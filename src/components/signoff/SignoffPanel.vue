@@ -230,7 +230,7 @@
       :title="dialogTitle"
       size="standardNarrow"
       :dirty="isFormDirty"
-      class="so-dialog"
+      :enter-submit="false"
     >
       <!-- 頂部：流程狀態與鎖定說明 -->
       <div v-if="editingId" class="so-flow-head">
@@ -444,7 +444,7 @@
           <span v-else-if="reconcileSelfBlocked && showReconcileActions" class="so-dialog-footer__hint">
             不可對帳自己確認{{ config.texts.unitLabel }}的交易
           </span>
-          <el-button @click="formDialogRef?.requestClose()">取消</el-button>
+          <el-button @click="requestClose">{{ isFormLocked ? '關閉' : '取消' }}</el-button>
 
           <!-- 草稿 / 被駁回：儲存草稿與送出審核是不同動作 -->
           <template v-if="!isFormLocked && canWrite">
@@ -915,6 +915,10 @@ const editingId = ref<number | null>(null)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
 const formDialogRef = ref<InstanceType<typeof FormDialog>>()
+// 關閉鈕與測試共用的關閉入口：委派給 FormDialog（dirty 判定與確認框都在殼層）
+function requestClose(): Promise<void> {
+  return formDialogRef.value?.requestClose() ?? Promise.resolve()
+}
 const dialogTitle = computed(() => {
   if (!editingId.value) return config.texts.addButton
   return isFormLocked.value
@@ -1510,6 +1514,7 @@ defineExpose({
   handleSave,
   handleDelete,
   disabledFutureDate,
+  requestClose,
 })
 </script>
 
