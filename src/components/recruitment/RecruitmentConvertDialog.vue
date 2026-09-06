@@ -3,7 +3,7 @@
   <el-dialog
     v-model="visible"
     title="轉為正式學生"
-    width="520px"
+    width="min(520px, 94vw)"
     :close-on-click-modal="false"
     @closed="resetForm"
   >

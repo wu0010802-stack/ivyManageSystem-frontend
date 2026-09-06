@@ -36,7 +36,7 @@ describe('TransitionConfirmDialog modes', () => {
     })
     await nextTick()
     expect(wrapper.text()).toContain('原因')
-    expect(wrapper.find('.destructive-warning').exists()).toBe(true)
+    expect(wrapper.find('.transition-warning').exists()).toBe(true)
   })
 
   it('plain mode: just confirm/cancel', async () => {
@@ -107,7 +107,7 @@ describe('TransitionConfirmDialog modes', () => {
       attachTo: document.body,
     })
     await nextTick()
-    expect(wrapper.find('.destructive-warning').exists()).toBe(true)
+    expect(wrapper.find('.transition-warning').exists()).toBe(true)
     expect(wrapper.text()).toContain('將刪除學生檔案（含家長聯絡資料），招生紀錄保留')
     expect(wrapper.text()).toContain('原因')
   })
@@ -122,7 +122,80 @@ describe('TransitionConfirmDialog modes', () => {
       attachTo: document.body,
     })
     await nextTick()
-    expect(wrapper.find('.destructive-warning').exists()).toBe(true)
-    expect(wrapper.text()).toContain('將標記退預繳（取消預繳訂金）')
+    expect(wrapper.find('.transition-warning').exists()).toBe(true)
+    expect(wrapper.text()).toContain('將標記退預繳')
+    expect(wrapper.text()).toContain('學費管理')
+  })
+})
+
+/**
+ * 2026-09-06 招生流程審查：原本只有「選班別」與「進退出欄」會攔下來確認，
+ * 其餘直接送出——拖曳填不到收預繳人員，拖出退出欄更是一聲不響。
+ */
+describe('TransitionConfirmDialog 新增的確認模式', () => {
+  const mountAt = (fromStage: string, toStage: string) =>
+    mount(TransitionConfirmDialog, {
+      props: {
+        modelValue: true,
+        fromStage: fromStage as never,
+        toStage: toStage as never,
+        visitId: 7,
+        childName: '王小寶',
+      },
+      attachTo: document.body,
+    })
+
+  it('visited→deposited：可填收預繳人員，並提醒實際收款在學費管理', async () => {
+    const wrapper = mountAt('visited', 'deposited')
+    await nextTick()
+
+    expect(wrapper.find('[data-test="deposit-collector-input"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('學費管理')
+    expect(wrapper.text()).toContain('收預繳人員')
+  })
+
+  it('visited→deposited：收預繳人員選填，不填也能確認', async () => {
+    const wrapper = mountAt('visited', 'deposited')
+    await nextTick()
+
+    await wrapper.find('.confirm-btn').trigger('click')
+
+    expect(wrapper.emitted('confirm')).toBeTruthy()
+    expect(wrapper.emitted('confirm')![0][0]).toMatchObject({ depositCollector: undefined })
+  })
+
+  it('visited→deposited：填了就帶進 payload（去頭尾空白）', async () => {
+    const wrapper = mountAt('visited', 'deposited')
+    await nextTick()
+
+    // el-input 把 data-test 透傳到 input 本身（不是外層 div），故不加子選擇器
+    await wrapper.find('[data-test="deposit-collector-input"]').setValue('  王小美  ')
+    await wrapper.find('.confirm-btn').trigger('click')
+
+    expect(wrapper.emitted('confirm')![0][0]).toMatchObject({ depositCollector: '王小美' })
+  })
+
+  it('withdrawn→deposited：離開退出欄也要確認（與進欄對稱）', async () => {
+    const wrapper = mountAt('withdrawn', 'deposited')
+    await nextTick()
+
+    expect(wrapper.find('.transition-warning').exists()).toBe(true)
+    expect(wrapper.text()).toContain('取消這筆退預繳／退註冊的標記')
+    // 不是 destructive，不需要填原因
+    expect(wrapper.text()).not.toContain('原因（必填）')
+  })
+
+  it('deposited→visited：取消預繳有說明', async () => {
+    const wrapper = mountAt('deposited', 'visited')
+    await nextTick()
+
+    expect(wrapper.text()).toContain('將取消預繳標記')
+  })
+
+  it('deposited→withdrawn：警示點出退款要另外處理', async () => {
+    const wrapper = mountAt('deposited', 'withdrawn')
+    await nextTick()
+
+    expect(wrapper.text()).toContain('學費管理')
   })
 })

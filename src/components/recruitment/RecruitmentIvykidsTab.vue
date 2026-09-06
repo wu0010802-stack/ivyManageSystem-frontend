@@ -224,6 +224,34 @@
             {{ row.external_created_at || '—' }}
           </template>
         </el-table-column>
+        <!-- 轉為訪視（2026-09-06）：官網報名原本只能被統計消費，要跟進得自己
+             到訪視明細重打一次姓名電話。 -->
+        <el-table-column label="操作" width="120" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.converted_visit_id"
+              size="small"
+              text
+              type="primary"
+              data-test="ivykids-view-visit"
+              @click="goToVisit(row)"
+            >
+              已轉入
+            </el-button>
+            <el-button
+              v-else-if="canWrite"
+              size="small"
+              type="primary"
+              plain
+              :loading="convertingId === row.id"
+              data-test="ivykids-to-visit"
+              @click="onConvertToVisit(row)"
+            >
+              轉為訪視
+            </el-button>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
       </el-table>
 
       <el-pagination
@@ -250,6 +278,7 @@ import {
   getRecruitmentIvykidsRecords,
   syncRecruitmentIvykidsBackend,
   deleteRecruitmentIvykidsBackendRecords,
+  convertIvykidsRecordToVisit,
 } from '@/api/recruitmentIvykids'
 import { apiError } from '@/utils/error'
 
@@ -274,6 +303,13 @@ withDefaults(defineProps<{
 }>(), {
   canWrite: false,
 })
+
+const emit = defineEmits<{
+  /** 已把官網報名轉成訪視，父層要同步統計與看板 */
+  converted: []
+  /** 使用者想看某筆已轉入的訪視（父層切到明細並帶關鍵字） */
+  'open-visit': [keyword: string]
+}>()
 
 // ── 同步狀態 ──
 const syncStatus         = ref<SyncStatus | null>(null)
@@ -530,6 +566,44 @@ const onClearFilter = () => {
   filterMonth.value  = null
   recordsPage.value  = 1
   fetchRecords()
+}
+
+// ── 轉為訪視（2026-09-06）────────────────────────────────────────────────
+// 官網報名原本只被統計與地址熱點消費，沒有進入漏斗的路徑。
+const convertingId = ref<number | null>(null)
+
+interface IvykidsRow {
+  id: number
+  child_name?: string | null
+  converted_visit_id?: number | null
+  [key: string]: unknown
+}
+
+const onConvertToVisit = async (row: IvykidsRow) => {
+  try {
+    await ElMessageBox.confirm(
+      `將「${row.child_name || '這筆報名'}」建立成招生訪視，之後就能在漏斗看板上追蹤。`,
+      '轉為訪視',
+      { confirmButtonText: '建立訪視', cancelButtonText: '取消', type: 'info' },
+    )
+  } catch {
+    return
+  }
+  convertingId.value = row.id
+  try {
+    await convertIvykidsRecordToVisit(row.id)
+    ElMessage.success('已建立訪視，可在漏斗看板追蹤')
+    await fetchRecords()
+    emit('converted')
+  } catch (e) {
+    ElMessage.error(apiError(e, '轉為訪視失敗'))
+  } finally {
+    convertingId.value = null
+  }
+}
+
+const goToVisit = (row: IvykidsRow) => {
+  emit('open-visit', String(row.child_name ?? ''))
 }
 
 const onPageChange = (page: number) => {
