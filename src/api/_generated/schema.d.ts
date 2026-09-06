@@ -39806,6 +39806,12 @@ export interface components {
             updated_at?: string | null;
             /** Visit Date */
             visit_date?: string | null;
+            /** Withdraw Reason */
+            withdraw_reason?: string | null;
+            /** Withdrawn At */
+            withdrawn_at?: string | null;
+            /** Withdrawn From */
+            withdrawn_from?: string | null;
         };
         /**
          * RecruitmentSourceCategoryOut

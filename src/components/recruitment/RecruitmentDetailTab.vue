@@ -128,9 +128,14 @@
       </el-table-column>
       <el-table-column prop="source" label="來源" min-width="100" />
       <el-table-column prop="referrer" label="介紹者" width="90" />
-      <el-table-column label="預繳" align="center" width="104">
+      <el-table-column label="預繳" align="center" width="118">
         <template #default="{ row }">
-          <el-tag :type="row.has_deposit ? 'success' : 'danger'" size="small">
+          <!-- 退出後 has_deposit 與 enrolled 都被清成 False，跟「從沒預繳」長得
+               一模一樣（2026-09-06）；退出狀態要獨立標出來。 -->
+          <el-tag v-if="row.withdrawn_at" type="danger" size="small" data-test="row-withdrawn">
+            {{ row.withdrawn_from === 'enrolled' ? '已退註冊' : '已退預繳' }}
+          </el-tag>
+          <el-tag v-else :type="row.has_deposit ? 'success' : 'danger'" size="small">
             {{ row.has_deposit ? '是' : '否' }}
           </el-tag>
           <!-- 收款對帳（2026-09-06）：招生端旗標與學費模組的預繳金是兩個真相，
