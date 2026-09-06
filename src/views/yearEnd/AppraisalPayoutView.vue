@@ -72,6 +72,9 @@ const router = useRouter()
 // year 持久化進 URL query，F5 / 分享連結可保留篩選狀態（比照 CycleListView 慣例）。
 const year = ref<number>(Number(route.query.year) || new Date().getFullYear())
 const loading = ref(false)
+const submitting = ref(false)
+let previewSequence = 0
+let generatedSequence = 0
 const rows = ref<PreviewRow[]>([])
 const selected = ref<Set<number>>(new Set())
 const tab = ref<'preview' | 'generated'>('preview')
@@ -119,14 +122,18 @@ const includedInactiveIds = computed(() =>
 const previewLoadError = ref(false)
 
 async function loadPreview() {
+  const sequence = ++previewSequence
+  const requestedYear = year.value
   loading.value = true
   notReady.value = false
   previewLoadError.value = false
   try {
-    const res = await previewAppraisalPayout(year.value)
+    const res = await previewAppraisalPayout(requestedYear)
+    if (sequence !== previewSequence || requestedYear !== year.value) return
     rows.value = res.data as PreviewRow[]
     selected.value = new Set(rows.value.filter((r) => !r.is_inactive).map((r) => r.employee_id))
   } catch (e) {
+    if (sequence !== previewSequence || requestedYear !== year.value) return
     const status = (e as { response?: { status?: number } } | null)?.response?.status
     if (status === 422) {
       rows.value = []
@@ -137,27 +144,32 @@ async function loadPreview() {
       previewLoadError.value = true
     }
   } finally {
-    loading.value = false
+    if (sequence === previewSequence) loading.value = false
   }
 }
 
 const generatedLoadError = ref(false)
 
 async function loadGenerated() {
+  const sequence = ++generatedSequence
+  const requestedYear = year.value
   generatedLoading.value = true
   generatedLoadError.value = false
   try {
-    const res = await listAppraisalPayouts(year.value)
+    const res = await listAppraisalPayouts(requestedYear)
+    if (sequence !== generatedSequence || requestedYear !== year.value) return
     generatedRows.value = res.data as PayoutItem[]
   } catch (e) {
-    ElMessage.error(friendlyError('載入已生成列表失敗', e))
+    if (sequence !== generatedSequence || requestedYear !== year.value) return
+    ElMessage.error(friendlyError('載入已建立發放資料失敗', e))
     generatedLoadError.value = true
   } finally {
-    generatedLoading.value = false
+    if (sequence === generatedSequence) generatedLoading.value = false
   }
 }
 
 function toggleSelect(employeeId: number, checked: boolean) {
+  if (submitting.value) return
   // 在職員工一律納入發放（後端契約），不可被排除——對在職列的取消勾選視為 no-op，
   // 避免畫面顯示「已排除」但實際仍會發放（bug #27）。只允許切換非在職員工的 opt-in。
   const row = rows.value.find((r) => r.employee_id === employeeId)
@@ -167,10 +179,14 @@ function toggleSelect(employeeId: number, checked: boolean) {
 }
 
 async function onGenerate() {
+  if (submitting.value || loading.value || previewLoadError.value) return
   if (payoutRows.value.length === 0) {
     ElMessage.warning('沒有可發放的員工')
     return
   }
+  const submittedYear = year.value
+  const submittedIds = [...includedInactiveIds.value]
+  submitting.value = true
   try {
     await ElMessageBox.confirm(
       `將為 ${payoutRows.value.length} 名員工建立考核年終發放資料（全部在職員工＋已勾選的離職員工），合計 ${payoutTotalDisplay.value}。此動作只會在系統內建立發放資料，不會執行匯款。`,
@@ -178,12 +194,13 @@ async function onGenerate() {
       { confirmButtonText: '確認建立', cancelButtonText: '取消' }
     )
   } catch {
+    submitting.value = false
     return
   }
   try {
     const res = await generateAppraisalPayout({
-      year: year.value,
-      included_inactive_employee_ids: includedInactiveIds.value,
+      year: submittedYear,
+      included_inactive_employee_ids: submittedIds,
     })
     const data = res.data
     receipt.value = {
@@ -193,31 +210,39 @@ async function onGenerate() {
       total_amount: data.total_amount,
       skipped_inactive_count: data.skipped_inactive_count,
       warnings: data.warnings ?? [],
-      included_inactive_count: includedInactiveIds.value.length,
+      included_inactive_count: submittedIds.length,
       created_at: new Date(),
     }
     ElMessage.success('發放資料已建立')
     tab.value = 'generated'
   } catch (e) {
     ElMessage.error(friendlyError('建立發放資料失敗', e))
+  } finally {
+    submitting.value = false
   }
 }
 
 async function onVoid() {
+  if (submitting.value) return
+  const submittedYear = year.value
+  submitting.value = true
   try {
     await ElMessageBox.confirm('將清空本年所有考核年終發放資料（不可復原）', '確認清空', { type: 'warning' })
     await ElMessageBox.confirm('再次確認：清空後須重新建立發放資料', '最終確認', { type: 'warning' })
   } catch {
+    submitting.value = false
     return
   }
   try {
-    const res = await voidAppraisalPayouts(year.value)
+    const res = await voidAppraisalPayouts(submittedYear)
     const data = res.data as { deleted_count: number }
     ElMessage.success(`已刪除 ${data.deleted_count} 筆發放資料`)
     receipt.value = null
     await loadGenerated()
   } catch (e) {
     ElMessage.error(friendlyError('清空發放資料失敗', e))
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -236,6 +261,9 @@ defineExpose({
 
 onMounted(loadPreview)
 watch(year, (v) => {
+  rows.value = []
+  generatedRows.value = []
+  selected.value = new Set()
   loadPreview()
   receipt.value = null // 收據屬於送出當下的年份，切年後顯示會誤導
   if (tab.value === 'generated') loadGenerated()
@@ -251,10 +279,12 @@ watch(tab, (t) => {
   <div class="appraisal-payout-view">
     <PageHeader title="考核年終獎金管理">
       <template #actions>
-        <el-input-number v-model="year" :min="2024" :max="2099" />
-        <el-button type="primary" @click="loadPreview">重新載入</el-button>
+        <label for="payout-year">發放年度（西元）</label>
+        <el-input-number id="payout-year" :disabled="submitting" v-model="year" :min="2024" :max="2099" aria-label="發放年度（西元）" />
+        <el-button type="primary" :disabled="submitting" @click="loadPreview">重新載入</el-button>
       </template>
     </PageHeader>
+    <p data-test="payout-year-context" role="status">{{ year }} 年發放｜來源：{{ sourceAcademicYear }} 學年度上、下學期</p>
 
     <el-alert
       v-if="anyCycleNotFinalized"
@@ -269,7 +299,7 @@ watch(tab, (t) => {
       <el-tab-pane label="預覽" name="preview">
         <div v-if="previewLoadError" class="apv-error">
           載入失敗
-          <el-button data-test="preview-load-retry" size="small" text type="primary" @click="loadPreview">重試</el-button>
+          <el-button data-test="preview-load-retry" size="small" text type="primary" :disabled="submitting" @click="loadPreview">重試</el-button>
         </div>
 
         <EmptyState
@@ -293,7 +323,8 @@ watch(tab, (t) => {
                      只有非在職員工可 opt-in 切換。bug #27：避免顯示與實際發放不一致 -->
                 <el-checkbox
                   :model-value="selected.has(row.employee_id)"
-                  :disabled="!row.is_inactive"
+                  :disabled="!row.is_inactive || submitting"
+                  :aria-label="`納入 ${row.employee_name} 的發放資料`"
                   :data-test="`row-checkbox-${row.employee_id}`"
                   @update:model-value="(v) => toggleSelect(row.employee_id, Boolean(v))"
                 />
@@ -303,7 +334,7 @@ watch(tab, (t) => {
             <el-table-column prop="earlier_amount" :label="earlierLabel" />
             <el-table-column prop="later_amount" :label="laterLabel" />
             <el-table-column prop="total_amount" label="合計" />
-            <el-table-column label="在職?" width="100">
+            <el-table-column label="任職狀態" width="100">
               <template #default="{ row }">
                 <el-tag :type="row.is_inactive ? 'danger' : 'success'" size="small">
                   {{ row.is_inactive ? '已離職' : '在職' }}
@@ -318,14 +349,14 @@ watch(tab, (t) => {
           </el-table>
 
           <footer class="footer">
-            <el-button type="primary" size="large" data-test="generate-button" @click="onGenerate">
+            <el-button type="primary" size="large" data-test="generate-button" :loading="submitting" :disabled="loading || previewLoadError" @click="onGenerate">
               建立發放資料（{{ payoutRows.length }} 人，合計 {{ payoutTotalDisplay }}）
             </el-button>
           </footer>
         </template>
       </el-tab-pane>
 
-      <el-tab-pane label="已生成" name="generated">
+      <el-tab-pane label="已建立發放資料" name="generated">
         <!-- 批次 A②：收據卡——建立成功後常駐回顧（原本只彈一次 toast，看過就沒了） -->
         <div v-if="receipt" class="receipt-card" data-test="generate-receipt">
           <div class="receipt-card__title">✅ 發放資料已建立（{{ formatReceiptTime(receipt.created_at) }}）</div>
@@ -349,7 +380,7 @@ watch(tab, (t) => {
           </a>
         </div>
         <div class="generated-toolbar">
-          <el-button type="danger" plain data-test="void-button" @click="onVoid">清空本年發放資料</el-button>
+          <el-button type="danger" plain data-test="void-button" :loading="submitting" @click="onVoid">清空本年發放資料</el-button>
         </div>
         <div v-if="generatedLoadError" class="apv-error">
           載入失敗
@@ -357,7 +388,7 @@ watch(tab, (t) => {
         </div>
         <el-table v-loading="generatedLoading" :data="generatedRows" border>
           <template #empty>
-            <EmptyState title="本年尚未生成" />
+            <EmptyState title="本年尚未建立發放資料" />
           </template>
           <el-table-column label="員工">
             <template #default="{ row }">{{ row.employee_name }}</template>
@@ -368,7 +399,7 @@ watch(tab, (t) => {
           <el-table-column label="金額" align="right">
             <template #default="{ row }">{{ formatCurrency(row.amount) }}</template>
           </el-table-column>
-          <el-table-column label="來源">
+          <el-table-column label="來源紀錄">
             <template #default="{ row }">{{ row.source_ref ?? '—' }}</template>
           </el-table-column>
         </el-table>

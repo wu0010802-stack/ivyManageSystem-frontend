@@ -43,7 +43,7 @@ function onSelectAll(v: string | number | boolean) {
 <template>
   <div class="kanban-column">
     <div class="col-header">
-      <el-checkbox :model-value="allSelected" @update:model-value="onSelectAll"
+      <el-checkbox :aria-label="`選取所有${label}考核`" :model-value="allSelected" @update:model-value="onSelectAll"
                    :data-test="`col-select-all-${status}`" />
       <span class="col-label">{{ label }} ({{ summaries?.length ?? 0 }})</span>
       <el-button text @click="collapsed = !collapsed">
