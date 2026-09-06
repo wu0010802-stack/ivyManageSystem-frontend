@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElSelect, ElOption, ElButton, ElMessage, ElMessageBox, ElAlert, ElLink } from 'element-plus'
 import { useRecruitmentFunnelStore, type Stage, type FunnelCardData } from '@/stores/recruitmentFunnel'
 import { hasPermission } from '@/utils/auth'
@@ -93,14 +93,19 @@ import TimelineDrawer from './TimelineDrawer.vue'
 import type { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import FunnelAddVisit from './FunnelAddVisit.vue'
 
-defineProps<{
+const props = defineProps<{
   dashboard: ReturnType<typeof useRecruitmentDashboard>
+  /** 入學學年／學期由父層統一持有（2026-09-06），四個 tab 共用一份 */
+  schoolYear?: number | null
+  semester?: 1 | 2 | null
 }>()
 
 const emit = defineEmits<{
   created: []
   /** 使用者要去處理沒有入學學期的訪視（父層切到明細 tab） */
   'show-unscoped': []
+  'update:schoolYear': [value: number | null]
+  'update:semester': [value: 1 | 2 | null]
 }>()
 
 const store = useRecruitmentFunnelStore()
@@ -108,15 +113,28 @@ const store = useRecruitmentFunnelStore()
 /** 沒有入學學期、不屬於任何學年看板的訪視數（後端 board 回傳）。 */
 const unscopedCount = computed(() => store.board?.unscoped_count ?? 0)
 
-// === 篩選器 ===
-const schoolYearLocal = ref<number | null>(null)
-const semesterLocal = ref<1 | 2 | null>(null)
+// === 篩選器（2026-09-06 起由父層統一持有，四個 tab 共用一份）===
 const currentYear = currentRocYear()
 const yearOptions = computed(() => [currentYear + 1, currentYear, currentYear - 1, currentYear - 2])
+
+const schoolYearLocal = computed({
+  get: () => props.schoolYear ?? null,
+  set: (v: number | null) => emit('update:schoolYear', v),
+})
+const semesterLocal = computed({
+  get: () => props.semester ?? null,
+  set: (v: 1 | 2 | null) => emit('update:semester', v),
+})
 
 async function onRefresh() {
   await store.setFilter(schoolYearLocal.value, semesterLocal.value)
 }
+
+// 父層改了學年學期就重載看板（切 tab 回來時 store 已是同一組條件）
+watch(
+  () => [props.schoolYear, props.semester],
+  () => { void store.setFilter(props.schoolYear ?? null, props.semester ?? null) },
+)
 
 // === Column 設定 ===
 const columnConfigs: Array<{ stage: Stage; title: string; color: string }> =
@@ -297,7 +315,12 @@ async function onVisitCreated(record: { id: number; [k: string]: unknown }): Pro
 }
 
 onMounted(() => {
-  store.loadBoard()
+  // 掛載時把父層的學年學期同步進 store（切 tab 回來也走這裡）
+  if (props.schoolYear != null || props.semester != null) {
+    void store.setFilter(props.schoolYear ?? null, props.semester ?? null)
+  } else {
+    void store.loadBoard()
+  }
 })
 </script>
 

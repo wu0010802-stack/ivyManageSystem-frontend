@@ -14,6 +14,8 @@
       <el-tab-pane label="漏斗看板" name="funnel">
         <FunnelBoard
           :dashboard="dashboard"
+          v-model:school-year="termSchoolYear"
+          v-model:semester="termSemester"
           @created="onFunnelVisitCreated"
           @show-unscoped="showUnscopedVisits"
         />
@@ -27,7 +29,10 @@
         />
       </el-tab-pane>
       <el-tab-pane label="名額規劃" name="intake" lazy>
-        <IntakePlanPanel />
+        <IntakePlanPanel
+          v-model:school-year="termSchoolYear"
+          v-model:semester="termSemester"
+        />
       </el-tab-pane>
       <el-tab-pane label="官網報名" name="ivykids" lazy>
         <RecruitmentIvykidsTab
@@ -50,11 +55,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 import { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
+import { useAdmissionsTermFilter } from '@/composables/useAdmissionsTermFilter'
 import { useRecruitmentFunnelStore } from '@/stores/recruitmentFunnel'
 import { LazyBar } from '@/components/recruitment/lazyChartComponents'
 import FunnelBoard from '@/components/recruitment/funnel/FunnelBoard.vue'
@@ -76,12 +82,38 @@ const activeTab = ref<AdmissionsTab>(initialTab)
 
 const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
 const dashboard = useRecruitmentDashboard({ notifyError: (m: string) => ElMessage.error(m) })
+// 入學學年／學期：四個 tab 共用一份並寫進 URL（2026-09-06）。原本各自維護，
+// 在看板挑了學期、切到明細又跳回全部，使用者以為資料不見了。
+const { schoolYear: termSchoolYear, semester: termSemester } = useAdmissionsTermFilter()
+
 const funnelStore = useRecruitmentFunnelStore()
 // 注意：panel 為 lazy keep-mounted，patch 僅在 panel watch/onMounted 各讀一次；
 // 若日後改 destroy-on-hide，殘留 patch 會在 remount 重套舊篩選
 const recordsFilterPatch = ref<Record<string, unknown> | null>(null)
 const recordsPanelRef = ref<InstanceType<typeof AdmissionsRecordsPanel> | null>(null)
 const statsPanelRef = ref<InstanceType<typeof RecruitmentStatsPanel> | null>(null)
+
+// 統計分頁沿用 dashboard 內部的 statsSchoolYear/statsSemester 組 query，
+// 這裡把共用篩選同步過去（term 是唯一真相），避免兩份各走各的。
+// 本 watch 立即執行，故必須宣告在 recordsFilterPatch／panel ref 之後。
+watch(
+  [termSchoolYear, termSemester],
+  ([sy, sem]) => {
+    dashboard.statsSchoolYear.value = sy
+    dashboard.statsSemester.value = sem
+    // 明細分頁的篩選同樣跟著走；panel 已掛載時才需要重抓
+    recordsFilterPatch.value = { school_year: sy, semester: sem }
+    void recordsPanelRef.value?.fetchDetail?.()
+  },
+  { immediate: true },
+)
+
+// 反向：使用者在統計分頁改學年學期時回寫共用狀態。值相同時 watch 不觸發，
+// 兩個方向不會互相喚起無限迴圈。
+watch([dashboard.statsSchoolYear, dashboard.statsSemester], ([sy, sem]) => {
+  termSchoolYear.value = sy
+  termSemester.value = sem
+})
 
 function drillToRecords(patch: Record<string, unknown>) {
   recordsFilterPatch.value = { ...patch }
