@@ -11,6 +11,10 @@ vi.mock('@/api/appraisal', () => ({
 }))
 import { listAppraisalCycles, getAppraisalCurrentCycle, getAppraisalCycleExceptions } from '@/api/appraisal'
 
+vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn().mockReturnValue(true) }))
+import { hasPermission } from '@/utils/auth'
+vi.mock('../components/CreateCycleDialog.vue', () => ({ default: { name: 'CreateCycleDialog', props: ['visible', 'canWrite'], emits: ['created', 'update:visible'], template: '<div />' } }))
+
 const mockedList = vi.mocked(listAppraisalCycles)
 const mockedCurrent = vi.mocked(getAppraisalCurrentCycle)
 const mockedExceptions = vi.mocked(getAppraisalCycleExceptions)
@@ -53,6 +57,7 @@ async function mountShell(query = '') {
 
 describe('AppraisalWorkspaceView', () => {
   beforeEach(() => {
+    vi.mocked(hasPermission).mockReturnValue(true)
     mockedList.mockReset().mockResolvedValue({ data: CYCLES })
     mockedCurrent.mockReset().mockResolvedValue({ data: CYCLES[1] })
     mockedExceptions.mockReset().mockResolvedValue({
@@ -146,5 +151,31 @@ describe('AppraisalWorkspaceView', () => {
     expect(links[0].attributes('href')).toBe('/appraisal-year-end/appraisal/institution-events')
     expect(links[1].attributes('href')).toBe('/appraisal-year-end/appraisal/disciplinary')
     expect(links[2].attributes('href')).toBe('/appraisal-year-end/appraisal/calibration')
+  })
+})
+
+
+describe('建立考核入口', () => {
+  it('空態可開啟建立對話窗，成功後同時保留新週期與準備階段', async () => {
+    vi.mocked(hasPermission).mockReturnValue(true)
+    mockedList.mockResolvedValue({ data: [] })
+    mockedCurrent.mockResolvedValue({ data: null })
+    const { w, r } = await mountShell()
+    await w.get('[data-test="create-cycle"]').trigger('click')
+    const dialog = w.getComponent({ name: 'CreateCycleDialog' })
+    expect(dialog.props('canWrite')).toBe(true)
+    mockedList.mockResolvedValue({ data: CYCLES })
+    mockedCurrent.mockResolvedValue({ data: CYCLES[1] })
+    dialog.vm.$emit('created', { id: 2 })
+    await flushPromises()
+    expect(r.currentRoute.value.query).toMatchObject({ cycle: '2', stage: 'prepare' })
+  })
+  it('缺建立權限不顯示建立按鈕', async () => {
+    vi.mocked(hasPermission).mockReturnValue(false)
+    mockedList.mockResolvedValue({ data: [] })
+    mockedCurrent.mockResolvedValue({ data: null })
+    const { w } = await mountShell()
+    expect(w.find('[data-test="create-cycle"]').exists()).toBe(false)
+    expect(w.text()).toContain('有建立權限的管理人員')
   })
 })

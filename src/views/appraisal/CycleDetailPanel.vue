@@ -28,7 +28,7 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
-import { statusLabel, MSG } from '@/constants/appraisalYearEnd'
+import { statusLabel, MSG, ROLE_GROUP_LABEL, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 
 import KanbanView from './components/KanbanView.vue'
 import ListView from './components/ListView.vue'
@@ -135,11 +135,62 @@ const canBatchSign = computed(
 // 權限；UI 守衛保守用 OR 三個 sign 權限（任一即可顯示，後端會二次驗）。
 const canReject = computed(() => canBatchSign.value)
 
+const search = ref('')
+const filter = ref('all')
+const roleFilter = ref('')
+const roleOptions = computed(() => [...new Set(participants.value.map(p => p.role_group).filter((v): v is string => !!v))])
+function canSignSummary(summary: Summary | undefined) {
+  return !!summary && !summary.is_excluded && (
+    (summary.status === 'DRAFT' && canSignSupervisor.value) ||
+    (summary.status === 'SUPERVISOR_SIGNED' && canSignAccounting.value) ||
+    (summary.status === 'ACCOUNTING_SIGNED' && canFinalize.value)
+  )
+}
+const visibleParticipants = computed(() => participants.value.filter(p => {
+  const summary = summaryByParticipant.value[p.id]
+  return (p.employee_name ?? '').toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()) &&
+    (!roleFilter.value || p.role_group === roleFilter.value) &&
+    (filter.value === 'all' || (filter.value === 'mine' ? !p.is_excluded && canSignSummary(summary) : filter.value === 'missing' ? !summary : summary?.status === filter.value))
+}))
+const selectableIds = computed(() => visibleParticipants.value.flatMap(p => {
+  const summary = summaryByParticipant.value[p.id]
+  return !p.is_excluded && canSignSummary(summary) && !isSigning(summary.id) ? [summary.id] : []
+}))
+const allVisibleSelected = computed(() => selectableIds.value.length > 0 && selectableIds.value.every(id => selectedIds.value.includes(id)))
+const someVisibleSelected = computed(() => selectableIds.value.some(id => selectedIds.value.includes(id)))
+function toggleAllVisible(value: boolean) { selectedIds.value = value ? [...selectableIds.value] : [] }
+function eligibleSelected(status: string) {
+  return selectedIds.value.filter(id => summariesById.value[id]?.status === status && canSignSummary(summariesById.value[id]))
+}
+watch(selectableIds, ids => {
+  if (view.value === 'list') selectedIds.value = selectedIds.value.filter(id => ids.includes(id))
+})
+
 // statusLabel 從 ./labels 集中載入（P2 i18n 過渡）
+
+// 看板與列表使用不同讀取 API；以看板剛載入的資料同步批次資格與返回列表的狀態。
+type KanbanSummary = Awaited<ReturnType<typeof getSignStatusSummary>>['data']['buckets'][number]['summaries'][number] & { status: string }
+let latestKanbanSummaries: KanbanSummary[] | null = null
+function syncKanbanSummaries(latest: KanbanSummary[]) {
+  latestKanbanSummaries = latest
+  const updated = new Map(summaries.value.map(summary => [summary.id, summary]))
+  for (const summary of latest) {
+    const previous = updated.get(summary.id)
+    updated.set(summary.id, {
+      ...previous,
+      ...summary,
+      participant_id: previous?.participant_id ?? participants.value.find(p => p.employee_id === summary.employee_id)?.id,
+      total_score: Number(summary.total_score),
+      bonus_amount: Number(summary.bonus_amount),
+    })
+  }
+  summaries.value = [...updated.values()]
+}
 
 const loadError = ref(false)
 
 async function load() {
+  latestKanbanSummaries = null
   loading.value = true
   loadError.value = false
   try {
@@ -156,6 +207,7 @@ async function load() {
     cycle.value = cycles.find((c) => c.id === cycleId.value) || null
     participants.value = participantsRes.data as Participant[]
     summaries.value = summariesRes.data as Summary[]
+    if (latestKanbanSummaries) syncKanbanSummaries(latestKanbanSummaries)
     catalog.value = catalogRes.data as unknown[]
     aggregatedParticipants.value = (statusRes.data as { participants?: AggregatedParticipant[] })?.participants ?? []
     loadRules()
@@ -226,8 +278,7 @@ async function reload() {
   if (kanbanRef.value?.reload) kanbanRef.value.reload()
 }
 
-// P1-14：背景非阻塞重新整理 kanban，不動 summaries / participants /
-// catalog（這些只在初次載入或 reject/comment/recompute 後才需要重撈）。
+// 背景重新整理看板；看板載入後透過 loaded 同步 summaries，其他資料不重撈。
 // Task 8：簽核進度列 counts 掛在同一個背景刷新點，簽核/退簽/留言後一併更新。
 function silentKanbanRefresh() {
   loadSignCounts()
@@ -329,6 +380,7 @@ function onKanbanActionPayload(payload: unknown) {
 
 defineExpose({
   view,
+  search, filter, roleFilter, visibleParticipants, selectableIds, toggleAllVisible, eligibleSelected,
   selectedIds,
   openReject,
   openComment,
@@ -368,7 +420,7 @@ onMounted(() => {
 
     <SignProgressBar :counts="signCounts" class="sign-progress-wrap" />
 
-    <div class="toolbar">
+    <div class="toolbar" :class="{ 'toolbar--selected': selectedIds.length > 0 }">
       <el-button
         v-if="canRecompute"
         type="primary"
@@ -385,27 +437,28 @@ onMounted(() => {
         class="batch-zone"
         data-test="batch-zone"
       >
+        <span v-if="selectedIds.length" role="status">已選 {{ selectedIds.length }} 位，可簽 {{ selectedIds.filter(id => canSignSummary(summariesById[id])).length }} 位</span>
         <el-tooltip content="勾選列後可批次簽核" :disabled="selectedIds.length > 0">
           <BatchSignButton
             v-if="canSignSupervisor"
-            :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds"
-            :disabled="!selectedIds.length"
+            :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="eligibleSelected('DRAFT')"
+            :disabled="!eligibleSelected('DRAFT').length || busy"
             :summaries-map="summariesById" @done="reload"
           />
         </el-tooltip>
         <el-tooltip content="勾選列後可批次簽核" :disabled="selectedIds.length > 0">
           <BatchSignButton
             v-if="canSignAccounting"
-            :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds"
-            :disabled="!selectedIds.length"
+            :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="eligibleSelected('SUPERVISOR_SIGNED')"
+            :disabled="!eligibleSelected('SUPERVISOR_SIGNED').length || busy"
             :summaries-map="summariesById" @done="reload"
           />
         </el-tooltip>
         <el-tooltip content="勾選列後可批次簽核" :disabled="selectedIds.length > 0">
           <BatchSignButton
             v-if="canFinalize"
-            :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds"
-            :disabled="!selectedIds.length"
+            :cycle-id="cycleId" stage="FINALIZE" :selected-ids="eligibleSelected('ACCOUNTING_SIGNED')"
+            :disabled="!eligibleSelected('ACCOUNTING_SIGNED').length || busy"
             :summaries-map="summariesById" @done="reload"
           />
         </el-tooltip>
@@ -422,14 +475,30 @@ onMounted(() => {
       ref="kanbanRef"
       :cycle-id="cycleId"
       :can-write-cycle="canWriteCycle"
+      @loaded="syncKanbanSummaries"
       @action="onKanbanActionPayload"
       @selected-changed="(ids) => (selectedIds = ids)"
     />
 
+    <div v-if="view === 'list'" class="list-filters">
+      <el-input v-model="search" clearable placeholder="搜尋員工姓名" aria-label="搜尋員工姓名" />
+      <el-select v-model="filter" aria-label="篩選簽核狀態">
+        <el-option label="全部" value="all" />
+        <el-option label="待我簽" value="mine" />
+        <el-option label="尚未產生結果" value="missing" />
+        <el-option v-for="status in SIGN_STATUS_ORDER" :key="status" :value="status" :label="statusLabel(status)" />
+      </el-select>
+      <el-select v-model="roleFilter" clearable placeholder="所有角色" aria-label="篩選員工角色">
+        <el-option v-for="role in roleOptions" :key="role" :value="role" :label="ROLE_GROUP_LABEL[role] || role" />
+      </el-select>
+      <el-checkbox v-if="canBatchSign" :model-value="allVisibleSelected" :indeterminate="someVisibleSelected && !allVisibleSelected" :disabled="!selectableIds.length || busy" @update:model-value="v => toggleAllVisible(v === true)">選取篩選結果中可簽核的 {{ selectableIds.length }} 位</el-checkbox>
+      <span role="status">顯示 {{ visibleParticipants.length }} / {{ participants.length }} 位</span>
+    </div>
     <ListView
-      v-else
+      v-if="view === 'list'"
       :cycle-id="cycleId"
-      :participants="participants"
+      :participants="visibleParticipants"
+      :selectable-ids="selectableIds"
       :summary-by-participant="summaryByParticipant"
       :catalog="catalog"
       v-model:selected-ids="selectedIds"
@@ -480,4 +549,9 @@ onMounted(() => {
 .sign-progress-wrap { margin: 0 0 var(--space-3); }
 .toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 .batch-zone { display: flex; gap: 6px; }
+.list-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); align-items: center; }
+.list-filters :deep(.el-input), .list-filters :deep(.el-select) { width: 190px; }
+.batch-zone { flex-wrap: wrap; }
+@media (max-width: 600px) { .list-filters :deep(.el-input), .list-filters :deep(.el-select) { width: 100%; } }
+.toolbar--selected { position: sticky; top: 0; z-index: 4; background: var(--el-bg-color); padding: var(--space-2); border-bottom: 1px solid var(--el-border-color); }
 </style>

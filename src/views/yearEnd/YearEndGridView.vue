@@ -471,7 +471,10 @@ onMounted(initGrid)
       <el-tag
         v-for="key in BONUS_COL_KEYS"
         :key="key"
-        class="bonus-col-chip"
+        class="bonus-col-chip" role="button" tabindex="0"
+        :aria-pressed="visibleBonusCols.has(key)"
+        @keydown.enter.prevent="toggleBonusCol(key)"
+        @keydown.space.prevent="toggleBonusCol(key)"
         :data-test="`bonus-col-chip-${key}`"
         :type="visibleBonusCols.has(key) ? 'primary' : 'info'"
         :effect="visibleBonusCols.has(key) ? 'dark' : 'plain'"
@@ -593,9 +596,9 @@ onMounted(initGrid)
       width="480px"
       data-test="build-dialog"
     >
-      <p>將為所有在職員工試算年終結算單（idempotent）。</p>
-      <p class="build-note">注意：已完成簽核（非 DRAFT）的結算不會被覆寫。</p>
-      <p class="build-note">若需納入離職員工，請聯絡系統管理員透過 API 指定 <code>included_resigned_employee_ids</code>。</p>
+      <p>將建立或更新在職員工的年終草稿結算；重複試算不會新增重複結算單。</p>
+      <p class="build-note">已進入簽核流程的結算資料會保留。</p>
+      <p class="build-note">本次試算不會新增離職員工；需要納入時，請先聯絡系統管理員確認名單。</p>
       <template #footer>
         <el-button @click="buildDialogVisible = false">取消</el-button>
         <el-button type="primary" data-test="build-confirm-button" @click="onBuild">確認試算</el-button>
@@ -706,4 +709,5 @@ onMounted(initGrid)
   font-size: 13px;
   margin: var(--space-1) 0;
 }
+.bonus-col-chip:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 3px; }
 </style>
