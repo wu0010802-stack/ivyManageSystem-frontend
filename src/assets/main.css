@@ -361,12 +361,13 @@ html.ivy-admin .el-table .el-table__cell {
   .el-dialog .el-form-item {
     flex-direction: column;
   }
-  .el-dialog .el-form--label-top .el-form-item__label,
-  .el-dialog .el-form-item__label {
+  .el-dialog .el-form .el-form-item__label {
     width: auto !important;
     text-align: left;
     /* EP label-right 的 label 是 inline-flex + justify-content:flex-end；
-       只改 text-align 蓋不掉，標籤會靠右浮在輸入框上方（2026-09-05 staging 實測 8/15 表單中招）。 */
+       只改 text-align 蓋不掉，標籤會靠右浮在輸入框上方（2026-09-05 staging 實測 8/15 表單中招）。
+       選擇器用 (0,3,0) 壓過 EP 的 .el-form--label-right .el-form-item__label (0,2,0)，
+       因 EP 元件樣式在執行期晚於本檔注入，同 specificity 會輸在來源順序。 */
     justify-content: flex-start;
     padding-bottom: 4px;
   }

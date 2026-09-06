@@ -14,10 +14,16 @@ function block(startMarker: string): string {
 }
 
 describe('main.css dialog 表單預設層', () => {
-  it('手機斷點：dialog 內標籤規則含 justify-content: flex-start', () => {
+  it('手機斷點：dialog 內標籤規則用 (0,3,0) specificity 壓過 EP label-right，含 flex-start／text-align left', () => {
     const mobile = block('/* Dialog - responsive on mobile */')
-    const labelRule = mobile.slice(mobile.indexOf('.el-dialog .el-form-item__label'))
-    expect(labelRule.slice(0, 600)).toMatch(/justify-content:\s*flex-start/)
+    const selector = '.el-dialog .el-form .el-form-item__label'
+    const selectorIndex = mobile.indexOf(selector)
+    expect(selectorIndex, `找不到選擇器 ${selector}`).toBeGreaterThan(-1)
+    const labelRule = mobile.slice(selectorIndex, selectorIndex + 600)
+    expect(labelRule).toMatch(/justify-content:\s*flex-start/)
+    expect(labelRule).toMatch(/text-align:\s*left/)
+    // 舊的低 specificity 選擇器（(0,2,0)，輸給 EP .el-form--label-right .el-form-item__label）不應再出現
+    expect(mobile).not.toMatch(/\.el-dialog \.el-form-item__label\s*\{/)
   })
 
   it('桌機：dialog 內非 inline 表單預設堆疊標籤，並排除 .form-labels-inline，包進 --bp-sm', () => {
