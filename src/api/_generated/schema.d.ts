@@ -3801,6 +3801,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/reconciliation/confirm-shift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Reconciliation
+         * @description 以同一交易確認最多兩人當日調班並重算既有出勤。
+         */
+        post: operations["confirm_reconciliation_api_attendance_reconciliation_confirm_shift_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/reconciliation/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Reconciliation
+         * @description 預覽班表與打卡；不保存完整性聲明或推測結果。
+         */
+        post: operations["preview_reconciliation_api_attendance_reconciliation_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/record": {
         parameters: {
             query?: never;
@@ -26030,6 +26070,39 @@ export interface components {
             /** Course Id */
             course_id: number;
         };
+        /** ConfirmShiftItem */
+        ConfirmShiftItem: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Day Off
+             * @default false
+             */
+            day_off: boolean;
+            /** Employee Id */
+            employee_id: number;
+            /** Shift Type Id */
+            shift_type_id?: number | null;
+            /** Version */
+            version: string;
+        };
+        /** ConfirmShiftsIn */
+        ConfirmShiftsIn: {
+            /** Items */
+            items: components["schemas"]["ConfirmShiftItem"][];
+            /** Reason */
+            reason: string;
+        };
+        /** ConfirmShiftsOut */
+        ConfirmShiftsOut: {
+            /** Message */
+            message: string;
+            /** Updated Count */
+            updated_count: number;
+        };
         /** ConsentEventIn */
         ConsentEventIn: {
             /**
@@ -39283,6 +39356,78 @@ export interface components {
             old_value: string | null;
             /** Student Name */
             student_name: string | null;
+        };
+        /** ReconciliationPreviewIn */
+        ReconciliationPreviewIn: {
+            /** Complete End Date */
+            complete_end_date?: string | null;
+            /** Complete Start Date */
+            complete_start_date?: string | null;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+        };
+        /** ReconciliationPreviewOut */
+        ReconciliationPreviewOut: {
+            /** Rows */
+            rows: components["schemas"]["ReconciliationRowOut"][];
+            /** Shift Types */
+            shift_types: components["schemas"]["ReconciliationShiftOut"][];
+        };
+        /** ReconciliationRowOut */
+        ReconciliationRowOut: {
+            /** Candidates */
+            candidates: components["schemas"]["ReconciliationShiftOut"][];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Day Off */
+            day_off: boolean;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Number */
+            employee_number: string;
+            /** Expected End */
+            expected_end: string;
+            /** Expected Start */
+            expected_start: string;
+            /** Original Shift Type Id */
+            original_shift_type_id: number | null;
+            /** Punch In */
+            punch_in: string | null;
+            /** Punch Out */
+            punch_out: string | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "matched" | "possible_shift_change" | "missing_punch" | "suspected_absence" | "data_incomplete" | "leave" | "off_day" | "unscheduled_attendance" | "anomaly";
+            /** Version */
+            version: string;
+        };
+        /** ReconciliationShiftOut */
+        ReconciliationShiftOut: {
+            /** Name */
+            name: string;
+            /** Shift Type Id */
+            shift_type_id: number;
+            /** Work End */
+            work_end: string;
+            /** Work Start */
+            work_start: string;
         };
         /**
          * RecruitmentBonusReportBlockOut
@@ -53052,6 +53197,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KioskRosterEntry"][];
+                };
+            };
+        };
+    };
+    confirm_reconciliation_api_attendance_reconciliation_confirm_shift_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmShiftsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmShiftsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_reconciliation_api_attendance_reconciliation_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconciliationPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

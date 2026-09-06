@@ -264,8 +264,9 @@ export const NAVIGATION_MANIFEST = {
           ],
         },
         {
-          key: 'attendance', title: MODULE_TERMS.attendance, routePath: '/attendance',
+          key: 'attendance', title: '排班與出勤', routePath: '/attendance',
           views: [{ code: 'ATTENDANCE_READ' }],
+          sharedViews: ['SCHEDULE'],
           actions: [{ code: 'ATTENDANCE_WRITE' }],
           menu: { icon: icon('Clock') },
         },
@@ -289,7 +290,7 @@ export const NAVIGATION_MANIFEST = {
         {
           key: 'schedule', title: MODULE_TERMS.schedule, routePath: '/schedule',
           views: [{ code: 'SCHEDULE' }],
-          menu: { icon: icon('Timer') },
+          // 保留舊連結與權限主屬，側邊欄由排班與出勤統一進入。
         },
       ],
     },

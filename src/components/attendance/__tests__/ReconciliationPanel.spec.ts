@@ -1,0 +1,64 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import ElementPlus from 'element-plus'
+import Panel from '../ReconciliationPanel.vue'
+const api = vi.hoisted(() => ({ preview: vi.fn(), confirm: vi.fn() }))
+vi.mock('@/api/attendanceReconciliation', () => ({ previewReconciliation: api.preview, confirmReconciliationShift: api.confirm }))
+vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
+const shifts = [
+  { shift_type_id: 1, name: '早班', work_start: '07:00', work_end: '16:00' },
+  { shift_type_id: 2, name: '晚班', work_start: '08:00', work_end: '17:00' },
+]
+const row = (id: number) => ({ employee_id: id, employee_name: `測試員工${id}`, employee_number: `T${id}`, date: '2026-08-03',
+  punch_in: `2026-08-03T0${id === 1 ? 8 : 7}:00:00`, punch_out: `2026-08-03T${id === 1 ? 17 : 16}:00:00`,
+  expected_start: id === 1 ? '07:00' : '08:00', expected_end: id === 1 ? '16:00' : '17:00', original_shift_type_id: id,
+  day_off: false, status: 'possible_shift_change', reason: '兩卡接近另一班別', candidates: [shifts[id === 1 ? 1 : 0]], version: String(id).repeat(64) })
+let wrapper: ReturnType<typeof mount<typeof Panel>>
+const button = (text: string) => wrapper.findAll('button').find(item => item.text() === text)!
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-06T12:00:00+08:00'))
+  vi.resetAllMocks()
+  api.preview.mockResolvedValue({ data: { rows: [row(1), row(2)], shift_types: shifts } })
+  api.confirm.mockResolvedValue({ data: { message: '已確認', updated_count: 2 } })
+  wrapper = mount(Panel, { props: { year: 2026, month: 8, revision: 0 }, global: { plugins: [ElementPlus], stubs: { teleport: true, ElDialog: { name: 'ElDialog', props: ['modelValue'], template: '<section v-if="modelValue" role="dialog"><slot /><slot name="footer" /></section>' } } } })
+})
+afterEach(() => { wrapper.unmount(); vi.useRealTimers() })
+describe('核對清單互動', () => {
+  it('初次核對不宣稱完整；明確勾選後重查才傳完整區間', async () => {
+    await flushPromises()
+    expect(api.preview.mock.calls[0][0]).toEqual({ start_date: '2026-08-01', end_date: '2026-08-31' })
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    expect(wrapper.findAll('article')).toHaveLength(0)
+    await button('重新核對').trigger('click'); await flushPromises()
+    expect(api.preview.mock.lastCall?.[0]).toEqual({ start_date: '2026-08-01', end_date: '2026-08-31', complete_start_date: '2026-08-01', complete_end_date: '2026-08-31' })
+  })
+  it('更改日期撤銷完整性聲明並使舊建議失效', async () => {
+    await flushPromises()
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await button('重新核對').trigger('click'); await flushPromises()
+    await wrapper.find('input[aria-label="核對起日"]').setValue('2026-08-02')
+    expect((wrapper.find('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.findAll('article')).toHaveLength(0)
+  })
+  it('再次匯入重設完整性並重新取得結果', async () => {
+    await flushPromises()
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await wrapper.setProps({ revision: 1 }); await flushPromises()
+    expect((wrapper.find('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(false)
+    expect(api.preview.mock.lastCall?.[0]).not.toHaveProperty('complete_start_date')
+  })
+  it('兩人互換須勾選對象後一次送出兩個版本與原因', async () => {
+    await flushPromises()
+    await button('確認當日班別').trigger('click'); await flushPromises()
+    expect(wrapper.findComponent({ name: 'ElDialog' }).props('modelValue')).toBe(true)
+    expect(wrapper.text()).toContain('一併確認 測試員工2')
+    await wrapper.findAll('input[type="checkbox"]')[1].setValue(true)
+    await wrapper.find('textarea').setValue('已與兩位員工確認同日換班')
+    await button('確認並重算').trigger('click'); await flushPromises()
+    expect(api.confirm.mock.lastCall?.[0]).toEqual({ items: [
+      { employee_id: 1, date: '2026-08-03', shift_type_id: 2, day_off: false, version: '1'.repeat(64) },
+      { employee_id: 2, date: '2026-08-03', shift_type_id: 1, day_off: false, version: '2'.repeat(64) },
+    ], reason: '已與兩位員工確認同日換班' })
+    expect(wrapper.emitted('confirmed')).toHaveLength(1)
+  })
+})

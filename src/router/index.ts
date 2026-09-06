@@ -4,7 +4,7 @@ import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoa
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo, clearAuth, hasPortalPermission, hasPermission, isPlatformAdmin } from '@/utils/auth'
 import { captureException } from '@/utils/sentry'
 import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
-import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
 function resolveLegacySectionQuery(to: RouteLocation): RouteLocationRaw | null {
@@ -229,8 +229,8 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/attendance',
             name: 'attendance',
-            component: () => import('../views/attendance/AttendanceWorkspaceView.vue'),
-            meta: { title: MODULE_TERMS.attendance }
+            component: () => import('../views/attendance/AttendanceScheduleHubView.vue'),
+            meta: { title: '排班與出勤' }
         },
         {
             path: '/leaves',
@@ -247,8 +247,8 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/schedule',
             name: 'schedule',
-            component: () => import('../views/ScheduleView.vue'),
-            meta: { title: MODULE_TERMS.schedule }
+            component: () => import('../views/attendance/AttendanceScheduleHubView.vue'),
+            meta: { title: '排班與出勤' }
         },
         {
             path: '/salary',
