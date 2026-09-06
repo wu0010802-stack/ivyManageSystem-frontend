@@ -7,9 +7,11 @@
     {{ expanded ? '收起詳細資料 ▲' : '詳細資料 ▼' }}
   </button>
   <div
-    v-show="expanded"
     class="preschool-gov-detail"
+    :class="{ 'is-expanded': expanded }"
+    :inert="!expanded"
   >
+    <div class="preschool-gov-detail__inner">
     <div v-if="loading" class="gov-detail-loading">載入政府資料中…</div>
     <div v-else-if="!govData" class="gov-detail-empty">查無政府登記資料（該園可能尚未收錄或名稱格式不同）</div>
     <template v-else>
@@ -99,6 +101,7 @@
         </span>
       </div>
     </template>
+    </div>
   </div>
 </template>
 
@@ -140,8 +143,9 @@ const sqmToPing = (sqm: number | null | undefined) => (Number(sqm) / 3.30579).to
   background: var(--color-info-soft);
 }
 
-.preschool-gov-detail {
-  margin-top: 6px;
+.preschool-gov-detail__inner {
+  overflow: hidden;
+  min-height: 0;
   border-radius: 10px;
   border: 1px solid rgba(59, 130, 246, 0.18);
   background: #f8fbff;
@@ -194,19 +198,23 @@ const sqmToPing = (sqm: number | null | undefined) => (Number(sqm) / 3.30579).to
 .gov-status-clean  { color: #166534; }
 .gov-status-warned { color: var(--color-warning-darker); font-weight: 600; }
 
-/* v-show 展開動畫：直接在元素上做 max-height transition，不依賴 <Transition>。
-   2026-07-20 UI 稽核評估：不改 grid-template-rows 動畫——該法需插入中介 wrapper 且
-   對 v-show 的 display:none 切換一樣無法平滑補間，風險大於收益；max-height 動畫僅
-   0.25s、面板高度上限 600px 已知，layout 動畫成本可接受，維持現狀。 */
+/* 展開動畫：2026-07-20 曾評估並否決 grid-template-rows（理由：需插入中介 wrapper，
+   且對 v-show 的 display:none 切換一樣無法平滑補間），改用 max-height transition
+   （動畫 layout 屬性、觸發 reflow）。2026-09-06 重新採用 grid-template-rows：
+   移除 v-show，改為一律渲染＋class 切換（`.is-expanded`），把「需要中介 wrapper」
+   這個當年的否決理由直接做成 __inner 層——問題已不存在。collapse 時用
+   `:inert` 取代 display:none 阻擋鍵盤焦點與 a11y tree 曝光。 */
 .preschool-gov-detail {
-  overflow: hidden;
-  transition: opacity 0.2s ease, max-height 0.25s ease;
-  max-height: 600px;
-}
-.preschool-gov-detail[style*="display: none"],
-.preschool-gov-detail[style*="display:none"] {
-  max-height: 0;
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: 0;
   opacity: 0;
+  transition: grid-template-rows 0.25s ease, opacity 0.2s ease, margin-top 0.25s ease;
+}
+.preschool-gov-detail.is-expanded {
+  grid-template-rows: 1fr;
+  margin-top: 6px;
+  opacity: 1;
 }
 
 /* dark mode：以下元素疊在不翻色的硬編淺底/白卡（finding #2 既有債，非本次範圍），上游
