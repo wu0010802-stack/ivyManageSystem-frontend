@@ -117,16 +117,19 @@ defineProps<{
 .kpi-card {
   flex: 1;
   min-width: 130px;
-  /* 改吃 admin brand token（青藍 #0284c7）；舊 --rv-primary 海軍藍 #1e40af 與品牌色相漂移 */
-  border-left: 4px solid var(--brand-primary, #0284c7);
+  /* 改吃 admin brand token（青藍 #0284c7）；舊 --rv-primary 海軍藍 #1e40af 與品牌色相漂移
+   * 2026-09-06：移除側邊粗色條（accent border），改用淡底色 + 1px 完整邊框表達強調，
+   * light/dark 皆有對應 --brand-primary-soft 定義（design-tokens.css / a11y.css）。 */
+  background: var(--brand-primary-soft, #e0f2fe);
+  border: 1px solid var(--brand-primary, #0284c7);
   transition: box-shadow 0.18s ease, transform 0.18s ease;
 }
 .kpi-card:hover {
   box-shadow: 0 4px 16px rgba(2, 132, 199, 0.12);
   transform: translateY(-1px);
 }
-.kpi-card.kpi-blue   { border-left-color: var(--color-info); }
-.kpi-card.kpi-green  { border-left-color: var(--color-success-hover); }
+.kpi-card.kpi-blue   { background: var(--color-info-soft); border-color: var(--color-info); }
+.kpi-card.kpi-green  { background: var(--color-success-soft); border-color: var(--color-success-hover); }
 .kpi-value {
   font-family: 'Fira Code', ui-monospace, monospace;
   font-size: 1.8rem;

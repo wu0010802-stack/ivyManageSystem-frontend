@@ -27,6 +27,16 @@
       <span v-if="card.source" class="funnel-card__source">{{ card.source }}</span>
     </div>
     <div v-if="card.withdraw_reason" class="funnel-card__reason">{{ card.withdraw_reason }}</div>
+    <!-- 收款對帳（2026-09-06）：招生端的預繳旗標與學費模組的預繳金是兩個真相，
+         不連動。落差直接標在卡片上，否則要兩個模組對開才看得出來。 -->
+    <div
+      v-if="mismatchLabel"
+      class="funnel-card__mismatch"
+      :title="mismatchTitle"
+      data-test="card-deposit-mismatch"
+    >
+      {{ mismatchLabel }}
+    </div>
     <div v-if="card.student_id" class="student-id-badge">學號 #{{ card.student_id }}</div>
   </div>
 </template>
@@ -38,8 +48,7 @@ import { formatSemesterShort } from '@/utils/classHistory'
 import { WITHDRAWN_FROM_LABELS } from '@/constants/recruitmentFunnel'
 import type { FunnelCardData } from '@/stores/recruitmentFunnel'
 
-// TODO(codegen): schema.d.ts regen 後 FunnelCardData 會自帶 target_semester，屆時此擴充成為冗餘可移除
-type FunnelCardWithTerm = FunnelCardData & { target_semester?: number | null }
+type FunnelCardWithTerm = FunnelCardData
 
 const props = defineProps<{
   card: FunnelCardWithTerm
@@ -62,6 +71,19 @@ const withdrawnLabel = computed((): string | null =>
     ? (WITHDRAWN_FROM_LABELS[props.card.withdrawn_from] ?? null)
     : null,
 )
+
+/** 招生旗標與學費模組收款紀錄的落差（後端算好，見 services/recruitment_prepayment_link）。 */
+const MISMATCH_LABEL: Record<string, string> = {
+  flag_without_credit: '查無收款',
+  credit_without_flag: '已收款未標記',
+}
+const MISMATCH_TITLE: Record<string, string> = {
+  flag_without_credit: '這筆標記為已預繳，但學費管理查不到對應的預繳金，請確認收款是否漏登。',
+  credit_without_flag: '學費管理已有這筆的預繳金，但招生狀態還停在未預繳，請把卡片推進到「已預繳」。',
+}
+const mismatchKey = computed(() => props.card.deposit_mismatch ?? '')
+const mismatchLabel = computed(() => MISMATCH_LABEL[mismatchKey.value] ?? '')
+const mismatchTitle = computed(() => MISMATCH_TITLE[mismatchKey.value] ?? '')
 </script>
 
 <style scoped>
@@ -77,6 +99,16 @@ const withdrawnLabel = computed((): string | null =>
 .funnel-card:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.funnel-card__mismatch {
+  margin-top: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+  display: inline-block;
 }
 .funnel-card--pending {
   opacity: 0.5;
