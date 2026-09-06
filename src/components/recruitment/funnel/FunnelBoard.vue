@@ -31,6 +31,25 @@
 
     <FunnelSummaryBar v-if="store.board" :summary="store.board.summary" />
 
+    <!-- 沒有入學學期的訪視不屬於任何學年看板（2026-09-06）。不講出來，空看板會
+         謊稱「還沒有訪視紀錄」，操作者只會覺得系統壞了（e2e-115 實測明細 170
+         筆、看板 0 張）。 -->
+    <el-alert
+      v-if="unscopedCount > 0"
+      type="info"
+      :closable="false"
+      show-icon
+      class="funnel-board__unscoped"
+      data-test="funnel-unscoped-alert"
+    >
+      <template #title>
+        另有 {{ unscopedCount }} 筆訪視沒有填入學學期，不會出現在任何學年的看板。
+        <el-link type="primary" :underline="false" @click="$emit('show-unscoped')">
+          到訪視明細處理
+        </el-link>
+      </template>
+    </el-alert>
+
     <div class="funnel-board__columns">
       <FunnelColumn
         v-for="col in columnConfigs"
@@ -62,7 +81,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElSelect, ElOption, ElButton, ElMessage, ElMessageBox } from 'element-plus'
+import { ElSelect, ElOption, ElButton, ElMessage, ElMessageBox, ElAlert, ElLink } from 'element-plus'
 import { useRecruitmentFunnelStore, type Stage, type FunnelCardData } from '@/stores/recruitmentFunnel'
 import { hasPermission } from '@/utils/auth'
 import { currentRocYear } from '@/utils/academic'
@@ -80,9 +99,14 @@ defineProps<{
 
 const emit = defineEmits<{
   created: []
+  /** 使用者要去處理沒有入學學期的訪視（父層切到明細 tab） */
+  'show-unscoped': []
 }>()
 
 const store = useRecruitmentFunnelStore()
+
+/** 沒有入學學期、不屬於任何學年看板的訪視數（後端 board 回傳）。 */
+const unscopedCount = computed(() => store.board?.unscoped_count ?? 0)
 
 // === 篩選器 ===
 const schoolYearLocal = ref<number | null>(null)
@@ -131,14 +155,30 @@ interface PendingTransition {
 const pendingTransition = ref<PendingTransition | null>(null)
 const dialogOpen = ref(false)
 
+/**
+ * 每一種階段轉換都先跳確認框（2026-09-06 招生流程審查）。
+ *
+ * 原本只有「選班別」與「進退出欄」會攔；`visited→deposited` 直接送出，於是
+ * 拖曳完全填不到「收預繳人員」；`withdrawn→*` 也直接送出，進退出欄要填原因、
+ * 離開卻一聲不響，一手滑就把退費個案復原了。
+ *
+ * 保留這個函式而不是寫死 true：對話框內容仍依 from/to 分模式，未來若有真正
+ * 無需確認的轉換，改這裡就好。
+ */
 function needsDialog(from: Stage, to: Stage): boolean {
   // deposited → enrolled：需選教室（dropdown mode）
   if (from === 'deposited' && to === 'enrolled') return true
   // 進退出欄（退預繳／退註冊）：destructive，必填原因
   if (to === 'withdrawn') return true
+  // 離開退出欄（取消退費）：與進欄對稱，要確認
+  if (from === 'withdrawn') return true
+  // 標記已預繳：順手記下誰收的
+  if (from === 'visited' && to === 'deposited') return true
   // 自「已註冊」往前退：destructive
   const order: readonly Stage[] = FUNNEL_STAGES
   if (from === 'enrolled' && order.indexOf(to) < order.indexOf(from)) return true
+  // 取消預繳（deposited → visited）：狀態倒退，確認
+  if (from === 'deposited' && to === 'visited') return true
   return false
 }
 
@@ -155,25 +195,50 @@ async function onTransitionAttempt(payload: {
     dialogOpen.value = true
   } else {
     try {
-      await store.transition(payload.visitId, payload.toStage, {})
-      ElMessage.success('已更新階段')
+      const result = await store.transition(payload.visitId, payload.toStage, {})
+      notifyTransitionSuccess(result)
     } catch (err) {
       handleTransitionError(err)
     }
   }
 }
 
-async function onDialogConfirm(payload: { classroomId?: number; reason?: string }) {
+async function onDialogConfirm(payload: {
+  classroomId?: number
+  reason?: string
+  depositCollector?: string
+}) {
   if (!pendingTransition.value) return
   const { visitId, toStage } = pendingTransition.value
   try {
-    await store.transition(visitId, toStage, payload)
-    ElMessage.success('已更新階段')
+    const result = await store.transition(visitId, toStage, payload)
+    notifyTransitionSuccess(result)
   } catch (err) {
     handleTransitionError(err)
   } finally {
     pendingTransition.value = null
   }
+}
+
+/**
+ * 後端回的 warnings 要講給人聽（2026-09-06）：退預繳只關招生端的旗標，不會退錢，
+ * 名下還有預繳金時得提醒去學費管理，否則錢就這樣掛著沒人知道。
+ */
+const TRANSITION_WARNING_TEXT: Record<string, string> = {
+  active_prepayment_needs_refund:
+    '已標記退預繳，但這筆在「學費管理」還有未處理的預繳金，請另外走退款流程。',
+  duplicate_student_name_birthday:
+    '系統裡已有同名同生日的在學學生，請確認不是重複建檔。',
+}
+
+function notifyTransitionSuccess(result: unknown): void {
+  const warnings = (result as { warnings?: string[] } | undefined)?.warnings ?? []
+  const texts = warnings.map((w) => TRANSITION_WARNING_TEXT[w]).filter(Boolean)
+  if (texts.length) {
+    ElMessageBox.alert(texts.join('\n'), '已更新，但有事情要處理', { type: 'warning' })
+    return
+  }
+  ElMessage.success('已更新階段')
 }
 
 function onDialogCancel() {
@@ -253,6 +318,9 @@ onMounted(() => {
   margin-left: auto;
 }
 
+.funnel-board__unscoped {
+  margin-bottom: 12px;
+}
 .funnel-board__columns {
   display: flex;
   gap: var(--space-3);

@@ -12,7 +12,11 @@
 
     <el-tabs v-model="activeTab" class="admissions-tabs" @tab-change="onTabChange">
       <el-tab-pane label="漏斗看板" name="funnel">
-        <FunnelBoard :dashboard="dashboard" @created="onFunnelVisitCreated" />
+        <FunnelBoard
+          :dashboard="dashboard"
+          @created="onFunnelVisitCreated"
+          @show-unscoped="showUnscopedVisits"
+        />
       </el-tab-pane>
       <el-tab-pane label="訪視明細" name="records" lazy>
         <AdmissionsRecordsPanel
@@ -76,6 +80,14 @@ const statsPanelRef = ref<InstanceType<typeof RecruitmentStatsPanel> | null>(nul
 function drillToRecords(patch: Record<string, unknown>) {
   recordsFilterPatch.value = { ...patch }
   activeTab.value = 'records'
+}
+
+/**
+ * 看板提示「有 N 筆沒有入學學期」時的去處（2026-09-06）：切到訪視明細並清掉
+ * 學年學期篩選，讓那些訪視真的看得到——否則使用者切過去仍被同一組篩選擋住。
+ */
+function showUnscopedVisits() {
+  drillToRecords({ school_year: null, semester: null })
 }
 
 function onTabChange(name: string | number) {
