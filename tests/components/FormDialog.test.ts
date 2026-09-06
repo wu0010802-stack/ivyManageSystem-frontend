@@ -161,6 +161,15 @@ describe('FormDialog', () => {
     expect(document.activeElement).toBe(w.find('[data-test="form-dialog-body"]').element)
   })
 
+  it('第一個可聚焦欄位在 el-upload 內時跳過，聚焦下一個一般欄位', async () => {
+    const w = mountDialog({}, {
+      default: '<div class="el-upload"><input type="file" /></div><input class="second" />',
+    })
+    w.findComponent(ElDialogStub).vm.$emit('opened')
+    await nextTick(); await nextTick()
+    expect(document.activeElement).toBe(w.find('input.second').element)
+  })
+
   it('scrollToFirstError 捲到第一個 is-error 欄並聚焦其 input；沒有錯誤回 false', async () => {
     const w = mountDialog({}, {
       default: '<div class="el-form-item"><input class="ok" /></div><div class="el-form-item is-error"><input class="bad" /></div>',

@@ -1,5 +1,5 @@
 import type { FormItemRule } from 'element-plus'
-import { TW_MOBILE_RE } from '@/utils/phone'
+import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
 /**
  * Element Plus FormItemRule 產生器（spec 2026-09-06 §3.3）。
@@ -26,7 +26,7 @@ export function phone(label = '手機'): FormItemRule {
     trigger: 'blur',
     validator: (_rule: unknown, value: unknown, cb: Callback) => {
       if (value == null || value === '') return cb()
-      if (TW_MOBILE_RE.test(String(value).replace(/[\s-]/g, ''))) return cb()
+      if (TW_MOBILE_RE.test(normalizeMobile(value))) return cb()
       cb(new Error(`${label}格式應為 09 開頭共 10 碼`))
     },
   }

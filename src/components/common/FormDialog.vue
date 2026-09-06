@@ -63,6 +63,7 @@ const bodyRef = ref<HTMLElement | null>(null)
 const width = computed(() => FORM_DIALOG_WIDTH[props.size])
 const fullscreen = computed(() => isMobile.value && (props.fullscreenOnMobile ?? props.size === 'wide'))
 // 透傳給 el-dialog 的其餘屬性；使用端可覆寫 destroy-on-close / close-on-click-modal 等預設
+// 初掛零 attrs 時之後動態加入的 attr 不會觸發重算（極邊緣）
 const dialogAttrs = computed(() => ({
   destroyOnClose: true,
   closeOnClickModal: false,
@@ -93,8 +94,9 @@ function handleSubmit(): void {
   emit('submit')
 }
 
+/** el-input-tag／el-mention 亦有自身 Enter 語意，repo 尚未使用，用到時補進來 */
 const PICKER_WRAPPER = '.el-select, .el-date-editor, .el-time-picker, .el-cascader, .el-autocomplete'
-/** 可送出的文字類 input type；''＝未設 type（瀏覽器預設視為文字） */
+/** 可送出的文字類 input type；未設或未知 type 時瀏覽器回 'text'，'' 只是保險 */
 const TEXT_INPUT_TYPES = ['text', 'number', 'email', 'tel', 'url', 'password', 'search', '']
 
 function onBodyKeydown(event: KeyboardEvent): void {
@@ -110,13 +112,13 @@ function onBodyKeydown(event: KeyboardEvent): void {
   handleSubmit()
 }
 
-const FOCUSABLE = 'input:not([readonly]):not([disabled]):not([type="hidden"]), textarea:not([readonly]):not([disabled])'
+const FOCUSABLE = 'input:not([readonly]):not([disabled]):not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]), textarea:not([readonly]):not([disabled])'
 
 function focusFirstField(): void {
   const body = bodyRef.value
   if (!body) return
   const candidates = Array.from(body.querySelectorAll<HTMLElement>(FOCUSABLE))
-    .filter((el) => !el.closest(PICKER_WRAPPER))
+    .filter((el) => !el.closest(PICKER_WRAPPER) && !el.closest('.el-upload'))
   ;(candidates[0] ?? body).focus()
 }
 
@@ -154,7 +156,7 @@ defineExpose({ requestClose, scrollToFirstError })
     @closed="emit('closed')"
   >
     <template v-if="$slots['title-extra']" #header="{ titleId, titleClass }">
-      <span :id="titleId" :class="titleClass">{{ title }}</span>
+      <span :id="titleId" :class="titleClass" role="heading" aria-level="2">{{ title }}</span>
       <slot name="title-extra" />
     </template>
 

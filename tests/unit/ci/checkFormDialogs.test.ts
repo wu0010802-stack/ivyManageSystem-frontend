@@ -57,6 +57,7 @@ describe('check-form-dialogs 四指標偵測', () => {
       'src/views/RawView.vue': '<el-dialog v-model="v" width="480px"><el-form label-width="90px"><el-form-item /></el-form></el-dialog><el-dialog width="360px"><el-form label-width="80px" /></el-dialog>',
     })
     const out = run(root)
+    expect(out).toMatch(/A=2\b/)
     expect(out).toMatch(/B=2\b/)
     expect(out).toMatch(/C=2\b/)
   })

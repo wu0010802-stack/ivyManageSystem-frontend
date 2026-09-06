@@ -22,6 +22,10 @@ describe('validators/rules 文案與規則', () => {
     expect(runValidator(r, '02-12345678')).toBe('手機格式應為 09 開頭共 10 碼')
   })
 
+  it('phone：改用 normalizeMobile，句點分隔的手機號碼也通過', () => {
+    expect(runValidator(phone(), '0912.345.678')).toBeNull()
+  })
+
   it('email：格式錯誤拒絕', () => {
     expect(runValidator(email(), 'a@b.c')).toBeNull()
     expect(runValidator(email(), 'nope')).toBe('Email 格式不正確')
