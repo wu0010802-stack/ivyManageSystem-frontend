@@ -2,7 +2,7 @@
   <el-dialog
     :model-value="visible"
     title="管理登記月份"
-    width="420px"
+    width="min(420px, 94vw)"
     @update:model-value="$emit('update:visible', $event)"
     @open="loadMonths"
   >

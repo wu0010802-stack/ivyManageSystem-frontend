@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="保留座位（暫定編班）" width="420px">
+  <el-dialog v-model="visible" title="保留座位（暫定編班）" width="min(420px, 94vw)">
     <p class="child-info">幼生：{{ v.childName }}（visit #{{ v.id }}）</p>
     <el-form label-position="top">
       <el-form-item label="暫定年級" required>

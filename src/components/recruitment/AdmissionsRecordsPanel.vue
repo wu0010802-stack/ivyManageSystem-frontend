@@ -61,7 +61,7 @@
       @reserved="onReserved"
     />
 
-    <el-drawer v-model="journeyDrawerVisible" title="參觀→入學 歷程" direction="rtl" size="460px">
+    <el-drawer v-model="journeyDrawerVisible" title="參觀→入學 歷程" direction="rtl" size="min(460px, 92vw)">
       <JourneyTimeline :visit-id="journeyVisitId" />
     </el-drawer>
   </div>

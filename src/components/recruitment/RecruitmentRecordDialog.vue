@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :model-value="visible"
-    width="680px"
+    width="min(680px, 94vw)"
     destroy-on-close
     @update:model-value="$emit('update:visible', $event)"
   >

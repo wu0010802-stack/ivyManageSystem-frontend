@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     :title="title"
-    width="480px"
+    width="min(480px, 94vw)"
     :before-close="onCancel"
   >
     <div v-if="warningText" class="transition-warning">

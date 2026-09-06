@@ -171,7 +171,14 @@
       <el-table-column prop="no_deposit_reason" label="未預繳原因" min-width="120" show-overflow-tooltip />
       <el-table-column prop="notes" label="備註" min-width="120" show-overflow-tooltip />
       <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />
-      <el-table-column v-if="canWrite || canConvert" label="操作" width="360" fixed="right">
+      <!-- 手機上不釘住操作欄（2026-09-06）：360px 的操作欄在 390px 視窗會蓋掉
+           幾乎整個表格，反而看不到是哪一位幼生。窄螢幕改為隨表格一起水平捲動。 -->
+      <el-table-column
+        v-if="canWrite || canConvert"
+        label="操作"
+        width="360"
+        :fixed="isMobile ? false : 'right'"
+      >
         <template #default="{ row }">
           <el-button v-if="canWrite" size="small" @click="$emit('edit', row)">編輯</el-button>
           <el-button size="small" @click="$emit('journey', row)">歷程</el-button>
@@ -219,6 +226,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { currentRocYear } from '@/utils/academic'
 import { formatSemester } from '@/utils/classHistory'
 
@@ -272,6 +280,8 @@ const emit = defineEmits<{
   'withdraw': [row: Record<string, unknown>]
   'delete': [id: unknown]
 }>()
+
+const { isMobile } = useIsMobile()
 
 /** 招生旗標與學費模組收款紀錄的落差（後端 services/recruitment_prepayment_link 算好）。 */
 const MISMATCH_LABEL: Record<string, string> = {

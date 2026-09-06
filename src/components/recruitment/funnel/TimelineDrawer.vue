@@ -3,7 +3,7 @@
     v-model="visible"
     :title="`Visit #${visitId ?? ''} 時間線`"
     direction="rtl"
-    size="420px"
+    size="min(420px, 92vw)"
   >
     <!-- 呈現層與明細的「歷程」共用 RecruitmentTimelineList（2026-09-06）：
          兩處原本各有一份逐字相同的渲染與樣式。本檔只負責 drawer 外框與取資料。 -->
