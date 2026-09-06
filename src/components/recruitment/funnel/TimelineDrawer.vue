@@ -5,39 +5,21 @@
     direction="rtl"
     size="420px"
   >
-    <div v-if="loading" v-loading="true" class="loading-area" />
-    <div v-else-if="events.length === 0" class="empty-area">尚無事件記錄</div>
-    <ul v-else class="timeline-list">
-      <li
-        v-for="(ev, idx) in events"
-        :key="idx"
-        class="timeline-item"
-        :class="`source--${ev.source}`"
-      >
-        <div class="timeline-time">{{ formatTime(ev.created_at) }}</div>
-        <div class="timeline-event">
-          <el-tag
-            :type="ev.source === 'recruitment' ? 'warning' : 'success'"
-            size="small"
-          >
-            {{ ev.source === 'recruitment' ? '招生' : '學生' }}
-          </el-tag>
-          <span class="event-type">{{ humanizeEventType(ev.event_type) }}</span>
-        </div>
-        <div v-if="ev.from_stage || ev.to_stage" class="timeline-stage">
-          {{ ev.from_stage ?? '—' }} → {{ ev.to_stage ?? '—' }}
-        </div>
-        <div v-if="ev.reason" class="timeline-reason">{{ ev.reason }}</div>
-      </li>
-    </ul>
+    <!-- 呈現層與明細的「歷程」共用 RecruitmentTimelineList（2026-09-06）：
+         兩處原本各有一份逐字相同的渲染與樣式。本檔只負責 drawer 外框與取資料。 -->
+    <RecruitmentTimelineList
+      :events="events"
+      :loading="loading"
+      empty-text="尚無事件記錄"
+    />
   </el-drawer>
 </template>
 
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { ElDrawer, ElTag } from 'element-plus'
+import { ElDrawer } from 'element-plus'
 import { useRecruitmentFunnelStore } from '@/stores/recruitmentFunnel'
-import { FUNNEL_EVENT_LABELS } from '@/constants/recruitmentFunnel'
+import RecruitmentTimelineList from '@/components/recruitment/RecruitmentTimelineList.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -74,56 +56,8 @@ watch(
   },
   { immediate: true },
 )
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString('zh-TW', { hour12: false })
-}
-
-function humanizeEventType(t: string): string {
-  return FUNNEL_EVENT_LABELS[t] ?? t
-}
 </script>
 
 <style scoped>
-.loading-area {
-  height: 200px;
-}
-.empty-area {
-  text-align: center;
-  color: var(--text-tertiary);
-  padding: 32px 0;
-}
-.timeline-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.timeline-item {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-color-light);
-}
-.timeline-time {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-.timeline-event {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 4px;
-}
-.event-type {
-  font-weight: 600;
-}
-.timeline-stage {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.timeline-reason {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-style: italic;
-}
+/* 清單樣式已搬到 RecruitmentTimelineList；本檔只保留 drawer 外框相關 */
 </style>
