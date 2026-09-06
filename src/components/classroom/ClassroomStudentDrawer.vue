@@ -217,6 +217,17 @@ const { confirmDelete: handleStudentDelete } = useConfirmDelete({
 })
 
 // ── 開完整檔案 ──────────────────────────────────────
+/**
+ * 準新生 → 招生入學訪視明細（2026-09-06）。
+ * 帶姓名關鍵字讓對方一進去就看到那一筆，不必自己再搜一次。
+ */
+const openProspectVisit = (p: { child_name?: string | null }) => {
+  router.push({
+    path: '/students/admissions',
+    query: { tab: 'records', keyword: String(p.child_name ?? '') },
+  })
+}
+
 const handleOpenFullPage = () => {
   if (!selectedStudentId.value) {
     ElMessage.info('請先在左側選擇學生')
@@ -462,7 +473,16 @@ const close = () => emit('update:visible', false)
                 >
                   <ul class="prospect-items">
                     <li v-for="p in prospects" :key="p.id" class="prospect-item">
-                      <span class="prospect-name">{{ p.child_name }}</span>
+                      <!-- 2026-09-06：原本是純文字清單，看到名字卻沒有任何去處，
+                           要處理得自己切到招生入學再用姓名搜尋一次。 -->
+                      <button
+                        type="button"
+                        class="prospect-name prospect-name--link"
+                        data-test="prospect-open-visit"
+                        @click="openProspectVisit(p)"
+                      >
+                        {{ p.child_name }}
+                      </button>
                       <el-tag size="small" type="info">{{ p.target_semester === 2 ? '下學期' : '上學期' }}</el-tag>
                       <span v-if="p.source" class="muted">{{ p.source }}</span>
                       <el-tag v-if="p.has_deposit" size="small" type="success">已預繳</el-tag>
@@ -743,6 +763,22 @@ const close = () => emit('update:visible', false)
   justify-content: center;
   height: 100%;
   min-height: 400px;
+}
+
+/* 準新生姓名可點進招生入學訪視明細（2026-09-06）。用 button 保留鍵盤可及性，
+   外觀維持文字連結。 */
+.prospect-name--link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--brand-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.prospect-name--link:hover,
+.prospect-name--link:focus-visible {
+  text-decoration: underline;
 }
 
 .mobile-back { display: none; margin-bottom: 8px; }

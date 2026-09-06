@@ -256,8 +256,29 @@
     <!-- ============ 新增歸屬列 dialog ============ -->
     <el-dialog v-model="addDialogVisible" title="新增歸屬列" width="480px">
       <el-form :model="addForm" label-width="90px">
-        <el-form-item label="幼生 visit id">
-          <el-input-number v-model="addForm.recruitment_visit_id" :min="1" controls-position="right" style="width: 100%" />
+        <!-- 2026-09-06：原本要手打裸的 visit id，招生人員得自己去記或另開分頁查。
+             改成用姓名搜尋招生訪視，選到誰就帶哪個 id。 -->
+        <el-form-item label="幼生">
+          <el-select
+            v-model="addForm.recruitment_visit_id"
+            filterable
+            remote
+            clearable
+            reserve-keyword
+            placeholder="輸入幼生姓名搜尋"
+            :remote-method="searchVisits"
+            :loading="visitSearchLoading"
+            style="width: 100%"
+            data-test="bonus-visit-search"
+          >
+            <el-option
+              v-for="v in visitOptions"
+              :key="v.id"
+              :value="v.id"
+              :label="v.label"
+            />
+          </el-select>
+          <div class="hint">找不到人時，先確認該筆訪視已建立在「招生入學 → 訪視明細」。</div>
         </el-form-item>
         <el-form-item label="來源點數">
           <el-select v-model="addForm.point_code" style="width: 100%">
@@ -303,6 +324,7 @@ import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
 import { useEmployeeStore } from '@/stores/employee'
+import { getRecruitmentRecords } from '@/api/recruitment'
 import {
     listCampaigns,
     createCampaign,
@@ -552,6 +574,40 @@ const onStatusChange = (row: AttributionRow, status: string) => {
     patchRow(row, { status })
 }
 
+// ---- 招生訪視搜尋（2026-09-06）----
+// 原本要手打裸的 visit id，招生人員得自己去記或另開分頁查訪視編號。
+interface VisitOption { id: number; label: string }
+const visitOptions = ref<VisitOption[]>([])
+const visitSearchLoading = ref(false)
+
+const searchVisits = async (keyword: string) => {
+    const kw = keyword.trim()
+    if (!kw) {
+        visitOptions.value = []
+        return
+    }
+    visitSearchLoading.value = true
+    try {
+        const resp = await getRecruitmentRecords({ keyword: kw, page_size: 20 })
+        const rows = (resp.data as { records?: Record<string, unknown>[] } | undefined)?.records ?? []
+        visitOptions.value = rows.map((r) => {
+            const term = r.target_school_year != null && r.target_semester != null
+                ? ` · ${r.target_school_year}-${r.target_semester}`
+                : ''
+            const grade = r.grade ? ` · ${String(r.grade)}` : ''
+            return {
+                id: Number(r.id),
+                label: `${String(r.child_name ?? '')}${grade}${term}（#${Number(r.id)}）`,
+            }
+        })
+    } catch (e) {
+        ElMessage.error(friendlyError('搜尋招生訪視失敗', e))
+        visitOptions.value = []
+    } finally {
+        visitSearchLoading.value = false
+    }
+}
+
 // ---- 手動新增歸屬列 ----
 const addDialogVisible = ref(false)
 const addForm = reactive<{
@@ -574,6 +630,7 @@ const addForm = reactive<{
     notes: '',
 })
 const openAddDialog = () => {
+    visitOptions.value = []
     addForm.recruitment_visit_id = null
     addForm.employee_id = null
     addForm.point_code = pointCatalogOptions.value[0]?.value || ''

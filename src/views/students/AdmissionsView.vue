@@ -30,7 +30,13 @@
         <IntakePlanPanel />
       </el-tab-pane>
       <el-tab-pane label="官網報名" name="ivykids" lazy>
-        <RecruitmentIvykidsTab :bar-component="LazyBar" :show-charts="true" :can-write="canWrite" />
+        <RecruitmentIvykidsTab
+          :bar-component="LazyBar"
+          :show-charts="true"
+          :can-write="canWrite"
+          @converted="onRecordsChanged"
+          @open-visit="(kw: string) => drillToRecords({ keyword: kw })"
+        />
       </el-tab-pane>
       <el-tab-pane label="統計分析" name="stats" lazy>
         <RecruitmentStatsPanel
