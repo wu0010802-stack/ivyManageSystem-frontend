@@ -5,7 +5,7 @@ import { useAttendanceReconciliation } from '@/composables/useAttendanceReconcil
 import type { ApiResponse } from '@/api/_generated/typed'
 import { hasPermission } from '@/utils/auth'
 import { dateToLocalISO, formatDateTimeTW, todayTaipeiISO } from '@/utils/format'
-import { FORM_DIALOG_WIDTH } from '@/constants/formDialog'
+import FormDialog from '@/components/common/FormDialog.vue'
 
 type Row = ApiResponse<'/attendance/reconciliation/preview', 'post'>['rows'][number]
 const props = defineProps<{ year: number; month: number; revision: number }>()
@@ -129,7 +129,7 @@ async function saveShift() {
         <el-button v-if="canWrite && !row.punch_in && !row.punch_out" text @click="emit('import', row)">補匯入當日紀錄</el-button>
       </article>
     </div>
-    <el-dialog v-model="dialogOpen" title="確認當日班別" :width="FORM_DIALOG_WIDTH.compact" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
+    <FormDialog v-model="dialogOpen" title="確認當日班別" size="compact" :enter-submit="false" :loading="saving" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <template v-if="selected">
         <p>{{ selected.employee_name }} · {{ selected.date }}</p>
         <p>打卡：{{ selected.punch_in ? formatDateTimeTW(selected.punch_in) : '無上班卡' }} ／ {{ selected.punch_out ? formatDateTimeTW(selected.punch_out) : '無下班卡' }}</p>
@@ -148,7 +148,7 @@ async function saveShift() {
         <p class="reconciliation__hint">只調整當日班表並重新計算出勤；保留原始打卡與異動紀錄。缺勤、漏卡或跨日調休仍須查證。</p>
       </template>
       <template #footer><el-button :disabled="saving" @click="selected = null">取消</el-button><el-button type="primary" :loading="saving" :disabled="selectedShift === null || !reason.trim() || !canWrite" @click="saveShift">確認並重算</el-button></template>
-    </el-dialog>
+    </FormDialog>
   </section>
 </template>
 
