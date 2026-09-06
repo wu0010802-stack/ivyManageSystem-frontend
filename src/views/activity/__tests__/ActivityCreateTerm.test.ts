@@ -82,7 +82,9 @@ const GLOBAL_STUBS = {
   'el-table': ElTableStub,
   'el-table-column': ElTableColumnStub,
   'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
-  'el-form': { template: '<form><slot /></form>' },
+  // handleSave 改 fail-closed 後會呼叫 courseFormRef.value.validate()：stub 補一個
+  // 恆回 Promise.resolve(true) 的 validate，讓既有測試繞過表單驗證直接送出
+  'el-form': { template: '<form><slot /></form>', methods: { validate: () => Promise.resolve(true) } },
   'el-form-item': { template: '<label><slot /></label>' },
   'el-input': { template: '<input />' },
   'el-input-number': { template: '<input />' },

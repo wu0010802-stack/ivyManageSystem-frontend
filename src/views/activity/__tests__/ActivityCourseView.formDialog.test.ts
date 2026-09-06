@@ -6,12 +6,13 @@ import ElementPlus from 'element-plus'
 // form-grid 語意配對，必填改 EP rules（不再只靠送出時 toast）。
 
 const getCoursesMock = vi.hoisted(() => vi.fn())
+const createCourseMock = vi.hoisted(() => vi.fn())
 vi.mock('@/api/activity', () => ({
   getCourses: getCoursesMock,
   getCourseWaitlist: vi.fn(),
   getCourseEnrolled: vi.fn(),
   promoteWaitlist: vi.fn(),
-  createCourse: vi.fn(),
+  createCourse: createCourseMock,
   updateCourse: vi.fn(),
   deleteCourse: vi.fn(),
   copyCoursesFromPrevious: vi.fn(),
@@ -55,8 +56,15 @@ async function mountView() {
   return wrapper
 }
 
+interface CourseFormRef { validate: () => Promise<boolean> }
+interface CourseDialogRef { scrollToFirstError: () => boolean }
+interface HandleSaveVm { courseFormRef: CourseFormRef; courseDialogRef: CourseDialogRef; handleSave: () => Promise<void> }
+
 describe('ActivityCourseView 課程對話框（FormDialog 旗艦）', () => {
-  beforeEach(() => { getCoursesMock.mockReset() })
+  beforeEach(() => {
+    getCoursesMock.mockReset()
+    createCourseMock.mockReset()
+  })
 
   it('新增：FormDialog standardNarrow、主鈕「建立課程」、label-top 表單', async () => {
     const w = await mountView()
@@ -86,7 +94,7 @@ describe('ActivityCourseView 課程對話框（FormDialog 旗艦）', () => {
     expect((w.find('[data-test="course-name-input"] input').element as HTMLInputElement).value).toBe('美語')
   })
 
-  it('版面：名稱 fg-8＋價格 fg-4；說明、年級、影片 fg-12；上課時段在 FormSection 內', async () => {
+  it('版面：名稱 fg-8＋價格 fg-4、說明 fg-12、時段在 FormSection', async () => {
     const w = await mountView()
     ;(w.vm as unknown as Vm).openCreate()
     await flushPromises()
@@ -95,5 +103,31 @@ describe('ActivityCourseView 課程對話框（FormDialog 旗艦）', () => {
     expect(cls('course-price-input')).toContain('fg-4')
     expect(cls('course-description-input')).toContain('fg-12')
     expect(w.find('[data-test="section-schedule"] .form-section__label').text()).toContain('上課時段')
+  })
+
+  it('驗證失敗擋送出：不呼叫 createCourse，捲到第一個錯誤欄', async () => {
+    const w = await mountView()
+    ;(w.vm as unknown as Vm).openCreate()
+    await flushPromises()
+    const vm = w.vm as unknown as HandleSaveVm
+    vi.spyOn(vm.courseFormRef, 'validate').mockRejectedValueOnce(new Error('invalid'))
+    const scroll = vi.spyOn(vm.courseDialogRef, 'scrollToFirstError')
+
+    await vm.handleSave()
+
+    expect(createCourseMock).not.toHaveBeenCalled()
+    expect(scroll).toHaveBeenCalledTimes(1)
+  })
+
+  it('驗證通過才送出：createCourse 被呼叫', async () => {
+    const w = await mountView()
+    ;(w.vm as unknown as Vm).openCreate()
+    await flushPromises()
+    const vm = w.vm as unknown as HandleSaveVm
+    vi.spyOn(vm.courseFormRef, 'validate').mockResolvedValueOnce(true)
+
+    await vm.handleSave()
+
+    expect(createCourseMock).toHaveBeenCalledTimes(1)
   })
 })

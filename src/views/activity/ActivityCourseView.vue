@@ -1156,11 +1156,12 @@ function onDmUpdated(payload: { dm_url: string | null; dm_pages: string[] | null
 }
 
 async function handleSave() {
-  // 必填改走 EP rules（inline 標紅＋捲到第一個錯誤欄），不再只跳 toast
-  // ?.validate?.()：既有測試把 el-form stub 成無 validate() 的陽春樣板時整條 optional
-  // chain 短路成 undefined（放行），不因缺方法而同步炸掉
-  const valid = await courseFormRef.value?.validate?.().catch(() => false)
-  if (valid === false) {
+  // 必填改走 EP rules（inline 標紅＋捲到第一個錯誤欄），不再只跳 toast；
+  // ref 未綁定視同驗證失敗，不送出（fail-closed）
+  const courseForm = courseFormRef.value
+  if (!courseForm) return
+  const valid = await courseForm.validate().catch(() => false)
+  if (!valid) {
     courseDialogRef.value?.scrollToFirstError()
     return
   }
