@@ -30,12 +30,12 @@ describe('main.css dialog 表單預設層', () => {
     const desk = block('/* ========== Dialog 表單預設層')
     // 區塊必須位於 @media (--bp-sm) 內
     const bpSmIndex = desk.indexOf('@media (--bp-sm)')
-    const selectorIndex = desk.indexOf('.el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline)')
+    const selectorIndex = desk.indexOf('html.ivy-admin .el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline)')
     expect(bpSmIndex, '@media (--bp-sm) 必須存在').toBeGreaterThan(-1)
-    expect(selectorIndex, '.el-form 選擇器必須存在').toBeGreaterThan(-1)
+    expect(selectorIndex, '.el-form 選擇器必須限定 html.ivy-admin（教師端 Portal 不吃桌機預設層）').toBeGreaterThan(-1)
     expect(bpSmIndex, '@media (--bp-sm) 應在選擇器之前').toBeLessThan(selectorIndex)
-    // 既有規則檢查
-    expect(desk).toMatch(/\.el-dialog \.el-form:not\(\.el-form--inline\):not\(\.form-labels-inline\)/)
+    // 既有規則檢查：限定 html.ivy-admin，不外溢教師端 Portal
+    expect(desk).toMatch(/html\.ivy-admin \.el-dialog \.el-form:not\(\.el-form--inline\):not\(\.form-labels-inline\)/)
     expect(desk).toMatch(/\.el-form-item__label\s*\{[^}]*width:\s*auto\s*!important/)
     expect(desk).toMatch(/\.el-form-item__content\s*\{[^}]*margin-left:\s*0\s*!important/)
   })
