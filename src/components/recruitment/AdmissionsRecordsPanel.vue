@@ -344,6 +344,7 @@ const openEditDialog = async (row: Record<string, unknown>) => {
     birthday: (row.birthday ?? null) as string | null,
     grade: (row.grade ?? null) as string | null,
     phone: String(row.phone ?? ''),
+    contact_name: String(row.contact_name ?? ''),
     address: String(row.address ?? ''),
     source: String(row.source ?? ''),
     source_category: (row.source_category ?? null) as string | null,
@@ -361,6 +362,9 @@ const openEditDialog = async (row: Record<string, unknown>) => {
     notes: String(row.notes ?? ''),
     parent_response: String(row.parent_response ?? ''),
     geocoding_consent: Boolean(row.geocoding_consent ?? false),
+    // 唯讀對帳結果（後端算好），只用於在表單顯示落差提示
+    deposit_mismatch: (row.deposit_mismatch ?? null) as string | null,
+    prepayment_state: (row.prepayment_state ?? null) as string | null,
   }
   dialogMode.value = 'edit'
   editingId.value = row.id as number | null
@@ -372,8 +376,8 @@ const openEditDialog = async (row: Record<string, unknown>) => {
 const handleSave = async () => {
   // Dialog 內部已經驗證過表單（RecruitmentRecordDialog 的 handleSave）
   saving.value = true
-  // 排除前端內部用的 month_raw，不送到後端
-  const { month_raw: _mr, ...payload } = form.value
+  // 排除前端內部用的 month_raw 與後端算好的唯讀對帳欄，不回送
+  const { month_raw: _mr, deposit_mismatch: _dm, prepayment_state: _ps, ...payload } = form.value
   try {
     if (dialogMode.value === 'add') {
       await createRecruitmentRecord(payload)

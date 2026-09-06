@@ -32,13 +32,9 @@
         </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="適讀班級">
-              <el-select v-model="form.grade" clearable style="width:100%" @change="onGradeManualChange">
-                <el-option v-for="g in GRADES_ORDER" :key="g" :label="g" :value="g" />
-              </el-select>
-              <div v-if="gradeAutoFilled" class="form-hint form-hint--ok" data-test="grade-auto-hint">
-                ✓ 已依生日 × {{ form.target_school_year }} 學年自動判定，可手動修改
-              </div>
+            <el-form-item label="聯絡人姓名">
+              <el-input v-model="form.contact_name" placeholder="家長或主要照顧者" data-test="contact-name-input" />
+              <div class="form-hint">轉為學生時用來建立監護人；留空會退回「介紹者」。</div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -70,18 +66,32 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="入學學期" required>
-          <div class="enroll-term">
-            <el-select v-model="form.target_school_year" style="width:130px">
-              <el-option v-for="y in enrollYearOptions" :key="y" :value="y" :label="`${y} 學年`" />
-            </el-select>
-            <el-radio-group v-model="form.target_semester">
-              <el-radio-button :value="1">上學期</el-radio-button>
-              <el-radio-button :value="2">下學期</el-radio-button>
-            </el-radio-group>
-          </div>
-          <div class="form-hint">小孩預計入學的學期（預設當前學期，可改）。</div>
-        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="14">
+            <el-form-item label="入學學期" required>
+              <div class="enroll-term">
+                <el-select v-model="form.target_school_year" style="width:130px">
+                  <el-option v-for="y in enrollYearOptions" :key="y" :value="y" :label="`${y} 學年`" />
+                </el-select>
+                <el-radio-group v-model="form.target_semester">
+                  <el-radio-button :value="1">上學期</el-radio-button>
+                  <el-radio-button :value="2">下學期</el-radio-button>
+                </el-radio-group>
+              </div>
+              <div class="form-hint">小孩預計入學的學期（預設當前學期，可改）。</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="10">
+            <el-form-item label="適讀班級">
+              <el-select v-model="form.grade" clearable style="width:100%" @change="onGradeManualChange">
+                <el-option v-for="g in GRADES_ORDER" :key="g" :label="g" :value="g" />
+              </el-select>
+              <div v-if="gradeAutoFilled" class="form-hint form-hint--ok" data-test="grade-auto-hint">
+                ✓ 已依生日 × {{ form.target_school_year }} 學年自動判定，可手動修改
+              </div>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </FormSection>
 
       <!-- 聯絡與來源 -->
@@ -134,10 +144,22 @@
 
       <!-- 預繳狀態 -->
       <FormSection ref="depositRef" data-test="section-deposit" title="預繳狀態" collapsible :default-open="false" :badge-count="sectionErrors.deposit" badge-type="error" :summary="depositSummary">
+        <!-- 狀態欄一律走漏斗狀態機（2026-09-06）：表單直改會繞過事件紀錄、不建學生，
+             造成看板與統計對同一筆資料說法相反。編輯模式改唯讀並指路。 -->
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="是否預繳">
-              <el-switch v-model="form.has_deposit" active-text="已預繳" inactive-text="未預繳" @change="onDepositChange" />
+              <el-switch
+                v-model="form.has_deposit"
+                active-text="已預繳"
+                inactive-text="未預繳"
+                :disabled="stateLocked"
+                data-test="has-deposit-switch"
+                @change="onDepositChange"
+              />
+              <div v-if="stateLocked" class="form-hint" data-test="deposit-locked-hint">
+                預繳狀態請在「漏斗看板」拖曳卡片變更，才會留下紀錄與原因。
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -149,7 +171,10 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="已註冊">
-              <el-switch v-model="form.enrolled" active-text="是" inactive-text="否" />
+              <el-switch v-model="form.enrolled" active-text="是" inactive-text="否" disabled data-test="enrolled-switch" />
+              <div class="form-hint" data-test="enrolled-locked-hint">
+                註冊要建立學生檔案，只能在漏斗看板把卡片推進到「已註冊」。
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -158,6 +183,15 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item v-if="depositMismatchText" label="收款對帳">
+          <el-alert
+            :title="depositMismatchText"
+            type="warning"
+            :closable="false"
+            show-icon
+            data-test="deposit-mismatch-alert"
+          />
+        </el-form-item>
         <template v-if="!form.has_deposit">
           <el-form-item label="未預繳原因">
             <el-select v-model="form.no_deposit_reason" clearable placeholder="請選擇原因" style="width:100%">
@@ -223,6 +257,7 @@ interface VisitForm {
   grade?: string | number | null
   birthday?: string | number | null
   phone?: string | number | null
+  contact_name?: string | number | null
   address?: string | number | null
   source?: string | number | undefined
   referrer?: string | number | undefined
@@ -240,6 +275,9 @@ interface VisitForm {
   target_semester?: number
   source_category?: string | null
   tour_guide_employee_id?: number | null
+  /** 後端對帳結果（唯讀，僅編輯既有訪視時有值） */
+  deposit_mismatch?: string | null
+  prepayment_state?: string | null
   [key: string]: unknown
 }
 
@@ -261,6 +299,21 @@ const props = withDefaults(defineProps<{
   noDepositReasons: () => [],
   sourceCategories: () => [],
   teacherOptions: () => [],
+})
+
+/**
+ * 狀態欄鎖定（2026-09-06）：既有訪視的預繳／註冊狀態一律走漏斗 transition，
+ * 表單直改會繞過事件紀錄且不會建立學生。新增時仍可標記當場收到的預繳。
+ */
+const stateLocked = computed(() => props.mode !== 'add')
+
+const DEPOSIT_MISMATCH_TEXT: Record<string, string> = {
+  flag_without_credit: '這筆標記為已預繳，但學費管理查不到對應的預繳金。請確認收款是否漏登。',
+  credit_without_flag: '學費管理有這筆的預繳金，但招生狀態還停在未預繳。請到漏斗看板把卡片推進到「已預繳」。',
+}
+const depositMismatchText = computed(() => {
+  const key = typeof props.form.deposit_mismatch === 'string' ? props.form.deposit_mismatch : ''
+  return DEPOSIT_MISMATCH_TEXT[key] ?? ''
 })
 
 // 拆分提示（spec §6）：兄姊均分／邀約拆分是一生兩師，第二列要在獎金頁手動加

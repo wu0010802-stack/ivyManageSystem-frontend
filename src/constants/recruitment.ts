@@ -47,6 +47,8 @@ export interface VisitFormState {
   birthday: string | null
   grade: string | null
   phone: string
+  /** 主要聯絡人姓名（rvcontact01）：轉學生時用來建立監護人 */
+  contact_name: string
   address: string
   source: string
   source_category: string | null
@@ -65,6 +67,12 @@ export interface VisitFormState {
   notes: string
   parent_response: string
   geocoding_consent: boolean
+  /**
+   * 後端算好的預繳金對帳結果（唯讀，僅編輯既有訪視時有值）。
+   * 純顯示用，送出前會被剔除，不回寫後端。
+   */
+  deposit_mismatch?: string | null
+  prepayment_state?: string | null
 }
 
 export function emptyVisitForm(): VisitFormState {
@@ -75,7 +83,7 @@ export function emptyVisitForm(): VisitFormState {
   const rocMonth = `${toRocYear(parseInt(ty, 10))}.${tm}`
   return {
     month: rocMonth, month_raw: today, visit_date: rocDate, seq_no: '', child_name: '',
-    birthday: null, grade: null, phone: '', address: '',
+    birthday: null, grade: null, phone: '', contact_name: '', address: '',
     source: '', source_category: null, referrer: '',
     deposit_collector: '', tour_guide_employee_id: null,
     has_deposit: false, rides_bus: false, enrolled: false, transfer_term: false,
