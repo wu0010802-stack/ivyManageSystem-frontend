@@ -191,6 +191,7 @@ declare module 'vue' {
     FeeTemplateTab: typeof import('./src/components/fees/FeeTemplateTab.vue')['default']
     FeeWorkbench: typeof import('./src/components/fees/workspace/FeeWorkbench.vue')['default']
     FeeYearTemplateGrid: typeof import('./src/components/fees/FeeYearTemplateGrid.vue')['default']
+    FormDialog: typeof import('./src/components/common/FormDialog.vue')['default']
     FormSection: typeof import('./src/components/common/FormSection.vue')['default']
     FormSectionNav: typeof import('./src/components/common/FormSectionNav.vue')['default']
     FunnelAddVisit: typeof import('./src/components/recruitment/funnel/FunnelAddVisit.vue')['default']

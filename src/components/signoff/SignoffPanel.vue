@@ -224,13 +224,13 @@
     </div>
 
     <!-- 詳細資料 / 編輯 / 新增 Dialog -->
-    <el-dialog
+    <FormDialog
+      ref="formDialogRef"
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="640px"
-      destroy-on-close
-      :before-close="handleDialogBeforeClose"
-      class="so-dialog"
+      size="standardNarrow"
+      :dirty="isFormDirty"
+      :enter-submit="false"
     >
       <!-- 頂部：流程狀態與鎖定說明 -->
       <div v-if="editingId" class="so-flow-head">
@@ -444,7 +444,7 @@
           <span v-else-if="reconcileSelfBlocked && showReconcileActions" class="so-dialog-footer__hint">
             不可對帳自己確認{{ config.texts.unitLabel }}的交易
           </span>
-          <el-button @click="requestClose">關閉</el-button>
+          <el-button @click="requestClose">{{ isFormLocked ? '關閉' : '取消' }}</el-button>
 
           <!-- 草稿 / 被駁回：儲存草稿與送出審核是不同動作 -->
           <template v-if="!isFormLocked && canWrite">
@@ -501,7 +501,7 @@
           </template>
         </div>
       </template>
-    </el-dialog>
+    </FormDialog>
 
     <SignoffSignDialog
       v-model="signDialogVisible"
@@ -549,6 +549,7 @@ import AdminListToolbar, {
   type FilterGroup,
 } from '@/components/common/AdminListToolbar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
 import FormSection from '@/components/common/FormSection.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import SignoffFlowSummary, {
@@ -913,6 +914,11 @@ const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
+const formDialogRef = ref<InstanceType<typeof FormDialog>>()
+// 關閉鈕與測試共用的關閉入口：委派給 FormDialog（dirty 判定與確認框都在殼層）
+function requestClose(): Promise<void> {
+  return formDialogRef.value?.requestClose() ?? Promise.resolve()
+}
 const dialogTitle = computed(() => {
   if (!editingId.value) return config.texts.addButton
   return isFormLocked.value
@@ -1019,26 +1025,6 @@ function editableSnapshot(): string {
   })
 }
 const isFormDirty = () => !isFormLocked.value && editableSnapshot() !== formSnapshot
-
-function handleDialogBeforeClose(done: () => void) {
-  if (!isFormDirty()) {
-    done()
-    return
-  }
-  ElMessageBox.confirm('表單內容尚未儲存，確定要離開嗎？', '尚未儲存', {
-    type: 'warning',
-    confirmButtonText: '放棄變更',
-    cancelButtonText: '留在此頁',
-  })
-    .then(() => done())
-    .catch(() => {})
-}
-
-function requestClose() {
-  handleDialogBeforeClose(() => {
-    dialogVisible.value = false
-  })
-}
 
 function resetForm() {
   Object.assign(form, {
@@ -1528,6 +1514,7 @@ defineExpose({
   handleSave,
   handleDelete,
   disabledFutureDate,
+  requestClose,
 })
 </script>
 

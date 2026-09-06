@@ -48,9 +48,14 @@ const STUBS = {
   'el-tag': true,
   'el-icon': true,
   'el-empty': true,
-  'el-dialog': true,
+  // el-dialog 原為 auto-stub（true）：VTU 的 true stub 不渲染 default slot，導致
+  // FormDialog 內的 el-form 從未掛載、courseFormRef.value 恆為 undefined（handleSave
+  // 改 fail-closed 後因此誤擋）。改成保留 slot 的樣板（與 ActivityCreateTerm.test.ts 同）
+  'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
   'el-drawer': true,
-  'el-form': true,
+  // handleSave 改 fail-closed 後會呼叫 courseFormRef.value.validate()：補一個恆回
+  // Promise.resolve(true) 的版本讓既有測試繞過表單驗證
+  'el-form': { template: '<form><slot /></form>', methods: { validate: () => Promise.resolve(true) } },
   'el-form-item': true,
   'el-input': true,
   'el-input-number': true,
