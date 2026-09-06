@@ -187,30 +187,69 @@
     </AdminListCards>
 
     <!-- 新增/編輯對話框 -->
-    <el-dialog v-model="dialogVisible" :title="editingId ? '編輯課程' : '新增課程'" width="480px" destroy-on-close>
-      <el-form :model="form" label-width="90px" size="default">
-        <el-form-item label="課程名稱" required>
-          <el-input v-model="form.name" />
+    <FormDialog
+      ref="courseDialogRef"
+      v-model="dialogVisible"
+      :title="editingId ? '編輯課程' : '新增課程'"
+      size="standardNarrow"
+      :dirty="courseDirty"
+      :loading="saving"
+      :submit-text="editingId ? '儲存' : '建立課程'"
+      @submit="handleSave"
+    >
+      <el-form
+        ref="courseFormRef"
+        :model="form"
+        :rules="courseRules"
+        label-position="top"
+        class="form-grid"
+        scroll-to-error
+        @submit.prevent
+      >
+        <el-form-item label="課程名稱" prop="name" class="fg-8" data-test="course-name-input">
+          <el-input v-model="form.name" maxlength="100" />
         </el-form-item>
-        <el-form-item label="價格（元）" required>
-          <el-input-number v-model="form.price" :min="0" :max="999999" :step="1" :precision="0" style="width: 100%" />
+        <el-form-item label="價格（元）" prop="price" class="fg-4" data-test="course-price-input">
+          <el-input-number v-model="form.price" :min="0" :max="999999" :step="1" :precision="0" controls-position="right" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="堂數">
-          <el-input-number v-model="form.sessions" :min="1" :step="1" :precision="0" style="width: 100%" />
+        <el-form-item label="堂數" prop="sessions" class="fg-4">
+          <el-input-number v-model="form.sessions" :min="1" :step="1" :precision="0" controls-position="right" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="容量">
-          <el-input-number v-model="form.capacity" :min="1" :step="1" :precision="0" style="width: 100%" />
+        <el-form-item label="容量" prop="capacity" class="fg-4">
+          <el-input-number v-model="form.capacity" :min="1" :step="1" :precision="0" controls-position="right" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="允許候補">
+        <el-form-item label="允許候補" prop="allow_waitlist" class="fg-4">
           <el-switch v-model="form.allow_waitlist" />
         </el-form-item>
-        <el-form-item label="影片 URL">
-          <el-input v-model="form.video_url" />
+        <el-form-item label="講師" prop="instructor_name" class="fg-6">
+          <el-input v-model="form.instructor_name" maxlength="50" placeholder="講師姓名（選填，前台課程卡顯示）" />
         </el-form-item>
-        <el-form-item label="說明">
+        <el-form-item label="負責老師" prop="instructor_employee_id" class="fg-6">
+          <el-select
+            v-model="form.instructor_employee_id"
+            clearable
+            filterable
+            placeholder="選擇負責老師"
+            style="width: 100%"
+            data-test="select-instructor-employee"
+          >
+            <el-option v-for="emp in employeeOptions" :key="emp.id" :label="String(emp.name)" :value="emp.id" />
+          </el-select>
+          <div class="form-hint">年終教課獎勵金依此歸屬自動計算</div>
+        </el-form-item>
+        <el-form-item label="限定年級" prop="allowed_grades" class="fg-12">
+          <el-checkbox-group v-model="form.allowed_grades" data-test="allowed-grades-group">
+            <el-checkbox v-for="g in GRADES_ORDER" :key="g" :value="g" :label="g">{{ g }}</el-checkbox>
+          </el-checkbox-group>
+          <div class="form-hint">不勾＝不限年級。僅供前台顯示與報名管理標示，不會擋報名</div>
+        </el-form-item>
+        <el-form-item label="說明" prop="description" class="fg-12" data-test="course-description-input">
           <el-input v-model="form.description" type="textarea" :rows="2" />
         </el-form-item>
-        <el-form-item label="課程 DM">
+        <el-form-item label="影片 URL" prop="video_url" class="fg-12">
+          <el-input v-model="form.video_url" />
+        </el-form-item>
+        <el-form-item label="課程 DM" class="fg-12">
           <CourseDmUploader
             v-if="editingId"
             :course-id="editingId"
@@ -220,92 +259,38 @@
           />
           <span v-else class="dm-hint-create">儲存課程後即可上傳 DM</span>
         </el-form-item>
-        <el-form-item label="限定年級">
-          <el-checkbox-group v-model="form.allowed_grades" data-test="allowed-grades-group">
-            <el-checkbox v-for="g in GRADES_ORDER" :key="g" :value="g" :label="g">{{ g }}</el-checkbox>
-          </el-checkbox-group>
-          <div style="font-size: 12px; color: var(--text-tertiary); width: 100%;">
-            不勾＝不限年級。僅供前台顯示與報名管理標示，不會擋報名
-          </div>
-        </el-form-item>
-        <el-form-item label="講師">
-          <el-input v-model="form.instructor_name" maxlength="50" placeholder="講師姓名（選填，前台課程卡顯示）" />
-        </el-form-item>
-        <el-form-item label="負責老師">
-          <el-select
-            v-model="form.instructor_employee_id"
-            clearable
-            filterable
-            placeholder="選擇負責老師"
-            style="width: 100%"
-            data-test="select-instructor-employee"
-          >
-            <el-option
-              v-for="emp in employeeOptions"
-              :key="emp.id"
-              :label="String(emp.name)"
-              :value="emp.id"
-            />
-          </el-select>
-          <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">
-            年終教課獎勵金依此歸屬自動計算
-          </div>
-        </el-form-item>
 
-        <el-divider content-position="left">
-          <span style="font-size: 12px; color: var(--text-secondary);">
-            上課時段（公開報名頁顯示用；空白＝不限制）
-          </span>
-        </el-divider>
-        <el-form-item label="上課星期">
-          <el-select
-            v-model="form.meeting_weekdays"
-            placeholder="選擇上課星期（可複選）"
-            multiple
-            clearable
-            style="width: 100%;"
-          >
-            <el-option :value="0" label="週一" />
-            <el-option :value="1" label="週二" />
-            <el-option :value="2" label="週三" />
-            <el-option :value="3" label="週四" />
-            <el-option :value="4" label="週五" />
-            <el-option :value="5" label="週六" />
-            <el-option :value="6" label="週日" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="上課時間">
-          <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
-            <el-time-picker
-              v-model="form.meeting_start_time"
-              value-format="HH:mm"
-              format="HH:mm"
-              placeholder="起始"
-              style="flex: 1;"
-            />
-            <span style="color: var(--text-tertiary);">~</span>
-            <el-time-picker
-              v-model="form.meeting_end_time"
-              value-format="HH:mm"
-              format="HH:mm"
-              placeholder="結束"
-              style="flex: 1;"
+        <FormSection title="上課時段（公開報名頁顯示用；空白＝不限制）" class="fg-12" data-test="section-schedule">
+          <div class="form-grid">
+            <el-form-item label="上課星期" prop="meeting_weekdays" class="fg-4">
+              <el-select v-model="form.meeting_weekdays" placeholder="可複選" multiple clearable style="width: 100%;">
+                <el-option :value="0" label="週一" />
+                <el-option :value="1" label="週二" />
+                <el-option :value="2" label="週三" />
+                <el-option :value="3" label="週四" />
+                <el-option :value="4" label="週五" />
+                <el-option :value="5" label="週六" />
+                <el-option :value="6" label="週日" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="起始時間" prop="meeting_start_time" class="fg-4">
+              <el-time-picker v-model="form.meeting_start_time" value-format="HH:mm" format="HH:mm" placeholder="起始" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="結束時間" prop="meeting_end_time" class="fg-4">
+              <el-time-picker v-model="form.meeting_end_time" value-format="HH:mm" format="HH:mm" placeholder="結束" style="width: 100%" />
+            </el-form-item>
+            <el-alert
+              v-if="isWeekdayScheduleIncomplete(form)"
+              class="fg-12"
+              title="已選上課星期但未填完整起訖時間：報名頁只會顯示星期，且不參與衝堂提醒。"
+              type="warning"
+              :closable="false"
+              show-icon
             />
           </div>
-        </el-form-item>
-        <el-alert
-          v-if="isWeekdayScheduleIncomplete(form)"
-          title="已選上課星期但未填完整起訖時間：報名頁只會顯示星期，且不參與衝堂提醒。"
-          type="warning"
-          :closable="false"
-          show-icon
-        />
+        </FormSection>
       </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving" :disabled="saving">儲存</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
 
     <!-- 繳費單批次列印：A4 一頁 8 格（含 QR），裁切後貼信封袋發給家長 -->
     <el-dialog v-model="slipDialogVisible" :title="`列印繳費單 — ${slipCourse?.name ?? ''}`" width="380px" destroy-on-close>
@@ -610,6 +595,11 @@ import { sanitizeHref } from '@/utils/url'
 import { formatWeekdaySchedule, isWeekdayScheduleIncomplete } from '@/utils/weekdaySchedule'
 import { GRADES_ORDER } from '@/constants/recruitment'
 import CourseDmUploader from './components/CourseDmUploader.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
+import FormSection from '@/components/common/FormSection.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { required, money } from '@/validators/rules'
+import type { FormInstance, FormRules } from 'element-plus'
 
 interface Course {
   id: number; name: string; price: number; sessions?: number | null; capacity: number
@@ -743,6 +733,14 @@ const defaultForm = (): CourseForm => ({
   allowed_grades: [],
 })
 const form = ref<CourseForm>(defaultForm())
+const courseFormRef = ref<FormInstance>()
+const courseDialogRef = ref<InstanceType<typeof FormDialog>>()
+// 開啟／載入初值後 snapshot()；關閉前 FormDialog 依 isDirty 決定是否詢問捨棄
+const { isDirty: courseDirty, snapshot: snapshotCourse } = useFormDirty(form)
+const courseRules: FormRules<CourseForm> = {
+  name: [required('課程名稱')],
+  price: [required('價格', { kind: 'input', trigger: 'change' }), money({ min: 0 })],
+}
 
 // G8：負責老師下拉選項（在職員工），比照 YearEndRulesPanel.vue 的 fetchEmployeeOptions 慣例
 const employeeOptions = ref<EmployeeOption[]>([])
@@ -1120,6 +1118,7 @@ function openCreate() {
   editingId.value = null
   form.value = defaultForm()
   editingDm.value = { dm_url: null, dm_pages: null }
+  snapshotCourse()
   dialogVisible.value = true
 }
 
@@ -1141,6 +1140,7 @@ function openEdit(row: Course) {
     allowed_grades: row.allowed_grades ? [...row.allowed_grades] : [],
   }
   editingDm.value = { dm_url: row.dm_url ?? null, dm_pages: row.dm_pages ?? null }
+  snapshotCourse()
   dialogVisible.value = true
 }
 
@@ -1156,8 +1156,13 @@ function onDmUpdated(payload: { dm_url: string | null; dm_pages: string[] | null
 }
 
 async function handleSave() {
-  if (!form.value.name || form.value.price == null) {
-    return ElMessage.warning('請填寫課程名稱和價格')
+  // 必填改走 EP rules（inline 標紅＋捲到第一個錯誤欄），不再只跳 toast
+  // ?.validate?.()：既有測試把 el-form stub 成無 validate() 的陽春樣板時整條 optional
+  // chain 短路成 undefined（放行），不因缺方法而同步炸掉
+  const valid = await courseFormRef.value?.validate?.().catch(() => false)
+  if (valid === false) {
+    courseDialogRef.value?.scrollToFirstError()
+    return
   }
   // Phase 3 前端驗證：與後端 Pydantic validator 同步
   const f = form.value
