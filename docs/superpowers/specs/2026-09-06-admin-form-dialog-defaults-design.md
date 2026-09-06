@@ -64,6 +64,7 @@ staging 實測 15 張新增表單：對話框寬度 8 種、送出文案 7 種�
 - 已明確寫 `label-position="top"` 的 12 檔不受影響（EP 自己的 class 規則同構）。
 - 風險：無 label 的 item 原本靠 `margin-left` 與上方欄位對齊（例如欄位下方的 checkbox 列），改為貼左。堆疊版面下這是正確行為。
 - 驗證：以 `shots.mjs` 對 15 張表單做前後截圖比對；`el-row`/`el-col` 成對欄位不受影響。
+- 桌機區塊包在 `@media (--bp-sm)`（≥768px）並限定 `html.ivy-admin`；手機由既有 `--to-sm` 規則獨佔，選擇器 (0,3,0) 壓過 EP。
 
 若 D1 否決，只做 3.1.1，label-top 改由 FormDialog 使用端各自設定。
 
@@ -94,7 +95,9 @@ Emits：`update:modelValue`、`submit`、`cancel`、`opened`、`closed`。
 
 Slots：`default`（表單本體）、`title-extra`（標題旁 chip，如「序號 自動產生」）、`footer-extra`（主按鈕左側的次要動作，如「儲存並新增下一筆」「儲存草稿」）、`footer`（整個取代預設 footer）。
 
-Expose：`scrollToFirstError()`：在 body 內找第一個 `.el-form-item.is-error`，`scrollIntoView({ block: 'center' })` 後聚焦其內的 input。使用端在 `validate` 失敗的 callback 呼叫；FormSection 收合區的自動展開沿用 06-02 spec 既有機制，不由本元件接管。
+Expose：
+- `scrollToFirstError()`：在 body 內找第一個 `.el-form-item.is-error`，`scrollIntoView({ block: 'center' })` 後聚焦其內的 input。使用端在 `validate` 失敗的 callback 呼叫；FormSection 收合區的自動展開沿用 06-02 spec 既有機制，不由本元件接管。
+- `requestClose(): Promise<void>`：dirty 判定後關閉（同 `before-close`／footer 取消鈕路徑）。自訂 `footer` slot 的取消鈕必走它，才會保有離開保護。
 
 行為細則：
 - **關閉保護**：`before-close`、footer 取消鈕、Esc、遮罩點擊四條路徑統一走 `dirty` 判定 → `confirmDiscardChanges()`（既有 `useUnsavedChangesGuard.ts` 匯出的函式，文案「尚有未儲存的變更，確定離開並捨棄？」）。使用 `useFormDraft` 的表單（員工、請假）傳 `dirty=false`，靠草稿還原，不重複攔截。
@@ -133,7 +136,7 @@ Expose：`scrollToFirstError()`：在 body 內找第一個 `.el-form-item.is-err
 | `required(label, { kind: 'select' })` | 「請選擇{label}」 |
 | `phone(label?)` | 沿用 `src/utils/phone.ts` 既有正規化與 pattern |
 | `email()` | 「Email 格式不正確」 |
-| `idNumber()` | 身分證／居留證；正則以 `StudentEditDialog.vue` 現行版本為準，遷移時把另外三份（EmployeeFormDialog、EmployeeFormBasic、GovReportsView）逐一比對後收斂 |
+| `idNumber()` | 身分證／居留證格式；`rules.ts` 的正則即新權威（既有檔案無共用正則） |
 | `money({ min = 0 })` | 「請輸入 0 以上的金額」 |
 
 現況四種文案（請輸入 51 檔／請選擇 45／必填 33／不可為空 2）不在本期回改，由遷移時順手替換；守衛不對文案計數。
@@ -146,7 +149,7 @@ Expose：`scrollToFirstError()`：在 body 內找第一個 `.el-form-item.is-err
 |---|---|
 | A 裸 dialog 表單 | 每個 `<el-dialog` 區塊（至對應 `</el-dialog>`）內含 `<el-form`（非 el-form-item）即計 1（區塊數） |
 | B label-width | 上述表單檔內 `label-width=` 出現次數 |
-| C 硬寫寬度 | 表單檔內 `<el-dialog … width="\d+[px]"` 出現次數 |
+| C 硬寫寬度 | 表單檔內 `<el-dialog … width="NNN(px)?"` 出現次數 |
 | D 按鈕誤用 | 新增／建立主鈕 `type="success"`，或任何按鈕文字以「＋」「+」開頭（次數） |
 
 例外清單（`EXEMPT`）：`FormDialog.vue` 自身、確認型 dialog 的誤判可逐檔登記並附理由。接線：`package.json` 加 `check:form-dialogs`，`ci.yml` 緊接 `check:error-detail` 之後（開放決策 D3，預設 blocking）。
