@@ -121,13 +121,8 @@
       <el-table-column prop="child_name" label="姓名" width="90" />
       <el-table-column prop="grade" label="班別" width="80" />
       <el-table-column label="入學學期" width="110" :formatter="(row: Record<string, unknown>) => enrollTermText(row)" />
-      <el-table-column prop="address" label="地址" min-width="220" show-overflow-tooltip>
-        <template #default="{ row }">
-          {{ row.address || row.district || '—' }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="source" label="來源" min-width="100" />
-      <el-table-column prop="referrer" label="介紹者" width="90" />
+      <!-- 「預繳」含收款對帳標籤，是本頁最需要一眼看到的狀態；擺在地址等長欄位
+           之前，才不會被釘在右側的操作欄遮住（2026-09-06 staging 實跑確認）。 -->
       <el-table-column label="預繳" align="center" width="118">
         <template #default="{ row }">
           <!-- 退出後 has_deposit 與 enrolled 都被清成 False，跟「從沒預繳」長得
@@ -155,6 +150,13 @@
           </el-tooltip>
         </template>
       </el-table-column>
+      <el-table-column prop="address" label="地址" min-width="220" show-overflow-tooltip>
+        <template #default="{ row }">
+          {{ row.address || row.district || '—' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="source" label="來源" min-width="100" />
+      <el-table-column prop="referrer" label="介紹者" width="90" />
       <el-table-column label="已註冊" align="center" width="70">
         <template #default="{ row }">
           <el-tag v-if="row.enrolled" type="success" size="small">是</el-tag>
