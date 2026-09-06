@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { getAssignments, saveAssignments, copyMonthAssignments, getDaily, saveDaily, deleteDaily, getScheduleRoster, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts, getLeaveContext } from '@/api/shifts'
 import { computeWeekCoverage, leaveWindowForDate, type LeaveContextItem, type DailyOverrideLike, type AbsenceWindow } from '@/utils/scheduleCoverage'
 import type { ApiResponse } from '@/api/_generated/typed'
@@ -13,6 +13,10 @@ import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useClientTableFilter } from '@/composables'
+import { hasPermission } from '@/utils/auth'
+
+const props = defineProps<{ initialDate?: string }>()
+const emit = defineEmits<{ dateChange: [date: string]; reconcile: [date: string] }>()
 
 // 手機版（≤767.98px）：兩個清單改卡片視圖（比照 EmployeeListView 範式）
 const { isMobile } = useIsMobile()
@@ -75,8 +79,14 @@ const formatDate = (d: Date) => {
   return `${y}-${m}-${dd}`
 }
 
-const monday = getMonday(new Date())
+const monday = getMonday(props.initialDate ? new Date(`${props.initialDate}T12:00:00`) : new Date())
 const weekStart = ref(formatDate(monday))
+watch(weekStart, value => emit('dateChange', value))
+watch(() => props.initialDate, value => {
+  if (!value) return
+  const next = formatDate(getMonday(new Date(`${value}T12:00:00`)))
+  if (next !== weekStart.value) { weekStart.value = next; void fetchAssignments() }
+})
 
 const weekLabel = computed(() => {
   const d = new Date(weekStart.value)
@@ -571,6 +581,9 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
 
 <template>
   <div class="schedule-page">
+    <el-alert title="已有打卡紀錄的當日班別，請由出勤核對確認並重算。" type="info" :closable="false">
+      <el-button v-if="hasPermission('ATTENDANCE_READ')" text @click="emit('reconcile', weekStart)">前往班表與打卡核對</el-button>
+    </el-alert>
     <h2>排班管理</h2>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
