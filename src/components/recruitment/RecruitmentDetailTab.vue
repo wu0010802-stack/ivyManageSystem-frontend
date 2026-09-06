@@ -171,43 +171,42 @@
       <el-table-column prop="no_deposit_reason" label="未預繳原因" min-width="120" show-overflow-tooltip />
       <el-table-column prop="notes" label="備註" min-width="120" show-overflow-tooltip />
       <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />
-      <!-- 手機上不釘住操作欄（2026-09-06）：360px 的操作欄在 390px 視窗會蓋掉
-           幾乎整個表格，反而看不到是哪一位幼生。窄螢幕改為隨表格一起水平捲動。 -->
+      <!-- 操作欄（2026-09-06 重整）：一列六顆按鈕要 360px，釘在右側會蓋掉「預繳」
+           之後的所有欄位。常用的三顆留在外面，其餘收進「更多」，欄寬縮回 210px。
+           手機上不釘住——窄視窗裡釘住的操作欄會蓋掉整個表格，反而看不到是誰。 -->
       <el-table-column
         v-if="canWrite || canConvert"
         label="操作"
-        width="360"
+        width="248"
         :fixed="isMobile ? false : 'right'"
       >
         <template #default="{ row }">
+          <div class="row-actions">
           <el-button v-if="canWrite" size="small" @click="$emit('edit', row)">編輯</el-button>
           <el-button size="small" @click="$emit('journey', row)">歷程</el-button>
-          <el-button
-            v-if="canWrite && row.has_deposit"
-            size="small"
-            type="warning"
-            plain
-            @click="$emit('reserve', row)"
-          >{{ row.provisional_grade_id ? '變更座位' : '保留座位' }}</el-button>
           <el-button
             v-if="canConvert && row.has_deposit && !row.enrolled"
             size="small"
             type="success"
             @click="$emit('convert', row)"
           >轉為學生</el-button>
-          <!-- 退預繳／退註冊（2026-09-06）：原本唯一入口是漏斗看板拖曳，只看列表的人
-               根本找不到退費功能在哪。已退出的不再顯示。 -->
-          <el-button
-            v-if="canWrite && !row.withdrawn_at && (row.has_deposit || row.enrolled)"
-            size="small"
-            type="warning"
-            plain
-            data-test="row-withdraw"
-            @click="$emit('withdraw', row)"
-          >{{ row.enrolled ? '退註冊' : '退預繳' }}</el-button>
-          <!-- plain 而非實心：實心 danger 是這一列裡唯一有填色的按鈕，視覺重量高過「編輯」
-               與「轉為學生」，等於每列都在把眼睛引向不可逆的動作 -->
-          <el-button v-if="canWrite" size="small" type="danger" plain @click="$emit('delete', row.id)">刪除</el-button>
+          <el-dropdown v-if="canWrite" trigger="click" @command="(c: string) => onRowCommand(c, row)">
+            <el-button size="small" text data-test="row-more">更多<el-icon class="more-caret"><ArrowDown /></el-icon></el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-if="row.has_deposit" command="reserve">
+                  {{ row.provisional_grade_id ? '變更座位' : '保留座位' }}
+                </el-dropdown-item>
+                <el-dropdown-item
+                  v-if="!row.withdrawn_at && (row.has_deposit || row.enrolled)"
+                  command="withdraw"
+                  data-test="row-withdraw"
+                >{{ row.enrolled ? '退註冊' : '退預繳' }}</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -226,6 +225,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { currentRocYear } from '@/utils/academic'
 import { formatSemester } from '@/utils/classHistory'
@@ -283,6 +283,13 @@ const emit = defineEmits<{
 
 const { isMobile } = useIsMobile()
 
+/** 操作欄「更多」下拉：把次要與危險動作收進來，欄寬才不會蓋掉表格中段。 */
+function onRowCommand(command: string, row: Record<string, unknown>): void {
+  if (command === 'reserve') emit('reserve', row)
+  else if (command === 'withdraw') emit('withdraw', row)
+  else if (command === 'delete') emit('delete', row.id)
+}
+
 /** 招生旗標與學費模組收款紀錄的落差（後端 services/recruitment_prepayment_link 算好）。 */
 const MISMATCH_LABEL: Record<string, string> = {
   flag_without_credit: '查無收款',
@@ -317,5 +324,18 @@ const updateFilter = (field: string, value: unknown) => {
 /* 收款對帳標籤跟在「預繳」tag 後面，靠 margin 與它拉開，不另佔一欄 */
 .mismatch-tag {
   margin-left: 4px;
+}
+.more-caret {
+  margin-left: 2px;
+}
+/* 四個元素（編輯／歷程／轉為學生／更多）維持單行，不因欄寬臨界值折行 */
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.row-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 </style>
