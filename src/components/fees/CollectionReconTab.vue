@@ -83,10 +83,10 @@
       </el-descriptions>
       <el-alert
         v-if="preview?.already_imported"
-        type="warning"
+        :type="newRowCount > 0 ? 'success' : 'warning'"
         :closable="false"
         class="mt-1"
-        title="此檔案先前已匯入（同檔重送不會重複入帳）"
+        :title="alreadyImportedTitle"
         data-test="dup-import-alert"
       />
       <el-alert
@@ -454,6 +454,20 @@ const importing = ref(false)
 const errorRowsOpen = ref(false)
 /** 後端 preview 一定帶 errors（最多 50 筆）；?? [] 是為了不讓舊快取／缺欄位炸掉整頁。 */
 const previewErrors = computed(() => preview.value?.errors ?? [])
+
+/** 本檔尚未入帳過的列數（＝確認匯入會新增幾筆）。 */
+const newRowCount = computed(() =>
+  preview.value ? Math.max(0, preview.value.row_count - preview.value.duplicate_count) : 0,
+)
+/**
+ * 同檔重送先前一律「不會重複入帳」，但 parser 升版後會重新解析並補進舊版
+ * 漏掉的列（如在途列）——此時再說「重送沒用」會讓人以為按了也沒差。
+ */
+const alreadyImportedTitle = computed(() =>
+  newRowCount.value > 0
+    ? `此檔案先前已匯入，但其中 ${newRowCount.value} 筆先前沒被收下——確認匯入會補進來，既有列不會重複入帳`
+    : '此檔案先前已匯入（同檔重送不會重複入帳）',
+)
 
 /** 在途列顯示「未入帳」＋預計入帳日（有預計日才附上，避免顯示 undefined）。 */
 function pendingLabel(row: CollectionPaymentRow): string {

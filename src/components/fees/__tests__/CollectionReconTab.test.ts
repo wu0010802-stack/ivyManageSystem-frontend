@@ -342,6 +342,28 @@ describe('CollectionReconTab 在途列與錯誤列明細', () => {
     expect(last.posting_state).toBeUndefined()
   })
 
+  it('已匯入過但仍有未收下的列時，提示會補進來而非「重送沒用」', async () => {
+    const wrapper = await previewWith({
+      already_imported: true,
+      row_count: 66,
+      duplicate_count: 38,
+    })
+    const alert = wrapper.find('[data-test="dup-import-alert"]')
+    expect(alert.attributes('title')).toContain('28 筆先前沒被收下')
+    expect(alert.attributes('type')).toBe('success')
+  })
+
+  it('已匯入且沒有新列時維持原本的「不會重複入帳」提示', async () => {
+    const wrapper = await previewWith({
+      already_imported: true,
+      row_count: 38,
+      duplicate_count: 38,
+    })
+    const alert = wrapper.find('[data-test="dup-import-alert"]')
+    expect(alert.attributes('title')).toContain('不會重複入帳')
+    expect(alert.attributes('type')).toBe('warning')
+  })
+
   it('在途列標籤附預計入帳日，無預計日則只顯示未入帳', async () => {
     const wrapper = await mountTab()
     const vm = wrapper.vm as unknown as {
