@@ -114,7 +114,7 @@
         <EmptyState
           v-else
           title="尚無費用紀錄"
-          description="可先到右上「費用設定」維護費用範本，系統將於每日依啟用範本自動產生費用單"
+          description="費用單來自右上「匯入」的銀行檢核檔（發單批次）與「現金項目」批次；零散的額外應收可用「新增單筆費用」補登"
         />
       </template>
 
@@ -525,9 +525,22 @@ function searchRecords() {
   return fetchRecords()
 }
 
-// 父層（全域搜尋導航）帶入學生姓名預篩。
+// 父層帶入學生姓名預篩（全域搜尋導航、月表明細面板「到逐筆明細處理」）。
 // 只設 student_name → 觸發既有 watcher（page 歸 1 + 300ms debounce fetch），不重複呼叫 fetch。
+//
+// 一併解除預設鎖住的「未繳」：帶著某位學生進來就是要看他的**全部**帳款，
+// 尤其「到逐筆明細處理（部分繳費／退款）」要處理的正是已繳的單——沿用未繳
+// 篩選會讓已繳清的學生落地後顯示「目前篩選沒有結果」。與 initialSearch 進場
+// 的預設同軸（見 recordFilter 初始化）。status 的 watcher 在此靜默，讓那唯一
+// 一次查詢仍由 student_name 的 debounce 發出。
 function applySearch(name: string) {
+  if (recordFilter.value.status) {
+    _suppressStatusWatch = true
+    recordFilter.value.status = ''
+    nextTick(() => {
+      _suppressStatusWatch = false
+    })
+  }
   recordFilter.value.student_name = name
 }
 
@@ -552,6 +565,8 @@ function flushSearchNow() {
 
 // reset 一次改四個欄位，靠 suppress 旗標讓個別 watcher 靜默，只發出這裡的單一 fetch
 let _suppressFilterWatch = false
+// applySearch 專用：只靜默 status watcher（student_name 的 debounce 仍要照常發查詢）
+let _suppressStatusWatch = false
 function resetRecordFilters() {
   _suppressFilterWatch = true
   if (_feeSearchTimer) {
@@ -730,7 +745,7 @@ watch(() => recordFilter.value.period, () => {
   if (!_suppressFilterWatch) searchRecords()
 })
 watch(() => recordFilter.value.status, () => {
-  if (!_suppressFilterWatch) searchRecords()
+  if (!_suppressFilterWatch && !_suppressStatusWatch) searchRecords()
 })
 watch(() => recordFilter.value.classroom_name, () => {
   if (!_suppressFilterWatch) searchRecords()

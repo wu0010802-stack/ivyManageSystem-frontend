@@ -40,6 +40,7 @@ const SUMMARY = {
 interface TabVm {
   fetchRecords: () => Promise<void>
   resetRecordFilters: () => Promise<void>
+  applySearch: (name: string) => void
   recordFilter: { period: string; classroom_name: string; status: string; student_name: string }
 }
 
@@ -101,6 +102,31 @@ describe('FeeRecordsTab 預設範圍（autoLoad 模式）', () => {
       )
       const params = getFeeRecords.mock.calls[0][0] as Record<string, unknown>
       expect(params).not.toHaveProperty('status')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // 回歸：月表明細面板「到逐筆明細處理（部分繳費／退款）」對已繳清學生會落在
+  // 預設鎖住的「未繳」上 → 顯示「目前篩選沒有結果」，而退款正需要已繳的單。
+  // applySearch 是「帶入指定學生」的唯一入口，語意必須與 initialSearch 進場一致。
+  it('applySearch（月表帶入學生）改看該生全部帳款，不受預設「未繳」鎖住，且只發一輪查詢', async () => {
+    vi.useFakeTimers()
+    try {
+      const w = mountTab({ autoLoad: true, defaultPeriod: '115-1' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(vmOf(w).recordFilter.status).toBe('unpaid')
+      getFeeRecords.mockClear()
+      getFeeSummary.mockClear()
+
+      vmOf(w).applySearch('薛安雅')
+      await vi.advanceTimersByTimeAsync(350)
+
+      expect(vmOf(w).recordFilter.status).toBe('')
+      expect(getFeeRecords).toHaveBeenCalledTimes(1)
+      const params = getFeeRecords.mock.calls[0][0] as Record<string, unknown>
+      expect(params).not.toHaveProperty('status')
+      expect(params).toMatchObject({ student_name: '薛安雅', page: 1 })
     } finally {
       vi.useRealTimers()
     }

@@ -176,6 +176,9 @@ describe('FeeRecordsTab 載入/空/錯誤狀態', () => {
     await vm.fetchRecords()
     await flushPromises()
     expect(w.text()).toContain('尚無費用紀錄')
+    // SPEC-019 起費用範本與「費用設定」入口已全數退場，空狀態不得再指路到不存在的地方
+    expect(w.text()).not.toContain('費用設定')
+    expect(w.text()).not.toContain('費用範本')
 
     vm.recordFilter.status = 'unpaid'
     await flushPromises()
