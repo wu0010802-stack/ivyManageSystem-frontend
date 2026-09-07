@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, provide, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
 import { normalizeSchoolYear } from '@/utils/academic'
+import { todayISO } from '@/utils/format'
 import { todayRange, thisWeekRange, thisMonthRange, lastNDaysRange } from '@/utils/dateRange'
 import {
   useAcademicAffairsFilters,
@@ -35,6 +36,7 @@ const { filters, setClassroom, setDateRange, setStudent } = filtersCtx
 
 provide(ACADEMIC_AFFAIRS_FILTERS_KEY, filtersCtx)
 
+const attendanceDate = ref(todayISO())
 const classrooms = ref<ClassroomItem[]>([])
 const classroomsLoading = ref(false)
 const students = ref<StudentItem[]>([])
@@ -85,21 +87,26 @@ const fetchClassrooms = async () => {
   }
 }
 
+let studentRequestSequence = 0
 const fetchStudents = async () => {
+  const sequence = ++studentRequestSequence
   if (!filters.classroomId) {
     students.value = []
+    studentsLoading.value = false
     return
   }
   studentsLoading.value = true
   try {
     const res = await getStudents({ classroom_id: filters.classroomId as number | null, limit: 500 })
+    if (sequence !== studentRequestSequence) return
     const raw = res.data ?? []
     students.value = (Array.isArray(raw) ? raw : (raw as { items?: StudentItem[] }).items ?? []) as StudentItem[]
   } catch (error) {
+    if (sequence !== studentRequestSequence) return
     ElMessage.error(apiError(error, '載入學生清單失敗'))
     students.value = []
   } finally {
-    studentsLoading.value = false
+    if (sequence === studentRequestSequence) studentsLoading.value = false
   }
 }
 
@@ -108,16 +115,17 @@ watch(
   () => fetchStudents(),
 )
 
+onUnmounted(() => { studentRequestSequence += 1 })
+
 onMounted(async () => {
   await fetchClassrooms()
-  if (filters.classroomId) await fetchStudents()
 })
 </script>
 
 <template>
   <div class="today-tasks-panel">
     <p class="panel-subtitle">
-      出席、請假、評量、事件依下方班級與日期區間顯示；出席為當日點名，僅呈現區間結束日當天。
+      先完成每日點名，再處理請假與教務紀錄。班級與學生篩選共用，點名日期與紀錄查詢區間分開設定。
     </p>
 
     <el-card shadow="never" class="filter-card">
@@ -127,9 +135,9 @@ onMounted(async () => {
           <el-select
             :model-value="selectedClassroomId"
             placeholder="選擇班級"
+            aria-label="班級"
             filterable
             :loading="classroomsLoading"
-            style="width: 200px"
             @update:model-value="setClassroom"
           >
             <el-option
@@ -141,16 +149,28 @@ onMounted(async () => {
           </el-select>
         </div>
         <div class="filter-item">
-          <span class="filter-label">日期區間</span>
+          <span class="filter-label">點名日期</span>
+          <el-date-picker
+            v-model="attendanceDate"
+            type="date"
+            aria-label="點名日期"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+          />
+        </div>
+        <div class="filter-item filter-item--range">
+          <span class="filter-label">紀錄查詢區間</span>
           <el-date-picker
             :model-value="selectedDateRange"
             type="daterange"
+            aria-label="紀錄查詢區間"
+            start-label="紀錄起始日"
+            end-label="紀錄結束日"
             value-format="YYYY-MM-DD"
             range-separator="至"
             start-placeholder="起始日"
             end-placeholder="結束日"
             :shortcuts="dateRangeShortcuts"
-            style="width: 280px"
             @update:model-value="setDateRange"
           />
         </div>
@@ -159,11 +179,11 @@ onMounted(async () => {
           <el-select
             :model-value="selectedStudentId"
             placeholder="全班"
+            aria-label="學生（選填）"
             filterable
             clearable
             :loading="studentsLoading"
             :disabled="!filters.classroomId"
-            style="width: 220px"
             @update:model-value="setStudent"
           >
             <el-option
@@ -177,17 +197,17 @@ onMounted(async () => {
       </div>
     </el-card>
 
-    <div class="sections-grid">
-      <AttendanceSection />
-      <LeaveSection />
-    </div>
-
     <div class="secondary-records">
-      <span class="secondary-records-label">次要紀錄</span>
+      <span class="secondary-records-label">教務紀錄</span>
       <div class="secondary-records-entries">
         <AssessmentSection :classrooms="classrooms" />
         <IncidentSection :classrooms="classrooms" />
       </div>
+    </div>
+
+    <div class="sections-grid">
+      <AttendanceSection :attendance-date="attendanceDate" />
+      <LeaveSection />
     </div>
   </div>
 </template>
@@ -217,8 +237,11 @@ onMounted(async () => {
 
 .filter-item {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-2);
+  min-width: 0;
+  flex: 1 1 12rem;
 }
 
 .filter-label {
@@ -234,7 +257,7 @@ onMounted(async () => {
   gap: var(--space-4);
 }
 
-@media (max-width: 1280px) {
+@media (--to-lg) {
   .sections-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -263,6 +286,9 @@ onMounted(async () => {
   }
 }
 
+.filter-item--range { flex-basis: 20rem; }
+.filter-item :deep(.el-date-editor), .filter-item :deep(.el-select) { width: 100%; min-width: 0; }
+
 /* 觸發鈕由子元件 (AssessmentSection / IncidentSection) 渲染，故用 :deep 穿透 */
 .secondary-records :deep(.record-entry) {
   width: 100%;
@@ -279,8 +305,8 @@ onMounted(async () => {
   background: var(--neutral-50);
   cursor: pointer;
   transition:
-    background 0.15s,
-    border-color 0.15s;
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .secondary-records :deep(.record-trigger:hover) {
@@ -290,7 +316,7 @@ onMounted(async () => {
 
 .secondary-records :deep(.record-trigger-label) {
   font-weight: 600;
-  font-size: 15px;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 

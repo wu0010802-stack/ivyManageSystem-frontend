@@ -6,6 +6,10 @@ import { useStudentStore } from '@/stores/student'
 import { STUDENT_STATUS_TAG_OPTIONS } from '@/utils/student'
 import { apiError } from '@/utils/error'
 import { isSilentError } from '@/utils/errorHandler'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
+import FormDialog from '@/components/common/FormDialog.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import FormSection from '@/components/common/FormSection.vue'
 import { sectionForStudentField } from '@/constants/studentFormSections'
 import { hasPermission } from '@/utils/auth'
@@ -155,6 +159,16 @@ const emptyForm = (): StudentForm => ({
 })
 
 const form = reactive(emptyForm())
+const { isDirty, snapshot } = useFormDirty(form)
+// 儲存中的請求尚未結束，不能離開後再操作另一份學生資料。
+onBeforeRouteLeave(() => !submitting.value)
+const { confirmDiscard } = useUnsavedChangesGuard(() => props.visible && isDirty.value)
+// 同一個 profile route 切換學生 ID 會重建表單，也必須保護尚未完成的操作。
+onBeforeRouteUpdate((to, from) => {
+  if (to.params.id === from.params.id) return true
+  if (submitting.value) return false
+  return confirmDiscard()
+})
 
 // 鏡像後端 StudentCreate.validate_phone：^[\d\-\+\(\)\s]{7,20}$
 const PHONE_PATTERN = /^[\d\-+()\s]{7,20}$/
@@ -175,8 +189,11 @@ watch(
     } else if (props.defaultClassroomId) {
       form.classroom_id = props.defaultClassroomId
     }
+    snapshot()
+    applyValidationErrors([])
     formRef.value?.clearValidate()
   },
+  { immediate: true },
 )
 
 const close = () => emit('update:visible', false)
@@ -211,6 +228,7 @@ const submit = async () => {
         await studentStore.createStudent(payload)
       }
       ElMessage.success(isEdit.value ? '更新成功' : '新增成功')
+      snapshot()
       emit('saved', payload)
       close()
     } catch (error) {
@@ -230,12 +248,14 @@ const submit = async () => {
 </script>
 
 <template>
-  <el-dialog
+  <FormDialog
     :model-value="visible"
     :title="isEdit ? '編輯學生' : '新增學生'"
-    width="560px"
-    :close-on-click-modal="false"
-    destroy-on-close
+    size="wide"
+    :dirty="isDirty"
+    :loading="submitting"
+    :submit-text="isEdit ? '儲存變更' : '建立學生'"
+    @submit="submit"
     @update:model-value="emit('update:visible', $event)"
   >
     <el-form
@@ -247,90 +267,102 @@ const submit = async () => {
       <p class="required-legend"><span class="req">*</span> 為必填，其餘可日後補</p>
 
       <!-- 核心資料 -->
-      <el-form-item label="姓名" prop="name">
+      <div class="form-grid">
+      <el-form-item class="fg-6" label="姓名" prop="name">
         <el-input v-model="form.name" />
       </el-form-item>
-      <el-form-item label="學生編號">
+      <el-form-item class="fg-6" label="學生編號">
         <div data-test="student-id-auto" class="form-hint" style="margin-top:0">
           <el-tag v-if="isEdit && form.student_id" type="info" effect="plain">{{ form.student_id }}</el-tag>
           <el-tag v-else type="success" effect="plain">儲存後自動配號（依班級）</el-tag>
         </div>
       </el-form-item>
-      <el-form-item label="性別">
+      <el-form-item class="fg-6" label="性別">
         <el-radio-group :model-value="form.gender ?? undefined" @update:model-value="(v: string | number | boolean | undefined) => (form.gender = (v as string) ?? null)">
           <el-radio value="男">男</el-radio>
           <el-radio value="女">女</el-radio>
         </el-radio-group>
       </el-form-item>
-      <el-form-item label="生日">
+      <el-form-item class="fg-6" label="生日">
         <el-date-picker v-model="form.birthday" type="date" placeholder="選擇日期" value-format="YYYY-MM-DD" style="width: 100%" />
       </el-form-item>
-      <el-form-item label="班級" v-if="classroomOptions.length || form.classroom_id">
+      <el-form-item class="fg-6" label="班級" v-if="classroomOptions.length || form.classroom_id">
         <el-select v-model="form.classroom_id" placeholder="選擇班級" :disabled="lockClassroom" clearable filterable style="width: 100%">
           <el-option v-for="c in classroomOptions" :key="c.id as PropertyKey" :label="formatClassroomLabel(c)" :value="(c.id as number)" />
         </el-select>
       </el-form-item>
-      <el-form-item label="入學日">
+      <el-form-item class="fg-6" label="入學日">
         <el-date-picker v-model="form.enrollment_date" type="date" placeholder="選擇日期" value-format="YYYY-MM-DD" style="width: 100%" />
       </el-form-item>
 
+      </div>
+
       <!-- 家長資訊 -->
       <FormSection v-if="canGuardianWrite" ref="parentRef" data-test="section-parent" title="家長資訊" collapsible :default-open="false" :badge-count="sectionErrors.parent" badge-type="error">
-        <el-form-item label="家長姓名"><el-input v-model="form.parent_name" /></el-form-item>
-        <el-form-item label="電話" prop="parent_phone">
+        <div class="form-grid">
+        <el-form-item class="fg-6" label="家長姓名"><el-input v-model="form.parent_name" /></el-form-item>
+        <el-form-item class="fg-6" label="電話" prop="parent_phone">
           <el-input v-model="form.parent_phone" />
           <div class="form-hint form-hint--example">例：0912-345-678</div>
         </el-form-item>
-        <el-form-item label="地址"><el-input v-model="form.address" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item class="fg-12" label="地址"><el-input v-model="form.address" type="textarea" :rows="2" /></el-form-item>
+        </div>
       </FormSection>
 
       <!-- 緊急聯絡人 -->
       <FormSection v-if="canGuardianWrite" ref="emergencyRef" data-test="section-emergency" title="緊急聯絡人" collapsible :default-open="false" :badge-count="sectionErrors.emergency" badge-type="error">
-        <el-form-item label="姓名"><el-input v-model="form.emergency_contact_name" placeholder="例: 王奶奶" /></el-form-item>
-        <el-form-item label="電話" prop="emergency_contact_phone">
+        <div class="form-grid">
+        <el-form-item class="fg-6" label="姓名"><el-input v-model="form.emergency_contact_name" placeholder="例: 王奶奶" /></el-form-item>
+        <el-form-item class="fg-6" label="電話" prop="emergency_contact_phone">
           <el-input v-model="form.emergency_contact_phone" />
           <div class="form-hint form-hint--example">例：0912-345-678</div>
         </el-form-item>
-        <el-form-item label="關係"><el-input v-model="form.emergency_contact_relation" placeholder="例: 祖母、舅舅" /></el-form-item>
+        <el-form-item class="fg-6" label="關係"><el-input v-model="form.emergency_contact_relation" placeholder="例: 祖母、舅舅" /></el-form-item>
+        </div>
       </FormSection>
 
       <!-- 健康資訊 -->
       <FormSection v-if="canHealthWrite || canSpecialNeedsWrite" ref="healthRef" data-test="section-health" title="健康資訊" collapsible :default-open="false" :badge-count="sectionErrors.health" badge-type="error">
-        <el-form-item v-if="canHealthWrite" label="過敏原"><el-input v-model="form.allergy" type="textarea" :rows="2" placeholder="例: 花生、塵蟎" /></el-form-item>
-        <el-form-item v-if="canHealthWrite" label="用藥說明"><el-input v-model="form.medication" type="textarea" :rows="2" /></el-form-item>
-        <el-form-item v-if="canSpecialNeedsWrite" label="特殊需求"><el-input v-model="form.special_needs" type="textarea" :rows="2" /></el-form-item>
+        <div class="form-grid">
+        <el-form-item class="fg-12" v-if="canHealthWrite" label="過敏原"><el-input v-model="form.allergy" type="textarea" :rows="2" placeholder="例: 花生、塵蟎" /></el-form-item>
+        <el-form-item class="fg-12" v-if="canHealthWrite" label="用藥說明"><el-input v-model="form.medication" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item class="fg-12" v-if="canSpecialNeedsWrite" label="特殊需求"><el-input v-model="form.special_needs" type="textarea" :rows="2" /></el-form-item>
+        </div>
       </FormSection>
 
       <!-- 其他標記 -->
       <FormSection ref="otherRef" data-test="section-other" title="其他標記" collapsible :default-open="false" :badge-count="sectionErrors.other" badge-type="error">
-        <el-form-item label="狀態標籤">
+        <div class="form-grid">
+        <el-form-item class="fg-6" label="狀態標籤">
           <el-select v-model="form.status_tag" filterable allow-create default-first-option clearable placeholder="選擇或輸入標籤" style="width: 100%">
             <el-option v-for="tag in STUDENT_STATUS_TAG_OPTIONS" :key="tag" :label="tag" :value="tag" />
           </el-select>
         </el-form-item>
+        </div>
       </FormSection>
 
       <!-- 政府申報資料 -->
       <FormSection v-if="showGovSection" ref="govRef" data-test="section-gov" title="政府申報資料" collapsible :default-open="false" :badge-count="sectionErrors.gov" badge-type="error">
-        <el-form-item label="身分證字號"><el-input v-model="form.id_number" maxlength="20" /></el-form-item>
-        <el-form-item label="國籍"><el-input v-model="form.nationality" maxlength="20" placeholder="本國" /></el-form-item>
-        <el-form-item label="戶籍地址"><el-input v-model="form.household_address" type="textarea" :rows="2" /></el-form-item>
-        <el-form-item label="弱勢標記"><el-switch v-model="form.is_disadvantaged" /></el-form-item>
-        <el-form-item v-if="canSpecialNeedsWrite" label="特教標記">
+        <div class="form-grid">
+        <el-form-item class="fg-6" label="身分證字號"><el-input v-model="form.id_number" maxlength="20" /></el-form-item>
+        <el-form-item class="fg-6" label="國籍"><el-input v-model="form.nationality" maxlength="20" placeholder="本國" /></el-form-item>
+        <el-form-item class="fg-12" label="戶籍地址"><el-input v-model="form.household_address" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item class="fg-6" label="弱勢標記"><el-switch v-model="form.is_disadvantaged" /></el-form-item>
+        <el-form-item class="fg-6" v-if="canSpecialNeedsWrite" label="特教標記">
           <el-switch
             :model-value="form.is_special_education ?? false"
             :disabled="form.is_special_education == null"
             @update:model-value="(v: string | number | boolean) => (form.is_special_education = v === true)"
           />
         </el-form-item>
-        <el-form-item label="低收/中低收">
+        <el-form-item class="fg-6" label="低收/中低收">
           <el-select v-model="form.low_income_status" clearable placeholder="(無)">
             <el-option label="低收入戶" value="low" />
             <el-option label="中低收入戶" value="mid_low" />
           </el-select>
         </el-form-item>
-        <el-form-item label="原住民族"><el-input v-model="form.indigenous_status" placeholder="阿美/泰雅/..." /></el-form-item>
-        <el-form-item v-if="canSpecialNeedsWrite" label="身障類型">
+        <el-form-item class="fg-6" label="原住民族"><el-input v-model="form.indigenous_status" placeholder="阿美/泰雅/..." /></el-form-item>
+        <el-form-item class="fg-6" v-if="canSpecialNeedsWrite" label="身障類型">
           <el-select v-model="form.disability_type" clearable>
             <el-option label="智能障礙" value="智能障礙" />
             <el-option label="聽覺障礙" value="聽覺障礙" />
@@ -343,7 +375,7 @@ const submit = async () => {
             <el-option label="多重障礙" value="多重障礙" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="canSpecialNeedsWrite" label="身障等級">
+        <el-form-item class="fg-6" v-if="canSpecialNeedsWrite" label="身障等級">
           <el-select v-model="form.disability_level" clearable>
             <el-option label="輕度" value="輕度" />
             <el-option label="中度" value="中度" />
@@ -351,23 +383,20 @@ const submit = async () => {
             <el-option label="極重度" value="極重度" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="canSpecialNeedsWrite" label="鑑定文號"><el-input v-model="form.disability_cert_no" maxlength="50" /></el-form-item>
-        <el-form-item v-if="canSpecialNeedsWrite" label="鑑定到期日">
+        <el-form-item class="fg-6" v-if="canSpecialNeedsWrite" label="鑑定文號"><el-input v-model="form.disability_cert_no" maxlength="50" /></el-form-item>
+        <el-form-item class="fg-6" v-if="canSpecialNeedsWrite" label="鑑定到期日">
           <el-date-picker v-model="form.disability_cert_expiry" type="date" placeholder="(無則永久)" value-format="YYYY-MM-DD" />
         </el-form-item>
+        </div>
       </FormSection>
     </el-form>
 
     <slot name="extra" :mode="mode" :is-edit="isEdit" :classroom-id="form.classroom_id" />
 
-    <template #footer>
-      <el-button @click="close">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="submit">確認</el-button>
-    </template>
-  </el-dialog>
+  </FormDialog>
 </template>
 
 <style scoped>
-.required-legend { font-size: 12px; color: var(--el-text-color-secondary); margin: 0 0 14px; }
+.required-legend { font-size: var(--text-xs); color: var(--el-text-color-secondary); margin: 0 0 var(--space-4); }
 .required-legend .req { color: var(--el-color-danger); }
 </style>

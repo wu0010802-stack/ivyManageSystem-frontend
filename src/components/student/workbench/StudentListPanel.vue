@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { LocationQueryRaw } from 'vue-router'
 import { getStudent, getStudents } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
 import { createDismissalCall, getDismissalCalls } from '@/api/dismissalCalls'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { Search, Plus, Edit, Warning, ArrowDown } from '@element-plus/icons-vue'
+import { Edit, Warning, ArrowDown } from '@element-plus/icons-vue'
+import PageHeader from '@/components/common/PageHeader.vue'
+import AdminCreateButton from '@/components/common/AdminCreateButton.vue'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+import { buildRosterProfileQuery, rememberRosterSearch, takeRosterSearch } from '@/utils/studentRosterNavigation'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useConfirmDelete } from '@/composables'
 import { apiError } from '@/utils/error'
@@ -28,15 +36,19 @@ interface StudentRow {
 }
 interface ClassroomRow { id: number; name: string; school_year?: number; semester?: number; semester_label?: string; grade_name?: string; [key: string]: unknown }
 
+const { isMobile } = useIsMobile()
+const showMoreColumns = ref(false)
+const tableRef = ref<{ clearSelection: () => void } | null>(null)
 const students = ref<StudentRow[]>([])
 const classrooms = ref<ClassroomRow[]>([])
 const totalStudents = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(50)
-const loading = ref(false)
+const loading = ref(true)
 const selectedStudents = ref<StudentRow[]>([])
-const searchQuery = ref('')
-const debouncedSearch = ref('')
+const restoredSearch = takeRosterSearch(router)
+const searchQuery = ref(restoredSearch)
+const debouncedSearch = ref(restoredSearch)
 const activeTab = ref('active')  // 'active' | 'graduated'
 const transferDialogVisible = ref(false)
 const transferTargetClassroomId = ref<number | null>(null)
@@ -130,7 +142,10 @@ const dialogClassroomOptions = computed(() => {
 })
 
 watch(debouncedSearch, () => {
+  if (_applyingRoute) return
   currentPage.value = 1
+  clearSelection()
+  syncRouteQuery()
   fetchStudents()
 })
 
@@ -185,6 +200,8 @@ const fetchStudents = async () => {
       search: debouncedSearch.value || undefined,
     })
     if (seq !== fetchSeq) return
+    if (selectedStudents.value.some(selected => !response.data.items.some(student => student.id === selected.id))) clearSelection()
+    else selectedStudents.value = response.data.items.filter(student => selectedStudents.value.some(selected => selected.id === student.id))
     students.value = response.data.items
     totalStudents.value = response.data.total
     if (activeTab.value === 'active') {
@@ -217,6 +234,8 @@ const handleNotifyDismissal = async (row: StudentRow) => {
 
 const handleTabChange = () => {
   currentPage.value = 1
+  clearSelection()
+  syncRouteQuery()
   fetchStudents()
 }
 
@@ -279,12 +298,16 @@ const submitGraduate = async () => {
 
 const handlePageChange = (page: number) => {
   currentPage.value = page
+  clearSelection()
+  syncRouteQuery()
   fetchStudents()
 }
 
 const handleSizeChange = (size: number) => {
   pageSize.value = size
   currentPage.value = 1
+  clearSelection()
+  syncRouteQuery()
   fetchStudents()
 }
 
@@ -295,6 +318,27 @@ const classroomName = (id: number | null | undefined) => (
 const handleSelectionChange = (rows: StudentRow[]) => {
   selectedStudents.value = rows
 }
+const clearSelection = () => {
+  selectedStudents.value = []
+  tableRef.value?.clearSelection?.()
+}
+const toggleStudent = (row: StudentRow, checked: string | number | boolean) => {
+  selectedStudents.value = checked === true
+    ? [...selectedStudents.value.filter(student => student.id !== row.id), row]
+    : selectedStudents.value.filter(student => student.id !== row.id)
+}
+watch(isMobile, clearSelection)
+const mobileColumns = computed(() => [
+  { prop: 'classroom', label: '班級', formatter: (row: Record<string, unknown>) => classroomName(displayClassroomId(row as StudentRow)) },
+  { prop: 'parent_name', label: '家長' },
+  { prop: 'parent_phone', label: '電話' },
+  { prop: activeTab.value === 'active' ? 'status_tag' : 'status', label: '狀態' },
+  ...(showMoreColumns.value ? [
+    { prop: 'student_id', label: '編號' }, { prop: 'gender', label: '性別' },
+    { prop: 'birthday', label: '生日' }, { prop: 'enrollment_date', label: '入學日' },
+  ] : []),
+  ...(activeTab.value === 'graduated' ? [{ prop: 'graduation_date', label: '離園日' }] : []),
+])
 const openTransferDialog = () => {
   const sourceIds = new Set(selectedStudents.value.map((student) => student.classroom_id ?? null))
   if (sourceIds.size > 1) {
@@ -331,7 +375,8 @@ const submitTransfer = async () => {
 }
 
 const openProfile = (row: StudentRow) => {
-  router.push({ name: 'student-profile', params: { id: row.id } })
+  rememberRosterSearch(router, searchQuery.value)
+  router.push({ name: 'student-profile', params: { id: row.id }, query: buildRosterProfileQuery(rosterQuery()) })
 }
 
 const handleAdd = () => {
@@ -378,16 +423,42 @@ const handleRowCommand = (command: string, row: StudentRow) => {
   else if (command === 'delete') handleDelete(row)
 }
 
+const positiveInteger = (value: unknown, fallback: number | null): number | null => {
+  const parsed = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+const rosterQuery = () => ({
+  school_year: String(normalizeSchoolYear(filterSchoolYear.value)),
+  semester: String(filterSemester.value),
+  classroom_id: filterClassroomId.value ? String(filterClassroomId.value) : undefined,
+  show_all: showAllClassrooms.value ? '1' : undefined,
+  status: activeTab.value,
+  page: String(currentPage.value),
+  page_size: String(pageSize.value),
+})
+let lastWrittenQuery = ''
+const syncRouteQuery = () => {
+  if (_applyingRoute) return
+  const query: LocationQueryRaw = { ...route.query, ...rosterQuery() }
+  // 搜尋可能含幼生／家長姓名，只保留在此名冊流程的記憶體。
+  delete query.q
+  lastWrittenQuery = JSON.stringify(query)
+  void router.push({ query })
+}
 const applyRouteContext = () => {
   const parsedSemester = Number(route.query.semester)
-  const parsedClassroomId = Number(route.query.classroom_id)
   filterSchoolYear.value = normalizeSchoolYear(route.query.school_year)
   filterSemester.value = [1, 2].includes(parsedSemester) ? parsedSemester : currentAcademicTerm.semester
-  filterClassroomId.value = Number.isFinite(parsedClassroomId) ? parsedClassroomId : null
+  filterClassroomId.value = positiveInteger(route.query.classroom_id, null)
   showAllClassrooms.value = route.query.show_all === '1'
+  activeTab.value = route.query.status === 'graduated' ? 'graduated' : 'active'
+  currentPage.value = positiveInteger(route.query.page, 1) ?? 1
+  const size = positiveInteger(route.query.page_size, 50)
+  pageSize.value = size && [20, 50, 100].includes(size) ? size : 50
   // 在籍記錄表點學生跳轉：以 ?q= 預填搜尋框並觸發查詢
   if (typeof route.query.q === 'string' && route.query.q) {
     searchQuery.value = route.query.q
+    debouncedSearch.value = route.query.q
   }
 }
 
@@ -395,6 +466,7 @@ const clearRouteAction = async () => {
   if (!route.query.action) return
   const nextQuery = { ...route.query }
   delete nextQuery.action
+  if (nextQuery.tab !== 'tasks' && nextQuery.tab !== 'roster') nextQuery.tab = 'roster'
   await router.replace({ query: nextQuery })
 }
 
@@ -455,14 +527,25 @@ watch([filterSchoolYear, filterSemester, filterClassroomId], ([, , cid], [prevYe
     return
   }
   currentPage.value = 1
+  clearSelection()
+  syncRouteQuery()
   fetchStudents()
 })
+
+watch(showAllClassrooms, () => syncRouteQuery())
 
 watch(
   () => route.query,
   async () => {
+    if (route.path && route.path !== '/students') return
+    // 本頁剛寫入的 query 已完成查詢；URL 的正規化會省略 undefined。
+    const writtenQuery = lastWrittenQuery
+    lastWrittenQuery = ''
+    if (JSON.stringify(route.query) === writtenQuery) return
+    const previousFilters = JSON.stringify(rosterQuery())
     _applyingRoute = true
     applyRouteContext()
+    if (JSON.stringify(rosterQuery()) !== previousFilters) clearSelection()
     await nextTick()
     _applyingRoute = false
     await fetchStudents()
@@ -480,12 +563,16 @@ const busEvents = [
 ]
 busEvents.forEach((evt) => domainBus.on(evt, onBusRefresh))
 onUnmounted(() => {
+  fetchSeq += 1
   editLoadSeq += 1
   busEvents.forEach((evt) => domainBus.off(evt, onBusRefresh))
 })
 
 onMounted(async () => {
+  _applyingRoute = true
   applyRouteContext()
+  await nextTick()
+  _applyingRoute = false
   // loadClassrooms 與 fetchStudents 無依賴可並行；handleRouteAction 依賴 students 已載入故保留序列
   await Promise.all([loadClassrooms(), fetchStudents()])
   await handleRouteAction()
@@ -494,79 +581,91 @@ onMounted(async () => {
 
 <template>
   <div class="student-page">
-    <div class="page-header">
-      <div class="header-actions">
-        <el-button @click="exportStudents">匯出 Excel</el-button>
-        <el-button @click="exportK12ea">匯出教育局格式</el-button>
-        <el-button
-          v-if="activeTab === 'active'"
-          plain
-          :disabled="selectedStudents.length === 0"
-          @click="openTransferDialog"
-        >
-          批次轉班
-        </el-button>
-        <el-button
-          v-if="activeTab === 'active'"
-          plain
-          :disabled="selectedStudents.length === 0"
-          @click="openBatchGraduateDialog"
-        >
-          批次畢業
-        </el-button>
-        <el-button type="primary" :icon="Plus" @click="handleAdd">新增學生</el-button>
-      </div>
-    </div>
+    <PageHeader title="學生名冊" subtitle="依學期與班級查找學生，查看檔案或維護基本資料。">
+      <template #actions>
+        <AdminCreateButton @click="handleAdd">新增學生</AdminCreateButton>
+      </template>
+    </PageHeader>
 
     <div class="filter-section">
-      <el-radio-group v-model="activeTab" @change="handleTabChange">
+      <el-radio-group v-model="activeTab" aria-label="學生在籍狀態" @change="handleTabChange">
         <el-radio-button value="active">在讀中</el-radio-button>
         <el-radio-button value="graduated">已離園</el-radio-button>
       </el-radio-group>
       <div class="filter-toolbar">
-        <el-select v-model="filterSchoolYear" filterable allow-create default-first-option style="width: 150px">
-          <el-option
-            v-for="year in schoolYearOptions"
-            :key="year"
-            :label="`${year}學年度`"
-            :value="year"
-          />
-        </el-select>
-        <el-select v-model="filterSemester" style="width: 190px">
-          <el-option
-            v-for="option in semesterOptions"
-            :key="option.value"
-            :label="option.label"
-            :value="option.value"
-          />
-        </el-select>
-        <el-select v-model="filterClassroomId" clearable placeholder="全部班級" style="width: 300px">
-          <el-option
-            v-for="classroom in filteredClassroomOptions"
-            :key="classroom.id"
-            :label="classroomLabel(classroom)"
-            :value="classroom.id"
-          />
-        </el-select>
-        <el-switch
-          v-model="showAllClassrooms"
-          inline-prompt
-          active-text="全部學期"
-          inactive-text="本學期"
-        />
-        <el-input
-          v-model="searchQuery"
-          placeholder="搜尋編號、姓名或家長..."
-          :prefix-icon="Search"
-          clearable
-          style="width: 300px"
-        />
+        <label class="filter-field"><span>學年度</span>
+          <el-select v-model="filterSchoolYear" aria-label="學年度" filterable allow-create default-first-option>
+            <el-option v-for="year in schoolYearOptions" :key="year" :label="`${year}學年度`" :value="year" />
+          </el-select>
+        </label>
+        <label class="filter-field"><span>學期</span>
+          <el-select v-model="filterSemester" aria-label="學期">
+            <el-option v-for="option in semesterOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+        </label>
+        <label class="filter-field filter-field--classroom"><span>班級</span>
+          <el-select v-model="filterClassroomId" aria-label="班級" clearable placeholder="全部班級">
+            <el-option v-for="classroom in filteredClassroomOptions" :key="classroom.id" :label="classroomLabel(classroom)" :value="classroom.id" />
+          </el-select>
+        </label>
+      </div>
+      <div class="classroom-option-setting">
+        <el-switch v-model="showAllClassrooms" aria-label="顯示其他學期班級" active-text="顯示其他學期班級" />
+        <span class="filter-hint">只擴充班級選項，學生名單仍依所選學年度與學期查詢。</span>
       </div>
     </div>
 
-    <TableSkeleton v-if="loading && !students.length" :columns="8" />
+    <AdminListToolbar v-model:search="searchQuery" search-placeholder="搜尋編號、姓名或家長" :total="totalStudents" :shown="students.length">
+      <template #actions>
+        <el-checkbox v-model="showMoreColumns">顯示更多欄位</el-checkbox>
+        <el-dropdown trigger="click">
+          <el-button>匯出名冊<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="exportStudents">匯出 Excel</el-dropdown-item>
+              <el-dropdown-item @click="exportK12ea">匯出教育局格式</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </template>
+    </AdminListToolbar>
+
+    <div v-if="activeTab === 'active' && selectedStudents.length" data-test="student-batch-toolbar" class="batch-toolbar" role="region" aria-label="已選學生批次操作">
+      <strong role="status">已選 {{ selectedStudents.length }} 位學生</strong>
+      <el-button data-test="clear-student-selection" text @click="clearSelection">清除選取</el-button>
+      <div class="batch-actions">
+        <el-button plain @click="openTransferDialog">批次轉班</el-button>
+        <el-button plain @click="openBatchGraduateDialog">批次畢業</el-button>
+      </div>
+    </div>
+
+    <AdminListCards v-if="isMobile" :items="students" :columns="mobileColumns" row-key="id" :loading="loading" empty-text="沒有符合篩選條件的學生，請調整學期、班級或搜尋文字。">
+      <template #title="{ item }">
+        <el-checkbox v-if="activeTab === 'active'" :model-value="selectedStudents.some(student => student.id === item.id)" :aria-label="`選取 ${item.name}`" @update:model-value="value => toggleStudent(item as StudentRow, value)">{{ item.name }}</el-checkbox>
+        <span v-else>{{ item.name }}</span>
+        <el-tag v-if="item.allergy || item.medication || item.special_needs" type="warning" size="small">有健康提醒</el-tag>
+      </template>
+      <template #actions="{ item }">
+        <el-button @click="openProfile(item as StudentRow)">檔案</el-button>
+        <el-button :icon="Edit" @click="handleEdit(item as StudentRow)">編輯</el-button>
+        <el-dropdown v-if="activeTab === 'active'" trigger="click" @command="(cmd: string) => handleRowCommand(cmd, item as StudentRow)">
+          <el-button :aria-label="`${item.name}的更多操作`">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="notify" :disabled="activeCallStudentIds.has(item.id)">{{ activeCallStudentIds.has(item.id) ? '已通知放學' : '通知放學' }}</el-dropdown-item>
+              <el-dropdown-item command="graduate">畢業 / 轉出</el-dropdown-item>
+              <el-dropdown-item command="delete" divided class="row-action-danger">刪除</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </template>
+    </AdminListCards>
+
+    <TableSkeleton v-else-if="loading && !students.length" :columns="8" />
     <el-table
       v-else
+      ref="tableRef"
+      row-key="id"
       :data="students"
       v-loading="loading"
       stripe
@@ -574,8 +673,9 @@ onMounted(async () => {
       max-height="600"
       @selection-change="handleSelectionChange"
     >
-      <el-table-column v-if="activeTab === 'active'" type="selection" width="48" />
-      <el-table-column prop="student_id" label="編號" width="100" sortable />
+      <template #empty><EmptyState title="沒有符合條件的學生" description="請調整學期、班級或搜尋文字。" /></template>
+      <el-table-column v-if="activeTab === 'active'" type="selection" reserve-selection width="48" />
+      <el-table-column v-if="showMoreColumns" prop="student_id" label="編號" width="100" sortable />
       <el-table-column label="姓名" width="130" sortable prop="name">
         <template #default="{ row }">
           <span>{{ row.name }}</span>
@@ -588,22 +688,22 @@ onMounted(async () => {
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column label="性別" width="70">
+      <el-table-column v-if="showMoreColumns" label="性別" width="70">
         <template #default="{ row }">
-          <el-tag v-if="row.gender === '男'" size="small" effect="light" class="gender-tag gender-tag--male">男</el-tag>
-          <el-tag v-else-if="row.gender === '女'" size="small" effect="light" class="gender-tag gender-tag--female">女</el-tag>
+          <el-tag v-if="row.gender === '男'" size="small" type="info" effect="light">男</el-tag>
+          <el-tag v-else-if="row.gender === '女'" size="small" type="info" effect="light">女</el-tag>
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="班級" width="120">
+      <el-table-column label="班級" min-width="180">
         <template #default="{ row }">
           <span>{{ classroomName(displayClassroomId(row)) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="birthday" label="生日" width="120" />
+      <el-table-column v-if="showMoreColumns" prop="birthday" label="生日" width="120" />
       <el-table-column prop="parent_name" label="家長" width="120" />
       <el-table-column prop="parent_phone" label="電話" width="150" />
-      <el-table-column prop="enrollment_date" label="入學日" width="120" sortable />
+      <el-table-column v-if="showMoreColumns" prop="enrollment_date" label="入學日" width="120" sortable />
       <el-table-column v-if="activeTab === 'graduated'" prop="graduation_date" label="離園日" width="120" sortable />
       <el-table-column v-if="activeTab === 'graduated'" label="離園類型" width="100">
         <template #default="{ row }">
@@ -647,9 +747,10 @@ onMounted(async () => {
 
     <el-pagination
       v-if="totalStudents > pageSize"
-      style="margin-top: 16px; justify-content: flex-end;"
+      class="student-pagination"
       background
-      layout="total, sizes, prev, pager, next"
+      :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next'"
+      :pager-count="isMobile ? 5 : 7"
       :total="totalStudents"
       :page-size="pageSize"
       :current-page="currentPage"
@@ -753,44 +854,21 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.page-header {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: var(--space-4);
-}
-
-.header-actions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.filter-section {
-  margin-bottom: var(--space-5);
-}
-
-.filter-toolbar {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: var(--space-3);
-}
-
-/* 性別標籤：以柔色區分，避免用 danger（紅＝危險）誤標女性 */
-.gender-tag--male {
-  --el-tag-bg-color: #eef4fb;
-  --el-tag-border-color: #d6e4f5;
-  --el-tag-text-color: #2f6cb5;
-}
-
-.gender-tag--female {
-  --el-tag-bg-color: #fdeef4;
-  --el-tag-border-color: #f6d4e2;
-  --el-tag-text-color: #a83a73;
-}
-
-/* dropdown 內的刪除動作以危險色凸顯並與其他項分隔 */
-.row-action-danger {
-  color: var(--el-color-danger);
+.filter-section { margin-bottom: var(--space-4); }
+.filter-toolbar { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); }
+.filter-field { display: flex; flex-direction: column; gap: var(--space-2); flex: 1 1 10rem; min-width: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.filter-field--classroom { flex-grow: 2; }
+.classroom-option-setting { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
+.filter-hint { font-size: var(--text-xs); color: var(--text-secondary); }
+.batch-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3); margin-bottom: var(--space-3); border-radius: var(--radius-md); background: var(--el-color-primary-light-9); }
+.batch-actions { display: flex; gap: var(--space-2); margin-left: auto; }
+.student-pagination { margin-top: var(--space-4); justify-content: flex-end; }
+.row-action-danger { color: var(--el-color-danger); }
+@media (--to-sm) {
+  .filter-field { flex-basis: 40%; }
+  .filter-field--classroom { flex-basis: 100%; }
+  .batch-actions { width: 100%; margin-left: 0; }
+  .batch-actions :deep(.el-button) { flex: 1; min-height: var(--touch-target-min); }
+  .student-pagination { justify-content: center; }
 }
 </style>

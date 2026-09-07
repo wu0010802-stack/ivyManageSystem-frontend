@@ -36,3 +36,22 @@ describe('TodayTasksPanel', () => {
     expect(wrapper.findComponent({ name: 'IncidentSection' }).exists()).toBe(true)
   })
 })
+
+// 使用者改紀錄區間時，點名日期不可跟著結束日跳動。
+it('點名日期與紀錄查詢區間各自獨立', async () => {
+  setActivePinia(createPinia())
+  const wrapper = shallowMount(TodayTasksPanel, { global: { stubs: {
+    'el-card': { template: '<div><slot /></div>' }, 'el-select': true,
+    'el-option': true, 'el-date-picker': true,
+  } } })
+  const pickers = wrapper.findAllComponents({ name: 'ElDatePicker' })
+  const single = pickers.find(p => p.attributes('type') === 'date')
+  const range = pickers.find(p => p.attributes('type') === 'daterange')
+  expect(single).toBeTruthy()
+  single!.vm.$emit('update:modelValue', '2026-09-06')
+  await wrapper.vm.$nextTick()
+  range!.vm.$emit('update:modelValue', ['2026-08-01', '2026-08-31'])
+  await wrapper.vm.$nextTick()
+  expect(wrapper.findComponent({ name: 'AttendanceSection' }).props('attendanceDate')).toBe('2026-09-06')
+  wrapper.unmount()
+})

@@ -8,6 +8,8 @@ import { ATTENDANCE_EVENTS, domainBus } from '@/utils/domainBus'
 import AttendanceBatchPanel from './AttendanceBatchPanel.vue'
 import SectionCard from './SectionCard.vue'
 
+const props = defineProps<{ attendanceDate?: string | null }>()
+
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('AttendanceSection 須在 TodayTasksPanel 內使用')
 
@@ -17,7 +19,7 @@ const loading = ref(false)
 const errorMessage = ref('')
 const batchDrawerOpen = ref(false)
 
-const refDate = computed(() => ctx.endDate.value)
+const refDate = computed(() => props.attendanceDate === undefined ? ctx.endDate.value : props.attendanceDate)
 
 const filteredRows = computed(() => {
   const sid = ctx.filters.studentId
@@ -45,26 +47,33 @@ const statusType = (status: string | null | undefined) => {
   return undefined
 }
 
+let requestSequence = 0
 const fetchDaily = async () => {
+  const sequence = ++requestSequence
   const classroomId = ctx.filters.classroomId as number | null
   const date = refDate.value
   if (!classroomId || !date) {
     records.value = []
+    errorMessage.value = ''
+    loading.value = false
     return
   }
   loading.value = true
+  records.value = []
   errorMessage.value = ''
   try {
     const res = await getDailyAttendance({
       date,
       classroom_id: classroomId,
     })
+    if (sequence !== requestSequence) return
     records.value = res.data.records ?? []
   } catch (error) {
+    if (sequence !== requestSequence) return
     errorMessage.value = apiError(error, '載入出席資料失敗')
     records.value = []
   } finally {
-    loading.value = false
+    if (sequence === requestSequence) loading.value = false
   }
 }
 
@@ -76,7 +85,10 @@ const onAttendanceChanged = (payload: Record<string, unknown>) => {
 
 watch(
   () => [ctx.filters.classroomId, refDate.value],
-  () => fetchDaily(),
+  () => {
+    batchDrawerOpen.value = false
+    fetchDaily()
+  },
   { immediate: true },
 )
 
@@ -85,6 +97,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  requestSequence += 1
   domainBus.off(ATTENDANCE_EVENTS.CHANGED, onAttendanceChanged)
 })
 
@@ -93,7 +106,7 @@ defineExpose({ fetchDaily })
 
 <template>
   <SectionCard
-    title="出席"
+    title="每日點名"
     :count="summary.total"
     count-type="info"
     :loading="loading"
@@ -107,13 +120,16 @@ defineExpose({ fetchDaily })
       <el-button
         size="small"
         type="primary"
-        :disabled="!ctx.filters.classroomId"
+        :disabled="!ctx.filters.classroomId || !refDate || loading"
         @click="batchDrawerOpen = true"
       >
         批次點名
       </el-button>
     </template>
     <template #summary>
+      <p v-if="!loading && !errorMessage && summary.total" class="attendance-progress" role="status">
+        {{ summary.unmarked ? `尚有 ${summary.unmarked} 位未完成點名` : ctx.filters.studentId ? '此學生已完成點名' : '全班已完成點名' }}
+      </p>
       <div class="summary-tags">
         <el-tag type="success" size="small">出席 {{ summary.present }}</el-tag>
         <el-tag type="warning" size="small">遲到 {{ summary.late }}</el-tag>
@@ -128,7 +144,7 @@ defineExpose({ fetchDaily })
       :data="filteredRows"
       stripe
       size="small"
-      style="width: 100%; margin-top: 12px"
+      class="attendance-table"
       max-height="320"
     >
       <el-table-column prop="student_no" label="學號" width="100" />
@@ -148,6 +164,7 @@ defineExpose({ fetchDaily })
       destroy-on-close
     >
       <AttendanceBatchPanel
+        v-if="refDate"
         :classroom-id="(ctx.filters.classroomId as number | null)"
         :date="refDate"
         hide-classroom-select
@@ -162,6 +179,8 @@ defineExpose({ fetchDaily })
 .summary-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
+.attendance-progress { margin: 0 0 var(--space-3); font-weight: var(--font-weight-semibold); }
+.attendance-table { width: 100%; margin-top: var(--space-3); }
 </style>

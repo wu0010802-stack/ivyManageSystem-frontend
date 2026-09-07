@@ -77,6 +77,7 @@ const legendText = computed(() => (props.requiredLegend ? props.requiredLegend.r
 
 /** el-dialog before-close：X／Esc／遮罩三條路徑，皆視為使用者主動關閉，一致發 cancel */
 async function handleBeforeClose(done: () => void): Promise<void> {
+  if (props.loading) return
   if (isDirty() && !(await confirmDiscardChanges())) return
   emit('cancel')
   done()
@@ -84,6 +85,7 @@ async function handleBeforeClose(done: () => void): Promise<void> {
 
 /** footer 取消鈕與使用端自訂 footer 共用：dirty 檢查後關閉 */
 async function requestClose(): Promise<void> {
+  if (props.loading) return
   if (isDirty() && !(await confirmDiscardChanges())) return
   emit('cancel')
   emit('update:modelValue', false)
@@ -174,7 +176,7 @@ defineExpose({ requestClose, scrollToFirstError })
     <template #footer>
       <slot name="footer">
         <div class="ivy-form-dialog__footer">
-          <el-button data-test="form-dialog-cancel" @click="requestClose">{{ cancelText }}</el-button>
+          <el-button data-test="form-dialog-cancel" :disabled="loading" @click="requestClose">{{ cancelText }}</el-button>
           <slot name="footer-extra" />
           <el-button
             type="primary"
