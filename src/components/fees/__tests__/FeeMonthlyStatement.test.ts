@@ -757,3 +757,52 @@ it('精簡清單的側邊明細仍可查看完整收款紀錄與經手人', asyn
   expect(w.find('[data-testid="cash-dialog"]').attributes('data-open')).toBe('0')
   w.unmount()
 })
+
+describe('存量無收據（unreceipted）的可見性', () => {
+  // 回歸：完整欄位模式把「已收」欄換成「現金已收／網銀已收」，而 unreceipted
+  // （改版前只有繳費流水、沒有收據的錢）不歸入任何一桶 → 該生列會顯示
+  // 「已繳清、現金 —、網銀 —」，看起來像錢憑空消失。
+  it('完整欄位下有未立據金額的列標示「未立據」，精簡欄位（有「已收」欄）不加噪音', async () => {
+    getFeeMonthlyStatement.mockResolvedValue({
+      ...STATEMENT,
+      students: [
+        {
+          student_id: 9,
+          student_name: '孫存量',
+          classroom_name: '向日葵',
+          status: 'paid',
+          total_due: 9500,
+          total_paid: 9500,
+          outstanding: 0,
+          items: [
+            item({
+              id: 91,
+              amount_paid: 9500,
+              status: 'paid',
+              payment_date: '2026-08-02',
+              payment_method: '現金',
+              settlement: settlement({ unreceipted: 9500 }),
+            }),
+          ],
+        },
+      ],
+    })
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-flt-paid"]').trigger('click')
+
+    expect(w.find('[data-test="stmt-unreceipted-tag"]').exists()).toBe(false)
+
+    await w.find('[data-test="stmt-columns"]').trigger('click')
+    const tag = w.find('[data-test="stmt-unreceipted-tag"]')
+    expect(tag.exists()).toBe(true)
+    expect(tag.attributes('title')).toContain('9,500')
+  })
+
+  it('沒有未立據金額的列不顯示該標示', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-columns"]').trigger('click')
+    expect(w.find('[data-test="stmt-unreceipted-tag"]').exists()).toBe(false)
+  })
+})

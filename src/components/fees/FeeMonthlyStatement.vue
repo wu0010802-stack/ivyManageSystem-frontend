@@ -393,6 +393,19 @@
                 >
                   逾期
                 </el-tag>
+                <!-- 完整欄位把「已收」換成現金／網銀兩欄，unreceipted 不屬任一桶，
+                     不標出來該生會顯示成「已繳清但兩欄都是 —」（錢像憑空消失） -->
+                <el-tag
+                  v-if="showFullColumns && unreceiptedOf(stu) > 0"
+                  type="danger"
+                  size="small"
+                  effect="plain"
+                  class="overdue-tag"
+                  data-test="stmt-unreceipted-tag"
+                  :title="`未立據（存量）${formatCurrency(unreceiptedOf(stu))}：有繳費流水但沒有收據，不計入現金／網銀已收`"
+                >
+                  未立據
+                </el-tag>
               </td>
               <td v-if="showFullColumns" class="col-view">
                 <el-button
@@ -984,6 +997,14 @@ const totalColumns = computed(
  * 現金三桶（已登錄／待簽收／已簽收）都是「現金收到了」，只是簽收層級不同；
  * 網銀為對帳銷帳。unreceipted（存量無收據）不歸入任一欄，仍由既有 tag 呈現。
  */
+/**
+ * 存量無收據金額（改版前只有繳費流水、沒開收據的錢）。現金／網銀兩欄都不含它，
+ * 因此完整欄位模式必須另外標示，否則這筆錢在該列上完全看不見。
+ */
+function unreceiptedOf(stu: StatementStudent): number {
+  return stu.items.reduce((acc, it) => acc + (it.settlement?.unreceipted ?? 0), 0)
+}
+
 function paidSplit(stu: StatementStudent): { cash: number; bank: number } {
   return stu.items.reduce(
     (acc, it) => {
