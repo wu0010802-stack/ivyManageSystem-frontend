@@ -49,6 +49,8 @@ const GLOBAL_STUBS = {
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-input': { template: '<input v-bind="$attrs" />' },
   'el-date-picker': { template: '<input v-bind="$attrs" />' },
+  'el-select': { template: '<div v-bind="$attrs"><slot /></div>' },
+  'el-option': { props: ['label'], template: '<span>{{ label }}</span>' },
   'el-descriptions': { template: '<div v-bind="$attrs"><slot /></div>' },
   'el-descriptions-item': {
     props: ['label'],
@@ -79,6 +81,8 @@ const PAYMENT = {
   bill_month: 8,
   posting_date: '2026-08-10',
   expected_posting_date: '2026-08-10',
+  is_pending: false,
+  overdue_pending: false,
   occurrence_index: 0,
   reconciliation_status: 'imported',
   status_note: null,
@@ -142,9 +146,12 @@ describe('CollectionReconTab 匯入', () => {
       decoded_count: 144,
       old_period_count: 2,
       duplicate_count: 0,
+      pending_count: 0,
+      backfill_count: 0,
       error_count: 0,
+      errors: [],
       already_imported: false,
-      parser_version: 'sinopac-collection-csv-v1',
+      parser_version: 'sinopac-collection-csv-v2',
     })
     const wrapper = await mountTab()
     const vm = wrapper.vm as unknown as {
@@ -203,5 +210,146 @@ describe('CollectionReconTab 存摺勾稽', () => {
     const vm = wrapper.vm as unknown as { runCoverage: (dry: boolean) => Promise<void> }
     await vm.runCoverage(true)
     expect(apiMocks.reconcileCollectionCoverage).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * 在途列（超商已收、銀行未撥）：舊版把「入帳日期」留白的列當錯誤丟掉，
+ * 2026-09-07 實檔 66 列中丟了 28 列（306,820 元）。
+ */
+describe('CollectionReconTab 在途列與錯誤列明細', () => {
+  const PREVIEW_BASE = {
+    statement_start: '2026-08-31',
+    statement_end: '2026-09-06',
+    row_count: 66,
+    gross_total: 728284,
+    net_total: 728224,
+    fee_total: 60,
+    decoded_count: 66,
+    old_period_count: 1,
+    duplicate_count: 0,
+    pending_count: 28,
+    backfill_count: 0,
+    error_count: 0,
+    errors: [] as { row_number: number; reason: string }[],
+    already_imported: false,
+    parser_version: 'sinopac-collection-csv-v2',
+  }
+
+  async function previewWith(overrides: Partial<typeof PREVIEW_BASE>) {
+    apiMocks.previewCollectionImport.mockResolvedValue({ ...PREVIEW_BASE, ...overrides })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      runPreview: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'CS_1.csv')
+    await vm.runPreview()
+    await nextTick()
+    return wrapper
+  }
+
+  it('預覽顯示尚未入帳筆數並提示會一併匯入', async () => {
+    const wrapper = await previewWith({})
+    expect(wrapper.find('[data-test="preview-pending-count"]').text()).toBe('28')
+    const hint = wrapper.find('[data-test="pending-rows-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.attributes('title')).toContain('28 筆')
+  })
+
+  it('沒有在途列時不顯示提示', async () => {
+    const wrapper = await previewWith({ pending_count: 0 })
+    expect(wrapper.find('[data-test="pending-rows-hint"]').exists()).toBe(false)
+  })
+
+  it('錯誤列可展開看原因（後端早就回 errors，只是沒畫出來）', async () => {
+    const wrapper = await previewWith({
+      error_count: 2,
+      errors: [
+        { row_number: 5, reason: '入帳日期格式錯誤' },
+        { row_number: 9, reason: '金額勾稽不符（金額 ≠ 入帳金額＋手續費）' },
+      ],
+    })
+    expect(wrapper.find('[data-test="error-rows"]').exists()).toBe(false)
+
+    await wrapper.find('[data-test="toggle-error-rows"]').trigger('click')
+    await nextTick()
+    const rows = wrapper.find('[data-test="error-rows"]')
+    expect(rows.exists()).toBe(true)
+    expect(rows.text()).toContain('入帳日期格式錯誤')
+  })
+
+  it('沒有錯誤列時不顯示展開按鈕', async () => {
+    const wrapper = await previewWith({})
+    expect(wrapper.find('[data-test="toggle-error-rows"]').exists()).toBe(false)
+  })
+
+  it('錯誤列超過 50 筆時說明只顯示前 50 列', async () => {
+    const errors = Array.from({ length: 50 }, (_, i) => ({
+      row_number: i + 2,
+      reason: '入帳日期格式錯誤',
+    }))
+    const wrapper = await previewWith({ error_count: 80, errors })
+    await wrapper.find('[data-test="toggle-error-rows"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="error-rows"]').text()).toContain('共 80 列')
+  })
+
+  it('preview 缺 errors 欄位（舊快取）不炸整頁', async () => {
+    const { errors: _drop, ...noErrors } = PREVIEW_BASE
+    apiMocks.previewCollectionImport.mockResolvedValue(noErrors)
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      runPreview: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'CS_1.csv')
+    await vm.runPreview()
+    await nextTick()
+    expect(wrapper.find('[data-test="import-preview"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="toggle-error-rows"]').exists()).toBe(false)
+  })
+
+  it('入帳狀態篩選帶進查詢參數', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      filters: { posting_state: string | null }
+      refetch: () => void
+    }
+    vm.filters.posting_state = 'overdue'
+    vm.refetch()
+    await nextTick()
+    const last = apiMocks.getCollectionPayments.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >
+    expect(last.posting_state).toBe('overdue')
+  })
+
+  it('清空入帳狀態就不帶該參數', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      filters: { posting_state: string | null }
+      refetch: () => void
+    }
+    vm.filters.posting_state = null
+    vm.refetch()
+    await nextTick()
+    const last = apiMocks.getCollectionPayments.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >
+    expect(last.posting_state).toBeUndefined()
+  })
+
+  it('在途列標籤附預計入帳日，無預計日則只顯示未入帳', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pendingLabel: (row: { expected_posting_date: string | null }) => string
+    }
+    expect(vm.pendingLabel({ expected_posting_date: '2026-09-10' })).toBe(
+      '未入帳（預計 09-10）',
+    )
+    expect(vm.pendingLabel({ expected_posting_date: null })).toBe('未入帳')
   })
 })

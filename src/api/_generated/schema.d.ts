@@ -25878,6 +25878,11 @@ export interface components {
         };
         /** CollectionImportOut */
         CollectionImportOut: {
+            /**
+             * Backfill Count
+             * @default 0
+             */
+            backfill_count: number;
             /** Bank */
             bank: string;
             /** Created */
@@ -25918,6 +25923,8 @@ export interface components {
         CollectionImportPreviewOut: {
             /** Already Imported */
             already_imported: boolean;
+            /** Backfill Count */
+            backfill_count: number;
             /** Decoded Count */
             decoded_count: number;
             /** Duplicate Count */
@@ -25942,6 +25949,8 @@ export interface components {
             old_period_count: number;
             /** Parser Version */
             parser_version: string;
+            /** Pending Count */
+            pending_count: number;
             /** Row Count */
             row_count: number;
             /** Statement End */
@@ -25990,15 +25999,22 @@ export interface components {
             id: number;
             /** Import Id */
             import_id: number;
+            /**
+             * Is Pending
+             * @default false
+             */
+            is_pending: boolean;
             /** Net Amount */
             net_amount: number;
             /** Occurrence Index */
             occurrence_index: number;
             /**
-             * Posting Date
-             * Format: date
+             * Overdue Pending
+             * @default false
              */
-            posting_date: string;
+            overdue_pending: boolean;
+            /** Posting Date */
+            posting_date?: string | null;
             /** Reconciliation Status */
             reconciliation_status: string;
             /** Status Note */
@@ -60001,6 +60017,8 @@ export interface operations {
                 import_id?: number | null;
                 page?: number;
                 page_size?: number;
+                /** @description pending=尚未入帳／posted=已入帳／overdue=逾預計入帳日仍未入帳 */
+                posting_state?: ("pending" | "posted" | "overdue") | null;
                 status?: string | null;
                 suffix?: string | null;
             };
