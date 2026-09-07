@@ -3731,6 +3731,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/import-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Import Settings
+         * @description 取得校內設備設定及可對應的在職員工。
+         */
+        get: operations["get_import_settings_api_attendance_import_settings_get"];
+        /**
+         * Put Import Settings
+         * @description 儲存單一設備的完整對照；拒絕跨租戶及離職員工。
+         */
+        put: operations["put_import_settings_api_attendance_import_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/kiosk/preview": {
         parameters: {
             query?: never;
@@ -22147,14 +22171,34 @@ export interface components {
             date: string;
             /** Department */
             department: string;
+            /** Device Id */
+            device_id?: string | null;
             /** Employee Number */
             employee_number: string;
+            /** Import Format */
+            import_format?: "punch_events" | null;
             /** Name */
             name: string;
             /** Punch In */
             punch_in?: string | null;
             /** Punch Out */
             punch_out?: string | null;
+            /** Punches */
+            punches?: string[];
+            /**
+             * Review Confirmed
+             * @default false
+             */
+            review_confirmed: boolean;
+            /**
+             * Review Required
+             * @default false
+             */
+            review_required: boolean;
+            /** Source Employee Number */
+            source_employee_number?: string | null;
+            /** Source Rows */
+            source_rows?: number[];
             /** Weekday */
             weekday: string;
         };
@@ -22181,6 +22225,50 @@ export interface components {
             status: string;
             /** Student Id */
             student_id: number;
+        };
+        /** AttendanceImportSettings */
+        AttendanceImportSettings: {
+            /**
+             * Default Format
+             * @default auto
+             * @enum {string}
+             */
+            default_format: "auto" | "daily_columns" | "punch_events";
+            /**
+             * Device Id
+             * @default default
+             */
+            device_id: string;
+            /** Employee Mappings */
+            employee_mappings?: components["schemas"]["DeviceEmployeeMapping"][];
+            /**
+             * Version
+             * @default 0
+             */
+            version: number;
+        };
+        /** AttendanceImportSettingsOut */
+        AttendanceImportSettingsOut: {
+            /**
+             * Default Format
+             * @default auto
+             * @enum {string}
+             */
+            default_format: "auto" | "daily_columns" | "punch_events";
+            /**
+             * Device Id
+             * @default default
+             */
+            device_id: string;
+            /** Employee Mappings */
+            employee_mappings?: components["schemas"]["DeviceEmployeeMapping"][];
+            /** Employees */
+            employees?: components["schemas"]["ImportEmployeeChoice"][];
+            /**
+             * Version
+             * @default 0
+             */
+            version: number;
         };
         /**
          * AttendancePolicyUpdate
@@ -22218,10 +22306,29 @@ export interface components {
         };
         /** AttendancePreviewResult */
         AttendancePreviewResult: {
+            /** Date End */
+            date_end?: string | null;
+            /** Date Start */
+            date_start?: string | null;
+            /**
+             * Device Id
+             * @default default
+             */
+            device_id: string;
+            /**
+             * Import Format
+             * @default daily_columns
+             */
+            import_format: string;
             /** Normalized */
             normalized: components["schemas"]["AttendanceCSVRow"][];
             /** Rows */
             rows: components["schemas"]["PreviewRow"][];
+            /**
+             * Source Count
+             * @default 0
+             */
+            source_count: number;
             summary: components["schemas"]["PreviewSummary"];
         };
         /** AttendanceRecordItem */
@@ -22255,6 +22362,10 @@ export interface components {
             employee_number: string;
             /** Id */
             id: number;
+            /** Import Metadata */
+            import_metadata?: {
+                [key: string]: unknown;
+            } | null;
             /** Is Early Leave */
             is_early_leave?: boolean | null;
             /** Is Late */
@@ -27852,6 +27963,13 @@ export interface components {
              */
             value: string;
         };
+        /** DeviceEmployeeMapping */
+        DeviceEmployeeMapping: {
+            /** Employee Id */
+            employee_id: number;
+            /** Source Employee Number */
+            source_employee_number: string;
+        };
         /**
          * DeviceSetupOut
          * @description POST /auth/device-setup 兌換設定碼成功回傳（無 LINE 家長裝置登入）。
@@ -31068,6 +31186,15 @@ export interface components {
              * @enum {string}
              */
             mode: "readonly" | "write";
+        };
+        /** ImportEmployeeChoice */
+        ImportEmployeeChoice: {
+            /** Employee Number */
+            employee_number: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
         };
         /** ImportRecord */
         ImportRecord: {
@@ -38710,21 +38837,41 @@ export interface components {
              * Check
              * @enum {string}
              */
-            check: "importable" | "employee_not_found" | "invalid_date" | "month_finalized" | "overwrite" | "missing_fields" | "invalid_time" | "equal_punch" | "duplicate_row" | "month_mismatch";
+            check: "importable" | "review_required" | "employee_not_found" | "invalid_date" | "month_finalized" | "overwrite" | "missing_fields" | "invalid_time" | "equal_punch" | "duplicate_row" | "month_mismatch";
             /** Date */
             date?: string | null;
+            /** Device Id */
+            device_id?: string | null;
             /** Employee Name */
             employee_name: string;
             /** Employee Number */
             employee_number: string;
+            /** Import Format */
+            import_format?: "punch_events" | null;
             /** Matched Employee Id */
             matched_employee_id?: number | null;
             /** Punch In */
             punch_in?: string | null;
             /** Punch Out */
             punch_out?: string | null;
+            /** Punches */
+            punches?: string[];
+            /**
+             * Review Confirmed
+             * @default false
+             */
+            review_confirmed: boolean;
+            /**
+             * Review Required
+             * @default false
+             */
+            review_required: boolean;
             /** Row Num */
             row_num: number;
+            /** Source Employee Number */
+            source_employee_number?: string | null;
+            /** Source Rows */
+            source_rows?: number[];
             /** Status */
             status?: string | null;
         };
@@ -53204,6 +53351,70 @@ export interface operations {
             };
         };
     };
+    get_import_settings_api_attendance_import_settings_get: {
+        parameters: {
+            query?: {
+                device_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceImportSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_import_settings_api_attendance_import_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceImportSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceImportSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     kiosk_preview_api_attendance_kiosk_preview_post: {
         parameters: {
             query?: never;
@@ -53692,6 +53903,8 @@ export interface operations {
     preview_attendance_excel_api_attendance_upload_preview_excel_post: {
         parameters: {
             query?: {
+                device_id?: string;
+                format?: "auto" | "daily_columns" | "punch_events";
                 month?: number | null;
                 year?: number | null;
             };

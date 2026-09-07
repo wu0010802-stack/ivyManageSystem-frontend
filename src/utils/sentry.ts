@@ -81,6 +81,9 @@ const PII_KEY_SUBSTRINGS = [
   // prop（＝學生姓名）就在這個暴露面上。
   // ⚠ 新增 camelCase PII prop 時要記得補這裡；snake_case 詞條不會自動涵蓋它。
   'childname', 'studentname', 'parentname', 'personname',
+  // 打卡匯入來源與原始刷卡個資（與後端同步，含 Vue prop 命名）。
+  'source_employee_number', 'sourceemployeenumber', 'source_rows', 'sourcerows',
+  'punches', 'import_metadata', 'importmetadata',
 ]
 
 // 精確比對 denylist（#11 資安稽核，2026-07-30；與後端 utils/sentry_init._PII_KEY_EXACT 對齊）：

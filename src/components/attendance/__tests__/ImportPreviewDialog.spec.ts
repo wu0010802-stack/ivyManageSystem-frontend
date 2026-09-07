@@ -4,12 +4,14 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 // ── hoisted mocks ──────────────────────────────────────────────────────────────
-const { mockPreviewImport, mockPreviewExcel, mockUploadCsv, mockUploadFile, mockNotify } = vi.hoisted(() => ({
+const { mockPreviewImport, mockPreviewExcel, mockUploadCsv, mockUploadFile, mockNotify, mockGetImportSettings, mockSaveImportSettings } = vi.hoisted(() => ({
   mockPreviewImport: vi.fn(),
   mockPreviewExcel: vi.fn(),
   mockUploadCsv: vi.fn(),
   mockUploadFile: vi.fn(),
   mockNotify: vi.fn(),
+  mockGetImportSettings: vi.fn().mockResolvedValue({ data: { default_format: 'auto', device_id: 'default', version: 0, employee_mappings: [], employees: [] } }),
+  mockSaveImportSettings: vi.fn(),
 }))
 
 // ── mock api ───────────────────────────────────────────────────────────────────
@@ -18,6 +20,8 @@ vi.mock('@/api/attendance', () => ({
   previewExcel: mockPreviewExcel,
   uploadCsv: mockUploadCsv,
   uploadFile: mockUploadFile,
+  getImportSettings: mockGetImportSettings,
+  saveImportSettings: mockSaveImportSettings,
 }))
 
 // ── mock useErrorNotify ────────────────────────────────────────────────────────
@@ -548,5 +552,164 @@ describe('ImportPreviewDialog', () => {
     await nextTick()
 
     expect(mockNotify).toHaveBeenCalledWith(err, expect.stringContaining('ImportPreviewDialog'), null, expect.objectContaining({ prefix: expect.any(String) }))
+  })
+})
+
+
+describe('匯入預覽請求一致性', () => {
+  it('選定月份改變後，不採用舊 Excel 預覽', async () => {
+    let resolvePreview!: (value: { data: typeof previewFixture }) => void
+    mockPreviewExcel.mockReturnValueOnce(new Promise(resolve => { resolvePreview = resolve }))
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as {
+      handleExcelUpload: (options: { file: File }) => Promise<void>
+      previewResult: unknown
+    }
+    const pending = vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    await wrapper.setProps({ month: 7 })
+    resolvePreview({ data: previewFixture })
+    await pending
+    expect(vm.previewResult).toBeNull()
+  })
+
+  it('較新的 Excel 預覽完成後，不被前一檔的回應覆蓋', async () => {
+    let resolvePreview!: (value: { data: typeof previewFixture }) => void
+    mockPreviewExcel.mockReturnValueOnce(new Promise(resolve => { resolvePreview = resolve }))
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as {
+      handleExcelUpload: (options: { file: File }) => Promise<void>
+      previewResult: typeof previewFixture | null
+    }
+    const pending = vm.handleExcelUpload({ file: new File(['old'], 'old.xls') })
+    const latest = { ...previewFixture, normalized: [] }
+    mockPreviewExcel.mockResolvedValueOnce({ data: latest })
+    await vm.handleExcelUpload({ file: new File(['new'], 'new.xls') })
+    resolvePreview({ data: previewFixture })
+    await pending
+    expect(vm.previewResult?.normalized).toEqual([])
+  })
+})
+
+
+describe('逐筆打卡預覽', () => {
+  it('顯示辨識格式、原始筆數及日期範圍', async () => {
+    mockPreviewExcel.mockResolvedValueOnce({ data: {
+      ...previewFixture, import_format: 'punch_events', device_id: 'default',
+      source_count: 12, date_start: '2026-06-01', date_end: '2026-06-30',
+    } })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as { handleExcelUpload: (options: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('逐筆刷卡')
+    expect(wrapper.text()).toContain('原始刷卡 12 筆')
+    expect(wrapper.text()).toContain('2026-06-30')
+  })
+
+  it('待人工確認的單卡不可直接視為可匯入', async () => {
+    mockPreviewExcel.mockResolvedValueOnce({ data: {
+      ...previewFixture, import_format: 'punch_events',
+      summary: { importable: 0, problems: 1, overwrites: 0 }, normalized: [],
+      rows: [{ ...previewFixture.rows[0], check: 'review_required',
+        import_format: 'punch_events', source_employee_number: '101',
+        punches: ['2026-06-01T08:00:00'], review_required: true, review_confirmed: false,
+      }],
+    } })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as { handleExcelUpload: (options: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('單筆卡 1 人日')
+    const confirm = wrapper.findAll('button').find(b => b.text().includes('確認匯入'))
+    expect(confirm?.attributes('disabled')).toBeDefined()
+  })
+})
+
+
+describe('人工工號與刷卡核對契約', () => {
+  it('明確儲存人工工號對照，不以姓名推定員工', async () => {
+    mockSaveImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 1, employee_mappings: [], employees: [] } })
+    const wrapper = mountDialog()
+    await nextTick()
+    const vm = wrapper.vm as unknown as { mappings: Record<string, number>; handleSaveSettings: () => Promise<void> }
+    expect(vm.mappings).toEqual({})
+    vm.mappings['101'] = 7
+    await vm.handleSaveSettings()
+    expect(mockSaveImportSettings).toHaveBeenCalledWith(expect.objectContaining({
+      device_id: 'default', version: 0, employee_mappings: [{ source_employee_number: '101', employee_id: 7 }],
+    }))
+  })
+
+  it('人工選擇缺下班卡後，重送預覽仍保留完整原始紀錄', async () => {
+    const row = { ...previewFixture.rows[0], import_format: 'punch_events', device_id: 'default',
+      source_employee_number: '101', source_rows: [2], punches: ['2026-06-01T08:00:00'],
+      review_required: true, review_confirmed: false, punch_out: null, check: 'review_required',
+    }
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, rows: [row], normalized: [], import_format: 'punch_events' } })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...previewFixture, rows: [row], normalized: [] } })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as {
+      handleExcelUpload: (options: { file: File }) => Promise<void>
+      reviewEdits: Record<number, { punch_in: string; punch_out: string; confirmed: boolean }>
+      handleReviewPreview: () => Promise<void>
+    }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    vm.reviewEdits[2] = { punch_in: '08:00', punch_out: '', confirmed: true }
+    await vm.handleReviewPreview()
+    expect(mockPreviewImport).toHaveBeenLastCalledWith(expect.objectContaining({ records: [expect.objectContaining({
+      source_employee_number: '101', punches: ['2026-06-01T08:00:00'], source_rows: [2],
+      punch_in: '08:00', punch_out: null, review_confirmed: true,
+    })] }))
+  })
+})
+
+
+describe('審查回歸', () => {
+  it('兩筆同分鐘刷卡也提供人工核對入口', async () => {
+    const row = { ...previewFixture.rows[0], import_format: 'punch_events', device_id: 'default',
+      source_employee_number: '101', source_rows: [2, 3], punches: ['2026-06-01T08:00:00', '2026-06-01T08:00:20'],
+      review_required: true, review_confirmed: false, check: 'review_required',
+    }
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, rows: [row], normalized: [], import_format: 'punch_events' } })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as { handleExcelUpload: (options: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('依人工核對結果重新預覽')
+  })
+
+  it('匯入只包含可匯入列時，明示略過問題數', async () => {
+    mockPreviewExcel.mockResolvedValueOnce({ data: previewFixture })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as { handleExcelUpload: (options: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('2 筆問題資料不會匯入')
+  })
+
+  it('舊匯入成功回應不關閉重新開啟的對話框', async () => {
+    let resolveImport!: (value: { data: { message: string } }) => void
+    mockUploadCsv.mockReturnValueOnce(new Promise(resolve => { resolveImport = resolve }))
+    mockPreviewExcel.mockResolvedValueOnce({ data: previewFixture })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as {
+      handleExcelUpload: (options: { file: File }) => Promise<void>
+      handleConfirmImport: () => Promise<void>
+    }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    const pending = vm.handleConfirmImport()
+    await wrapper.setProps({ modelValue: false })
+    await wrapper.setProps({ modelValue: true })
+    resolveImport({ data: { message: '成功' } })
+    await pending
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.emitted('imported')).toHaveLength(1)
+  })
+
+  it('無效設備代號保留可修正輸入並阻止匯入', async () => {
+    const wrapper = mountDialog()
+    await nextTick()
+    const input = wrapper.find('input[aria-label="設備代號"]')
+    await input.setValue('中文')
+    await input.trigger('change')
+    await nextTick()
+    expect(wrapper.find('input[aria-label="設備代號"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('設備代號限 1～40 個英文字母、數字、底線或連字號')
   })
 })

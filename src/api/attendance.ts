@@ -84,3 +84,13 @@ export const deleteEmployeeDateRecord = (
   date: string,
 ): AxiosResp<'/attendance/records/{employee_id}/{date_str}', 'delete'> =>
   api.delete(`/attendance/records/${employeeId}/${date}`)
+
+
+/** 目前分校的打卡設備格式與人工工號對照。 */
+export const getImportSettings = (
+  params?: ApiQuery<'/attendance/import-settings', 'get'>,
+): AxiosResp<'/attendance/import-settings', 'get'> => api.get('/attendance/import-settings', { params })
+
+export const saveImportSettings = (
+  payload: ApiBody<'/attendance/import-settings', 'put'>,
+): AxiosResp<'/attendance/import-settings', 'put'> => api.put('/attendance/import-settings', payload)

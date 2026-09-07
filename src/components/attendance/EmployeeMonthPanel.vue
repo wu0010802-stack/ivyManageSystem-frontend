@@ -44,6 +44,7 @@
           :loading="saving[idx]"
           @click="handleUpsert(rec, idx)"
         >補打卡</el-button>
+        <RawPunchDetails :import-metadata="rec.import_metadata" />
       </div>
     </template>
   </div>
@@ -55,6 +56,8 @@ import { ElMessage } from 'element-plus'
 import { getRecords, upsertRecord } from '@/api/attendance'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import EmptyState from '@/components/common/EmptyState.vue'
+import RawPunchDetails from './RawPunchDetails.vue'
+import type { ApiResponse } from '@/api/_generated/typed'
 
 // ── props & emits ──────────────────────────────────────────────────────────────
 const props = defineProps<{
@@ -72,6 +75,7 @@ const { notify } = useErrorNotify()
 
 // ── state ──────────────────────────────────────────────────────────────────────
 interface AttendanceRecord {
+  import_metadata: ApiResponse<'/attendance/records', 'get'>[number]['import_metadata']
   id: number
   employee_id: number
   employee_name: string
@@ -109,6 +113,7 @@ async function load(): Promise<void> {
     const res = await getRecords({ employee_id: props.employeeId, year: props.year, month: props.month })
     // OpenAPI 契約列 → 本地 view model（nullable 欄位正規化為預設值）
     const list: AttendanceRecord[] = (res.data ?? []).map((r) => ({
+      import_metadata: r.import_metadata,
       id: r.id,
       employee_id: r.employee_id,
       employee_name: r.employee_name,

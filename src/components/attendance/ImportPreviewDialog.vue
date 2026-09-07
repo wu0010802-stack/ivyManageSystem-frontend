@@ -11,9 +11,9 @@
  *
  * 兩條路徑的 confirm 都走 uploadCsv（normalized 列 + year/month），與 preview 同規則。
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { previewImport, previewExcel, uploadCsv, uploadFile } from '@/api/attendance'
+import { previewImport, previewExcel, uploadCsv, uploadFile, getImportSettings, saveImportSettings } from '@/api/attendance'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
@@ -48,6 +48,131 @@ type PreviewRow = PreviewResult['rows'][number]
 const previewResult = ref<PreviewResult | null>(null)
 const previewing = ref(false)
 const importing = ref(false)
+type ImportSettings = ApiResponse<'/attendance/import-settings', 'get'>
+const settings = ref<ImportSettings | null>(null)
+const selectedFormat = ref<ImportSettings['default_format']>('auto')
+const deviceId = ref('default')
+const mappings = ref<Record<string, number | undefined>>({})
+const settingsLoading = ref(false)
+const settingsError = ref('')
+const savingSettings = ref(false)
+const reviewDirty = ref(false)
+const mappingDirty = ref(false)
+const sourceFile = ref<File | null>(null)
+const reviewEdits = ref<Record<number, { punch_in: string; punch_out: string; confirmed: boolean }>>({})
+let generation = 0
+let settingsGeneration = 0
+const busy = computed(() => previewing.value || uploading.value || importing.value || savingSettings.value)
+const isPunchEvents = computed(() => previewResult.value?.import_format === 'punch_events')
+const singlePunchCount = computed(() => previewResult.value?.rows.filter(row => row.punches?.length === 1).length ?? 0)
+const multiPunchCount = computed(() => previewResult.value?.rows.filter(row => (row.punches?.length ?? 0) > 2).length ?? 0)
+const sourceEmployees = computed(() => {
+  const entries = new Map<string, string>()
+  for (const row of previewResult.value?.rows ?? []) {
+    if (row.source_employee_number) entries.set(row.source_employee_number, row.employee_name)
+  }
+  return [...entries].map(([number, name]) => ({ number, name }))
+})
+const unmappedCount = computed(() => sourceEmployees.value.filter(entry => !mappings.value[entry.number]).length)
+
+function clearPreview() {
+  generation++
+  previewResult.value = null
+  legacyExcelFile.value = null
+  reviewEdits.value = {}
+  reviewDirty.value = false
+  mappingDirty.value = false
+  previewing.value = false
+  uploading.value = false
+}
+
+async function loadSettings() {
+  const request = ++settingsGeneration
+  settings.value = null
+  settingsError.value = ''
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(deviceId.value)) {
+    settingsError.value = '設備代號限 1～40 個英文字母、數字、底線或連字號'
+    settingsLoading.value = false
+    return
+  }
+  settingsLoading.value = true
+  try {
+    const res = await getImportSettings({ device_id: deviceId.value })
+    if (request !== settingsGeneration || !props.modelValue) return
+    settings.value = res.data
+    selectedFormat.value = res.data.default_format
+    mappingDirty.value = false
+    mappings.value = Object.fromEntries((res.data.employee_mappings ?? []).map(entry => [entry.source_employee_number, entry.employee_id]))
+  } catch (err) {
+    if (request === settingsGeneration) {
+      settingsError.value = '讀取打卡格式設定失敗，請重試後再上傳'
+      notify(err, 'ImportPreviewDialog.settings', null, { prefix: '讀取打卡格式設定失敗' })
+    }
+  } finally {
+    if (request === settingsGeneration) settingsLoading.value = false
+  }
+}
+
+
+function initializeReview() {
+  reviewDirty.value = false
+  reviewEdits.value = Object.fromEntries((previewResult.value?.rows ?? []).map(row => [row.row_num, {
+    punch_in: row.punch_in ?? '', punch_out: row.punch_out ?? '', confirmed: row.review_confirmed ?? false,
+  }]))
+}
+
+async function handleSaveSettings() {
+  if (!canWrite.value || !settings.value || busy.value) return
+  savingSettings.value = true
+  const request = generation
+  try {
+    const res = await saveImportSettings({
+      default_format: selectedFormat.value, device_id: deviceId.value, version: settings.value.version,
+      employee_mappings: Object.entries(mappings.value).flatMap(([number, id]) => id ? [{ source_employee_number: number, employee_id: id }] : []),
+    })
+    if (request !== generation) return
+    settings.value = res.data
+    mappingDirty.value = false
+    ElMessage.success('已儲存本校打卡格式與工號對照')
+    if (sourceFile.value) await handleExcelUpload({ file: sourceFile.value })
+  } catch (err) {
+    if (request !== generation) return
+    if ((err as { response?: { status?: number } })?.response?.status === 409) {
+      clearPreview()
+      await loadSettings()
+      ElMessage.warning('本校設備設定已被其他人更新，已重新讀取，請重新核對工號對照')
+    } else notify(err, 'ImportPreviewDialog.saveSettings', null, { prefix: '儲存失敗' })
+  } finally { savingSettings.value = false }
+}
+
+async function handleReviewPreview() {
+  if (!previewResult.value || busy.value) return
+  const current = previewResult.value
+  const records = current.rows.map(row => ({
+    department: '', weekday: '', employee_number: row.employee_number, name: row.employee_name,
+    date: row.date ?? '', punch_in: reviewEdits.value[row.row_num]?.punch_in || null,
+    punch_out: reviewEdits.value[row.row_num]?.punch_out || null,
+    import_format: row.import_format, device_id: row.device_id,
+    source_employee_number: row.source_employee_number, source_rows: row.source_rows,
+    punches: row.punches, review_required: row.review_required,
+    review_confirmed: reviewEdits.value[row.row_num]?.confirmed ?? false,
+  }))
+  const request = ++generation
+  previewing.value = true
+  previewResult.value = null
+  try {
+    const res = await previewImport({ records, year: props.year, month: props.month })
+    if (request !== generation) return
+    previewResult.value = { ...res.data, import_format: current.import_format, device_id: current.device_id,
+      source_count: current.source_count, date_start: current.date_start, date_end: current.date_end }
+    initializeReview()
+  } catch (err) {
+    if (request === generation) notify(err, 'ImportPreviewDialog.review', null, { prefix: '重新核對失敗' })
+  } finally { if (request === generation) previewing.value = false }
+}
+
+function punchTime(value: string) { return value.slice(11, 16) }
+
 
 // ── Tab A 狀態 ────────────────────────────────────────────────────────────────
 const rawText = ref('')
@@ -57,12 +182,22 @@ const uploading = ref(false)
 /** previewExcel 判定為 legacy 月統計格式時開啟直接匯入退路 */
 const legacyExcelFile = ref<File | null>(null)
 
+watch(() => [props.modelValue, props.year, props.month], () => {
+  clearPreview()
+  sourceFile.value = null
+  if (props.modelValue) void loadSettings()
+  else settingsGeneration++
+}, { immediate: true })
+
+
 // ── 關閉 / 重設 ───────────────────────────────────────────────────────────────
 function closeDialog() {
   emit('update:modelValue', false)
 }
 
 function resetState() {
+  clearPreview()
+  sourceFile.value = null
   rawText.value = ''
   previewResult.value = null
   legacyExcelFile.value = null
@@ -80,6 +215,7 @@ async function handlePreview() {
     ElMessage.warning('請貼上 CSV 資料')
     return
   }
+  const request = ++generation
   previewing.value = true
   previewResult.value = null
   legacyExcelFile.value = null
@@ -89,11 +225,13 @@ async function handlePreview() {
       year: props.year,
       month: props.month,
     })
+    if (request !== generation) return
     previewResult.value = res.data
   } catch (err) {
+    if (request !== generation) return
     notify(err, 'ImportPreviewDialog.preview', null, { prefix: '預覽失敗' })
   } finally {
-    previewing.value = false
+    if (request === generation) previewing.value = false
   }
 }
 
@@ -104,15 +242,23 @@ function isLegacyFormatError(err: unknown): boolean {
 }
 
 async function handleExcelUpload(options: { file: File }) {
+  if (!canWrite.value || settingsError.value) return
+  const request = ++generation
+  sourceFile.value = options.file
   uploading.value = true
   previewResult.value = null
   legacyExcelFile.value = null
   try {
     const formData = new FormData()
     formData.append('file', options.file)
-    const res = await previewExcel(formData, { year: props.year, month: props.month })
+    const res = await previewExcel(formData, { year: props.year, month: props.month,
+      ...(settings.value ? { format: selectedFormat.value, device_id: deviceId.value } : {}),
+    })
+    if (request !== generation) return
     previewResult.value = res.data
+    initializeReview()
   } catch (err) {
+    if (request !== generation) return
     if (isLegacyFormatError(err)) {
       legacyExcelFile.value = options.file
       ElMessage.warning('此檔為 legacy 月統計格式，無法逐列預覽；可改用直接匯入')
@@ -120,7 +266,7 @@ async function handleExcelUpload(options: { file: File }) {
       notify(err, 'ImportPreviewDialog.excelPreview', null, { prefix: 'Excel 預覽失敗' })
     }
   } finally {
-    uploading.value = false
+    if (request === generation) uploading.value = false
   }
 }
 
@@ -155,7 +301,9 @@ const importableCount = computed(() => {
 })
 
 async function handleConfirmImport() {
-  if (!previewResult.value) return
+  if (!previewResult.value || !canWrite.value || busy.value || reviewDirty.value || mappingDirty.value || importableCount.value === 0) return
+  const request = generation
+  const skipped = previewResult.value.summary.problems
   importing.value = true
   try {
     const res = await uploadCsv({
@@ -170,10 +318,14 @@ async function handleConfirmImport() {
     } else {
       ElMessage.warning(summary.text)
     }
+    if (skipped > 0) ElMessage.warning(`${skipped} 筆問題資料未匯入，請修正後重新上傳`)
     emit('imported', res.data)
-    resetState()
-    closeDialog()
+    if (request === generation) {
+      resetState()
+      closeDialog()
+    }
   } catch (err) {
+    if (request !== generation) return
     notify(err, 'ImportPreviewDialog.import', null, { prefix: '匯入失敗' })
   } finally {
     importing.value = false
@@ -215,6 +367,7 @@ function handleDownloadProblems() {
 type ElTagType = 'primary' | 'success' | 'warning' | 'danger' | 'info' | undefined
 
 const CHECK_TAG_TYPE: Record<PreviewRow['check'], ElTagType> = {
+  review_required: 'warning',
   importable: 'success',
   overwrite: 'warning',
   employee_not_found: 'danger',
@@ -228,6 +381,7 @@ const CHECK_TAG_TYPE: Record<PreviewRow['check'], ElTagType> = {
 }
 
 const CHECK_LABEL: Record<PreviewRow['check'], string> = {
+  review_required: '待人工核對',
   importable: '可匯入',
   overwrite: '將覆蓋',
   employee_not_found: '找不到員工',
@@ -257,6 +411,10 @@ defineExpose({
   canWrite,
   handleExcelUpload,
   handleConfirmImport,
+  handleSaveSettings,
+  handleReviewPreview,
+  mappings,
+  reviewEdits,
 })
 </script>
 
@@ -295,16 +453,34 @@ defineExpose({
       <el-tab-pane label="上傳 Excel 檔" name="excel">
         <div class="import-preview-dialog__excel-section">
           <p class="import-preview-dialog__note">
-            支援 .xlsx / .xls（新格式：部門/編號/姓名/日期/星期/上班時間/下班時間）。
+            支援 .xlsx / .xls，每日上下班欄位與逐筆刷卡格式會自動辨識。
             上傳後先逐列預覽，確認後才匯入。
           </p>
+          <div class="import-preview-dialog__settings">
+            <label>打卡格式
+              <select v-model="selectedFormat" :disabled="busy" aria-label="打卡格式" @change="clearPreview">
+                <option value="auto">自動辨識</option>
+                <option value="daily_columns">每日上下班欄位</option>
+                <option value="punch_events">逐筆刷卡</option>
+              </select>
+            </label>
+            <label>設備代號
+              <input v-model="deviceId" :disabled="busy" aria-label="設備代號" @change="clearPreview(); loadSettings()" />
+            </label>
+            <el-button :disabled="busy || !canWrite || !settings" @click="handleSaveSettings">儲存本校預設</el-button>
+          </div>
+          <div v-if="settingsError" role="alert">
+            {{ settingsError }}
+            <el-button :disabled="busy || settingsLoading" @click="loadSettings">重新讀取設定</el-button>
+          </div>
+          <p v-if="settingsLoading" role="status">讀取本校打卡設定中…</p>
           <el-upload
             drag
             accept=".xlsx,.xls"
             :http-request="handleExcelUpload"
             :show-file-list="false"
             :multiple="false"
-            :disabled="uploading || !canWrite"
+            :disabled="busy || settingsLoading || !settings || !canWrite"
           >
             <el-icon><span>⬆</span></el-icon>
             <div class="el-upload__text">
@@ -337,6 +513,34 @@ defineExpose({
 
     <!-- ── 預覽結果（Tab A / Tab B 共用）──────────────────────────────────── -->
     <template v-if="previewResult">
+      <section v-if="isPunchEvents" class="import-preview-dialog__device" aria-label="逐筆刷卡核對">
+        <p>已辨識：逐筆刷卡 · 原始刷卡 {{ previewResult.source_count }} 筆 · {{ previewResult.date_start }} ～ {{ previewResult.date_end }}</p>
+        <p>{{ sourceEmployees.length }} 人 · 未對照 {{ unmappedCount }} 人 · 單筆卡 {{ singlePunchCount }} 人日 · 多筆卡 {{ multiPunchCount }} 人日</p>
+        <details v-if="settings">
+          <summary>設備工號與本校員工對照（首次需人工確認）</summary>
+          <p class="import-preview-dialog__note">姓名僅供核對；請以員工編號確認同名人員。儲存後會重新預覽。</p>
+          <div v-for="entry in sourceEmployees" :key="entry.number" class="import-preview-dialog__mapping">
+            <label :for="`mapping-${entry.number}`">{{ entry.number }} · {{ entry.name }}</label>
+            <select :id="`mapping-${entry.number}`" v-model="mappings[entry.number]" @change="mappingDirty = true" :disabled="busy || !canWrite">
+              <option :value="undefined">尚未對照</option>
+              <option v-for="employee in settings.employees" :key="employee.id" :value="employee.id">{{ employee.name }}（{{ employee.employee_number }}）</option>
+            </select>
+          </div>
+          <el-button :disabled="busy || !canWrite" @click="handleSaveSettings">儲存對照並重新預覽</el-button>
+        </details>
+        <details v-if="previewResult.rows.some(row => row.review_required)">
+          <summary>核對單筆、多筆或重複刷卡</summary>
+          <p class="import-preview-dialog__note">選擇實際上下班時間；缺卡的一側請保留空白。原始刷卡與來源列號均保留。</p>
+          <div v-for="row in previewResult.rows.filter(r => r.review_required)" :key="row.row_num" class="import-preview-dialog__review">
+            <span>{{ row.employee_name }} · {{ row.date }} · 來源列 {{ row.source_rows?.join('、') }}</span>
+            <span>原始刷卡：{{ row.punches?.map(punchTime).join('、') }}</span>
+            <label>上班 <select v-model="reviewEdits[row.row_num]!.punch_in" @change="reviewDirty = true" :disabled="busy || !canWrite"><option value="">缺卡</option><option v-for="time in [...new Set(row.punches?.map(punchTime))]" :key="time" :value="time">{{ time }}</option></select></label>
+            <label>下班 <select v-model="reviewEdits[row.row_num]!.punch_out" @change="reviewDirty = true" :disabled="busy || !canWrite"><option value="">缺卡</option><option v-for="time in [...new Set(row.punches?.map(punchTime))]" :key="time" :value="time">{{ time }}</option></select></label>
+            <label><input v-model="reviewEdits[row.row_num]!.confirmed" @change="reviewDirty = true" type="checkbox" :disabled="busy || !canWrite" />已人工核對</label>
+          </div>
+          <el-button :disabled="busy || !canWrite" @click="handleReviewPreview">依人工核對結果重新預覽</el-button>
+        </details>
+      </section>
       <!-- Banner -->
       <div class="import-preview-dialog__banner">
         <span class="banner-item banner-item--success">
@@ -376,13 +580,16 @@ defineExpose({
         </el-table-column>
       </el-table>
 
+      <p v-if="previewResult.summary.problems > 0" role="status">
+        {{ previewResult.summary.problems }} 筆問題資料不會匯入，請先下載問題清單，修正後再重新上傳。
+      </p>
       <!-- 操作列 -->
       <div class="import-preview-dialog__confirm-row">
         <el-button
           v-if="canWrite"
           type="primary"
           :loading="importing"
-          :disabled="importing || importableCount === 0"
+          :disabled="busy || reviewDirty || mappingDirty || importableCount === 0"
           @click="handleConfirmImport"
         >
           確認匯入 {{ importableCount }} 筆
@@ -476,4 +683,14 @@ defineExpose({
 :deep(.problem-row) {
   background-color: var(--el-color-danger-light-9, #fef0f0);
 }
+</style>
+
+<style scoped>
+.import-preview-dialog__settings, .import-preview-dialog__mapping {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-block: 8px;
+}
+.import-preview-dialog__device { padding: 12px; background: var(--el-fill-color-light); }
+.import-preview-dialog__device details { margin-block: 12px; }
+.import-preview-dialog__review { display: flex; flex-wrap: wrap; gap: 12px; padding-block: 10px; border-bottom: 1px solid var(--el-border-color); }
+select, input:not([type="checkbox"]) { padding: 6px; max-width: 100%; border: 1px solid var(--el-border-color); border-radius: 4px; background: var(--el-bg-color); color: var(--el-text-color-primary); }
 </style>

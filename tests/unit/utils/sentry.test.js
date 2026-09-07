@@ -813,3 +813,15 @@ describe('scrubEvent logentry / message PII', () => {
     expect(res.message).toContain('[Filtered]')
   })
 })
+
+
+describe('打卡匯入個資遮罩', () => {
+  it('遮罩設備工號、原始刷卡與匯入來源資料', () => {
+    const data = {
+      source_employee_number: '101', sourceEmployeeNumber: '101',
+      source_rows: [2, 3], sourceRows: [2, 3], punches: ['2026-08-03T08:00:00'],
+      import_metadata: { source_employee_number: '101' }, importMetadata: { sourceEmployeeNumber: '101' },
+    }
+    expect(Object.values(scrubMapping(data))).toEqual(Array(7).fill('[Filtered]'))
+  })
+})
