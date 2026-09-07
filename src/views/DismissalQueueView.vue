@@ -143,6 +143,27 @@ const connectionMessage = computed(() =>
   lastWsClose.value?.message || '網路可能暫時不穩，系統會自動重連',
 )
 
+// 401/403＝登入已逾期或身分已失效：axios 攔截器已經試過一輪 refresh，繼續每 15s
+// 輪詢或每次 WS 重連只會不斷重播同一個必敗請求（並每次彈一次錯誤訊息騷擾使用者），
+// 與教師端 usePortalDismissalAlerts.ts 同型守衛（見該檔 fetchCalls 註解）。
+const isAuthFailureStatus = (status: number | undefined): boolean => status === 401 || status === 403
+
+// tab 從背景切回前景時 onVisibility 會補抓一次；認證已判定失效後不應再送出必敗請求
+// 或重啟 WS 重連——直到本元件重新掛載（例如切頁再進來）為止。
+let authFailed = false
+
+// 停止 polling / WS 重連。與 onUnmounted 的 cleanup 為同一組動作，抽出共用避免兩處漂移。
+const stopAllConnections = () => {
+  fetchDispatchSeq++ // 讓仍在 flight 的舊請求晚到時失效
+  closeWebSocketSafely(ws)
+  ws = null
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+  if (wsRecoveryTimer) { clearTimeout(wsRecoveryTimer); wsRecoveryTimer = null }
+  clearLiveness()
+  stopPolling()
+  loading.value = false
+}
+
 // ─── HTTP 載入 ───────────────────────────────────────────
 const fetchCalls = async () => {
   const mySeq = ++fetchDispatchSeq
@@ -163,6 +184,11 @@ const fetchCalls = async () => {
     if (mySeq !== fetchDispatchSeq) return
     calls.value = (res.data || []) as DismissalCall[]
   } catch (e) {
+    if (isAuthFailureStatus((e as { response?: { status?: number } })?.response?.status)) {
+      authFailed = true
+      stopAllConnections()
+      return
+    }
     // 過時快照不再彈錯（前一輪請求已被新一輪取代）
     if (mySeq === fetchDispatchSeq) ElMessage.error(friendlyError('載入接送通知失敗', e))
   } finally {
@@ -387,6 +413,8 @@ const onVisibility = () => {
     clearLiveness()
     return
   }
+  // 認證已判定失效：不再補抓、也不再嘗試重連 WS（兩者都只會立即重播同一個必敗請求）。
+  if (authFailed) return
   fetchCalls()
   if (ws?.readyState === WebSocket.OPEN) {
     bumpLiveness()
@@ -460,21 +488,18 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', onVisibility)
   // 班級清單走本頁 loadClassrooms（見檔頭註解：刻意不走全域 classroomStore）
   await Promise.all([fetchCalls(), loadClassrooms(), loadStudents()])
+  // fetchCalls 若在等待期間已判定認證失效並呼叫 stopAllConnections()，
+  // 不可在此又無條件把 WS 重新接上去。
+  if (authFailed) return
   connectWs()
 })
 
 onUnmounted(() => {
-  // 讓卸載後才完成的 HTTP request 失效，避免舊頁面狀態回填。
-  fetchDispatchSeq++
   document.removeEventListener('visibilitychange', onVisibility)
   // 先卸 handler 再 close，避免 close() 觸發 onclose → scheduleReconnect 在卸載後
-  // 建殭屍重連（QA 2026-06-04 P2-5）。
-  closeWebSocketSafely(ws)
-  ws = null
-  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
-  if (wsRecoveryTimer) { clearTimeout(wsRecoveryTimer); wsRecoveryTimer = null }
-  clearLiveness()
-  stopPolling()
+  // 建殭屍重連（QA 2026-06-04 P2-5）；stopAllConnections() 內的 closeWebSocketSafely
+  // 已保證這個順序。
+  stopAllConnections()
 })
 </script>
 
