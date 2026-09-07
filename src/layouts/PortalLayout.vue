@@ -18,6 +18,7 @@ import { useIsMobile } from '@/composables/useIsMobile'
 import {
   Search,
   Fold,
+  Expand,
   UserFilled,
   HomeFilled,
   Calendar,
@@ -74,6 +75,8 @@ const { isMobile } = useIsMobile()
 // 娃娃車隨車操作為 per-user 顯式授權；沒有就不顯示入口（權限把關仍在 router guard）
 const canOperateBusTrips = computed(() => hasPortalPermission('BUS_TRIPS_OPERATE'))
 const sidebarOpen = ref(false)
+const sidebarCollapsed = ref(false)
+const isSidebarCollapsed = computed(() => sidebarCollapsed.value && !isMobile.value)
 
 watch(isMobile, (m) => {
   if (!m) sidebarOpen.value = false
@@ -323,14 +326,31 @@ const submitPassword = async () => {
     <!-- Mobile overlay -->
     <div class="sidebar-overlay" v-if="isMobile && sidebarOpen" @click="closeSidebar"></div>
 
-    <el-aside id="portal-sidebar" :width="isMobile ? '220px' : '200px'" :class="{ 'sidebar-open': sidebarOpen, 'sidebar-hidden': isMobile && !sidebarOpen }">
+    <el-aside
+      id="portal-sidebar"
+      :width="isMobile ? '220px' : (isSidebarCollapsed ? '64px' : '200px')"
+      :class="{ 'is-collapsed': isSidebarCollapsed, 'sidebar-open': sidebarOpen, 'sidebar-hidden': isMobile && !sidebarOpen }"
+    >
       <div class="portal-logo">
-        <span>教師專區</span>
+        <span v-if="!isSidebarCollapsed">教師專區</span>
+        <button
+          v-if="!isMobile"
+          type="button"
+          class="portal-collapse-toggle"
+          :aria-label="isSidebarCollapsed ? '展開側邊欄' : '收合側邊欄'"
+          :aria-expanded="!isSidebarCollapsed"
+          aria-controls="portal-sidebar"
+          @click="sidebarCollapsed = !sidebarCollapsed"
+        >
+          <el-icon v-if="isSidebarCollapsed"><Expand /></el-icon>
+          <el-icon v-else><Fold /></el-icon>
+        </button>
       </div>
       <el-menu
         :default-active="activeIndex"
         :router="true"
         class="portal-menu"
+        :collapse="isSidebarCollapsed"
         unique-opened
         text-color="#94a3b8"
         active-text-color="#ffffff"
@@ -455,12 +475,14 @@ const submitPassword = async () => {
         <!-- ============ 其他 ============ -->
         <el-menu-item index="/portal/announcements">
           <el-icon><Bell /></el-icon>
-          <span>公告通知</span>
-          <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />
+          <template #title>
+            <span>公告通知</span>
+            <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />
+          </template>
         </el-menu-item>
         <el-menu-item index="/portal/calendar">
           <el-icon><Calendar /></el-icon>
-          <span>學校行事曆</span>
+          <template #title>學校行事曆</template>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -701,12 +723,16 @@ html.dark .portal-layout {
   border-right: 1px solid var(--neutral-700);
   display: flex;
   flex-direction: column;
-  transition: transform var(--transition-slow);
+  transition: width var(--transition-slow), transform var(--transition-slow);
   z-index: 2000;
 }
 
 .portal-logo {
   height: 64px;
+  flex-shrink: 0;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -719,6 +745,47 @@ html.dark .portal-layout {
   font-weight: 700;
   color: #fff;
   letter-spacing: 0.5px;
+}
+
+.portal-collapse-toggle {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: #94a3b8;
+}
+
+.portal-collapse-toggle:hover {
+  background-color: var(--neutral-700);
+  color: #fff;
+}
+
+.portal-collapse-toggle:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+.is-collapsed .portal-logo {
+  padding: 0;
+}
+
+/* 收合時消除 Element Plus 預設內距，讓圖示在 64px 側欄內置中。 */
+.is-collapsed :deep(.el-menu--collapse > .el-menu-item),
+.is-collapsed :deep(.el-menu--collapse > .el-sub-menu > .el-sub-menu__title),
+.is-collapsed :deep(.el-menu--collapse > .el-menu-item > .el-menu-tooltip__trigger) {
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .portal-menu {
