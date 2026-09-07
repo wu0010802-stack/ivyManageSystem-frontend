@@ -501,9 +501,15 @@ export function teardownPortalDismissalAlerts(): void {
 //   對已初始化的本模組不構成誤殺。
 // - useActingTenant 切換 acting tenant：僅 platform 總部 console 功能，教師 Portal
 //   不會觸發。
+// ⚠ 只回應 source:'local'。source:'remote' 是同瀏覽器**另一分頁**透過 storage 廣播的
+// advanceAdminSession()——它在登入／登出／冒充請求**送出前**就先廣播、請求失敗也照播
+// （api/auth.ts requestSessionChange），對一個仍有效的教師分頁不能當作「身分已失效」；
+// 共享平板同時開兩個分頁是實際部署情境。若 cookie 真的被換掉，下一次輪詢會收到
+// 401/403、WS 也會被關閉，由 fetchCalls 路徑停止即可（審查 P1）。
 // 訂閱一次即可（module-singleton，模組僅求值一次）；stopAfterAuthFailure() 內部以
 // initialized 守衛，模組尚未啟動時收到事件是安全的 no-op。
-onAdminSessionReset(() => {
+onAdminSessionReset((context) => {
+  if (context.source !== 'local') return
   stopAfterAuthFailure()
 })
 

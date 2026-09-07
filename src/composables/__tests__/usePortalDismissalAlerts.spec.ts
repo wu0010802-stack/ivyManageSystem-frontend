@@ -509,6 +509,34 @@ describe('usePortalDismissalAlerts：認證逾期即停', () => {
     }
   })
 
+  it('他分頁的 session reset（storage 廣播，source:remote）不停止本分頁：交給 401/403 路徑判定', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      const { adminSessionRevisionKey } = await import('@/utils/adminSession')
+      m.initPortalDismissalAlerts()
+      await vi.advanceTimersByTimeAsync(0)
+
+      await driveToExhaustedPolling(() => m.usePortalDismissalAlerts().connectionState.value)
+      const callCountWhilePolling = getCallsMock.mock.calls.length
+      expect(callCountWhilePolling).toBeGreaterThan(1)
+
+      // 模擬同瀏覽器另一分頁的 advanceAdminSession()：storage event 不會送回發動分頁，
+      // 本分頁只收到 source:'remote' 的廣播——它在登入／登出／冒充請求送出前就先廣播、
+      // 失敗也照播，對一個仍有效的教師分頁不能當作「身分已失效」。
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: adminSessionRevisionKey(),
+        newValue: `remote-${Date.now()}`,
+      }))
+
+      // 推進兩個輪詢週期：本分頁必須繼續輪詢（若 cookie 真的換了，下一次 401/403 才停）。
+      await vi.advanceTimersByTimeAsync(15000 * 2)
+      expect(getCallsMock.mock.calls.length).toBeGreaterThan(callCountWhilePolling)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('停止後仍可恢復：再次 initPortalDismissalAlerts() 會重新 fetch（不是永久死掉）', async () => {
     vi.useFakeTimers()
     try {
