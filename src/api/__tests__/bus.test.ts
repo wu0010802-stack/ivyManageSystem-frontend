@@ -14,7 +14,7 @@ import {
   replaceBusRouteStops, geocodeBusStudent, getBusTripToday, updateBusRoute,
   reorderBusRoutes, copyBusRouteFrom, optimizeBusRoute, recomputeBusRouteEtas,
   listStudentPickupAddresses, createStudentPickupAddress, deleteStudentPickupAddress,
-  getBusDailyPlan, patchBusDailyPlanStops, optimizeBusDailyPlan, resetBusDailyPlan,
+  getBusDailyPlan, ensureBusDailyPlan, patchBusDailyPlanStops, optimizeBusDailyPlan, resetBusDailyPlan,
   getBusSettings, putBusSettings, listBusTrips,
 } from '../bus'
 
@@ -176,6 +176,13 @@ describe('娃娃車 admin API —— 當日調度', () => {
     expect(api.get).toHaveBeenLastCalledWith('/bus/daily-plans', { params: {} })
     getBusDailyPlan({ date: '2026-08-27', route_id: 3 })
     expect(api.get).toHaveBeenLastCalledWith('/bus/daily-plans', {
+      params: { date: '2026-08-27', route_id: 3 },
+    })
+  })
+
+  it('建立缺少的當日計畫走 POST，query 參數與 GET 一致', () => {
+    ensureBusDailyPlan({ date: '2026-08-27', route_id: 3 })
+    expect(api.post).toHaveBeenLastCalledWith('/bus/daily-plans', undefined, {
       params: { date: '2026-08-27', route_id: 3 },
     })
   })

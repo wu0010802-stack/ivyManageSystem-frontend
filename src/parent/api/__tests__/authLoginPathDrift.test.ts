@@ -27,10 +27,14 @@ describe('PARENT_LOGIN_PATHS 與 auth.ts 實際路徑一致', () => {
   })
 
   it('deviceSetup 實際 POST 的路徑在集合內', async () => {
-    await deviceSetup('ABCD1234EFGH')
+    await deviceSetup('ABCD1234EFGH', 'a'.repeat(64))
     expect(postSpy).toHaveBeenCalledTimes(1)
     const path = postSpy.mock.calls[0]?.[0] as string
     expect(PARENT_LOGIN_PATHS.has(path)).toBe(true)
+    expect(postSpy).toHaveBeenCalledWith('/parent/auth/device-setup', {
+      code: 'ABCD1234EFGH',
+      client_nonce: 'a'.repeat(64),
+    })
   })
 
   it('集合本身恰好只有這兩個字面值（不多不少，改動需同步這條測試）', () => {

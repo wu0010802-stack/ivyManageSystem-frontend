@@ -2,7 +2,7 @@
  * 今日調度 composable 的守衛測試。
  *
  * 這一頁的核心風險與班次設定頁不同，集中在三處：
- * - **`GET /bus/daily-plans` 有寫入副作用**（懶生成）。日期範圍守衛若形同虛設，
+ * - **`POST /bus/daily-plans` 會補建計畫**。日期範圍守衛若形同虛設，
  *   使用者按錯一格就在資料庫裡生出一批不該存在的 trip。
  * - **權限是雙碼且不互相蘊含**。`BUS_WRITE` 與 `BUS_IN_PROGRESS_WRITE` 分別對應
  *   planned／in_progress；判錯的後果是「只給發車後調整權的行政能改隔天的計畫」，
@@ -14,6 +14,7 @@ import { flushPromises } from '@vue/test-utils'
 
 vi.mock('@/api/bus', () => ({
   getBusDailyPlan: vi.fn(),
+  ensureBusDailyPlan: vi.fn(),
   listBusRoutes: vi.fn(),
   patchBusDailyPlanStops: vi.fn(),
   optimizeBusDailyPlan: vi.fn(),
@@ -34,7 +35,8 @@ vi.mock('element-plus', () => ({
 }))
 
 import {
-  getBusDailyPlan, listBusRoutes, patchBusDailyPlanStops, optimizeBusDailyPlan, resetBusDailyPlan,
+  getBusDailyPlan, ensureBusDailyPlan, listBusRoutes, patchBusDailyPlanStops,
+  optimizeBusDailyPlan, resetBusDailyPlan,
 } from '@/api/bus'
 import { getStudents } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
@@ -91,7 +93,9 @@ function routesPayload() {
 }
 
 async function boot(items: unknown[] = [planItem()]) {
-  vi.mocked(getBusDailyPlan).mockResolvedValue({ data: { date: TODAY, items } } as never)
+  const response = { data: { date: TODAY, items } } as never
+  vi.mocked(getBusDailyPlan).mockResolvedValue(response)
+  vi.mocked(ensureBusDailyPlan).mockResolvedValue(response)
   const d = useBusDailyDispatch()
   await d.load()
   await flushPromises()
@@ -125,10 +129,18 @@ describe('載入', () => {
   it('以今天為預設日期，並把班次名稱由 /bus/routes 併入計畫', async () => {
     const d = await boot()
     expect(d.date.value).toBe(TODAY)
-    expect(vi.mocked(getBusDailyPlan).mock.calls[0][0]).toEqual({ date: TODAY })
+    expect(vi.mocked(ensureBusDailyPlan).mock.calls[0][0]).toEqual({ date: TODAY })
     expect(d.plans.value[0].route_name).toBe('A 線')
     expect(d.plans.value[0].depart_time).toBe('07:00:00')
     expect(d.selectedTripId.value).toBe(7)
+  })
+
+  it('只有 BUS_READ 時以 GET 唯讀載入，不呼叫建立端點', async () => {
+    vi.mocked(hasPermission).mockReturnValue(false)
+    await boot()
+
+    expect(getBusDailyPlan).toHaveBeenCalledWith({ date: TODAY })
+    expect(ensureBusDailyPlan).not.toHaveBeenCalled()
   })
 
   it('班次清單一併回傳的家庭座標不進狀態（隱私）', async () => {
@@ -168,7 +180,7 @@ describe('載入', () => {
   })
 
   it('計畫載入失敗時 loadFailed 亮起，不得讓空清單被讀成「今天沒有班次」', async () => {
-    vi.mocked(getBusDailyPlan).mockRejectedValue(new Error('boom'))
+    vi.mocked(ensureBusDailyPlan).mockRejectedValue(new Error('boom'))
     const d = useBusDailyDispatch()
     await d.load()
     expect(d.loadFailed.value).toBe(true)
@@ -199,20 +211,20 @@ describe('載入', () => {
   })
 })
 
-describe('日期範圍（GET 有寫入副作用，超界不得白跑一趟）', () => {
+describe('日期範圍（POST 會補建計畫，超界不得白跑一趟）', () => {
   it('今天與 +7 天可選', async () => {
     const d = await boot()
     expect(await d.setDate(TODAY)).toBe(true)
     expect(await d.setDate('2026-09-02')).toBe(true) // +7
   })
 
-  it('昨天與 +8 天一律擋下，且不呼叫懶生成端點', async () => {
+  it('昨天與 +8 天一律擋下，且不呼叫建立端點', async () => {
     const d = await boot()
-    vi.mocked(getBusDailyPlan).mockClear()
+    vi.mocked(ensureBusDailyPlan).mockClear()
 
     expect(await d.setDate('2026-08-25')).toBe(false)
     expect(await d.setDate('2026-09-03')).toBe(false) // +8
-    expect(getBusDailyPlan).not.toHaveBeenCalled()
+    expect(ensureBusDailyPlan).not.toHaveBeenCalled()
     expect(d.date.value).toBe(TODAY)
   })
 
@@ -229,7 +241,7 @@ describe('日期範圍（GET 有寫入副作用，超界不得白跑一趟）', 
     // 「無法取得當日計畫」。上界反向同理（東京在台北 23:30 後會放行到後端的 +8 天）。
     const d = await boot()
     expect(d.date.value).toBe('2026-08-26')
-    expect(vi.mocked(getBusDailyPlan).mock.calls[0][0]).toEqual({ date: '2026-08-26' })
+    expect(vi.mocked(ensureBusDailyPlan).mock.calls[0][0]).toEqual({ date: '2026-08-26' })
   })
 
   it('日期範圍守衛也以台北今天為基準（本地日期不得影響上下界）', async () => {
@@ -580,11 +592,11 @@ describe('自動排序（預覽 → 套用）', () => {
     vi.mocked(optimizeBusDailyPlan).mockResolvedValue({
       data: { applied: true, stops: [], end_time_estimated: null, moved_unpinned_student_ids: [] },
     } as never)
-    vi.mocked(getBusDailyPlan).mockClear()
+    vi.mocked(ensureBusDailyPlan).mockClear()
 
     expect(await d.applyOptimize()).toBe(true)
     expect(vi.mocked(optimizeBusDailyPlan).mock.calls.at(-1)).toEqual([7, { apply: true }])
-    expect(getBusDailyPlan).toHaveBeenCalledTimes(1)
+    expect(ensureBusDailyPlan).toHaveBeenCalledTimes(1)
     expect(d.optimizePreviewData.value).toBeNull()
   })
 
