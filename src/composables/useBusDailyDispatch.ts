@@ -1,9 +1,9 @@
 /**
  * 管理端娃娃車「今日調度」（`/bus/dispatch` 專用，非 module singleton）。
  *
- * spec「當日計畫生命週期」：`GET /bus/daily-plans` 是**懶生成＋冪等**的——光是
- * 開這一頁就會替每條啟用班次生成當日 `planned` 計畫。因此本檔的 `load()` 不是
- * 唯讀查詢，換日期就是一次寫入，不可以放在 watch 裡隨手重打。
+ * spec「當日計畫生命週期」：`POST /bus/daily-plans` 會冪等補建當日
+ * `planned` 計畫；純 `BUS_READ` 使用者改走無副作用的 GET。換日期仍透過
+ * `load()` 明確觸發，不放在 watch 裡隨手重打。
  *
  * ── 與 `useBusRouteEditor` 的關鍵差異 ──────────────────────────────────────
  *
@@ -34,6 +34,7 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   getBusDailyPlan,
+  ensureBusDailyPlan,
   listBusRoutes,
   optimizeBusDailyPlan,
   patchBusDailyPlanStops,
@@ -303,7 +304,8 @@ export function useBusDailyDispatch() {
   }
 
   /**
-   * 取（並懶生成）`date` 當天的全部班次計畫。
+   * 取 `date` 當天的全部班次計畫；有 BUS_WRITE 時由 POST 冪等補建，
+   * 純 BUS_READ 使用者只以 GET 讀取既有計畫。
    *
    * 班次表與計畫用 `allSettled` 分開判定：班次表失敗只讓卡片顯示 `班次 #id`
    * （計畫本身仍可編輯），計畫失敗才是真正的載入失敗。
@@ -311,9 +313,12 @@ export function useBusDailyDispatch() {
   async function load(): Promise<void> {
     loading.value = true
     loadFailed.value = false
+    const loadPlans = hasPermission(PERMISSION_NAMES.BUS_WRITE)
+      ? ensureBusDailyPlan
+      : getBusDailyPlan
     const [metaResult, planResult] = await Promise.allSettled([
       loadRouteMeta(),
-      getBusDailyPlan({ date: date.value }),
+      loadPlans({ date: date.value }),
     ])
     if (metaResult.status === 'rejected') {
       ElMessage.warning(apiError(metaResult.reason, '班次名稱載入失敗，卡片將以編號顯示'))
@@ -336,7 +341,7 @@ export function useBusDailyDispatch() {
 
   /**
    * 換日期並重載。超出今天~+7 直接擋下（後端會 422；先擋是為了不讓那次
-   * **有寫入副作用的 GET** 白跑一趟，也不讓畫面短暫清空）。
+   * 建立端點白跑一趟，也不讓畫面短暫清空）。
    */
   async function setDate(next: string): Promise<boolean> {
     const today = todayTaipeiISO()
@@ -432,8 +437,8 @@ export function useBusDailyDispatch() {
   /**
    * 送出一次 `PATCH …/stops` 並以回應重填該班次。
    *
-   * 只重填**這一條**班次：其他班次的當日計畫沒有變，整批重載會多打一次懶生成
-   * GET（有寫入副作用），也會讓畫面閃一下。
+   * 只重填**這一條**班次：其他班次的當日計畫沒有變，整批重載會多打一輪查詢，
+   * 也會讓畫面閃一下。
    *
    * `silent` 給「呼叫端自己要把錯誤顯示在原地」的流程用（例如插入 Dialog 要把
    * 422 留在表單上），避免同一則訊息既彈 toast 又印在 Dialog 裡。

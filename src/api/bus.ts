@@ -301,8 +301,9 @@ export const deleteStudentPickupAddress = (studentId: number, addressId: number)
 // --- Admin：當日調度（daily-plans） ---
 
 /**
- * 當日計畫（`GET /bus/daily-plans`，`BUS_READ`）：懶生成＋冪等，`date` 省略＝今天，
- * 範圍今天~+7 天（超出 422）。回應逐班次帶 `calendar_warnings`（假日／補班／停課，
+ * 讀取既有當日計畫（`GET /bus/daily-plans`，`BUS_READ`）。此操作不建立資料；
+ * `date` 省略＝今天，範圍今天~+7 天（超出 422）。
+ * 回應逐班次帶 `calendar_warnings`（假日／補班／停課，
  * **警示不阻擋**）、`capacity`、`eta_may_be_stale`。
  *
  * `eta_may_be_stale: true` 時（`depart_time_planned` 被改或有 excused 站）呼叫端要
@@ -311,6 +312,13 @@ export const deleteStudentPickupAddress = (studentId: number, addressId: number)
 export const getBusDailyPlan = (
   params: ApiQuery<'/bus/daily-plans', 'get'> = {},
 ): AxiosResp<'/bus/daily-plans', 'get'> => api.get('/bus/daily-plans', { params })
+
+/**
+ * 建立缺少的當日計畫（`POST /bus/daily-plans`，`BUS_WRITE`），冪等且受 CSRF 保護。
+ */
+export const ensureBusDailyPlan = (
+  params: ApiQuery<'/bus/daily-plans', 'post'> = {},
+): AxiosResp<'/bus/daily-plans', 'post'> => api.post('/bus/daily-plans', undefined, { params })
 
 /**
  * 當日名單編輯（`PATCH /bus/daily-plans/{trip_id}/stops`）：單一 body 表達

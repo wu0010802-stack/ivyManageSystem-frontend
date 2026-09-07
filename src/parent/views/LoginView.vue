@@ -216,6 +216,20 @@ const showDeviceSetup = ref(isDeviceOnly.value)
 const deviceCode = ref('')
 const deviceSetupSubmitting = ref(false)
 const deviceSetupError = ref('')
+const deviceSetupProof = ref<{ code: string; nonce: string } | null>(null)
+
+function newDeviceSetupNonce(): string {
+  const bytes = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function retryNonceFor(code: string): string {
+  if (deviceSetupProof.value?.code === code) return deviceSetupProof.value.nonce
+  const nonce = newDeviceSetupNonce()
+  deviceSetupProof.value = { code, nonce }
+  return nonce
+}
 
 async function submitDeviceSetup() {
   const code = deviceCode.value.trim()
@@ -225,13 +239,16 @@ async function submitDeviceSetup() {
   }
   deviceSetupSubmitting.value = true
   deviceSetupError.value = ''
+  const clientNonce = retryNonceFor(code)
   try {
-    const { data } = await deviceSetup(code)
+    const { data } = await deviceSetup(code, clientNonce)
+    deviceSetupProof.value = null
     if (data?.status !== 'ok') throw new Error('伺服器回應未預期狀態')
     await completeLogin(data.user)
   } catch (err: unknown) {
     const e = err as { response?: { status?: number } }
     if (e?.response?.status === 429) {
+      deviceSetupProof.value = null
       deviceSetupError.value = '嘗試次數過多，請稍後再試'
     } else if (!e?.response) {
       // 傳輸層失敗（斷線／逾時／請求被中止／DNS 失敗）：後端根本沒回應，不帶任何
@@ -254,6 +271,7 @@ async function submitDeviceSetup() {
         })
       }
     } else {
+      deviceSetupProof.value = null
       // 後端對「碼不存在／已過期／已使用」一律回同一個 BusinessError code
       // 避免碼枚舉；前端也不採用後端實際訊息字串，固定顯示這句，避免後端
       // 訊息未來變得更具體時前端不小心變成枚舉 oracle。

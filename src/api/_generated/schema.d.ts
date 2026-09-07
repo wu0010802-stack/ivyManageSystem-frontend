@@ -4586,13 +4586,15 @@ export interface paths {
         };
         /**
          * Get Daily Plans
-         * @description 懶生成當日計畫：逐班次「無未完成 trip 即生成」，冪等，`route_id`
-         *     未帶時回該租戶全部啟用班次。此 GET 有寫入副作用，顯式記 audit（僅在
-         *     確實新生成時記一筆，重複 GET 命中既有列不重記）。
+         * @description 唯讀列出既有當日計畫；不存在的班次不在 GET 階段建立。
          */
         get: operations["get_daily_plans_api_bus_daily_plans_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Daily Plans
+         * @description 建立缺少的當日計畫並回傳；冪等且受寫入權限與 CSRF 保護。
+         */
+        post: operations["create_daily_plans_api_bus_daily_plans_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -27860,6 +27862,8 @@ export interface components {
         };
         /** DeviceSetupRequest */
         DeviceSetupRequest: {
+            /** Client Nonce */
+            client_nonce?: string | null;
             /** Code */
             code: string;
         };
@@ -54367,6 +54371,39 @@ export interface operations {
         };
     };
     get_daily_plans_api_bus_daily_plans_get: {
+        parameters: {
+            query?: {
+                /** @description 預設今天 */
+                date?: string | null;
+                route_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyPlansOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_daily_plans_api_bus_daily_plans_post: {
         parameters: {
             query?: {
                 /** @description 預設今天 */

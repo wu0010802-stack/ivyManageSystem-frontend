@@ -1,4 +1,5 @@
 import api from './index'
+import type { ApiBody } from '@/api/_generated/typed'
 
 export const liffLogin = (idToken: string) =>
   api.post('/parent/auth/liff-login', { id_token: idToken })
@@ -13,8 +14,11 @@ export const bindAdditional = (code: string) =>
 // （passwordless）。成功回傳 shape 與 liffLogin/bind 的 ok 分支一致
 // （{status:'ok', user:{user_id,name,role}}），呼叫端沿用同一套後續流程
 // （consent gate + resolveSafeRedirect），不要另外分岔。
-export const deviceSetup = (code: string) =>
-  api.post('/parent/auth/device-setup', { code })
+export const deviceSetup = (code: string, clientNonce: string) =>
+  api.post(
+    '/parent/auth/device-setup',
+    { code, client_nonce: clientNonce } satisfies ApiBody<'/parent/auth/device-setup', 'post'>,
+  )
 
 export const logout = () => api.post('/parent/auth/logout')
 
