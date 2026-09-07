@@ -20,7 +20,7 @@ vi.mock('@/api/fees', () => apiMocks)
 
 // 固定「今天」避免測試依日期漂移
 const TODAY = '2026-08-25'
-vi.mock('@/utils/format', () => ({ todayISO: () => TODAY }))
+vi.mock('@/utils/format', () => ({ todayTaipeiISO: () => TODAY }))
 vi.mock('@/utils/academic', () => ({
   getCurrentAcademicTerm: () => ({ school_year: 115, semester: 1 }),
 }))
@@ -162,8 +162,9 @@ describe('FeeWorkbench 工作佇列', () => {
     const wrapper = mountWorkbench()
     await flushAll()
     await wrapper.find('[data-test="workbench-row-receivable"] button').trigger('click')
+    // 「本學期費用單」是學期口徑 → 導向逐筆（月表是當月口徑，數字對不上）
     expect(wrapper.emitted('navigate')?.[0]).toEqual([
-      { ws: 'billing', view: 'receivable' },
+      { ws: 'billing', view: 'receivable', mode: 'list' },
     ])
   })
 

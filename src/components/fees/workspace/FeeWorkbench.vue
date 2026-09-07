@@ -4,7 +4,8 @@
       今天 {{ today }}<span aria-hidden="true"> ・ </span>統計月份 {{ monthLabel }}
     </p>
 
-    <el-skeleton v-if="loading" :rows="5" animated data-test="workbench-skeleton" />
+    <!-- 佇列固定 7 列 ＋ 最多 2 個分組標題；骨架列數對齊才不會載入完成瞬間版面暴增 -->
+    <el-skeleton v-if="loading" :rows="8" animated data-test="workbench-skeleton" />
 
     <ul v-else class="queue" data-test="workbench-queue">
       <li v-if="actionItems.length" class="queue-section">

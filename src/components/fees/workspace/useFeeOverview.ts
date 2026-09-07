@@ -22,7 +22,7 @@
  */
 import { computed, reactive, ref } from 'vue'
 import { formatCurrency } from '@/utils/currency'
-import { todayISO } from '@/utils/format'
+import { todayTaipeiISO } from '@/utils/format'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 import {
   getBankTransactions,
@@ -133,9 +133,13 @@ function noteFailure(err: unknown): void {
 
 // 刻意不在 module 載入當下就求值：一來長開的分頁跨午夜後日期會凍住，
 // 二來 import 時取值會早於測試的 vi.mock('@/utils/format') 生效時機。
+//
+// 用 todayTaipeiISO 而非 todayISO：後端的 business_date（交接日）與關帳的
+// year/month 都是 Asia/Taipei 口徑，瀏覽器在別的時區時 todayISO 會挑錯日子
+// ——format.ts:150 自己就寫明這種場合「不可沿用 todayISO()」。
 const today = ref('')
 function currentToday(): string {
-  if (!today.value) today.value = todayISO()
+  if (!today.value) today.value = todayTaipeiISO()
   return today.value
 }
 const monthLabel = computed(() => currentToday().slice(0, 7))
@@ -270,7 +274,7 @@ async function loadPassbookPending() {
 
 async function loadAll(initial: boolean) {
   if (initial) state.loading = true
-  today.value = todayISO()
+  today.value = todayTaipeiISO()
   state.forbidden = false
   await Promise.allSettled([
     loadCloseSummary(),
@@ -347,12 +351,20 @@ onAdminSessionReset(__resetFeeOverview)
 
 // ── 佇列項目 ──────────────────────────────────────────────────────────────
 
+/**
+ * 本學期費用單。
+ *
+ * ⚠ target 帶 mode:'list'（逐筆）。這一列是**學期**口徑（/fees/summary?period=），
+ * 但應收帳款的預設檢視是**當月**月表（/fees/monthly-statement?month=），
+ * 直接導過去兩邊筆數與金額必然對不上（實測工作台 159 筆／NT$1,729,905，
+ * 目的地是 2026-09 月表）。逐筆明細才是依學期看的檢視。
+ */
 function receivableItem(): FeeQueueItem {
   const base = {
     key: 'receivable',
     title: '本學期費用單',
     actionLabel: '去收款',
-    target: { ws: 'billing' as FeeWorkspaceKey, view: 'receivable' },
+    target: { ws: 'billing' as FeeWorkspaceKey, view: 'receivable', mode: 'list' },
     amount: 0,
   }
   if (!state.feeSummaryLoaded) {
@@ -553,7 +565,7 @@ function refundItem(): FeeQueueItem {
   if (!s) {
     return { ...base, state: 'unknown', detail: '無法載入退款狀態，點入退款查看' }
   }
-  const pending = s.owner.pending_refunds
+  const pending = s.owner?.pending_refunds ?? 0
   if (pending > 0) {
     return {
       ...base,
@@ -619,7 +631,7 @@ function closeItem(): FeeQueueItem {
   if (!s) {
     return { ...base, state: 'unknown', detail: '無法載入關帳檢查，點入月結查看' }
   }
-  const failing = Object.values(s.checklist).filter((ok) => !ok).length
+  const failing = Object.values(s.checklist ?? {}).filter((ok) => !ok).length
   return {
     ...base,
     state: 'muted',

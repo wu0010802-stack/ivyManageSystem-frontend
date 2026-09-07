@@ -21,7 +21,7 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('@/api/fees', () => apiMocks)
 
 const TODAY = '2026-08-25'
-vi.mock('@/utils/format', () => ({ todayISO: () => TODAY }))
+vi.mock('@/utils/format', () => ({ todayTaipeiISO: () => TODAY }))
 vi.mock('@/utils/academic', () => ({
   getCurrentAcademicTerm: () => ({ school_year: 115, semester: 1 }),
 }))
