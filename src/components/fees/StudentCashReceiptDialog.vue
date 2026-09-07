@@ -69,7 +69,7 @@
             type="date"
             value-format="YYYY-MM-DD"
             size="small"
-            :disabled-date="(d: Date) => d.toISOString().slice(0, 10) > todayISO()"
+            :disabled-date="(d: Date) => dateToLocalISO(d) > todayISO()"
             data-test="cash-date"
             aria-label="收款日期"
           />
@@ -115,7 +115,9 @@ import { ElMessage } from 'element-plus'
 import { createCashReceipt, getFeeRecords } from '@/api/fees'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
-import { todayISO } from '@/utils/format'
+// dateToLocalISO：不可用 d.toISOString()（UTC），台灣 UTC+8 下「明天」的 UTC
+// 日期仍等於今天，未來日期會漏過前端防呆、直到後端 validate_payment_date 才擋。
+import { dateToLocalISO, todayISO } from '@/utils/format'
 
 interface FeeRecordLite {
   id: number

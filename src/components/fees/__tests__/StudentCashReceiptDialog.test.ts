@@ -12,7 +12,10 @@ const apiMocks = vi.hoisted(() => ({
   createCashReceipt: vi.fn(() => Promise.resolve({ receipt_id: 9, allocation_ids: [], idempotent_replay: false })),
 }))
 vi.mock('@/api/fees', () => apiMocks)
-vi.mock('@/utils/format', () => ({ todayISO: () => '2026-08-05' }))
+vi.mock('@/utils/format', async (orig) => ({
+  ...((await orig()) as Record<string, unknown>),
+  todayISO: () => '2026-08-05',
+}))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
@@ -27,6 +30,12 @@ const rec = (over: Record<string, unknown>) => ({
   ...over,
 })
 
+const DatePickerStub = {
+  name: 'DatePickerStub',
+  props: ['disabledDate'],
+  template: '<input v-bind="$attrs" />',
+}
+
 const STUBS = {
   'el-dialog': {
     props: ['modelValue', 'title'],
@@ -34,7 +43,7 @@ const STUBS = {
   },
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-input': { template: '<input v-bind="$attrs" />' },
-  'el-date-picker': { template: '<input v-bind="$attrs" />' },
+  'el-date-picker': DatePickerStub,
   'el-input-number': {
     props: ['modelValue', 'min', 'max'],
     emits: ['update:modelValue'],
@@ -152,5 +161,25 @@ describe('StudentCashReceiptDialog', () => {
     const { ElMessage } = await import('element-plus')
     expect(ElMessage.error).toHaveBeenCalled()
     expect(w.emitted('paid')).toBeFalsy()
+  })
+})
+
+describe('StudentCashReceiptDialog 收款日期界線', () => {
+  // 回歸：disabled-date 曾用 d.toISOString()（UTC）與本地 todayISO() 比較，
+  // 台灣 UTC+8 下「明天」的 UTC 日期仍等於今天 → 明天可選，直到送出才被後端擋。
+  it('今天可選、明天與更後面不可選（一律以本地時區比較）', async () => {
+    const w = mountDialog()
+    await flushPromises()
+
+    const disabledDate = w.findComponent(DatePickerStub).props('disabledDate') as (d: Date) => boolean
+    // todayISO 被 mock 成 2026-08-05；用當地時間建構避免 UTC 位移
+    const localDate = (y: number, m: number, d: number, h = 0) => new Date(y, m - 1, d, h)
+
+    expect(disabledDate(localDate(2026, 8, 5))).toBe(false)
+    expect(disabledDate(localDate(2026, 8, 4))).toBe(false)
+    // 台北 UTC+8：8/6 當地 00:00 的 UTC 仍是 8/5，正是舊寫法漏掉的破口
+    expect(disabledDate(localDate(2026, 8, 6))).toBe(true)
+    expect(disabledDate(localDate(2026, 8, 6, 23))).toBe(true)
+    expect(disabledDate(localDate(2026, 8, 20))).toBe(true)
   })
 })
