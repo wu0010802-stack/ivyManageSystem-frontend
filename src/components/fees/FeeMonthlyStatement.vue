@@ -1061,6 +1061,8 @@ interface PayRecordLite {
   fee_item_name: string
   period: string
   amount_due: number
+  /** 既有累計已繳：批次收款只收剩餘，對話框要據此顯示本次實收 */
+  amount_paid: number
 }
 
 const payDialogVisible = ref(false)
@@ -1076,6 +1078,7 @@ function outstandingRecordsOf(stu: StatementStudent): PayRecordLite[] {
       fee_item_name: it.fee_item_name ?? '',
       period: it.period ?? '',
       amount_due: it.amount_due,
+      amount_paid: it.amount_paid ?? 0,
     }))
 }
 

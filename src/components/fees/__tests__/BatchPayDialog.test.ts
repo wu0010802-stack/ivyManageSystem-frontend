@@ -22,6 +22,7 @@ interface Row {
   record_id: number
   student_name: string
   amount_due: number
+  amount_remaining: number
   status: string
   error?: string | null
   idempotency_key: string
@@ -206,5 +207,40 @@ describe('BatchPayDialog 重新開啟', () => {
     await flushPromises()
 
     expect(vmOf(w).rows[0].idempotency_key).not.toBe(firstKey)
+  })
+})
+
+describe('BatchPayDialog 部分繳費列的金額', () => {
+  // 回歸：批次端點語意固定「繳清餘額」（後端以 amount_due − 既有 amount_paid 算 delta），
+  // 但對話框列與合計顯示的是整張 amount_due → 出納照著合計向家長收錢會多收。
+  const PARTIAL_RECORDS = [
+    { id: 1, student_name: '小明', classroom_name: '向日葵', fee_item_name: '學費', period: '115-1', amount_due: 1000, amount_paid: 0 },
+    { id: 2, student_name: '小華', classroom_name: '向日葵', fee_item_name: '學費', period: '115-1', amount_due: 1000, amount_paid: 400 },
+  ]
+
+  it('每列金額為剩餘應繳（應繳−已繳），合計亦然', async () => {
+    const w = mountDialog({ records: PARTIAL_RECORDS })
+    await flushPromises()
+    const vm = vmOf(w)
+    expect(vm.rows.map((r) => r.amount_remaining)).toEqual([1000, 600])
+    expect(vm.totalDue).toBe(1600)
+    expect(w.text()).toContain('NT$1,600')
+  })
+
+  it('部分繳費列另標原應繳與已繳，避免只看到剩餘而誤判單據金額', async () => {
+    const w = mountDialog({ records: PARTIAL_RECORDS })
+    await flushPromises()
+    const rows = w.findAll('[data-test="batch-pay-row"]')
+    expect(rows[1].text()).toContain('應繳 NT$1,000')
+    expect(rows[1].text()).toContain('已繳 NT$400')
+    // 未部分繳費的列不加這段雜訊
+    expect(rows[0].text()).not.toContain('已繳')
+  })
+
+  it('amount_paid 未提供（既有呼叫端）時剩餘＝應繳，行為不變', async () => {
+    const w = mountDialog()
+    await flushPromises()
+    expect(vmOf(w).rows.map((r) => r.amount_remaining)).toEqual([1000, 2000])
+    expect(vmOf(w).totalDue).toBe(3000)
   })
 })
