@@ -833,3 +833,19 @@ describe('薪資表核對個資遮罩', () => {
     expect(Object.values(scrubMapping(data))).toEqual(Array(9).fill('[Filtered]'))
   })
 })
+
+
+describe('接送地址聯絡人姓名遮罩', () => {
+  it('遮罩 snake_case 與 Vue camelCase 姓名，保留非個資 metadata', () => {
+    expect(scrubMapping({ contact_name: '測試聯絡人', contactName: '測試聯絡人', contact_count: 2, status: 'active' })).toEqual({
+      contact_name: '[Filtered]', contactName: '[Filtered]', contact_count: 2, status: 'active',
+    })
+  })
+  it('遮罩 SQL exception parameters 內的聯絡人姓名', () => {
+    const event = scrubEvent({ exception: { values: [{ type: 'Error', value: "constraint failed [parameters: {'contact_name': '測試聯絡人', 'contactName': '另一測試聯絡人', 'status': 'active'}]" }] } })
+    const value = event.exception.values[0].value
+    expect(value).not.toContain('測試聯絡人')
+    expect(value).toContain('[Filtered]')
+    expect(value).toContain("'status': 'active'")
+  })
+})

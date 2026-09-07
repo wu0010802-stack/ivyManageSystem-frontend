@@ -26,7 +26,7 @@ const PII_KEY_SUBSTRINGS = [
   'bank_account', 'bank_code', 'card_no', 'credit_card',
   'id_number', 'passport', 'phone', 'mobile', 'email',
   'line_user_id', 'liff', 'address',
-  'child_name', 'student_name', 'parent_name', 'guardian', 'custody_note',
+  'child_name', 'student_name', 'parent_name', 'contact_name', 'guardian', 'custody_note',
   'emergency_contact', 'birthday', 'birth_date',
   'medication', 'dosage', 'allergy', 'allergen', 'allergies',
   'reaction_symptom', 'first_aid_note', 'disability', 'iep', 'special_needs', 'special_education',
@@ -80,7 +80,7 @@ const PII_KEY_SUBSTRINGS = [
   // exact 清單的 `child`，於是原樣上傳。`BusRideCancellationSheet` 的 `childName`
   // prop（＝學生姓名）就在這個暴露面上。
   // ⚠ 新增 camelCase PII prop 時要記得補這裡；snake_case 詞條不會自動涵蓋它。
-  'childname', 'studentname', 'parentname', 'personname',
+  'childname', 'studentname', 'parentname', 'personname', 'contactname',
   // 打卡匯入來源與原始刷卡個資（與後端同步，含 Vue prop 命名）。
   'source_employee_number', 'sourceemployeenumber', 'source_rows', 'sourcerows',
   'punches', 'import_metadata', 'importmetadata',
