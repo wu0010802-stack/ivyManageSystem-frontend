@@ -209,3 +209,12 @@ describe('FormDialog', () => {
     expect(w.find('#t1').text()).toBe('新增課程')
   })
 })
+
+it('儲存中不能由取消鈕或 X／Escape 關閉', async () => {
+  const w = mountDialog({ loading: true })
+  expect(w.find('[data-test="form-dialog-cancel"]').attributes('disabled')).toBeDefined()
+  await w.find('.stub-x').trigger('click')
+  await (w.vm as unknown as { requestClose: () => Promise<void> }).requestClose()
+  expect(w.emitted('update:modelValue')).toBeUndefined()
+  w.unmount()
+})
