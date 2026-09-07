@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMenu } from 'element-plus'
 
 vi.mock('vue-router', () => ({
   RouterView: { template: '<div />' },
@@ -97,5 +97,66 @@ describe('PortalLayout — 手機漢堡鍵恢復側欄可達（P0）', () => {
     await flushPromises()
     expect(wrapper.find(SEL).exists()).toBe(false)
     wrapper.unmount()
+  })
+})
+
+
+describe('PortalLayout — 桌機側邊欄收合', () => {
+  function prepareViewport(mobile = false) {
+    const listeners: Array<(event: { matches: boolean }) => void> = []
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: mobile,
+      addEventListener: (_: string, listener: (event: { matches: boolean }) => void) => listeners.push(listener),
+      removeEventListener: vi.fn(),
+    })
+    localStorage.setItem('portal_layout_v', '2')
+    userInfoData = { role: 'teacher' }
+    return listeners
+  }
+
+  it('桌機可收合成圖示導覽並再次展開', async () => {
+    prepareViewport()
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    try {
+      const button = wrapper.get('button[aria-label="收合側邊欄"]')
+      expect(button.attributes('aria-expanded')).toBe('true')
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('200px')
+      await button.trigger('click')
+      expect(button.attributes('aria-label')).toBe('展開側邊欄')
+      expect(button.attributes('aria-expanded')).toBe('false')
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('64px')
+      expect(wrapper.getComponent(ElMenu).props('collapse')).toBe(true)
+      expect(wrapper.get('.portal-logo').text()).not.toContain('教師專區')
+      await button.trigger('click')
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('200px')
+      expect(wrapper.getComponent(ElMenu).props('collapse')).toBe(false)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('桌機收合後切至手機仍為完整抽屜，回桌機保留收合狀態', async () => {
+    const listeners = prepareViewport()
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    try {
+      await wrapper.get('button[aria-label="收合側邊欄"]').trigger('click')
+      listeners.forEach(listener => listener({ matches: true }))
+      await flushPromises()
+      expect(wrapper.find('button[aria-label="展開側邊欄"]').exists()).toBe(false)
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('220px')
+      expect(wrapper.getComponent(ElMenu).props('collapse')).toBe(false)
+      await wrapper.get(SEL).trigger('click')
+      expect(wrapper.get('#portal-sidebar').classes()).toContain('sidebar-open')
+      await wrapper.get('.sidebar-overlay').trigger('click')
+      expect(wrapper.get('#portal-sidebar').classes()).toContain('sidebar-hidden')
+      listeners.forEach(listener => listener({ matches: false }))
+      await flushPromises()
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('64px')
+      expect(wrapper.getComponent(ElMenu).props('collapse')).toBe(true)
+    } finally {
+      wrapper.unmount()
+    }
   })
 })
