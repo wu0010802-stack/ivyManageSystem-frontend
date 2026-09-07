@@ -7257,7 +7257,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Handovers */
+        /**
+         * List Handovers
+         * @description 現金交接批次列表（依交接日新到舊）。
+         *
+         *     ``total`` 是符合條件的真實筆數，不是截斷後的列數——消費端（學費工作台）
+         *     據此判斷「有沒有未結交接」，回 len(rows) 會在超過 limit 後謊報。
+         */
         get: operations["list_handovers_api_fees_cash_handovers_get"];
         put?: never;
         post?: never;
@@ -7342,7 +7348,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Close Periods */
+        /**
+         * List Close Periods
+         * @description 關帳紀錄列表（新到舊）。``total`` 為真實筆數，不是截斷後的列數。
+         */
         get: operations["list_close_periods_api_fees_close_periods_get"];
         put?: never;
         /** Close Period Route */
@@ -60344,6 +60353,7 @@ export interface operations {
             query?: {
                 date_from?: string | null;
                 date_to?: string | null;
+                limit?: number;
                 status?: string | null;
             };
             header?: never;
@@ -60510,6 +60520,7 @@ export interface operations {
         parameters: {
             query?: {
                 include_snapshot?: boolean;
+                limit?: number;
             };
             header?: never;
             path?: never;
