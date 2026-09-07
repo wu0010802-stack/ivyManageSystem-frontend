@@ -6966,7 +6966,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Bank Transactions */
+        /**
+         * List Bank Transactions
+         * @description 存摺交易列表。
+         *
+         *     "pending" 為聚合值：展開為 close 檢查認定的未結狀態集合
+         *     （imported / suggested / unmatched / partially_allocated），供學費工作台
+         *     的待辦佇列使用——只查 imported 會把「部分分配」等仍有未分配餘額的錢
+         *     算成已完成（2026-09-07 bug hunt）。其餘值維持逐字單值篩選。
+         */
         get: operations["list_bank_transactions_api_fees_bank_transactions_get"];
         put?: never;
         post?: never;
@@ -7460,6 +7468,11 @@ export interface paths {
         /**
          * List Collection Payments
          * @description 代收繳費列表（日期篩選以顧客繳費日為準——歸月口徑）。
+         *
+         *     "pending" 為聚合值：展開為 close 檢查認定的未結狀態集合
+         *     （imported / suggested / unmatched / partially_allocated），供學費工作台
+         *     的待辦佇列使用——只查 imported 會把「部分分配」等仍有未分配餘額的錢
+         *     算成已完成（2026-09-07 bug hunt）。其餘值維持逐字單值篩選。
          */
         get: operations["list_collection_payments_api_fees_collection_payments_get"];
         put?: never;
@@ -23187,6 +23200,16 @@ export interface components {
             source: string;
             /** Title */
             title: string;
+            /**
+             * Unresolved Amount
+             * @default 0
+             */
+            unresolved_amount: number;
+            /**
+             * Unresolved Count
+             * @default 0
+             */
+            unresolved_count: number;
             /** Zero Amount Count */
             zero_amount_count: number;
         };
