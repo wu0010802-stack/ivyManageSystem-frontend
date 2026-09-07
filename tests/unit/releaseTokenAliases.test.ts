@@ -56,3 +56,20 @@ describe('Portal 局部與高對比主題 alias 等值', () => {
     })
   })
 })
+
+
+describe("側欄新增 hover 色彩維持三個作用域等值", () => {
+  it.each([
+    ["src/assets/design-tokens.css", ":root", "#334155"],
+    ["src/assets/a11y.css", "html.dark", "#f1f5f9"],
+    ["src/assets/a11y.css", "html.dark .portal-layout .el-aside", "#334155"],
+  ])("保留 %s 的 %s 原始色值", (path, selector, value) => {
+    const css = block(read(path), selector)
+    expect(css).toContain(`--color-neutral-700: ${value};`)
+    expect(css).toContain("--neutral-700: var(--color-neutral-700);")
+  })
+  it("側欄收合按鈕使用 canonical hover token", () => {
+    expect(block(read("src/layouts/PortalLayout.vue"), ".portal-collapse-toggle:hover"))
+      .toContain("background-color: var(--color-neutral-700);")
+  })
+})

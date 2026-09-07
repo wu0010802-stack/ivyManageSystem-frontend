@@ -779,7 +779,7 @@ html.dark .portal-layout {
 }
 
 .portal-collapse-toggle:hover {
-  background-color: var(--neutral-700);
+  background-color: var(--color-neutral-700);
   color: #fff;
 }
 
