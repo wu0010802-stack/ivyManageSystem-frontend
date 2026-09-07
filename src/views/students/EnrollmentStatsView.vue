@@ -1,12 +1,26 @@
 <script setup lang="ts">
+/**
+ * 在籍統計：現值（此刻各班多少人）與異動帳（人數怎麼變成這樣）同一頁。
+ *
+ * 2026-09-07 整合前是兩個頁籤，代價是同一個總人數報兩次、頁首的學年學期只作用於
+ * 其中一個頁籤、而唯一有時間軸的趨勢圖反而藏在第二頁。整合後：
+ * - **學年學期是全頁唯一主控制項**，切換時同時換掉現值與帳的查詢區間。
+ * - **對帳橫幅置頂**，是現值與帳兩者的接點（帳上累加 vs 實際名冊）。
+ * - **一份數字只畫一次**：各班男女與年級占比在表格裡逐格都有，原本的堆疊長條圖
+ *   與甜甜圈圖是同一份資料的第三次呈現，已移除；只留帳推導出的趨勢圖。
+ */
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { RefreshRight } from '@element-plus/icons-vue'
-import { getEnrollmentStats, getEnrollmentOptions } from '@/api/studentEnrollment'
-import { coerceRocYear } from '@/utils/academic'
+import {
+  getEnrollmentStats,
+  getEnrollmentOptions,
+  getLedgerReconcile,
+} from '@/api/studentEnrollment'
+import { coerceRocYear, getTermDateRange } from '@/utils/academic'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { apiError } from '@/utils/error'
-import { BarChart, DoughnutChart } from '@/composables/useChartJs'
+import { describeReconcile, type ReconcileResult } from '@/utils/enrollmentLedger'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EnrollmentLedgerPanel from './EnrollmentLedgerPanel.vue'
 
@@ -23,7 +37,21 @@ const termStore = useAcademicTermStore()
 const loading = ref(false)
 const stats = ref<EnrollmentStats | null>(null)
 const termOptions = ref<TermOption[]>([])
-const activeTab = ref('current')
+
+/**
+ * 異動帳的查詢區間，跟著頁首的學年學期走。使用者仍可在下方面板內縮小範圍，
+ * 那個改動會回寫這裡，讓對帳橫幅與明細看的是同一個結束日。
+ */
+const dateRange = ref<[string, string]>(
+  getTermDateRange(termStore.school_year, termStore.semester),
+)
+/** 「重新整理」的訊號，遞增即通知下方面板重抓。 */
+const refreshToken = ref(0)
+const reconcileResult = ref<ReconcileResult | null>(null)
+
+const banner = computed(() =>
+  reconcileResult.value ? describeReconcile(reconcileResult.value) : null,
+)
 
 const selectedTerm = computed({
   get: () => `${termStore.school_year}-${termStore.semester}`,
@@ -59,15 +87,39 @@ const fetchStats = async () => {
   }
 }
 
+/** 對帳：帳上累加 vs 實際名冊。以區間結束日為準，與下方明細同一個日子。 */
+const fetchReconcile = async () => {
+  try {
+    const res = await getLedgerReconcile({ date: dateRange.value[1] })
+    reconcileResult.value = res.data
+  } catch (e) {
+    ElMessage.error(apiError(e, '載入在籍對帳失敗'))
+  }
+}
+
 watch(selectedTerm, () => {
   stats.value = null
+  // 學年學期是全頁唯一主控制項：現值與帳的區間一起換，不讓兩邊各講各的學期。
+  dateRange.value = getTermDateRange(termStore.school_year, termStore.semester)
   fetchStats()
+  // 對帳交給下面的 dateRange watch，避免換學期時重複打同一支端點。
 })
+
+// 區間結束日換了（換學期，或使用者在面板內縮小範圍）就重新對帳，
+// 否則橫幅講的日子會與下方明細對不起來。
+watch(() => dateRange.value[1], fetchReconcile)
+
+/** 頁首「重新整理」：現值、對帳、帳三邊一起刷，不是只刷一半。 */
+const refreshAll = () => {
+  fetchStats()
+  fetchReconcile()
+  refreshToken.value += 1
+}
 
 onMounted(async () => {
   // 效能（2026-08-21）：fetchStats 讀 termStore.school_year/semester、不依賴
   // fetchOptions 回傳的 termOptions，零交集，改平行發送。
-  await Promise.all([fetchOptions(), fetchStats()])
+  await Promise.all([fetchOptions(), fetchStats(), fetchReconcile()])
 })
 
 // ---------------------------------------------------------------------------
@@ -107,11 +159,6 @@ const summaryCards = computed(() => {
       sub: avg != null ? `平均 ${avg} 人 / 班` : '—',
     },
   ]
-})
-
-const classCount = computed(() => {
-  if (!stats.value?.by_grade) return 0
-  return stats.value.by_grade.reduce((s, g) => s + g.classes.length, 0)
 })
 
 const ratioPct = (n: number, total: number) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '0%')
@@ -181,145 +228,11 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
   return ''
 }
 
-// ---------------------------------------------------------------------------
-// 圖表色票（與 Element Plus 風格貼近的低飽和色）
-// ---------------------------------------------------------------------------
-const CHART_PALETTE = ['#409eff', '#67c23a', '#e6a23c', '#909399', '#f56c6c', '#a0cfff']
-
-// ---------------------------------------------------------------------------
-// 長條圖
-// ---------------------------------------------------------------------------
-const barChartData = computed(() => {
-  if (!stats.value?.by_grade) return null
-  const labels = []
-  const maleData = []
-  const femaleData = []
-  for (const grade of stats.value.by_grade) {
-    for (const cls of grade.classes) {
-      labels.push(cls.class_name)
-      maleData.push(cls.male)
-      femaleData.push(cls.female)
-    }
-  }
-  return {
-    labels,
-    datasets: [
-      {
-        label: '男生',
-        data: maleData,
-        backgroundColor: '#409eff',
-        borderRadius: 4,
-        borderSkipped: false,
-      },
-      {
-        label: '女生',
-        data: femaleData,
-        backgroundColor: '#f56c6c',
-        borderRadius: 4,
-        borderSkipped: false,
-      },
-    ],
-  }
-})
-
-const _barChartOptionsRaw = {
-  responsive: true,
-  maintainAspectRatio: false,
-  scales: {
-    x: {
-      stacked: true,
-      grid: { display: false },
-      ticks: { color: '#606266', font: { size: 11 } },
-    },
-    y: {
-      stacked: true,
-      beginAtZero: true,
-      ticks: { stepSize: 5, color: '#909399', font: { size: 11 } },
-      grid: { color: 'rgba(220, 223, 230, 0.5)' },
-    },
-  },
-  plugins: {
-    legend: {
-      position: 'top' as const,
-      align: 'end' as const,
-      labels: {
-        color: '#303133',
-        font: { size: 12 },
-        padding: 12,
-        boxWidth: 12,
-        boxHeight: 12,
-        usePointStyle: true,
-        pointStyle: 'circle' as const,
-      },
-    },
-    tooltip: {
-      backgroundColor: 'rgba(48, 49, 51, 0.92)',
-      titleFont: { size: 12, weight: '600' as const },
-      bodyFont: { size: 12 },
-      padding: 10,
-      cornerRadius: 4,
-      displayColors: true,
-    },
-  },
-}
-
-const barChartOptions = _barChartOptionsRaw as unknown as Record<string, unknown>
-
-// ---------------------------------------------------------------------------
-// 圓餅圖
-// ---------------------------------------------------------------------------
-const doughnutChartData = computed(() => {
-  if (!stats.value?.by_grade) return null
-  return {
-    labels: stats.value.by_grade.map(g => g.grade_name),
-    datasets: [
-      {
-        data: stats.value.by_grade.map(g => g.total),
-        backgroundColor: stats.value.by_grade.map((_: GradeStat, i: number) => CHART_PALETTE[i % CHART_PALETTE.length]),
-        borderColor: '#ffffff',
-        borderWidth: 2,
-        hoverOffset: 4,
-      },
-    ],
-  }
-})
-
-const doughnutChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  cutout: '60%',
-  plugins: {
-    legend: {
-      position: 'bottom' as const,
-      labels: {
-        color: '#303133',
-        font: { size: 12 },
-        padding: 12,
-        boxWidth: 10,
-        boxHeight: 10,
-        usePointStyle: true,
-        pointStyle: 'circle',
-      },
-    },
-    tooltip: {
-      backgroundColor: 'rgba(48, 49, 51, 0.92)',
-      padding: 10,
-      cornerRadius: 4,
-      callbacks: {
-        label: (ctx: { dataset: { data: number[] }; parsed: number; label: string }) => {
-          const total = ctx.dataset.data.reduce((s: number, v: number) => s + v, 0)
-          const pct = total > 0 ? Math.round((ctx.parsed / total) * 100) : 0
-          return ` ${ctx.label}：${ctx.parsed} 人（${pct}%）`
-        },
-      },
-    },
-  },
-}
 </script>
 
 <template>
   <div class="enrollment-stats-view">
-    <PageHeader title="統計圖表">
+    <PageHeader title="在籍統計">
       <template #actions>
         <el-select
           v-model="selectedTerm"
@@ -333,130 +246,115 @@ const doughnutChartOptions = {
             :value="`${opt.school_year}-${opt.semester}`"
           />
         </el-select>
-        <el-button :icon="RefreshRight" :loading="loading" @click="fetchStats">重新整理</el-button>
+        <el-button
+          data-testid="refresh-btn"
+          :icon="RefreshRight"
+          :loading="loading"
+          @click="refreshAll"
+        >
+          重新整理
+        </el-button>
       </template>
     </PageHeader>
 
-    <el-tabs v-model="activeTab" class="stats-tabs">
-      <el-tab-pane label="目前在籍" name="current">
-        <div v-if="stats" class="page-meta">
-          <span>{{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}</span>
-          <span v-if="stats.summary?.total != null" class="meta-sep">|</span>
-          <span v-if="stats.summary?.total != null">在籍 {{ stats.summary.total }} 人</span>
-        </div>
+    <div v-if="stats" class="page-meta">
+      <span>{{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}</span>
+      <span v-if="stats.summary?.total != null" class="meta-sep">|</span>
+      <span v-if="stats.summary?.total != null">在籍 {{ stats.summary.total }} 人</span>
+    </div>
 
-        <!-- Summary cards -->
-        <el-row :gutter="16" class="summary-cards">
-          <el-col :xs="12" :sm="6" v-for="card in summaryCards" :key="card.key">
-            <el-card class="summary-card" shadow="never">
-              <template v-if="loading && stats == null">
-                <el-skeleton :rows="2" animated />
-              </template>
-              <template v-else>
-                <div class="card-label">{{ card.label }}</div>
-                <div class="card-value">{{ card.value }}</div>
-                <div class="card-sub">{{ card.sub }}</div>
-              </template>
-            </el-card>
-          </el-col>
-        </el-row>
+    <!--
+      對帳橫幅：實際名冊（現值）與帳上累加（憑證）的比對，是本頁上下兩段的接點。
+      置頂，因為「這頁的數字可不可信」要先講。
+    -->
+    <el-alert
+      v-if="banner"
+      data-testid="reconcile-banner"
+      :title="banner.text"
+      :type="banner.level === 'ok' ? 'success' : banner.level === 'info' ? 'info' : 'warning'"
+      :closable="banner.level === 'ok'"
+      show-icon
+      class="reconcile-banner"
+    />
 
-        <!-- Statistics table -->
-        <el-card class="table-card" shadow="never">
-          <template #header>
-            <div class="card-header-row">
-              <span class="card-header-title">各班在籍人數表</span>
-              <span v-if="stats" class="card-header-meta">
-                {{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}
-              </span>
-            </div>
+    <!-- 現值：此刻各班多少人 -->
+    <el-row :gutter="16" class="summary-cards">
+      <el-col :xs="12" :sm="6" v-for="card in summaryCards" :key="card.key">
+        <el-card class="summary-card" shadow="never">
+          <template v-if="loading && stats == null">
+            <el-skeleton :rows="2" animated />
           </template>
-          <el-skeleton v-if="loading && !tableData.length" :rows="6" animated />
-          <el-table
-            v-else-if="tableData.length"
-            :data="tableData"
-            border
-            stripe
-            style="width: 100%"
-            :span-method="spanMethod"
-            :row-class-name="rowClassName"
-            class="enrollment-table"
-          >
-            <el-table-column label="年級" prop="grade_name" width="120" align="center" />
-            <el-table-column label="班級" prop="class_name" width="110" align="center" />
-            <el-table-column label="男生" prop="male" width="90" align="center" />
-            <el-table-column label="女生" prop="female" width="90" align="center" />
-            <el-table-column label="合計" prop="total" width="90" align="center">
-              <template #default="{ row }">
-                <span class="num-total">{{ row.total }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="男女比例" min-width="180">
-              <template #default="{ row }">
-                <div v-if="row.total > 0" class="ratio-bar">
-                  <div class="ratio-track">
-                    <div class="ratio-male" :style="{ width: ratioPct(row.male, row.total) }" />
-                    <div class="ratio-female" :style="{ width: ratioPct(row.female, row.total) }" />
-                  </div>
-                  <div class="ratio-text">
-                    {{ ratioPct(row.male, row.total) }} / {{ ratioPct(row.female, row.total) }}
-                  </div>
-                </div>
-                <span v-else class="ratio-empty">—</span>
-              </template>
-            </el-table-column>
-          </el-table>
-          <el-empty
-            v-else-if="!loading"
-            description="此學期尚無在籍資料"
-            :image-size="80"
-          />
+          <template v-else>
+            <div class="card-label">{{ card.label }}</div>
+            <div class="card-value">{{ card.value }}</div>
+            <div class="card-sub">{{ card.sub }}</div>
+          </template>
         </el-card>
+      </el-col>
+    </el-row>
 
-        <!-- Charts -->
-        <el-row :gutter="16" class="chart-row" v-if="stats?.by_grade?.length">
-          <el-col :xs="24" :md="14">
-            <el-card shadow="never" class="chart-card">
-              <template #header>
-                <div class="card-header-row">
-                  <span class="card-header-title">各班人數（男 / 女堆疊）</span>
-                  <span class="card-header-meta">共 {{ classCount }} 班</span>
-                </div>
-              </template>
-              <div class="chart-wrapper">
-                <component
-                  :is="BarChart"
-                  v-if="barChartData"
-                  :data="barChartData"
-                  :options="barChartOptions"
-                />
+    <el-card class="table-card" shadow="never">
+      <template #header>
+        <div class="card-header-row">
+          <span class="card-header-title">各班在籍人數表</span>
+          <span v-if="stats" class="card-header-meta">
+            {{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}
+          </span>
+        </div>
+      </template>
+      <el-skeleton v-if="loading && !tableData.length" :rows="6" animated />
+      <el-table
+        v-else-if="tableData.length"
+        :data="tableData"
+        border
+        stripe
+        style="width: 100%"
+        :span-method="spanMethod"
+        :row-class-name="rowClassName"
+        class="enrollment-table"
+      >
+        <el-table-column label="年級" prop="grade_name" width="120" align="center" />
+        <el-table-column label="班級" prop="class_name" width="110" align="center" />
+        <el-table-column label="男生" prop="male" width="90" align="center" />
+        <el-table-column label="女生" prop="female" width="90" align="center" />
+        <el-table-column label="合計" prop="total" width="90" align="center">
+          <template #default="{ row }">
+            <span class="num-total">{{ row.total }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="男女比例" min-width="180">
+          <template #default="{ row }">
+            <div v-if="row.total > 0" class="ratio-bar">
+              <div class="ratio-track">
+                <div class="ratio-male" :style="{ width: ratioPct(row.male, row.total) }" />
+                <div class="ratio-female" :style="{ width: ratioPct(row.female, row.total) }" />
               </div>
-            </el-card>
-          </el-col>
-          <el-col :xs="24" :md="10">
-            <el-card shadow="never" class="chart-card">
-              <template #header>
-                <div class="card-header-row">
-                  <span class="card-header-title">年級人數分布</span>
-                  <span class="card-header-meta">{{ stats?.by_grade?.length ?? 0 }} 個年級</span>
-                </div>
-              </template>
-              <div class="chart-wrapper">
-                <component
-                  :is="DoughnutChart"
-                  v-if="doughnutChartData"
-                  :data="doughnutChartData"
-                  :options="doughnutChartOptions"
-                />
+              <div class="ratio-text">
+                {{ ratioPct(row.male, row.total) }} / {{ ratioPct(row.female, row.total) }}
               </div>
-            </el-card>
-          </el-col>
-        </el-row>
-      </el-tab-pane>
-      <el-tab-pane label="異動帳" name="ledger" lazy>
-        <EnrollmentLedgerPanel />
-      </el-tab-pane>
-    </el-tabs>
+            </div>
+            <span v-else class="ratio-empty">—</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty
+        v-else-if="!loading"
+        description="此學期尚無在籍資料"
+        :image-size="80"
+      />
+    </el-card>
+
+    <!-- 帳：人數怎麼變成上面那樣（趨勢圖 + 逐筆明細） -->
+    <section class="ledger-section">
+      <h3 class="section-title">人數異動</h3>
+      <p class="section-hint">
+        逐筆自動記錄，不需人工登錄。預設看本學期，可在下方縮小日期範圍。
+      </p>
+      <EnrollmentLedgerPanel
+        v-model:date-range="dateRange"
+        :refresh-token="refreshToken"
+      />
+    </section>
   </div>
 </template>
 
@@ -506,9 +404,8 @@ const doughnutChartOptions = {
   color: var(--text-tertiary);
 }
 
-/* ===== Card (table & charts) ===== */
-.table-card,
-.chart-card {
+/* ===== Card ===== */
+.table-card {
   margin-top: var(--space-4, 16px);
 }
 
@@ -583,14 +480,26 @@ const doughnutChartOptions = {
   color: var(--text-primary);
 }
 
-/* ===== Charts ===== */
-.chart-row {
-  margin-top: var(--space-4, 16px);
+/* ===== 人數異動（下半段） ===== */
+.ledger-section {
+  margin-top: var(--space-6, 24px);
 }
 
-.chart-wrapper {
-  height: 340px;
-  position: relative;
-  padding: 8px 4px 0;
+.section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.section-hint {
+  margin: 4px 0 var(--space-4, 16px);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* 對帳橫幅與其下的卡片之間留一格，避免警示色貼著摘要卡。 */
+.reconcile-banner {
+  margin-bottom: var(--space-4, 16px);
 }
 </style>
