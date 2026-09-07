@@ -451,9 +451,10 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('CreditCard') },
         },
         {
-          // 統計圖表：資料同源於在籍統計 API，權限借道學生模組 STUDENTS_READ（owned 於 studentsMain）。
+          // 在籍統計：現值統計與異動帳同一頁（2026-09-07 整合），資料同源於在籍統計 API，
+          // 權限借道學生模組 STUDENTS_READ（owned 於 studentsMain）。
           // 依業主指示置於本群組最下方（2026-07-31）。
-          key: 'enrollmentStats', title: '統計圖表', routePath: '/enrollment-stats',
+          key: 'enrollmentStats', title: '在籍統計', routePath: '/enrollment-stats',
           views: [], sharedViews: ['STUDENTS_READ'],
           menu: { icon: icon('PieChart') },
         },

@@ -105,8 +105,11 @@ vi.mock('@/composables/useChartJs', () => ({
   LineChart: { name: 'LineChart', template: '<div class="stub-line-chart" />' },
 }))
 
-const mountPanel = () =>
-  mount(EnrollmentLedgerPanel, { global: { plugins: [ElementPlus] } })
+const mountPanel = (dateRange: [string, string] = ['2026-08-01', '2026-09-07']) =>
+  mount(EnrollmentLedgerPanel, {
+    props: { dateRange },
+    global: { plugins: [ElementPlus] },
+  })
 
 describe('EnrollmentLedgerPanel', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -118,13 +121,66 @@ describe('EnrollmentLedgerPanel', () => {
     expect(wrapper.text()).not.toContain('快照')
   })
 
-  it('對帳不符時顯示警示橫幅，並同時說出兩個數字', async () => {
+  it('對帳橫幅不在本面板——已上移到頁面層，與現值統計共用一條', async () => {
     const wrapper = mountPanel()
     await flushPromises()
-    const banner = wrapper.find('[data-testid="reconcile-banner"]')
-    expect(banner.exists()).toBe(true)
-    expect(banner.text()).toContain('197')
-    expect(banner.text()).toContain('198')
+    expect(wrapper.find('[data-testid="reconcile-banner"]').exists()).toBe(false)
+  })
+
+  it('查詢區間來自父層傳入的 prop，不自行決定預設值', async () => {
+    const api = await import('@/api/studentEnrollment')
+    mountPanel(['2027-02-01', '2027-03-15'])
+    await flushPromises()
+    expect(api.getEnrollmentLedger).toHaveBeenCalledWith(
+      expect.objectContaining({ date_from: '2027-02-01', date_to: '2027-03-15' }),
+    )
+    expect(api.getLedgerTrend).toHaveBeenCalledWith(
+      expect.objectContaining({ date_from: '2027-02-01', date_to: '2027-03-15' }),
+    )
+  })
+
+  it('父層換學期（prop 變更）時重抓，不需使用者再按一次', async () => {
+    const api = await import('@/api/studentEnrollment')
+    const wrapper = mountPanel(['2026-08-01', '2026-09-07'])
+    await flushPromises()
+    vi.mocked(api.getEnrollmentLedger).mockClear()
+    await wrapper.setProps({ dateRange: ['2027-02-01', '2027-07-31'] })
+    await flushPromises()
+    expect(api.getEnrollmentLedger).toHaveBeenCalledWith(
+      expect.objectContaining({ date_from: '2027-02-01', date_to: '2027-07-31' }),
+    )
+  })
+
+  it('開帳列不是學生事件，學生欄不可寫成「已刪除」', async () => {
+    // 後端 ensure_opening_row 不帶 student，student_id/student_name 皆為 NULL。
+    // 每個租戶的第一列一定是開帳列，寫成「已刪除」會讓人以為有學生資料掉了。
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentLedger).mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            ...ledgerRow,
+            id: 3,
+            event_kind: '開帳',
+            student_id: null,
+            student_name: null,
+            student_display_id: null,
+            to_classroom_id: null,
+            to_class_name: null,
+            school_delta: 0,
+            reason: null,
+            actor_name: null,
+            source: 'opening',
+            source_path: 'services.enrollment_ledger.ensure_opening_row',
+          },
+        ],
+        total: 1,
+        opened: true,
+      },
+    } as never)
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('已刪除')
   })
 
   it('逐筆列出異動，含操作者與原因', async () => {
@@ -161,31 +217,12 @@ describe('EnrollmentLedgerPanel', () => {
     expect(wrapper.find('.stub-line-chart').exists()).toBe(true)
   })
 
-  it('載入時同時取帳、對帳與趨勢三份資料', async () => {
+  it('載入時取帳與趨勢；對帳改由頁面層取，本面板不重複打', async () => {
     const api = await import('@/api/studentEnrollment')
     mountPanel()
     await flushPromises()
     expect(api.getEnrollmentLedger).toHaveBeenCalled()
-    expect(api.getLedgerReconcile).toHaveBeenCalled()
     expect(api.getLedgerTrend).toHaveBeenCalled()
-  })
-
-  it('尚未起帳時橫幅走說明語氣，不報警', async () => {
-    const api = await import('@/api/studentEnrollment')
-    vi.mocked(api.getLedgerReconcile).mockResolvedValueOnce({
-      data: {
-        opened: false,
-        status: 'not_opened',
-        ledger_total: null,
-        roster_total: 196,
-        difference: null,
-        unknown_rows: [],
-      },
-    } as never)
-    const wrapper = mountPanel()
-    await flushPromises()
-    const banner = wrapper.find('[data-testid="reconcile-banner"]')
-    expect(banner.text()).toContain('尚未起帳')
-    expect(banner.text()).toContain('196')
+    expect(api.getLedgerReconcile).not.toHaveBeenCalled()
   })
 })

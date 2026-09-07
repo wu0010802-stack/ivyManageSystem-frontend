@@ -5,17 +5,20 @@
  * 取代 SPEC-017 的快照面板：主體是逐筆流水，不是定期拍照，
  * 因此**沒有任何「拍照」按鈕**——帳只由後端業務路徑自動產生。
  * 版面比照 src/views/governance/AuditLogView.vue（篩選列 → 表格 → expand）。
+ *
+ * 2026-09-07 起本面板是「在籍統計」頁的下半段，不再是獨立頁籤：
+ * - **查詢區間由父層持有**（`v-model:date-range`），與頁首的學年學期同一個控制項；
+ *   面板內的日期選擇器只用來在該學期內進一步縮小範圍。
+ * - **對帳橫幅已上移到頁面層**，與現值統計共用一條，避免同一個總人數報兩次。
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   getEnrollmentLedger,
   getHeadcountOn,
-  getLedgerReconcile,
   getLedgerTrend,
 } from '@/api/studentEnrollment'
 import { apiError } from '@/utils/error'
-import { dateToLocalISO, todayISO } from '@/utils/format'
 import { LineChart } from '@/composables/useChartJs'
 import {
   EVENT_KIND_TAG_TYPE,
@@ -24,20 +27,20 @@ import {
   changeSummary,
   decorateDatasets,
   deltaClass,
-  describeReconcile,
   formatDelta,
   type LedgerRow,
-  type ReconcileResult,
   type TrendPoint,
 } from '@/utils/enrollmentLedger'
 
-// ⚠ 日期一律走 dateToLocalISO / todayISO——`toISOString()` 是 UTC，
-// 台北（UTC+8）在早上 8 點前會取到前一天，帳本區間會少一天。
-// 專案 lint 規則 no-restricted-syntax 擋這個。
-const now = new Date()
-const defaultFrom = new Date(now.getFullYear(), now.getMonth() - 2, 1)
+/**
+ * 查詢區間。父層切學年學期時整段換掉；面板內的日期選擇器改值也會回寫父層，
+ * 讓頁面層的對帳橫幅跟著同一個結束日走。
+ */
+const dateRange = defineModel<[string, string]>('dateRange', { required: true })
 
-const dateRange = ref<[string, string]>([dateToLocalISO(defaultFrom), todayISO()])
+/** 父層「重新整理」的訊號。值變了就重抓，不在意值本身。 */
+const props = defineProps<{ refreshToken?: number }>()
+
 const classroomId = ref<number | undefined>(undefined)
 const eventKind = ref<string | undefined>(undefined)
 const source = ref<string | undefined>(undefined)
@@ -48,7 +51,6 @@ const loading = ref(false)
 const rows = ref<LedgerRow[]>([])
 const total = ref(0)
 const opened = ref(true)
-const reconcileResult = ref<ReconcileResult | null>(null)
 const trendPoints = ref<TrendPoint[]>([])
 const overlayClassIds = ref<number[]>([])
 const classOptions = ref<{ id: number; name: string }[]>([])
@@ -62,10 +64,6 @@ const sourceOptions = [
 
 const classNameMap = computed(() =>
   Object.fromEntries(classOptions.value.map((c) => [c.id, c.name])),
-)
-
-const banner = computed(() =>
-  reconcileResult.value ? describeReconcile(reconcileResult.value) : null,
 )
 
 const chartData = computed(() => {
@@ -92,11 +90,6 @@ const fetchLedger = async () => {
   opened.value = res.data.opened
 }
 
-const fetchReconcile = async () => {
-  const res = await getLedgerReconcile({ date: dateRange.value[1] })
-  reconcileResult.value = res.data
-}
-
 const fetchTrend = async () => {
   const res = await getLedgerTrend({
     date_from: dateRange.value[0],
@@ -115,12 +108,7 @@ const fetchClassOptions = async () => {
 const reload = async () => {
   loading.value = true
   try {
-    await Promise.all([
-      fetchLedger(),
-      fetchReconcile(),
-      fetchTrend(),
-      fetchClassOptions(),
-    ])
+    await Promise.all([fetchLedger(), fetchTrend(), fetchClassOptions()])
   } catch (e: unknown) {
     ElMessage.error(apiError(e, '載入在籍異動帳失敗'))
   } finally {
@@ -134,8 +122,25 @@ watch([dateRange, classroomId, eventKind, source], () => {
   void reload()
 })
 watch(page, () => void fetchLedger())
+// 父層按下「重新整理」。deep-watch 不必要，值本身無意義、變了就重抓。
+watch(
+  () => props.refreshToken,
+  () => void reload(),
+)
 
 const tagType = (kind: string) => EVENT_KIND_TAG_TYPE[kind] ?? 'info'
+/**
+ * 開帳列是帳本基準，不是學生事件——後端 `ensure_opening_row` 不帶 student，
+ * 兩個學生欄天生為 NULL。只有「本來有學生、後來被刪掉」的列才算孤兒列。
+ * 每個租戶的第一列都是開帳列，標成「已刪除」會讓人以為資料掉了。
+ */
+const isOpeningRow = (row: LedgerRow) => row.source === 'opening'
+const isOrphanStudent = (row: LedgerRow) =>
+  row.student_id === null && !isOpeningRow(row)
+const studentLabel = (row: LedgerRow) => {
+  if (isOpeningRow(row)) return '—'
+  return row.student_name ?? '（已刪除）'
+}
 const isSentinel = (row: LedgerRow) => row.source === 'db_trigger'
 /** 來源不明列整列標記，讓它在一片正常紀錄中一眼可辨。 */
 const rowClassName = ({ row }: { row: LedgerRow }) =>
@@ -144,17 +149,7 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
 
 <template>
   <div v-loading="loading" class="enrollment-ledger-panel">
-    <!-- 對帳橫幅：憑證值與現值的比對結果 -->
-    <el-alert
-      v-if="banner"
-      data-testid="reconcile-banner"
-      :title="banner.text"
-      :type="banner.level === 'ok' ? 'success' : banner.level === 'info' ? 'info' : 'warning'"
-      :closable="banner.level === 'ok'"
-      show-icon
-      class="reconcile-banner"
-    />
-
+    <!-- 對帳橫幅在頁面層（EnrollmentStatsView），本面板只管趨勢與逐筆明細。 -->
     <el-card shadow="never" class="chart-card">
       <template #header>
         <span class="card-header-title">在籍人數趨勢</span>
@@ -227,7 +222,7 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
         <template #default="{ row }">
           <div class="expand-detail" :data-testid="`ledger-detail-${row.id}`">
             <p v-if="row.notes">備註：{{ row.notes }}</p>
-            <p v-if="row.student_id === null" class="source-path">
+            <p v-if="isOrphanStudent(row)" class="source-path">
               學生資料已刪除，本列靠冗餘欄保留姓名與學號
             </p>
             <p class="source-path">寫入來源：{{ row.source_path ?? '—' }}</p>
@@ -244,7 +239,7 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
 
       <el-table-column label="學生" width="140">
         <template #default="{ row }">
-          <span>{{ row.student_name ?? '（已刪除）' }}</span>
+          <span>{{ studentLabel(row) }}</span>
           <span v-if="row.student_display_id" class="student-no">
             {{ row.student_display_id }}
           </span>
@@ -324,9 +319,6 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-.reconcile-banner {
-  margin-bottom: 4px;
 }
 .chart-card :deep(.el-card__header) {
   display: flex;

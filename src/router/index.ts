@@ -125,7 +125,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/students',
             name: 'students',
             component: () => import('../views/StudentWorkbenchView.vue'),
-            // 舊 ?tab=enrollment 深連結：在籍統計已移至班級學生管理／統計圖表，導回班級學生管理即可
+            // 舊 ?tab=enrollment 深連結：在籍統計已移至班級學生管理／在籍統計，導回班級學生管理即可
             beforeEnter: (to) => to.query.tab === 'enrollment'
                 ? ({ path: '/classrooms', replace: true })
                 : true,
@@ -172,7 +172,7 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '今日用藥', parent: '/students' }
         },
         {
-            // 在籍記錄表已折入班級學生管理頁的「統計表」modal；統計圖表獨立為 /enrollment-stats。
+            // 在籍記錄表已折入班級學生管理頁的「統計表」modal；在籍統計獨立為 /enrollment-stats。
             // 舊連結一律導回班級學生管理（不再有 tab query）。
             path: '/student-enrollment',
             redirect: '/classrooms',
@@ -181,7 +181,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/enrollment-stats',
             name: 'enrollment-stats',
             component: () => import('../views/students/EnrollmentStatsView.vue'),
-            meta: { title: '統計圖表' }
+            meta: { title: '在籍統計' }
         },
         {
             path: '/students/admissions',
@@ -216,7 +216,7 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/classrooms',
             name: 'classrooms',
-            // 外層 tabs 殼已移除：在籍記錄表折入本頁「統計表」modal、統計圖表獨立為 /enrollment-stats。
+            // 外層 tabs 殼已移除：在籍記錄表折入本頁「統計表」modal、在籍統計獨立為 /enrollment-stats。
             component: () => import('../views/ClassroomView.vue'),
             meta: { title: PAGE_TERMS.classrooms }
         },
