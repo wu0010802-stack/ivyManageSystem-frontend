@@ -59,3 +59,11 @@ describe('recruitmentIvykids api', () => {
     })
   })
 })
+
+
+it('轉訪視使用既有 API wrapper，保留招生記錄 response 的 data 外層', async () => {
+  const response = { data: { id: 9, student_name: '測試學生' } }
+  mockPost.mockResolvedValueOnce(response)
+  expect(await mod.convertIvykidsRecordToVisit(7)).toBe(response)
+  expect(mockPost).toHaveBeenCalledWith('/recruitment/ivykids/records/7/to-visit')
+})

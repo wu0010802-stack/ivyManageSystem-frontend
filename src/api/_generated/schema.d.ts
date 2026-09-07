@@ -6870,8 +6870,8 @@ export interface paths {
          * Run Scheduler Now
          * @description 手動立即跑一次逾期學費催繳排程（idempotent 重跑安全）。
          *
-         *     直接呼叫與 asyncio scheduler 相同的 `tick_fee_due_reminders`——內部已含
-         *     `for_each_tenant` 逐租戶迭代、per-tenant advisory lock（同租戶同日內
+         *     只執行目前 Host 租戶，沿用 scheduler 的單租戶執行器與
+         *     per-tenant advisory lock（同租戶同日內
          *     並發觸發會自動略過）、以及 `NotificationLog` 去重窗（repeat_days 內
          *     不重推同一學生）。本端點僅加權限守衛，不重複實作鎖定 / 去重邏輯。
          */
@@ -8080,7 +8080,7 @@ export interface paths {
         put?: never;
         /**
          * Run Scheduler Now
-         * @description 手動立即跑一次才藝 POS 對帳（bypass 每日 02:00 時刻門檻）。
+         * @description 手動立即跑一次目前 Host 租戶的才藝 POS 對帳（bypass 每日 02:00 時刻門檻）。
          *
          *     對帳本身唯讀比對（僅寫入 `finance_reconciliation` watermark 游標）；發現
          *     不一致才推 LINE 警示給老闆。per-tenant advisory lock 仍會擋同租戶同日內
@@ -29890,6 +29890,19 @@ export interface components {
             /** Posting Date */
             posting_date?: string | null;
         };
+        /** FeeDueRunOut */
+        FeeDueRunOut: {
+            /** Candidates */
+            candidates: number;
+            /** Errors */
+            errors: number;
+            /** Notified */
+            notified: number;
+            /** Skipped Dedup */
+            skipped_dedup: number;
+            /** Skipped Zero */
+            skipped_zero: number;
+        };
         /** FeeReceiptListOut */
         FeeReceiptListOut: {
             /** Items */
@@ -30237,6 +30250,17 @@ export interface components {
              */
             result: "reconciled" | "exception";
         };
+        /** FinanceReconciliationRunOut */
+        FinanceReconciliationRunOut: {
+            /** Failed Tenant Ids */
+            failed_tenant_ids: number[];
+            /** Tenant Results */
+            tenant_results: {
+                [key: string]: components["schemas"]["FinanceTenantRunOut"];
+            };
+            /** Total Mismatch Count */
+            total_mismatch_count: number;
+        };
         /** FinanceSettleRequest */
         FinanceSettleRequest: {
             /**
@@ -30248,6 +30272,19 @@ export interface components {
             payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
             /** Transaction Ref */
             transaction_ref?: string | null;
+        };
+        /** FinanceTenantRunOut */
+        FinanceTenantRunOut: {
+            /** Date */
+            date: string;
+            /** Mismatch Count */
+            mismatch_count?: number | null;
+            /** Notification Pushed */
+            notification_pushed?: boolean | null;
+            /** Skipped */
+            skipped?: boolean | null;
+            /** Total Drift */
+            total_drift?: number | null;
         };
         /**
          * FinanceTransitionOut
@@ -30653,6 +30690,49 @@ export interface components {
             /** Total Amount */
             total_amount: string;
         };
+        /** GrowthBookBatchItemOut */
+        GrowthBookBatchItemOut: {
+            /** Line Sent At */
+            line_sent_at: string | null;
+            material_summary: components["schemas"]["GrowthBookMaterialSummaryOut"];
+            /** Report Id */
+            report_id: number | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
+        /** GrowthBookBatchStatusOut */
+        GrowthBookBatchStatusOut: {
+            /** Items */
+            items: components["schemas"]["GrowthBookBatchItemOut"][];
+            /** Period Label */
+            period_label: string;
+        };
+        /** GrowthBookCandidatesOut */
+        GrowthBookCandidatesOut: {
+            /** Collage Pool */
+            collage_pool: components["schemas"]["GrowthBookCollageOut"][];
+            /** Measurement Count */
+            measurement_count: number;
+            /** Milestones */
+            milestones: components["schemas"]["GrowthBookMilestoneOut"][];
+            /** Observations */
+            observations: components["schemas"]["GrowthBookObservationOut"][];
+            /** Work Samples */
+            work_samples: components["schemas"]["GrowthBookWorkSampleOut"][];
+        };
+        /** GrowthBookCollageOut */
+        GrowthBookCollageOut: {
+            /** Date */
+            date: string;
+            /** Id */
+            id: number;
+            /** Thumb Url */
+            thumb_url: string | null;
+        };
         /** GrowthBookCreatePayload */
         GrowthBookCreatePayload: {
             /** Academic Year */
@@ -30660,6 +30740,12 @@ export interface components {
             manifest?: components["schemas"]["GrowthBookManifest"] | null;
             /** Teacher Narrative */
             teacher_narrative?: string | null;
+        };
+        /** GrowthBookDraftOut */
+        GrowthBookDraftOut: {
+            candidates: components["schemas"]["GrowthBookCandidatesOut"];
+            manifest: components["schemas"]["GrowthBookManifest"];
+            period: components["schemas"]["GrowthBookPeriodOut"];
         };
         /** GrowthBookDraftPayload */
         GrowthBookDraftPayload: {
@@ -30691,6 +30777,74 @@ export interface components {
             version: number;
             /** Work Sample Ids */
             work_sample_ids?: number[];
+        };
+        /** GrowthBookMaterialSummaryOut */
+        GrowthBookMaterialSummaryOut: {
+            /** Observations */
+            observations: number;
+            /** Photos */
+            photos: number;
+            /** Work Samples */
+            work_samples: number;
+        };
+        /** GrowthBookMilestoneOut */
+        GrowthBookMilestoneOut: {
+            /** Date */
+            date: string;
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+        };
+        /** GrowthBookObservationOut */
+        GrowthBookObservationOut: {
+            /** Attachment Ids */
+            attachment_ids: number[];
+            /** Attachment Thumbs */
+            attachment_thumbs: components["schemas"]["GrowthBookThumbOut"][];
+            /** Domain */
+            domain: string | null;
+            /** Id */
+            id: number;
+            /** Is Highlight */
+            is_highlight: boolean;
+            /** Narrative */
+            narrative: string | null;
+            /** Observation Date */
+            observation_date: string;
+            /** Rating */
+            rating: number | null;
+        };
+        /** GrowthBookPeriodOut */
+        GrowthBookPeriodOut: {
+            /** End */
+            end: string;
+            /** Label */
+            label: string;
+            /** Start */
+            start: string;
+        };
+        /** GrowthBookThumbOut */
+        GrowthBookThumbOut: {
+            /** Id */
+            id: number;
+            /** Thumb Url */
+            thumb_url: string | null;
+        };
+        /** GrowthBookWorkSampleOut */
+        GrowthBookWorkSampleOut: {
+            /** Attachment Ids */
+            attachment_ids: number[];
+            /** Attachment Thumbs */
+            attachment_thumbs: components["schemas"]["GrowthBookThumbOut"][];
+            /** Domain */
+            domain: string | null;
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Work Date */
+            work_date: string;
         };
         /** GrowthHourCreate */
         GrowthHourCreate: {
@@ -34956,6 +35110,66 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** ParentSignRequestDetailOut */
+        ParentSignRequestDetailOut: {
+            /** Content Hash */
+            content_hash: string;
+            /** Content Md */
+            content_md: string;
+            /** Doc Type */
+            doc_type: string;
+            /** Has Pdf */
+            has_pdf: boolean;
+            /** Id */
+            id: number;
+            /** Sent At */
+            sent_at: string;
+            /** Signed At */
+            signed_at: string | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+            /** Title */
+            title: string;
+        };
+        /** ParentSignRequestListOut */
+        ParentSignRequestListOut: {
+            /** Pending */
+            pending: components["schemas"]["ParentSignRequestOut"][];
+            /** Signed */
+            signed: components["schemas"]["ParentSignRequestOut"][];
+        };
+        /** ParentSignRequestOut */
+        ParentSignRequestOut: {
+            /** Doc Type */
+            doc_type: string;
+            /** Has Pdf */
+            has_pdf: boolean;
+            /** Id */
+            id: number;
+            /** Sent At */
+            sent_at: string;
+            /** Signed At */
+            signed_at: string | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+            /** Title */
+            title: string;
+        };
+        /** ParentSignResultOut */
+        ParentSignResultOut: {
+            /** Signed At */
+            signed_at: string;
+            /** Status */
+            status: string;
+        };
         /** ParentSurveyCardOut */
         ParentSurveyCardOut: {
             /** Event Date */
@@ -36917,6 +37131,45 @@ export interface components {
             /** Grants */
             grants: components["schemas"]["PortalCompLeaveGrantItemOut"][];
         };
+        /** PortalDismissalCallOut */
+        PortalDismissalCallOut: {
+            /** Acknowledged At */
+            acknowledged_at: string | null;
+            /** Arrived At */
+            arrived_at: string | null;
+            /** Cancelled At */
+            cancelled_at: string | null;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Completed At */
+            completed_at: string | null;
+            /** Expected Arrival At */
+            expected_arrival_at: string | null;
+            /** Id */
+            id: number;
+            /** Note */
+            note: string | null;
+            /** Person Name */
+            person_name: string | null;
+            /** Person Relation */
+            person_relation: string | null;
+            /** Pickup Authorization Id */
+            pickup_authorization_id: number | null;
+            /** Pickup Code */
+            pickup_code: string | null;
+            /** Request Source */
+            request_source: string;
+            /** Requested At */
+            requested_at: string | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
         /** PortalLeaveRequestOut */
         PortalLeaveRequestOut: {
             /** Leave Hours */
@@ -38089,6 +38342,17 @@ export interface components {
             refund_count: number;
             /** Refund Total */
             refund_total: number;
+        };
+        /** PositionMappingOut */
+        PositionMappingOut: {
+            /** Position Salary Key */
+            position_salary_key: {
+                [key: string]: string;
+            };
+            /** Title To Grade */
+            title_to_grade: {
+                [key: string]: string;
+            };
         };
         /**
          * PositionSalaryOut
@@ -39658,6 +39922,13 @@ export interface components {
             question_type: string;
             /** Sort Order */
             sort_order: number;
+        };
+        /** QuickActionSlotsOut */
+        QuickActionSlotsOut: {
+            /** Is Default */
+            is_default: boolean;
+            /** Slots */
+            slots: string[];
         };
         /** QuickActionSlotsUpdate */
         QuickActionSlotsUpdate: {
@@ -44617,6 +44888,11 @@ export interface components {
             /** Succeeded */
             succeeded: number;
         };
+        /** SignRequestNotificationOut */
+        SignRequestNotificationOut: {
+            /** Notified */
+            notified: number;
+        };
         /** SignRequestOut */
         SignRequestOut: {
             /** Batch Id */
@@ -47428,6 +47704,41 @@ export interface components {
              * Format: date
              */
             work_date: string;
+        };
+        /** WorkSampleDeletedOut */
+        WorkSampleDeletedOut: {
+            /** Ok */
+            ok: boolean;
+        };
+        /** WorkSampleListOut */
+        WorkSampleListOut: {
+            /** Items */
+            items: components["schemas"]["WorkSampleOut"][];
+            /** Total */
+            total: number;
+        };
+        /** WorkSampleOut */
+        WorkSampleOut: {
+            /** Attachments */
+            attachments: components["schemas"]["StudentAttachmentOut"][];
+            /** Created At */
+            created_at: string | null;
+            /** Created By */
+            created_by: number | null;
+            /** Description */
+            description: string | null;
+            /** Domain */
+            domain: string | null;
+            /** Id */
+            id: number;
+            /** Student Id */
+            student_id: number;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string | null;
+            /** Work Date */
+            work_date: string | null;
         };
         /** WorkSampleUpdate */
         WorkSampleUpdate: {
@@ -56747,7 +57058,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PositionMappingOut"];
                 };
             };
         };
@@ -59144,7 +59455,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeDueRunOut"];
                 };
             };
         };
@@ -61484,7 +61795,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FinanceReconciliationRunOut"];
                 };
             };
         };
@@ -62638,9 +62949,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GrowthBookBatchStatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -67574,7 +67883,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentSignRequestListOut"];
                 };
             };
         };
@@ -67596,7 +67905,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentSignRequestDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -67662,7 +67971,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentSignResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -68667,7 +68976,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["QuickActionSlotsOut"];
                 };
             };
         };
@@ -68691,7 +69000,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["QuickActionSlotsOut"];
                 };
             };
             /** @description Validation Error */
@@ -71673,7 +71982,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalDismissalCallOut"];
                 };
             };
             /** @description Validation Error */
@@ -74917,7 +75226,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentRecordOut"];
                 };
             };
             /** @description Validation Error */
@@ -77773,7 +78082,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SignRequestNotificationOut"];
                 };
             };
             /** @description Validation Error */
@@ -79194,9 +79503,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GrowthReportOut"];
                 };
             };
             /** @description Validation Error */
@@ -79231,9 +79538,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GrowthBookDraftOut"];
                 };
             };
             /** @description Validation Error */
@@ -80318,9 +80623,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WorkSampleListOut"];
                 };
             };
             /** @description Validation Error */
@@ -80355,9 +80658,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WorkSampleOut"];
                 };
             };
             /** @description Validation Error */
@@ -80389,9 +80690,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WorkSampleDeletedOut"];
                 };
             };
             /** @description Validation Error */
@@ -80427,9 +80726,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WorkSampleOut"];
                 };
             };
             /** @description Validation Error */

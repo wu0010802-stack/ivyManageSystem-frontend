@@ -1,4 +1,5 @@
 import api from './index'
+import type { AxiosResp } from './_generated/typed'
 
 export const getRecruitmentIvykidsBackendStatus = () => api.get('/recruitment/ivykids/status')
 export const syncRecruitmentIvykidsBackend = (payload: unknown) => api.post('/recruitment/ivykids/sync', payload)
@@ -10,5 +11,5 @@ export const getRecruitmentIvykidsRecords = (params: unknown) => api.get('/recru
  * 把一筆官網報名轉成招生訪視（2026-09-06）。官網報名原本只被統計消費，
  * 沒有進入漏斗的路徑，要跟進得自己在訪視明細重打一次。
  */
-export const convertIvykidsRecordToVisit = (recordId: number) =>
+export const convertIvykidsRecordToVisit = (recordId: number): AxiosResp<'/recruitment/ivykids/records/{record_id}/to-visit', 'post'> =>
   api.post(`/recruitment/ivykids/records/${recordId}/to-visit`)
