@@ -5,12 +5,19 @@
     width="640px"
     append-to-body
     data-test="cash-dialog"
-    @update:model-value="(v: boolean) => emit('update:modelValue', v)"
+    :close-on-click-modal="!submitting"
+    :close-on-press-escape="!submitting"
+    :show-close="!submitting"
+    @update:model-value="closeDialog"
   >
     <p class="intro">
       一次收多張單開一張現金收據，自動進當日交接批；轉帳請到入帳媒合由網銀資料銷帳。
     </p>
     <el-skeleton v-if="loading" :rows="3" animated />
+    <div v-else-if="loadError" data-test="cash-load-error">
+      <el-alert :title="loadError" type="error" :closable="false" />
+      <el-button @click="load">重新載入</el-button>
+    </div>
     <template v-else>
       <p v-if="rows.length === 0" class="empty" data-test="cash-empty">此學生目前沒有未繳的費用單</p>
       <template v-else>
@@ -35,6 +42,7 @@
                 <td class="col-check">
                   <el-checkbox
                     v-model="row.checked"
+                    :disabled="submitting"
                     data-test="cash-row-check"
                     :aria-label="`收 ${row.name}`"
                   />
@@ -49,7 +57,7 @@
                     :min="1"
                     :max="row.remaining"
                     :step="100"
-                    :disabled="!row.checked"
+                    :disabled="!row.checked || submitting"
                     size="small"
                     controls-position="right"
                     data-test="cash-row-amount"
@@ -66,6 +74,7 @@
           收款日
           <el-date-picker
             v-model="receivedDate"
+            :disabled="submitting"
             type="date"
             value-format="YYYY-MM-DD"
             size="small"
@@ -76,6 +85,7 @@
         </label>
         <el-input
           v-model="payerNote"
+          :disabled="submitting"
           size="small"
           maxlength="200"
           placeholder="備註（選填）"
@@ -87,12 +97,12 @@
       </div>
     </template>
     <template #footer>
-      <el-button @click="emit('update:modelValue', false)">取消</el-button>
+      <el-button :disabled="submitting" @click="closeDialog(false)">取消</el-button>
       <el-button
         type="primary"
         data-test="cash-submit"
         :loading="submitting"
-        :disabled="total <= 0 || submitting"
+        :disabled="total <= 0 || submitting || loading || !!loadError"
         @click="submit"
       >
         確認收款
@@ -110,7 +120,7 @@
  * （1 ≤ 金額 ≤ 剩餘），合計即收據金額，走既有 POST /fees/cash-receipts 一筆多單，
  * 由後端掛當日交接批並受關帳／交接鎖（409 原樣顯示）。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createCashReceipt, getFeeRecords } from '@/api/fees'
 import { friendlyError } from '@/utils/errorMessages'
@@ -158,6 +168,11 @@ const emit = defineEmits<{
 }>()
 
 const loading = ref(false)
+const loadError = ref('')
+let loadSequence = 0
+let loadedSequence = 0
+// 回應中斷時後端可能已入帳；相同內容重試必須沿用同一把冪等 key。
+let pendingAttempt: { fingerprint: string; key: string } | null = null
 const submitting = ref(false)
 const rows = ref<CashRow[]>([])
 const receivedDate = ref(todayISO())
@@ -187,26 +202,36 @@ function monthKey(r: FeeRecordLite): string | null {
   return anchor ? anchor.slice(0, 7) : null
 }
 
-function classify(r: FeeRecordLite): CashRow['group'] {
+function classify(r: FeeRecordLite, month: string): CashRow['group'] {
   if (r.source === 'cash_item') return 'cash_item'
-  const inMonth = !props.month || monthKey(r) === props.month
+  const inMonth = !month || monthKey(r) === month
   return r.source === 'bill_slip' && inMonth ? 'bank' : 'other'
 }
 
 async function load() {
-  if (!props.studentId) return
+  const sequence = ++loadSequence
+  loadedSequence = 0
+  rows.value = []
+  loadError.value = ''
+  const studentId = props.studentId
+  const month = props.month
+  const preselect = new Set(props.preselectRecordIds)
+  if (!props.modelValue || !studentId) {
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
     const [unpaid, partial] = await Promise.all([
-      getFeeRecords({ student_id: props.studentId, status: 'unpaid', page: 1, page_size: 100 }),
-      getFeeRecords({ student_id: props.studentId, status: 'partial', page: 1, page_size: 100 }),
+      getFeeRecords({ student_id: studentId, status: 'unpaid', page: 1, page_size: 100 }),
+      getFeeRecords({ student_id: studentId, status: 'partial', page: 1, page_size: 100 }),
     ])
+    if (sequence !== loadSequence) return
     const items = [...(unpaid.items ?? []), ...(partial.items ?? [])] as unknown as FeeRecordLite[]
-    const preselect = new Set(props.preselectRecordIds)
     rows.value = items
       .map((r) => {
         const remaining = Math.max(r.amount_due - (r.amount_paid ?? 0), 0)
-        const group = classify(r)
+        const group = classify(r, month)
         const defaultChecked = preselect.size ? preselect.has(r.id) : group !== 'other'
         return {
           id: r.id,
@@ -218,54 +243,80 @@ async function load() {
         }
       })
       .filter((r) => r.remaining > 0)
+    loadedSequence = sequence
   } catch (e) {
-    ElMessage.error(friendlyError('載入未繳費用單失敗', e))
+    if (sequence !== loadSequence) return
+    loadError.value = friendlyError('載入未繳費用單失敗', e)
+    ElMessage.error(loadError.value)
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 
 async function submit() {
+  if (!props.modelValue || !props.studentId || loading.value || loadError.value || submitting.value || loadedSequence !== loadSequence) return
+  const contextSequence = loadSequence
   const picked = rows.value.filter((r) => r.checked && r.amount > 0)
   if (!picked.length) return
   if (picked.some((r) => r.amount > r.remaining)) {
     ElMessage.warning('收款金額不得超過剩餘應繳')
     return
   }
+  // 送出後表單或父層切換不得改變本次收款內容及成功訊息金額。
+  const parts = picked.map((r) => ({ part_type: 'fee_record' as const, fee_record_id: r.id, amount: r.amount }))
+    .sort((a, b) => a.fee_record_id - b.fee_record_id)
+  const payload = {
+    amount: parts.reduce((sum, part) => sum + part.amount, 0),
+    received_date: receivedDate.value,
+    parts,
+    payer_note: payerNote.value.trim() || undefined,
+  }
+  const fingerprint = JSON.stringify({ studentId: props.studentId, ...payload })
+  if (pendingAttempt?.fingerprint !== fingerprint) {
+    pendingAttempt = { fingerprint, key: `cashdlg-${Date.now()}-${Math.floor(Math.random() * 100000)}` }
+  }
+  const key = pendingAttempt.key
   submitting.value = true
   try {
-    await createCashReceipt({
-      amount: total.value,
-      received_date: receivedDate.value,
-      parts: picked.map((r) => ({
-        part_type: 'fee_record' as const,
-        fee_record_id: r.id,
-        amount: r.amount,
-      })),
-      payer_note: payerNote.value.trim() || undefined,
-      idempotency_key: `cashdlg-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
-    })
-    ElMessage.success(`已收現金 ${formatCurrency(total.value)}（進當日交接批）`)
+    await createCashReceipt({ ...payload, idempotency_key: key })
+    pendingAttempt = null
+    if (contextSequence !== loadSequence) return
+    loadedSequence = 0
+    rows.value = []
+    ElMessage.success(`已收現金 ${formatCurrency(payload.amount)}（進當日交接批）`)
     emit('paid')
     emit('update:modelValue', false)
   } catch (e) {
-    ElMessage.error(friendlyError('收款失敗', e))
+    if (contextSequence === loadSequence) ElMessage.error(friendlyError('收款失敗', e))
   } finally {
     submitting.value = false
   }
 }
 
+function closeDialog(visible: boolean) {
+  if (submitting.value) return
+  if (!visible) {
+    loadSequence += 1
+    loadedSequence = 0
+    rows.value = []
+  }
+  emit('update:modelValue', visible)
+}
+
 watch(
-  () => [props.modelValue, props.studentId] as const,
+  () => [props.modelValue, props.studentId, props.month, props.preselectRecordIds.join(',')] as const,
   ([open]) => {
     if (open) {
       receivedDate.value = todayISO()
       payerNote.value = ''
-      load()
     }
+    void load()
   },
-  { immediate: true },
+  { immediate: true, flush: 'sync' },
 )
+
+onBeforeUnmount(() => { loadSequence += 1 })
+
 </script>
 
 <style scoped>

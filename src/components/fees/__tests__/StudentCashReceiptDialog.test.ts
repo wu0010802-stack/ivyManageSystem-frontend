@@ -183,3 +183,94 @@ describe('StudentCashReceiptDialog 收款日期界線', () => {
     expect(disabledDate(localDate(2026, 8, 20))).toBe(true)
   })
 })
+
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
+  return { promise, resolve, reject }
+}
+const list = (id: number) => ({ items: [rec({ id, amount_due: 100 })], total: 1, page: 1, page_size: 100 })
+const invokeSubmit = (w: ReturnType<typeof mountDialog>) =>
+  (w.vm.$.setupState as unknown as { submit: () => Promise<void> }).submit()
+
+describe('StudentCashReceiptDialog 收款對象切換競態', () => {
+  beforeEach(() => {
+    apiMocks.getFeeRecords.mockReset()
+    apiMocks.createCashReceipt.mockReset()
+    apiMocks.createCashReceipt.mockResolvedValue({ receipt_id: 9, allocation_ids: [], idempotent_replay: false })
+  })
+  it('切到新學生載入期間立即清除舊單，禁止按鈕與程式直接送出', async () => {
+    const later = deferred<ReturnType<typeof list>>()
+    apiMocks.getFeeRecords.mockImplementation(({ student_id, status }) => status === 'partial' ? Promise.resolve({ items: [] }) : student_id === 5 ? Promise.resolve(list(11)) : later.promise)
+    const w = mountDialog()
+    await flushPromises()
+    await w.setProps({ modelValue: false })
+    await w.setProps({ modelValue: true, studentId: 6, studentName: '另一學生' })
+    expect(w.find('[data-test="cash-submit"]').attributes('disabled')).toBeDefined()
+    await invokeSubmit(w)
+    expect(apiMocks.createCashReceipt).not.toHaveBeenCalled()
+    later.resolve(list(22))
+    await flushPromises()
+    await invokeSubmit(w)
+    expect(apiMocks.createCashReceipt.mock.calls[0][0].parts).toEqual([{ part_type: 'fee_record', fee_record_id: 22, amount: 100 }])
+  })
+  it('新學生載入失敗時清除舊單並顯示錯誤，不誤報無未繳費用', async () => {
+    apiMocks.getFeeRecords.mockImplementation(({ student_id, status }) => student_id === 6 ? Promise.reject(new Error('網路失敗')) : Promise.resolve(status === 'partial' ? { items: [] } : list(11)))
+    const w = mountDialog()
+    await flushPromises()
+    await w.setProps({ studentId: 6 })
+    await flushPromises()
+    expect(w.find('[data-test="cash-load-error"]').exists()).toBe(true)
+    expect(w.find('[data-test="cash-empty"]').exists()).toBe(false)
+    expect(w.findAll('[data-test="cash-row"]')).toHaveLength(0)
+    await invokeSubmit(w)
+    expect(apiMocks.createCashReceipt).not.toHaveBeenCalled()
+  })
+  it('較舊學生的晚到回應不得覆蓋新學生費用單', async () => {
+    const older = deferred<ReturnType<typeof list>>()
+    apiMocks.getFeeRecords.mockImplementation(({ student_id, status }) => status === 'partial' ? Promise.resolve({ items: [] }) : student_id === 5 ? older.promise : Promise.resolve(list(22)))
+    const w = mountDialog()
+    await w.setProps({ studentId: 6 })
+    await flushPromises()
+    older.resolve(list(11))
+    await flushPromises()
+    expect(w.findAll('[data-test="cash-row"]').map(row => row.attributes('data-record'))).toEqual(['22'])
+  })
+  it('送出鎖防重複請求，完成後不關閉或刷新已切換的新對象', async () => {
+    const pending = deferred<{ receipt_id: number; allocation_ids: number[]; idempotent_replay: boolean }>()
+    apiMocks.createCashReceipt.mockReturnValue(pending.promise)
+    apiMocks.getFeeRecords.mockImplementation(({ student_id, status }) => Promise.resolve(status === 'partial' ? { items: [] } : list(student_id === 5 ? 11 : 22)))
+    const w = mountDialog()
+    await flushPromises()
+    const first = invokeSubmit(w)
+    void invokeSubmit(w)
+    expect(apiMocks.createCashReceipt).toHaveBeenCalledTimes(1)
+    await w.setProps({ studentId: 6 })
+    await flushPromises()
+    pending.resolve({ receipt_id: 9, allocation_ids: [], idempotent_replay: false })
+    await first
+    expect(apiMocks.createCashReceipt.mock.calls[0][0]).toMatchObject({ amount: 100, parts: [{ fee_record_id: 11, amount: 100 }] })
+    expect(w.emitted('paid')).toBeUndefined()
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+  })
+})
+
+
+it('相同部分收款在回應不確定後重試沿用 idempotency key，修改金額才換新 key', async () => {
+  apiMocks.getFeeRecords.mockReset()
+  apiMocks.createCashReceipt.mockReset()
+  apiMocks.getFeeRecords.mockImplementation(({ status }) => Promise.resolve(status === 'partial' ? { items: [] } : { ...list(11), items: [rec({ id: 11, amount_due: 1000 })] }))
+  apiMocks.createCashReceipt.mockRejectedValue(new Error('回應中斷'))
+  const w = mountDialog()
+  await flushPromises()
+  await w.find('[data-test="cash-row-amount"]').setValue('500')
+  await invokeSubmit(w)
+  await invokeSubmit(w)
+  const calls = apiMocks.createCashReceipt.mock.calls
+  expect(calls[0][0].idempotency_key).toBe(calls[1][0].idempotency_key)
+  await w.find('[data-test="cash-row-amount"]').setValue('400')
+  await invokeSubmit(w)
+  expect(calls[2][0].idempotency_key).not.toBe(calls[1][0].idempotency_key)
+})
