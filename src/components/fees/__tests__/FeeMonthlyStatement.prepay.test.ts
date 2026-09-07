@@ -15,6 +15,17 @@ vi.mock('@/api/fees', () => ({
   getPrepayments: (...args: unknown[]) => getPrepayments(...args),
 }))
 
+const elMessageMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  warning: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+}))
+vi.mock('element-plus', async (orig) => ({
+  ...((await orig()) as Record<string, unknown>),
+  ElMessage: elMessageMocks,
+}))
+
 const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
 vi.mock('@/utils/auth', () => ({
   hasPermission: (name: string) => authMocks.perms.has(name),
@@ -249,5 +260,24 @@ describe('載入失敗', () => {
     await flushPromises()
     expect(wrapper.findAll('[data-test="stmt-row"]')).toHaveLength(2)
     expect(wrapper.find('[data-test="stmt-prepay-cell"]').exists()).toBe(false)
+  })
+})
+
+describe('預繳筆數撞到查詢上限', () => {
+  // 回歸：端點有列表上限，撞到時被截掉的學生預繳欄會顯示成「—」＝看起來沒有預繳。
+  // 後端 total 已回真實總數，前端要據此明講，不讓它靜默。
+  it('total 大於實際回傳筆數時提示顯示不完整', async () => {
+    getPrepayments.mockResolvedValue({ total: 2100, items: CREDITS.items })
+    mountStatement()
+    await flushPromises()
+
+    expect(elMessageMocks.warning).toHaveBeenCalledTimes(1)
+    expect(String(elMessageMocks.warning.mock.calls[0][0])).toContain('2,100')
+  })
+
+  it('total 與回傳筆數一致時不提示', async () => {
+    mountStatement()
+    await flushPromises()
+    expect(elMessageMocks.warning).not.toHaveBeenCalled()
   })
 })

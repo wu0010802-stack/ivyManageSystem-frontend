@@ -671,6 +671,14 @@ async function fetchPrepayData() {
   try {
     const creditsRes = await getPrepayments()
     prepayCredits.value = (creditsRes.items ?? []) as PrepayCreditRow[]
+    // 端點有列表上限：撞到時被截掉的學生預繳欄會顯示成「—」（＝看起來沒有預繳）。
+    // total 是真實總數，據此明講一次，不讓資料缺口靜默。
+    const total = creditsRes.total ?? 0
+    if (total > prepayCredits.value.length) {
+      ElMessage.warning(
+        `預繳款共 ${total.toLocaleString()} 筆、超過單次查詢上限（已載入 ${prepayCredits.value.length.toLocaleString()} 筆），部分學生的預繳欄可能顯示不完整`,
+      )
+    }
   } catch (e) {
     // 不阻擋帳款主表；欄位顯示 '—' 但明講載入失敗，避免誤讀成「無預繳」
     ElMessage.error(friendlyError('載入預繳款失敗', e))
