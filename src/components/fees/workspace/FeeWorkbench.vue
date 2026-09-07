@@ -20,7 +20,7 @@
         <button
           type="button"
           class="queue-row__hit"
-          :aria-label="`${item.title}：${item.actionLabel}`"
+          :aria-label="`${item.title}${item.detail ? '，' + item.detail : ''}：${item.actionLabel}`"
           :data-test="`workbench-action-${item.key}`"
           @click="emit('navigate', item.target)"
         >
@@ -46,7 +46,7 @@
         <button
           type="button"
           class="queue-row__hit"
-          :aria-label="`${item.title}：${item.actionLabel}`"
+          :aria-label="`${item.title}${item.detail ? '，' + item.detail : ''}：${item.actionLabel}`"
           :data-test="`workbench-action-${item.key}`"
           @click="emit('navigate', item.target)"
         >
@@ -66,7 +66,44 @@
           </span>
         </button>
       </li>
+
+      <!-- 載入失敗的列絕不能混進「沒有待辦」：那會把錯誤讀成一切正常 -->
+      <li v-if="unknownItems.length" class="queue-section queue-section--warn">
+        {{ forbidden ? '你的帳號沒有權限查看' : '無法載入' }}
+        <span class="queue-section__count queue-section__count--warn">
+          {{ unknownItems.length }}
+        </span>
+      </li>
+      <li
+        v-for="item in unknownItems"
+        :key="item.key"
+        class="queue-row"
+        :data-test="`workbench-row-${item.key}`"
+      >
+        <button
+          type="button"
+          class="queue-row__hit"
+          :aria-label="`${item.title}：${item.detail}`"
+          :data-test="`workbench-action-${item.key}`"
+          @click="emit('navigate', item.target)"
+        >
+          <span class="row-status" data-state="unknown">
+            <el-icon class="row-status__icon" aria-hidden="true"><QuestionFilled /></el-icon>
+            <span class="sr-only">{{ FEE_QUEUE_STATE_TEXT[item.state] }}</span>
+          </span>
+          <span class="row-main">
+            <span class="row-title">{{ item.title }}</span>
+            <span class="row-detail">{{ item.detail }}</span>
+          </span>
+          <span class="row-go row-go--muted">查看<span aria-hidden="true"> ›</span></span>
+        </button>
+      </li>
     </ul>
+
+    <p v-if="!loading && forbidden" class="perm-note" data-test="workbench-forbidden">
+      這些統計是全園金流資料，需要「學生管理」的全園檢視權限才能讀取。
+      請園長或系統管理員調整你的角色權限。
+    </p>
   </section>
 </template>
 
@@ -84,7 +121,7 @@
  * 佇列不含任何學生姓名等 PII，只有聚合計數與金額。
  */
 import { onActivated, onMounted } from 'vue'
-import { CircleCheck, MoreFilled, Warning } from '@element-plus/icons-vue'
+import { CircleCheck, MoreFilled, QuestionFilled, Warning } from '@element-plus/icons-vue'
 import type { FeeNavTarget } from './feesNavigation'
 import { FEE_QUEUE_STATE_TEXT, useFeeOverview } from './useFeeOverview'
 
@@ -96,6 +133,8 @@ const {
   monthLabel,
   actionItems,
   restItems,
+  unknownItems,
+  forbidden,
   ensureLoaded,
   refresh,
 } = useFeeOverview()
@@ -129,8 +168,19 @@ onActivated(() => {
   padding: 0;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  /* overflow:hidden 會把每一列 2px offset 的鍵盤焦點框左右裁掉（只剩上下兩條
+     線，看起來像分隔線）。改用 clip-path 保住圓角、同時不裁 outline。 */
   background: var(--surface-color);
+}
+
+.queue > :first-child {
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+
+.queue > :last-child {
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
 }
 
 .queue-section {
@@ -143,6 +193,22 @@ onActivated(() => {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   letter-spacing: 0.5px;
+}
+
+.queue-section--warn {
+  color: var(--el-color-warning);
+}
+
+.queue-section__count--warn {
+  background: var(--el-color-warning-light-9, #fdf6ec);
+  color: var(--el-color-warning);
+}
+
+.perm-note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.7;
 }
 
 .queue-section__count {
