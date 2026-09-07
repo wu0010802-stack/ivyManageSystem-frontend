@@ -129,6 +129,26 @@ const flushAll = async () => {
 import FeeBillingWorkspace from '../FeeBillingWorkspace.vue'
 import { __resetFeeOverview } from '../useFeeOverview'
 
+/**
+ * 2026-09-07 起 recordsMode 是受控 prop（由 route ?mode= 控制），元件本身只
+ * emit change-mode。這個 helper 扮演殼層：把 emit 寫回 prop，讓既有測試仍能
+ * 驗「切換後渲染什麼」，同時真的走過受控路徑。
+ */
+function mountBilling(props: Record<string, unknown> = {}) {
+  let wrapper: ReturnType<typeof mount>
+  wrapper = mount(FeeBillingWorkspace, {
+    props: {
+      recordsMode: 'statement',
+      ...props,
+      'onChange-mode': (mode: string) => {
+        void wrapper.setProps({ recordsMode: mode })
+      },
+    },
+    global: { stubs: GLOBAL_STUBS },
+  })
+  return wrapper
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   authMocks.hasPermission.mockReturnValue(true)
@@ -149,7 +169,7 @@ beforeEach(() => {
 
 describe('FeeBillingWorkspace 應收帳款模式切換', () => {
   it('可寫者可新增，建立後刷新學期與總覽並聚焦新費用學生和學期', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    const wrapper = mountBilling()
     await flushAll()
     await wrapper.get('[data-test="records-mode-switch-list"]').trigger('click')
     const oldRecords = wrapper.findComponent({ name: 'FeeRecordsTab' }).vm
@@ -172,7 +192,7 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
 
   it('唯讀人員沒有新增費用入口', async () => {
     authMocks.hasPermission.mockReturnValue(false)
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    const wrapper = mountBilling()
     await flushAll()
     expect(wrapper.find('[data-test="billing-create-manual-fee"]').exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'ManualFeeRecordDialog' }).exists()).toBe(false)
@@ -180,13 +200,13 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
 
   it('只有收費寫入權限而無學生讀取權限也沒有新增入口', async () => {
     authMocks.hasPermission.mockImplementation((permission) => permission !== PERMISSION_NAMES.STUDENTS_READ)
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    const wrapper = mountBilling()
     await flushAll()
     expect(wrapper.find('[data-test="billing-create-manual-fee"]').exists()).toBe(false)
   })
 
   it('預設渲染月表（月繳總表），非逐筆明細', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    const wrapper = mountBilling()
     await flushAll()
     expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="records-tab"]').exists()).toBe(false)
@@ -198,7 +218,7 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
   })
 
   it('切到逐筆明細渲染 FeeRecordsTab（auto-load），切回月表', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    const wrapper = mountBilling()
     await flushAll()
     await wrapper.find('[data-test="records-mode-switch-list"]').trigger('click')
     await flushAll()
@@ -213,19 +233,13 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
   })
 
   it('模式切換只在應收帳款檢視顯示（退款不顯示）', async () => {
-    const wrapper = mount(FeeBillingWorkspace, {
-      props: { view: 'refunds' },
-      global: { stubs: GLOBAL_STUBS },
-    })
+    const wrapper = mountBilling({ view: 'refunds' })
     await flushAll()
     expect(wrapper.find('[data-test="records-mode-switch"]').exists()).toBe(false)
   })
 
   it('入帳媒合檢視改顯示來源切換（代收／存摺）', async () => {
-    const wrapper = mount(FeeBillingWorkspace, {
-      props: { view: 'matching' },
-      global: { stubs: GLOBAL_STUBS },
-    })
+    const wrapper = mountBilling({ view: 'matching' })
     await flushAll()
     expect(wrapper.find('[data-test="records-mode-switch"]').exists()).toBe(false)
     const labels = wrapper
@@ -237,20 +251,14 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
   })
 
   it('切換入帳來源 emit change-source（由殼層寫回 query）', async () => {
-    const wrapper = mount(FeeBillingWorkspace, {
-      props: { view: 'matching', source: 'collection' },
-      global: { stubs: GLOBAL_STUBS },
-    })
+    const wrapper = mountBilling({ view: 'matching', source: 'collection' })
     await flushAll()
     await wrapper.find('[data-test="matching-source-switch-passbook"]').trigger('click')
     expect(wrapper.emitted('change-source')).toEqual([['passbook']])
   })
 
   it('全域搜尋（studentSearch）初始即落地逐筆明細並帶 initial-search', async () => {
-    const wrapper = mount(FeeBillingWorkspace, {
-      props: { studentSearch: '王小明' },
-      global: { stubs: GLOBAL_STUBS },
-    })
+    const wrapper = mountBilling({ studentSearch: '王小明', recordsMode: 'list' })
     await flushAll()
     const records = wrapper.find('[data-testid="records-tab"]')
     expect(records.exists()).toBe(true)
@@ -258,7 +266,7 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
   })
 
   it('搜尋變更時切到逐筆明細並轉交 applySearch', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    const wrapper = mountBilling()
     await flushAll()
     expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(true)
     await wrapper.setProps({ studentSearch: '陳小華' })
@@ -268,7 +276,7 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
   })
 
   it('月表 open-list（到逐筆明細處理）切換模式並預帶姓名', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    const wrapper = mountBilling()
     await flushAll()
     wrapper.findComponent({ name: 'FeeMonthlyStatement' }).vm.$emit('open-list', '陳部分')
     await flushAll()
@@ -277,7 +285,7 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
   })
 
   it('切回應收帳款檢視時刷新作用中的月表', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    const wrapper = mountBilling()
     await flushAll()
     statementMocks.refresh.mockClear()
     await wrapper.setProps({ view: 'refunds' })
@@ -288,7 +296,7 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
     expect(statementMocks.refresh).toHaveBeenCalledTimes(1)
   })
   it('現金項目交由內頁提供新增入口，外層工具列不重複', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { props: { view: 'cashItems' }, global: { stubs: GLOBAL_STUBS } })
+    const wrapper = mountBilling({ view: 'cashItems' })
     await flushAll()
     expect(wrapper.find('[data-testid="cash-items"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="cash-items-create"]').exists()).toBe(false)

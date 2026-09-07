@@ -225,9 +225,15 @@ describe('FeeBillingWorkspace（收款）', () => {
   })
 
   it('切到逐筆明細模式時帶入當前學期（autoLoad 自載，行為不變）', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    // recordsMode 為受控 prop（route ?mode=）：元件 emit change-mode，殼層寫回
+    const wrapper = mount(FeeBillingWorkspace, {
+      props: { recordsMode: 'statement' },
+      global: { stubs: GLOBAL_STUBS },
+    })
     await flushAll()
     await wrapper.find('[data-test="records-mode-switch-list"]').trigger('click')
+    expect(wrapper.emitted('change-mode')).toEqual([['list']])
+    await wrapper.setProps({ recordsMode: 'list' })
     await flushAll()
     const records = wrapper.find('[data-testid="records-tab"]')
     expect(records.exists()).toBe(true)

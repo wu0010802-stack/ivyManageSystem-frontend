@@ -66,6 +66,7 @@ vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
 }))
 import StudentFeeView from '../StudentFeeView.vue'
 import { __resetFeeOverview } from '@/components/fees/workspace/useFeeOverview'
+import { __resetFeeLastViews } from '@/components/fees/workspace/feesNavigation'
 
 const globalConfig = {
   stubs: {
@@ -96,6 +97,8 @@ describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => 
   beforeEach(() => {
     vi.clearAllMocks()
     __resetFeeOverview()
+    // lastViews 現為 module scope（真的 session 內記憶），測試間必須重置
+    __resetFeeLastViews()
     routerMocks.route!.query = {}
     apiMocks.getCloseSummary.mockRejectedValue(new Error('n/a'))
     apiMocks.getCashHandovers.mockResolvedValue({ items: [] })
@@ -120,23 +123,22 @@ describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => 
     expect(w.find('[data-test="ws-settings"]').exists()).toBe(false)
   })
 
-  it('切到收款 → push 保存 ws/view 且保留其他 query（?search=）', async () => {
+  it('切走工作區時丟掉 ?search=（它是全域搜尋的一次性上下文）', async () => {
+    // 2026-09-07：原本 queryFor 用 {...route.query} 起手卻沒清 search，於是
+    // 搜尋詞永久黏在網址上，切走再切回收款時清單仍被那個姓名篩住
+    // （staging 實測 170 列剩 11 列）。只有停在應收帳款才保留。
     const w = mountView({ search: '小明' })
     await flushAll()
     routerMocks.router!.push.mockClear()
 
-    // ?search= 無 ws 時已導向收款；先切走再切回，驗證 push 保留 search
     await w.find('[data-test="fee-main-nav-settlement"]').trigger('click')
     await flushAll()
-    await w.find('[data-test="fee-main-nav-billing"]').trigger('click')
-    await flushAll()
 
-    expect(w.find('[data-test="ws-billing"]').exists()).toBe(true)
     const lastPush = routerMocks.router!.push.mock.calls.at(-1)![0] as {
       query: Record<string, unknown>
     }
-    expect(lastPush.query.search).toBe('小明')
-    expect(lastPush.query.ws).toBe('billing')
+    expect(lastPush.query.ws).toBe('settlement')
+    expect(lastPush.query).not.toHaveProperty('search')
   })
 
   it('舊深連結 ?tab=templates → 收款／應收帳款（費用設定已退場）', async () => {
@@ -174,7 +176,8 @@ describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => 
     // 正規化只補 ws/view 鍵；不得新增任何含姓名的新 query 鍵
     for (const call of routerMocks.router!.replace.mock.calls) {
       const q = (call[0] as { query: Record<string, unknown> }).query
-      expect(Object.keys(q).sort()).toEqual(['search', 'view', 'ws'])
+      // 全域搜尋落地逐筆（mode=list），故多一個 mode 鍵
+      expect(Object.keys(q).sort()).toEqual(['mode', 'search', 'view', 'ws'])
       expect(q.search).toBe('王小美')
     }
   })

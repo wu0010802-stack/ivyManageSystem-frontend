@@ -247,22 +247,35 @@ import FeeMatchingPanel from './FeeMatchingPanel.vue'
 import FeeBillSlipDrawer from './FeeBillSlipDrawer.vue'
 import FeeSegToggle from './FeeSegToggle.vue'
 import FeeWorkspaceToolbar from './FeeWorkspaceToolbar.vue'
-import { FEE_MATCHING_SOURCES, FEE_WORKSPACE_VIEWS } from './feesNavigation'
+import {
+  FEE_MATCHING_SOURCES,
+  FEE_RECORDS_MODES,
+  FEE_WORKSPACE_VIEWS,
+} from './feesNavigation'
 import { useFeeOverview } from './useFeeOverview'
 
 const props = withDefaults(
   defineProps<{
     view?: string
     source?: string
+    /** 應收帳款檢視模式（由 route query 控制，重新整理／分享網址可還原） */
+    recordsMode?: string
     importsOpen?: boolean
     studentSearch?: string
   }>(),
-  { view: 'receivable', source: 'collection', importsOpen: false, studentSearch: '' },
+  {
+    view: 'receivable',
+    source: 'collection',
+    recordsMode: 'statement',
+    importsOpen: false,
+    studentSearch: '',
+  },
 )
 
 const emit = defineEmits<{
   'change-view': [view: string]
   'change-source': [src: string]
+  'change-mode': [mode: string]
   'update:imports-open': [open: boolean]
   navigate: [target: { ws: 'billing' | 'settlement' | 'workbench'; view?: string }]
 }>()
@@ -282,15 +295,21 @@ const subCounts = computed<Record<string, number>>(() => {
   return counts
 })
 
-// 帳款檢視模式：月表（預設）⇄ 逐筆明細；帶全域搜尋進場時直接落地逐筆
-const RECORDS_MODES = [
-  { key: 'statement', label: '月表' },
-  { key: 'list', label: '逐筆' },
-]
-const recordsMode = ref<'statement' | 'list'>(props.studentSearch ? 'list' : 'statement')
+// 帳款檢視模式：月表（預設）⇄ 逐筆明細。
+// 2026-09-07：改由 route query（?mode=）控制。原本是純本地 ref，重新整理、
+// 分享網址、上一頁都回不到逐筆，與同層的 ?src= 行為互相矛盾。
+const RECORDS_MODES = FEE_RECORDS_MODES
+const recordsMode = computed<'statement' | 'list'>(() =>
+  props.recordsMode === 'list' ? 'list' : 'statement',
+)
 
 function onRecordsModeChange(val: string) {
-  recordsMode.value = val === 'list' ? 'list' : 'statement'
+  emit('change-mode', val === 'list' ? 'list' : 'statement')
+}
+
+/** 內部流程（新增費用後、月表「到逐筆明細處理」、全域搜尋）切到逐筆 */
+function gotoListMode() {
+  if (recordsMode.value !== 'list') emit('change-mode', 'list')
 }
 
 const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
@@ -374,7 +393,7 @@ async function onManualFeeCreated(record: Schema<'FeeRecordOut'>) {
     periodOptions.value.unshift(record.period)
   }
   createdStudentSearch.value = record.student_name || ''
-  recordsMode.value = 'list'
+  gotoListMode()
   // 清掉兩種模式的快取，並用新費用的學期與學生重新載入逐筆明細。
   recordsVersion.value += 1
   refreshOverview()
@@ -382,7 +401,7 @@ async function onManualFeeCreated(record: Schema<'FeeRecordOut'>) {
 
 // 月表「到逐筆明細處理」：切換模式並預帶學生姓名
 async function onOpenList(studentName: string) {
-  recordsMode.value = 'list'
+  gotoListMode()
   await nextTick()
   if (studentName) recordsTabRef.value?.applySearch?.(studentName)
 }
@@ -421,7 +440,7 @@ watch(
     if (!kw) return
     createdStudentSearch.value = ''
     if (recordsMode.value !== 'list') {
-      recordsMode.value = 'list'
+      gotoListMode()
       await nextTick()
     }
     recordsTabRef.value?.applySearch?.(kw)

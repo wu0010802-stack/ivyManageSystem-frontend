@@ -13,8 +13,12 @@
           class="fee-tab"
           :class="{ 'fee-tab--active': w.key === activeWs }"
           :aria-selected="w.key === activeWs"
+          :aria-controls="`fee-ws-panel-${w.key}`"
+          :id="`fee-ws-tab-${w.key}`"
+          :tabindex="w.key === activeWs ? 0 : -1"
           :data-test="`fee-main-nav-${w.key}`"
           @click="onWorkspaceChange(w.key)"
+          @keydown="onTabKeydown($event, w.key)"
         >
           {{ w.label }}
           <span
@@ -28,26 +32,35 @@
     </nav>
 
     <!-- 工作區內容：KeepAlive 保留各區篩選/時間脈絡；async import 延遲載入 -->
-    <KeepAlive>
-      <FeeWorkbench v-if="activeWs === 'workbench'" @navigate="navigateTo" />
-      <FeeBillingWorkspace
-        v-else-if="activeWs === 'billing'"
-        :view="activeView ?? undefined"
-        :source="activeSrc ?? undefined"
-        :imports-open="importsOpen"
-        :student-search="studentSearch"
-        @change-view="onViewChange"
-        @change-source="onSourceChange"
-        @update:imports-open="onImportsToggle"
-        @navigate="navigateTo"
-      />
-      <FeeSettlementWorkspace
-        v-else
-        :view="activeView ?? undefined"
-        @change-view="onViewChange"
-        @navigate="navigateTo"
-      />
-    </KeepAlive>
+    <div
+      role="tabpanel"
+      :id="`fee-ws-panel-${activeWs}`"
+      :aria-labelledby="`fee-ws-tab-${activeWs}`"
+      tabindex="0"
+    >
+      <KeepAlive>
+        <FeeWorkbench v-if="activeWs === 'workbench'" @navigate="navigateTo" />
+        <FeeBillingWorkspace
+          v-else-if="activeWs === 'billing'"
+          :view="activeView ?? undefined"
+          :source="activeSrc ?? undefined"
+          :records-mode="activeMode ?? undefined"
+          :imports-open="importsOpen"
+          :student-search="studentSearch"
+          @change-view="onViewChange"
+          @change-source="onSourceChange"
+          @change-mode="onModeChange"
+          @update:imports-open="onImportsToggle"
+          @navigate="navigateTo"
+        />
+        <FeeSettlementWorkspace
+          v-else
+          :view="activeView ?? undefined"
+          @change-view="onViewChange"
+          @navigate="navigateTo"
+        />
+      </KeepAlive>
+    </div>
   </div>
 </template>
 
@@ -68,12 +81,14 @@
  * 舊網址（?tab= 系列與 2026-08-25 的 ?ws=recon 系列）由 resolveFeesLocation
  * 相容映射，於此以 router.replace 正規化。
  */
-import { computed, defineAsyncComponent, onMounted, reactive, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader.vue'
 import {
   FEE_MAIN_WORKSPACES,
   FEE_WORKSPACE_VIEWS,
+  recallFeeView,
+  rememberFeeView,
   resolveFeesLocation,
   type FeeNavTarget,
   type FeeWorkspaceKey,
@@ -99,6 +114,7 @@ const resolved = computed(() => resolveFeesLocation(route.query))
 const activeWs = computed(() => resolved.value.ws)
 const activeView = computed(() => resolved.value.view)
 const activeSrc = computed(() => resolved.value.src)
+const activeMode = computed(() => resolved.value.mode)
 const importsOpen = computed(() => resolved.value.imports)
 const studentSearch = computed(() => {
   const raw = route.query.search
@@ -112,9 +128,6 @@ onMounted(() => {
   ensureLoaded()
 })
 
-// 各工作區最後停留的檢視（session 內記憶；重新整理由 query 還原）
-const lastViews = reactive<Partial<Record<FeeWorkspaceKey, string>>>({})
-
 // 舊 tab 深連結 / 非法值 → replace 正規化（不留歷史紀錄）
 watch(
   resolved,
@@ -123,7 +136,7 @@ watch(
       router.replace({ query: loc.normalizedQuery })
       return
     }
-    if (loc.view) lastViews[loc.ws] = loc.view
+    rememberFeeView(loc.ws, loc.view)
   },
   { immediate: true },
 )
@@ -134,11 +147,12 @@ function queryFor(target: FeeNavTarget): LocationQueryRaw {
   delete query.view
   delete query.src
   delete query.imports
+  delete query.mode
 
   const views = FEE_WORKSPACE_VIEWS[target.ws]
   let view: string | undefined
   if (views.length > 0) {
-    const candidate = target.view ?? lastViews[target.ws] ?? views[0].key
+    const candidate = target.view ?? recallFeeView(target.ws) ?? views[0].key
     view = views.some((v) => v.key === candidate) ? candidate : views[0].key
     query.view = view
   }
@@ -146,6 +160,17 @@ function queryFor(target: FeeNavTarget): LocationQueryRaw {
     query.src = target.src
   }
   if (target.imports && target.ws === 'billing') query.imports = '1'
+  if (target.mode && target.ws === 'billing' && view === 'receivable' && target.mode !== 'statement') {
+    query.mode = target.mode
+  }
+
+  // ?search= 是全域搜尋帶進來的一次性上下文（GlobalSearch 帶學生姓名直達
+  // 應收帳款）。原本用 {...route.query} 起手卻沒清，於是它永久黏在網址上，
+  // 使用者切走再切回收款時清單仍被那個姓名篩住（實測 170 列剩 11 列）。
+  // 只有「停在應收帳款」才保留。
+  const staysOnReceivable = target.ws === 'billing' && view === 'receivable'
+  if (!staysOnReceivable) delete query.search
+
   return query
 }
 
@@ -164,15 +189,44 @@ function onSourceChange(src: string) {
   router.push({ query: queryFor({ ws: 'billing', view: 'matching', src }) })
 }
 
+/**
+ * 匯入紀錄抽屜。
+ *
+ * 開啟 push（上一頁＝關閉抽屜），關閉 replace（不再往 history 多塞一筆）。
+ * 原本開關都 push，關掉後按上一頁會把抽屜重新打開，要多按好幾次才離得開
+ * /fees（staging 實測確實會重開）。
+ */
 function onImportsToggle(open: boolean) {
   if (open === importsOpen.value) return
-  router.push({
-    query: queryFor({
-      ws: 'billing',
-      view: activeView.value ?? undefined,
-      imports: open,
-    }),
+  const query = queryFor({
+    ws: 'billing',
+    view: activeView.value ?? undefined,
+    mode: activeMode.value ?? undefined,
+    imports: open,
   })
+  if (open) router.push({ query })
+  else router.replace({ query })
+}
+
+function onModeChange(mode: string) {
+  if (mode === activeMode.value) return
+  router.push({
+    query: queryFor({ ws: 'billing', view: 'receivable', mode }),
+  })
+}
+
+/** WAI-ARIA tabs pattern：左右鍵在工作區間移動、Home/End 跳頭尾 */
+function onTabKeydown(event: KeyboardEvent, key: FeeWorkspaceKey) {
+  const keys = FEE_MAIN_WORKSPACES.map((w) => w.key)
+  const current = keys.indexOf(key)
+  let next: number | null = null
+  if (event.key === 'ArrowRight') next = (current + 1) % keys.length
+  else if (event.key === 'ArrowLeft') next = (current - 1 + keys.length) % keys.length
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = keys.length - 1
+  if (next === null) return
+  event.preventDefault()
+  onWorkspaceChange(keys[next])
 }
 
 function navigateTo(target: FeeNavTarget) {

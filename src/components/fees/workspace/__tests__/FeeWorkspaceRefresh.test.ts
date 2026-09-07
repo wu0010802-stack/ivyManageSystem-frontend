@@ -156,12 +156,20 @@ import FeeSettlementWorkspace from '../FeeSettlementWorkspace.vue'
 import { __resetFeeOverview } from '../useFeeOverview'
 
 /** 以 KeepAlive 包住受測工作區，`show` 切換即模擬切走／切回主工作區 */
+/**
+ * 代殼層：KeepAlive ＋ 把 change-mode 寫回 recordsMode prop。
+ * 2026-09-07 起 recordsMode 由 route ?mode= 控制（原本是元件內部 ref），
+ * 元件只 emit，得有人寫回來才會真的切換。
+ */
 function keepAliveHost(inner: unknown, extraProps: Record<string, unknown> = {}) {
   return defineComponent({
     components: { Inner: inner as never },
     props: { show: { type: Boolean, default: true } },
+    data: () => ({ recordsMode: 'statement' }),
     setup: () => ({ extraProps }),
-    template: '<KeepAlive><Inner v-if="show" v-bind="extraProps" /></KeepAlive>',
+    template:
+      '<KeepAlive><Inner v-if="show" v-bind="extraProps" ' +
+      ':records-mode="recordsMode" @change-mode="(m) => (recordsMode = m)" /></KeepAlive>',
   })
 }
 

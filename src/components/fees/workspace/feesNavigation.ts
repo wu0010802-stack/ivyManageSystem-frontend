@@ -66,6 +66,8 @@ export interface FeeNavTarget {
   view?: string
   src?: string
   imports?: boolean
+  /** 應收帳款檢視模式：statement（月表，預設）｜ list（逐筆，依學期） */
+  mode?: string
 }
 
 /** 舊版 ?tab= 值 → 新工作區/檢視 的相容映射（8 個舊 tab 全數涵蓋） */
@@ -98,7 +100,31 @@ export const LEGACY_FEE_WS_VIEW_MAP: Record<string, FeeNavTarget> = {
   'billing/prepayments': { ws: 'billing', view: 'receivable' },
 }
 
+/**
+ * 只取物件自有屬性。裸的 `MAP[key]` 會沿原型鏈取到 `Object.prototype` 的成員
+ * ——`?ws=constructor` / `?tab=toString` 拿到的是 truthy 的函式，後續
+ * `target.ws` 為 undefined、`FEE_WORKSPACE_VIEWS[undefined].length` 直接
+ * TypeError，把整個後台打成「此頁載入失敗」全螢幕錯誤頁（staging 實測，
+ * 連側欄都不見）。網址是使用者可控輸入，一律走自有屬性查表。
+ */
+function ownLookup(
+  map: Record<string, FeeNavTarget>,
+  key: string | null,
+): FeeNavTarget | undefined {
+  if (key == null) return undefined
+  return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined
+}
+
 const WORKSPACE_KEYS = new Set<string>(['workbench', 'billing', 'settlement'])
+
+/** 應收帳款的兩種檢視模式；月表為預設，不寫進網址（避免 URL 抖動） */
+export const FEE_RECORDS_MODES: FeeWorkspaceViewDef[] = [
+  { key: 'statement', label: '月表' },
+  { key: 'list', label: '逐筆' },
+]
+
+const DEFAULT_RECORDS_MODE = 'statement'
+const RECORDS_MODE_KEYS = new Set<string>(FEE_RECORDS_MODES.map((m) => m.key))
 
 const MATCHING_SOURCE_KEYS = new Set<string>(FEE_MATCHING_SOURCES.map((s) => s.key))
 
@@ -113,6 +139,8 @@ export interface ResolvedFeesLocation {
   view: string | null
   /** 入帳媒合的資料來源；非該檢視時為 null */
   src: string | null
+  /** 應收帳款檢視模式；非該檢視時為 null */
+  mode: string | null
   /** 匯入紀錄抽屜是否開啟（只在收款工作區有意義） */
   imports: boolean
   /** query 是否需要 router.replace 正規化（含舊網址映射、非法值修正） */
@@ -140,23 +168,25 @@ export function resolveFeesLocation(query: LocationQuery): ResolvedFeesLocation 
   const rawSrc = firstString(query.src)
   const rawImports = firstString(query.imports)
   const rawSearch = firstString(query.search)
+  const rawMode = firstString(query.mode)
 
   let ws: FeeWorkspaceKey
   let requestedView: string | null = rawView
   let requestedSrc: string | null = rawSrc
   let requestedImports = rawImports === '1'
+  let requestedMode: string | null = rawMode
 
   const legacyWsView = rawWs
-    ? (LEGACY_FEE_WS_VIEW_MAP[`${rawWs}/${rawView ?? ''}`] ??
-      LEGACY_FEE_WS_VIEW_MAP[rawWs])
+    ? (ownLookup(LEGACY_FEE_WS_VIEW_MAP, `${rawWs}/${rawView ?? ''}`) ??
+      ownLookup(LEGACY_FEE_WS_VIEW_MAP, rawWs))
     : undefined
+  const legacyTab = ownLookup(LEGACY_FEE_TAB_MAP, rawTab)
 
-  if (rawTab && LEGACY_FEE_TAB_MAP[rawTab]) {
-    const target = LEGACY_FEE_TAB_MAP[rawTab]
-    ws = target.ws
-    requestedView = target.view ?? null
-    requestedSrc = target.src ?? null
-    requestedImports = target.imports ?? false
+  if (legacyTab) {
+    ws = legacyTab.ws
+    requestedView = legacyTab.view ?? null
+    requestedSrc = legacyTab.src ?? null
+    requestedImports = legacyTab.imports ?? false
   } else if (legacyWsView) {
     ws = legacyWsView.ws
     requestedView = legacyWsView.view ?? null
@@ -165,9 +195,10 @@ export function resolveFeesLocation(query: LocationQuery): ResolvedFeesLocation 
   } else if (rawWs && WORKSPACE_KEYS.has(rawWs)) {
     ws = rawWs as FeeWorkspaceKey
   } else if (rawSearch) {
-    // 全域搜尋導航（GlobalSearch 帶 ?search=學生姓名）：直達應收帳款
+    // 全域搜尋導航（GlobalSearch 帶 ?search=學生姓名）：直達應收帳款逐筆
     ws = 'billing'
     requestedView = 'receivable'
+    requestedMode = 'list'
   } else {
     ws = 'workbench'
   }
@@ -185,25 +216,61 @@ export function resolveFeesLocation(query: LocationQuery): ResolvedFeesLocation 
   // 匯入紀錄抽屜只在收款工作區有意義
   const imports = ws === 'billing' && requestedImports
 
+  // 檢視模式只在應收帳款有意義；月表為預設，不寫進網址
+  const isReceivable = ws === 'billing' && view === 'receivable'
+  const mode = isReceivable
+    ? requestedMode && RECORDS_MODE_KEYS.has(requestedMode)
+      ? requestedMode
+      : DEFAULT_RECORDS_MODE
+    : null
+
   const normalizedQuery: LocationQueryRaw = {}
   for (const [key, value] of Object.entries(query)) {
     if (key === 'tab' || key === 'ws' || key === 'view') continue
-    if (key === 'src' || key === 'imports') continue
+    if (key === 'src' || key === 'imports' || key === 'mode') continue
     normalizedQuery[key] = value
   }
   normalizedQuery.ws = ws
   if (view) normalizedQuery.view = view
   if (src && src !== DEFAULT_MATCHING_SOURCE) normalizedQuery.src = src
   if (imports) normalizedQuery.imports = '1'
+  if (mode && mode !== DEFAULT_RECORDS_MODE) normalizedQuery.mode = mode
 
   const expectedSrc = src && src !== DEFAULT_MATCHING_SOURCE ? src : null
+  const expectedMode = mode && mode !== DEFAULT_RECORDS_MODE ? mode : null
   const needsNormalize =
+    legacyTab != null ||
     rawTab != null ||
     legacyWsView != null ||
     rawWs !== ws ||
     (rawView ?? null) !== view ||
     (rawSrc ?? null) !== expectedSrc ||
-    (rawImports ?? null) !== (imports ? '1' : null)
+    (rawImports ?? null) !== (imports ? '1' : null) ||
+    (rawMode ?? null) !== expectedMode
 
-  return { ws, view, src, imports, needsNormalize, normalizedQuery }
+  return { ws, view, src, mode, imports, needsNormalize, normalizedQuery }
+}
+
+/**
+ * 各工作區最後停留的次層檢視（session 內記憶）。
+ *
+ * 原本宣告在 StudentFeeView 的 `<script setup>` 裡，離開 /fees 再回來時元件
+ * 重新 mount 就清空，與註解宣稱的「session 內記憶」不符。放在 module scope
+ * 才真的活過一次 mount；身分切換不需要清（不含任何 PII，只有檢視 key）。
+ */
+const lastViews: Partial<Record<FeeWorkspaceKey, string>> = {}
+
+export function rememberFeeView(ws: FeeWorkspaceKey, view: string | null): void {
+  if (view) lastViews[ws] = view
+}
+
+export function recallFeeView(ws: FeeWorkspaceKey): string | undefined {
+  return lastViews[ws]
+}
+
+/** 測試用：清空 session 記憶 */
+export function __resetFeeLastViews(): void {
+  for (const key of Object.keys(lastViews)) {
+    delete lastViews[key as FeeWorkspaceKey]
+  }
 }

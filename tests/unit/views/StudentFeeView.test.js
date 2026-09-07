@@ -81,6 +81,7 @@ const flushAll = async () => {
 
 import StudentFeeView from '@/views/StudentFeeView.vue'
 import { __resetFeeOverview } from '@/components/fees/workspace/useFeeOverview'
+import { __resetFeeLastViews } from '@/components/fees/workspace/feesNavigation'
 
 function mountView(query = {}) {
   routerMocks.route.query = { ...query }
@@ -91,6 +92,8 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     __resetFeeOverview()
+    // lastViews 現為 module scope（真的 session 內記憶），測試間必須重置
+    __resetFeeLastViews()
     routerMocks.route.query = {}
     apiMocks.getCloseSummary.mockRejectedValue(new Error('n/a'))
     apiMocks.getCashHandovers.mockResolvedValue({ items: [] })
