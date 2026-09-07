@@ -1844,6 +1844,19 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   overflow-x: auto;
 }
 
+/* 完整欄位的表格 min-width 是 1000px，clip 門檻要跟著它走（基礎的 900px 門檻
+   對這個模式太早）。放得下就 clip，捲動容器回到 AdminLayout 的 .el-main，
+   表頭與分組表頭的 sticky 才會生效；放不下才退回上面的 auto 橫向捲動。
+   ⚠ 選擇器必須與上面那條同為 (0,2,0)——container query 本身不加特異度，
+   單類選擇器會被上面的 auto 壓過去（這個 SFC 的老陷阱）。 */
+
+@container (min-width: 1000px) {
+
+  .stmt-table-wrap.stmt-table-wrap--full {
+    overflow-x: clip;
+  }
+}
+
 .stmt-table--full {
   min-width: 1000px;
 }
