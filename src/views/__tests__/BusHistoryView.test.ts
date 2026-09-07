@@ -361,3 +361,17 @@ describe('BusHistoryView 手機卡片切換', () => {
     expect(wrapper.findComponent({ name: 'AdminListCards' }).exists()).toBe(true)
   })
 })
+
+
+it('明細失敗可重試同一班次', async () => {
+  const w = mountView()
+  await flushPromises()
+  getBusTrip.mockRejectedValueOnce(new Error('離線'))
+  await w.get('[data-testid="bus-history-detail-btn"]').trigger('click')
+  await flushPromises()
+  const requestedId = getBusTrip.mock.calls.at(-1)?.[0]
+  await w.get('[data-testid="bus-history-detail-retry"]').trigger('click')
+  await flushPromises()
+  expect(getBusTrip.mock.calls.at(-1)?.[0]).toBe(requestedId)
+  expect(getBusTrip).toHaveBeenCalledTimes(2)
+})

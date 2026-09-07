@@ -83,6 +83,7 @@ export const DIRECTION_LABELS: Record<string, string> = {
 export interface BusMonitorTrip {
   id: number
   route_id: number
+  trip_date: string | null
   direction: string
   status: string
   auto_closed: boolean
@@ -145,6 +146,7 @@ function normalizeTrip(raw: unknown): BusMonitorTrip | null {
   return {
     id,
     route_id: routeId,
+    trip_date: typeof r.trip_date === 'string' ? r.trip_date : null,
     direction: asStr(r.direction) ?? '',
     status: asStr(r.status) ?? '',
     auto_closed: r.auto_closed === true,

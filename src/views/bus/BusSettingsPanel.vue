@@ -11,13 +11,13 @@
  * 1. **PUT 是部分更新**：未帶的欄位不動、**顯式帶 null 才是清除**。所以送出前只
  *    收集與伺服器值不同的欄位（比照 BusRouteForm）；全欄照送會把別人同時改的欄位
  *    一起蓋掉，清空地址也必須送 `school_address: null` 而不是省略。
- * 2. **「查座標」是寫入不是預覽**：後端只有 `PUT /bus/settings` 帶 `geocode: true`
+ * 2. **「定位並儲存地址」是寫入不是預覽**：後端只有 `PUT /bus/settings` 帶 `geocode: true`
  *    這一條 geocode 路徑（`geocodeBusStudent` 是學生專用），它會連同地址與新座標
  *    一起落庫。按鈕文案與二次確認都必須說出「會立即儲存」——標成「查詢」卻偷偷
  *    寫入是說謊。失敗時後端回 502 且**不落任何變更**，提示改用「地圖微調」手動定位。
  *    既然它本來就要寫，就把**其他待存欄位一起帶上**（見 `onGeocode`）：只送地址會讓
  *    回應的 `fill()` 把使用者剛改好還沒存的車輛數靜默蓋回舊值。
- * 3. **兩個寫入動作必須互斥**：儲存與查座標打同一支 PUT，併發時「後回應者」決定
+ * 3. **兩個寫入動作必須互斥**：儲存與定位並儲存地址打同一支 PUT，併發時「後回應者」決定
  *    `saved`，而它的回應可能算在對方寫入之前——`saved` 是 diff 基準，一旦退回舊值，
  *    下一次儲存就會拿舊值當基準把剛寫進去的設定覆寫掉。`busy` 從**進二次確認之前**
  *    就鎖住（不是等 confirm resolve），否則連點兩下會排出兩個確認框與兩次 PUT，
@@ -183,7 +183,7 @@ function confirmLines(payload: BusSettingsPayload): string[] {
     )
     if (!coordsChanged) {
       // 最佳化吃的是座標不是地址；只改地址就存，兩者從此互相矛盾而畫面不會提。
-      lines.push('座標不會跟著地址更新，如需同步請改按「查座標」。')
+      lines.push('座標不會跟著地址更新，如需同步請改按「定位並儲存地址」。')
     }
   }
   if (coordsChanged) {
@@ -246,7 +246,7 @@ async function onGeocode(): Promise<void> {
   const trimmed = address.value.trim()
   if (!trimmed) {
     // 後端沒地址會回 422；先擋在前面，錯誤訊息才講得出下一步。
-    ElMessage.warning('請先填園所地址再查座標')
+    ElMessage.warning('請先填園所地址再定位並儲存地址')
     return
   }
 
@@ -265,7 +265,7 @@ async function onGeocode(): Promise<void> {
     if (tunedLat !== undefined || tunedLng !== undefined) {
       lines.push('你剛才用地圖微調的座標會被查到的座標取代。')
     }
-    if (!(await confirmWrite(lines, '查座標並儲存', '查座標並儲存'))) return
+    if (!(await confirmWrite(lines, '定位並儲存地址', '定位並儲存地址'))) return
 
     geocoding.value = true
     lastError.value = null
@@ -275,7 +275,7 @@ async function onGeocode(): Promise<void> {
       // 200 但沒座標：不能說「已取得座標」，畫面上那一格還是「尚未設定」。
       ElMessage.warning('地址已儲存，但沒有取得座標，請用「地圖微調」手動定位')
     } else {
-      ElMessage.success('已取得座標並儲存')
+      ElMessage.success('園所地址與座標已儲存')
     }
   } catch (e) {
     // 502＝地圖服務查不到；後端不落任何變更——連一起帶上的車輛數也沒存，所以
@@ -367,11 +367,11 @@ function onTuneConfirm(nextLat: number, nextLng: number): void {
             data-test="geocode-btn"
             @click="onGeocode"
           >
-            查座標
+            定位並儲存地址
           </el-button>
         </div>
         <span class="bus-settings-panel__hint">
-          按「查座標」會立即儲存地址與查到的座標；查不到時可用「地圖微調」手動定位。
+          按「定位並儲存地址」會立即儲存地址與查到的座標；查不到時可用「地圖微調」手動定位。
         </span>
       </el-form-item>
 

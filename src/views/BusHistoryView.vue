@@ -210,24 +210,28 @@ const tripCardColumns = [
 // ── 詳情（逐站）──
 const detail = reactive({
   visible: false,
+  requestedId: null as number | null,
   loading: false,
   errored: false,
   trip: null as BusTripDetail | null,
 })
 
-const openDetail = async (row: BusTripListItem) => {
+let detailRequest = 0
+const openDetail = async (row: Pick<BusTripListItem, 'id'>) => {
   const tripId = row.id
+  const request = ++detailRequest
+  detail.requestedId = tripId
   detail.visible = true
   detail.loading = true
   detail.errored = false
   detail.trip = null
   try {
     const res = await getBusTrip(tripId)
-    detail.trip = res.data
+    if (request === detailRequest) detail.trip = res.data
   } catch {
-    detail.errored = true
+    if (request === detailRequest) detail.errored = true
   } finally {
-    detail.loading = false
+    if (request === detailRequest) detail.loading = false
   }
 }
 
@@ -241,8 +245,11 @@ onMounted(() => {
   <div class="bus-history">
     <PageHeader title="娃娃車乘車歷史" subtitle="查詢過去班次的接送進度，用於申訴查證與異常追蹤">
       <template #filters>
+        <label class="bus-history__filter">
+          <span>路線</span>
         <el-select
           :model-value="filters.route_id"
+          aria-label="路線"
           data-testid="bus-history-filter-route"
           :placeholder="routesFailed ? '路線清單載入失敗' : '全部路線'"
           clearable
@@ -251,8 +258,12 @@ onMounted(() => {
         >
           <el-option v-for="r in routes" :key="r.id" :label="r.name" :value="r.id" />
         </el-select>
+        </label>
+        <label class="bus-history__filter">
+          <span>方向</span>
         <el-select
           :model-value="filters.direction"
+          aria-label="方向"
           data-testid="bus-history-filter-direction"
           placeholder="全部方向"
           clearable
@@ -262,28 +273,41 @@ onMounted(() => {
           <el-option label="早上接學生" value="morning" />
           <el-option label="下午送學生" value="afternoon" />
         </el-select>
+        </label>
+        <label class="bus-history__filter">
+          <span>起始日期</span>
         <el-date-picker
           v-model="filters.date_from"
+          aria-label="起始日期"
           data-testid="bus-history-filter-date-from"
           type="date"
           value-format="YYYY-MM-DD"
           placeholder="起始日期"
           style="width: 160px"
         />
+        </label>
+        <label class="bus-history__filter">
+          <span>結束日期</span>
         <el-date-picker
           v-model="filters.date_to"
+          aria-label="結束日期"
           data-testid="bus-history-filter-date-to"
           type="date"
           value-format="YYYY-MM-DD"
           placeholder="結束日期"
           style="width: 160px"
         />
+        </label>
         <el-button type="primary" data-testid="bus-history-search" :loading="loading" @click="handleSearch">
           查詢
         </el-button>
         <el-button data-testid="bus-history-reset" @click="handleReset">重置</el-button>
       </template>
     </PageHeader>
+
+    <el-alert v-if="routesFailed" type="warning" :closable="false" title="路線選單載入失敗，其餘條件仍可查詢">
+      <el-button data-testid="bus-history-routes-retry" @click="fetchRoutes">重試路線選單</el-button>
+    </el-alert>
 
     <el-skeleton v-if="loading && !trips.length" data-testid="bus-history-loading" :rows="5" animated />
 
@@ -294,8 +318,11 @@ onMounted(() => {
       show-icon
       :closable="false"
       title="載入乘車歷史失敗"
-      description="請確認網路連線後重新查詢。"
-    />
+      description="請確認網路連線後重試。"
+    >
+        <p>請確認網路連線後重試。</p>
+      <el-button data-testid="bus-history-retry" @click="fetchTrips">重試</el-button>
+    </el-alert>
 
     <el-empty
       v-else-if="isEmpty"
@@ -399,7 +426,9 @@ onMounted(() => {
         show-icon
         :closable="false"
         title="載入班次明細失敗"
-      />
+      >
+        <el-button data-testid="bus-history-detail-retry" @click="detail.requestedId !== null && openDetail({ id: detail.requestedId })">重試</el-button>
+      </el-alert>
       <template v-else-if="detail.trip">
         <p class="bus-history__detail-summary">
           {{ detail.trip.route_name }}・{{ directionLabelOf(detail.trip) }}・{{ detail.trip.trip_date }}
@@ -443,6 +472,11 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.bus-history__filter {
+  display: grid;
+  gap: var(--space-1);
+}
+
 .bus-history {
   padding: var(--space-4, 16px);
   display: flex;

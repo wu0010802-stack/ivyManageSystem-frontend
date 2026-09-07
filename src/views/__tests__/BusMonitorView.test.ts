@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
   const stale = r(false)
   const isLive = c(() => trip.value?.status === 'in_progress')
   return {
+    push: vi.fn(),
     api: {
       routes: r<Array<Record<string, unknown>>>([]),
       selectedRouteId: r<number | null>(null),
@@ -47,6 +48,8 @@ vi.mock('@/composables/useBusMonitor', async () => {
   )
   return { ...actual, useBusMonitor: () => mocks.api }
 })
+
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: mocks.push }) }))
 
 import BusMonitorView from '@/views/BusMonitorView.vue'
 
@@ -336,4 +339,22 @@ describe('BusMonitorView', () => {
     await flushPromises()
     expect(withoutEnd.find('[data-testid="bus-monitor-end-time"]').exists()).toBe(false)
   })
+})
+
+
+it('不同步捷徑帶實際班次日期與 trip id，僅導覽', async () => {
+  s.trip.value = inProgressTrip({ trip_date: '2026-08-26' })
+  s.rosterOutOfSync.value = true
+  const w = mountView()
+  await flushPromises()
+  await w.get('[data-testid="bus-monitor-dispatch"]').trigger('click')
+  expect(mocks.push).toHaveBeenCalledWith({ path: '/bus/dispatch', query: { date: '2026-08-26', trip_id: '7' } })
+})
+
+it('監看載入失敗可原地重試', async () => {
+  s.snapshotFailed.value = true
+  const w = mountView()
+  await flushPromises()
+  await w.get('[data-testid="bus-monitor-retry"]').trigger('click')
+  expect(s.refresh).toHaveBeenCalledOnce()
 })

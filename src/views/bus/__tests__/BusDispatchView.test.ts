@@ -9,15 +9,17 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { reactive } from 'vue'
 
 const mocks = vi.hoisted(() => {
-  const { ref: r, computed: c } = require('vue') as typeof import('vue')
+  const { ref: r, computed: c, reactive } = require('vue') as typeof import('vue')
   const plans = r<Array<Record<string, unknown>>>([])
   const selectedTripId = r<number | null>(null)
   const selectedPlan = c(
     () => plans.value.find((p) => (p.trip as { id: number }).id === selectedTripId.value) ?? null,
   )
   return {
+    query: reactive({} as Record<string, unknown>),
     confirm: vi.fn(() => Promise.resolve()),
     api: {
       date: r('2026-08-26'),
@@ -47,6 +49,10 @@ const mocks = vi.hoisted(() => {
       students: r([]),
       studentsFailed: r(false),
       load: vi.fn(),
+      refresh: vi.fn(),
+      loadLinkedPlan: vi.fn(),
+      lastUpdatedAt: r<number | null>(null),
+      linkError: r<string | null>(null),
       setDate: vi.fn(),
       selectTrip: vi.fn(),
       canEdit: vi.fn(() => true),
@@ -64,6 +70,9 @@ const mocks = vi.hoisted(() => {
     },
   }
 })
+
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: mocks.query }), useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn(() => true) }))
 
 vi.mock('@/composables/useBusDailyDispatch', () => ({
   useBusDailyDispatch: () => mocks.api,
@@ -110,6 +119,10 @@ const GLOBAL_STUBS = {
     props: ['modelValue'],
   },
   'el-tag': { template: '<span><slot /></span>' },
+  'el-select': { template: '<div><slot /></div>' },
+  'el-option': { template: '<span />' },
+  'el-form': { template: '<form><slot /></form>' },
+  'el-form-item': { template: '<div><slot /></div>' },
   'el-date-picker': { template: '<input />' },
   // 預覽 Dialog 有自己的測試；這裡只驗「傳進去的東西對不對」，內部 el-table 的
   // slot 渲染不是本檔的關注點（真的渲染還得補一整組可傳 row 的 table stub）。
@@ -150,6 +163,8 @@ const mountView = () => mount(BusDispatchView, { global: { stubs: GLOBAL_STUBS }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.query = reactive({})
+  s.optimizing.value = false
   mocks.confirm.mockResolvedValue(undefined)
   s.plans.value = [plan()]
   s.selectedTripId.value = 7
@@ -642,5 +657,108 @@ describe('日期列', () => {
     await flushPromises()
     expect(w.findComponent({ name: 'BusDispatchDateBar' }).props('holidayNotice'))
       .toEqual({ is_holiday: true, label: '本日為假日：中秋節' })
+  })
+})
+
+
+describe('更新與班次捷徑', () => {
+  it('錯誤卡可原地重試，日期列也能更新', async () => {
+    s.loadFailed.value = true
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid="bus-dispatch-retry"]').trigger('click')
+    expect(s.refresh).toHaveBeenCalledOnce()
+    w.findComponent({ name: 'BusDispatchDateBar' }).vm.$emit('refresh')
+    expect(s.refresh).toHaveBeenCalledTimes(2)
+  })
+  it('監看捷徑交給嚴格日期與班次驗證，不自行重設或補建', async () => {
+    Object.assign(mocks.query, { date: '2026-08-26', trip_id: '8' })
+    mountView()
+    await flushPromises()
+    expect(s.loadLinkedPlan).toHaveBeenCalledWith('2026-08-26', '8')
+    expect(s.load).not.toHaveBeenCalled()
+    expect(s.resetPlan).not.toHaveBeenCalled()
+  })
+})
+
+
+it('同頁連結變更於忙碌時保留最新日期與班次，結束後才載入', async () => {
+  const w = mountView()
+  await flushPromises()
+  s.loading.value = true
+  Object.assign(mocks.query, { date: '2026-08-26', trip_id: '8' })
+  await w.vm.$nextTick()
+  Object.assign(mocks.query, { date: '2026-08-27', trip_id: '9' })
+  await w.vm.$nextTick()
+  expect(s.loadLinkedPlan).not.toHaveBeenCalled()
+  s.loading.value = false
+  await flushPromises()
+  expect(s.loadLinkedPlan).toHaveBeenCalledExactlyOnceWith('2026-08-27', '9')
+  w.unmount()
+})
+
+
+describe('連結導航讓舊班次對話框失效', () => {
+  function enableNavigation() {
+    s.loadLinkedPlan.mockImplementation((_date: string, id: string) => {
+      s.plans.value = [plan({}, { id: Number(id) })]
+      s.selectedTripId.value = Number(id)
+    })
+  }
+
+  it('插入表單立即關閉，舊表單送出事件不能寫到新班次', async () => {
+    enableNavigation()
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid="bus-dispatch-insert"]').trigger('click')
+    const dialog = w.findComponent({ name: 'BusDispatchInsertStudentDialog' })
+    Object.assign(mocks.query, { date: '2026-08-26', trip_id: '8' })
+    await flushPromises()
+    expect(s.selectedTripId.value).toBe(8)
+    expect(dialog.props('visible')).toBe(false)
+    dialog.vm.$emit('submit', { student_id: 202 })
+    await flushPromises()
+    expect(s.insertStop).not.toHaveBeenCalled()
+    w.unmount()
+  })
+
+  it('地址表單在導航尚待載入時就關閉，不能把舊地址套到新班次', async () => {
+    enableNavigation()
+    const w = mountView()
+    await flushPromises()
+    w.findComponent({ name: 'BusDispatchStopsTable' }).vm.$emit('change-address', 101)
+    await flushPromises()
+    w.findComponent({ name: 'BusPickupAddressSelect' }).vm.$emit('resolved', { id: 9, lat: 22.7, lng: 120.4, address: '測試地址' })
+    await flushPromises()
+    const submit = w.get('[data-testid="bus-dispatch-address-submit"]')
+    s.loading.value = true
+    Object.assign(mocks.query, { date: '2026-08-26', trip_id: '8' })
+    await w.vm.$nextTick()
+    expect(w.find('[data-testid="bus-dispatch-address-dialog"]').exists()).toBe(false)
+    s.loading.value = false
+    await flushPromises()
+    await submit.trigger('click')
+    expect(s.changeAddress).not.toHaveBeenCalled()
+    w.unmount()
+  })
+
+  it.each(['reset', 'remove'])('導航後確認舊%s對話框不送出', async (action) => {
+    enableNavigation()
+    let resolve!: () => void
+    mocks.confirm.mockImplementationOnce(() => new Promise<void>((r) => { resolve = r }))
+    const w = mountView()
+    await flushPromises()
+    if (action === 'reset') await w.get('[data-testid="bus-dispatch-reset"]').trigger('click')
+    else w.findComponent({ name: 'BusDispatchStopsTable' }).vm.$emit('remove', 101)
+    await flushPromises()
+    expect(mocks.confirm).toHaveBeenCalledOnce()
+    Object.assign(mocks.query, { date: '2026-08-26', trip_id: '8' })
+    await flushPromises()
+    expect(s.selectedTripId.value).toBe(8)
+    resolve()
+    await flushPromises()
+    expect(s.resetPlan).not.toHaveBeenCalled()
+    expect(s.removeStop).not.toHaveBeenCalled()
+    w.unmount()
   })
 })

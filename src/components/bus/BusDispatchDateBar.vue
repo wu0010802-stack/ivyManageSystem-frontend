@@ -7,15 +7,20 @@
  * holidayNotice 由 daily-plans 回應帶出。
  */
 import { computed } from 'vue'
+import { formatTimeTW } from '@/utils/format'
 
 const props = defineProps<{
   /** YYYY-MM-DD */
   modelValue: string
+  busy?: boolean
+  loading?: boolean
+  lastUpdatedAt?: number | null
   holidayNotice: { is_holiday: boolean; label: string } | null
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [date: string]
+  refresh: []
 }>()
 
 const MAX_AHEAD_DAYS = 7
@@ -60,6 +65,8 @@ defineExpose({ disabledDate })
     <div class="bus-dispatch-date-bar__row">
       <el-date-picker
         :model-value="modelValue"
+        aria-label="調度日期"
+        :disabled="busy"
         type="date"
         value-format="YYYY-MM-DD"
         :clearable="false"
@@ -67,9 +74,13 @@ defineExpose({ disabledDate })
         placeholder="選擇調度日期"
         @change="onChange"
       />
-      <el-button :disabled="isToday" data-test="today-btn" @click="selectToday">
+      <el-button :disabled="isToday || busy" data-test="today-btn" @click="selectToday">
         今天
       </el-button>
+      <el-button :disabled="busy" :loading="loading" data-test="refresh-btn" @click="emit('refresh')">更新名單</el-button>
+      <span role="status" class="bus-dispatch-date-bar__updated">
+        {{ lastUpdatedAt != null ? `最後更新：${formatTimeTW(new Date(lastUpdatedAt))}` : '尚未成功更新' }}
+      </span>
     </div>
     <el-alert
       v-if="holidayNotice?.is_holiday"
@@ -96,7 +107,8 @@ defineExpose({ disabledDate })
 .bus-dispatch-date-bar__row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .bus-dispatch-date-bar__holiday {

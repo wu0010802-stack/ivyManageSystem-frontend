@@ -361,7 +361,7 @@ describe('BusSettingsPanel —— 查座標', () => {
     await flushPromises()
 
     expect(mocks.putBusSettings).not.toHaveBeenCalled()
-    expect(mocks.message.warning).toHaveBeenCalledWith('請先填園所地址再查座標')
+    expect(mocks.message.warning).toHaveBeenCalledWith('請先填園所地址再定位並儲存地址')
   })
 
   it('確認文案說明會立即儲存（後端沒有「只查不存」的入口）', async () => {

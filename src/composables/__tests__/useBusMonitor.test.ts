@@ -761,3 +761,11 @@ describe('測試輔助函式自檢', () => {
     expect(seen).toEqual(['msg:{"a":1}', 'close:4003'])
   })
 })
+
+
+it('快照保留實際班次日期供調度導覽使用', async () => {
+  const m = useBusMonitor()
+  await m.init()
+  expect(m.trip.value?.trip_date).toBe('2026-07-29')
+  m.teardown()
+})

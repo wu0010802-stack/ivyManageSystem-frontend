@@ -155,6 +155,10 @@ export function useBusDailyDispatch() {
    * 與監看頁 `snapshotFailed` 同一條原則。
    */
   const loadFailed = ref(false)
+  const lastUpdatedAt = ref<number | null>(null)
+  const linkError = ref<string | null>(null)
+  let loadInFlight = false
+  let linkedTripId: number | null = null
   /** 自動排序預覽（`apply: false` 的回應），按「套用」前不落庫。 */
   const optimizePreviewData = ref<OptimizePreviewOut | null>(null)
   const optimizing = ref(false)
@@ -310,10 +314,12 @@ export function useBusDailyDispatch() {
    * 班次表與計畫用 `allSettled` 分開判定：班次表失敗只讓卡片顯示 `班次 #id`
    * （計畫本身仍可編輯），計畫失敗才是真正的載入失敗。
    */
-  async function load(): Promise<void> {
+  async function load({ readOnly = false }: { readOnly?: boolean } = {}): Promise<void> {
+    if (loadInFlight || saving.value || optimizing.value) return
+    loadInFlight = true
     loading.value = true
     loadFailed.value = false
-    const loadPlans = hasPermission(PERMISSION_NAMES.BUS_WRITE)
+    const loadPlans = !readOnly && hasPermission(PERMISSION_NAMES.BUS_WRITE)
       ? ensureBusDailyPlan
       : getBusDailyPlan
     const [metaResult, planResult] = await Promise.allSettled([
@@ -326,17 +332,53 @@ export function useBusDailyDispatch() {
     if (planResult.status === 'rejected') {
       loadFailed.value = true
       plans.value = []
-      selectedTripId.value = null
-      ElMessage.error(apiError(planResult.reason, '載入當日計畫失敗，請重新整理'))
+      ElMessage.error(apiError(planResult.reason, '載入當日計畫失敗，請重試'))
       loading.value = false
+      loadInFlight = false
       return
     }
     plans.value = toPlans(planResult.value.data.items)
     // 換日後舊 trip_id 不存在了；沒有選中的就落在第一張卡
-    if (!plans.value.some((p) => p.trip.id === selectedTripId.value)) {
+    if (linkedTripId !== null) {
+      const target = plans.value.find((p) => p.trip.id === linkedTripId && p.trip.trip_date === date.value)
+      selectedTripId.value = target?.trip.id ?? null
+      linkError.value = target ? null : '找不到指定班次，可能已結束或不在此日期，請自行選擇班次。'
+    } else if (!plans.value.some((p) => p.trip.id === selectedTripId.value)) {
       selectedTripId.value = plans.value[0]?.trip.id ?? null
     }
+    lastUpdatedAt.value = Date.now()
     loading.value = false
+    loadInFlight = false
+  }
+
+  /** 手動更新只讀目前計畫，保留班次與失敗後的重試上下文。 */
+  async function refresh(): Promise<void> {
+    await load({ readOnly: true })
+  }
+
+  /** 監看捷徑只接受完整日期與正整數班次編號，不以路線編號代替。 */
+  async function loadLinkedPlan(linkDate: unknown, tripId: unknown): Promise<void> {
+    if (loadInFlight || saving.value || optimizing.value) return
+    selectedTripId.value = null
+    linkedTripId = null
+    optimizePreviewData.value = null
+    optimizeError.value = null
+    const parsed = typeof linkDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(linkDate)
+      ? parseLocalISODate(linkDate) : null
+    const id = typeof tripId === 'string' && /^[1-9]\d*$/.test(tripId) ? Number(tripId) : NaN
+    const today = todayTaipeiISO()
+    if (!parsed || dateToLocalISO(parsed) !== linkDate || !Number.isSafeInteger(id)
+      || typeof linkDate !== 'string' || linkDate < today || linkDate > isoPlusDays(today, MAX_DAYS_AHEAD)) {
+      linkError.value = '班次連結無效，請選擇日期後更新名單。'
+      plans.value = []
+      loading.value = false
+      return
+    }
+    if (date.value !== linkDate) lastUpdatedAt.value = null
+    date.value = linkDate
+    linkedTripId = id
+    linkError.value = null
+    await refresh()
   }
 
   /**
@@ -344,6 +386,7 @@ export function useBusDailyDispatch() {
    * 建立端點白跑一趟，也不讓畫面短暫清空）。
    */
   async function setDate(next: string): Promise<boolean> {
+    if (loadInFlight || saving.value || optimizing.value) return false
     const today = todayTaipeiISO()
     if (next < today || next > isoPlusDays(today, MAX_DAYS_AHEAD)) {
       ElMessage.error(`只能調度今天起 ${MAX_DAYS_AHEAD} 天內的班次`)
@@ -351,6 +394,9 @@ export function useBusDailyDispatch() {
     }
     if (next === date.value) return true
     date.value = next
+    linkedTripId = null
+    linkError.value = null
+    lastUpdatedAt.value = null
     optimizePreviewData.value = null
     optimizeError.value = null
     await load()
@@ -358,6 +404,9 @@ export function useBusDailyDispatch() {
   }
 
   function selectTrip(tripId: number): void {
+    if (loadInFlight || saving.value || optimizing.value) return
+    linkedTripId = null
+    linkError.value = null
     if (tripId === selectedTripId.value) return
     selectedTripId.value = tripId
     optimizePreviewData.value = null
@@ -633,7 +682,7 @@ export function useBusDailyDispatch() {
     holidayNotice, etaStale, rosterOutOfSync, overCapacity, editable, inProgress, lockedByPermission,
     optimizePreviewData, optimizing, optimizeError, lastError, departedPending,
     students, studentsLoading, studentsFailed, insertCandidates, loadStudents,
-    load, setDate, selectTrip, canEdit,
+    load, refresh, loadLinkedPlan, lastUpdatedAt, linkError, setDate, selectTrip, canEdit,
     insertStop, markExcusedAdmin, unmarkExcused, changeAddress, removeStop, moveStop,
     optimizePreview, applyOptimize, cancelOptimize, resetPlan,
   }

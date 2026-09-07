@@ -17,12 +17,14 @@
  * 兩個 SDK 都動態 import（Leaflet 含 CSS），理由同家長端——不讓地圖庫進首屏 bundle。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, watch, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 import { useBusMonitor, DIRECTION_LABELS } from '@/composables/useBusMonitor'
 import { excuseReasonLabel } from '@/constants/bus'
 import { ensureGoogleMaps } from '@/utils/googleMapsLoader'
 
+const router = useRouter()
 const monitor = useBusMonitor()
 const {
   routes, selectedRouteId, trip, stops, loading, snapshotFailed, rosterOutOfSync,
@@ -274,7 +276,10 @@ onBeforeUnmount(() => {
   <div class="bus-monitor">
     <PageHeader title="娃娃車監看" subtitle="今日班次的車輛位置與各站接送進度">
       <template #actions>
+        <label class="bus-monitor__route-filter">
+          <span>監看路線</span>
         <el-select
+          aria-label="監看路線"
           :model-value="selectedRouteId"
           data-testid="bus-monitor-route"
           placeholder="選擇路線"
@@ -288,6 +293,7 @@ onBeforeUnmount(() => {
             :value="r.id"
           />
         </el-select>
+        </label>
       </template>
     </PageHeader>
 
@@ -306,7 +312,10 @@ onBeforeUnmount(() => {
         :closable="false"
         title="無法取得最新班次資料"
         description="與伺服器的連線出了狀況，畫面上的資訊可能已經過時，因此暫時不顯示地圖。"
-      />
+      >
+        <p>與伺服器的連線出了狀況，畫面上的資訊可能已經過時，因此暫時不顯示地圖。</p>
+        <el-button data-testid="bus-monitor-retry" @click="monitor.refresh">重試</el-button>
+      </el-alert>
 
       <el-empty
         v-else-if="!trip"
@@ -331,8 +340,11 @@ onBeforeUnmount(() => {
           show-icon
           :closable="false"
           title="班次名單有更新，此班次的名單/地址與路線設定不同步"
-          description="請到「今日調度」頁按「重設為預設名單」套用最新內容。"
-        />
+          description="請到「今日調度」確認名單差異，再決定是否重設。"
+        >
+        <p>請到「今日調度」確認名單差異，再決定是否重設。</p>
+          <el-button v-if="trip.trip_date" data-testid="bus-monitor-dispatch" @click="router.push({ path: '/bus/dispatch', query: { date: trip.trip_date, trip_id: String(trip.id) } })">前往此班次調度</el-button>
+        </el-alert>
 
         <el-alert
           v-if="!isLive"
@@ -415,6 +427,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.bus-monitor__route-filter {
+  display: grid;
+  gap: var(--space-1);
+}
+
 .bus-monitor {
   padding: var(--space-4, 16px);
   display: flex;

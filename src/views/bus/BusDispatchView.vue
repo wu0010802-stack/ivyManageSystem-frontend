@@ -22,7 +22,10 @@
  * 站點座標只交給 `BusStopMapTuner` 當地圖起始位置，不顯示數字、不進 console／
  * Sentry／URL query／storage。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { hasPermission } from '@/utils/auth'
+import { PERMISSION_NAMES } from '@/constants/permissions'
 import { ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
 import BusDispatchDateBar from '@/components/bus/BusDispatchDateBar.vue'
@@ -38,9 +41,13 @@ import { useBusDailyDispatch } from '@/composables/useBusDailyDispatch'
 import { DIRECTION_LABELS } from '@/composables/useBusRouteEditor'
 import { busInProgressWriteLabel } from '@/constants/bus'
 
+const route = useRoute()
+const router = useRouter()
+const canManageRoutes = computed(() => hasPermission(PERMISSION_NAMES.BUS_WRITE))
 const dispatch = useBusDailyDispatch()
+let navigationVersion = 0
 const {
-  date, plans, selectedPlan, selectedTripId, loading, saving, loadFailed,
+  date, plans, selectedPlan, selectedTripId, loading, saving, loadFailed, lastUpdatedAt, linkError,
   holidayNotice, etaStale, rosterOutOfSync, overCapacity, editable, inProgress, lockedByPermission,
   optimizePreviewData, optimizing, optimizeError, lastError, departedPending,
   insertCandidates, studentsLoading, studentsFailed,
@@ -52,7 +59,7 @@ const {
  * 會照送（不會 422，optimize 不改 pending 集合只改 seq），然後被 applyOptimize
  * 後的 `load()` 靜默覆蓋掉。收斂到的是一致狀態，但不是使用者以為的那個。
  */
-const busy = computed(() => saving.value || optimizing.value)
+const busy = computed(() => loading.value || saving.value || optimizing.value)
 
 // ── 班次卡片 ────────────────────────────────────────────────────────────────
 type CardStatus = 'none' | 'planned' | 'in_progress' | 'completed' | 'expired'
@@ -139,6 +146,7 @@ async function openOptimize(): Promise<void> {
 }
 
 async function onApplyOptimize(): Promise<void> {
+  if (!optimizeVisible.value) return
   if (await dispatch.applyOptimize()) optimizeVisible.value = false
 }
 
@@ -158,6 +166,7 @@ async function openInsert(): Promise<void> {
 }
 
 async function onInsertSubmit(payload: Parameters<typeof dispatch.insertStop>[0]): Promise<void> {
+  if (!insertVisible.value) return
   insertError.value = null
   if (await dispatch.insertStop(payload)) {
     insertVisible.value = false
@@ -276,6 +285,9 @@ const RESET_COPY = {
 } as const
 
 async function onReset(): Promise<void> {
+  const version = navigationVersion
+  const tripId = selectedTripId.value
+  const tripDate = date.value
   const status = selectedPlan.value?.trip.status
   if (status !== 'planned' && status !== 'in_progress') return
   try {
@@ -285,6 +297,7 @@ async function onReset(): Promise<void> {
   } catch {
     return
   }
+  if (version !== navigationVersion || tripId !== selectedTripId.value || tripDate !== date.value) return
   await dispatch.resetPlan()
 }
 
@@ -298,6 +311,9 @@ async function onReset(): Promise<void> {
  * 接送地址。
  */
 async function onRemove(studentId: number): Promise<void> {
+  const version = navigationVersion
+  const tripId = selectedTripId.value
+  const tripDate = date.value
   const name = stopNameOf(studentId)
   try {
     await ElMessageBox.confirm(
@@ -308,10 +324,38 @@ async function onRemove(studentId: number): Promise<void> {
   } catch {
     return
   }
+  if (version !== navigationVersion || tripId !== selectedTripId.value || tripDate !== date.value) return
   await dispatch.removeStop(studentId)
 }
 
-onMounted(() => { void dispatch.load() })
+// 導航一到就讓舊表單與尚未完成的確認失效，不能等新班次載入完才清理。
+watch(() => [route.query.date, route.query.trip_id], () => {
+  navigationVersion += 1
+  insertVisible.value = false
+  insertError.value = null
+  closeAddress()
+  onCancelOptimize()
+}, { flush: 'sync' })
+
+// 同頁捷徑在請求途中改變時，等目前動作結束後只套用最新連結。
+let navigationPending = false
+function loadNavigation(): void {
+  navigationPending = false
+  if (route.query.date !== undefined || route.query.trip_id !== undefined) {
+    void dispatch.loadLinkedPlan(route.query.date, route.query.trip_id)
+  } else {
+    void dispatch.load()
+  }
+}
+watch(() => [route.query.date, route.query.trip_id], () => {
+  navigationPending = true
+  if (!busy.value) loadNavigation()
+})
+watch(busy, (value) => {
+  if (!value && navigationPending) loadNavigation()
+})
+onMounted(loadNavigation)
+
 </script>
 
 <template>
@@ -321,9 +365,15 @@ onMounted(() => { void dispatch.load() })
     <BusDispatchDateBar
       :model-value="date"
       :holiday-notice="holidayNotice"
+      :last-updated-at="lastUpdatedAt"
+      :busy="busy"
+      :loading="loading"
+      @refresh="dispatch.refresh"
       data-testid="bus-dispatch-datebar"
       @update:model-value="dispatch.setDate"
     />
+
+    <el-alert v-if="linkError" type="warning" :closable="false" :title="linkError" data-testid="bus-dispatch-link-error" />
 
     <el-skeleton v-if="loading" :rows="5" animated />
 
@@ -339,14 +389,19 @@ onMounted(() => { void dispatch.load() })
         show-icon
         :closable="false"
         title="無法取得當日計畫"
-        description="與伺服器的連線出了狀況，請重新整理後再試；在此之前畫面上沒有任何可信的名單。"
-      />
+        description="與伺服器的連線出了狀況，請重試；在此之前畫面上沒有任何可信的名單。"
+      >
+        <p>與伺服器的連線出了狀況，請重試；在此之前畫面上沒有任何可信的名單。</p>
+        <el-button data-testid="bus-dispatch-retry" @click="dispatch.refresh">重試</el-button>
+      </el-alert>
 
       <el-empty
         v-else-if="!plans.length"
         data-testid="bus-dispatch-empty"
-        description="尚未建立任何啟用中的班次，請先到「路線管理」新增"
-      />
+        description="此日期目前沒有可調度的班次"
+      >
+        <el-button v-if="canManageRoutes" @click="router.push('/bus/routes')">前往路線管理</el-button>
+      </el-empty>
 
       <template v-else>
         <div class="bus-dispatch__cards" data-testid="bus-dispatch-cards">
@@ -364,7 +419,7 @@ onMounted(() => { void dispatch.load() })
             <h3 class="bus-dispatch__title" data-testid="bus-dispatch-title">{{ selectedTitle }}</h3>
             <div class="bus-dispatch__actions">
               <el-button
-                :disabled="!editable"
+                :disabled="!editable || busy"
                 :loading="optimizing"
                 data-testid="bus-dispatch-optimize"
                 @click="openOptimize"
@@ -372,7 +427,7 @@ onMounted(() => { void dispatch.load() })
                 自動排序
               </el-button>
               <el-button
-                :disabled="!editable || inProgress"
+                :disabled="!editable || inProgress || busy"
                 data-testid="bus-dispatch-insert"
                 @click="openInsert"
               >
@@ -381,7 +436,7 @@ onMounted(() => { void dispatch.load() })
               <el-button
                 type="danger"
                 plain
-                :disabled="!editable"
+                :disabled="!editable || busy"
                 :loading="saving"
                 data-testid="bus-dispatch-reset"
                 @click="onReset"

@@ -503,19 +503,28 @@ async function onRelocate(id: number): Promise<void> {
     </el-button>
 
     <div v-else class="bus-pickup-address-select__form" data-test="create-form">
+      <label class="bus-pickup-address-select__field">
+        <span>地址名稱</span>
       <el-input
+        aria-label="地址名稱"
         v-model="newLabel"
         :maxlength="MAX_LABEL_LENGTH"
         show-word-limit
         placeholder="名稱（例：阿嬤家）"
         data-test="new-label"
       />
+      </label>
+      <label class="bus-pickup-address-select__field">
+        <span>接送地址（必填）</span>
       <el-input
+        aria-label="接送地址"
+        aria-required="true"
         v-model="newAddress"
         :maxlength="MAX_ADDRESS_LENGTH"
         placeholder="地址（必填）"
         data-test="new-address"
       />
+      </label>
       <div class="bus-pickup-address-select__form-actions">
         <el-button :loading="submitting" type="primary" data-test="create-btn" @click="onSubmitForm">
           {{ editingId === null ? '新增' : '儲存' }}
@@ -527,6 +536,11 @@ async function onRelocate(id: number): Promise<void> {
 </template>
 
 <style scoped>
+.bus-pickup-address-select__field {
+  display: grid;
+  gap: var(--space-1);
+}
+
 .bus-pickup-address-select {
   display: flex;
   flex-direction: column;

@@ -669,3 +669,76 @@ describe('重設為預設名單', () => {
     expect(d.rosterOutOfSync.value).toBe(false)
   })
 })
+
+
+describe('手動更新與監看捷徑', () => {
+  it('成功更新記錄時間並保留班次，失敗不偽造更新時間，重試仍保留選取', async () => {
+    const d = await boot([planItem(), planItem({ trip: trip({ id: 8 }) })])
+    d.selectTrip(8)
+    expect(d.lastUpdatedAt.value).toBe(LOCAL_NOW_MS)
+    vi.setSystemTime(LOCAL_NOW_MS + 60000)
+    await d.refresh()
+    expect(d.selectedTripId.value).toBe(8)
+    expect(d.lastUpdatedAt.value).toBe(LOCAL_NOW_MS + 60000)
+    vi.mocked(getBusDailyPlan).mockRejectedValueOnce(new Error('離線'))
+    await d.refresh()
+    expect(d.loadFailed.value).toBe(true)
+    expect(d.lastUpdatedAt.value).toBe(LOCAL_NOW_MS + 60000)
+    await d.refresh()
+    expect(d.selectedTripId.value).toBe(8)
+  })
+
+  it('更新只讀既有名單，不補建或重設；寫入中不重載', async () => {
+    const d = await boot()
+    vi.clearAllMocks()
+    d.saving.value = true
+    await d.refresh()
+    expect(getBusDailyPlan).not.toHaveBeenCalled()
+    d.saving.value = false
+    await d.refresh()
+    expect(getBusDailyPlan).toHaveBeenCalledOnce()
+    expect(ensureBusDailyPlan).not.toHaveBeenCalled()
+    expect(resetBusDailyPlan).not.toHaveBeenCalled()
+  })
+
+  it('監看捷徑依日期與 trip id 選取，只做 GET', async () => {
+    const d = await boot([planItem(), planItem({ trip: trip({ id: 8, trip_date: '2026-08-27' }) })])
+    vi.clearAllMocks()
+    await d.loadLinkedPlan('2026-08-27', '8')
+    expect(d.date.value).toBe('2026-08-27')
+    expect(getBusDailyPlan).toHaveBeenCalledWith({ date: '2026-08-27' })
+    expect(d.selectedTripId.value).toBe(8)
+    expect(ensureBusDailyPlan).not.toHaveBeenCalled()
+    expect(resetBusDailyPlan).not.toHaveBeenCalled()
+  })
+
+  it.each([['2026-08-27', '999'], ['2026-08-99', '7'], ['2026-08-26', '7x'], ['2026-08-26', ['7']]])(
+    '失效捷徑不選到其他班次：%s %s', async (date, id) => {
+      const d = await boot()
+      vi.clearAllMocks()
+      await d.loadLinkedPlan(date, id)
+      expect(d.selectedPlan.value).toBeNull()
+      expect(d.linkError.value).toBeTruthy()
+      expect(ensureBusDailyPlan).not.toHaveBeenCalled()
+      expect(resetBusDailyPlan).not.toHaveBeenCalled()
+    },
+  )
+})
+
+
+it('連結載入失敗後重試保留目標；載入期間禁止換日與重複更新', async () => {
+  const d = await boot()
+  vi.mocked(getBusDailyPlan).mockRejectedValueOnce(new Error('離線'))
+  await d.loadLinkedPlan(TODAY, '7')
+  expect(d.loadFailed.value).toBe(true)
+  let resolve!: (value: never) => void
+  vi.mocked(getBusDailyPlan).mockReturnValueOnce(new Promise((r) => { resolve = r }))
+  const pending = d.refresh()
+  await d.refresh()
+  expect(await d.setDate('2026-08-27')).toBe(false)
+  expect(d.date.value).toBe(TODAY)
+  resolve({ data: { items: [planItem()] } } as never)
+  await pending
+  expect(d.selectedTripId.value).toBe(7)
+  expect(d.linkError.value).toBeNull()
+})

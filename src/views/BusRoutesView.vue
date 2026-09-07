@@ -523,14 +523,18 @@ const overloadedLabel = computed(() =>
       show-icon
       :closable="false"
       title="無法載入娃娃車班次"
-      description="與伺服器的連線出了狀況，目前無法確認園內既有的班次；請重新整理後再操作，先不要新增班次以免建出重複的班次。"
-    />
+      description="與伺服器的連線出了狀況，目前無法確認園內既有的班次；請重試後再操作，先不要新增班次以免建出重複的班次。"
+    >
+        <p>與伺服器的連線出了狀況，目前無法確認園內既有的班次；請重試後再操作，先不要新增班次以免建出重複的班次。</p>
+      <el-button data-testid="bus-routes-retry" @click="editor.loadRoutes">重試</el-button>
+    </el-alert>
 
     <el-empty
       v-else-if="!routes.length"
       data-testid="bus-routes-empty"
       description="尚未建立任何娃娃車班次"
     >
+        <p>尚未建立任何娃娃車班次</p>
       <el-button type="primary" @click="openCreateDialog">建立第一個班次</el-button>
     </el-empty>
 
