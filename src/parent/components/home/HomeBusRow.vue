@@ -21,7 +21,7 @@ import StatTile from '../StatTile.vue'
 
 // 娃娃車入口卡：只在班次進行中才出現。首頁刻意**不**用 useBusTracking——那支
 // composable 會開 WebSocket，掛在首頁等於每位家長一進 App 就多一條長連線；這裡只要
-// 一次性快照即可，即時位置留給 /bus 頁。
+// 一次性快照即可，到站進度留給 /bus 頁。
 // 隱私：回應含 stop_lat / stop_lng（＝家庭住址），只取用得到的兩個欄位，座標不進
 // 首頁任何狀態。
 const busInfo = ref<{ stopStatus: string; stopsAhead: number } | null>(null)

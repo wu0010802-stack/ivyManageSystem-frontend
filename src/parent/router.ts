@@ -37,7 +37,7 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '出席', tab: 'admin', showBack: true },
     },
     {
-      // 娃娃車即時位置：從首頁入口卡進來，屬 home 分頁
+      // 娃娃車到站進度：從首頁入口卡進來，屬 home 分頁
       path: '/bus',
       name: 'parent-bus',
       component: () => import('./views/BusTrackingView.vue'),

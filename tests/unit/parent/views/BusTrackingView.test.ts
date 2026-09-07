@@ -1,16 +1,4 @@
-/**
- * BusTrackingView — 家長端娃娃車地圖頁。
- *
- * 這頁的核心不變式是「不得把不新鮮的位置呈現成即時的」：
- *  - `stale`（server 60 秒沒收到回報）
- *  - `lastFetchFailedAt`（快照 403 / 500，Task 9 F4 承接）
- * 兩者任一成立時都必須收起地圖並明說，而不是靜靜留著舊座標。
- *
- * 連線狀態只有兩態（Task 9 F1 更正）：正常 / 斷線重連中。4001/4007/4029/1008 全在
- * `ws.accept()` 之前 close，瀏覽器只看得到 1006，因此**不做**「權限不足」之類的 UI。
- *
- * 隱私：站點座標＝家庭住址，不得進 console / storage / document.title / URL。
- */
+/** 家長端到站進度：過期或斷線不得顯示即時預估；家庭座標不得外顯。 */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -56,28 +44,6 @@ vi.mock('@/parent/composables/useBusTracking', () => ({
   useBusTracking: () => trackingMock,
 }))
 
-// Leaflet 動態 import 的替身：只要求「不炸」，地圖本身不是本測試的斷言對象
-const leafletMock = vi.hoisted(() => {
-  const marker = () => {
-    const m = { addTo: () => m, setLatLng: () => m, remove: () => {} }
-    return m
-  }
-  const map = () => {
-    const m = { setView: () => m, remove: () => {}, invalidateSize: () => {}, fitBounds: () => m }
-    return m
-  }
-  return {
-    default: {
-      map,
-      marker,
-      tileLayer: () => ({ addTo: () => ({}) }),
-      divIcon: () => ({}),
-      latLngBounds: () => ({ extend: () => {}, isValid: () => true }),
-    },
-  }
-})
-vi.mock('leaflet', () => leafletMock)
-
 import BusTrackingView from '@/parent/views/BusTrackingView.vue'
 
 const IN_PROGRESS_TRIP = { id: 1, direction: 'morning', status: 'in_progress', auto_closed: false, started_at: '2026-07-29T07:20:00' }
@@ -97,6 +63,8 @@ async function mountView() {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-07-28T23:30:00Z'))
   Object.assign(trackingMock.state, trackingMock.reset())
   trackingMock.init.mockClear()
   trackingMock.teardown.mockClear()
@@ -104,6 +72,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   document.title = ''
 })
 
@@ -121,10 +90,10 @@ describe('BusTrackingView — 四態', () => {
     expect(w.text()).toContain('目前沒有進行中的娃娃車班次')
   })
 
-  it('進行中顯示地圖與進度（前面還有 N 站）', async () => {
+  it('進行中只顯示進度，不建立地圖', async () => {
     setState({ trip: IN_PROGRESS_TRIP, position: POSITION, children: [CHILD_PENDING] })
     const w = await mountView()
-    expect(w.find('[data-testid="bus-map"]').exists()).toBe(true)
+    expect(w.find('[data-testid="bus-map"]').exists()).toBe(false)
     expect(w.text()).toContain('王小明')
     expect(w.text()).toContain('前面還有 2 站')
   })
@@ -177,17 +146,17 @@ describe('BusTrackingView — 四態', () => {
   })
 })
 
-describe('BusTrackingView — 不得把不新鮮的位置當即時', () => {
-  it('stale 時收起地圖並明說訊號中斷', async () => {
+describe('BusTrackingView — 不得把舊進度當即時', () => {
+  it('stale 時明說進度暫停更新', async () => {
     setState({ trip: IN_PROGRESS_TRIP, position: POSITION, children: [CHILD_PENDING], stale: true })
     const w = await mountView()
-    expect(w.text()).toContain('位置訊號暫時中斷')
+    expect(w.text()).toContain('接送進度暫停更新')
     expect(w.find('[data-testid="bus-map"]').exists()).toBe(false)
     // 進度仍要看得到（那是 stop_status，不隨座標過時而失效）
     expect(w.text()).toContain('前面還有 2 站')
   })
 
-  it('快照失敗（F4）時收起地圖並明說無法取得最新位置，而非靜靜顯示舊座標', async () => {
+  it('快照失敗時明說無法取得最新接送進度', async () => {
     setState({
       trip: IN_PROGRESS_TRIP,
       position: POSITION,
@@ -197,13 +166,12 @@ describe('BusTrackingView — 不得把不新鮮的位置當即時', () => {
     })
     const w = await mountView()
     expect(w.find('[data-testid="bus-fetch-error"]').exists()).toBe(true)
-    expect(w.text()).toContain('無法取得最新位置')
+    expect(w.text()).toContain('無法取得最新接送進度')
     expect(w.find('[data-testid="bus-map"]').exists()).toBe(false)
   })
 
   it('冷啟動快照失敗時不得謊稱「今天沒有班次」', async () => {
     // trip 還是 null 只是因為快照根本沒抓到，不代表今天沒有娃娃車。
-    // 這比凍結的地圖更糟——家長會直接不看了。
     setState({ trip: null, lastFetchFailedAt: Date.now() })
     const w = await mountView()
     expect(w.text()).not.toContain('目前沒有進行中的娃娃車班次')
@@ -310,17 +278,6 @@ describe('BusTrackingView — 連線狀態只有兩態', () => {
 })
 
 describe('BusTrackingView — 無障礙', () => {
-  it('地圖容器要有可命名的 role，且不得是 img（img 會把縮放鈕與 OSM 授權連結一起藏起來）', async () => {
-    setState({ trip: IN_PROGRESS_TRIP, position: POSITION })
-    const w = await mountView()
-    const map = w.find('[data-testid="bus-map"]')
-    // ARIA 不允許為 generic role 命名 → 無 role 的 div 上的 aria-label 多數 AT 會忽略；
-    // 但 img 會讓子節點變 presentational。region / group 兩者兼得。
-    expect(map.attributes('role')).not.toBe('img')
-    expect(['region', 'group']).toContain(map.attributes('role'))
-    expect(map.attributes('aria-label')).toBeTruthy()
-  })
-
   it('三種動態降級提示都要 role="status"，螢幕閱讀器才收得到', async () => {
     setState({ trip: IN_PROGRESS_TRIP, position: POSITION, lastFetchFailedAt: Date.now() })
     const failed = await mountView()
@@ -396,7 +353,8 @@ describe('BusTrackingView — 自己站 ETA（FE-PARENT-03）', () => {
       children: [{ ...CHILD_PENDING, eta: '2026-07-29T07:35:00' }],
     })
     const w = await mountView()
-    expect(w.find('[data-testid="bus-eta"]').text()).toBe('預計 07:35 到')
+    expect(w.find('[data-testid="bus-eta"]').text()).toContain('約 5 分鐘後到')
+    expect(w.find('[data-testid="bus-eta"]').text()).toContain('預計 07:35 到')
     expect(w.text()).toContain('前面還有 2 站')
   })
 
@@ -409,17 +367,17 @@ describe('BusTrackingView — 自己站 ETA（FE-PARENT-03）', () => {
       children: [{ ...CHILD_PENDING, eta: '2026-07-29T16:05:00' }],
     })
     const w = await mountView()
-    expect(w.find('[data-testid="bus-eta"]').text()).toBe('預計 16:05 到')
+    expect(w.find('[data-testid="bus-eta"]').text()).toContain('預計 16:05 到')
   })
 
-  it('尚未排定（eta=null）時不顯示 ETA 區塊', async () => {
+  it('尚未排定（eta=null）時明說預估時間待更新', async () => {
     setState({
       trip: IN_PROGRESS_TRIP,
       position: POSITION,
       children: [{ ...CHILD_PENDING, eta: null }],
     })
     const w = await mountView()
-    expect(w.find('[data-testid="bus-eta"]').exists()).toBe(false)
+    expect(w.find('[data-testid="bus-eta"]').text()).toBe('預估時間待更新')
   })
 
   it('已上車／略過的站不顯示 ETA（「預計 07:35 到」對已發生的事只會誤導）', async () => {
@@ -429,9 +387,43 @@ describe('BusTrackingView — 自己站 ETA（FE-PARENT-03）', () => {
       children: [
         { ...CHILD_PENDING, student_id: 3, stop_status: 'departed', stops_ahead: 0, eta: '2026-07-29T07:35:00' },
         { ...CHILD_PENDING, student_id: 4, stop_status: 'excused', stops_ahead: 0, eta: '2026-07-29T07:40:00' },
+        { ...CHILD_PENDING, student_id: 5, stop_status: 'skipped', stops_ahead: 0, eta: '2026-07-29T07:40:00' },
       ],
     })
     const w = await mountView()
     expect(w.find('[data-testid="bus-eta"]').exists()).toBe(false)
+  })
+})
+
+
+describe('BusTrackingView — 剩餘時間可信度', () => {
+  it.each([
+    { stale: true },
+    { lastFetchFailedAt: 1 },
+    { wsConnected: false, lastWsClose: { code: 1006 } },
+  ])('資料中斷時只顯示最近進度，不繼續倒數：%s', async (patch) => {
+    setState({ trip: IN_PROGRESS_TRIP, position: POSITION,
+      children: [{ ...CHILD_PENDING, eta: '2026-07-29T07:35:00' }], ...patch })
+    const w = await mountView()
+    expect(w.text()).toContain('最近一次')
+    expect(w.text()).toContain('前面還有 2 站')
+    expect(w.text()).not.toContain('分鐘後到')
+    expect(w.text()).not.toContain('預計 07:35 到')
+  })
+
+  it('每 30 秒更新剩餘時間，到期後不宣稱抵達，離頁清除計時器', async () => {
+    setState({ trip: IN_PROGRESS_TRIP, position: POSITION,
+      children: [{ ...CHILD_PENDING, stops_ahead: 0, eta: '2026-07-29T07:31:01' }] })
+    const w = await mountView()
+    expect(w.text()).toContain('約 2 分鐘後到')
+    expect(w.text()).toContain('下一站就是您這站')
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(w.text()).toContain('約 1 分鐘後到')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(w.text()).toContain('預估時間更新中')
+    expect(w.text()).not.toContain('分鐘後到')
+    expect(w.text()).not.toContain('已抵達')
+    w.unmount()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

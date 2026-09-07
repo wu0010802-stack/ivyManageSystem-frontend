@@ -86,7 +86,7 @@ export const QUICK_ACTION_CATALOG: Record<string, QuickActionModule> = {
   bus: {
     key: 'bus',
     label: '娃娃車',
-    sub: '即時位置',
+    sub: '到站進度',
     tone: 'sky',
     route: '/bus',
     icon: 'directions_bus',
