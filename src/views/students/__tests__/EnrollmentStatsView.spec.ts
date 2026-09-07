@@ -10,6 +10,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import EnrollmentStatsView from '../EnrollmentStatsView.vue'
+import EnrollmentLedgerPanel from '../EnrollmentLedgerPanel.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 
 const statsResponse = {
@@ -204,6 +205,21 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
     expect(api.getEnrollmentLedger).toHaveBeenCalledWith(
       expect.objectContaining({ date_from: '2027-02-01', date_to: '2027-07-31' }),
     )
+  })
+
+  it('面板內縮小日期範圍後，頁面層要用新的結束日重新對帳', async () => {
+    // 橫幅講的日子必須跟著下方明細走，否則兩者對不起來。
+    // 這條路徑只在 v-model 雙向回寫成立時才通，值得單獨守著。
+    const api = await import('@/api/studentEnrollment')
+    const wrapper = mountView()
+    await flushPromises()
+    vi.mocked(api.getLedgerReconcile).mockClear()
+
+    const panel = wrapper.findComponent(EnrollmentLedgerPanel)
+    panel.vm.$emit('update:dateRange', ['2026-09-01', '2026-09-05'])
+    await flushPromises()
+
+    expect(api.getLedgerReconcile).toHaveBeenCalledWith({ date: '2026-09-05' })
   })
 
   it('重新整理同時刷新現值、對帳與帳，不是只刷一半', async () => {
