@@ -8,12 +8,24 @@
  *
  * 資料源全部是既有唯讀 API，失敗逐項降級（拿不到可靠數字的項目只顯示狀態與
  * 入口，絕不顯示推估／假數字）。佇列不含任何學生姓名等 PII，只有聚合計數與金額。
+ *
+ * 2026-09-07 bug hunt 修正（八項都是「有事要做卻報綠燈」）：
+ * - 待辦判定一律與後端 close 檢查同軸：代收／存摺查 status=pending（四個未結
+ *   狀態），不是只查 imported；存摺不再用「本月」closeSummary 而是全期間列表，
+ *   否則跨月遺留的未分類交易永遠不會提示。
+ * - 發單批次改看 unresolved_count：產過單不代表沒漏單（略過未解析的學生）。
+ * - 現金交接看的是「所有未結批次」而非只有今天那一筆。
+ * - 預繳退款導向現金項目（PrepaymentRefundsDialog 的所在），不是費用單退費頁。
+ * - 關帳改盯「上個月」：本月還沒結束就催關帳，而關帳會 409 鎖死當月後續入帳。
+ * - 快取有 TTL 且隨身分切換清空（原本離開 /fees 再回來永遠是舊數字）。
+ * - 載入失敗的項目另立分組並辨識 403，不再混進「沒有待辦」。
  */
 import { computed, reactive, ref } from 'vue'
 import { formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 import {
+  getBankTransactions,
   getBillSlipBatches,
   getCashHandovers,
   getClosePeriods,
@@ -22,6 +34,7 @@ import {
   getFeePeriods,
   getFeeSummary,
 } from '@/api/fees'
+import { onAdminSessionReset } from '@/utils/adminSession'
 import type { FeeNavTarget, FeeWorkspaceKey } from './feesNavigation'
 
 export type FeeQueueState = 'ok' | 'action' | 'muted' | 'unknown'
@@ -69,22 +82,54 @@ interface ClosePeriodLite {
 interface BillSlipBatchLite {
   net_total: number
   records_generated_count: number
+  /** 檢核檔姓名對不上在籍學生、產單時被略過的非零元列（＝這些學生永久沒有費用單） */
+  unresolved_count?: number
+  unresolved_amount?: number
 }
+
+/** 待辦數字最多沿用這麼久；超過就重抓（離開 /fees 再回來要拿得到新數字） */
+const STALE_AFTER_MS = 60_000
+
+/** 未結交接批：draft／reopened＝會計還沒提交，submitted＝老闆還沒簽收 */
+const HANDOVER_PENDING_STATUSES = new Set(['draft', 'reopened', 'submitted'])
 
 // ── module scope 共用狀態（工作台與主導航頁籤共用一次載入）────────────────
 const state = reactive({
   loading: true,
   loadedOnce: false,
+  /** 上次載入完成的時間戳（Date.now）；配合 STALE_AFTER_MS 決定要不要重抓 */
+  loadedAt: 0,
+  /** 這輪載入有沒有任何一支被後端以 403 擋下（權限不足，不是系統故障） */
+  forbidden: false,
   closeSummary: null as CloseSummaryLite | null,
   todayHandover: null as HandoverLite | null,
+  pendingHandovers: [] as HandoverLite[],
   handoversLoaded: false,
   currentPeriod: null as string | null,
   feeSummary: null as FeeSummaryLite | null,
   feeSummaryLoaded: false,
   monthClosed: null as boolean | null,
-  billSlips: null as { total: number; pending: number; pendingAmount: number } | null,
+  prevMonthClosed: null as boolean | null,
+  billSlips: null as {
+    total: number
+    pending: number
+    pendingAmount: number
+    unresolved: number
+    unresolvedAmount: number
+  } | null,
   collectionPending: null as number | null,
+  passbookPending: null as number | null,
 })
+
+/** axios 錯誤是不是 403（權限不足）——用來把「你沒有權限」與「系統壞了」分開講 */
+function isForbidden(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } } | null)?.response?.status
+  return status === 403
+}
+
+function noteFailure(err: unknown): void {
+  if (isForbidden(err)) state.forbidden = true
+}
 
 // 刻意不在 module 載入當下就求值：一來長開的分頁跨午夜後日期會凍住，
 // 二來 import 時取值會早於測試的 vi.mock('@/utils/format') 生效時機。
@@ -101,18 +146,26 @@ async function loadCloseSummary() {
   const [y, m] = monthLabel.value.split('-').map(Number)
   try {
     state.closeSummary = (await getCloseSummary(y, m)) as unknown as CloseSummaryLite
-  } catch {
+  } catch (err) {
+    noteFailure(err)
     state.closeSummary = null // 降級：不顯示數字，只留入口
   }
 }
 
-async function loadTodayHandover() {
+// 只看「今天」會把前幾天卡在草稿／待簽收的現金整批藏起來（staging 實測：
+// 09-03 的 NT$13,000 draft 一直掛著，工作台卻寫「今日尚無現金收款」無待辦，
+// 而同一份資料在關帳檢查裡是紅的）。改為收下所有未結批次。
+async function loadHandovers() {
   try {
     const data = await getCashHandovers()
     const items = (data.items ?? []) as HandoverLite[]
     state.todayHandover = items.find((b) => b.business_date === currentToday()) ?? null
+    state.pendingHandovers = items.filter((b) =>
+      HANDOVER_PENDING_STATUSES.has(b.status),
+    )
     state.handoversLoaded = true
-  } catch {
+  } catch (err) {
+    noteFailure(err)
     state.handoversLoaded = false
   }
 }
@@ -131,21 +184,30 @@ async function loadFeeSummary() {
       period: state.currentPeriod,
     })) as FeeSummaryLite
     state.feeSummaryLoaded = true
-  } catch {
+  } catch (err) {
+    noteFailure(err)
     state.feeSummaryLoaded = false
   }
 }
 
 async function loadMonthClosed() {
   const [y, m] = monthLabel.value.split('-').map(Number)
+  const prevY = m === 1 ? y - 1 : y
+  const prevM = m === 1 ? 12 : m - 1
   try {
     const data = await getClosePeriods()
     const items = (data.items ?? []) as ClosePeriodLite[]
-    state.monthClosed = items.some(
-      (row) => row.close_year === y && row.close_month === m && row.status === 'closed',
-    )
-  } catch {
+    const closed = (yy: number, mm: number) =>
+      items.some(
+        (row) =>
+          row.close_year === yy && row.close_month === mm && row.status === 'closed',
+      )
+    state.monthClosed = closed(y, m)
+    state.prevMonthClosed = closed(prevY, prevM)
+  } catch (err) {
+    noteFailure(err)
     state.monthClosed = null
+    state.prevMonthClosed = null
   }
 }
 
@@ -157,53 +219,89 @@ async function loadBillSlips() {
     const pendingRows = rows.filter(
       (r) => r.net_total > 0 && r.records_generated_count === 0,
     )
+    // 產過單 ≠ 沒漏單：勾「略過未解析」跳過的學生（檢核檔姓名對不上在籍
+    // 學生）永遠沒有費用單，而批次的 records_generated_count 仍 > 0。
     state.billSlips = {
       total: rows.length,
       pending: pendingRows.length,
       pendingAmount: pendingRows.reduce((sum, r) => sum + (r.net_total ?? 0), 0),
+      unresolved: rows.reduce((sum, r) => sum + (r.unresolved_count ?? 0), 0),
+      unresolvedAmount: rows.reduce((sum, r) => sum + (r.unresolved_amount ?? 0), 0),
     }
-  } catch {
+  } catch (err) {
+    noteFailure(err)
     state.billSlips = null
   }
 }
 
-// 代收明細待媒合筆數：只取分頁 total，不拉明細（page_size=1）
+// 待處理筆數：只取分頁 total，不拉明細（page_size=1）。
+// status=pending 是後端的聚合值＝close 檢查認定的四個未結狀態
+// （imported / suggested / unmatched / partially_allocated）；只查 imported
+// 會把「部分分配」等仍有未分配餘額的錢算成完成。
 async function loadCollectionPending() {
   try {
     const data = (await getCollectionPayments({
-      status: 'imported',
+      status: 'pending',
       page: 1,
       page_size: 1,
     })) as unknown as { total?: number }
     state.collectionPending = data.total ?? 0
-  } catch {
+  } catch (err) {
+    noteFailure(err)
     state.collectionPending = null
+  }
+}
+
+// 存摺待分類改打列表端點（全期間）而非 closeSummary（本月）：目的地頁列的是
+// 全期間，用本月口徑會讓跨月遺留的未分類交易在工作台永遠顯示「已全數分類」。
+async function loadPassbookPending() {
+  try {
+    const data = (await getBankTransactions({
+      status: 'pending',
+      page: 1,
+      page_size: 1,
+    })) as unknown as { total?: number }
+    state.passbookPending = data.total ?? 0
+  } catch (err) {
+    noteFailure(err)
+    state.passbookPending = null
   }
 }
 
 async function loadAll(initial: boolean) {
   if (initial) state.loading = true
   today.value = todayISO()
+  state.forbidden = false
   await Promise.allSettled([
     loadCloseSummary(),
-    loadTodayHandover(),
+    loadHandovers(),
     loadFeeSummary(),
     loadMonthClosed(),
     loadBillSlips(),
     loadCollectionPending(),
+    loadPassbookPending(),
   ])
   state.loading = false
   state.loadedOnce = true
+  state.loadedAt = Date.now()
 }
 
-/** 首次載入（重複呼叫共用同一個 in-flight promise，不會重打 API） */
+/**
+ * 首次載入；已有資料但超過 STALE_AFTER_MS 就重抓（不閃 skeleton）。
+ *
+ * 舊版只看 loadedOnce，於是使用者離開 /fees 去別的模組處理完事情再回來時，
+ * 元件雖重新 mount 卻一支 API 都不打，畫面停在上次進站的數字（連「今天」
+ * 那行都是舊的），只能整頁重新整理。
+ */
 function ensureLoaded(): Promise<void> {
-  if (state.loadedOnce) return Promise.resolve()
-  if (!inflight) {
-    inflight = loadAll(true).finally(() => {
-      inflight = null
-    })
+  if (inflight) return inflight
+  if (state.loadedOnce && Date.now() - state.loadedAt < STALE_AFTER_MS) {
+    return Promise.resolve()
   }
+  const initial = !state.loadedOnce
+  inflight = loadAll(initial).finally(() => {
+    inflight = null
+  })
   return inflight
 }
 
@@ -216,22 +314,36 @@ function refresh(): Promise<void> {
   return inflight
 }
 
-/** 測試用：清空 module scope 狀態 */
+/**
+ * 清空 module scope 狀態。
+ *
+ * 除了測試，**身分切換時一定要跑**：state 活在 module scope，登出後同一個
+ * 分頁換人登入時 SPA 不會 reload，前一位使用者的全校金額會直接顯示給下一位
+ * （包含後端會 403 拒絕他的那些數字）。
+ */
 export function __resetFeeOverview() {
   state.loading = true
   state.loadedOnce = false
+  state.loadedAt = 0
+  state.forbidden = false
   state.closeSummary = null
   state.todayHandover = null
+  state.pendingHandovers = []
   state.handoversLoaded = false
   state.currentPeriod = null
   state.feeSummary = null
   state.feeSummaryLoaded = false
   state.monthClosed = null
+  state.prevMonthClosed = null
   state.billSlips = null
   state.collectionPending = null
+  state.passbookPending = null
   today.value = ''
   inflight = null
 }
+
+// login / logout / impersonate 都會發這個事件（local）；另一分頁換身分為 remote。
+onAdminSessionReset(__resetFeeOverview)
 
 // ── 佇列項目 ──────────────────────────────────────────────────────────────
 
@@ -299,7 +411,7 @@ function collectionItem(): FeeQueueItem {
       // 金額未知（只取了 total），以筆數當排序權重的下界，確保排在無金額項之前
       amount: 1,
       title: `代收明細 ${pending} 筆待媒合`,
-      detail: '銀行代收已入帳但尚未分配到費用單',
+      detail: '銀行代收已入帳但尚未分配完畢（含部分分配）',
     }
   }
   return {
@@ -319,18 +431,18 @@ function passbookItem(): FeeQueueItem {
     target: { ws: 'billing' as FeeWorkspaceKey, view: 'matching', src: 'passbook' },
     amount: 0,
   }
-  const s = state.closeSummary
-  if (!s) {
-    return { ...base, state: 'unknown', detail: '無法載入本月統計，點入入帳媒合查看' }
+  const pending = state.passbookPending
+  if (pending == null) {
+    return { ...base, state: 'unknown', detail: '無法載入存摺交易，點入入帳媒合查看' }
   }
-  const pending = s.bank.unclassified_count
   if (pending > 0) {
     return {
       ...base,
       state: 'action',
-      amount: s.bank.unallocated,
+      // 金額未知（只取了 total），以筆數當排序權重的下界
+      amount: 1,
       title: `存摺交易 ${pending} 筆待分類`,
-      detail: `未分配 ${formatCurrency(s.bank.unallocated)}`,
+      detail: '銀行存摺已入帳但尚未分類或分配完畢',
     }
   }
   return {
@@ -342,6 +454,14 @@ function passbookItem(): FeeQueueItem {
   }
 }
 
+/**
+ * 現金交接。
+ *
+ * 只看「今天」是原本的漏報來源：前幾天卡在草稿或待簽收的整批現金完全不會
+ * 出現在待辦（staging 實測 09-03 的 NT$13,000 draft 掛了四天，工作台寫
+ * 「今日尚無現金收款」判無待辦，而同一份資料在關帳檢查裡是紅的）。
+ * 這裡看的是所有未結批次；今天那筆若也未結，文案沿用原本的狀態措辭。
+ */
 function handoverItem(): FeeQueueItem {
   const base = {
     key: 'handover',
@@ -353,8 +473,45 @@ function handoverItem(): FeeQueueItem {
   if (!state.handoversLoaded) {
     return { ...base, state: 'unknown', detail: '無法載入交接狀態，點入每日交接查看' }
   }
-  const batch = state.todayHandover
-  if (!batch) {
+  const pending = state.pendingHandovers
+  const today = state.todayHandover
+  const todayPending =
+    today && HANDOVER_PENDING_STATUSES.has(today.status) ? today : null
+
+  if (pending.length > 0) {
+    const amount = pending.reduce((sum, b) => sum + (b.cash_receipt_total ?? 0), 0)
+    const olderDates = pending
+      .filter((b) => b.business_date !== currentToday())
+      .map((b) => b.business_date)
+      .sort()
+    const awaitingOwner = pending.filter((b) => b.status === 'submitted')
+    // 全部都待簽收 → 動作在老闆身上；只要有一筆還沒提交，動作在會計身上
+    const allAwaitingOwner = awaitingOwner.length === pending.length
+    const olderNote = olderDates.length
+      ? `含 ${olderDates[0]}${olderDates.length > 1 ? ` 等 ${olderDates.length} 天` : ''} 的舊批次`
+      : ''
+    if (allAwaitingOwner) {
+      return {
+        ...base,
+        state: 'action',
+        amount,
+        title: `現金 ${formatCurrency(amount)} 待老闆簽收`,
+        detail: olderNote || '簽收後本月才能關帳',
+        actionLabel: '去簽收',
+      }
+    }
+    return {
+      ...base,
+      state: 'action',
+      amount,
+      title: todayPending
+        ? `現金 ${formatCurrency(amount)} 尚未完成交接`
+        : `${formatCurrency(amount)} 的現金交接未完成`,
+      detail: olderNote || '提交後由老闆簽收',
+    }
+  }
+
+  if (!today) {
     return {
       ...base,
       state: 'muted',
@@ -363,44 +520,33 @@ function handoverItem(): FeeQueueItem {
       actionLabel: '去登記',
     }
   }
-  if (batch.status === 'draft' || batch.status === 'reopened') {
-    return {
-      ...base,
-      state: 'action',
-      amount: batch.cash_receipt_total,
-      title: `今日現金 ${formatCurrency(batch.cash_receipt_total)} 尚未提交交接`,
-      detail: '提交後由老闆簽收',
-    }
-  }
-  if (batch.status === 'submitted') {
-    return {
-      ...base,
-      state: 'action',
-      amount: batch.cash_receipt_total,
-      title: `現金 ${formatCurrency(batch.cash_receipt_total)} 待老闆簽收`,
-      detail: '簽收後本月才能關帳',
-      actionLabel: '去簽收',
-    }
-  }
   const varianceNote =
-    batch.variance != null && batch.variance !== 0
-      ? `，簽收差異 ${formatCurrency(batch.variance)}`
+    today.variance != null && today.variance !== 0
+      ? `簽收差異 ${formatCurrency(today.variance)}`
       : ''
   return {
     ...base,
     state: 'ok',
     title: '今日交接已完成',
-    detail: varianceNote ? varianceNote.replace(/^，/, '') : '',
+    detail: varianceNote,
     actionLabel: '查看',
   }
 }
 
+/**
+ * 預繳退款（PrepaymentCashRefund，狀態 requested／approved）。
+ *
+ * ⚠ 目的地是「收款 › 現金項目」而不是「收款 › 退款」：後者是費用單退費
+ * （FeeRefundsTab 打 /fees/refunds），完全不列預繳退款；預繳退款的核准與
+ * 交付介面是 CashItemsView 裡的 PrepaymentRefundsDialog。導錯頁會讓使用者
+ * 找不到東西，而 no_pending_refunds 又是關帳阻擋項。
+ */
 function refundItem(): FeeQueueItem {
   const base = {
     key: 'refunds',
     title: '預繳退款',
     actionLabel: '去處理',
-    target: { ws: 'billing' as FeeWorkspaceKey, view: 'refunds' },
+    target: { ws: 'billing' as FeeWorkspaceKey, view: 'cashItems' },
     amount: 0,
   }
   const s = state.closeSummary
@@ -414,7 +560,7 @@ function refundItem(): FeeQueueItem {
       state: 'action',
       amount: 1,
       title: `預繳退款 ${pending} 筆待處理`,
-      detail: '待核准或交付現金',
+      detail: '在「現金項目 › 預繳款」的退款清單核准或交付現金',
     }
   }
   return {
@@ -426,6 +572,21 @@ function refundItem(): FeeQueueItem {
   }
 }
 
+/** 上一個月的 YYYY-MM（關帳的實際對象） */
+function prevMonthLabel(): string {
+  const [y, m] = monthLabel.value.split('-').map(Number)
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
+}
+
+/**
+ * 關帳。
+ *
+ * ⚠ 催的對象是**上個月**，不是本月。關帳會寫入 close period，之後該月的
+ * 所有入帳／分配／沖銷一律被後端 assert_month_open 擋成 409，必須 reopen
+ * 才能繼續。舊版在 checklist 全過時把「本月可以關帳」標成待處理，等於從
+ * 每月 1 號就把一個會癱瘓當月收款的動作置頂催促（結算頁籤的紅徽章也因此
+ * 整個月不可能歸零）。本月只呈現進度，不催。
+ */
 function closeItem(): FeeQueueItem {
   const base = {
     key: 'close',
@@ -433,6 +594,17 @@ function closeItem(): FeeQueueItem {
     actionLabel: '去月結',
     target: { ws: 'settlement' as FeeWorkspaceKey, view: 'close' },
     amount: 0,
+  }
+  if (state.monthClosed === null) {
+    return { ...base, state: 'unknown', detail: '無法載入關帳紀錄，點入月結查看' }
+  }
+  if (state.prevMonthClosed === false) {
+    return {
+      ...base,
+      state: 'action',
+      title: `上個月（${prevMonthLabel()}）尚未關帳`,
+      detail: '月份已結束，關帳後快照凍結',
+    }
   }
   if (state.monthClosed === true) {
     return {
@@ -448,20 +620,15 @@ function closeItem(): FeeQueueItem {
     return { ...base, state: 'unknown', detail: '無法載入關帳檢查，點入月結查看' }
   }
   const failing = Object.values(s.checklist).filter((ok) => !ok).length
-  if (failing > 0) {
-    return {
-      ...base,
-      state: 'action',
-      title: `本月關帳有 ${failing} 項檢查未通過`,
-      detail: '逐項修正後才能直接關帳',
-      actionLabel: '去修正',
-    }
-  }
   return {
     ...base,
-    state: 'action',
-    title: '本月可以關帳',
-    detail: '關帳前檢查全數通過',
+    state: 'muted',
+    title: '本月進行中',
+    detail:
+      failing > 0
+        ? `關帳前檢查目前 ${failing} 項未通過；月底結束後再關帳`
+        : '關帳前檢查全數通過；月底結束後再關帳',
+    actionLabel: '查看',
   }
 }
 
@@ -500,6 +667,20 @@ function slipGenItem(): FeeQueueItem {
       detail: `${s.pending} 個批次已匯入，應收合計 ${formatCurrency(s.pendingAmount)}`,
     }
   }
+  // 產過單不代表沒漏單：檢核檔姓名對不上在籍學生的列被略過後，那些學生
+  // 永遠沒有費用單，也不會出現在應收帳款或未繳名單裡。
+  if (s.unresolved > 0) {
+    return {
+      ...base,
+      state: 'action',
+      amount: s.unresolvedAmount,
+      title: `發單批次有 ${s.unresolved} 名學生未產生費用單`,
+      detail:
+        `檢核檔姓名對不上在籍學生，合計 ${formatCurrency(s.unresolvedAmount)}；` +
+        '到匯入紀錄逐列指定學生後重新產單',
+      actionLabel: '去指定',
+    }
+  }
   return {
     ...base,
     state: 'ok',
@@ -529,9 +710,19 @@ export function useFeeOverview() {
       .sort((a, b) => b.amount - a.amount),
   )
 
+  /**
+   * 載入失敗（403／500）的列。刻意與 restItems 分開：舊版把它們混進寫死的
+   * 「沒有待辦」分組標題底下，七支 API 全掛時整頁讀起來像一切正常。
+   */
+  const unknownItems = computed(() =>
+    allItems.value
+      .filter((i) => i.state === 'unknown')
+      .sort((a, b) => RESIDUAL_ORDER.indexOf(a.key) - RESIDUAL_ORDER.indexOf(b.key)),
+  )
+
   const restItems = computed(() =>
     allItems.value
-      .filter((i) => i.state !== 'action')
+      .filter((i) => i.state !== 'action' && i.state !== 'unknown')
       .sort((a, b) => RESIDUAL_ORDER.indexOf(a.key) - RESIDUAL_ORDER.indexOf(b.key)),
   )
 
@@ -551,9 +742,16 @@ export function useFeeOverview() {
     loadedOnce: computed(() => state.loadedOnce),
     today: computed(() => currentToday()),
     monthLabel,
-    queueItems: computed(() => [...actionItems.value, ...restItems.value]),
+    queueItems: computed(() => [
+      ...actionItems.value,
+      ...restItems.value,
+      ...unknownItems.value,
+    ]),
     actionItems,
     restItems,
+    unknownItems,
+    /** 這輪載入有 403：畫面要說「你沒有權限」而不是「無法載入」 */
+    forbidden: computed(() => state.forbidden),
     todoCounts,
     /** 發單批次待產單數（應收帳款頂端提示條用） */
     pendingBillSlips: computed(() => state.billSlips?.pending ?? 0),

@@ -35,6 +35,7 @@ const apiMocks = vi.hoisted(() => ({
   getClosePeriods: vi.fn(),
   getBillSlipBatches: vi.fn(),
   getCollectionPayments: vi.fn(),
+  getBankTransactions: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
@@ -100,9 +101,21 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
       partial_count: 0,
       total_unpaid: 0,
     })
-    apiMocks.getClosePeriods.mockResolvedValue({ items: [] })
+    // 上個月已關帳＝關帳列不是待辦；本檔測的是導航殼層，徽章不該干擾斷言
+    const now = new Date()
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    apiMocks.getClosePeriods.mockResolvedValue({
+      items: [
+        {
+          close_year: prev.getFullYear(),
+          close_month: prev.getMonth() + 1,
+          status: 'closed',
+        },
+      ],
+    })
     apiMocks.getBillSlipBatches.mockResolvedValue([])
     apiMocks.getCollectionPayments.mockResolvedValue({ total: 0 })
+    apiMocks.getBankTransactions.mockResolvedValue({ total: 0 })
   })
 
   it('預設進入工作台，且 URL 正規化為 ?ws=workbench', async () => {

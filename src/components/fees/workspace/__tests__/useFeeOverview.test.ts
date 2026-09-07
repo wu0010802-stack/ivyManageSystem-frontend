@@ -16,6 +16,7 @@ const apiMocks = vi.hoisted(() => ({
   getClosePeriods: vi.fn(),
   getBillSlipBatches: vi.fn(),
   getCollectionPayments: vi.fn(),
+  getBankTransactions: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
@@ -43,12 +44,16 @@ function allClear() {
     total_unpaid: 0,
   })
   apiMocks.getClosePeriods.mockResolvedValue({
-    items: [{ close_year: 2026, close_month: 8, status: 'closed' }],
+    items: [
+      { close_year: 2026, close_month: 8, status: 'closed' },
+      { close_year: 2026, close_month: 7, status: 'closed' },
+    ],
   })
   apiMocks.getBillSlipBatches.mockResolvedValue([
-    { net_total: 100, records_generated_count: 5 },
+    { net_total: 100, records_generated_count: 5, unresolved_count: 0 },
   ])
   apiMocks.getCollectionPayments.mockResolvedValue({ total: 0 })
+  apiMocks.getBankTransactions.mockResolvedValue({ total: 0 })
 }
 
 beforeEach(() => {
@@ -82,8 +87,9 @@ describe('useFeeOverview 載入去重', () => {
 
   it('代收明細只取分頁 total（page_size=1，不拉明細）', async () => {
     await useFeeOverview().ensureLoaded()
+    // status=pending＝close 檢查的四個未結狀態；只查 imported 會漏掉部分分配
     expect(apiMocks.getCollectionPayments).toHaveBeenCalledWith({
-      status: 'imported',
+      status: 'pending',
       page: 1,
       page_size: 1,
     })
@@ -136,11 +142,7 @@ describe('useFeeOverview 待辦數（主導航徽章）', () => {
       partial_count: 2,
       total_unpaid: 1054000,
     })
-    apiMocks.getCloseSummary.mockResolvedValue({
-      bank: { unallocated: 9720, unclassified_count: 2 },
-      owner: { pending_refunds: 0 },
-      checklist: { a: true },
-    })
+    apiMocks.getBankTransactions.mockResolvedValue({ total: 2 })
     apiMocks.getCashHandovers.mockResolvedValue({
       items: [
         {
@@ -153,6 +155,7 @@ describe('useFeeOverview 待辦數（主導航徽章）', () => {
     })
     const o = useFeeOverview()
     await o.ensureLoaded()
+    // passbook 的金額未知（只取 total），排序權重固定為 1 → 排在有金額的兩項之後
     expect(o.actionItems.value.map((i) => i.key)).toEqual([
       'receivable',
       'handover',
@@ -172,8 +175,8 @@ describe('useFeeOverview 待辦數（主導航徽章）', () => {
 
   it('發單批次待產單數與金額供應收帳款提示條使用', async () => {
     apiMocks.getBillSlipBatches.mockResolvedValue([
-      { net_total: 2148669, records_generated_count: 0 },
-      { net_total: 1775200, records_generated_count: 119 },
+      { net_total: 2148669, records_generated_count: 0, unresolved_count: 0 },
+      { net_total: 1775200, records_generated_count: 119, unresolved_count: 0 },
     ])
     const o = useFeeOverview()
     await o.ensureLoaded()
@@ -184,6 +187,7 @@ describe('useFeeOverview 待辦數（主導航徽章）', () => {
   it('API 失敗的項目不計入待辦數（不虛構待辦）', async () => {
     apiMocks.getCloseSummary.mockRejectedValue(new Error('403'))
     apiMocks.getCollectionPayments.mockRejectedValue(new Error('403'))
+    apiMocks.getClosePeriods.mockRejectedValue(new Error('403'))
     const o = useFeeOverview()
     await o.ensureLoaded()
     expect(o.todoCounts.value.billing).toBe(0)

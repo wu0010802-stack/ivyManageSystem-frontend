@@ -14,6 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   getClosePeriods: vi.fn(),
   getBillSlipBatches: vi.fn(),
   getCollectionPayments: vi.fn(),
+  getBankTransactions: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
@@ -79,9 +80,15 @@ beforeEach(() => {
     partial_count: 5,
     total_unpaid: 480000,
   })
-  apiMocks.getClosePeriods.mockResolvedValue({ total: 0, items: [] })
+  // 上個月（2026-07）已關帳＝關帳列不是待辦；本月未關帳（進行中）
+  apiMocks.getClosePeriods.mockResolvedValue({
+    total: 1,
+    items: [{ close_year: 2026, close_month: 7, status: 'closed' }],
+  })
   apiMocks.getBillSlipBatches.mockResolvedValue([])
   apiMocks.getCollectionPayments.mockResolvedValue({ total: 0 })
+  // 存摺待分類改由列表端點（全期間）供給，不再讀本月 closeSummary
+  apiMocks.getBankTransactions.mockResolvedValue({ total: 3 })
 })
 
 describe('FeeWorkbench 工作佇列', () => {
@@ -102,6 +109,7 @@ describe('FeeWorkbench 工作佇列', () => {
     expect(apiMocks.getFeeSummary).toHaveBeenCalledTimes(1)
     expect(apiMocks.getClosePeriods).toHaveBeenCalledTimes(1)
     expect(apiMocks.getCollectionPayments).toHaveBeenCalledTimes(1)
+    expect(apiMocks.getBankTransactions).toHaveBeenCalledTimes(1)
   })
 
   it('待處理項目排在最前，且金額大者優先', async () => {
@@ -109,17 +117,16 @@ describe('FeeWorkbench 工作佇列', () => {
     await flushAll()
     const rows = wrapper.findAll('.queue-row')
     const keys = rows.map((r) => r.attributes('data-test'))
-    // 待處理依金額大到小：費用單 480,000 → 交接 15,800 → 存摺 10,800
-    // → 退款（無金額語意，權重 1）→ 關帳（無金額，0）
-    expect(keys.slice(0, 5)).toEqual([
+    // 待處理依金額大到小：費用單 480,000 → 交接 15,800
+    // → 存摺／退款（金額未知，權重 1）；關帳本月進行中不再是待辦
+    expect(keys.slice(0, 2)).toEqual([
       'workbench-row-receivable',
       'workbench-row-handover',
-      'workbench-row-passbook',
-      'workbench-row-refunds',
-      'workbench-row-close',
     ])
-    expect(rows.slice(0, 5).every((r) => r.classes('queue-row--action'))).toBe(true)
-    expect(rows.slice(5).some((r) => r.classes('queue-row--action'))).toBe(false)
+    expect(keys.slice(0, 4)).toContain('workbench-row-passbook')
+    expect(keys.slice(0, 4)).toContain('workbench-row-refunds')
+    expect(rows.slice(0, 4).every((r) => r.classes('queue-row--action'))).toBe(true)
+    expect(rows.slice(4).some((r) => r.classes('queue-row--action'))).toBe(false)
   })
 
   it('可靠數據可得時顯示實際計數與金額', async () => {
@@ -127,10 +134,12 @@ describe('FeeWorkbench 工作佇列', () => {
     await flushAll()
     const text = wrapper.text()
     expect(text).toContain('存摺交易 3 筆待分類')
-    expect(text).toContain('NT$10,800')
-    expect(text).toContain('今日現金 NT$15,800 尚未提交交接')
+    expect(text).toContain('現金 NT$15,800 尚未完成交接')
     expect(text).toContain('預繳退款 2 筆待處理')
-    expect(text).toContain('本月關帳有 3 項檢查未通過')
+    // 本月尚未結束 → 只呈現進度，不催關帳（關帳會 409 鎖死當月後續入帳）
+    expect(text).toContain('本月進行中')
+    expect(text).toContain('關帳前檢查目前 3 項未通過')
+    expect(text).not.toContain('本月可以關帳')
     expect(text).toContain('45 筆未收齊')
     expect(text).toContain('NT$480,000')
   })
@@ -144,7 +153,8 @@ describe('FeeWorkbench 工作佇列', () => {
     expect(wrapper.emitted('navigate')).toEqual([
       [{ ws: 'billing', view: 'matching', src: 'passbook' }],
       [{ ws: 'settlement', view: 'handover' }],
-      [{ ws: 'billing', view: 'refunds' }],
+      // 預繳退款在「現金項目」的 PrepaymentRefundsDialog，不是費用單退費頁
+      [{ ws: 'billing', view: 'cashItems' }],
     ])
   })
 
@@ -160,11 +170,15 @@ describe('FeeWorkbench 工作佇列', () => {
   it('統計 API 失敗時降級：不顯示數字、保留狀態說明與入口', async () => {
     apiMocks.getCloseSummary.mockRejectedValue(new Error('403'))
     apiMocks.getCashHandovers.mockRejectedValue(new Error('network'))
+    apiMocks.getBankTransactions.mockRejectedValue(new Error('network'))
     const wrapper = mountWorkbench()
     await flushAll()
     const text = wrapper.text()
-    expect(text).toContain('無法載入本月統計')
+    expect(text).toContain('無法載入退款狀態')
     expect(text).toContain('無法載入交接狀態')
+    expect(text).toContain('無法載入存摺交易')
+    // 失敗的列不得混進「沒有待辦」分組
+    expect(text).toContain('無法載入')
     expect(text).not.toContain('NT$10,800')
     // 入口仍在
     expect(wrapper.find('[data-test="workbench-action-passbook"]').exists()).toBe(true)
@@ -184,8 +198,11 @@ describe('FeeWorkbench 工作佇列', () => {
 
   it('本月已關帳時顯示完成狀態', async () => {
     apiMocks.getClosePeriods.mockResolvedValue({
-      total: 1,
-      items: [{ close_year: 2026, close_month: 8, status: 'closed' }],
+      total: 2,
+      items: [
+        { close_year: 2026, close_month: 8, status: 'closed' },
+        { close_year: 2026, close_month: 7, status: 'closed' },
+      ],
     })
     const wrapper = mountWorkbench()
     await flushAll()
