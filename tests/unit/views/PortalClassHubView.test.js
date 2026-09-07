@@ -186,10 +186,11 @@ describe('PortalClassHubView', () => {
     expect(getTodayHub).toHaveBeenCalledTimes(2)
   })
 
-  it('shows the sticky empty-state message when sticky_next is null', async () => {
+  it('沒有排定時間但仍有待辦時，不誤報今日任務都完成', async () => {
     const wrapper = mount(PortalClassHubView, MOUNT_OPTS)
     await flushPromises()
-    expect(wrapper.text()).toContain('今日任務都完成')
+    expect(wrapper.text()).toContain('仍有 11 項待處理')
+    expect(wrapper.text()).not.toContain('今日任務都完成')
   })
 
   // Phase 1 殼層改版：學生 tab 退出底部導覽後，班級工作台補「班級學生」入口

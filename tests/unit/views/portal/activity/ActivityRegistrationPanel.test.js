@@ -92,17 +92,13 @@ describe('ActivityRegistrationPanel', () => {
     expect(w.find('.registration-panel').exists()).toBe(false)
   })
 
-  it('renders 4 summary cards with correct values', () => {
+  it('摘要列顯示正確的報名、正式、候補與繳費人數', () => {
     const w = mount(ActivityRegistrationPanel, {
       props: { data: DATA, activeClass: null },
       global: GLOBAL,
     })
-    const cards = w.findAll('.el-card')
-    expect(cards.length).toBe(4)
-    expect(w.text()).toContain('30')  // total_registrations
-    expect(w.text()).toContain('25')  // total_enrolled
-    expect(w.text()).toContain('3')   // total_waitlist
-    expect(w.text()).toContain('20')  // total_paid
+    const summary = w.find('.reg-summary').text().replace(/\s+/g, ' ')
+    expect(summary).toBe('已報名 30 人・ 正式 25・ 候補 3・ 已繳費 20')
   })
 
   it('shows classroom tabs when 2+ classrooms', () => {

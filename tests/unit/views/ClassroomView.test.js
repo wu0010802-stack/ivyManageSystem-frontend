@@ -35,6 +35,8 @@ vi.mock('vue-router', () => ({
   // ClassroomView 以 route.query.selected 還原「返回班級」深連結（e08b108d），
   // 未 mock useRoute 會讓元件 setup 直接拋錯。
   useRoute: () => ({ query: {} }),
+  onBeforeRouteLeave: vi.fn(),
+  onBeforeRouteUpdate: vi.fn(),
 }))
 
 vi.mock('@/api/classrooms', () => ({

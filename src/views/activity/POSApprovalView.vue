@@ -586,7 +586,9 @@ const PENDING_RANGE_MAX_SEGMENTS = 8
 /** 以 UTC 曆算推移天數（與 taipeiOffsetISO 同一套做法，避免本地時區偏移）。 */
 function isoShiftDays(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d) + days * 86400000).toISOString().slice(0, 10)
+  const shifted = new Date(Date.UTC(y, m - 1, d) + days * 86400000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`
 }
 
 function splitPendingRange(

@@ -1,7 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 import POSSearchPanel from '../POSSearchPanel.vue'
+
+// 月曆初始月以今日為準，固定到報名資料的月份，避免跨月後找不到測試列。
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-08-01T04:00:00Z'))
+})
+afterEach(() => vi.useRealTimers())
 
 // STATE-04：待審核報名（課程 status='pending_review'／'promoted_pending'，
 // registration.total_amount 因此為 0）會被後端 outstanding 清單刻意放行，讓收銀員

@@ -179,11 +179,11 @@ describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => 
     }
   })
 
-  it('subtitle 為不誤導文案（不宣稱「本學期」）', async () => {
+  it('頁首保留學費管理標題，不宣稱所有工作區都限本學期', async () => {
     const w = mountView()
     await flushAll()
     const header = w.find('[data-test="page-header"]').text()
-    expect(header).toContain('收款、對帳與結算的日常工作區')
+    expect(header).toContain('學費管理')
     expect(header).not.toContain('本學期')
   })
 })
