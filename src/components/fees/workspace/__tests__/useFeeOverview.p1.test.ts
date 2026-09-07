@@ -414,3 +414,28 @@ describe('⑨ 沒有簽收/關帳權限時不得叫人去按不存在的按鈕',
     expect(itemOf(o, 'close').actionLabel).toBe('去月結')
   })
 })
+
+describe('⑩ 進到工作台一律重抓（TTL 不得擋住「離開再回來」）', () => {
+  it('元件重新 mount 時就算在 TTL 內也重打 API', async () => {
+    const { mount } = await import('@vue/test-utils')
+    const FeeWorkbench = (await import('../FeeWorkbench.vue')).default
+    const stubs = {
+      'el-skeleton': { template: '<div />' },
+      'el-icon': { template: '<i><slot /></i>' },
+    }
+    const flush = async () => {
+      for (let i = 0; i < 8; i += 1) await Promise.resolve()
+    }
+
+    const first = mount(FeeWorkbench, { global: { stubs } })
+    await flush()
+    expect(apiMocks.getFeeSummary).toHaveBeenCalledTimes(1)
+    first.unmount()
+
+    // 同一秒內重新進站（遠在 TTL 內）——仍必須重抓
+    const second = mount(FeeWorkbench, { global: { stubs } })
+    await flush()
+    expect(apiMocks.getFeeSummary).toHaveBeenCalledTimes(2)
+    second.unmount()
+  })
+})

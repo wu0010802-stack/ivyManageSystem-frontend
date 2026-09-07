@@ -130,6 +130,7 @@ const emit = defineEmits<{ navigate: [target: FeeNavTarget] }>()
 
 const {
   loading,
+  loadedOnce,
   today,
   monthLabel,
   actionItems,
@@ -140,11 +141,22 @@ const {
   refresh,
 } = useFeeOverview()
 
-// KeepAlive 下切回工作台時重新整理待辦（不閃 skeleton）；
-// 首次 activated 與 mounted 連發，用旗標避免重複載入。
+/**
+ * 進到工作台一律重抓，不吃 TTL 快取。
+ *
+ * 「離開 /fees 去別的模組處理完事情再回來」時元件會重新 mount，那正是最需要
+ * 新數字的時刻——ensureLoaded 的 TTL 只是用來擋住同一次進站的重複載入
+ * （StudentFeeView 的頁籤徽章也會呼叫），不該讓使用者看到自己剛處理過的
+ * 舊狀態。refresh 與 ensureLoaded 共用同一個 in-flight promise，所以父子
+ * 同時掛載仍只打一輪 API。
+ *
+ * 首次載入走 ensureLoaded 以顯示 skeleton；之後的 activate／re-mount 都用
+ * refresh（不閃 skeleton）。
+ */
 let mountedOnce = false
 onMounted(async () => {
-  await ensureLoaded()
+  if (loadedOnce.value) refresh()
+  else await ensureLoaded()
   mountedOnce = true
 })
 onActivated(() => {
