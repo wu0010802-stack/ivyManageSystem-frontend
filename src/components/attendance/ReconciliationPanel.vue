@@ -94,21 +94,26 @@ async function saveShift() {
 
 <template>
   <section class="reconciliation" aria-label="班表與打卡核對">
-    <p class="reconciliation__intro">依應出勤名單比對已匯入的打卡。班別不符時先提出建議，確認後才更新當日班表。</p>
+    <div class="reconciliation__setup">
+    <p class="reconciliation__intro">比對班表與打卡，確認差異後再調整當日班別。</p>
     <div class="reconciliation__controls">
       <label>起日<input v-model="start" type="date" :disabled="saving" aria-label="核對起日" /></label>
       <label>迄日<input v-model="end" type="date" :disabled="saving" aria-label="核對迄日" /></label>
       <el-button type="primary" :loading="loading" :disabled="saving || !start || !end || start > end" @click="runPreview">重新核對</el-button>
     </div>
     <label class="reconciliation__complete">
-      <input v-model="complete" type="checkbox" :disabled="!completeAllowed || saving" />
+      <input v-model="complete" type="checkbox" :disabled="!completeAllowed || saving" aria-describedby="reconciliation-completeness-hint" />
       我已完整匯入上述期間所有員工、所有打卡來源的紀錄
     </label>
-    <p class="reconciliation__hint">一次最多核對 31 天。完整性確認只適用本次範圍；換日期或再次匯入後需重新確認。當日尚未結束，不判定整日缺勤。</p>
-    <p v-if="!complete" class="reconciliation__hint">尚未確認資料完整：沒有打卡者會列為「資料待補」。</p>
+    <p id="reconciliation-completeness-hint" class="reconciliation__hint">{{ complete ? '完整性聲明僅適用目前區間；疑似缺勤仍須查證。' : '尚未確認資料完整：沒有打卡者會列為「資料待補」。' }}</p>
+    <details class="reconciliation__guide">
+      <summary>核對範圍與缺勤判讀說明</summary>
+      <p class="reconciliation__hint">一次最多核對 31 天。完整性確認只適用本次範圍；換日期或再次匯入後需重新確認。當日尚未結束，不判定整日缺勤。</p>
+    </details>
+    </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <div v-if="data" class="reconciliation__filters">
-      <p role="status">共 {{ data.rows.length }} 筆人日，{{ unresolvedCount }} 筆待核對</p>
+      <p class="reconciliation__count" role="status"><strong>{{ unresolvedCount }} 筆待核對</strong><span>共 {{ data.rows.length }} 筆人日</span></p>
       <label>顯示<select v-model="filter" aria-label="核對狀態"><option value="exceptions">待核對</option><option value="all">全部</option><option v-for="(label, status) in labels" :key="status" :value="status">{{ label }}</option></select></label>
       <label>人員<input v-model="search" type="search" aria-label="搜尋核對人員" placeholder="姓名或工號" /></label>
     </div>
@@ -124,9 +129,11 @@ async function saveShift() {
           <div><dt>下班打卡</dt><dd>{{ row.punch_out ? formatDateTimeTW(row.punch_out) : '無紀錄' }}</dd></div>
           <div><dt>可能班別</dt><dd>{{ row.candidates.length ? row.candidates.map(c => `${c.name} ${c.work_start}–${c.work_end}`).join('、') : '無明確建議' }}</dd></div>
         </dl>
-        <div class="reconciliation__reason"><p>{{ row.reason }}</p><el-button v-if="canWrite" :disabled="saving || loading" @click="openConfirm(row)">確認當日班別</el-button></div>
+        <p class="reconciliation__reason">{{ row.reason }}</p>
+        <div class="reconciliation__actions"><el-button v-if="canWrite" :disabled="saving || loading" @click="openConfirm(row)">確認當日班別</el-button>
         <el-button v-if="['missing_punch', 'anomaly', 'suspected_absence'].includes(row.status)" text @click="emit('records', row)">查看出勤明細</el-button>
         <el-button v-if="canWrite && !row.punch_in && !row.punch_out" text @click="emit('import', row)">補匯入當日紀錄</el-button>
+        </div>
       </article>
     </div>
     <FormDialog v-model="dialogOpen" title="確認當日班別" size="compact" :enter-submit="false" :loading="saving" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
@@ -153,21 +160,39 @@ async function saveShift() {
 </template>
 
 <style scoped>
-.reconciliation { display: grid; gap: var(--space-3); }
+.reconciliation { display: grid; gap: var(--space-4); min-width: 0; }
+.reconciliation__setup { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); background: var(--el-fill-color-light); }
 .reconciliation__intro { margin: 0; color: var(--el-text-color-primary); }
 .reconciliation__controls, .reconciliation__filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; }
-.reconciliation__controls label, .reconciliation__filters label { display: grid; gap: var(--space-1); }
-.reconciliation input:not([type='checkbox']), .reconciliation select { min-height: var(--touch-target-min); border: 1px solid var(--el-border-color); border-radius: var(--radius-sm); padding: var(--space-2); background: var(--el-bg-color); color: var(--el-text-color-primary); font: inherit; }
-.reconciliation input:focus-visible, .reconciliation select:focus-visible { outline: 2px solid var(--el-color-primary); }
+.reconciliation__controls label, .reconciliation__filters label { display: grid; gap: var(--space-1); font-size: var(--text-sm); }
+.reconciliation input:not([type='checkbox']), .reconciliation select { min-width: 0; max-width: 100%; min-height: var(--touch-target-min); border: 1px solid var(--el-border-color); border-radius: var(--radius-sm); padding: var(--space-2); background: var(--el-bg-color); color: var(--el-text-color-primary); font: inherit; }
+.reconciliation input:focus-visible, .reconciliation select:focus-visible, .reconciliation summary:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .reconciliation__complete { display: flex; align-items: center; gap: var(--space-2); min-height: var(--touch-target-min); }
-.reconciliation__hint { color: var(--el-text-color-secondary); font-size: var(--font-size-sm); margin: 0; }
-.reconciliation__row { border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); padding: var(--space-4); margin-bottom: var(--space-3); background: var(--el-bg-color); }
-.reconciliation__row header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
-.reconciliation__row header span { color: var(--el-text-color-secondary); }
-.reconciliation__row dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
-.reconciliation__row dt { font-size: var(--font-size-sm); color: var(--el-text-color-secondary); }
+.reconciliation__hint { color: var(--el-text-color-secondary); font-size: var(--text-sm); margin: 0; }
+.reconciliation__guide summary { cursor: pointer; color: var(--el-text-color-regular); font-size: var(--text-sm); padding-block: var(--space-2); }
+.reconciliation__count { display: grid; gap: var(--space-1); margin: 0 auto 0 0; align-self: center; }
+.reconciliation__count span { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
+.reconciliation__list { border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); background: var(--el-bg-color); }
+.reconciliation__row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); }
+.reconciliation__row + .reconciliation__row { border-top: 1px solid var(--el-border-color-light); }
+.reconciliation__row:focus-within { background: var(--el-fill-color-light); }
+.reconciliation__row header { grid-column: span 2; display: flex; flex-wrap: wrap; align-content: start; align-items: center; gap: var(--space-1) var(--space-2); }
+.reconciliation__row header > span:not(.el-tag) { flex-basis: 100%; color: var(--el-text-color-secondary); font-size: var(--text-sm); }
+.reconciliation__row dl { grid-column: span 6; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
+.reconciliation__row dt { font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 .reconciliation__row dd { margin: var(--space-1) 0 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.reconciliation__reason { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.reconciliation__reason p { margin: 0; }
-@media (--to-sm) { .reconciliation__row dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } .reconciliation__controls label { flex: 1; min-width: 140px; } }
+.reconciliation__reason { grid-column: span 4; margin: 0; color: var(--el-text-color-regular); font-size: var(--text-sm); align-self: center; }
+.reconciliation__actions { grid-column: span 4; display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; }
+.reconciliation__actions .el-button { margin-left: 0; }
+@media (--to-sm) {
+  .reconciliation__setup { padding: var(--space-3); }
+  .reconciliation__row { grid-template-columns: minmax(0, 1fr); padding: var(--space-3); gap: var(--space-3); }
+  .reconciliation__row > header, .reconciliation__row > dl, .reconciliation__row > .reconciliation__reason, .reconciliation__row > .reconciliation__actions { grid-column: 1 / -1; }
+  .reconciliation__row dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reconciliation__controls label, .reconciliation__filters label { flex: 1; min-width: 0; }
+  .reconciliation__controls > .el-button { width: 100%; min-height: var(--touch-target-min); }
+  .reconciliation__count { flex-basis: 100%; }
+  .reconciliation__actions { justify-content: flex-start; }
+  .reconciliation__actions .el-button, .reconciliation__guide summary { min-height: var(--touch-target-min); }
+}
 </style>

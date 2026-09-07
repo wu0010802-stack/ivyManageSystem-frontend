@@ -584,18 +584,19 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
     <el-alert title="已有打卡紀錄的當日班別，請由出勤核對確認並重算。" type="info" :closable="false">
       <el-button v-if="hasPermission('ATTENDANCE_READ')" text @click="emit('reconcile', weekStart)">前往班表與打卡核對</el-button>
     </el-alert>
-    <h2>排班管理</h2>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <el-tab-pane label="每週排班" name="schedule">
-        <!-- Week Controls -->
-        <el-card class="control-panel">
+        <!-- 週期選擇與班表操作 -->
+        <section class="control-panel" aria-label="每週排班工具列">
           <div class="controls">
+            <div class="week-navigation" role="group" aria-label="選擇排班週期">
             <el-button @click="changeWeek(-1)" :icon="'ArrowLeft'">上週</el-button>
             <el-date-picker
               v-model="weekStart"
               type="date"
               placeholder="選擇日期"
+              aria-label="排班週期日期"
               format="YYYY-MM-DD"
               value-format="YYYY-MM-DD"
               style="width: 160px;"
@@ -603,7 +604,8 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
             />
             <el-button @click="changeWeek(1)">下週 <el-icon><ArrowRight /></el-icon></el-button>
             <span class="week-label">{{ weekLabel }}</span>
-            <div class="spacer" />
+            </div>
+            <div class="schedule-actions" role="group" aria-label="班表操作">
             <el-dropdown split-button @click="copyPrevWeek" :loading="monthCopyLoading">
               複製上週排班
               <template #dropdown>
@@ -618,8 +620,9 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
             <el-button @click="downloadShiftTemplate">下載範本</el-button>
             <el-button @click="shiftImportVisible = true">匯入班表</el-button>
             <el-button type="primary" @click="saveAll" :loading="saving">儲存排班</el-button>
+            </div>
           </div>
-        </el-card>
+        </section>
 
         <!-- 週工時超時預警（後端 warnings；常駐到下次儲存或手動關閉） -->
         <el-alert
@@ -982,7 +985,24 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
 
 <style scoped>
 .control-panel {
-  margin-bottom: 4px;
+  padding-block: var(--space-3);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+.week-navigation, .schedule-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.week-navigation { flex: 1 1 100%; }
+.schedule-actions { flex: 1 1 100%; }
+.schedule-actions > .el-button { margin-left: 0; }
+.schedule-actions > .el-button--primary { margin-left: auto; }
+@media (--to-sm) {
+  .week-navigation .week-label { flex-basis: 100%; }
+  .schedule-actions > .el-button { min-height: var(--touch-target-min); }
 }
 .controls {
   display: flex;
