@@ -7059,7 +7059,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Bill Slip Batches */
+        /**
+         * List Bill Slip Batches
+         * @description 發單批次列表（期別新到舊）。
+         *
+         *     回裸陣列（既有契約）；``limit`` 開成參數，讓消費端在批次累積後仍能
+         *     拉到較舊的未產單／未解析批次，不會因寫死的上限而從待辦裡消失。
+         */
         get: operations["list_bill_slip_batches_api_fees_bill_slip_batches_get"];
         put?: never;
         /** Import Bill Slip Batch */
@@ -59890,6 +59896,7 @@ export interface operations {
             query?: {
                 bill_month?: number | null;
                 bill_year?: number | null;
+                limit?: number;
             };
             header?: never;
             path?: never;

@@ -35,6 +35,11 @@ vi.mock('@/utils/adminSession', () => ({
   },
 }))
 
+const authMocks = vi.hoisted(() => ({
+  hasPermission: vi.fn((_p: string) => true),
+}))
+vi.mock('@/utils/auth', () => authMocks)
+
 const TODAY = '2026-08-25'
 vi.mock('@/utils/format', () => ({ todayTaipeiISO: () => TODAY }))
 vi.mock('@/utils/academic', () => ({
@@ -85,6 +90,7 @@ function itemOf(o: ReturnType<typeof useFeeOverview>, key: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  authMocks.hasPermission.mockImplementation(() => true)
   // 刻意不清 listeners：註冊發生在 module 求值當下（import 時），清掉就測不到
   __resetFeeOverview()
   allClear()
@@ -365,5 +371,46 @@ describe('⑧ 載入失敗不得偽裝成沒事', () => {
     const o = useFeeOverview()
     await o.ensureLoaded()
     expect(o.forbidden.value).toBe(false)
+  })
+})
+
+describe('⑨ 沒有簽收/關帳權限時不得叫人去按不存在的按鈕', () => {
+  it('無 FEE_CLOSE_APPROVE 時交接與關帳的動作文案改為「查看」', async () => {
+    authMocks.hasPermission.mockImplementation((p: string) => p !== 'FEE_CLOSE_APPROVE')
+    apiMocks.getCashHandovers.mockResolvedValue({
+      items: [
+        {
+          business_date: '2026-08-22',
+          status: 'submitted',
+          cash_receipt_total: 13000,
+          variance: null,
+        },
+      ],
+    })
+    apiMocks.getClosePeriods.mockResolvedValue({ items: [] })
+    const o = useFeeOverview()
+    await o.ensureLoaded()
+    // CloseTab / CashHandoverTab 的簽收與關帳按鈕都掛 v-if="canApprove"，
+    // 沒權限的人點「去簽收」進去看不到任何可按的東西。
+    expect(itemOf(o, 'handover').actionLabel).toBe('查看')
+    expect(itemOf(o, 'close').actionLabel).toBe('查看')
+  })
+
+  it('有權限時維持原本的行動文案', async () => {
+    apiMocks.getCashHandovers.mockResolvedValue({
+      items: [
+        {
+          business_date: '2026-08-22',
+          status: 'submitted',
+          cash_receipt_total: 13000,
+          variance: null,
+        },
+      ],
+    })
+    apiMocks.getClosePeriods.mockResolvedValue({ items: [] })
+    const o = useFeeOverview()
+    await o.ensureLoaded()
+    expect(itemOf(o, 'handover').actionLabel).toBe('去簽收')
+    expect(itemOf(o, 'close').actionLabel).toBe('去月結')
   })
 })

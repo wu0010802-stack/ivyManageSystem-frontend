@@ -35,6 +35,8 @@ import {
   getFeeSummary,
 } from '@/api/fees'
 import { onAdminSessionReset } from '@/utils/adminSession'
+import { hasPermission } from '@/utils/auth'
+import { PERMISSION_NAMES } from '@/constants/permissions'
 import type { FeeNavTarget, FeeWorkspaceKey } from './feesNavigation'
 
 export type FeeQueueState = 'ok' | 'action' | 'muted' | 'unknown'
@@ -85,6 +87,15 @@ interface BillSlipBatchLite {
   /** 檢核檔姓名對不上在籍學生、產單時被略過的非零元列（＝這些學生永久沒有費用單） */
   unresolved_count?: number
   unresolved_amount?: number
+}
+
+/**
+ * 老闆簽收與關帳都掛 FEE_CLOSE_APPROVE（CloseTab / CashHandoverTab 的按鈕
+ * 都是 v-if="canApprove"）。沒這個權限的人看到「去簽收」「去月結」，點進去
+ * 一個可按的東西都沒有——文案降級成「查看」，狀態仍如實呈現。
+ */
+function canApproveClose(): boolean {
+  return hasPermission(PERMISSION_NAMES.FEE_CLOSE_APPROVE)
 }
 
 /** 待辦數字最多沿用這麼久；超過就重抓（離開 /fees 再回來要拿得到新數字） */
@@ -509,7 +520,7 @@ function handoverItem(): FeeQueueItem {
         amount,
         title: `現金 ${formatCurrency(amount)} 待老闆簽收`,
         detail: olderNote || '簽收後本月才能關帳',
-        actionLabel: '去簽收',
+        actionLabel: canApproveClose() ? '去簽收' : '查看',
       }
     }
     return {
@@ -616,6 +627,7 @@ function closeItem(): FeeQueueItem {
       state: 'action',
       title: `上個月（${prevMonthLabel()}）尚未關帳`,
       detail: '月份已結束，關帳後快照凍結',
+      actionLabel: canApproveClose() ? '去月結' : '查看',
     }
   }
   if (state.monthClosed === true) {
