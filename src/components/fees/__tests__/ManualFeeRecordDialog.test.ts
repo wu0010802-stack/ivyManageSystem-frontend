@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ManualFeeRecordDialog from '../ManualFeeRecordDialog.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), error: vi.fn(), success: vi.fn() }))
 vi.mock('@/api/fees', () => ({ createManualFeeRecord: mocks.create }))
@@ -79,4 +80,13 @@ describe('單筆費用補登', () => {
     expect((wrapper.get('[data-test="manual-fee-name"]').element as HTMLInputElement).value).toBe(' 衣服 ')
     expect(mocks.error).toHaveBeenCalled()
   })
+})
+
+
+it('採用共用表單殼，保留送出中禁止關閉及既有 Enter 送出路徑', () => {
+  const wrapper = render()
+  const dialog = wrapper.findComponent(FormDialog)
+  expect(dialog.exists()).toBe(true)
+  expect(dialog.props('size')).toBe('compact')
+  expect(dialog.props('enterSubmit')).toBe(false)
 })

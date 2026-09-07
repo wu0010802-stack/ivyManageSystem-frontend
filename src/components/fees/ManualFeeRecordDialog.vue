@@ -1,6 +1,7 @@
 <template>
-  <el-dialog
-    :model-value="modelValue" title="新增單筆費用" width="min(560px, 94vw)"
+  <FormDialog
+    :model-value="modelValue" title="新增單筆費用" size="compact"
+    :loading="saving" :enter-submit="false" :destroy-on-close="false"
     append-to-body :close-on-click-modal="false" :close-on-press-escape="!saving"
     :show-close="!saving" @update:model-value="close"
   >
@@ -32,7 +33,7 @@
       <el-button :disabled="saving" data-test="manual-fee-cancel" @click="close(false)">取消</el-button>
       <el-button type="primary" :loading="saving" :disabled="!valid || saving" data-test="manual-fee-submit" @click="submit">新增費用</el-button>
     </template>
-  </el-dialog>
+  </FormDialog>
   <StudentPickerDialog v-model="pickerOpen" @pick="pickStudent" />
 </template>
 <script setup lang="ts">
@@ -43,6 +44,7 @@ import type { Schema } from '@/api/_generated/typed'
 import { todayTaipeiISO } from '@/utils/format'
 import { friendlyError } from '@/utils/errorMessages'
 import StudentPickerDialog from './StudentPickerDialog.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
 
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{
