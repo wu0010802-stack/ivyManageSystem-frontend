@@ -13,6 +13,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { PERMISSION_NAMES } from '@/constants/permissions'
 
 const apiMocks = vi.hoisted(() => ({
   getFeePeriods: vi.fn(),
@@ -26,9 +27,8 @@ const apiMocks = vi.hoisted(() => ({
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
-vi.mock('@/utils/auth', () => ({
-  hasPermission: () => true,
-}))
+const authMocks = vi.hoisted(() => ({ hasPermission: vi.fn((_permission: string) => true) }))
+vi.mock('@/utils/auth', () => authMocks)
 
 vi.mock('@/utils/academic', () => ({
   getCurrentAcademicTerm: () => ({ school_year: 115, semester: 1 }),
@@ -109,6 +109,7 @@ vi.mock('../FeeBillSlipDrawer.vue', () => ({
 }))
 
 const GLOBAL_STUBS = {
+  ManualFeeRecordDialog: { name: 'ManualFeeRecordDialog', props: ['modelValue'], emits: ['created', 'update:modelValue'], template: '<div />' },
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-skeleton': { template: '<div data-testid="skeleton" />' },
   'el-popover': { template: '<div><slot name="reference" /></div>' },
@@ -130,6 +131,7 @@ import { __resetFeeOverview } from '../useFeeOverview'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  authMocks.hasPermission.mockReturnValue(true)
   __resetFeeOverview()
   apiMocks.getFeePeriods.mockResolvedValue(['115-1', '114-2'])
   apiMocks.getCloseSummary.mockRejectedValue(new Error('n/a'))
@@ -146,6 +148,43 @@ beforeEach(() => {
 })
 
 describe('FeeBillingWorkspace 應收帳款模式切換', () => {
+  it('可寫者可新增，建立後刷新學期與總覽並聚焦新費用學生和學期', async () => {
+    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    await flushAll()
+    await wrapper.get('[data-test="records-mode-switch-list"]').trigger('click')
+    const oldRecords = wrapper.findComponent({ name: 'FeeRecordsTab' }).vm
+    await wrapper.get('[data-test="records-mode-switch-statement"]').trigger('click')
+    await wrapper.get('[data-test="billing-create-manual-fee"]').trigger('click')
+    const dialog = wrapper.findComponent({ name: 'ManualFeeRecordDialog' })
+    expect(dialog.props('modelValue')).toBe(true)
+    const beforeSummaryCalls = apiMocks.getFeeSummary.mock.calls.length
+    const beforePeriodCalls = apiMocks.getFeePeriods.mock.calls.length
+    dialog.vm.$emit('created', { student_name: '測試學生', period: '114-1' })
+    await flushAll()
+    const records = wrapper.findComponent({ name: 'FeeRecordsTab' })
+    expect(records.vm).not.toBe(oldRecords)
+    expect(records.props('defaultPeriod')).toBe('114-1')
+    expect(records.props('initialSearch')).toBe('測試學生')
+    expect(records.props('periodOptions')).toContain('114-1')
+    expect(apiMocks.getFeePeriods.mock.calls.length).toBeGreaterThan(beforePeriodCalls)
+    expect(apiMocks.getFeeSummary.mock.calls.length).toBeGreaterThan(beforeSummaryCalls)
+  })
+
+  it('唯讀人員沒有新增費用入口', async () => {
+    authMocks.hasPermission.mockReturnValue(false)
+    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    await flushAll()
+    expect(wrapper.find('[data-test="billing-create-manual-fee"]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'ManualFeeRecordDialog' }).exists()).toBe(false)
+  })
+
+  it('只有收費寫入權限而無學生讀取權限也沒有新增入口', async () => {
+    authMocks.hasPermission.mockImplementation((permission) => permission !== PERMISSION_NAMES.STUDENTS_READ)
+    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    await flushAll()
+    expect(wrapper.find('[data-test="billing-create-manual-fee"]').exists()).toBe(false)
+  })
+
   it('預設渲染月表（月繳總表），非逐筆明細', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()

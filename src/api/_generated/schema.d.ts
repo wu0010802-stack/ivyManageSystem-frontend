@@ -7803,7 +7803,11 @@ export interface paths {
          */
         get: operations["list_fee_records_api_fees_records_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Manual Fee Record
+         * @description 補登未列入銀行繳費單的額外應收；不建立繳費流水或收據。
+         */
+        post: operations["create_manual_fee_record_api_fees_records_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -32299,6 +32303,27 @@ export interface components {
             note?: string | null;
             /** Participant Id */
             participant_id: number;
+        };
+        /**
+         * ManualFeeRecordRequest
+         * @description 補登銀行繳費單以外的單筆應收，不代表已收款。
+         */
+        ManualFeeRecordRequest: {
+            /** Amount Due */
+            amount_due: number;
+            /**
+             * Billing Start Date
+             * Format: date
+             */
+            billing_start_date: string;
+            /** Due Date */
+            due_date?: string | null;
+            /** Fee Item Name */
+            fee_item_name: string;
+            /** Notes */
+            notes?: string | null;
+            /** Student Id */
+            student_id: number;
         };
         /** ManualPatchRequest */
         ManualPatchRequest: {
@@ -60685,6 +60710,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeeRecordListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_fee_record_api_fees_records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualFeeRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeRecordOut"];
                 };
             };
             /** @description Validation Error */

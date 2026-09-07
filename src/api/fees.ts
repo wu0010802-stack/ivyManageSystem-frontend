@@ -1,5 +1,10 @@
 import api from './index'
-import type { ApiBody, ApiQuery, ApiResponse } from './_generated/typed'
+import type { ApiBody, ApiQuery, ApiResponse, AxiosResp } from './_generated/typed'
+
+/** 補登未列入銷帳單的單筆額外應收。 */
+export const createManualFeeRecord = (
+  payload: ApiBody<'/fees/records', 'post'>,
+): AxiosResp<'/fees/records', 'post'> => api.post('/fees/records', payload)
 
 export const getFeePeriods = () => api.get('/fees/periods').then((res) => res.data)
 // params 維持 unknown：FeesTab.vue 以 Record<string, unknown> 建構（含條件式賦值），

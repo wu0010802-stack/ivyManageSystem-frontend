@@ -66,6 +66,7 @@
               一鍵產單；教材費等只收現金的費用在「現金項目」建批
             </li>
             <li><strong>應收帳款</strong>：看誰該繳；收到現金時按該列的「收款」</li>
+            <li>銷帳單未包含的零散消費，可用「新增單筆費用」補登額外應收</li>
             <li><strong>入帳媒合</strong>：匯入代收明細後，把銀行收到的錢分配到費用單</li>
             <li>月底到「結算」交接現金並關帳</li>
           </ol>
@@ -77,6 +78,9 @@
 
       <template #actions>
         <template v-if="view === 'receivable'">
+          <el-button v-if="canCreateManualFee" type="primary" data-test="billing-create-manual-fee" @click="manualFeeOpen = true">
+            新增單筆費用
+          </el-button>
           <el-dropdown
             v-if="canWrite"
             trigger="click"
@@ -161,7 +165,7 @@
           </el-button>
         </div>
 
-        <KeepAlive>
+        <KeepAlive :key="recordsVersion">
           <FeeMonthlyStatement
             v-if="recordsMode === 'statement'"
             ref="statementRef"
@@ -176,7 +180,7 @@
             :period-options="periodOptions"
             :classrooms="classrooms"
             :default-period="defaultPeriod"
-            :initial-search="studentSearch"
+            :initial-search="createdStudentSearch || studentSearch"
           />
         </KeepAlive>
       </template>
@@ -200,6 +204,7 @@
       @update:model-value="(v: boolean) => emit('update:imports-open', v)"
       @generated="onGenerated"
     />
+    <ManualFeeRecordDialog v-if="canCreateManualFee" v-model="manualFeeOpen" @created="onManualFeeCreated" />
   </section>
 </template>
 
@@ -219,7 +224,7 @@
  * 原「發單與未繳」降為「發單批次」抽屜（月拋一次的操作不該常駐佔檢視），
  * 三種匯入（代收 CSV／存摺 CSV／銀行檢核檔）收斂成工具列一顆「匯入」下拉。
  *
- * SPEC-019 起費用單只來自發單批次與現金項目批次（範本產單已移除）。
+ * 費用單來自發單批次、現金項目批次，另可手動補登未列入銷帳單的額外應收。
  * 預繳款自 2026-08-26 起併入應收帳款（月表「預繳」欄與工具列入口）。
  */
 import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
@@ -228,6 +233,7 @@ import { ArrowDown, WarningFilled } from '@element-plus/icons-vue'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
 import { getFeePeriods } from '@/api/fees'
+import type { Schema } from '@/api/_generated/typed'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
@@ -235,6 +241,7 @@ import { useAllClassroomStore } from '@/stores/classroomAll'
 import CashItemsView from '@/components/fees/CashItemsView.vue'
 import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
 import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
+import ManualFeeRecordDialog from '@/components/fees/ManualFeeRecordDialog.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
 import FeeMatchingPanel from './FeeMatchingPanel.vue'
 import FeeBillSlipDrawer from './FeeBillSlipDrawer.vue'
@@ -287,6 +294,10 @@ function onRecordsModeChange(val: string) {
 }
 
 const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
+const canCreateManualFee = computed(() => canWrite.value && hasPermission(PERMISSION_NAMES.STUDENTS_READ))
+const manualFeeOpen = ref(false)
+const createdStudentSearch = ref('')
+const recordsVersion = ref(0)
 
 // ─── 學期選項與預設學期（等載入完成再掛帳款表，確保首次查詢就聚焦當前學期）───
 const periodOptions = ref<string[]>([])
@@ -356,6 +367,19 @@ function onGenerated() {
   refreshOverview()
 }
 
+async function onManualFeeCreated(record: Schema<'FeeRecordOut'>) {
+  await loadPeriods()
+  defaultPeriod.value = record.period || ''
+  if (record.period && !periodOptions.value.includes(record.period)) {
+    periodOptions.value.unshift(record.period)
+  }
+  createdStudentSearch.value = record.student_name || ''
+  recordsMode.value = 'list'
+  // 清掉兩種模式的快取，並用新費用的學期與學生重新載入逐筆明細。
+  recordsVersion.value += 1
+  refreshOverview()
+}
+
 // 月表「到逐筆明細處理」：切換模式並預帶學生姓名
 async function onOpenList(studentName: string) {
   recordsMode.value = 'list'
@@ -395,6 +419,7 @@ watch(
   () => props.studentSearch,
   async (kw) => {
     if (!kw) return
+    createdStudentSearch.value = ''
     if (recordsMode.value !== 'list') {
       recordsMode.value = 'list'
       await nextTick()
