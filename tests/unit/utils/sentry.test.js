@@ -825,3 +825,11 @@ describe('打卡匯入個資遮罩', () => {
     expect(Object.values(scrubMapping(data))).toEqual(Array(7).fill('[Filtered]'))
   })
 })
+
+
+describe('薪資表核對個資遮罩', () => {
+  it('整包核對結果、姓名、兩端金額與差額均遮罩', () => {
+    const data = { payrollResult: { rows: [{ name: '合成員工' }] }, source_name: '合成員工', sourceName: '合成員工', source_amount: '20', sourceAmount: '20', system_amount: '10', systemAmount: '10', difference: '10', worksheets: ['合成員工薪資'] }
+    expect(Object.values(scrubMapping(data))).toEqual(Array(9).fill('[Filtered]'))
+  })
+})

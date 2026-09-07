@@ -10,10 +10,12 @@
       @export="onExport"
     />
 
-    <div v-if="canReconcile" class="workspace-mode" aria-label="出勤核對方式">
-      <el-button :type="reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = true">班表與打卡核對</el-button>
-      <el-button :type="!reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = false">出勤明細與補卡</el-button>
+    <div v-if="canReconcile || canPayrollCompare" class="workspace-mode" aria-label="出勤核對方式">
+      <el-button v-if="canReconcile" :type="reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = true">班表與打卡核對</el-button>
+      <el-button v-if="canReconcile" :type="!reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = false">出勤明細與補卡</el-button>
+      <el-button v-if="canPayrollCompare" @click="payrollOpen = true">薪資扣項核對</el-button>
     </div>
+    <PayrollComparisonDialog v-if="payrollOpen && canPayrollCompare" v-model="payrollOpen" :year="query.year" :month="query.month" />
     <ReconciliationPanel v-if="reconcileOpen && canReconcile" :year="query.year" :month="query.month" :revision="importRevision" @confirmed="onResolved" @records="onReconciliationRecords" @import="onReconciliationImport" />
     <div v-show="!reconcileOpen || !canReconcile">
     <!-- 桌機三欄 -->
@@ -133,7 +135,8 @@ import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
 import DetailColumn from '@/components/attendance/DetailColumn.vue'
 import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue'
-import { hasPermission } from '@/utils/auth'
+import { hasPermission, hasFullSalaryView } from '@/utils/auth'
+const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
 const ReconciliationPanel = defineAsyncComponent(() => import('@/components/attendance/ReconciliationPanel.vue'))
 
 const props = defineProps<{ initialDate?: string; defaultReconcile?: boolean }>()
@@ -162,6 +165,8 @@ const selectedEmployeeId = ref<number | null>(null)
 const selectedAnomalyIndex = ref(0)
 const detailMode = ref<'resolve' | 'month'>('resolve')
 const importOpen = ref(false)
+const payrollOpen = ref(false)
+const canPayrollCompare = computed(() => hasPermission('ATTENDANCE_READ') && hasPermission('SALARY_READ') && hasFullSalaryView())
 const canReconcile = computed(() => hasPermission('SCHEDULE') && hasPermission('ATTENDANCE_READ'))
 const reconcileOpen = ref(props.defaultReconcile ?? false)
 const importRevision = ref(0)

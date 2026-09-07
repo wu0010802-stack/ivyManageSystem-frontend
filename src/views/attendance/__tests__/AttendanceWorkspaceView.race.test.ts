@@ -33,7 +33,7 @@ vi.mock('@/api/attendance', () => ({
 }))
 
 vi.mock('@/utils/auth', () => ({
-  hasPermission: () => true,
+  hasFullSalaryView: () => false, hasPermission: () => true,
 }))
 
 vi.mock('@/composables/useIsMobile', () => ({

@@ -18,9 +18,11 @@ vi.mock('@/api/attendance', () => ({
   upsertRecord: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
+const mockHasFullSalaryView = vi.fn(() => false)
 const mockHasPermission = vi.fn(() => true)
 vi.mock('@/utils/auth', () => ({
   hasPermission: (...args: unknown[]) => mockHasPermission(...args),
+  hasFullSalaryView: () => mockHasFullSalaryView(),
 }))
 
 vi.mock('@/composables/useIsMobile', () => ({
@@ -79,6 +81,7 @@ const WorkspaceHeaderStub = {
 
 const ReconciliationPanelStub = { name: 'ReconciliationPanel', emits: ['records', 'import'], template: '<div />' }
 const STUBS = {
+  PayrollComparisonDialog: { props: ['modelValue'], template: '<div />' },
   ReconciliationPanel: ReconciliationPanelStub,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,
@@ -114,6 +117,7 @@ const mountView = () =>
 
 describe('AttendanceWorkspaceView', () => {
   beforeEach(() => {
+    mockHasFullSalaryView.mockReturnValue(false)
     getSummaryMock.mockReset()
     getAnomalyListMock.mockReset()
     getRecordsMock.mockReset()
@@ -452,5 +456,23 @@ describe('核對跨月明細導向', () => {
     await flushPromises()
     expect(getRecordsMock).toHaveBeenLastCalledWith({ year: 2026, month: 8, employee_id: 2 })
     wrapper.unmount()
+  })
+})
+
+
+describe('薪資核對入口權限', () => {
+  it('有完整薪資和出勤讀權限，不需班表管理權限即可使用', async () => {
+    mockHasFullSalaryView.mockReturnValue(true)
+    mockHasPermission.mockImplementation((code: unknown) => code === 'SALARY_READ' || code === 'ATTENDANCE_READ')
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('薪資扣項核對')
+  })
+  it('沒有全員薪資視野則隱藏入口', async () => {
+    mockHasFullSalaryView.mockReturnValue(false)
+    mockHasPermission.mockReturnValue(true)
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('薪資扣項核對')
   })
 })

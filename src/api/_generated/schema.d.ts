@@ -3825,6 +3825,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/payroll-comparison/preview-excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Payroll Comparison
+         * @description 只在記憶體讀取薪資表扣項，對照本校既存薪資，不重算或更新金額。
+         */
+        post: operations["preview_payroll_comparison_api_attendance_payroll_comparison_preview_excel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/reconciliation/confirm-shift": {
         parameters: {
             query?: never;
@@ -23521,6 +23541,32 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_preview_payroll_comparison_api_attendance_payroll_comparison_preview_excel_post */
+        Body_preview_payroll_comparison_api_attendance_payroll_comparison_preview_excel_post: {
+            /**
+             * Blank Deductions As Zero
+             * @default false
+             */
+            blank_deductions_as_zero: boolean;
+            /**
+             * Employee Mappings
+             * @default []
+             */
+            employee_mappings: string;
+            /** File */
+            file: string;
+            /**
+             * Leave Scope Confirmed
+             * @default false
+             */
+            leave_scope_confirmed: boolean;
+            /** Month */
+            month: number;
+            /** Worksheet */
+            worksheet?: string | null;
+            /** Year */
+            year: number;
+        };
         /** Body_update_pickup_person_api_parent_pickup_persons__person_id__patch */
         Body_update_pickup_person_api_parent_pickup_persons__person_id__patch: {
             /** Is Active */
@@ -35248,6 +35294,140 @@ export interface components {
              * @description 收款方式（帳單頁僅接受現金；轉帳請至對帳工作區銷帳）
              */
             payment_method: string;
+        };
+        /** PayrollAttendanceOut */
+        PayrollAttendanceOut: {
+            /**
+             * Approved Leave Count
+             * @default 0
+             */
+            approved_leave_count: number;
+            /**
+             * Approved Overtime Count
+             * @default 0
+             */
+            approved_overtime_count: number;
+            /**
+             * Early Leave Minutes
+             * @default 0
+             */
+            early_leave_minutes: number;
+            /**
+             * Late Minutes
+             * @default 0
+             */
+            late_minutes: number;
+            /**
+             * Missing Punch Days
+             * @default 0
+             */
+            missing_punch_days: number;
+            /**
+             * Recorded Days
+             * @default 0
+             */
+            recorded_days: number;
+            /**
+             * Unconfirmed Days
+             * @default 0
+             */
+            unconfirmed_days: number;
+        };
+        /** PayrollComparisonItemOut */
+        PayrollComparisonItemOut: {
+            /** Difference */
+            difference: string | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Source Amount */
+            source_amount: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "matched" | "different" | "unverified" | "not_comparable";
+            /** System Amount */
+            system_amount: string | null;
+        };
+        /** PayrollComparisonOut */
+        PayrollComparisonOut: {
+            /** Employees */
+            employees: components["schemas"]["ImportEmployeeChoice"][];
+            /** Month */
+            month: number;
+            /** Rows */
+            rows: components["schemas"]["PayrollComparisonRowOut"][];
+            summary: components["schemas"]["PayrollComparisonSummaryOut"];
+            /** Warnings */
+            warnings: string[];
+            /** Worksheet */
+            worksheet: string | null;
+            /** Worksheets */
+            worksheets: string[];
+            /** Year */
+            year: number;
+        };
+        /** PayrollComparisonRowOut */
+        PayrollComparisonRowOut: {
+            attendance?: components["schemas"]["PayrollAttendanceOut"];
+            /** Comparisons */
+            comparisons?: components["schemas"]["PayrollComparisonItemOut"][];
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Employee Number */
+            employee_number?: string | null;
+            /**
+             * Match Status
+             * @enum {string}
+             */
+            match_status: "matched" | "employee_not_found" | "ambiguous_employee" | "duplicate_employee" | "invalid_row";
+            /**
+             * Salary State
+             * @default missing
+             * @enum {string}
+             */
+            salary_state: "missing" | "stale" | "draft" | "finalized";
+            /** Source Name */
+            source_name: string;
+            /** Source Row */
+            source_row: number;
+            /**
+             * Status
+             * @default unverified
+             * @enum {string}
+             */
+            status: "matched" | "different" | "unverified" | "problem";
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** PayrollComparisonSummaryOut */
+        PayrollComparisonSummaryOut: {
+            /**
+             * Different
+             * @default 0
+             */
+            different: number;
+            /**
+             * Matched
+             * @default 0
+             */
+            matched: number;
+            /**
+             * Problems
+             * @default 0
+             */
+            problems: number;
+            /**
+             * Unverified
+             * @default 0
+             */
+            unverified: number;
         };
         /**
          * PendingRegistrationActionResultOut
@@ -53497,6 +53677,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KioskRosterEntry"][];
+                };
+            };
+        };
+    };
+    preview_payroll_comparison_api_attendance_payroll_comparison_preview_excel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_payroll_comparison_api_attendance_payroll_comparison_preview_excel_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayrollComparisonOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

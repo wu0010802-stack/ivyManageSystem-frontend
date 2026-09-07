@@ -16,7 +16,7 @@ vi.mock('@/api/attendance', () => ({
   upsertRecord: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
-vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
+vi.mock('@/utils/auth', () => ({ hasFullSalaryView: () => false, hasPermission: () => true }))
 
 const mockIsMobile = ref(true)
 vi.mock('@/composables/useIsMobile', () => ({

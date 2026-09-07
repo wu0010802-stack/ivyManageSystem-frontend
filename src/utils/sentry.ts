@@ -84,6 +84,9 @@ const PII_KEY_SUBSTRINGS = [
   // 打卡匯入來源與原始刷卡個資（與後端同步，含 Vue prop 命名）。
   'source_employee_number', 'sourceemployeenumber', 'source_rows', 'sourcerows',
   'punches', 'import_metadata', 'importmetadata',
+  // 外部薪資表核對包含來源姓名、金額與可能含人名的工作表名稱。
+  'payroll', 'source_name', 'sourcename', 'source_amount', 'sourceamount',
+  'system_amount', 'systemamount', 'difference', 'worksheet',
 ]
 
 // 精確比對 denylist（#11 資安稽核，2026-07-30；與後端 utils/sentry_init._PII_KEY_EXACT 對齊）：

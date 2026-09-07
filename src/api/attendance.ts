@@ -94,3 +94,12 @@ export const getImportSettings = (
 export const saveImportSettings = (
   payload: ApiBody<'/attendance/import-settings', 'put'>,
 ): AxiosResp<'/attendance/import-settings', 'put'> => api.put('/attendance/import-settings', payload)
+
+
+/** 外部薪資表扣項唯讀預覽，不寫入出勤或薪資。 */
+export const previewPayrollComparison = (
+  formData: FormData,
+): AxiosResp<'/attendance/payroll-comparison/preview-excel', 'post'> =>
+  api.post('/attendance/payroll-comparison/preview-excel', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
