@@ -198,7 +198,15 @@
           </tr>
         </thead>
         <tbody>
-          <template v-for="grp in visibleGroups" :key="grp.name">
+          <!-- 跨班一列都沒通過篩選時：分組表頭的統計講的是收款狀況，與「逾期」等
+               篩選無關，整排留著只是噪音——改成一句說明為什麼是空的。
+               明確選定某一班時例外：那條表頭正是該班的脈絡，保留它與組內空狀態。 -->
+          <tr v-if="visibleStudents.length === 0 && !selectedClassroom">
+            <td :colspan="totalColumns" class="stmt-state" data-test="stmt-no-match">
+              {{ emptyRowsHint }}
+            </td>
+          </tr>
+          <template v-else v-for="grp in visibleGroups" :key="grp.name">
             <!-- 分組表頭：捲動時黏在表頭下，往下看永遠知道自己在哪一班 -->
             <tr
               class="stmt-group"
@@ -437,11 +445,6 @@
           </template>
             </template>
           </template>
-          <tr v-if="visibleGroups.length === 0">
-            <td :colspan="totalColumns" class="stmt-state" data-test="stmt-no-match">
-              此篩選條件下沒有學生——試試切換狀態或班級
-            </td>
-          </tr>
         </tbody>
         <tfoot v-if="visibleStudents.length">
           <tr>
@@ -816,6 +819,21 @@ const visibleStudents = computed(() =>
     (s) => (statusOn.value[s.status] ?? true) && (!overdueOnly.value || isOverdueStudent(s)),
   ),
 )
+
+/**
+ * 整表一列都沒有時的說明。先講最具體的原因（範圍本身沒帳款 → 逾期快篩 → 全班
+ * 收齊），最後才回到泛用的「換個篩選」。
+ */
+const emptyRowsHint = computed(() => {
+  if (scopeStudents.value.length === 0) return '此範圍本月尚無帳款'
+  if (overdueOnly.value && overdueCount.value === 0) {
+    return '範圍內沒有逾期的學生——關掉「逾期」快篩可看其餘帳款'
+  }
+  if (scopeUnpaidCount.value === 0) {
+    return `範圍內 ${scopeStudents.value.length} 人本月都已收齊——打開「已繳清」快篩可看明細`
+  }
+  return '此篩選條件下沒有學生——試試切換狀態或班級'
+})
 
 // ─── 收款確認分解（SPEC-014 §16）：scope 內逐項 settlement 加總 ────────────
 const scopeSettlementTags = computed(() =>

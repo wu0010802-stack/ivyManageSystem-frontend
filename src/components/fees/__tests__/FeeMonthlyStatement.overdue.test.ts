@@ -136,3 +136,36 @@ describe('FeeMonthlyStatement — SPEC-015 逾期標註', () => {
     expect(wrapper.findAll('[data-test="stmt-row"]').length).toBeGreaterThan(1)
   })
 })
+
+describe('FeeMonthlyStatement — 篩選後整表無列時的說明', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  // 回歸：逾期 0 人時 visibleStudents 為空，但分組表頭仍逐班列出（表頭統計講的是
+  // 收款狀況，與逾期無關）→ 畫面只剩一排無關數字、沒有任何一句話說明為什麼沒有列。
+  it('逾期快篩 0 人：明說沒有逾期學生，不留一排與逾期無關的班級表頭', async () => {
+    getFeeMonthlyStatement.mockResolvedValue({
+      ...STATEMENT,
+      students: [STATEMENT.students[1], STATEMENT.students[2]],
+    })
+    const w = mount(FeeMonthlyStatement, { props: { classrooms: [] } })
+    await flushPromises()
+
+    await w.find('[data-test="stmt-flt-overdue"]').trigger('click')
+    expect(w.findAll('[data-test="stmt-row"]').length).toBe(0)
+    expect(w.findAll('[data-test="stmt-class-group"]').length).toBe(0)
+    expect(w.find('[data-test="stmt-no-match"]').text()).toContain('沒有逾期')
+  })
+
+  it('狀態快篩把人全篩掉時說出是狀態造成的', async () => {
+    getFeeMonthlyStatement.mockResolvedValue({
+      ...STATEMENT,
+      students: [STATEMENT.students[2]],
+    })
+    const w = mount(FeeMonthlyStatement, { props: { classrooms: [] } })
+    await flushPromises()
+
+    // 預設關「已繳清」，範圍內只有一位已繳清學生 → 一列都不會通過
+    expect(w.findAll('[data-test="stmt-row"]').length).toBe(0)
+    expect(w.find('[data-test="stmt-no-match"]').text()).toContain('已收齊')
+  })
+})
