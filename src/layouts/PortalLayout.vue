@@ -662,15 +662,22 @@ const submitPassword = async () => {
   --bg-color-soft: #f3f4f6;
   --surface-color: var(--neutral-0);
   --pt-surface-app: #f8fafc;
-  --pt-surface-card: #ffffff;
-  --pt-surface-mute: #f3f4f6;
+  --color-portal-surface-card: #ffffff;
+  --pt-surface-card: var(--color-portal-surface-card);
+  --color-portal-surface-mute: #f3f4f6;
+  --pt-surface-mute: var(--color-portal-surface-mute);
   --pt-surface-mute-soft: #f9fafb;
-  --pt-text-strong: #0f172a;
-  --pt-text-body: #1e293b;
+  --color-portal-text-strong: #0f172a;
+  --pt-text-strong: var(--color-portal-text-strong);
+  --color-portal-text-body: #1e293b;
+  --pt-text-body: var(--color-portal-text-body);
   /* 次級文字 slate-700 (#334155, 10.4:1 AAA on #fff)：業主反映過淡，再往深調一階 */
-  --pt-text-muted: #334155;
-  --pt-text-soft: #334155;
-  --pt-text-faint: #475569;
+  --color-portal-text-muted: #334155;
+  --pt-text-muted: var(--color-portal-text-muted);
+  --color-portal-text-soft: #334155;
+  --pt-text-soft: var(--color-portal-text-soft);
+  --color-portal-text-faint: #475569;
+  --pt-text-faint: var(--color-portal-text-faint);
   height: 100vh;
   background-color: var(--bg-color);
   color: var(--pt-text-body);
@@ -684,14 +691,21 @@ html.dark .portal-layout {
   --bg-color-soft: #1e293b;
   --surface-color: #1e293b;
   --pt-surface-app: #0f172a;
-  --pt-surface-card: #1e293b;
-  --pt-surface-mute: #263449;
+  --color-portal-surface-card: #1e293b;
+  --pt-surface-card: var(--color-portal-surface-card);
+  --color-portal-surface-mute: #263449;
+  --pt-surface-mute: var(--color-portal-surface-mute);
   --pt-surface-mute-soft: #1e293b;
-  --pt-text-strong: #f1f5f9;
-  --pt-text-body: #e2e8f0;
-  --pt-text-muted: #cbd5e1;
-  --pt-text-soft: #cbd5e1;
-  --pt-text-faint: #94a3b8;
+  --color-portal-text-strong: #f1f5f9;
+  --pt-text-strong: var(--color-portal-text-strong);
+  --color-portal-text-body: #e2e8f0;
+  --pt-text-body: var(--color-portal-text-body);
+  --color-portal-text-muted: #cbd5e1;
+  --pt-text-muted: var(--color-portal-text-muted);
+  --color-portal-text-soft: #cbd5e1;
+  --pt-text-soft: var(--color-portal-text-soft);
+  --color-portal-text-faint: #94a3b8;
+  --pt-text-faint: var(--color-portal-text-faint);
 }
 
 /* Sidebar Styling */

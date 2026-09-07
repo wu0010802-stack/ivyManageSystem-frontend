@@ -268,7 +268,7 @@ function onConfirmSubmit(): void {
   padding: 12px;
   font-size: var(--text-md, 15px);
   font-weight: 700;
-  color: #fff;
+  color: var(--color-primary-contrast);
   background: var(--pt-primary, #2d6f8e);
 }
 

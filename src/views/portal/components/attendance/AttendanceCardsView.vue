@@ -242,7 +242,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 /* ===== 卡片：去除 side-stripe，改為左日期柱 + 右內容 ===== */
 .day-card {
   display: flex;
-  background: var(--pt-surface-card, var(--surface-color));
+  background: var(--color-portal-surface-card, var(--surface-color));
   border-radius: var(--radius-md);
   border: var(--pt-hairline, 1px solid var(--neutral-200));
   overflow: hidden;
@@ -280,7 +280,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
   font-size: var(--text-2xl);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--pt-text-strong, var(--text-primary));
+  color: var(--color-portal-text-strong, var(--text-primary));
   line-height: 1;
   letter-spacing: -0.02em;
 }
@@ -288,7 +288,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 .day-card__weekday {
   font-size: 11px;
   font-weight: 500;
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
 }
 
 .day-card__date--weekend {
@@ -297,7 +297,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 
 .day-card__date--weekend .day-card__day-num,
 .day-card__date--weekend .day-card__weekday {
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
 }
 
 .day-card__date--holiday {
@@ -328,7 +328,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 
 .day-card__date-label {
   font-size: var(--text-xs);
-  color: var(--pt-text-faint, var(--neutral-400));
+  color: var(--color-portal-text-faint, var(--neutral-400));
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
@@ -384,7 +384,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 
 .time-block__label {
   font-size: 11px;
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   font-weight: 500;
   letter-spacing: 0.02em;
 }
@@ -392,7 +392,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 .time-block__val {
   font-size: var(--text-base);
   font-weight: 600;
-  color: var(--pt-text-strong, var(--text-primary));
+  color: var(--color-portal-text-strong, var(--text-primary));
   font-variant-numeric: tabular-nums;
 }
 
@@ -400,7 +400,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
   font-size: 0.75em;
   font-weight: 500;
   margin-left: 1px;
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
 }
 
 .val--warn {
@@ -410,7 +410,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 /* ===== 班表：弱化次行 ===== */
 .day-card__shift {
   font-size: 11px;
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   font-variant-numeric: tabular-nums;
 }
 
@@ -433,7 +433,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 .request-row__type {
   font-size: 11px;
   font-weight: 600;
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   background: var(--neutral-100);
   padding: 1px 6px;
   border-radius: var(--radius-sm);
@@ -443,7 +443,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 .request-row__text {
   flex: 1;
   min-width: 0;
-  color: var(--pt-text-body, var(--text-primary));
+  color: var(--color-portal-text-body, var(--text-primary));
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
@@ -452,7 +452,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 .request-row__hours {
   font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   font-variant-numeric: tabular-nums;
 }
 
@@ -504,7 +504,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 }
 
 .status-pill--weekend {
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   background: transparent;
   font-weight: 400;
 }
@@ -522,7 +522,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 
 .badge--approved {
   background: var(--neutral-100);
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   border: 1px solid var(--neutral-200);
 }
 

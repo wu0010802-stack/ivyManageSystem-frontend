@@ -120,8 +120,10 @@
   /* ===== Neutral / Surface (共用基底) ===== */
   --neutral-0: #ffffff;
   --neutral-50: #f8fafc;
-  --neutral-100: #f1f5f9;
-  --neutral-200: #e2e8f0;
+  --color-neutral-100: #f1f5f9;
+  --neutral-100: var(--color-neutral-100);
+  --color-neutral-200: #e2e8f0;
+  --neutral-200: var(--color-neutral-200);
   --neutral-300: #cbd5e1;
   --neutral-400: #94a3b8;
   --neutral-500: #64748b;

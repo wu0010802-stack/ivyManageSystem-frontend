@@ -376,7 +376,7 @@ onMounted(() => {
 .child-avatar {
   width: 56px;
   height: 56px;
-  background: linear-gradient(135deg, var(--m3-primary, #006d3d), var(--ivy-green-mid, #41a074));
+  background: linear-gradient(135deg, var(--m3-primary, #006d3d), var(--color-green-mid, #41a074));
   color: var(--m3-on-primary, #fff);
   border-radius: 50%;
   display: flex;

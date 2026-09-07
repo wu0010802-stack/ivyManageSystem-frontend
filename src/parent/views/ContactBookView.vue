@@ -351,7 +351,7 @@ onMounted(async () => {
 .cb-segment.active {
   background: var(--brand-primary, #0d9053);
   border-color: var(--brand-primary, #0d9053);
-  color: #fff;
+  color: var(--color-primary-contrast);
 }
 .cb-segment:focus-visible {
   outline: 2px solid var(--brand-primary, #0d9053);
@@ -363,13 +363,13 @@ onMounted(async () => {
   padding: 0 5px;
   border-radius: 9px;
   background: var(--coral-500, #ff8b8b);
-  color: #fff;
+  color: var(--color-primary-contrast);
   font-size: 11px;
   line-height: 18px;
   font-weight: var(--font-weight-bold, 700);
 }
 .cb-segment.active .cb-segment-badge {
-  background: #fff;
+  background: var(--color-primary-contrast);
   color: var(--brand-primary, #0d9053);
 }
 

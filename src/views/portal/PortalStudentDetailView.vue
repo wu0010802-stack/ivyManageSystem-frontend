@@ -315,13 +315,13 @@ function back() {
   margin: 0;
   font-size: var(--text-2xl);
   font-weight: 700;
-  color: var(--pt-text-strong);
+  color: var(--color-portal-text-strong);
 }
-.age { color: var(--pt-text-muted); font-size: var(--text-base); }
+.age { color: var(--color-portal-text-muted); font-size: var(--text-base); }
 
 .meta {
   margin: 0;
-  color: var(--pt-text-muted);
+  color: var(--color-portal-text-muted);
   font-size: var(--text-sm);
   display: flex;
   flex-wrap: wrap;
@@ -364,7 +364,7 @@ function back() {
 .panel h4 {
   margin: var(--space-3) 0 var(--space-2);
   font-size: var(--text-base);
-  color: var(--pt-text-strong);
+  color: var(--color-portal-text-strong);
 }
 .panel h4:first-child { margin-top: 0; }
 
@@ -376,13 +376,13 @@ function back() {
 }
 .list li:last-child { border-bottom: none; }
 .list.compact li { padding: var(--space-1) 0; }
-.note { color: var(--pt-text-muted); }
+.note { color: var(--color-portal-text-muted); }
 .aid { font-size: var(--text-xs); color: var(--color-warning); margin: 4px 0 0; }
-.date { color: var(--pt-text-faint); margin-left: var(--space-2); }
+.date { color: var(--color-portal-text-faint); margin-left: var(--space-2); }
 
-.empty { color: var(--pt-text-muted); padding: var(--space-3) 0; }
+.empty { color: var(--color-portal-text-muted); padding: var(--space-3) 0; }
 .stat-row { display: flex; gap: var(--space-4); margin-bottom: var(--space-3); }
-.stat b { font-size: var(--text-xl); color: var(--pt-text-strong); }
+.stat b { font-size: var(--text-xl); color: var(--color-portal-text-strong); }
 
 .status-tag, .severity-tag, .domain-tag, .source-tag, .badge, .published-tag, .draft-tag, .highlight, .mood {
   display: inline-block;
@@ -392,9 +392,9 @@ function back() {
   margin-left: var(--space-1);
 }
 .domain-tag { background: var(--pt-tint-event); color: var(--pt-tint-event-fg); }
-.source-tag { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
+.source-tag { background: var(--color-portal-surface-mute); color: var(--color-portal-text-muted); }
 .published-tag { background: var(--color-success-lighter); color: var(--color-success); }
-.draft-tag { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
+.draft-tag { background: var(--color-portal-surface-mute); color: var(--color-portal-text-muted); }
 .highlight {
   display: inline-flex;
   align-items: center;
@@ -407,7 +407,7 @@ function back() {
 .status-tag.出席 { background: var(--color-success-lighter); color: var(--color-success); }
 .status-tag.缺席 { background: var(--color-danger-lighter); color: var(--color-danger); }
 .status-tag.遲到 { background: var(--color-warning-lighter); color: var(--color-warning); }
-.status-tag.病假, .status-tag.事假 { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
+.status-tag.病假, .status-tag.事假 { background: var(--color-portal-surface-mute); color: var(--color-portal-text-muted); }
 
 .severity-tag.嚴重 { background: var(--color-danger-lighter); color: var(--color-danger); }
 .severity-tag.中度 { background: var(--color-warning-lighter); color: var(--color-warning); }

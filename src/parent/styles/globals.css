@@ -198,7 +198,8 @@
   --ivy-green-deep:    #0d9053;  /* primary CTA, emphasis bar */
   --ivy-green-bright:  #0caf76;  /* hover state */
   --ivy-green-laurel:  #5aa842;  /* 月桂葉、accent bar */
-  --ivy-green-mid:     #41a074;  /* 中綠 icon bg */
+  --color-green-mid: #41a074;
+  --ivy-green-mid: var(--color-green-mid);  /* 中綠 icon bg */
   --ivy-teal-primary:  #33aaaa;  /* secondary primary button */
   --ivy-teal-soft:     #d3ecec;  /* teal soft tint */
   --ivy-star-yellow:   #ffde51;  /* kawaii 星黃 */
@@ -347,7 +348,8 @@
   --ivy-green-deep:    #5aa842;
   --ivy-green-bright:  #6dc068;
   --ivy-green-laurel:  #8bc34a;
-  --ivy-green-mid:     #6dc068;
+  --color-green-mid: #6dc068;
+  --ivy-green-mid: var(--color-green-mid);
   --ivy-teal-primary:  #4dc4c4;
   --ivy-teal-soft:     rgba(77, 196, 196, 0.18);
   --ivy-star-yellow:   #ffe66d;

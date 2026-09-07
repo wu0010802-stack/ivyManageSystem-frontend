@@ -23,16 +23,23 @@
 
   /* Surface alias（淺色） */
   --pt-surface-app: var(--bg-color, #f8fafc);
-  --pt-surface-card: var(--surface-color, #ffffff);
-  --pt-surface-mute: var(--bg-color-soft, #f1f5f9);
+  --color-portal-surface-card: var(--surface-color, #ffffff);
+  --pt-surface-card: var(--color-portal-surface-card);
+  --color-portal-surface-mute: var(--bg-color-soft, #f1f5f9);
+  --pt-surface-mute: var(--color-portal-surface-mute);
   --pt-surface-mute-soft: #f6f8fa;
 
   /* Text alias（保留 portal 視覺，深色文字） */
-  --pt-text-strong: var(--text-primary, #1e293b);
-  --pt-text-body: var(--text-primary, #1e293b);
-  --pt-text-muted: var(--text-secondary, #64748b);
-  --pt-text-soft: var(--text-secondary, #64748b);
-  --pt-text-faint: var(--text-tertiary, #94a3b8);
+  --color-portal-text-strong: var(--text-primary, #1e293b);
+  --pt-text-strong: var(--color-portal-text-strong);
+  --color-portal-text-body: var(--text-primary, #1e293b);
+  --pt-text-body: var(--color-portal-text-body);
+  --color-portal-text-muted: var(--text-secondary, #64748b);
+  --pt-text-muted: var(--color-portal-text-muted);
+  --color-portal-text-soft: var(--text-secondary, #64748b);
+  --pt-text-soft: var(--color-portal-text-soft);
+  --color-portal-text-faint: var(--text-tertiary, #94a3b8);
+  --pt-text-faint: var(--color-portal-text-faint);
   --pt-border: var(--border-color, #e2e8f0);
 
   /* Icon tint：與家長端一致，方便共用元件。

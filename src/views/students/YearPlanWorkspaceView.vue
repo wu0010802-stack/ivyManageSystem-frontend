@@ -466,7 +466,7 @@ async function onStudentMove(payload: {
   border-radius: var(--radius-full, 9999px);
   font-size: var(--text-xs);
   font-weight: 700;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   color: var(--neutral-700);
 }
 
@@ -503,7 +503,7 @@ async function onStudentMove(payload: {
 .skeleton-row {
   height: 32px;
   border-radius: var(--radius-md);
-  background: linear-gradient(90deg, var(--neutral-100) 25%, var(--neutral-200) 37%, var(--neutral-100) 63%);
+  background: linear-gradient(90deg, var(--color-neutral-100) 25%, var(--color-neutral-200) 37%, var(--color-neutral-100) 63%);
   background-size: 400% 100%;
   animation: skeleton-loading 1.4s ease infinite;
 }
@@ -564,7 +564,7 @@ async function onStudentMove(payload: {
   position: sticky;
   top: 0;
   z-index: 5;
-  border: 1px solid var(--neutral-200);
+  border: 1px solid var(--color-neutral-200);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
   background: var(--surface-color);
