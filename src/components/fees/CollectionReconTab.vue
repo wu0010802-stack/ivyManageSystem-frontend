@@ -59,16 +59,60 @@
         <el-descriptions-item label="可解析帳號">{{ preview.decoded_count }}</el-descriptions-item>
         <el-descriptions-item label="舊期別帳號">{{ preview.old_period_count }}</el-descriptions-item>
         <el-descriptions-item label="重複/已匯入">{{ preview.duplicate_count }}</el-descriptions-item>
-        <el-descriptions-item label="錯誤列">{{ preview.error_count }}</el-descriptions-item>
+        <el-descriptions-item label="尚未入帳">
+          <span data-test="preview-pending-count">{{ preview.pending_count }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="回填入帳日">
+          <span data-test="preview-backfill-count">{{ preview.backfill_count }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="錯誤列">
+          <span data-test="preview-error-count">{{ preview.error_count }}</span>
+          <el-button
+            v-if="previewErrors.length"
+            size="small"
+            text
+            type="primary"
+            data-test="toggle-error-rows"
+            :aria-expanded="errorRowsOpen"
+            aria-label="展開錯誤列原因"
+            @click="errorRowsOpen = !errorRowsOpen"
+          >
+            {{ errorRowsOpen ? '收合' : '看原因' }}
+          </el-button>
+        </el-descriptions-item>
       </el-descriptions>
       <el-alert
         v-if="preview?.already_imported"
-        type="warning"
+        :type="newRowCount > 0 ? 'success' : 'warning'"
         :closable="false"
         class="mt-1"
-        title="此檔案先前已匯入（同檔重送不會重複入帳）"
+        :title="alreadyImportedTitle"
         data-test="dup-import-alert"
       />
+      <el-alert
+        v-if="preview && preview.pending_count > 0"
+        type="info"
+        :closable="false"
+        class="mt-1"
+        data-test="pending-rows-hint"
+        :title="`本檔有 ${preview.pending_count} 筆家長已繳、銀行尚未撥款（在途）——會一併匯入並可先銷帳，入帳日待下次匯入回填`"
+      />
+      <div
+        v-if="preview && errorRowsOpen && previewErrors.length"
+        class="error-rows mt-1"
+        data-test="error-rows"
+      >
+        <p class="error-rows__caption">以下列無法匯入（列號對應 CSV 檔案內的行數）：</p>
+        <ul class="error-rows__list">
+          <li v-for="e in previewErrors" :key="`${e.row_number}-${e.reason}`">
+            <span class="error-rows__num">第 {{ e.row_number }} 列</span>
+            <span>{{ e.reason }}</span>
+          </li>
+        </ul>
+        <p v-if="preview.error_count > previewErrors.length" class="hint">
+          僅顯示前 {{ previewErrors.length }} 列（共 {{ preview.error_count }} 列）
+        </p>
+      </div>
       <div v-if="preview" class="mt-1">
         <el-button
           v-if="canWrite"
@@ -147,6 +191,19 @@
         style="width: 150px"
         @change="refetch"
       />
+      <el-select
+        v-model="filters.posting_state"
+        placeholder="入帳狀態"
+        aria-label="以入帳狀態篩選"
+        style="width: 150px"
+        clearable
+        data-test="posting-state-filter"
+        @change="refetch"
+      >
+        <el-option label="已入帳" value="posted" />
+        <el-option label="尚未入帳" value="pending" />
+        <el-option label="逾期未入帳" value="overdue" />
+      </el-select>
       <el-button aria-label="重新整理繳費列表" @click="fetchPayments">重新整理</el-button>
       <el-button
         v-if="canWrite && !embedded"
@@ -185,6 +242,27 @@
             {{ billPeriodLabel(row) }}
           </el-tag>
           <span v-else>{{ billPeriodLabel(row) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="入帳" width="135">
+        <template #default="{ row }">
+          <el-tag
+            v-if="row.overdue_pending"
+            size="small"
+            type="danger"
+            data-test="overdue-pending-tag"
+          >
+            逾期未入帳
+          </el-tag>
+          <el-tag
+            v-else-if="row.is_pending"
+            size="small"
+            type="warning"
+            data-test="pending-tag"
+          >
+            {{ pendingLabel(row) }}
+          </el-tag>
+          <span v-else data-test="posting-date">{{ row.posting_date }}</span>
         </template>
       </el-table-column>
       <el-table-column label="狀態" width="110">
@@ -342,6 +420,7 @@ import {
 import type {
   CollectionImportPreview,
   CollectionPaymentRow,
+  CollectionPostingState,
   CoverageDay,
   CoveragePair,
 } from './collectionTypes'
@@ -372,6 +451,29 @@ const pickedFile = ref<File | null>(null)
 const preview = ref<CollectionImportPreview | null>(null)
 const previewing = ref(false)
 const importing = ref(false)
+const errorRowsOpen = ref(false)
+/** 後端 preview 一定帶 errors（最多 50 筆）；?? [] 是為了不讓舊快取／缺欄位炸掉整頁。 */
+const previewErrors = computed(() => preview.value?.errors ?? [])
+
+/** 本檔尚未入帳過的列數（＝確認匯入會新增幾筆）。 */
+const newRowCount = computed(() =>
+  preview.value ? Math.max(0, preview.value.row_count - preview.value.duplicate_count) : 0,
+)
+/**
+ * 同檔重送先前一律「不會重複入帳」，但 parser 升版後會重新解析並補進舊版
+ * 漏掉的列（如在途列）——此時再說「重送沒用」會讓人以為按了也沒差。
+ */
+const alreadyImportedTitle = computed(() =>
+  newRowCount.value > 0
+    ? `此檔案先前已匯入，但其中 ${newRowCount.value} 筆先前沒被收下——確認匯入會補進來，既有列不會重複入帳`
+    : '此檔案先前已匯入（同檔重送不會重複入帳）',
+)
+
+/** 在途列顯示「未入帳」＋預計入帳日（有預計日才附上，避免顯示 undefined）。 */
+function pendingLabel(row: CollectionPaymentRow): string {
+  if (!row.expected_posting_date) return '未入帳'
+  return `未入帳（預計 ${row.expected_posting_date.slice(5)}）`
+}
 
 const batchVisible = ref(false)
 const lastImportId = ref<number | null>(null)
@@ -407,7 +509,14 @@ const filters = reactive<{
   suffix: string
   date_from: string | null
   date_to: string | null
-}>({ status: 'imported', suffix: '', date_from: null, date_to: null })
+  posting_state: CollectionPostingState | null
+}>({
+  status: 'imported',
+  suffix: '',
+  date_from: null,
+  date_to: null,
+  posting_state: null,
+})
 const payments = ref<CollectionPaymentRow[]>([])
 const loading = ref(false)
 const page = ref(1)
@@ -448,6 +557,7 @@ function isAllocatable(row: CollectionPaymentRow): boolean {
 function onFileChange(file: UploadFile) {
   pickedFile.value = (file.raw as File) ?? null
   preview.value = null
+  errorRowsOpen.value = false
 }
 
 async function runPreview() {
@@ -496,6 +606,7 @@ async function fetchPayments() {
     if (filters.suffix) params.suffix = filters.suffix
     if (filters.date_from) params.date_from = filters.date_from
     if (filters.date_to) params.date_to = filters.date_to
+    if (filters.posting_state) params.posting_state = filters.posting_state
     const data = (await getCollectionPayments(params)) as unknown as {
       items: CollectionPaymentRow[]
       total: number
@@ -624,6 +735,35 @@ defineExpose({ fetchPayments, openCoverage, openImport, openBatch, setScope, fil
 }
 .preview-box {
   margin-top: 10px;
+}
+.error-rows {
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+.error-rows__caption {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+.error-rows__list {
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.error-rows__list li {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+}
+.error-rows__num {
+  flex: 0 0 76px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
 }
 .batch-hint {
   display: flex;

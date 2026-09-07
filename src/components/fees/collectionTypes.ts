@@ -21,13 +21,22 @@ export interface CollectionPaymentRow {
   collection_suffix: string | null
   bill_year: number | null
   bill_month: number | null
-  posting_date: string
+  /** null＝在途：家長已在超商繳款，銀行尚未撥入 */
+  posting_date: string | null
   expected_posting_date: string | null
+  is_pending: boolean
+  /** 逾預計入帳日仍未入帳（錢真的沒撥進來，要追） */
+  overdue_pending: boolean
   occurrence_index: number
   reconciliation_status: string
   status_note: string | null
   allocated_total: number
   unallocated: number
+}
+
+export interface CollectionImportRowError {
+  row_number: number
+  reason: string
 }
 
 export interface CollectionImportPreview {
@@ -40,10 +49,18 @@ export interface CollectionImportPreview {
   decoded_count: number
   old_period_count: number
   duplicate_count: number
+  /** 本檔尚未入帳的列數（超商已收、銀行未撥） */
+  pending_count: number
+  /** 會回填既有在途列入帳日的筆數 */
+  backfill_count: number
   error_count: number
+  errors: CollectionImportRowError[]
   already_imported: boolean
   parser_version: string
 }
+
+/** 入帳狀態篩選（後端 posting_state query param）。 */
+export type CollectionPostingState = 'pending' | 'posted' | 'overdue'
 
 export interface CoveragePair {
   payment_id: number | null
