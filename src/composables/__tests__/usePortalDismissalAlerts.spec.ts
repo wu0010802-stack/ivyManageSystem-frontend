@@ -437,3 +437,97 @@ describe('usePortalDismissalAlerts', () => {
     }
   })
 })
+
+// 登入逾期後的輪詢死循環守衛（staging 觀測：一台停在本頁的裝置登入逾期後，
+// fetchCalls 401 → refresh 401 每 15s 永不停止，7 天 79,140 次請求；WS 本身因無法
+// 完成 handshake 每 WS_RECOVERY_RETRY_MS＝60s 也重試一次、同樣 403）。
+describe('usePortalDismissalAlerts：認證逾期即停', () => {
+  // 驅動 WS 連續 6 次連線失敗（scheduleReconnect 對 WS_MAX_RETRIES=5 的語意：
+  // 前 5 次個別排程重試，第 6 次判定 exhausted）轉為 15s HTTP 輪詢 fallback，
+  // 對應 staging 觀測到的「WS 無法 handshake → 退化為純輪詢」情境。
+  async function driveToExhaustedPolling(getConnectionState: () => string): Promise<void> {
+    for (let i = 0; i < 6; i++) {
+      lastWs!.onclose?.({ code: 1006, reason: '' } as CloseEvent)
+      await vi.advanceTimersByTimeAsync(30000) // 覆蓋任何 exponential backoff（cap 30s）
+    }
+    expect(getConnectionState()).toBe('exhausted')
+  }
+
+  it('WS 耗盡轉為輪詢後，fetchCalls 收到 401 → 立即停止輪詢，不再對已知失效端點重試', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+      await vi.advanceTimersByTimeAsync(0) // init 內立即觸發的第一次 fetchCalls 先 resolve
+
+      await driveToExhaustedPolling(() => m.usePortalDismissalAlerts().connectionState.value)
+      // exhausted 期間輪詢已在跑（15s 一次）：確認呼叫次數確實隨時間增加，
+      // 否則下面「不再增加」的斷言會是假綠（baseline 也會通過）。
+      const callCountWhilePolling = getCallsMock.mock.calls.length
+      expect(callCountWhilePolling).toBeGreaterThan(1)
+
+      // 換成 401（登入已逾期）：下一個輪詢週期應觸發停止。
+      getCallsMock.mockImplementation(() =>
+        Promise.reject(Object.assign(new Error('unauthorized'), { response: { status: 401 } })),
+      )
+      await vi.advanceTimersByTimeAsync(15000)
+      const callCountAfterFirst401 = getCallsMock.mock.calls.length
+      expect(callCountAfterFirst401).toBeGreaterThan(callCountWhilePolling)
+      const wsAfterStop = lastWs
+
+      // 再推進三個輪詢週期＋一次 WS_RECOVERY_RETRY_MS：呼叫次數不再增加，也沒有新的 WS 重連。
+      await vi.advanceTimersByTimeAsync(15000 * 3)
+      expect(getCallsMock.mock.calls.length).toBe(callCountAfterFirst401)
+      expect(lastWs).toBe(wsAfterStop)
+    } finally {
+      getCallsMock.mockImplementation(() => Promise.resolve({ data: [] }))
+      vi.useRealTimers()
+    }
+  })
+
+  it('advanceAdminSession()（登出／登入逾期跳轉共用的全域訊號）→ 輪詢中的模組立即停下', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      const { advanceAdminSession } = await import('@/utils/adminSession')
+      m.initPortalDismissalAlerts()
+      await vi.advanceTimersByTimeAsync(0)
+
+      await driveToExhaustedPolling(() => m.usePortalDismissalAlerts().connectionState.value)
+      const callCountWhilePolling = getCallsMock.mock.calls.length
+      expect(callCountWhilePolling).toBeGreaterThan(1)
+
+      advanceAdminSession()
+      const wsAfterReset = lastWs
+
+      // 推進三個輪詢週期＋一次 WS_RECOVERY_RETRY_MS：reset 後應已停止輪詢與 WS 重連。
+      await vi.advanceTimersByTimeAsync(15000 * 3)
+      expect(getCallsMock.mock.calls.length).toBe(callCountWhilePolling)
+      expect(lastWs).toBe(wsAfterReset)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('停止後仍可恢復：再次 initPortalDismissalAlerts() 會重新 fetch（不是永久死掉）', async () => {
+    vi.useFakeTimers()
+    try {
+      getCallsMock.mockImplementation(() =>
+        Promise.reject(Object.assign(new Error('unauthorized'), { response: { status: 401 } })),
+      )
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+      await vi.advanceTimersByTimeAsync(0)
+      const callCountAfterFailure = getCallsMock.mock.calls.length
+
+      // 模擬重新登入成功：換回會成功的 mock，再次 init（PortalLayout 重新掛載時的呼叫模式）。
+      getCallsMock.mockImplementation(() => Promise.resolve({ data: [] }))
+      m.initPortalDismissalAlerts()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(getCallsMock.mock.calls.length).toBeGreaterThan(callCountAfterFailure)
+    } finally {
+      getCallsMock.mockImplementation(() => Promise.resolve({ data: [] }))
+      vi.useRealTimers()
+    }
+  })
+})

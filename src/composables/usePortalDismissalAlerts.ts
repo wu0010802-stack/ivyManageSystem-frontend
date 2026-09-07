@@ -27,6 +27,9 @@ import {
 } from '@/composables/useDismissalUrgency'
 // 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
+// 認證逾期／登出／代操作切換的全域訊號，見檔案下方 onAdminSessionReset 訂閱與其旁的
+// 呼叫點盤點註解。
+import { onAdminSessionReset } from '@/utils/adminSession'
 
 type DismissalCall = DismissalCallView
 
@@ -247,6 +250,24 @@ function mergeSnapshotWithLiveCalls(snapshot: DismissalCall[], mySeq: number): D
   return [...preserved, ...snapshot]
 }
 
+// 401/403＝登入已逾期或身分已失效：axios 攔截器已經試過一輪 refresh（見 api/index.ts
+// _doRefresh + _redirectToLogin），繼續每 15s 輪詢／每次 WS 重連只會不斷重播同一個
+// 必敗請求——這正是 staging 觀測到 7 天 79,140 次 401 的成因（一台停在本頁的裝置登入
+// 逾期後永不停止）。故 fetchCalls 收到 401/403 時直接停下，不等路由或 PortalLayout
+// unmount（兩者在部分情境下未同步發生，根因待查）。
+function isAuthFailureStatus(status: number | undefined): boolean {
+  return status === 401 || status === 403
+}
+
+// 停止 polling / WS 重連，模組靜默直到下一次 initPortalDismissalAlerts()（例如重新
+// 登入後 PortalLayout 重新掛載）。複用既有 teardownPortalDismissalAlerts()（見下方定義，
+// function 宣告已 hoist）以避免兩份 cleanup 邏輯彼此漂移；initialized 守衛讓重複呼叫
+// 是安全的 no-op。
+function stopAfterAuthFailure(): void {
+  if (!initialized) return
+  teardownPortalDismissalAlerts()
+}
+
 async function fetchCalls(): Promise<void> {
   const mySeq = ++fetchDispatchSeq
   const myGeneration = lifecycleGeneration
@@ -256,7 +277,13 @@ async function fetchCalls(): Promise<void> {
     // 已有更新的 fetch 發出 → 丟棄這個過時快照（避免 out-of-order 覆蓋新資料）
     if (myGeneration !== lifecycleGeneration || mySeq !== fetchDispatchSeq) return
     activeCalls.value = mergeSnapshotWithLiveCalls(res.data || [], mySeq)
-  } catch { /* 靜默：UI 由 connectionState 呈現 */ } finally {
+  } catch (err) {
+    if (isAuthFailureStatus((err as { response?: { status?: number } })?.response?.status)) {
+      stopAfterAuthFailure()
+      return
+    }
+    /* 其餘錯誤維持靜默：UI 由 connectionState 呈現 */
+  } finally {
     if (myGeneration === lifecycleGeneration && mySeq === fetchDispatchSeq) {
       loading.value = false
     }
@@ -464,6 +491,21 @@ export function teardownPortalDismissalAlerts(): void {
   loading.value = false
   initialized = false
 }
+
+// ── 認證逾期／身分切換：全域訊號直接停下 ──
+// 呼叫點盤點（確認不會誤殺教師正常使用，結論見 commit message）：
+// - clearAuth()（utils/auth.ts:208）：登出，或 axios 攔截器 refresh 失敗後的
+//   _redirectToLogin()（api/index.ts）——後者正是本次要處理的「登入逾期」情境。
+// - login / impersonate（api/auth.ts requestSessionChange）：發生在登入頁或 platform
+//   console，且早於 PortalLayout mount（教師必須先登入才看得到 Portal 路由），
+//   對已初始化的本模組不構成誤殺。
+// - useActingTenant 切換 acting tenant：僅 platform 總部 console 功能，教師 Portal
+//   不會觸發。
+// 訂閱一次即可（module-singleton，模組僅求值一次）；stopAfterAuthFailure() 內部以
+// initialized 守衛，模組尚未啟動時收到事件是安全的 no-op。
+onAdminSessionReset(() => {
+  stopAfterAuthFailure()
+})
 
 export function usePortalDismissalAlerts() {
   return {
