@@ -91,6 +91,9 @@ describe('渲染', () => {
     expect(w.find('[data-test="rail-owe"]').exists()).toBe(false)
     expect(w.find('[data-test="rail-ok"]').exists()).toBe(false)
     expect(classChips(w)).toHaveLength(3)
+    for (const chip of w.findAll('[title]')) {
+      expect(chip.attributes('title')).not.toMatch(/人|已收齊|未收齊/)
+    }
   })
 
   it('以 nav 承載並帶無障礙名稱', () => {

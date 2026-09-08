@@ -260,6 +260,31 @@ describe('PrepaymentDrawer（預繳併入帳款後的額度管理抽屜）', () 
     expect(wrapper.text()).toContain('套用註冊費')
   })
 
+  it('套用選單包含部分已繳註冊費，且不漏掉第二頁的費用單', async () => {
+    const monthly = Array.from({ length: 50 }, (_, i) => ({
+      id: i + 1, fee_item_name: '月費', period: '115-1',
+      amount_due: 9000, amount_paid: 0, fee_type: 'monthly',
+    }))
+    apiMocks.getFeeRecords.mockResolvedValueOnce({ total: 53, items: monthly })
+    apiMocks.getFeeRecords.mockResolvedValueOnce({ total: 53, items: [{
+      id: 51, fee_item_name: '部分已繳註冊費', period: '115-1',
+      amount_due: 12000, amount_paid: 2000, fee_type: 'registration',
+    }, {
+      id: 52, fee_item_name: '已繳清註冊費', period: '115-1',
+      amount_due: 12000, amount_paid: 12000, fee_type: 'registration',
+    }, {
+      id: 53, fee_item_name: '其他學期註冊費', period: '114-1',
+      amount_due: 12000, amount_paid: 0, fee_type: 'registration',
+    }] })
+    const wrapper = await mountDrawer([CREDITS[0]])
+    await wrapper.find('[data-test="apply-btn"]').trigger('click')
+    await flushPromises()
+    expect(apiMocks.getFeeRecords).toHaveBeenCalledTimes(2)
+    expect(apiMocks.getFeeRecords).toHaveBeenLastCalledWith(expect.objectContaining({ student_id: 5, period: '115-1', page: 2 }))
+    expect(apiMocks.getFeeRecords.mock.calls[0]?.[0]).not.toHaveProperty('status', 'unpaid')
+    expect(wrapper.findAllComponents(ElTableStub).at(-1)?.props('data')).toEqual([expect.objectContaining({ id: 51, amount_paid: 2000 })])
+  })
+
   it('套用註冊費：只列學期相符的註冊費費用單，確認後 emit refresh', async () => {
     apiMocks.getFeeRecords.mockResolvedValueOnce({
       total: 2,
