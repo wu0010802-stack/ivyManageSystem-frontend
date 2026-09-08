@@ -90,6 +90,7 @@
       </div>
       <div class="head__actions">
         <el-button v-if="canWrite" type="primary" size="small" data-test="ppd-open" @click="prepayVisible = true">登記預繳現金</el-button>
+        <el-button size="small" data-test="ppd-refresh" :loading="prepayLoading" @click="fetchPrepay">重新整理預繳</el-button>
         <el-button size="small" data-test="ppd-refunds-open" @click="refundsVisible = true">
           預繳退款{{ pendingRefundCount ? `（${pendingRefundCount} 待辦）` : '' }}
         </el-button>
@@ -107,7 +108,7 @@
           <td><el-tag :type="creditStatusTag(c.status)" size="small">{{ CREDIT_STATUS_LABELS[c.status] ?? c.status }}</el-tag></td>
           <td><el-button size="small" text data-test="ppd-credit-manage" @click="openCredit(c)">管理</el-button></td>
         </tr>
-        <tr v-if="credits.length === 0"><td colspan="5" class="hint">目前尚無有效預繳額度</td></tr>
+        <tr v-if="credits.length === 0"><td colspan="5" class="hint">{{ prepayLoading ? '載入預繳款中…' : prepayError || '目前尚無有效預繳額度' }}</td></tr>
       </tbody>
     </table>
 
@@ -193,7 +194,7 @@ const filteredBatches = computed(() => batches.value.filter(batch => batch.title
 
 function closeDetail() { detailSequence++; detail.value = null; detailLoading.value = false; detailError.value = '' }
 watch(termKey, () => { closeDetail(); batches.value = [] })
-onBeforeUnmount(() => { listSequence++; detailSequence++ })
+onBeforeUnmount(() => { listSequence++; detailSequence++; prepaySequence++ })
 
 // 建批 dialog（宣告在較前面，避免 defineExpose 之後才宣告造成 TDZ）
 const createVisible = ref(false)
@@ -301,32 +302,54 @@ async function confirmAdd() {
 }
 
 // 新生預繳
-const credits = ref<PrepayCreditRow[]>([])
+const allCredits = ref<PrepayCreditRow[]>([])
+const prepayReady = ref(false)
+const prepayLoading = ref(false)
+const prepayError = ref('')
+let prepaySequence = 0
+const credits = computed(() => prepayReady.value
+  ? allCredits.value.filter((x) => ['available', 'applied', 'refund_pending'].includes(x.status))
+  : [])
 const refunds = ref<PrepayRefundRow[]>([])
 const prepayVisible = ref(false)
 const refundsVisible = ref(false)
 const drawerVisible = ref(false)
-const drawerCredits = ref<PrepayCreditRow[]>([])
-const drawerTitle = ref('')
+const selectedCreditId = ref<number | null>(null)
+const selectedCredit = computed(() => allCredits.value.find((c) => c.id === selectedCreditId.value))
+const drawerCredits = computed(() => prepayReady.value && selectedCredit.value ? [selectedCredit.value] : [])
+const drawerTitle = computed(() => `${selectedCredit.value?.student_name ?? selectedCredit.value?.visit_child_name ?? ''} 的預繳款`)
 const pendingRefundCount = computed(
   () => refunds.value.filter((r) => ['requested', 'approved'].includes(r.status)).length,
 )
 
 async function fetchPrepay() {
+  const sequence = ++prepaySequence
+  prepayReady.value = false
+  prepayLoading.value = true
+  prepayError.value = ''
   try {
     const [c, r] = await Promise.all([getPrepayments(), getPrepaymentRefunds()])
-    credits.value = ((c.items ?? []) as PrepayCreditRow[]).filter((x) =>
-      ['available', 'applied', 'refund_pending'].includes(x.status),
-    )
+    if (sequence !== prepaySequence) return
+    allCredits.value = (c.items ?? []) as PrepayCreditRow[]
     refunds.value = (r.items ?? []) as PrepayRefundRow[]
+    prepayReady.value = true
+    if (selectedCreditId.value !== null && !selectedCredit.value) {
+      selectedCreditId.value = null
+      drawerVisible.value = false
+    }
   } catch (e) {
-    ElMessage.error(friendlyError('載入預繳款失敗', e))
+    if (sequence === prepaySequence) {
+      prepayError.value = friendlyError('載入預繳款失敗，請重新整理', e)
+      ElMessage.error(prepayError.value)
+    }
+  } finally {
+    if (sequence === prepaySequence) prepayLoading.value = false
   }
 }
 
 function openCredit(c: PrepayCreditRow) {
-  drawerCredits.value = [c]
-  drawerTitle.value = `${c.student_name ?? c.visit_child_name ?? ''} 的預繳款`
+  if (!prepayReady.value) return
+  selectedCreditId.value = c.id
   drawerVisible.value = true
 }
 

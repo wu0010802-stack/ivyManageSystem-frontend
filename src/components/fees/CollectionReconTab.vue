@@ -30,6 +30,7 @@
           v-if="canWrite && pickedFile"
           data-test="run-preview"
           :loading="previewing"
+          :disabled="importing"
           aria-label="安全預覽匯入內容（不寫入）"
           @click="runPreview"
         >
@@ -463,6 +464,8 @@ const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 
 const pickedFile = ref<File | null>(null)
 const preview = ref<CollectionImportPreview | null>(null)
+const previewedFile = ref<File | null>(null)
+let previewSequence = 0
 const previewing = ref(false)
 const importing = ref(false)
 const errorRowsOpen = ref(false)
@@ -576,30 +579,40 @@ function isAllocatable(row: CollectionPaymentRow): boolean {
 }
 
 function onFileChange(file: UploadFile) {
+  previewSequence++
+  previewing.value = false
+  previewedFile.value = null
   pickedFile.value = (file.raw as File) ?? null
   preview.value = null
   errorRowsOpen.value = false
 }
 
 async function runPreview() {
-  if (!pickedFile.value) return
+  const file = pickedFile.value
+  if (!file || importing.value) return
+  const sequence = ++previewSequence
+  preview.value = null
+  previewedFile.value = null
   previewing.value = true
   try {
-    preview.value = (await previewCollectionImport(
-      pickedFile.value,
-    )) as unknown as CollectionImportPreview
+    const result = (await previewCollectionImport(file)) as unknown as CollectionImportPreview
+    if (sequence !== previewSequence || pickedFile.value !== file) return
+    preview.value = result
+    previewedFile.value = file
   } catch (e) {
-    ElMessage.error(friendlyError('預覽失敗', e))
+    if (sequence === previewSequence) ElMessage.error(friendlyError('預覽失敗', e))
   } finally {
-    previewing.value = false
+    if (sequence === previewSequence) previewing.value = false
   }
 }
 
 async function runImport() {
-  if (!pickedFile.value) return
+  const file = previewedFile.value
+  if (!file || file !== pickedFile.value || !preview.value || previewing.value || importing.value) return
+  const sequence = previewSequence
   importing.value = true
   try {
-    const result = (await confirmCollectionImport(pickedFile.value)) as unknown as {
+    const result = (await confirmCollectionImport(file)) as unknown as {
       id: number
       row_count: number
       created: boolean | null
@@ -607,8 +620,11 @@ async function runImport() {
     ElMessage.success(
       result.created ? `已匯入 ${result.row_count} 筆代收繳費` : '此檔先前已匯入（未重複入帳）',
     )
-    pickedFile.value = null
-    preview.value = null
+    if (sequence === previewSequence && pickedFile.value === file) {
+      pickedFile.value = null
+      preview.value = null
+      previewedFile.value = null
+    }
     lastImportId.value = result.id
     await refreshBatchHint(lastImportId.value)
     await fetchPayments()

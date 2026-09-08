@@ -7,6 +7,9 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { loadBranding, replaceTokens, tokenMapFor } from './scripts/brand-tokens-lib.mjs'
+import { createPrecacheStaticDependencies } from './scripts/precache-static-dependencies.mjs'
+
+const precacheDependencies = createPrecacheStaticDependencies()
 
 /**
  * dev server 專用：把三個 HTML 的 `{{TB_*}}` 換成 default tenant 的值。
@@ -386,6 +389,7 @@ function manualChunks(id) {
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [
+        precacheDependencies.plugin,
         brandTokensDevPlugin(),
         vue(),
         AutoImport({
@@ -419,6 +423,7 @@ export default defineConfig({
             manifest: false,
 
             workbox: {
+                manifestTransforms: [precacheDependencies.manifestTransform],
                 // 新 SW 一就緒就接管，避免舊 SW 繼續攔截到已不存在的 chunk hash → 404 白屏。
                 // 與 boot-time chunk-fail 自救（main.js）合作：雙保險避免 PWA 升級卡住。
                 skipWaiting: true,

@@ -23070,7 +23070,7 @@ export interface components {
         BatchFeePayItem: {
             /**
              * Idempotency Key
-             * @description 本筆繳費冪等鍵（語意同 PayRequest.idempotency_key）
+             * @description 本筆繳費冪等鍵（語意同 PayRequest.idempotency_key；不得使用系統保留前綴 feealloc-／feepay-）
              */
             idempotency_key?: string | null;
             /** Record Id */
@@ -25161,7 +25161,10 @@ export interface components {
         CashReceiptRequest: {
             /** Amount */
             amount: number;
-            /** Idempotency Key */
+            /**
+             * Idempotency Key
+             * @description 現金收款冪等鍵（不得使用系統保留前綴 feealloc-／feepay-）
+             */
             idempotency_key?: string | null;
             /** Parts */
             parts: (components["schemas"]["FeeRecordAllocationPartIn"] | components["schemas"]["PrepaymentAllocationPartIn"] | components["schemas"]["NonTuitionAllocationPartIn"])[];
@@ -35674,7 +35677,7 @@ export interface components {
             amount_paid?: number | null;
             /**
              * Idempotency Key
-             * @description 繳費冪等鍵（全域唯一；同 key 重送視為重試並回放先前結果）
+             * @description 繳費冪等鍵（全域唯一；同 key 重送視為重試並回放先前結果；不得使用系統保留前綴 feealloc-／feepay-）
              */
             idempotency_key?: string | null;
             /**
@@ -41002,7 +41005,7 @@ export interface components {
             } | null;
             /**
              * Idempotency Key
-             * @description 冪等鍵（10 分鐘視窗內同 key 視為重試，避免重複退款）
+             * @description 冪等鍵（同 key 且內容相符時回放原退款；不得使用系統保留前綴 feealloc-／feepay-）
              */
             idempotency_key?: string | null;
             /**

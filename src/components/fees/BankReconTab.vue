@@ -31,6 +31,7 @@
           v-if="canWrite && pickedFile"
           data-test="run-preview"
           :loading="previewing"
+          :disabled="importing"
           aria-label="安全預覽匯入內容（不寫入）"
           @click="runPreview"
         >
@@ -301,6 +302,8 @@ const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 
 const pickedFile = ref<File | null>(null)
 const preview = ref<Preview | null>(null)
+const previewedFile = ref<File | null>(null)
+let previewSequence = 0
 const previewing = ref(false)
 const importing = ref(false)
 
@@ -372,34 +375,49 @@ const emptyDescription = computed(() => {
 })
 
 function onFileChange(file: UploadFile) {
+  previewSequence++
+  previewing.value = false
+  previewedFile.value = null
   pickedFile.value = (file.raw as File) ?? null
   preview.value = null
 }
 
 async function runPreview() {
-  if (!pickedFile.value) return
+  const file = pickedFile.value
+  if (!file || importing.value) return
+  const sequence = ++previewSequence
+  preview.value = null
+  previewedFile.value = null
   previewing.value = true
   try {
-    preview.value = (await previewBankImport(pickedFile.value)) as Preview
+    const result = (await previewBankImport(file)) as Preview
+    if (sequence !== previewSequence || pickedFile.value !== file) return
+    preview.value = result
+    previewedFile.value = file
   } catch (e) {
-    ElMessage.error(friendlyError('預覽失敗', e))
+    if (sequence === previewSequence) ElMessage.error(friendlyError('預覽失敗', e))
   } finally {
-    previewing.value = false
+    if (sequence === previewSequence) previewing.value = false
   }
 }
 
 async function runImport() {
-  if (!pickedFile.value) return
+  const file = previewedFile.value
+  if (!file || file !== pickedFile.value || !preview.value || previewing.value || importing.value) return
+  const sequence = previewSequence
   importing.value = true
   try {
-    const result = await confirmBankImport(pickedFile.value)
+    const result = await confirmBankImport(file)
     if (result.created === false) {
       ElMessage.warning('此檔先前已匯入，未重複入帳')
     } else {
       ElMessage.success(`匯入完成：${result.row_count} 筆（略過重複 ${result.duplicate_count}）`)
     }
-    pickedFile.value = null
-    preview.value = null
+    if (sequence === previewSequence && pickedFile.value === file) {
+      pickedFile.value = null
+      preview.value = null
+      previewedFile.value = null
+    }
     refetch()
   } catch (e) {
     ElMessage.error(friendlyError('匯入失敗', e))

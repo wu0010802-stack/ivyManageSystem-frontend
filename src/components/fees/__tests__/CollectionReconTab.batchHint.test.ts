@@ -8,7 +8,7 @@ import { defineComponent, h, nextTick } from 'vue'
 import CollectionReconTab from '../CollectionReconTab.vue'
 
 const apiMocks = vi.hoisted(() => ({
-  previewCollectionImport: vi.fn(),
+  previewCollectionImport: vi.fn(() => Promise.resolve({ row_count: 187, duplicate_count: 0, errors: [] })),
   confirmCollectionImport: vi.fn(() =>
     Promise.resolve({ id: 12, row_count: 187, created: true }),
   ),

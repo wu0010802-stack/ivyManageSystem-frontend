@@ -267,4 +267,69 @@ describe('CashItemsView', () => {
     await flushPromises()
   })
 
+  it('抽屜刷新期間清除舊操作資料，完成後跟隨額度狀態與正式學生身分', async () => {
+    const w = mount(CashItemsView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await w.get('[data-test="ppd-credit-manage"]').trigger('click')
+    const drawer = w.findComponent({ name: 'PrepaymentDrawer' })
+    const old = (drawer.props('credits') as Record<string, unknown>[])[0]
+    let resolve!: (value: unknown) => void
+    apiMocks.getPrepayments.mockImplementationOnce(() => new Promise(r => { resolve = r }) as never)
+    drawer.vm.$emit('refresh')
+    await flushPromises()
+    expect(drawer.props('credits')).toEqual([])
+    resolve({ items: [{ ...old, student_id: 5, student_name: '測試新生', status: 'applied', balance: 0 }] })
+    await flushPromises()
+    expect(drawer.props('credits')).toEqual([expect.objectContaining({ student_id: 5, status: 'applied', balance: 0 })])
+    expect(drawer.props('title')).toContain('測試新生')
+  })
+
+  it.each(['refund_pending', 'refunded'])('抽屜刷新可呈現 %s，不保留可退款舊額度', async (status) => {
+    const w = mount(CashItemsView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await w.get('[data-test="ppd-credit-manage"]').trigger('click')
+    const drawer = w.findComponent({ name: 'PrepaymentDrawer' })
+    const old = (drawer.props('credits') as Record<string, unknown>[])[0]
+    apiMocks.getPrepayments.mockResolvedValueOnce({ items: [{ ...old, status, balance: 0 }], total: 1 } as never)
+    drawer.vm.$emit('refresh')
+    await flushPromises()
+    expect(drawer.props('credits')).toEqual([expect.objectContaining({ status, balance: 0 })])
+  })
+
+  it('刷新失敗或選中額度消失時不留下可操作舊額度', async () => {
+    const w = mount(CashItemsView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await w.get('[data-test="ppd-credit-manage"]').trigger('click')
+    const drawer = w.findComponent({ name: 'PrepaymentDrawer' })
+    apiMocks.getPrepayments.mockRejectedValueOnce(new Error('載入失敗'))
+    drawer.vm.$emit('refresh')
+    await flushPromises()
+    expect(drawer.props('credits')).toEqual([])
+    expect(w.text()).toContain('載入預繳款失敗，請重新整理')
+    drawer.vm.$emit('update:modelValue', false)
+    apiMocks.getPrepayments.mockResolvedValueOnce({ items: [], total: 0 })
+    await w.get('[data-test="ppd-refresh"]').trigger('click')
+    await flushPromises()
+    expect(drawer.props('credits')).toEqual([])
+    expect(drawer.props('modelValue')).toBe(false)
+  })
+
+  it('較舊的刷新最後回來也不能把已套用額度還原成可用', async () => {
+    const w = mount(CashItemsView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await w.get('[data-test="ppd-credit-manage"]').trigger('click')
+    const drawer = w.findComponent({ name: 'PrepaymentDrawer' })
+    const old = (drawer.props('credits') as Record<string, unknown>[])[0]
+    let resolve!: (value: unknown) => void
+    apiMocks.getPrepayments.mockImplementationOnce(() => new Promise(r => { resolve = r }) as never)
+    drawer.vm.$emit('refresh')
+    await flushPromises()
+    apiMocks.getPrepayments.mockResolvedValueOnce({ items: [{ ...old, status: 'applied', balance: 0 }], total: 1 } as never)
+    drawer.vm.$emit('refresh')
+    await flushPromises()
+    resolve({ items: [old], total: 1 })
+    await flushPromises()
+    expect(drawer.props('credits')).toEqual([expect.objectContaining({ status: 'applied', balance: 0 })])
+  })
+
 })
