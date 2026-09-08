@@ -320,6 +320,14 @@ function manualChunks(id) {
         return 'qrcode'
     }
 
+    // gsap：僅家長端聯絡簿「已讀蓋章」ReadStampButton.vue 用到，且該元件以
+    // `await import('gsap')` 懶載入（元件本身在 parent-app eager chunk，但 gsap
+    // 只在進到聯絡簿詳情頁才下載）。不 pin 會落進 vendor catch-all 被三端首屏
+    // eager 載入（~25KB gz 的無用死碼）。
+    if (id.includes('/node_modules/gsap/')) {
+        return 'gsap'
+    }
+
     // marked + dompurify：僅家長端 FAQ FaqAnswer.vue 渲染 + 消毒 markdown 用到。
     if (
         id.includes('/node_modules/marked/') ||

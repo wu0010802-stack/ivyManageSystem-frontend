@@ -7,13 +7,20 @@ interface NavItem {
   activeIcon?: string
   label: string
   badge?: number
+  /** 隆起的圓形主按鈕（bottom-app-bar FAB 造型），一列最多一顆 */
+  prominent?: boolean
 }
 
 /**
  * Material 3 Navigation Bar.
  *
- * 4-tab 底部導航。Active tab 用 active indicator pill (32×32 secondary-container)，
+ * 底部導航。Active tab 用 active indicator pill (32×32 secondary-container)，
  * icon 切 filled 變體。Inactive 用 outline。
+ *
+ * `prominent` 的 tab 改成「永久隆起」的圓形 FAB：導航列本身維持平整矩形（上緣
+ * 一條直線、不挖凹槽），圓鈕直接浮貼在列上，上半身露出列頂。隆起與陰影是靜態的，
+ * 不隨 hover / active 變化；hover / press 只改按鈕顏色（state layer）。
+ * 「目前分頁」另用 filled icon + 標籤色 + 標籤下方小圓點表達，與隆起語意分開。
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §5.1
  */
@@ -42,24 +49,28 @@ function onTabClick(item: NavItem): void {
 </script>
 
 <template>
-  <nav class="m3-navigation-bar" role="navigation" aria-label="主要功能">
+  <nav
+    class="m3-navigation-bar"
+    role="navigation"
+    aria-label="主要功能"
+  >
     <button
       v-for="item in items"
       :key="item.key"
       type="button"
       class="m3-nav-tab"
-      :class="{ 'is-active': item.key === currentKey }"
+      :class="{ 'is-active': item.key === currentKey, 'is-prominent': item.prominent }"
       :aria-current="item.key === currentKey ? 'page' : undefined"
       :aria-label="item.label"
       @click="onTabClick(item)"
     >
-      <span class="m3-nav-tab-icon-wrap">
-        <span class="m3-nav-tab-indicator" aria-hidden="true" />
+      <span :class="item.prominent ? 'm3-nav-fab' : 'm3-nav-tab-icon-wrap'">
+        <span v-if="!item.prominent" class="m3-nav-tab-indicator" aria-hidden="true" />
         <M3Icon
           class="m3-nav-tab-icon"
           :name="iconName(item, item.key === currentKey)"
           :filled="item.key === currentKey"
-          :size="24"
+          :size="item.prominent ? 26 : 24"
           aria-hidden="true"
         />
         <span
@@ -69,17 +80,21 @@ function onTabClick(item: NavItem): void {
         >{{ badgeLabel(item.badge) }}</span>
       </span>
       <span class="m3-nav-tab-label m3-label-medium">{{ item.label }}</span>
+      <span v-if="item.prominent" class="m3-nav-tab-dot" aria-hidden="true" />
     </button>
   </nav>
 </template>
 
 <style scoped>
 .m3-navigation-bar {
+  --m3-nav-bg: var(--m3-surface-container, #ebefe8);
+  position: relative;
   display: flex;
   width: 100%;
   height: 80px;
   padding-bottom: env(safe-area-inset-bottom, 0);
-  background: var(--m3-surface-container, #ebefe8);
+  /* 平整實色列底；prominent FAB 直接疊在列上（不挖凹槽），所以列本身不需要 overflow 裁切 */
+  background: var(--m3-nav-bg);
   color: var(--m3-on-surface-variant, #424941);
 }
 
@@ -107,6 +122,29 @@ function onTabClick(item: NavItem): void {
   justify-content: center;
   width: 64px;
   height: 32px;
+}
+/* 圓形 hover/focus/press 狀態層：40×40 正圓，疊在橢圓 icon-wrap 正中央，
+ * 樣式與命中區大小比照 M3IconButton 的 state-layer 慣例，讓 icon 有跟其他
+ * 圓形 icon 按鈕一致的觸控回饋（此前底部導航列完全沒有 hover 樣式）。 */
+.m3-nav-tab-icon-wrap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--m3-dur-short-2, 100ms) var(--m3-easing-standard, ease);
+}
+.m3-nav-tab:hover .m3-nav-tab-icon-wrap::after { opacity: var(--m3-state-hover, 0.08); }
+.m3-nav-tab:focus-visible .m3-nav-tab-icon-wrap::after { opacity: var(--m3-state-focus, 0.12); }
+.m3-nav-tab:active .m3-nav-tab-icon-wrap::after { opacity: var(--m3-state-pressed, 0.12); }
+@media (prefers-reduced-motion: reduce) {
+  .m3-nav-tab-icon-wrap::after { transition: none; }
 }
 .m3-nav-tab-indicator {
   position: absolute;
@@ -157,5 +195,109 @@ function onTabClick(item: NavItem): void {
 }
 .m3-nav-tab.is-active .m3-nav-tab-label {
   color: var(--m3-on-surface, #181d18);
+}
+
+/* ============================================================
+ * Prominent tab：永久隆起的圓形 FAB，直接浮貼在平整的導航列上
+ * 隆起（位置 / 尺寸 / 陰影）全部是靜態值，不掛在 hover / active 上；
+ * hover / press 只透過 ::after state layer 改顏色。
+ * ============================================================ */
+.m3-nav-tab.is-prominent {
+  /* 標籤貼齊其他 tab 的標籤基線（12 + 32 + 4 = 48px 起），FAB 另行絕對定位 */
+  justify-content: flex-end;
+}
+.m3-nav-fab {
+  --m3-nav-fab-size: 56px;
+  position: absolute;
+  /* 只有頂端 12px（約 1/5 圓）露出列頂，其餘 44px 疊在列面上、圓心落在 icon 列稍上方，
+   * 視覺上是「服貼在列上」而不是懸在半空（2026-09-08 從 -32px 收斂，先前露出過半太突兀）。
+   * 圓底 44px < 標籤起點 48px，不會壓到標籤。 */
+  top: -12px;
+  left: 50%;
+  margin-left: calc(var(--m3-nav-fab-size) / -2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--m3-nav-fab-size);
+  height: var(--m3-nav-fab-size);
+  border-radius: 9999px;
+  /* 品牌綠漸層：亮綠 → 品牌深綠 → M3 primary，白 icon 對最亮端仍 ≥3:1（非文字 AA） */
+  background: linear-gradient(
+    145deg,
+    var(--ivy-green-mid, #41a074) 0%,
+    var(--brand-primary, #0d9053) 55%,
+    var(--m3-primary, #006d3d) 100%
+  );
+  color: #ffffff;
+  /* 隆起幅度小，陰影只留兩層短距離的接觸陰影（M3 elevation 2 量級）把圓鈕從列面上
+   * 輕輕托起；先前為了撐起大幅隆起的第三層綠色投影已拿掉，避免圓鈕看起來過重。 */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.14),
+    0 2px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1;
+}
+/* 深色主題 --m3-primary 是淺綠，漸層尾端改用 primary-container 維持深綠收尾。
+ * 選擇器不綁 :root，讓 data-theme 掛在任一祖先容器（例如並排對照的測試頁）也能生效。 */
+[data-theme='dark'] .m3-nav-fab {
+  background: linear-gradient(
+    145deg,
+    var(--ivy-green-mid, #41a074) 0%,
+    var(--brand-primary, #0d9053) 55%,
+    var(--m3-primary-container, #00522c) 100%
+  );
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+}
+/* state layer：hover 泛白、按下壓暗，只動顏色 */
+.m3-nav-fab::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--m3-dur-short-2, 100ms) var(--m3-easing-standard, ease);
+}
+.m3-nav-tab:hover .m3-nav-fab::after { opacity: 0.14; }
+.m3-nav-tab:active .m3-nav-fab::after { background: #000000; opacity: 0.16; }
+
+.m3-nav-tab.is-prominent .m3-nav-tab-icon {
+  color: #ffffff;
+  transform: none; /* 隆起鈕不做 active 放大，避免與「永久隆起」語意混淆 */
+}
+.m3-nav-fab .m3-nav-tab-badge {
+  top: -2px;
+  right: -4px;
+  box-shadow: 0 0 0 2px var(--m3-nav-bg);
+}
+
+/* 鍵盤 focus：環在圓鈕上（原生 outline 會框住整個 tab 矩形，和圓鈕造型打架） */
+.m3-nav-tab.is-prominent:focus-visible { outline: none; }
+.m3-nav-tab.is-prominent:focus-visible .m3-nav-fab {
+  outline: 3px solid var(--m3-primary, #006d3d);
+  outline-offset: 3px;
+}
+
+/* 目前分頁指示：標籤下方小圓點（其他 tab 用 pill，隆起鈕永遠是綠底所以改用圓點） */
+.m3-nav-tab-dot {
+  position: absolute;
+  bottom: 7px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 9999px;
+  background: var(--brand-primary, #0d9053);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity var(--motion-quick, 150ms) ease,
+    transform var(--motion-base, 260ms) var(--motion-spring, ease);
+}
+.m3-nav-tab.is-active .m3-nav-tab-dot { opacity: 1; transform: scale(1); }
+@media (prefers-reduced-motion: reduce) {
+  .m3-nav-fab::after,
+  .m3-nav-tab-dot { transition: none; }
 }
 </style>

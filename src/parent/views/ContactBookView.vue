@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
@@ -23,7 +23,6 @@ import MonthDateStrip from '../components/contact-book/MonthDateStrip.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 import ContactBookListItem from '../components/contact-book/ContactBookListItem.vue'
 import AnnouncementsPanel from '../components/announcements/AnnouncementsPanel.vue'
-import { getUnreadCount as getAnnouncementUnreadCount } from '../api/announcements'
 
 const router = useRouter()
 const route = useRoute()
@@ -146,68 +145,23 @@ const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
 // 當 fetch 失敗且完全沒有資料時，顯示 inline MobileErrorRetry（toast 仍保留）
 const hasNoData = computed(() => !today.value && history.value.length === 0)
 
-/* ── 上方分頁：聯絡簿 / 公告 ────────────────────────────────────────────
- * 訊息功能下架（2026-08-28）後，公告從原「訊息」tab 移進這裡當第二分頁。
- * 分頁狀態放 query 而非本地 ref：LINE 推播與返回鍵才能直接落在公告分頁。
+/* ── 上方分頁按鈕已移除（2026-09-08）──────────────────────────────────
+ * 公告分頁按鈕先前已移除（同日），此後分頁列只剩「聯絡簿」一顆恆常 active
+ * 且點了無作用的按鈕，故一併移除整條分頁列。
+ * 深連結（LINE 推播用的 `?tab=announcements`）與 AnnouncementsPanel 資料
+ * 邏輯刻意保留：舊推播訊息仍可正常落地開啟公告內容，只是使用者在聯絡簿
+ * 頁面上已看不到任何手動切換分頁的入口（含按鈕本身）。
+ * 分頁狀態仍放 query 而非本地 ref，理由同上。
  */
 type CbTab = 'contact-book' | 'announcements'
-const CB_TABS: { key: CbTab; label: string }[] = [
-  { key: 'contact-book', label: '聯絡簿' },
-  { key: 'announcements', label: '公告' },
-]
 const activeTab = computed<CbTab>(() =>
   route.query.tab === 'announcements' ? 'announcements' : 'contact-book',
 )
-
-function selectTab(tab: CbTab) {
-  if (tab === activeTab.value) return
-  const query = { ...route.query }
-  if (tab === 'announcements') query.tab = 'announcements'
-  else delete query.tab
-  router.replace({ path: route.path, query })
-}
-
-// 公告未讀數。面板掛載時由它回報權威值；但使用者停在聯絡簿分頁時面板不掛載，
-// 分頁標籤就永遠不會亮數字——所以這裡自己先取一次。
-const announcementUnread = ref(0)
-function onAnnouncementUnread(n: number) {
-  announcementUnread.value = n
-}
-onMounted(async () => {
-  if (activeTab.value === 'announcements') return
-  try {
-    const { data } = await getAnnouncementUnreadCount()
-    announcementUnread.value = (data as Record<string, unknown>)?.unread_count as number || 0
-  } catch { /* ignore：標籤數字是輔助資訊，抓不到就不顯示 */ }
-})
 </script>
 
 <template>
   <div class="cb">
-    <div class="cb-segments" role="tablist" aria-label="聯絡簿與公告">
-      <button
-        v-for="t in CB_TABS"
-        :key="t.key"
-        data-testid="cb-segment-tab"
-        class="cb-segment"
-        :class="{ active: activeTab === t.key }"
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === t.key"
-        @click="selectTab(t.key)"
-      >
-        {{ t.label }}
-        <span
-          v-if="t.key === 'announcements' && announcementUnread > 0"
-          class="cb-segment-badge"
-        >{{ announcementUnread }}</span>
-      </button>
-    </div>
-
-    <AnnouncementsPanel
-      v-if="activeTab === 'announcements'"
-      @unread-change="onAnnouncementUnread"
-    />
+    <AnnouncementsPanel v-if="activeTab === 'announcements'" />
 
     <template v-else>
       <ChildContextHeader variant="page" />
@@ -325,57 +279,6 @@ onMounted(async () => {
 }
 .skeleton-wrap { padding: var(--space-2) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2, 8px); }
 
-/* 上方分頁（聯絡簿 / 公告） */
-.cb-segments {
-  display: flex;
-  gap: var(--space-1, 4px);
-  padding: var(--space-2) var(--space-4) 0;
-}
-.cb-segment {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--pt-border-light, #ecf5f9);
-  border-radius: var(--radius-full, 999px);
-  background: var(--pt-surface-card, #fff);
-  color: var(--pt-text-body, #4b5563);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
-}
-.cb-segment.active {
-  background: var(--brand-primary, #0d9053);
-  border-color: var(--brand-primary, #0d9053);
-  color: var(--color-primary-contrast);
-}
-.cb-segment:focus-visible {
-  outline: 2px solid var(--brand-primary, #0d9053);
-  outline-offset: 2px;
-}
-.cb-segment-badge {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: var(--coral-500, #ff8b8b);
-  color: var(--color-primary-contrast);
-  font-size: 11px;
-  line-height: 18px;
-  font-weight: var(--font-weight-bold, 700);
-}
-.cb-segment.active .cb-segment-badge {
-  background: var(--color-primary-contrast);
-  color: var(--brand-primary, #0d9053);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cb-segment { transition: none; }
-}
 .render-sentinel { height: 1px; }
 
 .today-section { padding: 0 var(--space-4); }
