@@ -70,21 +70,13 @@ import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTa
 import RecruitmentStatsPanel from '@/components/recruitment/RecruitmentStatsPanel.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 
-const VALID_TABS = ['funnel', 'records', 'intake', 'ivykids', 'stats'] as const
-type AdmissionsTab = (typeof VALID_TABS)[number]
-
 const route = useRoute()
-const initialTab = ((): AdmissionsTab => {
-  const t = typeof route.query.tab === 'string' ? route.query.tab : ''
-  return (VALID_TABS as readonly string[]).includes(t) ? (t as AdmissionsTab) : 'funnel'
-})()
-const activeTab = ref<AdmissionsTab>(initialTab)
 
 const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
 const dashboard = useRecruitmentDashboard({ notifyError: (m: string) => ElMessage.error(m) })
 // 入學學年／學期：四個 tab 共用一份並寫進 URL（2026-09-06）。原本各自維護，
 // 在看板挑了學期、切到明細又跳回全部，使用者以為資料不見了。
-const { schoolYear: termSchoolYear, semester: termSemester } = useAdmissionsTermFilter()
+const { schoolYear: termSchoolYear, semester: termSemester, activeTab } = useAdmissionsTermFilter()
 
 const funnelStore = useRecruitmentFunnelStore()
 // 注意：panel 為 lazy keep-mounted，patch 僅在 panel watch/onMounted 各讀一次；
@@ -150,7 +142,8 @@ async function onFunnelVisitCreated() {
 onMounted(() => {
   dashboard.loadDashboard()
   const kw = typeof route.query.keyword === 'string' ? route.query.keyword : ''
-  if (kw) drillToRecords({ keyword: kw })
+  // 舊的純關鍵字連結仍開明細；明確指定頁籤時不可被殘留關鍵字拉回明細。
+  if (kw && (!route.query.tab || route.query.tab === 'records')) drillToRecords({ keyword: kw })
 })
 </script>
 

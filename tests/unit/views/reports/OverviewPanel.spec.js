@@ -12,7 +12,7 @@
  *  5. API 錯誤與「真零值」視覺區分（持久性錯誤區塊 vs NT$0）
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 
 const {
@@ -84,6 +84,7 @@ function signoffSummary(pendingCount = 0, pendingAmount = 0) {
 // 未 stub 時 `:description` prop 不會投影成可見文字（無 slot children 可渲染）。
 // 比照 MonthlyPnLPanel.spec.js 的作法自建最小 stub。
 const globalConfig = {
+  stubs: { RouterLink: RouterLinkStub },
   components: {
     ElEmpty: defineComponent({
       name: 'ElEmpty',
@@ -115,6 +116,14 @@ beforeEach(() => {
 })
 
 describe('OverviewPanel KPI 渲染', () => {
+  it('固定支出缺漏直接連到收付款登錄並保留年度月份', async () => {
+    mockGetFinanceSummary.mockResolvedValue({ data: makeFinanceFixture({ trend: [], summary: zeroSummary() }) })
+    const wrapper = mountPanel(2025)
+    await flushPromises()
+    const link = wrapper.find('[data-test="todo-item-fixed-cost-1"]').findComponent(RouterLinkStub)
+    expect(link.props('to')).toEqual({ path: '/finance-signoffs', query: { tab: 'fixed-cost', year: '2025', month: '1' } })
+    wrapper.unmount()
+  })
   it('渲染本年總收入/退款/總支出/淨現金（KPI 主數字＝截至實際發生月的 monthly_trend 累加，2026-07-10 改版不再直讀 finance.summary）', async () => {
     // 過去年度 cutoff=12（全年皆「已過去」），12 個月均攤出與 summary 相同的全年總額，
     // 讓本測試同時涵蓋新舊口徑一致的情境（見 OverviewPanel.test.ts 覆蓋兩口徑分岔情境）。

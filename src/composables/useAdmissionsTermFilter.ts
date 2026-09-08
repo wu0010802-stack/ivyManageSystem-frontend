@@ -34,18 +34,33 @@ export function useAdmissionsTermFilter() {
 
   const schoolYear = ref<number | null>(parseYear(route.query.sy))
   const semester = ref<TermSemester>(parseSemester(route.query.sem))
+  const tabs = ['funnel', 'records', 'intake', 'ivykids', 'stats'] as const
+  type Tab = (typeof tabs)[number]
+  const parseTab = (raw: unknown): Tab =>
+    typeof raw === 'string' && tabs.some(tab => tab === raw) ? raw as Tab : 'funnel'
+  const activeTab = ref<Tab>(parseTab(route.query.tab))
 
   /** 寫回 URL：值為 null 時移除該 query，避免留下 `sy=` 這種空字串。 */
   function syncToUrl(): void {
     const query = { ...route.query }
+    query.tab = activeTab.value
     if (schoolYear.value == null) delete query.sy
     else query.sy = String(schoolYear.value)
     if (semester.value == null) delete query.sem
     else query.sem = String(semester.value)
-    void router.replace({ query })
+    if (query.tab !== route.query.tab || query.sy !== route.query.sy || query.sem !== route.query.sem) {
+      void router.replace({ query })
+    }
   }
 
-  watch([schoolYear, semester], syncToUrl)
+  // 三項狀態共用一次回寫，避免切頁籤與學期同時發生時互相覆蓋 query。
+  watch([schoolYear, semester, activeTab], syncToUrl)
+  watch(() => route.query, query => {
+    if (route.path && route.path !== '/students/admissions') return
+    schoolYear.value = parseYear(query.sy)
+    semester.value = parseSemester(query.sem)
+    activeTab.value = parseTab(query.tab)
+  })
 
   function setTerm(next: Partial<AdmissionsTermFilter>): void {
     if ('schoolYear' in next) schoolYear.value = next.schoolYear ?? null
@@ -55,5 +70,5 @@ export function useAdmissionsTermFilter() {
   /** 名額規劃這類需要具體學期的面板用；沒選學期時退回上學期。 */
   const semesterOrFirst = computed<1 | 2>(() => semester.value ?? 1)
 
-  return { schoolYear, semester, semesterOrFirst, setTerm }
+  return { schoolYear, semester, semesterOrFirst, setTerm, activeTab }
 }

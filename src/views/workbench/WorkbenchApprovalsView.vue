@@ -21,6 +21,7 @@ import { MODULE_TERMS } from '@/constants/moduleTerms'
 import { getApprovalPolicies, type ApprovalPolicyRow } from '@/api/approvalSettings'
 import { isSuperAdmin } from '@/utils/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
+import TaskWorkspaceLinks from '@/components/dashboard/TaskWorkspaceLinks.vue'
 
 const router = useRouter()
 
@@ -364,6 +365,7 @@ onMounted(() => {
         <el-button @click="fetchAll">重新整理</el-button>
       </template>
     </PageHeader>
+    <TaskWorkspaceLinks exclude-path="/workbench" />
 
     <div class="shortcut-grid">
       <el-card class="shortcut-card" shadow="hover">

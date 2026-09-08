@@ -4,7 +4,7 @@
       <template #actions>
         <!-- 桌面版主要新增入口：active tab 方向為主按鈕，另一方向收在下拉 -->
         <el-dropdown
-          v-if="!isMobile && creatableModules.length"
+          v-if="activeKey !== 'fixed-cost' && !isMobile && creatableModules.length"
           split-button
           type="primary"
           data-test="header-create"
@@ -27,17 +27,25 @@
       </template>
     </PageHeader>
 
-    <el-tabs v-if="visibleModules.length > 1" v-model="activeKey" class="fs-tabs">
+    <el-tabs v-if="visibleModules.length + Number(canReadFixedCost) > 1" v-model="activeKey" class="fs-tabs" :before-leave="confirmLeaveFixedCost">
       <el-tab-pane
         v-for="m in visibleModules"
         :key="m.key"
         :label="m.tabLabel"
         :name="m.key"
       />
+      <el-tab-pane v-if="canReadFixedCost" label="固定支出登錄" name="fixed-cost" />
     </el-tabs>
 
+    <section v-if="activeKey === 'fixed-cost' && canReadFixedCost" aria-label="固定支出登錄">
+      <label for="fixed-cost-year">登錄年度</label>
+      <el-select id="fixed-cost-year" :model-value="fixedCostYear" aria-label="登錄年度" @change="changeFixedCostYear">
+        <el-option v-for="year in fixedCostYears" :key="year" :label="`${year} 年`" :value="year" />
+      </el-select>
+      <MonthlyFixedCostPanel :key="fixedCostYear" :year="fixedCostYear" :highlight-month="fixedCostMonth" @update:dirty="fixedCostDirty = $event" />
+    </section>
     <SignoffPanel
-      v-if="activeModule"
+      v-else-if="activeModule"
       ref="panelRef"
       :key="activeModule.key"
       :config="activeModule"
@@ -86,19 +94,55 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { Plus } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { SIGNOFF_MODULES, type SignoffModuleConfig } from '@/config/signoffModules'
 import PageHeader from '@/components/common/PageHeader.vue'
 import SignoffPanel from '@/components/signoff/SignoffPanel.vue'
+import MonthlyFixedCostPanel from '@/views/reports/MonthlyFixedCostPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { isMobile } = useIsMobile()
 
 const panelRef = ref<InstanceType<typeof SignoffPanel> | null>(null)
+const canReadFixedCost = computed(() => hasPermission('VENDOR_PAYMENT_READ'))
+const fixedCostDirty = ref(false)
+const currentYear = new Date().getFullYear()
+const fixedCostYear = computed(() => {
+  const year = Number(route.query.year)
+  return typeof route.query.year === 'string' && Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : currentYear
+})
+const fixedCostYears = computed(() => [...new Set([fixedCostYear.value, ...Array.from({ length: 5 }, (_, i) => currentYear - 1 + i)])].sort())
+const fixedCostMonth = computed(() => {
+  const month = Number(route.query.month)
+  return typeof route.query.month === 'string' && Number.isInteger(month) && month >= 1 && month <= 12 ? month : undefined
+})
+async function confirmLeaveFixedCost(): Promise<boolean> {
+  if (activeKey.value !== 'fixed-cost' || !fixedCostDirty.value) return true
+  try {
+    await ElMessageBox.confirm('固定費用尚有未儲存變更，確定離開並捨棄？', '未儲存變更', {
+      type: 'warning', confirmButtonText: '捨棄變更', cancelButtonText: '留在此頁',
+    })
+    return true
+  } catch { return false }
+}
+async function changeFixedCostYear(year: number) {
+  if (await confirmLeaveFixedCost()) {
+    fixedCostDirty.value = false
+    await router.replace({ query: { ...route.query, year: String(year) } })
+  }
+}
+// 返回／深連結更新 query 不會觸發子元件的 route-leave 守衛，需在此保護同頁換年度。
+onBeforeRouteUpdate(async (to, from) => {
+  if (to.query.tab === from.query.tab && to.query.year === from.query.year) return true
+  const allowed = await confirmLeaveFixedCost()
+  if (allowed) fixedCostDirty.value = false
+  return allowed
+})
 
 const visibleModules = computed<SignoffModuleConfig[]>(() =>
   SIGNOFF_MODULES.filter((m) => hasPermission(m.permissions.read)),
@@ -106,6 +150,7 @@ const visibleModules = computed<SignoffModuleConfig[]>(() =>
 
 function resolveKeyFromRoute(): string {
   const q = route.query.tab
+  if (q === 'fixed-cost' && canReadFixedCost.value) return 'fixed-cost'
   const hit = visibleModules.value.find((m) => m.key === q)
   return hit?.key ?? visibleModules.value[0]?.key ?? ''
 }
@@ -122,6 +167,7 @@ watch(
 // tab → query 回寫（比照 OvertimeView 慣例）；換 tab 順帶清 highlight，
 // 避免舊 id 打到另一個模組的 GET 端點
 watch(activeKey, async (value) => {
+  fixedCostDirty.value = false
   const current = typeof route.query.tab === 'string' ? route.query.tab : undefined
   if (value === current) return
   const nextQuery = { ...route.query, tab: value } as Record<string, string | string[]>
@@ -159,7 +205,7 @@ const secondaryCreateModules = computed(() =>
 )
 
 const showMobileCta = computed(
-  () => isMobile.value && !!primaryCreateModule.value,
+  () => activeKey.value !== 'fixed-cost' && isMobile.value && !!primaryCreateModule.value,
 )
 
 /** 跨方向新增：非 active tab 先切 tab（panel 以 :key 重掛）再開新增表單 */

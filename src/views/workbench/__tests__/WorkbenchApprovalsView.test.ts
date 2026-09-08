@@ -40,7 +40,7 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn().mockResolvedValue(true), prompt: vi.fn() },
 }))
-vi.mock('@/utils/auth', () => ({ getUserInfo: () => ({ role: 'admin' }), isSuperAdmin: () => false }))
+vi.mock('@/utils/auth', () => ({ getUserInfo: () => ({ role: 'admin' }), isSuperAdmin: () => false, hasPermission: () => false }))
 vi.mock('@/stores/approvalPolicy', () => ({ useApprovalPolicyStore: () => ({ policies: [] }) }))
 vi.mock('@/stores/notification', () => ({ useNotificationStore: () => ({ addNotification: vi.fn() }) }))
 
