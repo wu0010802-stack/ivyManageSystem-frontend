@@ -15,6 +15,11 @@
  * 一律降級成預設頭像 icon，不捏造照片。天氣本身（溫度／天氣現象）目前無資料
  * 來源，只保留「早安／午安／晚安」＋太陽或月亮插畫，暫不顯示氣溫或天氣現象
  * （待確認是否要接氣象 API，見預覽稿的「想跟您確認」）。
+ *
+ * 2026-09-08 首頁改版：右上角新增通知鈴鐺（unreadAnnouncements > 0 時掛紅點），
+ * 點擊 emit `open-announcements` 交給父層（TodayView）決定要不要導頁——本元件
+ * 不直接依賴 vue-router，維持與既有測試（無 router mock）相容，且與 PushCta
+ * 原本 `enable` emit 的作法一致。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { fetchChildPhotos } from '../../api/childPhotos'
@@ -22,11 +27,22 @@ import GreetingSunIllustration from '../illustrations/GreetingSunIllustration.vu
 import GreetingMoonIllustration from '../illustrations/GreetingMoonIllustration.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   studentId: number | null
   name: string
   classroomName?: string | null
+  unreadAnnouncements?: number
+}>(), {
+  unreadAnnouncements: 0,
+})
+
+const emit = defineEmits<{
+  'open-announcements': []
 }>()
+
+function onBellClick(): void {
+  emit('open-announcements')
+}
 
 type GreetingPeriod = 'morning' | 'noon' | 'evening'
 const GREETING_TEXT: Record<GreetingPeriod, string> = { morning: '早安', noon: '午安', evening: '晚安' }
@@ -133,26 +149,39 @@ const currentPhotoUrl = computed(() => {
         <span class="hh-greet-text">{{ greetingText }}</span>
       </div>
 
-      <button
-        type="button"
-        class="hh-photo"
-        :disabled="photos.length < 2"
-        :aria-label="photos.length > 1 ? `${name}的近期照片，點擊看下一張` : `${name}的照片`"
-        @click="cyclePhoto"
-      >
-        <span class="hh-photo-frame">
-          <img v-if="currentPhotoUrl" :src="currentPhotoUrl" alt="" class="hh-photo-img" />
-          <span v-else class="material-symbols-rounded hh-photo-fallback" aria-hidden="true">child_care</span>
-        </span>
-        <span v-if="photos.length > 1" class="hh-photo-dots" aria-hidden="true">
-          <span
-            v-for="(p, i) in photos"
-            :key="p.id"
-            class="hh-dot"
-            :class="{ 'is-active': i === photoIdx }"
-          />
-        </span>
-      </button>
+      <div class="hh-right">
+        <button
+          type="button"
+          class="hh-bell"
+          data-testid="hh-bell"
+          aria-label="校園公告通知"
+          @click="onBellClick"
+        >
+          <span class="material-symbols-rounded" aria-hidden="true">notifications</span>
+          <span v-if="unreadAnnouncements > 0" class="hh-bell-dot" data-testid="hh-bell-dot" aria-hidden="true" />
+        </button>
+
+        <button
+          type="button"
+          class="hh-photo"
+          :disabled="photos.length < 2"
+          :aria-label="photos.length > 1 ? `${name}的近期照片，點擊看下一張` : `${name}的照片`"
+          @click="cyclePhoto"
+        >
+          <span class="hh-photo-frame">
+            <img v-if="currentPhotoUrl" :src="currentPhotoUrl" alt="" class="hh-photo-img" />
+            <span v-else class="material-symbols-rounded hh-photo-fallback" aria-hidden="true">child_care</span>
+          </span>
+          <span v-if="photos.length > 1" class="hh-photo-dots" aria-hidden="true">
+            <span
+              v-for="(p, i) in photos"
+              :key="p.id"
+              class="hh-dot"
+              :class="{ 'is-active': i === photoIdx }"
+            />
+          </span>
+        </button>
+      </div>
     </div>
 
     <h2 class="hh-name">{{ name }}</h2>
@@ -174,6 +203,34 @@ const currentPhotoUrl = computed(() => {
 .hh-greet-logo { flex-shrink: 0; }
 .hh-greet-art { width: 34px; height: auto; flex-shrink: 0; }
 .hh-greet-text { font-size: var(--text-sm, 13px); font-weight: 700; color: var(--pt-text-strong); }
+
+.hh-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.hh-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--m3-surface-container-low, #f3f4ef);
+  color: var(--pt-text-strong);
+  box-shadow: var(--pt-shadow-card);
+  cursor: pointer;
+}
+.hh-bell .material-symbols-rounded { font-size: 22px; }
+.hh-bell-dot {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--coral-500, #ff8b8b);
+  box-shadow: 0 0 0 2px var(--m3-surface-container-low, #f3f4ef);
+}
 
 .hh-photo { display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; background: transparent; padding: 0; cursor: pointer; }
 .hh-photo:disabled { cursor: default; }

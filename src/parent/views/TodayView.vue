@@ -11,12 +11,12 @@ import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import TodayTimeline from '../components/home-timeline/TodayTimeline.vue'
-import PushCta from '../components/home/PushCta.vue'
 import ChildrenStrip from '../components/home/ChildrenStrip.vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
 import SectionHeader from '../components/SectionHeader.vue'
 import HomeHeroHeader from '../components/home/HomeHeroHeader.vue'
 import QuickActionsBar from '../components/home/QuickActionsBar.vue'
+import AnnouncementsHomeCard from '../components/home/AnnouncementsHomeCard.vue'
 import HomeTodoList from '../components/home/HomeTodoList.vue'
 import HomeBusRow from '../components/home/HomeBusRow.vue'
 
@@ -41,10 +41,13 @@ const {
   { ttl: 60_000 },
 )
 
-const me = computed(() => summaryData.value?.me || null)
 const children = computed(() => summaryData.value?.children || [])
 const summary = computed(() => summaryData.value?.summary || null)
-const showPushCta = computed(() => me.value && !me.value.can_push)
+/** 首頁 hero 鈴鐺的紅點：沿用既有 home-summary 的 unread_announcements 欄位，不新打 API。 */
+const unreadAnnouncements = computed<number>(() => {
+  const n = summary.value?.unread_announcements
+  return typeof n === 'number' ? n : 0
+})
 const selectedChild = computed(() => {
   const list: { student_id: number; name?: string; classroom_name?: string }[] = children.value || []
   return list.find((c) => c.student_id === selectedStudentId.value) || list[0] || null
@@ -209,13 +212,15 @@ function go(path: string) {
     <!--
       首頁頂部 hero（2026-08-16 改版）：問候語 chip（早中晚＋插畫）+ 孩子近期
       照片輪播 + 姓名 + 日期/班級，取代原本的純問候語列。多寶切換沿用既有
-      ChildContextHeader，接在後面。
+      ChildContextHeader，接在後面。右上角鈴鐺（2026-09-08）帶未讀公告紅點。
     -->
     <HomeHeroHeader
       v-if="selectedChild"
       :student-id="selectedChild.student_id"
       :name="selectedChild.name || ''"
       :classroom-name="selectedChild.classroom_name"
+      :unread-announcements="unreadAnnouncements"
+      @open-announcements="go('/announcements')"
     />
     <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
 
@@ -258,16 +263,20 @@ function go(path: string) {
     -->
 
     <!--
+      校園公告預覽卡（2026-09-08）：待辦清單原本把「未讀公告」包成一筆
+      todo（key=announcements），與這張卡重複曝光，已從 useParentTodos 移除，
+      公告的首頁入口統一收斂到這裡。位置刻意在 QuickActionsBar 之後、
+      待辦清單之前。
+    -->
+    <AnnouncementsHomeCard />
+
+    <!--
       待辦清單（2026-09-02）：取代原本的兩張 sticky 橫幅與 bento 四格。
       同一筆待辦在首頁只出現一次，資料來源為 useParentTodos。
     -->
     <HomeTodoList />
 
     <HomeBusRow ref="busRow" />
-
-    <!-- LINE 好友提示：系統性提醒，位階刻意排在待辦清單之後，
-         不能比逾期繳費／待簽文件更早搶走注意力 -->
-    <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
     <template v-if="summaryPending && !summaryData">
       <div class="skeleton-wrap">
