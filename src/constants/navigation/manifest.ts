@@ -47,6 +47,7 @@ const SIDEBAR_ICONS = {
   Clock: safeIcon(() => ElementPlusIcons.Clock),
   Coin: safeIcon(() => ElementPlusIcons.Coin),
   Collection: safeIcon(() => ElementPlusIcons.Collection),
+  CollectionTag: safeIcon(() => ElementPlusIcons.CollectionTag),
   CreditCard: safeIcon(() => ElementPlusIcons.CreditCard),
   DataAnalysis: safeIcon(() => ElementPlusIcons.DataAnalysis),
   DataBoard: safeIcon(() => ElementPlusIcons.DataBoard),
@@ -466,8 +467,24 @@ export const NAVIGATION_MANIFEST = {
         {
           key: 'announcements', title: '公告管理', routePath: '/announcements',
           views: [{ code: 'ANNOUNCEMENTS_READ' }],
-          actions: [{ code: 'ANNOUNCEMENTS_WRITE' }],
+          // SCHOOL_WRITE／CLASS_WRITE（2026-09-08 anncat01）：公告受眾範圍獨立碼，
+          // 與 ANNOUNCEMENTS_WRITE 平行、互不隱含，主屬本頁（見 utils/permissions.py 同段註解）。
+          actions: [
+            { code: 'ANNOUNCEMENTS_WRITE' },
+            { code: 'ANNOUNCEMENTS_SCHOOL_WRITE', label: '校園發布' },
+            { code: 'ANNOUNCEMENTS_CLASS_WRITE', label: '班級發布' },
+          ],
           menu: { icon: icon('Bell') },
+        },
+        {
+          // 公告分類管理（2026-09-08 anncat01）：權限沿用公告管理本身的
+          // ANNOUNCEMENTS_READ/WRITE，不另外新增管理權限碼——views 借道
+          // sharedViews（該碼已由上面 announcements 頁 owned），本頁不重複 own。
+          // 寫入操作（新增/編輯/刪除/設預設）由元件內 hasPermission('ANNOUNCEMENTS_WRITE')
+          // 控制，manifest 層不需要（也不可）再掛一次同碼的 actions。
+          key: 'announcementCategories', title: '公告分類管理', routePath: '/announcement-categories',
+          views: [], sharedViews: ['ANNOUNCEMENTS_READ'],
+          menu: { icon: icon('CollectionTag') },
         },
         {
           key: 'calendar', title: PAGE_TERMS.calendar, routePath: '/calendar',
