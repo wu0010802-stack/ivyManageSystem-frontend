@@ -298,3 +298,54 @@ describe('CollectionAllocationDialog', () => {
     expect(wrapper.find('[data-test="manual-toggle"]').exists()).toBe(false)
   })
 })
+
+
+describe('代收分配契約與候選競態', () => {
+  it.each([
+    { part_type: 'fee_record', amount: 100, fee_record_id: 77 },
+    { part_type: 'prepayment', amount: 5000, student_id: 5, target_school_year: 115, target_semester: 2 },
+    { part_type: 'non_tuition', amount: 100, reason: '測試非學費' },
+  ])('只送出 $part_type 對應的欄位，切換類型也不殘留舊欄位', async (expected) => {
+    const payment = { ...PAYMENT, gross_amount: 5000, net_amount: 4998, unallocated: 5000 }
+    const wrapper = await mountDialog(payment)
+    const vm = wrapper.vm as unknown as { parts: unknown[] }
+    vm.parts = [{ fee_record_id: 77, student_id: 5, target_school_year: 115,
+      target_semester: 2, reason: '測試非學費', ...expected }]
+    await nextTick()
+    await wrapper.get('[data-test="alloc-confirm"]').trigger('click')
+    expect(apiMocks.allocateCollectionPayment.mock.calls).toEqual([[11, {
+      parts: [expected], allow_partial: expected.amount < payment.unallocated,
+    }]])
+  })
+
+  it('切換付款後忽略較晚回來的舊候選', async () => {
+    let resolveOld!: (value: ReturnType<typeof candidates>) => void
+    apiMocks.getCollectionCandidates.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+    const wrapper = await mountDialog()
+    const newer = candidates({ bill_target_month: '2026-09' })
+    newer.candidates[0].parts[0].fee_record_id = 88
+    apiMocks.getCollectionCandidates.mockResolvedValueOnce(newer)
+    await wrapper.setProps({ payment: { ...PAYMENT, id: 12 } })
+    await nextTick()
+    resolveOld(candidates())
+    await nextTick()
+    await nextTick()
+    await wrapper.get('[data-test="alloc-confirm"]').trigger('click')
+    expect(apiMocks.allocateCollectionPayment).toHaveBeenCalledWith(12, expect.objectContaining({
+      parts: [expect.objectContaining({ fee_record_id: 88 })],
+    }))
+    expect(wrapper.get('[data-test="bill-period"]').text()).toContain('2026-09')
+  })
+
+  it('關閉對話框使尚未完成的候選失效', async () => {
+    let resolveOld!: (value: ReturnType<typeof candidates>) => void
+    apiMocks.getCollectionCandidates.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+    const wrapper = await mountDialog()
+    await wrapper.setProps({ visible: false })
+    resolveOld(candidates())
+    await nextTick()
+    await nextTick()
+    expect(wrapper.find('[data-test="bill-period"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="alloc-confirm"]').attributes('disabled')).toBeDefined()
+  })
+})
