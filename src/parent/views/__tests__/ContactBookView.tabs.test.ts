@@ -1,8 +1,11 @@
 /**
  * ContactBookView 上方分頁（聯絡簿 / 公告）。
  *
- * 訊息功能下架（2026-08-28）後，原本掛在「訊息」tab 的公告改併進聯絡簿頁的
- * 第二個分頁；此檔驗證分頁切換、query 同步與未讀數顯示。
+ * 訊息功能下架（2026-08-28）後，原本掛在「訊息」tab 的公告曾併進聯絡簿頁的
+ * 第二個分頁；2026-09-08 起「公告」分頁按鈕已從畫面移除，但深連結
+ * `?tab=announcements`（LINE 推播用）與 AnnouncementsPanel 資料邏輯刻意保留。
+ * 此檔驗證：畫面上只剩「聯絡簿」一顆分頁按鈕、深連結仍可直接落在公告分頁，
+ * 且從深連結進來後仍可點「聯絡簿」按鈕切回去。
  */
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -130,35 +133,17 @@ describe('ContactBookView 上方分頁（聯絡簿 / 公告）', () => {
     expect(w.find('[data-testid="ann-panel"]').exists()).toBe(false)
   })
 
-  it('提供兩個分頁按鈕：聯絡簿、公告', async () => {
+  it('公告按鈕已移除，畫面上只剩「聯絡簿」一顆分頁按鈕', async () => {
     const { w } = await mountCbView()
     const tabs = w.findAll('[data-testid="cb-segment-tab"]')
-    expect(tabs).toHaveLength(2)
+    expect(tabs).toHaveLength(1)
     expect(tabs[0].text()).toContain('聯絡簿')
-    expect(tabs[1].text()).toContain('公告')
   })
 
-  it('點「公告」→ 掛載公告面板、聯絡簿內容退場，且 URL query 帶 tab=announcements', async () => {
-    const { w, router } = await mountCbView()
-    await w.findAll('[data-testid="cb-segment-tab"]')[1].trigger('click')
-    await flushPromises()
-
-    expect(w.find('[data-testid="ann-panel"]').exists()).toBe(true)
-    expect(w.find('[data-testid="month-strip"]').exists()).toBe(false)
-    expect(router.currentRoute.value.query.tab).toBe('announcements')
-  })
-
-  it('深連結 ?tab=announcements 直接開在公告分頁', async () => {
+  it('深連結 ?tab=announcements 直接開在公告分頁（資料邏輯保留，只是沒有可見入口能點進來）', async () => {
     const { w } = await mountCbView('/contact-book?tab=announcements')
     expect(w.find('[data-testid="ann-panel"]').exists()).toBe(true)
     expect(w.find('[data-testid="month-strip"]').exists()).toBe(false)
-  })
-
-  it('公告面板回報未讀數 → 公告分頁標籤顯示數字', async () => {
-    const { w } = await mountCbView('/contact-book?tab=announcements')
-    w.findComponent('[data-testid="ann-panel"]').vm.$emit('unread-change', 3)
-    await flushPromises()
-    expect(w.findAll('[data-testid="cb-segment-tab"]')[1].text()).toContain('3')
   })
 
   it('切回聯絡簿 → query 移除 tab', async () => {
