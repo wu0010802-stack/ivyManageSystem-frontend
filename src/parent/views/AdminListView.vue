@@ -23,7 +23,7 @@ const {
 
 // 入學文件簽署與臨時接送授權不在 home/summary 內（後端未聚合這兩個欄位）。
 // 2026-09-02 起改由首頁待辦清單的同一支 useParentTodos 供應，兩頁共用
-// useCachedAsync 的固定 key，同時掛載也只會各打一次；事務頁不再自己 fetch。
+// useCachedAsync 的固定 key，同時掛載也只會各打一次。事務頁不再自己 fetch。
 const { signDocsCount, pickupActiveCount } = useParentTodos()
 
 /**
@@ -142,6 +142,18 @@ const items = computed<AdminItem[]>(() => {
       badge: pickupActiveCount.value,
       badgeTone: 'info',
       badgeLabel: `${pickupActiveCount.value} 筆進行中授權`,
+    },
+    {
+      // 2026-09-08 首頁改版：公告在首頁已有專屬預覽卡（AnnouncementsHomeCard），
+      // 這裡是事務頁的對應入口，供想主動查完整列表的家長使用；徽章沿用
+      // home-summary 既有的 unread_announcements，不新打 API。
+      headline: '校園公告',
+      supportingText: '查看園所發布的公告',
+      leadingIcon: 'campaign',
+      path: '/announcements',
+      badge: b.unreadAnnouncements,
+      badgeTone: 'info',
+      badgeLabel: `${b.unreadAnnouncements} 則未讀`,
     },
   ]
 })

@@ -36,8 +36,9 @@ vi.mock('@/parent/stores/parentAuth', () => ({
   useParentAuthStore: () => ({ setUser: vi.fn() }),
 }))
 
+const routerMock = vi.hoisted(() => ({ push: vi.fn() }))
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => routerMock,
 }))
 
 // 連帶在 P1-16 加 immediate watch 後，每次 mount 都會打 contact-book API；
@@ -110,7 +111,6 @@ function mountWith(summary, today) {
         SkeletonBlock: true,
         MobileErrorRetry: true,
         TodayTimeline: true,
-        PushCta: true,
         ChildrenStrip: {
           props: ['children', 'selectedId'],
           emits: ['select', 'navigate'],
@@ -124,6 +124,7 @@ function mountWith(summary, today) {
         },
         HomeTodoList: { template: '<div class="home-todo-stub"></div>' },
         HomeBusRow: { template: '<div class="home-bus-stub"></div>' },
+        AnnouncementsHomeCard: { template: '<div class="ann-home-card-stub"></div>' },
         M3Card: { template: '<div class="m3-card-stub"><slot /></div>' },
       },
     },
@@ -416,12 +417,62 @@ describe('TodayView 區塊收斂（2026-09-02）', () => {
     expect(w.find('.stat-tile-stub').exists()).toBe(false)
   })
 
-  it('渲染待辦清單與娃娃車列兩個子元件', () => {
+  it('渲染待辦清單、公告卡與娃娃車列三個子元件，公告卡在待辦清單之前', () => {
     const w = mountWith(
       { children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明' }] },
     )
     expect(w.find('.home-todo-stub').exists()).toBe(true)
     expect(w.find('.home-bus-stub').exists()).toBe(true)
+    expect(w.find('.ann-home-card-stub').exists()).toBe(true)
+
+    const order = Array.from(w.element.querySelectorAll('.ann-home-card-stub, .home-todo-stub'))
+      .map((el) => (el.classList.contains('ann-home-card-stub') ? 'ann' : 'todo'))
+    expect(order).toEqual(['ann', 'todo'])
+  })
+})
+
+describe('TodayView 首頁改版（2026-09-08）— 移除 LINE 加好友提示、鈴鐺帶未讀公告紅點', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('不再渲染「尚未加 LINE 為好友」提示卡（PushCta 已移除）', async () => {
+    const w = mountWith(
+      { me: { name: '王太太', can_push: false }, children: [{ student_id: 1, name: '小明' }], summary: {} },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    await flushPromises()
+    expect(w.find('.push-cta').exists()).toBe(false)
+    expect(w.text()).not.toContain('尚未加 LINE 為好友')
+  })
+
+  it('有未讀公告時，HomeHeroHeader 鈴鐺帶紅點', async () => {
+    const w = mountWith(
+      { children: [{ student_id: 1, name: '小明' }], summary: { unread_announcements: 3 } },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    await flushPromises()
+    expect(w.find('[data-testid="hh-bell-dot"]').exists()).toBe(true)
+  })
+
+  it('沒有未讀公告時，鈴鐺不帶紅點', async () => {
+    const w = mountWith(
+      { children: [{ student_id: 1, name: '小明' }], summary: { unread_announcements: 0 } },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    await flushPromises()
+    expect(w.find('[data-testid="hh-bell-dot"]').exists()).toBe(false)
+  })
+
+  it('點擊鈴鐺導向 /announcements', async () => {
+    routerMock.push.mockClear()
+    const w = mountWith(
+      { children: [{ student_id: 1, name: '小明' }], summary: { unread_announcements: 1 } },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    await flushPromises()
+    await w.find('[data-testid="hh-bell"]').trigger('click')
+    expect(routerMock.push).toHaveBeenCalledWith('/announcements')
   })
 })

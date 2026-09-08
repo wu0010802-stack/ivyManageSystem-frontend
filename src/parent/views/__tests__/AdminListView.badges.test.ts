@@ -119,6 +119,15 @@ describe('AdminListView 待辦徽章', () => {
     expect(badgeOf(w, '待簽文件')?.attributes('aria-label')).toBe('4 份待簽收')
     w.unmount()
   })
+
+  it('未讀公告顯示在「校園公告」列（2026-09-08 首頁改版新增入口）', () => {
+    setSummary({ unread_announcements: 5 })
+    const w = mount(AdminListView)
+    const badge = badgeOf(w, '校園公告')
+    expect(badge?.text()).toBe('5')
+    expect(badge?.classes()).toContain('admin-badge-info')
+    w.unmount()
+  })
 })
 
 describe('AdminListView 項目收斂（2026-09-02）', () => {
