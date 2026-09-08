@@ -5,9 +5,15 @@
 // "campaign"），但後台 admin console 未載入 Material Symbols 字型（該字型僅
 // src/parent/** 家長端自架子集，見 scripts/gen-parent-icon-font.mjs）。專案內
 // 已 grep 過現有圖示元件/清單（M3Icon.vue 為家長端專用、無 admin 版 icon picker），
-// 故此處新增一份最小策展清單：value 為存進後端的 Material Symbols 名稱（後續如
-// 家長/教師端要顯示分類圖示，沿用同一批合法名稱即可），preview 借用既有
-// @element-plus/icons-vue（admin 全站慣用）供後台挑選時視覺參考，不代表最終渲染。
+// 故此處新增一份最小策展清單：value 為存進後端的 Material Symbols 名稱。
+//
+// ⚠ 這份清單的 value 會被 scripts/lib/parent-icon-names.mjs 的 EXTRA_ICONS
+// 顯式 import 併入家長端自架子集字型的候選集（見該檔案開頭註解）——這是
+// 唯一讓「後續家長/教師端顯示分類圖示」時這批名稱保證渲染得出來的原因，
+// 不是巧合。新增/刪除/改名這裡的 value 後，記得重跑 `npm run gen:parent-icons`
+// 重產字型（`iconFontSubset.spec.ts` 會在忘記重跑時讓 CI 紅燈）。
+// preview 借用既有 @element-plus/icons-vue（admin 全站慣用）供後台挑選時
+// 視覺參考，不代表最終渲染（最終渲染是家長端的 Material Symbols 字型）。
 import type { Component } from 'vue'
 import {
   Promotion,
