@@ -145,47 +145,22 @@ const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
 // 當 fetch 失敗且完全沒有資料時，顯示 inline MobileErrorRetry（toast 仍保留）
 const hasNoData = computed(() => !today.value && history.value.length === 0)
 
-/* ── 上方分頁：聯絡簿（公告按鈕已移除，2026-09-08）──────────────────────
- * 公告分頁按鈕已從畫面移除，但深連結（LINE 推播用的 `?tab=announcements`）
- * 與 AnnouncementsPanel 資料邏輯刻意保留：舊推播訊息仍可正常落地開啟公告
- * 內容，只是使用者在聯絡簿頁面上已看不到手動切換公告的入口。
+/* ── 上方分頁按鈕已移除（2026-09-08）──────────────────────────────────
+ * 公告分頁按鈕先前已移除（同日），此後分頁列只剩「聯絡簿」一顆恆常 active
+ * 且點了無作用的按鈕，故一併移除整條分頁列。
+ * 深連結（LINE 推播用的 `?tab=announcements`）與 AnnouncementsPanel 資料
+ * 邏輯刻意保留：舊推播訊息仍可正常落地開啟公告內容，只是使用者在聯絡簿
+ * 頁面上已看不到任何手動切換分頁的入口（含按鈕本身）。
  * 分頁狀態仍放 query 而非本地 ref，理由同上。
  */
 type CbTab = 'contact-book' | 'announcements'
-const CB_TABS: { key: CbTab; label: string }[] = [
-  { key: 'contact-book', label: '聯絡簿' },
-]
 const activeTab = computed<CbTab>(() =>
   route.query.tab === 'announcements' ? 'announcements' : 'contact-book',
 )
-
-function selectTab(tab: CbTab) {
-  if (tab === activeTab.value) return
-  const query = { ...route.query }
-  if (tab === 'announcements') query.tab = 'announcements'
-  else delete query.tab
-  router.replace({ path: route.path, query })
-}
 </script>
 
 <template>
   <div class="cb">
-    <div class="cb-segments" role="tablist" aria-label="聯絡簿">
-      <button
-        v-for="t in CB_TABS"
-        :key="t.key"
-        data-testid="cb-segment-tab"
-        class="cb-segment"
-        :class="{ active: activeTab === t.key }"
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === t.key"
-        @click="selectTab(t.key)"
-      >
-        {{ t.label }}
-      </button>
-    </div>
-
     <AnnouncementsPanel v-if="activeTab === 'announcements'" />
 
     <template v-else>
@@ -304,41 +279,6 @@ function selectTab(tab: CbTab) {
 }
 .skeleton-wrap { padding: var(--space-2) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2, 8px); }
 
-/* 上方分頁（聯絡簿 / 公告） */
-.cb-segments {
-  display: flex;
-  gap: var(--space-1, 4px);
-  padding: var(--space-2) var(--space-4) 0;
-}
-.cb-segment {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--pt-border-light, #ecf5f9);
-  border-radius: var(--radius-full, 999px);
-  background: var(--pt-surface-card, #fff);
-  color: var(--pt-text-body, #4b5563);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
-}
-.cb-segment.active {
-  background: var(--brand-primary, #0d9053);
-  border-color: var(--brand-primary, #0d9053);
-  color: var(--color-primary-contrast);
-}
-.cb-segment:focus-visible {
-  outline: 2px solid var(--brand-primary, #0d9053);
-  outline-offset: 2px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .cb-segment { transition: none; }
-}
 .render-sentinel { height: 1px; }
 
 .today-section { padding: 0 var(--space-4); }

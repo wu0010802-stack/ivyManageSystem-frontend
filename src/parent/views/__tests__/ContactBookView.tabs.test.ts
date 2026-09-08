@@ -2,10 +2,10 @@
  * ContactBookView 上方分頁（聯絡簿 / 公告）。
  *
  * 訊息功能下架（2026-08-28）後，原本掛在「訊息」tab 的公告曾併進聯絡簿頁的
- * 第二個分頁；2026-09-08 起「公告」分頁按鈕已從畫面移除，但深連結
- * `?tab=announcements`（LINE 推播用）與 AnnouncementsPanel 資料邏輯刻意保留。
- * 此檔驗證：畫面上只剩「聯絡簿」一顆分頁按鈕、深連結仍可直接落在公告分頁，
- * 且從深連結進來後仍可點「聯絡簿」按鈕切回去。
+ * 第二個分頁；2026-09-08 起「公告」分頁按鈕先從畫面移除，隨後僅剩、且恆常
+ * active、點了無作用的「聯絡簿」分頁按鈕也一併移除，畫面上已無任何分頁按鈕。
+ * 深連結 `?tab=announcements`（LINE 推播用）與 AnnouncementsPanel 資料邏輯
+ * 刻意保留。此檔驗證：畫面上不存在任何分頁按鈕、深連結仍可直接落在公告分頁。
  */
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -133,24 +133,14 @@ describe('ContactBookView 上方分頁（聯絡簿 / 公告）', () => {
     expect(w.find('[data-testid="ann-panel"]').exists()).toBe(false)
   })
 
-  it('公告按鈕已移除，畫面上只剩「聯絡簿」一顆分頁按鈕', async () => {
+  it('分頁按鈕已完全移除，畫面上不存在任何分頁按鈕', async () => {
     const { w } = await mountCbView()
-    const tabs = w.findAll('[data-testid="cb-segment-tab"]')
-    expect(tabs).toHaveLength(1)
-    expect(tabs[0].text()).toContain('聯絡簿')
+    expect(w.findAll('[data-testid="cb-segment-tab"]')).toHaveLength(0)
   })
 
   it('深連結 ?tab=announcements 直接開在公告分頁（資料邏輯保留，只是沒有可見入口能點進來）', async () => {
     const { w } = await mountCbView('/contact-book?tab=announcements')
     expect(w.find('[data-testid="ann-panel"]').exists()).toBe(true)
     expect(w.find('[data-testid="month-strip"]').exists()).toBe(false)
-  })
-
-  it('切回聯絡簿 → query 移除 tab', async () => {
-    const { w, router } = await mountCbView('/contact-book?tab=announcements')
-    await w.findAll('[data-testid="cb-segment-tab"]')[0].trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.query.tab).toBeUndefined()
-    expect(w.find('[data-testid="month-strip"]').exists()).toBe(true)
   })
 })
