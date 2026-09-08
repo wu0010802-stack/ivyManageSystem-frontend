@@ -26188,6 +26188,8 @@ export interface components {
             expected_posting_date?: string | null;
             /** Fee Amount */
             fee_amount: number;
+            /** Full Collection Number */
+            full_collection_number?: string | null;
             /** Gross Amount */
             gross_amount: number;
             /** Id */
@@ -26199,6 +26201,10 @@ export interface components {
              * @default false
              */
             is_pending: boolean;
+            /** Match Level */
+            match_level?: string | null;
+            /** Match Reasons */
+            match_reasons?: string[];
             /** Net Amount */
             net_amount: number;
             /** Occurrence Index */
@@ -60793,6 +60799,7 @@ export interface operations {
                 date_from?: string | null;
                 date_to?: string | null;
                 import_id?: number | null;
+                include_match_details?: boolean;
                 page?: number;
                 page_size?: number;
                 /** @description pending=尚未入帳／posted=已入帳／overdue=逾預計入帳日仍未入帳 */
