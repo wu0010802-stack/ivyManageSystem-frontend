@@ -76,7 +76,10 @@ describe('HomeTodoList', () => {
   it('副標「N 件」只計 action 與 alert 列', () => {
     todosRef.value = [
       makeTodo({ count: 2 }),
-      makeTodo({ key: 'announcements', label: '未讀公告', count: 99, tone: 'info', to: '/announcements' }),
+      // 未讀公告已改由首頁專屬的 AnnouncementsHomeCard 呈現（2026-09-08），
+      // 這裡用 leaveReviews（既有的 info tone 待辦）驗證同一件事：info 列
+      // 不計入標題「N 件」。
+      makeTodo({ key: 'leaveReviews', label: '請假已成立', count: 99, tone: 'info', to: '/leaves' }),
     ]
     const w = mount(HomeTodoList, { global: { stubs } })
     expect(w.find('[data-testid="home-todo-count"]').text()).toBe('2 件')
