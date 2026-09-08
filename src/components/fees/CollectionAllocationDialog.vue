@@ -397,20 +397,25 @@ function addPart() {
 
 watch(
   () => [props.visible, props.payment?.id] as const,
-  async ([visible, paymentId]) => {
-    if (!visible || !paymentId) return
+  async ([visible, paymentId], _previous, onCleanup) => {
+    let active = true
+    onCleanup(() => { active = false })
     parts.value = []
     candidates.value = null
     appliedCandidateIndex.value = null
     manualMode.value = false
+    manualRecordRows.value = new Set()
+    if (!visible || !paymentId) return
     try {
-      candidates.value = (await getCollectionCandidates(paymentId)) as unknown as Candidates
+      const result = await getCollectionCandidates(paymentId)
+      if (!active) return
+      candidates.value = result as unknown as Candidates
       // auto_high 唯一組合直接預填，會計只需按確認
       if (candidates.value?.level === 'auto_high' && candidates.value.candidates.length === 1) {
         useCandidate(candidates.value.candidates[0], 0)
       }
     } catch (e) {
-      ElMessage.error(friendlyError('載入媒合候選失敗', e))
+      if (active) ElMessage.error(friendlyError('載入媒合候選失敗', e))
     }
   },
   { immediate: true },
@@ -421,17 +426,28 @@ async function submit() {
   submitting.value = true
   try {
     await allocateCollectionPayment(props.payment.id, {
-      parts: parts.value.map((p) => ({
-        part_type: p.part_type,
-        amount: p.amount,
-        fee_record_id: p.fee_record_id ?? null,
-        student_id: p.student_id ?? null,
-        target_school_year: p.target_school_year ?? null,
-        target_semester: p.target_semester ?? null,
-        reason: p.reason ?? null,
-      })),
+      parts: parts.value.map((p) => {
+        if (p.part_type === 'fee_record') {
+          if (!p.fee_record_id) throw new Error('請選擇費用單')
+          return { part_type: p.part_type, amount: p.amount, fee_record_id: p.fee_record_id }
+        }
+        if (p.part_type === 'prepayment') {
+          if (!p.student_id || !p.target_school_year || !p.target_semester) {
+            throw new Error('請填寫預繳學生與目標學期')
+          }
+          return {
+            part_type: p.part_type,
+            amount: p.amount,
+            student_id: p.student_id,
+            target_school_year: p.target_school_year,
+            target_semester: p.target_semester,
+          }
+        }
+        if (!p.reason?.trim()) throw new Error('請填寫非學費原因')
+        return { part_type: p.part_type, amount: p.amount, reason: p.reason }
+      }),
       allow_partial: partsTotal.value < props.payment.unallocated,
-    } as never)
+    })
     ElMessage.success('已完成分配')
     emit('allocated')
     emit('update:visible', false)
