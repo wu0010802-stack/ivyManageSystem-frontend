@@ -197,13 +197,20 @@ export function useCachedAsync<T = unknown>(
       }
     })()
 
+    // 取消也是請求終態；只清除自己仍持有的 inflight，避免晚到的舊請求
+    // 清掉 invalidate 後新建立的共用請求。清理掛在 Promise 上，亦涵蓋同步 throw。
+    const tracked = promise.finally(() => {
+      const current = _cache.get(currentKey)
+      if (current?.inflight === tracked) current.inflight = null
+    })
+
     const currentKey2 = resolveKey()
     const cur: CacheEntry<unknown> = _cache.get(currentKey2) || { data: data.value as unknown, fetchedAt: fetchedAt.value, inflight: null }
-    cur.inflight = promise as Promise<unknown>
+    cur.inflight = tracked as Promise<unknown>
     _cache.set(currentKey2, cur)
 
     try {
-      return await promise
+      return await tracked
     } catch {
       return data.value
     }
@@ -222,8 +229,14 @@ export function useCachedAsync<T = unknown>(
   }
 
   onUnmounted(() => {
-    if (controller) controller.abort()
     untrackConsumer(key, consumer)
+    // 共用請求屬於 cache entry；仍有訂閱者時，不因發起元件離頁而取消。
+    // 最後一個訂閱者離開才中止，並立即解除 inflight，讓重訪不會加入已取消請求。
+    if (!_activeConsumers.has(key)) {
+      abortControllers(key)
+      const current = _cache.get(key)
+      if (current) current.inflight = null
+    }
   })
 
   return { data, error, pending, fetchedAt, isStale, refresh, invalidate }
