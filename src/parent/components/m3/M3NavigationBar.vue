@@ -209,7 +209,10 @@ function onTabClick(item: NavItem): void {
 .m3-nav-fab {
   --m3-nav-fab-size: 56px;
   position: absolute;
-  top: -32px; /* 上半身 32px 露出列頂、下半身 24px 疊在列面上（列不挖洞，純重疊） */
+  /* 只有頂端 12px（約 1/5 圓）露出列頂，其餘 44px 疊在列面上、圓心落在 icon 列稍上方，
+   * 視覺上是「服貼在列上」而不是懸在半空（2026-09-08 從 -32px 收斂，先前露出過半太突兀）。
+   * 圓底 44px < 標籤起點 48px，不會壓到標籤。 */
+  top: -12px;
   left: 50%;
   margin-left: calc(var(--m3-nav-fab-size) / -2);
   display: inline-flex;
@@ -226,15 +229,16 @@ function onTabClick(item: NavItem): void {
     var(--m3-primary, #006d3d) 100%
   );
   color: #ffffff;
-  /* 沒有凹槽後，靠一層貼身接觸陰影 + 一層柔和的綠色投影把圓鈕從平整列面上「抬」起來 */
+  /* 隆起幅度小，陰影只留兩層短距離的接觸陰影（M3 elevation 2 量級）把圓鈕從列面上
+   * 輕輕托起；先前為了撐起大幅隆起的第三層綠色投影已拿掉，避免圓鈕看起來過重。 */
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.16),
-    0 3px 6px rgba(0, 0, 0, 0.1),
-    0 8px 18px -6px rgba(13, 144, 83, 0.5);
+    0 1px 2px rgba(0, 0, 0, 0.14),
+    0 2px 6px rgba(0, 0, 0, 0.1);
   z-index: 1;
 }
-/* 深色主題 --m3-primary 是淺綠，漸層尾端改用 primary-container 維持深綠收尾 */
-:root[data-theme='dark'] .m3-nav-fab {
+/* 深色主題 --m3-primary 是淺綠，漸層尾端改用 primary-container 維持深綠收尾。
+ * 選擇器不綁 :root，讓 data-theme 掛在任一祖先容器（例如並排對照的測試頁）也能生效。 */
+[data-theme='dark'] .m3-nav-fab {
   background: linear-gradient(
     145deg,
     var(--ivy-green-mid, #41a074) 0%,
@@ -242,9 +246,8 @@ function onTabClick(item: NavItem): void {
     var(--m3-primary-container, #00522c) 100%
   );
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.5),
-    0 3px 6px rgba(0, 0, 0, 0.35),
-    0 8px 18px -6px rgba(0, 0, 0, 0.6);
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.3);
 }
 /* state layer：hover 泛白、按下壓暗，只動顏色 */
 .m3-nav-fab::after {
