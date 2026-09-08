@@ -113,7 +113,7 @@ vi.mock('@/components/fees/CashHandoverTab.vue', () => ({
     template: '<div data-testid="handover-tab" :data-embedded="embedded ? \'1\' : \'0\'" />',
   },
 }))
-const closeMocks = vi.hoisted(() => ({ fetchSummary: vi.fn() }))
+const closeMocks = vi.hoisted(() => ({ fetchSummary: vi.fn(), fetchCloses: vi.fn() }))
 vi.mock('@/components/fees/CloseTab.vue', async () => {
   const { ref } = await import('vue')
   return {
@@ -344,7 +344,7 @@ describe('FeeSettlementWorkspace（結算）', () => {
     expect(handoverMocks.fetchBatches).toHaveBeenCalledTimes(1)
   })
 
-  it('月結的月份選擇與重算上移到共用工具列', async () => {
+  it('月結工具列重新檢查會同步刷新試算與關帳紀錄', async () => {
     const wrapper = mount(FeeSettlementWorkspace, {
       props: { view: 'close' },
       global: { stubs: GLOBAL_STUBS },
@@ -362,6 +362,7 @@ describe('FeeSettlementWorkspace（結算）', () => {
 
     await wrapper.find('[data-test="close-recalc"]').trigger('click')
     expect(closeMocks.fetchSummary).toHaveBeenCalledTimes(2)
+    expect(closeMocks.fetchCloses).toHaveBeenCalledTimes(1)
   })
 
   it('無 FEES_WRITE 時工具列不顯示「登記現金收款」', async () => {

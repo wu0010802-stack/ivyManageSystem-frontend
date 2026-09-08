@@ -480,7 +480,7 @@ describe('CloseTab', () => {
     const wrapper = await mountTab()
     await flushPromises()
     expect(wrapper.find('[data-test="close-cards"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('✓ 平衡')
+    expect(wrapper.text()).toContain('收款等式平衡')
     const btn = wrapper.find('[data-test="close-btn"]')
     expect(btn.text()).toContain('關帳')
     expect(btn.text()).not.toContain('帶例外')
@@ -500,9 +500,12 @@ describe('CloseTab', () => {
     const wrapper = await mountTab()
     await flushPromises()
     const btn = wrapper.find('[data-test="close-btn"]')
-    expect(btn.text()).toContain('帶例外關帳')
+    expect(btn.text()).toContain('確認關帳')
     expect(btn.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-test="exception-note"]').exists()).toBe(false)
+    await wrapper.get('[data-test="exception-toggle"]').trigger('click')
     expect(wrapper.find('[data-test="exception-note"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="exception-close-btn"]').attributes('disabled')).toBeDefined()
   })
 
   it('預繳三向與老闆退款分開顯示', async () => {
