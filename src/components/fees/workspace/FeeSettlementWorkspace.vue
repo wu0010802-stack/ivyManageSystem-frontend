@@ -44,6 +44,7 @@
             :model-value="closeMonth"
             type="month"
             value-format="YYYY-MM"
+            format="YYYY 年 M 月"
             placeholder="選擇月份"
             aria-label="選擇關帳月份"
             data-test="close-month"
@@ -51,11 +52,11 @@
             @update:model-value="onCloseMonthChange"
           />
           <el-button
-            aria-label="重新計算關帳試算"
+            aria-label="重新檢查本月關帳條件"
             data-test="close-recalc"
-            @click="closeRef?.fetchSummary?.()"
+            @click="refreshClose"
           >
-            重算
+            重新檢查
           </el-button>
         </template>
       </template>
@@ -122,6 +123,11 @@ watch(
   },
   { immediate: true, flush: 'post' },
 )
+
+function refreshClose() {
+  closeRef.value?.fetchSummary?.()
+  closeRef.value?.fetchCloses?.()
+}
 
 function onCloseMonthChange(value: unknown) {
   const next = typeof value === 'string' ? value : ''

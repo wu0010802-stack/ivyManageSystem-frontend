@@ -24,7 +24,8 @@
           <span
             v-if="todoCounts[w.key]"
             class="fee-tab__count"
-            :aria-label="`${todoCounts[w.key]} 類待辦`"
+            :aria-label="`${w.label}工作區有 ${todoCounts[w.key]} 類待辦，非本月關帳未通過項目數`"
+            title="工作區待辦類別數；本月關帳未通過項目另列於月結頁"
             >{{ todoCounts[w.key] }} 類待辦</span
           >
         </button>
