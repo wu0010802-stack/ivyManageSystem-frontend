@@ -9,9 +9,15 @@
  *
  * `#hero` slot 讓獨立頁掛自己的 page hero（帶未讀數），嵌在聯絡簿頁時留空。
  * 未讀數透過 `unread-change` 往上送，供外層分頁標籤顯示。
+ *
+ * 2026-09-08 首頁改版：公告新增分類（category：id/name/icon/color，見後端
+ * schemas/announcement_categories.py::AnnouncementCategoryBriefOut），本檔與
+ * 首頁 AnnouncementsHomeCard 都要顯示分類徽章；相對時間格式化抽成共用 util
+ * （utils/announcementRelativeTime.ts），兩處 import 同一份，不重寫第二份。
  */
 import { computed, onMounted, ref, watch } from 'vue'
-import { getUnreadCount, listAnnouncements, markRead } from '../../api/announcements'
+import { getUnreadCount, listAnnouncements, markRead, type AnnouncementCategoryBrief } from '../../api/announcements'
+import { formatAnnouncementRelativeTime } from '../../utils/announcementRelativeTime'
 import { toast } from '../../utils/toast'
 import PullToRefresh from '../PullToRefresh.vue'
 import SkeletonBlock from '../SkeletonBlock.vue'
@@ -20,7 +26,15 @@ import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import AnnouncementDetailModal from './AnnouncementDetailModal.vue'
 import { useIncrementalRender } from '../../composables/useIncrementalRender'
 
-type AnnItem = { id: number | string; priority: string; is_read: boolean; created_at: string; title: string; content?: string }
+type AnnItem = {
+  id: number | string
+  priority: string
+  is_read: boolean
+  created_at: string
+  title: string
+  content?: string
+  category?: AnnouncementCategoryBrief | null
+}
 
 const emit = defineEmits<{ (e: 'unread-change', count: number): void }>()
 
@@ -123,22 +137,7 @@ async function openDetail(item: AnnItem) {
   }
 }
 
-const formatRelative = (s: string | null | undefined) => {
-  if (!s) return ''
-  try {
-    const d = new Date(s.replace(' ', 'T'))
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const min = Math.floor(diffMs / 60000)
-    if (min < 1) return '剛剛'
-    if (min < 60) return `${min} 分鐘前`
-    const hr = Math.floor(min / 60)
-    if (hr < 24) return `${hr} 小時前`
-    const day = Math.floor(hr / 24)
-    if (day < 7) return `${day} 天前`
-    return d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
-  } catch { return s ? s.replace('T', ' ').slice(0, 16) : '' }
-}
+const formatRelative = formatAnnouncementRelativeTime
 
 onMounted(fetchData)
 
@@ -180,6 +179,14 @@ defineExpose({ refresh: fetchData })
         <div class="ann-row">
           <span class="pt-pill" :class="`pt-pill-${PRIORITY_META[item.priority]?.tone || 'info'}`">
             {{ PRIORITY_META[item.priority]?.label || item.priority }}
+          </span>
+          <span
+            v-if="item.category"
+            class="ann-cat"
+            :style="{ '--cat-color': item.category.color || 'var(--brand-primary, #0d9053)' }"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">{{ item.category.icon || 'campaign' }}</span>
+            {{ item.category.name }}
           </span>
           <span class="time">{{ formatRelative(item.created_at) }}</span>
           <span v-if="!item.is_read" class="unread-dot" aria-label="未讀" />
@@ -250,7 +257,20 @@ defineExpose({ refresh: fetchData })
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
+.ann-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--cat-color);
+  background: color-mix(in srgb, var(--cat-color) 14%, transparent);
+}
+.ann-cat .material-symbols-rounded { font-size: 14px; }
 .time {
   flex: 1;
   font-size: 12px;

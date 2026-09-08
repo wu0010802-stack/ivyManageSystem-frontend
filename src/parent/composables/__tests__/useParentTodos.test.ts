@@ -2,14 +2,19 @@
  * useParentTodos — 家長端待辦清單的唯一真源。
  *
  * 重整前同一筆待辦最多出現三次（首頁頂部橫幅、首頁 bento 方格、今日動態），
- * 每處各自從 summary 讀欄位、各自做 null guard。這支把八種待辦收斂成一份
+ * 每處各自從 summary 讀欄位、各自做 null guard。這支把七種待辦收斂成一份
  * 固定順序的陣列，首頁與事務頁共用。
  *
  * 涵蓋：
- *  - 八種列各自取對欄位、count 為 0 不產生列
+ *  - 七種列各自取對欄位、count 為 0 不產生列
  *  - 固定順序（不因逾期而重排）
  *  - 逾期走 alert tone、sub 改顯示逾期金額
  *  - 部分來源失敗時，其餘來源已有的列照常渲染
+ *
+ * 2026-09-08 首頁改版：未讀公告有了專屬的 AnnouncementsHomeCard 首頁卡，
+ * 原本的 `announcements` 待辦列（key='announcements'）已移除，避免同一件事
+ * 在首頁重複曝光；未讀數改由 AdminListView／HomeHeroHeader 直接讀
+ * `useHomeSummary().badges.unreadAnnouncements` 或 summary.unread_announcements。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
@@ -43,7 +48,6 @@ import { _resetCacheForTesting } from '@/composables/useCachedAsync'
 
 function setSummary(overrides: Record<string, unknown> = {}) {
   summaryRef.value = {
-    unread_announcements: 0,
     fees: { outstanding_count: 0, outstanding: 0, overdue: 0 },
     pending_event_acks: 0,
     pending_survey_count: 0,
@@ -131,11 +135,10 @@ describe('useParentTodos 列的產生條件', () => {
     expect(row.to).toBe('/pickup')
   })
 
-  it('未讀公告與請假已成立為 info tone', async () => {
-    setSummary({ unread_announcements: 5, recent_leave_reviews: 1 })
+  it('請假已成立為 info tone', async () => {
+    setSummary({ recent_leave_reviews: 1 })
     const { todos } = useParentTodos()
     await flush()
-    expect(todos.value.find((t) => t.key === 'announcements')!.tone).toBe('info')
     expect(todos.value.find((t) => t.key === 'leaveReviews')!.tone).toBe('info')
   })
 
@@ -150,17 +153,23 @@ describe('useParentTodos 列的產生條件', () => {
     expect(row.label).not.toContain('審核')
     expect(row.sub).toBe('近 7 天 2 筆')
   })
+
+  it('不再產生 key=announcements 的待辦列（2026-09-08 首頁改版：改用專屬 AnnouncementsHomeCard）', async () => {
+    setSummary({ unread_announcements: 5 })
+    const { todos } = useParentTodos()
+    await flush()
+    expect(todos.value.find((t) => t.key === 'announcements')).toBeUndefined()
+  })
 })
 
 describe('useParentTodos 順序與計數', () => {
-  it('順序固定為 fees→signDocs→eventAcks→surveys→promotions→pickup→leaveReviews→announcements，逾期不改變位置', async () => {
+  it('順序固定為 fees→signDocs→eventAcks→surveys→promotions→pickup→leaveReviews，逾期不改變位置', async () => {
     setSummary({
       fees: { outstanding_count: 1, outstanding: 100, overdue: 100 },
       pending_event_acks: 1,
       pending_survey_count: 1,
       pending_activity_promotions: 1,
       recent_leave_reviews: 1,
-      unread_announcements: 1,
     })
     listMySignRequests.mockResolvedValue({ data: { pending: [{ id: 1 }], signed: [] } })
     listPickupAuthorizations.mockResolvedValue({ data: { items: [{ id: 1 }] } })
@@ -168,7 +177,7 @@ describe('useParentTodos 順序與計數', () => {
     await flush()
     expect(todos.value.map((t) => t.key)).toEqual([
       'fees', 'signDocs', 'eventAcks', 'surveys',
-      'promotions', 'pickup', 'leaveReviews', 'announcements',
+      'promotions', 'pickup', 'leaveReviews',
     ])
   })
 
@@ -176,7 +185,6 @@ describe('useParentTodos 順序與計數', () => {
     setSummary({
       fees: { outstanding_count: 2, outstanding: 100, overdue: 0 },
       pending_event_acks: 3,
-      unread_announcements: 99,
       recent_leave_reviews: 4,
     })
     const { actionCount } = useParentTodos()

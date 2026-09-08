@@ -14,6 +14,7 @@ import {
   uploadAnnouncementAttachment,
   deleteAnnouncementAttachment,
 } from '@/api/announcements'
+import { getAnnouncementCategories } from '@/api/announcementCategories'
 import { getStudents } from '@/api/students'
 import {
   buildParentRecipientsPayload,
@@ -25,9 +26,12 @@ import { useAllClassroomStore } from '@/stores/classroomAll'
 import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
 import { Top, Document } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
 import { useTableFilters } from '@/composables/useTableFilters'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { previewIconFor } from '@/constants/announcementCategoryIcons'
+import type { Schema } from '@/api/_generated/typed'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 
@@ -45,6 +49,9 @@ type AttachmentItem = {
   thumb_url: string | null
 }
 
+type AnnouncementCategoryRow = Schema<'AnnouncementCategoryOut'>
+type CategoryBrief = Schema<'AnnouncementCategoryBriefOut'>
+
 interface AnnouncementItem {
   id: number
   title: string
@@ -60,6 +67,7 @@ interface AnnouncementItem {
   expires_at?: string | null
   status?: 'scheduled' | 'active' | 'expired'
   attachments?: AttachmentItem[]
+  category?: CategoryBrief | null
   [key: string]: unknown
 }
 
@@ -100,6 +108,26 @@ const classroomOptions = computed(() =>
     label: c.label,
   }))
 )
+
+// 公告分類（anncat01）：下拉選單資料源，新公告預設帶入該 tenant 的 is_default 分類。
+const categories = ref<AnnouncementCategoryRow[]>([])
+const fetchCategories = async () => {
+  try {
+    const res = await getAnnouncementCategories()
+    categories.value = res.data.items
+  } catch (error) {
+    ElMessage.warning(apiError(error, '載入公告分類失敗'))
+  }
+}
+const defaultCategoryId = computed(
+  () => categories.value.find((c) => c.is_default)?.id ?? null,
+)
+
+// 公告受眾範圍獨立權限碼（2026-09-08 anncat01）：SCHOOL_WRITE 控「全部家長／校園」，
+// CLASS_WRITE 控「指定班級」；scope='student'（指定學生）與既有 preserved
+// guardian/classroom 項不受影響，仍只需基礎 ANNOUNCEMENTS_WRITE。
+const canScopeSchool = computed(() => hasPermission('ANNOUNCEMENTS_SCHOOL_WRITE'))
+const canScopeClass = computed(() => hasPermission('ANNOUNCEMENTS_CLASS_WRITE'))
 
 const priorityOptions: { value: string; label: string; type: ElTagType }[] = [
   { value: 'normal', label: '一般', type: 'info' },
@@ -181,6 +209,7 @@ const form = reactive<{
   title: string
   content: string
   priority: string
+  category_id: number | null
   is_pinned: boolean
   restrict_recipients: boolean
   target_employee_ids: number[]
@@ -194,6 +223,7 @@ const form = reactive<{
   title: '',
   content: '',
   priority: 'normal',
+  category_id: null,
   is_pinned: false,
   restrict_recipients: false,
   target_employee_ids: [],
@@ -247,6 +277,7 @@ const resetForm = () => {
   form.title = ''
   form.content = ''
   form.priority = 'normal'
+  form.category_id = defaultCategoryId.value
   form.is_pinned = false
   form.restrict_recipients = false
   form.target_employee_ids = []
@@ -272,6 +303,7 @@ const openEdit = async (row: AnnouncementItem) => {
   form.title = row.title
   form.content = row.content
   form.priority = row.priority
+  form.category_id = row.category?.id ?? null
   form.is_pinned = row.is_pinned
   form.publish_at = (row.publish_at as string | null) ?? null
   form.expires_at = (row.expires_at as string | null) ?? null
@@ -347,6 +379,7 @@ const handleSubmit = async () => {
         title: form.title,
         content: form.content,
         priority: form.priority,
+        category_id: form.category_id,
         is_pinned: form.is_pinned,
         target_employee_ids: recipientIds,
         publish_at: form.publish_at,
@@ -357,6 +390,7 @@ const handleSubmit = async () => {
         title: form.title,
         content: form.content,
         priority: form.priority,
+        category_id: form.category_id,
         is_pinned: form.is_pinned,
         target_employee_ids: recipientIds.length > 0 ? recipientIds : null,
         publish_at: form.publish_at,
@@ -455,6 +489,7 @@ const announcementCardColumns = [
 
 onMounted(() => {
   fetchAnnouncements()
+  fetchCategories()
   employeeStore.fetchEmployees()
   classroomStore.fetchClassrooms()
 })
@@ -497,6 +532,18 @@ onMounted(() => {
           <el-tag :type="priorityMap[row.priority]?.type || 'info'" size="small">
             {{ priorityMap[row.priority]?.label || row.priority }}
           </el-tag>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="分類" width="110" align="center">
+        <template #default="{ row }">
+          <span v-if="row.category" class="category-option">
+            <el-icon :size="14" :color="row.category.color || undefined">
+              <component :is="previewIconFor(row.category.icon)" />
+            </el-icon>
+            {{ row.category.name }}
+          </span>
+          <span v-else class="text-muted">—</span>
         </template>
       </el-table-column>
 
@@ -688,6 +735,29 @@ onMounted(() => {
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="分類">
+          <el-select
+            v-model="form.category_id"
+            placeholder="請選擇分類"
+            clearable
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="cat in categories"
+              :key="cat.id"
+              :label="cat.name"
+              :value="cat.id"
+            >
+              <span class="category-option">
+                <el-icon :size="16" :color="cat.color || undefined">
+                  <component :is="previewIconFor(cat.icon)" />
+                </el-icon>
+                {{ cat.name }}
+                <el-tag v-if="cat.is_default" size="small" type="success" effect="plain">預設</el-tag>
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="置頂">
           <el-switch v-model="form.is_pinned" />
         </el-form-item>
@@ -768,8 +838,17 @@ onMounted(() => {
         <el-form-item label="家長端">
           <el-radio-group v-model="form.parent_visibility">
             <el-radio value="off">不對家長公開</el-radio>
-            <el-radio value="all">全部家長</el-radio>
-            <el-radio value="classroom">指定班級</el-radio>
+            <!-- ANNOUNCEMENTS_SCHOOL_WRITE／ANNOUNCEMENTS_CLASS_WRITE（anncat01）：
+                 與基礎 ANNOUNCEMENTS_WRITE 互不隱含的獨立範圍碼，缺碼即停用對應選項
+                 （指定學生／既有進階設定不受影響，仍只需 ANNOUNCEMENTS_WRITE）。 -->
+            <el-radio value="all" :disabled="!canScopeSchool">
+              全部家長
+              <span v-if="!canScopeSchool" class="text-muted">（需校園發布權限）</span>
+            </el-radio>
+            <el-radio value="classroom" :disabled="!canScopeClass">
+              指定班級
+              <span v-if="!canScopeClass" class="text-muted">（需班級發布權限）</span>
+            </el-radio>
             <el-radio value="custom" data-test="parent-custom-radio">指定學生</el-radio>
             <el-radio v-if="form.parent_visibility === 'unchanged'" value="unchanged" disabled>
               讀取失敗，將不變更
@@ -885,6 +964,12 @@ onMounted(() => {
 
 .text-muted {
   color: var(--text-tertiary);
+}
+
+.category-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .attachments-block {

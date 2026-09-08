@@ -30,6 +30,12 @@ vi.mock('@/api/announcements', () => ({
   uploadAnnouncementAttachment: vi.fn(),
   deleteAnnouncementAttachment: vi.fn(),
 }))
+vi.mock('@/api/announcementCategories', () => ({
+  getAnnouncementCategories: vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } })),
+  createAnnouncementCategory: vi.fn(),
+  updateAnnouncementCategory: vi.fn(),
+  deleteAnnouncementCategory: vi.fn(),
+}))
 vi.mock('@/api/students', () => ({ getStudents: vi.fn(() => Promise.resolve({ data: { items: [] } })) }))
 vi.mock('@/stores/employee', () => ({
   useEmployeeStore: () => ({ employees: [], fetchEmployees: vi.fn(() => Promise.resolve()) }),

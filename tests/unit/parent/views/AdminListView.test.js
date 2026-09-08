@@ -42,13 +42,15 @@ beforeEach(() => {
 })
 
 // 「孩子檔案」二級入口 P2 起已移至孩子 hub（ChildHubView，見
-// tests/unit/parent/views/ChildHubView.test.js），本檔只驗 10 個一般行政項目，
+// tests/unit/parent/views/ChildHubView.test.js），本檔只驗 11 個一般行政項目，
 // 不再依賴 useChildrenStore／useChildSelection。
+// 2026-09-08 首頁改版新增「校園公告」入口（第 11 項），對應首頁的
+// AnnouncementsHomeCard 預覽卡。
 describe('AdminListView', () => {
-  it('渲染 10 個主行政 item', () => {
+  it('渲染 11 個主行政 item', () => {
     const w = mount(AdminListView)
     const items = w.findAll('.m3-list-item')
-    expect(items).toHaveLength(10)
+    expect(items).toHaveLength(11)
     expect(w.text()).toContain('請假')
     expect(w.text()).toContain('繳費')
     expect(w.text()).toContain('入學文件簽署')
@@ -59,6 +61,7 @@ describe('AdminListView', () => {
     expect(w.text()).toContain('出席紀錄')
     expect(w.text()).toContain('預告接送')
     expect(w.text()).toContain('臨時接送')
+    expect(w.text()).toContain('校園公告')
     expect(w.text()).not.toContain('孩子檔案')
   })
 
@@ -68,14 +71,15 @@ describe('AdminListView', () => {
     expect(pushMock).toHaveBeenCalledWith('/leaves')
   })
 
-  it('10 行政 item 路徑對齊', async () => {
+  it('11 行政 item 路徑對齊', async () => {
     const w = mount(AdminListView)
     const items = w.findAll('.m3-list-item')
     const paths = [
       '/leaves', '/fees', '/sign', '/events', '/surveys',
       '/activity', '/medications', '/attendance', '/pickup-notice', '/pickup',
+      '/announcements',
     ]
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < paths.length; i++) {
       pushMock.mockClear()
       await items[i].trigger('click')
       expect(pushMock).toHaveBeenCalledWith(paths[i])
@@ -90,5 +94,14 @@ describe('AdminListView 預告接送（pnotice01）', () => {
     expect(w.text()).toContain('通知園所我多久後抵達')
     expect(w.text()).toContain('臨時接送')
     expect(w.text()).toContain('授權親友代為到園接送')
+  })
+})
+
+describe('AdminListView 校園公告入口（2026-09-08）', () => {
+  it('未讀公告徽章沿用 badges.unreadAnnouncements', () => {
+    const w = mount(AdminListView)
+    const row = w.findAll('li').find((li) => li.text().includes('校園公告'))
+    // 本檔 mock 的 badges.unreadAnnouncements 為 0，不應出現「0 則」徽章
+    expect(row.find('.admin-badge').exists()).toBe(false)
   })
 })

@@ -275,6 +275,9 @@ const INTENTIONAL_DIVERGENCE = {
     // AUDIT_LOGS，不新增權限碼；一律 exact，禁用 prefix（外溢會讓 DATA_QUALITY_READ
     // 深連結進監控頁）。
     '/governance/parent-monitor × AUDIT_LOGS',
+    // 2026-09-08 公告分類管理新頁（anncat01）：沿用 ANNOUNCEMENTS_READ 借道
+    // sharedViews，不新增權限碼（fixture 凍結於 2026-07-31，此頁更晚才有）。
+    '/announcement-categories × ANNOUNCEMENTS_READ',
   ],
 }
 

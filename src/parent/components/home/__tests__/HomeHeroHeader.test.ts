@@ -4,6 +4,9 @@
  *
  * 問候語三段斷言沿用原本 TodayView.greeting.test.ts 的時段案例（該檔已刪除，
  * 邏輯搬進本元件後改在這裡測）。
+ *
+ * 2026-09-08 首頁改版：右上角新增通知鈴鐺（unreadAnnouncements > 0 時掛紅點，
+ * 點擊 emit open-announcements）。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -136,5 +139,34 @@ describe('HomeHeroHeader — 照片輪播（真實資料，抓不到就降級）
     await w.setProps({ studentId: 2 })
     await flushPromises()
     expect(fetchChildPhotosMock).toHaveBeenCalledWith(2, { limit: 6 })
+  })
+})
+
+describe('HomeHeroHeader — 通知鈴鐺（2026-09-08）', () => {
+  it('unreadAnnouncements 未帶（預設 0）：不顯示紅點', async () => {
+    const w = mountHeader()
+    await flushPromises()
+    expect(w.find('[data-testid="hh-bell"]').exists()).toBe(true)
+    expect(w.find('[data-testid="hh-bell-dot"]').exists()).toBe(false)
+  })
+
+  it('unreadAnnouncements = 0：不顯示紅點', async () => {
+    const w = mountHeader({ unreadAnnouncements: 0 })
+    await flushPromises()
+    expect(w.find('[data-testid="hh-bell-dot"]').exists()).toBe(false)
+  })
+
+  it('unreadAnnouncements > 0：顯示紅點', async () => {
+    const w = mountHeader({ unreadAnnouncements: 3 })
+    await flushPromises()
+    expect(w.find('[data-testid="hh-bell-dot"]').exists()).toBe(true)
+  })
+
+  it('點擊鈴鐺 emit open-announcements（不直接依賴 vue-router）', async () => {
+    const w = mountHeader({ unreadAnnouncements: 1 })
+    await flushPromises()
+    await w.find('[data-testid="hh-bell"]').trigger('click')
+    expect(w.emitted('open-announcements')).toBeTruthy()
+    expect(w.emitted('open-announcements').length).toBe(1)
   })
 })

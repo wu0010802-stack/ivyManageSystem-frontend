@@ -4,7 +4,7 @@
  *
  * 重整前（2026-09-02 之前）同一筆待辦最多在首頁出現三次：頂部 sticky 橫幅、
  * bento 方格、今日動態的「晚一些」桶，三處各自從 summary 讀欄位、各自做
- * null guard 與型別斷言；事務頁與我的頁又各讀一次。這支把八種待辦收斂成
+ * null guard 與型別斷言；事務頁與我的頁又各讀一次。這支把七種待辦收斂成
  * 一份固定順序的陣列，首頁 HomeTodoList 與事務頁 AdminListView 共用。
  *
  * 資料來源三支：
@@ -14,6 +14,11 @@
  *
  * 2、3 各自走 useCachedAsync 固定 key，首頁與事務頁同時掛載只會各打一次。
  * key 以 `parent/` 開頭，登出時 invalidateCachedAsync('parent/') 才清得掉。
+ *
+ * 2026-09-08 首頁改版：未讀公告已有專屬的 AnnouncementsHomeCard 首頁卡，
+ * 原本的 `announcements` 待辦列（未讀公告）移除，避免同一件事在首頁重複
+ * 曝光兩次；未讀數仍可從 `useHomeSummary` 的 `badges.unreadAnnouncements`
+ * 或本檔 `summary.value.unread_announcements` 取得，事務頁公告入口即用此值。
  */
 import { computed, type ComputedRef } from 'vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
@@ -27,7 +32,7 @@ export const PICKUP_ACTIVE_CACHE_KEY = 'parent/pickup/active'
 
 export type ParentTodoKey =
   | 'fees' | 'signDocs' | 'eventAcks' | 'surveys'
-  | 'promotions' | 'pickup' | 'leaveReviews' | 'announcements'
+  | 'promotions' | 'pickup' | 'leaveReviews'
 
 /**
  * tone 語意分三級，色調必須分開，否則「今天有 5 則公告」會被讀成「有事沒處理」：
@@ -106,7 +111,6 @@ export function useParentTodos(options: { immediate?: boolean } = {}) {
       pending_survey_count?: unknown
       pending_activity_promotions?: unknown
       recent_leave_reviews?: unknown
-      unread_announcements?: unknown
     }
     const fees = s.fees ?? {}
     const feesCount = num(fees.outstanding_count)
@@ -180,15 +184,6 @@ export function useParentTodos(options: { immediate?: boolean } = {}) {
         tone: 'info',
         icon: 'event_busy',
         to: '/leaves',
-      },
-      {
-        key: 'announcements',
-        label: '未讀公告',
-        count: num(s.unread_announcements),
-        sub: `${num(s.unread_announcements)} 則`,
-        tone: 'info',
-        icon: 'campaign',
-        to: '/announcements',
       },
     ]
 
