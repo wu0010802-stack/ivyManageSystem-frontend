@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import M3Icon from './M3Icon.vue'
 
 interface NavItem {
@@ -18,24 +17,17 @@ interface NavItem {
  * 底部導航。Active tab 用 active indicator pill (32×32 secondary-container)，
  * icon 切 filled 變體。Inactive 用 outline。
  *
- * `prominent` 的 tab 改成「永久隆起」的圓形 FAB：導航列在它下方挖一個凹槽
- * （radial-gradient 挖洞的 `::before` 背景層），圓鈕懸浮於凹槽上方。隆起與陰影
- * 是靜態的，不隨 hover / active 變化；hover / press 只改按鈕顏色（state layer）。
+ * `prominent` 的 tab 改成「永久隆起」的圓形 FAB：導航列本身維持平整矩形（上緣
+ * 一條直線、不挖凹槽），圓鈕直接浮貼在列上，上半身露出列頂。隆起與陰影是靜態的，
+ * 不隨 hover / active 變化；hover / press 只改按鈕顏色（state layer）。
  * 「目前分頁」另用 filled icon + 標籤色 + 標籤下方小圓點表達，與隆起語意分開。
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §5.1
  */
-const props = defineProps<{
+defineProps<{
   items: NavItem[]
   currentKey: string
 }>()
-
-/** 凹槽的水平中心：對齊第一顆 prominent tab 的中線（tab 等寬 flex: 1）。 */
-const notchX = computed<string | null>(() => {
-  const idx = props.items.findIndex((it) => it.prominent)
-  if (idx < 0) return null
-  return `${((idx + 0.5) / props.items.length) * 100}%`
-})
 
 const emit = defineEmits<{
   'select': [key: string, item: NavItem]
@@ -59,8 +51,6 @@ function onTabClick(item: NavItem): void {
 <template>
   <nav
     class="m3-navigation-bar"
-    :class="{ 'has-prominent': notchX !== null }"
-    :style="notchX !== null ? { '--m3-nav-notch-x': notchX } : undefined"
     role="navigation"
     aria-label="主要功能"
   >
@@ -98,40 +88,14 @@ function onTabClick(item: NavItem): void {
 <style scoped>
 .m3-navigation-bar {
   --m3-nav-bg: var(--m3-surface-container, #ebefe8);
-  /* 凹槽半徑：FAB 56px 半徑 28 + 6px 呼吸間距（FAB 圓心在列頂上方 4px，見 .m3-nav-fab） */
-  --m3-nav-notch-r: 34px;
   position: relative;
   display: flex;
   width: 100%;
   height: 80px;
   padding-bottom: env(safe-area-inset-bottom, 0);
-  color: var(--m3-on-surface-variant, #424941);
-}
-/* 背景獨立成 ::before 圖層：有 prominent tab 時用 radial-gradient 在列頂挖一個
- * 透明圓洞當凹槽，FAB 才能「浮出」列面而不被自身背景蓋住。凹槽邊緣疊一圈淡陰影
- * 做內凹感。無 prominent tab 時就是原本的實色列底。 */
-.m3-navigation-bar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
+  /* 平整實色列底；prominent FAB 直接疊在列上（不挖凹槽），所以列本身不需要 overflow 裁切 */
   background: var(--m3-nav-bg);
-  pointer-events: none;
-}
-.m3-navigation-bar.has-prominent::before {
-  background: radial-gradient(
-    circle calc(var(--m3-nav-notch-r) + 6px) at var(--m3-nav-notch-x, 50%) 0,
-    transparent var(--m3-nav-notch-r),
-    rgba(27, 60, 38, 0.14) calc(var(--m3-nav-notch-r) + 0.6px),
-    var(--m3-nav-bg) calc(var(--m3-nav-notch-r) + 6px)
-  );
-}
-:root[data-theme='dark'] .m3-navigation-bar.has-prominent::before {
-  background: radial-gradient(
-    circle calc(var(--m3-nav-notch-r) + 6px) at var(--m3-nav-notch-x, 50%) 0,
-    transparent var(--m3-nav-notch-r),
-    rgba(0, 0, 0, 0.45) calc(var(--m3-nav-notch-r) + 0.6px),
-    var(--m3-nav-bg) calc(var(--m3-nav-notch-r) + 6px)
-  );
+  color: var(--m3-on-surface-variant, #424941);
 }
 
 .m3-nav-tab {
@@ -234,7 +198,7 @@ function onTabClick(item: NavItem): void {
 }
 
 /* ============================================================
- * Prominent tab：永久隆起的圓形 FAB（bottom-app-bar 凹槽造型）
+ * Prominent tab：永久隆起的圓形 FAB，直接浮貼在平整的導航列上
  * 隆起（位置 / 尺寸 / 陰影）全部是靜態值，不掛在 hover / active 上；
  * hover / press 只透過 ::after state layer 改顏色。
  * ============================================================ */
@@ -245,7 +209,7 @@ function onTabClick(item: NavItem): void {
 .m3-nav-fab {
   --m3-nav-fab-size: 56px;
   position: absolute;
-  top: -32px; /* 圓心落在列頂上方 4px：上半身 32px 浮出列面，下半身 24px 嵌進凹槽 */
+  top: -32px; /* 上半身 32px 露出列頂、下半身 24px 疊在列面上（列不挖洞，純重疊） */
   left: 50%;
   margin-left: calc(var(--m3-nav-fab-size) / -2);
   display: inline-flex;
@@ -262,9 +226,11 @@ function onTabClick(item: NavItem): void {
     var(--m3-primary, #006d3d) 100%
   );
   color: #ffffff;
+  /* 沒有凹槽後，靠一層貼身接觸陰影 + 一層柔和的綠色投影把圓鈕從平整列面上「抬」起來 */
   box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.14),
-    0 8px 18px -6px rgba(13, 144, 83, 0.55);
+    0 1px 2px rgba(0, 0, 0, 0.16),
+    0 3px 6px rgba(0, 0, 0, 0.1),
+    0 8px 18px -6px rgba(13, 144, 83, 0.5);
   z-index: 1;
 }
 /* 深色主題 --m3-primary 是淺綠，漸層尾端改用 primary-container 維持深綠收尾 */
@@ -276,7 +242,8 @@ function onTabClick(item: NavItem): void {
     var(--m3-primary-container, #00522c) 100%
   );
   box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 3px 6px rgba(0, 0, 0, 0.35),
     0 8px 18px -6px rgba(0, 0, 0, 0.6);
 }
 /* state layer：hover 泛白、按下壓暗，只動顏色 */

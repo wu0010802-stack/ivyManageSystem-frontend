@@ -119,17 +119,16 @@ describe('M3NavigationBar', () => {
       ITEMS[3],
     ]
 
-    it('沒有 prominent item 時 nav 不掛 has-prominent、不設凹槽變數', () => {
+    it('沒有 prominent item 時不渲染 m3-nav-fab', () => {
       const w = mount(M3NavigationBar, { props: { items: ITEMS, currentKey: 'home' } })
-      expect(w.classes()).not.toContain('has-prominent')
-      expect(w.attributes('style') || '').not.toContain('--m3-nav-notch-x')
       expect(w.find('.m3-nav-fab').exists()).toBe(false)
+      expect(w.find('.is-prominent').exists()).toBe(false)
     })
 
-    it('prominent item 掛 is-prominent + m3-nav-fab，凹槽對齊該 tab 中線', () => {
+    it('prominent item 掛 is-prominent + m3-nav-fab；列本身不掛凹槽 class / 變數（平整列）', () => {
       const w = mount(M3NavigationBar, { props: { items: PROMINENT_ITEMS, currentKey: 'home' } })
-      expect(w.classes()).toContain('has-prominent')
-      expect(w.attributes('style')).toContain('--m3-nav-notch-x: 50%')
+      expect(w.classes()).not.toContain('has-prominent')
+      expect(w.attributes('style') || '').not.toContain('--m3-nav-notch-x')
       const tab = w.findAll('.m3-nav-tab')[2]
       expect(tab.classes()).toContain('is-prominent')
       expect(tab.find('.m3-nav-fab').exists()).toBe(true)
