@@ -7914,6 +7914,7 @@ export interface paths {
          * @description 查詢費用記錄（支援分頁）。
          *
          *     student_id：指定學生 ID 時，僅回傳該學生的費用紀錄（跨學期）。
+         *     has_payment：為 true 時僅列實繳金額大於零的紀錄，供退款選單分頁。
          */
         get: operations["list_fee_records_api_fees_records_get"];
         put?: never;
@@ -61740,6 +61741,7 @@ export interface operations {
         parameters: {
             query?: {
                 classroom_name?: string | null;
+                has_payment?: boolean;
                 page?: number;
                 page_size?: number;
                 period?: string | null;

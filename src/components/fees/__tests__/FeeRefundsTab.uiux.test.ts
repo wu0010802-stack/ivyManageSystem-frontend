@@ -190,3 +190,51 @@ describe('FeeRefundsTab 空/錯誤狀態', () => {
     expect(vmOf(w).refundedRows.length).toBe(1)
   })
 })
+
+
+describe('新增退費選單完整查詢', () => {
+  it('先篩已繳帳單並可翻頁到第 51 筆，不截斷或混入未繳單', async () => {
+    const w = mountTab()
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      openNewRefundDialog: () => void
+      loadPickerCandidates: () => Promise<void>
+      onPickerPageChange: (page: number) => void
+      pickerTotal: number
+      pickerCandidates: { id: number }[]
+    }
+    vm.openNewRefundDialog()
+    getFeeRecords.mockResolvedValueOnce({ total: 51, items: [{ id: 1, amount_paid: 100 }] })
+    await vm.loadPickerCandidates()
+    expect(getFeeRecords).toHaveBeenLastCalledWith(expect.objectContaining({ has_payment: true, page: 1 }))
+    expect(vm.pickerTotal).toBe(51)
+    getFeeRecords.mockResolvedValueOnce({ total: 51, items: [{ id: 51, amount_paid: 100 }] })
+    vm.onPickerPageChange(2)
+    await flushPromises()
+    expect(getFeeRecords).toHaveBeenLastCalledWith(expect.objectContaining({ has_payment: true, page: 2 }))
+    expect(vm.pickerCandidates.map(row => row.id)).toEqual([51])
+  })
+})
+
+
+describe('新增退費查詢時序', () => {
+  it('改搜尋條件時清掉舊候選，晚回的前次結果不可恢復', async () => {
+    const w = mountTab()
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      openNewRefundDialog: () => void
+      loadPickerCandidates: () => Promise<void>
+      pickerFilter: { period: string; student_name: string }
+      pickerCandidates: { id: number }[]
+    }
+    vm.openNewRefundDialog()
+    let finish!: (value: { total: number; items: { id: number; amount_paid: number }[] }) => void
+    getFeeRecords.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    const pending = vm.loadPickerCandidates()
+    vm.pickerFilter.student_name = '新查詢'
+    await flushPromises()
+    finish({ total: 1, items: [{ id: 1, amount_paid: 100 }] })
+    await pending
+    expect(vm.pickerCandidates).toEqual([])
+  })
+})
