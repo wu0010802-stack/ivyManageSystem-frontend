@@ -172,8 +172,8 @@ function report(over: Record<string, unknown> = {}) {
   }
 }
 
-async function mountTab(reportData = report()) {
-  apiMocks.getBillSlipBatches.mockResolvedValue([BATCH])
+async function mountTab(reportData = report(), batch = BATCH) {
+  apiMocks.getBillSlipBatches.mockResolvedValue([batch])
   apiMocks.getOutstandingReport.mockResolvedValue(reportData)
   const BillSlipTab = (await import('../BillSlipTab.vue')).default
   const wrapper = mount(BillSlipTab, { global: { stubs: STUBS } })
@@ -437,6 +437,48 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
     preview: [],
   }
 
+  it('部分產單 194/197 仍可補產並指定未解析學生', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue({
+      ...PLAN, created: 0, skipped_zero: 0, skipped_existing: 194,
+      unresolved: [{ slip_item_id: 3, student_name: '測試學生', collection_suffix: '9999', net_amount: 9720 }],
+    })
+    const wrapper = await mountTab(report(), { ...BATCH, zero_amount_count: 0, records_generated_count: 194 })
+    const button = wrapper.find('[data-test="open-generate"]')
+    expect(button.exists()).toBe(true)
+    expect(button.text()).toContain('補產費用單')
+    await button.trigger('click')
+    await flush()
+    expect(apiMocks.generateBillSlipRecords).toHaveBeenCalledWith(7, { dry_run: true, skip_unresolved: false })
+    expect(wrapper.find('[data-test="gen-assign-student"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="gen-confirm"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('已配對但尚未補產的批次先預覽新增 3 張並跳過原 194 張', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue({
+      ...PLAN, created: 3, skipped_zero: 0, skipped_existing: 194, total_amount_due: 30240,
+    })
+    const wrapper = await mountTab(report(), { ...BATCH, zero_amount_count: 0, records_generated_count: 194 })
+    await wrapper.find('[data-test="open-generate"]').trigger('click')
+    await flush()
+    expect(wrapper.find('[data-test="gen-confirm"]').text()).toContain('確認補產')
+    expect(wrapper.find('[data-test="gen-confirm"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-test="gen-dialog"]').text()).toContain('194 筆')
+    expect(wrapper.find('[data-test="gen-dialog"]').text()).toContain('30,240')
+    expect(apiMocks.generateBillSlipRecords).toHaveBeenCalledTimes(1)
+    expect(apiMocks.generateBillSlipRecords).toHaveBeenCalledWith(7, { dry_run: true, skip_unresolved: false })
+  })
+
+  it('完整批次扣除零元單後不顯示補產入口', async () => {
+    const wrapper = await mountTab(report(), { ...BATCH, records_generated_count: 119 })
+    expect(wrapper.find('[data-test="open-generate"]').exists()).toBe(false)
+  })
+
+  it('唯讀權限不可補產部分批次', async () => {
+    authMocks.perms = new Set(['FEES_READ'])
+    const wrapper = await mountTab(report(), { ...BATCH, zero_amount_count: 0, records_generated_count: 194 })
+    expect(wrapper.find('[data-test="open-generate"]').exists()).toBe(false)
+  })
+
   it('開啟對話框先 dry_run 預覽，顯示筆數與合計', async () => {
     apiMocks.generateBillSlipRecords.mockResolvedValue(PLAN)
     const wrapper = await mountTab()
@@ -467,13 +509,16 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
       ...PLAN,
       dry_run: false,
     })
+    await (wrapper.vm as unknown as { selectBatch: (r: unknown) => Promise<void> }).selectBatch(BATCH)
     apiMocks.getBillSlipBatches.mockClear()
+    apiMocks.getOutstandingReport.mockClear()
     await vm.confirmGenerate()
     expect(apiMocks.generateBillSlipRecords).toHaveBeenLastCalledWith(7, {
       dry_run: false,
       skip_unresolved: false,
     })
     expect(apiMocks.getBillSlipBatches).toHaveBeenCalled()
+    expect(apiMocks.getOutstandingReport).toHaveBeenCalledWith(7, expect.any(Object))
     expect(wrapper.find('[data-test="gen-dialog"]').exists()).toBe(false)
   })
 
@@ -695,13 +740,26 @@ describe('BillSlipTab 批次類型（SPEC-019 §6.1）', () => {
     const vm = wrapper.vm as unknown as {
       onAssignPick: (s: { id: number; name: string }) => Promise<void>
     }
+    await (wrapper.vm as unknown as { selectBatch: (r: unknown) => Promise<void> }).selectBatch(BATCH)
+    apiMocks.getBillSlipBatches.mockClear()
+    apiMocks.getOutstandingReport.mockClear()
     apiMocks.generateBillSlipRecords.mockClear()
     await vm.onAssignPick({ id: 5, name: '王小明' })
     await flush()
+    expect(apiMocks.getBillSlipBatches).toHaveBeenCalled()
+    expect(apiMocks.getOutstandingReport).toHaveBeenCalledWith(7, expect.any(Object))
     expect(apiMocks.assignBillSlipItemStudent).toHaveBeenCalledWith(7, 3, { student_id: 5 })
     expect(apiMocks.generateBillSlipRecords).toHaveBeenCalledWith(7, {
       dry_run: true,
       skip_unresolved: false,
     })
+    apiMocks.generateBillSlipRecords.mockRejectedValueOnce(new Error('預覽失敗'))
+    await vm.onAssignPick({ id: 6, name: '測試學生' })
+    await flush()
+    expect(wrapper.find('[data-test="gen-confirm"]').attributes('disabled')).toBeDefined()
+    await wrapper.find('[data-test="open-generate"]').trigger('click')
+    await flush()
+    expect(wrapper.find('[data-test="gen-assign-student"]').exists()).toBe(true)
+
   })
 })

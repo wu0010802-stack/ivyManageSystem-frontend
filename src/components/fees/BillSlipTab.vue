@@ -171,15 +171,15 @@
       <el-table-column label="操作" width="260">
         <template #default="{ row }">
           <el-button
-            v-if="canWrite && row.records_generated_count === 0 && row.net_total > 0"
+            v-if="canWrite && row.net_total > 0 && row.records_generated_count < row.row_count - row.zero_amount_count"
             size="small"
             type="success"
             text
             data-test="open-generate"
-            aria-label="依此批次淨額產生費用單"
+            :aria-label="row.records_generated_count > 0 ? '補產此批次尚未建立的費用單' : '依此批次淨額產生費用單'"
             @click.stop="openGenerateDialog(row)"
           >
-            產生費用單
+            {{ row.records_generated_count > 0 ? '補產費用單' : '產生費用單' }}
           </el-button>
           <el-button
             size="small"
@@ -216,7 +216,7 @@
     <!-- 產生費用單（SPEC-018：一生一筆淨額單） -->
     <el-dialog
       v-model="genDialogVisible"
-      title="產生費用單"
+      :title="genBatch && genBatch.records_generated_count > 0 ? '補產費用單' : '產生費用單'"
       width="600px"
       data-test="gen-dialog"
     >
@@ -274,7 +274,7 @@
           class="mt-1"
           data-test="gen-unresolved-alert"
           :title="`${genPlan.unresolved.length} 筆學生未解析（檢核檔姓名對不上在籍學生）`"
-          :description="`${unresolvedNames}。可逐列指定學生後重跑，或勾選下方略過。`"
+          :description="`${unresolvedNames}。請先核對正式學生身分再逐列指定；略過的資料不會建立費用單，可之後補產。`"
         />
         <ul v-if="genPlan.unresolved.length" class="unresolved-list">
           <li v-for="u in genPlan.unresolved" :key="u.slip_item_id">
@@ -312,7 +312,7 @@
           :disabled="!canConfirmGenerate"
           @click="confirmGenerate"
         >
-          確認產生
+          {{ genBatch && genBatch.records_generated_count > 0 ? '確認補產' : '確認產生' }}
         </el-button>
       </template>
     </el-dialog>
@@ -687,6 +687,7 @@ async function confirmGenerate() {
     genDialogVisible.value = false
     genPlan.value = null
     await fetchBatches()
+    await fetchReport()
     emit('generated')
   } catch (e) {
     ElMessage.error(friendlyError('產生費用單失敗', e))
@@ -707,18 +708,25 @@ function openAssign(itemId: number, name: string) {
 }
 
 async function onAssignPick(student: { id: number; name: string }) {
-  if (!genBatch.value || assignItemId.value == null) return
+  if (!genBatch.value || assignItemId.value == null || generating.value) return
+  generating.value = true
+  genPlan.value = null
+  skipUnresolved.value = false
   try {
     await assignBillSlipItemStudent(genBatch.value.id, assignItemId.value, {
       student_id: student.id,
     })
     ElMessage.success(`已指定 ${student.name}`)
+    await fetchBatches()
+    await fetchReport()
     genPlan.value = (await generateBillSlipRecords(genBatch.value.id, {
       dry_run: true,
       skip_unresolved: false,
     })) as unknown as BillSlipGenerateResult
   } catch (e) {
-    ElMessage.error(friendlyError('指定學生失敗', e))
+    ElMessage.error(friendlyError('指定學生或更新預覽失敗，請重新開啟產單預覽', e))
+  } finally {
+    generating.value = false
   }
 }
 
