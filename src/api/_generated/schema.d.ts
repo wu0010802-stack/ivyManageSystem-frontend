@@ -63609,6 +63609,7 @@ export interface operations {
         parameters: {
             query?: {
                 deep?: boolean;
+                expected_sha?: string | null;
             };
             header?: never;
             path?: never;
