@@ -47,6 +47,7 @@ export interface FeeQueueItem {
   detail: string
   state: FeeQueueState
   actionLabel: string
+  action?: 'show-unresolved'
   target: FeeNavTarget
   /** 待處理金額，用於「金額大的排前面」；無金額語意者為 0 */
   amount: number
@@ -702,7 +703,8 @@ function slipGenItem(): FeeQueueItem {
       detail:
         `檢核檔姓名對不上在籍學生，合計 ${formatCurrency(s.unresolvedAmount)}；` +
         '到匯入紀錄逐列指定學生後重新產單',
-      actionLabel: '去指定',
+      actionLabel: '查看名單',
+      action: 'show-unresolved',
     }
   }
   return {

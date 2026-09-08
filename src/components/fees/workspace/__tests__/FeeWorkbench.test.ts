@@ -13,6 +13,7 @@ const apiMocks = vi.hoisted(() => ({
   getFeeSummary: vi.fn(),
   getClosePeriods: vi.fn(),
   getBillSlipBatches: vi.fn(),
+  getOutstandingReport: vi.fn(),
   getCollectionPayments: vi.fn(),
   getBankTransactions: vi.fn(),
 }))
@@ -27,6 +28,10 @@ vi.mock('@/utils/academic', () => ({
 
 const GLOBAL_STUBS = {
   'el-skeleton': { template: '<div data-testid="skeleton" />' },
+  FeeUnresolvedDialog: {
+    props: ['modelValue'],
+    template: '<div v-if="modelValue" data-test="unresolved-dialog" />',
+  },
   'el-icon': { template: '<i aria-hidden="true"><slot /></i>' },
 }
 
@@ -119,10 +124,7 @@ describe('FeeWorkbench 工作佇列', () => {
     const keys = rows.map((r) => r.attributes('data-test'))
     // 待處理依金額大到小：費用單 480,000 → 交接 15,800
     // → 存摺／退款（金額未知，權重 1）；關帳本月進行中不再是待辦
-    expect(keys.slice(0, 2)).toEqual([
-      'workbench-row-receivable',
-      'workbench-row-handover',
-    ])
+    expect(keys.slice(0, 2)).toEqual(['workbench-row-receivable', 'workbench-row-handover'])
     expect(keys.slice(0, 4)).toContain('workbench-row-passbook')
     expect(keys.slice(0, 4)).toContain('workbench-row-refunds')
     expect(rows.slice(0, 4).every((r) => r.classes('queue-row--action'))).toBe(true)
@@ -259,6 +261,24 @@ describe('FeeWorkbench 發單批次產單卡（SPEC-018）', () => {
     expect(wrapper.emitted('navigate')?.at(-1)).toEqual([
       { ws: 'billing', view: 'receivable', imports: true },
     ])
+  })
+
+  it('點擊未匹配提醒直接開啟名單，不離開工作台', async () => {
+    apiMocks.getBillSlipBatches.mockResolvedValue([
+      {
+        id: 8,
+        net_total: 1000,
+        records_generated_count: 1,
+        unresolved_count: 1,
+        unresolved_amount: 1000,
+      },
+    ])
+    const wrapper = mountWorkbench()
+    await flushAll()
+    await wrapper.find('[data-test="workbench-action-billslips"]').trigger('click')
+    expect(wrapper.find('[data-test="unresolved-dialog"]').exists()).toBe(true)
+    expect(wrapper.emitted('navigate')).toBeUndefined()
+    expect(wrapper.text()).toContain('查看名單')
   })
 
   it('批次皆已產單時顯示完成', async () => {

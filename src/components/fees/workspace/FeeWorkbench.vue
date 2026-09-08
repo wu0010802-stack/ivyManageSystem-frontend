@@ -1,7 +1,8 @@
 <template>
   <section class="fee-workbench" aria-label="學費管理工作台">
     <p class="context-line">
-      今天 {{ today }}<span aria-hidden="true"> ・ </span>統計月份 {{ monthLabel }}
+      今天 {{ today }}<span aria-hidden="true"> ・ </span>統計月份
+      {{ monthLabel }}
     </p>
 
     <!-- 佇列固定 7 列 ＋ 最多 2 個分組標題；骨架列數對齊才不會載入完成瞬間版面暴增 -->
@@ -23,7 +24,7 @@
           class="queue-row__hit"
           :aria-label="`${item.title}${item.detail ? '，' + item.detail : ''}：${item.actionLabel}`"
           :data-test="`workbench-action-${item.key}`"
-          @click="emit('navigate', item.target)"
+          @click="activateItem(item)"
         >
           <span class="row-status" data-state="action">
             <el-icon class="row-status__icon" aria-hidden="true"><Warning /></el-icon>
@@ -49,7 +50,7 @@
           class="queue-row__hit"
           :aria-label="`${item.title}${item.detail ? '，' + item.detail : ''}：${item.actionLabel}`"
           :data-test="`workbench-action-${item.key}`"
-          @click="emit('navigate', item.target)"
+          @click="activateItem(item)"
         >
           <span class="row-status" :data-state="item.state">
             <el-icon class="row-status__icon" aria-hidden="true">
@@ -86,7 +87,7 @@
           class="queue-row__hit"
           :aria-label="`${item.title}：${item.detail}`"
           :data-test="`workbench-action-${item.key}`"
-          @click="emit('navigate', item.target)"
+          @click="activateItem(item)"
         >
           <span class="row-status" data-state="unknown">
             <el-icon class="row-status__icon" aria-hidden="true"><QuestionFilled /></el-icon>
@@ -105,6 +106,7 @@
       這些統計是全園金流資料，需要「學生管理」的全園檢視權限才能讀取。
       請園長或系統管理員調整你的角色權限。
     </p>
+    <FeeUnresolvedDialog v-model="unresolvedOpen" @imports="openImports" />
   </section>
 </template>
 
@@ -121,12 +123,28 @@
  * 原則：拿不到可靠數字的項目只顯示狀態與入口，絕不顯示推估／假數字。
  * 佇列不含任何學生姓名等 PII，只有聚合計數與金額。
  */
-import { onActivated, onMounted } from 'vue'
+import { onActivated, onDeactivated, onMounted, ref } from 'vue'
 import { CircleCheck, MoreFilled, QuestionFilled, Warning } from '@element-plus/icons-vue'
 import type { FeeNavTarget } from './feesNavigation'
-import { FEE_QUEUE_STATE_TEXT, useFeeOverview } from './useFeeOverview'
+import { FEE_QUEUE_STATE_TEXT, useFeeOverview, type FeeQueueItem } from './useFeeOverview'
+import FeeUnresolvedDialog from './FeeUnresolvedDialog.vue'
 
 const emit = defineEmits<{ navigate: [target: FeeNavTarget] }>()
+const unresolvedOpen = ref(false)
+
+function activateItem(item: FeeQueueItem) {
+  if (item.action === 'show-unresolved') unresolvedOpen.value = true
+  else emit('navigate', item.target)
+}
+
+function openImports() {
+  unresolvedOpen.value = false
+  emit('navigate', { ws: 'billing', view: 'receivable', imports: true })
+}
+
+onDeactivated(() => {
+  unresolvedOpen.value = false
+})
 
 const {
   loading,
