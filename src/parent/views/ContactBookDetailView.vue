@@ -3,28 +3,20 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   ackContactBook,
-  deleteContactBookReply,
   getContactBookDetail,
-  replyContactBook,
 } from '../api/contactBook'
 import type { ContactBookEntry as CbEntry } from '../api/contactBook'
 import { useChildrenStore } from '../stores/children'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
-import ConfirmDialog from '../components/ConfirmDialog.vue'
 import MoodBadge from '../components/contact-book/MoodBadge.vue'
 import TimelineRow from '../components/contact-book/TimelineRow.vue'
 import PhotoGrid from '../components/contact-book/PhotoGrid.vue'
+import ReadStampButton from '../components/contact-book/ReadStampButton.vue'
 import ContactBookHeroSparkle from '../components/illustrations/ContactBookHeroSparkle.vue'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
 import { isNetworkError } from '@/composables/useOnlineStatus'
-
-interface Reply {
-  id: number | string
-  body?: string
-  created_at?: string
-}
 
 const route = useRoute()
 // 子女資訊用於 hero 區的姓名/班級，缺 pinia 時 graceful（測試環境）。
@@ -37,15 +29,7 @@ try {
 
 const entryId = computed(() => Number(route.params.entryId))
 const entry = ref<CbEntry | null>(null)
-const replies = ref<Reply[]>([])
-const newReply = ref('')
-const removeReplyTarget = ref<number | string | null>(null)
-const removeReplyOpen = computed({
-  get: () => removeReplyTarget.value !== null,
-  set: (v: boolean) => { if (!v) removeReplyTarget.value = null },
-})
 const loading = ref(false)
-const submitting = ref(false)
 const acking = ref(false)
 
 const MOOD_LABEL: Record<string, string> = {
@@ -147,7 +131,6 @@ async function fetchData() {
     const { data } = await getContactBookDetail(reqId)
     if (entryId.value !== reqId) return
     entry.value = data as CbEntry
-    replies.value = ((data as CbEntry)?.replies as Reply[] | undefined) || []
   } catch (err) {
     if (entryId.value !== reqId) return
     const e = err as Record<string, unknown>
@@ -177,8 +160,16 @@ async function queueAck() {
   flushParentQueue(OP_KINDS.CONTACT_BOOK_ACK).catch(() => {})
 }
 
+/**
+ * 蓋章互動：一律由家長主動點擊觸發（2026-09-08 起不再進頁自動標記已讀）。
+ * 「印章落下」動畫由 ReadStampButton 在點擊當下自行播放，與這裡的 ack request
+ * 平行進行；動畫播放與已讀是否成功已解耦——徽章文字變紅是由 `entry.isRead`
+ * 驅動，不是寫死的動畫時間點，所以無論 API 多快/多慢回應，蓋章落下後只要
+ * ack 成功就會轉紅；若失敗則維持灰色並跳錯誤提示，可重新點擊。
+ * entry.isRead 若進頁時已為 true（先前已讀過）不會播動畫，只顯示蓋完章的終態。
+ */
 async function markAsRead() {
-  if (acking.value) return
+  if (acking.value || entry.value?.isRead) return
   acking.value = true
 
   if (!navigator.onLine) {
@@ -199,7 +190,7 @@ async function markAsRead() {
       entry.value.readAt = data.readAt
       entry.value.isRead = true
     }
-    // 已讀軌：成功不跳 toast（被動行為，與「已讀」語意一致）
+    // 已讀軌：成功不跳 toast（被動行為，與「已讀」語意一致；視覺回饋交給蓋章動畫）
   } catch (err) {
     // navigator.onLine 會說謊（弱訊號、行動網路連著但打不到 server）：網路層失敗
     // 一律 fallback 進佇列，否則家長的操作直接遺失。非網路錯誤（4xx/5xx）維持原提示。
@@ -216,86 +207,6 @@ async function markAsRead() {
   }
 }
 
-/**
- * 把回覆寫進離線佇列（含樂觀 UI）。離線分流與假線上 fallback 共用。
- */
-async function queueReply(body: string) {
-  await enqueueParent({
-    kind: OP_KINDS.CONTACT_BOOK_REPLY,
-    payload: { entry_id: entryId.value, body },
-    meta: { entry_id: entryId.value, content_preview: body.slice(0, 20) },
-  })
-  // 樂觀 UI
-  replies.value.push({ id: `pending-${Date.now()}`, body, created_at: new Date().toISOString() })
-  newReply.value = ''
-  toast.success('已暫存，連線後自動送出')
-  flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
-}
-
-async function submitReply() {
-  const body = newReply.value.trim()
-  if (!body) return
-  if (body.length > 500) {
-    toast.warn('回覆不可超過 500 字')
-    return
-  }
-  submitting.value = true
-
-  if (!navigator.onLine) {
-    try {
-      await queueReply(body)
-    } catch (err) {
-      const e = err as Record<string, unknown>
-      toast.error(String(e?.displayMessage || '暫存失敗'))
-    } finally {
-      submitting.value = false
-    }
-    return
-  }
-
-  try {
-    const { data } = await replyContactBook(entryId.value, { body })
-    replies.value.push(data as Reply)
-    newReply.value = ''
-  } catch (err) {
-    // 假線上：網路層失敗一律進佇列，家長打好的回覆不可因弱訊號蒸發。
-    if (isNetworkError(err)) {
-      try {
-        await queueReply(body)
-        return
-      } catch { /* 佇列也寫不進去 → 落回下方錯誤提示 */ }
-    }
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '送出失敗'))
-  } finally {
-    submitting.value = false
-  }
-}
-
-function askRemoveReply(replyId: number | string) {
-  removeReplyTarget.value = replyId
-}
-
-async function doRemoveReply() {
-  const replyId = removeReplyTarget.value
-  removeReplyTarget.value = null
-  if (!replyId) return
-  try {
-    await deleteContactBookReply(entryId.value, Number(replyId))
-    replies.value = replies.value.filter((r) => r.id !== replyId)
-  } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '刪除失敗'))
-  }
-}
-
-async function loadAndMark() {
-  await fetchData()
-  if (entry.value && !entry.value.isRead) {
-    await markAsRead()
-  }
-}
-
 onMounted(async () => {
   if (childrenStore?.load) {
     try {
@@ -305,17 +216,14 @@ onMounted(async () => {
       /* graceful — 缺 pinia 時不阻擋 detail 載入 */
     }
   }
-  await loadAndMark()
-  flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
+  await fetchData()
   flushParentQueue(OP_KINDS.CONTACT_BOOK_ACK).catch(() => {})
 })
 
 watch(entryId, async (newId, oldId) => {
   if (!newId || newId === oldId) return
   entry.value = null
-  replies.value = []
-  newReply.value = ''
-  await loadAndMark()
+  await fetchData()
 })
 
 function formatTime(iso: string | null): string {
@@ -325,23 +233,6 @@ function formatTime(iso: string | null): string {
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   } catch {
     return ''
-  }
-}
-
-function formatReplyTime(iso: string) {
-  try {
-    const d = new Date(iso)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const diff = today.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-    const days = Math.round(diff / 86400000)
-    const time = d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
-    if (days === 0) return `今天 ${time}`
-    if (days === 1) return `昨天 ${time}`
-    if (days < 7) return `${days} 天前 ${time}`
-    return d.toLocaleDateString('zh-TW') + ' ' + time
-  } catch {
-    return iso
   }
 }
 </script>
@@ -373,6 +264,17 @@ function formatReplyTime(iso: string) {
           </div>
         </div>
       </header>
+
+      <!-- 已讀狀態：印章蓋章互動，獨立呈現在 hero 下方（不再與家長留言共用卡片） -->
+      <section class="read-stamp">
+        <ReadStampButton
+          :is-read="entry.isRead"
+          :disabled="acking"
+          @click="markAsRead"
+        />
+        <span v-if="entry.isRead" class="stamp-time">{{ formatTime(entry.readAt) }} 已讀</span>
+        <span v-else class="stamp-hint">點一下蓋章確認已讀</span>
+      </section>
 
       <!-- 時間軸：一天的故事 -->
       <section v-if="timelineItems.length" class="card timeline-card">
@@ -412,86 +314,9 @@ function formatReplyTime(iso: string) {
         </h2>
         <PhotoGrid :photos="(entry.photos || []) as never[]" />
       </section>
-
-      <!-- 已讀狀態 / 回覆 -->
-      <section class="card replies-card">
-        <header class="ack-bar">
-          <div class="ack-status">
-            <span v-if="entry.isRead" class="read-badge is-read">
-              <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
-              已讀 · {{ formatTime(entry.readAt) }}
-            </span>
-            <span v-else class="read-badge is-pending">
-              <span class="material-symbols-rounded" aria-hidden="true">circle</span>
-              尚未閱讀
-            </span>
-          </div>
-          <button
-            v-if="!entry.isRead"
-            type="button"
-            class="read-btn"
-            :disabled="acking"
-            @click="markAsRead"
-          >
-            標為已讀
-          </button>
-        </header>
-
-        <h2 class="card-title with-divider">
-          <span class="material-symbols-rounded" aria-hidden="true">forum</span>
-          家長留言
-          <span v-if="replies.length" class="title-count">{{ replies.length }} 則</span>
-        </h2>
-
-        <ul v-if="replies.length" class="replies">
-          <li v-for="r in replies" :key="r.id" class="reply">
-            <div class="reply-body">{{ r.body }}</div>
-            <div class="reply-meta">
-              <span>{{ formatReplyTime(r.created_at || '') }}</span>
-              <button type="button" class="reply-delete link-btn" @click="askRemoveReply(r.id)">刪除</button>
-            </div>
-          </li>
-        </ul>
-        <p v-else class="reply-empty">
-          給老師留個訊息，孩子的成長故事更完整
-        </p>
-
-        <div class="composer">
-          <label for="reply-textarea" class="sr-only">回覆內容</label>
-          <textarea
-            id="reply-textarea"
-            v-model="newReply"
-            rows="2"
-            placeholder="想跟老師說的話…（最多 500 字）"
-            maxlength="500"
-            autocomplete="off"
-          />
-          <div class="composer-bar">
-            <span class="counter" :class="{ near: newReply.length > 450 }">{{ newReply.length }} / 500</span>
-            <button
-              type="button"
-              class="send-btn"
-              :disabled="submitting || !newReply.trim()"
-              @click="submitReply"
-            >
-              <span class="material-symbols-rounded" aria-hidden="true">send</span>
-              送出
-            </button>
-          </div>
-        </div>
-      </section>
     </template>
 
     <p v-else class="hint">找不到聯絡簿。</p>
-
-    <ConfirmDialog
-      v-model:open="removeReplyOpen"
-      title="確定刪除這則留言？"
-      message="刪除後無法還原。"
-      confirm-label="刪除"
-      destructive
-      @confirm="doRemoveReply"
-    />
   </div>
 </template>
 
@@ -574,6 +399,23 @@ function formatReplyTime(iso: string) {
   color: var(--pt-text-muted);
 }
 
+/* 已讀狀態：印章蓋章按鈕本體（含動畫）在 ReadStampButton.vue；這裡只負責
+ * 版面。印章落下時會突出到上方 hero 之上，故拉高 stacking 讓它不被 hero 蓋住。 */
+.read-stamp {
+  position: relative;
+  z-index: 1;
+  margin: -4px 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.stamp-time,
+.stamp-hint {
+  font-size: 12px;
+  color: var(--pt-text-faint);
+}
+
 /* Card 通用 */
 .card {
   margin: 0 16px;
@@ -604,11 +446,6 @@ function formatReplyTime(iso: string) {
   color: var(--pt-text-faint);
   letter-spacing: 0.04em;
 }
-.card-title.with-divider {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--pt-border-light, #ecf5f9);
-}
 
 /* Timeline */
 .timeline {
@@ -630,172 +467,5 @@ function formatReplyTime(iso: string) {
   line-height: 1.75;
   color: var(--pt-text-body);
   white-space: pre-wrap;
-}
-
-/* Replies / Ack */
-.ack-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: -4px 0 12px;
-}
-.read-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 999px;
-  transition: background-color 200ms ease, color 200ms ease;
-}
-.read-badge .material-symbols-rounded {
-  font-size: 16px;
-  font-variation-settings: 'FILL' 1, 'wght' 600;
-}
-.read-badge.is-read {
-  background-color: var(--pt-color-success-bg, var(--leaf-100, #e8f5e9));
-  color: var(--pt-color-success, var(--brand-primary, #2e7d32));
-}
-.read-badge.is-pending {
-  background: var(--coral-100, #ffe3e0);
-  color: var(--coral-700, #b14545);
-}
-.read-btn {
-  background: var(--m3-primary, var(--brand-primary, #0d9053));
-  color: var(--m3-on-primary, #fff);
-  border: none;
-  padding: 8px 16px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 160ms ease, transform 120ms ease;
-}
-.read-btn:active { transform: scale(0.97); background: var(--brand-primary-hover, #0caf76); }
-.read-btn:disabled { background: var(--brand-primary-soft); color: var(--pt-text-disabled); cursor: not-allowed; }
-
-.replies {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.reply {
-  background: var(--cream, #fffcf2);
-  border: 1px solid var(--pt-border-light, #ecf5f9);
-  border-radius: 14px;
-  padding: 10px 14px;
-}
-.reply-body {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--pt-text-body);
-  white-space: pre-wrap;
-}
-.reply-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--pt-text-faint);
-}
-.reply-delete {
-  background: none;
-  border: none;
-  color: var(--coral-700, #b14545);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-}
-.reply-empty {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: var(--pt-text-faint);
-  text-align: center;
-  padding: 16px 0;
-  font-style: italic;
-}
-
-.composer {
-  margin-top: 12px;
-  background: var(--pt-surface-mute-soft, #fefcf3);
-  border: 1px solid var(--pt-border-light, #ecf5f9);
-  border-radius: 14px;
-  padding: 10px 12px;
-}
-.composer textarea {
-  width: 100%;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--pt-text-body);
-  resize: vertical;
-  outline: none;
-  min-height: 48px;
-}
-.composer textarea::placeholder { color: var(--pt-text-placeholder); }
-
-.composer-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--pt-border-light, #ecf5f9);
-}
-.counter {
-  font-size: 12px;
-  color: var(--pt-text-faint);
-  letter-spacing: 0.02em;
-}
-.counter.near { color: var(--coral-700, #b14545); font-weight: 600; }
-.send-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--m3-primary, var(--brand-primary, #0d9053));
-  color: var(--m3-on-primary, #fff);
-  border: none;
-  padding: 8px 16px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 160ms ease, transform 120ms ease;
-}
-.send-btn .material-symbols-rounded {
-  font-size: 16px;
-  font-variation-settings: 'FILL' 1, 'wght' 600;
-}
-.send-btn:active { transform: scale(0.97); background: var(--brand-primary-hover, #0caf76); }
-.send-btn:disabled {
-  background: var(--brand-primary-soft, #f5fbe6);
-  color: var(--pt-text-disabled, #c4d2d9);
-  cursor: not-allowed;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .read-badge, .read-btn, .send-btn { transition: none; }
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0,0,0,0);
-  white-space: nowrap;
-  border: 0;
 }
 </style>

@@ -143,7 +143,7 @@ describe('parent contact-book API', () => {
 })
 
 
-// ─── View：自動標記已讀 ───────────────────────────────────────────────────
+// ─── View：已讀改為主動點擊蓋章（2026-09-08 起不再進頁自動標記） ─────────────
 
 vi.mock('@/parent/utils/toast', () => ({
   toast: {
@@ -161,7 +161,7 @@ vi.mock('vue-router', () => ({
 import { useRoute } from 'vue-router'
 import ContactBookDetailView from '@/parent/views/ContactBookDetailView.vue'
 
-describe('ContactBookDetailView 自動標記已讀', () => {
+describe('ContactBookDetailView 已讀改為主動點擊蓋章', () => {
   beforeEach(() => {
     apiMock.get.mockReset()
     apiMock.post.mockReset()
@@ -169,7 +169,7 @@ describe('ContactBookDetailView 自動標記已讀', () => {
     useRoute.mockReturnValue({ params: { entryId: '11' } })
   })
 
-  it('掛載後若尚未已讀，會呼叫 ack endpoint', async () => {
+  it('掛載後即使尚未已讀，也不會自動呼叫 ack endpoint', async () => {
     apiMock.get.mockResolvedValue({
       data: {
         id: 11,
@@ -177,19 +177,36 @@ describe('ContactBookDetailView 自動標記已讀', () => {
         mood: 'normal',
         teacher_note: 'note',
         photos: [],
-        replies: [],
+        my_acknowledged_at: null,
+      },
+    })
+    mount(ContactBookDetailView)
+    await flushPromises()
+    expect(apiMock.post).not.toHaveBeenCalled()
+  })
+
+  it('點擊蓋章按鈕才呼叫 ack endpoint', async () => {
+    apiMock.get.mockResolvedValue({
+      data: {
+        id: 11,
+        log_date: '2026-05-02',
+        mood: 'normal',
+        teacher_note: 'note',
+        photos: [],
         my_acknowledged_at: null,
       },
     })
     apiMock.post.mockResolvedValue({
       data: { read_at: '2026-05-02T10:00:00', already_marked: false },
     })
-    mount(ContactBookDetailView)
+    const wrapper = mount(ContactBookDetailView)
+    await flushPromises()
+    await wrapper.find('.stamp-target').trigger('click')
     await flushPromises()
     expect(apiMock.post).toHaveBeenCalledWith('/parent/contact-book/11/ack')
   })
 
-  it('已讀過的 entry 不會重複呼叫 ack', async () => {
+  it('已讀過的 entry：蓋章按鈕為 disabled，點擊不會再呼叫 ack', async () => {
     useRoute.mockReturnValue({ params: { entryId: '12' } })
     apiMock.get.mockResolvedValue({
       data: {
@@ -197,33 +214,16 @@ describe('ContactBookDetailView 自動標記已讀', () => {
         log_date: '2026-05-02',
         teacher_note: 'note',
         photos: [],
-        replies: [],
         my_acknowledged_at: '2026-05-02T08:00:00',
       },
     })
     apiMock.post.mockResolvedValue({ data: {} })
-    mount(ContactBookDetailView)
-    await flushPromises()
-    expect(apiMock.post).not.toHaveBeenCalled()
-  })
-
-  it('回覆超過 500 字觸發 warn 不送 API', async () => {
-    apiMock.get.mockResolvedValue({
-      data: {
-        id: 11,
-        log_date: '2026-05-02',
-        teacher_note: '',
-        photos: [],
-        replies: [],
-        my_acknowledged_at: '2026-05-02T08:00:00',
-      },
-    })
     const wrapper = mount(ContactBookDetailView)
     await flushPromises()
-    apiMock.post.mockClear()
-    const tooLong = 'x'.repeat(501)
-    wrapper.vm.newReply = tooLong
-    await wrapper.vm.submitReply()
+    const btn = wrapper.find('.stamp-target')
+    expect(btn.attributes('disabled')).toBeDefined()
+    await btn.trigger('click')
+    await flushPromises()
     expect(apiMock.post).not.toHaveBeenCalled()
   })
 })
