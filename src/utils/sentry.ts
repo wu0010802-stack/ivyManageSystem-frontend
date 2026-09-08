@@ -85,6 +85,8 @@ const PII_KEY_SUBSTRINGS = [
   'source_employee_number', 'sourceemployeenumber', 'source_rows', 'sourcerows',
   'punches', 'import_metadata', 'importmetadata',
   // 外部薪資表核對包含來源姓名、金額與可能含人名的工作表名稱。
+  // 收款累計快照，含回放前額與 camelCase 鍵名；與後端同步。
+  'amount_paid', 'amountpaid',
   'payroll', 'source_name', 'sourcename', 'source_amount', 'sourceamount',
   'system_amount', 'systemamount', 'difference', 'worksheet',
 ]

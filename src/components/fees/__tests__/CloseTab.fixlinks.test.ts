@@ -150,7 +150,7 @@ describe('CloseTab 阻擋項目與修正入口', () => {
     expect(wrapper.emitted('navigate')).toEqual([
       [{ ws: 'billing', view: 'matching', src: 'passbook' }],
       [{ ws: 'settlement', view: 'handover' }],
-      [{ ws: 'billing', view: 'refunds' }],
+      [{ ws: 'billing', view: 'cashItems' }],
     ])
   })
 
@@ -165,5 +165,35 @@ describe('CloseTab 阻擋項目與修正入口', () => {
     await flushAll()
     expect(wrapper.find('[data-test="close-blocked-hint"]').exists()).toBe(false)
     expect(wrapper.find('[data-test^="close-fix-"]').exists()).toBe(false)
+  })
+})
+
+
+describe('月結試算競態', () => {
+  it('舊月份晚回應不可覆蓋新月份摘要', async () => {
+    let resolveOld!: (value: typeof SUMMARY) => void
+    apiMocks.getCloseSummary.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+    const wrapper = mountTab()
+    const newer = { ...SUMMARY, bank: { ...SUMMARY.bank, credit_total: 999 } }
+    apiMocks.getCloseSummary.mockResolvedValueOnce(newer)
+    wrapper.vm.setMonth('2027-09')
+    await flushAll()
+    resolveOld(SUMMARY)
+    await flushAll()
+    expect(wrapper.get('[data-test="close-cards"]').text()).toContain('999')
+  })
+
+  it('新月份讀取中及失敗後不保留舊摘要與關帳按鈕', async () => {
+    const wrapper = mountTab()
+    await flushAll()
+    let rejectNew!: (reason: Error) => void
+    apiMocks.getCloseSummary.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectNew = reject }))
+    wrapper.vm.setMonth('2027-09')
+    await nextTick()
+    expect(wrapper.find('[data-test="close-cards"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="close-btn"]').exists()).toBe(false)
+    rejectNew(new Error('測試載入失敗'))
+    await flushAll()
+    expect(wrapper.find('[data-test="close-cards"]').exists()).toBe(false)
   })
 })

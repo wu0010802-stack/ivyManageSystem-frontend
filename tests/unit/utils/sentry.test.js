@@ -849,3 +849,20 @@ describe('接送地址聯絡人姓名遮罩', () => {
     expect(value).toContain("'status': 'active'")
   })
 })
+
+
+describe('收款累計快照遮罩', () => {
+  it('遮罩累計與前額的兩種鍵名格式，保留非金額計數', () => {
+    expect(scrubMapping({
+      amount_paid: 10000,
+      previous_amount_paid: 5000,
+      nested: { amountPaid: 10000, previousAmountPaid: 5000 },
+      payment_count: 2,
+    })).toEqual({
+      amount_paid: '[Filtered]',
+      previous_amount_paid: '[Filtered]',
+      nested: { amountPaid: '[Filtered]', previousAmountPaid: '[Filtered]' },
+      payment_count: 2,
+    })
+  })
+})

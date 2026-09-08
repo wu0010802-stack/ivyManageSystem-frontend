@@ -238,7 +238,7 @@ const CHECKLIST_FIX_TARGETS: Record<string, FeeNavTarget> = {
   legacy_cash_reconciled: { ws: 'settlement', view: 'handover' },
   all_collection_payments_classified: { ws: 'billing', view: 'matching' },
   collection_fully_allocated: { ws: 'billing', view: 'matching' },
-  no_pending_refunds: { ws: 'billing', view: 'refunds' },
+  no_pending_refunds: { ws: 'billing', view: 'cashItems' },
   equation_balanced: { ws: 'billing', view: 'matching' },
 }
 
@@ -277,16 +277,22 @@ function parseMonth(): { year: number; monthNum: number } | null {
   return { year: y, monthNum: m }
 }
 
+let summaryRequest = 0
+
 async function fetchSummary() {
+  const request = ++summaryRequest
+  summary.value = null
   const parsed = parseMonth()
   if (!parsed) return
   try {
     // 後端 summary 為動態彙總 dict（response_model=dict）→ 先過 unknown 再收斂
-    summary.value = (await getCloseSummary(
+    const result = (await getCloseSummary(
       parsed.year,
       parsed.monthNum,
     )) as unknown as CloseSummary
+    if (request === summaryRequest) summary.value = result
   } catch (e) {
+    if (request !== summaryRequest) return
     ElMessage.error(friendlyError('載入關帳試算失敗', e))
   }
 }
