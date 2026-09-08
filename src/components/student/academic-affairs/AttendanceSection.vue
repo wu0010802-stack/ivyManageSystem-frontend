@@ -115,8 +115,9 @@ defineExpose({ fetchDaily })
     :show-empty="filteredRows.length === 0"
     @retry="fetchDaily"
   >
-    <template #titleExtra v-if="refDate">{{ refDate }}</template>
+    <template #titleExtra v-if="refDate && !$slots['date-control']">{{ refDate }}</template>
     <template #actions>
+      <slot name="date-control" />
       <el-button
         size="small"
         type="primary"
@@ -183,4 +184,24 @@ defineExpose({ fetchDaily })
 }
 .attendance-progress { margin: 0 0 var(--space-3); font-weight: var(--font-weight-semibold); }
 .attendance-table { width: 100%; margin-top: var(--space-3); }
+.section-card :deep(.section-head),
+.section-card :deep(.section-actions) {
+  flex-wrap: wrap;
+}
+.section-card :deep(.section-actions) {
+  justify-content: flex-end;
+  row-gap: var(--space-2);
+}
+
+@media (--to-sm) {
+  .section-card :deep(.section-actions) {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .section-card :deep(.section-actions > .el-button) {
+    width: 100%;
+    min-height: var(--touch-target-min);
+  }
+}
 </style>

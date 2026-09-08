@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { defineComponent, h } from 'vue'
 import TodayTasksPanel from '@/components/student/workbench/TodayTasksPanel.vue'
 
 vi.mock('@/api/classrooms', () => ({
@@ -9,6 +10,22 @@ vi.mock('@/api/classrooms', () => ({
 vi.mock('@/api/students', () => ({
   getStudents: vi.fn(() => Promise.resolve({ data: [] })),
 }))
+
+const AttendanceSectionStub = defineComponent({
+  name: 'AttendanceSection',
+  props: { attendanceDate: String },
+  setup(_, { slots }) {
+    return () => h('div', { 'data-test': 'attendance-section' }, slots['date-control']?.())
+  },
+})
+
+const globalStubs = {
+  AttendanceSection: AttendanceSectionStub,
+  'el-card': { template: '<div><slot /></div>' },
+  'el-select': true,
+  'el-option': true,
+  'el-date-picker': true,
+}
 
 describe('TodayTasksPanel', () => {
   beforeEach(() => {
@@ -19,12 +36,7 @@ describe('TodayTasksPanel', () => {
   it('renders the panel subtitle and the 4 sections', () => {
     const wrapper = shallowMount(TodayTasksPanel, {
       global: {
-        stubs: {
-          'el-card': { template: '<div><slot /></div>' },
-          'el-select': true,
-          'el-option': true,
-          'el-date-picker': true,
-        },
+        stubs: globalStubs,
       },
     })
 
@@ -40,10 +52,7 @@ describe('TodayTasksPanel', () => {
 // 使用者改紀錄區間時，點名日期不可跟著結束日跳動。
 it('點名日期與紀錄查詢區間各自獨立', async () => {
   setActivePinia(createPinia())
-  const wrapper = shallowMount(TodayTasksPanel, { global: { stubs: {
-    'el-card': { template: '<div><slot /></div>' }, 'el-select': true,
-    'el-option': true, 'el-date-picker': true,
-  } } })
+  const wrapper = shallowMount(TodayTasksPanel, { global: { stubs: globalStubs } })
   const pickers = wrapper.findAllComponents({ name: 'ElDatePicker' })
   const single = pickers.find(p => p.attributes('type') === 'date')
   const range = pickers.find(p => p.attributes('type') === 'daterange')
@@ -53,5 +62,7 @@ it('點名日期與紀錄查詢區間各自獨立', async () => {
   range!.vm.$emit('update:modelValue', ['2026-08-01', '2026-08-31'])
   await wrapper.vm.$nextTick()
   expect(wrapper.findComponent({ name: 'AttendanceSection' }).props('attendanceDate')).toBe('2026-09-06')
+  expect((range!.vm.$attrs.shortcuts as Array<{ text: string }>).map(item => item.text)).toContain('近 90 天')
+  expect((range!.vm.$attrs.shortcuts as Array<{ text: string }>).map(item => item.text)).not.toContain('本學期 (近 90 天)')
   wrapper.unmount()
 })

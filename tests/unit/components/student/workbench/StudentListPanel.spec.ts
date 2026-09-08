@@ -139,6 +139,89 @@ beforeEach(() => {
 })
 
 describe('StudentListPanel', () => {
+  it('清除班級與搜尋時保留學年、學期與在籍狀態，並回到第一頁及清除選取', async () => {
+    const wrapper = mountPanel()
+
+    await flushPromises()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      activeTab: string
+      currentPage: number
+      debouncedSearch: string
+      filterClassroomId: number | null
+      filterSchoolYear: number
+      filterSemester: number
+      searchQuery: string
+      selectedStudents: Array<{ id: number; name: string }>
+    }
+    vm.currentPage = 3
+    vm.searchQuery = '測試學生'
+    vm.debouncedSearch = '測試學生'
+    vm.selectedStudents = [{ id: 99, name: '測試學生' }]
+    await nextTick()
+
+    await wrapper.get('[data-test="clear-roster-quick-filters"]').trigger('click')
+    await nextTick()
+
+    expect(vm.filterClassroomId).toBeNull()
+    expect(vm.searchQuery).toBe('')
+    expect(vm.debouncedSearch).toBe('')
+    expect(vm.currentPage).toBe(1)
+    expect(vm.selectedStudents).toEqual([])
+    expect(vm.filterSchoolYear).toBe(2025)
+    expect(vm.filterSemester).toBe(2)
+    expect(vm.activeTab).toBe('active')
+
+    wrapper.unmount()
+  })
+
+  it('搜尋防抖生效前清除仍同步第一頁的網址與資料', async () => {
+    route.query = { school_year: '2025', semester: '2', page: '3' } as typeof route.query
+    const wrapper = mountPanel()
+
+    await flushPromises()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      currentPage: number
+      debouncedSearch: string
+      filterClassroomId: number | null
+      searchQuery: string
+    }
+    expect(vm.currentPage).toBe(3)
+    expect(vm.filterClassroomId).toBeNull()
+    expect(vm.debouncedSearch).toBe('')
+
+    vi.useFakeTimers()
+    try {
+      push.mockClear()
+      getStudents.mockClear()
+
+      vm.searchQuery = '尚未套用的搜尋'
+      await nextTick()
+      expect(vi.getTimerCount()).toBe(1)
+      expect(vm.debouncedSearch).toBe('')
+
+      await wrapper.get('[data-test="clear-roster-quick-filters"]').trigger('click')
+      await nextTick()
+      await flushPromises()
+
+      expect(vm.currentPage).toBe(1)
+      expect(push).toHaveBeenCalledWith({
+        query: expect.objectContaining({ page: '1' }),
+      })
+      expect(getStudents).toHaveBeenCalledWith(expect.objectContaining({
+        skip: 0,
+        classroom_id: undefined,
+        search: undefined,
+      }))
+    } finally {
+      wrapper.unmount()
+      vi.useRealTimers()
+    }
+  })
+
   it('uses route query to preload academic term and classroom filters', async () => {
     mountPanel()
 
@@ -285,6 +368,16 @@ it('手機卡片保留學生檔案、編輯、更多操作與批次勾選', asyn
   checkbox!.vm.$emit('update:modelValue', true)
   await nextTick()
   expect(wrapper.get('[data-test="student-batch-toolbar"]').text()).toContain('已選 1')
+
+  const detailedData = wrapper.findAllComponents({ name: 'ElCheckbox' })
+    .find(c => c.attributes('aria-label') === '詳細資料')
+  expect(detailedData).toBeTruthy()
+  detailedData!.vm.$emit('update:modelValue', true)
+  await nextTick()
+  const mobileList = wrapper.findComponent({ name: 'AdminListCards' })
+  expect((mobileList.props('columns') as Array<{ prop: string }>).map(column => column.prop))
+    .toEqual(expect.arrayContaining(['student_id', 'gender', 'birthday', 'enrollment_date']))
+
   wrapper.unmount()
   vi.unstubAllGlobals()
 })

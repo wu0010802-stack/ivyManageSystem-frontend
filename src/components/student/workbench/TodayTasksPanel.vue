@@ -62,7 +62,7 @@ const dateRangeShortcuts = [
   { text: '今天', value: () => todayRange() },
   { text: '本週', value: () => thisWeekRange() },
   { text: '本月', value: () => thisMonthRange() },
-  { text: '本學期 (近 90 天)', value: () => lastNDaysRange(90) },
+  { text: '近 90 天', value: () => lastNDaysRange(90) },
 ]
 
 const fetchClassrooms = async () => {
@@ -125,7 +125,7 @@ onMounted(async () => {
 <template>
   <div class="today-tasks-panel">
     <p class="panel-subtitle">
-      先完成每日點名，再處理請假與教務紀錄。班級與學生篩選共用，點名日期與紀錄查詢區間分開設定。
+      班級與學生篩選會同時套用到點名、請假與教務紀錄；日期則在各工作區分開設定。
     </p>
 
     <el-card shadow="never" class="filter-card">
@@ -147,32 +147,6 @@ onMounted(async () => {
               :value="item.value"
             />
           </el-select>
-        </div>
-        <div class="filter-item">
-          <span class="filter-label">點名日期</span>
-          <el-date-picker
-            v-model="attendanceDate"
-            type="date"
-            aria-label="點名日期"
-            value-format="YYYY-MM-DD"
-            :clearable="false"
-          />
-        </div>
-        <div class="filter-item filter-item--range">
-          <span class="filter-label">紀錄查詢區間</span>
-          <el-date-picker
-            :model-value="selectedDateRange"
-            type="daterange"
-            aria-label="紀錄查詢區間"
-            start-label="紀錄起始日"
-            end-label="紀錄結束日"
-            value-format="YYYY-MM-DD"
-            range-separator="至"
-            start-placeholder="起始日"
-            end-placeholder="結束日"
-            :shortcuts="dateRangeShortcuts"
-            @update:model-value="setDateRange"
-          />
         </div>
         <div class="filter-item">
           <span class="filter-label">學生 (選填)</span>
@@ -197,17 +171,54 @@ onMounted(async () => {
       </div>
     </el-card>
 
-    <div class="secondary-records">
-      <span class="secondary-records-label">教務紀錄</span>
-      <div class="secondary-records-entries">
-        <AssessmentSection :classrooms="classrooms" />
-        <IncidentSection :classrooms="classrooms" />
+    <div class="workbench-layout">
+      <div class="attendance-workspace">
+        <AttendanceSection :attendance-date="attendanceDate">
+          <template #date-control>
+            <label class="attendance-date-control">
+              <span class="header-control-label">點名日期</span>
+              <el-date-picker
+                v-model="attendanceDate"
+                type="date"
+                aria-label="點名日期"
+                value-format="YYYY-MM-DD"
+                :clearable="false"
+              />
+            </label>
+          </template>
+        </AttendanceSection>
       </div>
-    </div>
+      <aside class="records-workspace" aria-label="紀錄查詢">
+        <div class="records-filter">
+          <label class="records-filter-control">
+            <span class="filter-label">紀錄查詢區間</span>
+            <el-date-picker
+              :model-value="selectedDateRange"
+              type="daterange"
+              aria-label="紀錄查詢區間"
+              start-label="紀錄起始日"
+              end-label="紀錄結束日"
+              value-format="YYYY-MM-DD"
+              range-separator="至"
+              start-placeholder="起始日"
+              end-placeholder="結束日"
+              :shortcuts="dateRangeShortcuts"
+              @update:model-value="setDateRange"
+            />
+          </label>
+          <p class="records-filter-hint">此區間套用到下方請假、評量與事件紀錄。</p>
+        </div>
 
-    <div class="sections-grid">
-      <AttendanceSection :attendance-date="attendanceDate" />
-      <LeaveSection />
+        <LeaveSection />
+
+        <div class="secondary-records">
+          <span class="secondary-records-label">其他教務紀錄</span>
+          <div class="secondary-records-entries">
+            <AssessmentSection :classrooms="classrooms" />
+            <IncidentSection :classrooms="classrooms" />
+          </div>
+        </div>
+      </aside>
     </div>
   </div>
 </template>
@@ -229,10 +240,11 @@ onMounted(async () => {
 }
 
 .filter-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
   gap: var(--space-4);
+  max-width: 44rem;
 }
 
 .filter-item {
@@ -250,21 +262,59 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.sections-grid {
+.workbench-layout {
   margin-top: var(--space-4);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: var(--space-4);
 }
 
-@media (--to-lg) {
-  .sections-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.attendance-workspace {
+  flex: 1.7 1 0;
+  min-width: min(100%, 32rem);
+}
+
+.records-workspace {
+  display: grid;
+  flex: 1 1 0;
+  min-width: min(100%, 40rem);
+  gap: var(--space-4);
+}
+
+.records-filter {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-color);
+}
+
+.records-filter-control,
+.attendance-date-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.records-filter-control {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.header-control-label {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.records-filter-hint {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
 .secondary-records {
-  margin-top: var(--space-4);
+  min-width: 0;
 }
 
 .secondary-records-label {
@@ -286,8 +336,15 @@ onMounted(async () => {
   }
 }
 
-.filter-item--range { flex-basis: 20rem; }
-.filter-item :deep(.el-date-editor), .filter-item :deep(.el-select) { width: 100%; min-width: 0; }
+.filter-item :deep(.el-select),
+.records-filter :deep(.el-date-editor) {
+  width: 100%;
+  min-width: 0;
+}
+
+.attendance-date-control :deep(.el-date-editor) {
+  width: 10rem;
+}
 
 /* 觸發鈕由子元件 (AssessmentSection / IncidentSection) 渲染，故用 :deep 穿透 */
 .secondary-records :deep(.record-entry) {
@@ -335,5 +392,26 @@ onMounted(async () => {
 .section-placeholder {
   border-radius: var(--radius-lg);
   min-height: 320px;
+}
+
+@media (--to-sm) {
+  .filter-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .attendance-date-control {
+    width: 100%;
+  }
+
+  .attendance-date-control :deep(.el-date-editor) {
+    flex: 1;
+    width: auto;
+    min-height: var(--touch-target-min);
+  }
+
+  .attendance-date-control :deep(.el-input__wrapper),
+  .records-filter :deep(.el-input__wrapper) {
+    min-height: var(--touch-target-min);
+  }
 }
 </style>

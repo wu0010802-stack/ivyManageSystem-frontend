@@ -322,6 +322,24 @@ const clearSelection = () => {
   selectedStudents.value = []
   tableRef.value?.clearSelection?.()
 }
+const clearClassroomAndSearch = () => {
+  const filterWatchWillRefresh = filterClassroomId.value !== null || debouncedSearch.value !== ''
+  if (_searchTimer) {
+    clearTimeout(_searchTimer)
+    _searchTimer = null
+  }
+  searchQuery.value = ''
+  debouncedSearch.value = ''
+  filterClassroomId.value = null
+  currentPage.value = 1
+  clearSelection()
+  // 搜尋字仍在 debounce、且原本就是全部班級時，兩個 filter watcher 都不會觸發。
+  // 此分支需主動同步頁碼並重抓第一頁，避免畫面狀態與 URL／資料停在舊頁。
+  if (!filterWatchWillRefresh) {
+    syncRouteQuery()
+    fetchStudents()
+  }
+}
 const toggleStudent = (row: StudentRow, checked: string | number | boolean) => {
   selectedStudents.value = checked === true
     ? [...selectedStudents.value.filter(student => student.id !== row.id), row]
@@ -588,11 +606,13 @@ onMounted(async () => {
     </PageHeader>
 
     <div class="filter-section">
-      <el-radio-group v-model="activeTab" aria-label="學生在籍狀態" @change="handleTabChange">
-        <el-radio-button value="active">在讀中</el-radio-button>
-        <el-radio-button value="graduated">已離園</el-radio-button>
-      </el-radio-group>
-      <div class="filter-toolbar">
+      <div class="filter-grid">
+        <div class="filter-field filter-field--status"><span id="student-status-filter-label">在籍狀態</span>
+          <el-radio-group v-model="activeTab" aria-labelledby="student-status-filter-label" @change="handleTabChange">
+            <el-radio-button value="active">在讀中</el-radio-button>
+            <el-radio-button value="graduated">已離園</el-radio-button>
+          </el-radio-group>
+        </div>
         <label class="filter-field"><span>學年度</span>
           <el-select v-model="filterSchoolYear" aria-label="學年度" filterable allow-create default-first-option>
             <el-option v-for="year in schoolYearOptions" :key="year" :label="`${year}學年度`" :value="year" />
@@ -609,15 +629,30 @@ onMounted(async () => {
           </el-select>
         </label>
       </div>
-      <div class="classroom-option-setting">
-        <el-switch v-model="showAllClassrooms" aria-label="顯示其他學期班級" active-text="顯示其他學期班級" />
-        <span class="filter-hint">只擴充班級選項，學生名單仍依所選學年度與學期查詢。</span>
-      </div>
+      <details class="advanced-filter">
+        <summary>
+          <el-icon class="advanced-filter-chevron" aria-hidden="true"><ArrowDown /></el-icon>
+          <span>進階篩選</span>
+          <el-tag v-if="showAllClassrooms" size="small" type="info">已顯示其他學期班級</el-tag>
+        </summary>
+        <div class="classroom-option-setting">
+          <el-switch v-model="showAllClassrooms" aria-label="顯示其他學期班級" active-text="顯示其他學期班級" />
+          <span class="filter-hint">只擴充班級選項，學生名單仍依所選學年度與學期查詢。</span>
+        </div>
+      </details>
     </div>
 
     <AdminListToolbar v-model:search="searchQuery" search-placeholder="搜尋編號、姓名或家長" :total="totalStudents" :shown="students.length">
       <template #actions>
-        <el-checkbox v-model="showMoreColumns">顯示更多欄位</el-checkbox>
+        <el-button
+          data-test="clear-roster-quick-filters"
+          plain
+          :disabled="!filterClassroomId && !searchQuery"
+          @click="clearClassroomAndSearch"
+        >清除班級與搜尋</el-button>
+        <el-checkbox v-model="showMoreColumns" :aria-label="isMobile ? '詳細資料' : '詳細欄位'">
+          {{ isMobile ? '詳細資料' : '詳細欄位' }}
+        </el-checkbox>
         <el-dropdown trigger="click">
           <el-button>匯出名冊<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
           <template #dropdown>
@@ -649,7 +684,7 @@ onMounted(async () => {
         <el-button @click="openProfile(item as StudentRow)">檔案</el-button>
         <el-button :icon="Edit" @click="handleEdit(item as StudentRow)">編輯</el-button>
         <el-dropdown v-if="activeTab === 'active'" trigger="click" @command="(cmd: string) => handleRowCommand(cmd, item as StudentRow)">
-          <el-button :aria-label="`${item.name}的更多操作`">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          <el-button :aria-label="`${item.name} 的更多操作`">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="notify" :disabled="activeCallStudentIds.has(item.id)">{{ activeCallStudentIds.has(item.id) ? '已通知放學' : '通知放學' }}</el-dropdown-item>
@@ -678,13 +713,19 @@ onMounted(async () => {
       <el-table-column v-if="showMoreColumns" prop="student_id" label="編號" width="100" sortable />
       <el-table-column label="姓名" width="130" sortable prop="name">
         <template #default="{ row }">
-          <span>{{ row.name }}</span>
+          <el-button
+            link
+            type="primary"
+            class="student-name-link"
+            :aria-label="`開啟 ${row.name} 的學生檔案`"
+            @click="openProfile(row)"
+          >{{ row.name }}</el-button>
           <el-tooltip
             v-if="row.allergy || row.medication || row.special_needs"
             placement="top"
             :content="[row.allergy && `過敏：${row.allergy}`, row.medication && `用藥：${row.medication}`, row.special_needs && `特殊需求：${row.special_needs}`].filter(Boolean).join(' ／ ')"
           >
-            <el-icon style="color: var(--el-color-warning); margin-left: 4px; vertical-align: middle"><Warning /></el-icon>
+            <el-icon class="health-warning-icon"><Warning /></el-icon>
           </el-tooltip>
         </template>
       </el-table-column>
@@ -727,7 +768,7 @@ onMounted(async () => {
             trigger="click"
             @command="(cmd: string) => handleRowCommand(cmd, scope.row)"
           >
-            <el-button size="small">
+            <el-button size="small" :aria-label="`${scope.row.name} 的更多操作`">
               更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </el-button>
             <template #dropdown>
@@ -854,19 +895,60 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.filter-section { margin-bottom: var(--space-4); }
-.filter-toolbar { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); }
-.filter-field { display: flex; flex-direction: column; gap: var(--space-2); flex: 1 1 10rem; min-width: 0; font-size: var(--text-sm); color: var(--text-secondary); }
-.filter-field--classroom { flex-grow: 2; }
-.classroom-option-setting { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
+.student-page :deep(.page-header) { margin-bottom: var(--space-3); }
+.filter-section {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-color);
+}
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+}
+.filter-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.filter-field :deep(.el-select),
+.filter-field :deep(.el-radio-group) { width: 100%; }
+.filter-field--status :deep(.el-radio-button) { flex: 1; }
+.filter-field--status :deep(.el-radio-button__inner) { width: 100%; }
+.advanced-filter {
+  padding-top: var(--space-2);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--border-color);
+}
+.advanced-filter summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: fit-content;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.advanced-filter summary::-webkit-details-marker { display: none; }
+.advanced-filter-chevron { transition: transform var(--transition-fast); }
+.advanced-filter[open] .advanced-filter-chevron { transform: rotate(180deg); }
+.classroom-option-setting { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding-top: var(--space-2); }
 .filter-hint { font-size: var(--text-xs); color: var(--text-secondary); }
 .batch-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3); margin-bottom: var(--space-3); border-radius: var(--radius-md); background: var(--el-color-primary-light-9); }
 .batch-actions { display: flex; gap: var(--space-2); margin-left: auto; }
 .student-pagination { margin-top: var(--space-4); justify-content: flex-end; }
 .row-action-danger { color: var(--el-color-danger); }
+.student-name-link { font-weight: var(--font-weight-semibold); }
+.health-warning-icon { margin-left: var(--space-1); color: var(--el-color-warning); vertical-align: middle; }
+@media (--to-lg) {
+  .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (--to-sm) {
-  .filter-field { flex-basis: 40%; }
-  .filter-field--classroom { flex-basis: 100%; }
+  .filter-section { padding: var(--space-3); }
+  .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-field--status,
+  .filter-field--classroom { grid-column: 1 / -1; }
+  .advanced-filter summary,
+  .student-page :deep(.admin-list-toolbar .el-checkbox) { min-height: var(--touch-target-min); }
   .batch-actions { width: 100%; margin-left: 0; }
   .batch-actions :deep(.el-button) { flex: 1; min-height: var(--touch-target-min); }
   .student-pagination { justify-content: center; }
