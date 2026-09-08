@@ -190,3 +190,17 @@ describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => 
     expect(header).not.toContain('本學期')
   })
 })
+
+it('離開逐筆到媒合再返回時保留模式，直接網址仍以網址為準', async () => {
+  const wrapper = mountView({ ws: 'billing', view: 'receivable', mode: 'list' })
+  await flushAll()
+  wrapper.findComponent({ name: 'FeeBillingWorkspace' }).vm.$emit('change-view', 'matching')
+  await flushAll()
+  wrapper.findComponent({ name: 'FeeBillingWorkspace' }).vm.$emit('change-view', 'receivable')
+  await flushAll()
+  expect(routerMocks.route!.query.mode).toBe('list')
+  routerMocks.route!.query = { ws: 'billing', view: 'receivable' }
+  await flushAll()
+  expect(wrapper.findComponent({ name: 'FeeBillingWorkspace' }).attributes('records-mode')).toBe('statement')
+  wrapper.unmount()
+})

@@ -305,3 +305,18 @@ describe('FeeWorkbench 發單批次產單卡（SPEC-018）', () => {
     expect(wrapper.find('[data-test="workbench-action-billslips"]').exists()).toBe(true)
   })
 })
+
+it('無須處理預設收合，可由原生按鈕展開；待處理列仍顯示', async () => {
+  const wrapper = mountWorkbench()
+  await flushAll()
+  const toggle = wrapper.get('[data-test="workbench-rest-toggle"]')
+  expect(toggle.element.tagName).toBe('BUTTON')
+  expect(toggle.attributes('aria-expanded')).toBe('false')
+  expect(wrapper.findAll('.queue-row--action').every(row => row.isVisible())).toBe(true)
+  const hidden = wrapper.findAll('.queue-row').filter(row => (row.element as HTMLElement).style.display === 'none')
+  expect(hidden.length).toBeGreaterThan(0)
+  await toggle.trigger('click')
+  expect(toggle.attributes('aria-expanded')).toBe('true')
+  expect(hidden.every(row => (row.element as HTMLElement).style.display !== 'none')).toBe(true)
+  wrapper.unmount()
+})

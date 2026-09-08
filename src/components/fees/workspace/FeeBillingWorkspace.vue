@@ -1,5 +1,5 @@
 <template>
-  <section class="fee-billing-workspace" aria-label="收款工作區">
+  <section ref="workspaceRoot" class="fee-billing-workspace" aria-label="收款工作區">
     <FeeWorkspaceToolbar
       :views="views"
       :view="view"
@@ -93,13 +93,13 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="collection" data-test="import-collection">
-                  永豐代收明細 CSV
+                  登錄銀行繳費：永豐代收明細 CSV
                 </el-dropdown-item>
                 <el-dropdown-item command="passbook" data-test="import-passbook">
-                  永豐存摺明細 CSV
+                  核對實際入帳：永豐存摺明細 CSV
                 </el-dropdown-item>
                 <el-dropdown-item command="billslip" divided data-test="import-billslip">
-                  銀行檢核檔（發單批次）
+                  建立費用單：銀行檢核檔（發單批次）
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -165,16 +165,19 @@
           </el-button>
         </div>
 
+      </template>
+
+      <!-- KeepAlive 常駐，次頁往返只停用帳款實例；首次仍按需掛載。 -->
         <KeepAlive :key="recordsVersion">
           <FeeMonthlyStatement
-            v-if="recordsMode === 'statement'"
+            v-if="view === 'receivable' && recordsMode === 'statement'"
             ref="statementRef"
             :classrooms="classrooms"
             @open-list="onOpenList"
             @open-imports="emit('update:imports-open', true)"
           />
           <FeeRecordsTab
-            v-else
+            v-else-if="view === 'receivable'"
             ref="recordsTabRef"
             auto-load
             :period-options="periodOptions"
@@ -183,11 +186,10 @@
             :initial-search="createdStudentSearch || studentSearch"
           />
         </KeepAlive>
-      </template>
 
       <!-- ── 入帳媒合 ─────────────────────────────────────────────── -->
       <FeeMatchingPanel
-        v-else-if="view === 'matching'"
+        v-if="view === 'matching'"
         ref="matchingRef"
         :source="source"
       />
@@ -196,7 +198,7 @@
       <CashItemsView v-else-if="view === 'cashItems'" ref="cashItemsRef" />
 
       <!-- ── 退款 ─────────────────────────────────────────────────── -->
-      <FeeRefundsTab v-else :period-options="periodOptions" />
+      <FeeRefundsTab v-else-if="view === 'refunds'" :period-options="periodOptions" />
     </template>
 
     <FeeBillSlipDrawer
@@ -227,7 +229,7 @@
  * 費用單來自發單批次、現金項目批次，另可手動補登未列入銷帳單的額外應收。
  * 預繳款自 2026-08-26 起併入應收帳款（月表「預繳」欄與工具列入口）。
  */
-import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, WarningFilled } from '@element-plus/icons-vue'
 import { friendlyError } from '@/utils/errorMessages'
@@ -317,6 +319,33 @@ const canCreateManualFee = computed(() => canWrite.value && hasPermission(PERMIS
 const manualFeeOpen = ref(false)
 const createdStudentSearch = ref('')
 const recordsVersion = ref(0)
+const workspaceRoot = ref<HTMLElement | null>(null)
+let recordsScrollTop = 0
+let workspaceActive = true
+function saveRecordsScroll() {
+  const host = workspaceRoot.value?.closest<HTMLElement>('#admin-main')
+  if (host) recordsScrollTop = host.scrollTop
+}
+let recordsNavigation = 0
+async function refreshRecordsAndRestoreScroll() {
+  const navigation = recordsNavigation
+  const targetTop = recordsScrollTop
+  const pending = refreshActiveRecordsView()
+  await nextTick()
+  const host = workspaceRoot.value?.closest<HTMLElement>('#admin-main')
+  const initialTop = host?.scrollTop
+  await pending
+  await nextTick()
+  // 使用者已換頁／切模式或自行捲動時，晚回的刷新不可拉動畫面。
+  if (navigation !== recordsNavigation || !workspaceActive || props.view !== 'receivable') return
+  if (host && host.scrollTop === initialTop) host.scrollTop = targetTop
+}
+watch(() => [props.view, recordsMode.value], () => { recordsNavigation += 1 })
+// DOM 切換前保存位置；搜尋條件只留在此元件樹記憶體內。
+watch(() => props.view, (next, previous) => {
+  if (previous === 'receivable' && next !== previous) saveRecordsScroll()
+})
+onDeactivated(() => { workspaceActive = false })
 
 // ─── 學期選項與預設學期（等載入完成再掛帳款表，確保首次查詢就聚焦當前學期）───
 const periodOptions = ref<string[]>([])
@@ -328,11 +357,34 @@ const classroomStore = useAllClassroomStore()
 const classrooms = computed(() => classroomStore.classrooms)
 
 const recordsTabRef = ref<{
-  fetchRecords?: () => void
+  fetchRecords?: () => Promise<unknown> | void
   applySearch?: (name: string) => void
 } | null>(null)
 
-const statementRef = ref<{ refresh?: () => void } | null>(null)
+const statementRef = ref<{ refresh?: () => Promise<unknown> | void } | null>(null)
+
+// 同一模式首次掛載由子元件自載；已看過的模式再啟用才刷新。
+// 另一模式可能在媒合、產單或收款前已快取，不能只刷新返回時的作用中模式。
+const visitedRecordsModes = new Set<string>()
+watch(
+  () => [props.view, recordsMode.value, recordsVersion.value] as const,
+  async ([view, mode, version], [previousView, previousMode, previousVersion]) => {
+    if (version !== previousVersion) {
+      visitedRecordsModes.clear()
+      return
+    }
+    if (previousView === 'receivable') {
+      const previousInstance = previousMode === 'statement' ? statementRef.value : recordsTabRef.value
+      if (previousInstance) visitedRecordsModes.add(previousMode)
+    }
+    if (view !== 'receivable' || previousView !== view || mode === previousMode) return
+    if (!visitedRecordsModes.has(mode)) return
+    await nextTick()
+    if (workspaceActive && props.view === view && recordsMode.value === mode && recordsVersion.value === version) {
+      refreshActiveRecordsView()
+    }
+  },
+)
 
 const matchingRef = ref<{
   openImport?: () => void
@@ -376,8 +428,8 @@ async function onImportCommand(command: string) {
 
 // 刷新目前作用中的帳款檢視（月表或逐筆明細）
 function refreshActiveRecordsView() {
-  if (recordsMode.value === 'statement') statementRef.value?.refresh?.()
-  else recordsTabRef.value?.fetchRecords?.()
+  if (recordsMode.value === 'statement') return statementRef.value?.refresh?.()
+  return recordsTabRef.value?.fetchRecords?.()
 }
 
 function onGenerated() {
@@ -411,6 +463,7 @@ async function onOpenList(studentName: string) {
 // 子元件自己會載，故跳過第一次——用旗標而非 onMounted 時序，避免依賴 hook 順序。
 let activatedOnce = false
 onActivated(() => {
+  workspaceActive = true
   if (activatedOnce) {
     if (props.view === 'matching') matchingRef.value?.refresh?.()
     else if (props.view === 'cashItems') cashItemsRef.value?.refresh?.()
@@ -425,9 +478,9 @@ onActivated(() => {
 // flush: 'post' 確保 KeepAlive 重新啟用後 ref 已恢復。
 watch(
   () => props.view,
-  (next, prev) => {
+  async (next, prev) => {
     if (next === 'receivable' && prev !== undefined && prev !== 'receivable') {
-      refreshActiveRecordsView()
+      await refreshRecordsAndRestoreScroll()
     }
   },
   { flush: 'post' },

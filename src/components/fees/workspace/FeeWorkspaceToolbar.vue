@@ -20,7 +20,7 @@
         @click="onSelect(v.key)"
       >
         {{ v.label }}
-        <span v-if="counts?.[v.key]" class="fee-subtab__count">{{ counts[v.key] }}</span>
+        <span v-if="counts?.[v.key]" class="fee-subtab__count">{{ counts[v.key] }} 類待辦</span>
       </button>
     </div>
 

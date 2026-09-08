@@ -1,5 +1,6 @@
 <template>
   <div class="fee-records-tab">
+    <p class="records-scope" data-test="records-scope">學期費用明細・{{ recordFilter.period ? `${recordFilter.period} 學期` : '全部學期' }}・每張費用單一列，數量以筆計</p>
     <!-- ================================================================
          統計摘要（先看結論再篩選：置於 filters 與 table 之前）
          paid/partial/unpaid count 是 fee record 數 → 單位「筆」，不是「人」
@@ -789,6 +790,12 @@ defineExpose({
 </script>
 
 <style scoped>
+.records-scope {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
 .cash-handover-hint {
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-xs);

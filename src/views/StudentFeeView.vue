@@ -24,8 +24,8 @@
           <span
             v-if="todoCounts[w.key]"
             class="fee-tab__count"
-            :aria-label="`${todoCounts[w.key]} 項待處理`"
-            >{{ todoCounts[w.key] }}</span
+            :aria-label="`${todoCounts[w.key]} 類待辦`"
+            >{{ todoCounts[w.key] }} 類待辦</span
           >
         </button>
       </div>
@@ -81,7 +81,7 @@
  * 舊網址（?tab= 系列與 2026-08-25 的 ?ws=recon 系列）由 resolveFeesLocation
  * 相容映射，於此以 router.replace 正規化。
  */
-import { computed, defineAsyncComponent, onMounted, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader.vue'
 import {
@@ -115,6 +115,13 @@ const activeWs = computed(() => resolved.value.ws)
 const activeView = computed(() => resolved.value.view)
 const activeSrc = computed(() => resolved.value.src)
 const activeMode = computed(() => resolved.value.mode)
+// 僅此頁生命週期內記憶；離開頁面、登出或租戶重掛時隨實例清除。
+const lastRecordsMode = ref('statement')
+watch(resolved, (loc) => {
+  if (loc.ws === 'billing' && loc.view === 'receivable') {
+    lastRecordsMode.value = loc.mode ?? 'statement'
+  }
+}, { immediate: true })
 const importsOpen = computed(() => resolved.value.imports)
 const studentSearch = computed(() => {
   const raw = route.query.search
@@ -160,8 +167,9 @@ function queryFor(target: FeeNavTarget): LocationQueryRaw {
     query.src = target.src
   }
   if (target.imports && target.ws === 'billing') query.imports = '1'
-  if (target.mode && target.ws === 'billing' && view === 'receivable' && target.mode !== 'statement') {
-    query.mode = target.mode
+  const recordsMode = target.mode ?? lastRecordsMode.value
+  if (target.ws === 'billing' && view === 'receivable' && recordsMode !== 'statement') {
+    query.mode = recordsMode
   }
 
   // ?search= 是全域搜尋帶進來的一次性上下文（GlobalSearch 帶學生姓名直達

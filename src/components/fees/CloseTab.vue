@@ -5,13 +5,19 @@
            推到第二屏；改為與收款工作區同款的摘要列，資訊一格不少。 -->
       <div class="close-strip" data-test="close-cards">
         <div class="close-cell">
-          <div class="close-cell__label">銀行實際入帳</div>
+          <div class="close-cell__label">存摺入帳（排除代收涵蓋）</div>
           <div class="close-cell__value">{{ formatCurrency(summary.bank.credit_total) }}</div>
-          <div class="close-cell__sub">未分配 {{ formatCurrency(summary.bank.unallocated) }}</div>
+          <div class="close-cell__sub">依存摺入帳日歸月・未分配 {{ formatCurrency(summary.bank.unallocated) }}</div>
+        </div>
+        <div class="close-cell" data-test="close-collection">
+          <div class="close-cell__label">代收繳費（帳單面額）</div>
+          <div class="close-cell__value">{{ formatCurrency(summary.collection.gross_total) }}</div>
+          <div class="close-cell__sub">依家長繳費日歸月・含尚未撥款的在途繳費。</div>
         </div>
         <div class="close-cell">
           <div class="close-cell__label">會計現金收款</div>
           <div class="close-cell__value">{{ formatCurrency(summary.cash.receipts_total) }}</div>
+          <div class="close-cell__sub">依收據收款日歸月・僅已確認收據</div>
           <div class="close-cell__sub">
             應交付 {{ formatCurrency(summary.cash.handover_expected) }}｜實收
             {{ formatCurrency(summary.cash.handover_actual) }}｜差異
@@ -52,10 +58,18 @@
         class="mt-1"
         data-test="equation-alert"
       >
-        銀行入帳＋現金收款（{{ formatCurrency(summary.totals.equation_left) }}）＝
-        學費分配＋新收預繳＋非學費＋未分配（{{ formatCurrency(summary.totals.equation_right) }}）
+        存摺入帳＋代收繳費毛額＋現金收款（{{ formatCurrency(summary.totals.equation_left) }}）＝
+        學費分配＋新收預繳分配＋非學費＋存摺標記非學費＋未分配（{{ formatCurrency(summary.totals.equation_right) }}）
         {{ summary.checklist.equation_balanced ? '✓ 平衡' : '✗ 不平衡，請先處理' }}
       </el-alert>
+      <p class="close-equation-note">平衡表示本月收款來源與分配去向等式相符，不代表每筆款項均已媒合或代收款已撥入銀行；仍須通過下方所有關帳檢查。</p>
+      <details class="close-equation-detail" data-test="equation-detail">
+        <summary>查看收款等式加總明細</summary>
+        <p>存摺入帳已排除由代收涵蓋的交易，避免重複列入。代收毛額為帳單面額，不等同銀行已撥款；手續費 {{ formatCurrency(summary.collection.fee_total) }} 另列支出，淨額 {{ formatCurrency(summary.collection.net_total) }} 供存摺勾稽。</p>
+        <p>收款來源：存摺入帳 {{ formatCurrency(summary.bank.credit_total) }} ＋代收毛額 {{ formatCurrency(summary.collection.gross_total) }} ＋已確認現金 {{ formatCurrency(summary.cash.receipts_total) }} ＝ {{ formatCurrency(summary.totals.equation_left) }}</p>
+        <p>分配去向：學費分配 {{ formatCurrency(summary.totals.fee_allocated) }} ＋新收預繳分配 {{ formatCurrency(summary.totals.prepayment_received_allocated) }} ＋非學費 {{ formatCurrency(summary.totals.non_tuition) }} ＋存摺標記非學費 {{ formatCurrency(summary.bank.ignored_amount) }} ＋存摺未分配 {{ formatCurrency(summary.bank.unallocated) }} ＋代收未分配 {{ formatCurrency(summary.collection.unallocated) }} ＝ {{ formatCurrency(summary.totals.equation_right) }}</p>
+        <p>新收預繳分配依本月收款來源歸屬；上方預繳款摘要依預繳異動期間統計，口徑可能不同。</p>
+      </details>
 
       <!-- 關帳 checklist：未通過的排最前（要處理的東西不該混在九個 ✓ 裡找），
            桌機雙欄以免整頁被一長串已通過項目撐開 -->
@@ -179,7 +193,8 @@ import {
 } from '@/api/fees'
 
 interface CloseSummary {
-  bank: { credit_total: number; unallocated: number; unclassified_count: number }
+  bank: { credit_total: number; unallocated: number; unclassified_count: number; ignored_amount: number }
+  collection: { gross_total: number; net_total: number; fee_total: number; unallocated: number }
   cash: {
     receipts_total: number
     handover_expected: number
@@ -197,6 +212,7 @@ interface CloseSummary {
   owner: { refund_paid: number; pending_refunds: number }
   totals: {
     fee_allocated: number
+    prepayment_received_allocated: number
     non_tuition: number
     equation_left: number
     equation_right: number
@@ -369,7 +385,18 @@ defineExpose({ fetchSummary, fetchCloses, month, setMonth })
 </script>
 
 <style scoped>
-/* 摘要列（與收款工作區同款）：五格等分、格線分隔，取代原本五張獨立 el-card */
+.close-equation-note,
+.close-equation-detail {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+.close-equation-detail summary {
+  min-height: var(--touch-target-min);
+  cursor: pointer;
+}
+
+/* 摘要列（與收款工作區同款）：六格依寬度換行、格線分隔，取代原本五張獨立 el-card */
 .close-strip {
   display: flex;
   align-items: stretch;

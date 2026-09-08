@@ -7,15 +7,21 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { shallowMount, flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
+import FeeBillingWorkspace from '@/components/fees/workspace/FeeBillingWorkspace.vue'
 
 const getFeeRecords = vi.fn()
 const getFeeSummary = vi.fn()
 const payFeeRecord = vi.fn()
 vi.mock('@/api/fees', () => ({
+  getFeePeriods: () => Promise.resolve(['115-1', '114-2']),
   getFeeRecords: (...args: unknown[]) => getFeeRecords(...args),
   getFeeSummary: (...args: unknown[]) => getFeeSummary(...args),
   payFeeRecord: (...args: unknown[]) => payFeeRecord(...args),
 }))
+
+vi.mock('@/stores/classroomAll', () => ({ useAllClassroomStore: () => ({ classrooms: [], fetchClassrooms: vi.fn() }) }))
+vi.mock('@/components/fees/workspace/useFeeOverview', () => ({ useFeeOverview: () => ({ actionItems: ref([]), pendingBillSlips: ref(0), pendingBillSlipAmount: ref(0), refresh: vi.fn() }) }))
 
 vi.mock('element-plus', async (orig) => {
   const actual = (await orig()) as Record<string, unknown>
@@ -151,4 +157,32 @@ describe('FeeRecordsTab 預設範圍（autoLoad 模式）', () => {
     expect(w.text()).toContain('目前篩選沒有結果')
     expect(w.find('[data-test="fee-empty-clear-filters"]').exists()).toBe(true)
   })
+})
+
+it('真實逐筆檢視返回保留學期、班級、姓名與繳費狀態，刷新請求使用保留條件', async () => {
+  vi.useFakeTimers()
+  try {
+    const wrapper = shallowMount(FeeBillingWorkspace, {
+      props: { view: 'receivable', recordsMode: 'list' },
+      global: { stubs: { FeeRecordsTab: false, KeepAlive: false, 'el-table-column': { template: '<span />' } } },
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    const records = wrapper.findComponent(FeeRecordsTab)
+    const filters = (records.vm as unknown as TabVm).recordFilter
+    Object.assign(filters, { period: '114-2', classroom_name: '測試班', student_name: '測試', status: 'partial' })
+    await vi.advanceTimersByTimeAsync(350)
+    const previousCalls = getFeeRecords.mock.calls.length
+    await wrapper.setProps({ view: 'matching' })
+    await wrapper.setProps({ view: 'receivable' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(wrapper.get('[data-test="records-scope"]').text()).toContain('114-2 學期')
+    expect((wrapper.findComponent(FeeRecordsTab).vm as unknown as TabVm).recordFilter).toEqual(filters)
+    expect(getFeeRecords.mock.calls.length).toBe(previousCalls + 1)
+    expect(getFeeRecords).toHaveBeenLastCalledWith(expect.objectContaining({
+      period: '114-2', classroom_name: '測試班', student_name: '測試', status: 'partial',
+    }))
+    wrapper.unmount()
+  } finally {
+    vi.useRealTimers()
+  }
 })

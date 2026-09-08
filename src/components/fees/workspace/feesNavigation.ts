@@ -119,8 +119,8 @@ const WORKSPACE_KEYS = new Set<string>(['workbench', 'billing', 'settlement'])
 
 /** 應收帳款的兩種檢視模式；月表為預設，不寫進網址（避免 URL 抖動） */
 export const FEE_RECORDS_MODES: FeeWorkspaceViewDef[] = [
-  { key: 'statement', label: '月表' },
-  { key: 'list', label: '逐筆' },
+  { key: 'statement', label: '每月學生總表' },
+  { key: 'list', label: '學期費用明細' },
 ]
 
 const DEFAULT_RECORDS_MODE = 'statement'

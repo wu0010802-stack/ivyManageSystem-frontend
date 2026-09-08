@@ -1,5 +1,6 @@
 <template>
   <section class="fee-monthly-statement" :class="{ 'fee-monthly-statement--detail': detailStudent }" aria-label="月繳總表">
+    <p class="stmt-scope" data-test="stmt-scope">每月學生總表・{{ monthLabel }}・每位學生一列，數量以人計</p>
     <!-- 月份、搜尋與欄位密度；批次動作僅在勾選後出現 -->
     <div class="stmt-filters">
       <div class="month-nav" role="group" aria-label="月份選擇">
@@ -657,9 +658,8 @@ onMounted(() => {
   fetchPrepayData()
 })
 
-function refreshAll() {
-  fetchStatement()
-  fetchPrepayData()
+async function refreshAll() {
+  await Promise.all([fetchStatement(), fetchPrepayData()])
 }
 
 defineExpose({ refresh: refreshAll })
@@ -1178,6 +1178,12 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
 </script>
 
 <style scoped>
+.stmt-scope {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
 
 .fee-monthly-statement {
   display: flex;

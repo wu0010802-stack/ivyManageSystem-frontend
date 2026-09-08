@@ -444,7 +444,8 @@ describe('CloseTab', () => {
   const baseSummary = {
     close_year: 2026, close_month: 8,
     period: { start: '2026-08-01', end: '2026-08-31' },
-    bank: { credit_total: 2052479, unallocated: 0, unclassified_count: 0, status_summary: {}, allocated_net: 2052479, by_type: {} },
+    collection: { gross_total: 0, net_total: 0, fee_total: 0, unallocated: 0 },
+    bank: { ignored_amount: 0, credit_total: 2052479, unallocated: 0, unclassified_count: 0, status_summary: {}, allocated_net: 2052479, by_type: {} },
     cash: {
       receipts_total: 100000, handover_expected: 100000,
       handover_actual: 100000, handover_variance: 0, handover_unconfirmed: 0,

@@ -11,13 +11,19 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
+import FeeBillingWorkspace from '@/components/fees/workspace/FeeBillingWorkspace.vue'
 
 const getFeeMonthlyStatement = vi.fn()
 const getPrepayments = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
 vi.mock('@/api/fees', () => ({
+  getFeePeriods: () => Promise.resolve(['115-1']),
   getFeeMonthlyStatement: (...args: unknown[]) => getFeeMonthlyStatement(...args),
   getPrepayments: (...args: unknown[]) => getPrepayments(...args),
 }))
+
+vi.mock('@/stores/classroomAll', () => ({ useAllClassroomStore: () => ({ classrooms: CLASSROOMS, fetchClassrooms: vi.fn() }) }))
+vi.mock('@/components/fees/workspace/useFeeOverview', () => ({ useFeeOverview: () => ({ actionItems: ref([]), pendingBillSlips: ref(0), pendingBillSlipAmount: ref(0), refresh: vi.fn() }) }))
 
 const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
 vi.mock('@/utils/auth', () => ({
@@ -805,4 +811,33 @@ describe('存量無收據（unreceipted）的可見性', () => {
     await w.find('[data-test="stmt-columns"]').trigger('click')
     expect(w.find('[data-test="stmt-unreceipted-tag"]').exists()).toBe(false)
   })
+})
+
+it('真實月表跨入帳媒合返回保留月份、班級、搜尋與狀態，並重抓原月最新資料', async () => {
+  const wrapper = mount(FeeBillingWorkspace, {
+    props: { view: 'receivable' },
+    global: { stubs: { ...GLOBAL_STUBS,
+      FeeMatchingPanel: true, FeeBillSlipDrawer: true, ManualFeeRecordDialog: true,
+      'el-dropdown': { template: '<div><slot /></div>' },
+      'el-icon': { template: '<i />' },
+    } },
+  })
+  await flushPromises()
+  await wrapper.get('[data-test="stmt-month-prev"]').trigger('click')
+  await flushPromises()
+  await wrapper.get('[data-test="stmt-class-rail-class"][data-classroom="向日葵"]').trigger('click')
+  await wrapper.get('[data-test="stmt-search"]').setValue('林')
+  await wrapper.get('[data-test="stmt-flt-partial"]').trigger('click')
+  const stateBefore = wrapper.get('[data-test="stmt-flt-partial"]').attributes('aria-pressed')
+  const previousCalls = getFeeMonthlyStatement.mock.calls.length
+  await wrapper.setProps({ view: 'matching' })
+  await wrapper.setProps({ view: 'receivable' })
+  await flushPromises()
+  expect(wrapper.get('[data-test="stmt-month-label"]').text()).toContain('7')
+  expect((wrapper.get('[data-test="stmt-search"]').element as HTMLInputElement).value).toBe('林')
+  expect(wrapper.get('[data-test="stmt-class-rail-class"][data-classroom="向日葵"]').attributes('aria-pressed')).toBe('true')
+  expect(wrapper.get('[data-test="stmt-flt-partial"]').attributes('aria-pressed')).toBe(stateBefore)
+  expect(getFeeMonthlyStatement.mock.calls.length).toBe(previousCalls + 1)
+  expect(getFeeMonthlyStatement).toHaveBeenLastCalledWith({ month: '2026-07' })
+  wrapper.unmount()
 })

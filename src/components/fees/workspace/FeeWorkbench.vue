@@ -38,9 +38,15 @@
         </button>
       </li>
 
-      <li v-if="restItems.length" class="queue-section">沒有待辦</li>
+      <li v-if="restItems.length" class="queue-section">
+        <button type="button" class="queue-rest-toggle" :aria-expanded="restExpanded"
+          data-test="workbench-rest-toggle" @click="restExpanded = !restExpanded">
+          目前無須處理（{{ restItems.length }} 類）{{ restExpanded ? '收合' : '展開' }}
+        </button>
+      </li>
       <li
         v-for="item in restItems"
+        v-show="restExpanded"
         :key="item.key"
         class="queue-row"
         :data-test="`workbench-row-${item.key}`"
@@ -69,7 +75,7 @@
         </button>
       </li>
 
-      <!-- 載入失敗的列絕不能混進「沒有待辦」：那會把錯誤讀成一切正常 -->
+      <!-- 載入失敗的列絕不能混進「目前無須處理」：那會把錯誤讀成一切正常 -->
       <li v-if="unknownItems.length" class="queue-section queue-section--warn">
         {{ forbidden ? '你的帳號沒有權限查看' : '無法載入' }}
         <span class="queue-section__count queue-section__count--warn">
@@ -131,6 +137,7 @@ import FeeUnresolvedDialog from './FeeUnresolvedDialog.vue'
 
 const emit = defineEmits<{ navigate: [target: FeeNavTarget] }>()
 const unresolvedOpen = ref(false)
+const restExpanded = ref(false)
 
 function activateItem(item: FeeQueueItem) {
   if (item.action === 'show-unresolved') unresolvedOpen.value = true
@@ -183,6 +190,15 @@ onActivated(() => {
 </script>
 
 <style scoped>
+.queue-rest-toggle {
+  min-height: var(--touch-target-min);
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
 .fee-workbench {
   max-width: 880px;
 }

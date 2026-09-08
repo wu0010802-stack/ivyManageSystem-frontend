@@ -53,7 +53,8 @@ const flushAll = async () => {
 import CloseTab from '@/components/fees/CloseTab.vue'
 
 const SUMMARY = {
-  bank: { credit_total: 100, unallocated: 50, unclassified_count: 1 },
+  bank: { credit_total: 100, unallocated: 50, unclassified_count: 1, ignored_amount: 5 },
+  collection: { gross_total: 1200, net_total: 1180, fee_total: 20, unallocated: 40 },
   cash: {
     receipts_total: 0,
     handover_expected: 0,
@@ -63,7 +64,7 @@ const SUMMARY = {
   },
   prepayment: { opening_balance: 0, received: 0, applied: 0, refunded: 0, closing_balance: 0 },
   owner: { refund_paid: 0, pending_refunds: 1 },
-  totals: { fee_allocated: 0, non_tuition: 0, equation_left: 100, equation_right: 50 },
+  totals: { prepayment_received_allocated: 75, fee_allocated: 0, non_tuition: 0, equation_left: 100, equation_right: 50 },
   checklist: {
     all_bank_transactions_classified: false,
     bank_fully_allocated: false,
@@ -105,14 +106,14 @@ describe('CloseTab 阻擋項目與修正入口', () => {
     expect(wrapper.find('[data-test="close-failing-count"]').text()).toContain('5 項未通過')
   })
 
-  it('摘要列取代五張卡，五格數字一格不少', async () => {
+  it('摘要包含代收在內的六格金額', async () => {
     const wrapper = mountTab()
     await flushAll()
     const cells = wrapper.findAll('[data-test="close-cards"] .close-cell')
-    expect(cells).toHaveLength(5)
+    expect(cells).toHaveLength(6)
     expect(cells.map((c) => c.text())).toEqual(
       expect.arrayContaining([
-        expect.stringContaining('銀行實際入帳'),
+        expect.stringContaining('存摺入帳'),
         expect.stringContaining('會計現金收款'),
         expect.stringContaining('學費分配'),
         expect.stringContaining('預繳款'),
@@ -196,4 +197,20 @@ describe('月結試算競態', () => {
     await flushAll()
     expect(wrapper.find('[data-test="close-cards"]').exists()).toBe(false)
   })
+})
+
+it('完整說明代收毛額、日期口徑與等式分配項，平衡仍依後端判定', async () => {
+  const wrapper = mountTab()
+  await flushAll()
+  const collection = wrapper.get('[data-test="close-collection"]')
+  expect(collection.text()).toContain('NT$1,200')
+  expect(collection.text()).toContain('家長繳費日')
+  expect(collection.text()).toContain('尚未撥款')
+  const details = wrapper.get('[data-test="equation-detail"]')
+  expect(details.text()).toContain('新收預繳分配 NT$75')
+  expect(details.text()).toContain('存摺標記非學費 NT$5')
+  expect(details.text()).toContain('代收未分配 NT$40')
+  expect(wrapper.get('[data-test="equation-alert"]').text()).toContain('不平衡')
+  expect(wrapper.text()).toContain('不代表每筆款項均已媒合')
+  wrapper.unmount()
 })
