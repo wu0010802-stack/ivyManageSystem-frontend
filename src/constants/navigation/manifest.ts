@@ -722,6 +722,12 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('List') },
         },
         {
+          key: 'platformObservability', title: '排程監控', routePath: '/platform/observability',
+          views: [],
+          sharedViews: ['PLATFORM_TENANTS_MANAGE'],
+          menu: { icon: icon('DataBoard') },
+        },
+        {
           // 勞健保級距／費率是 GLOBAL 表（無 tenant_id），一改對全平台生效，
           // 後端寫入端已於 SEC-02 降為 require_platform_admin。此處借道
           // PLATFORM_TENANTS_MANAGE（比照角色同步頁），**不新增第四個

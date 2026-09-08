@@ -390,6 +390,16 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '跨分校稽核' }
         },
         {
+            path: '/platform/observability',
+            name: 'platform-observability',
+            component: () => import('../views/platform/PlatformObservabilityView.vue'),
+            meta: { title: '排程監控' },
+            beforeEnter: (to) => isPlatformAdmin() || {
+                path: '/error',
+                query: { type: 'forbidden', feature: '排程監控', from: to.fullPath },
+            },
+        },
+        {
             path: '/platform/gov-data',
             name: 'platform-gov-data',
             component: () => import('../views/platform/PlatformGovDataView.vue'),

@@ -108,6 +108,7 @@ import {
   ElTag,
 } from 'element-plus'
 import { getSchedulerMetrics } from '@/api/internalMetrics'
+import { isPlatformAdmin } from '@/utils/auth'
 import type { ApiResponse } from '@/api/_generated/typed'
 
 // 與後端 utils/scheduler_observability.ALERT_THRESHOLD 對齊；變動時兩端一起改
@@ -131,6 +132,7 @@ const failingCount = computed(() =>
 )
 
 async function refresh(): Promise<void> {
+  if (!isPlatformAdmin()) return
   loading.value = true
   loadError.value = null
   try {
