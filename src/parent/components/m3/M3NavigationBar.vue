@@ -108,6 +108,29 @@ function onTabClick(item: NavItem): void {
   width: 64px;
   height: 32px;
 }
+/* 圓形 hover/focus/press 狀態層：40×40 正圓，疊在橢圓 icon-wrap 正中央，
+ * 樣式與命中區大小比照 M3IconButton 的 state-layer 慣例，讓 icon 有跟其他
+ * 圓形 icon 按鈕一致的觸控回饋（此前底部導航列完全沒有 hover 樣式）。 */
+.m3-nav-tab-icon-wrap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--m3-dur-short-2, 100ms) var(--m3-easing-standard, ease);
+}
+.m3-nav-tab:hover .m3-nav-tab-icon-wrap::after { opacity: var(--m3-state-hover, 0.08); }
+.m3-nav-tab:focus-visible .m3-nav-tab-icon-wrap::after { opacity: var(--m3-state-focus, 0.12); }
+.m3-nav-tab:active .m3-nav-tab-icon-wrap::after { opacity: var(--m3-state-pressed, 0.12); }
+@media (prefers-reduced-motion: reduce) {
+  .m3-nav-tab-icon-wrap::after { transition: none; }
+}
 .m3-nav-tab-indicator {
   position: absolute;
   inset: 0;
