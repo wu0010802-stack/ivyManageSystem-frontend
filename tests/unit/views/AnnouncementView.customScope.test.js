@@ -38,6 +38,13 @@ vi.mock('@/api/students', () => ({
   ] } })),
 }))
 
+vi.mock('@/api/announcementCategories', () => ({
+  getAnnouncementCategories: vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } })),
+  createAnnouncementCategory: vi.fn(),
+  updateAnnouncementCategory: vi.fn(),
+  deleteAnnouncementCategory: vi.fn(),
+}))
+
 // el-dialog pass-through：渲染 default + footer slot，讓對話框內容可被斷言
 const ElDialogStub = defineComponent({
   props: { modelValue: { type: Boolean, default: false } },

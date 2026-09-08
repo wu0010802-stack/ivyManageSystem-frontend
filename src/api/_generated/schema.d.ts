@@ -2495,6 +2495,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/announcement-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Categories
+         * @description 依 sort_order 排序回傳所有分類，含各分類目前使用中的公告數。
+         */
+        get: operations["list_categories_api_announcement_categories_get"];
+        put?: never;
+        /** Create Category */
+        post: operations["create_category_api_announcement_categories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/announcement-categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Category
+         * @description 更新分類；切換 is_default=true 時，同 tenant 原本的預設自動取消。
+         */
+        put: operations["update_category_api_announcement_categories__category_id__put"];
+        post?: never;
+        /** Delete Category */
+        delete: operations["delete_category_api_announcement_categories__category_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/announcements": {
         parameters: {
             query?: never;
@@ -21779,8 +21821,87 @@ export interface components {
             /** Url */
             url: string;
         };
+        /**
+         * AnnouncementCategoryBriefOut
+         * @description 掛在公告本體回傳裡的精簡分類資訊（家長端/教師端/後台列表共用）。
+         */
+        AnnouncementCategoryBriefOut: {
+            /** Color */
+            color?: string | null;
+            /** Icon */
+            icon?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /** AnnouncementCategoryCreate */
+        AnnouncementCategoryCreate: {
+            /** Color */
+            color?: string | null;
+            /** Icon */
+            icon?: string | null;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Sort Order
+             * @default 0
+             */
+            sort_order: number;
+        };
+        /** AnnouncementCategoryListOut */
+        AnnouncementCategoryListOut: {
+            /** Items */
+            items: components["schemas"]["AnnouncementCategoryOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * AnnouncementCategoryOut
+         * @description 後台列表用：含 announcement_count 供刪除前判斷是否可刪。
+         */
+        AnnouncementCategoryOut: {
+            /** Announcement Count */
+            announcement_count: number;
+            /** Color */
+            color?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Icon */
+            icon?: string | null;
+            /** Id */
+            id: number;
+            /** Is Default */
+            is_default: boolean;
+            /** Name */
+            name: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** AnnouncementCategoryUpdate */
+        AnnouncementCategoryUpdate: {
+            /** Color */
+            color?: string | null;
+            /** Icon */
+            icon?: string | null;
+            /** Is Default */
+            is_default?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
         /** AnnouncementCreate */
         AnnouncementCreate: {
+            /** Category Id */
+            category_id?: number | null;
             /** Content */
             content: string;
             /** Expires At */
@@ -21812,6 +21933,7 @@ export interface components {
              * @default []
              */
             attachments: components["schemas"]["AnnouncementAttachmentOut"][];
+            category?: components["schemas"]["AnnouncementCategoryBriefOut"] | null;
             /** Content */
             content: string;
             /** Created At */
@@ -21932,6 +22054,8 @@ export interface components {
         };
         /** AnnouncementUpdate */
         AnnouncementUpdate: {
+            /** Category Id */
+            category_id?: number | null;
             /** Content */
             content?: string | null;
             /** Expires At */
@@ -36842,6 +36966,7 @@ export interface components {
              * @default []
              */
             attachments: components["schemas"]["AnnouncementAttachmentOut"][];
+            category?: components["schemas"]["AnnouncementCategoryBriefOut"] | null;
             /** Content */
             content: string;
             /** Created At */
@@ -51765,6 +51890,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyVersionAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_categories_api_announcement_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementCategoryListOut"];
+                };
+            };
+        };
+    };
+    create_category_api_announcement_categories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnouncementCategoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_category_api_announcement_categories__category_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnouncementCategoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_category_api_announcement_categories__category_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */

@@ -12,14 +12,27 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+// 公告分類策展圖示清單（2026-09-08 anncat01）：後台 admin console 選的分類圖示，
+// 存進 AnnouncementCategoryOut.icon 這個自由字串欄位，家長端未來顯示分類徽章時
+// 會直接沿用同一批名稱。該清單躺在 src/constants/（不在下面 SCAN_ROOTS 內），
+// 靜態掃描永遠抓不到，故在此顯式 import 真正的原始清單（非複製貼上一份 value）
+// 併入候選集——這樣以後清單改動（新增/刪除/改名圖示）重跑 gen:parent-icons
+// 會自動跟著同步，不會再犯「巧合收錄」的錯（4 個名稱 priority_high／
+// medical_services／groups／flag 曾經因為不在任何家長端既有用法裡而漏收，
+// 2026-09-08 補上）。這個 import 兩邊執行環境都吃得下：直接用 `node` 跑本檔
+// （gen-parent-icon-font.mjs）靠 Node ≥24（見 package.json engines）原生的
+// TS 型別剝離；vitest 跑本檔（iconFontSubset.spec.ts）則靠 vite-node 本來就會
+// transform 依賴圖裡的 .ts——兩者都不需要額外掛 ts-node/tsx 之類的 loader。
+import { ANNOUNCEMENT_CATEGORY_ICON_OPTIONS } from '../../src/constants/announcementCategoryIcons.ts'
+
 /** 掃描根（相對 repo root）。src/components/common 因家長端會用到 MobileErrorRetry 等共用元件而納入。 */
 export const SCAN_ROOTS = ['src/parent', 'src/components/common']
 
 /**
  * 動態組出 icon 名、靜態掃描抓不到時，登記在這裡。
- * 目前為空；新增時附上使用處路徑註解。
+ * 公告分類策展清單（src/constants/announcementCategoryIcons.ts）顯式併入，見上方 import 說明。
  */
-export const EXTRA_ICONS = []
+export const EXTRA_ICONS = ANNOUNCEMENT_CATEGORY_ICON_OPTIONS.map((o) => o.value)
 
 const NAME_RE = /^[a-z][a-z0-9_]{1,40}$/
 

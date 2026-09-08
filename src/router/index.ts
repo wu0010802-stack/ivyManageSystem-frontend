@@ -311,6 +311,12 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '公告管理' }
         },
         {
+            path: '/announcement-categories',
+            name: 'announcement-categories',
+            component: () => import('../views/AnnouncementCategoryView.vue'),
+            meta: { title: '公告分類管理' }
+        },
+        {
             path: '/finance-signoffs',
             name: 'finance-signoffs',
             component: () => import('../views/FinanceSignoffView.vue'),
