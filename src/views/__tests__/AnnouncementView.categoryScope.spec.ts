@@ -105,4 +105,39 @@ describe('AnnouncementView 分類欄位與受眾範圍權限', () => {
     expect(vm.canScopeSchool).toBe(true)
     expect(vm.canScopeClass).toBe(true)
   })
+
+  // 2026-09-08 補強：上面兩個測試只斷言 computed（canScopeSchool/canScopeClass）
+  // 的值，不會發現「computed 邏輯本身正確，但模板 :disabled 綁定被改掉／拔掉」
+  // 這種脫鉤——mutation test 實測過：把模板改成 `:disabled="false"` 硬編，
+  // 舊測試仍全綠。這裡改斷言實際 render 出來的 <el-radio disabled> 屬性，
+  // 直接鎖住「使用者在畫面上真正看到的狀態」，不只是背後的邏輯值。
+  it('缺兩碼時，全部家長／指定班級選項在畫面上實際被停用（rendered disabled 屬性）', async () => {
+    const wrapper = shallowMount(AnnouncementView, { global: globalConfig })
+    await flushPromises()
+    ;(wrapper.vm as unknown as Vm).openAdd()
+    await flushPromises()
+
+    const allRadio = wrapper.find('el-radio[value="all"]')
+    const classroomRadio = wrapper.find('el-radio[value="classroom"]')
+    const customRadio = wrapper.find('el-radio[value="custom"]')
+    expect(allRadio.exists()).toBe(true)
+    expect(classroomRadio.exists()).toBe(true)
+    expect(allRadio.attributes('disabled')).toBe('true')
+    expect(classroomRadio.attributes('disabled')).toBe('true')
+    // 指定學生（custom）不受這兩個獨立碼影響，畫面上不應被停用。
+    expect(customRadio.attributes('disabled')).toBeUndefined()
+  })
+
+  it('持有兩碼時，全部家長／指定班級選項在畫面上實際可用（rendered disabled 屬性）', async () => {
+    hasPermissionMock.mockImplementation(() => true)
+    const wrapper = shallowMount(AnnouncementView, { global: globalConfig })
+    await flushPromises()
+    ;(wrapper.vm as unknown as Vm).openAdd()
+    await flushPromises()
+
+    const allRadio = wrapper.find('el-radio[value="all"]')
+    const classroomRadio = wrapper.find('el-radio[value="classroom"]')
+    expect(allRadio.attributes('disabled')).toBe('false')
+    expect(classroomRadio.attributes('disabled')).toBe('false')
+  })
 })
