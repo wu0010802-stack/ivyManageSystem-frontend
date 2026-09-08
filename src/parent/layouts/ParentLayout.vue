@@ -19,6 +19,8 @@ interface TabItem {
   activeIcon: string
   path: string
   badge?: number
+  /** 永久隆起的圓形主按鈕（見 M3NavigationBar `prominent`），一列只能有一顆 */
+  prominent?: boolean
 }
 
 const route = useRoute()
@@ -120,6 +122,8 @@ const TABS = computed<TabItem[]>(() => [
     activeIcon: 'menu_book',
     path: '/contact-book',
     badge: contactBookTabBadge.value,
+    // 2026-09-08：正中央改為永久隆起的圓形主按鈕（bottom-app-bar 凹槽造型）。
+    prominent: true,
   },
   {
     key: 'admin',
