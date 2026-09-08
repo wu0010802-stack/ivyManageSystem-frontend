@@ -173,6 +173,17 @@
         </template>
       </el-table>
 
+      <el-pagination
+        v-if="pickerTotal > 0"
+        data-test="refund-picker-pagination"
+        :current-page="pickerPage"
+        :page-size="50"
+        :total="pickerTotal"
+        :disabled="pickerLoading"
+        layout="total, prev, pager, next"
+        @current-change="onPickerPageChange"
+      />
+
       <template #footer>
         <el-button @click="pickerVisible = false">取消</el-button>
       </template>
@@ -194,6 +205,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getFeeRecords, getRefundedFeeRecords, getFeePeriods } from '@/api/fees'
+import type { ApiQuery } from '@/api/_generated/typed'
 import { formatCurrency } from '@/utils/currency'
 import EmptyState from '@/components/common/EmptyState.vue'
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
@@ -319,8 +331,29 @@ const pickerFilter = reactive({
   student_name: '',
 })
 const pickerCandidates = ref<FeeRecord[]>([])
+const pickerPage = ref(1)
+const pickerTotal = ref(0)
+let pickerSeq = 0
+
+function resetPickerResults() {
+  pickerSeq += 1
+  pickerPage.value = 1
+  pickerTotal.value = 0
+  pickerCandidates.value = []
+  pickerLoading.value = false
+}
+
+// 新條件與關閉視窗立即使舊候選失效，避免慢回應覆蓋另一位學生的搜尋。
+watch(() => [pickerFilter.period, pickerFilter.student_name], resetPickerResults, { flush: 'sync' })
+watch(pickerVisible, (open) => { if (!open) resetPickerResults() }, { flush: 'sync' })
+
+function onPickerPageChange(next: number) {
+  pickerPage.value = next
+  void loadPickerCandidates()
+}
 
 function openNewRefundDialog() {
+  resetPickerResults()
   pickerFilter.period = filter.period || ''
   pickerFilter.student_name = ''
   pickerCandidates.value = []
@@ -328,23 +361,34 @@ function openNewRefundDialog() {
 }
 
 async function loadPickerCandidates() {
+  const seq = ++pickerSeq
   pickerLoading.value = true
+  pickerCandidates.value = []
   try {
-    const params: Record<string, unknown> = { page: 1, page_size: 50 }
+    // 必須在後端分頁前篩選，前端過濾前 50 張會漏掉後面的已繳帳單。
+    const params: ApiQuery<'/fees/records', 'get'> = {
+      page: pickerPage.value,
+      page_size: 50,
+      has_payment: true,
+    }
     if (pickerFilter.period) params.period = pickerFilter.period
     if (pickerFilter.student_name) params.student_name = pickerFilter.student_name
     const res = await getFeeRecords(params)
-    // 只列「已繳金額 > 0」的（才能退費）
-    pickerCandidates.value = ((res as { items?: FeeRecord[] })?.items || []).filter((r) => ((r.amount_paid as number) || 0) > 0)
+    if (seq !== pickerSeq || !pickerVisible.value) return
+    pickerCandidates.value = res.items as FeeRecord[]
+    pickerTotal.value = res.total
   } catch (err: unknown) {
+    if (seq !== pickerSeq) return
+    pickerTotal.value = 0
     const e = err as { response?: { data?: { detail?: string } } }
     ElMessage.error(e?.response?.data?.detail || '搜尋費用記錄失敗')
   } finally {
-    pickerLoading.value = false
+    if (seq === pickerSeq) pickerLoading.value = false
   }
 }
 
 function onPickRecord(row: FeeRecord) {
+  if (pickerLoading.value) return
   pickerVisible.value = false
   refundTarget.value = row
   refundModalVisible.value = true
@@ -424,6 +468,11 @@ defineExpose({
   onPageSizeChange,
   pickerVisible,
   pickerCandidates,
+  pickerFilter,
+  pickerPage,
+  pickerTotal,
+  loadPickerCandidates,
+  onPickerPageChange,
   refundModalVisible,
   refundTarget,
   openNewRefundDialog,

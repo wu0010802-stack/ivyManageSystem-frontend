@@ -12,7 +12,7 @@
       class="rail-all"
       :class="{ 'rail-all--on': !selectedClass && !selectedGrade }"
       :aria-pressed="!selectedClass && !selectedGrade"
-      :title="`全部班級　共 ${total} 人・${totalUnpaid ? `${totalUnpaid} 人未收齊` : '已收齊'}`"
+      :title="showCounts ? `全部班級　共 ${total} 人・${totalUnpaid ? `${totalUnpaid} 人未收齊` : '已收齊'}` : '全部班級'"
       data-test="stmt-class-rail-all"
       @click="emit('select', { cls: null, grade: null })"
     >
@@ -147,11 +147,13 @@ function onClass(c: ClassGroup) {
  */
 function chipTitle(c: ClassGroup): string {
   const grade = c.gradeLabel ? `（${c.gradeLabel}）` : ''
+  if (!props.showCounts) return `${c.label}${grade}`
   const state = c.unpaidCount ? `${c.unpaidCount} 人未收齊` : '已收齊'
   return `${c.label}${grade}　共 ${c.total} 人・${state}`
 }
 
 function gradeTitle(g: GradeGroup): string {
+  if (!props.showCounts) return `只看${g.label}`
   const state = g.unpaidCount ? `${g.unpaidCount} 人未收齊` : '已收齊'
   return `只看${g.label}　共 ${g.total} 人・${state}`
 }
