@@ -93,6 +93,12 @@ describe('sanitizeUrl', () => {
 })
 
 describe('scrubMapping', () => {
+  it('遮罩代收列表巢狀資料中的完整銷帳碼', () => {
+    expect(scrubMapping({ items: [{ full_collection_number: '00998172001206', match_level: 'manual' }] })).toEqual({
+      items: [{ full_collection_number: '[Filtered]', match_level: 'manual' }],
+    })
+  })
+
   it('filters finance / identity / medical PII keys', () => {
     const res = scrubMapping({
       base_salary: 50000,

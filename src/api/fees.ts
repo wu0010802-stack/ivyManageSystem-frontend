@@ -142,7 +142,7 @@ export const confirmCollectionImport = (
     .then((res) => res.data)
 }
 export const getCollectionPayments = (
-  params?: unknown,
+  params?: ApiQuery<'/fees/collection-payments', 'get'>,
 ): Promise<ApiResponse<'/fees/collection-payments', 'get'>> =>
   api.get('/fees/collection-payments', { params }).then((res) => res.data)
 export const getCollectionCandidates = (

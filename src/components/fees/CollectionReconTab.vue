@@ -233,8 +233,14 @@
           <span v-else>—</span>
         </template>
       </el-table-column>
-      <el-table-column prop="collection_suffix" label="末四碼" width="80">
-        <template #default="{ row }">{{ row.collection_suffix || '—' }}</template>
+      <el-table-column prop="full_collection_number" label="銷帳碼" width="175">
+        <template #default="{ row }">
+          <span v-if="row.full_collection_number" class="collection-number">{{ row.full_collection_number }}</span>
+          <template v-else>
+            <span>未提供</span>
+            <div v-if="row.collection_suffix" class="hint">末四碼 {{ row.collection_suffix }}</div>
+          </template>
+        </template>
       </el-table-column>
       <el-table-column label="帳單期別" width="105">
         <template #default="{ row }">
@@ -270,6 +276,13 @@
           <el-tag :type="statusTag(row.reconciliation_status)" size="small">
             {{ COLLECTION_STATUS_LABELS[row.reconciliation_status] ?? row.reconciliation_status }}
           </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="未媒合原因" min-width="260">
+        <template #default="{ row }">
+          <div class="match-reasons">
+            <div v-for="(reason, index) in matchReasonLines(row)" :key="index" data-test="match-reason">{{ reason }}</div>
+          </div>
         </template>
       </el-table-column>
       <el-table-column label="已分配/未分配" width="165" align="right" class-name="num-cell">
@@ -395,6 +408,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
+import type { ApiQuery } from '@/api/_generated/typed'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
@@ -550,6 +564,13 @@ function statusTag(status: string): 'success' | 'info' | 'warning' | 'danger' | 
   return 'info'
 }
 
+/** 顯示即時媒合診斷；未分配但已有高信心候選不屬於媒合失敗。 */
+function matchReasonLines(row: CollectionPaymentRow): string[] {
+  if (row.reconciliation_status === 'allocated' || row.reconciliation_status === 'reversed') return ['—']
+  if (row.match_level === 'auto_high') return ['可自動媒合／待確認', ...(row.match_reasons ?? [])]
+  return row.match_reasons?.length ? row.match_reasons : ['尚未取得媒合結果']
+}
+
 function isAllocatable(row: CollectionPaymentRow): boolean {
   return COLLECTION_PENDING_STATUSES.has(row.reconciliation_status)
 }
@@ -601,7 +622,11 @@ async function runImport() {
 async function fetchPayments() {
   loading.value = true
   try {
-    const params: Record<string, unknown> = { page: page.value, page_size: pageSize }
+    const params: ApiQuery<'/fees/collection-payments', 'get'> = {
+      page: page.value,
+      page_size: pageSize,
+      include_match_details: true,
+    }
     if (filters.status) params.status = filters.status
     if (filters.suffix) params.suffix = filters.suffix
     if (filters.date_from) params.date_from = filters.date_from
@@ -806,6 +831,14 @@ defineExpose({ fetchPayments, openCoverage, openImport, openBatch, setScope, fil
 }
 .num-cell {
   font-variant-numeric: tabular-nums;
+}
+.collection-number {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.match-reasons {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .coverage-hint {
   font-size: 13px;

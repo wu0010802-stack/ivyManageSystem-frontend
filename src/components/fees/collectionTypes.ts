@@ -2,6 +2,7 @@
 
 export type { BillSlipKind } from '@/api/fees'
 import type { BillSlipKind } from '@/api/fees'
+import type { Schema } from '@/api/_generated/typed'
 export const BILL_SLIP_KIND_LABELS: Record<BillSlipKind, string> = {
   monthly: '月費批',
   registration: '註冊費批',
@@ -10,7 +11,7 @@ export const BILL_SLIP_KIND_OPTIONS = (Object.keys(BILL_SLIP_KIND_LABELS) as Bil
   (key) => ({ key, label: BILL_SLIP_KIND_LABELS[key] }),
 )
 
-export interface CollectionPaymentRow {
+export interface CollectionPaymentRow extends Pick<Schema<'CollectionPaymentOut'>, 'full_collection_number' | 'match_level' | 'match_reasons'> {
   id: number
   import_id: number
   customer_paid_date: string

@@ -61,6 +61,7 @@ const GLOBAL_STUBS = {
   'el-pagination': { template: '<div />' },
   'el-dialog': { template: '<div v-bind="$attrs"><slot /><slot name="footer" /></div>' },
   CollectionAllocationDialog: true,
+  CollectionBatchDrawer: true,
   EmptyState: {
     props: ['title', 'description'],
     template:
@@ -77,6 +78,9 @@ const PAYMENT = {
   net_amount: 10798,
   fee_amount: 2,
   collection_suffix: '1104',
+  full_collection_number: null as string | null,
+  match_level: null as string | null,
+  match_reasons: [] as string[],
   bill_year: 2026,
   bill_month: 8,
   posting_date: '2026-08-10',
@@ -90,7 +94,7 @@ const PAYMENT = {
   unallocated: 10800,
 }
 
-async function mountTab(payments = [PAYMENT]) {
+async function mountTab(payments = [PAYMENT], renderRows = false) {
   apiMocks.getCollectionPayments.mockResolvedValue({
     total: payments.length,
     page: 1,
@@ -98,7 +102,26 @@ async function mountTab(payments = [PAYMENT]) {
     items: payments,
   })
   const CollectionReconTab = (await import('../CollectionReconTab.vue')).default
-  const wrapper = mount(CollectionReconTab, { global: { stubs: GLOBAL_STUBS } })
+  const wrapper = mount(CollectionReconTab, {
+    global: {
+      directives: { loading: () => {} },
+      stubs: {
+        ...GLOBAL_STUBS,
+        ...(renderRows
+          ? {
+              'el-table-column': defineComponent({
+                props: ['label'],
+                setup(props, { slots }) {
+                  return () => h('section', { 'data-column': props.label },
+                    payments.map((row) => slots.default?.({ row })),
+                  )
+                },
+              }),
+            }
+          : {}),
+      },
+    },
+  })
   await nextTick()
   await nextTick()
   return wrapper
@@ -373,5 +396,70 @@ describe('CollectionReconTab 在途列與錯誤列明細', () => {
       '未入帳（預計 09-10）',
     )
     expect(vm.pendingLabel({ expected_posting_date: null })).toBe('未入帳')
+  })
+})
+
+
+describe('CollectionReconTab 完整銷帳碼與未媒合原因', () => {
+  it('列表一次取得媒合結果，保留完整銷帳碼的前導零', async () => {
+    const wrapper = await mountTab([{ ...PAYMENT, full_collection_number: '00998172001206' }], true)
+    expect(wrapper.get('[data-column="銷帳碼"]').text()).toBe('00998172001206')
+    expect(apiMocks.getCollectionPayments).toHaveBeenCalledWith(
+      expect.objectContaining({ include_match_details: true }),
+    )
+    expect(apiMocks.getCollectionCandidates).not.toHaveBeenCalled()
+  })
+
+  it('缺少完整碼明示未提供，不將末四碼當成完整碼', async () => {
+    const wrapper = await mountTab([PAYMENT], true)
+    expect(wrapper.get('[data-column="銷帳碼"]').text()).toContain('未提供')
+    expect(wrapper.get('[data-column="銷帳碼"]').text()).toContain('末四碼 1104')
+  })
+
+  it('逐條呈現後端原因，不用匯入備註冒充媒合結果', async () => {
+    const wrapper = await mountTab([{
+      ...PAYMENT,
+      match_level: 'manual',
+      match_reasons: ['找不到未繳帳單', '請確認帳單期別'],
+      status_note: '匯入備註',
+    }], true)
+    const cell = wrapper.get('[data-column="未媒合原因"]')
+    expect(cell.text()).toContain('找不到未繳帳單')
+    expect(cell.text()).toContain('請確認帳單期別')
+    expect(cell.text()).not.toContain('匯入備註')
+    expect(cell.findAll('[data-test="match-reason"]')).toHaveLength(2)
+  })
+
+  it('高信心候選標示可自動媒合，沒有結果不冒稱媒合失敗', async () => {
+    const auto = await mountTab([{ ...PAYMENT, match_level: 'auto_high', match_reasons: ['金額符合'] }], true)
+    expect(auto.get('[data-column="未媒合原因"]').text()).toContain('可自動媒合／待確認')
+    const unknown = await mountTab([PAYMENT], true)
+    expect(unknown.get('[data-column="未媒合原因"]').text()).toBe('尚未取得媒合結果')
+  })
+
+  it.each(['allocated', 'reversed'])('完成狀態 %s 不顯示失敗原因', async (status) => {
+    const wrapper = await mountTab([{ ...PAYMENT, reconciliation_status: status, match_reasons: ['先前原因'] }], true)
+    expect(wrapper.get('[data-column="未媒合原因"]').text()).toBe('—')
+  })
+
+  it('部分分配仍呈現目前剩餘款項的媒合原因', async () => {
+    const wrapper = await mountTab([{
+      ...PAYMENT,
+      reconciliation_status: 'partially_allocated',
+      match_level: 'manual',
+      match_reasons: ['剩餘金額與候選帳單不符'],
+    }], true)
+    expect(wrapper.get('[data-column="未媒合原因"]').text()).toBe('剩餘金額與候選帳單不符')
+  })
+
+  it('保留末四碼篩選並持續要求列表媒合結果', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as { filters: { suffix: string }; refetch: () => void }
+    vm.filters.suffix = '1206'
+    vm.refetch()
+    await nextTick()
+    expect(apiMocks.getCollectionPayments).toHaveBeenLastCalledWith(
+      expect.objectContaining({ suffix: '1206', include_match_details: true }),
+    )
   })
 })
