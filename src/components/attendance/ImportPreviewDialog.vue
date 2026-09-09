@@ -58,6 +58,7 @@ const settingsError = ref('')
 const savingSettings = ref(false)
 const reviewDirty = ref(false)
 const mappingDirty = ref(false)
+const manuallyMapped = ref(new Set<string>())
 const sourceFile = ref<File | null>(null)
 const reviewEdits = ref<Record<number, { punch_in: string; punch_out: string; confirmed: boolean }>>({})
 let generation = 0
@@ -74,6 +75,41 @@ const sourceEmployees = computed(() => {
   return [...entries].map(([number, name]) => ({ number, name }))
 })
 const unmappedCount = computed(() => sourceEmployees.value.filter(entry => !mappings.value[entry.number]).length)
+const mappingSuggestions = computed(() => {
+  const occupied = new Set(Object.values(mappings.value).filter(Boolean))
+  const sourceNames = new Map<string, Set<string>>()
+  for (const row of previewResult.value?.rows ?? []) {
+    if (!row.source_employee_number) continue
+    const names = sourceNames.get(row.source_employee_number) ?? new Set<string>()
+    names.add(row.employee_name.trim())
+    sourceNames.set(row.source_employee_number, names)
+  }
+  const candidates = sourceEmployees.value.flatMap(entry => {
+    if (mappings.value[entry.number] || manuallyMapped.value.has(entry.number) || sourceNames.get(entry.number)?.size !== 1) return []
+    const name = entry.name.trim()
+    const matches = settings.value?.employees?.filter(employee => name && employee.name.trim() === name) ?? []
+    const employee = matches.length === 1 ? matches[0] : undefined
+    return employee && !occupied.has(employee.id) ? [{ number: entry.number, employee }] : []
+  })
+  return candidates.filter(candidate => candidates.filter(other => other.employee.id === candidate.employee.id).length === 1)
+})
+
+function applyMappingSuggestions() {
+  if (!canWrite.value || busy.value || !settings.value) return
+  for (const suggestion of mappingSuggestions.value) {
+    mappings.value[suggestion.number] = suggestion.employee.id
+  }
+  mappingDirty.value = true
+}
+
+function checkLabel(row: PreviewRow): string {
+  if (row.check !== 'employee_not_found' || row.import_format !== 'punch_events') return CHECK_LABEL[row.check]
+  const number = row.source_employee_number
+  const saved = settings.value?.employee_mappings?.find(entry => entry.source_employee_number === number)?.employee_id
+  if (number && mappings.value[number] !== saved) return '對照尚未儲存，請儲存並重新預覽'
+  return saved ? '已設定對照但找不到員工，請重新選擇' : '尚未設定設備工號對照'
+}
+
 
 function clearPreview() {
   generation++
@@ -102,6 +138,7 @@ async function loadSettings() {
     settings.value = res.data
     selectedFormat.value = res.data.default_format
     mappingDirty.value = false
+    manuallyMapped.value = new Set()
     mappings.value = Object.fromEntries((res.data.employee_mappings ?? []).map(entry => [entry.source_employee_number, entry.employee_id]))
   } catch (err) {
     if (request === settingsGeneration) {
@@ -516,15 +553,21 @@ defineExpose({
       <section v-if="isPunchEvents" class="import-preview-dialog__device" aria-label="逐筆刷卡核對">
         <p>已辨識：逐筆刷卡 · 原始刷卡 {{ previewResult.source_count }} 筆 · {{ previewResult.date_start }} ～ {{ previewResult.date_end }}</p>
         <p>{{ sourceEmployees.length }} 人 · 未對照 {{ unmappedCount }} 人 · 單筆卡 {{ singlePunchCount }} 人日 · 多筆卡 {{ multiPunchCount }} 人日</p>
-        <details v-if="settings">
+        <p v-if="unmappedCount > 0" role="status">請先完成 {{ unmappedCount }} 人的員工對照，再儲存並重新預覽。</p>
+        <p v-if="mappingDirty" role="status">對照尚未儲存，請按「儲存對照並重新預覽」更新檢核結果。</p>
+        <details v-if="settings" :open="unmappedCount > 0 || mappingDirty">
           <summary>設備工號與本校員工對照（首次需人工確認）</summary>
-          <p class="import-preview-dialog__note">姓名僅供核對；請以員工編號確認同名人員。儲存後會重新預覽。</p>
+          <p class="import-preview-dialog__note">姓名建議僅使用本校唯一同名員工；請以員工編號確認身分。採用建議後仍須儲存並重新預覽，同名或無建議者請手動選擇。</p>
+          <el-button v-if="mappingSuggestions.length" :disabled="busy || !canWrite" @click="applyMappingSuggestions">採用 {{ mappingSuggestions.length }} 筆同名建議</el-button>
           <div v-for="entry in sourceEmployees" :key="entry.number" class="import-preview-dialog__mapping">
             <label :for="`mapping-${entry.number}`">{{ entry.number }} · {{ entry.name }}</label>
-            <select :id="`mapping-${entry.number}`" v-model="mappings[entry.number]" @change="mappingDirty = true" :disabled="busy || !canWrite">
+            <select :id="`mapping-${entry.number}`" v-model="mappings[entry.number]" @change="mappingDirty = true; manuallyMapped.add(entry.number)" :disabled="busy || !canWrite">
               <option :value="undefined">尚未對照</option>
               <option v-for="employee in settings.employees" :key="employee.id" :value="employee.id">{{ employee.name }}（{{ employee.employee_number }}）</option>
             </select>
+            <span v-if="mappingSuggestions.find(suggestion => suggestion.number === entry.number)" class="import-preview-dialog__note">
+              建議：{{ mappingSuggestions.find(suggestion => suggestion.number === entry.number)?.employee.name }}（{{ mappingSuggestions.find(suggestion => suggestion.number === entry.number)?.employee.employee_number }}）
+            </span>
           </div>
           <el-button :disabled="busy || !canWrite" @click="handleSaveSettings">儲存對照並重新預覽</el-button>
         </details>
@@ -564,7 +607,8 @@ defineExpose({
         <el-table-column label="列號" prop="row_num" width="60" />
         <el-table-column label="員工" width="140">
           <template #default="{ row }">
-            {{ row.employee_name }}（{{ row.employee_number }}）
+            {{ row.employee_name }}<span v-if="row.employee_number">（{{ row.employee_number }}）</span>
+            <div v-if="row.source_employee_number" class="import-preview-dialog__note">設備工號 {{ row.source_employee_number }}</div>
           </template>
         </el-table-column>
         <el-table-column label="日期" prop="date" width="110" />
@@ -574,14 +618,14 @@ defineExpose({
         <el-table-column label="檢核">
           <template #default="{ row }">
             <el-tag :type="CHECK_TAG_TYPE[row.check as PreviewRow['check']]">
-              {{ CHECK_LABEL[row.check as PreviewRow['check']] }}
+              {{ checkLabel(row) }}
             </el-tag>
           </template>
         </el-table-column>
       </el-table>
 
       <p v-if="previewResult.summary.problems > 0" role="status">
-        {{ previewResult.summary.problems }} 筆問題資料不會匯入，請先下載問題清單，修正後再重新上傳。
+        {{ previewResult.summary.problems }} 筆問題資料不會匯入，<template v-if="isPunchEvents">請先完成工號對照與刷卡核對，再重新預覽；其他問題可下載清單查核。</template><template v-else>請先下載問題清單，修正後再重新上傳。</template>
       </p>
       <!-- 操作列 -->
       <div class="import-preview-dialog__confirm-row">

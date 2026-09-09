@@ -1,6 +1,6 @@
 // src/components/attendance/__tests__/ImportPreviewDialog.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 // ── hoisted mocks ──────────────────────────────────────────────────────────────
@@ -711,5 +711,139 @@ describe('審查回歸', () => {
     await nextTick()
     expect(wrapper.find('input[aria-label="設備代號"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('設備代號限 1～40 個英文字母、數字、底線或連字號')
+  })
+})
+
+
+describe('設備工號配對引導', () => {
+  const employees = [
+    { id: 11, name: '測試甲', employee_number: 'T011' },
+    { id: 12, name: '測試乙', employee_number: 'T012' },
+    { id: 13, name: '同名', employee_number: 'T013' },
+    { id: 14, name: '同名', employee_number: 'T014' },
+  ]
+  function punchRow(number: string, name: string, index = 0) {
+    return { ...previewFixture.rows[0], row_num: index + 2, employee_name: name, employee_number: '',
+      matched_employee_id: null, source_employee_number: number, import_format: 'punch_events',
+      check: 'employee_not_found', punches: ['2026-06-01T08:00:00', '2026-06-01T17:00:00'] }
+  }
+  async function openMapping(rows = [punchRow('101', '測試甲')], employeeMappings: { source_employee_number: string; employee_id: number }[] = []) {
+    mockGetImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 0, employee_mappings: employeeMappings, employees } })
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, import_format: 'punch_events', rows,
+      summary: { importable: 0, overwrites: 0, problems: rows.length }, normalized: [] } })
+    // 表格以實際 scoped slot 渲染每列，驗證使用者可見文案。
+    const wrapper = mount(ImportPreviewDialog, { props: { modelValue: true, year: 2026, month: 6 }, global: { stubs: { ...stubs,
+      'el-table': { template: '<div><slot /></div>' },
+      'el-table-column': { data: () => ({ rows }), template: '<div><slot v-for="row in rows" :row="row" /></div>' },
+    } } })
+    await flushPromises()
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    return wrapper
+  }
+  beforeEach(() => { vi.clearAllMocks(); mockHasPermission.mockReturnValue(true) })
+
+  it('未對照時展開並提示人數，指引先完成對照', async () => {
+    const wrapper = await openMapping()
+    expect(wrapper.find('details').attributes('open')).toBeDefined()
+    expect(wrapper.text()).toContain('請先完成 1 人的員工對照')
+    expect(wrapper.text()).toContain('設備工號 101')
+    expect(wrapper.text()).toContain('尚未設定設備工號對照')
+    expect(wrapper.text()).not.toContain('測試甲（）')
+    expect(wrapper.text()).toContain('先完成工號對照與刷卡核對')
+    expect(wrapper.text()).not.toContain('請先下載問題清單')
+  })
+
+  it('唯一同名建議需明確採用、儲存與後端重新預覽', async () => {
+    const wrapper = await openMapping()
+    expect(wrapper.vm.mappings).toEqual({})
+    wrapper.vm.previewResult = {
+      ...wrapper.vm.previewResult!,
+      summary: { importable: 1, overwrites: 0, problems: 1 },
+      rows: [...wrapper.vm.previewResult!.rows, { ...previewFixture.rows[0], row_num: 3 }],
+      normalized: [normalizedRows[0]!],
+    }
+    await nextTick()
+    expect(wrapper.findAll('button').find(b => b.text().includes('確認匯入'))!.attributes('disabled')).toBeUndefined()
+    const adopt = wrapper.findAll('button').find(button => button.text().includes('採用 1 筆同名建議'))
+    expect(adopt).toBeTruthy()
+    await adopt!.trigger('click')
+    expect(wrapper.vm.mappings).toEqual({ '101': 11 })
+    expect(mockSaveImportSettings).not.toHaveBeenCalled()
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('對照尚未儲存')
+    expect(wrapper.findAll('button').find(b => b.text().includes('確認匯入'))!.attributes('disabled')).toBeDefined()
+    mockSaveImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 1,
+      employee_mappings: [{ source_employee_number: '101', employee_id: 11 }], employees } })
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, import_format: 'punch_events', rows: [], normalized: [] } })
+    await wrapper.vm.handleSaveSettings()
+    expect(mockSaveImportSettings).toHaveBeenCalledWith(expect.objectContaining({ employee_mappings: [{ source_employee_number: '101', employee_id: 11 }] }))
+    expect(mockPreviewExcel).toHaveBeenCalledTimes(2)
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+  })
+
+  it('同名歧義、來源重名、已佔用員工與同工號姓名衝突均不建議', async () => {
+    const wrapper = await openMapping([
+      punchRow('101', '測試甲'), punchRow('102', '同名', 1),
+      punchRow('103', '測試乙', 2), punchRow('104', '測試乙', 3),
+      punchRow('105', '測試甲', 4), punchRow('105', '不同姓名', 5),
+    ], [{ source_employee_number: '900', employee_id: 11 }])
+    expect(wrapper.findAll('button').some(b => /採用 \d+ 筆同名建議/.test(b.text()))).toBe(false)
+    expect(wrapper.vm.mappings).toEqual({ '900': 11 })
+  })
+
+  it('設定省略員工候選時不產生建議或拋錯', async () => {
+    mockGetImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 0 } })
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, import_format: 'punch_events', rows: [punchRow('101', '測試甲')] } })
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('請先完成 1 人的員工對照')
+    expect(wrapper.findAll('button').some(b => b.text().includes('同名建議'))).toBe(false)
+  })
+
+  it('已儲存對照仍找不到員工時提示重新選擇' , async () => {
+    const wrapper = await openMapping(undefined, [{ source_employee_number: '101', employee_id: 11 }])
+    expect(wrapper.text()).toContain('已設定對照但找不到員工，請重新選擇')
+  })
+
+  it('唯讀權限無法採用建議，切換設備清除預覽與舊候選', async () => {
+    const wrapper = await openMapping()
+    mockHasPermission.mockReturnValue(false)
+    mockGetImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 0, employee_mappings: [], employees } })
+    const readonly = mountDialog()
+    await flushPromises()
+    expect(readonly.vm.canWrite).toBe(false)
+    readonly.vm.previewResult = wrapper.vm.previewResult
+    await nextTick()
+    const adopt = readonly.findAll('button').find(b => b.text().includes('採用 1 筆同名建議'))
+    expect(adopt?.attributes('disabled')).toBeDefined()
+    await adopt!.trigger('click')
+    expect(readonly.vm.mappings).toEqual({})
+    expect(mockSaveImportSettings).not.toHaveBeenCalled()
+    mockHasPermission.mockReturnValue(true)
+    mockGetImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'other', version: 0, employee_mappings: [], employees: [] } })
+    await wrapper.find('input[aria-label="設備代號"]').setValue('other')
+    await flushPromises()
+    expect(wrapper.find('#mapping-101').exists()).toBe(false)
+    expect(wrapper.findAll('button').some(b => b.text().includes('同名建議'))).toBe(false)
+  })
+
+  it('手動清除的對照不被批次建議重新填入', async () => {
+    const wrapper = await openMapping([punchRow('101', '測試甲'), punchRow('102', '測試乙', 1)])
+    await wrapper.find('#mapping-101').setValue('11')
+    await wrapper.find('#mapping-101').setValue('')
+    const adopt = wrapper.findAll('button').find(b => b.text().includes('採用 1 筆同名建議'))
+    expect(adopt).toBeTruthy()
+    await adopt!.trigger('click')
+    expect(wrapper.vm.mappings['101']).toBeUndefined()
+    expect(wrapper.vm.mappings['102']).toBe(12)
+  })
+
+  it('手動選擇保留，其他建議不得佔用該員工'  , async () => {
+    const wrapper = await openMapping([punchRow('101', '測試甲'), punchRow('102', '測試乙', 1)])
+    await wrapper.find('#mapping-101').setValue('12')
+    expect(wrapper.vm.mappings['101']).toBe(12)
+    expect(wrapper.findAll('button').some(b => /採用 \d+ 筆同名建議/.test(b.text()))).toBe(false)
   })
 })
