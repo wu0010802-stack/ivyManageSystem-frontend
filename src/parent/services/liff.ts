@@ -27,7 +27,7 @@
 
 import liff from '@line/liff'
 
-import { fetchTenantMetaForLiff } from '@/api/tenantMeta'
+import { fetchTenantMetaForLine, shouldUseLegacyLineEnvFallback } from '@/api/tenantMeta'
 import { markLineClientFromSdk } from '../utils/lineClient'
 import { reportClientEvent } from '../utils/clientEvents'
 
@@ -44,18 +44,19 @@ function envLiffId(): string {
 
 async function resolveLiffId(): Promise<string> {
   try {
-    // ⚠ 用 `fetchTenantMetaForLiff()` 而**非** `fetchTenantMeta()`：後者被品牌灰度
+    // ⚠ 用 `fetchTenantMetaForLine()` 而**非** `fetchTenantMeta()`：後者被品牌灰度
     // 閘門擋住時會直接 reject、連請求都不發，而該閘門讀的是 build-time 旗標——
     // Zeabur 實測不會把 service variables 傳成 build-arg，旗標在正式環境恆為空
     // ⇒ 家長端會連 LIFF ID 都拿不到而完全無法登入（2026-08-11 prod 事故）。
-    const id = (await fetchTenantMetaForLiff()).liff_id
-    if (id) return id
-  } catch {
-    // tenant-meta 不可用（網路錯誤 / 端點未上線）→ 走過渡 fallback。
-    // 404/403/503 這三種「這個網域不是有效園所」的情況已由 useTenantBranding 的
-    // 三態遮罩接管（CT-F-01），不需要在這裡重複判斷。
+    // 只要 tenant-meta 成功回應，該租戶的欄位就是權威；空值代表尚未設定，
+    // 不能借用 build-time default tenant 的 LIFF ID。
+    return (await fetchTenantMetaForLine()).liff_id || ''
+  } catch (error) {
+    // 唯一相容窗：前端仍是單租戶模式，且舊 FastAPI 明確沒有 tenant-meta route。
+    // 網路錯誤、5xx、租戶 404/403/503 與畸形 404 全部 fail-closed。
+    if (shouldUseLegacyLineEnvFallback(error)) return envLiffId()
   }
-  return envLiffId()
+  return ''
 }
 
 export function initLiff(): Promise<void> {

@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   fetchTenantMeta,
-  fetchTenantMetaForLiff,
+  fetchTenantMetaForLine,
   isTenantMetaEnabled,
+  shouldUseLegacyLineEnvFallback,
   TENANT_META_DISABLED,
   TenantMetaError,
   _resetTenantMetaCacheForTests,
@@ -75,12 +76,12 @@ describe('灰度閘門 isTenantMetaEnabled()', () => {
    * 拿不到 LIFF ID 而完全無法登入。LIFF ID 是登入前置，必須有一條不受此閘門
    * 限制的管道；品牌／遮罩行為仍走 `fetchTenantMeta()`，灰度不變式不受影響。
    */
-  it('fetchTenantMetaForLiff 不受閘門限制：灰度全關仍會發請求', async () => {
+  it('fetchTenantMetaForLine 不受閘門限制：灰度全關仍會發請求', async () => {
     setEnv({ VITE_TENANT_META_ENABLED: '', VITE_TENANT_BASE_DOMAIN: '', VITE_TENANT_DOMAIN_MAP: '' })
     const spy = stubFetch(() => jsonResponse({ liff_id: 'tenant-liff-9' }))
     expect(isTenantMetaEnabled()).toBe(false)
 
-    await expect(fetchTenantMetaForLiff()).resolves.toMatchObject({ liff_id: 'tenant-liff-9' })
+    await expect(fetchTenantMetaForLine()).resolves.toMatchObject({ liff_id: 'tenant-liff-9' })
     expect(spy).toHaveBeenCalledTimes(1)
     // 同一時間 branding 那條仍必須被閘門擋住（灰度不變式沒有被順手放寬）
     await expect(fetchTenantMeta()).rejects.toMatchObject({ code: TENANT_META_DISABLED })
@@ -137,6 +138,29 @@ describe('錯誤分類與去重（CT-F-01）', () => {
   ])('%i 帶出 detail.code=%s', async (status, code) => {
     stubFetch(() => jsonResponse({ detail: { code } }, status))
     await expect(fetchTenantMeta()).rejects.toMatchObject({ status, code })
+  })
+
+  it('只把 FastAPI 精確的 detail="Not Found" 404 標成舊版路由不存在', async () => {
+    setEnv({ VITE_TENANT_META_ENABLED: '', VITE_TENANT_BASE_DOMAIN: '', VITE_TENANT_DOMAIN_MAP: '' })
+    stubFetch(() => jsonResponse({ detail: 'Not Found' }, 404))
+
+    const error = await fetchTenantMetaForLine().catch((caught: unknown) => caught)
+
+    expect(error).toMatchObject({ status: 404, code: undefined, legacyRouteMissing: true })
+    expect(shouldUseLegacyLineEnvFallback(error)).toBe(true)
+  })
+
+  it.each([
+    ['結構化 tenant 404', jsonResponse({ detail: { code: 'TENANT_NOT_FOUND' } }, 404)],
+    ['畸形 JSON 404', new Response('{', { status: 404, headers: { 'Content-Type': 'application/json' } })],
+    ['HTML 404', new Response('<h1>Not Found</h1>', { status: 404, headers: { 'Content-Type': 'text/html' } })],
+  ])('%s 不開啟 legacy env fallback', async (_label, response) => {
+    setEnv({ VITE_TENANT_META_ENABLED: '', VITE_TENANT_BASE_DOMAIN: '', VITE_TENANT_DOMAIN_MAP: '' })
+    stubFetch(() => response)
+
+    const error = await fetchTenantMetaForLine().catch((caught: unknown) => caught)
+
+    expect(shouldUseLegacyLineEnvFallback(error)).toBe(false)
   })
 
   it('非 JSON 的錯誤 body 不會讓錯誤處理自己炸掉', async () => {

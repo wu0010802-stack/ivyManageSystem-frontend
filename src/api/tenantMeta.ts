@@ -66,7 +66,12 @@ export interface TenantMeta {
 // 任何一方要加回來，先改 contracts，別在這裡偷加。
 
 export class TenantMetaError extends Error {
-  constructor(public readonly status: number, public readonly code?: string) {
+  constructor(
+    public readonly status: number,
+    public readonly code?: string,
+    /** 舊單租戶後端沒有此 route 時，FastAPI 固定回傳 `detail: "Not Found"`。 */
+    public readonly legacyRouteMissing = false,
+  ) {
     super(code ?? String(status))
     this.name = 'TenantMetaError'
   }
@@ -93,11 +98,18 @@ async function _doFetch(): Promise<TenantMeta> {
     signal: AbortSignal.timeout(TIMEOUT_MS),
   })
   if (!res.ok) {
-    const code = await res
+    const detail = await res
       .json()
-      .then((b: unknown) => (b as { detail?: { code?: string } } | undefined)?.detail?.code)
+      .then((body: unknown) => (body as { detail?: unknown } | undefined)?.detail)
       .catch(() => undefined)
-    throw new TenantMetaError(res.status, code)
+    const code =
+      detail && typeof detail === 'object' && typeof (detail as { code?: unknown }).code === 'string'
+        ? (detail as { code: string }).code
+        : undefined
+    // 僅辨識 FastAPI「route 不存在」的精確 response。HTML 404、壞 JSON、tenant
+    // middleware 的結構化 404 都不是 legacy 證據，不能據此借用 default tenant env。
+    const legacyRouteMissing = res.status === 404 && detail === 'Not Found'
+    throw new TenantMetaError(res.status, code, legacyRouteMissing)
   }
   return (await res.json()) as TenantMeta
 }
@@ -144,7 +156,7 @@ export function fetchTenantMeta(): Promise<TenantMeta> {
 }
 
 /**
- * 家長端 LIFF 專用：**刻意不經灰度閘門**的同一支請求（與 `fetchTenantMeta()`
+ * LINE 身分設定專用：**刻意不經灰度閘門**的同一支請求（與 `fetchTenantMeta()`
  * 共用 in-flight promise，boot 仍只打一次）。
  *
  * 為什麼要有這個例外（2026-08-11 prod 事故）：`isTenantMetaEnabled()` 讀的是
@@ -157,8 +169,23 @@ export function fetchTenantMeta(): Promise<TenantMeta> {
  * LIFF ID 是**登入前置**，不該被「品牌 API 灰度」這個無關旗標決定生死；品牌／
  * CT-F-01 遮罩行為仍走 `fetchTenantMeta()`，灰度不變式（DEV-12）不受影響。
  */
-export function fetchTenantMetaForLiff(): Promise<TenantMeta> {
+export function fetchTenantMetaForLine(): Promise<TenantMeta> {
   return _shared()
+}
+
+/**
+ * 是否可啟用 build-time LINE env 的舊單租戶相容窗。
+ *
+ * 只有「前端未啟用多租戶」且「舊 FastAPI 明確沒有 tenant-meta route」兩項同時成立
+ * 才能退回 env。成功但欄位缺漏、租戶 404/403/503、5xx、網路錯誤或畸形 response
+ * 都 fail-closed，避免其他園所誤用 default tenant 的 LIFF／LINE OA。
+ */
+export function shouldUseLegacyLineEnvFallback(error: unknown): boolean {
+  return (
+    !isTenantModeEnabled() &&
+    error instanceof TenantMetaError &&
+    error.legacyRouteMissing
+  )
 }
 
 /** 單一 in-flight promise；**rejection 不快取**，讓重試能真的重打。 */

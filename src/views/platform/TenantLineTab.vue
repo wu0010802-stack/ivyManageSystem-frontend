@@ -56,7 +56,7 @@
 
     <template v-if="canManage">
       <h4>更新憑證</h4>
-      <el-form label-width="220px" @submit.prevent>
+      <el-form :disabled="loading || saving || loadedTenantId !== props.tenantId" label-width="220px" @submit.prevent>
         <el-form-item label="啟用">
           <el-switch v-model="form.is_enabled" data-testid="line-form-enabled" />
         </el-form-item>
@@ -90,14 +90,22 @@
       </el-form>
       <div class="tenant-line__actions">
         <el-button :loading="loading" data-testid="line-reload" @click="load">重新載入</el-button>
-        <el-button type="primary" :loading="saving" data-testid="line-save" @click="save">儲存</el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          :disabled="loading || saving || loadedTenantId !== props.tenantId"
+          data-testid="line-save"
+          @click="save"
+        >
+          儲存
+        </el-button>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 import { getErrorMessage } from '@/utils/errorHandler'
@@ -109,6 +117,8 @@ const canManage = computed(() => hasPermission('PLATFORM_TENANTS_MANAGE'))
 const loading = ref(false)
 const saving = ref(false)
 const current = ref<PlatformLineConfig | null>(null)
+const loadedTenantId = ref<number | null>(null)
+let requestGeneration = 0
 
 const form = ref({
   is_enabled: false,
@@ -134,19 +144,31 @@ function resetForm(cfg: PlatformLineConfig | null): void {
 }
 
 async function load(): Promise<void> {
+  const tenantId = props.tenantId
+  const generation = ++requestGeneration
   loading.value = true
+  saving.value = false
+  loadedTenantId.value = null
+  current.value = null
+  resetForm(null)
   try {
-    const res = await getTenantLineConfig(props.tenantId)
+    const res = await getTenantLineConfig(tenantId)
+    if (generation !== requestGeneration || tenantId !== props.tenantId) return
     current.value = res.data ?? null
     resetForm(current.value)
+    loadedTenantId.value = tenantId
   } catch (err) {
+    if (generation !== requestGeneration || tenantId !== props.tenantId) return
     ElMessage.error(getErrorMessage(err, 'LINE 設定載入失敗'))
   } finally {
-    loading.value = false
+    if (generation === requestGeneration) loading.value = false
   }
 }
 
 async function save(): Promise<void> {
+  const tenantId = props.tenantId
+  const generation = requestGeneration
+  if (loading.value || saving.value || loadedTenantId.value !== tenantId) return
   saving.value = true
   try {
     // 只送有填的欄位：空字串在此語意為「不變更」，一律不進 payload，
@@ -164,18 +186,24 @@ async function save(): Promise<void> {
       const value = form.value[key]
       if (typeof value === 'string' && value.trim() !== '') payload[key] = value.trim()
     }
-    const res = await updateTenantLineConfig(props.tenantId, payload)
+    const res = await updateTenantLineConfig(tenantId, payload)
+    if (generation !== requestGeneration || tenantId !== props.tenantId || loadedTenantId.value !== tenantId) return
     current.value = res.data ?? current.value
     resetForm(current.value)
     ElMessage.success('LINE 設定已更新')
   } catch (err) {
+    if (generation !== requestGeneration || tenantId !== props.tenantId) return
     ElMessage.error(getErrorMessage(err, 'LINE 設定儲存失敗'))
   } finally {
-    saving.value = false
+    if (generation === requestGeneration && tenantId === props.tenantId) saving.value = false
   }
 }
 
-watch(() => props.tenantId, load, { immediate: true })
+watch(() => props.tenantId, load, { immediate: true, flush: 'sync' })
+
+onUnmounted(() => {
+  requestGeneration += 1
+})
 </script>
 
 <style scoped>

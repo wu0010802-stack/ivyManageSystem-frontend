@@ -8,6 +8,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 const h = vi.hoisted(() => ({
   getTenantBrand: vi.fn(),
   updateTenantBrand: vi.fn(),
@@ -15,6 +25,7 @@ const h = vi.hoisted(() => ({
   updateTenantLineConfig: vi.fn(),
   getTenantEmailConfig: vi.fn(),
   updateTenantEmailConfig: vi.fn(),
+  messageSuccess: vi.fn(),
 }))
 
 vi.mock('@/api/platform', () => ({
@@ -26,7 +37,7 @@ vi.mock('@/api/platform', () => ({
   updateTenantEmailConfig: h.updateTenantEmailConfig,
 }))
 vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessage: { success: h.messageSuccess, error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() },
 }))
 vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
@@ -69,7 +80,7 @@ describe('TenantBrandTab', () => {
     })
   })
 
-  const mountTab = () => mount(TenantBrandTab, { props: { tenantId: 2 }, global: { stubs } })
+  const mountTab = (tenantId = 2) => mount(TenantBrandTab, { props: { tenantId }, global: { stubs } })
 
   it('列出全部 key、標出未填者', async () => {
     const w = mountTab()
@@ -100,6 +111,110 @@ describe('TenantBrandTab', () => {
     const payload = h.updateTenantBrand.mock.calls[0][1] as { values: Record<string, unknown> }
     expect(Object.keys(payload.values)).not.toContain('brand.short_name')
   })
+
+  it('切到 B 校時立即清除 A 校未儲存品牌值，B 載入失敗後仍禁止儲存', async () => {
+    const w = mountTab()
+    await flushPromises()
+    await w.find('[data-testid="brand-input-brand.short_name"]').setValue('A 校未儲存')
+
+    const bLoad = deferred<{ data: never }>()
+    h.getTenantBrand.mockReturnValueOnce(bLoad.promise)
+    await w.setProps({ tenantId: 3 })
+
+    expect(w.find('[data-testid="brand-input-brand.short_name"]').exists()).toBe(false)
+    expect((w.find('[data-testid="brand-save"]').element as HTMLButtonElement).disabled).toBe(true)
+
+    bLoad.reject({ displayMessage: 'B 校品牌設定載入失敗' })
+    await flushPromises()
+    await w.find('[data-testid="brand-save"]').trigger('click')
+    expect(h.updateTenantBrand).not.toHaveBeenCalled()
+  })
+
+  it('A 校較晚回覆時不會覆蓋已載入的 B 校品牌表單', async () => {
+    const aLoad = deferred<{
+      data: { tenant_id: number; known_keys: string[]; missing_keys: string[]; values: Record<string, string> }
+    }>()
+    h.getTenantBrand.mockReturnValueOnce(aLoad.promise).mockResolvedValueOnce({
+      data: {
+        tenant_id: 3,
+        known_keys: ['brand.short_name'],
+        missing_keys: [],
+        values: { 'brand.short_name': 'B 校' },
+      },
+    })
+
+    const w = mountTab()
+    await w.setProps({ tenantId: 3 })
+    await flushPromises()
+    expect((w.find('[data-testid="brand-input-brand.short_name"]').element as HTMLInputElement).value).toBe('B 校')
+
+    aLoad.resolve({
+      data: {
+        tenant_id: 2,
+        known_keys: ['brand.short_name'],
+        missing_keys: [],
+        values: { 'brand.short_name': 'A 校' },
+      },
+    })
+    await flushPromises()
+    expect((w.find('[data-testid="brand-input-brand.short_name"]').element as HTMLInputElement).value).toBe('B 校')
+  })
+
+  it('A 校儲存中切到 B 校時，A 回覆不會覆蓋 B，B 儲存只送 B payload', async () => {
+    const w = mountTab()
+    await flushPromises()
+    await w.find('[data-testid="brand-input-brand.short_name"]').setValue('A 校未儲存')
+
+    const aSave = deferred<{
+      data: { tenant_id: number; known_keys: string[]; missing_keys: string[]; values: Record<string, string> }
+    }>()
+    h.updateTenantBrand.mockReturnValueOnce(aSave.promise)
+    await w.find('[data-testid="brand-save"]').trigger('click')
+
+    h.getTenantBrand.mockResolvedValueOnce({
+      data: {
+        tenant_id: 3,
+        known_keys: ['brand.short_name'],
+        missing_keys: [],
+        values: { 'brand.short_name': 'B 校' },
+      },
+    })
+    await w.setProps({ tenantId: 3 })
+    await flushPromises()
+
+    aSave.resolve({
+      data: {
+        tenant_id: 2,
+        known_keys: ['brand.short_name'],
+        missing_keys: [],
+        values: { 'brand.short_name': 'A 校已儲存' },
+      },
+    })
+    await flushPromises()
+    expect((w.find('[data-testid="brand-input-brand.short_name"]').element as HTMLInputElement).value).toBe('B 校')
+
+    h.updateTenantBrand.mockResolvedValueOnce({
+      data: { tenant_id: 3, known_keys: [], missing_keys: [], values: { 'brand.short_name': 'B 校更新' } },
+    })
+    await w.find('[data-testid="brand-input-brand.short_name"]').setValue('B 校更新')
+    await w.find('[data-testid="brand-save"]').trigger('click')
+    await flushPromises()
+    expect(h.updateTenantBrand).toHaveBeenLastCalledWith(3, { values: { 'brand.short_name': 'B 校更新' } })
+  })
+
+  it('A 校儲存回覆晚於分頁卸載時不顯示成功訊息', async () => {
+    const w = mountTab()
+    await flushPromises()
+    await w.find('[data-testid="brand-input-brand.short_name"]').setValue('A 校未儲存')
+    const pendingSave = deferred<{ data: { tenant_id: number; missing_keys: string[]; values: Record<string, string> } }>()
+    h.updateTenantBrand.mockReturnValueOnce(pendingSave.promise)
+    await w.find('[data-testid="brand-save"]').trigger('click')
+
+    w.unmount()
+    pendingSave.resolve({ data: { tenant_id: 2, missing_keys: [], values: { 'brand.short_name': 'A 校' } } })
+    await flushPromises()
+    expect(h.messageSuccess).not.toHaveBeenCalled()
+  })
 })
 
 describe('TenantLineTab', () => {
@@ -119,7 +234,7 @@ describe('TenantLineTab', () => {
     h.updateTenantLineConfig.mockResolvedValue({ data: { tenant_id: 2, is_enabled: true } })
   })
 
-  const mountTab = () => mount(TenantLineTab, { props: { tenantId: 2 }, global: { stubs } })
+  const mountTab = (tenantId = 2) => mount(TenantLineTab, { props: { tenantId }, global: { stubs } })
 
   it('憑證只顯示遮罩值，不會有明文出現在畫面上', async () => {
     const w = mountTab()
@@ -167,6 +282,83 @@ describe('TenantLineTab', () => {
     expect(text).toContain('Published')
     expect(text).toContain('Developing')
   })
+
+  it('切到 B 校時立即清除 A 校未儲存憑證，B 載入失敗後仍禁止儲存', async () => {
+    const w = mountTab()
+    await flushPromises()
+    await w.find('[data-testid="line-form-token"]').setValue('tenant-a-secret')
+
+    const bLoad = deferred<{ data: never }>()
+    h.getTenantLineConfig.mockReturnValueOnce(bLoad.promise)
+    await w.setProps({ tenantId: 3 })
+
+    expect((w.find('[data-testid="line-form-token"]').element as HTMLInputElement).value).toBe('')
+    expect((w.find('[data-testid="line-save"]').element as HTMLButtonElement).disabled).toBe(true)
+
+    bLoad.reject({ displayMessage: 'B 校 LINE 設定載入失敗' })
+    await flushPromises()
+    await w.find('[data-testid="line-save"]').trigger('click')
+    expect(h.updateTenantLineConfig).not.toHaveBeenCalled()
+  })
+
+  it('A 校較晚回覆時不會覆蓋已載入的 B 校表單', async () => {
+    const aLoad = deferred<{ data: { tenant_id: number; is_enabled: boolean; liff_id: string } }>()
+    h.getTenantLineConfig
+      .mockReturnValueOnce(aLoad.promise)
+      .mockResolvedValueOnce({ data: { tenant_id: 3, is_enabled: false, liff_id: 'tenant-b-liff' } })
+
+    const w = mountTab()
+    await w.setProps({ tenantId: 3 })
+    await flushPromises()
+    expect((w.find('[data-testid="line-form-liff"]').element as HTMLInputElement).value).toBe('tenant-b-liff')
+
+    aLoad.resolve({ data: { tenant_id: 2, is_enabled: true, liff_id: 'tenant-a-liff' } })
+    await flushPromises()
+    expect((w.find('[data-testid="line-form-liff"]').element as HTMLInputElement).value).toBe('tenant-b-liff')
+  })
+
+  it('A 校儲存中切到 B 校時，A 回覆不會覆蓋 B，B 儲存只送 B payload', async () => {
+    const w = mountTab()
+    await flushPromises()
+    await w.find('[data-testid="line-form-liff"]').setValue('tenant-a-unsaved')
+
+    const aSave = deferred<{ data: { tenant_id: number; is_enabled: boolean; liff_id: string } }>()
+    h.updateTenantLineConfig.mockReturnValueOnce(aSave.promise)
+    await w.find('[data-testid="line-save"]').trigger('click')
+
+    h.getTenantLineConfig.mockResolvedValueOnce({
+      data: { tenant_id: 3, is_enabled: false, liff_id: 'tenant-b-original' },
+    })
+    await w.setProps({ tenantId: 3 })
+    await flushPromises()
+
+    aSave.resolve({ data: { tenant_id: 2, is_enabled: true, liff_id: 'tenant-a-saved' } })
+    await flushPromises()
+    expect((w.find('[data-testid="line-form-liff"]').element as HTMLInputElement).value).toBe('tenant-b-original')
+
+    h.updateTenantLineConfig.mockResolvedValueOnce({ data: { tenant_id: 3, is_enabled: false } })
+    await w.find('[data-testid="line-form-liff"]').setValue('tenant-b-new')
+    await w.find('[data-testid="line-save"]').trigger('click')
+    await flushPromises()
+    expect(h.updateTenantLineConfig).toHaveBeenLastCalledWith(3, {
+      is_enabled: false,
+      liff_id: 'tenant-b-new',
+    })
+  })
+
+  it('A 校儲存回覆晚於分頁卸載時不顯示成功訊息', async () => {
+    const w = mountTab()
+    await flushPromises()
+    await w.find('[data-testid="line-form-liff"]').setValue('tenant-a-unsaved')
+    const pendingSave = deferred<{ data: { tenant_id: number; is_enabled: boolean; liff_id: string } }>()
+    h.updateTenantLineConfig.mockReturnValueOnce(pendingSave.promise)
+    await w.find('[data-testid="line-save"]').trigger('click')
+
+    w.unmount()
+    pendingSave.resolve({ data: { tenant_id: 2, is_enabled: true, liff_id: 'tenant-a-saved' } })
+    await flushPromises()
+    expect(h.messageSuccess).not.toHaveBeenCalled()
+  })
 })
 
 describe('TenantEmailTab', () => {
@@ -185,7 +377,7 @@ describe('TenantEmailTab', () => {
     h.updateTenantEmailConfig.mockResolvedValue({ data: { tenant_id: 2, is_enabled: true } })
   })
 
-  const mountTab = () => mount(TenantEmailTab, { props: { tenantId: 2 }, global: { stubs } })
+  const mountTab = (tenantId = 2) => mount(TenantEmailTab, { props: { tenantId }, global: { stubs } })
 
   it('憑證只顯示遮罩值，不會有明文出現在畫面上', async () => {
     const w = mountTab()
@@ -214,5 +406,95 @@ describe('TenantEmailTab', () => {
     })
     const payload = h.updateTenantEmailConfig.mock.calls[0][1] as Record<string, unknown>
     expect(payload).not.toHaveProperty('resend_api_key')
+  })
+
+  it('切到 B 校時立即清除 A 校未儲存 API Key，B 載入失敗後仍禁止儲存', async () => {
+    const w = mountTab()
+    await flushPromises()
+    await w.find('[data-testid="email-form-key"]').setValue('tenant-a-secret')
+
+    const bLoad = deferred<{ data: never }>()
+    h.getTenantEmailConfig.mockReturnValueOnce(bLoad.promise)
+    await w.setProps({ tenantId: 3 })
+
+    expect((w.find('[data-testid="email-form-key"]').element as HTMLInputElement).value).toBe('')
+    expect((w.find('[data-testid="email-save"]').element as HTMLButtonElement).disabled).toBe(true)
+
+    bLoad.reject({ displayMessage: 'B 校 Email 設定載入失敗' })
+    await flushPromises()
+    await w.find('[data-testid="email-save"]').trigger('click')
+    expect(h.updateTenantEmailConfig).not.toHaveBeenCalled()
+  })
+
+  it('A 校較晚回覆時不會覆蓋已載入的 B 校表單', async () => {
+    const aLoad = deferred<{
+      data: { tenant_id: number; is_enabled: boolean; from_name: string; from_address: string }
+    }>()
+    h.getTenantEmailConfig.mockReturnValueOnce(aLoad.promise).mockResolvedValueOnce({
+      data: { tenant_id: 3, is_enabled: false, from_name: 'B 校', from_address: 'b@example.tw' },
+    })
+
+    const w = mountTab()
+    await w.setProps({ tenantId: 3 })
+    await flushPromises()
+    expect((w.find('[data-testid="email-form-from-name"]').element as HTMLInputElement).value).toBe('B 校')
+
+    aLoad.resolve({
+      data: { tenant_id: 2, is_enabled: true, from_name: 'A 校', from_address: 'a@example.tw' },
+    })
+    await flushPromises()
+    expect((w.find('[data-testid="email-form-from-name"]').element as HTMLInputElement).value).toBe('B 校')
+  })
+
+  it('A 校儲存中切到 B 校時，A 回覆不會覆蓋 B，B 儲存只送 B payload', async () => {
+    const w = mountTab()
+    await flushPromises()
+    await w.find('[data-testid="email-form-from-name"]').setValue('A 校未儲存')
+
+    const aSave = deferred<{
+      data: { tenant_id: number; is_enabled: boolean; from_name: string; from_address: string }
+    }>()
+    h.updateTenantEmailConfig.mockReturnValueOnce(aSave.promise)
+    await w.find('[data-testid="email-save"]').trigger('click')
+
+    h.getTenantEmailConfig.mockResolvedValueOnce({
+      data: { tenant_id: 3, is_enabled: false, from_name: 'B 校', from_address: 'b@example.tw' },
+    })
+    await w.setProps({ tenantId: 3 })
+    await flushPromises()
+
+    aSave.resolve({
+      data: { tenant_id: 2, is_enabled: true, from_name: 'A 校已儲存', from_address: 'a@example.tw' },
+    })
+    await flushPromises()
+    expect((w.find('[data-testid="email-form-from-name"]').element as HTMLInputElement).value).toBe('B 校')
+
+    h.updateTenantEmailConfig.mockResolvedValueOnce({ data: { tenant_id: 3, is_enabled: false } })
+    await w.find('[data-testid="email-form-from-name"]').setValue('B 校更新')
+    await w.find('[data-testid="email-save"]').trigger('click')
+    await flushPromises()
+    expect(h.updateTenantEmailConfig).toHaveBeenLastCalledWith(3, {
+      is_enabled: false,
+      from_name: 'B 校更新',
+      from_address: 'b@example.tw',
+    })
+  })
+
+  it('A 校儲存回覆晚於分頁卸載時不顯示成功訊息', async () => {
+    const w = mountTab()
+    await flushPromises()
+    await w.find('[data-testid="email-form-from-name"]').setValue('A 校未儲存')
+    const pendingSave = deferred<{
+      data: { tenant_id: number; is_enabled: boolean; from_name: string; from_address: string }
+    }>()
+    h.updateTenantEmailConfig.mockReturnValueOnce(pendingSave.promise)
+    await w.find('[data-testid="email-save"]').trigger('click')
+
+    w.unmount()
+    pendingSave.resolve({
+      data: { tenant_id: 2, is_enabled: true, from_name: 'A 校已儲存', from_address: 'a@example.tw' },
+    })
+    await flushPromises()
+    expect(h.messageSuccess).not.toHaveBeenCalled()
   })
 })
