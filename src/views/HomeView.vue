@@ -30,7 +30,6 @@ import QuickLeaveDialog from '@/components/dashboard/quick-add/QuickLeaveDialog.
 import QuickStudentDialog from '@/components/dashboard/quick-add/QuickStudentDialog.vue'
 import QuickAnnouncementDialog from '@/components/dashboard/quick-add/QuickAnnouncementDialog.vue'
 import QuickClassroomDialog from '@/components/dashboard/quick-add/QuickClassroomDialog.vue'
-import TaskWorkspaceLinks from '@/components/dashboard/TaskWorkspaceLinks.vue'
 
 const quickAddDialogs = ref<Record<QuickAddDialogType, boolean>>({
   overtime: false,
@@ -241,8 +240,6 @@ const anomalyOverflow = computed(
         </button>
       </div>
     </section>
-
-    <TaskWorkspaceLinks />
 
     <!-- 教師出勤狀況 -->
     <template v-if="showAttendance">
