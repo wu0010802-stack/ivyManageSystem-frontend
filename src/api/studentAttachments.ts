@@ -12,4 +12,6 @@ export const OWNER_TYPE_LABELS = {
   contact_book_entry: '聯絡簿',
   medication_order: '用藥單',
   report: '報告',
+  work_sample: '作品集',
+  class_album: '班級相簿',
 }

@@ -21667,6 +21667,11 @@ export interface components {
             id: number;
             /** Original Filename */
             original_filename: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "manual" | "contact_book";
             /** Students */
             students: components["schemas"]["TaggedStudentOut"][];
             /** Thumb Url */

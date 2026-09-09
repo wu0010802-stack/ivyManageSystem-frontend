@@ -76,6 +76,7 @@
           @click="toggleSelect(photo.id)"
         />
         <div class="photo-tags">
+          <el-tag v-if="photo.source === 'contact_book'" type="info" size="small">來自聯絡簿</el-tag>
           <el-tag v-if="photo.students.length === 0" type="warning" size="small">未標記</el-tag>
           <el-tag v-for="s in photo.students" :key="s.id" size="small">{{ s.name }}</el-tag>
         </div>
@@ -185,8 +186,15 @@ async function submitUpload(): Promise<void> {
 }
 
 async function removePhoto(photoId: number): Promise<void> {
+  // 來自聯絡簿的照片只是借展進本相簿：刪除只解除關聯，不會動到聯絡簿的原始照片
+  // （後端 api/portal/class_albums.py::delete_photo 的行為分流，需求 3）。
+  const photo = album.value?.photos.find((p) => p.id === photoId)
+  const isFromContactBook = photo?.source === 'contact_book'
+  const message = isFromContactBook
+    ? '確定要從本相簿移除這張照片？（不會刪除聯絡簿中的原始照片）'
+    : '確定刪除這張照片？'
   try {
-    await ElMessageBox.confirm('確定刪除這張照片？', '刪除照片', { type: 'warning' })
+    await ElMessageBox.confirm(message, isFromContactBook ? '移除照片' : '刪除照片', { type: 'warning' })
   } catch (e) {
     // 使用者按取消 → 靜默返回；非 cancel 的例外照舊往外拋，讓既有全域 handler（Sentry unhandledrejection）接住
     if (e !== 'cancel') throw e

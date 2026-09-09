@@ -30,6 +30,8 @@ const emit = defineEmits([
   'close',
 ])
 
+const MAX_PHOTOS = 5
+
 const MEAL_OPTIONS = [
   { value: 0, label: '未進食' },
   { value: 1, label: '少' },
@@ -109,6 +111,7 @@ const visible = computed({
 
 const isPublished = computed(() => !!props.entry?.published_at)
 const photos = computed(() => props.entry?.photos || [])
+const photoLimitReached = computed(() => photos.value.length >= MAX_PHOTOS)
 
 // 家長端回流（2026-09-02 對齊稽核前教師端完全看不到已讀／回覆）
 interface ParentAck { guardian_user_id: number; guardian_name?: string | null; read_at?: string | null }
@@ -369,6 +372,7 @@ defineExpose({ requestLeave })
             </div>
           </div>
           <el-upload
+            v-if="!photoLimitReached"
             :auto-upload="true"
             :show-file-list="false"
             :http-request="handleUploadPhoto"
@@ -378,9 +382,10 @@ defineExpose({ requestLeave })
               上傳照片
             </el-button>
             <template #tip>
-              <div class="upload-tip muted">支援 JPG / PNG / HEIC，一次一張</div>
+              <div class="upload-tip muted">支援 JPG / PNG / HEIC，一次一張，最多 {{ MAX_PHOTOS }} 張（{{ photos.length }}/{{ MAX_PHOTOS }}）</div>
             </template>
           </el-upload>
+          <div v-else class="hint muted">已達上限（{{ MAX_PHOTOS }}/{{ MAX_PHOTOS }} 張），如需更換請先刪除照片</div>
         </div>
       </el-form-item>
     </el-form>
