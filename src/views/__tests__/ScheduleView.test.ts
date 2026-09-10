@@ -79,8 +79,9 @@ vi.mock('@/stores/shift', () => ({
   }),
 }))
 
+const mockIsMobile = ref(false)
 vi.mock('@/composables/useIsMobile', () => ({
-  useIsMobile: () => ({ isMobile: ref(false) }),
+  useIsMobile: () => ({ isMobile: mockIsMobile }),
 }))
 
 vi.mock('@/composables', () => ({
@@ -191,6 +192,7 @@ const mountView = async () => {
 describe('ScheduleView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockIsMobile.value = false
     mockGetRoster.mockResolvedValue({ data: ROSTER })
     mockGetAssignments.mockResolvedValue({ data: [] })
     mockGetSwapHistory.mockResolvedValue({ data: [] })
@@ -201,14 +203,38 @@ describe('ScheduleView', () => {
     mockSaveAssignments.mockResolvedValue({ data: { message: 'ok', week_start_date: MONDAY } })
   })
 
-  it('名冊走 /shifts/roster；classroom_name 正常顯示、無班級者被排除', async () => {
+  it.each([false, true])('名冊走 /shifts/roster；未指派班級的在職員工也能排班（手機：%s）', async (isMobile) => {
+    mockIsMobile.value = isMobile
     const wrapper = await mountView()
     expect(mockGetRoster).toHaveBeenCalledTimes(1)
     const text = wrapper.text()
     expect(text).toContain('王一')
     expect(text).toContain('小熊班')
     expect(text).toContain('李二')
-    expect(text).not.toContain('無班級者') // 只列有班級指派者
+    expect(text).toContain('無班級者')
+    expect(text).toContain('未指派班級')
+  })
+
+  it('未指派班級員工選班後可儲存，既有員工的班別與備註仍保留', async () => {
+    mockGetAssignments.mockResolvedValue({ data: [
+      { employee_id: 1, shift_type_id: 3, notes: '既有備註' },
+      { employee_id: 9, shift_type_id: 3, notes: '行政備註' },
+    ] })
+    const wrapper = await mountView()
+    const selects = wrapper.find('[data-label="班別"]').findAllComponents(ElSelectStub)
+    expect(selects).toHaveLength(3)
+    expect(selects[2].props('modelValue')).toBe(3)
+    selects[2].vm.$emit('update:modelValue', 4)
+    await wrapper.findAll('button').find((b) => b.text() === '儲存排班')!.trigger('click')
+    await flushPromises()
+    expect(mockSaveAssignments).toHaveBeenCalledWith({
+      week_start_date: MONDAY,
+      assignments: [
+        { employee_id: 1, shift_type_id: 3, notes: '既有備註' },
+        { employee_id: 2, shift_type_id: null, notes: null },
+        { employee_id: 9, shift_type_id: 4, notes: '行政備註' },
+      ],
+    })
   })
 
   it('saveAll 接住並顯示後端週工時 warnings', async () => {

@@ -31,7 +31,7 @@ const { isMobile } = useIsMobile()
 
 // 班別指派卡片欄位：班別下拉與起訖時間為 slot（沿用表格內同一套 getter）
 const assignmentCardColumns = [
-  { label: '班級', prop: '__classroom', formatter: (r: Record<string, unknown>) => (r.classroom_name as string) || '-' },
+  { label: '班級', prop: '__classroom', formatter: (r: Record<string, unknown>) => (r.classroom_name as string) || (r.classroom_id ? '-' : '未指派班級') },
   { label: '班別', prop: '__shift' },
   { label: '上班時間', prop: '__start' },
   { label: '下班時間', prop: '__end' },
@@ -59,6 +59,7 @@ const loading = ref(false)
 const saving = ref(false)
 const shiftStore = useShiftStore()
 const { activeShiftTypes: shiftTypes } = storeToRefs(shiftStore)
+// 排班名冊由後端預設限定在職員工；未指派班級者同樣可排班。
 const roster = ref<EmployeeRow[]>([])
 const assignments = ref<Record<string | number, AssignmentEntry>>({}) // { employee_id: { shift_type_id, notes } }
 
@@ -101,12 +102,6 @@ const weekLabel = computed(() => {
   const end = new Date(d)
   end.setDate(end.getDate() + 4) // Friday
   return `${d.getMonth() + 1}/${d.getDate()} ~ ${end.getMonth() + 1}/${end.getDate()}`
-})
-
-// Filter: only show active employees with classroom assignment (teachers)
-// roster 預設只回在職者；沿用「有班級指派」的既有篩選語意
-const teacherEmployees = computed(() => {
-  return roster.value.filter((e) => e.classroom_id)
 })
 
 // --- 請假整合（2026-08-28）：週請假摘要＋全員每日調整 → 空班判定 ---
@@ -202,7 +197,7 @@ const saveAll = async () => {
   saving.value = true
   try {
     const items = []
-    for (const emp of teacherEmployees.value) {
+    for (const emp of roster.value) {
       const a = assignments.value[emp.id]
       items.push({
         employee_id: emp.id,
@@ -354,9 +349,9 @@ const getDayName = (dateStr: string) => {
 const weekCoverage = computed(() =>
   computeWeekCoverage({
     dates: currentWeekDates.value,
-    employeeIds: teacherEmployees.value.map((e) => e.id),
+    employeeIds: roster.value.map((e) => e.id),
     weeklyShiftByEmp: Object.fromEntries(
-      teacherEmployees.value.map((e) => [e.id, getAssignment(e.id)])
+      roster.value.map((e) => [e.id, getAssignment(e.id)])
     ),
     dailyOverrides: weekDailyOverrides.value,
     shiftTypes: shiftTypes.value,
@@ -687,7 +682,7 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
         </div>
 
         <!-- Assignment Table -->
-        <el-table v-if="!isMobile" :data="teacherEmployees" v-loading="loading" style="width: 100%; margin-top: 16px;" stripe>
+        <el-table v-if="!isMobile" :data="roster" v-loading="loading" style="width: 100%; margin-top: 16px;" stripe>
           <el-table-column label="姓名" width="130" fixed>
             <template #default="{ row }">
               {{ row.name }}
@@ -702,7 +697,7 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
           </el-table-column>
           <el-table-column label="班級" width="120">
             <template #default="{ row }">
-              {{ row.classroom_name || '-' }}
+              {{ row.classroom_name || (row.classroom_id ? '-' : '未指派班級') }}
             </template>
           </el-table-column>
           <el-table-column label="班別" min-width="240">
@@ -747,11 +742,11 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
         </el-table>
         <AdminListCards
           v-else
-          :items="(teacherEmployees as unknown as Record<string, unknown>[])"
+          :items="(roster as unknown as Record<string, unknown>[])"
           :columns="assignmentCardColumns"
           row-key="id"
           :loading="loading"
-          empty-text="尚無班導老師資料（需有班級指派的員工）"
+          empty-text="尚無在職員工可排班"
         >
           <template #title="{ item }">
             {{ item.name }}
@@ -795,7 +790,7 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
           </template>
         </AdminListCards>
 
-        <el-empty v-if="teacherEmployees.length === 0 && !loading" description="尚無班導老師資料（需有班級指派的員工）" />
+        <el-empty v-if="roster.length === 0 && !loading" description="尚無在職員工可排班" />
       </el-tab-pane>
 
       <el-tab-pane label="換班紀錄" name="swap-history">
