@@ -31657,6 +31657,33 @@ export interface components {
              */
             mode: "readonly" | "write";
         };
+        /** ImportBatchOut */
+        ImportBatchOut: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Imported By */
+            imported_by: string | null;
+            /** Row Count */
+            row_count: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "excel" | "csv";
+        };
         /** ImportEmployeeChoice */
         ImportEmployeeChoice: {
             /** Employee Number */
@@ -40293,6 +40320,16 @@ export interface components {
             /** Student Name */
             student_name: string | null;
         };
+        /**
+         * ReconciliationCoverageOut
+         * @description 本次核對區間內，系統判定「打卡資料已涵蓋」的日期與依據。
+         */
+        ReconciliationCoverageOut: {
+            /** Batches */
+            batches: components["schemas"]["ImportBatchOut"][];
+            /** Covered Dates */
+            covered_dates: string[];
+        };
         /** ReconciliationPreviewIn */
         ReconciliationPreviewIn: {
             /** Complete End Date */
@@ -40312,6 +40349,7 @@ export interface components {
         };
         /** ReconciliationPreviewOut */
         ReconciliationPreviewOut: {
+            coverage: components["schemas"]["ReconciliationCoverageOut"];
             /** Rows */
             rows: components["schemas"]["ReconciliationRowOut"][];
             /** Shift Types */

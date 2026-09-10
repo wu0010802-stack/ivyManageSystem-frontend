@@ -14,7 +14,7 @@ const emit = defineEmits<{ confirmed: []; records: [row: Row]; import: [row: Row
 const { data, loading, saving, error, preview, confirm, reset } = useAttendanceReconciliation()
 const start = ref('')
 const end = ref('')
-const complete = ref(false)
+const showCoverageDetail = ref(false)
 const filter = ref('exceptions')
 const search = ref('')
 const expandedEmployees = ref(new Set<number>())
@@ -42,7 +42,22 @@ function chooseRange(key: 'today' | 'week' | 'elapsed' | 'custom'): void {
 }
 function onCustomRange(): void { selectedRange.value = 'custom' }
 
-const completeAllowed = computed(() => !!start.value && !!end.value && end.value < today.value && start.value <= end.value)
+// 系統判定涵蓋（2026-09-10 改版，取代前端手動勾選「我已完整匯入」）：某日視為
+// 已涵蓋，只要有匯入批次的日期範圍包含它，或當天有電子打卡台紀錄；後端回應
+// 的 coverage.covered_dates 即為此判定結果，前端只負責顯示、不再自行送出
+// complete_start_date/complete_end_date。
+const totalDays = computed(() => {
+  if (!start.value || !end.value) return 0
+  const ms = new Date(`${end.value}T00:00:00`).getTime() - new Date(`${start.value}T00:00:00`).getTime()
+  return Math.round(ms / 86_400_000) + 1
+})
+const coveredCount = computed(() => data.value?.coverage.covered_dates.length ?? 0)
+const coverageLabel = computed(() => {
+  if (!data.value) return ''
+  if (coveredCount.value === 0) return '打卡資料尚未涵蓋任何一天'
+  if (coveredCount.value >= totalDays.value) return `打卡資料已涵蓋全部 ${totalDays.value} 天`
+  return `打卡資料已涵蓋 ${coveredCount.value}／${totalDays.value} 天`
+})
 const labels: Record<Row['status'], string> = {
   matched: '符合原班表', possible_shift_change: '疑似換班', missing_punch: '缺卡待確認',
   suspected_absence: '疑似缺勤', data_incomplete: '資料待補', leave: '已核准請假',
@@ -90,21 +105,18 @@ function resetRange() {
   start.value = range?.start ?? ranges.value.first
   end.value = range?.end ?? ranges.value.first
   selectedRange.value = range ? 'elapsed' : 'custom'
-  complete.value = false
+  showCoverageDetail.value = false
   selected.value = null
   reset()
 }
 watch(() => [props.year, props.month], () => { resetRange(); void runPreview() }, { immediate: true })
-watch(() => props.revision, () => { complete.value = false; selected.value = null; reset(); void runPreview() })
-watch([start, end], () => { complete.value = false; selected.value = null; reset() }, { flush: 'sync' })
-watch(complete, () => { selected.value = null; reset() }, { flush: 'sync' })
+watch(() => props.revision, () => { selected.value = null; reset(); void runPreview() })
+watch([start, end], () => { showCoverageDetail.value = false; selected.value = null; reset() }, { flush: 'sync' })
 watch(selectedShift, () => { includePair.value = false })
 
 async function runPreview() {
   if (rangeError.value) return
-  await preview({ start_date: start.value, end_date: end.value,
-    ...(complete.value && completeAllowed.value ? { complete_start_date: start.value, complete_end_date: end.value } : {}),
-  })
+  await preview({ start_date: start.value, end_date: end.value })
 }
 function openConfirm(row: Row) {
   selected.value = row
@@ -148,14 +160,24 @@ async function saveShift() {
       <el-button type="primary" :loading="loading" :disabled="saving || !!rangeError" @click="runPreview">重新核對</el-button>
     </div>
     <p v-if="rangeError" role="alert" class="reconciliation__hint">{{ rangeError }}</p>
-    <label class="reconciliation__complete">
-      <input v-model="complete" type="checkbox" :disabled="!completeAllowed || saving" aria-describedby="reconciliation-completeness-hint" />
-      我已完整匯入上述期間所有員工、所有打卡來源的紀錄
-    </label>
-    <p id="reconciliation-completeness-hint" class="reconciliation__hint">{{ complete ? '完整性聲明僅適用目前區間；疑似缺勤仍須查證。' : '尚未確認資料完整：沒有打卡者會列為「資料待補」。' }}</p>
+    <p v-if="data" class="reconciliation__coverage" role="status" :class="{ 'reconciliation__coverage--none': coveredCount === 0 }">
+      {{ coverageLabel }}
+      <button
+        v-if="data.coverage.batches.length"
+        type="button"
+        class="reconciliation__coverage-toggle"
+        :aria-expanded="showCoverageDetail"
+        @click="showCoverageDetail = !showCoverageDetail"
+      >{{ showCoverageDetail ? '收合明細' : '涵蓋明細' }}</button>
+    </p>
+    <ul v-if="showCoverageDetail && data" class="reconciliation__coverage-detail">
+      <li v-for="(batch, i) in data.coverage.batches" :key="i">
+        {{ batch.source === 'excel' ? 'Excel 匯入' : 'CSV 匯入' }}・{{ batch.date_from }} 至 {{ batch.date_to }}・{{ batch.row_count }} 筆・{{ formatDateTimeTW(batch.imported_at) }}{{ batch.imported_by ? `・${batch.imported_by}` : '' }}
+      </li>
+    </ul>
     <details class="reconciliation__guide">
       <summary>核對範圍與缺勤判讀說明</summary>
-      <p class="reconciliation__hint">一次最多核對 31 天。完整性確認只適用本次範圍；換日期或再次匯入後需重新確認。當日尚未結束，不判定整日缺勤。</p>
+      <p class="reconciliation__hint">一次最多核對 31 天。打卡資料是否已涵蓋由系統依匯入批次與電子打卡台紀錄自動判定；已涵蓋且無打卡才會列為疑似缺勤，尚未涵蓋的日子列為資料待補。當日尚未結束，不判定整日缺勤。</p>
     </details>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
@@ -226,7 +248,11 @@ async function saveShift() {
 .reconciliation__controls label, .reconciliation__filters label { display: grid; gap: var(--space-1); font-size: var(--text-sm); }
 .reconciliation input:not([type='checkbox']), .reconciliation select { min-width: 0; max-width: 100%; min-height: var(--touch-target-min); border: 1px solid var(--el-border-color); border-radius: var(--radius-sm); padding: var(--space-2); background: var(--el-bg-color); color: var(--el-text-color-primary); font: inherit; }
 .reconciliation input:focus-visible, .reconciliation select:focus-visible, .reconciliation summary:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
-.reconciliation__complete { display: flex; align-items: center; gap: var(--space-2); min-height: var(--touch-target-min); }
+.reconciliation__coverage { display: flex; align-items: center; gap: var(--space-2); min-height: var(--touch-target-min); margin: 0; color: var(--el-color-success); font-size: var(--text-sm); }
+.reconciliation__coverage--none { color: var(--el-color-warning); }
+.reconciliation__coverage-toggle { appearance: none; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; font-size: var(--text-sm); padding: 0; cursor: pointer; min-height: var(--touch-target-min); }
+.reconciliation__coverage-toggle:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.reconciliation__coverage-detail { margin: 0; padding-left: var(--space-5); color: var(--el-text-color-secondary); font-size: var(--text-sm); display: grid; gap: var(--space-1); }
 .reconciliation__hint { color: var(--el-text-color-secondary); font-size: var(--text-sm); margin: 0; }
 .reconciliation__guide summary { cursor: pointer; color: var(--el-text-color-regular); font-size: var(--text-sm); padding-block: var(--space-2); }
 .reconciliation__count { display: grid; gap: var(--space-1); margin: 0 auto 0 0; align-self: center; }
