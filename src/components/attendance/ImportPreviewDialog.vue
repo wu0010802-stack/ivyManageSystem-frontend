@@ -11,7 +11,7 @@
  *
  * 兩條路徑的 confirm 都走 uploadCsv（normalized 列 + year/month），與 preview 同規則。
  */
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { previewImport, previewExcel, uploadCsv, uploadFile, getImportSettings, saveImportSettings } from '@/api/attendance'
 import type { ApiResponse } from '@/api/_generated/typed'
@@ -20,6 +20,8 @@ import { hasPermission } from '@/utils/auth'
 import { summarizeCsvImportResult } from '@/utils/attendanceImport'
 import { proposeReview, reviewReasons, matchesReviewFilter, punchOptions } from '@/utils/attendanceBatchReview'
 import type { ReviewEdit, ReviewAction, ReviewFilter } from '@/utils/attendanceBatchReview'
+import { useAttendanceScheduleReview } from '@/composables/useAttendanceScheduleReview'
+import { reviewFingerprint, proposeScheduleReview, SCHEDULE_WINDOW_MINUTES } from '@/utils/attendanceScheduleReview'
 import { csvRow } from '@/utils/csv'
 
 // ── Props / Emits ──────────────────────────────────────────────────────────────
@@ -64,12 +66,31 @@ const mappingDirty = ref(false)
 const manuallyMapped = ref(new Set<string>())
 const sourceFile = ref<File | null>(null)
 const reviewEdits = ref<Record<number, ReviewEdit>>({})
-const reviewFilter = ref<ReviewFilter>('all')
+const reviewFilter = ref<ReviewFilter | 'schedule_eligible' | 'schedule_manual'>('all')
+const manualTimeKeys = ref(new Set<string>())
+const { hints: scheduleHints, requiredKeys: scheduleRequiredKeys, blockingKeys: scheduleBlockingKeys, loading: scheduleLoading, loaded: scheduleLoaded, completed: scheduleCompleted, total: scheduleTotal, failed: scheduleFailed, invalidate: invalidateSchedule, load: loadSchedule } = useAttendanceScheduleReview()
+onBeforeUnmount(() => invalidateSchedule())
+const scheduleManualCount = computed(() => Object.values(scheduleHints.value).filter(hint => hint.kind === 'manual').length)
+const scheduleEligibleCount = computed(() => Object.values(scheduleHints.value).filter(hint => hint.kind === 'eligible').length)
+const unresolvedScheduleCount = computed(() => (previewResult.value?.rows ?? []).filter(row => scheduleBlockingKeys.value.has(reviewFingerprint(row)) && !reviewEdits.value[row.row_num]?.confirmed).length)
+function markTimeEdit(row: PreviewRow) { manualTimeKeys.value.add(reviewFingerprint(row)); reviewDirty.value = true }
+async function handleLoadSchedule() {
+  if (!previewResult.value || busy.value || mappingDirty.value || pendingBatch.value || !hasPermission('ATTENDANCE_READ')) return
+  clearReviewSelection()
+  await loadSchedule(previewResult.value.rows, props.year, props.month)
+}
+function scheduleReason(row: PreviewRow): string {
+  return scheduleHints.value[reviewFingerprint(row)]?.reason ?? (scheduleRequiredKeys.value.has(reviewFingerprint(row)) ? '先前班表提示需人工核對；建議已清除，可重新載入' : '尚未載入班表建議')
+}
 const selectedReviewRows = ref<number[]>([])
-const pendingBatch = ref<{ action: ReviewAction; rows: { row: PreviewRow; edit: ReviewEdit | null; error: string }[] } | null>(null)
-const batchLabels: Record<ReviewAction, string> = { current: '採用目前結果（保留已調整時間）', in: '只有上班（取最早，下班缺卡）', out: '只有下班（取最晚，上班缺卡）' }
-const reviewRows = computed(() => (previewResult.value?.rows ?? []).filter(row => row.review_required))
-const filteredReviewRows = computed(() => reviewRows.value.filter(row => matchesReviewFilter(row, reviewEdits.value[row.row_num] ?? { punch_in: '', punch_out: '', confirmed: false }, reviewFilter.value)))
+const pendingBatch = ref<{ action: ReviewAction | 'schedule'; rows: { row: PreviewRow; edit: ReviewEdit | null; error: string }[] } | null>(null)
+const batchLabels: Record<ReviewAction | 'schedule', string> = { schedule: '採用班表建議', current: '採用目前結果（保留已調整時間）', in: '只有上班（取最早，下班缺卡）', out: '只有下班（取最晚，上班缺卡）' }
+const reviewRows = computed(() => (previewResult.value?.rows ?? []).filter(row => row.review_required || scheduleRequiredKeys.value.has(reviewFingerprint(row))))
+const filteredReviewRows = computed(() => reviewRows.value.filter(row => {
+  if (reviewFilter.value === 'schedule_eligible') return scheduleHints.value[reviewFingerprint(row)]?.kind === 'eligible'
+  if (reviewFilter.value === 'schedule_manual') return scheduleHints.value[reviewFingerprint(row)]?.kind === 'manual' || scheduleRequiredKeys.value.has(reviewFingerprint(row))
+  return matchesReviewFilter(row, reviewEdits.value[row.row_num] ?? { punch_in: '', punch_out: '', confirmed: false }, reviewFilter.value)
+}))
 const selectableReviewRows = computed(() => filteredReviewRows.value.filter(row => punchOptions(row).length > 0))
 const allReviewsSelected = computed(() => selectableReviewRows.value.length > 0 && selectableReviewRows.value.every(row => selectedReviewRows.value.includes(row.row_num)))
 const batchApplicableCount = computed(() => pendingBatch.value?.rows.filter(entry => entry.edit).length ?? 0)
@@ -79,26 +100,31 @@ watch(selectableReviewRows, rows => {
   const visible = new Set(rows.map(row => row.row_num))
   selectedReviewRows.value = selectedReviewRows.value.filter(id => visible.has(id))
 })
-watch(mappings, clearReviewSelection, { deep: true })
+watch(mappings, () => { clearReviewSelection(); invalidateSchedule(); manualTimeKeys.value = new Set() }, { deep: true })
 function selectVisibleReviews(event: Event) {
   selectedReviewRows.value = (event.target as HTMLInputElement).checked ? selectableReviewRows.value.map(row => row.row_num) : []
 }
-function prepareBatch(action: ReviewAction) {
+function prepareBatch(action: ReviewAction | 'schedule') {
   if (!canWrite.value || busy.value || mappingDirty.value) return
   const rows = selectableReviewRows.value.filter(row => selectedReviewRows.value.includes(row.row_num))
   if (!rows.length) return
-  pendingBatch.value = { action, rows: rows.map(row => ({ row, ...proposeReview(row, reviewEdits.value[row.row_num]!, action) })) }
+  pendingBatch.value = { action, rows: rows.map(row => ({ row, ...(action === 'schedule'
+    ? proposeScheduleReview(row, reviewEdits.value[row.row_num]!, scheduleHints.value[reviewFingerprint(row)], manualTimeKeys.value.has(reviewFingerprint(row)))
+    : proposeReview(row, reviewEdits.value[row.row_num]!, action)) })) }
 }
 function confirmBatch() {
   if (!pendingBatch.value || busy.value || !canWrite.value || mappingDirty.value) return
   for (const entry of pendingBatch.value.rows) {
-    if (entry.edit) { reviewEdits.value[entry.row.row_num] = entry.edit; reviewDirty.value = true }
+    if (entry.edit) {
+      if (pendingBatch.value.action === 'in' || pendingBatch.value.action === 'out') manualTimeKeys.value.add(reviewFingerprint(entry.row))
+      reviewEdits.value[entry.row.row_num] = entry.edit; reviewDirty.value = true
+    }
   }
   clearReviewSelection()
 }
 let generation = 0
 let settingsGeneration = 0
-const busy = computed(() => previewing.value || uploading.value || importing.value || savingSettings.value)
+const busy = computed(() => previewing.value || uploading.value || importing.value || savingSettings.value || scheduleLoading.value)
 const isPunchEvents = computed(() => previewResult.value?.import_format === 'punch_events')
 const singlePunchCount = computed(() => previewResult.value?.rows.filter(row => row.punches?.length === 1).length ?? 0)
 const multiPunchCount = computed(() => previewResult.value?.rows.filter(row => (row.punches?.length ?? 0) > 2).length ?? 0)
@@ -148,6 +174,8 @@ function checkLabel(row: PreviewRow): string {
 
 function clearPreview() {
   generation++
+  invalidateSchedule()
+  manualTimeKeys.value = new Set()
   clearReviewSelection()
   reviewFilter.value = 'all'
   previewResult.value = null
@@ -222,6 +250,8 @@ async function handleSaveSettings() {
 async function handleReviewPreview() {
   if (!previewResult.value || busy.value || !canWrite.value || mappingDirty.value || pendingBatch.value) return
   clearReviewSelection()
+  invalidateSchedule(false)
+  reviewFilter.value = 'all'
   const current = previewResult.value
   const records = current.rows.map(row => ({
     department: '', weekday: '', employee_number: row.employee_number, name: row.employee_name,
@@ -229,7 +259,7 @@ async function handleReviewPreview() {
     punch_out: reviewEdits.value[row.row_num]?.punch_out || null,
     import_format: row.import_format, device_id: row.device_id,
     source_employee_number: row.source_employee_number, source_rows: row.source_rows,
-    punches: row.punches, review_required: row.review_required,
+    punches: row.punches, review_required: row.review_required || scheduleRequiredKeys.value.has(reviewFingerprint(row)),
     review_confirmed: reviewEdits.value[row.row_num]?.confirmed ?? false,
   }))
   const request = ++generation
@@ -382,7 +412,7 @@ const importableCount = computed(() => {
 })
 
 async function handleConfirmImport() {
-  if (!previewResult.value || !canWrite.value || busy.value || reviewDirty.value || mappingDirty.value || pendingBatch.value || importableCount.value === 0) return
+  if (!previewResult.value || !canWrite.value || busy.value || reviewDirty.value || mappingDirty.value || pendingBatch.value || unresolvedScheduleCount.value > 0 || importableCount.value === 0) return
   const request = generation
   const skipped = previewResult.value.summary.problems
   importing.value = true
@@ -616,32 +646,40 @@ defineExpose({
           </div>
           <el-button :disabled="busy || !canWrite" @click="handleSaveSettings">儲存對照並重新預覽</el-button>
         </details>
-        <details v-if="previewResult.rows.some(row => row.review_required)">
+        <section aria-label="班表輔助判讀" class="import-preview-dialog__schedule">
+          <p>班表輔助判讀：上下班各前後 {{ SCHEDULE_WINDOW_MINUTES }} 分鐘（含端點）。僅提供核對建議，不判定遲到、早退或薪資。</p>
+          <el-button data-load-schedule :disabled="busy || mappingDirty || !!pendingBatch || !hasPermission('ATTENDANCE_READ')" @click="handleLoadSchedule">{{ scheduleLoaded ? '重新載入班表建議' : '載入班表建議' }}</el-button>
+          <p v-if="scheduleLoading" role="status">讀取班表中：{{ scheduleCompleted }}／{{ scheduleTotal }} 位員工；完成前暫停匯入。</p>
+          <p v-if="scheduleLoaded" role="status">班表建議可採用 {{ scheduleEligibleCount }} 個人日；班表需人工 {{ scheduleManualCount }} 個人日。正常兩筆且符合班表者不另外加入核對表；後端已列為問題的紀錄仍依原規則略過。</p>
+          <p v-if="scheduleFailed" role="alert">{{ scheduleFailed }} 位員工班表讀取失敗；已保留人工調整，可重試或人工核對。<el-button data-retry-schedule :disabled="busy || mappingDirty" @click="handleLoadSchedule">重試班表建議</el-button></p>
+          <p v-if="unresolvedScheduleCount" role="status">原可匯入紀錄中另有 {{ unresolvedScheduleCount }} 個人日尚待班表人工核對，完成核對並重新預覽前不能匯入。</p>
+        </section>
+        <details v-if="reviewRows.length">
           <summary>核對單筆、多筆或重複刷卡</summary>
           <p class="import-preview-dialog__note">選擇實際上下班時間；缺卡的一側請保留空白。原始刷卡與來源列號均保留。</p>
           <label>篩選核對紀錄
             <select v-model="reviewFilter" aria-label="篩選核對紀錄" :disabled="busy || !!pendingBatch">
-              <option value="all">全部</option><option value="multi">多筆</option><option value="single">單筆</option><option value="duplicate">重複刷卡</option><option value="unconfirmed">未核對</option>
+              <option value="all">全部</option><option value="multi">多筆</option><option value="single">單筆</option><option value="duplicate">重複刷卡</option><option value="unconfirmed">未核對</option><option value="schedule_eligible">班表建議可採用</option><option value="schedule_manual">班表需人工</option>
             </select>
           </label>
           <p role="status">顯示 {{ filteredReviewRows.length }} 個人日，已選 {{ selectedReviewRows.length }} 個人日；全選僅包含目前篩選結果。</p>
           <div class="import-preview-dialog__review-scroll">
             <table class="import-preview-dialog__review-table">
               <caption>刷卡核對清單（時間僅為建議，請依實際出勤確認）</caption>
-              <thead><tr><th><input type="checkbox" aria-label="全選目前篩選結果" :checked="allReviewsSelected" :indeterminate="selectedReviewRows.length > 0 && !allReviewsSelected" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch || !selectableReviewRows.length" @change="selectVisibleReviews" /></th><th>員工／日期</th><th>原始刷卡／來源列</th><th>原因</th><th>上班</th><th>下班</th><th>核對</th></tr></thead>
+              <thead><tr><th><input type="checkbox" aria-label="全選目前篩選結果" :checked="allReviewsSelected" :indeterminate="selectedReviewRows.length > 0 && !allReviewsSelected" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch || !selectableReviewRows.length" @change="selectVisibleReviews" /></th><th>員工／日期</th><th>原始刷卡／來源列</th><th>原因／班表提示</th><th>上班</th><th>下班</th><th>核對</th></tr></thead>
               <tbody><tr v-for="row in filteredReviewRows" :key="row.row_num" :data-review-row="row.row_num">
                 <td><input v-model="selectedReviewRows" :value="row.row_num" type="checkbox" :aria-label="`選取 ${row.employee_name} ${row.date}`" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch || !punchOptions(row).length" /></td>
                 <td>{{ row.employee_name }}<br />{{ row.date }}<br /><small>{{ row.source_employee_number }}</small></td>
                 <td>{{ row.punches?.map(time => time.slice(11)).join('、') }}<br /><small>來源列 {{ row.source_rows?.join('、') }}</small></td>
-                <td>{{ reviewReasons(row).join('、') || checkLabel(row) }}</td>
-                <td><select v-model="reviewEdits[row.row_num]!.punch_in" :aria-label="`${row.employee_name} ${row.date} 上班`" @change="reviewDirty = true" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"><option value="">缺卡</option><option v-for="time in punchOptions(row)" :key="time" :value="time">{{ time }}</option></select></td>
-                <td><select v-model="reviewEdits[row.row_num]!.punch_out" :aria-label="`${row.employee_name} ${row.date} 下班`" @change="reviewDirty = true" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"><option value="">缺卡</option><option v-for="time in punchOptions(row)" :key="time" :value="time">{{ time }}</option></select></td>
+                <td>{{ reviewReasons(row).join('、') || checkLabel(row) }}<template v-if="scheduleLoaded || scheduleRequiredKeys.has(reviewFingerprint(row))"><br /><small>{{ scheduleHints[reviewFingerprint(row)]?.schedule || '班表未提供' }}</small><br />{{ scheduleReason(row) }}</template></td>
+                <td><select v-model="reviewEdits[row.row_num]!.punch_in" :aria-label="`${row.employee_name} ${row.date} 上班`" @change="markTimeEdit(row)" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"><option value="">缺卡</option><option v-for="time in punchOptions(row)" :key="time" :value="time">{{ time }}</option></select></td>
+                <td><select v-model="reviewEdits[row.row_num]!.punch_out" :aria-label="`${row.employee_name} ${row.date} 下班`" @change="markTimeEdit(row)" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"><option value="">缺卡</option><option v-for="time in punchOptions(row)" :key="time" :value="time">{{ time }}</option></select></td>
                 <td><label><input v-model="reviewEdits[row.row_num]!.confirmed" @change="reviewDirty = true" type="checkbox" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch" />已人工核對</label></td>
               </tr></tbody>
             </table>
           </div>
           <div class="import-preview-dialog__settings">
-            <el-button v-for="(label, action) in batchLabels" :key="action" :data-batch-action="action" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch || !selectedReviewRows.length" @click="prepareBatch(action)">{{ label }}</el-button>
+            <el-button v-for="(label, action) in batchLabels" :key="action" :data-batch-action="action" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch || !selectedReviewRows.length || (action === 'schedule' && !scheduleLoaded)" @click="prepareBatch(action)">{{ label }}</el-button>
           </div>
           <section v-if="pendingBatch" aria-label="批次核對確認" class="import-preview-dialog__batch-confirm">
             <p>選取 {{ pendingBatch.rows.length }} 個人日；將套用 {{ batchApplicableCount }} 個人日，略過 {{ pendingBatch.rows.length - batchApplicableCount }} 個人日。</p>
@@ -703,7 +741,7 @@ defineExpose({
           v-if="canWrite"
           type="primary"
           :loading="importing"
-          :disabled="busy || reviewDirty || mappingDirty || !!pendingBatch || importableCount === 0"
+          :disabled="busy || reviewDirty || mappingDirty || !!pendingBatch || unresolvedScheduleCount > 0 || importableCount === 0"
           @click="handleConfirmImport"
         >
           確認匯入 {{ importableCount }} 筆
