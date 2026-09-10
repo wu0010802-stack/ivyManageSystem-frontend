@@ -168,6 +168,7 @@ const ElIcon = {
 }
 
 const stubs = {
+  'el-alert': { props: ['title', 'description'], template: '<div role="status">{{ title }} {{ description }}</div>' },
   teleport: true,
   'el-dialog': ElDialog,
   'el-tabs': ElTabs,
@@ -199,6 +200,16 @@ describe('ImportPreviewDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(true)
+  })
+
+  it('顯示待補人日並明確提醒實際匯入以完整預覽清單為準', async () => {
+    const wrapper = mountDialog()
+    await wrapper.setProps({ sourceContext: { employee_id: 7, employee_name: '測試員工', date: '2026-06-03' } })
+    expect(wrapper.text()).toContain('待補資料：測試員工 · 2026-06-03')
+    expect(wrapper.text()).toContain('不會自動限制匯入範圍，實際匯入以預覽清單為準')
+    await wrapper.setProps({ sourceContext: null })
+    expect(wrapper.text()).not.toContain('待補資料：')
+    wrapper.unmount()
   })
 
   // ── basic rendering ──────────────────────────────────────────────────────────

@@ -24,6 +24,48 @@ beforeEach(() => {
 })
 afterEach(() => { wrapper.unmount(); vi.useRealTimers() })
 describe('核對清單互動', () => {
+  it('日期快捷維持選定月份，本週只涵蓋週一至今日', async () => {
+    await flushPromises()
+    expect(button('今日').attributes('disabled')).toBeDefined()
+    expect(button('整月').exists()).toBe(true)
+    await wrapper.setProps({ month: 9 }); await flushPromises()
+    await button('今日').trigger('click'); await flushPromises()
+    expect(api.preview.mock.lastCall?.[0]).toMatchObject({ start_date: '2026-09-06', end_date: '2026-09-06' })
+    await button('本週迄今').trigger('click'); await flushPromises()
+    expect(api.preview.mock.lastCall?.[0]).toMatchObject({ start_date: '2026-09-01', end_date: '2026-09-06' })
+  })
+  it('自訂超過31天不送出預覽並顯示原因', async () => {
+    await flushPromises()
+    const calls = api.preview.mock.calls.length
+    await wrapper.find('input[aria-label="核對起日"]').setValue('2026-07-01')
+    await button('重新核對').trigger('click'); await flushPromises()
+    expect(api.preview).toHaveBeenCalledTimes(calls)
+    expect(wrapper.text()).toContain('核對範圍不可超過 31 天')
+  })
+
+  it('資料待補按人員摺疊並與異常分開計數，搜尋後仍可逐日匯入', async () => {
+    api.preview.mockResolvedValue({ data: { rows: [
+      { ...row(1), status: 'data_incomplete', punch_in: null, punch_out: null },
+      { ...row(1), date: '2026-08-04', status: 'data_incomplete', punch_in: null, punch_out: null },
+      row(2),
+    ], shift_types: shifts } })
+    await button('重新核對').trigger('click'); await flushPromises()
+    expect(wrapper.text()).toContain('資料待補 2 筆')
+    expect(wrapper.text()).toContain('出勤差異 1 筆')
+    const group = wrapper.find('details[data-employee-id="1"]')
+    expect(group.exists()).toBe(true)
+    expect(group.attributes('open')).toBeUndefined()
+    expect(group.find('summary').text()).toContain('2 天資料待補')
+    expect(wrapper.findAll('article').filter(item => !item.element.closest('details'))).toHaveLength(1)
+    await wrapper.find('input[aria-label="搜尋核對人員"]').setValue('T1')
+    ;(group.element as HTMLDetailsElement).open = true
+    await group.trigger('toggle')
+    await group.findAll('button').find(item => item.text() === '匯入打卡')!.trigger('click')
+    expect(wrapper.emitted('import')?.[0]?.[0]).toMatchObject({ employee_id: 1, date: '2026-08-03' })
+    await wrapper.setProps({ revision: 1 }); await flushPromises()
+    expect(wrapper.find('details[data-employee-id="1"]').attributes('open')).toBeDefined()
+  })
+
   it('初次核對不宣稱完整；明確勾選後重查才傳完整區間', async () => {
     await flushPromises()
     expect(api.preview.mock.calls[0][0]).toEqual({ start_date: '2026-08-01', end_date: '2026-08-31' })
@@ -40,10 +82,15 @@ describe('核對清單互動', () => {
     expect((wrapper.find('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(false)
     expect(wrapper.findAll('article')).toHaveLength(0)
   })
-  it('再次匯入重設完整性並重新取得結果', async () => {
+  it('再次匯入重設完整性並重新取得結果，保留自訂期間與人員搜尋', async () => {
     await flushPromises()
+    await wrapper.find('input[aria-label="搜尋核對人員"]').setValue('T1')
+    await wrapper.find('input[aria-label="核對起日"]').setValue('2026-08-02')
     await wrapper.find('input[type="checkbox"]').setValue(true)
+    await button('重新核對').trigger('click'); await flushPromises()
     await wrapper.setProps({ revision: 1 }); await flushPromises()
+    expect(api.preview.mock.lastCall?.[0].start_date).toBe('2026-08-02')
+    expect((wrapper.find('input[aria-label="搜尋核對人員"]').element as HTMLInputElement).value).toBe('T1')
     expect((wrapper.find('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(false)
     expect(api.preview.mock.lastCall?.[0]).not.toHaveProperty('complete_start_date')
   })

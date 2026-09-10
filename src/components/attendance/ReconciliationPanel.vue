@@ -4,7 +4,8 @@ import { ElMessage } from 'element-plus'
 import { useAttendanceReconciliation } from '@/composables/useAttendanceReconciliation'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { hasPermission } from '@/utils/auth'
-import { dateToLocalISO, formatDateTimeTW, todayTaipeiISO } from '@/utils/format'
+import { formatDateTimeTW, todayTaipeiISO } from '@/utils/format'
+import { reconciliationRanges, reconciliationRangeError } from '@/utils/attendanceReconciliationRange'
 import FormDialog from '@/components/common/FormDialog.vue'
 
 type Row = ApiResponse<'/attendance/reconciliation/preview', 'post'>['rows'][number]
@@ -16,12 +17,31 @@ const end = ref('')
 const complete = ref(false)
 const filter = ref('exceptions')
 const search = ref('')
+const expandedEmployees = ref(new Set<number>())
+function onGroupToggle(employeeId: number, event: Event): void {
+  if ((event.target as HTMLDetailsElement).open) expandedEmployees.value.add(employeeId)
+  else expandedEmployees.value.delete(employeeId)
+}
 const selected = ref<Row | null>(null)
 const selectedShift = ref<number | null>(null)
 const includePair = ref(false)
 const reason = ref('')
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE') && hasPermission('SCHEDULE'))
 const today = computed(() => todayTaipeiISO())
+const ranges = computed(() => reconciliationRanges(props.year, props.month, today.value))
+const rangeError = computed(() => reconciliationRangeError(start.value, end.value, ranges.value.first, ranges.value.last))
+const selectedRange = ref<'today' | 'week' | 'elapsed' | 'custom'>('elapsed')
+function chooseRange(key: 'today' | 'week' | 'elapsed' | 'custom'): void {
+  selectedRange.value = key
+  if (key === 'custom') return
+  const range = ranges.value[key]
+  if (!range) return
+  start.value = range.start
+  end.value = range.end
+  void runPreview()
+}
+function onCustomRange(): void { selectedRange.value = 'custom' }
+
 const completeAllowed = computed(() => !!start.value && !!end.value && end.value < today.value && start.value <= end.value)
 const labels: Record<Row['status'], string> = {
   matched: '符合原班表', possible_shift_change: '疑似換班', missing_punch: '缺卡待確認',
@@ -35,6 +55,25 @@ const rows = computed(() => (data.value?.rows ?? []).filter(row => {
   return statusMatch && (!term || row.employee_name.includes(term) || row.employee_number.includes(term))
 }))
 const unresolvedCount = computed(() => (data.value?.rows ?? []).filter(row => !['matched', 'leave', 'off_day'].includes(row.status)).length)
+const incompleteCount = computed(() => (data.value?.rows ?? []).filter(row => row.status === 'data_incomplete').length)
+const groups = computed(() => {
+  const result: { key: string; incomplete: boolean; rows: Row[] }[] = []
+  const byEmployee = new Map<number, Row[]>()
+  for (const row of rows.value) {
+    if (row.status !== 'data_incomplete') {
+      result.push({ key: `${row.employee_id}:${row.date}`, incomplete: false, rows: [row] })
+      continue
+    }
+    let employeeRows = byEmployee.get(row.employee_id)
+    if (!employeeRows) {
+      employeeRows = []
+      byEmployee.set(row.employee_id, employeeRows)
+      result.push({ key: `incomplete:${row.employee_id}`, incomplete: true, rows: employeeRows })
+    }
+    employeeRows.push(row)
+  }
+  return result
+})
 const pair = computed(() => {
   const row = selected.value
   if (!row || row.original_shift_type_id === null || selectedShift.value === null || selectedShift.value === 0) return null
@@ -46,23 +85,23 @@ const pair = computed(() => {
 const dialogOpen = computed({ get: () => selected.value !== null, set: (value: boolean) => { if (!value && !saving.value) selected.value = null } })
 
 function resetRange() {
-  const first = new Date(props.year, props.month - 1, 1)
-  const last = new Date(props.year, props.month, 0)
-  const yesterday = new Date(`${todayTaipeiISO()}T12:00:00+08:00`)
-  yesterday.setDate(yesterday.getDate() - 1)
-  start.value = dateToLocalISO(first)
-  end.value = dateToLocalISO(last < yesterday ? last : yesterday < first ? first : yesterday)
+  expandedEmployees.value.clear()
+  const range = ranges.value.elapsed
+  start.value = range?.start ?? ranges.value.first
+  end.value = range?.end ?? ranges.value.first
+  selectedRange.value = range ? 'elapsed' : 'custom'
   complete.value = false
   selected.value = null
   reset()
 }
-watch(() => [props.year, props.month, props.revision], () => { resetRange(); void runPreview() }, { immediate: true })
+watch(() => [props.year, props.month], () => { resetRange(); void runPreview() }, { immediate: true })
+watch(() => props.revision, () => { complete.value = false; selected.value = null; reset(); void runPreview() })
 watch([start, end], () => { complete.value = false; selected.value = null; reset() }, { flush: 'sync' })
 watch(complete, () => { selected.value = null; reset() }, { flush: 'sync' })
 watch(selectedShift, () => { includePair.value = false })
 
 async function runPreview() {
-  if (!start.value || !end.value || start.value > end.value) return
+  if (rangeError.value) return
   await preview({ start_date: start.value, end_date: end.value,
     ...(complete.value && completeAllowed.value ? { complete_start_date: start.value, complete_end_date: end.value } : {}),
   })
@@ -96,11 +135,19 @@ async function saveShift() {
   <section class="reconciliation" aria-label="班表與打卡核對">
     <div class="reconciliation__setup">
     <p class="reconciliation__intro">比對班表與打卡，確認差異後再調整當日班別。</p>
-    <div class="reconciliation__controls">
-      <label>起日<input v-model="start" type="date" :disabled="saving" aria-label="核對起日" /></label>
-      <label>迄日<input v-model="end" type="date" :disabled="saving" aria-label="核對迄日" /></label>
-      <el-button type="primary" :loading="loading" :disabled="saving || !start || !end || start > end" @click="runPreview">重新核對</el-button>
+    <div class="reconciliation__shortcuts" role="group" aria-label="核對日期快捷">
+      <el-button :disabled="!ranges.today || saving" :aria-pressed="selectedRange === 'today'" @click="chooseRange('today')">今日</el-button>
+      <el-button :disabled="!ranges.week || saving" :aria-pressed="selectedRange === 'week'" @click="chooseRange('week')">本週迄今</el-button>
+      <el-button :disabled="!ranges.elapsed || saving" :aria-pressed="selectedRange === 'elapsed'" @click="chooseRange('elapsed')">{{ ranges.elapsedLabel }}</el-button>
+      <el-button :disabled="saving" :aria-pressed="selectedRange === 'custom'" @click="chooseRange('custom')">自訂</el-button>
     </div>
+    <p class="reconciliation__hint">快捷範圍限 {{ year }} 年 {{ month }} 月；本週迄今為週一至今天。{{ !ranges.today ? '今日不在所選月份，今日快捷無法使用。' : '' }}{{ !ranges.week ? '本週與所選月份沒有交集。' : '' }}{{ !ranges.elapsed ? '此月份尚無截至昨日的日期，請使用可選的快捷或自訂日期。' : '' }}</p>
+    <div class="reconciliation__controls">
+      <label>起日<input v-model="start" type="date" :min="ranges.first" :max="ranges.last" @input="onCustomRange" :disabled="saving" aria-label="核對起日" /></label>
+      <label>迄日<input v-model="end" type="date" :min="ranges.first" :max="ranges.last" @input="onCustomRange" :disabled="saving" aria-label="核對迄日" /></label>
+      <el-button type="primary" :loading="loading" :disabled="saving || !!rangeError" @click="runPreview">重新核對</el-button>
+    </div>
+    <p v-if="rangeError" role="alert" class="reconciliation__hint">{{ rangeError }}</p>
     <label class="reconciliation__complete">
       <input v-model="complete" type="checkbox" :disabled="!completeAllowed || saving" aria-describedby="reconciliation-completeness-hint" />
       我已完整匯入上述期間所有員工、所有打卡來源的紀錄
@@ -113,15 +160,21 @@ async function saveShift() {
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <div v-if="data" class="reconciliation__filters">
-      <p class="reconciliation__count" role="status"><strong>{{ unresolvedCount }} 筆待核對</strong><span>共 {{ data.rows.length }} 筆人日</span></p>
+      <p class="reconciliation__count" role="status"><strong>{{ unresolvedCount }} 筆待核對</strong><span>資料待補 {{ incompleteCount }} 筆 · 出勤差異 {{ unresolvedCount - incompleteCount }} 筆</span><span>共 {{ data.rows.length }} 筆人日；符合班表、請假與非應出勤日不列待核對。</span></p>
       <label>顯示<select v-model="filter" aria-label="核對狀態"><option value="exceptions">待核對</option><option value="all">全部</option><option v-for="(label, status) in labels" :key="status" :value="status">{{ label }}</option></select></label>
       <label>人員<input v-model="search" type="search" aria-label="搜尋核對人員" placeholder="姓名或工號" /></label>
     </div>
     <p v-if="loading" role="status">正在核對班表與打卡…</p>
     <p v-else-if="!data && !error" role="status">範圍或完整性設定已變更，請按「重新核對」。</p>
-    <el-empty v-else-if="data && !rows.length" :description="data.rows.length ? '此篩選下沒有待核對項目' : '此期間沒有可核對的員工資料'" />
+    <div v-else-if="data && !rows.length">
+      <el-empty :description="data.rows.length ? '此篩選下沒有待核對項目' : '此期間沒有可核對的員工資料'" />
+      <el-button v-if="data.rows.length" @click="search = ''; filter = 'all'">清除篩選</el-button>
+    </div>
     <div v-else class="reconciliation__list">
-      <article v-for="row in rows" :key="`${row.employee_id}:${row.date}`" class="reconciliation__row">
+      <div class="reconciliation__column-headings" aria-hidden="true"><span>人員／日期</span><span>原班表</span><span>上班打卡</span><span>下班打卡</span><span>可能班別</span></div>
+      <component v-for="group in groups" :is="group.incomplete ? 'details' : 'div'" :key="group.key" :open="group.incomplete && expandedEmployees.has(group.rows[0].employee_id)" @toggle="onGroupToggle(group.rows[0].employee_id, $event)" :data-employee-id="group.incomplete ? group.rows[0].employee_id : undefined" class="reconciliation__group">
+      <summary v-if="group.incomplete"><strong>{{ group.rows[0].employee_name }}</strong> · {{ group.rows[0].employee_number }} · {{ group.rows.length }} 天資料待補<span>展開逐日核對與匯入</span></summary>
+      <article v-for="row in group.rows" :key="`${row.employee_id}:${row.date}`" class="reconciliation__row">
         <header><strong>{{ row.employee_name }}</strong><span>{{ row.employee_number }} · {{ row.date }}</span><el-tag :type="['matched', 'leave', 'off_day'].includes(row.status) ? 'info' : 'warning'">{{ labels[row.status] }}</el-tag></header>
         <dl>
           <div><dt>原班表</dt><dd>{{ row.day_off ? '非應出勤日' : `${row.expected_start}–${row.expected_end}` }}</dd></div>
@@ -130,11 +183,13 @@ async function saveShift() {
           <div><dt>可能班別</dt><dd>{{ row.candidates.length ? row.candidates.map(c => `${c.name} ${c.work_start}–${c.work_end}`).join('、') : '無明確建議' }}</dd></div>
         </dl>
         <p class="reconciliation__reason">{{ row.reason }}</p>
-        <div class="reconciliation__actions"><el-button v-if="canWrite" :disabled="saving || loading" @click="openConfirm(row)">確認當日班別</el-button>
+        <div class="reconciliation__actions">
+        <el-button v-if="canWrite && !row.punch_in && !row.punch_out" :type="row.status === 'data_incomplete' ? 'primary' : 'default'" :disabled="saving || loading" @click="emit('import', row)">匯入打卡</el-button>
+        <el-button v-if="canWrite" :disabled="saving || loading" @click="openConfirm(row)">確認當日班別</el-button>
         <el-button v-if="['missing_punch', 'anomaly', 'suspected_absence'].includes(row.status)" text @click="emit('records', row)">查看出勤明細</el-button>
-        <el-button v-if="canWrite && !row.punch_in && !row.punch_out" text @click="emit('import', row)">補匯入當日紀錄</el-button>
         </div>
       </article>
+      </component>
     </div>
     <FormDialog v-model="dialogOpen" title="確認當日班別" size="compact" :enter-submit="false" :loading="saving" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving">
       <template v-if="selected">
@@ -160,9 +215,13 @@ async function saveShift() {
 </template>
 
 <style scoped>
-.reconciliation { display: grid; gap: var(--space-4); min-width: 0; }
+.reconciliation { --reconciliation-columns: minmax(0, 2fr) repeat(4, minmax(0, 1.5fr)); display: grid; gap: var(--space-4); min-width: 0; }
 .reconciliation__setup { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); background: var(--el-fill-color-light); }
 .reconciliation__intro { margin: 0; color: var(--el-text-color-primary); }
+.reconciliation__shortcuts { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.reconciliation__shortcuts .el-button { margin-left: 0; }
+.reconciliation__shortcuts [aria-pressed="true"] { color: var(--el-color-primary); border-color: var(--el-color-primary); }
+.reconciliation__column-headings { display: grid; grid-template-columns: var(--reconciliation-columns); gap: var(--space-4); position: sticky; top: 0; z-index: 2; padding: var(--space-3) var(--space-4); background: var(--el-fill-color-light); border-bottom: 1px solid var(--el-border-color-light); font-size: var(--text-sm); font-weight: 600; }
 .reconciliation__controls, .reconciliation__filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; }
 .reconciliation__controls label, .reconciliation__filters label { display: grid; gap: var(--space-1); font-size: var(--text-sm); }
 .reconciliation input:not([type='checkbox']), .reconciliation select { min-width: 0; max-width: 100%; min-height: var(--touch-target-min); border: 1px solid var(--el-border-color); border-radius: var(--radius-sm); padding: var(--space-2); background: var(--el-bg-color); color: var(--el-text-color-primary); font: inherit; }
@@ -173,22 +232,28 @@ async function saveShift() {
 .reconciliation__count { display: grid; gap: var(--space-1); margin: 0 auto 0 0; align-self: center; }
 .reconciliation__count span { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .reconciliation__list { border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); background: var(--el-bg-color); }
-.reconciliation__row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); }
+.reconciliation__group + .reconciliation__group { border-top: 1px solid var(--el-border-color-light); }
+.reconciliation__group > summary { cursor: pointer; padding: var(--space-3) var(--space-4); min-height: var(--touch-target-min); }
+.reconciliation__group > summary span { margin-left: var(--space-3); font-size: var(--text-sm); color: var(--el-text-color-secondary); }
+.reconciliation__row { display: grid; grid-template-columns: var(--reconciliation-columns); gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); }
 .reconciliation__row + .reconciliation__row { border-top: 1px solid var(--el-border-color-light); }
 .reconciliation__row:focus-within { background: var(--el-fill-color-light); }
-.reconciliation__row header { grid-column: span 2; display: flex; flex-wrap: wrap; align-content: start; align-items: center; gap: var(--space-1) var(--space-2); }
+.reconciliation__row header { grid-column: 1; display: flex; flex-wrap: wrap; align-content: start; align-items: center; gap: var(--space-1) var(--space-2); }
 .reconciliation__row header > span:not(.el-tag) { flex-basis: 100%; color: var(--el-text-color-secondary); font-size: var(--text-sm); }
-.reconciliation__row dl { grid-column: span 6; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
-.reconciliation__row dt { font-size: var(--text-sm); color: var(--el-text-color-secondary); }
+.reconciliation__row dl { display: contents; }
+.reconciliation__row dl > div { min-width: 0; }
+.reconciliation__row dt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 .reconciliation__row dd { margin: var(--space-1) 0 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.reconciliation__reason { grid-column: span 4; margin: 0; color: var(--el-text-color-regular); font-size: var(--text-sm); align-self: center; }
-.reconciliation__actions { grid-column: span 4; display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; }
+.reconciliation__reason { grid-column: 1 / 3; margin: 0; color: var(--el-text-color-regular); font-size: var(--text-sm); align-self: center; }
+.reconciliation__actions { grid-column: 3 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; }
 .reconciliation__actions .el-button { margin-left: 0; }
 @media (--to-sm) {
+  .reconciliation__column-headings { display: none; }
+  .reconciliation__row dt { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
   .reconciliation__setup { padding: var(--space-3); }
   .reconciliation__row { grid-template-columns: minmax(0, 1fr); padding: var(--space-3); gap: var(--space-3); }
   .reconciliation__row > header, .reconciliation__row > dl, .reconciliation__row > .reconciliation__reason, .reconciliation__row > .reconciliation__actions { grid-column: 1 / -1; }
-  .reconciliation__row dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reconciliation__row dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
   .reconciliation__controls label, .reconciliation__filters label { flex: 1; min-width: 0; }
   .reconciliation__controls > .el-button { width: 100%; min-height: var(--touch-target-min); }
   .reconciliation__count { flex-basis: 100%; }

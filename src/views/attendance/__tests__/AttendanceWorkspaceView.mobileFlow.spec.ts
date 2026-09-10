@@ -53,7 +53,7 @@ const RosterColumnStub = {
 const AnomalyQueueColumnStub = {
   name: 'AnomalyQueueColumn',
   props: ['items', 'selectedIndex', 'loading'],
-  emits: ['select', 'filterChange'],
+  emits: ['select', 'filterChange', 'resolved'],
   template: '<div class="anomaly-queue-column-stub" />',
 }
 const DetailColumnStub = {
@@ -63,7 +63,9 @@ const DetailColumnStub = {
   template: '<div class="detail-column-stub" />',
 }
 
+const ReconciliationPanelStub = { name: 'ReconciliationPanel', props: ['revision'], template: '<div />' }
 const STUBS = {
+  ReconciliationPanel: ReconciliationPanelStub,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,
   DetailColumn: DetailColumnStub,
@@ -93,6 +95,17 @@ describe('AttendanceWorkspaceView 手機三段流程', () => {
       .mockReset()
       .mockResolvedValue({ data: { items: sampleAnomalies, pending: 2, total: 2, confirmed: 0 } })
     getRecordsMock.mockReset().mockResolvedValue({ data: [] })
+  })
+
+  it.each([true, false])('批次處理成功會使核對版本失效（手機=%s）', async (mobile) => {
+    mockIsMobile.value = mobile
+    const wrapper = mount(AttendanceWorkspaceView, { props: { defaultReconcile: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('revision')).toBe(0)
+    await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('resolved')
+    await flushPromises()
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('revision')).toBe(1)
+    wrapper.unmount()
   })
 
   it('手機預設停在名冊分頁', async () => {

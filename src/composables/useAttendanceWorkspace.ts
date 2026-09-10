@@ -142,6 +142,10 @@ export function useAttendanceWorkspace(year: Ref<number>, month: Ref<number>) {
     confirmed: 0,
   })
   const loading = ref(false)
+  const loadState = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const loadedPeriod = ref<string | null>(null)
+  const currentPeriod = computed(() => `${year.value}-${String(month.value).padStart(2, '0')}`)
+  const hasCurrentData = computed(() => loadedPeriod.value === currentPeriod.value)
 
   // 防切月 race：晚到的舊請求不得蓋掉新月資料（epoch 比對，鏡像 useSalarySettlement）
   let epoch = 0
@@ -150,25 +154,32 @@ export function useAttendanceWorkspace(year: Ref<number>, month: Ref<number>) {
 
   async function refresh() {
     const my = ++epoch
+    const period = currentPeriod.value
     loading.value = true
+    loadState.value = 'loading'
     try {
       const [sumRes, anoRes] = await Promise.all([
         getSummary({ year: year.value, month: month.value }),
         getAnomalyList({ year: year.value, month: month.value, status: 'all' }),
       ])
-      if (my !== epoch) return
+      if (my !== epoch || period !== currentPeriod.value) return
       const anoData = anoRes.data ?? { total: 0, pending: 0, confirmed: 0, items: [] }
       roster.value = sumRes.data ?? []
       // P1-4：queue 保留全部狀態（依 id 分組成日卡）；「未處理/已處理」
       // 篩選由 AnomalyQueueColumn 依 confirmed_action 過濾，讓 status filter 真的生效
       anomalyQueue.value = groupAnomalies(anoData.items ?? [])
+      loadedPeriod.value = period
+      loadState.value = 'success'
       anomalyMeta.value = {
         total: anoData.total ?? 0,
         pending: anoData.pending ?? 0,
         confirmed: anoData.confirmed ?? 0,
       }
     } catch (e) {
-      if (my === epoch) notify(e, 'useAttendanceWorkspace.refresh', '載入考勤工作台失敗')
+      if (my === epoch && period === currentPeriod.value) {
+        loadState.value = 'error'
+        notify(e, 'useAttendanceWorkspace.refresh', '載入考勤工作台失敗')
+      }
     } finally {
       if (my === epoch) loading.value = false
     }
@@ -176,7 +187,7 @@ export function useAttendanceWorkspace(year: Ref<number>, month: Ref<number>) {
 
   watch([year, month], refresh)
 
-  return { roster, anomalyQueue, anomalyMeta, kpis, loading, refresh }
+  return { roster, anomalyQueue, anomalyMeta, kpis, loading, loadState, loadedPeriod, hasCurrentData, refresh }
 }
 
 export type AttendanceWorkspace = ReturnType<typeof useAttendanceWorkspace>

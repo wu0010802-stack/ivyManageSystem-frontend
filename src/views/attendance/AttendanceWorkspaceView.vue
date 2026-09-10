@@ -4,24 +4,38 @@
       :year="query.year"
       :month="query.month"
       :kpis="kpis"
+      :display-state="statsDisplayState"
       @update:year="(v) => { query.year = v }"
       @update:month="(v) => { query.month = v }"
-      @import="importOpen = true"
+      @import="openImport"
       @export="onExport"
-    />
+    >
+      <template #month-tools><el-button v-if="canPayrollCompare" @click="payrollOpen = true">薪資扣項核對</el-button></template>
+    </WorkspaceHeader>
 
-    <div v-if="canReconcile || canPayrollCompare" class="workspace-mode" aria-label="出勤核對方式">
+    <div v-if="canReconcile" class="workspace-mode" aria-label="出勤核對方式">
       <el-button v-if="canReconcile" :type="reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = true">班表與打卡核對</el-button>
       <el-button v-if="canReconcile" :type="!reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = false">出勤明細與補卡</el-button>
-      <el-button v-if="canPayrollCompare" @click="payrollOpen = true">薪資扣項核對</el-button>
     </div>
     <PayrollComparisonDialog v-if="payrollOpen && canPayrollCompare" v-model="payrollOpen" :year="query.year" :month="query.month" />
-    <ReconciliationPanel v-if="reconcileOpen && canReconcile" :year="query.year" :month="query.month" :revision="importRevision" @confirmed="onResolved" @records="onReconciliationRecords" @import="onReconciliationImport" />
+    <ReconciliationPanel v-if="canReconcile && reconciliationVisited" v-show="reconcileOpen" :year="query.year" :month="query.month" :revision="importRevision" @confirmed="onResolved" @records="onReconciliationRecords" @import="onReconciliationImport" />
     <div v-show="!reconcileOpen || !canReconcile">
+    <p v-if="ws.loading.value" role="status">正在載入 {{ query.year }} 年 {{ query.month }} 月出勤紀錄…</p>
+    <div v-if="ws.loadState.value === 'error'" class="workspace-status" role="alert">
+      <p>{{ query.year }} 年 {{ query.month }} 月出勤資料載入失敗。{{ ws.hasCurrentData.value ? '目前顯示此月份上次成功載入的資料。' : '目前尚無此月份可顯示的資料。' }}</p>
+      <el-button @click="ws.refresh()">重新載入</el-button>
+    </div>
+    <section v-if="showEmptyRecords" class="workspace-status" aria-label="出勤紀錄空狀態">
+      <h2>本月尚無出勤紀錄</h2>
+      <p>{{ query.year }} 年 {{ query.month }} 月尚無已載入的出勤紀錄；班表與打卡核對仍可能有待補資料。</p>
+      <el-button v-if="hasPermission('ATTENDANCE_WRITE')" type="primary" @click="openImport">匯入打卡紀錄</el-button>
+    </section>
+    <template v-else-if="ws.hasCurrentData.value">
     <!-- 桌機三欄 -->
     <div v-if="isDesktop" class="workspace-cols">
       <div class="col-roster">
         <RosterColumn
+          v-model:search="rosterSearch"
           :roster="ws.roster.value"
           :selected-employee-id="selectedEmployeeId"
           :loading="ws.loading.value"
@@ -35,7 +49,7 @@
           :loading="ws.loading.value"
           @select="onAnomalySelect"
           @filter-change="onFilterChange"
-          @resolved="onResolved"
+          @resolved="onDetailResolved"
         />
       </div>
       <div class="col-detail">
@@ -46,9 +60,11 @@
           :anomaly-total="ws.anomalyQueue.value.length"
           :context="context"
           :employee-id="currentEmployeeId"
+          :focus-date="focusDate"
+          @import="openImport"
           :year="query.year"
           :month="query.month"
-          @resolved="onResolved"
+          @resolved="onDetailResolved"
           @navigate="onNavigate"
           @switch-mode="(m: 'resolve' | 'month') => { detailMode = m }"
         />
@@ -61,6 +77,7 @@
       <el-tab-pane label="名冊" name="roster">
         <div class="col-roster">
           <RosterColumn
+            v-model:search="rosterSearch"
             :roster="ws.roster.value"
             :selected-employee-id="selectedEmployeeId"
             :loading="ws.loading.value"
@@ -76,7 +93,7 @@
             :loading="ws.loading.value"
             @select="onAnomalySelect"
             @filter-change="onFilterChange"
-            @resolved="onResolved"
+            @resolved="onDetailResolved"
           />
         </div>
       </el-tab-pane>
@@ -98,15 +115,18 @@
             :anomaly-total="ws.anomalyQueue.value.length"
             :context="context"
             :employee-id="currentEmployeeId"
+            :focus-date="focusDate"
+            @import="openImport"
             :year="query.year"
             :month="query.month"
-            @resolved="onResolved"
+            @resolved="onDetailResolved"
             @navigate="onNavigate"
             @switch-mode="(m: 'resolve' | 'month') => { detailMode = m }"
           />
         </div>
       </el-tab-pane>
     </el-tabs>
+    </template>
 
     </div>
     <!-- 匯入 dialog -->
@@ -114,6 +134,7 @@
       v-model="importOpen"
       :year="query.year"
       :month="query.month"
+      :source-context="importContext"
       @imported="onImported"
     />
   </div>
@@ -152,6 +173,9 @@ const query = reactive({ year: now.getFullYear(), month: now.getMonth() + 1 })
 // ── workspace composable ───────────────────────────────────────────────────
 const ws = useAttendanceWorkspace(toRef(query, 'year'), toRef(query, 'month'))
 const kpis = computed(() => ws.kpis.value)
+const rosterSearch = ref('')
+const statsDisplayState = computed(() => ws.hasCurrentData.value ? (ws.loadState.value === 'success' ? 'ready' : 'stale') : (ws.loading.value ? 'loading' : 'unavailable'))
+const showEmptyRecords = computed(() => !focusDate.value && !rosterSearch.value.trim() && ws.loadState.value === 'success' && ws.hasCurrentData.value && ws.roster.value.length === 0 && ws.anomalyQueue.value.length === 0)
 
 // ── 錯誤通知 ────────────────────────────────────────────────────────────────
 const { notify } = useErrorNotify()
@@ -165,12 +189,21 @@ const selectedEmployeeId = ref<number | null>(null)
 const selectedAnomalyIndex = ref(0)
 const detailMode = ref<'resolve' | 'month'>('resolve')
 const importOpen = ref(false)
+const focusDate = ref<string | null>(null)
+const importContext = ref<{ employee_id: number; employee_name: string; date: string } | null>(null)
+function openImport(): void { importContext.value = null; importOpen.value = true }
 const payrollOpen = ref(false)
 const canPayrollCompare = computed(() => hasPermission('ATTENDANCE_READ') && hasPermission('SALARY_READ') && hasFullSalaryView())
 const canReconcile = computed(() => hasPermission('SCHEDULE') && hasPermission('ATTENDANCE_READ'))
 const reconcileOpen = ref(props.defaultReconcile ?? false)
+const reconciliationVisited = ref(reconcileOpen.value)
+watch(reconcileOpen, value => { if (value) reconciliationVisited.value = true })
 const importRevision = ref(0)
-watch(() => [query.year, query.month], () => { emit('dateChange', `${query.year}-${String(query.month).padStart(2, '0')}-01`) })
+watch(() => [query.year, query.month], () => {
+  const monthPrefix = `${query.year}-${String(query.month).padStart(2, '0')}`
+  if (focusDate.value && !focusDate.value.startsWith(`${monthPrefix}-`)) focusDate.value = null
+  emit('dateChange', `${monthPrefix}-01`)
+})
 watch(() => props.initialDate, value => {
   if (!value) return
   const date = new Date(`${value}T12:00:00`)
@@ -263,12 +296,14 @@ const context = computed(() => {
 // ── 事件 handlers ─────────────────────────────────────────────────────────
 
 function onRosterSelect(id: number): void {
+  focusDate.value = null
   selectedEmployeeId.value = id
   detailMode.value = 'month'
   if (isMobile.value) mobileTab.value = 'detail'
 }
 
 function onAnomalySelect(idx: number): void {
+  focusDate.value = null
   selectedAnomalyIndex.value = idx
   selectedEmployeeId.value = null // 走 anomaly.employee_number → roster 對照
   detailMode.value = 'resolve'
@@ -310,6 +345,11 @@ async function onResolved(): Promise<void> {
   clampSelectedIndex()
 }
 
+async function onDetailResolved(): Promise<void> {
+  await onResolved()
+  importRevision.value += 1
+}
+
 function onNavigate(delta: number): void {
   const max = Math.max(0, ws.anomalyQueue.value.length - 1)
   selectedAnomalyIndex.value = Math.min(Math.max(0, selectedAnomalyIndex.value + delta), max)
@@ -321,11 +361,13 @@ function onReconciliationRecords(row: { employee_id: number; date: string }): vo
   query.month = month
   reconcileOpen.value = false
   selectedEmployeeId.value = row.employee_id
+  focusDate.value = row.date
   detailMode.value = 'month'
   if (!isDesktop.value) mobileTab.value = 'detail'
 }
 
-function onReconciliationImport(row: { date: string }): void {
+function onReconciliationImport(row: { employee_id: number; employee_name: string; date: string }): void {
+  importContext.value = { employee_id: row.employee_id, employee_name: row.employee_name, date: row.date }
   const [year, month] = row.date.split('-').map(Number)
   query.year = year
   query.month = month
@@ -358,6 +400,10 @@ provide('attendanceWs', ws)
   padding: var(--space-4);
 }
 
+.workspace-status { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-6); text-align: center; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); }
+.workspace-status h2, .workspace-status p { margin: 0; }
+.workspace-status h2 { font-size: var(--text-lg); }
+.workspace-status p { color: var(--el-text-color-secondary); }
 .workspace-mode { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-4); }
 
 .workspace-cols {

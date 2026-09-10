@@ -60,26 +60,26 @@ const AnomalyQueueColumnStub = {
 
 const DetailColumnStub = {
   name: 'DetailColumn',
-  props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month'],
+  props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month', 'focusDate'],
   emits: ['resolved', 'navigate', 'switchMode'],
   template: `<div class="detail-column-stub"><slot /></div>`,
 }
 
 const ImportPreviewDialogStub = {
   name: 'ImportPreviewDialog',
-  props: ['modelValue', 'year', 'month'],
+  props: ['modelValue', 'year', 'month', 'sourceContext'],
   emits: ['update:modelValue', 'imported'],
   template: `<div class="import-preview-dialog-stub"><slot /></div>`,
 }
 
 const WorkspaceHeaderStub = {
   name: 'WorkspaceHeader',
-  props: ['year', 'month', 'kpis'],
+  props: ['year', 'month', 'kpis', 'displayState'],
   emits: ['update:year', 'update:month', 'import', 'export'],
-  template: `<div class="workspace-header-stub"><slot /></div>`,
+  template: `<div class="workspace-header-stub"><slot /><slot name="month-tools" /></div>`,
 }
 
-const ReconciliationPanelStub = { name: 'ReconciliationPanel', emits: ['records', 'import'], template: '<div />' }
+const ReconciliationPanelStub = { name: 'ReconciliationPanel', props: ['revision'], emits: ['records', 'import'], template: '<div />' }
 const STUBS = {
   PayrollComparisonDialog: { props: ['modelValue'], template: '<div />' },
   ReconciliationPanel: ReconciliationPanelStub,
@@ -439,11 +439,12 @@ describe('核對跨月明細導向', () => {
     getRecordsMock.mockResolvedValue({ data: [] })
     const wrapper = mount(AttendanceWorkspaceView, { props: { initialDate: '2026-09-06', defaultReconcile: true }, global: { stubs: STUBS } })
     await flushPromises()
-    wrapper.findComponent(ReconciliationPanelStub).vm.$emit('import', { date: '2026-08-31' })
+    wrapper.findComponent(ReconciliationPanelStub).vm.$emit('import', { employee_id: 2, employee_name: '測試員工', date: '2026-08-31' })
     await flushPromises()
     const dialog = wrapper.findComponent(ImportPreviewDialogStub)
     expect(dialog.props('modelValue')).toBe(true)
     expect(dialog.props('month')).toBe(8)
+    expect(dialog.props('sourceContext')).toEqual({ employee_id: 2, employee_name: '測試員工', date: '2026-08-31' })
     wrapper.unmount()
   })
   it('依所點人日的月份載入該員工明細', async () => {
@@ -455,6 +456,13 @@ describe('核對跨月明細導向', () => {
     wrapper.findComponent(ReconciliationPanelStub).vm.$emit('records', { employee_id: 2, date: '2026-08-31' })
     await flushPromises()
     expect(getRecordsMock).toHaveBeenLastCalledWith({ year: 2026, month: 8, employee_id: 2 })
+    expect(wrapper.findComponent(DetailColumnStub).props('focusDate')).toBe('2026-08-31')
+    await wrapper.findComponent(DetailColumnStub).vm.$emit('resolved')
+    await flushPromises()
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('revision')).toBe(1)
+    await wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:month', 9)
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('focusDate')).toBeNull()
     wrapper.unmount()
   })
 })
@@ -475,4 +483,81 @@ describe('薪資核對入口權限', () => {
     await flushPromises()
     expect(wrapper.text()).not.toContain('薪資扣項核對')
   })
+})
+
+
+describe('明細整體空態', () => {
+  it('只有成功且沒有紀錄時合併三欄，提供匯入入口', async () => {
+    mockHasPermission.mockReturnValue(true)
+    getSummaryMock.mockResolvedValue({ data: [] })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('本月尚無出勤紀錄')
+    expect(wrapper.find('.workspace-cols').exists()).toBe(false)
+    await wrapper.findAll('button').find(button => button.text() === '匯入打卡紀錄')!.trigger('click')
+    expect(wrapper.findComponent(ImportPreviewDialogStub).props('modelValue')).toBe(true)
+    wrapper.unmount()
+  })
+  it('載入失敗顯示重試，不宣稱本月沒有資料', async () => {
+    getSummaryMock.mockRejectedValue(new Error('測試失敗'))
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('本月尚無出勤紀錄')
+    expect(wrapper.text()).toContain('重新載入')
+    expect(wrapper.find('.workspace-cols').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+
+it('跨月失敗隱藏前月三欄與統計，重試成功後恢復', async () => {
+  getSummaryMock.mockResolvedValue({ data: sampleRoster })
+  getAnomalyListMock.mockResolvedValue({ data: { items: sampleAnomalies, total: 2, pending: 2, confirmed: 0 } })
+  const wrapper = mountView()
+  await flushPromises()
+  const header = wrapper.findComponent(WorkspaceHeaderStub)
+  expect(header.props('displayState')).toBe('ready')
+  getSummaryMock.mockRejectedValueOnce(new Error('測試失敗'))
+  await header.vm.$emit('update:month', header.props('month') === 9 ? 8 : 9)
+  await flushPromises()
+  expect(wrapper.find('.workspace-cols').exists()).toBe(false)
+  expect(header.props('displayState')).toBe('unavailable')
+  await wrapper.findAll('button').find(button => button.text() === '重新載入')!.trigger('click')
+  await flushPromises()
+  expect(wrapper.find('.workspace-cols').exists()).toBe(true)
+  expect(header.props('displayState')).toBe('ready')
+  wrapper.unmount()
+})
+
+it('沒有當月資料時統計不顯示舊月數字', () => {
+  const wrapper = mount(WorkspaceHeader, {
+    props: { year: 2026, month: 9, displayState: 'unavailable', kpis: { fullAttendance: 9876, lateCount: 0, missingCount: 0, pendingAnomalies: 0 } },
+    global: { stubs: WH_STUBS },
+  })
+  expect(wrapper.text()).toContain('出勤統計尚未載入成功')
+  expect(wrapper.text()).not.toContain('9876')
+  expect(wrapper.find('[aria-label="月結工具"]').text()).toContain('匯出月報')
+  wrapper.unmount()
+})
+
+
+it('整月無出勤紀錄仍保留從核對進入的指定人日明細', async () => {
+  mockHasPermission.mockReturnValue(true)
+  getSummaryMock.mockResolvedValue({ data: [] })
+  getAnomalyListMock.mockResolvedValue({ data: { items: [], total: 0, pending: 0, confirmed: 0 } })
+  getRecordsMock.mockResolvedValue({ data: [] })
+  const wrapper = mount(AttendanceWorkspaceView, { props: { initialDate: '2026-09-10', defaultReconcile: true }, global: { stubs: STUBS } })
+  await flushPromises()
+  await wrapper.findComponent(ReconciliationPanelStub).vm.$emit('records', { employee_id: 7, date: '2026-09-03' })
+  await flushPromises()
+  const detail = wrapper.findComponent(DetailColumnStub)
+  expect(detail.exists()).toBe(true)
+  expect(detail.props('employeeId')).toBe(7)
+  expect(detail.props('focusDate')).toBe('2026-09-03')
+  expect(wrapper.find('[aria-label="出勤紀錄空狀態"]').exists()).toBe(false)
+  await wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:month', 10)
+  await flushPromises()
+  expect(wrapper.find('[aria-label="出勤紀錄空狀態"]').exists()).toBe(true)
+  wrapper.unmount()
 })

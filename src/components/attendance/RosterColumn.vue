@@ -11,9 +11,10 @@
     <div v-if="!loading && sortedFiltered.length === 0" class="roster-column__empty">
       <EmptyState
         variant="inline"
-        title="無符合人員"
-        description="請調整搜尋條件或確認該月是否有出勤資料"
+        :title="searchQuery.trim() ? '沒有符合搜尋的人員' : '目前沒有出勤人員紀錄'"
+        :description="searchQuery.trim() ? '請調整搜尋條件' : '請確認該月出勤資料'"
       />
+      <el-button v-if="searchQuery.trim()" @click="searchQuery = ''">清除搜尋</el-button>
     </div>
 
     <ul v-else class="roster-column__list" role="listbox" aria-label="人員名冊">
@@ -60,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { RosterRow } from '@/composables/useAttendanceWorkspace'
 
@@ -74,14 +75,14 @@ const emit = defineEmits<{
   (e: 'select', employeeId: number): void
 }>()
 
-const searchQuery = ref('')
+const searchQuery = defineModel<string>('search', { default: '' })
 
 function anomalyCount(r: RosterRow): number {
   return r.late_count + r.early_leave_count + r.missing_punch_in + r.missing_punch_out
 }
 
 const sortedFiltered = computed<RosterRow[]>(() => {
-  const q = searchQuery.value.toLowerCase()
+  const q = searchQuery.value.trim().toLowerCase()
 
   const filtered = q
     ? props.roster.filter(

@@ -25,6 +25,7 @@ const props = defineProps<{
   modelValue: boolean
   year: number
   month: number
+  sourceContext?: { employee_id: number; employee_name: string; date: string } | null
 }>()
 
 const emit = defineEmits<{
@@ -463,6 +464,7 @@ defineExpose({
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
     @closed="resetState"
   >
+    <el-alert v-if="sourceContext" type="info" :closable="false" show-icon :title="`待補資料：${sourceContext.employee_name} · ${sourceContext.date}`" description="本次從此人員與日期進入；不會自動限制匯入範圍，實際匯入以預覽清單為準，請確認所有人員與日期後再匯入。" />
     <el-tabs v-model="activeTab">
       <!-- ── Tab A: 貼上 / CSV 文字 ────────────────────────────────────────── -->
       <el-tab-pane label="貼上 / CSV 文字" name="paste">

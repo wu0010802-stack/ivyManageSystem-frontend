@@ -109,7 +109,7 @@
         type="success"
         :loading="batchBusy"
         @click="confirmBatchAction('admin_accept')"
-      >批次視為正常（{{ selectedIds.size }}）</el-button>
+      >批次接受扣款（{{ selectedIds.size }}）</el-button>
       <el-button
         size="small"
         type="warning"
@@ -187,7 +187,7 @@ const filteredWithIndex = computed<{ item: AnomalyDayCard; origIndex: number }[]
 const MAX_BATCH_IDS = 500
 
 const ACTION_LABELS: Record<'admin_accept' | 'admin_waive', string> = {
-  admin_accept: '視為正常',
+  admin_accept: '接受扣款',
   admin_waive: '豁免',
 }
 
@@ -247,7 +247,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 
   try {
     await ElMessageBox.confirm(
-      `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？`,
+      `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？此操作套用選取日期的整日異常。${action === 'admin_accept' ? '接受扣款仍依原規則計算扣款，並非豁免。' : ''}`,
       '批次處理',
       { type: 'warning', confirmButtonText: '確認', cancelButtonText: '取消' },
     )

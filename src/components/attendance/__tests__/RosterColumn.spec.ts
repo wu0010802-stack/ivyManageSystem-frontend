@@ -70,6 +70,7 @@ const EmptyStateStub = {
 }
 
 const stubs = {
+  ElButton: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
   ElInput,
   ElTag,
   ElEmpty,
@@ -204,4 +205,14 @@ describe('RosterColumn', () => {
     expect(items.length).toBe(1)
     expect(items[0].text()).toContain('王遲到')
   })
+})
+
+
+it('搜尋無結果可清除並恢復名冊', async () => {
+  const wrapper = mountRoster({})
+  await wrapper.find('input').setValue('不存在的測試員工')
+  expect(wrapper.text()).toContain('沒有符合搜尋的人員')
+  await wrapper.find('button').trigger('click')
+  expect(wrapper.findAll('[role="option"]')).toHaveLength(3)
+  wrapper.unmount()
 })

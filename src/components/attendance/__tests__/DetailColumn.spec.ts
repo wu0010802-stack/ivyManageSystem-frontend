@@ -29,6 +29,8 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }))
 
+vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn(() => true) }))
+import { hasPermission } from '@/utils/auth'
 import { ElMessage } from 'element-plus'
 import DetailColumn from '../DetailColumn.vue'
 
@@ -159,15 +161,27 @@ describe('DetailColumn', () => {
 
   // ── mode=resolve + anomaly=null → 空狀態 ────────────────────────────────────
   describe('mode=resolve, anomaly=null', () => {
-    it('shows 異常已清空 empty state', () => {
+    it('無異常不代表資料已完整核對', () => {
       const wrapper = mountDetail({ anomaly: null })
-      expect(wrapper.text()).toContain('異常已清空')
+      expect(wrapper.text()).not.toContain('異常已清空')
+      expect(wrapper.text()).toContain('不代表整月打卡資料已齊全')
     })
 
     it('does NOT render ResolveCard when anomaly is null', () => {
       const wrapper = mountDetail({ anomaly: null })
       expect(wrapper.find('.resolve-card-stub').exists()).toBe(false)
     })
+  })
+
+  it('空態提供匯入入口並沿用出勤寫入權限', async () => {
+    const wrapper = mountDetail({ anomaly: null })
+    await wrapper.findAll('button').find(button => button.text() === '匯入打卡紀錄')!.trigger('click')
+    expect(wrapper.emitted('import')).toHaveLength(1)
+    wrapper.unmount()
+    vi.mocked(hasPermission).mockReturnValueOnce(false)
+    const readOnly = mountDetail({ anomaly: null })
+    expect(readOnly.text()).not.toContain('匯入打卡紀錄')
+    readOnly.unmount()
   })
 
   // ── mode=month ────────────────────────────────────────────────────────────────

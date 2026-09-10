@@ -2,14 +2,19 @@
   <div v-if="employeeId === null" class="emp-month-panel__no-employee">
     請選擇員工
   </div>
-  <div v-else v-loading="loading" class="emp-month-panel">
-    <template v-if="!loading && records.length === 0">
+  <div v-else ref="panel" v-loading="loading" class="emp-month-panel">
+    <p v-if="focusDate" role="status">核對日期：{{ focusDate }}<template v-if="!loading && !loadFailed && !records.some(rec => rec.date === focusDate)"> · {{ focusDate }} 尚無打卡紀錄</template></p>
+    <p v-if="loadFailed" role="alert">載入出勤紀錄失敗，請重新載入。</p>
+    <template v-if="!loading && !loadFailed && records.length === 0">
       <EmptyState title="本月無考勤記錄" />
     </template>
     <template v-else>
       <div
         v-for="(rec, idx) in records"
         :key="rec.id"
+        :data-attendance-date="rec.date"
+        :aria-current="rec.date === focusDate ? 'date' : undefined"
+        :tabindex="rec.date === focusDate ? -1 : undefined"
         class="month-record-row"
         :class="{ 'month-record-row--anomaly': isAnomaly(rec) }"
       >
@@ -51,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getRecords, upsertRecord } from '@/api/attendance'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -64,6 +69,7 @@ const props = defineProps<{
   employeeId: number | null
   year: number
   month: number
+  focusDate?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -96,6 +102,9 @@ interface AttendanceRecord {
 
 const records = ref<AttendanceRecord[]>([])
 const loading = ref(false)
+const loadFailed = ref(false)
+const panel = ref<HTMLElement | null>(null)
+let loadSequence = 0
 const editPunchIn = ref<(string | null)[]>([])
 const editPunchOut = ref<(string | null)[]>([])
 const saving = ref<boolean[]>([])
@@ -107,10 +116,18 @@ function isAnomaly(rec: AttendanceRecord): boolean {
 
 // ── load ───────────────────────────────────────────────────────────────────────
 async function load(): Promise<void> {
+  const sequence = ++loadSequence
+  records.value = []
+  editPunchIn.value = []
+  editPunchOut.value = []
+  saving.value = []
+  loadFailed.value = false
+  loading.value = false
   if (props.employeeId === null) return
   loading.value = true
   try {
     const res = await getRecords({ employee_id: props.employeeId, year: props.year, month: props.month })
+    if (sequence !== loadSequence) return
     // OpenAPI 契約列 → 本地 view model（nullable 欄位正規化為預設值）
     const list: AttendanceRecord[] = (res.data ?? []).map((r) => ({
       import_metadata: r.import_metadata,
@@ -136,9 +153,11 @@ async function load(): Promise<void> {
     editPunchOut.value = list.map((r) => r.punch_out)
     saving.value = list.map(() => false)
   } catch (err) {
+    if (sequence !== loadSequence) return
+    loadFailed.value = true
     notify(err, 'EmployeeMonthPanel.load', null, { prefix: '載入失敗' })
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 
@@ -147,6 +166,15 @@ watch(
   load,
   { immediate: true },
 )
+
+watch([() => props.focusDate, records, loading], async () => {
+  if (!props.focusDate || loading.value) return
+  await nextTick()
+  const target = [...(panel.value?.querySelectorAll<HTMLElement>('[data-attendance-date]') ?? [])]
+    .find(element => element.dataset.attendanceDate === props.focusDate)
+  target?.scrollIntoView?.({ block: 'center' })
+  target?.focus({ preventScroll: true })
+}, { flush: 'post' })
 
 // ── upsert ─────────────────────────────────────────────────────────────────────
 async function handleUpsert(rec: AttendanceRecord, idx: number): Promise<void> {
@@ -199,6 +227,8 @@ async function handleUpsert(rec: AttendanceRecord, idx: number): Promise<void> {
   border: 1px solid var(--border-color-light, #f1f5f9);
   background: var(--fill-color-blank, #fff);
 }
+
+.month-record-row[aria-current='date'] { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 
 .month-record-row--anomaly {
   background: var(--danger-soft, #fef2f2);

@@ -296,7 +296,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     await boxes[0].setValue(true)
     const bar = wrapper.find('.anomaly-queue-column__batch-bar')
     expect(bar.exists()).toBe(true)
-    expect(bar.text()).toContain('批次視為正常（1）')
+    expect(bar.text()).toContain('批次接受扣款（1）')
     expect(bar.text()).toContain('批次豁免（1）')
   })
 
@@ -310,7 +310,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     expect(wrapper.find('.anomaly-queue-column__batch-bar').exists()).toBe(false)
   })
 
-  it('批次視為正常：先跳確認對話框，確認後帶 attendance_ids/action/remark 呼叫 API', async () => {
+  it('批次接受扣款：先跳確認對話框，確認後帶 attendance_ids/action/remark 呼叫 API', async () => {
     const wrapper = mountQueue({})
     const boxes = checkboxesOf(wrapper)
     await boxes[0].setValue(true)
@@ -321,11 +321,12 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 
     expect(mockConfirm).toHaveBeenCalledTimes(1)
+    expect(mockConfirm.mock.calls[0][0]).toContain('接受扣款仍依原規則計算扣款')
     expect(mockBatchConfirm).toHaveBeenCalledWith({
       attendance_ids: expect.arrayContaining([cardLate.id, cardMulti.id]),
       action: 'admin_accept',
@@ -357,7 +358,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 
@@ -374,7 +375,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 
@@ -394,7 +395,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 
@@ -425,7 +426,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 

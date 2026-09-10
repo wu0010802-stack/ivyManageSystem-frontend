@@ -1,6 +1,6 @@
 // src/components/attendance/__tests__/EmployeeMonthPanel.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 // ── hoisted mocks (must be defined before vi.mock factories run) ───────────────
@@ -287,5 +287,32 @@ describe('EmployeeMonthPanel', () => {
     expect(mockGetRecords).toHaveBeenLastCalledWith(
       expect.objectContaining({ month: 7 }),
     )
+  })
+})
+
+
+describe('核對日期定位', () => {
+  it('定位指定日期，該日無紀錄時明確說明', async () => {
+    mockGetRecords.mockResolvedValue({ data: [recordNormal, recordMissing] })
+    const wrapper = mountPanel({})
+    await wrapper.setProps({ focusDate: '2026-06-03' })
+    await flushPromises()
+    expect(wrapper.find('[data-attendance-date="2026-06-03"]').attributes('aria-current')).toBe('date')
+    await wrapper.setProps({ focusDate: '2026-06-04' })
+    expect(wrapper.text()).toContain('2026-06-04 尚無打卡紀錄')
+    wrapper.unmount()
+  })
+  it('快速切換人員時，舊請求不得覆蓋新目標紀錄', async () => {
+    let release!: (value: unknown) => void
+    mockGetRecords.mockReturnValueOnce(new Promise(resolve => { release = resolve }))
+    const wrapper = mountPanel({ employeeId: 5 })
+    mockGetRecords.mockResolvedValueOnce({ data: [{ ...recordNormal, employee_id: 6, date: '2026-06-04' }] })
+    await wrapper.setProps({ employeeId: 6, focusDate: '2026-06-04' })
+    await flushPromises()
+    release({ data: [recordNormal] })
+    await flushPromises()
+    expect(wrapper.find('[data-attendance-date="2026-06-04"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('2026-06-02')
+    wrapper.unmount()
   })
 })

@@ -17,7 +17,8 @@
         />
       </template>
       <div v-else class="detail-column__empty">
-        <span>異常已清空</span>
+        <p>目前沒有選取的異常紀錄；不代表整月打卡資料已齊全。</p>
+        <el-button v-if="hasPermission('ATTENDANCE_WRITE')" @click="emit('import')">匯入打卡紀錄</el-button>
       </div>
     </template>
 
@@ -30,6 +31,7 @@
         :employee-id="employeeId"
         :year="year"
         :month="month"
+        :focus-date="focusDate"
         @updated="emit('resolved')"
       />
     </template>
@@ -38,6 +40,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { hasPermission } from '@/utils/auth'
 import { ElMessage } from 'element-plus'
 import ResolveCard from './ResolveCard.vue'
 import EmployeeMonthPanel from './EmployeeMonthPanel.vue'
@@ -60,9 +63,11 @@ const props = defineProps<{
   employeeId: number | null
   year: number
   month: number
+  focusDate?: string | null
 }>()
 
 const emit = defineEmits<{
+  (e: 'import'): void
   (e: 'resolved'): void
   (e: 'navigate', delta: number): void
   (e: 'switchMode', mode: 'resolve' | 'month'): void
@@ -128,6 +133,7 @@ async function onResolve(payload: {
 }
 
 .detail-column__empty {
+  flex-direction: column;
   display: flex;
   align-items: center;
   justify-content: center;

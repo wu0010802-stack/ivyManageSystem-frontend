@@ -21,7 +21,7 @@
       <el-button aria-label="下個月" :icon="ArrowRight" circle size="small" @click="nextMonth" />
     </div>
 
-    <div class="workspace-header__kpis">
+    <div v-if="!displayState || displayState === 'ready' || displayState === 'stale'" class="workspace-header__kpis">
       <!-- P1-3：語意=已有紀錄且無異常；expected workdays 未定義前不稱「全勤」 -->
       <el-statistic title="已有紀錄且無異常" :value="kpis.fullAttendance" />
       <el-statistic title="遲到人次" :value="kpis.lateCount" />
@@ -33,11 +33,18 @@
       />
     </div>
 
+    <p v-else role="status">{{ displayState === 'loading' ? '出勤統計載入中…' : '出勤統計尚未載入成功' }}</p>
+    <p v-if="displayState === 'stale'" class="workspace-header__scope" role="status">統計為此月份上次成功載入的資料，尚未更新。</p>
     <div class="workspace-header__actions">
       <el-button :icon="Monitor" @click="openKiosk">電子打卡</el-button>
       <el-button v-if="canWrite" @click="emit('import')">匯入</el-button>
-      <el-button type="primary" @click="emit('export')">匯出月報</el-button>
     </div>
+    <section class="workspace-header__month-tools" aria-label="月結工具">
+      <span>月結工具</span>
+      <slot name="month-tools" />
+      <el-button @click="emit('export')">匯出月報</el-button>
+    </section>
+    <p class="workspace-header__scope">以上統計僅涵蓋已有出勤紀錄；0 筆異常不代表打卡資料已齊全。</p>
   </div>
 </template>
 
@@ -57,6 +64,7 @@ interface Kpis {
 const props = defineProps<{
   year: number
   month: number
+  displayState?: 'ready' | 'loading' | 'unavailable' | 'stale'
   kpis: Kpis
 }>()
 
@@ -102,6 +110,10 @@ function nextMonth() {
 </script>
 
 <style scoped>
+.workspace-header__month-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding-inline-start: var(--space-3); border-inline-start: 1px solid var(--el-border-color-light); }
+.workspace-header__month-tools > span { font-size: var(--text-sm); color: var(--el-text-color-secondary); }
+.workspace-header__month-tools :deep(.el-button) { margin-left: 0; }
+.workspace-header__scope { width: 100%; margin: 0; color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .workspace-header {
   display: flex;
   flex-wrap: wrap;
