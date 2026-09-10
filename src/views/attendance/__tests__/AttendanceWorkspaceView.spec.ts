@@ -1,3 +1,4 @@
+vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }) }))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import AttendanceWorkspaceView from '../AttendanceWorkspaceView.vue'
@@ -81,6 +82,7 @@ const WorkspaceHeaderStub = {
 
 const ReconciliationPanelStub = { name: 'ReconciliationPanel', props: ['revision'], emits: ['records', 'import'], template: '<div />' }
 const STUBS = {
+  ElDrawer: { props: ['modelValue'], template: '<section data-test="anomaly-drawer" :data-open="String(modelValue)"><slot /></section>' },
   PayrollComparisonDialog: { props: ['modelValue'], template: '<div />' },
   ReconciliationPanel: ReconciliationPanelStub,
   RosterColumn: RosterColumnStub,
@@ -137,17 +139,17 @@ describe('AttendanceWorkspaceView', () => {
     expect(getAnomalyListMock).toHaveBeenCalledTimes(1)
   })
 
-  // ── 三欄渲染 ────────────────────────────────────────────────────────────────
-  it('桌機模式：三欄容器 class 存在', async () => {
+  // ── 兩欄渲染 ────────────────────────────────────────────────────────────────
+  it('桌機模式：保留名冊與明細兩欄', async () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.find('.workspace-cols').exists()).toBe(true)
     expect(wrapper.find('.col-roster').exists()).toBe(true)
-    expect(wrapper.find('.col-anomaly').exists()).toBe(true)
+    expect(wrapper.find('.workspace-cols .col-anomaly').exists()).toBe(false)
     expect(wrapper.find('.col-detail').exists()).toBe(true)
   })
 
-  it('桌機模式：三欄子元件都渲染', async () => {
+  it('桌機模式：異常清單位於抽屜，名冊與明細保留', async () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.findComponent(RosterColumnStub).exists()).toBe(true)
@@ -559,5 +561,41 @@ it('整月無出勤紀錄仍保留從核對進入的指定人日明細', async (
   await wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:month', 10)
   await flushPromises()
   expect(wrapper.find('[aria-label="出勤紀錄空狀態"]').exists()).toBe(true)
+  wrapper.unmount()
+})
+
+
+it('預設整月明細，異常清單收進抽屜且點選後關閉', async () => {
+  getSummaryMock.mockResolvedValue({ data: sampleRoster })
+  getAnomalyListMock.mockResolvedValue({ data: { items: sampleAnomalies, total: 2, pending: 2, confirmed: 0 } })
+  const wrapper = mountView()
+  await flushPromises()
+  expect(wrapper.findComponent(DetailColumnStub).props('mode')).toBe('month')
+  expect(wrapper.findComponent(RosterColumnStub).props('selectedEmployeeId')).toBe(wrapper.findComponent(DetailColumnStub).props('employeeId'))
+  expect(wrapper.find('.workspace-cols .col-anomaly').exists()).toBe(false)
+  await wrapper.findAll('button').find(button => button.text().includes('待處理異常'))!.trigger('click')
+  expect(wrapper.find('[data-test="anomaly-drawer"]').attributes('data-open')).toBe('true')
+  await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 1)
+  await flushPromises()
+  expect(wrapper.find('[data-test="anomaly-drawer"]').attributes('data-open')).toBe('false')
+  expect(wrapper.findComponent(DetailColumnStub).props('mode')).toBe('resolve')
+  const employee = wrapper.findComponent(DetailColumnStub).props('employeeId')
+  await wrapper.findComponent(DetailColumnStub).vm.$emit('switch-mode', 'month')
+  await flushPromises()
+  expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(employee)
+  wrapper.unmount()
+})
+
+it('新月份名冊不再包含原選人時回到可用員工', async () => {
+  getSummaryMock.mockResolvedValue({ data: sampleRoster })
+  getAnomalyListMock.mockResolvedValue({ data: { items: [], total: 0, pending: 0, confirmed: 0 } })
+  const wrapper = mountView()
+  await flushPromises()
+  await wrapper.findComponent(RosterColumnStub).vm.$emit('select', sampleRoster[1]!.employee_id)
+  await flushPromises()
+  getSummaryMock.mockResolvedValue({ data: [sampleRoster[0]] })
+  await wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:month', 10)
+  await flushPromises()
+  expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(sampleRoster[0]!.employee_id)
   wrapper.unmount()
 })

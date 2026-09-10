@@ -1,267 +1,145 @@
 <template>
-  <div v-if="employeeId === null" class="emp-month-panel__no-employee">
-    請選擇員工
-  </div>
+  <div v-if="employeeId === null" class="emp-month-panel__no-employee">請選擇員工</div>
   <div v-else ref="panel" v-loading="loading" class="emp-month-panel">
-    <p v-if="focusDate" role="status">核對日期：{{ focusDate }}<template v-if="!loading && !loadFailed && !records.some(rec => rec.date === focusDate)"> · {{ focusDate }} 尚無打卡紀錄</template></p>
-    <p v-if="loadFailed" role="alert">載入出勤紀錄失敗，請重新載入。</p>
-    <template v-if="!loading && !loadFailed && records.length === 0">
-      <EmptyState title="本月無考勤記錄" />
-    </template>
-    <template v-else>
-      <div
-        v-for="(rec, idx) in records"
-        :key="rec.id"
-        :data-attendance-date="rec.date"
-        :aria-current="rec.date === focusDate ? 'date' : undefined"
-        :tabindex="rec.date === focusDate ? -1 : undefined"
-        class="month-record-row"
-        :class="{ 'month-record-row--anomaly': isAnomaly(rec) }"
-      >
-        <span class="month-record-row__date">{{ rec.date }}</span>
-        <span class="month-record-row__weekday">{{ rec.weekday }}</span>
-        <span class="month-record-row__punch-in">
-          <template v-if="rec.punch_in">{{ rec.punch_in }}</template>
-          <el-time-picker
-            v-else
-            v-model="editPunchIn[idx]"
-            format="HH:mm"
-            value-format="HH:mm"
-            placeholder="補上班"
-            class="month-record-row__picker"
-          />
-        </span>
-        <span class="month-record-row__punch-out">
-          <template v-if="rec.punch_out">{{ rec.punch_out }}</template>
-          <el-time-picker
-            v-else
-            v-model="editPunchOut[idx]"
-            format="HH:mm"
-            value-format="HH:mm"
-            placeholder="補下班"
-            class="month-record-row__picker"
-          />
-        </span>
-        <span class="month-record-row__status">{{ rec.status }}</span>
-        <el-button
-          v-if="isAnomaly(rec)"
-          size="small"
-          :loading="saving[idx]"
-          @click="handleUpsert(rec, idx)"
-        >補打卡</el-button>
-        <RawPunchDetails :import-metadata="rec.import_metadata" />
-      </div>
-    </template>
+    <h3>{{ employeeName || '所選員工' }} · {{ year }} 年 {{ month }} 月出勤明細</h3>
+    <p v-if="focusDate" role="status">核對日期：{{ focusDate }}<template v-if="!loading && !loadFailed && !rows.some(row => row.date === focusDate)"> · {{ focusDate }} 尚無打卡紀錄或應出勤班表</template></p>
+    <div v-if="loadFailed" role="alert">載入出勤紀錄或班表失敗，無法判定缺卡。<el-button @click="load">重新載入</el-button></div>
+    <EmptyState v-else-if="!loading && !rows.length" title="本月沒有應出勤日或打卡紀錄" />
+    <table v-else-if="!loadFailed" class="month-record-table">
+      <caption class="sr-only">{{ employeeName || '所選員工' }} {{ year }} 年 {{ month }} 月出勤</caption>
+      <thead><tr><th scope="col">日期</th><th scope="col">應上班時段</th><th scope="col">上班打卡</th><th scope="col">下班打卡</th><th scope="col">狀態／請假</th><th scope="col">操作</th></tr></thead>
+      <tbody>
+        <tr v-for="row in rows" :key="row.date" class="month-record-row" :class="{ 'month-record-row--anomaly': row.warning }" :data-attendance-date="row.date" :aria-current="row.date === focusDate ? 'date' : undefined" :tabindex="row.date === focusDate ? -1 : undefined">
+          <th scope="row" data-label="日期">{{ row.date }}<small>{{ row.weekday }}</small></th>
+          <td data-label="應上班時段">{{ row.expectedLabel }}</td>
+          <td class="month-record-row__punch-in" data-label="上班打卡">{{ row.record?.punch_in || '—' }}</td>
+          <td class="month-record-row__punch-out" data-label="下班打卡">{{ row.record?.punch_out || '—' }}</td>
+          <td class="month-record-row__status" data-label="狀態／請假">{{ row.status }}<small v-if="row.leaveLabel">{{ row.leaveLabel }}</small><RawPunchDetails v-if="row.record" :import-metadata="row.record.import_metadata" /></td>
+          <td data-label="操作"><el-button v-if="canWrite && row.canSupplement" size="small" :disabled="saving" @click="openSupplement(row)">補打卡</el-button></td>
+        </tr>
+      </tbody>
+    </table>
+    <section v-if="editing && canWrite" ref="editForm" class="month-edit" aria-label="補打卡">
+      <p>{{ employeeName || '所選員工' }} · {{ editing.date }}</p>
+      <label>上班時間<el-time-picker v-model="punchIn" format="HH:mm" value-format="HH:mm" :disabled="saving" aria-label="補上班時間" placeholder="補上班" /></label>
+      <label>下班時間<el-time-picker v-model="punchOut" format="HH:mm" value-format="HH:mm" :disabled="saving" aria-label="補下班時間" placeholder="補下班" /></label>
+      <el-button :disabled="saving" @click="editing = null">取消</el-button>
+      <el-button type="primary" :loading="saving" :disabled="saving || !hasNewPunch" @click="saveSupplement">儲存補卡</el-button>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getRecords, upsertRecord } from '@/api/attendance'
+import { getAttendanceMonthContext } from '@/api/attendanceMonthContext'
+import { buildAttendanceMonthRows } from '@/utils/attendanceMonthRows'
+import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import EmptyState from '@/components/common/EmptyState.vue'
 import RawPunchDetails from './RawPunchDetails.vue'
 import type { ApiResponse } from '@/api/_generated/typed'
 
-// ── props & emits ──────────────────────────────────────────────────────────────
-const props = defineProps<{
-  employeeId: number | null
-  year: number
-  month: number
-  focusDate?: string | null
-}>()
-
-const emit = defineEmits<{
-  (e: 'updated'): void
-}>()
-
-// ── error notify ───────────────────────────────────────────────────────────────
+const props = defineProps<{ employeeId: number | null; employeeName?: string; year: number; month: number; focusDate?: string | null }>()
+const emit = defineEmits<{ updated: [] }>()
 const { notify } = useErrorNotify()
-
-// ── state ──────────────────────────────────────────────────────────────────────
-interface AttendanceRecord {
-  import_metadata: ApiResponse<'/attendance/records', 'get'>[number]['import_metadata']
-  id: number
-  employee_id: number
-  employee_name: string
-  employee_number: string
-  date: string
-  weekday: string
-  punch_in: string | null
-  punch_out: string | null
-  status: string
-  is_late: boolean
-  is_early_leave: boolean
-  is_missing_punch_in: boolean
-  is_missing_punch_out: boolean
-  late_minutes: number
-  early_leave_minutes: number
-  remark: string
-}
-
-const records = ref<AttendanceRecord[]>([])
+const records = ref<ApiResponse<'/attendance/records', 'get'>>([])
+const days = ref<ApiResponse<'/attendance/month-context', 'get'>['days']>([])
 const loading = ref(false)
 const loadFailed = ref(false)
 const panel = ref<HTMLElement | null>(null)
+const editForm = ref<HTMLElement | null>(null)
+const now = ref(Date.now())
+const clockTimer = window.setInterval(() => { now.value = Date.now() }, 60_000)
+onUnmounted(() => { window.clearInterval(clockTimer); loadSequence += 1 })
+const rows = computed(() => buildAttendanceMonthRows(days.value, records.value, now.value))
+const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
+const editing = ref<ReturnType<typeof buildAttendanceMonthRows>[number] | null>(null)
+const punchIn = ref<string | null>(null)
+const punchOut = ref<string | null>(null)
+const saving = ref(false)
 let loadSequence = 0
-const editPunchIn = ref<(string | null)[]>([])
-const editPunchOut = ref<(string | null)[]>([])
-const saving = ref<boolean[]>([])
+const hasNewPunch = computed(() => !!editing.value && ((!!punchIn.value && punchIn.value !== editing.value.record?.punch_in) || (!!punchOut.value && punchOut.value !== editing.value.record?.punch_out)))
 
-// ── helpers ────────────────────────────────────────────────────────────────────
-function isAnomaly(rec: AttendanceRecord): boolean {
-  return rec.is_late || rec.is_early_leave || rec.is_missing_punch_in || rec.is_missing_punch_out
-}
-
-// ── load ───────────────────────────────────────────────────────────────────────
 async function load(): Promise<void> {
   const sequence = ++loadSequence
-  records.value = []
-  editPunchIn.value = []
-  editPunchOut.value = []
-  saving.value = []
-  loadFailed.value = false
-  loading.value = false
-  if (props.employeeId === null) return
+  records.value = []; days.value = []; editing.value = null
+  loadFailed.value = false; loading.value = false
+  const employeeId = props.employeeId
+  if (employeeId === null) return
   loading.value = true
   try {
-    const res = await getRecords({ employee_id: props.employeeId, year: props.year, month: props.month })
+    const query = { employee_id: employeeId, year: props.year, month: props.month }
+    const [recordResult, contextResult] = await Promise.all([getRecords(query), getAttendanceMonthContext(query)])
     if (sequence !== loadSequence) return
-    // OpenAPI 契約列 → 本地 view model（nullable 欄位正規化為預設值）
-    const list: AttendanceRecord[] = (res.data ?? []).map((r) => ({
-      import_metadata: r.import_metadata,
-      id: r.id,
-      employee_id: r.employee_id,
-      employee_name: r.employee_name,
-      employee_number: r.employee_number,
-      date: r.date,
-      weekday: r.weekday ?? '',
-      punch_in: r.punch_in ?? null,
-      punch_out: r.punch_out ?? null,
-      status: r.status ?? '',
-      is_late: r.is_late ?? false,
-      is_early_leave: r.is_early_leave ?? false,
-      is_missing_punch_in: r.is_missing_punch_in ?? false,
-      is_missing_punch_out: r.is_missing_punch_out ?? false,
-      late_minutes: r.late_minutes ?? 0,
-      early_leave_minutes: r.early_leave_minutes ?? 0,
-      remark: r.remark ?? '',
-    }))
-    records.value = list
-    editPunchIn.value = list.map((r) => r.punch_in)
-    editPunchOut.value = list.map((r) => r.punch_out)
-    saving.value = list.map(() => false)
-  } catch (err) {
+    records.value = recordResult.data ?? []
+    days.value = contextResult.data.days
+    now.value = Date.now()
+  } catch (error) {
     if (sequence !== loadSequence) return
     loadFailed.value = true
-    notify(err, 'EmployeeMonthPanel.load', null, { prefix: '載入失敗' })
+    notify(error, 'EmployeeMonthPanel.load', null, { prefix: '載入失敗' })
   } finally {
     if (sequence === loadSequence) loading.value = false
   }
 }
-
-watch(
-  [() => props.employeeId, () => props.year, () => props.month],
-  load,
-  { immediate: true },
-)
-
-watch([() => props.focusDate, records, loading], async () => {
+watch([() => props.employeeId, () => props.year, () => props.month], load, { immediate: true })
+watch([() => props.focusDate, rows, loading], async () => {
   if (!props.focusDate || loading.value) return
   await nextTick()
-  const target = [...(panel.value?.querySelectorAll<HTMLElement>('[data-attendance-date]') ?? [])]
-    .find(element => element.dataset.attendanceDate === props.focusDate)
-  target?.scrollIntoView?.({ block: 'center' })
-  target?.focus({ preventScroll: true })
+  const target = [...(panel.value?.querySelectorAll<HTMLElement>('[data-attendance-date]') ?? [])].find(element => element.dataset.attendanceDate === props.focusDate)
+  target?.scrollIntoView?.({ block: 'center' }); target?.focus({ preventScroll: true })
 }, { flush: 'post' })
-
-// ── upsert ─────────────────────────────────────────────────────────────────────
-async function handleUpsert(rec: AttendanceRecord, idx: number): Promise<void> {
-  saving.value[idx] = true
-  try {
-    const payload: { employee_id: number; date: string; punch_in?: string; punch_out?: string } = {
-      employee_id: props.employeeId!,
-      date: rec.date,
-    }
-    const pi = editPunchIn.value[idx] ?? rec.punch_in
-    const po = editPunchOut.value[idx] ?? rec.punch_out
-    if (pi !== null) payload.punch_in = pi
-    if (po !== null) payload.punch_out = po
-    await upsertRecord(payload)
-    ElMessage.success('補打卡成功')
-    emit('updated')
-    await load()
-  } catch (err) {
-    notify(err, 'EmployeeMonthPanel.upsert', null, { prefix: '補打卡失敗' })
-  } finally {
-    saving.value[idx] = false
+async function openSupplement(row: ReturnType<typeof buildAttendanceMonthRows>[number]): Promise<void> {
+  if (!canWrite.value || saving.value || !row.canSupplement) return
+  editing.value = row; punchIn.value = row.record?.punch_in ?? null; punchOut.value = row.record?.punch_out ?? null
+  await nextTick()
+  editForm.value?.scrollIntoView?.({ block: 'center' })
+  editForm.value?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true })
+}
+async function saveSupplement(): Promise<void> {
+  const row = editing.value
+  const employeeId = props.employeeId
+  if (!row || employeeId === null || saving.value || !canWrite.value || !hasNewPunch.value) return
+  const sequence = loadSequence
+  const payload = { employee_id: employeeId, date: row.date,
+    ...(punchIn.value ? { punch_in: punchIn.value } : {}),
+    ...(punchOut.value ? { punch_out: punchOut.value } : {}),
   }
+  saving.value = true
+  try {
+    await upsertRecord(payload)
+    emit('updated')
+    if (sequence !== loadSequence) return
+    ElMessage.success('補打卡成功'); editing.value = null
+    await load()
+  } catch (error) {
+    notify(error, 'EmployeeMonthPanel.upsert', null, { prefix: '補打卡失敗' })
+  } finally { saving.value = false }
 }
 </script>
 
 <style scoped>
-.emp-month-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-}
-
-.emp-month-panel__no-employee {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-8);
-  color: var(--text-tertiary, #94a3b8);
-  font-size: var(--text-sm, 0.875rem);
-}
-
-.month-record-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm, 4px);
-  font-size: var(--text-sm, 0.875rem);
-  border: 1px solid var(--border-color-light, #f1f5f9);
-  background: var(--fill-color-blank, #fff);
-}
-
+.emp-month-panel { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-3); }
+.emp-month-panel h3, .emp-month-panel p { margin: 0; }
+.emp-month-panel__no-employee { padding: var(--space-8); color: var(--el-text-color-secondary); }
+.month-record-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--text-sm); }
+.month-record-table th, .month-record-table td { padding: var(--space-2); text-align: left; vertical-align: top; overflow-wrap: anywhere; border-bottom: 1px solid var(--el-border-color-light); }
+.month-record-table thead th { position: sticky; top: 0; z-index: 1; background: var(--el-fill-color-light); font-weight: 600; }
+.month-record-table small { display: block; color: var(--el-text-color-secondary); margin-top: var(--space-1); }
+.month-record-row--anomaly { background: var(--el-color-warning-light-9); }
 .month-record-row[aria-current='date'] { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
-
-.month-record-row--anomaly {
-  background: var(--danger-soft, #fef2f2);
-  border-color: var(--danger-border, #fecaca);
-  color: var(--danger, #ef4444);
-}
-
-.month-record-row__date {
-  width: 90px;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.month-record-row__weekday {
-  width: 24px;
-  flex-shrink: 0;
-  text-align: center;
-  color: var(--text-secondary, #475569);
-}
-
-.month-record-row__punch-in,
-.month-record-row__punch-out {
-  width: 80px;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.month-record-row__status {
-  flex: 1;
-  color: var(--text-secondary, #475569);
-}
-
-.month-record-row__picker {
-  width: 80px;
+.month-edit { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); padding: var(--space-3); }
+.month-edit p { width: 100%; }
+.month-edit label { display: grid; gap: var(--space-1); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (--to-sm) {
+  .month-record-table, .month-record-table tbody, .month-record-table tr { display: block; }
+  .month-record-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .month-record-table tr { border: 1px solid var(--el-border-color-light); border-radius: var(--radius-sm); margin-bottom: var(--space-3); padding: var(--space-2); }
+  .month-record-table td, .month-record-table tbody th { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-2); }
+  .month-record-table td::before, .month-record-table tbody th::before { content: attr(data-label); color: var(--el-text-color-secondary); font-weight: normal; }
+  .month-edit label { width: 100%; }
 }
 </style>

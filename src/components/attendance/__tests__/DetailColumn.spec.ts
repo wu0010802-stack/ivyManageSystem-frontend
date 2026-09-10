@@ -196,15 +196,13 @@ describe('DetailColumn', () => {
       expect(wrapper.find('.resolve-card-stub').exists()).toBe(false)
     })
 
-    it('has a "回佇列" button that emits switchMode("resolve")', async () => {
+    it('整月模式可要求開啟異常清單', async () => {
       const wrapper = mountDetail({ mode: 'month' })
       const btns = wrapper.findAll('button')
-      const btn = btns.find((b) => b.text().includes('回佇列'))
+      const btn = btns.find((b) => b.text().includes('開啟異常清單'))
       expect(btn).toBeTruthy()
       await btn!.trigger('click')
-      const emitted = wrapper.emitted('switchMode')
-      expect(emitted).toBeTruthy()
-      expect(emitted![0][0]).toBe('resolve')
+      expect(wrapper.emitted('anomalies')).toHaveLength(1)
     })
   })
 

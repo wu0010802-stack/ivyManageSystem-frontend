@@ -34,7 +34,8 @@
           </span>
         </div>
         <div class="roster-item__badges">
-          <template v-if="anomalyCount(row) === 0">
+          <el-tag v-if="row.has_summary === false" type="info" size="small">尚無統計</el-tag>
+          <template v-else-if="anomalyCount(row) === 0">
             <!-- P1-3：expected workdays 未定義前不宣稱「全勤」（待業主裁定） -->
             <el-tag type="success" size="small">紀錄無異常</el-tag>
           </template>

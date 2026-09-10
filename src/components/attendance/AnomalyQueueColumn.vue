@@ -1,5 +1,7 @@
 <template>
   <div class="anomaly-queue-column" v-loading="loading">
+    <el-input v-model="searchTerm" aria-label="搜尋異常人員" placeholder="搜尋異常人員姓名或工號" clearable />
+    <p class="anomaly-queue-column__scope">搜尋僅套用此異常清單；全選限目前篩選結果，變更篩選會清除選取。</p>
     <!-- 頂部篩選 -->
     <div class="anomaly-queue-column__filters">
       <el-select
@@ -30,7 +32,7 @@
         :model-value="allVisibleSelected"
         :indeterminate="someVisibleSelected"
         @update:model-value="toggleSelectAll"
-      >全選（{{ filteredWithIndex.length }}）</el-checkbox>
+      >全選目前篩選結果（{{ filteredWithIndex.length }}）</el-checkbox>
       <span v-if="selectedIds.size > 0" class="anomaly-queue-column__selected-count">
         已選 {{ selectedIds.size }} 筆
       </span>
@@ -148,6 +150,7 @@ const emit = defineEmits<{
 
 const { notify } = useErrorNotify()
 
+const searchTerm = ref('')
 const typeFilter = ref<string>('all')
 // 預設只看未處理（沿用舊佇列語意）；已處理／全部由使用者切換
 const statusFilter = ref<string>('pending')
@@ -170,6 +173,7 @@ function deductionOf(card: AnomalyDayCard): number {
 const filteredWithIndex = computed<{ item: AnomalyDayCard; origIndex: number }[]>(() => {
   return props.items
     .map((it, i) => ({ item: it, origIndex: i }))
+    .filter(({ item }) => !searchTerm.value.trim() || `${item.employee_name} ${item.employee_number}`.toLowerCase().includes(searchTerm.value.trim().toLowerCase()))
     .filter(
       ({ item }) =>
         typeFilter.value === 'all' || item.items.some((x) => x.type === typeFilter.value),
@@ -192,6 +196,7 @@ const ACTION_LABELS: Record<'admin_accept' | 'admin_waive', string> = {
 }
 
 const selectedIds = reactive(new Set<number>())
+watch([searchTerm, typeFilter, statusFilter], () => selectedIds.clear())
 const batchRemark = ref('')
 const batchBusy = ref(false)
 
@@ -277,6 +282,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 </script>
 
 <style scoped>
+.anomaly-queue-column__scope { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .anomaly-queue-column {
   display: flex;
   flex-direction: column;

@@ -1,3 +1,4 @@
+vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }) }))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -65,6 +66,7 @@ const DetailColumnStub = {
 
 const ReconciliationPanelStub = { name: 'ReconciliationPanel', props: ['revision'], template: '<div />' }
 const STUBS = {
+  ElDrawer: { props: ['modelValue'], template: '<section data-test="anomaly-drawer" :data-open="String(modelValue)"><slot /></section>' },
   ReconciliationPanel: ReconciliationPanelStub,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,
@@ -141,7 +143,7 @@ describe('AttendanceWorkspaceView 手機三段流程', () => {
     await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 0)
     await flushPromises()
     await wrapper.get('[data-test="mobile-detail-back"]').trigger('click')
-    expect(wrapper.get('.el-tabs').attributes('data-active')).toBe('anomaly')
+    expect(wrapper.get('[data-test="anomaly-drawer"]').attributes('data-open')).toBe('true')
 
     await wrapper.findComponent(RosterColumnStub).vm.$emit('select', 1)
     await flushPromises()
@@ -149,11 +151,10 @@ describe('AttendanceWorkspaceView 手機三段流程', () => {
     expect(wrapper.get('.el-tabs').attributes('data-active')).toBe('roster')
   })
 
-  it('異常分頁標籤顯示待處理筆數', async () => {
+  it('全月異常按鈕顯示待處理筆數', async () => {
     const wrapper = mountView()
     await flushPromises()
-    const pane = wrapper.findAll('.el-tab-pane').find((p) => p.attributes('data-name') === 'anomaly')
-    expect(pane!.attributes('data-label')).toContain('2')
+    expect(wrapper.findAll('button').find(button => button.text() === '全月待處理異常（2）')).toBeDefined()
   })
 
   it('桌機：仍走三欄，不渲染分頁殼', async () => {

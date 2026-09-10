@@ -1,4 +1,5 @@
 import { ref, computed, watch, type Ref } from 'vue'
+import { getAttendanceMonthContext } from '@/api/attendanceMonthContext'
 import { getSummary, getAnomalyList } from '@/api/attendance'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { ApiResponse } from '@/api/_generated/typed'
@@ -7,6 +8,7 @@ export type SummaryRowApi = ApiResponse<'/attendance/summary', 'get'>[number]
 export type AnomalyRowApi = ApiResponse<'/attendance/anomalies', 'get'>['items'][number]
 
 export interface RosterRow {
+  has_summary?: boolean
   employee_id: number
   employee_name: string
   employee_number?: string | null
@@ -135,6 +137,7 @@ export function buildKpis(
 export function useAttendanceWorkspace(year: Ref<number>, month: Ref<number>) {
   const { notify } = useErrorNotify()
   const roster = ref<RosterRow[]>([])
+  const summary = ref<SummaryRowApi[]>([])
   const anomalyQueue = ref<AnomalyDayCard[]>([])
   const anomalyMeta = ref<{ total: number; pending: number; confirmed: number }>({
     total: 0,
@@ -150,7 +153,7 @@ export function useAttendanceWorkspace(year: Ref<number>, month: Ref<number>) {
   // 防切月 race：晚到的舊請求不得蓋掉新月資料（epoch 比對，鏡像 useSalarySettlement）
   let epoch = 0
 
-  const kpis = computed<Kpis>(() => buildKpis(roster.value, anomalyMeta.value))
+  const kpis = computed<Kpis>(() => buildKpis(summary.value, anomalyMeta.value))
 
   async function refresh() {
     const my = ++epoch
@@ -158,13 +161,20 @@ export function useAttendanceWorkspace(year: Ref<number>, month: Ref<number>) {
     loading.value = true
     loadState.value = 'loading'
     try {
-      const [sumRes, anoRes] = await Promise.all([
+      const [sumRes, monthRes, anoRes] = await Promise.all([
         getSummary({ year: year.value, month: month.value }),
+        getAttendanceMonthContext({ year: year.value, month: month.value }),
         getAnomalyList({ year: year.value, month: month.value, status: 'all' }),
       ])
       if (my !== epoch || period !== currentPeriod.value) return
       const anoData = anoRes.data ?? { total: 0, pending: 0, confirmed: 0, items: [] }
-      roster.value = sumRes.data ?? []
+      summary.value = sumRes.data ?? []
+      const merged = new Map<number, RosterRow>(summary.value.map(row => [row.employee_id, { ...row, has_summary: true }]))
+      for (const employee of monthRes.data.roster) {
+        const existing = merged.get(employee.employee_id)
+        merged.set(employee.employee_id, { normal_days: 0, late_count: 0, early_leave_count: 0, missing_punch_in: 0, missing_punch_out: 0, total_late_minutes: 0, has_summary: false, ...existing, ...employee })
+      }
+      roster.value = [...merged.values()]
       // P1-4：queue 保留全部狀態（依 id 分組成日卡）；「未處理/已處理」
       // 篩選由 AnomalyQueueColumn 依 confirmed_action 過濾，讓 status filter 真的生效
       anomalyQueue.value = groupAnomalies(anoData.items ?? [])

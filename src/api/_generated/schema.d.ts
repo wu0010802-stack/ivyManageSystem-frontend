@@ -3867,6 +3867,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/month-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Month Context
+         * @description 整月任職名冊；指定員工時回傳任職期間班表，不建立或修改出勤。
+         */
+        get: operations["read_month_context_api_attendance_month_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/payroll-comparison/preview-excel": {
         parameters: {
             query?: never;
@@ -22447,6 +22467,63 @@ export interface components {
              * @default 0
              */
             version: number;
+        };
+        /** AttendanceMonthContextOut */
+        AttendanceMonthContextOut: {
+            /** Days */
+            days: components["schemas"]["AttendanceMonthDay"][];
+            /** Roster */
+            roster: components["schemas"]["AttendanceMonthEmployee"][];
+        };
+        /** AttendanceMonthDay */
+        AttendanceMonthDay: {
+            /** Approved Leaves */
+            approved_leaves: components["schemas"]["AttendanceMonthLeave"][];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Expected End At */
+            expected_end_at: string | null;
+            /** Expected Start At */
+            expected_start_at: string | null;
+            /** Full Day Leave */
+            full_day_leave: boolean;
+            /** Is Expected Workday */
+            is_expected_workday: boolean;
+            /** Schedule Known */
+            schedule_known: boolean;
+        };
+        /** AttendanceMonthEmployee */
+        AttendanceMonthEmployee: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Number */
+            employee_number: string;
+        };
+        /** AttendanceMonthLeave */
+        AttendanceMonthLeave: {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** End Time */
+            end_time: string | null;
+            /** Is Full Day */
+            is_full_day: boolean;
+            /** Leave Type */
+            leave_type: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Start Time */
+            start_time: string | null;
         };
         /**
          * AttendancePolicyUpdate
@@ -54301,6 +54378,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KioskRosterEntry"][];
+                };
+            };
+        };
+    };
+    read_month_context_api_attendance_month_context_get: {
+        parameters: {
+            query: {
+                employee_id?: number | null;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceMonthContextOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -25,10 +25,11 @@
     <!-- month mode -->
     <template v-else>
       <div class="detail-column__toolbar">
-        <el-button size="small" @click="emit('switchMode', 'resolve')">回佇列</el-button>
+        <el-button size="small" @click="emit('anomalies')">開啟異常清單</el-button>
       </div>
       <EmployeeMonthPanel
         :employee-id="employeeId"
+        :employee-name="employeeName"
         :year="year"
         :month="month"
         :focus-date="focusDate"
@@ -61,12 +62,14 @@ const props = defineProps<{
     estimated_deduction: number
   }
   employeeId: number | null
+  employeeName?: string
   year: number
   month: number
   focusDate?: string | null
 }>()
 
 const emit = defineEmits<{
+  (e: 'anomalies'): void
   (e: 'import'): void
   (e: 'resolved'): void
   (e: 'navigate', delta: number): void

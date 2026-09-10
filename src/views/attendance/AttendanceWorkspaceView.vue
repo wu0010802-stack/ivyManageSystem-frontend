@@ -31,47 +31,40 @@
       <el-button v-if="hasPermission('ATTENDANCE_WRITE')" type="primary" @click="openImport">匯入打卡紀錄</el-button>
     </section>
     <template v-else-if="ws.hasCurrentData.value">
-    <!-- 桌機三欄 -->
+    <div class="workspace-record-actions"><el-button @click="anomalyDrawerOpen = true">全月待處理異常（{{ ws.kpis.value.pendingAnomalies }}）</el-button><span>名冊搜尋只篩選人員；異常清單可另外搜尋與批次處理。</span></div>
+    <!-- 桌機名冊與整月明細 -->
     <div v-if="isDesktop" class="workspace-cols">
       <div class="col-roster">
         <RosterColumn
           v-model:search="rosterSearch"
           :roster="ws.roster.value"
-          :selected-employee-id="selectedEmployeeId"
+          :selected-employee-id="currentEmployeeId"
           :loading="ws.loading.value"
           @select="onRosterSelect"
-        />
-      </div>
-      <div class="col-anomaly">
-        <AnomalyQueueColumn
-          :items="ws.anomalyQueue.value"
-          :selected-index="selectedAnomalyIndex"
-          :loading="ws.loading.value"
-          @select="onAnomalySelect"
-          @filter-change="onFilterChange"
-          @resolved="onDetailResolved"
         />
       </div>
       <div class="col-detail">
         <DetailColumn
           :mode="detailMode"
+          @anomalies="anomalyDrawerOpen = true"
           :anomaly="currentAnomaly"
           :anomaly-index="selectedAnomalyIndex"
           :anomaly-total="ws.anomalyQueue.value.length"
           :context="context"
           :employee-id="currentEmployeeId"
+          :employee-name="currentEmployeeName"
           :focus-date="focusDate"
           @import="openImport"
           :year="query.year"
           :month="query.month"
           @resolved="onDetailResolved"
           @navigate="onNavigate"
-          @switch-mode="(m: 'resolve' | 'month') => { detailMode = m }"
+          @switch-mode="switchDetailMode"
         />
       </div>
     </div>
 
-    <!-- 行動三段流程：名冊／異常 → 明細。tab 受控，選取後自動推進到明細，
+    <!-- 行動流程：名冊 → 明細，異常另開抽屜。tab 受控，選取後自動推進到明細，
          否則使用者在名冊點了人卻停在原頁，看不出發生了什麼。 -->
     <el-tabs v-else v-model="mobileTab" class="workspace-tabs">
       <el-tab-pane label="名冊" name="roster">
@@ -79,21 +72,9 @@
           <RosterColumn
             v-model:search="rosterSearch"
             :roster="ws.roster.value"
-            :selected-employee-id="selectedEmployeeId"
+            :selected-employee-id="currentEmployeeId"
             :loading="ws.loading.value"
             @select="onRosterSelect"
-          />
-        </div>
-      </el-tab-pane>
-      <el-tab-pane :label="anomalyTabLabel" name="anomaly">
-        <div class="col-anomaly">
-          <AnomalyQueueColumn
-            :items="ws.anomalyQueue.value"
-            :selected-index="selectedAnomalyIndex"
-            :loading="ws.loading.value"
-            @select="onAnomalySelect"
-            @filter-change="onFilterChange"
-            @resolved="onDetailResolved"
           />
         </div>
       </el-tab-pane>
@@ -110,18 +91,20 @@
           </el-button>
           <DetailColumn
             :mode="detailMode"
+            @anomalies="anomalyDrawerOpen = true"
             :anomaly="currentAnomaly"
             :anomaly-index="selectedAnomalyIndex"
             :anomaly-total="ws.anomalyQueue.value.length"
             :context="context"
             :employee-id="currentEmployeeId"
+            :employee-name="currentEmployeeName"
             :focus-date="focusDate"
             @import="openImport"
             :year="query.year"
             :month="query.month"
             @resolved="onDetailResolved"
             @navigate="onNavigate"
-            @switch-mode="(m: 'resolve' | 'month') => { detailMode = m }"
+            @switch-mode="switchDetailMode"
           />
         </div>
       </el-tab-pane>
@@ -129,6 +112,9 @@
     </template>
 
     </div>
+    <el-drawer v-if="ws.hasCurrentData.value" v-model="anomalyDrawerOpen" title="全月出勤異常（全體人員）" :size="isMobile ? '100%' : '480px'" append-to-body>
+      <AnomalyQueueColumn :items="ws.anomalyQueue.value" :selected-index="selectedAnomalyIndex" :loading="ws.loading.value" @select="onAnomalySelect" @filter-change="onFilterChange" @resolved="onDetailResolved" />
+    </el-drawer>
     <!-- 匯入 dialog -->
     <ImportPreviewDialog
       v-model="importOpen"
@@ -187,7 +173,8 @@ const isDesktop = computed(() => !isMobile.value)
 // ── UI 狀態機 ────────────────────────────────────────────────────────────────
 const selectedEmployeeId = ref<number | null>(null)
 const selectedAnomalyIndex = ref(0)
-const detailMode = ref<'resolve' | 'month'>('resolve')
+const detailMode = ref<'resolve' | 'month'>('month')
+const anomalyDrawerOpen = ref(false)
 const importOpen = ref(false)
 const focusDate = ref<string | null>(null)
 const importContext = ref<{ employee_id: number; employee_name: string; date: string } | null>(null)
@@ -211,20 +198,15 @@ watch(() => props.initialDate, value => {
   query.month = date.getMonth() + 1
 })
 
-// ── 手機三段流程 ────────────────────────────────────────────────────────────
-// 桌機三欄同時可見，不需要這個狀態；手機一次只看得到一段，故需記錄目前在哪一段。
-type MobileTab = 'roster' | 'anomaly' | 'detail'
+// ── 手機名冊與明細流程 ────────────────────────────────────────────────────────────
+// 桌機兩欄同時可見，不需要這個狀態；手機一次只看得到一段，故需記錄目前在哪一段。
+type MobileTab = 'roster' | 'detail'
 const mobileTab = ref<MobileTab>('roster')
 
-// 異常分頁標籤帶待處理筆數，讓使用者不必切過去才知道有沒有事情要處理
-const anomalyTabLabel = computed(() => {
-  const n = ws.anomalyQueue.value.length
-  return n > 0 ? `異常（${n}）` : '異常'
-})
-
-// 返回鍵回到「來的那一段」：resolve 模式來自異常佇列，month 模式來自名冊
+// 手機從異常明細返回抽屜，整月明細返回名冊。
 function backFromDetail(): void {
-  mobileTab.value = detailMode.value === 'resolve' ? 'anomaly' : 'roster'
+  if (detailMode.value === 'resolve') anomalyDrawerOpen.value = true
+  else mobileTab.value = 'roster'
 }
 
 // ── 員工月記錄快取 ───────────────────────────────────────────────────────────
@@ -241,10 +223,21 @@ const currentAnomaly = computed<AnomalyDayCard | null>(
 // 從 AnomalyQueue 選取時 selectedEmployeeId=null，用 anomaly.employee_number 對照名冊
 const currentEmployeeId = computed<number | null>(() => {
   if (selectedEmployeeId.value != null) return selectedEmployeeId.value
+  if (detailMode.value === 'month') return ws.roster.value[0]?.employee_id ?? null
   const a = currentAnomaly.value
   if (!a) return null
   return ws.roster.value.find((r) => r.employee_number === a.employee_number)?.employee_id ?? null
 })
+
+watch([ws.roster, ws.loadedPeriod], () => {
+  if (!ws.hasCurrentData.value || ws.loadState.value !== 'success') return
+  if (selectedEmployeeId.value !== null && !ws.roster.value.some(row => row.employee_id === selectedEmployeeId.value)) {
+    selectedEmployeeId.value = null
+    focusDate.value = null
+  }
+})
+
+const currentEmployeeName = computed(() => ws.roster.value.find(row => row.employee_id === currentEmployeeId.value)?.employee_name ?? '')
 
 // ── 監聽 [currentEmployeeId, year, month]：換月先清快取再載入 ──────────────
 // 合併為單一 watch 避免換月時 Watch1（載入）先跑命中舊快取、Watch2（清快取）後跑的競態。
@@ -295,6 +288,14 @@ const context = computed(() => {
 
 // ── 事件 handlers ─────────────────────────────────────────────────────────
 
+function switchDetailMode(mode: 'resolve' | 'month'): void {
+  if (mode === 'month') {
+    selectedEmployeeId.value = currentEmployeeId.value
+    focusDate.value = currentAnomaly.value?.date ?? focusDate.value
+  }
+  detailMode.value = mode
+}
+
 function onRosterSelect(id: number): void {
   focusDate.value = null
   selectedEmployeeId.value = id
@@ -303,6 +304,7 @@ function onRosterSelect(id: number): void {
 }
 
 function onAnomalySelect(idx: number): void {
+  anomalyDrawerOpen.value = false
   focusDate.value = null
   selectedAnomalyIndex.value = idx
   selectedEmployeeId.value = null // 走 anomaly.employee_number → roster 對照
@@ -406,9 +408,11 @@ provide('attendanceWs', ws)
 .workspace-status p { color: var(--el-text-color-secondary); }
 .workspace-mode { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-4); }
 
+.workspace-record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.workspace-record-actions > span { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .workspace-cols {
   display: grid;
-  grid-template-columns: 240px 280px 1fr;
+  grid-template-columns: 240px minmax(0, 1fr);
   gap: var(--space-3);
   align-items: start;
 }
@@ -434,7 +438,7 @@ provide('attendanceWs', ws)
   .attendance-workspace {
     padding: var(--space-3);
   }
-  /* 三段標籤在窄機平均分配寬度，避免「異常（12）」把「明細」擠出視窗 */
+  /* 兩段標籤在窄機平均分配寬度 */
   .workspace-tabs :deep(.el-tabs__nav) {
     display: flex;
     width: 100%;
