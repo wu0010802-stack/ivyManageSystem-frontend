@@ -858,3 +858,163 @@ describe('設備工號配對引導', () => {
     expect(wrapper.findAll('button').some(b => /採用 \d+ 筆同名建議/.test(b.text()))).toBe(false)
   })
 })
+
+describe('批次核對操作', () => {
+  const rows = [
+    { ...previewFixture.rows[0], row_num: 2, employee_name: '測試甲', import_format: 'punch_events', source_rows: [2, 3, 4], punches: ['2026-06-01T08:00:00', '2026-06-01T08:01:00', '2026-06-01T17:00:00'], review_required: true, review_confirmed: false },
+    { ...previewFixture.rows[0], row_num: 5, employee_name: '測試乙', import_format: 'punch_events', source_rows: [5], punches: ['2026-06-01T09:00:00'], punch_in: '09:00', punch_out: null, review_required: true, review_confirmed: false },
+    { ...previewFixture.rows[0], row_num: 6, employee_name: '測試丙', import_format: 'punch_events', source_rows: [6, 7], punches: ['2026-06-01T08:00:00', '2026-06-01T08:00:20'], punch_in: '08:00', punch_out: '08:00', review_required: true, review_confirmed: false },
+  ]
+  const batchFixture = { ...previewFixture, import_format: 'punch_events', rows }
+  async function openBatch() {
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.vm.handleExcelUpload({ file: new File(['synthetic'], 'batch.xls') })
+    return wrapper
+  }
+  beforeEach(() => { vi.clearAllMocks(); mockHasPermission.mockReturnValue(true) })
+
+  it('只全選目前篩選結果，切換篩選清空選取', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('multi')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(1)
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    expect(wrapper.text()).toContain('已選 1 個人日')
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('single')
+    expect(wrapper.text()).toContain('已選 0 個人日')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(1)
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('duplicate')
+    expect(wrapper.get('[data-review-row]').text()).toContain('測試丙')
+  })
+
+  it('先看摘要可取消，採用目前結果保留手改，無效相同時間明示略過', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="測試甲 2026-06-01 上班"]').setValue('08:01')
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="current"]').trigger('click')
+    expect(wrapper.get('[aria-label="批次核對確認"]').text()).toContain('將套用 2 個人日，略過 1 個人日')
+    expect(wrapper.text()).toContain('下班須晚於上班')
+    expect(wrapper.vm.reviewEdits[2]?.confirmed).toBe(false)
+    await wrapper.get('[data-batch-cancel]').trigger('click')
+    expect(wrapper.vm.reviewEdits[2]?.confirmed).toBe(false)
+    await wrapper.get('[data-batch-action="current"]').trigger('click')
+    await wrapper.get('[data-batch-confirm]').trigger('click')
+    expect(wrapper.vm.reviewEdits[2]).toEqual({ punch_in: '08:01', punch_out: '17:00', confirmed: true })
+    expect(wrapper.vm.reviewEdits[6]?.confirmed).toBe(false)
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('核對結果已變更')
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('unconfirmed')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(1)
+  })
+
+  it.each([['in', '08:00', ''], ['out', '', '17:00']])('單側批次 %s 保留缺卡且送原始紀錄重新驗證', async (action, punchIn, punchOut) => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('multi')
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get(`[data-batch-action="${action}"]`).trigger('click')
+    await wrapper.get('[data-batch-confirm]').trigger('click')
+    expect(wrapper.vm.reviewEdits[2]).toEqual({ punch_in: punchIn, punch_out: punchOut, confirmed: true })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...batchFixture, rows: rows.map(row => ({ ...row, review_confirmed: true })) } })
+    await wrapper.vm.handleReviewPreview()
+    expect(mockPreviewImport).toHaveBeenLastCalledWith(expect.objectContaining({ records: expect.arrayContaining([expect.objectContaining({ punches: rows[0]!.punches, source_rows: [2, 3, 4], punch_in: punchIn || null, punch_out: punchOut || null, review_confirmed: true })]) }))
+    expect(wrapper.text()).not.toContain('核對結果已變更')
+  })
+
+  it('重新預覽失敗保留批次結果可重試，匯入持續停用', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="in"]').trigger('click')
+    await wrapper.get('[data-batch-confirm]').trigger('click')
+    mockPreviewImport.mockRejectedValueOnce(new Error('測試失敗'))
+    await wrapper.vm.handleReviewPreview()
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(3)
+    expect(wrapper.vm.reviewEdits[2]).toEqual({ punch_in: '08:00', punch_out: '', confirmed: true })
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+    mockPreviewImport.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleReviewPreview()
+    expect(mockPreviewImport).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['resolve', 'reject'])('重核對舊請求 %s 不覆蓋新檔，換檔清除摘要與選取', async outcome => {
+    const wrapper = await openBatch()
+    let resolve!: (value: unknown) => void
+    let reject!: (reason: Error) => void
+    mockPreviewImport.mockReturnValueOnce(new Promise((res, rej) => { resolve = res; reject = rej }))
+    const pending = wrapper.vm.handleReviewPreview()
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['new'], 'new.xls') })
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="out"]').trigger('click')
+    if (outcome === 'resolve') resolve({ data: { ...batchFixture, rows: [] } })
+    else reject(new Error('舊請求'))
+    await pending
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(3)
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['newer'], 'newer.xls') })
+    expect(wrapper.find('[aria-label="批次核對確認"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('已選 0 個人日')
+    expect(wrapper.vm.reviewEdits[2]?.confirmed).toBe(false)
+  })
+
+  it('改月份、設備、格式與工號對照清空選取，不能套用舊摘要', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    wrapper.vm.mappings['101'] = 12
+    await nextTick()
+    expect(wrapper.text()).toContain('已選 0 個人日')
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.setProps({ month: 7 })
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(0)
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'again.xls') })
+    expect(wrapper.text()).toContain('已選 0 個人日')
+    await wrapper.get('[aria-label="打卡格式"]').setValue('daily_columns')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(0)
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'again.xls') })
+    await wrapper.get('[aria-label="設備代號"]').setValue('other')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(0)
+  })
+  it('未核對篩選中勾選核對後移除已隱藏選取', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('unconfirmed')
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-review-row="2"] td:last-child input').setValue(true)
+    expect(wrapper.text()).toContain('已選 2 個人日')
+  })
+
+  it('重新上傳不解除未儲存工號對照的匯入阻擋', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="設備代號"]').trigger('change')
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...batchFixture, rows: rows.map(row => ({ ...row, source_employee_number: '101' })) } })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'mapped.xls') })
+    await wrapper.get('#mapping-101').trigger('change')
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'new.xls') })
+    expect(wrapper.text()).toContain('對照尚未儲存')
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+  })
+
+  it.each(['csv', 'format'])('未儲存對照跨 %s 預覽重設與再上傳仍阻擋', async route => {
+    const wrapper = await openBatch()
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...batchFixture, rows: rows.map(row => ({ ...row, source_employee_number: '101' })) } })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'mapped.xls') })
+    await wrapper.get('#mapping-101').trigger('change')
+    if (route === 'csv') {
+      mockPreviewImport.mockResolvedValueOnce({ data: previewFixture })
+      await wrapper.get('textarea').setValue('synthetic csv')
+      await wrapper.findAll('button').find(button => button.text() === '預覽核對')!.trigger('click')
+      await flushPromises()
+    } else await wrapper.get('[aria-label="打卡格式"]').setValue('daily_columns')
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'new.xls') })
+    expect(wrapper.text()).toContain('對照尚未儲存')
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+  })
+
+})

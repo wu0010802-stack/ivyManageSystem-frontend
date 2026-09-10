@@ -18,6 +18,8 @@ import type { ApiResponse } from '@/api/_generated/typed'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
 import { summarizeCsvImportResult } from '@/utils/attendanceImport'
+import { proposeReview, reviewReasons, matchesReviewFilter, punchOptions } from '@/utils/attendanceBatchReview'
+import type { ReviewEdit, ReviewAction, ReviewFilter } from '@/utils/attendanceBatchReview'
 import { csvRow } from '@/utils/csv'
 
 // ── Props / Emits ──────────────────────────────────────────────────────────────
@@ -61,7 +63,39 @@ const reviewDirty = ref(false)
 const mappingDirty = ref(false)
 const manuallyMapped = ref(new Set<string>())
 const sourceFile = ref<File | null>(null)
-const reviewEdits = ref<Record<number, { punch_in: string; punch_out: string; confirmed: boolean }>>({})
+const reviewEdits = ref<Record<number, ReviewEdit>>({})
+const reviewFilter = ref<ReviewFilter>('all')
+const selectedReviewRows = ref<number[]>([])
+const pendingBatch = ref<{ action: ReviewAction; rows: { row: PreviewRow; edit: ReviewEdit | null; error: string }[] } | null>(null)
+const batchLabels: Record<ReviewAction, string> = { current: '採用目前結果（保留已調整時間）', in: '只有上班（取最早，下班缺卡）', out: '只有下班（取最晚，上班缺卡）' }
+const reviewRows = computed(() => (previewResult.value?.rows ?? []).filter(row => row.review_required))
+const filteredReviewRows = computed(() => reviewRows.value.filter(row => matchesReviewFilter(row, reviewEdits.value[row.row_num] ?? { punch_in: '', punch_out: '', confirmed: false }, reviewFilter.value)))
+const selectableReviewRows = computed(() => filteredReviewRows.value.filter(row => punchOptions(row).length > 0))
+const allReviewsSelected = computed(() => selectableReviewRows.value.length > 0 && selectableReviewRows.value.every(row => selectedReviewRows.value.includes(row.row_num)))
+const batchApplicableCount = computed(() => pendingBatch.value?.rows.filter(entry => entry.edit).length ?? 0)
+function clearReviewSelection() { selectedReviewRows.value = []; pendingBatch.value = null }
+watch(reviewFilter, clearReviewSelection)
+watch(selectableReviewRows, rows => {
+  const visible = new Set(rows.map(row => row.row_num))
+  selectedReviewRows.value = selectedReviewRows.value.filter(id => visible.has(id))
+})
+watch(mappings, clearReviewSelection, { deep: true })
+function selectVisibleReviews(event: Event) {
+  selectedReviewRows.value = (event.target as HTMLInputElement).checked ? selectableReviewRows.value.map(row => row.row_num) : []
+}
+function prepareBatch(action: ReviewAction) {
+  if (!canWrite.value || busy.value || mappingDirty.value) return
+  const rows = selectableReviewRows.value.filter(row => selectedReviewRows.value.includes(row.row_num))
+  if (!rows.length) return
+  pendingBatch.value = { action, rows: rows.map(row => ({ row, ...proposeReview(row, reviewEdits.value[row.row_num]!, action) })) }
+}
+function confirmBatch() {
+  if (!pendingBatch.value || busy.value || !canWrite.value || mappingDirty.value) return
+  for (const entry of pendingBatch.value.rows) {
+    if (entry.edit) { reviewEdits.value[entry.row.row_num] = entry.edit; reviewDirty.value = true }
+  }
+  clearReviewSelection()
+}
 let generation = 0
 let settingsGeneration = 0
 const busy = computed(() => previewing.value || uploading.value || importing.value || savingSettings.value)
@@ -114,11 +148,12 @@ function checkLabel(row: PreviewRow): string {
 
 function clearPreview() {
   generation++
+  clearReviewSelection()
+  reviewFilter.value = 'all'
   previewResult.value = null
   legacyExcelFile.value = null
   reviewEdits.value = {}
   reviewDirty.value = false
-  mappingDirty.value = false
   previewing.value = false
   uploading.value = false
 }
@@ -153,6 +188,7 @@ async function loadSettings() {
 
 
 function initializeReview() {
+  clearReviewSelection()
   reviewDirty.value = false
   reviewEdits.value = Object.fromEntries((previewResult.value?.rows ?? []).map(row => [row.row_num, {
     punch_in: row.punch_in ?? '', punch_out: row.punch_out ?? '', confirmed: row.review_confirmed ?? false,
@@ -184,7 +220,8 @@ async function handleSaveSettings() {
 }
 
 async function handleReviewPreview() {
-  if (!previewResult.value || busy.value) return
+  if (!previewResult.value || busy.value || !canWrite.value || mappingDirty.value || pendingBatch.value) return
+  clearReviewSelection()
   const current = previewResult.value
   const records = current.rows.map(row => ({
     department: '', weekday: '', employee_number: row.employee_number, name: row.employee_name,
@@ -205,11 +242,15 @@ async function handleReviewPreview() {
       source_count: current.source_count, date_start: current.date_start, date_end: current.date_end }
     initializeReview()
   } catch (err) {
-    if (request === generation) notify(err, 'ImportPreviewDialog.review', null, { prefix: '重新核對失敗' })
+    if (request === generation) {
+      previewResult.value = current
+      reviewDirty.value = true
+      notify(err, 'ImportPreviewDialog.review', null, { prefix: '重新核對失敗，已保留核對結果，請重試' })
+    }
   } finally { if (request === generation) previewing.value = false }
 }
 
-function punchTime(value: string) { return value.slice(11, 16) }
+
 
 
 // ── Tab A 狀態 ────────────────────────────────────────────────────────────────
@@ -235,6 +276,7 @@ function closeDialog() {
 
 function resetState() {
   clearPreview()
+  mappingDirty.value = false
   sourceFile.value = null
   rawText.value = ''
   previewResult.value = null
@@ -253,10 +295,9 @@ async function handlePreview() {
     ElMessage.warning('請貼上 CSV 資料')
     return
   }
-  const request = ++generation
+  clearPreview()
+  const request = generation
   previewing.value = true
-  previewResult.value = null
-  legacyExcelFile.value = null
   try {
     const res = await previewImport({
       raw_text: rawText.value,
@@ -265,6 +306,7 @@ async function handlePreview() {
     })
     if (request !== generation) return
     previewResult.value = res.data
+    initializeReview()
   } catch (err) {
     if (request !== generation) return
     notify(err, 'ImportPreviewDialog.preview', null, { prefix: '預覽失敗' })
@@ -281,7 +323,8 @@ function isLegacyFormatError(err: unknown): boolean {
 
 async function handleExcelUpload(options: { file: File }) {
   if (!canWrite.value || settingsError.value) return
-  const request = ++generation
+  clearPreview()
+  const request = generation
   sourceFile.value = options.file
   uploading.value = true
   previewResult.value = null
@@ -339,7 +382,7 @@ const importableCount = computed(() => {
 })
 
 async function handleConfirmImport() {
-  if (!previewResult.value || !canWrite.value || busy.value || reviewDirty.value || mappingDirty.value || importableCount.value === 0) return
+  if (!previewResult.value || !canWrite.value || busy.value || reviewDirty.value || mappingDirty.value || pendingBatch.value || importableCount.value === 0) return
   const request = generation
   const skipped = previewResult.value.summary.problems
   importing.value = true
@@ -576,14 +619,39 @@ defineExpose({
         <details v-if="previewResult.rows.some(row => row.review_required)">
           <summary>核對單筆、多筆或重複刷卡</summary>
           <p class="import-preview-dialog__note">選擇實際上下班時間；缺卡的一側請保留空白。原始刷卡與來源列號均保留。</p>
-          <div v-for="row in previewResult.rows.filter(r => r.review_required)" :key="row.row_num" class="import-preview-dialog__review">
-            <span>{{ row.employee_name }} · {{ row.date }} · 來源列 {{ row.source_rows?.join('、') }}</span>
-            <span>原始刷卡：{{ row.punches?.map(punchTime).join('、') }}</span>
-            <label>上班 <select v-model="reviewEdits[row.row_num]!.punch_in" @change="reviewDirty = true" :disabled="busy || !canWrite"><option value="">缺卡</option><option v-for="time in [...new Set(row.punches?.map(punchTime))]" :key="time" :value="time">{{ time }}</option></select></label>
-            <label>下班 <select v-model="reviewEdits[row.row_num]!.punch_out" @change="reviewDirty = true" :disabled="busy || !canWrite"><option value="">缺卡</option><option v-for="time in [...new Set(row.punches?.map(punchTime))]" :key="time" :value="time">{{ time }}</option></select></label>
-            <label><input v-model="reviewEdits[row.row_num]!.confirmed" @change="reviewDirty = true" type="checkbox" :disabled="busy || !canWrite" />已人工核對</label>
+          <label>篩選核對紀錄
+            <select v-model="reviewFilter" aria-label="篩選核對紀錄" :disabled="busy || !!pendingBatch">
+              <option value="all">全部</option><option value="multi">多筆</option><option value="single">單筆</option><option value="duplicate">重複刷卡</option><option value="unconfirmed">未核對</option>
+            </select>
+          </label>
+          <p role="status">顯示 {{ filteredReviewRows.length }} 個人日，已選 {{ selectedReviewRows.length }} 個人日；全選僅包含目前篩選結果。</p>
+          <div class="import-preview-dialog__review-scroll">
+            <table class="import-preview-dialog__review-table">
+              <caption>刷卡核對清單（時間僅為建議，請依實際出勤確認）</caption>
+              <thead><tr><th><input type="checkbox" aria-label="全選目前篩選結果" :checked="allReviewsSelected" :indeterminate="selectedReviewRows.length > 0 && !allReviewsSelected" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch || !selectableReviewRows.length" @change="selectVisibleReviews" /></th><th>員工／日期</th><th>原始刷卡／來源列</th><th>原因</th><th>上班</th><th>下班</th><th>核對</th></tr></thead>
+              <tbody><tr v-for="row in filteredReviewRows" :key="row.row_num" :data-review-row="row.row_num">
+                <td><input v-model="selectedReviewRows" :value="row.row_num" type="checkbox" :aria-label="`選取 ${row.employee_name} ${row.date}`" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch || !punchOptions(row).length" /></td>
+                <td>{{ row.employee_name }}<br />{{ row.date }}<br /><small>{{ row.source_employee_number }}</small></td>
+                <td>{{ row.punches?.map(time => time.slice(11)).join('、') }}<br /><small>來源列 {{ row.source_rows?.join('、') }}</small></td>
+                <td>{{ reviewReasons(row).join('、') || checkLabel(row) }}</td>
+                <td><select v-model="reviewEdits[row.row_num]!.punch_in" :aria-label="`${row.employee_name} ${row.date} 上班`" @change="reviewDirty = true" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"><option value="">缺卡</option><option v-for="time in punchOptions(row)" :key="time" :value="time">{{ time }}</option></select></td>
+                <td><select v-model="reviewEdits[row.row_num]!.punch_out" :aria-label="`${row.employee_name} ${row.date} 下班`" @change="reviewDirty = true" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"><option value="">缺卡</option><option v-for="time in punchOptions(row)" :key="time" :value="time">{{ time }}</option></select></td>
+                <td><label><input v-model="reviewEdits[row.row_num]!.confirmed" @change="reviewDirty = true" type="checkbox" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch" />已人工核對</label></td>
+              </tr></tbody>
+            </table>
           </div>
-          <el-button :disabled="busy || !canWrite" @click="handleReviewPreview">依人工核對結果重新預覽</el-button>
+          <div class="import-preview-dialog__settings">
+            <el-button v-for="(label, action) in batchLabels" :key="action" :data-batch-action="action" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch || !selectedReviewRows.length" @click="prepareBatch(action)">{{ label }}</el-button>
+          </div>
+          <section v-if="pendingBatch" aria-label="批次核對確認" class="import-preview-dialog__batch-confirm">
+            <p>選取 {{ pendingBatch.rows.length }} 個人日；將套用 {{ batchApplicableCount }} 個人日，略過 {{ pendingBatch.rows.length - batchApplicableCount }} 個人日。</p>
+            <p>規則：{{ batchLabels[pendingBatch.action] }}。請核對下列結果；此操作尚未匯入。</p>
+            <ul><li v-for="entry in pendingBatch.rows" :key="entry.row.row_num">{{ entry.row.employee_name }} · {{ entry.row.date }}：<template v-if="entry.edit">上班 {{ entry.edit.punch_in || '缺卡' }}／下班 {{ entry.edit.punch_out || '缺卡' }}</template><template v-else>略過：{{ entry.error }}</template></li></ul>
+            <el-button :disabled="busy || !canWrite || !batchApplicableCount" data-batch-confirm @click="confirmBatch">確認選取的 {{ batchApplicableCount }} 個人日</el-button>
+            <el-button data-batch-cancel @click="pendingBatch = null">取消</el-button>
+          </section>
+          <p v-if="reviewDirty" role="status">核對結果已變更，請重新預覽成功後再確認匯入。</p>
+          <el-button :disabled="busy || !canWrite || mappingDirty || !!pendingBatch" @click="handleReviewPreview">依人工核對結果重新預覽</el-button>
         </details>
       </section>
       <!-- Banner -->
@@ -635,7 +703,7 @@ defineExpose({
           v-if="canWrite"
           type="primary"
           :loading="importing"
-          :disabled="busy || reviewDirty || mappingDirty || importableCount === 0"
+          :disabled="busy || reviewDirty || mappingDirty || !!pendingBatch || importableCount === 0"
           @click="handleConfirmImport"
         >
           確認匯入 {{ importableCount }} 筆
@@ -737,6 +805,11 @@ defineExpose({
 }
 .import-preview-dialog__device { padding: 12px; background: var(--el-fill-color-light); }
 .import-preview-dialog__device details { margin-block: 12px; }
-.import-preview-dialog__review { display: flex; flex-wrap: wrap; gap: 12px; padding-block: 10px; border-bottom: 1px solid var(--el-border-color); }
+.import-preview-dialog__review-scroll { overflow-x: auto; max-height: 420px; }
+.import-preview-dialog__review-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.import-preview-dialog__review-table th, .import-preview-dialog__review-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--el-border-color); vertical-align: top; }
+.import-preview-dialog__review-table thead { position: sticky; top: 0; background: var(--el-bg-color); }
+.import-preview-dialog__batch-confirm { padding: 12px; border: 1px solid var(--el-color-primary); border-radius: 4px; }
+.import-preview-dialog__batch-confirm ul { max-height: 240px; overflow-y: auto; }
 select, input:not([type="checkbox"]) { padding: 6px; max-width: 100%; border: 1px solid var(--el-border-color); border-radius: 4px; background: var(--el-bg-color); color: var(--el-text-color-primary); }
 </style>
