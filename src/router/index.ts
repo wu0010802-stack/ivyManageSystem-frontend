@@ -6,6 +6,11 @@ import { captureException } from '@/utils/sentry'
 import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 
+// /attendance、/schedule 深連結的 date query 驗證（2026-09-10 hub 拆分後兩路由各自使用）。
+function isValidDateQuery(value: unknown): value is string {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00`))
+}
+
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
 function resolveLegacySectionQuery(to: RouteLocation): RouteLocationRaw | null {
     const q = { ...to.query }
@@ -229,8 +234,19 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/attendance',
             name: 'attendance',
-            component: () => import('../views/attendance/AttendanceScheduleHubView.vue'),
-            meta: { title: '排班與出勤' }
+            component: () => import('../views/attendance/AttendanceWorkspaceView.vue'),
+            // 2026-09-10 拆分：/attendance、/schedule 各自獨立側欄項目，不再共用 hub 頁。
+            // initialDate 只承接舊連結／班表頁「前往班表與打卡核對」帶來的深連結；
+            // tab=reconcile|records 由該按鈕明確指定要開哪一分頁，未帶則依權限預設。
+            props: (route) => ({
+                initialDate: isValidDateQuery(route.query.date) ? route.query.date : undefined,
+                defaultReconcile: route.query.tab === 'reconcile'
+                    ? true
+                    : route.query.tab === 'records'
+                        ? false
+                        : hasPermission('SCHEDULE') && hasPermission('ATTENDANCE_READ'),
+            }),
+            meta: { title: '出勤管理' }
         },
         {
             path: '/leaves',
@@ -247,8 +263,11 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/schedule',
             name: 'schedule',
-            component: () => import('../views/attendance/AttendanceScheduleHubView.vue'),
-            meta: { title: '排班與出勤' }
+            component: () => import('../views/ScheduleView.vue'),
+            props: (route) => ({
+                initialDate: isValidDateQuery(route.query.date) ? route.query.date : undefined,
+            }),
+            meta: { title: '排班管理' }
         },
         {
             path: '/salary',

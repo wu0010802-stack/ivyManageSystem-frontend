@@ -359,9 +359,9 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 }
 
 .anomaly-item--selected {
-  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin） */
+  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin）；2026-09-10 改版
+     移除側邊色條（impeccable AI-slop 偵測命中），與 RosterColumn 選取態一致。 */
   background-color: var(--brand-primary-soft, #e0f2fe);
-  border-left: 3px solid var(--brand-primary, #0284c7);
 }
 
 .anomaly-item__checkbox-wrap {

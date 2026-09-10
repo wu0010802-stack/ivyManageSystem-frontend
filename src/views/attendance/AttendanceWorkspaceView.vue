@@ -1,5 +1,8 @@
 <template>
   <div class="attendance-workspace">
+    <PageHeader title="出勤管理" subtitle="打卡核對與出勤明細；每月結算前完成核對再匯出月報" />
+    <!-- 2026-09-10 拆分：無獨立頁面層級權限閘（本站慣例＝側欄隱藏＋後端 403，
+         非 /portal/* 頁不另掛 client 閘，見 router/index.ts 開頭註解）。 -->
     <WorkspaceHeader
       :year="query.year"
       :month="query.month"
@@ -13,9 +16,11 @@
       <template #month-tools><el-button v-if="canPayrollCompare" @click="payrollOpen = true">薪資扣項核對</el-button></template>
     </WorkspaceHeader>
 
-    <div v-if="canReconcile" class="workspace-mode" aria-label="出勤核對方式">
-      <el-button v-if="canReconcile" :type="reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = true">班表與打卡核對</el-button>
-      <el-button v-if="canReconcile" :type="!reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = false">出勤明細與補卡</el-button>
+    <!-- 2026-09-10：原「班表與打卡核對／出勤明細與補卡」兩顆切換鈕改標籤語彙與樣式，
+         對應改版提案頁籤命名（打卡核對／出勤明細）。班表已獨立至 /schedule。 -->
+    <div v-if="canReconcile" class="workspace-mode" role="tablist" aria-label="出勤管理檢視">
+      <button type="button" role="tab" class="workspace-mode__tab" :class="{ 'workspace-mode__tab--active': reconcileOpen }" :aria-selected="reconcileOpen" @click="reconcileOpen = true">打卡核對</button>
+      <button type="button" role="tab" class="workspace-mode__tab" :class="{ 'workspace-mode__tab--active': !reconcileOpen }" :aria-selected="!reconcileOpen" @click="reconcileOpen = false">出勤明細</button>
     </div>
     <PayrollComparisonDialog v-if="payrollOpen && canPayrollCompare" v-model="payrollOpen" :year="query.year" :month="query.month" />
     <ReconciliationPanel v-if="canReconcile && reconciliationVisited" v-show="reconcileOpen" :year="query.year" :month="query.month" :revision="importRevision" @confirmed="onResolved" @records="onReconciliationRecords" @import="onReconciliationImport" />
@@ -137,6 +142,7 @@ import { useErrorNotify } from '@/composables/useErrorNotify'
 import { downloadFile } from '@/utils/download'
 import { getRecords } from '@/api/attendance'
 import type { ApiResponse } from '@/api/_generated/typed'
+import PageHeader from '@/components/common/PageHeader.vue'
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
 import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
@@ -406,7 +412,20 @@ provide('attendanceWs', ws)
 .workspace-status h2, .workspace-status p { margin: 0; }
 .workspace-status h2 { font-size: var(--text-lg); }
 .workspace-status p { color: var(--el-text-color-secondary); }
-.workspace-mode { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-4); }
+.workspace-mode { display: flex; gap: var(--space-5); border-bottom: 1px solid var(--el-border-color-light); margin-bottom: var(--space-4); }
+.workspace-mode__tab {
+  min-height: var(--touch-target-min);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--el-text-color-regular);
+  padding: var(--space-2) 0 var(--space-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+}
+.workspace-mode__tab--active { color: var(--el-color-primary); border-bottom-color: var(--el-color-primary); font-weight: 600; }
+.workspace-mode__tab:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 
 .workspace-record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
 .workspace-record-actions > span { color: var(--el-text-color-secondary); font-size: var(--text-sm); }

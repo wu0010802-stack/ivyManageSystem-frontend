@@ -265,11 +265,17 @@ export const NAVIGATION_MANIFEST = {
           ],
         },
         {
-          key: 'attendance', title: '排班與出勤', routePath: '/attendance',
+          // 2026-09-10 拆回獨立側欄項目（原 2026-09-06 共用入口決定反轉，見 UI/UX 審查）：
+          // 出勤管理只剩「打卡核對」「出勤明細」兩頁籤，班表獨立見下方 schedule。
+          key: 'attendance', title: '出勤管理', routePath: '/attendance',
           views: [{ code: 'ATTENDANCE_READ' }],
-          sharedViews: ['SCHEDULE'],
           actions: [{ code: 'ATTENDANCE_WRITE' }],
           menu: { icon: icon('Clock') },
+        },
+        {
+          key: 'schedule', title: MODULE_TERMS.schedule, routePath: '/schedule',
+          views: [{ code: 'SCHEDULE' }],
+          menu: { icon: icon('Calendar') },
         },
         {
           key: 'leaves', title: '請假管理', routePath: '/leaves',
@@ -287,11 +293,6 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('Watch') },
           // /meetings 舊獨立路由規則保留（原手寫陣列既有，redirect/直連解析用）。
           extraRoutes: [{ path: '/meetings', permission: 'MEETINGS' }],
-        },
-        {
-          key: 'schedule', title: MODULE_TERMS.schedule, routePath: '/schedule',
-          views: [{ code: 'SCHEDULE' }],
-          // 保留舊連結與權限主屬，側邊欄由排班與出勤統一進入。
         },
       ],
     },

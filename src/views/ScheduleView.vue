@@ -14,9 +14,17 @@ import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
+import { useRouter } from 'vue-router'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const props = defineProps<{ initialDate?: string }>()
-const emit = defineEmits<{ dateChange: [date: string]; reconcile: [date: string] }>()
+// dateChange 曾用於與 hub 頁的出勤分頁同步 date query；2026-09-10 拆為獨立路由後
+// 兩頁不再共用同一個 date query，僅保留供未來若有其他頁面想跟隨排班週次時使用。
+const emit = defineEmits<{ dateChange: [date: string] }>()
+const router = useRouter()
+function goToReconciliation(date: string): void {
+  void router.push({ path: '/attendance', query: { date, tab: 'reconcile' } })
+}
 
 // 手機版（≤767.98px）：兩個清單改卡片視圖（比照 EmployeeListView 範式）
 const { isMobile } = useIsMobile()
@@ -581,9 +589,12 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
 
 <template>
   <div class="schedule-page">
-    <el-alert title="已有打卡紀錄的當日班別，請由出勤核對確認並重算。" type="info" :closable="false">
-      <el-button v-if="hasPermission('ATTENDANCE_READ')" text @click="emit('reconcile', weekStart)">前往班表與打卡核對</el-button>
-    </el-alert>
+    <PageHeader title="排班管理" subtitle="每週排班與換班紀錄；已有打卡的日子，班別以出勤管理的核對結果為準" />
+    <!-- 2026-09-10 拆分：無獨立頁面層級權限閘（本站慣例＝側欄隱藏＋後端 403）。 -->
+    <p class="schedule-page__notice">
+      改的是排定班別；當天實際上什麼班，看出勤管理的打卡核對結果。
+      <el-button v-if="hasPermission('ATTENDANCE_READ')" text @click="goToReconciliation(weekStart)">前往打卡核對</el-button>
+    </p>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <el-tab-pane label="每週排班" name="schedule">
@@ -984,6 +995,15 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
 
 
 <style scoped>
+.schedule-page__notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-3);
+}
 .control-panel {
   padding-block: var(--space-3);
   margin-bottom: var(--space-2);

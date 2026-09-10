@@ -4,7 +4,8 @@ import { LEAVE_TYPE_MAP } from '@/utils/leaves'
 type RecordRow = ApiResponse<'/attendance/records', 'get'>[number]
 type Day = ApiResponse<'/attendance/month-context', 'get'>['days'][number]
 
-function taipeiDate(now: number): string {
+/** 匯出供 EmployeeMonthPanel 判定「未來日」收合區段用；邏輯不變、只是曝露既有函式。 */
+export function taipeiDate(now: number): string {
   const parts = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
   return ['year', 'month', 'day'].map(type => parts.find(part => part.type === type)?.value).join('-')
 }

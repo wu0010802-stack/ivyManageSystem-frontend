@@ -9,13 +9,20 @@
       <caption class="sr-only">{{ employeeName || '所選員工' }} {{ year }} 年 {{ month }} 月出勤</caption>
       <thead><tr><th scope="col">日期</th><th scope="col">應上班時段</th><th scope="col">上班打卡</th><th scope="col">下班打卡</th><th scope="col">狀態／請假</th><th scope="col">操作</th></tr></thead>
       <tbody>
-        <tr v-for="row in rows" :key="row.date" class="month-record-row" :class="{ 'month-record-row--anomaly': row.warning }" :data-attendance-date="row.date" :aria-current="row.date === focusDate ? 'date' : undefined" :tabindex="row.date === focusDate ? -1 : undefined">
+        <tr v-for="row in visibleRows" :key="row.date" class="month-record-row" :class="{ 'month-record-row--anomaly': row.warning }" :data-attendance-date="row.date" :aria-current="row.date === focusDate ? 'date' : undefined" :tabindex="row.date === focusDate ? -1 : undefined">
           <th scope="row" data-label="日期">{{ row.date }}<small>{{ row.weekday }}</small></th>
           <td data-label="應上班時段">{{ row.expectedLabel }}</td>
           <td class="month-record-row__punch-in" data-label="上班打卡">{{ row.record?.punch_in || '—' }}</td>
           <td class="month-record-row__punch-out" data-label="下班打卡">{{ row.record?.punch_out || '—' }}</td>
           <td class="month-record-row__status" data-label="狀態／請假">{{ row.status }}<small v-if="row.leaveLabel">{{ row.leaveLabel }}</small><RawPunchDetails v-if="row.record" :import-metadata="row.record.import_metadata" /></td>
           <td data-label="操作"><el-button v-if="canWrite && row.canSupplement" size="small" :disabled="saving" @click="openSupplement(row)">補打卡</el-button></td>
+        </tr>
+        <tr v-if="futureRows.length && !showFuture" class="month-future-toggle">
+          <td colspan="6">
+            <button type="button" class="month-future-toggle__btn" @click="showFuture = true">
+              ▸ {{ futureRows[0].date }} 起尚未到班日（{{ futureRows.length }} 天{{ futureLeaveCount ? `，含請假 ${futureLeaveCount} 天` : '' }}）
+            </button>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -34,7 +41,7 @@ import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getRecords, upsertRecord } from '@/api/attendance'
 import { getAttendanceMonthContext } from '@/api/attendanceMonthContext'
-import { buildAttendanceMonthRows } from '@/utils/attendanceMonthRows'
+import { buildAttendanceMonthRows, taipeiDate } from '@/utils/attendanceMonthRows'
 import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -54,6 +61,16 @@ const now = ref(Date.now())
 const clockTimer = window.setInterval(() => { now.value = Date.now() }, 60_000)
 onUnmounted(() => { window.clearInterval(clockTimer); loadSequence += 1 })
 const rows = computed(() => buildAttendanceMonthRows(days.value, records.value, now.value))
+// 未來日收合（UI/UX 改版提案 09-10）：整月排到月底的「尚未到班日」預設摺起，展開一次
+// 後維持展開；核對日期落在未來時自動視為已展開，確保 focusDate 定位一定找得到目標列。
+const todayISO = computed(() => taipeiDate(now.value))
+const pastRows = computed(() => rows.value.filter(row => row.date <= todayISO.value))
+const futureRows = computed(() => rows.value.filter(row => row.date > todayISO.value))
+const futureLeaveCount = computed(() => futureRows.value.filter(row => row.leaveLabel).length)
+const showFuture = ref(false)
+const visibleRows = computed(() => (
+  showFuture.value || (!!props.focusDate && futureRows.value.some(row => row.date === props.focusDate))
+) ? rows.value : pastRows.value)
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
 const editing = ref<ReturnType<typeof buildAttendanceMonthRows>[number] | null>(null)
 const punchIn = ref<string | null>(null)
@@ -65,7 +82,7 @@ const hasNewPunch = computed(() => !!editing.value && ((!!punchIn.value && punch
 async function load(): Promise<void> {
   const sequence = ++loadSequence
   records.value = []; days.value = []; editing.value = null
-  loadFailed.value = false; loading.value = false
+  loadFailed.value = false; loading.value = false; showFuture.value = false
   const employeeId = props.employeeId
   if (employeeId === null) return
   loading.value = true
@@ -129,6 +146,18 @@ async function saveSupplement(): Promise<void> {
 .month-record-table thead th { position: sticky; top: 0; z-index: 1; background: var(--el-fill-color-light); font-weight: 600; }
 .month-record-table small { display: block; color: var(--el-text-color-secondary); margin-top: var(--space-1); }
 .month-record-row--anomaly { background: var(--el-color-warning-light-9); }
+.month-future-toggle__btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) 0;
+  cursor: pointer;
+}
+.month-future-toggle__btn:hover,
+.month-future-toggle__btn:focus-visible { color: var(--el-color-primary); }
 .month-record-row[aria-current='date'] { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .month-edit { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); padding: var(--space-3); }
 .month-edit p { width: 100%; }
