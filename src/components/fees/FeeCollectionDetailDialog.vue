@@ -462,7 +462,7 @@ function statusTagType(status: string | null | undefined): 'success' | 'warning'
 }
 
 .col-when {
-  width: 150px;
+  width: 132px;
   white-space: nowrap;
 }
 
@@ -475,9 +475,19 @@ function statusTagType(status: string | null | undefined): 'success' | 'warning'
   width: 90px;
 }
 
+/* 多了操作欄後 820px 更擠：備註多半是「—」，讓出寬度給確認狀態的日期字串 */
+.col-note {
+  width: 76px;
+}
+
+/* 停用說明會換行，不可 nowrap：整列撐寬會把「確認狀態」擠成直排 */
 .col-action {
-  width: 92px;
-  white-space: nowrap;
+  width: 96px;
+}
+
+.col-action .muted {
+  margin-top: 2px;
+  line-height: 1.35;
 }
 
 .event--negative .num {
