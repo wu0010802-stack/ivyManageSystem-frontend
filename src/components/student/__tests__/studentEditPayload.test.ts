@@ -105,6 +105,37 @@ describe('buildStudentMutationPayload', () => {
     expect(payload).toEqual({ notes: '新備註' })
   })
 
+  it('SPEC-025：銷帳碼由空白改成有值時送出（T3→T9 介面缺口驗證）', () => {
+    const payload = buildStudentMutationPayload(
+      { id: 13, name: '銷帳碼學生', collection_suffix: '1101' },
+      {
+        isEdit: true,
+        initial: { id: 13, name: '銷帳碼學生', collection_suffix: '' },
+        canHealthWrite: false,
+        canSpecialNeedsWrite: false,
+        canGuardianWrite: false,
+      },
+    )
+
+    expect(payload).toEqual({ collection_suffix: '1101' })
+  })
+
+  it('SPEC-025：銷帳碼未變更時不送出（符合既有 diff 語意，不覆寫無關資料）', () => {
+    const payload = buildStudentMutationPayload(
+      { id: 14, name: '未變更學生', collection_suffix: '1101' },
+      {
+        isEdit: true,
+        initial: { id: 14, name: '未變更學生', collection_suffix: '1101' },
+        canHealthWrite: false,
+        canSpecialNeedsWrite: false,
+        canGuardianWrite: false,
+      },
+    )
+
+    expect(payload).toEqual({})
+    expect(payload).not.toHaveProperty('collection_suffix')
+  })
+
   it('真正改班時附上來源班級 CAS', () => {
     const payload = buildStudentMutationPayload(
       { id: 12, name: '轉班學生', classroom_id: 20 },

@@ -103,6 +103,7 @@ interface StudentForm {
   birthday: string
   classroom_id: number | null
   enrollment_date: string
+  collection_suffix: string
   parent_name: string
   parent_phone: string
   address: string
@@ -135,6 +136,7 @@ const emptyForm = (): StudentForm => ({
   birthday: '',
   classroom_id: null,
   enrollment_date: '',
+  collection_suffix: '',
   parent_name: '',
   parent_phone: '',
   address: '',
@@ -293,6 +295,13 @@ const submit = async () => {
       </el-form-item>
       <el-form-item class="fg-6" label="入學日">
         <el-date-picker v-model="form.enrollment_date" type="date" placeholder="選擇日期" value-format="YYYY-MM-DD" style="width: 100%" />
+      </el-form-item>
+      <el-form-item class="fg-6" label="銷帳碼">
+        <el-input
+          v-model="form.collection_suffix" maxlength="4" inputmode="numeric"
+          placeholder="4 位數字，例：1101" data-test="student-collection-suffix"
+        />
+        <div class="form-hint">永豐繳款單的末四碼；升班會重編，同一學年不可與其他在園學生重複。</div>
       </el-form-item>
 
       </div>
