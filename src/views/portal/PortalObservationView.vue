@@ -5,13 +5,11 @@ import { ElMessage } from 'element-plus'
 import { getMyStudents } from '@/api/portal'
 import { listObservations, createObservation } from '@/api/portalObservations'
 import { todayISO, dateToLocalISO } from '@/utils/format'
-import { usePortalFromHub } from '@/composables/usePortalFromHub'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import { StarFilled } from '@element-plus/icons-vue'
 
 const route = useRoute()
-const { fromHub, backToHub } = usePortalFromHub()
 
 // 7 領域對齊台灣課綱（後端 StudentObservation.domain）
 const DOMAINS = [
@@ -131,11 +129,7 @@ async function submit() {
 
 <template>
   <div class="obs-view">
-    <PortalPageHeader
-      title="課堂觀察 / 成長紀錄"
-      :back-label="fromHub ? '返回今日工作台' : ''"
-      @back="backToHub"
-    />
+    <PortalPageHeader title="課堂觀察 / 成長紀錄" />
 
     <!-- 快速記錄表單 -->
     <div class="pt-card form-card">

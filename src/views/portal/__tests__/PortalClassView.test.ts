@@ -8,10 +8,11 @@ const hubData = ref<Record<string, unknown> | null>(null)
 const hubLoading = ref(false)
 const hubError = ref<unknown>(null)
 
-const { mockRefresh, mockPush, mockRouteQuery, mockHomeSummary, mockPickupCount } =
+const { mockRefresh, mockPush, mockReplace, mockRouteQuery, mockHomeSummary, mockPickupCount } =
   vi.hoisted(() => ({
     mockRefresh: vi.fn(() => Promise.resolve()),
     mockPush: vi.fn(),
+    mockReplace: vi.fn(),
     mockRouteQuery: { value: {} as Record<string, unknown> },
     mockHomeSummary: vi.fn(() =>
       Promise.resolve({ data: { classrooms: [] as unknown[] } }),
@@ -52,7 +53,7 @@ vi.mock('@/utils/auth', async (orig) => {
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: mockRouteQuery.value }),
-  useRouter: () => ({ push: mockPush, replace: vi.fn() }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }))
 
 import PortalClassView from '@/views/portal/PortalClassView.vue'
@@ -103,6 +104,7 @@ describe('PortalClassView', () => {
     hubError.value = null
     mockRouteQuery.value = {}
     mockPush.mockClear()
+    mockReplace.mockClear()
     mockRefresh.mockClear()
     mockHomeSummary.mockResolvedValue({ data: { classrooms: [] } })
   })
@@ -165,6 +167,23 @@ describe('PortalClassView', () => {
     mockRouteQuery.value = { sheet: 'measurement' }
     const wrapper = await mountView()
     expect(wrapper.find('.measurement-sheet-stub').attributes('data-show')).toBe('true')
+  })
+
+  it('關閉量體位抽屜要清掉 URL 上的 ?sheet=measurement（I1：否則側欄第二次點同一項無效）', async () => {
+    mockRouteQuery.value = { sheet: 'measurement', classroom_id: '3' }
+    const wrapper = await mountView()
+    expect(wrapper.find('.measurement-sheet-stub').attributes('data-show')).toBe('true')
+
+    // 模擬 PortalBatchMeasurementSheet 關閉：emit('update:modelValue', false)
+    const sheetStub = wrapper.findComponent('.measurement-sheet-stub')
+    await sheetStub.vm.$emit('update:modelValue', false)
+    await flushPromises()
+
+    expect(mockReplace).toHaveBeenCalledTimes(1)
+    const [arg] = mockReplace.mock.calls[0] as [{ query: Record<string, unknown> }]
+    expect(arg.query).not.toHaveProperty('sheet')
+    // 保留其他 query 參數（例如 classroom_id），不能整包清空。
+    expect(arg.query).toMatchObject({ classroom_id: '3' })
   })
 
   it('單班教師不顯示班級切換器', async () => {

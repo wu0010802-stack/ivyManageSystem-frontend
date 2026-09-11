@@ -21,12 +21,18 @@ export function usePortalClassHub(classroomId?: Ref<number | null>) {
   const error = ref<unknown>(null)
   let timer: ReturnType<typeof setInterval> | null = null
   let inflight: Promise<unknown> | null = null
+  // inflight 去重要帶上 classroomId：否則切班當下若前一輪請求仍在飛，
+  // watch 觸發的 refresh() 會沿用舊班級的 promise，resolve 後把舊班資料塞回
+  // data（下拉選單看起來「自己彈回去」）。key 用 undefined 代表未指定班級。
+  let inflightKey: number | null | undefined = undefined
 
   async function refresh() {
-    if (inflight) return inflight
+    const key = classroomId?.value ?? undefined
+    if (inflight && inflightKey === key) return inflight
     loading.value = true
     error.value = null
-    inflight = getTodayHub(classroomId?.value ?? undefined)
+    inflightKey = key
+    inflight = getTodayHub(key)
       .then((d) => {
         data.value = d
         return d
@@ -57,9 +63,8 @@ export function usePortalClassHub(classroomId?: Ref<number | null>) {
     }
   }
 
-  // 切換班級要立刻重抓；inflight 去重在 refresh 內，短時間連按不會打爆後端。
-  // 已知限制：若切換當下前一個請求仍在飛行中，refresh() 會直接沿用該 inflight
-  // promise（仍是舊班級的請求），不會插隊重打——不在本次改動範圍內處理。
+  // 切換班級要立刻重抓；inflight 去重在 refresh 內按 classroomId 分key，
+  // 短時間連按同一班不會打爆後端，切班當下也不會誤用舊班的 inflight promise。
   if (classroomId) {
     watch(classroomId, () => {
       refresh().catch(() => {})

@@ -9,9 +9,10 @@
  * 直接短路回 false（教師只走 Portal），用錯的話整頁會是空的。
  *
  * 顯示條件（permission）對齊的是 **router meta.permission**，不是後端算 counts
- * 用的權限。兩者在課堂觀察／聯絡簿上不一致（router 用 STUDENTS_READ，後端
- * counts 用 PORTFOLIO_READ），效果是「格子看得到但數字恆為 0」——這是既有
- * 行為，故意不在本次對齊，以免動到 router guard 造成提權。
+ * 用的權限。兩者在課堂觀察上不一致（router 用 STUDENTS_READ，後端 counts 用
+ * PORTFOLIO_READ），效果是「格子看得到但數字恆為 0」——這是既有行為，故意
+ * 不在本次對齊，以免動到 router guard 造成提權。（聯絡簿兩端皆為
+ * PORTFOLIO_READ，一致，不受影響。）
  */
 import { hasPortalPermission } from '@/utils/auth'
 import type { PortalHubCounts } from '@/utils/portalHubCounts'

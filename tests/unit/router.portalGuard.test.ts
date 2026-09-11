@@ -16,13 +16,20 @@ function findRoute(path: string) {
 const SENSITIVE_PORTAL_ROUTES: Array<[string, string]> = [
   // /portal/class-hub 已於 SPEC-024 移除，改為永久 redirect（無 meta.permission，
   // 守衛不適用於純轉向路由；權限檢查由目的地 /portal/class 與 /portal/medications 各自把關）。
+  ['/portal/class', 'STUDENTS_READ'],
   ['/portal/students', 'STUDENTS_READ'],
   ['/portal/students/:studentId', 'STUDENTS_READ'],
   ['/portal/student-attendance', 'STUDENTS_READ'],
+  ['/portal/student-leaves', 'STUDENTS_READ'],
   ['/portal/medications', 'STUDENTS_HEALTH_READ'],
   ['/portal/observations', 'STUDENTS_READ'],
   ['/portal/incidents', 'STUDENTS_READ'],
   ['/portal/assessments', 'STUDENTS_READ'],
+  ['/portal/work-samples', 'STUDENTS_READ'],
+  ['/portal/albums', 'CLASS_ALBUMS_READ'],
+  ['/portal/albums/:id', 'CLASS_ALBUMS_READ'],
+  ['/portal/pickup-authorizations', 'STUDENTS_READ'],
+  ['/portal/bus-trip', 'BUS_TRIPS_OPERATE'],
   ['/portal/contact-book', 'PORTFOLIO_READ'],
   ['/portal/dismissal-calls', 'DISMISSAL_CALLS_READ'],
 ]
@@ -32,6 +39,25 @@ describe('C52: portal 敏感子路由逐路由 meta.permission', () => {
     const r = findRoute(path)
     expect(r, `route ${path} 不存在`).toBeDefined()
     expect(r?.meta?.permission).toBe(perm)
+  })
+
+  // I3：SENSITIVE_PORTAL_ROUTES 曾漏掉 /portal/class（新的班級主入口，掛
+  // STUDENTS_READ、會曝露學生相關導覽）卻沒有任何測試察覺。改成從 router
+  // 真實路由樹反向比對，以後新增 portal 頁面忘了把它加進清單會直接紅，
+  // 不必等人工發現。
+  it('凡 /portal/* 且掛 meta.permission 的路由，都必須出現在 SENSITIVE_PORTAL_ROUTES', () => {
+    const coveredPaths = new Set(SENSITIVE_PORTAL_ROUTES.map(([path]) => path))
+    const actualPermissioned = router
+      .getRoutes()
+      .filter((r) => r.path.startsWith('/portal/') && r.meta?.permission)
+      .map((r) => r.path)
+      .sort()
+
+    for (const path of actualPermissioned) {
+      expect(coveredPaths, `route ${path} 掛了 meta.permission 卻未登記在 SENSITIVE_PORTAL_ROUTES`).toContain(path)
+    }
+    // 反向也要成立：清單裡不該有 router 中已不存在、或已不再掛 permission 的過時項。
+    expect([...coveredPaths].sort()).toEqual(actualPermissioned)
   })
 
   it('個人/通用 portal 子路由不應掛 permission（避免誤鎖全教師）', () => {

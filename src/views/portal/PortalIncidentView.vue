@@ -13,9 +13,7 @@ import { Plus } from '@element-plus/icons-vue'
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 const TYPE_TAG = _TYPE_TAG as Record<string, ElTagType>
 const SEVERITY_TAG = _SEVERITY_TAG as Record<string, ElTagType>
-import { usePortalFromHub } from '@/composables/usePortalFromHub'
 
-const { fromHub, backToHub } = usePortalFromHub()
 const { isMobile } = useIsMobile()
 
 // ── 班級/學生 ─────────────────────────────────────────
@@ -177,11 +175,7 @@ function resetFilters() {
 
 <template>
   <div>
-    <PortalPageHeader
-      title="事件紀錄"
-      :back-label="fromHub ? '返回今日工作台' : ''"
-      @back="backToHub"
-    >
+    <PortalPageHeader title="事件紀錄">
       <template #actions>
         <el-button type="primary" size="small" :icon="Plus" @click="openCreate">新增事件</el-button>
       </template>

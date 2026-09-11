@@ -16,6 +16,8 @@ import {
   User,
   UserFilled,
   Notebook,
+  List,
+  Odometer,
 } from '@element-plus/icons-vue'
 import { searchPortal } from '@/api/portalSearch'
 import { usePortalSearch } from '@/composables/usePortalSearch'
@@ -32,7 +34,10 @@ const COMMANDS: { id: string; keywords: string[]; label: string; icon: Component
   { id: 'calendar', keywords: ['行事曆', 'calendar'], label: '行事曆', icon: Calendar, route: '/portal/calendar' },
   { id: 'observation', keywords: ['觀察', '新增觀察', 'observation'], label: '新增觀察', icon: View, route: '/portal/observations' },
   { id: 'announcement', keywords: ['公告', 'announcement'], label: '公告通知', icon: Bell, route: '/portal/announcements' },
-  { id: 'hub', keywords: ['今日', '工作台', 'hub', 'today'], label: '今日工作台', icon: HomeFilled, route: '/portal/class-hub' },
+  { id: 'class', keywords: ['班級', 'class', '工作台'], label: '班級', icon: HomeFilled, route: '/portal/class' },
+  { id: 'student-attendance', keywords: ['點名', '學生點名', 'attendance'], label: '學生點名', icon: List, route: '/portal/student-attendance' },
+  { id: 'contact-book', keywords: ['聯絡簿', '每日聯絡簿', 'contact book'], label: '每日聯絡簿', icon: Notebook, route: '/portal/contact-book' },
+  { id: 'measurement', keywords: ['量體位', '全班量體位', 'measurement'], label: '全班量體位', icon: Odometer, route: '/portal/class?sheet=measurement' },
 ]
 
 // 結果分類圖示（對齊 EP icon 系統，取代原本的裝飾 emoji）

@@ -14,11 +14,8 @@ import {
 import { getUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { todayISO } from '@/utils/format'
-import { usePortalFromHub } from '@/composables/usePortalFromHub'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
-
-const { fromHub, backToHub } = usePortalFromHub()
 
 // 7 領域對齊台灣課綱（同 PortalObservationView / 後端 OBSERVATION_DOMAINS）
 const DOMAINS = [
@@ -240,11 +237,7 @@ async function confirmDelete(item: WorkSampleItem) {
 
 <template>
   <div class="ws-view">
-    <PortalPageHeader
-      title="作品上傳"
-      :back-label="fromHub ? '返回今日工作台' : ''"
-      @back="backToHub"
-    />
+    <PortalPageHeader title="作品上傳" />
 
     <!-- 選擇學生：行動優先用可點選 chip，不用下拉（避免多層點擊） -->
     <div class="pt-card form-card">

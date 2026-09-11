@@ -111,6 +111,18 @@ watch(
   { immediate: true },
 )
 
+// 抽屜關閉要把 URL 上的 ?sheet=measurement 清掉，否則第二次點側欄同一項
+// 時 query 沒變化、上面的 watch 不會觸發，抽屜就再也開不了（要先離開頁面
+// 再回來才能重開）。用 replace 避免多留一筆瀏覽紀錄；保留 query 裡其他參數
+// （例如 classroom_id）。
+watch(measurementSheetOpen, (open) => {
+  if (open) return
+  if (route.query.sheet === undefined) return
+  const query = { ...route.query }
+  delete query.sheet
+  router.replace({ query })
+})
+
 watch(
   () => route.query.classroom_id,
   (raw) => {

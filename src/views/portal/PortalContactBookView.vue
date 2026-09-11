@@ -5,7 +5,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { getMyStudents } from '@/api/portal'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
-import { usePortalFromHub } from '@/composables/usePortalFromHub'
 import {
   applyTemplate,
   batchPublish,
@@ -30,7 +29,6 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 
 const { isMobile } = useIsMobile()
-const { fromHub, backToHub } = usePortalFromHub()
 
 interface Photo { id: number; url?: string; [key: string]: unknown }
 interface EntryRecord { id: number; published_at?: string | null; photos?: Photo[]; version?: number; [key: string]: unknown }
@@ -481,11 +479,7 @@ watch([selectedClassroomId, selectedDate], () => {
 
 <template>
   <div class="contact-book-page">
-    <PortalPageHeader
-      title="每日聯絡簿"
-      :back-label="fromHub ? '返回今日工作台' : ''"
-      @back="backToHub"
-    />
+    <PortalPageHeader title="每日聯絡簿" />
 
     <ContactBookFilterBar
       v-model:classroom-id="(selectedClassroomId as number | undefined)"
