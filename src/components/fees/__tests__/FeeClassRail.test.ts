@@ -43,27 +43,32 @@ const mountRail = (props: Record<string, unknown> = {}) =>
     },
   })
 
+// 年段由大到小排，此組資料的順序固定為：小班（玫瑰）→ 幼幼班（牡丹、向日葵）
 const classChips = (w: ReturnType<typeof mountRail>) =>
   w.findAll('[data-test="stmt-class-rail-class"]')
+
+/** 依班名取 chip，免得年段排序一改就要重算索引 */
+const chipOf = (w: ReturnType<typeof mountRail>, name: string) =>
+  classChips(w).find((c) => c.attributes('data-classroom') === name)!
 
 describe('渲染', () => {
   it('每個年段一組，班級 chip 依分組資料展開（不是下拉）', () => {
     const w = mountRail()
     expect(w.find('select').exists()).toBe(false)
     expect(w.findAll('[data-test="stmt-class-rail-grade"]').map((g) => g.text())).toEqual([
-      expect.stringContaining('幼幼班'),
       expect.stringContaining('小班'),
+      expect.stringContaining('幼幼班'),
     ])
     expect(classChips(w).map((c) => c.attributes('data-classroom'))).toEqual([
+      '玫瑰',
       '牡丹',
       '向日葵',
-      '玫瑰',
     ])
   })
 
   it('有未收的班顯示未收人數，收齊的班顯示已收齊而不是 0', () => {
     const w = mountRail()
-    const [mudan, , meigui] = classChips(w)
+    const [meigui, mudan] = classChips(w)
     expect(mudan.find('[data-test="rail-owe"]').text()).toBe('1')
     expect(meigui.find('[data-test="rail-owe"]').exists()).toBe(false)
     expect(meigui.find('[data-test="rail-ok"]').exists()).toBe(true)
@@ -76,12 +81,12 @@ describe('渲染', () => {
     const all = w.find('[data-test="stmt-class-rail-all"]')
     expect(all.text()).toContain('2')
     expect(all.attributes('title')).toContain('共 5 人')
-    // 幼幼班：3 人中 2 人未收齊（牡丹 1 + 向日葵 1）
-    const grade = w.findAll('[data-test="stmt-class-rail-grade"]')[0]
+    // 幼幼班：3 人中 2 人未收齊（牡丹 1 + 向日葵 1）；年段由大到小排，故排在小班之後
+    const grade = w.findAll('[data-test="stmt-class-rail-grade"]')[1]
     expect(grade.text()).toContain('2')
     expect(grade.attributes('title')).toContain('共 3 人')
     // 小班全繳清 → 年段數字為 0
-    expect(w.findAll('[data-test="stmt-class-rail-grade"]')[1].attributes('title')).toContain(
+    expect(w.findAll('[data-test="stmt-class-rail-grade"]')[0].attributes('title')).toContain(
       '已收齊',
     )
   })
@@ -112,7 +117,7 @@ describe('渲染', () => {
     const w = mountRail({ gradeSelectable: false })
     expect(w.find('[data-test="stmt-class-rail-grade"]').exists()).toBe(false)
     const labels = w.findAll('[data-test="stmt-class-rail-grade-label"]')
-    expect(labels.map((l) => l.text())).toEqual(['幼幼班', '小班'])
+    expect(labels.map((l) => l.text())).toEqual(['小班', '幼幼班'])
     // 班級 chip 仍可點
     await classChips(w)[0].trigger('click')
     expect(w.emitted('select')).toBeTruthy()
@@ -128,15 +133,16 @@ describe('選取狀態', () => {
   it('選中的班 aria-pressed 為真，其他為假', () => {
     const w = mountRail({ selectedClass: '向日葵', selectedGrade: '幼幼班' })
     const pressed = classChips(w).map((c) => c.attributes('aria-pressed'))
-    expect(pressed).toEqual(['false', 'true', 'false'])
+    expect(pressed).toEqual(['false', 'false', 'true'])
     expect(w.find('[data-test="stmt-class-rail-all"]').attributes('aria-pressed')).toBe('false')
   })
 
   it('選整個年段時只有年段標籤為作用態，班級 chip 都不是', () => {
     const w = mountRail({ selectedGrade: '幼幼班' })
     const grades = w.findAll('[data-test="stmt-class-rail-grade"]')
-    expect(grades[0].attributes('aria-pressed')).toBe('true')
-    expect(grades[1].attributes('aria-pressed')).toBe('false')
+    // grades = [小班, 幼幼班]
+    expect(grades[1].attributes('aria-pressed')).toBe('true')
+    expect(grades[0].attributes('aria-pressed')).toBe('false')
     expect(classChips(w).every((c) => c.attributes('aria-pressed') === 'false')).toBe(true)
   })
 })
@@ -144,29 +150,30 @@ describe('選取狀態', () => {
 describe('emit select', () => {
   it('點班級帶出班名與所屬年段', async () => {
     const w = mountRail()
-    await classChips(w)[1].trigger('click')
+    await chipOf(w, '向日葵').trigger('click')
     expect(w.emitted('select')).toEqual([[{ cls: '向日葵', grade: '幼幼班' }]])
   })
 
   it('再點一次已選中的班＝取消回全部', async () => {
     const w = mountRail({ selectedClass: '向日葵', selectedGrade: '幼幼班' })
-    await classChips(w)[1].trigger('click')
+    await chipOf(w, '向日葵').trigger('click')
     expect(w.emitted('select')).toEqual([[{ cls: null, grade: null }]])
   })
 
   it('點年段標籤選整個年段；再點一次取消', async () => {
     const w = mountRail()
-    await w.findAll('[data-test="stmt-class-rail-grade"]')[0].trigger('click')
+    // grades = [小班, 幼幼班]
+    await w.findAll('[data-test="stmt-class-rail-grade"]')[1].trigger('click')
     expect(w.emitted('select')).toEqual([[{ cls: null, grade: '幼幼班' }]])
 
     const w2 = mountRail({ selectedGrade: '幼幼班' })
-    await w2.findAll('[data-test="stmt-class-rail-grade"]')[0].trigger('click')
+    await w2.findAll('[data-test="stmt-class-rail-grade"]')[1].trigger('click')
     expect(w2.emitted('select')).toEqual([[{ cls: null, grade: null }]])
   })
 
   it('已選某班時點該班所屬年段＝放大到整個年段（不是取消）', async () => {
     const w = mountRail({ selectedClass: '向日葵', selectedGrade: '幼幼班' })
-    await w.findAll('[data-test="stmt-class-rail-grade"]')[0].trigger('click')
+    await w.findAll('[data-test="stmt-class-rail-grade"]')[1].trigger('click')
     expect(w.emitted('select')).toEqual([[{ cls: null, grade: '幼幼班' }]])
   })
 

@@ -48,6 +48,16 @@
         共 {{ visibleStudents.length }} 人
       </span>
 
+      <!-- 對帳時手上那疊繳款單／代收檔是銷帳碼序，畫面預設是姓名序——切過去才對得起來。
+           只重排班內的列，班級分組維持原樣（「哪一班還沒收齊」與按班全選都建立在分組上） -->
+      <label class="stmt-sort">
+        <span class="stmt-sort__label">排序</span>
+        <select v-model="sortKey" class="stmt-sort__select" data-test="stmt-sort">
+          <option value="default">姓名</option>
+          <option value="code">銷帳碼 ↑</option>
+        </select>
+      </label>
+
       <button type="button" class="stmt-column-toggle" data-test="stmt-columns"
         :aria-pressed="showFullColumns" @click="showFullColumns = !showFullColumns">
         {{ showFullColumns ? '精簡欄位' : '完整欄位' }}
@@ -544,6 +554,8 @@
       :record-ids="viewRecordIds"
       :student-name="viewStudentName"
       :month="month"
+      :can-write="canWrite"
+      @reversed="onPaid"
     />
   </section>
 </template>
@@ -900,6 +912,30 @@ const statusTiles = computed(() => {
  * 的答案所在（預設篩選下已收齊的班本來就一列都不會通過，整組消失反而看不出它
  * 存在且收齊了）。表頭的統計以範圍內該班全體計，不受狀態快篩影響。
  */
+/**
+ * 班內列序：預設沿用後端的姓名序（ORDER BY classroom_name, student_name, id），
+ * 切「銷帳碼」則依末四碼升冪——對帳時手上的繳款單／代收檔就是這個順序。
+ *
+ * 無碼者（非發單批次來源的帳款，如手動單）一律沉到該班最後：它們本來就不在那疊
+ * 單子裡，插在中間只會讓人以為對漏了。Array.sort 是穩定排序，無碼群組因而自動
+ * 維持原本的姓名序，不必另外處理。
+ */
+type StatementSortKey = 'default' | 'code'
+const sortKey = ref<StatementSortKey>('default')
+
+function sortRows(rows: StatementStudent[]): StatementStudent[] {
+  if (sortKey.value !== 'code') return rows
+  return [...rows].sort((a, b) => {
+    const ac = a.billing_code_suffix ?? ''
+    const bc = b.billing_code_suffix ?? ''
+    if (!ac && !bc) return 0
+    if (!ac) return 1
+    if (!bc) return -1
+    // numeric：末四碼雖是定長字串，帶前導零時仍以數值大小為準才符合直覺
+    return ac.localeCompare(bc, undefined, { numeric: true })
+  })
+}
+
 const visibleGroups = computed(() => {
   const rowsBy = new Map<string, StatementStudent[]>()
   visibleStudents.value.forEach((s) => {
@@ -920,7 +956,7 @@ const visibleGroups = computed(() => {
     .flatMap((g) => g.classes)
     .filter((c) => scopeBy.has(c.name))
     .map((c) => {
-      const rows = rowsBy.get(c.name) ?? []
+      const rows = sortRows(rowsBy.get(c.name) ?? [])
       // 分組表頭的統計以「範圍內該班全體」計（不受狀態快篩影響），
       // 否則關掉「已繳清」時每班都會顯示「已收齊 0／N」
       const scoped = scopeBy.get(c.name) ?? []
@@ -1828,6 +1864,34 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
 .stmt-strip__main .stmt-progress {
   width: 96px;
   align-self: center;
+}
+
+.stmt-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.stmt-sort__select {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--el-text-color-primary);
+  /* 兩個選項字數不同，寬度不鎖會讓右邊的「完整欄位」跟著跳 */
+  min-width: 104px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--el-border-radius-base);
+  background: var(--el-fill-color-blank);
+  cursor: pointer;
+}
+
+.stmt-sort__select:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .stmt-column-toggle {

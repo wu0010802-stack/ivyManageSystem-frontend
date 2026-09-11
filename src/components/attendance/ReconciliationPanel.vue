@@ -9,7 +9,15 @@ import { reconciliationRanges, reconciliationRangeError } from '@/utils/attendan
 import FormDialog from '@/components/common/FormDialog.vue'
 
 type Row = ApiResponse<'/attendance/reconciliation/preview', 'post'>['rows'][number]
-const props = defineProps<{ year: number; month: number; revision: number }>()
+// active=false（頁籤切到「出勤明細」）時本面板仍掛載著以保留核對狀態，但不得
+// 在背景送出 preview；待使用者切回來再補跑一次最新的。
+// ⚠ 必須走 withDefaults 明確給 true：Vue 對宣告為 Boolean 的 prop 有 casting，
+// 未傳入時值是 false 而非 undefined，直接寫 `active?: boolean` 會讓沒傳這個
+// prop 的呼叫端（與既有測試）一律被當成「隱藏中」而永遠不查詢。
+const props = withDefaults(
+  defineProps<{ year: number; month: number; revision: number; active?: boolean }>(),
+  { active: true },
+)
 const emit = defineEmits<{ confirmed: []; records: [row: Row]; import: [row: Row] }>()
 const { data, loading, saving, error, preview, confirm, reset } = useAttendanceReconciliation()
 const start = ref('')
@@ -52,11 +60,13 @@ const totalDays = computed(() => {
   return Math.round(ms / 86_400_000) + 1
 })
 const coveredCount = computed(() => data.value?.coverage.covered_dates.length ?? 0)
+// covered_dates 是「當天至少有一位員工已涵蓋」的日期；實際涵蓋逐人判定，
+// 所以文字不能寫成「這幾天全員都齊了」。
 const coverageLabel = computed(() => {
   if (!data.value) return ''
-  if (coveredCount.value === 0) return '打卡資料尚未涵蓋任何一天'
-  if (coveredCount.value >= totalDays.value) return `打卡資料已涵蓋全部 ${totalDays.value} 天`
-  return `打卡資料已涵蓋 ${coveredCount.value}／${totalDays.value} 天`
+  if (coveredCount.value === 0) return '這段期間尚未匯入任何打卡資料'
+  if (coveredCount.value >= totalDays.value) return `${totalDays.value} 天都有打卡資料（涵蓋範圍逐人判定）`
+  return `${coveredCount.value}／${totalDays.value} 天有打卡資料（涵蓋範圍逐人判定）`
 })
 const labels: Record<Row['status'], string> = {
   matched: '符合原班表', possible_shift_change: '疑似換班', missing_punch: '缺卡待確認',
@@ -109,8 +119,17 @@ function resetRange() {
   selected.value = null
   reset()
 }
-watch(() => [props.year, props.month], () => { resetRange(); void runPreview() }, { immediate: true })
-watch(() => props.revision, () => { selected.value = null; reset(); void runPreview() })
+// 面板隱藏時把查詢押後，切回來時補跑（見 active prop 註解）。
+const pendingPreview = ref(false)
+function requestPreview(): void {
+  if (props.active === false) { pendingPreview.value = true; return }
+  void runPreview()
+}
+watch(() => props.active, value => {
+  if (value && pendingPreview.value) { pendingPreview.value = false; void runPreview() }
+})
+watch(() => [props.year, props.month], () => { resetRange(); requestPreview() }, { immediate: true })
+watch(() => props.revision, () => { selected.value = null; reset(); requestPreview() })
 watch([start, end], () => { showCoverageDetail.value = false; selected.value = null; reset() }, { flush: 'sync' })
 watch(selectedShift, () => { includePair.value = false })
 
@@ -171,13 +190,15 @@ async function saveShift() {
       >{{ showCoverageDetail ? '收合明細' : '涵蓋明細' }}</button>
     </p>
     <ul v-if="showCoverageDetail && data" class="reconciliation__coverage-detail">
+      <!-- date_from 至 date_to 只是首尾日：中間可能整段沒有資料，涵蓋也逐人判定，
+           所以務必一併顯示「實際 N 天／M 人」，否則會被讀成整段期間全員都已匯入。 -->
       <li v-for="(batch, i) in data.coverage.batches" :key="i">
-        {{ batch.source === 'excel' ? 'Excel 匯入' : 'CSV 匯入' }}・{{ batch.date_from }} 至 {{ batch.date_to }}・{{ batch.row_count }} 筆・{{ formatDateTimeTW(batch.imported_at) }}{{ batch.imported_by ? `・${batch.imported_by}` : '' }}
+        {{ batch.source === 'excel' ? 'Excel 匯入' : 'CSV 匯入' }}・{{ batch.date_from }} 至 {{ batch.date_to }}<template v-if="batch.covered_day_count">（實際 {{ batch.covered_day_count }} 天<template v-if="batch.covered_employee_count">・{{ batch.covered_employee_count }} 人</template>）</template>・{{ batch.row_count }} 筆・{{ formatDateTimeTW(batch.imported_at) }}{{ batch.imported_by ? `・${batch.imported_by}` : '' }}
       </li>
     </ul>
     <details class="reconciliation__guide">
       <summary>核對範圍與缺勤判讀說明</summary>
-      <p class="reconciliation__hint">一次最多核對 31 天。打卡資料是否已涵蓋由系統依匯入批次與電子打卡台紀錄自動判定；已涵蓋且無打卡才會列為疑似缺勤，尚未涵蓋的日子列為資料待補。當日尚未結束，不判定整日缺勤。</p>
+      <p class="reconciliation__hint">一次最多核對 31 天。打卡資料是否已涵蓋由系統依匯入批次與電子打卡台紀錄自動判定，且<strong>逐人逐日</strong>判定：只有「這個人這一天的打卡資料確實已經進來、卻沒有打卡紀錄」才會列為疑似缺勤；沒匯入到的人或日子一律列為資料待補。當日與未來日不判定整日缺勤。</p>
     </details>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />

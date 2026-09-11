@@ -26,8 +26,8 @@
       </el-select>
     </div>
 
-    <!-- 全選列（多選批次處理，P?-batch-ux-tail）-->
-    <div v-if="filteredWithIndex.length > 0" class="anomaly-queue-column__select-all">
+    <!-- 全選列（多選批次處理，P?-batch-ux-tail）；唯讀帳號無批次動作可用，整列不顯示 -->
+    <div v-if="canWrite && filteredWithIndex.length > 0" class="anomaly-queue-column__select-all">
       <el-checkbox
         :model-value="allVisibleSelected"
         :indeterminate="someVisibleSelected"
@@ -98,8 +98,8 @@
       </li>
     </ul>
 
-    <!-- 批次動作列：選取 >0 時顯示 -->
-    <div v-if="selectedIds.size > 0" class="anomaly-queue-column__batch-bar">
+    <!-- 批次動作列：選取 >0 時顯示；與 ResolveCard 的單筆動作一致，需 ATTENDANCE_WRITE -->
+    <div v-if="canWrite && selectedIds.size > 0" class="anomaly-queue-column__batch-bar">
       <el-input
         v-model="batchRemark"
         placeholder="備註（選填）"
@@ -133,6 +133,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { batchConfirmAnomalies } from '@/api/attendance'
+import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
@@ -149,6 +150,10 @@ const emit = defineEmits<{
 }>()
 
 const { notify } = useErrorNotify()
+
+// 唯讀帳號（有 ATTENDANCE_READ 無 ATTENDANCE_WRITE）不該看到批次接受／豁免——
+// 單筆動作的 ResolveCard 一向有這道檢查，此處漏了，按下去才被後端 403。
+const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
 
 const searchTerm = ref('')
 const typeFilter = ref<string>('all')

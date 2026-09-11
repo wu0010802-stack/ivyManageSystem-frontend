@@ -114,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { suggestRefund, refundFeeRecord } from '@/api/fees'
 import { NON_REFUNDABLE_FEE_TYPES } from './feeTypes'
@@ -212,23 +212,52 @@ const canSubmit = computed(() =>
   form.amount > 0 && form.reason?.length >= 5 && !isBlocked.value
 )
 
+let suggestionSequence = 0
+let appliedSuggestedAmount: number | null = null
+
+function invalidateSuggestion() {
+  suggestionSequence++
+  suggesting.value = false
+  suggestion.value = null
+  reviewing.value = false
+  // 只清除曾套用且未手動修改的金額，手動退費仍可繼續。
+  if (appliedSuggestedAmount !== null && form.amount === appliedSuggestedAmount) form.amount = 0
+  appliedSuggestedAmount = null
+}
+
+watch(() => [
+  props.record?.id, props.record?.fee_type, props.modelValue,
+  format(form.withdrawal_date), form.T_total_override, form.T_served_override,
+], invalidateSuggestion, { flush: 'sync' })
+onBeforeUnmount(invalidateSuggestion)
+
 async function onSuggest() {
+  const recordId = props.record?.id
+  if (!recordId || !format(form.withdrawal_date) || isBlocked.value || submitting.value) return
+  invalidateSuggestion()
+  const sequence = suggestionSequence
   suggesting.value = true
   try {
     const payload: Record<string, unknown> = { withdrawal_date: format(form.withdrawal_date) }
-    if (form.T_total_override) payload.T_total_override = form.T_total_override
-    if (form.T_served_override) payload.T_served_override = form.T_served_override
-    suggestion.value = await suggestRefund((props.record as FeeRecord).id, payload) as RefundSuggestion
+    if (form.T_total_override != null) payload.T_total_override = form.T_total_override
+    if (form.T_served_override != null) payload.T_served_override = form.T_served_override
+    const result = await suggestRefund(recordId, payload) as RefundSuggestion
+    if (sequence !== suggestionSequence) return
+    suggestion.value = result
   } catch (e: unknown) {
+    if (sequence !== suggestionSequence) return
     const err = e as { response?: { data?: { detail?: string } } }
     ElMessage.error(err.response?.data?.detail || '計算失敗')
   } finally {
-    suggesting.value = false
+    if (sequence === suggestionSequence) suggesting.value = false
   }
 }
 
 function applySuggested() {
-  if (suggestion.value) form.amount = suggestion.value.suggested_amount
+  if (suggestion.value) {
+    form.amount = suggestion.value.suggested_amount
+    appliedSuggestedAmount = form.amount
+  }
 }
 
 // footer 主鈕：未 review → 進 review；已 review → 真正送出（payload 與冪等鍵沿用既有機制）
@@ -246,6 +275,7 @@ function backToEdit() {
 }
 
 async function onSubmit() {
+  if (!canSubmit.value || !props.record || submitting.value) return
   submitting.value = true
   try {
     await refundFeeRecord((props.record as FeeRecord).id, {

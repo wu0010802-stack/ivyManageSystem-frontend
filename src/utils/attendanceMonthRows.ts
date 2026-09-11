@@ -40,8 +40,20 @@ export function buildAttendanceMonthRows(days: Day[], records: RecordRow[], now:
     else if (record?.status && !['normal', 'present'].includes(record.status)) {
       status = ({ late: '遲到', early_leave: '早退', missing_punch: '缺卡待確認', partial_leave: '部分請假', absent: '缺卡待確認' } as Record<string, string>)[record.status] ?? '待確認'
     }
+    // 遲到／早退分鐘數：以旗標為準（與後端扣款判定 api/attendance/anomalies.py 同口徑），
+    // 旗標為 false 時不採信殘留分鐘數。缺卡列的 status 會蓋過「遲到」，分鐘數仍保留，
+    // 月合計才數得出來、也才對得回明細列。
+    const lateMinutes = record?.is_late ? (record.late_minutes ?? 0) : 0
+    const earlyLeaveMinutes = record?.is_early_leave ? (record.early_leave_minutes ?? 0) : 0
+    const deviations: string[] = []
+    if (lateMinutes > 0) deviations.push(`遲到 ${lateMinutes} 分`)
+    if (earlyLeaveMinutes > 0) deviations.push(`早退 ${earlyLeaveMinutes} 分`)
+    // status 已寫明是哪一種偏差時只補分鐘，避免「遲到／遲到 12 分」這種重複。
+    const deviationLabel = deviations.length === 1 && (status === '遲到' || status === '早退')
+      ? `${lateMinutes || earlyLeaveMinutes} 分鐘`
+      : deviations.join('、')
     return {
-      date, record, status, leaveLabel,
+      date, record, status, leaveLabel, lateMinutes, earlyLeaveMinutes, deviationLabel,
       expectedLabel: day?.expected_start_at && day.expected_end_at
         ? `${day.expected_start_at.slice(11, 16)}–${day.expected_end_at.slice(0, 10) !== date ? '次日 ' : ''}${day.expected_end_at.slice(11, 16)}` : '—',
       weekday: new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', weekday: 'short' }).format(new Date(`${date}T12:00:00+08:00`)),

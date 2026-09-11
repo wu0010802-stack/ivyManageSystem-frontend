@@ -63,10 +63,11 @@ vi.mock('@/components/fees/FeeCollectionDetailDialog.vue', () => ({
       recordIds: { type: Array, default: () => [] },
       studentName: { type: String, default: '' },
       month: { type: String, default: '' },
+      canWrite: { type: Boolean, default: false },
     },
-    emits: ['update:modelValue'],
+    emits: ['update:modelValue', 'reversed'],
     template:
-      '<div data-testid="coll-dialog" :data-open="modelValue ? \'1\' : \'0\'" :data-ids="recordIds.join(\',\')" :data-student="studentName" :data-month="month" />',
+      '<div data-testid="coll-dialog" :data-open="modelValue ? \'1\' : \'0\'" :data-ids="recordIds.join(\',\')" :data-student="studentName" :data-month="month" :data-can-write="canWrite ? \'1\' : \'0\'" />',
   },
 }))
 vi.mock('@/components/fees/BatchPayDialog.vue', () => ({
@@ -296,9 +297,10 @@ describe('狀態快篩與班級篩選', () => {
     const w = mountStatement()
     await flushPromises()
     await w.find('[data-test="stmt-flt-paid"]').trigger('click')
-    expect(rowNames(w)).toEqual(['林未繳', '陳部分', '張全繳'])
+    // 年段由大到小：中班（櫻花）在小班（向日葵）之前
+    expect(rowNames(w)).toEqual(['張全繳', '林未繳', '陳部分'])
     await w.find('[data-test="stmt-flt-unpaid"]').trigger('click')
-    expect(rowNames(w)).toEqual(['陳部分', '張全繳'])
+    expect(rowNames(w)).toEqual(['張全繳', '陳部分'])
   })
 
   it('班級以導覽列（非下拉）呈現，chip 帶未收人數／已收齊，跨學期同名班去重', async () => {
@@ -309,14 +311,14 @@ describe('狀態快篩與班級篩選', () => {
     expect(rail.exists()).toBe(true)
 
     const chips = rail.findAll('[data-test="stmt-class-rail-class"]')
-    expect(chips.map((c) => c.attributes('data-classroom'))).toEqual(['向日葵', '櫻花'])
+    expect(chips.map((c) => c.attributes('data-classroom'))).toEqual(['櫻花', '向日葵'])
     // 向日葵 2 人未收齊；櫻花全繳清顯示勾號而非數字
-    expect(chips[0].find('[data-test="rail-owe"]').text()).toBe('2')
-    expect(chips[1].find('[data-test="rail-ok"]').exists()).toBe(true)
-    // 年段來自班級清單
+    expect(chips[1].find('[data-test="rail-owe"]').text()).toBe('2')
+    expect(chips[0].find('[data-test="rail-ok"]').exists()).toBe(true)
+    // 年段來自班級清單，且由大到小排
     expect(rail.findAll('[data-test="stmt-class-rail-grade"]').map((g) => g.text())).toEqual([
-      expect.stringContaining('小班'),
       expect.stringContaining('中班'),
+      expect.stringContaining('小班'),
     ])
   })
 
@@ -338,10 +340,10 @@ describe('狀態快篩與班級篩選', () => {
   it('點年段標籤篩選整個年段', async () => {
     const w = mountStatement()
     await flushPromises()
-    await w.findAll('[data-test="stmt-class-rail-grade"]')[1].trigger('click')
-    // 中班＝櫻花（只有已繳生）
-    expect(rowNames(w)).toEqual([])
+    // 年段由大到小：[0]＝中班（櫻花，只有已繳生）、[1]＝小班（向日葵）
     await w.findAll('[data-test="stmt-class-rail-grade"]')[0].trigger('click')
+    expect(rowNames(w)).toEqual([])
+    await w.findAll('[data-test="stmt-class-rail-grade"]')[1].trigger('click')
     expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
   })
 
@@ -391,12 +393,13 @@ describe('表格依班級分組', () => {
     const w = mountStatement()
     await flushPromises()
     const g = groups(w)
-    expect(g.map((x) => x.attributes('data-classroom'))).toEqual(['向日葵', '櫻花'])
-    expect(g[0].text()).toContain('向日葵')
-    expect(g[0].text()).toContain('小班')
+    // 年段由大到小：中班（櫻花）在小班（向日葵）之前
+    expect(g.map((x) => x.attributes('data-classroom'))).toEqual(['櫻花', '向日葵'])
+    expect(g[1].text()).toContain('向日葵')
+    expect(g[1].text()).toContain('小班')
     // 向日葵 2 人、未收 10,700 + 180
-    expect(g[0].text()).toContain('2 人')
-    expect(g[0].text()).toContain('NT$10,880')
+    expect(g[1].text()).toContain('2 人')
+    expect(g[1].text()).toContain('NT$10,880')
   })
 
   it('已收齊的班仍留一條表頭（標示已收齊），不因篩選後無列而整組消失', async () => {
@@ -415,7 +418,7 @@ describe('表格依班級分組', () => {
     const w = mountStatement()
     await flushPromises()
     await w.find('[data-test="stmt-flt-paid"]').trigger('click')
-    expect(rowNames(w)).toEqual(['林未繳', '陳部分', '張全繳'])
+    expect(rowNames(w)).toEqual(['張全繳', '林未繳', '陳部分'])
   })
 
   it('分組表頭可手動收合／展開該班', async () => {
@@ -670,6 +673,29 @@ describe('檢視收款明細', () => {
     expect(paidRow.find('[data-test="stmt-view"]').exists()).toBe(true)
     await paidRow.find('[data-test="stmt-view"]').trigger('click')
     expect(w.find('[data-testid="coll-dialog"]').attributes('data-ids')).toBe('31')
+  })
+
+  // 誤收更正在明細彈窗裡做（那裡才看得到「是哪一筆」），月表只負責授權與重載
+  it('有 FEES_WRITE 才讓明細彈窗出現沖銷動作', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    expect(w.find('[data-testid="coll-dialog"]').attributes('data-can-write')).toBe('1')
+
+    authMocks.perms = new Set(['FEES_READ'])
+    const ro = mountStatement()
+    await flushPromises()
+    expect(ro.find('[data-testid="coll-dialog"]').attributes('data-can-write')).toBe('0')
+  })
+
+  it('彈窗沖銷成功後重載月表（該生金額與狀態都變了）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    expect(getFeeMonthlyStatement).toHaveBeenCalledTimes(1)
+
+    w.findComponent({ name: 'FeeCollectionDetailDialog' }).vm.$emit('reversed')
+    await flushPromises()
+
+    expect(getFeeMonthlyStatement).toHaveBeenCalledTimes(2)
   })
 })
 

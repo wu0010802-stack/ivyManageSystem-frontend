@@ -80,7 +80,7 @@ const WorkspaceHeaderStub = {
   template: `<div class="workspace-header-stub"><slot /><slot name="month-tools" /></div>`,
 }
 
-const ReconciliationPanelStub = { name: 'ReconciliationPanel', props: ['revision'], emits: ['records', 'import'], template: '<div />' }
+const ReconciliationPanelStub = { name: 'ReconciliationPanel', props: ['revision', 'active'], emits: ['records', 'import'], template: '<div />' }
 const STUBS = {
   ElDrawer: { props: ['modelValue'], template: '<section data-test="anomaly-drawer" :data-open="String(modelValue)"><slot /></section>' },
   PayrollComparisonDialog: { props: ['modelValue'], template: '<div />' },
@@ -296,6 +296,10 @@ describe('AttendanceWorkspaceView', () => {
     const rc = wrapper.findComponent(RosterColumnStub)
     await rc.vm.$emit('select', 1)
     await flushPromises()
+    // recordsCache 只餵 resolve 模式的 ResolveCard；整月明細由 EmployeeMonthPanel
+    // 自己抓同一支 API（2026-09-11 起不再兩邊都抓），故先切到 resolve 再驗證。
+    wrapper.findComponent(DetailColumnStub).vm.$emit('switchMode', 'resolve')
+    await flushPromises()
 
     expect(getRecordsMock).toHaveBeenCalledTimes(1)
     expect(getRecordsMock).toHaveBeenLastCalledWith(
@@ -326,6 +330,10 @@ describe('AttendanceWorkspaceView', () => {
     const rc = wrapper.findComponent(RosterColumnStub)
     await rc.vm.$emit('select', 1)
     await flushPromises()
+    // recordsCache 只餵 resolve 模式的 ResolveCard；整月明細由 EmployeeMonthPanel
+    // 自己抓同一支 API（2026-09-11 起不再兩邊都抓），故先切到 resolve 再驗證。
+    wrapper.findComponent(DetailColumnStub).vm.$emit('switchMode', 'resolve')
+    await flushPromises()
     expect(getRecordsMock).toHaveBeenCalledTimes(1)
 
     // 補卡成功（DetailColumn emit resolved）→ 快取應失效並以同員工重抓
@@ -351,6 +359,10 @@ describe('AttendanceWorkspaceView', () => {
 
     const rc = wrapper.findComponent(RosterColumnStub)
     await rc.vm.$emit('select', 1)
+    await flushPromises()
+    // recordsCache 只餵 resolve 模式的 ResolveCard；整月明細由 EmployeeMonthPanel
+    // 自己抓同一支 API（2026-09-11 起不再兩邊都抓），故先切到 resolve 再驗證。
+    wrapper.findComponent(DetailColumnStub).vm.$emit('switchMode', 'resolve')
     await flushPromises()
     expect(getRecordsMock).toHaveBeenCalledTimes(1)
 
@@ -449,6 +461,27 @@ describe('核對跨月明細導向', () => {
     expect(dialog.props('sourceContext')).toEqual({ employee_id: 2, employee_name: '測試員工', date: '2026-08-31' })
     wrapper.unmount()
   })
+  it('?tab= 深連結在已停留於本頁時仍切換頁籤，且隱藏的核對面板標記為非啟用', async () => {
+    getSummaryMock.mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+    // 先以 tab=records（defaultReconcile=false）進頁，再導到 tab=reconcile：
+    // router props function 會重算 props，頁籤必須跟著換（過去只有 date 會生效）。
+    const wrapper = mount(AttendanceWorkspaceView, { props: { defaultReconcile: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('active')).toBe(true)
+
+    await wrapper.setProps({ defaultReconcile: false })
+    await flushPromises()
+    // 面板以 v-show 常駐保留核對狀態，但必須標成非啟用，避免背景重跑 preview
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('active')).toBe(false)
+
+    await wrapper.setProps({ defaultReconcile: true })
+    await flushPromises()
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('active')).toBe(true)
+    wrapper.unmount()
+  })
+
   it('依所點人日的月份載入該員工明細', async () => {
     getSummaryMock.mockResolvedValue({ data: sampleRoster })
     getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
@@ -457,8 +490,14 @@ describe('核對跨月明細導向', () => {
     await flushPromises()
     wrapper.findComponent(ReconciliationPanelStub).vm.$emit('records', { employee_id: 2, date: '2026-08-31' })
     await flushPromises()
-    expect(getRecordsMock).toHaveBeenLastCalledWith({ year: 2026, month: 8, employee_id: 2 })
-    expect(wrapper.findComponent(DetailColumnStub).props('focusDate')).toBe('2026-08-31')
+    // 切到該人日所屬月份的整月明細；實際打卡列由 EmployeeMonthPanel 依這幾個 prop
+    // 自行載入（2026-09-11 起父層不再重複抓同一支 /attendance/records）。
+    const detail = wrapper.findComponent(DetailColumnStub)
+    expect(detail.props('mode')).toBe('month')
+    expect(detail.props('employeeId')).toBe(2)
+    expect(detail.props('year')).toBe(2026)
+    expect(detail.props('month')).toBe(8)
+    expect(detail.props('focusDate')).toBe('2026-08-31')
     await wrapper.findComponent(DetailColumnStub).vm.$emit('resolved')
     await flushPromises()
     expect(wrapper.findComponent(ReconciliationPanelStub).props('revision')).toBe(1)

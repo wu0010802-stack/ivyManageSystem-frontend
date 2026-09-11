@@ -105,7 +105,7 @@
           type="success"
           data-test="run-import"
           :loading="importing"
-          :disabled="!form.title.trim() || !form.batch_kind"
+          :disabled="!form.title.trim() || !form.batch_kind || previewing || importing || previewedFile !== pickedFile"
           aria-label="確認匯入此發單快照"
           @click="runImport"
         >
@@ -501,6 +501,8 @@ const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 
 const pickedFile = ref<File | null>(null)
 const preview = ref<BillSlipPreview | null>(null)
+const previewedFile = ref<File | null>(null)
+let previewSequence = 0
 const previewing = ref(false)
 const importing = ref(false)
 // SPEC-019 §6.1：檢核檔無類型資訊，匯入時由操作者宣告（未選不可送出）
@@ -526,33 +528,43 @@ function scopeCount(status: string): number {
 }
 
 function onFileChange(file: UploadFile) {
+  previewSequence++
+  previewing.value = false
+  previewedFile.value = null
   pickedFile.value = (file.raw as File) ?? null
   preview.value = null
 }
 
 async function runPreview() {
-  if (!pickedFile.value) return
+  const file = pickedFile.value
+  if (!file || importing.value) return
+  const sequence = ++previewSequence
+  preview.value = null
+  previewedFile.value = null
   previewing.value = true
   try {
-    preview.value = (await previewBillSlipBatch(
-      pickedFile.value,
-    )) as unknown as BillSlipPreview
+    const result = (await previewBillSlipBatch(file)) as unknown as BillSlipPreview
+    if (sequence !== previewSequence || pickedFile.value !== file) return
+    preview.value = result
+    previewedFile.value = file
     if (!form.title.trim() && preview.value?.bill_year) {
       const mm = String(preview.value.bill_month ?? 0).padStart(2, '0')
       form.title = `${preview.value.bill_year}-${mm} 繳款單`
     }
   } catch (e) {
-    ElMessage.error(friendlyError('預覽失敗', e))
+    if (sequence === previewSequence) ElMessage.error(friendlyError('預覽失敗', e))
   } finally {
-    previewing.value = false
+    if (sequence === previewSequence) previewing.value = false
   }
 }
 
 async function runImport() {
-  if (!pickedFile.value || !form.title.trim() || !form.batch_kind) return
+  const file = previewedFile.value
+  if (!file || file !== pickedFile.value || !preview.value || previewing.value || importing.value || !form.title.trim() || !form.batch_kind) return
+  const sequence = previewSequence
   importing.value = true
   try {
-    const result = (await importBillSlipBatch(pickedFile.value, {
+    const result = (await importBillSlipBatch(file, {
       title: form.title.trim(),
       batch_no: form.batch_no.trim() || undefined,
       batch_kind: form.batch_kind,
@@ -562,11 +574,14 @@ async function runImport() {
         ? `已建立發單快照：${result.row_count} 筆`
         : '此檔先前已匯入（未重複建立）',
     )
-    pickedFile.value = null
-    preview.value = null
-    form.title = ''
-    form.batch_no = ''
-    form.batch_kind = ''
+    if (sequence === previewSequence && pickedFile.value === file) {
+      pickedFile.value = null
+      preview.value = null
+      previewedFile.value = null
+      form.title = ''
+      form.batch_no = ''
+      form.batch_kind = ''
+    }
     await fetchBatches()
     await selectBatch(result)
   } catch (e) {

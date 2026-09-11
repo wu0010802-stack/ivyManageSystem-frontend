@@ -635,7 +635,11 @@ async function runImport() {
   }
 }
 
+let querySequence = 0
 async function fetchPayments() {
+  const sequence = ++querySequence
+  payments.value = []
+  total.value = 0
   loading.value = true
   try {
     const params: ApiQuery<'/fees/collection-payments', 'get'> = {
@@ -652,12 +656,13 @@ async function fetchPayments() {
       items: CollectionPaymentRow[]
       total: number
     }
+    if (sequence !== querySequence) return
     payments.value = data.items ?? []
     total.value = data.total ?? 0
   } catch (e) {
-    ElMessage.error(friendlyError('載入代收繳費失敗', e))
+    if (sequence === querySequence) ElMessage.error(friendlyError('載入代收繳費失敗', e))
   } finally {
-    loading.value = false
+    if (sequence === querySequence) loading.value = false
   }
 }
 

@@ -651,11 +651,14 @@ describe('BillSlipTab 匯入衝突處理', () => {
     const vm = wrapper.vm as unknown as {
       pickedFile: File | null
       form: { title: string; batch_no: string; batch_kind: string }
+      runPreview: () => Promise<void>
       runImport: () => Promise<void>
     }
     vm.pickedFile = new File(['x'], 'Check_v2.xls')
     vm.form.title = '註冊費(修正)'
     vm.form.batch_kind = 'registration'
+    apiMocks.previewBillSlipBatch.mockResolvedValue({ ...PREVIEW })
+    await vm.runPreview()
     await vm.runImport()
     expect(ElMessage.error).toHaveBeenCalled()
     // 檔案保留，讓會計可先去刪舊批次再重試
@@ -671,12 +674,15 @@ describe('BillSlipTab 匯入衝突處理', () => {
     const vm = wrapper.vm as unknown as {
       pickedFile: File | null
       form: { title: string; batch_kind: string }
+      runPreview: () => Promise<void>
       runImport: () => Promise<void>
     }
     vm.pickedFile = new File(['x'], 'Check.xls')
     vm.form.title = '註冊費'
     vm.form.batch_kind = 'monthly'
     apiMocks.getBillSlipBatches.mockClear()
+    apiMocks.previewBillSlipBatch.mockResolvedValue({ ...PREVIEW })
+    await vm.runPreview()
     await vm.runImport()
     expect(vm.pickedFile).toBeNull()
     expect(apiMocks.getBillSlipBatches).toHaveBeenCalled()

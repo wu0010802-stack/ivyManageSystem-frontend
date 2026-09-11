@@ -66,7 +66,7 @@ describe('buildClassGroups（依年段分組班級）', () => {
     expect(groups[0].label).toBe('幼幼班')
   })
 
-  it('年段依幼幼→小→中→大排序，班級在年段內依首次出現順序', () => {
+  it('年段依大→中→小→幼幼排序，班級在年段內依首次出現順序', () => {
     const students = [
       stu('甲', '蒲公英', 'unpaid'),
       stu('乙', '玫瑰', 'unpaid'),
@@ -75,8 +75,8 @@ describe('buildClassGroups（依年段分組班級）', () => {
       stu('戊', '向日葵', 'unpaid'),
     ]
     const groups = buildClassGroups(students, CLASSROOMS)
-    expect(groups.map((g) => g.label)).toEqual(['幼幼班', '小班', '中班', '大班'])
-    expect(groups[0].classes.map((c) => c.name)).toEqual(['牡丹', '向日葵'])
+    expect(groups.map((g) => g.label)).toEqual(['大班', '中班', '小班', '幼幼班'])
+    expect(groups.at(-1)!.classes.map((c) => c.name)).toEqual(['牡丹', '向日葵'])
   })
 
   it('只列月表出現的班；班級清單有但當月無費用單的班不出現', () => {
@@ -133,8 +133,8 @@ describe('buildClassGroups（依年段分組班級）', () => {
 describe('buildClassGroupsFromClassrooms（逐筆檢視：只有班級清單，沒有整月資料）', () => {
   it('直接以班級清單分年段，跨學期同名班去重', () => {
     const groups = buildClassGroupsFromClassrooms(CLASSROOMS)
-    expect(groups.map((g) => g.label)).toEqual(['幼幼班', '小班', '中班', '大班'])
-    expect(groups[0].classes.map((c) => c.name)).toEqual(['向日葵', '牡丹'])
+    expect(groups.map((g) => g.label)).toEqual(['大班', '中班', '小班', '幼幼班'])
+    expect(groups.at(-1)!.classes.map((c) => c.name)).toEqual(['向日葵', '牡丹'])
   })
 
   it('不帶人數（伺服器分頁算不出整月未收），計數一律為 0', () => {

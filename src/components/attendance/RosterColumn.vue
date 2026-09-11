@@ -75,6 +75,13 @@ const props = defineProps<{
   roster: RosterRow[]
   selectedEmployeeId: number | null
   loading: boolean
+  /**
+   * 每位員工「尚未處理」的異常日卡數（key＝employee_number），由父層以
+   * anomalyQueue 的 confirmed_action 計算。名冊上的 late_count 等欄位來自月統計，
+   * **不會**因為管理者接受扣款或豁免而減少；分組若沿用它，處理完的人仍掛在
+   * 「有待處理」底下。未提供時退回月統計數（單元測試等獨立掛載情境）。
+   */
+  pendingCounts?: Record<string, number>
 }>()
 
 const emit = defineEmits<{
@@ -85,6 +92,13 @@ const searchQuery = defineModel<string>('search', { default: '' })
 
 function anomalyCount(r: RosterRow): number {
   return r.late_count + r.early_leave_count + r.missing_punch_in + r.missing_punch_out
+}
+
+/** 尚待處理的異常數：有 pendingCounts 就用它，否則退回月統計數（見 props 註解）。 */
+function pendingCount(r: RosterRow): number {
+  const counts = props.pendingCounts
+  if (!counts) return anomalyCount(r)
+  return counts[r.employee_number ?? ''] ?? 0
 }
 
 const sortedFiltered = computed<RosterRow[]>(() => {
@@ -113,12 +127,13 @@ const groupedRows = computed(() => {
   const noSummary: RosterRow[] = []
   for (const row of sortedFiltered.value) {
     if (row.has_summary === false) noSummary.push(row)
-    else if (anomalyCount(row) > 0) pending.push(row)
+    else if (pendingCount(row) > 0) pending.push(row)
     else clean.push(row)
   }
   return [
     { key: 'pending', label: '有待處理', rows: pending },
-    { key: 'clean', label: '無異常', rows: clean },
+    // 「無待處理」而非「無異常」：本月有過異常但已接受扣款／豁免的人也歸在這裡
+    { key: 'clean', label: '無待處理', rows: clean },
     { key: 'no-summary', label: '尚無打卡', rows: noSummary },
   ]
 })

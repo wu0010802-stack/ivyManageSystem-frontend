@@ -280,6 +280,12 @@ export const getFeeReceipts = (
   params?: unknown,
 ): Promise<ApiResponse<'/fees/receipts', 'get'>> =>
   api.get('/fees/receipts', { params }).then((res) => res.data)
+/** 現金收款沖銷（誤登現金的正規更正路徑；收據轉 reversed，當日交接批即時排除該筆） */
+export const reverseCashReceipt = (
+  receiptId: number,
+  payload: ApiBody<'/fees/receipts/{receipt_id}/reverse', 'post'>,
+): Promise<ApiResponse<'/fees/receipts/{receipt_id}/reverse', 'post'>> =>
+  api.post(`/fees/receipts/${receiptId}/reverse`, payload).then((res) => res.data)
 
 // ===== 預繳款 =====
 export const getPrepayments = (

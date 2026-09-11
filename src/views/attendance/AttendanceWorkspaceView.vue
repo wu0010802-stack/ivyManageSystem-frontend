@@ -23,7 +23,9 @@
       <button type="button" role="tab" class="workspace-mode__tab" :class="{ 'workspace-mode__tab--active': !reconcileOpen }" :aria-selected="!reconcileOpen" @click="reconcileOpen = false">出勤明細</button>
     </div>
     <PayrollComparisonDialog v-if="payrollOpen && canPayrollCompare" v-model="payrollOpen" :year="query.year" :month="query.month" />
-    <ReconciliationPanel v-if="canReconcile && reconciliationVisited" v-show="reconcileOpen" :year="query.year" :month="query.month" :revision="importRevision" @confirmed="onResolved" @records="onReconciliationRecords" @import="onReconciliationImport" />
+    <!-- active：面板用 v-show 常駐以保留核對狀態，但隱藏時不得在背景重跑
+         reconciliation/preview（整月＝人數×天數的重運算，使用者根本看不到）。 -->
+    <ReconciliationPanel v-if="canReconcile && reconciliationVisited" v-show="reconcileOpen" :active="reconcileOpen" :year="query.year" :month="query.month" :revision="importRevision" @confirmed="onResolved" @records="onReconciliationRecords" @import="onReconciliationImport" />
     <div v-show="!reconcileOpen || !canReconcile">
     <p v-if="ws.loading.value" role="status">正在載入 {{ query.year }} 年 {{ query.month }} 月出勤紀錄…</p>
     <div v-if="ws.loadState.value === 'error'" class="workspace-status" role="alert">
@@ -44,6 +46,7 @@
           v-model:search="rosterSearch"
           :roster="ws.roster.value"
           :selected-employee-id="currentEmployeeId"
+          :pending-counts="pendingCountsByEmployee"
           :loading="ws.loading.value"
           @select="onRosterSelect"
         />
@@ -59,6 +62,7 @@
           :employee-id="currentEmployeeId"
           :employee-name="currentEmployeeName"
           :focus-date="focusDate"
+          :revision="importRevision"
           @import="openImport"
           :year="query.year"
           :month="query.month"
@@ -78,6 +82,7 @@
             v-model:search="rosterSearch"
             :roster="ws.roster.value"
             :selected-employee-id="currentEmployeeId"
+          :pending-counts="pendingCountsByEmployee"
             :loading="ws.loading.value"
             @select="onRosterSelect"
           />
@@ -104,6 +109,7 @@
             :employee-id="currentEmployeeId"
             :employee-name="currentEmployeeName"
             :focus-date="focusDate"
+            :revision="importRevision"
             @import="openImport"
             :year="query.year"
             :month="query.month"
@@ -166,6 +172,16 @@ const query = reactive({ year: now.getFullYear(), month: now.getMonth() + 1 })
 const ws = useAttendanceWorkspace(toRef(query, 'year'), toRef(query, 'month'))
 const kpis = computed(() => ws.kpis.value)
 const rosterSearch = ref('')
+// 名冊分組要用「還沒處理完的」異常數：roster 的 late_count 等來自月統計，不會因為
+// 管理者接受扣款或豁免而減少，直接拿來分組會讓處理完的人一直掛在「有待處理」。
+const pendingCountsByEmployee = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = {}
+  for (const card of ws.anomalyQueue.value) {
+    if (card.confirmed_action !== null) continue
+    counts[card.employee_number] = (counts[card.employee_number] ?? 0) + 1
+  }
+  return counts
+})
 const statsDisplayState = computed(() => ws.hasCurrentData.value ? (ws.loadState.value === 'success' ? 'ready' : 'stale') : (ws.loading.value ? 'loading' : 'unavailable'))
 const showEmptyRecords = computed(() => !focusDate.value && !rosterSearch.value.trim() && ws.loadState.value === 'success' && ws.hasCurrentData.value && ws.roster.value.length === 0 && ws.anomalyQueue.value.length === 0)
 
@@ -191,6 +207,11 @@ const canReconcile = computed(() => hasPermission('SCHEDULE') && hasPermission('
 const reconcileOpen = ref(props.defaultReconcile ?? false)
 const reconciliationVisited = ref(reconcileOpen.value)
 watch(reconcileOpen, value => { if (value) reconciliationVisited.value = true })
+// ?tab= 深連結在「已經停在本頁」時也要生效（date 深連結一直都有 watch，tab 沒有，
+// 於是從 /attendance 導到 /attendance?tab=reconcile 只會換月、不會換頁籤）。
+// props 由 router props function 依 query 重算，值沒變時 watch 不會觸發，因此
+// 使用者自己按的頁籤不會被 query 重算蓋掉。
+watch(() => props.defaultReconcile, value => { if (value !== undefined) reconcileOpen.value = value })
 const importRevision = ref(0)
 watch(() => [query.year, query.month], () => {
   const monthPrefix = `${query.year}-${String(query.month).padStart(2, '0')}`
@@ -251,15 +272,20 @@ const currentEmployeeName = computed(() => ws.roster.value.find(row => row.emplo
 // request-sequence guard（recSeq）：換月/換員工時，舊一次 in-flight 的 getRecords 回應
 // 可能在較新一次之後才 resolve；若無守衛會用舊月資料回填快取覆寫最新月，造成顯示與快取不一致。
 // 每次觸發遞增 recSeq 並在 await 後比對，過期回應直接丟棄。
+// 本快取只餵 context → ResolveCard，而 ResolveCard 只在 detailMode==='resolve'
+// 下渲染（DetailColumn 的 month 分支不吃 context）。整月明細由 EmployeeMonthPanel
+// 自己抓同一支 /attendance/records，兩邊都抓會讓每次換月／換人送出兩個內容相同、
+// 只有 query 參數順序不同的請求（dedupe 只併同時 in-flight 的，差一個 tick 就漏）。
 let recSeq = 0
 watch(
-  [currentEmployeeId, () => query.year, () => query.month] as const,
-  async ([empId, y, m], [, oldY, oldM]) => {
+  [currentEmployeeId, () => query.year, () => query.month, detailMode] as const,
+  async ([empId, y, m, mode], [, oldY, oldM]) => {
     const seq = ++recSeq
     // 換月或換年 → 清快取（確保不命中舊月資料）
     if (y !== oldY || m !== oldM) {
       recordsCache.value = new Map()
     }
+    if (mode !== 'resolve') return
     if (empId == null) return
     if (recordsCache.value.has(empId)) return
     try {
@@ -329,6 +355,8 @@ function clampSelectedIndex(): void {
 // 當前員工，其餘員工待選取時 cache-miss 重載。
 async function invalidateRecordsCache(): Promise<void> {
   recordsCache.value = new Map()
+  // 同上：只有 resolve 模式吃這份快取；整月明細由 EmployeeMonthPanel 自行重載。
+  if (detailMode.value !== 'resolve') return
   const empId = currentEmployeeId.value
   if (empId == null) return
   const seq = ++recSeq

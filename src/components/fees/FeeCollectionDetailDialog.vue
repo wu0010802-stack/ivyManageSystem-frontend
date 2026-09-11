@@ -49,6 +49,7 @@
               <th class="col-who">經手人</th>
               <th class="col-confirm">確認狀態</th>
               <th class="col-note">備註</th>
+              <th v-if="canWrite" class="col-action">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -85,6 +86,28 @@
                 <template v-if="noteText(ev)">{{ noteText(ev) }}</template>
                 <span v-else class="muted">—</span>
               </td>
+              <td v-if="canWrite" class="col-action" data-label="操作" data-test="coll-action">
+                <template v-if="reverseTarget(ev)">
+                  <el-button
+                    size="small"
+                    type="danger"
+                    text
+                    :disabled="handoverLocked(ev)"
+                    :loading="reversingKey === reverseKeyOf(ev)"
+                    data-test="coll-reverse"
+                    @click="reverseEvent(ev)"
+                  >
+                    沖銷
+                  </el-button>
+                  <small v-if="handoverLocked(ev)" class="muted">
+                    交接已送出，請老闆先 reopen 交接批
+                  </small>
+                </template>
+                <small v-else-if="ev.kind === 'legacy_payment'" class="muted">
+                  無收據，請到逐筆明細走退款
+                </small>
+                <span v-else class="muted">—</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -106,11 +129,21 @@
  * 的顯示對照：誰收的（經手人）、什麼時候（登錄／媒合時間＋收款日）、走到哪一層
  * 確認（現金：交接批 Maker-Checker 進度；網銀：銀行入帳日／交易時間／摘要）。
  *
- * 唯讀：不提供任何寫入動作；沖銷／退款請到對應工作區。
+ * 寫入動作只有「沖銷」：誤收的更正一律在這裡做，因為這是唯一看得到「是哪一筆」
+ * 的地方。依事件來源分派到三條既有端點（現金收據／存摺交易／代收明細），
+ * 三者都是 append-only 補正——寫負值分配列並把收據轉 reversed，當日交接批與
+ * 關帳金額因此同步退掉。存量未立據流水沒有收據可沖，仍須走逐筆明細的退款。
  */
 import { computed, ref, watch } from 'vue'
-import { getFeeRecordCollections } from '@/api/fees'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  getFeeRecordCollections,
+  reverseCashReceipt,
+  reverseCollectionPayment,
+  reverseTransaction,
+} from '@/api/fees'
 import { formatAmount, formatCurrency } from '@/utils/currency'
+import { friendlyError } from '@/utils/errorMessages'
 
 type CollectionsOut = Awaited<ReturnType<typeof getFeeRecordCollections>>
 type RecordOut = CollectionsOut['records'][number]
@@ -122,10 +155,14 @@ const props = defineProps<{
   studentName: string
   /** YYYY-MM（月表當前月份，只用於標題） */
   month: string
+  /** FEES_WRITE；無權限時整個操作欄不出現 */
+  canWrite?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
+  /** 沖銷成功：父層應重載月表（該生金額與狀態都變了） */
+  reversed: []
 }>()
 
 const records = ref<RecordOut[]>([])
@@ -168,6 +205,69 @@ watch(
   },
   { immediate: true },
 )
+
+// ─── 沖銷（誤收更正）───────────────────────────────────────────────────────
+/** 交接批一旦送出／簽收，後端一律 409；先在畫面停用，並講清楚要老闆做什麼 */
+const LOCKED_HANDOVER = new Set(['submitted', 'confirmed'])
+
+const reversingKey = ref('')
+
+/** 這筆事件可沖銷的話，回傳要打哪個端點與對象 id；否則 null */
+function reverseTarget(ev: EventOut): { api: 'cash' | 'bank' | 'collection'; id: number } | null {
+  if (ev.is_reversal) return null
+  if (ev.kind === 'cash') {
+    // 已沖銷過的收據再打會 409；沒有 receipt_id 的是存量流水，沒東西可沖
+    if (!ev.receipt_id || ev.receipt_status !== 'confirmed') return null
+    return { api: 'cash', id: ev.receipt_id }
+  }
+  if (ev.kind === 'bank' && ev.bank_transaction) {
+    return { api: 'bank', id: ev.bank_transaction.id }
+  }
+  if (ev.kind === 'collection' && ev.collection_payment) {
+    return { api: 'collection', id: ev.collection_payment.id }
+  }
+  return null
+}
+
+/** 沖銷中的識別：同一筆來源在畫面上只會有一列可沖，用 端點+id 足以唯一 */
+function reverseKeyOf(ev: EventOut): string {
+  const t = reverseTarget(ev)
+  return t ? `${t.api}-${t.id}` : ''
+}
+
+function handoverLocked(ev: EventOut): boolean {
+  return !!ev.handover && LOCKED_HANDOVER.has(ev.handover.status)
+}
+
+async function reverseEvent(ev: EventOut) {
+  const target = reverseTarget(ev)
+  if (!target || handoverLocked(ev)) return
+
+  let reason = ''
+  try {
+    const result = await ElMessageBox.prompt('請輸入沖銷原因（至少 5 字）', '沖銷收款', {
+      inputValidator: (v: string) => (v && v.trim().length >= 5 ? true : '原因至少 5 個字'),
+    })
+    reason = typeof result === 'object' ? result.value : ''
+  } catch {
+    return // 使用者取消
+  }
+
+  reversingKey.value = `${target.api}-${target.id}`
+  try {
+    const payload = { reason } as never
+    if (target.api === 'cash') await reverseCashReceipt(target.id, payload)
+    else if (target.api === 'bank') await reverseTransaction(target.id, payload)
+    else await reverseCollectionPayment(target.id, payload)
+    ElMessage.success('已沖銷這筆收款')
+    await fetchDetail()
+    emit('reversed')
+  } catch (e) {
+    ElMessage.error(friendlyError('沖銷失敗', e))
+  } finally {
+    reversingKey.value = ''
+  }
+}
 
 // ─── 顯示對照 ───────────────────────────────────────────────────────────────
 const KIND_LABELS: Record<string, string> = {
@@ -362,7 +462,7 @@ function statusTagType(status: string | null | undefined): 'success' | 'warning'
 }
 
 .col-when {
-  width: 150px;
+  width: 132px;
   white-space: nowrap;
 }
 
@@ -373,6 +473,21 @@ function statusTagType(status: string | null | undefined): 'success' | 'warning'
 
 .col-who {
   width: 90px;
+}
+
+/* 多了操作欄後 820px 更擠：備註多半是「—」，讓出寬度給確認狀態的日期字串 */
+.col-note {
+  width: 76px;
+}
+
+/* 停用說明會換行，不可 nowrap：整列撐寬會把「確認狀態」擠成直排 */
+.col-action {
+  width: 96px;
+}
+
+.col-action .muted {
+  margin-top: 2px;
+  line-height: 1.35;
 }
 
 .event--negative .num {

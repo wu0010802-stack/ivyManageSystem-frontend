@@ -46,3 +46,61 @@ it('多日部分請假每天顯示核准時段，不擴張為全天', () => {
   const leave = { leave_type: 'annual', start_date: '2026-09-09', end_date: '2026-09-11', start_time: '08:00', end_time: '10:00', is_full_day: false }
   expect(buildAttendanceMonthRows([{ ...day, approved_leaves: [leave] }], [], at('20:00'))[0]!.leaveLabel).toBe('特休（08:00–10:00）')
 })
+
+// 遲到／早退分鐘數：供逐列小字與月合計列對帳。以旗標（is_late/is_early_leave）為準，
+// 與後端扣款判定（api/attendance/anomalies.py）同口徑；旗標為 false 時不採信殘留分鐘數。
+type RecordRow = ApiResponse<'/attendance/records', 'get'>[number]
+const makeRecord = (overrides: Partial<RecordRow>): RecordRow => ({
+  id: 1, date: day.date, punch_in: '08:00', punch_out: '17:00', status: 'normal',
+  is_late: false, is_early_leave: false, late_minutes: 0, early_leave_minutes: 0, ...overrides,
+} as RecordRow)
+
+describe('遲到／早退分鐘數', () => {
+  it('狀態已寫明單一偏差時，小字只補分鐘', () => {
+    const row = buildAttendanceMonthRows([day], [makeRecord({ punch_in: '08:12', status: 'late', is_late: true, late_minutes: 12 })], at('20:00'))[0]!
+    expect(row.status).toBe('遲到')
+    expect(row.lateMinutes).toBe(12)
+    expect(row.earlyLeaveMinutes).toBe(0)
+    expect(row.deviationLabel).toBe('12 分鐘')
+  })
+
+  it('早退同樣只補分鐘', () => {
+    const row = buildAttendanceMonthRows([day], [makeRecord({ punch_out: '16:40', status: 'early_leave', is_early_leave: true, early_leave_minutes: 20 })], at('20:00'))[0]!
+    expect(row.status).toBe('早退')
+    expect(row.deviationLabel).toBe('20 分鐘')
+  })
+
+  it('遲到又早退時分別標示，才分得出各佔幾分', () => {
+    const row = buildAttendanceMonthRows([day], [makeRecord({ punch_in: '08:12', punch_out: '16:40', is_late: true, is_early_leave: true, late_minutes: 12, early_leave_minutes: 20 })], at('20:00'))[0]!
+    expect(row.status).toBe('遲到、早退')
+    expect(row.deviationLabel).toBe('遲到 12 分、早退 20 分')
+  })
+
+  it('缺卡列的狀態蓋過遲到，分鐘數仍保留供合計對帳', () => {
+    const row = buildAttendanceMonthRows([day], [makeRecord({ punch_in: '08:12', punch_out: null, status: 'missing_punch', is_late: true, late_minutes: 12 })], at('20:00'))[0]!
+    expect(row.status).toBe('缺卡待確認')
+    expect(row.lateMinutes).toBe(12)
+    expect(row.deviationLabel).toBe('遲到 12 分')
+  })
+
+  it('旗標為 false 時不採信殘留分鐘數', () => {
+    const row = buildAttendanceMonthRows([day], [makeRecord({ late_minutes: 30, early_leave_minutes: 15 })], at('20:00'))[0]!
+    expect(row.status).toBe('正常')
+    expect(row.lateMinutes).toBe(0)
+    expect(row.earlyLeaveMinutes).toBe(0)
+    expect(row.deviationLabel).toBe('')
+  })
+
+  it('旗標為真但分鐘數為 null 時計為 0 分，不出現 NaN', () => {
+    const row = buildAttendanceMonthRows([day], [makeRecord({ punch_in: '08:01', is_late: true, late_minutes: null })], at('20:00'))[0]!
+    expect(row.lateMinutes).toBe(0)
+    expect(row.deviationLabel).toBe('')
+  })
+
+  it('沒有打卡紀錄的合成列分鐘數為 0', () => {
+    const row = buildAttendanceMonthRows([day], [], at('20:00'))[0]!
+    expect(row.lateMinutes).toBe(0)
+    expect(row.earlyLeaveMinutes).toBe(0)
+    expect(row.deviationLabel).toBe('')
+  })
+})
