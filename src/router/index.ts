@@ -821,6 +821,12 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '今日班級工作台', permission: 'STUDENTS_READ' },
                 },
                 {
+                    path: 'class',
+                    name: 'portal-class',
+                    component: () => import('../views/portal/PortalClassView.vue'),
+                    meta: { title: '班級', permission: 'STUDENTS_READ' },
+                },
+                {
                     path: 'attendance',
                     name: 'portal-attendance',
                     component: () => import('../views/portal/PortalAttendanceView.vue'),
