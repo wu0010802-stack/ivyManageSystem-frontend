@@ -1,5 +1,6 @@
 import api from './index'
 import type { ApiBody, ApiQuery, ApiResponse, AxiosResp } from './_generated/typed'
+import type { AxiosResponse } from 'axios'
 
 /** 補登未列入銷帳單的單筆額外應收。 */
 export const createManualFeeRecord = (
@@ -362,3 +363,15 @@ export const reopenClosePeriod = (
   closeId: number,
   payload: ApiBody<'/fees/close-periods/{close_id}/reopen', 'post'>,
 ) => api.post(`/fees/close-periods/${closeId}/reopen`, payload).then((res) => res.data)
+
+// ===== SPEC-025 繳款單範本產出 =====
+export type SlipTemplateKind = 'monthly' | 'registration'
+export const previewSlipTemplate = (
+  payload: ApiBody<'/fees/slip-templates/preview', 'post'>,
+): Promise<ApiResponse<'/fees/slip-templates/preview', 'post'>> =>
+  api.post('/fees/slip-templates/preview', payload).then((res) => res.data)
+/** 回傳整個 response：檔名在 Content-Disposition，交給 saveBlobResponse 解析 */
+export const exportSlipTemplate = (
+  payload: ApiBody<'/fees/slip-templates/export', 'post'>,
+): Promise<AxiosResponse<Blob>> =>
+  api.post('/fees/slip-templates/export', payload, { responseType: 'blob' })
