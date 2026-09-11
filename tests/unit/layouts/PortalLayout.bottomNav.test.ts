@@ -127,13 +127,13 @@ describe('PortalLayout — 底部導覽 Phase 1 殼層', () => {
     wrapper.unmount()
   })
 
-  it('(b) 班級 tab push /portal/class-hub；今日 tab push /portal/home', async () => {
+  it('(b) 班級 tab push /portal/class；今日 tab push /portal/home', async () => {
     const wrapper = await mountMobile()
     const tabs = wrapper.findAll('.bottom-tab')
     const byLabel = (label: string) => tabs.find((t) => t.text().includes(label))
 
     await byLabel('班級')!.trigger('click')
-    expect(routerPush).toHaveBeenCalledWith('/portal/class-hub')
+    expect(routerPush).toHaveBeenCalledWith('/portal/class')
 
     await byLabel('今日')!.trigger('click')
     expect(routerPush).toHaveBeenCalledWith('/portal/home')

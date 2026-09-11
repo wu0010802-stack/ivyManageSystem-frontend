@@ -61,7 +61,7 @@ const applySheetOpen = ref(false)
 
 // 班級 tab active：班級工作台 + 班級學生（含 /portal/student-detail 等單數路徑）
 const classTabActive = computed(
-  () => route.path.startsWith('/portal/class-hub') || route.path.startsWith('/portal/student'),
+  () => route.path.startsWith('/portal/class') || route.path.startsWith('/portal/student'),
 )
 
 const showPasswordDialog = ref(false)
@@ -414,17 +414,26 @@ const submitPassword = async () => {
             <el-icon><School /></el-icon>
             <span>班級 — 教學</span>
           </template>
+          <el-menu-item index="/portal/class">
+            <span>班級總覽</span>
+          </el-menu-item>
           <el-menu-item index="/portal/students">
             <span>班級學生</span>
           </el-menu-item>
-          <el-menu-item index="/portal/class-hub">
-            <span>今日班級工作台</span>
+          <el-menu-item index="/portal/student-attendance">
+            <span>學生點名</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/contact-book">
+            <span>每日聯絡簿</span>
           </el-menu-item>
           <el-menu-item index="/portal/student-leaves">
             <span>學生請假</span>
           </el-menu-item>
           <el-menu-item index="/portal/observations">
             <span>課堂觀察</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/work-samples">
+            <span>作品上傳</span>
           </el-menu-item>
           <el-menu-item index="/portal/assessments">
             <span>學期評量</span>
@@ -453,6 +462,9 @@ const submitPassword = async () => {
           </el-menu-item>
           <el-menu-item index="/portal/medications">
             <span>用藥執行</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/class?sheet=measurement">
+            <span>全班量體位</span>
           </el-menu-item>
           <!-- 娃娃車：BUS_TRIPS_OPERATE 是 per-user 顯式授權（絕大多數老師沒有），
                不過濾的話所有人都會看到入口、點進去再被 router guard 踢回首頁。 -->
@@ -613,7 +625,7 @@ const submitPassword = async () => {
           class="bottom-tab"
           :class="{ active: classTabActive }"
           :aria-current="classTabActive ? 'page' : undefined"
-          @click="router.push('/portal/class-hub')"
+          @click="router.push('/portal/class')"
         >
           <el-icon><School /></el-icon>
           <span>班級</span>
