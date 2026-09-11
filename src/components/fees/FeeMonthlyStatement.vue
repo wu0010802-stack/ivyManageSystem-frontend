@@ -554,6 +554,8 @@
       :record-ids="viewRecordIds"
       :student-name="viewStudentName"
       :month="month"
+      :can-write="canWrite"
+      @reversed="onPaid"
     />
   </section>
 </template>

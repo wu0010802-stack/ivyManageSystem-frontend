@@ -63,10 +63,11 @@ vi.mock('@/components/fees/FeeCollectionDetailDialog.vue', () => ({
       recordIds: { type: Array, default: () => [] },
       studentName: { type: String, default: '' },
       month: { type: String, default: '' },
+      canWrite: { type: Boolean, default: false },
     },
-    emits: ['update:modelValue'],
+    emits: ['update:modelValue', 'reversed'],
     template:
-      '<div data-testid="coll-dialog" :data-open="modelValue ? \'1\' : \'0\'" :data-ids="recordIds.join(\',\')" :data-student="studentName" :data-month="month" />',
+      '<div data-testid="coll-dialog" :data-open="modelValue ? \'1\' : \'0\'" :data-ids="recordIds.join(\',\')" :data-student="studentName" :data-month="month" :data-can-write="canWrite ? \'1\' : \'0\'" />',
   },
 }))
 vi.mock('@/components/fees/BatchPayDialog.vue', () => ({
@@ -672,6 +673,29 @@ describe('檢視收款明細', () => {
     expect(paidRow.find('[data-test="stmt-view"]').exists()).toBe(true)
     await paidRow.find('[data-test="stmt-view"]').trigger('click')
     expect(w.find('[data-testid="coll-dialog"]').attributes('data-ids')).toBe('31')
+  })
+
+  // 誤收更正在明細彈窗裡做（那裡才看得到「是哪一筆」），月表只負責授權與重載
+  it('有 FEES_WRITE 才讓明細彈窗出現沖銷動作', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    expect(w.find('[data-testid="coll-dialog"]').attributes('data-can-write')).toBe('1')
+
+    authMocks.perms = new Set(['FEES_READ'])
+    const ro = mountStatement()
+    await flushPromises()
+    expect(ro.find('[data-testid="coll-dialog"]').attributes('data-can-write')).toBe('0')
+  })
+
+  it('彈窗沖銷成功後重載月表（該生金額與狀態都變了）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    expect(getFeeMonthlyStatement).toHaveBeenCalledTimes(1)
+
+    w.findComponent({ name: 'FeeCollectionDetailDialog' }).vm.$emit('reversed')
+    await flushPromises()
+
+    expect(getFeeMonthlyStatement).toHaveBeenCalledTimes(2)
   })
 })
 

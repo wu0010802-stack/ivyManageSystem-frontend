@@ -12,11 +12,16 @@ import { mount, flushPromises } from '@vue/test-utils'
 
 const apiMocks = vi.hoisted(() => ({
   getFeeRecordCollections: vi.fn(),
+  reverseCashReceipt: vi.fn(),
+  reverseTransaction: vi.fn(),
+  reverseCollectionPayment: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
-vi.mock('element-plus', () => ({
+const epMocks = vi.hoisted(() => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessageBox: { prompt: vi.fn() },
 }))
+vi.mock('element-plus', () => epMocks)
 
 import FeeCollectionDetailDialog from '@/components/fees/FeeCollectionDetailDialog.vue'
 
@@ -67,6 +72,7 @@ function mountDialog(props: Record<string, unknown> = {}) {
       recordIds: [21, 22],
       studentName: '陳部分',
       month: '2026-08',
+      canWrite: true,
       ...props,
     },
     global: { stubs: STUBS },
@@ -78,6 +84,13 @@ const rows = (w: ReturnType<typeof mountDialog>) => w.findAll('[data-test="coll-
 describe('FeeCollectionDetailDialog', () => {
   beforeEach(() => {
     apiMocks.getFeeRecordCollections.mockReset()
+    apiMocks.reverseCashReceipt.mockReset()
+    apiMocks.reverseTransaction.mockReset()
+    apiMocks.reverseCollectionPayment.mockReset()
+    epMocks.ElMessage.success.mockReset()
+    epMocks.ElMessage.error.mockReset()
+    epMocks.ElMessageBox.prompt.mockReset()
+    epMocks.ElMessageBox.prompt.mockResolvedValue({ value: '誤登現金，沖銷更正' })
   })
 
   it('開啟即以 recordIds 查詢；標題帶學生與民國月份；每張帳款一段', async () => {
@@ -323,5 +336,212 @@ describe('FeeCollectionDetailDialog', () => {
     await w.setProps({ modelValue: true, recordIds: [31] })
     await flushPromises()
     expect(apiMocks.getFeeRecordCollections).toHaveBeenCalledWith([31])
+  })
+  // ─── 沖銷（誤收更正）─────────────────────────────────────────────────────
+  // 後端早有三條沖銷端點，畫面卻只有唯讀彈窗；誤登現金只能用「退款」湊，
+  // 那條路不會把收據轉 reversed，當日交接批與關帳金額因此虛增。
+
+  const cashEvent = (over: Record<string, unknown> = {}) =>
+    event({
+      handover: {
+        id: 3,
+        business_date: '2026-08-05',
+        status: 'draft',
+        submitted_at: null,
+        confirmed_by_name: null,
+        confirmed_at: null,
+      },
+      ...over,
+    })
+
+  const reverseBtn = (w: ReturnType<typeof mountDialog>, idx = 0) =>
+    rows(w)[idx].find('[data-test="coll-reverse"]')
+
+  it('現金收款：點沖銷填原因後以 receipt_id 呼叫收據沖銷', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [record({ events: [cashEvent({ receipt_id: 77 })] })],
+    })
+    apiMocks.reverseCashReceipt.mockResolvedValue({ reversed_count: 1, receipt_id: 77 })
+    const w = mountDialog()
+    await flushPromises()
+
+    await reverseBtn(w).trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.reverseCashReceipt).toHaveBeenCalledWith(77, { reason: '誤登現金，沖銷更正' })
+    expect(epMocks.ElMessage.success).toHaveBeenCalled()
+  })
+
+  it('沖銷成功後重查明細並通知父層重載月表', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [record({ events: [cashEvent()] })],
+    })
+    apiMocks.reverseCashReceipt.mockResolvedValue({ reversed_count: 1, receipt_id: 7 })
+    const w = mountDialog()
+    await flushPromises()
+    expect(apiMocks.getFeeRecordCollections).toHaveBeenCalledTimes(1)
+
+    await reverseBtn(w).trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.getFeeRecordCollections).toHaveBeenCalledTimes(2)
+    expect(w.emitted('reversed')).toBeTruthy()
+  })
+
+  it('取消輸入原因就不送出', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [record({ events: [cashEvent()] })],
+    })
+    epMocks.ElMessageBox.prompt.mockRejectedValueOnce(new Error('cancel'))
+    const w = mountDialog()
+    await flushPromises()
+
+    await reverseBtn(w).trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.reverseCashReceipt).not.toHaveBeenCalled()
+    expect(epMocks.ElMessage.error).not.toHaveBeenCalled()
+  })
+
+  it('交接批已送出：沖銷停用並說明要老闆先 reopen', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [
+        record({
+          events: [
+            cashEvent({
+              handover: {
+                id: 4,
+                business_date: '2026-08-06',
+                status: 'submitted',
+                submitted_at: '2026-08-06T17:00:00',
+                confirmed_by_name: null,
+                confirmed_at: null,
+              },
+            }),
+          ],
+        }),
+      ],
+    })
+    const w = mountDialog()
+    await flushPromises()
+
+    const btn = reverseBtn(w)
+    expect(btn.exists()).toBe(true)
+    expect(btn.attributes('disabled')).toBeDefined()
+    expect(rows(w)[0].find('[data-test="coll-action"]').text()).toContain('reopen')
+  })
+
+  it('網銀銷帳：以 bank_transaction.id 呼叫交易沖銷', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [
+        record({
+          events: [
+            event({
+              kind: 'bank',
+              bank_transaction: { id: 55, posting_date: '2026-08-03', transaction_at: null, summary: null },
+            }),
+          ],
+        }),
+      ],
+    })
+    apiMocks.reverseTransaction.mockResolvedValue({ reversed_count: 1, receipt_id: 7 })
+    const w = mountDialog()
+    await flushPromises()
+
+    await reverseBtn(w).trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.reverseTransaction).toHaveBeenCalledWith(55, { reason: '誤登現金，沖銷更正' })
+    expect(apiMocks.reverseCashReceipt).not.toHaveBeenCalled()
+  })
+
+  it('代收入帳：以 collection_payment.id 呼叫代收沖銷', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [
+        record({
+          events: [
+            event({
+              kind: 'collection',
+              collection_payment: { id: 9, customer_paid_date: '2026-08-02', posting_date: '2026-08-04', channel: '超商' },
+            }),
+          ],
+        }),
+      ],
+    })
+    apiMocks.reverseCollectionPayment.mockResolvedValue({ reversed_count: 1, receipt_id: 7 })
+    const w = mountDialog()
+    await flushPromises()
+
+    await reverseBtn(w).trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.reverseCollectionPayment).toHaveBeenCalledWith(9, { reason: '誤登現金，沖銷更正' })
+  })
+
+  it('沖銷失敗顯示原因，且不清掉畫面上的明細', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [record({ events: [cashEvent()] })],
+    })
+    apiMocks.reverseCashReceipt.mockRejectedValue({
+      response: { status: 409, data: { detail: '當日現金交接已提交/確認，不可沖銷收款' } },
+    })
+    const w = mountDialog()
+    await flushPromises()
+
+    await reverseBtn(w).trigger('click')
+    await flushPromises()
+
+    expect(epMocks.ElMessage.error).toHaveBeenCalled()
+    expect(String(epMocks.ElMessage.error.mock.calls[0][0])).toContain('交接')
+    expect(rows(w)).toHaveLength(1)
+    expect(w.find('[data-test="coll-error"]').exists()).toBe(false)
+  })
+
+  it('已沖銷的收據與沖銷列本身都沒有沖銷按鈕', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [
+        record({
+          events: [
+            cashEvent({ receipt_status: 'reversed' }),
+            cashEvent({ amount: -10800, is_reversal: true, occurred_at: '2026-08-07T11:00:00' }),
+          ],
+        }),
+      ],
+    })
+    const w = mountDialog()
+    await flushPromises()
+
+    expect(reverseBtn(w, 0).exists()).toBe(false)
+    expect(reverseBtn(w, 1).exists()).toBe(false)
+  })
+
+  it('未立據流水與退款不給沖銷；流水明講要走退款', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [
+        record({
+          events: [
+            event({ kind: 'legacy_payment', receipt_id: null, payment_method: '轉帳' }),
+            event({ kind: 'refund', amount: -3000, receipt_id: null }),
+          ],
+        }),
+      ],
+    })
+    const w = mountDialog()
+    await flushPromises()
+
+    expect(reverseBtn(w, 0).exists()).toBe(false)
+    expect(rows(w)[0].find('[data-test="coll-action"]').text()).toContain('退款')
+    expect(reverseBtn(w, 1).exists()).toBe(false)
+  })
+
+  it('無 FEES_WRITE 時整欄操作都不出現', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [record({ events: [cashEvent()] })],
+    })
+    const w = mountDialog({ canWrite: false })
+    await flushPromises()
+
+    expect(rows(w)[0].find('[data-test="coll-action"]').exists()).toBe(false)
+    expect(reverseBtn(w).exists()).toBe(false)
   })
 })
