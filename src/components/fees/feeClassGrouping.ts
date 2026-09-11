@@ -11,11 +11,20 @@
  *
  * 年段順序固定為大→中→小→幼幼（園所點名／收費的慣用序，大班在最上面）；
  * 不在表列內的年段依首次出現順序接在後面。
+ *
+ * ## 年段內的班序＝班級代號
+ *
+ * 園所自己的班序是代號（`大1`／`中2`／`小1`…），不是資料出現順序。月表的班級
+ * 順序若沿用當月費用單的出現序，畫面上就會出現「玫瑰(小2) 排在芙蓉(小1) 前面」
+ * 這種對不上園所慣用序的排法。因此年段內一律依 `classrooms.class_code` 排；
+ * 沒填代號的班沉到該年段最後，彼此維持原出現順序（不猜它該排哪）。
  */
 
 export interface ClassroomLite {
   name?: string | null
   grade_name?: string | null
+  /** 班級代號（`大1`／`中2`…）；年段內的排序依據 */
+  class_code?: string | null
 }
 
 /** 分組只看得到這幾個欄位，月表與逐筆的列型別都相容 */
@@ -30,6 +39,8 @@ export interface ClassGroup {
   /** 顯示用班名（未分班顯示「未分班」） */
   label: string
   gradeLabel: string
+  /** 班級代號（`小2`）；班級清單查不到或沒填時為空字串 */
+  classCode: string
   total: number
   unpaidCount: number
   allPaid: boolean
@@ -51,25 +62,69 @@ const GRADE_ORDER = ['大', '中', '小', '幼幼']
 
 const stripSuffix = (s: string) => s.replace(/班$/, '')
 
+/**
+ * 年段 token（`大`／`中`／`小`／`幼幼`）→ 序號，查不到排在所有已知年段之後。
+ * 代號前綴只寫一個「幼」字（`幼1`）也要對得上「幼幼」，故完全相符不中時
+ * 再放寬成前綴互相包含。
+ */
+function gradeTokenRank(token: string): number {
+  if (!token) return GRADE_ORDER.length
+  const exact = GRADE_ORDER.indexOf(token)
+  if (exact !== -1) return exact
+  const loose = GRADE_ORDER.findIndex((g) => g.startsWith(token) || token.startsWith(g))
+  return loose === -1 ? GRADE_ORDER.length : loose
+}
+
 function gradeRank(label: string): number {
-  const idx = GRADE_ORDER.indexOf(stripSuffix(label))
-  return idx === -1 ? GRADE_ORDER.length : idx
+  return gradeTokenRank(stripSuffix(label))
 }
 
 /**
- * 班名 → 年段名。先試完全相符，再試去掉「班」字尾後相符（月表與班級清單
- * 對同一個班常有一邊帶「班」的差異）。查不到回空字串，不猜。
+ * 代號比較：`大1`／`中2`／`小10`。先比年段前綴（園所序大→中→小→幼幼，
+ * 同一年段內恆相同、只有未分年段桶才會混），再比號碼**數值**——`小10` 要排在
+ * `小9` 後面而不是 `小1` 後面。
  */
+function compareClassCode(a: string, b: string): number {
+  const prefixA = a.replace(/\d+$/, '')
+  const prefixB = b.replace(/\d+$/, '')
+  if (prefixA !== prefixB) {
+    const rankA = gradeTokenRank(prefixA)
+    const rankB = gradeTokenRank(prefixB)
+    if (rankA !== rankB) return rankA - rankB
+    return prefixA.localeCompare(prefixB, 'zh-Hant')
+  }
+  return a.localeCompare(b, 'zh-Hant', { numeric: true })
+}
+
+/**
+ * 班名 → 班級清單中的該班。先試完全相符，再試去掉「班」字尾後相符（月表與
+ * 班級清單對同一個班常有一邊帶「班」的差異）。查不到回 undefined，不猜。
+ */
+function findClassroom(
+  className: string,
+  classrooms: readonly ClassroomLite[],
+): ClassroomLite | undefined {
+  if (!className) return undefined
+  const exact = classrooms.find((c) => (c.name ?? '') === className)
+  if (exact) return exact
+  const stripped = stripSuffix(className)
+  return classrooms.find((c) => stripSuffix(c.name ?? '') === stripped)
+}
+
+/** 班名 → 年段名。查不到回空字串，不猜。 */
 export function resolveGradeName(
   className: string,
   classrooms: readonly ClassroomLite[],
 ): string {
-  if (!className) return ''
-  const exact = classrooms.find((c) => (c.name ?? '') === className)
-  if (exact) return exact.grade_name ?? ''
-  const stripped = stripSuffix(className)
-  const loose = classrooms.find((c) => stripSuffix(c.name ?? '') === stripped)
-  return loose?.grade_name ?? ''
+  return findClassroom(className, classrooms)?.grade_name ?? ''
+}
+
+/** 班名 → 班級代號。查不到或該班沒填代號時回空字串，不猜。 */
+export function resolveClassCode(
+  className: string,
+  classrooms: readonly ClassroomLite[],
+): string {
+  return findClassroom(className, classrooms)?.class_code ?? ''
 }
 
 interface ClassAgg {
@@ -79,8 +134,8 @@ interface ClassAgg {
 }
 
 /**
- * 依年段分組班級。班級與年段的出現順序都以 entries 的首次出現為準，
- * 年段之間再依 GRADE_ORDER 穩定排序（未分年段永遠最後）。
+ * 依年段分組班級。年段的出現順序以 entries 的首次出現為準，年段之間再依
+ * GRADE_ORDER 穩定排序（未分年段永遠最後）；年段內的班依班級代號排序。
  */
 function groupByGrade(
   byClass: Map<string, ClassAgg>,
@@ -88,7 +143,8 @@ function groupByGrade(
 ): GradeGroup[] {
   const grades = new Map<string, GradeGroup & { order: number }>()
   byClass.forEach((agg, name) => {
-    const gradeLabel = resolveGradeName(name, classrooms)
+    const classroom = findClassroom(name, classrooms)
+    const gradeLabel = classroom?.grade_name ?? ''
     const key = gradeLabel || UNGRADED_LABEL
     let grade = grades.get(key)
     if (!grade) {
@@ -106,6 +162,7 @@ function groupByGrade(
       name,
       label: name || UNASSIGNED_CLASS_LABEL,
       gradeLabel,
+      classCode: classroom?.class_code ?? '',
       total: agg.total,
       unpaidCount: agg.unpaidCount,
       allPaid: agg.unpaidCount === 0,
@@ -114,9 +171,19 @@ function groupByGrade(
     grade.unpaidCount += agg.unpaidCount
   })
 
-  // 班級在年段內依首次出現順序
+  // 班級在年段內依班級代號；沒填代號的沉到最後、彼此維持首次出現順序
   const classOrder = (name: string) => byClass.get(name)?.order ?? 0
-  grades.forEach((g) => g.classes.sort((a, b) => classOrder(a.name) - classOrder(b.name)))
+  grades.forEach((g) =>
+    g.classes.sort((a, b) => {
+      if (a.classCode && b.classCode) {
+        const byCode = compareClassCode(a.classCode, b.classCode)
+        if (byCode !== 0) return byCode
+      } else if (Boolean(a.classCode) !== Boolean(b.classCode)) {
+        return a.classCode ? -1 : 1
+      }
+      return classOrder(a.name) - classOrder(b.name)
+    }),
+  )
 
   return [...grades.values()]
     .sort((a, b) => {

@@ -365,6 +365,9 @@ import BatchPayDialog from '@/components/fees/BatchPayDialog.vue'
 interface Classroom {
   id: number
   name: string
+  grade_name?: string | null
+  /** 班級代號（`小2`）；班級導覽列的年段內班序依它排 */
+  class_code?: string | null
 }
 
 interface FeeRow {
