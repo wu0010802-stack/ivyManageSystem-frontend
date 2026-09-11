@@ -1,36 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
-import { getPortalPickupPendingCount } from '@/api/portal'
 
 const router = useRouter()
 
+// 班級類功能已全數移到「班級」tab（/portal/class，SPEC-024），這裡只留
+// 個人／跨班級事項，避免同一個功能兩個地方進得去。
 const links = [
-  { label: '班級學生', to: '/portal/students', tint: 'message' },
-  { label: '課堂觀察', to: '/portal/observations', tint: 'event' },
-  { label: '作品上傳', to: '/portal/work-samples', tint: 'event' },
-  { label: '用藥執行', to: '/portal/medications', tint: 'medication' },
-  { label: '事件紀錄', to: '/portal/incidents', tint: 'announcement' },
-  { label: '學期評量', to: '/portal/assessments', tint: 'contact' },
   { label: '成長軌跡', to: '/portal/growth', tint: 'event' },
   { label: '才藝點名', to: { path: '/portal/activity', query: { tab: 'attendance' } }, tint: 'activity' },
   { label: '活動調查', to: '/portal/surveys', tint: 'event' },
-  { label: '接送授權', to: '/portal/pickup-authorizations', tint: 'message' },
 ]
-
-// 今日接送授權待處理數（跨教師所有班級彙總，非單一 ClassroomOpsCard 可分組——
-// 該卡的 KPI 皆來自 home summary 後端聚合，接送本次未加後端欄位，故獨立輕量
-// fetch，比照 QuickLinksCard 本身不依賴 usePortalDashboard 的既有模式）。
-const pickupPendingCount = ref(0)
-onMounted(async () => {
-  try {
-    const { data } = await getPortalPickupPendingCount()
-    pickupPendingCount.value = (data as { count?: number })?.count || 0
-  } catch {
-    pickupPendingCount.value = 0
-  }
-})
 
 function go(to: RouteLocationRaw) {
   router.push(to)
@@ -49,10 +29,6 @@ function go(to: RouteLocationRaw) {
       >
         <span class="tile-dot" :class="`tint-${l.tint}`"></span>
         <span class="tile-label">{{ l.label }}</span>
-        <span
-          v-if="l.label === '接送授權' && pickupPendingCount > 0"
-          class="tile-badge"
-        >{{ pickupPendingCount }}</span>
       </button>
     </div>
   </div>
@@ -89,25 +65,7 @@ function go(to: RouteLocationRaw) {
 .tile-dot {
   width: 10px; height: 10px; border-radius: 50%;
 }
-.tile-badge {
-  margin-left: auto;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--color-danger, #e0645a);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.tint-message { background: var(--pt-tint-message-fg); }
 .tint-event { background: var(--pt-tint-event-fg); }
-.tint-medication { background: var(--pt-tint-medication-fg); }
-.tint-announcement { background: var(--pt-tint-announcement-fg); }
-.tint-contact { background: var(--pt-tint-contact-fg); }
 .tint-activity { background: var(--pt-tint-activity-fg); }
 
 .tile-label {
