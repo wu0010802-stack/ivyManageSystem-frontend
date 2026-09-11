@@ -111,7 +111,7 @@ describe('核對清單互動', () => {
 describe('系統判定涵蓋顯示（2026-09-10 改版，取代人工勾選）', () => {
   it('沒有任何批次或 kiosk 紀錄時顯示尚未涵蓋，且不出現涵蓋明細按鈕', async () => {
     await flushPromises()
-    expect(wrapper.find('.reconciliation__coverage').text()).toContain('打卡資料尚未涵蓋任何一天')
+    expect(wrapper.find('.reconciliation__coverage').text()).toContain('尚未匯入任何打卡資料')
     expect(wrapper.find('.reconciliation__coverage--none').exists()).toBe(true)
     expect(wrapper.find('.reconciliation__coverage-toggle').exists()).toBe(false)
   })
@@ -132,12 +132,43 @@ describe('系統判定涵蓋顯示（2026-09-10 改版，取代人工勾選）',
     expect(detail.text()).toContain('admin')
   })
 
-  it('全部天數皆涵蓋時顯示已涵蓋全部', async () => {
+  it('全部天數皆有打卡資料時仍標明涵蓋逐人判定', async () => {
     api.preview.mockResolvedValue({ data: { rows: [row(1), row(2)], shift_types: shifts, coverage: coverage({
       covered_dates: Array.from({ length: 31 }, (_, i) => `2026-08-${String(i + 1).padStart(2, '0')}`),
       batches: [{ source: 'csv', date_from: '2026-08-01', date_to: '2026-08-31', row_count: 900, imported_at: '2026-08-31T18:00:00', imported_by: null }],
     }) } })
     await button('重新核對').trigger('click'); await flushPromises()
-    expect(wrapper.find('.reconciliation__coverage').text()).toContain('已涵蓋全部 31 天')
+    const text = wrapper.find('.reconciliation__coverage').text()
+    expect(text).toContain('31 天都有打卡資料')
+    // covered_dates 只代表「當天至少一位員工已涵蓋」，不可讀成全員齊全
+    expect(text).toContain('逐人判定')
+  })
+
+  it('面板非啟用時不在背景送出核對，切回啟用才補跑', async () => {
+    await flushPromises()
+    const before = api.preview.mock.calls.length
+    await wrapper.setProps({ active: false })
+    // 隱藏狀態下換月：只重設範圍，不得送出 preview（整月＝人數×天數的重運算）
+    await wrapper.setProps({ month: 9 }); await flushPromises()
+    expect(api.preview).toHaveBeenCalledTimes(before)
+    // 切回顯示 → 立刻補跑一次最新範圍
+    await wrapper.setProps({ active: true }); await flushPromises()
+    expect(api.preview).toHaveBeenCalledTimes(before + 1)
+    expect(api.preview.mock.lastCall?.[0]).toMatchObject({ start_date: '2026-09-01' })
+  })
+
+  it('涵蓋明細顯示實際天數與人數，避免首尾日被讀成整段都已匯入', async () => {
+    api.preview.mockResolvedValue({ data: { rows: [row(1), row(2)], shift_types: shifts, coverage: coverage({
+      covered_dates: ['2026-08-01', '2026-08-31'],
+      batches: [{ source: 'excel', date_from: '2026-08-01', date_to: '2026-08-31', row_count: 24,
+        covered_day_count: 2, covered_employee_count: 12,
+        imported_at: '2026-08-31T18:00:00', imported_by: 'admin' }],
+    }) } })
+    await button('重新核對').trigger('click'); await flushPromises()
+    await wrapper.find('.reconciliation__coverage-toggle').trigger('click')
+    const detail = wrapper.find('.reconciliation__coverage-detail').text()
+    expect(detail).toContain('2026-08-01 至 2026-08-31')
+    expect(detail).toContain('實際 2 天')
+    expect(detail).toContain('12 人')
   })
 })

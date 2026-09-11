@@ -104,11 +104,19 @@ const sampleAnomalies = [
   { id: 10, employee_name: '王小明', employee_number: 'E001', date: '2026-06-05', weekday: '五', type: 'late', type_label: '遲到', detail: '遲到 10 分', estimated_deduction: 200, confirmed_action: null },
 ]
 
-const mountView = () =>
-  mount(AttendanceWorkspaceView, {
+// recordsCache 只餵 context → ResolveCard，而 ResolveCard 只在 detailMode==='resolve'
+// 下渲染；整月明細由 EmployeeMonthPanel 自己抓同一支 API（2026-09-11 起不再兩邊都抓）。
+// 因此本檔的快取競態驗證一律先切到 resolve 模式再進行。
+const mountView = async () => {
+  const wrapper = mount(AttendanceWorkspaceView, {
     global: { stubs: STUBS },
     attachTo: document.body,
   })
+  await flushPromises()
+  wrapper.findComponent(DetailColumnStub).vm.$emit('switchMode', 'resolve')
+  await flushPromises()
+  return wrapper
+}
 
 describe('AttendanceWorkspaceView 員工月記錄快取請求競態', () => {
   beforeEach(() => {
@@ -136,8 +144,7 @@ describe('AttendanceWorkspaceView 員工月記錄快取請求競態', () => {
     const m1 = deferred<{ data: RecordRow[] }>()
     getRecordsMock.mockReturnValueOnce(m1.promise as never)
 
-    const wrapper = mountView()
-    await flushPromises()
+    const wrapper = await mountView()
 
     // M1 已發出但仍 in-flight（快取尚未寫入）
     expect(getRecordsMock).toHaveBeenCalledTimes(1)
@@ -174,8 +181,7 @@ describe('AttendanceWorkspaceView 員工月記錄快取請求競態', () => {
     ]
 
     getRecordsMock.mockResolvedValueOnce({ data: m1Rows } as never)
-    const wrapper = mountView()
-    await flushPromises()
+    const wrapper = await mountView()
 
     const vm = wrapper.vm as unknown as { recordsCache: Map<number, RecordRow[]> }
     expect(vm.recordsCache.get(1)).toEqual(m1Rows)

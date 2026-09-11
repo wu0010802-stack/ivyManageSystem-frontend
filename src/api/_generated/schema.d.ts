@@ -31659,6 +31659,10 @@ export interface components {
         };
         /** ImportBatchOut */
         ImportBatchOut: {
+            /** Covered Day Count */
+            covered_day_count?: number | null;
+            /** Covered Employee Count */
+            covered_employee_count?: number | null;
             /**
              * Date From
              * Format: date
@@ -40323,6 +40327,9 @@ export interface components {
         /**
          * ReconciliationCoverageOut
          * @description 本次核對區間內，系統判定「打卡資料已涵蓋」的日期與依據。
+         *
+         *     covered_dates 是**顯示用**的日期粒度（該日至少一位員工已涵蓋）；缺勤判定走
+         *     服務層的「員工×日期」配對，見 services/attendance_import_batches.py。
          */
         ReconciliationCoverageOut: {
             /** Batches */
