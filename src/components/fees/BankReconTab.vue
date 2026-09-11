@@ -426,7 +426,11 @@ async function runImport() {
   }
 }
 
+let querySequence = 0
 async function fetchTxns() {
+  const sequence = ++querySequence
+  txns.value = []
+  total.value = 0
   loading.value = true
   try {
     const data = await getBankTransactions({
@@ -437,12 +441,13 @@ async function fetchTxns() {
       page: page.value,
       page_size: pageSize,
     })
+    if (sequence !== querySequence) return
     txns.value = data.items as TxnRow[]
     total.value = data.total
   } catch (e) {
-    ElMessage.error(friendlyError('載入交易失敗', e))
+    if (sequence === querySequence) ElMessage.error(friendlyError('載入交易失敗', e))
   } finally {
-    loading.value = false
+    if (sequence === querySequence) loading.value = false
   }
 }
 
