@@ -418,3 +418,82 @@ describe('整月明細在匯入後重新載入', () => {
     wrapper.unmount()
   })
 })
+
+// ── 月合計列 ──────────────────────────────────────────────────────────────────
+// 次數以 is_late / is_early_leave 旗標為準（與後端扣款判定同口徑），分鐘數取
+// late_minutes / early_leave_minutes。缺卡列的狀態文字會蓋過「遲到」，但分鐘數仍
+// 須計入合計，否則合計數字在明細表上數不出來。
+const makeRecord = (overrides: Record<string, unknown>) => ({
+  ...recordNormal, ...overrides,
+})
+
+describe('月合計列', () => {
+  it('依旗標統計次數與總分鐘，超過一小時改寫成時分', async () => {
+    mockGetRecords.mockResolvedValue({ data: [
+      makeRecord({ id: 11, date: '2026-06-02', punch_in: '08:12', status: 'late', is_late: true, late_minutes: 12 }),
+      makeRecord({ id: 12, date: '2026-06-04', punch_in: '08:50', status: 'late', is_late: true, late_minutes: 50 }),
+      makeRecord({ id: 13, date: '2026-06-05', punch_out: '16:40', status: 'early_leave', is_early_leave: true, early_leave_minutes: 20 }),
+      makeRecord({ id: 14, date: '2026-06-09' }),
+    ] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    const total = wrapper.find('.month-record-total')
+    expect(total.exists()).toBe(true)
+    expect(total.text()).toContain('本月合計')
+    expect(total.text()).toContain('遲到 2 次')
+    expect(total.text()).toContain('1 小時 2 分鐘')
+    expect(total.text()).toContain('早退 1 次')
+    expect(total.text()).toContain('20 分鐘')
+    wrapper.unmount()
+  })
+
+  it('缺卡列的遲到也計入，且逐列標出分鐘數讓合計可核對', async () => {
+    mockGetRecords.mockResolvedValue({ data: [
+      makeRecord({ id: 21, date: '2026-06-02', punch_in: '08:12', status: 'late', is_late: true, late_minutes: 12 }),
+      // 只打上班卡又遲到：狀態顯示「缺卡待確認」，但資料上 is_late 為真
+      makeRecord({ id: 22, date: '2026-06-03', punch_in: '08:08', punch_out: null, status: 'missing_punch', is_late: true, is_missing_punch_out: true, late_minutes: 8 }),
+    ] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    const total = wrapper.find('.month-record-total')
+    expect(total.text()).toContain('遲到 2 次')
+    expect(total.text()).toContain('20 分鐘')
+    // 對帳：合計說 2 次，明細表上就要看得到 2 列標了遲到分鐘
+    const statuses = wrapper.findAll('.month-record-row__status').map(cell => cell.text())
+    expect(statuses.filter(text => /12 分鐘|遲到 8 分/.test(text)).length).toBe(2)
+    wrapper.unmount()
+  })
+
+  it('整月沒有遲到早退時明說，不顯示 0 次 0 分', async () => {
+    mockGetRecords.mockResolvedValue({ data: [recordNormal, recordMissing] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    const total = wrapper.find('.month-record-total')
+    expect(total.text()).toContain('本月無遲到、早退')
+    expect(total.text()).not.toContain('0 次')
+    wrapper.unmount()
+  })
+
+  it('旗標為 false 的殘留分鐘數不計入', async () => {
+    mockGetRecords.mockResolvedValue({ data: [
+      makeRecord({ id: 31, date: '2026-06-02', late_minutes: 30, early_leave_minutes: 15 }),
+    ] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    expect(wrapper.find('.month-record-total').text()).toContain('本月無遲到、早退')
+    wrapper.unmount()
+  })
+
+  it('沒有任何列時不渲染合計列', async () => {
+    mockGetRecords.mockResolvedValue({ data: [] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    expect(wrapper.find('.month-record-total').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

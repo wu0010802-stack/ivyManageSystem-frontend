@@ -14,7 +14,7 @@
           <td data-label="應上班時段">{{ row.expectedLabel }}</td>
           <td class="month-record-row__punch-in" data-label="上班打卡">{{ row.record?.punch_in || '—' }}</td>
           <td class="month-record-row__punch-out" data-label="下班打卡">{{ row.record?.punch_out || '—' }}</td>
-          <td class="month-record-row__status" data-label="狀態／請假">{{ row.status }}<small v-if="row.leaveLabel">{{ row.leaveLabel }}</small><RawPunchDetails v-if="row.record" :import-metadata="row.record.import_metadata" /></td>
+          <td class="month-record-row__status" data-label="狀態／請假">{{ row.status }}<small v-if="row.deviationLabel">{{ row.deviationLabel }}</small><small v-if="row.leaveLabel">{{ row.leaveLabel }}</small><RawPunchDetails v-if="row.record" :import-metadata="row.record.import_metadata" /></td>
           <td data-label="操作"><el-button v-if="canWrite && row.canSupplement" size="small" :disabled="saving" @click="openSupplement(row)">補打卡</el-button></td>
         </tr>
         <tr v-if="futureRows.length && !showFuture" class="month-future-toggle">
@@ -25,6 +25,21 @@
           </td>
         </tr>
       </tbody>
+      <tfoot>
+        <tr class="month-record-total">
+          <th scope="row" data-label="項目">本月合計</th>
+          <td colspan="3"></td>
+          <!-- 合計列的操作欄本來就空著，讓數字跨兩欄，否則 table-layout: fixed 的
+               六等分寬度會把「共 1 小時 10 分鐘」折成兩行。 -->
+          <td class="month-record-total__value" colspan="2" data-label="遲到／早退">
+            <div v-if="monthTotals.hasDeviation">
+              <span>遲到 {{ monthTotals.lateCount }} 次・共 {{ formatMinutes(monthTotals.lateMinutes) }}</span>
+              <span>早退 {{ monthTotals.earlyCount }} 次・共 {{ formatMinutes(monthTotals.earlyMinutes) }}</span>
+            </div>
+            <div v-else>本月無遲到、早退</div>
+          </td>
+        </tr>
+      </tfoot>
     </table>
     <section v-if="editing && canWrite" ref="editForm" class="month-edit" aria-label="補打卡">
       <p>{{ employeeName || '所選員工' }} · {{ editing.date }}</p>
@@ -61,6 +76,23 @@ const now = ref(Date.now())
 const clockTimer = window.setInterval(() => { now.value = Date.now() }, 60_000)
 onUnmounted(() => { window.clearInterval(clockTimer); loadSequence += 1 })
 const rows = computed(() => buildAttendanceMonthRows(days.value, records.value, now.value))
+// 月合計：一律以整月 rows 計算，不跟著「未來日收合」變動——收起來的是尚未到班日，
+// 本來就不會有遲到早退，但合計的語意是整個月，不該隨畫面展開與否改變。
+// 次數以 is_late / is_early_leave 旗標為準，與後端扣款判定（anomalies.py）同口徑。
+const monthTotals = computed(() => {
+  let lateCount = 0, lateMinutes = 0, earlyCount = 0, earlyMinutes = 0
+  for (const row of rows.value) {
+    if (row.record?.is_late) { lateCount += 1; lateMinutes += row.lateMinutes }
+    if (row.record?.is_early_leave) { earlyCount += 1; earlyMinutes += row.earlyLeaveMinutes }
+  }
+  return { lateCount, lateMinutes, earlyCount, earlyMinutes, hasDeviation: lateCount > 0 || earlyCount > 0 }
+})
+function formatMinutes(total: number): string {
+  if (total < 60) return `${total} 分鐘`
+  const hours = Math.floor(total / 60)
+  const minutes = total % 60
+  return minutes ? `${hours} 小時 ${minutes} 分鐘` : `${hours} 小時`
+}
 // 未來日收合（UI/UX 改版提案 09-10）：整月排到月底的「尚未到班日」預設摺起，展開一次
 // 後維持展開；核對日期落在未來時自動視為已展開，確保 focusDate 定位一定找得到目標列。
 const todayISO = computed(() => taipeiDate(now.value))
@@ -148,6 +180,10 @@ async function saveSupplement(): Promise<void> {
 .month-record-table thead th { position: sticky; top: 0; z-index: 1; background: var(--el-fill-color-light); font-weight: 600; }
 .month-record-table small { display: block; color: var(--el-text-color-secondary); margin-top: var(--space-1); }
 .month-record-row--anomaly { background: var(--el-color-warning-light-9); }
+.month-record-total { background: var(--el-fill-color-light); font-weight: 600; }
+.month-record-total th, .month-record-total td { border-bottom: 0; border-top: 2px solid var(--el-border-color); }
+.month-record-total__value span { display: block; }
+.month-record-total__value span + span { margin-top: var(--space-1); }
 .month-future-toggle__btn {
   appearance: none;
   border: 0;
@@ -166,11 +202,15 @@ async function saveSupplement(): Promise<void> {
 .month-edit label { display: grid; gap: var(--space-1); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (--to-sm) {
-  .month-record-table, .month-record-table tbody, .month-record-table tr { display: block; }
+  .month-record-table, .month-record-table tbody, .month-record-table tfoot, .month-record-table tr { display: block; }
   .month-record-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .month-record-table tr { border: 1px solid var(--el-border-color-light); border-radius: var(--radius-sm); margin-bottom: var(--space-3); padding: var(--space-2); }
-  .month-record-table td, .month-record-table tbody th { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-2); }
-  .month-record-table td::before, .month-record-table tbody th::before { content: attr(data-label); color: var(--el-text-color-secondary); font-weight: normal; }
+  .month-record-table td, .month-record-table tbody th, .month-record-table tfoot th { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-2); }
+  .month-record-table td::before, .month-record-table tbody th::before, .month-record-table tfoot th::before { content: attr(data-label); color: var(--el-text-color-secondary); font-weight: normal; }
+  /* 窄螢幕堆疊後中間三欄的空白合併格沒有內容，留著只會多一條空列 */
+  .month-record-total td[colspan]:empty, .month-record-total td:empty { display: none; }
+  /* 小字是 td 的第三個 grid item，不指定欄位會掉到標籤欄底下、跟所屬的值錯開 */
+  .month-record-table td small { grid-column: 2; }
   .month-edit label { width: 100%; }
 }
 </style>
