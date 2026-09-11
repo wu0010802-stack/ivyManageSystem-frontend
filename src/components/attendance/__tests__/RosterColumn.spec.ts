@@ -83,12 +83,14 @@ function mountRoster(props: {
   roster?: RosterRow[]
   selectedEmployeeId?: number | null
   loading?: boolean
+  pendingCounts?: Record<string, number>
 }) {
   return mount(RosterColumn, {
     props: {
       roster: props.roster ?? [rowFull, rowLate, rowMissing],
       selectedEmployeeId: props.selectedEmployeeId ?? null,
       loading: props.loading ?? false,
+      ...(props.pendingCounts ? { pendingCounts: props.pendingCounts } : {}),
     },
     global: {
       stubs,
@@ -215,4 +217,33 @@ it('搜尋無結果可清除並恢復名冊', async () => {
   await wrapper.find('button').trigger('click')
   expect(wrapper.findAll('[role="option"]')).toHaveLength(3)
   wrapper.unmount()
+})
+
+describe('RosterColumn — 分組用真正的待處理數', () => {
+  it('異常已全部處理完的人歸到「無待處理」，不再掛在有待處理', async () => {
+    // rowLate 月統計有 3 次異常，但都已接受扣款／豁免 → pending 0
+    const wrapper = mountRoster({ pendingCounts: { E002: 0, E003: 2 } })
+    await nextTick()
+    const text = wrapper.text()
+    const pendingIdx = text.indexOf('有待處理')
+    const cleanIdx = text.indexOf('無待處理')
+    expect(pendingIdx).toBeGreaterThanOrEqual(0)
+    expect(cleanIdx).toBeGreaterThan(pendingIdx)
+    // 李缺卡仍有 2 筆待處理 → 落在「有待處理」段；王遲到已處理完 → 落在其後
+    expect(text.indexOf('李缺卡')).toBeGreaterThan(pendingIdx)
+    expect(text.indexOf('李缺卡')).toBeLessThan(cleanIdx)
+    expect(text.indexOf('王遲到')).toBeGreaterThan(cleanIdx)
+    wrapper.unmount()
+  })
+
+  it('未提供 pendingCounts 時退回月統計數，既有行為不變', async () => {
+    const wrapper = mountRoster({})
+    await nextTick()
+    const text = wrapper.text()
+    const cleanIdx = text.indexOf('無待處理')
+    // 王遲到、李缺卡都有月統計異常 → 仍在「有待處理」段（早於「無待處理」標頭）
+    expect(text.indexOf('王遲到')).toBeLessThan(cleanIdx)
+    expect(text.indexOf('李缺卡')).toBeLessThan(cleanIdx)
+    wrapper.unmount()
+  })
 })

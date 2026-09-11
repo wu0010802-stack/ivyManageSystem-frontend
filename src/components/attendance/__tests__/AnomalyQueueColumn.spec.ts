@@ -19,6 +19,11 @@ vi.mock('@/composables/useErrorNotify', () => ({
   useErrorNotify: () => ({ notify: mockNotify }),
 }))
 
+// 批次接受／豁免需 ATTENDANCE_WRITE（與單筆的 ResolveCard 同一把尺）；
+// 預設給有權限，唯讀情境由專屬案例覆寫。
+const { mockHasPermission } = vi.hoisted(() => ({ mockHasPermission: vi.fn(() => true) }))
+vi.mock('@/utils/auth', () => ({ hasPermission: (name: string) => mockHasPermission(name) }))
+
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
   ElMessageBox: { confirm: (...args: unknown[]) => mockConfirm(...args) },
@@ -135,6 +140,25 @@ function mountQueue(overrides: {
 }
 
 // ── tests ──────────────────────────────────────────────────────────────────────
+describe('AnomalyQueueColumn — 寫入權限', () => {
+  it('唯讀帳號不顯示全選列與批次動作（過去是按下去才被後端 403）', async () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mountQueue({})
+    await nextTick()
+    expect(wrapper.find('.anomaly-queue-column__select-all').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('批次接受扣款')
+    expect(wrapper.text()).not.toContain('批次豁免')
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  it('有 ATTENDANCE_WRITE 時全選列照常顯示', async () => {
+    const wrapper = mountQueue({})
+    await nextTick()
+    expect(wrapper.find('.anomaly-queue-column__select-all').exists()).toBe(true)
+    expect(mockHasPermission).toHaveBeenCalledWith('ATTENDANCE_WRITE')
+  })
+})
+
 describe('AnomalyQueueColumn', () => {
   it('預設只顯示未處理卡（statusFilter=pending）', () => {
     const wrapper = mountQueue({})

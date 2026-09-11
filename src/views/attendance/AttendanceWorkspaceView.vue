@@ -46,6 +46,7 @@
           v-model:search="rosterSearch"
           :roster="ws.roster.value"
           :selected-employee-id="currentEmployeeId"
+          :pending-counts="pendingCountsByEmployee"
           :loading="ws.loading.value"
           @select="onRosterSelect"
         />
@@ -61,6 +62,7 @@
           :employee-id="currentEmployeeId"
           :employee-name="currentEmployeeName"
           :focus-date="focusDate"
+          :revision="importRevision"
           @import="openImport"
           :year="query.year"
           :month="query.month"
@@ -80,6 +82,7 @@
             v-model:search="rosterSearch"
             :roster="ws.roster.value"
             :selected-employee-id="currentEmployeeId"
+          :pending-counts="pendingCountsByEmployee"
             :loading="ws.loading.value"
             @select="onRosterSelect"
           />
@@ -106,6 +109,7 @@
             :employee-id="currentEmployeeId"
             :employee-name="currentEmployeeName"
             :focus-date="focusDate"
+            :revision="importRevision"
             @import="openImport"
             :year="query.year"
             :month="query.month"
@@ -168,6 +172,16 @@ const query = reactive({ year: now.getFullYear(), month: now.getMonth() + 1 })
 const ws = useAttendanceWorkspace(toRef(query, 'year'), toRef(query, 'month'))
 const kpis = computed(() => ws.kpis.value)
 const rosterSearch = ref('')
+// 名冊分組要用「還沒處理完的」異常數：roster 的 late_count 等來自月統計，不會因為
+// 管理者接受扣款或豁免而減少，直接拿來分組會讓處理完的人一直掛在「有待處理」。
+const pendingCountsByEmployee = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = {}
+  for (const card of ws.anomalyQueue.value) {
+    if (card.confirmed_action !== null) continue
+    counts[card.employee_number] = (counts[card.employee_number] ?? 0) + 1
+  }
+  return counts
+})
 const statsDisplayState = computed(() => ws.hasCurrentData.value ? (ws.loadState.value === 'success' ? 'ready' : 'stale') : (ws.loading.value ? 'loading' : 'unavailable'))
 const showEmptyRecords = computed(() => !focusDate.value && !rosterSearch.value.trim() && ws.loadState.value === 'success' && ws.hasCurrentData.value && ws.roster.value.length === 0 && ws.anomalyQueue.value.length === 0)
 

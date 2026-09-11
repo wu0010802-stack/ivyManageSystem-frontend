@@ -106,12 +106,14 @@ function mountPanel(overrides: {
   employeeId?: number | null
   year?: number
   month?: number
+  revision?: number
 }) {
   return mount(EmployeeMonthPanel, {
     props: {
       employeeId: overrides.employeeId !== undefined ? overrides.employeeId : 5,
       year: overrides.year ?? 2026,
       month: overrides.month ?? 6,
+      ...(overrides.revision !== undefined ? { revision: overrides.revision } : {}),
     },
     global: {
       stubs,
@@ -388,4 +390,31 @@ it('點補卡後表單捲入畫面並聚焦時間欄位', async () => {
   expect(document.activeElement).toBe(wrapper.find('.el-time-picker').element)
   wrapper.unmount()
   HTMLElement.prototype.scrollIntoView = previousScroll
+})
+
+
+describe('整月明細在匯入後重新載入', () => {
+  it('revision 遞增即重抓（同員工同月匯入時 employeeId/year/month 都沒變）', async () => {
+    const wrapper = mountPanel({ revision: 0 })
+    await flushPromises()
+    const before = mockGetRecords.mock.calls.length
+    expect(before).toBeGreaterThan(0)
+
+    await wrapper.setProps({ revision: 1 })
+    await flushPromises()
+    // 少了這條，匯入完成後回到整月明細仍顯示匯入前的缺卡與舊時間
+    expect(mockGetRecords.mock.calls.length).toBe(before + 1)
+    wrapper.unmount()
+  })
+
+  it('revision 沒變則不重抓，避免無謂請求', async () => {
+    const wrapper = mountPanel({ revision: 3 })
+    await flushPromises()
+    const before = mockGetRecords.mock.calls.length
+
+    await wrapper.setProps({ revision: 3 })
+    await flushPromises()
+    expect(mockGetRecords.mock.calls.length).toBe(before)
+    wrapper.unmount()
+  })
 })

@@ -48,7 +48,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import RawPunchDetails from './RawPunchDetails.vue'
 import type { ApiResponse } from '@/api/_generated/typed'
 
-const props = defineProps<{ employeeId: number | null; employeeName?: string; year: number; month: number; focusDate?: string | null }>()
+const props = defineProps<{ employeeId: number | null; employeeName?: string; year: number; month: number; focusDate?: string | null; revision?: number }>()
 const emit = defineEmits<{ updated: [] }>()
 const { notify } = useErrorNotify()
 const records = ref<ApiResponse<'/attendance/records', 'get'>>([])
@@ -101,7 +101,9 @@ async function load(): Promise<void> {
     if (sequence === loadSequence) loading.value = false
   }
 }
-watch([() => props.employeeId, () => props.year, () => props.month], load, { immediate: true })
+// revision 一併納入：匯入同一位員工的同一個月時 employeeId/year/month 都沒變，
+// 少了它，匯入完成後回到整月明細仍顯示匯入前的缺卡與舊時間，要換人或重整才更新。
+watch([() => props.employeeId, () => props.year, () => props.month, () => props.revision], load, { immediate: true })
 watch([() => props.focusDate, rows, loading], async () => {
   if (!props.focusDate || loading.value) return
   await nextTick()

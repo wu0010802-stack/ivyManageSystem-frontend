@@ -33,6 +33,7 @@
         :year="year"
         :month="month"
         :focus-date="focusDate"
+        :revision="revision"
         @updated="emit('resolved')"
       />
     </template>
@@ -66,6 +67,8 @@ const props = defineProps<{
   year: number
   month: number
   focusDate?: string | null
+  /** 匯入／補卡等寫入後遞增，供整月明細重新載入（同員工同月時三個 key 都沒變） */
+  revision?: number
 }>()
 
 const emit = defineEmits<{
