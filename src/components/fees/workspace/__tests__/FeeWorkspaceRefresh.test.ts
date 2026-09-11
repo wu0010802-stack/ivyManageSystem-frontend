@@ -103,6 +103,15 @@ vi.mock('../FeeBillSlipDrawer.vue', () => ({
     template: '<div />',
   },
 }))
+vi.mock('../FeeSlipTemplateDialog.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeSlipTemplateDialog',
+    props: ['modelValue', 'kind', 'defaultYear', 'defaultMonth'],
+    emits: ['update:modelValue'],
+    template: '<div />',
+  },
+}))
 
 const handoverMocks = vi.hoisted(() => ({ fetchBatches: vi.fn() }))
 vi.mock('@/components/fees/CashHandoverTab.vue', () => ({
