@@ -169,14 +169,15 @@ describe('FeeMonthlyStatement — 依銷帳碼排序', () => {
   it('預設維持後端的班名／姓名序', async () => {
     const w = await mountStatement()
     expect((w.find('[data-test="stmt-sort"]').element as HTMLSelectElement).value).toBe('default')
+    // 班級分組依年段由大到小：櫻花（中班）在向日葵（小班）之前；班內維持後端姓名序
     expect(rowNames(w)).toEqual([
+      '己同學',
+      '庚同學',
       '甲同學',
       '乙同學',
       '丙同學',
       '丁無碼',
       '戊無碼',
-      '己同學',
-      '庚同學',
     ])
   })
 
@@ -185,15 +186,15 @@ describe('FeeMonthlyStatement — 依銷帳碼排序', () => {
     await w.find('[data-test="stmt-sort"]').setValue('code')
 
     expect(rowNames(w)).toEqual([
-      // 向日葵：0099 < 4203 < 4207，無碼兩位殿後且相對順序不變
+      // 櫻花（中班，排在前）：4101 < 4310
+      '庚同學',
+      '己同學',
+      // 向日葵（小班）：0099 < 4203 < 4207，無碼兩位殿後且相對順序不變
       '丙同學',
       '乙同學',
       '甲同學',
       '丁無碼',
       '戊無碼',
-      // 櫻花：4101 < 4310
-      '庚同學',
-      '己同學',
     ])
   })
 
@@ -214,13 +215,13 @@ describe('FeeMonthlyStatement — 依銷帳碼排序', () => {
     await w.find('[data-test="stmt-sort"]').setValue('default')
 
     expect(rowNames(w)).toEqual([
+      '己同學',
+      '庚同學',
       '甲同學',
       '乙同學',
       '丙同學',
       '丁無碼',
       '戊無碼',
-      '己同學',
-      '庚同學',
     ])
   })
 

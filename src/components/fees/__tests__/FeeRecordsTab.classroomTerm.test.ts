@@ -63,8 +63,8 @@ describe('FeeRecordsTab 班級篩選', () => {
       label: string
       classes: Array<{ name: string }>
     }>
-    expect(groups.map((g) => g.label)).toEqual(['幼幼班', '大班'])
-    expect(groups.flatMap((g) => g.classes).map((c) => c.name)).toEqual(['向日葵', '天堂鳥'])
+    expect(groups.map((g) => g.label)).toEqual(['大班', '幼幼班'])
+    expect(groups.flatMap((g) => g.classes).map((c) => c.name)).toEqual(['天堂鳥', '向日葵'])
   })
 
   it('伺服器分頁算不出整月未收，故不顯示人數', () => {

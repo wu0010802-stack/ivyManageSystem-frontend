@@ -9,7 +9,8 @@
  * 決定**（列得出來的一定有帳可看），班級清單只用來回查年段；查不到年段的班歸
  * 「未分年段」排在最後，而不是從清單消失。
  *
- * 年段順序固定為幼幼→小→中→大；不在表列內的年段依首次出現順序接在後面。
+ * 年段順序固定為大→中→小→幼幼（園所點名／收費的慣用序，大班在最上面）；
+ * 不在表列內的年段依首次出現順序接在後面。
  */
 
 export interface ClassroomLite {
@@ -45,8 +46,8 @@ export interface GradeGroup {
 export const UNGRADED_LABEL = '未分年段'
 export const UNASSIGNED_CLASS_LABEL = '未分班'
 
-/** 園所年段由小到大；比對用去尾「班」後的字串，容忍「幼幼」／「幼幼班」兩種寫法 */
-const GRADE_ORDER = ['幼幼', '小', '中', '大']
+/** 園所年段由大到小；比對用去尾「班」後的字串，容忍「幼幼」／「幼幼班」兩種寫法 */
+const GRADE_ORDER = ['大', '中', '小', '幼幼']
 
 const stripSuffix = (s: string) => s.replace(/班$/, '')
 
