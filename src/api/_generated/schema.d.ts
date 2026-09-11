@@ -71835,7 +71835,10 @@ export interface operations {
     };
     get_class_hub_today_api_portal_class_hub_today_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 指定要查的班級；不帶則用教師的預設班（head > assistant > art）。帶了但不屬於此教師 → 403。 */
+                classroom_id?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -71849,6 +71852,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassHubTodayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
