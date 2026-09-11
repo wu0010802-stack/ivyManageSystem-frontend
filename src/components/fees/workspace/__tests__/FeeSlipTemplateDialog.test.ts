@@ -183,6 +183,7 @@ describe('FeeSlipTemplateDialog', () => {
     expect(wrapper.text()).toContain('沒碼')
     expect(wrapper.text()).toContain('4115')
     expect(wrapper.find('[data-test="slip-download"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="slip-next"]').attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
 
@@ -198,6 +199,23 @@ describe('FeeSlipTemplateDialog', () => {
     await settle(wrapper)
     expect(wrapper.text()).toContain('甲生')
     expect(wrapper.text()).toContain('乙生')
+    expect(wrapper.find('[data-test="slip-next"]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('缺年段時列出學生，並擋住下一步', async () => {
+    apiMocks.previewSlipTemplate.mockResolvedValue(
+      preview({
+        missing_grade: [{ student_id: 9, student_name: '沒年段', classroom_name: '未知班' }],
+        blocked: true,
+      }),
+    )
+    const wrapper = await settle(mountDialog())
+    await wrapper.find('[data-test="slip-next"]').trigger('click')
+    await settle(wrapper)
+    expect(wrapper.text()).toContain('沒年段')
+    expect(wrapper.text()).toContain('未知班')
+    expect(wrapper.find('[data-test="slip-next"]').attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
 
