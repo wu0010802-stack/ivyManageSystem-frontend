@@ -145,7 +145,6 @@ export const TEACHER_PORTAL_ROUTES = [
   '/portal',
   '/portal/home',
   '/portal/class',
-  '/portal/class-hub',
   '/portal/attendance',
   '/portal/leave',
   '/portal/leave-history',

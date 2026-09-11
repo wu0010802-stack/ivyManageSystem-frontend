@@ -14,7 +14,8 @@ function findRoute(path: string) {
 }
 
 const SENSITIVE_PORTAL_ROUTES: Array<[string, string]> = [
-  ['/portal/class-hub', 'STUDENTS_READ'],
+  // /portal/class-hub 已於 SPEC-024 移除，改為永久 redirect（無 meta.permission，
+  // 守衛不適用於純轉向路由；權限檢查由目的地 /portal/class 與 /portal/medications 各自把關）。
   ['/portal/students', 'STUDENTS_READ'],
   ['/portal/students/:studentId', 'STUDENTS_READ'],
   ['/portal/student-attendance', 'STUDENTS_READ'],

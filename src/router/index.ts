@@ -815,10 +815,15 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '今日待辦' },
                 },
                 {
+                    // /portal/class-hub 已於 SPEC-024 移除，改為 /portal/class。
+                    // 這條 redirect 永久保留：存量推播通知的 deep_link
+                    // 寫在 DB 裡改不動（用藥提醒帶 ?sheet=medication&id=，學生請假不帶 query），
+                    // 老師點開歷史通知仍會走到這裡。
                     path: 'class-hub',
-                    name: 'portal-class-hub',
-                    component: () => import('../views/portal/PortalClassHubView.vue'),
-                    meta: { title: '今日班級工作台', permission: 'STUDENTS_READ' },
+                    redirect: (to) =>
+                        to.query.sheet === 'medication'
+                            ? { path: '/portal/medications', query: { id: to.query.id } }
+                            : { path: '/portal/class' },
                 },
                 {
                     path: 'class',
