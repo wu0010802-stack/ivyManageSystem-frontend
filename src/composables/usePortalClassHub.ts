@@ -10,12 +10,12 @@
  * - decrementCount(key: string): void — sheet 提交成功後呼叫，
  *   key ∈ ClassHubCounts field（如 'medications_pending', 'attendance_pending'）
  */
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, type Ref } from 'vue'
 import { getTodayHub } from '@/api/portalClassHub'
 
 const POLL_MS = 60_000
 
-export function usePortalClassHub() {
+export function usePortalClassHub(classroomId?: Ref<number | null>) {
   const data = ref<{ counts?: Record<string, number>; [key: string]: unknown } | null>(null)
   const loading = ref(false)
   const error = ref<unknown>(null)
@@ -26,7 +26,7 @@ export function usePortalClassHub() {
     if (inflight) return inflight
     loading.value = true
     error.value = null
-    inflight = getTodayHub()
+    inflight = getTodayHub(classroomId?.value ?? undefined)
       .then((d) => {
         data.value = d
         return d
@@ -55,6 +55,15 @@ export function usePortalClassHub() {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
       refresh().catch(() => {})
     }
+  }
+
+  // 切換班級要立刻重抓；inflight 去重在 refresh 內，短時間連按不會打爆後端。
+  // 已知限制：若切換當下前一個請求仍在飛行中，refresh() 會直接沿用該 inflight
+  // promise（仍是舊班級的請求），不會插隊重打——不在本次改動範圍內處理。
+  if (classroomId) {
+    watch(classroomId, () => {
+      refresh().catch(() => {})
+    })
   }
 
   onMounted(() => {
