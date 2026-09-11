@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildClassGroups,
   buildClassGroupsFromClassrooms,
+  resolveClassCode,
   resolveGradeName,
   UNGRADED_LABEL,
 } from '@/components/fees/feeClassGrouping'
@@ -150,5 +151,112 @@ describe('buildClassGroupsFromClassrooms（逐筆檢視：只有班級清單，�
     expect(groups).toHaveLength(1)
     expect(groups[0].label).toBe(UNGRADED_LABEL)
     expect(groups[0].classes.map((c) => c.name)).toEqual(['無年段班'])
+  })
+})
+
+/**
+ * 班級代號排序：園所的班序是代號（大1/中2/小1…）而不是資料出現順序。
+ * staging 實況：「玫瑰(小2)」排在「芙蓉(小1)」前面、「茉莉(中3)」排在
+ * 「薔薇(中2)」前面——因為月表的班級順序來自當月費用單的出現序。
+ */
+const CODED_CLASSROOMS = [
+  { name: '天堂鳥', grade_name: '大班', class_code: '大1' },
+  { name: '櫻花', grade_name: '大班', class_code: '大2' },
+  { name: '蒲公英', grade_name: '大班', class_code: '大3' },
+  { name: '百合', grade_name: '中班', class_code: '中1' },
+  { name: '薔薇', grade_name: '中班', class_code: '中2' },
+  { name: '茉莉', grade_name: '中班', class_code: '中3' },
+  { name: '芙蓉', grade_name: '小班', class_code: '小1' },
+  { name: '玫瑰', grade_name: '小班', class_code: '小2' },
+]
+
+describe('resolveClassCode（班名 → 班級代號）', () => {
+  it('班名完全相符時取該班代號', () => {
+    expect(resolveClassCode('玫瑰', CODED_CLASSROOMS)).toBe('小2')
+  })
+
+  it('月表班名帶「班」字尾時仍對得上（與年段回查同一套鬆散比對）', () => {
+    expect(resolveClassCode('玫瑰班', CODED_CLASSROOMS)).toBe('小2')
+  })
+
+  it('查無班級或該班沒填代號時回空字串，不猜', () => {
+    expect(resolveClassCode('查無此班', CODED_CLASSROOMS)).toBe('')
+    expect(resolveClassCode('向日葵', CLASSROOMS)).toBe('')
+    expect(resolveClassCode('', CODED_CLASSROOMS)).toBe('')
+  })
+})
+
+describe('班級代號排序', () => {
+  it('年段內依代號排序，不受月表出現順序影響', () => {
+    const students = [
+      stu('甲', '玫瑰', 'unpaid'), // 小2 先出現
+      stu('乙', '芙蓉', 'unpaid'), // 小1 後出現
+      stu('丙', '茉莉', 'unpaid'), // 中3 先出現
+      stu('丁', '薔薇', 'unpaid'), // 中2
+      stu('戊', '百合', 'unpaid'), // 中1
+    ]
+    const groups = buildClassGroups(students, CODED_CLASSROOMS)
+    expect(groups.map((g) => g.label)).toEqual(['中班', '小班'])
+    expect(groups[0].classes.map((c) => c.name)).toEqual(['百合', '薔薇', '茉莉'])
+    expect(groups[1].classes.map((c) => c.name)).toEqual(['芙蓉', '玫瑰'])
+  })
+
+  it('月表班名帶「班」字尾也照代號排（staging 實況）', () => {
+    const students = [stu('甲', '玫瑰班', 'unpaid'), stu('乙', '芙蓉班', 'unpaid')]
+    const groups = buildClassGroups(students, CODED_CLASSROOMS)
+    expect(groups[0].classes.map((c) => c.name)).toEqual(['芙蓉班', '玫瑰班'])
+  })
+
+  it('代號的數字以數值比大小，10 排在 9 後面而不是 1 後面', () => {
+    const classrooms = [
+      { name: 'A', grade_name: '小班', class_code: '小1' },
+      { name: 'B', grade_name: '小班', class_code: '小9' },
+      { name: 'C', grade_name: '小班', class_code: '小10' },
+    ]
+    const students = [stu('甲', 'C', 'unpaid'), stu('乙', 'B', 'unpaid'), stu('丙', 'A', 'unpaid')]
+    const [g] = buildClassGroups(students, classrooms)
+    expect(g.classes.map((c) => c.name)).toEqual(['A', 'B', 'C'])
+  })
+
+  it('沒填代號的班沉到該年段最後，彼此維持原出現順序', () => {
+    const classrooms = [
+      ...CODED_CLASSROOMS,
+      { name: '待編班', grade_name: '小班', class_code: null },
+      { name: '新設班', grade_name: '小班' },
+    ]
+    const students = [
+      stu('甲', '待編班', 'unpaid'),
+      stu('乙', '玫瑰', 'unpaid'),
+      stu('丙', '新設班', 'unpaid'),
+      stu('丁', '芙蓉', 'unpaid'),
+    ]
+    const [g] = buildClassGroups(students, classrooms)
+    expect(g.classes.map((c) => c.name)).toEqual(['芙蓉', '玫瑰', '待編班', '新設班'])
+  })
+
+  it('班級代號帶進 ClassGroup，供消費端顯示或再排序', () => {
+    const [g] = buildClassGroups([stu('甲', '玫瑰班', 'unpaid')], CODED_CLASSROOMS)
+    expect(g.classes[0].classCode).toBe('小2')
+  })
+
+  it('逐筆檢視（只有班級清單）同樣依代號排，不受清單順序影響', () => {
+    const shuffled = [CODED_CLASSROOMS[7], CODED_CLASSROOMS[6], CODED_CLASSROOMS[5], CODED_CLASSROOMS[3]]
+    const groups = buildClassGroupsFromClassrooms(shuffled)
+    expect(groups.map((g) => g.label)).toEqual(['中班', '小班'])
+    expect(groups[0].classes.map((c) => c.name)).toEqual(['百合', '茉莉'])
+    expect(groups[1].classes.map((c) => c.name)).toEqual(['芙蓉', '玫瑰'])
+  })
+
+  it('未分年段桶內混不同年段的代號時，仍依大→中→小→幼幼再依號碼排', () => {
+    const classrooms = [
+      { name: 'X', class_code: '小1' },
+      { name: 'Y', class_code: '大2' },
+      { name: 'Z', class_code: '幼1' },
+      { name: 'W', class_code: '大1' },
+    ]
+    const groups = buildClassGroupsFromClassrooms(classrooms)
+    expect(groups).toHaveLength(1)
+    expect(groups[0].label).toBe(UNGRADED_LABEL)
+    expect(groups[0].classes.map((c) => c.name)).toEqual(['W', 'Y', 'X', 'Z'])
   })
 })

@@ -600,6 +600,8 @@ type StatementStudent = MonthlyStatement['students'][number]
 interface ClassroomLite {
   name?: string | null
   grade_name?: string | null
+  /** 班級代號（`小2`）；年段內的班序依它排 */
+  class_code?: string | null
 }
 
 const props = withDefaults(
