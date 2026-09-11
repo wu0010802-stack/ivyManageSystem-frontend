@@ -1,9 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
-
-const { mockPendingCount } = vi.hoisted(() => ({ mockPendingCount: vi.fn() }))
-vi.mock('@/api/portal', () => ({ getPortalPickupPendingCount: mockPendingCount }))
 
 import QuickLinksCard from '@/components/portal/home/QuickLinksCard.vue'
 
@@ -12,20 +9,17 @@ const router = createRouter({
   routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
 })
 
-// QuickLinksCard 是 hardcoded 10 個連結（staging 併入時新增「活動調查」，
-// 2026-08-11 新增「接送授權」），使用 .link-tile class 的 button
-const EXPECTED_LABELS = ['班級學生', '課堂觀察', '作品上傳', '用藥執行', '事件紀錄', '學期評量', '成長軌跡', '才藝點名', '活動調查', '接送授權']
+// SPEC-024 收斂後：班級類功能全數移到「班級」tab（/portal/class），
+// 這裡只剩個人／跨班級事項三格（成長軌跡／才藝點名／活動調查）。
+// 「接送授權」與其 pending count 徽章亦隨舊十宮格一併移除（元件已不再
+// import getPortalPickupPendingCount）。
+const EXPECTED_LABELS = ['成長軌跡', '才藝點名', '活動調查']
 
 describe('QuickLinksCard', () => {
-  beforeEach(() => {
-    mockPendingCount.mockReset()
-    mockPendingCount.mockResolvedValue({ data: { count: 0 } })
-  })
-
-  it('renders 10 link tiles', () => {
+  it('renders 3 link tiles', () => {
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const tiles = w.findAll('.link-tile')
-    expect(tiles.length).toBe(10)
+    expect(tiles.length).toBe(3)
   })
 
   it('renders all expected link labels', () => {
@@ -44,49 +38,33 @@ describe('QuickLinksCard', () => {
     expect(() => mount(QuickLinksCard, { global: { plugins: [router] } })).not.toThrow()
   })
 
-  it('clicking 班級學生 tile pushes to /portal/students', async () => {
+  it('clicking 成長軌跡 tile pushes to /portal/growth', async () => {
     const push = vi.spyOn(router, 'push')
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const tiles = w.findAll('.link-tile')
-    // tiles[0] = 班級學生 → '/portal/students'
     await tiles[0].trigger('click')
-    expect(push).toHaveBeenCalledWith('/portal/students')
+    expect(push).toHaveBeenCalledWith('/portal/growth')
   })
 
   it('clicking 才藝點名 tile pushes to route with query', async () => {
     const push = vi.spyOn(router, 'push')
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const tiles = w.findAll('.link-tile')
-    // tiles[7] = 才藝點名 → { path: '/portal/activity', query: { tab: 'attendance' } }
-    await tiles[7].trigger('click')
+    await tiles[1].trigger('click')
     expect(push).toHaveBeenCalledWith({ path: '/portal/activity', query: { tab: 'attendance' } })
+  })
+
+  it('clicking 活動調查 tile pushes to /portal/surveys', async () => {
+    const push = vi.spyOn(router, 'push')
+    const w = mount(QuickLinksCard, { global: { plugins: [router] } })
+    const tiles = w.findAll('.link-tile')
+    await tiles[2].trigger('click')
+    expect(push).toHaveBeenCalledWith('/portal/surveys')
   })
 
   it('each tile has a tint dot element', () => {
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const dots = w.findAll('.tile-dot')
-    expect(dots.length).toBe(10)
-  })
-
-  it('shows pending count badge on 接送授權 tile when count > 0', async () => {
-    mockPendingCount.mockResolvedValue({ data: { count: 3 } })
-    const w = mount(QuickLinksCard, { global: { plugins: [router] } })
-    await flushPromises()
-    const badge = w.find('.tile-badge')
-    expect(badge.exists()).toBe(true)
-    expect(badge.text()).toBe('3')
-  })
-
-  it('hides badge when pending count is 0', async () => {
-    const w = mount(QuickLinksCard, { global: { plugins: [router] } })
-    await flushPromises()
-    expect(w.find('.tile-badge').exists()).toBe(false)
-  })
-
-  it('hides badge (does not throw) when the count fetch fails', async () => {
-    mockPendingCount.mockRejectedValue(new Error('network error'))
-    const w = mount(QuickLinksCard, { global: { plugins: [router] } })
-    await flushPromises()
-    expect(w.find('.tile-badge').exists()).toBe(false)
+    expect(dots.length).toBe(3)
   })
 })
