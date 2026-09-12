@@ -8140,6 +8140,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/slip-templates/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Slip Template
+         * @description 產出 .xls 附件；同時把指派的銷帳碼與本次金額落檔。
+         */
+        post: operations["export_slip_template_api_fees_slip_templates_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/slip-templates/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Slip Template
+         * @description 試算範本內容：年段小計、待補清單、版面樣列。不寫入任何資料。
+         */
+        post: operations["preview_slip_template_api_fees_slip_templates_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/summary": {
         parameters: {
             query?: never;
@@ -25752,6 +25792,8 @@ export interface components {
         ClassroomDetailStudentOut: {
             /** Allergy */
             allergy?: string | null;
+            /** Collection Suffix */
+            collection_suffix?: string | null;
             /** Gender */
             gender?: string | null;
             /** Id */
@@ -44461,6 +44503,8 @@ export interface components {
             birthday?: string | null;
             /** Classroom Id */
             classroom_id?: number | null;
+            /** Collection Suffix */
+            collection_suffix?: string | null;
             /** Emergency Contact Name */
             emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
@@ -45369,6 +45413,134 @@ export interface components {
             school_year?: number | null;
             /** Semester */
             semester?: number | null;
+            /** Student Name */
+            student_name: string;
+        };
+        /** SlipTemplateDuplicateSuffixOut */
+        SlipTemplateDuplicateSuffixOut: {
+            /** Collection Suffix */
+            collection_suffix: string;
+            /**
+             * From Assignment
+             * @default false
+             */
+            from_assignment: boolean;
+            /**
+             * Out Of Scope
+             * @default false
+             */
+            out_of_scope: boolean;
+            /** Students */
+            students: string[];
+        };
+        /** SlipTemplateGradeOut */
+        SlipTemplateGradeOut: {
+            /** Amount */
+            amount?: number | null;
+            /** Grade Name */
+            grade_name: string;
+            /** Student Count */
+            student_count: number;
+            /** Subtotal */
+            subtotal: number;
+        };
+        /** SlipTemplateMissingGradeOut */
+        SlipTemplateMissingGradeOut: {
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
+        /** SlipTemplateMissingSuffixOut */
+        SlipTemplateMissingSuffixOut: {
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+            /** Suggested Suffix */
+            suggested_suffix?: string | null;
+        };
+        /** SlipTemplatePreviewOut */
+        SlipTemplatePreviewOut: {
+            /** Account Period */
+            account_period: string;
+            /** Active Total */
+            active_total: number;
+            /** Amount Defaults */
+            amount_defaults: {
+                [key: string]: number;
+            };
+            /** Bill Month */
+            bill_month: number;
+            /** Bill Year */
+            bill_year: number;
+            /** Blocked */
+            blocked: boolean;
+            /** By Grade */
+            by_grade: components["schemas"]["SlipTemplateGradeOut"][];
+            /** Duplicate Suffix */
+            duplicate_suffix: components["schemas"]["SlipTemplateDuplicateSuffixOut"][];
+            /** Excluded Manual */
+            excluded_manual: number;
+            /** Excluded New Students */
+            excluded_new_students: number;
+            /** Kind */
+            kind: string;
+            /** Missing Amounts */
+            missing_amounts: string[];
+            /** Missing Grade */
+            missing_grade: components["schemas"]["SlipTemplateMissingGradeOut"][];
+            /** Missing Suffix */
+            missing_suffix: components["schemas"]["SlipTemplateMissingSuffixOut"][];
+            /** Project Code */
+            project_code: string;
+            /** Rows Total */
+            rows_total: number;
+            /** Sample Rows */
+            sample_rows: components["schemas"]["SlipTemplateSampleRowOut"][];
+            /** Total Amount */
+            total_amount: number;
+        };
+        /** SlipTemplateRequest */
+        SlipTemplateRequest: {
+            /** Amounts */
+            amounts?: {
+                [key: string]: number;
+            };
+            /** Bill Month */
+            bill_month: number;
+            /** Bill Year */
+            bill_year: number;
+            /** Classroom Ids */
+            classroom_ids?: number[] | null;
+            /** Exclude Student Ids */
+            exclude_student_ids?: number[];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "monthly" | "registration";
+            /** Suffix Assignments */
+            suffix_assignments?: {
+                [key: string]: string;
+            };
+        };
+        /** SlipTemplateSampleRowOut */
+        SlipTemplateSampleRowOut: {
+            /** Amount */
+            amount: number;
+            /** Classroom Label */
+            classroom_label: string;
+            /** Collection Suffix */
+            collection_suffix: string;
+            /** Full Collection Number */
+            full_collection_number: string;
+            /** Grade Label */
+            grade_label: string;
             /** Student Name */
             student_name: string;
         };
@@ -46615,6 +46787,8 @@ export interface components {
             birthday?: string | null;
             /** Classroom Id */
             classroom_id?: number | null;
+            /** Collection Suffix */
+            collection_suffix?: string | null;
             /** Disability Cert Expiry */
             disability_cert_expiry?: string | null;
             /** Disability Cert No */
@@ -62273,6 +62447,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeeRefundListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_slip_template_api_fees_slip_templates_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlipTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_slip_template_api_fees_slip_templates_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlipTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlipTemplatePreviewOut"];
                 };
             };
             /** @description Validation Error */

@@ -103,6 +103,7 @@ interface StudentForm {
   birthday: string
   classroom_id: number | null
   enrollment_date: string
+  collection_suffix: string
   parent_name: string
   parent_phone: string
   address: string
@@ -135,6 +136,7 @@ const emptyForm = (): StudentForm => ({
   birthday: '',
   classroom_id: null,
   enrollment_date: '',
+  collection_suffix: '',
   parent_name: '',
   parent_phone: '',
   address: '',
@@ -293,6 +295,16 @@ const submit = async () => {
       </el-form-item>
       <el-form-item class="fg-6" label="入學日">
         <el-date-picker v-model="form.enrollment_date" type="date" placeholder="選擇日期" value-format="YYYY-MM-DD" style="width: 100%" />
+      </el-form-item>
+      <!-- 只在編輯模式顯示：後端 StudentCreate 沒有這個欄位，新增時填了會被
+           Pydantic 靜默丟棄，畫面卻照樣跳「新增成功」。碼在第一次發單前由產
+           範本對話框指派，或事後在這裡補（SPEC-025 §4.3）。 -->
+      <el-form-item v-if="isEdit" class="fg-6" label="銷帳碼">
+        <el-input
+          v-model="form.collection_suffix" maxlength="4" inputmode="numeric"
+          placeholder="4 位數字，例：1101" data-test="student-collection-suffix"
+        />
+        <div class="form-hint">永豐繳款單的末四碼；升班會重編，同一學年不可與其他在籍學生重複。</div>
       </el-form-item>
 
       </div>

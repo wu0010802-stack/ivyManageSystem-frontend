@@ -154,6 +154,15 @@ vi.mock('../FeeBillSlipDrawer.vue', () => ({
     template: '<div data-testid="billslip-drawer" v-if="modelValue" />',
   },
 }))
+vi.mock('../FeeSlipTemplateDialog.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeSlipTemplateDialog',
+    props: ['modelValue', 'kind', 'defaultYear', 'defaultMonth'],
+    emits: ['update:modelValue'],
+    template: '<div />',
+  },
+}))
 
 const GLOBAL_STUBS = {
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },

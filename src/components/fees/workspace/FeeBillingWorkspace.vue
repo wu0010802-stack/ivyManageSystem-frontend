@@ -84,6 +84,26 @@
           <el-dropdown
             v-if="canWrite"
             trigger="click"
+            data-test="billing-slip-template-menu"
+            @command="onSlipTemplateCommand"
+          >
+            <el-button>
+              產生範本<el-icon class="el-icon--right" aria-hidden="true"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="monthly" data-test="slip-template-monthly">
+                  月費單範本：依年段月費，本月在園學生
+                </el-dropdown-item>
+                <el-dropdown-item command="registration" data-test="slip-template-registration">
+                  註冊費單範本：依年段註冊費，不含本學年新生
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-dropdown
+            v-if="canWrite"
+            trigger="click"
             data-test="billing-import-menu"
             @command="onImportCommand"
           >
@@ -206,6 +226,12 @@
       @update:model-value="(v: boolean) => emit('update:imports-open', v)"
       @generated="onGenerated"
     />
+    <FeeSlipTemplateDialog
+      v-model="slipTemplateOpen"
+      :kind="slipTemplateKind"
+      :default-year="slipTemplateYear"
+      :default-month="slipTemplateMonth"
+    />
     <ManualFeeRecordDialog v-if="canCreateManualFee" v-model="manualFeeOpen" @created="onManualFeeCreated" />
   </section>
 </template>
@@ -247,6 +273,8 @@ import ManualFeeRecordDialog from '@/components/fees/ManualFeeRecordDialog.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
 import FeeMatchingPanel from './FeeMatchingPanel.vue'
 import FeeBillSlipDrawer from './FeeBillSlipDrawer.vue'
+import FeeSlipTemplateDialog from './FeeSlipTemplateDialog.vue'
+import type { SlipTemplateKind } from '@/api/fees'
 import FeeSegToggle from './FeeSegToggle.vue'
 import FeeWorkspaceToolbar from './FeeWorkspaceToolbar.vue'
 import {
@@ -411,6 +439,18 @@ async function loadPeriods() {
   }
 }
 
+/** 產生範本：依名冊產出上傳永豐的 .xls（不建費用單，見 SPEC-025 §1） */
+const slipTemplateOpen = ref(false)
+const slipTemplateKind = ref<SlipTemplateKind>('monthly')
+const now = new Date()
+const slipTemplateYear = ref(now.getFullYear())
+const slipTemplateMonth = ref(now.getMonth() + 1)
+
+function onSlipTemplateCommand(command: string) {
+  slipTemplateKind.value = command === 'registration' ? 'registration' : 'monthly'
+  slipTemplateOpen.value = true
+}
+
 /** 匯入下拉：前兩項切到入帳媒合對應來源並展開匯入面板，第三項開發單批次抽屜 */
 async function onImportCommand(command: string) {
   if (command === 'billslip') {
@@ -505,6 +545,8 @@ onMounted(() => {
   loadPeriods()
   classroomStore.fetchClassrooms()
 })
+
+defineExpose({ onSlipTemplateCommand })
 </script>
 
 <style scoped>

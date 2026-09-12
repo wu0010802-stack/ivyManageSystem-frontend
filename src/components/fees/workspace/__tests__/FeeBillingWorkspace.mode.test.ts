@@ -113,6 +113,15 @@ vi.mock('../FeeBillSlipDrawer.vue', () => ({
     template: '<div />',
   },
 }))
+vi.mock('../FeeSlipTemplateDialog.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeSlipTemplateDialog',
+    props: ['modelValue', 'kind', 'defaultYear', 'defaultMonth'],
+    emits: ['update:modelValue'],
+    template: '<div />',
+  },
+}))
 
 const GLOBAL_STUBS = {
   ManualFeeRecordDialog: { name: 'ManualFeeRecordDialog', props: ['modelValue'], emits: ['created', 'update:modelValue'], template: '<div />' },

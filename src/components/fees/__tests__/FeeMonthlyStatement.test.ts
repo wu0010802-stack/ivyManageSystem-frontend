@@ -844,6 +844,7 @@ it('真實月表跨入帳媒合返回保留月份、班級、搜尋與狀態，�
     props: { view: 'receivable' },
     global: { stubs: { ...GLOBAL_STUBS,
       FeeMatchingPanel: true, FeeBillSlipDrawer: true, ManualFeeRecordDialog: true,
+      FeeSlipTemplateDialog: true,
       'el-dropdown': { template: '<div><slot /></div>' },
       'el-icon': { template: '<i />' },
     } },
