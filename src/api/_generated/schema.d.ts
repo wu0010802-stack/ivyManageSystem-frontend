@@ -25792,6 +25792,8 @@ export interface components {
         ClassroomDetailStudentOut: {
             /** Allergy */
             allergy?: string | null;
+            /** Collection Suffix */
+            collection_suffix?: string | null;
             /** Gender */
             gender?: string | null;
             /** Id */
@@ -45336,6 +45338,16 @@ export interface components {
         SlipTemplateDuplicateSuffixOut: {
             /** Collection Suffix */
             collection_suffix: string;
+            /**
+             * From Assignment
+             * @default false
+             */
+            from_assignment: boolean;
+            /**
+             * Out Of Scope
+             * @default false
+             */
+            out_of_scope: boolean;
             /** Students */
             students: string[];
         };

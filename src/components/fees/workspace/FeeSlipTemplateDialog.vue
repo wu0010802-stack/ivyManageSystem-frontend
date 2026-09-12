@@ -88,6 +88,15 @@
         v-if="kind === 'registration'" type="info" :closable="false" show-icon class="slip-alert"
         title="註冊費單不含本學年新生——新生註冊費於報名時另收。"
       />
+      <!-- SPEC-025 §7.3／§10 第三條風險：預繳折抵 v1 不做，會計必須知道面額偏高 -->
+      <el-alert
+        v-if="kind === 'registration'" type="warning" :closable="false" show-icon
+        class="slip-alert" data-test="slip-prepaid-warning"
+        title="本版不填預繳折抵（費用1 負值 −5,000）"
+      >
+        舊生的註冊費單面額會比實際應繳<b>多 5,000 元</b>。出檔後需人工處理這筆折抵，
+        否則家長會多繳或來電詢問。
+      </el-alert>
 
       <div v-if="data && data.missing_suffix.length" class="slip-block" data-test="slip-missing-suffix">
         <h4>{{ data.missing_suffix.length }} 位學生沒有銷帳碼</h4>
@@ -102,7 +111,7 @@
           <el-table-column label="指定銷帳碼" width="220">
             <template #default="{ row }">
               <el-input
-                :model-value="suffixAssignments[String(row.student_id)] ?? ''"
+                :model-value="suffixInputs[String(row.student_id)] ?? ''"
                 maxlength="4" inputmode="numeric" class="slip-suffix-input"
                 :aria-label="`${row.student_name} 的銷帳碼`"
                 @update:model-value="(v: string) => setAssignment(row.student_id, v)"
@@ -130,22 +139,43 @@
 
       <div v-if="data && data.duplicate_suffix.length" class="slip-block" data-test="slip-duplicate-suffix">
         <h4>{{ data.duplicate_suffix.length }} 組銷帳碼重複</h4>
-        <p class="slip-hint">兩位在園學生共用同一個號碼，銀行會把兩筆錢併進同一個虛擬帳號。請到學生資料頁改號。</p>
+        <p class="slip-hint">
+          兩位在籍學生共用同一個號碼，銀行會把兩筆錢併進同一個虛擬帳號，出檔前必須改掉其中一個。
+        </p>
         <ul>
           <li v-for="dup in data.duplicate_suffix" :key="dup.collection_suffix">
             {{ dup.collection_suffix }}：{{ dup.students.join('、') }}
+            <span class="slip-hint" data-test="slip-duplicate-hint">— {{ duplicateHint(dup) }}</span>
           </li>
         </ul>
       </div>
 
       <div v-if="data && data.missing_grade.length" class="slip-block" data-test="slip-missing-grade">
-        <h4>{{ data.missing_grade.length }} 位學生的班級未設年段</h4>
-        <p class="slip-hint">年段決定金額與繳款單上的「識別代號」，請先到班級管理補。</p>
-        <ul>
-          <li v-for="item in data.missing_grade" :key="item.student_id">
-            {{ item.student_name }}（{{ item.classroom_name || '未編班' }}）
-          </li>
-        </ul>
+        <h4>{{ data.missing_grade.length }} 位學生無法決定年段</h4>
+        <p class="slip-hint">
+          年段決定金額與繳款單上的「識別代號」。這個月先不出他的單也可以，按「排除」即可。
+        </p>
+        <el-table :data="data.missing_grade" size="small" border>
+          <el-table-column label="學生" width="120">
+            <template #default="{ row }">{{ row.student_name }}</template>
+          </el-table-column>
+          <el-table-column label="班級" width="120">
+            <template #default="{ row }">{{ row.classroom_name || '未編班' }}</template>
+          </el-table-column>
+          <el-table-column label="待補">
+            <template #default="{ row }">{{ missingGradeHint(row) }}</template>
+          </el-table-column>
+          <el-table-column label="" width="80">
+            <template #default="{ row }">
+              <el-button
+                link type="info" data-test="slip-exclude-missing-grade"
+                @click="excludeStudent(row.student_id)"
+              >
+                排除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </section>
 
@@ -204,6 +234,7 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { exportSlipTemplate, previewSlipTemplate, type SlipTemplateKind } from '@/api/fees'
+import type { ApiBody, ApiResponse } from '@/api/_generated/typed'
 import { saveBlobResponse } from '@/utils/download'
 import { friendlyError } from '@/utils/errorMessages'
 import { useAllClassroomStore } from '@/stores/classroomAll'
@@ -216,48 +247,12 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
-interface GradeRow {
-  grade_name: string
-  student_count: number
-  amount: number | null
-  subtotal: number
-}
-interface MissingSuffixRow {
-  student_id: number
-  student_name: string
-  classroom_name: string | null
-  suggested_suffix: string | null
-}
-interface DuplicateRow { collection_suffix: string; students: string[] }
-interface MissingGradeRow { student_id: number; student_name: string; classroom_name: string | null }
-interface SampleRow {
-  student_name: string
-  classroom_label: string
-  grade_label: string
-  collection_suffix: string
-  full_collection_number: string
-  amount: number
-}
-interface PreviewData {
-  kind: string
-  bill_year: number
-  bill_month: number
-  project_code: string
-  account_period: string
-  rows_total: number
-  total_amount: number
-  active_total: number
-  excluded_new_students: number
-  excluded_manual: number
-  by_grade: GradeRow[]
-  missing_suffix: MissingSuffixRow[]
-  duplicate_suffix: DuplicateRow[]
-  missing_grade: MissingGradeRow[]
-  missing_amounts: string[]
-  sample_rows: SampleRow[]
-  amount_defaults: Record<string, number>
-  blocked: boolean
-}
+// 契約一律取自 OpenAPI codegen。手抄一份本地 interface＋雙重轉型等於關掉防漂移：
+// 後端改欄名或 nullability 時 typecheck 不會紅，畫面到 prod 才壞。
+type PreviewData = ApiResponse<'/fees/slip-templates/preview', 'post'>
+type PreviewPayload = ApiBody<'/fees/slip-templates/preview', 'post'>
+type DuplicateRow = PreviewData['duplicate_suffix'][number]
+type MissingGradeRow = PreviewData['missing_grade'][number]
 
 const classroomStore = useAllClassroomStore()
 const step = ref(0)
@@ -265,8 +260,22 @@ const billYear = ref(props.defaultYear)
 const billMonth = ref(props.defaultMonth)
 const amounts = ref<Record<string, number>>({})
 const classroomIds = ref<number[]>([])
-const suffixAssignments = ref<Record<string, string>>({})
+/** 輸入框顯示用：可能是打到一半的 1–3 碼，只做「非數字剔除＋截 4 碼」的正規化 */
+const suffixInputs = ref<Record<string, string>>({})
 const excludeStudentIds = ref<number[]>([])
+/**
+ * 真正送出的指派：只收湊滿 4 碼的。
+ *
+ * 打到一半的碼若也進 payload，下一次因其他欄位變更觸發的試算會被後端以
+ * 「指定的銷帳碼須為 4 位數字」擋成 422，使用者只會看到「試算範本失敗」。
+ */
+const suffixAssignments = computed<Record<string, string>>(() => {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(suffixInputs.value)) {
+    if (/^\d{4}$/.test(value)) result[key] = value
+  }
+  return result
+})
 const data = ref<PreviewData | null>(null)
 const loading = ref(false)
 const exporting = ref(false)
@@ -289,7 +298,7 @@ const canAdvance = computed(() => {
   return !data.value.blocked
 })
 
-function payload() {
+function payload(): PreviewPayload {
   return {
     kind: props.kind,
     bill_year: billYear.value,
@@ -304,7 +313,7 @@ function payload() {
 async function fetchPreview() {
   loading.value = true
   try {
-    const result = (await previewSlipTemplate(payload() as never)) as unknown as PreviewData
+    const result = await previewSlipTemplate(payload())
     data.value = result
     // 第一次載入：把上次用過的金額帶進來，使用者只需確認
     for (const row of result.by_grade) {
@@ -332,21 +341,35 @@ function setAmount(gradeName: string, value: number | undefined) {
 }
 
 function setAssignment(studentId: number, value: string) {
-  const digits = String(value ?? '').replace(/\D/g, '').slice(0, 4)
   const key = String(studentId)
-  if (digits.length === 4) {
-    suffixAssignments.value[key] = digits
-    schedulePreview()
-  } else if (digits.length === 0) {
-    delete suffixAssignments.value[key]
-    schedulePreview()
-  } else {
-    suffixAssignments.value[key] = digits
+  const digits = String(value ?? '').replace(/\D/g, '').slice(0, 4)
+  const before = suffixInputs.value[key] ?? ''
+  // 輸入框顯示的一律是正規化後的值，不會殘留被剔除的字元
+  suffixInputs.value[key] = digits
+  // 只有「送出的內容真的變了」才重打試算，避免每敲一鍵就打一次
+  const wasComplete = /^\d{4}$/.test(before)
+  const isComplete = digits.length === 4
+  if (wasComplete !== isComplete || (isComplete && digits !== before)) schedulePreview()
+}
+
+function duplicateHint(dup: DuplicateRow): string {
+  if (dup.from_assignment) {
+    return '其中一個是本次剛指定、還沒存進學生資料的號碼，請在上面「沒有銷帳碼」的表格改掉'
   }
+  if (dup.out_of_scope) {
+    return '其中一位不在本次選取的班級範圍內，請到學生資料頁改號'
+  }
+  return '請到學生資料頁改掉其中一位的號碼'
+}
+
+function missingGradeHint(row: MissingGradeRow): string {
+  return row.classroom_name
+    ? `「${row.classroom_name}」尚未設定年段，請到班級管理補`
+    : '尚未編班，請先為該生編班'
 }
 
 function excludeStudent(studentId: number) {
-  delete suffixAssignments.value[String(studentId)]
+  delete suffixInputs.value[String(studentId)]
   if (!excludeStudentIds.value.includes(studentId)) excludeStudentIds.value.push(studentId)
   schedulePreview()
 }
@@ -354,7 +377,7 @@ function excludeStudent(studentId: number) {
 async function download() {
   exporting.value = true
   try {
-    const response = await exportSlipTemplate(payload() as never)
+    const response = await exportSlipTemplate(payload())
     saveBlobResponse(response, 'sinopac_slip_template.xls')
     ElMessage.success('範本已下載，請上傳永豐代收平台')
     close(false)
@@ -375,7 +398,7 @@ function reset() {
   billMonth.value = props.defaultMonth
   amounts.value = {}
   classroomIds.value = []
-  suffixAssignments.value = {}
+  suffixInputs.value = {}
   excludeStudentIds.value = []
   data.value = null
 }

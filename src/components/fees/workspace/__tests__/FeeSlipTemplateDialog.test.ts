@@ -101,7 +101,15 @@ const STUBS = {
   'el-form': { template: '<form v-bind="$attrs"><slot /></form>' },
   'el-form-item': { props: ['label'], template: '<div><label>{{ label }}</label><slot /></div>' },
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
-  'el-input': { template: '<input v-bind="$attrs" />' },
+  // 受控輸入：把 model-value 真的畫到 DOM、input 時回拋 update:model-value，
+  // 否則「輸入被正規化後畫面是否同步」這類斷言會假綠（stub 根本沒接線）。
+  'el-input': {
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template:
+      '<input v-bind="$attrs" :value="modelValue" '
+      + '@input="$emit(\'update:modelValue\', $event.target.value)" />',
+  },
   'el-input-number': { template: '<input type="number" v-bind="$attrs" />' },
   'el-select': { template: '<select v-bind="$attrs"><slot /></select>' },
   'el-option': { props: ['label', 'value'], template: '<option :value="value">{{ label }}</option>' },
@@ -190,7 +198,14 @@ describe('FeeSlipTemplateDialog', () => {
   it('重複碼會把雙方都列出來', async () => {
     apiMocks.previewSlipTemplate.mockResolvedValue(
       preview({
-        duplicate_suffix: [{ collection_suffix: '1101', students: ['甲生', '乙生'] }],
+        duplicate_suffix: [
+          {
+            collection_suffix: '1101',
+            students: ['甲生', '乙生'],
+            out_of_scope: false,
+            from_assignment: false,
+          },
+        ],
         blocked: true,
       }),
     )
@@ -233,8 +248,48 @@ describe('FeeSlipTemplateDialog', () => {
   })
 
   it('指派銷帳碼會帶進試算 payload', async () => {
-    apiMocks.previewSlipTemplate
-      .mockResolvedValueOnce(
+    // ⚠ payload 的 suffix_assignments 現在是每次重算的新物件（不再是被就地
+    // 改寫的同一個 ref），所以必須真的把 debounce timer 推進、等第二次試算
+    // 發出，才驗得到指派有帶進去。
+    vi.useFakeTimers()
+    try {
+      apiMocks.previewSlipTemplate
+        .mockResolvedValueOnce(
+          preview({
+            missing_suffix: [
+              {
+                student_id: 7,
+                student_name: '沒碼',
+                classroom_name: '牡丹班',
+                suggested_suffix: '4115',
+              },
+            ],
+            blocked: true,
+          }),
+        )
+        .mockResolvedValue(preview())
+      const wrapper = await settle(mountDialog())
+      await wrapper.find('[data-test="slip-next"]').trigger('click')
+      await settle(wrapper)
+      await wrapper.find('[data-test="slip-apply-suggested"]').trigger('click')
+      await vi.advanceTimersByTimeAsync(300)
+      await settle(wrapper)
+      expect(apiMocks.previewSlipTemplate).toHaveBeenCalledTimes(2)
+      const lastPreview = apiMocks.previewSlipTemplate.mock.calls.at(-1)?.[0]
+      expect(lastPreview.suffix_assignments).toEqual({ '7': '4115' })
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // ── final-fix 回歸守衛 ──────────────────────────────────────────────────
+
+  it('打到一半的銷帳碼不會進 payload，也不會觸發試算', async () => {
+    // 後端對非 4 碼的指派直接 422，整個試算會變成「試算範本失敗」。
+    vi.useFakeTimers()
+    try {
+      apiMocks.previewSlipTemplate.mockResolvedValue(
         preview({
           missing_suffix: [
             {
@@ -247,14 +302,136 @@ describe('FeeSlipTemplateDialog', () => {
           blocked: true,
         }),
       )
-      .mockResolvedValue(preview())
+      const wrapper = await settle(mountDialog())
+      await wrapper.find('[data-test="slip-next"]').trigger('click')
+      await settle(wrapper)
+      // 開啟時 reset() 重指派 classroomIds 會排一次多餘的試算，先讓它跑完
+      await vi.advanceTimersByTimeAsync(300)
+      await settle(wrapper)
+      const callsBefore = apiMocks.previewSlipTemplate.mock.calls.length
+
+      const input = wrapper.find('[data-test="slip-missing-suffix"] input')
+      await input.setValue('411a')
+      await vi.advanceTimersByTimeAsync(300)
+      await settle(wrapper)
+
+      // 畫面顯示的是正規化後的值，不殘留被剔除的字元
+      expect((input.element as HTMLInputElement).value).toBe('411')
+      // 1-3 碼不進 payload、也不重打試算
+      expect(apiMocks.previewSlipTemplate.mock.calls.length).toBe(callsBefore)
+
+      // 湊滿 4 碼才送出
+      await input.setValue('4115')
+      await vi.advanceTimersByTimeAsync(300)
+      await settle(wrapper)
+      const lastPreview = apiMocks.previewSlipTemplate.mock.calls.at(-1)?.[0]
+      expect(lastPreview.suffix_assignments).toEqual({ '7': '4115' })
+
+      // 湊滿後又退回 3 碼：要立刻把指派撤掉並重打試算，否則殘留的 3 碼會讓
+      // 下一次試算被後端以「指定的銷帳碼須為 4 位數字」擋成 422
+      await input.setValue('411')
+      await vi.advanceTimersByTimeAsync(300)
+      await settle(wrapper)
+      const afterBackspace = apiMocks.previewSlipTemplate.mock.calls.at(-1)?.[0]
+      expect(afterBackspace.suffix_assignments).toEqual({})
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('重複碼提示會區分「本次指派」與「範圍外」', async () => {
+    apiMocks.previewSlipTemplate.mockResolvedValue(
+      preview({
+        duplicate_suffix: [
+          {
+            collection_suffix: '1101',
+            students: ['甲生', '乙生'],
+            out_of_scope: true,
+            from_assignment: true,
+          },
+          {
+            collection_suffix: '1202',
+            students: ['丙生', '丁生'],
+            out_of_scope: true,
+            from_assignment: false,
+          },
+        ],
+        blocked: true,
+      }),
+    )
     const wrapper = await settle(mountDialog())
     await wrapper.find('[data-test="slip-next"]').trigger('click')
     await settle(wrapper)
-    await wrapper.find('[data-test="slip-apply-suggested"]').trigger('click')
+    const hints = wrapper.findAll('[data-test="slip-duplicate-hint"]').map((n) => n.text())
+    // 本次剛指定的碼還沒存進資料庫，叫使用者去學生資料頁會查無此碼
+    expect(hints[0]).toContain('本次剛指定')
+    expect(hints[1]).toContain('不在本次選取的班級範圍內')
+    wrapper.unmount()
+  })
+
+  it('缺年段的學生可以就地排除，不用被一位學生擋住整月出檔', async () => {
+    vi.useFakeTimers()
+    try {
+      apiMocks.previewSlipTemplate.mockResolvedValue(
+        preview({
+          missing_grade: [
+            { student_id: 9, student_name: '未編班生', classroom_name: null },
+          ],
+          blocked: true,
+        }),
+      )
+      const wrapper = await settle(mountDialog())
+      await wrapper.find('[data-test="slip-next"]').trigger('click')
+      await settle(wrapper)
+      // 沒有班級就沒有年段可補，提示不能叫使用者去班級管理
+      expect(wrapper.text()).toContain('尚未編班')
+
+      await wrapper.find('[data-test="slip-exclude-missing-grade"]').trigger('click')
+      await vi.advanceTimersByTimeAsync(300)
+      await settle(wrapper)
+      const lastPreview = apiMocks.previewSlipTemplate.mock.calls.at(-1)?.[0]
+      expect(lastPreview.exclude_student_ids).toEqual([9])
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('缺年段但有班級時提示去班級管理補年段', async () => {
+    apiMocks.previewSlipTemplate.mockResolvedValue(
+      preview({
+        missing_grade: [
+          { student_id: 9, student_name: '沒年段', classroom_name: '未知班' },
+        ],
+        blocked: true,
+      }),
+    )
+    const wrapper = await settle(mountDialog())
+    await wrapper.find('[data-test="slip-next"]').trigger('click')
     await settle(wrapper)
-    const lastPreview = apiMocks.previewSlipTemplate.mock.calls.at(-1)?.[0]
-    expect(lastPreview.suffix_assignments).toEqual({ '7': '4115' })
+    expect(wrapper.text()).toContain('請到班級管理補')
+    wrapper.unmount()
+  })
+
+  it('註冊費單提醒未填預繳折抵', async () => {
+    const wrapper = mount(FeeSlipTemplateDialog, {
+      props: { modelValue: true, kind: 'registration', defaultYear: 2026, defaultMonth: 9 },
+      global: { stubs: { ...STUBS, teleport: true } },
+    })
+    await settle(wrapper as ReturnType<typeof mountDialog>)
+    await wrapper.find('[data-test="slip-next"]').trigger('click')
+    await settle(wrapper as ReturnType<typeof mountDialog>)
+    expect(wrapper.find('[data-test="slip-prepaid-warning"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('5,000')
+    wrapper.unmount()
+  })
+
+  it('月費單不出現預繳折抵提醒', async () => {
+    const wrapper = await settle(mountDialog())
+    await wrapper.find('[data-test="slip-next"]').trigger('click')
+    await settle(wrapper)
+    expect(wrapper.find('[data-test="slip-prepaid-warning"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })
