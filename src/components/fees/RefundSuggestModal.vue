@@ -233,14 +233,17 @@ onBeforeUnmount(invalidateSuggestion)
 
 async function onSuggest() {
   const recordId = props.record?.id
-  if (!recordId || !format(form.withdrawal_date) || isBlocked.value || submitting.value) return
+  const withdrawalDate = format(form.withdrawal_date)
+  if (!recordId || !withdrawalDate || isBlocked.value || submitting.value) return
   invalidateSuggestion()
   const sequence = suggestionSequence
   suggesting.value = true
   try {
-    const payload: Record<string, unknown> = { withdrawal_date: format(form.withdrawal_date) }
-    if (form.T_total_override != null) payload.T_total_override = form.T_total_override
-    if (form.T_served_override != null) payload.T_served_override = form.T_served_override
+    const payload = {
+      withdrawal_date: withdrawalDate,
+      T_total_override: form.T_total_override ?? undefined,
+      T_served_override: form.T_served_override ?? undefined,
+    }
     const result = await suggestRefund(recordId, payload) as RefundSuggestion
     if (sequence !== suggestionSequence) return
     suggestion.value = result

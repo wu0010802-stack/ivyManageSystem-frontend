@@ -30057,6 +30057,11 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** FeeAdjustmentDeleteOut */
+        FeeAdjustmentDeleteOut: {
+            /** Deleted */
+            deleted: number;
+        };
         /**
          * FeeAdjustmentListOut
          * @description GET /fees/adjustments 回傳。
@@ -30199,6 +30204,24 @@ export interface components {
             /** Skipped Zero */
             skipped_zero: number;
         };
+        /** FeePayOut */
+        FeePayOut: {
+            /** Amount Paid */
+            amount_paid: number;
+            /** Delta */
+            delta?: number | null;
+            /**
+             * Idempotent Replay
+             * @default false
+             */
+            idempotent_replay: boolean;
+            /** Ok */
+            ok: boolean;
+            /** Previous Amount Paid */
+            previous_amount_paid: number;
+        };
+        /** FeePeriodsOut */
+        FeePeriodsOut: string[];
         /** FeeReceiptListOut */
         FeeReceiptListOut: {
             /** Items */
@@ -30378,6 +30401,22 @@ export interface components {
              */
             unreceipted: number;
         };
+        /** FeeRefundCreateOut */
+        FeeRefundCreateOut: {
+            /**
+             * Idempotent Replay
+             * @default false
+             */
+            idempotent_replay: boolean;
+            /** New Amount Paid */
+            new_amount_paid?: number | null;
+            /** Ok */
+            ok: boolean;
+            /** Refund Amount */
+            refund_amount: number;
+            /** Status */
+            status?: string | null;
+        };
         /**
          * FeeRefundEntryOut
          * @description 單筆退費明細（對應 StudentFeeRefund）。
@@ -30395,6 +30434,17 @@ export interface components {
             refunded_at?: string | null;
             /** Refunded By */
             refunded_by?: string | null;
+        };
+        /** FeeRefundHistoryOut */
+        FeeRefundHistoryOut: {
+            /** Record Id */
+            record_id: number;
+            /** Refunds */
+            refunds: components["schemas"]["FeeRefundEntryOut"][];
+            /** Student Name */
+            student_name?: string | null;
+            /** Total Refunded */
+            total_refunded: number;
         };
         /**
          * FeeRefundListOut
@@ -30441,6 +30491,38 @@ export interface components {
             student_name?: string | null;
             /** Total Refunded */
             total_refunded: number;
+        };
+        /** FeeRefundSuggestOut */
+        FeeRefundSuggestOut: {
+            /** Calc Method */
+            calc_method: string;
+            /** Calc Payload */
+            calc_payload: {
+                [key: string]: unknown;
+            };
+            /** Suggested Amount */
+            suggested_amount: number;
+            /** Warnings */
+            warnings: string[];
+        };
+        /** FeeSummaryOut */
+        FeeSummaryOut: {
+            /** Paid Count */
+            paid_count: number;
+            /** Partial Count */
+            partial_count: number;
+            /** Total Adjustment */
+            total_adjustment: number;
+            /** Total Count */
+            total_count: number;
+            /** Total Due */
+            total_due: number;
+            /** Total Paid */
+            total_paid: number;
+            /** Total Unpaid */
+            total_unpaid: number;
+            /** Unpaid Count */
+            unpaid_count: number;
         };
         /** FinalizeMonthRequest */
         FinalizeMonthRequest: {
@@ -59621,6 +59703,7 @@ export interface operations {
                 classroom_name?: string | null;
                 period?: string | null;
                 status?: string | null;
+                student_name?: string | null;
             };
             header?: never;
             path?: never;
@@ -60138,7 +60221,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeAdjustmentOut"];
                 };
             };
             /** @description Validation Error */
@@ -60173,7 +60256,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeAdjustmentOut"];
                 };
             };
             /** @description Validation Error */
@@ -60204,7 +60287,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeAdjustmentDeleteOut"];
                 };
             };
             /** @description Validation Error */
@@ -61630,7 +61713,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeePeriodsOut"];
                 };
             };
         };
@@ -62163,7 +62246,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeePayOut"];
                 };
             };
             /** @description Validation Error */
@@ -62198,7 +62281,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeRefundCreateOut"];
                 };
             };
             /** @description Validation Error */
@@ -62233,7 +62316,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeRefundSuggestOut"];
                 };
             };
             /** @description Validation Error */
@@ -62264,7 +62347,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeRefundHistoryOut"];
                 };
             };
             /** @description Validation Error */
@@ -62463,7 +62546,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeSummaryOut"];
                 };
             };
             /** @description Validation Error */

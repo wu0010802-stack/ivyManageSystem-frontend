@@ -168,12 +168,13 @@ describe('匯出 Excel', () => {
     expect(downloadFile).toHaveBeenCalledWith('/exports/fees', '學費繳費記錄.xlsx', undefined)
   })
 
-  it('依目前 學期/班級/狀態 篩選帶對應 query 參數', async () => {
+  it('依目前學期、班級、狀態與學生姓名篩選帶對應 query 參數', async () => {
     const w = mountTab()
     const vm = vmOf(w)
     vm.recordFilter.period = '115-1'
     vm.recordFilter.classroom_name = '向日葵'
     vm.recordFilter.status = 'unpaid'
+    vm.recordFilter.student_name = '王小明'
     await vm.exportRecords()
     await flushPromises()
 
@@ -181,6 +182,7 @@ describe('匯出 Excel', () => {
       period: '115-1',
       classroom_name: '向日葵',
       status: 'unpaid',
+      student_name: '王小明',
     })
   })
 })

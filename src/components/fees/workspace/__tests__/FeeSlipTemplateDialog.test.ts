@@ -138,6 +138,19 @@ describe('FeeSlipTemplateDialog', () => {
     apiMocks.exportSlipTemplate.mockResolvedValue({ data: new Blob(), headers: {} })
   })
 
+  it('卸載後不再執行已排程的試算', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = await settle(mountDialog())
+      const callsBeforeUnmount = apiMocks.previewSlipTemplate.mock.calls.length
+      wrapper.unmount()
+      await vi.advanceTimersByTimeAsync(300)
+      expect(apiMocks.previewSlipTemplate).toHaveBeenCalledTimes(callsBeforeUnmount)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('打開就試算，並帶入預設帳期', async () => {
     const wrapper = await settle(mountDialog())
     expect(apiMocks.previewSlipTemplate).toHaveBeenCalled()

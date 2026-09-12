@@ -231,7 +231,7 @@
  * 三步：帳期與金額 → 對象 → 預覽下載。每次輸入變更都重新試算，
  * 「能不能往下走」完全由後端回的阻擋清單決定，前端不自己判規則。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { exportSlipTemplate, previewSlipTemplate, type SlipTemplateKind } from '@/api/fees'
 import type { ApiBody, ApiResponse } from '@/api/_generated/typed'
@@ -280,6 +280,11 @@ const data = ref<PreviewData | null>(null)
 const loading = ref(false)
 const exporting = ref(false)
 let timer: ReturnType<typeof setTimeout> | null = null
+
+onBeforeUnmount(() => {
+  if (timer !== null) clearTimeout(timer)
+  timer = null
+})
 
 const dialogTitle = computed(() =>
   props.kind === 'registration' ? '產生範本 — 註冊費單' : '產生範本 — 月費單',

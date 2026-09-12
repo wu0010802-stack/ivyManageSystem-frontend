@@ -738,6 +738,7 @@ async function exportRecords() {
     if (recordFilter.value.period) params.period = recordFilter.value.period
     if (recordFilter.value.classroom_name) params.classroom_name = recordFilter.value.classroom_name
     if (recordFilter.value.status) params.status = recordFilter.value.status
+    if (recordFilter.value.student_name) params.student_name = recordFilter.value.student_name
     await downloadFile('/exports/fees', '學費繳費記錄.xlsx', Object.keys(params).length ? params : undefined)
   } finally {
     exporting.value = false

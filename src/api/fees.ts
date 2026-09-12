@@ -7,30 +7,48 @@ export const createManualFeeRecord = (
   payload: ApiBody<'/fees/records', 'post'>,
 ): AxiosResp<'/fees/records', 'post'> => api.post('/fees/records', payload)
 
-export const getFeePeriods = () => api.get('/fees/periods').then((res) => res.data)
+export const getFeePeriods = (): Promise<ApiResponse<'/fees/periods', 'get'>> =>
+  api.get('/fees/periods').then((res) => res.data)
 // params 維持 unknown：FeesTab.vue 以 Record<string, unknown> 建構（含條件式賦值），
 // 改用 ApiQuery 會破壞既有 typecheck；回傳型別化以消除下游 as any（後端已補 response_model）。
 export const getFeeRecords = (
   params: unknown,
 ): Promise<ApiResponse<'/fees/records', 'get'>> =>
   api.get('/fees/records', { params }).then((res) => res.data)
-export const payFeeRecord = (id: number, data: unknown) => api.put(`/fees/records/${id}/pay`, data).then((res) => res.data)
+export const payFeeRecord = (
+  id: number,
+  payload: ApiBody<'/fees/records/{record_id}/pay', 'put'>,
+): Promise<ApiResponse<'/fees/records/{record_id}/pay', 'put'>> =>
+  api.put(`/fees/records/${id}/pay`, payload).then((res) => res.data)
 // 批次登記繳費（語意固定「繳清全額」；部分繳費仍走單筆 payFeeRecord）
 export const batchPayFeeRecords = (
   payload: ApiBody<'/fees/records/batch-pay', 'post'>,
 ): Promise<ApiResponse<'/fees/records/batch-pay', 'post'>> =>
   api.post('/fees/records/batch-pay', payload).then((res) => res.data)
-export const refundFeeRecord = (id: number, data: unknown) => api.post(`/fees/records/${id}/refund`, data).then((res) => res.data)
-export const suggestRefund = (recordId: number, payload: unknown) =>
+export const refundFeeRecord = (
+  id: number,
+  payload: ApiBody<'/fees/records/{record_id}/refund', 'post'>,
+): Promise<ApiResponse<'/fees/records/{record_id}/refund', 'post'>> =>
+  api.post(`/fees/records/${id}/refund`, payload).then((res) => res.data)
+export const suggestRefund = (
+  recordId: number,
+  payload: ApiBody<'/fees/records/{record_id}/refund-suggest', 'post'>,
+): Promise<ApiResponse<'/fees/records/{record_id}/refund-suggest', 'post'>> =>
   api.post(`/fees/records/${recordId}/refund-suggest`, payload).then((res) => res.data)
-export const getFeeRefunds = (id: number) => api.get(`/fees/records/${id}/refunds`).then((res) => res.data)
+export const getFeeRefunds = (
+  id: number,
+): Promise<ApiResponse<'/fees/records/{record_id}/refunds', 'get'>> =>
+  api.get(`/fees/records/${id}/refunds`).then((res) => res.data)
 // 退費列表（伺服器分頁；Phase 2 取代前端掃 100 筆逐筆查 refunds 的 fan-out）
 // params 維持 unknown：FeeRefundsTab 以 Record<string, unknown> 建構（含條件式賦值），對齊本檔慣例。
 export const getRefundedFeeRecords = (
   params: unknown,
 ): Promise<ApiResponse<'/fees/refunds', 'get'>> =>
   api.get('/fees/refunds', { params }).then((res) => res.data)
-export const getFeeSummary = (params: unknown) => api.get('/fees/summary', { params }).then((res) => res.data)
+export const getFeeSummary = (
+  params: ApiQuery<'/fees/summary', 'get'>,
+): Promise<ApiResponse<'/fees/summary', 'get'>> =>
+  api.get('/fees/summary', { params }).then((res) => res.data)
 // 月繳總表（帳單工作區「彙總繳費表」）：per-student 聚合，單月一次撈全、前端快篩
 export const getFeeMonthlyStatement = (
   params: ApiQuery<'/fees/monthly-statement', 'get'>,
@@ -56,13 +74,18 @@ export const getFeeAdjustments = (
   params?: unknown,
 ): Promise<ApiResponse<'/fees/adjustments', 'get'>> =>
   api.get('/fees/adjustments', { params }).then((res) => res.data)
-export const createFeeAdjustment = (payload: ApiBody<'/fees/adjustments', 'post'>) =>
+export const createFeeAdjustment = (
+  payload: ApiBody<'/fees/adjustments', 'post'>,
+): Promise<ApiResponse<'/fees/adjustments', 'post'>> =>
   api.post('/fees/adjustments', payload).then((res) => res.data)
 export const updateFeeAdjustment = (
   id: number,
   payload: ApiBody<'/fees/adjustments/{adjustment_id}', 'put'>,
-) => api.put(`/fees/adjustments/${id}`, payload).then((res) => res.data)
-export const deleteFeeAdjustment = (id: number) =>
+): Promise<ApiResponse<'/fees/adjustments/{adjustment_id}', 'put'>> =>
+  api.put(`/fees/adjustments/${id}`, payload).then((res) => res.data)
+export const deleteFeeAdjustment = (
+  id: number,
+): Promise<ApiResponse<'/fees/adjustments/{adjustment_id}', 'delete'>> =>
   api.delete(`/fees/adjustments/${id}`).then((res) => res.data)
 
 // ============================================================================
