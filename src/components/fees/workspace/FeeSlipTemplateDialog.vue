@@ -66,7 +66,7 @@
     <!-- 步驟 2：對象 -->
     <section v-else-if="step === 1" class="slip-step">
       <div class="slip-kpis">
-        <div class="slip-kpi"><span>在園學生</span><b>{{ data?.active_total ?? 0 }}</b></div>
+        <div class="slip-kpi"><span>本期在冊</span><b>{{ data?.active_total ?? 0 }}</b></div>
         <div class="slip-kpi"><span>將寫入範本</span><b>{{ data?.rows_total ?? 0 }}</b></div>
         <div class="slip-kpi"><span>排除新生</span><b>{{ data?.excluded_new_students ?? 0 }}</b></div>
         <div class="slip-kpi"><span>待補銷帳碼</span><b>{{ data?.missing_suffix.length ?? 0 }}</b></div>
@@ -76,7 +76,7 @@
         <el-form-item label="班級範圍">
           <el-select
             v-model="classroomIds" multiple clearable collapse-tags collapse-tags-tooltip
-            placeholder="全園在園學生" class="slip-classrooms" data-test="slip-classrooms"
+            placeholder="全園在冊學生" class="slip-classrooms" data-test="slip-classrooms"
             aria-label="班級範圍"
           >
             <el-option v-for="c in classroomOptions" :key="c.id" :value="c.id" :label="c.name" />
