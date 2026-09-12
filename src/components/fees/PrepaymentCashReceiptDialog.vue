@@ -94,6 +94,7 @@ const searching = ref(false)
 const submitting = ref(false)
 const pickerVisible = ref(false)
 const receivedDate = ref(todayISO())
+let pendingAttempt: { fingerprint: string; key: string } | null = null
 
 function nextTerm(): { year: number; semester: number } {
   const t = getCurrentAcademicTerm()
@@ -144,14 +145,23 @@ async function submit() {
           target_school_year: targetYear.value,
           target_semester: targetSemester.value,
         }
+  const payload = {
+    amount: 5000,
+    received_date: receivedDate.value,
+    parts: [part],
+  }
+  const fingerprint = JSON.stringify(payload)
+  if (pendingAttempt?.fingerprint !== fingerprint) {
+    pendingAttempt = {
+      fingerprint,
+      key: `ppdlg-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+    }
+  }
+  const key = pendingAttempt.key
   submitting.value = true
   try {
-    await createCashReceipt({
-      amount: 5000,
-      received_date: receivedDate.value,
-      parts: [part],
-      idempotency_key: `ppdlg-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
-    })
+    await createCashReceipt({ ...payload, idempotency_key: key })
+    pendingAttempt = null
     ElMessage.success('已登記預繳現金 NT$5,000（進當日交接批）')
     emit('received')
     emit('update:modelValue', false)

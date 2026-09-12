@@ -30,6 +30,7 @@ vi.mock('@/components/fees/StudentPickerDialog.vue', () => ({
 }))
 
 import PrepaymentCashReceiptDialog from '@/components/fees/PrepaymentCashReceiptDialog.vue'
+import { ElMessage } from 'element-plus'
 
 const STUBS = {
   'el-dialog': {
@@ -56,7 +57,14 @@ const STUBS = {
 }
 
 describe('PrepaymentCashReceiptDialog', () => {
-  beforeEach(() => apiMocks.createCashReceipt.mockClear())
+  beforeEach(() => {
+    apiMocks.createCashReceipt.mockReset()
+    apiMocks.createCashReceipt.mockResolvedValue({
+      receipt_id: 1,
+      allocation_ids: [],
+      idempotent_replay: false,
+    })
+  })
 
   it('挑學生後送出 part=prepayment、amount=5000、目標學期預設下一學期', async () => {
     const w = mount(PrepaymentCashReceiptDialog, { props: { modelValue: true }, global: { stubs: STUBS } })
@@ -105,5 +113,31 @@ describe('PrepaymentCashReceiptDialog', () => {
     const w = mount(PrepaymentCashReceiptDialog, { props: { modelValue: true }, global: { stubs: STUBS } })
     await flushPromises()
     expect(w.find('[data-test="ppd-submit"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('回應中斷後相同收款重試沿用 idempotency key，修改 payload 才換 key', async () => {
+    const timeout = Object.assign(new Error('回應逾時'), { code: 'ECONNABORTED' })
+    apiMocks.createCashReceipt.mockRejectedValue(timeout)
+    const w = mount(PrepaymentCashReceiptDialog, { props: { modelValue: true }, global: { stubs: STUBS } })
+    await w.find('[data-test="ppd-pick-student"]').trigger('click')
+    w.findComponent({ name: 'StudentPickerDialog' }).vm.$emit('pick', {
+      id: 5,
+      name: '王小明',
+      classroom_name: null,
+    })
+    await flushPromises()
+
+    const vm = w.vm as unknown as { submit: () => Promise<void>; targetSemester: number }
+    await vm.submit()
+    expect(ElMessage.error).toHaveBeenCalledWith(expect.stringContaining('伺服器回應逾時'))
+    expect(w.find('[data-test="ppd-submit"]').attributes('disabled')).toBeUndefined()
+    await vm.submit()
+
+    const calls = apiMocks.createCashReceipt.mock.calls
+    expect(calls[0]?.[0].idempotency_key).toBe(calls[1]?.[0].idempotency_key)
+
+    vm.targetSemester = 2
+    await vm.submit()
+    expect(calls[2]?.[0].idempotency_key).not.toBe(calls[1]?.[0].idempotency_key)
   })
 })

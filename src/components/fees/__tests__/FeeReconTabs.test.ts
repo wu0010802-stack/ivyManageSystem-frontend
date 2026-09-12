@@ -184,6 +184,47 @@ describe('CashHandoverTab', () => {
     // draft 批仍可由會計提交
     expect(wrapper.find('[data-test="submit-handover"]').exists()).toBe(true)
   })
+
+  it('回應中斷後相同收款重試沿用 idempotency key，改變勾選內容才換 key', async () => {
+    apiMocks.createCashReceipt.mockRejectedValue(new Error('回應中斷'))
+    const wrapper = await mountTab()
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      selectedRecords: Array<{
+        id: number
+        student_name: string
+        fee_item_name: string
+        period: string
+        amount_due: number
+        amount_paid: number
+      }>
+      submitCash: () => Promise<void>
+    }
+    vm.selectedRecords = [{
+      id: 11,
+      student_name: '王小明',
+      fee_item_name: '學費',
+      period: '115-1',
+      amount_due: 1000,
+      amount_paid: 0,
+    }]
+
+    await vm.submitCash()
+    await vm.submitCash()
+    const calls = apiMocks.createCashReceipt.mock.calls
+    expect(calls[0]?.[0].idempotency_key).toBe(calls[1]?.[0].idempotency_key)
+
+    vm.selectedRecords = [{
+      id: 12,
+      student_name: '陳小華',
+      fee_item_name: '月費',
+      period: '115-1',
+      amount_due: 900,
+      amount_paid: 0,
+    }]
+    await vm.submitCash()
+    expect(calls[2]?.[0].idempotency_key).not.toBe(calls[1]?.[0].idempotency_key)
+  })
 })
 
 describe('PrepaymentDrawer（預繳併入帳款後的額度管理抽屜）', () => {

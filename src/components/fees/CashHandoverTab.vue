@@ -253,6 +253,7 @@ const { embedded } = defineProps<{ embedded?: boolean }>()
 
 const cashVisible = ref(false)
 const cashSubmitting = ref(false)
+let pendingCashAttempt: { fingerprint: string; key: string } | null = null
 const cashSearch = ref('')
 const unpaidRecords = ref<FeeRecordRow[]>([])
 const selectedRecords = ref<FeeRecordRow[]>([])
@@ -343,19 +344,30 @@ async function searchUnpaid() {
 }
 
 async function submitCash() {
-  const parts: CashReceiptBody['parts'] = selectedRecords.value.map((r) => ({
-    part_type: 'fee_record' as const,
-    fee_record_id: r.id,
-    amount: r.amount_due - r.amount_paid,
-  }))
+  const parts: CashReceiptBody['parts'] = selectedRecords.value
+    .map((r) => ({
+      part_type: 'fee_record' as const,
+      fee_record_id: r.id,
+      amount: r.amount_due - r.amount_paid,
+    }))
+    .sort((a, b) => (a.fee_record_id ?? 0) - (b.fee_record_id ?? 0))
+  const payload = {
+    amount: parts.reduce((sum, part) => sum + part.amount, 0),
+    received_date: cashForm.received_date,
+    parts,
+  }
+  const fingerprint = JSON.stringify(payload)
+  if (pendingCashAttempt?.fingerprint !== fingerprint) {
+    pendingCashAttempt = {
+      fingerprint,
+      key: `cashui-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+    }
+  }
+  const key = pendingCashAttempt.key
   cashSubmitting.value = true
   try {
-    await createCashReceipt({
-      amount: cashTotal.value,
-      received_date: cashForm.received_date,
-      parts,
-      idempotency_key: `cashui-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
-    })
+    await createCashReceipt({ ...payload, idempotency_key: key })
+    pendingCashAttempt = null
     ElMessage.success('現金收款已登記並掛入當日交接批')
     cashVisible.value = false
     fetchBatches()
