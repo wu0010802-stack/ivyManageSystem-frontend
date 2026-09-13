@@ -242,6 +242,15 @@
      原本只定義在 assets/public-theme.css，家長端不 import 該檔，所以在此補上同值定義。
      存量的 --pt-on-accent 待 token 遷移批次一併收斂。 */
   --color-primary-contrast: #ffffff;
+
+  /* M3 state layer 的遮罩底色（2026-09-13 稽核裁定：parent:audit 禁止直寫 hex）。
+     M3 的 hover／pressed 是在元件上疊一層固定色、只調 opacity；泛白用亮色、壓暗用
+     暗色，light/dark 兩主題**皆同值**——遮罩是相對於它底下那層顏色作用的，隨主題
+     翻轉會讓深色主題的「按下」變成打亮。
+     刻意不重用 --color-primary-contrast：那是「有色背景上的文字」語意，與遮罩無關，
+     共用會讓日後想調文字白階時連帶改掉所有 state layer。 */
+  --color-state-layer-light: #ffffff;
+  --color-state-layer-dark: #000000;
 }
 
 /* ============================================================

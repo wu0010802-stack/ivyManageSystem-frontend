@@ -87,14 +87,14 @@ function onTabClick(item: NavItem): void {
 
 <style scoped>
 .m3-navigation-bar {
-  --m3-nav-bg: var(--m3-surface-container, #ebefe8);
+  --nav-bg: var(--m3-surface-container, #ebefe8);
   position: relative;
   display: flex;
   width: 100%;
   height: 80px;
   padding-bottom: env(safe-area-inset-bottom, 0);
   /* 平整實色列底；prominent FAB 直接疊在列上（不挖凹槽），所以列本身不需要 overflow 裁切 */
-  background: var(--m3-nav-bg);
+  background: var(--nav-bg);
   color: var(--m3-on-surface-variant, #424941);
 }
 
@@ -207,19 +207,19 @@ function onTabClick(item: NavItem): void {
   justify-content: flex-end;
 }
 .m3-nav-fab {
-  --m3-nav-fab-size: 56px;
+  --nav-fab-size: 56px;
   position: absolute;
   /* 只有頂端 12px（約 1/5 圓）露出列頂，其餘 44px 疊在列面上、圓心落在 icon 列稍上方，
    * 視覺上是「服貼在列上」而不是懸在半空（2026-09-08 從 -32px 收斂，先前露出過半太突兀）。
    * 圓底 44px < 標籤起點 48px，不會壓到標籤。 */
   top: -12px;
   left: 50%;
-  margin-left: calc(var(--m3-nav-fab-size) / -2);
+  margin-left: calc(var(--nav-fab-size) / -2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--m3-nav-fab-size);
-  height: var(--m3-nav-fab-size);
+  width: var(--nav-fab-size);
+  height: var(--nav-fab-size);
   border-radius: 9999px;
   /* 品牌綠漸層：亮綠 → 品牌深綠 → M3 primary，白 icon 對最亮端仍 ≥3:1（非文字 AA） */
   background: linear-gradient(
@@ -228,7 +228,7 @@ function onTabClick(item: NavItem): void {
     var(--brand-primary, #0d9053) 55%,
     var(--m3-primary, #006d3d) 100%
   );
-  color: #ffffff;
+  color: var(--color-primary-contrast, #ffffff);
   /* 隆起幅度小，陰影只留兩層短距離的接觸陰影（M3 elevation 2 量級）把圓鈕從列面上
    * 輕輕托起；先前為了撐起大幅隆起的第三層綠色投影已拿掉，避免圓鈕看起來過重。 */
   box-shadow:
@@ -255,22 +255,25 @@ function onTabClick(item: NavItem): void {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: #ffffff;
+  background: var(--color-state-layer-light, #ffffff);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--m3-dur-short-2, 100ms) var(--m3-easing-standard, ease);
 }
 .m3-nav-tab:hover .m3-nav-fab::after { opacity: 0.14; }
-.m3-nav-tab:active .m3-nav-fab::after { background: #000000; opacity: 0.16; }
+.m3-nav-tab:active .m3-nav-fab::after {
+  background: var(--color-state-layer-dark, #000000);
+  opacity: 0.16;
+}
 
 .m3-nav-tab.is-prominent .m3-nav-tab-icon {
-  color: #ffffff;
+  color: var(--color-primary-contrast, #ffffff);
   transform: none; /* 隆起鈕不做 active 放大，避免與「永久隆起」語意混淆 */
 }
 .m3-nav-fab .m3-nav-tab-badge {
   top: -2px;
   right: -4px;
-  box-shadow: 0 0 0 2px var(--m3-nav-bg);
+  box-shadow: 0 0 0 2px var(--nav-bg);
 }
 
 /* 鍵盤 focus：環在圓鈕上（原生 outline 會框住整個 tab 矩形，和圓鈕造型打架） */
