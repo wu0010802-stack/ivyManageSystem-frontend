@@ -52,7 +52,10 @@
         </el-table-column>
         <el-table-column label="小計" align="right">
           <template #default="{ row }">
-            {{ row.amount == null ? '待填' : `NT$${row.subtotal.toLocaleString()}` }}
+            <div>{{ row.amount == null ? '待填' : `NT$${row.subtotal.toLocaleString()}` }}</div>
+            <div v-if="billableGap(row) > 0" class="slip-hint" data-test="slip-billable-hint">
+              {{ billableGapHint(row) }}
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -253,6 +256,7 @@ type PreviewData = ApiResponse<'/fees/slip-templates/preview', 'post'>
 type PreviewPayload = ApiBody<'/fees/slip-templates/preview', 'post'>
 type DuplicateRow = PreviewData['duplicate_suffix'][number]
 type MissingGradeRow = PreviewData['missing_grade'][number]
+type GradeRow = PreviewData['by_grade'][number]
 
 const classroomStore = useAllClassroomStore()
 const step = ref(0)
@@ -365,6 +369,22 @@ function duplicateHint(dup: DuplicateRow): string {
     return '其中一位不在本次選取的班級範圍內，請到學生資料頁改號'
   }
   return '請到學生資料頁改掉其中一位的號碼'
+}
+
+/**
+ * 小計沒有把在冊人數全部算進去的差額——缺銷帳碼、撞碼等不會出檔的人不計入
+ * subtotal（後端 `billable_count`），差額就是「小計看起來比人數×金額少」
+ * 的原因，要讓會計一眼看懂不是算錯，是那幾位本來就不會收到繳款單。
+ */
+function billableGap(row: GradeRow): number {
+  return row.student_count - row.billable_count
+}
+
+function billableGapHint(row: GradeRow): string {
+  const gap = billableGap(row)
+  // 用詞不指名原因（缺碼／撞碼皆可能）：具體原因已由下一步「沒有銷帳碼」
+  // 「銷帳碼重複」兩張表分別列出，這裡只需讓會計知道小計為何比人數×金額少。
+  return `${row.billable_count} 人（${gap} 人本次不會出檔，未計入小計）`
 }
 
 function missingGradeHint(row: MissingGradeRow): string {

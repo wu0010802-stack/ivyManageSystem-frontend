@@ -40,7 +40,9 @@ function preview(overrides: Record<string, unknown> = {}) {
     active_total: 2,
     excluded_new_students: 0,
     excluded_manual: 0,
-    by_grade: [{ grade_name: '大班', student_count: 2, amount: 10800, subtotal: 21600 }],
+    by_grade: [
+      { grade_name: '大班', student_count: 2, billable_count: 2, amount: 10800, subtotal: 21600 },
+    ],
     missing_suffix: [],
     duplicate_suffix: [],
     missing_grade: [],
@@ -168,10 +170,40 @@ describe('FeeSlipTemplateDialog', () => {
     wrapper.unmount()
   })
 
+  it('人數與可出檔人數相同時不顯示小計說明', async () => {
+    const wrapper = await settle(mountDialog())
+    expect(wrapper.find('[data-test="slip-billable-hint"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('可出檔人數小於在冊人數時，小計旁說明差額不計入小計', async () => {
+    apiMocks.previewSlipTemplate.mockResolvedValue(
+      preview({
+        by_grade: [
+          {
+            grade_name: '大班',
+            student_count: 10,
+            billable_count: 8,
+            amount: 10800,
+            subtotal: 86400,
+          },
+        ],
+      }),
+    )
+    const wrapper = await settle(mountDialog())
+    const hint = wrapper.find('[data-test="slip-billable-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('8')
+    expect(hint.text()).toContain('2')
+    wrapper.unmount()
+  })
+
   it('缺金額時擋住下一步', async () => {
     apiMocks.previewSlipTemplate.mockResolvedValue(
       preview({
-        by_grade: [{ grade_name: '幼幼班', student_count: 3, amount: null, subtotal: 0 }],
+        by_grade: [
+          { grade_name: '幼幼班', student_count: 3, billable_count: 3, amount: null, subtotal: 0 },
+        ],
         missing_amounts: ['幼幼班'],
         blocked: true,
         rows_total: 0,

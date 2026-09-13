@@ -45437,6 +45437,8 @@ export interface components {
         SlipTemplateGradeOut: {
             /** Amount */
             amount?: number | null;
+            /** Billable Count */
+            billable_count: number;
             /** Grade Name */
             grade_name: string;
             /** Student Count */
