@@ -2,17 +2,14 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { routeMock, replaceMock } = vi.hoisted(() => ({
-  routeMock: { query: { tab: 'attendance' } as Record<string, string> },
-  replaceMock: vi.fn(),
-}))
-
-vi.mock('vue-router', () => ({
-  useRoute: () => routeMock,
-  useRouter: () => ({ replace: replaceMock }),
-}))
+/**
+ * 場次請求競態守衛。
+ *
+ * 2026-09-14 課程點名自 /portal/activity 的第二個 tab 拆成獨立頁
+ * （PortalActivityAttendanceView）時，本檔自 PortalActivityView.race.test.ts
+ * 整批搬來——守衛跟著功能走，不是跟著原元件留下。
+ */
 vi.mock('@/api/activity', () => ({
-  getPortalActivityRegistrations: vi.fn(),
   getPortalAttendanceSessions: vi.fn(),
   getPortalAttendanceSession: vi.fn(),
   batchUpdatePortalAttendance: vi.fn(),
@@ -24,11 +21,10 @@ vi.mock('element-plus', () => ({
 
 import {
   batchUpdatePortalAttendance,
-  getPortalActivityRegistrations,
   getPortalAttendanceSession,
   getPortalAttendanceSessions,
 } from '@/api/activity'
-import PortalActivityView from '../PortalActivityView.vue'
+import PortalActivityAttendanceView from '../PortalActivityAttendanceView.vue'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -61,21 +57,14 @@ function detail(...attendance: Array<boolean | null>) {
 }
 
 async function mountView() {
-  vi.mocked(getPortalActivityRegistrations).mockResolvedValue({
-    data: { classrooms: [] },
-  } as never)
   vi.mocked(getPortalAttendanceSessions).mockResolvedValue({
     data: [{ id: 101, course_name: '音樂律動', recorded_count: 0, present_count: 0 }],
   } as never)
   vi.mocked(getPortalAttendanceSession).mockResolvedValue(detail(null) as never)
   vi.mocked(batchUpdatePortalAttendance).mockResolvedValue({ data: { updated: 1, skipped: 0 } } as never)
-  const wrapper = mount(PortalActivityView, {
+  const wrapper = mount(PortalActivityAttendanceView, {
     global: {
       stubs: {
-        'el-tabs': { template: '<div><slot /></div>' },
-        'el-tab-pane': true,
-        'el-empty': true,
-        ActivityRegistrationPanel: true,
         ActivitySessionList: SessionListStub,
         ActivityRollcallDrawer: true,
       },
@@ -88,10 +77,16 @@ async function mountView() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  routeMock.query = { tab: 'attendance' }
 })
 
-describe('PortalActivityView 場次請求競態', () => {
+describe('PortalActivityAttendanceView 場次請求競態', () => {
+  it('進頁即載入本月場次（不必再切 tab 觸發）', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { sessions: Array<{ id: number }> }
+    expect(getPortalAttendanceSessions).toHaveBeenCalledTimes(1)
+    expect(vm.sessions.map((s) => s.id)).toEqual([101])
+  })
+
   it('快速切月份/日期時，較舊的慢回應不得覆寫最新場次', async () => {
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {

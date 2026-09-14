@@ -998,11 +998,20 @@ export const routes: RouteRecordRaw[] = [
                     path: 'activity',
                     name: 'portal-activity',
                     component: () => import('../views/portal/PortalActivityView.vue'),
-                    meta: { title: '才藝管理' },
+                    meta: { title: '才藝報名' },
+                    // 課程點名 2026-09-14 拆成獨立頁（側欄獨立入口）後，本頁只剩課程報名。
+                    // 舊網址 ?tab=attendance 存在老師書籤與既有推播 deep link 裡改不動，
+                    // 這條轉址永久保留（同 /portal/class-hub 的處理慣例）。
+                    beforeEnter: (to) =>
+                        to.query.tab === 'attendance'
+                            ? { path: '/portal/activity/attendance', replace: true }
+                            : true,
                 },
                 {
                     path: 'activity/attendance',
-                    redirect: { path: '/portal/activity', query: { tab: 'attendance' } },
+                    name: 'portal-activity-attendance',
+                    component: () => import('../views/portal/PortalActivityAttendanceView.vue'),
+                    meta: { title: '課程點名' },
                 },
                 {
                     path: 'leave-history',

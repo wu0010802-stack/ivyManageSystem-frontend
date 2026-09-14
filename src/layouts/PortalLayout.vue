@@ -480,7 +480,12 @@ const submitPassword = async () => {
             <span>才藝</span>
           </template>
           <el-menu-item index="/portal/activity">
-            <span>才藝管理</span>
+            <span>才藝報名</span>
+          </el-menu-item>
+          <!-- 課程點名原本是 /portal/activity 的第二個 tab，老師得先進才藝管理再切 tab；
+               2026-09-14 拆成獨立頁，側欄直接進得去。 -->
+          <el-menu-item index="/portal/activity/attendance">
+            <span>課程點名</span>
           </el-menu-item>
         </el-sub-menu>
 

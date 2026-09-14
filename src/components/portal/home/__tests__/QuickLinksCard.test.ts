@@ -23,6 +23,15 @@ describe('QuickLinksCard（SPEC-024 收斂後）', () => {
     expect(labels).toEqual(['成長軌跡', '才藝點名', '活動調查'])
   })
 
+  // 2026-09-14：課程點名已是獨立頁，這格必須直接指過去，不得回退成
+  // /portal/activity?tab=attendance（那條轉址只為存量書籤保留）。
+  it('才藝點名指向獨立的課程點名頁', async () => {
+    const wrapper = await mountCard()
+    const tiles = wrapper.findAll('.link-tile')
+    await tiles[1].trigger('click')
+    expect(mockPush).toHaveBeenCalledWith('/portal/activity/attendance')
+  })
+
   it('班級類功能全數移除（已在「班級」tab）', async () => {
     const wrapper = await mountCard()
     const text = wrapper.text()

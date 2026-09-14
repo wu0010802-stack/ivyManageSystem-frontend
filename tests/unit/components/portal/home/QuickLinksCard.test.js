@@ -46,12 +46,13 @@ describe('QuickLinksCard', () => {
     expect(push).toHaveBeenCalledWith('/portal/growth')
   })
 
-  it('clicking 才藝點名 tile pushes to route with query', async () => {
+  // 2026-09-14：課程點名拆成獨立頁，這格不再走 /portal/activity?tab=attendance。
+  it('clicking 才藝點名 tile pushes to /portal/activity/attendance', async () => {
     const push = vi.spyOn(router, 'push')
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const tiles = w.findAll('.link-tile')
     await tiles[1].trigger('click')
-    expect(push).toHaveBeenCalledWith({ path: '/portal/activity', query: { tab: 'attendance' } })
+    expect(push).toHaveBeenCalledWith('/portal/activity/attendance')
   })
 
   it('clicking 活動調查 tile pushes to /portal/surveys', async () => {

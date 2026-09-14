@@ -166,6 +166,7 @@ export const TEACHER_PORTAL_ROUTES = [
   '/portal/pickup-authorizations',
   '/portal/bus-trip',
   '/portal/activity',
+  '/portal/activity/attendance',
   '/portal/surveys',
   '/portal/growth',
   '/portal/calendar',

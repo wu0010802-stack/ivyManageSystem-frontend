@@ -8,7 +8,8 @@ const router = useRouter()
 // 個人／跨班級事項，避免同一個功能兩個地方進得去。
 const links = [
   { label: '成長軌跡', to: '/portal/growth', tint: 'event' },
-  { label: '才藝點名', to: { path: '/portal/activity', query: { tab: 'attendance' } }, tint: 'activity' },
+  // 課程點名 2026-09-14 拆為獨立頁，不再靠 ?tab=attendance 進入。
+  { label: '才藝點名', to: '/portal/activity/attendance', tint: 'activity' },
   { label: '活動調查', to: '/portal/surveys', tint: 'event' },
 ]
 
