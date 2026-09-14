@@ -4,6 +4,7 @@ import { ref } from 'vue'
 
 // ── 模擬 vue-router（view 用 useRoute 取 query.token）──────────────────────
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ query: {} }),
   useRouter: () => ({ push: vi.fn() }),
 }))
