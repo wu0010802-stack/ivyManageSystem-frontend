@@ -655,7 +655,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 // 公開頁設計 token 唯一權威（與報名頁共用，禁止頁內重定義同名變數）
 import '@/assets/public-theme.css'
 import { getPublicBootstrap } from '@/api/activityPublic'
@@ -940,6 +940,10 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = ''
 }
 
+function confirmDiscardChanges() {
+  return !isEditFormDirty.value || window.confirm('尚有未儲存的修改，確定要離開嗎？')
+}
+
 const {
   editSubmitting, newPhoneTouched, newPhoneValid,
   rotatedCredentialRecovery, clearRotatedCredentialRecovery,
@@ -1008,8 +1012,8 @@ const {
 // 改為顯式導回報名頁；編輯中有未存異動時沿用 beforeunload 同語意先確認。
 const { branding } = useTenantBranding()
 const router = useRouter()
+onBeforeRouteLeave(() => confirmDiscardChanges())
 function goBackToRegistration() {
-  if (isEditFormDirty.value && !window.confirm('尚有未儲存的修改，確定要離開嗎？')) return
   router.push({ name: 'public-activity' })
 }
 

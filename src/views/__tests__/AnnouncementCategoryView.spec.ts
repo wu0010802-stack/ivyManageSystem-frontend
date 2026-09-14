@@ -11,6 +11,7 @@ const {
   ElMessageSuccess,
   ElMessageError,
   ElMessageBoxConfirm,
+  hasPermissionMock,
 } = vi.hoisted(() => ({
   getAnnouncementCategories: vi.fn(),
   createAnnouncementCategory: vi.fn(),
@@ -19,6 +20,7 @@ const {
   ElMessageSuccess: vi.fn(),
   ElMessageError: vi.fn(),
   ElMessageBoxConfirm: vi.fn(),
+  hasPermissionMock: vi.fn(() => true),
 }))
 
 vi.mock('@/api/announcementCategories', () => ({
@@ -37,7 +39,7 @@ vi.mock('element-plus', async (orig) => {
   }
 })
 
-vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn(() => true) }))
+vi.mock('@/utils/auth', () => ({ hasPermission: (...args: unknown[]) => hasPermissionMock(...args) }))
 
 import AnnouncementCategoryView from '@/views/AnnouncementCategoryView.vue'
 
@@ -55,6 +57,7 @@ describe('AnnouncementCategoryView', () => {
     vi.clearAllMocks()
     getAnnouncementCategories.mockResolvedValue({ data: { items: CATEGORY_ROWS, total: CATEGORY_ROWS.length } })
     ElMessageBoxConfirm.mockResolvedValue(undefined)
+    hasPermissionMock.mockReturnValue(true)
   })
 
   it('掛載即載入分類清單', async () => {
@@ -72,6 +75,17 @@ describe('AnnouncementCategoryView', () => {
     const form = (wrapper.vm as unknown as { form: { is_default: boolean; sort_order: number } }).form
     expect(form.is_default).toBe(true)
     expect(form.sort_order).toBe(0)
+  })
+
+  it('無 ANNOUNCEMENTS_WRITE 時即使直接呼叫 openAdd，也不得開啟原生編輯 dialog', async () => {
+    hasPermissionMock.mockImplementation((permission: string) => permission === 'ANNOUNCEMENTS_READ')
+    const wrapper = shallowMount(AnnouncementCategoryView, { global: globalConfig })
+    await flushPromises()
+
+    ;(wrapper.vm as unknown as { openAdd: () => void }).openAdd()
+
+    expect(hasPermissionMock).toHaveBeenCalledWith('ANNOUNCEMENTS_WRITE')
+    expect((wrapper.vm as unknown as { dialogVisible: boolean }).dialogVisible).toBe(false)
   })
 
   it('儲存新分類會呼叫 createAnnouncementCategory 並帶上圖示/顏色/排序', async () => {

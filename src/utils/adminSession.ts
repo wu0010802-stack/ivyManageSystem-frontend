@@ -84,6 +84,16 @@ export function advanceAdminSession(): number {
   return nextGeneration
 }
 
+/**
+ * 只重設目前分頁的管理端 runtime，不寫入跨分頁 revision。
+ *
+ * acting tenant 是 per-tab 狀態；切換分校時仍須中止舊 IO、清快取與 dedupe，
+ * 但不能讓其他分頁誤以為共享登入身分已變更而被登出。
+ */
+export function resetAdminSessionLocally(): number {
+  return applyAdminSessionReset({ source: 'local' })
+}
+
 function handleRemoteSessionRevision(event: StorageEvent): void {
   if (event.key !== adminSessionRevisionKey() || !event.newValue) return
   // storage event 不會送回發動的分頁，但 revision 可能與本分頁剛寫入的值相同

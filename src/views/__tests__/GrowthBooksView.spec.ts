@@ -77,7 +77,49 @@ type VM = {
   load: () => Promise<void>
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 describe('GrowthBooksView', () => {
+  it('切班或輪詢重疊時，舊班的慢回應不得覆蓋目前班級名單', async () => {
+    type BatchStatusResult = Awaited<ReturnType<typeof getGrowthBookBatchStatus>>
+    const oldClass = deferred<BatchStatusResult>()
+    const currentClass = deferred<BatchStatusResult>()
+    getGrowthBookBatchStatus
+      .mockReturnValueOnce(oldClass.promise)
+      .mockReturnValueOnce(currentClass.promise)
+
+    const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
+    const vm = w.vm as unknown as VM & { items: Array<{ student_id: number; student_name: string }> }
+    vm.classroomId = 1
+    const oldLoad = vm.load()
+    vm.classroomId = 2
+    const currentLoad = vm.load()
+
+    currentClass.resolve({
+      data: {
+        period_label: '目前班級',
+        items: [{ student_id: 20, student_name: '新班幼生', status: 'ready', report_id: 20, line_sent_at: null, material_summary: { observations: 0, work_samples: 0, photos: 0 } }],
+      },
+    })
+    await currentLoad
+    oldClass.resolve({
+      data: {
+        period_label: '舊班級',
+        items: [{ student_id: 10, student_name: '舊班幼生', status: 'ready', report_id: 10, line_sent_at: null, material_summary: { observations: 0, work_samples: 0, photos: 0 } }],
+      },
+    })
+    await oldLoad
+    await flushPromises()
+
+    expect(vm.items.map((item) => item.student_id)).toEqual([20])
+    expect(w.text()).toContain('新班幼生')
+    expect(w.text()).not.toContain('舊班幼生')
+  })
+
   it('選班級後列出每生冊況', async () => {
     const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
     await flushPromises()

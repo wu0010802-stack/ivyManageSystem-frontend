@@ -11,6 +11,7 @@ import type { Schema } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
 import {
   ANNOUNCEMENT_CATEGORY_ICON_OPTIONS,
   DEFAULT_ANNOUNCEMENT_CATEGORY_ICON,
@@ -62,6 +63,7 @@ const form = reactive<CategoryForm>({
 })
 
 const openAdd = () => {
+  if (!canWrite.value) return
   form.id = null
   form.name = ''
   form.icon = DEFAULT_ANNOUNCEMENT_CATEGORY_ICON
@@ -72,6 +74,7 @@ const openAdd = () => {
 }
 
 const openEdit = (row: CategoryRow) => {
+  if (!canWrite.value) return
   form.id = row.id
   form.name = row.name
   form.icon = row.icon || DEFAULT_ANNOUNCEMENT_CATEGORY_ICON
@@ -84,6 +87,7 @@ const openEdit = (row: CategoryRow) => {
 const submitLoading = ref(false)
 
 const handleSubmit = async () => {
+  if (!canWrite.value) return
   if (!form.name.trim()) {
     ElMessage.warning('請填寫分類名稱')
     return
@@ -121,6 +125,7 @@ const handleSubmit = async () => {
 // 設為預設：表格內快速動作，PUT is_default:true（後端交易內自動取消原本的預設）。
 const settingDefaultId = ref<number | null>(null)
 const setAsDefault = async (row: CategoryRow) => {
+  if (!canWrite.value) return
   settingDefaultId.value = row.id
   try {
     await updateAnnouncementCategory(row.id, { is_default: true })
@@ -134,6 +139,7 @@ const setAsDefault = async (row: CategoryRow) => {
 }
 
 const handleDelete = async (row: CategoryRow) => {
+  if (!canWrite.value) return
   try {
     await ElMessageBox.confirm(`確定要刪除分類「${row.name}」嗎？`, '確認刪除', {
       confirmButtonText: '刪除',
@@ -208,13 +214,15 @@ const handleDelete = async (row: CategoryRow) => {
     </el-table>
 
     <!-- Add/Edit Dialog -->
-    <el-dialog
+    <FormDialog
+      v-if="canWrite"
       :title="isEdit ? '編輯分類' : '新增分類'"
       v-model="dialogVisible"
-      width="480px"
-      :close-on-click-modal="false"
+      size="compact"
+      :loading="submitLoading"
+      @submit="handleSubmit"
     >
-      <el-form :model="form" label-width="90px">
+      <el-form :model="form" label-position="top">
         <el-form-item label="名稱" required>
           <el-input v-model="form.name" placeholder="例如：緊急通知" maxlength="50" show-word-limit />
         </el-form-item>
@@ -245,11 +253,7 @@ const handleDelete = async (row: CategoryRow) => {
           <span class="form-hint">新公告未指定分類時將自動帶入預設分類</span>
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitLoading">儲存</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </div>
 </template>
 

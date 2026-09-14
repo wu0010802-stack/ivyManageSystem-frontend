@@ -107,6 +107,27 @@ describe('GovReportsView — 期間預設值', () => {
     expect(pickers[2].element.value).toBe(String(new Date().getFullYear() - 1))
     expect(pickers[3].element.value).toBe(lastMonthPeriod())
   })
+
+  it('瀏覽器不在台北時區時仍以台北日期決定上月與去年', () => {
+    const originalTz = process.env.TZ
+    process.env.TZ = 'America/New_York'
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-12-31T16:30:00Z')) // 台北 2026-01-01 00:30
+    let wrapper
+    try {
+      wrapper = mount(GovReportsView, mountOptions)
+      const pickers = wrapper.findAll('.date-picker')
+      expect(pickers[0].element.value).toBe('2025-12')
+      expect(pickers[1].element.value).toBe('2025-12')
+      expect(pickers[2].element.value).toBe('2025')
+      expect(pickers[3].element.value).toBe('2025-12')
+    } finally {
+      wrapper?.unmount()
+      vi.useRealTimers()
+      if (originalTz === undefined) delete process.env.TZ
+      else process.env.TZ = originalTz
+    }
+  })
 })
 
 describe('GovReportsView — 雇主資料記憶', () => {

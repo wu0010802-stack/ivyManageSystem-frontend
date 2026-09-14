@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it, beforeEach, vi } from 'vitest'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 
 import {
@@ -327,5 +327,55 @@ describe('useCachedAsync', () => {
     await nextTick()
     expect(reread.captured.data.value).toEqual({ owner: 'B' })
     expect(shouldNotRun).not.toHaveBeenCalled()
+  })
+
+  it('reactive key 切換後，較慢的舊請求不得覆寫目前 key 的資料或 pending', async () => {
+    const key = ref('tenant-a')
+    let resolveTenantA
+    let resolveTenantB
+    const fetcher = vi.fn().mockImplementation(() => {
+      const requestedKey = key.value
+      return new Promise((resolve) => {
+        if (requestedKey === 'tenant-a') resolveTenantA = resolve
+        else resolveTenantB = resolve
+      })
+    })
+    const current = makeHarness(key, fetcher, { ttl: 60_000 })
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+
+    key.value = 'tenant-b'
+    current.captured.data.value = null
+    const tenantBRequest = current.captured.refresh(false)
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+
+    resolveTenantB({ owner: 'B' })
+    await tenantBRequest
+    expect(current.captured.data.value).toEqual({ owner: 'B' })
+    expect(current.captured.pending.value).toBe(false)
+
+    resolveTenantA({ owner: 'A' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(current.captured.data.value).toEqual({ owner: 'B' })
+    expect(current.captured.pending.value).toBe(false)
+  })
+
+  it('reactive key 切換後離頁，會解除目前 key consumer 並中止其在途請求', async () => {
+    const key = ref('tenant-a')
+    const signals = new Map()
+    const fetcher = vi.fn().mockImplementation((signal) => {
+      signals.set(key.value, signal)
+      return new Promise(() => {})
+    })
+    const current = makeHarness(key, fetcher, { ttl: 60_000 })
+    await vi.waitFor(() => expect(signals.has('tenant-a')).toBe(true))
+
+    key.value = 'tenant-b'
+    void current.captured.refresh(false)
+    await vi.waitFor(() => expect(signals.has('tenant-b')).toBe(true))
+    expect(signals.get('tenant-a').aborted).toBe(true)
+
+    current.wrapper.unmount()
+    expect(signals.get('tenant-b').aborted).toBe(true)
   })
 })

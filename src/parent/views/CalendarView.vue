@@ -32,6 +32,7 @@ const days = ref(7)
  * 「這個月還有什麼活動」。兩者共用同一份 items 形狀，只差查詢區間。
  */
 const mode = ref<'days' | 'month'>('days')
+let fetchEpoch = 0
 const now = new Date()
 const monthYear = now.getFullYear()
 const monthNo = now.getMonth() + 1
@@ -64,18 +65,27 @@ const groupedByDate = computed(() => {
 })
 
 async function fetchData() {
+  const requestEpoch = ++fetchEpoch
+  const requestedMode = mode.value
+  const requestedDays = days.value
   loading.value = true
   try {
     const { data: d } =
-      mode.value === 'month'
+      requestedMode === 'month'
         ? await getMonthAgenda(monthYear, monthNo)
-        : await getWeekAgenda(days.value)
+        : await getWeekAgenda(requestedDays)
+    if (
+      requestEpoch !== fetchEpoch
+      || mode.value !== requestedMode
+      || (requestedMode === 'days' && days.value !== requestedDays)
+    ) return
     data.value = d
   } catch (err) {
+    if (requestEpoch !== fetchEpoch) return
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入行事曆失敗'))
   } finally {
-    loading.value = false
+    if (requestEpoch === fetchEpoch) loading.value = false
   }
 }
 
@@ -121,6 +131,7 @@ onMounted(() => {
   }, 60 * 1000)
 })
 onBeforeUnmount(() => {
+  fetchEpoch += 1
   if (todayInterval) clearInterval(todayInterval)
 })
 

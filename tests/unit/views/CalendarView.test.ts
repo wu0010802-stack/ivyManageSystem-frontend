@@ -95,6 +95,12 @@ function mountCalendarView() {
   })
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 // FullCalendar dayGridMonth 檢視 2026 年 7 月的 DatesSetArg：
 // 格線第一格是 6/28（週日）、end 為 exclusive 8/9；
 // view.currentStart / currentEnd 才是「當前顯示月份」的真正邊界。
@@ -108,6 +114,19 @@ const JULY_2026_DATES_SET = {
     type: 'dayGridMonth',
     currentStart: new Date(2026, 6, 1),
     currentEnd: new Date(2026, 7, 1),
+  },
+}
+
+const AUGUST_2026_DATES_SET = {
+  ...JULY_2026_DATES_SET,
+  start: new Date(2026, 6, 26),
+  end: new Date(2026, 8, 6),
+  startStr: '2026-07-26',
+  endStr: '2026-09-06',
+  view: {
+    ...JULY_2026_DATES_SET.view,
+    currentStart: new Date(2026, 7, 1),
+    currentEnd: new Date(2026, 8, 1),
   },
 }
 
@@ -137,6 +156,26 @@ describe('CalendarView 上下同步（datesSet 月份推導）', () => {
     await flushPromises()
 
     expect(getAdminFeed).toHaveBeenCalledWith('2026-06-28', '2026-08-08')
+  })
+
+  it('快速切月時，較晚回來的舊月 admin feed 不得覆蓋新月', async () => {
+    const julyFeed = deferred<{ data: { from: string; to: string; items: Array<{ id: string }> } }>()
+    const augustFeed = deferred<{ data: { from: string; to: string; items: Array<{ id: string }> } }>()
+    getAdminFeed
+      .mockReturnValueOnce(julyFeed.promise)
+      .mockReturnValueOnce(augustFeed.promise)
+
+    const wrapper = mountCalendarView()
+    await wrapper.findComponent(CalendarBoardStub).vm.$emit('dates-set', JULY_2026_DATES_SET)
+    await wrapper.findComponent(CalendarBoardStub).vm.$emit('dates-set', AUGUST_2026_DATES_SET)
+
+    const augustItems = [{ id: 'august-current' }]
+    augustFeed.resolve({ data: { from: '2026-07-26', to: '2026-09-05', items: augustItems } })
+    await flushPromises()
+    julyFeed.resolve({ data: { from: '2026-06-28', to: '2026-08-08', items: [{ id: 'july-stale' }] } })
+    await flushPromises()
+
+    expect(setItems).toHaveBeenLastCalledWith(augustItems)
   })
 })
 

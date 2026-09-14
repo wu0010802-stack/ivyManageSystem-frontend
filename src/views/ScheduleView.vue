@@ -114,33 +114,51 @@ const weekEndDate = computed(() => {
   return formatDate(d)
 })
 
-const fetchLeaveContext = async () => {
+let weekFetchEpoch = 0
+
+const fetchLeaveContext = async (
+  requestedStart = weekStart.value,
+  requestedEnd = weekEndDate.value,
+  requestEpoch?: number,
+) => {
   try {
-    const res = await getLeaveContext({ start_date: weekStart.value, end_date: weekEndDate.value })
+    const res = await getLeaveContext({ start_date: requestedStart, end_date: requestedEnd })
+    if (requestEpoch !== undefined && requestEpoch !== weekFetchEpoch) return
     weekLeaves.value = res.data as LeaveContextItem[]
   } catch (e) {
+    if (requestEpoch !== undefined && requestEpoch !== weekFetchEpoch) return
     ElMessage.error(friendlyError('載入請假資訊失敗', e))
   }
 }
 
 // 全員每日調整（供空班判定用；每日調整 dialog 另按單一員工查詢）
-const fetchWeekDailyOverrides = async () => {
+const fetchWeekDailyOverrides = async (
+  requestedStart = weekStart.value,
+  requestedEnd = weekEndDate.value,
+  requestEpoch?: number,
+) => {
   try {
-    const res = await getDaily({ start_date: weekStart.value, end_date: weekEndDate.value })
+    const res = await getDaily({ start_date: requestedStart, end_date: requestedEnd })
+    if (requestEpoch !== undefined && requestEpoch !== weekFetchEpoch) return
     weekDailyOverrides.value = (res.data as { employee_id: number; date: string; shift_type_id: number | null }[])
       .map((d) => ({ employee_id: d.employee_id, date: d.date, shift_type_id: d.shift_type_id }))
   } catch (e) {
+    if (requestEpoch !== undefined && requestEpoch !== weekFetchEpoch) return
     ElMessage.error(friendlyError('載入每日調整失敗', e))
   }
 }
 
 const fetchAssignments = async () => {
+  const requestEpoch = ++weekFetchEpoch
+  const requestedStart = weekStart.value
+  const requestedEnd = weekEndDate.value
   loading.value = true
   // 請假摘要與全員每日調整跟著週切換一起刷新（各自有錯誤處理，不擋主流程）
-  fetchLeaveContext()
-  fetchWeekDailyOverrides()
+  void fetchLeaveContext(requestedStart, requestedEnd, requestEpoch)
+  void fetchWeekDailyOverrides(requestedStart, requestedEnd, requestEpoch)
   try {
-    const res = await getAssignments({ week_start: weekStart.value })
+    const res = await getAssignments({ week_start: requestedStart })
+    if (requestEpoch !== weekFetchEpoch || requestedStart !== weekStart.value) return
     // Build map: employee_id -> assignment
     const map: Record<string | number, AssignmentEntry> = {}
     for (const a of (res.data as { employee_id: number; shift_type_id: number | null; notes: string | null }[])) {
@@ -148,9 +166,10 @@ const fetchAssignments = async () => {
     }
     assignments.value = map
   } catch (e) {
+    if (requestEpoch !== weekFetchEpoch) return
     ElMessage.error(friendlyError('載入排班失敗', e))
   } finally {
-    loading.value = false
+    if (requestEpoch === weekFetchEpoch) loading.value = false
   }
 }
 
@@ -194,6 +213,7 @@ const getShiftInfo = (shiftTypeId: number | null) => shiftTypeId != null ? shift
 const saveWarnings = ref<WeeklyWarning[]>([])
 
 const saveAll = async () => {
+  if (loading.value) return
   saving.value = true
   try {
     const items = []
@@ -625,7 +645,7 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
             <el-button @click="exportCurrentWeekShifts">匯出本週班表</el-button>
             <el-button @click="downloadShiftTemplate">下載範本</el-button>
             <el-button @click="shiftImportVisible = true">匯入班表</el-button>
-            <el-button type="primary" @click="saveAll" :loading="saving">儲存排班</el-button>
+            <el-button type="primary" @click="saveAll" :loading="saving" :disabled="loading">儲存排班</el-button>
             </div>
           </div>
         </section>

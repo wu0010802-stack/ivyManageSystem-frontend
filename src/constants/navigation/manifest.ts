@@ -662,7 +662,9 @@ export const NAVIGATION_MANIFEST = {
         {
           // ⚠ /settings 不可改 routePrefix（子路由權限不同，外溢 = SETTINGS_READ 就能進帳號/角色頁）。
           key: 'settingsGeneral', title: PAGE_TERMS.settingsGeneral, routePath: '/settings',
+          // 同頁承載三個獨立權限域；route 採 OR，頁內 tab 再各自 fail-closed。
           views: [{ code: 'SETTINGS_READ' }],
+          sharedViews: ['SCHEDULE', 'DSR_MANAGE'],
           actions: [{ code: 'SETTINGS_WRITE' }],
           menu: { icon: icon('Tools') },
         },

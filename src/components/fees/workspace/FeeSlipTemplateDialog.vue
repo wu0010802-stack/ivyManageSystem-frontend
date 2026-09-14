@@ -1,6 +1,7 @@
 <template>
-  <el-dialog
-    :model-value="modelValue" :title="dialogTitle" width="900px" append-to-body
+  <FormDialog
+    :model-value="modelValue" :title="dialogTitle" size="wide" append-to-body
+    :loading="exporting" :enter-submit="false"
     :close-on-click-modal="false" :close-on-press-escape="!exporting"
     data-test="slip-template-dialog" @update:model-value="close"
   >
@@ -12,7 +13,7 @@
 
     <!-- 步驟 1：帳期與金額 -->
     <section v-if="step === 0" class="slip-step">
-      <el-form label-position="left" label-width="96px" :disabled="loading">
+      <el-form label-position="top" :disabled="loading">
         <el-form-item label="帳期">
           <el-select v-model="billYear" class="slip-year" data-test="slip-year" aria-label="帳期年份">
             <el-option v-for="y in yearOptions" :key="y" :value="y" :label="`${y - 1911} 學年度（西元 ${y}）`" />
@@ -218,13 +219,13 @@
         {{ step === 0 ? '下一步：對象' : '下一步：預覽' }}
       </el-button>
       <el-button
-        v-else-if="!blocked" type="success" :loading="exporting"
+        v-else-if="!blocked" type="success" :loading="exporting" :disabled="loading || !previewReady"
         data-test="slip-download" @click="download"
       >
         下載 .xls（{{ data?.rows_total ?? 0 }} 列）
       </el-button>
     </template>
-  </el-dialog>
+  </FormDialog>
 </template>
 
 <script setup lang="ts">
@@ -241,6 +242,7 @@ import type { ApiBody, ApiResponse } from '@/api/_generated/typed'
 import { saveBlobResponse } from '@/utils/download'
 import { friendlyError } from '@/utils/errorMessages'
 import { useAllClassroomStore } from '@/stores/classroomAll'
+import FormDialog from '@/components/common/FormDialog.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -282,10 +284,14 @@ const suffixAssignments = computed<Record<string, string>>(() => {
 })
 const data = ref<PreviewData | null>(null)
 const loading = ref(false)
+const previewReady = ref(false)
 const exporting = ref(false)
 let timer: ReturnType<typeof setTimeout> | null = null
+let previewRequestSeq = 0
+let resetting = false
 
 onBeforeUnmount(() => {
+  previewRequestSeq += 1
   if (timer !== null) clearTimeout(timer)
   timer = null
 })
@@ -302,6 +308,7 @@ const classroomOptions = computed(() =>
 )
 const blocked = computed(() => data.value?.blocked !== false)
 const canAdvance = computed(() => {
+  if (loading.value || !previewReady.value) return false
   if (!data.value) return false
   if (step.value === 0) return data.value.missing_amounts.length === 0
   return !data.value.blocked
@@ -320,10 +327,15 @@ function payload(): PreviewPayload {
 }
 
 async function fetchPreview() {
+  const seq = ++previewRequestSeq
+  const requestPayload = payload()
+  previewReady.value = false
   loading.value = true
   try {
-    const result = await previewSlipTemplate(payload())
+    const result = await previewSlipTemplate(requestPayload)
+    if (seq !== previewRequestSeq) return
     data.value = result
+    previewReady.value = true
     // 第一次載入：把上次用過的金額帶進來，使用者只需確認
     for (const row of result.by_grade) {
       if (amounts.value[row.grade_name] == null) {
@@ -332,15 +344,22 @@ async function fetchPreview() {
       }
     }
   } catch (e) {
-    ElMessage.error(friendlyError('試算範本失敗', e))
+    if (seq === previewRequestSeq) ElMessage.error(friendlyError('試算範本失敗', e))
   } finally {
-    loading.value = false
+    if (seq === previewRequestSeq) loading.value = false
   }
 }
 
 function schedulePreview() {
   if (timer) clearTimeout(timer)
-  timer = setTimeout(fetchPreview, 300)
+  const scheduledSeq = ++previewRequestSeq
+  previewReady.value = false
+  loading.value = true
+  timer = setTimeout(() => {
+    timer = null
+    if (scheduledSeq !== previewRequestSeq) return
+    void fetchPreview()
+  }, 300)
 }
 
 function setAmount(gradeName: string, value: number | undefined) {
@@ -418,6 +437,10 @@ function close(value: boolean) {
 }
 
 function reset() {
+  resetting = true
+  previewRequestSeq += 1
+  if (timer !== null) clearTimeout(timer)
+  timer = null
   step.value = 0
   billYear.value = props.defaultYear
   billMonth.value = props.defaultMonth
@@ -426,13 +449,30 @@ function reset() {
   suffixInputs.value = {}
   excludeStudentIds.value = []
   data.value = null
+  previewReady.value = false
+  loading.value = false
+  resetting = false
 }
 
-watch([billYear, billMonth, classroomIds], schedulePreview)
+watch(
+  [billYear, billMonth, classroomIds],
+  () => {
+    if (!resetting) schedulePreview()
+  },
+  { flush: 'sync' },
+)
 watch(
   () => props.modelValue,
   (open) => {
-    if (!open) return
+    if (!open) {
+      previewRequestSeq += 1
+      if (timer !== null) clearTimeout(timer)
+      timer = null
+      data.value = null
+      previewReady.value = false
+      loading.value = false
+      return
+    }
     reset()
     classroomStore.fetchClassrooms?.()
     void fetchPreview()

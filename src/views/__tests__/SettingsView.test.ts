@@ -58,7 +58,7 @@ const globalConfig = {
 describe('SettingsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockHasPermission.mockReturnValue(false)
+    mockHasPermission.mockImplementation((permission: string) => permission === 'SCHEDULE')
     mockIsPlatformAdmin.mockReturnValue(false)
     mockQuery = reactive({})
     replace.mockClear()
@@ -87,11 +87,29 @@ describe('SettingsView', () => {
     expect(wrapper.html()).toContain('隱私政策版本')
   })
 
-  it('預設 activeTab 為 shifts，固定 tab 永遠顯示', async () => {
+  it('有 SCHEDULE 時預設 activeTab 為 shifts 並顯示輪班別管理', async () => {
     const wrapper = shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
     // 確認固定存在的 tab（不受權限影響）
     expect(wrapper.html()).toContain('輪班別管理')
+  })
+
+  it('只有 SETTINGS_READ 時不掛載輪班別管理，預設退到 LINE 設定', async () => {
+    mockHasPermission.mockImplementation((permission: string) => permission === 'SETTINGS_READ')
+    const wrapper = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(wrapper.html()).not.toContain('輪班別管理')
+    expect(wrapper.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('line')
+  })
+
+  it('只有 DSR_MANAGE 時只掛載個資治理 tabs，不觸發一般設定 API', async () => {
+    mockHasPermission.mockImplementation((permission: string) => permission === 'DSR_MANAGE')
+    const wrapper = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(wrapper.find('[data-name="shifts"]').exists()).toBe(false)
+    expect(wrapper.find('[data-name="line"]').exists()).toBe(false)
+    expect(wrapper.find('[data-name="tenant-config"]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('dsr-requests')
   })
 
   it('帳號分頁已自 /settings 移除', async () => {
@@ -112,7 +130,7 @@ describe('SettingsView', () => {
 describe('SettingsView tab ↔ URL 同步', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockHasPermission.mockReturnValue(false)
+    mockHasPermission.mockImplementation((permission: string) => permission === 'SCHEDULE')
     mockIsPlatformAdmin.mockReturnValue(false)
     mockQuery = reactive({})
     replace.mockClear()

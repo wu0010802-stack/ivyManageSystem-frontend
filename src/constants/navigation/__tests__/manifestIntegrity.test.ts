@@ -152,6 +152,8 @@ const LEGACY_ROUTE_PERMISSION_RULES: { path: string; permission: string; prefix?
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },
   { path: '/data-quality', permission: 'DATA_QUALITY_READ' },
   { path: '/settings', permission: 'SETTINGS_READ' },
+  { path: '/settings', permission: 'SCHEDULE' },
+  { path: '/settings', permission: 'DSR_MANAGE' },
   { path: '/settings/accounts', permission: 'USER_MANAGEMENT_READ' },
   { path: '/settings/roles', permission: 'ROLES_MANAGE' },
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },

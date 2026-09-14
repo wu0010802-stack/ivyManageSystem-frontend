@@ -77,7 +77,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, ArrowUp, Close, Delete } from '@element-plus/icons-vue'
 import { createSurvey, getSurvey, updateSurvey } from '@/api/surveys'
@@ -121,6 +121,7 @@ const draft = ref<SurveyDraft>(emptyDraft())
 const baseline = ref<SurveyDraft>(emptyDraft())
 const status = ref('draft')
 const submitting = ref(false)
+let allowRouteLeave = false
 
 // closed：全鎖；published：僅結構（event_date/對象/題目）鎖，其餘（title/description/location/fee_note/reply_deadline）可改
 const locked = computed(() => status.value === 'closed')
@@ -198,11 +199,13 @@ async function onSubmit() {
     if (isEdit.value && surveyId.value) {
       await updateSurvey(surveyId.value, payload)
       ElMessage.success('已儲存')
+      allowRouteLeave = true
       router.push({ name: 'survey-detail', params: { id: surveyId.value } })
     } else {
       const res = await createSurvey(payload)
       const data = res.data as unknown as { id: number }
       ElMessage.success('已建立')
+      allowRouteLeave = true
       router.push({ name: 'survey-detail', params: { id: data.id } })
     }
   } catch (e) {
@@ -212,18 +215,25 @@ async function onSubmit() {
   }
 }
 
-const onCancel = async () => {
-  if (isDraftDirty(baseline.value, draft.value)) {
-    try {
-      await ElMessageBox.confirm('尚未儲存的變更將會遺失，確定離開？', '放棄編輯', {
-        confirmButtonText: '放棄變更',
-        cancelButtonText: '繼續編輯',
-        type: 'warning',
-      })
-    } catch {
-      return // 使用者選擇繼續編輯
-    }
+const confirmDiscardChanges = async (): Promise<boolean> => {
+  if (allowRouteLeave || !isDraftDirty(baseline.value, draft.value)) return true
+  try {
+    await ElMessageBox.confirm('尚未儲存的變更將會遺失，確定離開？', '放棄編輯', {
+      confirmButtonText: '放棄變更',
+      cancelButtonText: '繼續編輯',
+      type: 'warning',
+    })
+    return true
+  } catch {
+    return false
   }
+}
+
+onBeforeRouteLeave(() => confirmDiscardChanges())
+
+const onCancel = async () => {
+  if (!await confirmDiscardChanges()) return
+  allowRouteLeave = true
   // 固定回調查列表：router.back() 在直接開連結進來時無處可回。
   router.push({ name: 'surveys' })
 }

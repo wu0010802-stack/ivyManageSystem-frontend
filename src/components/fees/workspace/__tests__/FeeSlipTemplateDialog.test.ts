@@ -27,6 +27,7 @@ vi.mock('@/stores/classroomAll', () => ({
 }))
 
 import FeeSlipTemplateDialog from '../FeeSlipTemplateDialog.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
 
 function preview(overrides: Record<string, unknown> = {}) {
   return {
@@ -61,6 +62,14 @@ function preview(overrides: Record<string, unknown> = {}) {
     blocked: false,
     ...overrides,
   }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
 }
 
 // ⚠ repo 的 vitest setup 不註冊 Element Plus——比照
@@ -161,6 +170,99 @@ describe('FeeSlipTemplateDialog', () => {
     expect(payload.bill_year).toBe(2026)
     expect(payload.bill_month).toBe(9)
     wrapper.unmount()
+  })
+
+  it('表單型 wizard 使用 FormDialog wide 殼，且表單標籤採 top、不保留固定 label width', async () => {
+    const wrapper = await settle(mountDialog())
+    const shell = wrapper.findComponent(FormDialog)
+    expect(shell.exists()).toBe(true)
+    expect(shell.props('size')).toBe('wide')
+    const forms = wrapper.findAll('form')
+    expect(forms.length).toBeGreaterThan(0)
+    expect(forms.every((form) => form.attributes('label-position') === 'top')).toBe(true)
+    expect(forms.every((form) => form.attributes('label-width') === undefined)).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('輸入改變觸發新試算後，較晚完成的舊 preview 不得覆蓋目前帳期內容', async () => {
+    vi.useFakeTimers()
+    try {
+      const requestA = deferred<ReturnType<typeof preview>>()
+      const requestB = deferred<ReturnType<typeof preview>>()
+      apiMocks.previewSlipTemplate
+        .mockImplementationOnce(() => requestA.promise)
+        .mockImplementationOnce(() => requestB.promise)
+      const wrapper = await settle(mountDialog())
+
+      ;(wrapper.vm as unknown as { billMonth: number }).billMonth = 10
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(300)
+      requestB.resolve(preview({
+        bill_month: 10,
+        by_grade: [
+          { grade_name: '最新 B', student_count: 1, billable_count: 1, amount: 200, subtotal: 200 },
+        ],
+      }))
+      await settle(wrapper)
+      requestA.resolve(preview({
+        bill_month: 9,
+        by_grade: [
+          { grade_name: '過期 A', student_count: 1, billable_count: 1, amount: 100, subtotal: 100 },
+        ],
+      }))
+      await settle(wrapper)
+
+      expect(wrapper.text()).toContain('最新 B')
+      expect(wrapper.text()).not.toContain('過期 A')
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('新試算仍在 debounce 時，舊 preview 回應也不得套用或開放下一步', async () => {
+    vi.useFakeTimers()
+    try {
+      const requestA = deferred<ReturnType<typeof preview>>()
+      apiMocks.previewSlipTemplate.mockImplementationOnce(() => requestA.promise)
+      const wrapper = await settle(mountDialog())
+
+      ;(wrapper.vm as unknown as { billMonth: number }).billMonth = 10
+      await nextTick()
+      requestA.resolve(preview({
+        bill_month: 9,
+        by_grade: [
+          { grade_name: '過期 A', student_count: 1, billable_count: 1, amount: 100, subtotal: 100 },
+        ],
+      }))
+      await settle(wrapper)
+
+      expect(wrapper.text()).not.toContain('過期 A')
+      expect((wrapper.vm as unknown as { canAdvance: boolean }).canAdvance).toBe(false)
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('最新 preview 失敗後仍維持 fail-closed，不得用舊成功資料解鎖操作', async () => {
+    vi.useFakeTimers()
+    try {
+      apiMocks.previewSlipTemplate
+        .mockResolvedValueOnce(preview())
+        .mockRejectedValueOnce(new Error('preview failed'))
+      const wrapper = await settle(mountDialog())
+      expect((wrapper.vm as unknown as { canAdvance: boolean }).canAdvance).toBe(true)
+
+      ;(wrapper.vm as unknown as { billMonth: number }).billMonth = 10
+      await vi.advanceTimersByTimeAsync(300)
+      await settle(wrapper)
+
+      expect((wrapper.vm as unknown as { canAdvance: boolean }).canAdvance).toBe(false)
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('顯示各年段人數與金額', async () => {

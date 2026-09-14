@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { reactive } from 'vue'
+import { defineComponent, h, inject, reactive } from 'vue'
 import SalarySettleView from '../SalarySettleView.vue'
 
 const replaceMock = vi.fn()
@@ -14,6 +14,15 @@ vi.mock('@/api/salary', () => ({
     getRecords: vi.fn().mockResolvedValue({ data: [] }),
 }))
 
+const MonthScopedFinalizeStub = defineComponent({
+    name: 'StepFinalize',
+    setup() {
+        const query = inject<{ year: number; month: number }>('settleQuery')!
+        const mountedMonth = query.month
+        return () => h('p', { 'data-test': 'finalize-mounted-month' }, String(mountedMonth))
+    },
+})
+
 const STUBS = {
     'el-select': true,
     'el-option': true,
@@ -21,6 +30,7 @@ const STUBS = {
     'el-step': { template: '<div class="step-stub" @click="$emit(\'click\')"><slot /></div>' },
     'el-button': true,
     'el-empty': true,
+    StepFinalize: MonthScopedFinalizeStub,
 }
 
 describe('SalarySettleView 嚮導外殼', () => {
@@ -73,5 +83,17 @@ describe('SalarySettleView 嚮導外殼', () => {
         await flushPromises()
 
         expect(wrapper.text()).toContain('2026 年 9 月結薪')
+    })
+
+    it('停留同一步驟切換月份時重建月份限定的步驟狀態', async () => {
+        routeState.query = { step: 'finalize', year: '2026', month: '8' }
+        const wrapper = mount(SalarySettleView, { global: { stubs: STUBS } })
+        await flushPromises()
+        expect(wrapper.get('[data-test="finalize-mounted-month"]').text()).toBe('8')
+
+        routeState.query = { step: 'finalize', year: '2026', month: '9' }
+        await flushPromises()
+
+        expect(wrapper.get('[data-test="finalize-mounted-month"]').text()).toBe('9')
     })
 })

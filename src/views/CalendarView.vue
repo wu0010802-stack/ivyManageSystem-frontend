@@ -199,31 +199,45 @@ const fmtDate = (d: Date) => {
   return `${y}-${m}-${day}`
 }
 
+let adminFeedEpoch = 0
 const fetchAdminFeed = async (start: Date, end: Date) => {
+  const requestEpoch = ++adminFeedEpoch
   try {
     const fromStr = fmtDate(start)
     const toExclusive = new Date(end)
     toExclusive.setDate(toExclusive.getDate() - 1)
     const toStr = fmtDate(toExclusive)
     const resp = await getAdminFeed(fromStr, toStr)
+    if (requestEpoch !== adminFeedEpoch) return
     setItems(resp.data.items)
   } catch (error) {
+    if (requestEpoch !== adminFeedEpoch) return
     console.error('[calendar] getAdminFeed failed', error)
     setItems([])
   }
 }
 
+let calendarEventsEpoch = 0
 const fetchEvents = async () => {
+  const requestEpoch = ++calendarEventsEpoch
+  const requestedYear = currentYear.value
+  const requestedMonth = currentMonth.value
   loading.value = true
   try {
-    const res = await getCalendarFeed({ year: currentYear.value, month: currentMonth.value })
+    const res = await getCalendarFeed({ year: requestedYear, month: requestedMonth })
+    if (
+      requestEpoch !== calendarEventsEpoch
+      || currentYear.value !== requestedYear
+      || currentMonth.value !== requestedMonth
+    ) return
     const d = res.data as { events: CalendarEvent[]; official_sync?: OfficialSync }
     events.value = d.events
     officialSync.value = d.official_sync ?? null
   } catch (error) {
+    if (requestEpoch !== calendarEventsEpoch) return
     ElMessage.error(apiError(error, '載入失敗'))
   } finally {
-    loading.value = false
+    if (requestEpoch === calendarEventsEpoch) loading.value = false
   }
 }
 

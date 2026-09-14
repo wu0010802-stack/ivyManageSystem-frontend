@@ -508,6 +508,21 @@ describe('scrubEvent', () => {
     expect(res.contexts.user.phone).toBe('[Filtered]')
   })
 
+  it('sanitizes URL-like values stored in extra path fields', () => {
+    const res = scrubEvent({
+      extra: {
+        path: '/students/profile/123?parent_name=王小明&email=parent@example.com&tab=health',
+        from: '/students/456?phone=0912345678',
+      },
+    })
+
+    expect(res.extra.path).toBe('/students/profile/:id?parent_name=%5BFiltered%5D&email=%5BFiltered%5D&tab=health')
+    expect(res.extra.from).toBe('/students/:id?phone=%5BFiltered%5D')
+    expect(JSON.stringify(res.extra)).not.toContain('王小明')
+    expect(JSON.stringify(res.extra)).not.toContain('parent@example.com')
+    expect(JSON.stringify(res.extra)).not.toContain('0912345678')
+  })
+
   it('contexts.vue.propsData 整包遮罩（通用鍵名 prop 承載 PII，2026-08-26 bussch）', () => {
     // attachProps 會把 render error 元件的整包 props 塞進來。key 比對攔得住
     // childName 等具名 PII prop，但 StatTile 的 `value` prop 承載學生姓名，而

@@ -75,6 +75,7 @@ function openCuration(row: BatchStatusItem) {
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let loadEpoch = 0
 
 const STATUS_LABEL: Record<GrowthBookStatus, string> = {
   none: '尚未建立',
@@ -129,13 +130,24 @@ function maybeStartPolling() {
 }
 
 async function load() {
-  if (!classroomId.value) return
+  const requestEpoch = ++loadEpoch
+  const requestedClassroomId = classroomId.value
+  const requestedAcademicYear = academicYear.value
+  if (!requestedClassroomId) {
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
     const r = await getGrowthBookBatchStatus({
-      classroom_id: classroomId.value,
-      academic_year: academicYear.value,
+      classroom_id: requestedClassroomId,
+      academic_year: requestedAcademicYear,
     })
+    if (
+      requestEpoch !== loadEpoch
+      || classroomId.value !== requestedClassroomId
+      || academicYear.value !== requestedAcademicYear
+    ) return
     // 後端 GET /growth-books/batch-status 未標 response_model，型別退為 unknown，
     // 依 CLAUDE.md 慣例以本地 interface 明確標註等候補齊後端 schema。
     const data = r.data as unknown as { items: BatchStatusItem[]; period_label: string }
@@ -143,13 +155,17 @@ async function load() {
     periodLabel.value = data.period_label ?? ''
     maybeStartPolling()
   } catch (e) {
+    if (requestEpoch !== loadEpoch) return
     ElMessage.error(apiError(e, '讀取成長冊狀態失敗'))
   } finally {
-    loading.value = false
+    if (requestEpoch === loadEpoch) loading.value = false
   }
 }
 
 function onSearch() {
+  stopPolling()
+  items.value = []
+  periodLabel.value = ''
   router.push({
     query: {
       ...route.query,
@@ -157,7 +173,7 @@ function onSearch() {
       academic_year: academicYear.value,
     },
   })
-  load()
+  void load()
 }
 
 async function onGenerate(row: BatchStatusItem) {
@@ -202,6 +218,7 @@ async function onSendLine(row: BatchStatusItem) {
 
 async function onBatchGenerate() {
   if (!canPublish.value) return
+  if (loading.value) return
   if (batchGenerating.value) return
   const targets = items.value.filter((i) => ['none', 'failed'].includes(i.status))
   if (targets.length === 0) {
@@ -229,6 +246,7 @@ async function onBatchGenerate() {
 
 async function onBatchSendLine() {
   if (!canPublish.value) return
+  if (loading.value) return
   if (batchSending.value) return
   const targets = items.value.filter(
     (i) => i.status === 'ready' && i.report_id != null && !i.line_sent_at,
@@ -265,7 +283,10 @@ onMounted(() => {
   loadClassrooms()
   if (classroomId.value) load()
 })
-onUnmounted(stopPolling)
+onUnmounted(() => {
+  loadEpoch += 1
+  stopPolling()
+})
 
 // Expose for tests（<script setup> 預設不對外露出 setup 綁定）
 defineExpose({ classroomId, academicYear, load, items, classrooms })
@@ -283,7 +304,7 @@ defineExpose({ classroomId, academicYear, load, items, classrooms })
 
       <div v-if="canPublish" class="batch-actions">
         <el-button
-          :disabled="!classroomId || items.length === 0"
+          :disabled="loading || !classroomId || items.length === 0"
           :loading="batchGenerating"
           @click="onBatchGenerate"
         >
@@ -291,7 +312,7 @@ defineExpose({ classroomId, academicYear, load, items, classrooms })
           <span v-if="generateProgress">（{{ generateProgress.done }}/{{ generateProgress.total }}）</span>
         </el-button>
         <el-button
-          :disabled="!classroomId || items.length === 0"
+          :disabled="loading || !classroomId || items.length === 0"
           :loading="batchSending"
           @click="onBatchSendLine"
         >

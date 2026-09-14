@@ -110,6 +110,7 @@ const PII_KEY_SUBSTRINGS = [
 const PII_KEY_EXACT = ['student', 'child', 'parent', 'lat', 'lng', 'stop_lat', 'stop_lng']
 
 const FILTERED = '[Filtered]'
+const URL_LIKE_CONTEXT_KEYS = new Set(['url', 'path', 'from'])
 
 // Exempt：常見被誤判的 system / metric 欄位（substring 匹配；exempt 優先於 denylist）。
 // 起源：denylist 用 substring 匹配是為涵蓋 employee_phone / parent_email 等延伸欄位，
@@ -245,7 +246,13 @@ export function scrubMapping(obj: unknown): unknown {
   if (typeof obj !== 'object') return obj
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(obj)) {
-    out[k] = keyIsPii(k) ? FILTERED : scrubMapping(v)
+    if (keyIsPii(k)) {
+      out[k] = FILTERED
+    } else if (typeof v === 'string' && URL_LIKE_CONTEXT_KEYS.has(k.toLowerCase())) {
+      out[k] = redactPiiValue(sanitizeUrl(v))
+    } else {
+      out[k] = scrubMapping(v)
+    }
   }
   return out
 }

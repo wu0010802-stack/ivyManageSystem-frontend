@@ -40,6 +40,7 @@ const loading = ref(false)
 const exporting = ref(false)
 const logs = ref<AuditLog[]>([])
 const total = ref(0)
+let logsRequestSeq = 0
 
 const entityTypes = ref<MetaOption[]>([])
 const actionTypes = ref<MetaOption[]>([])
@@ -187,6 +188,7 @@ const fetchMeta = async () => {
 }
 
 const fetchLogs = async () => {
+  const seq = ++logsRequestSeq
   loading.value = true
   try {
     const params = {
@@ -195,18 +197,20 @@ const fetchLogs = async () => {
       page_size: filters.page_size,
     }
     const res = await getAuditLogs(params)
+    if (seq !== logsRequestSeq) return
     const d = res.data as { items: AuditLog[]; total: number }
     logs.value = d.items
     total.value = d.total
     syncQueryToUrl()
   } catch (error) {
+    if (seq !== logsRequestSeq) return
     if ((error as { response?: { status?: number } }).response?.status === 403) {
       ElMessage.error('需要管理員權限')
     } else {
       ElMessage.error(friendlyError('載入操作紀錄失敗', error))
     }
   } finally {
-    loading.value = false
+    if (seq === logsRequestSeq) loading.value = false
   }
 }
 

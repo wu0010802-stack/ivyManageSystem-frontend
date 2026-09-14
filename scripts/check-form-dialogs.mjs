@@ -25,7 +25,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 /** 修掉幾處後必須同步調降，否則棘輪鬆掉（同 check-error-detail-ratchet 慣例）。 */
-const BASELINE = { A: 100, B: 89, C: 154, D: 20 } // 2026-09-07 學生編輯表單改用 FormDialog，移除裸表單殼與固定寬度
+const BASELINE = { A: 100, B: 89, C: 153, D: 20 } // 2026-09-14 繳費單與公告分類改用 FormDialog
 
 /** 本來就該含 el-dialog 的檔案：FormDialog 殼本身。 */
 const EXEMPT = new Set(['src/components/common/FormDialog.vue'])

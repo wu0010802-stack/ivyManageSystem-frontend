@@ -111,6 +111,12 @@ const SUNDAY = (() => {
   return fmt(d)
 })()
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 // ── scoped-slot 版 el-table stub（讓 cell 模板與按鈕真的渲染） ──
 const ElTableStub = {
   props: ['data'],
@@ -233,6 +239,41 @@ describe('ScheduleView', () => {
         { employee_id: 1, shift_type_id: 3, notes: '既有備註' },
         { employee_id: 2, shift_type_id: null, notes: null },
         { employee_id: 9, shift_type_id: 4, notes: '行政備註' },
+      ],
+    })
+  })
+
+  it('快速切到下一週時，較晚回來的舊週資料不得覆蓋新週後被儲存', async () => {
+    const oldWeek = deferred<{ data: Array<{ employee_id: number; shift_type_id: number | null; notes: string | null }> }>()
+    const newWeek = deferred<{ data: Array<{ employee_id: number; shift_type_id: number | null; notes: string | null }> }>()
+    mockGetAssignments
+      .mockReturnValueOnce(oldWeek.promise)
+      .mockReturnValueOnce(newWeek.promise)
+
+    const wrapper = await mountView()
+    await wrapper.findAll('button').find((b) => b.text().includes('下週'))!.trigger('click')
+    await flushPromises()
+
+    newWeek.resolve({
+      data: [{ employee_id: 2, shift_type_id: 4, notes: '新週備註' }],
+    })
+    await flushPromises()
+    oldWeek.resolve({
+      data: [{ employee_id: 1, shift_type_id: 3, notes: '舊週備註' }],
+    })
+    await flushPromises()
+
+    await wrapper.findAll('button').find((b) => b.text() === '儲存排班')!.trigger('click')
+    await flushPromises()
+
+    const nextMonday = new Date(`${MONDAY}T12:00:00`)
+    nextMonday.setDate(nextMonday.getDate() + 7)
+    expect(mockSaveAssignments).toHaveBeenCalledWith({
+      week_start_date: fmt(nextMonday),
+      assignments: [
+        { employee_id: 1, shift_type_id: null, notes: null },
+        { employee_id: 2, shift_type_id: 4, notes: '新週備註' },
+        { employee_id: 9, shift_type_id: null, notes: null },
       ],
     })
   })

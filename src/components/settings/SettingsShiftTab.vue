@@ -10,6 +10,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useShiftStore } from '@/stores/shift'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
 import type { ApiResponse } from '@/api/_generated/typed'
 
 type ShiftTypeRow = ApiResponse<'/shifts/types', 'get'>[number]
@@ -18,6 +19,7 @@ const router = useRouter()
 // 其他頁（排班管理等）共用 shiftStore；本 tab 需要 usage 計數所以自抓，
 // 但每次異動後仍 refresh store，讓共用快取不過期。
 const shiftStore = useShiftStore()
+const canWrite = computed(() => hasPermission('SCHEDULE'))
 
 const rows = ref<ShiftTypeRow[]>([])
 const loading = ref(false)
@@ -92,6 +94,7 @@ const formPreviewHours = computed(() =>
 const formIsOvernight = computed(() => isOvernight(shiftForm.work_start, shiftForm.work_end))
 
 const handleAddShift = () => {
+  if (!canWrite.value) return
   shiftForm.id = null
   shiftForm.name = ''
   shiftForm.work_start = '08:00'
@@ -104,6 +107,7 @@ const handleAddShift = () => {
 }
 
 const handleEditShift = (row: ShiftTypeRow) => {
+  if (!canWrite.value) return
   shiftForm.id = row.id
   shiftForm.name = row.name
   shiftForm.work_start = row.work_start
@@ -116,6 +120,7 @@ const handleEditShift = (row: ShiftTypeRow) => {
 }
 
 const saveShift = async () => {
+  if (!canWrite.value) return
   if (!shiftForm.name.trim()) {
     ElMessage.warning('請填寫班別名稱')
     return
@@ -160,6 +165,7 @@ const saveShift = async () => {
 
 // ── 停用／啟用（歷史排班使用中的班別走這條，不走刪除） ──────────────────────
 const toggleActive = async (row: ShiftTypeRow) => {
+  if (!canWrite.value) return
   try {
     await updateShiftType(row.id, { is_active: !row.is_active })
     ElMessage.success(row.is_active ? '已停用（不再出現在新排班選單）' : '已重新啟用')
@@ -172,6 +178,7 @@ const toggleActive = async (row: ShiftTypeRow) => {
 
 // ── 刪除（使用中保護：改引導停用；後端另有 400 擋 hard delete） ────────────
 const handleDeleteShift = async (row: ShiftTypeRow) => {
+  if (!canWrite.value) return
   const usageTotal = row.usage?.total ?? 0
   if (usageTotal > 0) {
     try {
@@ -207,7 +214,7 @@ const goSchedule = () => router.push('/schedule')
 <template>
   <div>
     <div class="tab-header">
-      <el-button type="primary" @click="handleAddShift">新增班別</el-button>
+      <el-button v-if="canWrite" type="primary" @click="handleAddShift">新增班別</el-button>
       <el-button data-test="go-schedule" @click="goSchedule">前往排班管理</el-button>
     </div>
     <el-table :data="rows" v-loading="loading" style="width: 100%; margin-top: 20px;">
@@ -247,7 +254,7 @@ const goSchedule = () => router.push('/schedule')
           <el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '啟用' : '停用' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="190">
+      <el-table-column v-if="canWrite" label="操作" width="190">
         <template #default="scope">
           <el-button link type="primary" @click="handleEditShift(scope.row)">編輯</el-button>
           <el-button link data-test="toggle-active" @click="toggleActive(scope.row)">
@@ -259,7 +266,7 @@ const goSchedule = () => router.push('/schedule')
     </el-table>
 
     <!-- Shift Type Dialog -->
-    <el-dialog v-model="shiftDialogVisible" :title="shiftForm.id ? '編輯班別' : '新增班別'" width="480px">
+    <el-dialog v-if="canWrite" v-model="shiftDialogVisible" :title="shiftForm.id ? '編輯班別' : '新增班別'" width="480px">
       <el-form :model="shiftForm" label-width="100px">
         <el-form-item label="班別名稱" required>
           <el-input v-model="shiftForm.name" placeholder="例如：早值" maxlength="50" />

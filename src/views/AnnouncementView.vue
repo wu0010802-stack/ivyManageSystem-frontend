@@ -92,6 +92,9 @@ const onAnnFilterChange = (v: Record<string, unknown>) => {
 }
 const dialogVisible = ref(false)
 const isEdit = ref(false)
+const recipientSettingsLoading = ref(false)
+const recipientSettingsReady = ref(true)
+let recipientHydrationEpoch = 0
 const employeeStore = useEmployeeStore()
 const classroomStore = useAllClassroomStore()
 const employeeOptions = computed(() =>
@@ -293,12 +296,18 @@ const resetForm = () => {
 }
 
 const openAdd = () => {
+  recipientHydrationEpoch += 1
+  recipientSettingsLoading.value = false
+  recipientSettingsReady.value = true
   resetForm()
   isEdit.value = false
   dialogVisible.value = true
 }
 
 const openEdit = async (row: AnnouncementItem) => {
+  const requestEpoch = ++recipientHydrationEpoch
+  recipientSettingsLoading.value = true
+  recipientSettingsReady.value = false
   form.id = row.id
   form.title = row.title
   form.content = row.content
@@ -325,6 +334,7 @@ const openEdit = async (row: AnnouncementItem) => {
       getAnnouncementRecipients(row.id),
       getAnnouncementParentRecipients(row.id),
     ])
+    if (requestEpoch !== recipientHydrationEpoch || form.id !== row.id || !dialogVisible.value) return
     const empIds: number[] = (recRes.data as { employee_ids?: number[] })?.employee_ids || []
     form.target_employee_ids = empIds
     form.restrict_recipients = empIds.length > 0
@@ -335,10 +345,22 @@ const openEdit = async (row: AnnouncementItem) => {
     form.parent_target_classroom_ids = scope.classroomIds
     form.parent_target_student_ids = scope.studentIds
     preservedParentItems.value = scope.preservedItems
+    recipientSettingsReady.value = true
   } catch (error) {
-    ElMessage.warning('讀取設定失敗，部分欄位可能未填入')
+    if (requestEpoch !== recipientHydrationEpoch) return
+    ElMessage.warning('讀取受眾設定失敗，請取消後重試')
     form.parent_visibility = 'unchanged'
+  } finally {
+    if (requestEpoch === recipientHydrationEpoch) {
+      recipientSettingsLoading.value = false
+    }
   }
+}
+
+const invalidateRecipientHydration = () => {
+  recipientHydrationEpoch += 1
+  recipientSettingsLoading.value = false
+  recipientSettingsReady.value = false
 }
 
 const buildParentRecipients = () => buildParentRecipientsPayload({
@@ -351,6 +373,7 @@ const buildParentRecipients = () => buildParentRecipientsPayload({
 const submitLoading = ref(false)
 
 const handleSubmit = async () => {
+  if (recipientSettingsLoading.value || (isEdit.value && !recipientSettingsReady.value)) return
   if (!form.title.trim() || !form.content.trim()) {
     ElMessage.warning('請填寫標題和內容')
     return
@@ -720,6 +743,7 @@ onMounted(() => {
       v-model="dialogVisible"
       width="600px"
       :close-on-click-modal="false"
+      @closed="invalidateRecipientHydration"
     >
       <el-form label-width="80px">
         <el-form-item label="標題">
@@ -901,7 +925,12 @@ onMounted(() => {
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitLoading">
+        <el-button
+          type="primary"
+          @click="handleSubmit"
+          :loading="submitLoading || recipientSettingsLoading"
+          :disabled="recipientSettingsLoading || (isEdit && !recipientSettingsReady)"
+        >
           {{ isEdit ? '更新' : '發佈' }}
         </el-button>
       </template>

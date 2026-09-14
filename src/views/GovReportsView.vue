@@ -162,6 +162,7 @@ import { FirstAidKit } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
+import { todayTaipeiISO } from '@/utils/format'
 
 type ReportType = 'labor' | 'health' | 'withholding' | 'pension'
 
@@ -198,16 +199,16 @@ const activeReport = ref('labor')
 
 // 申報常態：月報表報上個月、扣繳憑單報去年，預設帶好省去每次點選
 function _lastMonthPeriod(): string {
-  const d = new Date()
-  d.setDate(1)
-  d.setMonth(d.getMonth() - 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const [year, month] = todayTaipeiISO().split('-').map(Number)
+  const previousYear = month === 1 ? year - 1 : year
+  const previousMonth = month === 1 ? 12 : month - 1
+  return `${previousYear}-${String(previousMonth).padStart(2, '0')}`
 }
 
 const labor = reactive<{ period: string | null; fmt: 'xlsx' | 'txt' }>({ period: _lastMonthPeriod(), fmt: 'xlsx' })
 const health = reactive<{ period: string | null }>({ period: _lastMonthPeriod() })
 const withholding = reactive<{ year: string | null; employerId: string }>({
-  year: String(new Date().getFullYear() - 1),
+  year: String(Number(todayTaipeiISO().slice(0, 4)) - 1),
   employerId: '',
 })
 const pension = reactive<{ period: string | null }>({ period: _lastMonthPeriod() })

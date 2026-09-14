@@ -24,7 +24,11 @@
       />
     </el-steps>
 
-    <component :is="STEPS[stepIndex].comp" @next="go(stepIndex + 1)" />
+    <component
+      :is="STEPS[stepIndex].comp"
+      :key="`${STEPS[stepIndex].key}:${query.year}-${query.month}`"
+      @next="go(stepIndex + 1)"
+    />
   </div>
 </template>
 

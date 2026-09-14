@@ -120,9 +120,12 @@ export function useCachedAsync<T = unknown>(
   const pending = ref(false)
   const fetchedAt = ref(entry.fetchedAt)
 
+  let requestEpoch = 0
   let controller: AbortController | null = null
+  let consumerKey = key
   const consumer: ActiveCacheConsumer = {
     clear: () => {
+      requestEpoch += 1
       controller?.abort()
       controller = null
       data.value = null
@@ -133,14 +136,29 @@ export function useCachedAsync<T = unknown>(
   }
   trackConsumer(key, consumer)
 
+  function releaseConsumer(trackedKey: string): void {
+    untrackConsumer(trackedKey, consumer)
+    if (_activeConsumers.has(trackedKey)) return
+    abortControllers(trackedKey)
+    const current = _cache.get(trackedKey)
+    if (current) current.inflight = null
+  }
+
+  function trackCurrentConsumer(currentKey: string): void {
+    if (currentKey === consumerKey) return
+    releaseConsumer(consumerKey)
+    consumerKey = currentKey
+    trackConsumer(consumerKey, consumer)
+  }
+
   const isStale = computed(() => {
     if (!fetchedAt.value) return true
     return Date.now() - fetchedAt.value > ttl
   })
 
-  function _syncFromCache() {
-    const currentKey = resolveKey()
-    const e = _cache.get(currentKey) as CacheEntry<T> | undefined
+  function _syncFromCache(expectedKey = resolveKey()) {
+    if (resolveKey() !== expectedKey) return
+    const e = _cache.get(expectedKey) as CacheEntry<T> | undefined
     if (!e) return
     data.value = e.data
     fetchedAt.value = e.fetchedAt
@@ -148,52 +166,59 @@ export function useCachedAsync<T = unknown>(
 
   async function refresh(force = false): Promise<T | null | undefined> {
     const currentKey = resolveKey()
+    trackCurrentConsumer(currentKey)
+    const currentEpoch = ++requestEpoch
+    const canUpdateConsumer = () => currentEpoch === requestEpoch && resolveKey() === currentKey
     const e = _cache.get(currentKey) as CacheEntry<T> | undefined
 
     // 共用 inflight：避免多 caller 同 key 重複 fetch
     if (e?.inflight) {
-      pending.value = data.value == null
+      if (canUpdateConsumer()) pending.value = data.value == null
       try {
         await e.inflight
       } catch {
         /* 由原 inflight 的 caller 處理錯誤；此處僅同步 cache */
       }
-      _syncFromCache()
-      pending.value = false
+      if (canUpdateConsumer()) {
+        _syncFromCache(currentKey)
+        pending.value = false
+      }
       return data.value
     }
 
     if (!force && e && e.fetchedAt && Date.now() - e.fetchedAt <= ttl) {
-      _syncFromCache()
+      if (canUpdateConsumer()) _syncFromCache(currentKey)
       return data.value
     }
 
-    error.value = null
+    if (canUpdateConsumer()) error.value = null
     // 有舊資料就不要顯示 spinner（SWR 行為）；無舊資料才顯示 loading
-    pending.value = data.value == null
+    if (canUpdateConsumer()) pending.value = data.value == null
 
     const requestController = new AbortController()
     controller = requestController
     trackController(currentKey, requestController)
     const promise: Promise<T | null | undefined> = (async () => {
-      const k = resolveKey()
       try {
         const result = await fetcher(requestController.signal)
         if (requestController.signal.aborted) return data.value
-        data.value = result
-        fetchedAt.value = Date.now()
-        _cache.set(k, { data: result as unknown, fetchedAt: fetchedAt.value, inflight: null })
+        const completedAt = Date.now()
+        _cache.set(currentKey, { data: result as unknown, fetchedAt: completedAt, inflight: null })
+        if (canUpdateConsumer()) {
+          data.value = result
+          fetchedAt.value = completedAt
+        }
         return result
       } catch (err) {
         if (requestController.signal.aborted) return data.value
-        error.value = err
+        if (canUpdateConsumer()) error.value = err
         // 失敗時不更新 cache（保留舊資料）
-        const cur = _cache.get(k)
+        const cur = _cache.get(currentKey)
         if (cur) cur.inflight = null
         throw err
       } finally {
-        untrackController(k, requestController)
-        pending.value = false
+        untrackController(currentKey, requestController)
+        if (canUpdateConsumer()) pending.value = false
       }
     })()
 
@@ -204,10 +229,9 @@ export function useCachedAsync<T = unknown>(
       if (current?.inflight === tracked) current.inflight = null
     })
 
-    const currentKey2 = resolveKey()
-    const cur: CacheEntry<unknown> = _cache.get(currentKey2) || { data: data.value as unknown, fetchedAt: fetchedAt.value, inflight: null }
+    const cur: CacheEntry<unknown> = _cache.get(currentKey) || { data: data.value as unknown, fetchedAt: fetchedAt.value, inflight: null }
     cur.inflight = tracked as Promise<unknown>
-    _cache.set(currentKey2, cur)
+    _cache.set(currentKey, cur)
 
     try {
       return await tracked
@@ -217,6 +241,7 @@ export function useCachedAsync<T = unknown>(
   }
 
   function invalidate() {
+    requestEpoch += 1
     const currentKey = resolveKey()
     abortControllers(currentKey)
     _cache.delete(currentKey)
@@ -229,14 +254,10 @@ export function useCachedAsync<T = unknown>(
   }
 
   onUnmounted(() => {
-    untrackConsumer(key, consumer)
+    requestEpoch += 1
     // 共用請求屬於 cache entry；仍有訂閱者時，不因發起元件離頁而取消。
     // 最後一個訂閱者離開才中止，並立即解除 inflight，讓重訪不會加入已取消請求。
-    if (!_activeConsumers.has(key)) {
-      abortControllers(key)
-      const current = _cache.get(key)
-      if (current) current.inflight = null
-    }
+    releaseConsumer(consumerKey)
   })
 
   return { data, error, pending, fetchedAt, isStale, refresh, invalidate }

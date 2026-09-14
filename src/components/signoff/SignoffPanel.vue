@@ -635,6 +635,8 @@ async function handleExport() {
 
 const summary = ref<SignoffSummary>({ ...EMPTY_SIGNOFF_SUMMARY })
 const summaryLoading = ref(false)
+let listRequestSeq = 0
+let summaryRequestSeq = 0
 
 const filters = reactive<{
   dateRange: string[] | null
@@ -743,6 +745,7 @@ function buildRangeParams(): Record<string, unknown> {
 }
 
 async function fetchList() {
+  const seq = ++listRequestSeq
   loading.value = true
   try {
     const params = buildRangeParams()
@@ -752,25 +755,28 @@ async function fetchList() {
     if (filters.flow) Object.assign(params, FLOW_FILTER_PARAMS[filters.flow])
 
     const res = await config.api.list(params)
+    if (seq !== listRequestSeq) return
     const data = res.data as { items: Record<string, unknown>[]; total: number }
     items.value = data.items
     total.value = data.total
   } catch (e) {
-    ElMessage.error(extractApiErrorMessage(e, '載入失敗'))
+    if (seq === listRequestSeq) ElMessage.error(extractApiErrorMessage(e, '載入失敗'))
   } finally {
-    loading.value = false
+    if (seq === listRequestSeq) loading.value = false
   }
 }
 
 async function fetchSummary() {
+  const seq = ++summaryRequestSeq
   summaryLoading.value = true
   try {
     const res = await config.api.summary(buildRangeParams())
+    if (seq !== summaryRequestSeq) return
     summary.value = res.data as SignoffSummary
   } catch {
-    summary.value = { ...EMPTY_SIGNOFF_SUMMARY }
+    if (seq === summaryRequestSeq) summary.value = { ...EMPTY_SIGNOFF_SUMMARY }
   } finally {
-    summaryLoading.value = false
+    if (seq === summaryRequestSeq) summaryLoading.value = false
   }
 }
 
@@ -1058,13 +1064,16 @@ function resetForm() {
 function openCreate() {
   editingId.value = null
   resetForm()
+  eventsRequestSeq += 1
   events.value = []
+  eventsLoading.value = false
   formSnapshot = editableSnapshot()
   dialogVisible.value = true
 }
 
 function openEdit(row: Record<string, unknown>) {
   editingId.value = row.id as number | null
+  events.value = []
   Object.assign(form, {
     plannedDate: row[config.fields.plannedDate.key] || '',
     partyName: row[config.fields.partyName.key],
@@ -1108,17 +1117,21 @@ function onRowCommand(command: string, row: Record<string, unknown>) {
 // ─── 事件時間軸 ──────────────────────────────────────────────────────────
 const events = ref<SignoffEvent[]>([])
 const eventsLoading = ref(false)
+let eventsRequestSeq = 0
 
 async function fetchEvents() {
-  if (!editingId.value) return
+  const id = editingId.value
+  if (!id) return
+  const seq = ++eventsRequestSeq
   eventsLoading.value = true
   try {
-    const res = await config.api.events(editingId.value)
+    const res = await config.api.events(id)
+    if (seq !== eventsRequestSeq || !dialogVisible.value || editingId.value !== id) return
     events.value = (res.data as { items: SignoffEvent[] }).items
   } catch {
-    events.value = []
+    if (seq === eventsRequestSeq && dialogVisible.value && editingId.value === id) events.value = []
   } finally {
-    eventsLoading.value = false
+    if (seq === eventsRequestSeq) eventsLoading.value = false
   }
 }
 

@@ -5,6 +5,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import AnnouncementView from '@/views/AnnouncementView.vue'
 
 const replaceAnnouncementParentRecipients = vi.fn(() => Promise.resolve({ data: {} }))
+const updateAnnouncement = vi.fn(() => Promise.resolve({ data: {} }))
+const getAnnouncementRecipients = vi.fn(() => Promise.resolve({ data: { employee_ids: [] } }))
 const getAnnouncementParentRecipients = vi.fn(() => Promise.resolve({
   data: { items: [
     { scope: 'student', student_id: 31 },
@@ -17,10 +19,10 @@ vi.mock('@/api/announcements', () => ({
     { id: 1, title: '對象測試', content: '內容', priority: 'normal', is_pinned: false, created_by_name: '園長', created_at: '2026-03-14T09:00:00', read_count: 0, read_preview: [], attachments: [] },
   ] } })),
   createAnnouncement: vi.fn(),
-  updateAnnouncement: vi.fn(() => Promise.resolve({ data: {} })),
+  updateAnnouncement: (...args) => updateAnnouncement(...args),
   deleteAnnouncement: vi.fn(),
   getAnnouncementParentRecipients: (...args) => getAnnouncementParentRecipients(...args),
-  getAnnouncementRecipients: vi.fn(() => Promise.resolve({ data: { employee_ids: [] } })),
+  getAnnouncementRecipients: (...args) => getAnnouncementRecipients(...args),
   getAnnouncementReaders: vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } })),
   replaceAnnouncementParentRecipients: (...args) => replaceAnnouncementParentRecipients(...args),
   uploadAnnouncementAttachment: vi.fn(() => Promise.resolve({ data: {} })),
@@ -56,6 +58,12 @@ const ElDialogStub = defineComponent({
 const flushPromises = async () => {
   await Promise.resolve()
   await Promise.resolve()
+}
+
+function deferred() {
+  let resolve
+  const promise = new Promise((done) => { resolve = done })
+  return { promise, resolve }
 }
 
 const ElTableColumnStub = defineComponent({
@@ -140,5 +148,26 @@ describe('AnnouncementView 指定學生 scope', () => {
     await flushPromises()
 
     expect(replaceAnnouncementParentRecipients).not.toHaveBeenCalled()
+  })
+
+  it('編輯受眾尚在載入時不得送出，避免以「全員／家長關閉」預設值覆寫', async () => {
+    const employeeScope = deferred()
+    const parentScope = deferred()
+    getAnnouncementRecipients.mockReturnValueOnce(employeeScope.promise)
+    getAnnouncementParentRecipients.mockReturnValueOnce(parentScope.promise)
+
+    const wrapper = mountView()
+    await flushPromises(); await nextTick()
+    await wrapper.findAll('el-button').find((b) => b.text().includes('編輯')).trigger('click')
+    await nextTick()
+
+    await wrapper.findAll('el-button').find((b) => b.text().includes('更新')).trigger('click')
+    await flushPromises()
+    expect(updateAnnouncement).not.toHaveBeenCalled()
+    expect(replaceAnnouncementParentRecipients).not.toHaveBeenCalled()
+
+    employeeScope.resolve({ data: { employee_ids: [8] } })
+    parentScope.resolve({ data: { items: [{ scope: 'student', student_id: 31 }] } })
+    await flushPromises()
   })
 })
