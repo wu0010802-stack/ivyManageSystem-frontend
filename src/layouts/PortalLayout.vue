@@ -59,11 +59,6 @@ const userInfo = computed<UserInfo>(() => (getUserInfo() || {}) as UserInfo)
 // 申請集中入口（底部「＋」FAB）
 const applySheetOpen = ref(false)
 
-// 班級 tab active：班級工作台 + 班級學生（含 /portal/student-detail 等單數路徑）
-const classTabActive = computed(
-  () => route.path.startsWith('/portal/class') || route.path.startsWith('/portal/student'),
-)
-
 const showPasswordDialog = ref(false)
 const passwordForm = ref<{ old_password: string; new_password: string; confirm_password: string }>(
   { old_password: '', new_password: '', confirm_password: '' }
@@ -205,8 +200,10 @@ onMounted(() => {
   // 接送提醒提升到殼層：單一 WS、全 Portal 頁存活、AudioContext gesture unlock、visibilitychange 重連
   initPortalDismissalAlerts()
 
-  // 導航更新一次性提示（v=2: Phase 1 殼層改版；v=1: 2026-05 教師端 ACD 改造）
-  const PORTAL_LAYOUT_VERSION = '2'
+  // 導航更新一次性提示（v=3: 2026-09-14 班級功能併入首頁；v=2: Phase 1 殼層改版；
+  // v=1: 2026-05 教師端 ACD 改造）。舊版文案介紹的「班級」分頁已於 v=3 移除，
+  // 沿用舊號碼會讓看過 v=2 的老師永遠讀不到新說明，故必須跟著進版。
+  const PORTAL_LAYOUT_VERSION = '3'
   const stored = tenantGetItem('portal_layout_v')
   if (stored !== PORTAL_LAYOUT_VERSION) {
     setTimeout(() => {
@@ -214,10 +211,11 @@ onMounted(() => {
         title: '導航更新',
         message:
           '教師端介面已更新：\n\n' +
-          '• 底部導覽改版：「工作台」改名「今日」、新增「班級」分頁\n' +
-          '• 中央「＋」按鈕集中請假／加班／補打卡／異常確認申請\n' +
-          '• 「排班」入口移到出勤頁上方、「學生」入口移到班級工作台\n\n' +
-          '桌機側邊欄選單維持不變。',
+          '• 班級功能全部移到首頁「今日工作台」，分「教學／管理／我的」三組；每格一律顯示，有待辦才標數字\n' +
+          '• 首頁原本的「今日待辦」「快速進入」「我的班級」已併入上述功能格，同一個功能不再有兩個入口\n' +
+          '• 帶多個班的老師可在功能格上方切換班級\n' +
+          '• 底部導覽的「班級」分頁移除（內容已在「今日」）\n\n' +
+          '側邊欄的「班級總覽」同樣併入首頁，其餘選單不變。',
         type: 'info',
         confirmButtonText: '我知道了',
         showCancelButton: false,
@@ -414,9 +412,7 @@ const submitPassword = async () => {
             <el-icon><School /></el-icon>
             <span>班級 — 教學</span>
           </template>
-          <el-menu-item index="/portal/class">
-            <span>班級總覽</span>
-          </el-menu-item>
+          <!-- 班級總覽 2026-09-14 併進首頁（我的 › 今日工作台），此處不再重複列出。 -->
           <el-menu-item index="/portal/students">
             <span>班級學生</span>
           </el-menu-item>
@@ -463,7 +459,7 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/medications">
             <span>用藥執行</span>
           </el-menu-item>
-          <el-menu-item index="/portal/class?sheet=measurement">
+          <el-menu-item index="/portal/home?sheet=measurement">
             <span>全班量體位</span>
           </el-menu-item>
           <!-- 娃娃車：BUS_TRIPS_OPERATE 是 per-user 顯式授權（絕大多數老師沒有），
@@ -609,8 +605,9 @@ const submitPassword = async () => {
         <RouterView />
       </el-main>
 
-      <!-- Bottom Navigation (mobile only)：Phase 1 殼層改版 —— 今日/班級/＋申請/出勤/我的。
-           排班入口移至出勤頁上方、學生入口移至班級工作台（桌機側欄不變）。 -->
+      <!-- Bottom Navigation (mobile only)：今日/＋申請/出勤/我的。
+           排班入口在出勤頁上方；班級功能 2026-09-14 併進首頁後，原本的第二個
+           tab 會與「今日」指向同一頁，已移除（桌機側欄不受影響）。 -->
       <nav v-if="isMobile" class="bottom-nav" aria-label="主要導覽">
         <button
           type="button"
@@ -624,16 +621,6 @@ const submitPassword = async () => {
             <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="tab-badge" />
           </div>
           <span>今日</span>
-        </button>
-        <button
-          type="button"
-          class="bottom-tab"
-          :class="{ active: classTabActive }"
-          :aria-current="classTabActive ? 'page' : undefined"
-          @click="router.push('/portal/class')"
-        >
-          <el-icon><School /></el-icon>
-          <span>班級</span>
         </button>
         <div class="bottom-fab-slot">
           <button type="button" class="bottom-fab" aria-label="開啟申請選單" @click="applySheetOpen = true">

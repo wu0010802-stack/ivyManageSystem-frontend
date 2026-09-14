@@ -1,17 +1,28 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Warning, ArrowRight } from '@element-plus/icons-vue'
 import { usePortalDashboard } from '@/composables/usePortalDashboard'
+import { usePortalClassHub } from '@/composables/usePortalClassHub'
+import { usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
 import { getMyLeaveQuotaExpiry } from '@/api/portalLeaveQuotaExpiry'
-import { getTodayHub } from '@/api/portalClassHub'
-import PendingActionsCard from '@/components/portal/home/PendingActionsCard.vue'
+import { getPortalPickupPendingCount } from '@/api/portal'
+import { getMeasurementsLatest } from '@/api/portalMeasurements'
+import PortalBatchMeasurementSheet from '@/components/portal/sheets/PortalBatchMeasurementSheet.vue'
 import TodayFocusCard from '@/components/portal/home/TodayFocusCard.vue'
 import ClassroomOpsCard from '@/components/portal/home/ClassroomOpsCard.vue'
-import QuickLinksCard from '@/components/portal/home/QuickLinksCard.vue'
+import {
+  visibleClassFeatures,
+  resolveFeatureBadge,
+  type ClassFeatureDef,
+  type ClassFeatureGroup,
+  type PortalPendingActions,
+} from '@/constants/portalClassFeatures'
+import type { PortalHubCounts } from '@/utils/portalHubCounts'
 
 const { summary, loading, error, refresh } = usePortalDashboard()
 const router = useRouter()
+const route = useRoute()
 
 interface LeaveQuotaExpiryInfo {
   compensatory_balance: number
@@ -35,7 +46,10 @@ const loadLeaveQuotaExpiry = async () => {
   }
 }
 
-// ===== Phase 2 任務流首頁：班級工作台摘要（現在該做置頂卡） =====
+// ===== 班級工作台（原 /portal/class，2026-09-14 併入首頁）=====
+// 「現在該做」置頂卡與下方功能格的數字都取自這一份。整併前首頁與班級頁各自
+// 打一次 getTodayHub，現在合成同一個 composable：只打一次，而且首頁順帶拿到
+// 原本只有班級頁才有的 60 秒輪詢、切回前景重抓與切班能力。
 interface HubSummary {
   classroom_id?: number
   classroom_name?: string
@@ -44,35 +58,50 @@ interface HubSummary {
   [key: string]: unknown
 }
 
-const hub = ref<HubSummary | null>(null)
+// null = 用後端解析的預設班（head > assistant > art）
+const classroomId = ref<number | null>(null)
+const { data: hubData, refresh: refreshHub } = usePortalClassHub(classroomId)
 
-const loadHub = async () => {
-  try {
-    const data = (await getTodayHub()) as HubSummary
-    // classroom_id=0＝未綁班（class-hub 同語意）；403/錯誤走 catch。兩者都隱藏置頂卡
-    hub.value = data && data.classroom_id ? data : null
-  } catch {
-    hub.value = null
-  }
-}
+// classroom_id=0＝未綁班（class-hub 同語意）；403／載入失敗時 data 仍是 null。
+// 三者都隱藏置頂卡與班級列，但**不影響功能格**——格子是靜態清單，沒有 hub
+// 資料只是不掛數字。首頁對全體 portal 使用者開放，沒帶班的行政同仁本來就會
+// 拿到 403，不該因此看到錯誤狀態或失去所有入口。
+const hub = computed<HubSummary | null>(() => {
+  const d = hubData.value as HubSummary | null
+  return d && d.classroom_id ? d : null
+})
 
 function onFocusJump(deepLink?: string) {
-  router.push(deepLink || '/portal/class-hub')
+  // deep_link 可能是存量推播的 /portal/class-hub?sheet=medication&id=，
+  // 由 router 的永久 redirect 接住；沒有 deep link 就捲到下方功能格。
+  if (deepLink) {
+    router.push(deepLink)
+    return
+  }
+  scrollToFeatures()
 }
 
 function openHub() {
-  router.push('/portal/class-hub')
+  scrollToFeatures()
+}
+
+const featuresEl = ref<HTMLElement | null>(null)
+
+function scrollToFeatures() {
+  featuresEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 const doRefresh = () => {
   refresh()
-  loadHub()
+  refreshHub().catch(() => {})
   loadLeaveQuotaExpiry()
+  loadPickupCount()
 }
 
 onMounted(() => {
   loadLeaveQuotaExpiry()
-  loadHub()
+  refreshLastBatchDate()
+  loadPickupCount()
 })
 
 const greeting = computed(() => {
@@ -133,6 +162,160 @@ const attendance = computed(() => (today.value?.attendance as TodayAttendance | 
 const punchInLabel = computed(() => formatTime(attendance.value?.punch_in_at))
 const punchOutLabel = computed(() => formatTime(attendance.value?.punch_out_at))
 const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
+
+// ===== 功能格（原 /portal/class 的兩組，加上承接首頁三張卡的「我的」組）=====
+
+const { pendingCount: dismissalPendingCount } = usePortalDismissalAlerts()
+const pickupPendingCount = ref(0)
+
+async function loadPickupCount() {
+  try {
+    const { data: res } = await getPortalPickupPendingCount()
+    pickupPendingCount.value = (res as { count?: number })?.count || 0
+  } catch (_) {
+    pickupPendingCount.value = 0
+  }
+}
+
+const GROUPS: { id: ClassFeatureGroup; title: string }[] = [
+  { id: 'teach', title: '教學' },
+  { id: 'manage', title: '管理' },
+  { id: 'mine', title: '我的' },
+]
+
+function featuresOf(group: ClassFeatureGroup): ClassFeatureDef[] {
+  return visibleClassFeatures(group)
+}
+
+const badgeSources = computed(() => ({
+  counts: (hubData.value?.counts ?? null) as PortalHubCounts | null,
+  actions: actions.value as PortalPendingActions,
+  dismissal: dismissalPendingCount.value,
+  pickup: pickupPendingCount.value,
+}))
+
+function badgeOf(f: ClassFeatureDef): number {
+  return resolveFeatureBadge(f, badgeSources.value)
+}
+
+// 帶上最早待確認月份，否則點進去固定看當月、舊的異常永遠找不到，badge 也消不掉。
+const anomalyTarget = computed(() => {
+  const e = (actions.value as PortalPendingActions).pending_anomaly_earliest as
+    | { year: number; month: number }
+    | null
+    | undefined
+  return e ? `/portal/anomalies?year=${e.year}&month=${e.month}` : '/portal/anomalies'
+})
+
+function onFeatureClick(f: ClassFeatureDef) {
+  if (f.action === 'measurement') {
+    measurementSheetOpen.value = true
+    return
+  }
+  if (f.key === 'anomalies') {
+    router.push(anomalyTarget.value)
+    return
+  }
+  if (!f.to) return
+  // 會讀 ?classroom_id= 的目的頁要帶上當前班級，否則多班老師切了班再點進去，
+  // 目的頁會落回它自己的第一班（誤寫聯絡簿、誤點名）。
+  const id = hub.value?.classroom_id
+  if (f.classroomScoped && id) {
+    router.push({ path: f.to, query: { classroom_id: id } })
+    return
+  }
+  router.push(f.to)
+}
+
+// ── 全班量體位抽屜（無獨立頁，只有抽屜）──
+const measurementSheetOpen = ref(false)
+const lastBatchMeasuredOn = ref<string | null>(null)
+
+async function refreshLastBatchDate() {
+  try {
+    const { data: latestData } = await getMeasurementsLatest()
+    const dates = (latestData as { last_measurement?: { measured_on?: string } }[])
+      .map((r) => r.last_measurement?.measured_on)
+      .filter((d): d is string => Boolean(d))
+      .sort()
+    lastBatchMeasuredOn.value = dates.length > 0 ? dates[dates.length - 1] : null
+  } catch (_) {
+    lastBatchMeasuredOn.value = null
+  }
+}
+
+function captionOf(f: ClassFeatureDef): string {
+  if (f.action === 'measurement') {
+    return lastBatchMeasuredOn.value ? `上次 ${lastBatchMeasuredOn.value}` : '尚未量測'
+  }
+  return ''
+}
+
+function onMeasurementDone() {
+  refreshLastBatchDate()
+}
+
+// 深連結：桌機側欄「全班量體位」與存量通知都靠 ?sheet=measurement 進來。
+// immediate 讓直接貼網址也有效；已在本頁時 push 只改 query 不重掛元件，
+// 沒有這個 watch 抽屜就不會開。
+watch(
+  () => route.query.sheet,
+  (name) => {
+    const key = Array.isArray(name) ? name[0] : name
+    if (key === 'measurement') measurementSheetOpen.value = true
+  },
+  { immediate: true },
+)
+
+// 抽屜關閉要把 URL 上的 ?sheet=measurement 清掉，否則第二次點側欄同一項時
+// query 沒變化、上面的 watch 不會觸發，抽屜就再也開不了。用 replace 避免多留
+// 一筆瀏覽紀錄；保留 query 裡其他參數（例如 classroom_id）。
+watch(measurementSheetOpen, (open) => {
+  if (open) return
+  if (route.query.sheet === undefined) return
+  const query = { ...route.query }
+  delete query.sheet
+  router.replace({ query })
+})
+
+// ── 班級切換（多班教師）──
+interface ClassroomOption {
+  classroom_id?: number
+  classroom_name?: string
+  student_count?: number
+  [key: string]: unknown
+}
+
+// 沒有 classroom_id 的項目無法作為切換選項（el-option 的 value 不接受 undefined），
+// 先濾掉再收斂型別。
+const classroomOptions = computed(() =>
+  (classrooms.value as ClassroomOption[]).filter(
+    (c): c is ClassroomOption & { classroom_id: number } =>
+      typeof c.classroom_id === 'number',
+  ),
+)
+const showSwitch = computed(() => classroomOptions.value.length > 1)
+const selectedClassroomId = computed(() => hub.value?.classroom_id)
+const classroomName = computed(() => hub.value?.classroom_name || '')
+const studentCount = computed(() => {
+  const id = hub.value?.classroom_id
+  const hit = classroomOptions.value.find((c) => c.classroom_id === id)
+  return hit?.student_count ?? null
+})
+
+function onSwitchClassroom(id: number) {
+  classroomId.value = id
+}
+
+watch(
+  () => route.query.classroom_id,
+  (raw) => {
+    const v = Array.isArray(raw) ? raw[0] : raw
+    const parsed = v == null ? null : Number(v)
+    classroomId.value = Number.isFinite(parsed) ? (parsed as number) : null
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -182,14 +365,60 @@ const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
       @open-hub="openHub"
     />
 
+    <!-- 功能格：原 /portal/class 整頁（教學／管理）＋承接首頁三張卡的「我的」組。
+         刻意放在 summary 的載入分支之外——格子是靜態清單，沒有 summary 也該進得去，
+         summary 只決定「我的」那組要不要掛數字。 -->
+    <section ref="featuresEl" class="feature-section">
+      <div class="class-bar">
+        <div class="class-bar__title">
+          <span class="class-bar__name">{{ classroomName || '班級功能' }}</span>
+          <span v-if="studentCount != null" class="class-bar__meta">
+            {{ studentCount }} 位學生
+          </span>
+        </div>
+        <el-select
+          v-if="showSwitch"
+          data-test="classroom-switch"
+          size="small"
+          class="class-bar__switch"
+          :model-value="selectedClassroomId"
+          placeholder="切換班級"
+          @change="onSwitchClassroom"
+        >
+          <el-option
+            v-for="c in classroomOptions"
+            :key="c.classroom_id"
+            :label="c.classroom_name"
+            :value="c.classroom_id"
+          />
+        </el-select>
+      </div>
+
+      <div v-for="g in GROUPS" :key="g.id" class="feature-group">
+        <h3 class="group-title">{{ g.title }}</h3>
+        <div class="feature-grid">
+          <button
+            v-for="f in featuresOf(g.id)"
+            :key="f.key"
+            type="button"
+            class="feature-tile press-scale"
+            :data-test="`feature-${f.key}`"
+            @click="onFeatureClick(f)"
+          >
+            <span class="feature-label">{{ f.label }}</span>
+            <span v-if="badgeOf(f) > 0" class="feature-badge">{{ badgeOf(f) }}</span>
+            <span v-if="captionOf(f)" class="feature-caption">{{ captionOf(f) }}</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <div v-if="!summary && loading" class="loading-state">
       <div class="pt-shimmer skeleton-block" v-for="i in 3" :key="i"></div>
     </div>
 
     <template v-else-if="summary">
-      <PendingActionsCard :actions="actions" />
-
-      <!-- 與同頁 PendingActionsCard／QuickLinksCard 同一套 pt-card 語彙（原本獨自用 el-card + header 分隔線） -->
+      <!-- 與同頁功能格同一套 pt-card 語彙（原本獨自用 el-card + header 分隔線） -->
       <section v-if="leaveQuotaInfo" class="pt-card leave-quota-card">
         <h3 class="card-title">補休結餘</h3>
         <div class="leave-quota-content">
@@ -219,8 +448,12 @@ const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
         </div>
       </section>
 
+      <!-- 班級提醒：連續缺席／近期生日／過敏注意。原「我的班級」卡的四格 KPI
+           已被上方功能格取代，但這三條提醒全系統只有這裡看得到，不能跟著刪。
+           逐班各一張（標了班名），不隨上方的班級切換過濾——漏看過敏或連續缺席
+           的代價比多看一張卡高。 -->
       <div class="classroom-section pt-stagger">
-        <h3 class="pt-section-title">我的班級</h3>
+        <h3 class="pt-section-title">班級提醒</h3>
         <div v-if="!classrooms.length" class="empty">
           <p>您目前未綁定任何班級</p>
           <!-- 空班級時附上身分與後端診斷提示：同名員工在系統裡是兩筆不同資料，
@@ -234,9 +467,12 @@ const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
           :card="c"
         />
       </div>
-
-      <QuickLinksCard />
     </template>
+
+    <PortalBatchMeasurementSheet
+      v-model="measurementSheetOpen"
+      @done="onMeasurementDone"
+    />
   </div>
 </template>
 
@@ -367,6 +603,109 @@ const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
 .skeleton-block {
   height: 120px;
   border-radius: var(--radius-md);
+}
+
+/* ===== 功能格（自 /portal/class 搬入）===== */
+.feature-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.class-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.class-bar__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.class-bar__name {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.class-bar__meta {
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+}
+
+.class-bar__switch {
+  width: 10rem;
+  max-width: 100%;
+}
+
+.feature-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.group-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--el-text-color-regular);
+  margin: 0;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-2);
+}
+
+.feature-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 64px;
+  padding: var(--space-3);
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+.feature-tile:hover {
+  background: var(--el-fill-color-light);
+}
+
+.feature-label {
+  font-size: var(--text-sm);
+  color: var(--el-text-color-primary);
+}
+
+.feature-caption {
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+}
+
+.feature-badge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: var(--el-color-white);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .classroom-section {

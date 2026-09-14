@@ -14,9 +14,11 @@ function findRoute(path: string) {
 }
 
 const SENSITIVE_PORTAL_ROUTES: Array<[string, string]> = [
-  // /portal/class-hub 已於 SPEC-024 移除，改為永久 redirect（無 meta.permission，
-  // 守衛不適用於純轉向路由；權限檢查由目的地 /portal/class 與 /portal/medications 各自把關）。
-  ['/portal/class', 'STUDENTS_READ'],
+  // /portal/class-hub 與 /portal/class 都已成為純 redirect（前者 SPEC-024，後者
+  // 2026-09-14 班級功能併入 /portal/home），不掛 meta.permission——守衛不適用於
+  // 純轉向路由。班級功能的把關改由首頁功能格的 hasPortalPermission 過濾，加上
+  // 下列各目的頁自己的 meta.permission；/portal/home 本身對全體 portal 使用者
+  // 開放，不可補掛 STUDENTS_READ，否則沒有該權限的行政同仁連首頁都進不去。
   ['/portal/students', 'STUDENTS_READ'],
   ['/portal/students/:studentId', 'STUDENTS_READ'],
   ['/portal/student-attendance', 'STUDENTS_READ'],

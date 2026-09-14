@@ -3,8 +3,9 @@
  *
  * Phase 1 殼層改版：底部導覽重排 + 申請 FAB + ivy-portal 品牌 class。
  *
- * (a) 手機模式 5 格：今日／班級／＋申請（FAB）／出勤／我的；排班、學生退出 tab
- * (b) 班級 tab 導向 /portal/class-hub；今日 tab 導向 /portal/home
+ * (a) 手機模式 4 格：今日／＋申請（FAB）／出勤／我的；排班、學生、班級退出 tab
+ *     （班級 2026-09-14 併進首頁，留著會與「今日」指向同一頁）
+ * (b) 今日 tab 導向 /portal/home
  * (c) FAB 點擊開啟 ApplySheet（modelValue true）
  * (d) 出勤 tab 承接 swapPendingCount badge（排班 tab 退場後的可見性補償）
  * (e) mount 時 html 掛 ivy-portal class、unmount 移除（EP primary 收斂 indigo 的 scope）
@@ -105,35 +106,35 @@ describe('PortalLayout — 底部導覽 Phase 1 殼層', () => {
   beforeEach(() => {
     routerPush.mockClear()
     mockIsMobile.value = false
-    localStorage.setItem('portal_layout_v', '2')
+    localStorage.setItem('portal_layout_v', '3')
   })
 
-  it('(a) 手機模式 tab 為 今日/班級/出勤/我的 + 申請 FAB；工作台/排班/學生退場', async () => {
+  it('(a) 手機模式 tab 為 今日/出勤/我的 + 申請 FAB；工作台/班級/排班/學生退場', async () => {
     const wrapper = await mountMobile()
     const nav = wrapper.find('.bottom-nav')
     expect(nav.exists()).toBe(true)
 
     const navText = nav.text()
     expect(navText).toContain('今日')
-    expect(navText).toContain('班級')
     expect(navText).toContain('出勤')
     expect(navText).toContain('我的')
     expect(navText).toContain('申請')
     expect(navText).not.toContain('工作台')
     expect(navText).not.toContain('排班')
     expect(navText).not.toContain('學生')
+    // 班級功能 2026-09-14 併進首頁後，這個 tab 會與「今日」指向同一頁。
+    expect(navText).not.toContain('班級')
 
     expect(nav.find('.bottom-fab').exists()).toBe(true)
     wrapper.unmount()
   })
 
-  it('(b) 班級 tab push /portal/class；今日 tab push /portal/home', async () => {
+  it('(b) 今日 tab push /portal/home；已無班級 tab', async () => {
     const wrapper = await mountMobile()
     const tabs = wrapper.findAll('.bottom-tab')
     const byLabel = (label: string) => tabs.find((t) => t.text().includes(label))
 
-    await byLabel('班級')!.trigger('click')
-    expect(routerPush).toHaveBeenCalledWith('/portal/class')
+    expect(byLabel('班級')).toBeUndefined()
 
     await byLabel('今日')!.trigger('click')
     expect(routerPush).toHaveBeenCalledWith('/portal/home')

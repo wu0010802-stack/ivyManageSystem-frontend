@@ -143,8 +143,8 @@ export const PORTAL_ONLY_ROLES = ['teacher', 'parent']
 // 頁面時須同步本清單。
 export const TEACHER_PORTAL_ROUTES = [
   '/portal',
+  // /portal/class 於 2026-09-14 併進 /portal/home，成為純轉址，不再列入。
   '/portal/home',
-  '/portal/class',
   '/portal/attendance',
   '/portal/leave',
   '/portal/leave-history',

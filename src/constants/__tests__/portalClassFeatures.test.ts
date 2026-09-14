@@ -5,6 +5,7 @@ import {
   CLASS_FEATURES,
   visibleClassFeatures,
   featureBadge,
+  resolveFeatureBadge,
 } from '@/constants/portalClassFeatures'
 
 describe('portalClassFeatures', () => {
@@ -48,10 +49,15 @@ describe('portalClassFeatures', () => {
     expect(keys).toContain('bus-trip')
   })
 
-  it('無任何權限時兩組皆空', () => {
+  // 首頁整併（/portal/class 併入 /portal/home）後，教學／管理兩組各混入一格
+  // 不需權限的跨班級功能，「無權限即整組空」不再成立——但需要權限的那些格子
+  // 仍必須一格都不剩，否則就是權限過濾破了。
+  it('無班級權限時，teach／manage 只剩不需權限的那一格', () => {
     setUserInfo({ role: 'teacher', permission_names: [] })
-    expect(visibleClassFeatures('teach')).toHaveLength(0)
-    expect(visibleClassFeatures('manage')).toHaveLength(0)
+    expect(visibleClassFeatures('teach').map((f) => f.key)).toEqual([
+      'activity-attendance',
+    ])
+    expect(visibleClassFeatures('manage').map((f) => f.key)).toEqual(['surveys'])
   })
 
   it('badge 對應正確的 counts 欄位', () => {
@@ -93,5 +99,66 @@ describe('portalClassFeatures', () => {
     for (const f of CLASS_FEATURES) {
       expect(Boolean(f.to) !== Boolean(f.action)).toBe(true)
     }
+  })
+
+  // ===== 首頁整併（/portal/class 併入 /portal/home）新增的「我的」組 =====
+
+  it('「我的」組五格都不需權限，空權限帳號一樣看得到', () => {
+    setUserInfo({ role: 'teacher', permission_names: [] })
+    expect(visibleClassFeatures('mine').map((f) => f.key)).toEqual([
+      'pending-substitute',
+      'pending-swap',
+      'anomalies',
+      'announcements',
+      'growth',
+    ])
+  })
+
+  it('成長軌跡屬「我的」組：它是教師自己的考核歷程，不是學生的成長紀錄', () => {
+    const f = CLASS_FEATURES.find((x) => x.key === 'growth')!
+    expect(f.group).toBe('mine')
+    expect(f.to).toBe('/portal/growth')
+  })
+
+  it('才藝點名指向 2026-09-14 拆出的獨立頁，不是舊的 ?tab=attendance', () => {
+    const f = CLASS_FEATURES.find((x) => x.key === 'activity-attendance')!
+    expect(f.to).toBe('/portal/activity/attendance')
+  })
+
+  it('「我的」組 badge 取自 dashboard actions，不是班級 hub counts', () => {
+    const actions = {
+      pending_substitute: 2,
+      pending_swap: 1,
+      pending_anomaly_confirms: 5,
+      unread_announcements: 3,
+    }
+    const byKey = (k: string) => CLASS_FEATURES.find((f) => f.key === k)!
+    expect(resolveFeatureBadge(byKey('pending-substitute'), { actions })).toBe(2)
+    expect(resolveFeatureBadge(byKey('pending-swap'), { actions })).toBe(1)
+    expect(resolveFeatureBadge(byKey('anomalies'), { actions })).toBe(5)
+    expect(resolveFeatureBadge(byKey('announcements'), { actions })).toBe(3)
+    // 成長軌跡沒有待辦語意，永遠不掛數字
+    expect(resolveFeatureBadge(byKey('growth'), { actions })).toBe(0)
+  })
+
+  it('resolveFeatureBadge 併攏三種來源：hub counts／外部計數／dashboard actions', () => {
+    const byKey = (k: string) => CLASS_FEATURES.find((f) => f.key === k)!
+    const sources = {
+      counts: { attendance_pending: 3 },
+      actions: { unread_announcements: 6 },
+      dismissal: 4,
+      pickup: 2,
+    }
+    expect(resolveFeatureBadge(byKey('student-attendance'), sources)).toBe(3)
+    expect(resolveFeatureBadge(byKey('dismissal-calls'), sources)).toBe(4)
+    expect(resolveFeatureBadge(byKey('pickup-authorizations'), sources)).toBe(2)
+    expect(resolveFeatureBadge(byKey('announcements'), sources)).toBe(6)
+  })
+
+  it('來源全缺時 resolveFeatureBadge 一律回 0，不得丟例外', () => {
+    const byKey = (k: string) => CLASS_FEATURES.find((f) => f.key === k)!
+    expect(resolveFeatureBadge(byKey('student-attendance'), {})).toBe(0)
+    expect(resolveFeatureBadge(byKey('announcements'), {})).toBe(0)
+    expect(resolveFeatureBadge(byKey('dismissal-calls'), {})).toBe(0)
   })
 })

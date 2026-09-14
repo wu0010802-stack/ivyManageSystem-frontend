@@ -815,21 +815,29 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '今日待辦' },
                 },
                 {
-                    // /portal/class-hub 已於 SPEC-024 移除，改為 /portal/class。
-                    // 這條 redirect 永久保留：存量推播通知的 deep_link
-                    // 寫在 DB 裡改不動（用藥提醒帶 ?sheet=medication&id=，學生請假不帶 query），
-                    // 老師點開歷史通知仍會走到這裡。
+                    // /portal/class-hub 已於 SPEC-024 移除；班級功能又於 2026-09-14
+                    // 整頁併進 /portal/home。這條 redirect 永久保留：存量推播通知的
+                    // deep_link 寫在 DB 裡改不動（用藥提醒帶 ?sheet=medication&id=，
+                    // 學生請假不帶 query），老師點開歷史通知仍會走到這裡。
                     path: 'class-hub',
                     redirect: (to) =>
                         to.query.sheet === 'medication'
                             ? { path: '/portal/medications', query: { id: to.query.id } }
-                            : { path: '/portal/class' },
+                            : { path: '/portal/home' },
                 },
                 {
+                    // 班級功能 2026-09-14 整頁併入首頁（見 PortalHomeView 的功能格區）。
+                    // 同樣是永久轉址：老師書籤、側欄舊連結與 class-hub 轉來的流量都落
+                    // 在這裡。必須用 function 形式才保得住 query——側欄「全班量體位」與
+                    // 存量通知走的是 ?sheet=measurement，query 掉了抽屜就不會開。
+                    //
+                    // 原本掛在本路由的 meta.permission（STUDENTS_READ）不隨之搬到首頁：
+                    // 首頁對全體 portal 使用者開放，掛上去會把沒有該權限的行政同仁擋在
+                    // 首頁外。學生相關入口改由功能格自己的 hasPortalPermission 過濾，
+                    // 加上每個目的頁各自的 meta.permission 把關——這兩道原本就都在，
+                    // 防護沒有降級。
                     path: 'class',
-                    name: 'portal-class',
-                    component: () => import('../views/portal/PortalClassView.vue'),
-                    meta: { title: '班級', permission: 'STUDENTS_READ' },
+                    redirect: (to) => ({ path: '/portal/home', query: to.query }),
                 },
                 {
                     path: 'attendance',

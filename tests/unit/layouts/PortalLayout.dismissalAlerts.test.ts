@@ -106,7 +106,7 @@ describe('PortalLayout — 接送提醒 composable 接線', () => {
     mockIsMobile.value = false
     pendingCount.value = 0
     // 壓制 onMounted 導航更新提示
-    localStorage.setItem('portal_layout_v', '2')
+    localStorage.setItem('portal_layout_v', '3')
     // jsdom matchMedia stub
     window.matchMedia = vi.fn().mockReturnValue({
       matches: false,

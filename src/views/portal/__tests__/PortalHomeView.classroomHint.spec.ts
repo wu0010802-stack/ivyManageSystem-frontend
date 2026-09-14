@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { createRouter, createWebHistory } from 'vue-router'
 import { ref } from 'vue'
 
 const state = vi.hoisted(() => ({ summary: { value: null as unknown } }))
@@ -36,7 +37,37 @@ vi.mock('@/api/portalLeaveQuotaExpiry', () => ({
   ),
 }))
 
+// 首頁 2026-09-14 併入班級功能格後多了這些依賴；本檔只關心空班級診斷文案，
+// 一律給最小假資料，避免真的打 API。
+vi.mock('@/composables/usePortalClassHub', () => ({
+  usePortalClassHub: () => ({
+    data: ref(null),
+    loading: ref(false),
+    error: ref(null),
+    refresh: vi.fn(() => Promise.resolve()),
+    decrementCount: vi.fn(),
+  }),
+}))
+
+vi.mock('@/composables/usePortalDismissalAlerts', () => ({
+  usePortalDismissalAlerts: () => ({ pendingCount: ref(0) }),
+}))
+
+vi.mock('@/api/portal', () => ({
+  getPortalPickupPendingCount: vi.fn(() => Promise.resolve({ data: { count: 0 } })),
+}))
+
+vi.mock('@/api/portalMeasurements', () => ({
+  getMeasurementsLatest: vi.fn(() => Promise.resolve({ data: [] })),
+}))
+
 import PortalHomeView from '../PortalHomeView.vue'
+
+// 功能格的量體位抽屜深連結會在 setup 立刻讀 route.query，沒有 router 直接爆。
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
+})
 
 function summaryWith(overrides: Record<string, unknown> = {}) {
   return {
@@ -57,7 +88,12 @@ function summaryWith(overrides: Record<string, unknown> = {}) {
 }
 
 const mountHome = async () => {
-  const wrapper = mount(PortalHomeView, { global: { plugins: [ElementPlus] } })
+  const wrapper = mount(PortalHomeView, {
+    global: {
+      plugins: [ElementPlus, router],
+      stubs: { PortalBatchMeasurementSheet: true, TodayFocusCard: true },
+    },
+  })
   await flushPromises()
   return wrapper
 }

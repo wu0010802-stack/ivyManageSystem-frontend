@@ -101,7 +101,7 @@ describe('PortalLayout — isMobile 接線', () => {
   beforeEach(() => {
     routerPush.mockClear()
     mockIsMobile.value = false
-    localStorage.setItem('portal_layout_v', '2')
+    localStorage.setItem('portal_layout_v', '3')
   })
 
   it('isMobile 為 true 時 .portal-layout 含 is-mobile class；切回 false 後移除', async () => {
@@ -127,7 +127,7 @@ describe('PortalLayout — impersonation 橫幅', () => {
     routerPush.mockClear()
     mockIsMobile.value = false
     // 每次測試前清除 onboarding 提示，防止 setTimeout ElMessageBox 干擾
-    localStorage.setItem('portal_layout_v', '2')
+    localStorage.setItem('portal_layout_v', '3')
   })
 
   it('(a) readonly 模式顯示藍色 info 橫幅，含「預覽中（唯讀）」與教師姓名', async () => {

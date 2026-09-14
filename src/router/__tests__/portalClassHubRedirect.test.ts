@@ -36,17 +36,55 @@ describe('/portal/class-hub 舊連結 redirect', () => {
     })
   })
 
-  it('不帶 query 轉到班級總覽', () => {
-    expect(classHubRedirect()({ query: {} })).toEqual({ path: '/portal/class' })
+  it('不帶 query 轉到首頁（班級功能 2026-09-14 併入首頁）', () => {
+    expect(classHubRedirect()({ query: {} })).toEqual({ path: '/portal/home' })
   })
 
-  it('帶其他 sheet 值也轉到班級總覽（不是 404）', () => {
+  it('帶其他 sheet 值也轉到首頁（不是 404）', () => {
     expect(classHubRedirect()({ query: { sheet: 'attendance' } })).toEqual({
-      path: '/portal/class',
+      path: '/portal/home',
     })
   })
 
   it('router 已無 portal-class-hub 這個 name', () => {
     expect(router.hasRoute('portal-class-hub')).toBe(false)
+  })
+})
+
+/**
+ * /portal/class 於 2026-09-14 整頁併進 /portal/home。這條轉址同樣是永久的：
+ * 老師的書籤、側欄舊連結與 class-hub 轉過來的流量都落在這裡。
+ *
+ * 必須保留 query——側欄「全班量體位」與存量通知走的是 ?sheet=measurement，
+ * 字串形式的 redirect 會把 query 丟掉，抽屜就再也不會開。
+ */
+describe('/portal/class 併入首頁後的 redirect', () => {
+  function classRedirect(): RedirectFn {
+    const rec = router.getRoutes().find((r) => r.path === '/portal/class')
+    expect(rec, '/portal/class 的 route record 必須存在（存量書籤靠它）').toBeTruthy()
+    expect(typeof rec!.redirect, 'redirect 要是 function：需保留 query').toBe('function')
+    return rec!.redirect as RedirectFn
+  }
+
+  it('轉到 /portal/home', () => {
+    expect(classRedirect()({ query: {} })).toEqual({ path: '/portal/home', query: {} })
+  })
+
+  it('保留 ?sheet=measurement，否則側欄的全班量體位再也開不了抽屜', () => {
+    expect(classRedirect()({ query: { sheet: 'measurement' } })).toEqual({
+      path: '/portal/home',
+      query: { sheet: 'measurement' },
+    })
+  })
+
+  it('保留 ?classroom_id=（多班教師的深連結）', () => {
+    expect(classRedirect()({ query: { classroom_id: '5' } })).toEqual({
+      path: '/portal/home',
+      query: { classroom_id: '5' },
+    })
+  })
+
+  it('router 已無 portal-class 這個 name', () => {
+    expect(router.hasRoute('portal-class')).toBe(false)
   })
 })

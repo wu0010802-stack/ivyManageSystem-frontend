@@ -69,10 +69,9 @@ function mountIt() {
     global: {
       plugins: [createPinia(), router],
       stubs: {
-        PendingActionsCard: true,
         TodayFocusCard: true,
         ClassroomOpsCard: true,
-        QuickLinksCard: true,
+        PortalBatchMeasurementSheet: true,
         ElButton: { template: '<button><slot /></button>' },
         ElCard: {
           template: '<div class="el-card"><slot name="header" /><slot /></div>',
@@ -115,7 +114,8 @@ describe('PortalHomeView', () => {
   it('renders classrooms section title', async () => {
     const w = mountIt()
     await flushPromises()
-    expect(w.text()).toContain('我的班級')
+    // 四格 KPI 併入功能格後，這一區只剩別處看不到的三條提醒，故更名。
+    expect(w.text()).toContain('班級提醒')
   })
 
   // ── Phase 2 任務流首頁：hero + 現在該做 ─────────────────────
