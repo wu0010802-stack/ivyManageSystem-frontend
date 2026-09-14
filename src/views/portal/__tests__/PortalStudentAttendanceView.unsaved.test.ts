@@ -106,10 +106,12 @@ describe('點名未儲存保護與批次操作', () => {
   it('批次只填未點名者，保留既有假別與本次手動修改', async () => {
     const w = await mountView()
     edit(w)
-    w.findComponent({ name: 'StudentRollcallTable' }).vm.$emit('quick-set-all', '缺席')
+    // 2026-09-14：批次只剩「未點名者全部出席」——整班缺席會推播全班家長，
+    // 那是停課不是點名（守衛見 StudentRollcallTable.tristate.test.ts）。
+    w.findComponent({ name: 'StudentRollcallTable' }).vm.$emit('quick-set-all', '出席')
     await flushPromises()
     const students = w.findComponent({ name: 'StudentRollcallTable' }).props('students')
-    expect(students.map((r: { status: string }) => r.status)).toEqual(['病假', '事假', '遲到', '缺席'])
+    expect(students.map((r: { status: string }) => r.status)).toEqual(['病假', '事假', '遲到', '出席'])
   })
 
   it('剛進頁不攔截，修改後重新整理需提醒', async () => {
@@ -185,13 +187,13 @@ describe('點名未儲存保護與批次操作', () => {
 })
 
 describe('點名保護邊界', () => {
-  it('批次預選出席也算待儲存，復原後回到未操作狀態', async () => {
+  it('批次補上出席也算待儲存，復原後回到未操作狀態', async () => {
     const w = await mountView()
     w.findComponent({ name: 'StudentRollcallTable' }).vm.$emit('quick-set-all', '出席')
     await flushPromises()
     expect(unloadBlocked()).toBe(true)
     expect(w.text()).toContain('有 2 筆未儲存')
-    const undo = w.findAllComponents({ name: 'ElButton' }).find(button => button.text().includes('復原批次點名'))
+    const undo = w.findAllComponents({ name: 'ElButton' }).find(button => button.text().trim() === '復原')
     expect(undo).toBeDefined()
     await undo!.vm.$emit('click')
     await flushPromises()

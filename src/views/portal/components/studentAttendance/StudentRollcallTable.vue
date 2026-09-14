@@ -1,13 +1,47 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+/**
+ * 到園點名名冊（2026-09-14 UI/UX 審查改版）。
+ *
+ * 三件事變了：
+ * 1. **未點名是第一級狀態**。改版前 view 把 `status=null` 預選成「出席」，27 列
+ *    一進頁全部亮著同一種藍，「誰還沒點」在畫面上不存在。現在未點名不選中任何
+ *    按鈕、列加黃底與「未點」徽章。
+ * 2. **狀態語意色**。改版前選中一律 primary 藍，只有缺席有黃底；病假／事假／遲到
+ *    選中後與出席列外觀完全相同，掃例外要逐列讀字。
+ * 3. **移除「未點名者缺席」批次鈕**。後端每筆轉缺席都會排程家長 LINE 通知
+ *    （api/portal/student_attendance.batch_save_class_attendance），一鍵全班缺席
+ *    等於同時推播全班家長；整班不到是停課，不是點名情境。才藝課程點名 09-14 已
+ *    因同一理由移除「全部缺席」。
+ *
+ * 控制項改用 el-button-group（與 components/activity/AttendanceMarkControl.vue 同
+ * 範式）而非 el-radio-group：radio 的選中態一律 primary，語意色得覆寫 EP 內部
+ * class 才做得到；button 的 type 本來就吃語意色，且 null 不會被任何元件改寫。
+ */
+import { reactive, computed } from 'vue'
+import {
+  ROLLCALL_STATUSES,
+  isUnmarked,
+  parseRollcallRemark,
+  composeRollcallRemark,
+} from '@/utils/studentRollcall'
 
-interface RollcallStudent { student_id?: number; student_no?: string; name?: string; status?: string; remark?: string; [key: string]: unknown }
+interface RollcallStudent {
+  student_id?: number
+  student_no?: string
+  name?: string
+  status?: string | null
+  remark?: string | null
+  [key: string]: unknown
+}
 
-defineProps<{
+const props = defineProps<{
   students: RollcallStudent[]
   loading?: boolean
   disabled?: boolean
+  /** 全班未點名人數（不是篩選後的），供批次按鈕顯示與停用判斷 */
   pendingCount?: number
+  /** 篩選或搜尋後結果為空時的說明，與「這班沒有學生」區分 */
+  emptyHint?: string
 }>()
 
 const emit = defineEmits<{
@@ -15,24 +49,47 @@ const emit = defineEmits<{
   'quick-set-all': [status: string]
 }>()
 
-// 點名狀態選項（依原 view 的 STATUSES 常數對齊）
-const STATUS_OPTIONS = ['出席', '缺席', '病假', '事假', '遲到']
+type ButtonType = '' | 'primary' | 'success' | 'warning' | 'danger' | 'info'
 
-// 手動點開備註的學生（已有備註者自動視為展開）
+/** 狀態 → el-button type。遲到用 primary：與出席（success）拉開，又不像缺席那麼重。 */
+const STATUS_TYPE: Record<string, ButtonType> = {
+  出席: 'success',
+  缺席: 'danger',
+  病假: 'warning',
+  事假: 'warning',
+  遲到: 'primary',
+}
+
+const pending = computed(() => props.pendingCount ?? 0)
+
+function rowTone(student: RollcallStudent): string {
+  if (isUnmarked(student)) return 'is-unmarked'
+  if (student.status === '出席') return 'is-present'
+  if (student.status === '缺席') return 'is-absent'
+  if (student.status === '遲到') return 'is-late'
+  return 'is-leave'
+}
+
+// 手動點開備註的學生（老師自己寫過備註者自動視為展開）
 const openedRemarks = reactive(new Set<number | string>())
+function rowKey(student: RollcallStudent): number | string {
+  return student.student_id ?? student.student_no ?? ''
+}
 function isRemarkOpen(student: RollcallStudent): boolean {
-  if (student.remark) return true
-  const key = student.student_id ?? student.student_no ?? ''
-  return openedRemarks.has(key)
+  if (parseRollcallRemark(student.remark).text) return true
+  return openedRemarks.has(rowKey(student))
 }
 function openRemark(student: RollcallStudent) {
-  openedRemarks.add(student.student_id ?? student.student_no ?? '')
+  openedRemarks.add(rowKey(student))
 }
 
-function onStatusChange(student: RollcallStudent, value: string) {
+function onPick(student: RollcallStudent, status: string) {
+  if (props.disabled) return
+  // 重複點已選中的狀態也要 emit：那代表老師確認過這一列（例如家長請假已帶成病假，
+  // 老師再點一次病假表示「我看過了」）。父頁據此把它移出未點名集合。
   emit('update-status', {
     student_id: student.student_id,
-    status: value,
+    status,
     remark: student.remark || '',
   })
 }
@@ -41,7 +98,7 @@ function onRemarkChange(student: RollcallStudent, value: string) {
   emit('update-status', {
     student_id: student.student_id,
     status: student.status ?? '',
-    remark: value,
+    remark: composeRollcallRemark(student.remark, value),
   })
 }
 </script>
@@ -49,16 +106,19 @@ function onRemarkChange(student: RollcallStudent, value: string) {
 <template>
   <div class="rollcall-table" v-loading="loading ?? false">
     <div v-if="!students.length" class="empty-state">
-      尚無學生
+      {{ emptyHint || '尚無學生' }}
     </div>
 
     <template v-else>
       <div class="rollcall-actions">
-        <el-button size="small" type="success" :disabled="disabled || pendingCount === 0" plain @click="$emit('quick-set-all', '出席')">
-          {{ pendingCount === undefined ? '全部出席' : `未點名者出席（${pendingCount} 人）` }}
-        </el-button>
-        <el-button size="small" type="danger" :disabled="disabled || pendingCount === 0" plain @click="$emit('quick-set-all', '缺席')">
-          {{ pendingCount === undefined ? '全部缺席' : `未點名者缺席（${pendingCount} 人）` }}
+        <el-button
+          size="small"
+          type="success"
+          plain
+          :disabled="disabled || pending === 0"
+          @click="emit('quick-set-all', '出席')"
+        >
+          未點名者全部出席（{{ pending }}）
         </el-button>
       </div>
 
@@ -67,31 +127,53 @@ function onRemarkChange(student: RollcallStudent, value: string) {
           v-for="s in students"
           :key="s.student_id"
           class="student-row"
-          :class="{ 'is-absent': s.status === '缺席' }"
+          :class="rowTone(s)"
         >
-          <span class="student-no">{{ s.student_no }}</span>
-          <span class="student-name">{{ s.name }}</span>
-          <!-- 點擊已預選的出席也代表確認，必須通知父頁從待點名集合移除。 -->
-          <el-radio-group
-            :model-value="s.status"
-            :disabled="disabled"
-            size="small"
-            @update:model-value="(v) => onStatusChange(s, String(v))"
+          <div class="student-row__who">
+            <span class="student-name">{{ s.name }}</span>
+            <span class="student-no">{{ s.student_no }}</span>
+            <span v-if="isUnmarked(s)" class="badge badge--unmarked">未點</span>
+            <span v-if="parseRollcallRemark(s.remark).fromParentLeave" class="badge badge--leave">
+              家長請假
+            </span>
+            <span v-if="s.status === '缺席'" class="notify-hint">會即時通知家長</span>
+            <el-button
+              v-if="!isRemarkOpen(s)"
+              link
+              type="primary"
+              class="remark-toggle"
+              :aria-label="`為 ${s.name} 加備註`"
+              @click="openRemark(s)"
+            >
+              加備註
+            </el-button>
+          </div>
+
+          <el-button-group
+            class="status-group"
+            role="group"
+            :aria-label="`${s.name} 的出缺席`"
           >
-            <el-radio-button
-              v-for="opt in STATUS_OPTIONS"
+            <el-button
+              v-for="opt in ROLLCALL_STATUSES"
               :key="opt"
-              :value="opt"
-              @click.capture="s.status === opt && onStatusChange(s, opt)"
+              class="status-btn"
+              :type="s.status === opt ? (STATUS_TYPE[opt] ?? '') : ''"
+              :disabled="disabled"
+              :aria-pressed="s.status === opt"
+              :aria-label="`${s.name}：${opt}`"
+              @click="onPick(s, opt)"
             >
               {{ opt }}
-            </el-radio-button>
-          </el-radio-group>
-          <!-- 備註預設收起（P2-15）：一班 27 人時，27 個常駐輸入框讓整頁
-               長到 9,200px，而備註是例外才填的東西。有值或點開才展開。 -->
+            </el-button>
+          </el-button-group>
+
+          <!-- 備註預設收起：一班 27 人時常駐輸入框會讓整頁長到 9,000px 以上，
+               而備註是例外才填的東西。老師寫過或點開才展開；家長請假的前綴不進
+               輸入框（改用 chip 顯示），送出時由 composeRollcallRemark 接回去。 -->
           <el-input
             v-if="isRemarkOpen(s)"
-            :model-value="s.remark"
+            :model-value="parseRollcallRemark(s.remark).text"
             :disabled="disabled"
             placeholder="備註（選填）"
             size="small"
@@ -99,16 +181,6 @@ function onRemarkChange(student: RollcallStudent, value: string) {
             clearable
             @update:model-value="onRemarkChange(s, $event)"
           />
-          <el-button
-            v-else
-            link
-            type="primary"
-            class="remark-toggle"
-            :aria-label="`為 ${s.name} 加備註`"
-            @click="openRemark(s)"
-          >
-            加備註
-          </el-button>
         </div>
       </div>
     </template>
@@ -139,78 +211,124 @@ function onRemarkChange(student: RollcallStudent, value: string) {
   display: flex;
   gap: var(--space-2, 8px);
   align-items: center;
-  padding: var(--space-2, 8px);
-  background: var(--pt-surface-card, #fff);
-  border: var(--pt-hairline, 1px solid #e5e7eb);
+  padding: 6px var(--space-3, 12px);
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color);
   border-radius: var(--radius-md, 8px);
   flex-wrap: wrap;
 }
 
-.remark-toggle {
-  margin-left: auto;
+.student-row__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
-.student-row.is-absent {
+/* 未點名：整列淡黃，掃一眼就知道還剩誰。已點名的列維持白底，不搶注意力。 */
+.student-row.is-unmarked {
   background: var(--color-warning-soft);
 }
 
-.student-no {
-  font-size: 12px;
-  color: var(--pt-text-muted, #9ca3af);
-  min-width: 50px;
+.student-name {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 
-.student-name {
-  font-weight: 500;
-  color: var(--pt-text-strong, #111827);
-  min-width: 80px;
+.student-no {
+  font-size: var(--text-xs, 12px);
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge--unmarked {
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+}
+
+.badge--leave {
+  background: var(--color-info-soft, #e0f2fe);
+  color: var(--color-info-darker);
+}
+
+.notify-hint {
+  font-size: var(--text-xs, 12px);
+  color: var(--color-danger);
+  white-space: nowrap;
+}
+
+.remark-toggle {
+  font-size: var(--text-sm, 13px);
 }
 
 .remark-input {
-  flex: 1;
-  min-width: 120px;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.status-group {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* 桌機原本是 22px 高的 radio-button，低於最小點擊目標。 */
+.status-btn {
+  min-height: 30px;
+  padding: 4px 10px;
 }
 
 .empty-state {
   text-align: center;
   padding: var(--space-6, 24px);
-  color: var(--pt-text-muted, #9ca3af);
+  color: var(--el-text-color-secondary);
 }
 
-/* 中等視口（≤ 600px）：保留 row 為大方向，避免 480px 才切讓 481-600px 寬度
- * 內 radio-group 跟 input 嚴重擠壓 wrap。學號+姓名同行，radio-group 第二行
- * 用 grid 5 等寬，每個 button 強制 44px 觸碰目標。備註輸入第三行。
- * 為什麼 600px 而不是 768px：768px 已是 iPad portrait，table 仍可正常排，
- * 600px 對應大多數手機橫向與小尺寸 phablet。 */
+/* 窄幕：姓名列與五格狀態各一行，卡片高度從改版前的 146px 收到約 100px
+ * （學號、姓名、按鈕、加備註原本各佔一行，一屏只放得下 3 個人）。
+ * 五格等寬 44px 保留——幼兒園病假事假常見，收進「其他」會讓常用動作變兩步。 */
 @media (max-width: 600px) {
   .student-row {
-    flex-direction: column;
     align-items: stretch;
-    gap: var(--space-2, 8px);
+    padding: var(--space-2, 8px) var(--space-3, 12px);
   }
 
-  /* radio-group 內部用 grid 平分 5 個選項，避免 wrap 後高低不齊或被截斷 */
-  .student-row :deep(.el-radio-group) {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
+  /* 父層是 flex row wrap：只給 width:100% 不會換行，status-group 會接在姓名列
+   * 後面用剩下的寬度排五格，第五格「遲到」被擠到第二行（實測列高 135px、一屏
+   * 只剩 2 人）。要 flex-basis:100% 才真的各自獨佔一行。 */
+  .student-row__who {
+    flex: 1 1 100%;
+  }
+
+  /* ⚠ 這裡不能用 grid 平分五格：el-button-group 帶 ::before/::after clearfix
+   * （display:table），在 grid 容器裡會各自佔掉一個 cell，五顆按鈕被推成 4+1
+   * 兩行（實測列高 135px、一屏只剩 2 人）。改用 flex + 等分 basis，偽元素寬度
+   * 為 0 不佔位。 */
+  .status-group {
+    flex: 1 1 100%;
+    display: flex;
     width: 100%;
   }
-  .student-row :deep(.el-radio-group .el-radio-button) {
-    width: 100%;
-  }
-  .student-row :deep(.el-radio-group .el-radio-button__inner) {
-    width: 100%;
+
+  .status-btn {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
     min-height: var(--touch-target-min, 44px);
     padding: 8px 2px;
     font-size: var(--text-xs, 12px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
 
   .remark-input {
-    flex: none;
-    min-width: 0;
     width: 100%;
   }
 }

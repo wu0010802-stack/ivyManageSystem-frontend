@@ -45943,12 +45943,22 @@ export interface components {
         /**
          * StudentAttendanceDailyOut
          * @description GET /student-attendance — 某班某日出席清單（含未點名）。
+         *
+         *     last_recorded_at／by 是**班級層級**的「上次儲存」metadata（不是逐生欄位）：
+         *     該班該日最後被寫入那筆的時間，與記錄者顯示名（員工姓名優先，退回帳號；
+         *     家長請假自動寫入的列無記錄者，此時 by 為 None 而 at 仍有值）。教師端到園
+         *     點名頁用它區分「還沒人點」與「班導已點完」（2026-09-14 UI/UX 審查 P2）。
+         *     admin 端 `/student-attendance` 共用本 model，未填時兩者皆為 None。
          */
         StudentAttendanceDailyOut: {
             /** Classroom Id */
             classroom_id: number;
             /** Date */
             date: string;
+            /** Last Recorded At */
+            last_recorded_at?: string | null;
+            /** Last Recorded By */
+            last_recorded_by?: string | null;
             /** Records */
             records: components["schemas"]["StudentAttendanceDailyRecordOut"][];
         };
