@@ -11,6 +11,8 @@ export interface AttendanceStudent {
   student_name?: string
 }
 
+export type { SessionData as AttendanceSessionData }
+
 export interface AttendanceStudentGroup {
   classroom_id: number | null
   classroom_name: string
@@ -22,6 +24,11 @@ interface SessionData {
   course_name: string
   session_date: string
   students: AttendanceStudent[]
+  /** 應到人數（後端 detail 的 total） */
+  total?: number
+  /** 本場最後一次點名的時間與點名者（皆無點名紀錄時為 null） */
+  last_recorded_at?: string | null
+  last_recorded_by?: string | null
 }
 
 /**
@@ -31,7 +38,19 @@ interface SessionData {
  * @param {Function} options.getSessionFn  - 取得場次詳情的 API 函式，接受 session id
  * @param {Function} options.updateFn      - 批次儲存點名的 API 函式，接受 (id, records)
  */
-export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSessionFn: (...args: unknown[]) => Promise<{ data: SessionData }>; updateFn: (...args: unknown[]) => Promise<unknown> }) {
+export function useActivityAttendanceDrawer({
+  getSessionFn,
+  updateFn,
+  closeOnSuccess = true,
+}: {
+  getSessionFn: (...args: unknown[]) => Promise<{ data: SessionData }>
+  updateFn: (...args: unknown[]) => Promise<unknown>
+  /**
+   * 儲存成功後是否關閉容器。drawer（後台）預設關閉；教師端已改成獨立頁面，
+   * 關掉等於把人踢回列表，還要自己找回剛剛那一列，所以傳 false 留在原地。
+   */
+  closeOnSuccess?: boolean
+}) {
   const drawerVisible = ref(false)
   const drawerLoading = ref(false)
   const drawerSession = ref<SessionData | null>(null)
@@ -150,6 +169,20 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
       : 0
   )
 
+  /**
+   * 相對載入基準有異動、且真的送得出去的列數（＝handleSave 會 PUT 的筆數）。
+   * 給畫面顯示「N 筆異動」用，讓老師按下儲存前知道自己改了幾個人。
+   */
+  const dirtyCount = computed(() => {
+    if (!drawerSession.value) return 0
+    return drawerSession.value.students.filter(s => {
+      if (s.is_present === null) return false
+      const base = baseline.value.get(s.registration_id)
+      if (!base) return true
+      return base.is_present !== s.is_present || base.notes !== (s.attendance_notes || '')
+    }).length
+  })
+
   async function openDrawer(row: { id: unknown }, params: Record<string, unknown> = {}) {
     const seq = ++loadSeq
     drawerVisible.value = true
@@ -199,6 +232,20 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     if (!drawerSession.value) return
     drawerSession.value.students.forEach(s => {
       s.is_present = value
+    })
+  }
+
+  /**
+   * 只把「還沒點名」的人標成出席，已經點過的（含缺席）一律不動。
+   *
+   * 取代教師端原本的「全部出席／全部缺席」兩顆：那兩顆會覆蓋已經標好的人，
+   * 而點到一半才按批次是常態。「全部缺席」則整個移除——整堂缺席是停課才會發生的事，
+   * 該走場次備註，不是把全班點成缺席（缺席會進退費堂數）。
+   */
+  function setUnmarkedPresent() {
+    if (!drawerSession.value) return
+    drawerSession.value.students.forEach(s => {
+      if (s.is_present === null) s.is_present = true
     })
   }
 
@@ -271,8 +318,8 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
       }
       captureBaseline()
       captureSnapshot()
-      ElMessage.success('點名儲存成功')
-      drawerVisible.value = false
+      ElMessage.success(`已儲存 ${records.length} 筆點名`)
+      if (closeOnSuccess) drawerVisible.value = false
       if (onSuccess) onSuccess()
     } catch (e) {
       const err = e as { response?: { data?: { detail?: string } } }
@@ -294,9 +341,11 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     drawerPresentCount,
     drawerAbsentCount,
     drawerUnmarkedCount,
+    dirtyCount,
     openDrawer,
     reloadCurrentSession,
     setAllPresent,
+    setUnmarkedPresent,
     handleSave,
     isDirty,
   }

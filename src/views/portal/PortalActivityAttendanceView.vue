@@ -1,173 +1,178 @@
+<script setup lang="ts">
+/**
+ * 課程點名｜場次列表（2026-09-14 改版）。
+ *
+ * 改版前：一次撈整月、依日期升冪平鋪 36 列，沒有「今天」也沒有上課時間；點名開在
+ * 右側 drawer。老師 90% 的來訪只為了點今天那一堂，卻要自己掃過整個月。
+ *
+ * 現在：以「週」為單位撈，今天固定在第一屏；另外撈過去 14 天算漏點名，主動浮出；
+ * 點名改成獨立頁面 /portal/activity/attendance/:sessionId。
+ */
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { getPortalAttendanceSessions } from '@/api/activity'
+import type { Schema } from '@/api/_generated/typed'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import ActivitySessionList from './components/activity/ActivitySessionList.vue'
+import {
+  findOverdue,
+  parseDay,
+  toISO,
+  toSessionView,
+  todayInTaipei,
+  todaySummary,
+  weekBounds,
+  weekLabel,
+  type BoardSession,
+  type SessionView,
+} from '@/utils/activitySessionBoard'
+
+type PortalSessionRow = Schema<'ActivitySessionListItemOut'>
+
+/** 漏點名回看天數。再往前的老師通常不會補了，全部翻出來只會讓提示變常駐雜訊。 */
+const OVERDUE_LOOKBACK_DAYS = 14
+
+const router = useRouter()
+
+const today = ref(todayInTaipei())
+const weekOffset = ref(0)
+const mode = ref<'week' | 'custom'>('week')
+const customStart = ref<string | null>(null)
+const customEnd = ref<string | null>(null)
+const filterCourseId = ref<number | null>(null)
+
+const loading = ref(false)
+const sessions = ref<PortalSessionRow[]>([])
+const overdueSessions = ref<SessionView[]>([])
+
+const range = computed(() => {
+  if (mode.value === 'custom' && (customStart.value || customEnd.value)) {
+    return { start: customStart.value ?? '', end: customEnd.value ?? '' }
+  }
+  return weekBounds(today.value, weekOffset.value)
+})
+
+const rangeLabel = computed(() => {
+  if (mode.value === 'custom') {
+    return `${customStart.value || '不限'} 至 ${customEnd.value || '不限'}`
+  }
+  return weekLabel(range.value.start, range.value.end, today.value)
+})
+
+const todayViews = computed(() =>
+  sessions.value
+    .map((s) => toSessionView(s as BoardSession, today.value))
+    .filter((s) => s.isToday),
+)
+
+const headerSubtitle = computed(() => {
+  const [, month, day] = today.value.split('-')
+  return `${Number(month)}月${Number(day)}日・${todaySummary(todayViews.value)}`
+})
+
+let requestSeq = 0
+
+async function loadSessions() {
+  const seq = ++requestSeq
+  loading.value = true
+  try {
+    const params: Record<string, string> = {}
+    if (range.value.start) params.start_date = range.value.start
+    if (range.value.end) params.end_date = range.value.end
+    const res = await getPortalAttendanceSessions(params)
+    if (seq !== requestSeq) return
+    sessions.value = res.data
+  } catch {
+    if (seq !== requestSeq) return
+    ElMessage.error('載入場次失敗')
+  } finally {
+    if (seq === requestSeq) loading.value = false
+  }
+}
+
+/**
+ * 漏點名要另外撈：它的視窗（過去 14 天）通常不在目前顯示的那一週裡，
+ * 不撈就只有翻回上一週才看得到，等於沒有提醒。
+ */
+async function loadOverdue() {
+  const floor = parseDay(today.value)
+  floor.setDate(floor.getDate() - OVERDUE_LOOKBACK_DAYS)
+  try {
+    const res = await getPortalAttendanceSessions({
+      start_date: toISO(floor),
+      end_date: today.value,
+    })
+    const views = (res.data as BoardSession[]).map((s) => toSessionView(s, today.value))
+    overdueSessions.value = findOverdue(views, today.value, OVERDUE_LOOKBACK_DAYS)
+  } catch {
+    // 漏點名只是輔助提示。撈不到就不顯示，不要再彈一次錯誤蓋掉主要內容的錯誤訊息。
+    overdueSessions.value = []
+  }
+}
+
+function shiftWeek(delta: number) {
+  mode.value = 'week'
+  weekOffset.value += delta
+  loadSessions()
+}
+
+function goToday() {
+  mode.value = 'week'
+  weekOffset.value = 0
+  today.value = todayInTaipei()
+  loadSessions()
+}
+
+function applyCustom() {
+  if (!customStart.value && !customEnd.value) {
+    ElMessage.warning('請先選擇日期範圍')
+    return
+  }
+  mode.value = 'custom'
+  loadSessions()
+}
+
+function openRollcall(session: SessionView) {
+  router.push({
+    name: 'portal-activity-rollcall',
+    params: { sessionId: String(session.id) },
+  })
+}
+
+onMounted(() => {
+  loadSessions()
+  loadOverdue()
+})
+</script>
+
 <template>
   <div class="portal-activity-attendance">
-    <PortalPageHeader title="課程點名" />
+    <PortalPageHeader title="課程點名" :subtitle="headerSubtitle" />
 
     <ActivitySessionList
-      :sessions="sessions"
-      :filter-course-id="filterCourseId"
-      :filter-start-date="filterStartDate"
-      :filter-end-date="filterEndDate"
-      :active-month="activeMonth"
+      :sessions="(sessions as BoardSession[])"
+      :overdue="overdueSessions"
       :loading="loading"
-      @update:filter-course-id="filterCourseId = $event; applyFilter()"
-      @update:filter-start-date="filterStartDate = $event"
-      @update:filter-end-date="filterEndDate = $event"
-      @set-month="setMonth"
-      @manual-date-change="onManualDateChange"
+      :today="today"
+      :range-label="rangeLabel"
+      :mode="mode"
+      :filter-course-id="filterCourseId"
+      :custom-start="customStart"
+      :custom-end="customEnd"
+      @shift-week="shiftWeek"
+      @go-today="goToday"
+      @update:filter-course-id="filterCourseId = $event"
+      @update:custom-start="customStart = $event"
+      @update:custom-end="customEnd = $event"
+      @apply-custom="applyCustom"
       @open-rollcall="openRollcall"
-    />
-
-    <ActivityRollcallDrawer
-      v-model="drawerVisible"
-      :drawer-title="drawerTitle"
-      :drawer-loading="drawerLoading"
-      :drawer-session="drawerSession || undefined"
-      :sorted-students="sortedStudents"
-      :save-loading="saveLoading"
-      :drawer-present-count="drawerPresentCount"
-      :drawer-absent-count="drawerAbsentCount"
-      :drawer-unmarked-count="drawerUnmarkedCount"
-      :before-close="handleRollcallBeforeClose"
-      @set-all-present="setAllPresent"
-      @save="handleSave(loadAttendanceSessions)"
     />
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  getPortalAttendanceSessions,
-  getPortalAttendanceSession,
-  batchUpdatePortalAttendance,
-} from '@/api/activity'
-import { dateToLocalISO } from '@/utils/format'
-import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
-import type { Schema } from '@/api/_generated/typed'
-import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
-import ActivitySessionList from './components/activity/ActivitySessionList.vue'
-import ActivityRollcallDrawer from './components/activity/ActivityRollcallDrawer.vue'
-
-// 後端 portal sessions list 已補 response_model（ActivitySessionListItemOut）→ codegen 型別
-type PortalSessionRow = Schema<'ActivitySessionListItemOut'>
-
-const loading = ref(false)
-const sessions = ref<PortalSessionRow[]>([])
-const filterCourseId = ref<number | null>(null)
-const filterStartDate = ref<string | null>(null)
-const filterEndDate = ref<string | null>(null)
-const activeMonth = ref<string | null>('current')
-
-const {
-  drawerVisible,
-  drawerLoading,
-  drawerSession,
-  saveLoading,
-  sortedStudents,
-  drawerTitle,
-  drawerPresentCount,
-  drawerAbsentCount,
-  drawerUnmarkedCount,
-  openDrawer,
-  setAllPresent,
-  handleSave,
-  isDirty,
-} = useActivityAttendanceDrawer({
-  // 對齊 admin call site（ActivityAttendanceView）：composable 以 unknown-arg 泛型契約
-  // 定義 getSessionFn/updateFn，其 SessionData 內部型別與 codegen 後 API 型別不完全
-  // 一致（如 is_present 的 undefined）；以薄 lambda 包裝已型別化的 api（id 由 unknown
-  // 收斂為 number），取代原 as-unknown-as 偽造完整簽名的雙重斷言。
-  // @ts-expect-error TODO(ts-strict): composable unknown-arg 契約 vs 型別化 API 的邊界
-  getSessionFn: (id, params) => getPortalAttendanceSession(id as number, params),
-  // @ts-expect-error TODO(ts-strict): 同上（records 型別於邊界相接）
-  updateFn: (id, records) => batchUpdatePortalAttendance(id as number, records),
-})
-
-function _monthBounds(offset: number) {
-  const today = new Date()
-  const y = today.getFullYear()
-  const m = today.getMonth() + offset
-  return {
-    start: dateToLocalISO(new Date(y, m, 1)),
-    end: dateToLocalISO(new Date(y, m + 1, 0)),
-  }
-}
-
-function setMonth(which: string) {
-  activeMonth.value = which
-  const offset = which === 'prev' ? -1 : which === 'next' ? 1 : 0
-  const { start, end } = _monthBounds(offset)
-  filterStartDate.value = start
-  filterEndDate.value = end
-  loadAttendanceSessions()
-}
-
-function onManualDateChange() {
-  activeMonth.value = null
-  applyFilter()
-}
-
-function applyFilter() {
-  loadAttendanceSessions()
-}
-
-let attendanceRequestSeq = 0
-
-async function loadAttendanceSessions() {
-  const seq = ++attendanceRequestSeq
-  loading.value = true
-  try {
-    const params: Record<string, string> = {}
-    if (filterStartDate.value) params.start_date = filterStartDate.value
-    if (filterEndDate.value) params.end_date = filterEndDate.value
-    const res = await getPortalAttendanceSessions(params)
-    if (seq !== attendanceRequestSeq) return
-    sessions.value = res.data
-  } catch {
-    if (seq !== attendanceRequestSeq) return
-    ElMessage.error('載入場次失敗')
-  } finally {
-    if (seq === attendanceRequestSeq) loading.value = false
-  }
-}
-
-function openRollcall(session: PortalSessionRow) {
-  openDrawer(session)
-}
-
-// 未存點名守衛：ESC/X 關閉時若有未儲存的出席/備註異動，先確認再關。
-async function handleRollcallBeforeClose(done: () => void) {
-  if (!isDirty()) {
-    done()
-    return
-  }
-  try {
-    await ElMessageBox.confirm('尚有未儲存點名，確定離開？', '未儲存變更', {
-      type: 'warning',
-      confirmButtonText: '離開',
-      cancelButtonText: '留在此頁',
-    })
-    done()
-  } catch {
-    // 取消：留在 drawer
-  }
-}
-
-onMounted(() => {
-  setMonth('current')
-})
-</script>
-
 <style scoped>
-.portal-activity-attendance { padding: 16px; }
-</style>
-
-<style>
-/* 未點名列的黃底。ActivityRollcallDrawer 的 el-table 以 row-class-name 掛上
-   .unmarked-row，該列由 Element Plus 渲染、選不到 scoped 屬性，故維持非 scoped。
-   本頁自 PortalActivityView 拆出時一併搬來（樣式服務的是點名 drawer，不是報名頁）。 */
-.el-table .unmarked-row td {
-  background-color: var(--color-warning-soft) !important;
+.portal-activity-attendance {
+  padding: var(--space-4, 16px);
 }
 </style>

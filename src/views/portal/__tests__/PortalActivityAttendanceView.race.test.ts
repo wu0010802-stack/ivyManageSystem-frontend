@@ -3,166 +3,238 @@ import { defineComponent } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * 場次請求競態守衛。
+ * 課程點名｜場次列表。
  *
- * 2026-09-14 課程點名自 /portal/activity 的第二個 tab 拆成獨立頁
- * （PortalActivityAttendanceView）時，本檔自 PortalActivityView.race.test.ts
- * 整批搬來——守衛跟著功能走，不是跟著原元件留下。
+ * 2026-09-14 改版：以「週」為單位撈、今天固定在第一屏、點名改成獨立路由。
+ * 原本這裡還有兩條屬於點名 drawer 的守衛（skipped 重抓、儲存後重抓權威名冊），
+ * 已隨功能搬到 PortalActivityRollcallView.test.ts，不是跟著元件刪掉。
  */
 vi.mock('@/api/activity', () => ({
   getPortalAttendanceSessions: vi.fn(),
-  getPortalAttendanceSession: vi.fn(),
-  batchUpdatePortalAttendance: vi.fn(),
 }))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn() },
 }))
 
-import {
-  batchUpdatePortalAttendance,
-  getPortalAttendanceSession,
-  getPortalAttendanceSessions,
-} from '@/api/activity'
+import { ElMessage } from 'element-plus'
+import { getPortalAttendanceSessions } from '@/api/activity'
 import PortalActivityAttendanceView from '../PortalActivityAttendanceView.vue'
+
+const push = vi.fn()
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push }),
+}))
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((r) => { resolve = r })
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
   return { promise, resolve }
 }
 
-const SessionListStub = defineComponent({
+const ListStub = defineComponent({
   name: 'ActivitySessionList',
-  props: ['sessions'],
-  template: '<div data-test="sessions">{{ JSON.stringify(sessions) }}</div>',
+  props: ['sessions', 'overdue', 'loading', 'today', 'rangeLabel', 'mode', 'filterCourseId'],
+  emits: ['shift-week', 'go-today', 'open-rollcall'],
+  template:
+    '<div data-test="list" :data-range="rangeLabel" :data-overdue="overdue.length">{{ sessions.map(s => s.id).join(",") }}</div>',
 })
 
-function detail(...attendance: Array<boolean | null>) {
-  const values = attendance.length > 0 ? attendance : [null]
+const HeaderStub = defineComponent({
+  props: ['title', 'subtitle'],
+  template: '<header>{{ title }}｜{{ subtitle }}</header>',
+})
+
+function row(over: Record<string, unknown> = {}) {
   return {
-    data: {
-      id: 101,
-      course_name: '音樂律動',
-      session_date: '2026-07-14',
-      students: values.map((isPresent, index) => ({
-        registration_id: 11 + index,
-        student_name: `學生${index + 1}`,
-        class_name: '蘋果班',
-        is_present: isPresent,
-        attendance_notes: '',
-      })),
-    },
+    id: 101,
+    course_id: 1,
+    course_name: '音樂律動',
+    session_date: '2026-09-16',
+    recorded_count: 0,
+    present_count: 0,
+    enrolled_count: 16,
+    meeting_start_time: '16:10:00',
+    meeting_end_time: '17:10:00',
+    ...over,
   }
 }
 
-async function mountView() {
-  vi.mocked(getPortalAttendanceSessions).mockResolvedValue({
-    data: [{ id: 101, course_name: '音樂律動', recorded_count: 0, present_count: 0 }],
-  } as never)
-  vi.mocked(getPortalAttendanceSession).mockResolvedValue(detail(null) as never)
-  vi.mocked(batchUpdatePortalAttendance).mockResolvedValue({ data: { updated: 1, skipped: 0 } } as never)
-  const wrapper = mount(PortalActivityAttendanceView, {
+function mountRaw() {
+  return mount(PortalActivityAttendanceView, {
     global: {
-      stubs: {
-        ActivitySessionList: SessionListStub,
-        ActivityRollcallDrawer: true,
-      },
+      stubs: { ActivitySessionList: ListStub, PortalPageHeader: HeaderStub },
       directives: { loading: () => {} },
     },
   })
+}
+
+async function mountView() {
+  vi.mocked(getPortalAttendanceSessions).mockResolvedValue({ data: [row()] } as never)
+  const wrapper = mountRaw()
   await flushPromises()
   return wrapper
 }
 
+type ListVm = {
+  sessions: Array<{ id: number }>
+  loadSessions: () => Promise<void>
+  shiftWeek: (delta: number) => void
+  goToday: () => void
+  applyCustom: () => void
+  openRollcall: (s: { id: number }) => void
+}
+
+/** 台北時間 2026-09-16（週三）早上八點 */
+function freezeOnWednesday() {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-09-16T00:00:00Z'))
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  push.mockClear()
+  vi.useRealTimers()
 })
 
-describe('PortalActivityAttendanceView 場次請求競態', () => {
-  it('進頁即載入本月場次（不必再切 tab 觸發）', async () => {
+describe('PortalActivityAttendanceView 場次載入', () => {
+  it('進頁即載入本週場次，並另外撈一次漏點名視窗', async () => {
     const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as { sessions: Array<{ id: number }> }
-    expect(getPortalAttendanceSessions).toHaveBeenCalledTimes(1)
-    expect(vm.sessions.map((s) => s.id)).toEqual([101])
+
+    // 一次是本週、一次是過去 14 天的漏點名
+    expect(getPortalAttendanceSessions).toHaveBeenCalledTimes(2)
+    expect((wrapper.vm as unknown as ListVm).sessions.map((s) => s.id)).toEqual([101])
   })
 
-  it('快速切月份/日期時，較舊的慢回應不得覆寫最新場次', async () => {
+  it('本週查詢帶的是週一到週日', async () => {
+    freezeOnWednesday()
+    await mountView()
+
+    expect(vi.mocked(getPortalAttendanceSessions).mock.calls[0][0]).toEqual({
+      start_date: '2026-09-14',
+      end_date: '2026-09-20',
+    })
+    vi.useRealTimers()
+  })
+
+  it('漏點名查詢回看 14 天', async () => {
+    freezeOnWednesday()
+    await mountView()
+
+    expect(vi.mocked(getPortalAttendanceSessions).mock.calls[1][0]).toEqual({
+      start_date: '2026-09-02',
+      end_date: '2026-09-16',
+    })
+    vi.useRealTimers()
+  })
+
+  it('快速切換週次時，較舊的慢回應不得覆寫最新場次', async () => {
     const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      loadAttendanceSessions: () => Promise<void>
-      sessions: Array<{ id: number }>
-    }
-    const old = deferred<{ data: Array<{ id: number; course_name: string }> }>()
+    const vm = wrapper.vm as unknown as ListVm
+    const old = deferred<{ data: Array<{ id: number }> }>()
     vi.mocked(getPortalAttendanceSessions)
       .mockReturnValueOnce(old.promise as never)
-      .mockResolvedValueOnce({ data: [{ id: 202, course_name: '新日期' }] } as never)
+      .mockResolvedValueOnce({ data: [row({ id: 202 })] } as never)
 
-    const oldRun = vm.loadAttendanceSessions()
-    await vm.loadAttendanceSessions()
+    const oldRun = vm.loadSessions()
+    await vm.loadSessions()
     expect(vm.sessions.map((s) => s.id)).toEqual([202])
 
-    old.resolve({ data: [{ id: 101, course_name: '舊日期' }] })
+    old.resolve({ data: [row({ id: 101 })] })
     await oldRun
     expect(vm.sessions.map((s) => s.id)).toEqual([202])
   })
 
-  it('portal 部分點名成功時重抓權威名冊，不用 skipped 輸入樂觀改 counts', async () => {
+  it('切到上一週會重新查詢，範圍往前推七天', async () => {
+    freezeOnWednesday()
     const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      sessions: Array<{ id: number; present_count: number; recorded_count: number }>
-      drawerSession: { students: Array<{ is_present: boolean | null }> } | null
-      drawerVisible: boolean
-      openRollcall: (row: { id: number }) => Promise<void>
-      handleSave: (callback: () => void) => Promise<void>
-      loadAttendanceSessions: () => Promise<void>
-    }
-    vi.mocked(getPortalAttendanceSession)
-      .mockResolvedValueOnce(detail(null, null) as never)
-      .mockResolvedValueOnce(detail(true, null) as never)
-    vi.mocked(batchUpdatePortalAttendance).mockResolvedValueOnce({
-      data: { updated: 1, skipped: 1 },
-    } as never)
-    vi.mocked(getPortalAttendanceSessions).mockResolvedValueOnce({
-      data: [{ id: 101, course_name: '音樂律動', recorded_count: 1, present_count: 1 }],
-    } as never)
+    vi.mocked(getPortalAttendanceSessions).mockClear()
 
-    await vm.openRollcall(vm.sessions[0])
-    vm.drawerSession!.students[0].is_present = true
-    vm.drawerSession!.students[1].is_present = true
-    await vm.handleSave(vm.loadAttendanceSessions)
+    ;(wrapper.vm as unknown as ListVm).shiftWeek(-1)
     await flushPromises()
 
-    expect(getPortalAttendanceSession).toHaveBeenCalledTimes(2)
-    expect(vm.sessions[0].present_count).toBe(1)
-    expect(vm.sessions[0].recorded_count).toBe(1)
-    expect(vm.drawerSession!.students[0].is_present).toBe(true)
-    expect(vm.drawerSession!.students[1].is_present).toBeNull()
-    expect(vm.drawerVisible).toBe(true)
+    expect(vi.mocked(getPortalAttendanceSessions).mock.calls[0][0]).toEqual({
+      start_date: '2026-09-07',
+      end_date: '2026-09-13',
+    })
+    vi.useRealTimers()
   })
 
-  it('完整成功後重抓場次統計，不用載入時的舊名冊覆寫其他老師點名', async () => {
+  it('回到今天會回到本週', async () => {
+    freezeOnWednesday()
     const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      sessions: Array<{ id: number; present_count: number; recorded_count: number }>
-      drawerSession: { students: Array<{ is_present: boolean | null }> } | null
-      openRollcall: (row: { id: number }) => void
-    }
-    vi.mocked(getPortalAttendanceSession).mockResolvedValueOnce(detail(null, null) as never)
-    // 另一位老師在本 drawer 載入後，已先完成第 2 位學生的點名；月列表重抓時
-    // 後端權威統計應為 2，不能由本地「舊第 2 位 + 新第 1 位」算成 1。
-    vi.mocked(getPortalAttendanceSessions).mockResolvedValueOnce({
-      data: [{ id: 101, course_name: '音樂律動', recorded_count: 2, present_count: 2 }],
+    const vm = wrapper.vm as unknown as ListVm
+    vm.shiftWeek(-2)
+    await flushPromises()
+    vi.mocked(getPortalAttendanceSessions).mockClear()
+
+    vm.goToday()
+    await flushPromises()
+
+    expect(vi.mocked(getPortalAttendanceSessions).mock.calls[0][0]).toEqual({
+      start_date: '2026-09-14',
+      end_date: '2026-09-20',
+    })
+    vi.useRealTimers()
+  })
+
+  it('自訂範圍沒填日期就不查，直接提示', async () => {
+    const wrapper = await mountView()
+    vi.mocked(getPortalAttendanceSessions).mockClear()
+
+    ;(wrapper.vm as unknown as ListVm).applyCustom()
+    await flushPromises()
+
+    expect(getPortalAttendanceSessions).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith('請先選擇日期範圍')
+  })
+
+  it('點名導向獨立頁面，不再開 drawer', async () => {
+    const wrapper = await mountView()
+
+    ;(wrapper.vm as unknown as ListVm).openRollcall({ id: 101 })
+
+    expect(push).toHaveBeenCalledWith({
+      name: 'portal-activity-rollcall',
+      params: { sessionId: '101' },
+    })
+  })
+
+  it('載入失敗時提示，不讓畫面卡在載入中', async () => {
+    vi.mocked(getPortalAttendanceSessions).mockRejectedValue(new Error('boom'))
+
+    const wrapper = mountRaw()
+    await flushPromises()
+
+    expect(ElMessage.error).toHaveBeenCalledWith('載入場次失敗')
+    expect(wrapper.find('[data-test="list"]').exists()).toBe(true)
+  })
+
+  it('漏點名撈失敗時只是不顯示，不再彈一次錯誤蓋掉主要訊息', async () => {
+    vi.mocked(getPortalAttendanceSessions)
+      .mockResolvedValueOnce({ data: [row()] } as never)
+      .mockRejectedValueOnce(new Error('boom'))
+
+    const wrapper = mountRaw()
+    await flushPromises()
+
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="list"]').attributes('data-overdue')).toBe('0')
+  })
+
+  it('頁首摘要說明今天有幾堂沒點完', async () => {
+    freezeOnWednesday()
+    vi.mocked(getPortalAttendanceSessions).mockResolvedValue({
+      data: [row({ id: 1, recorded_count: 0 }), row({ id: 2, recorded_count: 16 })],
     } as never)
 
-    vm.openRollcall(vm.sessions[0])
-    await flushPromises()
-    vm.drawerSession!.students[0].is_present = true
-    wrapper.findComponent({ name: 'ActivityRollcallDrawer' }).vm.$emit('save')
+    const wrapper = mountRaw()
     await flushPromises()
 
-    expect(getPortalAttendanceSessions).toHaveBeenCalledTimes(2)
-    expect(vm.sessions[0].present_count).toBe(2)
-    expect(vm.sessions[0].recorded_count).toBe(2)
+    expect(wrapper.text()).toContain('9月16日')
+    expect(wrapper.text()).toContain('今天 2 堂，1 堂還沒點完')
+    vi.useRealTimers()
   })
 })

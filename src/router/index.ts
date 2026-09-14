@@ -1022,6 +1022,16 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '課程點名' },
                 },
                 {
+                    // 2026-09-14：點名從列表的右側 drawer 改成獨立頁面——與到園點名
+                    // 一致、手機不必在 drawer 裡塞表格，也讓每一堂有自己的網址可深連結。
+                    path: 'activity/attendance/:sessionId',
+                    name: 'portal-activity-rollcall',
+                    component: () => import('../views/portal/PortalActivityRollcallView.vue'),
+                    // 與列表的「課程點名」刻意不同名：分頁標題與瀏覽紀錄要分得出
+                    // 「在挑場次」還是「在點某一堂」（portalRouteTitles 守衛強制不重複）。
+                    meta: { title: '點名名冊' },
+                },
+                {
                     path: 'leave-history',
                     name: 'portal-leave-history',
                     component: () => import('../views/portal/PortalLeaveHistoryView.vue'),

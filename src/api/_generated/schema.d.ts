@@ -1708,7 +1708,8 @@ export interface paths {
          * @description 取得報名的繳費／退費明細記錄（含 voided 軟刪紀錄，標示 is_voided）
          *
          *     以 registration_id 取資料，不要求 is_active：軟刪（is_active=False）報名的繳費/
-         *     退費沖帳歷史仍需供財務查核（#5）。已知 id 即查得，無額外曝險（仍需 ACTIVITY_READ）。
+         *     退費沖帳歷史仍需供財務查核（#5）。報名仍須屬於目前租戶，避免已知其他租戶 id
+         *     時讀到其完整繳退費紀錄。
          */
         get: operations["get_registration_payments_api_activity_registrations__registration_id__payments_get"];
         put?: never;
@@ -21280,6 +21281,10 @@ export interface components {
             groups?: components["schemas"]["ActivitySessionGroupOut"][] | null;
             /** Id */
             id: number;
+            /** Last Recorded At */
+            last_recorded_at?: string | null;
+            /** Last Recorded By */
+            last_recorded_by?: string | null;
             /** Notes */
             notes: string;
             /** Present Count */
@@ -21321,8 +21326,17 @@ export interface components {
             created_at?: string | null;
             /** Created By */
             created_by?: string | null;
+            /**
+             * Enrolled Count
+             * @default 0
+             */
+            enrolled_count: number;
             /** Id */
             id: number;
+            /** Meeting End Time */
+            meeting_end_time?: string | null;
+            /** Meeting Start Time */
+            meeting_start_time?: string | null;
             /** Notes */
             notes: string;
             /** Present Count */
@@ -33784,6 +33798,21 @@ export interface components {
             items: components["schemas"]["MonthlyStatementItemOut"][];
             /** Outstanding */
             outstanding: number;
+            /**
+             * Period Adjustment Total
+             * @default 0
+             */
+            period_adjustment_total: number;
+            /**
+             * Period Net Receivable
+             * @default 0
+             */
+            period_net_receivable: number;
+            /**
+             * Periods
+             * @default []
+             */
+            periods: string[];
             /** Status */
             status: string;
             /** Student Id */
@@ -44047,6 +44076,8 @@ export interface components {
             hourly_total?: number | null;
             /** Id */
             id: number;
+            /** Insurance Rate Id */
+            insurance_rate_id?: number | null;
             /** Labor Insurance Employee */
             labor_insurance_employee?: number | null;
             /** Labor Insurance Employer */
