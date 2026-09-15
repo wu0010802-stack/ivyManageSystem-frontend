@@ -131,6 +131,43 @@ describe('PortalHomeView 切班失敗提示', () => {
     expect(ElMessage.error).not.toHaveBeenCalled()
   })
 
+  it('連續快速切兩班時，先發那次的過期成功不得悶掉後發那次真正失敗的提示（2026-09-15 審查 P2）', async () => {
+    // 先切 5（先發、先 resolve 成功），緊接著切 7（後發、後 reject 失敗）。
+    // switchAttempted 若在「settle 當下是否仍是目前選的班級」這個判斷上
+    // 漏掉，5 的成功回來時會無條件把旗標歸位（此時使用者其實已經切到 7 了、
+    // 5 已經過期）；接著 7 的失敗抵達時 switchAttempted 已是 false，
+    // watch(hubError) 直接 return——使用者最後一個真正的動作完全悶掉。
+    const wrapper = await mountView()
+
+    let resolveFirst!: () => void
+    let rejectSecond!: (e: Error) => void
+    mockRefresh
+      .mockImplementationOnce(
+        () => new Promise<void>((resolve) => { resolveFirst = resolve }),
+      )
+      .mockImplementationOnce(
+        () => new Promise<void>((_resolve, reject) => { rejectSecond = reject }),
+      )
+
+    const select = wrapper.findComponent({ name: 'ElSelect' })
+    await select.vm.$emit('change', 5)
+    await select.vm.$emit('change', 7)
+
+    // 先發的第一次（5）先落地成功——但使用者此刻已經切到 7 了，這個成功
+    // 對「目前選的班級」來說已經過期。
+    hubData.value = { classroom_id: 5, classroom_name: '向日葵班', counts: {} }
+    resolveFirst()
+    await flushPromises()
+
+    // 後發的第二次（7）才是使用者最後一個動作，這裡失敗了。
+    const err = new Error('403')
+    hubError.value = err
+    rejectSecond(err)
+    await flushPromises()
+
+    expect(ElMessage.error).toHaveBeenCalledWith('切換班級失敗，請重新選擇或稍後再試')
+  })
+
   it('成功切班後，之後背景輪詢失敗不會誤觸發「切換班級失敗」提示', async () => {
     // switchAttempted 旗標必須在成功後歸位，否則之後任何失敗（含與切班
     // 無關的背景輪詢）都會誤報成切班失敗。

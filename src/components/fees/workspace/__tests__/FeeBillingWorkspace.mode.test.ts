@@ -292,6 +292,33 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
     expect(recordsMocks.applySearch).toHaveBeenCalledWith('陳小華')
   })
 
+  it('recordsMode 回流比一個 nextTick 慢時，全域搜尋仍要帶到姓名（studentSearch watcher 的同款守衛，2026-09-15 審查）', async () => {
+    // onOpenList 已經修過同一個 bug pattern（waitForListMode 取代單一
+    // nextTick），但 studentSearch watcher 是另一處獨立的呼叫點，用的是
+    // mountBilling() 的同步殼層，同樣蓋不住真實 router.push() 跨多輪 tick
+    // 的延遲——這裡用同款 setTimeout 模擬補上覆蓋。
+    let wrapper!: ReturnType<typeof mount>
+    wrapper = mount(FeeBillingWorkspace, {
+      props: {
+        recordsMode: 'statement',
+        'onChange-mode': (mode: string) => {
+          setTimeout(() => {
+            void wrapper.setProps({ recordsMode: mode })
+          }, 0)
+        },
+      },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    await flushAll()
+
+    await wrapper.setProps({ studentSearch: '遲到搜尋' })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await flushAll()
+
+    expect(wrapper.find('[data-testid="records-tab"]').exists()).toBe(true)
+    expect(recordsMocks.applySearch).toHaveBeenCalledWith('遲到搜尋')
+  })
+
   it('月表 open-list（到逐筆明細處理）切換模式並預帶姓名', async () => {
     const wrapper = mountBilling()
     await flushAll()

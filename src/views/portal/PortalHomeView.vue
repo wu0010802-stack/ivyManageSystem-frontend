@@ -321,10 +321,18 @@ function onSwitchClassroom(id: number) {
   // 主動觸發一次（composable 內部的 watch(classroomId) 也會觸發，但 key
   // 相同會被 inflight 去重共用同一個 promise，不會打兩次 API）：
   // 藉由這個 promise 的 settle 結果，知道要不要在成功時歸位旗標——
-  // 失敗時旗標交由上面 watch(hubError) 歸位，兩者互斥、不會漏歸位。
+  // 失敗時旗標交由上面 watch(hubError) 歸位。
+  //
+  // ⚠ 兩者「互斥」只在沒有連續快速切班時成立（2026-09-15 審查 P2 修正）：
+  // 快速切 A 再切 B，A 的請求可能較慢、在 B 之後才 resolve。若 A 成功時
+  // 無條件歸位旗標，會把「B（使用者最後一個動作）真正失敗」的提示悶掉——
+  // B 的 hubError 觸發時旗標已被 A 的成功結算清成 false，watch(hubError)
+  // 直接 return。修法：settle 當下若 classroomId 已經不是這次 dispatch
+  // 的目標（代表又被更新的切班取代），就不歸位——留給那個更新的請求自己
+  // 的 settle 處理。
   refreshHub()
     .then(() => {
-      switchAttempted = false
+      if (classroomId.value === id) switchAttempted = false
     })
     .catch(() => {})
 }
