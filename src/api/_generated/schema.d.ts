@@ -38073,12 +38073,19 @@ export interface components {
             /** Classroom Name */
             classroom_name: string;
             /**
+             * Code Attempts
+             * @default 0
+             */
+            code_attempts: number;
+            /**
              * Code Locked
              * @default false
              */
             code_locked: boolean;
             /** Completed At */
             completed_at?: string | null;
+            /** Completed By Name */
+            completed_by_name?: string | null;
             /** Completed Via */
             completed_via?: string | null;
             /**
@@ -38092,6 +38099,8 @@ export interface components {
             id: number;
             /** Note */
             note?: string | null;
+            /** Override Note */
+            override_note?: string | null;
             /** Parent Name */
             parent_name?: string | null;
             /** Person Name */
