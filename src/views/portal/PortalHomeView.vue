@@ -60,7 +60,7 @@ interface HubSummary {
 
 // null = 用後端解析的預設班（head > assistant > art）
 const classroomId = ref<number | null>(null)
-const { data: hubData, refresh: refreshHub } = usePortalClassHub(classroomId)
+const { data: hubData, error: hubError, refresh: refreshHub } = usePortalClassHub(classroomId)
 
 // classroom_id=0＝未綁班（class-hub 同語意）；403／載入失敗時 data 仍是 null。
 // 三者都隱藏置頂卡與班級列，但**不影響功能格**——格子是靜態清單，沒有 hub
@@ -219,7 +219,7 @@ function onFeatureClick(f: ClassFeatureDef) {
   if (!f.to) return
   // 會讀 ?classroom_id= 的目的頁要帶上當前班級，否則多班老師切了班再點進去，
   // 目的頁會落回它自己的第一班（誤寫聯絡簿、誤點名）。
-  const id = hub.value?.classroom_id
+  const id = classroomId.value ?? hub.value?.classroom_id
   if (f.classroomScoped && id) {
     router.push({ path: f.to, query: { classroom_id: id } })
     return
@@ -295,8 +295,13 @@ const classroomOptions = computed(() =>
   ),
 )
 const showSwitch = computed(() => classroomOptions.value.length > 1)
-const selectedClassroomId = computed(() => hub.value?.classroom_id)
-const classroomName = computed(() => hub.value?.classroom_name || '')
+const showHubError = computed(() => {
+  if (!hubError.value) return false
+  const status = (hubError.value as { response?: { status?: number } }).response?.status
+  return status !== 403 || classroomId.value !== null || classroomOptions.value.length > 0
+})
+const selectedClassroomId = computed(() => classroomId.value ?? hub.value?.classroom_id)
+const classroomName = computed(() => classroomOptions.value.find(c => c.classroom_id === selectedClassroomId.value)?.classroom_name || hub.value?.classroom_name || '')
 const studentCount = computed(() => {
   const id = hub.value?.classroom_id
   const hit = classroomOptions.value.find((c) => c.classroom_id === id)
@@ -355,6 +360,8 @@ watch(
     </header>
 
     <div v-if="error" class="error-banner">載入失敗：{{ (error as Record<string, unknown>).message || '請稍後再試' }}</div>
+
+    <div v-if="showHubError" role="alert" class="error-banner">班級資料載入失敗，請重試。<button type="button" @click="refreshHub().catch(() => {})">重試班級資料</button></div>
 
     <TodayFocusCard
       v-if="hub"

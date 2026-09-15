@@ -30172,6 +30172,8 @@ export interface components {
             received_by_name?: string | null;
             /** Received Date */
             received_date?: string | null;
+            /** Reversal Scope */
+            reversal_scope?: components["schemas"]["FeeCollectionReversalPartOut"][] | null;
         };
         /**
          * FeeCollectionHandoverOut
@@ -30204,6 +30206,30 @@ export interface components {
             id: number;
             /** Posting Date */
             posting_date?: string | null;
+        };
+        /**
+         * FeeCollectionReversalPartOut
+         * @description 同收據全部有效分配，供整筆來源沖銷前確認（限全校財務讀取權限）。
+         */
+        FeeCollectionReversalPartOut: {
+            /** Allocation Id */
+            allocation_id: number;
+            /** Allocation Type */
+            allocation_type: string;
+            /** Amount */
+            amount: number;
+            /** Fee Item Name */
+            fee_item_name?: string | null;
+            /** Fee Record Id */
+            fee_record_id?: number | null;
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /** Student Id */
+            student_id?: number | null;
+            /** Student Name */
+            student_name?: string | null;
+            /** Target Month */
+            target_month?: string | null;
         };
         /** FeeDueRunOut */
         FeeDueRunOut: {

@@ -1,6 +1,7 @@
 import api from './index'
+import type { AxiosRequestConfig } from 'axios'
 
-export const createLeave = (payload: unknown) => api.post('/parent/student-leaves', payload)
+export const createLeave = (payload: unknown, config?: AxiosRequestConfig) => api.post('/parent/student-leaves', payload, config)
 
 export const listLeaves = () => api.get('/parent/student-leaves')
 

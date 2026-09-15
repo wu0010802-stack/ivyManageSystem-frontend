@@ -36,6 +36,9 @@ async function getParentRouter(): Promise<ParentRouterShape> {
 }
 
 declare module 'axios' {
+  interface AxiosRequestConfig {
+    parentSessionGuard?: () => boolean
+  }
   interface AxiosError {
     displayMessage?: string | null
     // 後端 BusinessError envelope 的完整 detail：{ code, message, request_id, ...extra }
@@ -111,6 +114,9 @@ function combineAbortSignals(
 }
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (config.parentSessionGuard && !config.parentSessionGuard()) {
+    throw new axios.CanceledError('家長登出送出作業已失效', config)
+  }
   config.metadata = {
     startedAt: performance.now(),
     sessionGeneration: _apiSessionGeneration,
@@ -245,6 +251,9 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined
+    // 登出佇列只在本輪限時 context 內嘗試；失敗交由佇列保留，不啟動
+    // 脫離 context 的 refresh／重新導頁，也不在登出後彈全域提示。
+    if (originalRequest?.parentSessionGuard) return Promise.reject(error)
     if (
       originalRequest?.metadata?.sessionGeneration !== undefined &&
       originalRequest.metadata.sessionGeneration !== _apiSessionGeneration

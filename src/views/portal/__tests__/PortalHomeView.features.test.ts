@@ -285,3 +285,27 @@ describe('PortalHomeView 功能格區（/portal/class 整併後）', () => {
     expect(wrapper.find('[data-test="classroom-switch"]').exists()).toBe(true)
   })
 })
+
+it('班級hub失敗時保留指定班級並提供重試', async () => {
+  mockHomeSummary.mockResolvedValue({ data: { ...SUMMARY, classrooms: [{ classroom_id: 7, classroom_name: '甲班' }, { classroom_id: 9, classroom_name: '乙班' }] } })
+  hubData.value = null
+  hubError.value = new Error('offline')
+  await router.push('/portal/home?classroom_id=9')
+  const w = await mountView()
+  expect(w.text()).toContain('班級資料載入失敗')
+  expect(w.findComponent({ name: 'ElSelect' }).props('modelValue')).toBe(9)
+  const retry = w.findAll('button').find(button => button.text() === '重試班級資料')!
+  await retry.trigger('click')
+  expect(mockRefresh).toHaveBeenCalled()
+  w.unmount()
+})
+it('未綁班行政身分預期403不顯示班級錯誤', async () => {
+  mockHomeSummary.mockResolvedValue({ data: { ...SUMMARY, classrooms: [] } })
+  hubData.value = null
+  hubError.value = { response: { status: 403 } }
+  await router.push('/portal/home')
+  const w = await mountView()
+  expect(w.text()).not.toContain('班級資料載入失敗')
+  expect(w.text()).toContain('我的')
+  w.unmount()
+})

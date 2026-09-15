@@ -209,6 +209,30 @@ describe('ScheduleView', () => {
     mockSaveAssignments.mockResolvedValue({ data: { message: 'ok', week_start_date: MONDAY } })
   })
 
+  it('切換週次載入失敗後不可儲存上一週班表', async () => {
+    mockGetAssignments.mockResolvedValueOnce({ data: [{ employee_id: 1, shift_type_id: 3, notes: null }] })
+    const wrapper = await mountView()
+    mockGetAssignments.mockRejectedValueOnce(new Error('載入失敗'))
+    await wrapper.setProps({ initialDate: '2027-01-04' })
+    await flushPromises()
+    await wrapper.findAll('button').find((b) => b.text() === '儲存排班')!.trigger('click')
+    await flushPromises()
+    expect(mockSaveAssignments).not.toHaveBeenCalled()
+  })
+
+  it('儲存回覆晚到時不可把前一週警告顯示在新週', async () => {
+    let resolve!: (value: unknown) => void
+    mockSaveAssignments.mockReturnValueOnce(new Promise((done) => { resolve = done }))
+    const wrapper = await mountView()
+    await wrapper.findAll('button').find((b) => b.text() === '儲存排班')!.trigger('click')
+    await wrapper.setProps({ initialDate: '2027-01-04' })
+    await flushPromises()
+    resolve({ data: { warnings: [{ employee_id: 1, employee_name: '舊週警告', weekly_hours: 48 }] } })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('舊週警告')
+    expect(mockMessage.warning).not.toHaveBeenCalled()
+  })
+
   it.each([false, true])('名冊走 /shifts/roster；未指派班級的在職員工也能排班（手機：%s）', async (isMobile) => {
     mockIsMobile.value = isMobile
     const wrapper = await mountView()

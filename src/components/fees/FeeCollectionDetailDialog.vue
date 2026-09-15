@@ -92,12 +92,12 @@
                     size="small"
                     type="danger"
                     text
-                    :disabled="handoverLocked(ev)"
+                    :disabled="handoverLocked(ev) || !!reversingKey"
                     :loading="reversingKey === reverseKeyOf(ev)"
                     data-test="coll-reverse"
                     @click="reverseEvent(ev)"
                   >
-                    沖銷
+                    沖銷整筆收款
                   </el-button>
                   <small v-if="handoverLocked(ev)" class="muted">
                     交接已送出，請老闆先 reopen 交接批
@@ -134,7 +134,7 @@
  * 三者都是 append-only 補正——寫負值分配列並把收據轉 reversed，當日交接批與
  * 關帳金額因此同步退掉。存量未立據流水沒有收據可沖，仍須走逐筆明細的退款。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getFeeRecordCollections,
@@ -147,6 +147,7 @@ import { friendlyError } from '@/utils/errorMessages'
 
 type CollectionsOut = Awaited<ReturnType<typeof getFeeRecordCollections>>
 type RecordOut = CollectionsOut['records'][number]
+// 整合後改由 generated schema 的 reversal_scope 欄位提供型別。
 type EventOut = RecordOut['events'][number]
 
 const props = defineProps<{
@@ -169,6 +170,14 @@ const records = ref<RecordOut[]>([])
 const loading = ref(false)
 const loadError = ref(false)
 let requestSeq = 0
+let reverseSeq = 0
+const reversingKey = ref('')
+const contextKey = computed(() => JSON.stringify([props.modelValue, props.recordIds, props.month, props.studentName]))
+// 離開頁面同樣取消尚未確認的作業；卸載不一定先把 modelValue 設為 false。
+onBeforeUnmount(() => {
+  ++requestSeq
+  ++reverseSeq
+})
 
 const monthLabel = computed(() => {
   const [y, m] = props.month.split('-').map(Number)
@@ -198,19 +207,17 @@ async function fetchDetail() {
 }
 
 // 每次開啟都重抓：同一位學生在對話框關閉期間可能剛被收款／媒合
-watch(
-  () => [props.modelValue, props.recordIds] as const,
-  ([open]) => {
-    if (open) fetchDetail()
-  },
-  { immediate: true },
-)
+watch(contextKey, () => {
+  ++requestSeq
+  ++reverseSeq
+  reversingKey.value = ''
+  records.value = []
+  if (props.modelValue) void fetchDetail()
+}, { immediate: true, flush: 'sync' })
 
 // ─── 沖銷（誤收更正）───────────────────────────────────────────────────────
 /** 交接批一旦送出／簽收，後端一律 409；先在畫面停用，並講清楚要老闆做什麼 */
 const LOCKED_HANDOVER = new Set(['submitted', 'confirmed'])
-
-const reversingKey = ref('')
 
 /** 這筆事件可沖銷的話，回傳要打哪個端點與對象 id；否則 null */
 function reverseTarget(ev: EventOut): { api: 'cash' | 'bank' | 'collection'; id: number } | null {
@@ -241,31 +248,57 @@ function handoverLocked(ev: EventOut): boolean {
 
 async function reverseEvent(ev: EventOut) {
   const target = reverseTarget(ev)
-  if (!target || handoverLocked(ev)) return
-
-  let reason = ''
+  if (!props.modelValue || !props.canWrite || !target || handoverLocked(ev) || reversingKey.value) return
+  const key = `${target.api}-${target.id}`
+  const context = contextKey.value
+  const seq = ++reverseSeq
+  const isCurrent = () => seq === reverseSeq && context === contextKey.value && props.modelValue && props.canWrite
+  reversingKey.value = key
   try {
-    const result = await ElMessageBox.prompt('請輸入沖銷原因（至少 5 字）', '沖銷收款', {
-      inputValidator: (v: string) => (v && v.trim().length >= 5 ? true : '原因至少 5 個字'),
+    // 確認前重查整個來源，不能把目前學生的單列金額當成沖銷範圍。
+    const data = await getFeeRecordCollections([...props.recordIds])
+    if (!isCurrent()) return
+    const latest: EventOut | undefined = data.records.flatMap((rec) => rec.events)
+      .find((item) => reverseKeyOf(item) === key)
+    if (!latest || handoverLocked(latest)) {
+      ElMessage.error('此筆收款狀態已變更，請重新載入明細後再操作')
+      return
+    }
+    const scope = latest.reversal_scope
+    if (!scope?.length) {
+      ElMessage.error('無法取得整筆收款的完整沖銷範圍，請重新載入後再試')
+      return
+    }
+    const typeLabels: Record<string, string> = { fee_record: '費用帳款', prepayment: '預繳款', non_tuition: '非學費收入' }
+    const lines = scope.map((item) => {
+      const person = item.student_name || (item.student_id ? `學生 #${item.student_id}` : item.recruitment_visit_id ? `招生紀錄 #${item.recruitment_visit_id}` : '非學生對象')
+      return `${person}・${item.target_month || '無指定月份'}・${item.fee_item_name || typeLabels[item.allocation_type] || '其他款項'}：${formatCurrency(item.amount)}`
     })
-    reason = typeof result === 'object' ? result.value : ''
-  } catch {
-    return // 使用者取消
-  }
-
-  reversingKey.value = `${target.api}-${target.id}`
-  try {
+    const total = scope.reduce((sum, item) => sum + item.amount, 0)
+    const message = `將沖銷整筆來源收款，以下所有分配都會一併沖銷：\n\n${lines.join('\n')}\n\n共 ${scope.length} 筆，合計 ${formatCurrency(total)}。\n\n請確認完整範圍並輸入沖銷原因（至少 5 字）`
+    let reason: string
+    try {
+      const result = await ElMessageBox.prompt(h('div', { style: { whiteSpace: 'pre-line', maxHeight: '45vh', overflowY: 'auto' } }, message), '沖銷整筆來源收款', {
+        confirmButtonText: '確認沖銷整筆收款',
+        inputValidator: (v: string) => (v && v.trim().length >= 5 ? true : '原因至少 5 個字'),
+      })
+      reason = typeof result === 'object' ? result.value.trim() : ''
+    } catch {
+      return
+    }
+    if (!isCurrent() || reason.length < 5) return
     const payload = { reason } as never
     if (target.api === 'cash') await reverseCashReceipt(target.id, payload)
     else if (target.api === 'bank') await reverseTransaction(target.id, payload)
     else await reverseCollectionPayment(target.id, payload)
-    ElMessage.success('已沖銷這筆收款')
+    if (!isCurrent()) return
+    ElMessage.success('已沖銷整筆來源收款')
     await fetchDetail()
-    emit('reversed')
+    if (isCurrent()) emit('reversed')
   } catch (e) {
-    ElMessage.error(friendlyError('沖銷失敗', e))
+    if (isCurrent()) ElMessage.error(friendlyError('沖銷失敗', e))
   } finally {
-    reversingKey.value = ''
+    if (seq === reverseSeq) reversingKey.value = ''
   }
 }
 

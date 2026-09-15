@@ -100,3 +100,36 @@ describe('usePortalClassHub classroomId', () => {
     await flushPromises()
   })
 })
+
+it('新班先完成後舊班回應不得覆蓋，切班立即清掉資料', async () => {
+  let resolveOld!: (v: { classroom_id: number; counts: Record<string, never> }) => void
+  mockGetTodayHub.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+  const cid = ref<number | null>(7)
+  const { api, wrapper } = mountWith(cid)
+  mockGetTodayHub.mockResolvedValueOnce({ classroom_id: 9, counts: {} })
+  cid.value = 9
+  await flushPromises()
+  resolveOld({ classroom_id: 7, counts: {} })
+  await flushPromises()
+  expect((api.data as { value: { classroom_id: number } }).value.classroom_id).toBe(9)
+  mockGetTodayHub.mockImplementationOnce(() => new Promise(() => {}))
+  cid.value = 10
+  await flushPromises()
+  expect((api.data as { value: unknown }).value).toBeNull()
+  wrapper.unmount()
+})
+it('舊請求完成不解除新請求loading或去重', async () => {
+  let resolveOld!: (v: { classroom_id: number; counts: Record<string, never> }) => void
+  mockGetTodayHub.mockClear()
+  mockGetTodayHub.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve }))
+  const cid = ref<number | null>(7)
+  const { api, wrapper } = mountWith(cid)
+  mockGetTodayHub.mockImplementationOnce(() => new Promise(() => {}))
+  cid.value = 9
+  resolveOld({ classroom_id: 7, counts: {} })
+  await flushPromises()
+  expect((api.loading as { value: boolean }).value).toBe(true)
+  void (api.refresh as () => Promise<unknown>)()
+  expect(mockGetTodayHub).toHaveBeenCalledTimes(2)
+  wrapper.unmount()
+})

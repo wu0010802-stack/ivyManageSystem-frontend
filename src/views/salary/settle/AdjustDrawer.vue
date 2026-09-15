@@ -24,6 +24,11 @@
           />
         </el-form-item>
       </div>
+      <el-form-item label="節慶獎金設定">
+        <el-checkbox v-model="explicitFestivalBonus">
+          明確採用目前填寫的節慶獎金（含 0 元），不隨扣減連動
+        </el-checkbox>
+      </el-form-item>
       <el-form-item label="額外加給名目">
         <el-input
           v-model="extraAllowanceLabel"
@@ -75,6 +80,7 @@ const { notify } = useErrorNotify()
 const saving = ref(false)
 const reason = ref('')
 const extraAllowanceLabel = ref('')
+const explicitFestivalBonus = ref(false)
 const form = reactive<Record<FieldKey, number>>(
     Object.fromEntries(EDITABLE_FIELDS.map((f) => [f.key, 0])) as Record<FieldKey, number>,
 )
@@ -83,6 +89,7 @@ const form = reactive<Record<FieldKey, number>>(
 watch(
     () => [props.modelValue, props.row] as const,
     ([open, row]) => {
+        explicitFestivalBonus.value = false
         if (!open || !row) return
         reason.value = ''
         extraAllowanceLabel.value = (row.extra_allowance_label as string) || ''
@@ -95,7 +102,7 @@ watch(
 
 const save = async () => {
     const row = props.row
-    if (!row?.id) return
+    if (!row?.id || row.is_finalized || saving.value) return
     const trimmed = reason.value.trim()
     if (trimmed.length < 5) {
         ElMessage.warning('請填寫調整原因（至少 5 字）')
@@ -104,9 +111,25 @@ const save = async () => {
     saving.value = true
     try {
         const payload: Record<string, unknown> = { adjustment_reason: trimmed }
-        for (const f of EDITABLE_FIELDS) payload[f.key] = Number(form[f.key] || 0)
-        // 空字串 → 後端轉 null
-        payload.extra_allowance_label = extraAllowanceLabel.value.trim()
+        for (const f of EDITABLE_FIELDS) {
+            const value = Number(form[f.key] || 0)
+            if (value !== Number(row[f.key] ?? 0)) payload[f.key] = value
+        }
+        const label = extraAllowanceLabel.value.trim()
+        if (label !== String(row.extra_allowance_label ?? '').trim()) payload.extra_allowance_label = label
+        if (Object.keys(payload).length === 1) {
+            ElMessage.info('尚未修改薪資金額或加給名目')
+            return
+        }
+        const festival = Number(form.festival_bonus || 0)
+        const needsExplicitFestival = Number(row.festival_bonus ?? 0) === 0
+            && festival === 0
+            && Number(form.meeting_absence_deduction || 0) < Number(row.meeting_absence_deduction ?? 0)
+        if (needsExplicitFestival && !explicitFestivalBonus.value) {
+            ElMessage.warning('原節慶獎金為 0 元，降低扣減時無法自動回推；請填寫正確節慶獎金，若仍為 0 元請勾選明確採用金額')
+            return
+        }
+        if (explicitFestivalBonus.value) payload.festival_bonus = festival
         await manualAdjustSalary(
             row.id,
             payload as Parameters<typeof manualAdjustSalary>[1],

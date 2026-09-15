@@ -261,3 +261,60 @@ describe('SurveysView 三態（Task 17）', () => {
     w.unmount()
   })
 })
+
+it('快速切換調查時忽略舊明細，送出對應最後選取的孩子與調查', async () => {
+  listMock.mockResolvedValue({ data: { items: [SUCCESS_CARDS.data.items[0], { ...SUCCESS_CARDS.data.items[0], survey_id: 3, student_id: 2, student_name: '孩子乙' }] } })
+  let resolveOld!: (value: unknown) => void
+  getSurveyMock.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve }))
+  getSurveyMock.mockResolvedValueOnce({ data: { survey_id: 3, title: '新調查', questions: [] } })
+  const SurveysView = (await import('@/parent/views/SurveysView.vue')).default
+  const w = mount(SurveysView, { global: { stubs: STUBS } })
+  await flushPromises()
+  await w.findAll('.survey-card')[0].trigger('click')
+  await w.findAll('.survey-card')[1].trigger('click')
+  await flushPromises()
+  resolveOld({ data: { survey_id: 1, title: '舊調查', questions: [] } })
+  await flushPromises()
+  const sheet = w.findComponent({ name: 'SurveyFillSheet' })
+  expect(sheet.props('survey').survey_id).toBe(3)
+  expect(sheet.props('studentName')).toBe('孩子乙')
+  w.unmount()
+})
+it('關閉後明細完成不重新開sheet', async () => {
+  listMock.mockResolvedValue(SUCCESS_CARDS)
+  let resolveDetail!: (value: unknown) => void
+  getSurveyMock.mockImplementation(() => new Promise(resolve => { resolveDetail = resolve }))
+  const SurveysView = (await import('@/parent/views/SurveysView.vue')).default
+  const w = mount(SurveysView, { global: { stubs: STUBS } })
+  await flushPromises()
+  await w.find('.survey-card').trigger('click')
+  const sheet = w.findComponent({ name: 'SurveyFillSheet' })
+  sheet.vm.$emit('update:modelValue', false)
+  resolveDetail({ data: { survey_id: 1, questions: [] } })
+  await flushPromises()
+  expect(sheet.props('modelValue')).toBe(false)
+  expect(sheet.props('survey')).toBeNull()
+  w.unmount()
+})
+it('送出期間不重複提交，payload保留送出當下答案快照', async () => {
+  listMock.mockResolvedValue(SUCCESS_CARDS)
+  getSurveyMock.mockResolvedValue({ data: { survey_id: 1, questions: [] } })
+  let finish!: () => void
+  submitMock.mockImplementation(() => new Promise<void>(resolve => { finish = resolve }))
+  const SurveysView = (await import('@/parent/views/SurveysView.vue')).default
+  const w = mount(SurveysView, { global: { stubs: STUBS } })
+  await flushPromises()
+  await w.find('.survey-card').trigger('click')
+  await flushPromises()
+  const sheet = w.findComponent({ name: 'SurveyFillSheet' })
+  const answers = { meal: '葷食' }
+  sheet.vm.$emit('update:formData', { attending: true, answers, note: '' })
+  sheet.vm.$emit('submit')
+  sheet.vm.$emit('submit')
+  answers.meal = '素食'
+  expect(submitMock).toHaveBeenCalledTimes(1)
+  expect(submitMock).toHaveBeenCalledWith(1, 1, { attending: true, answers: { meal: '葷食' }, note: null })
+  finish()
+  await flushPromises()
+  w.unmount()
+})

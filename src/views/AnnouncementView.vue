@@ -374,6 +374,10 @@ const submitLoading = ref(false)
 
 const handleSubmit = async () => {
   if (recipientSettingsLoading.value || (isEdit.value && !recipientSettingsReady.value)) return
+  if (form.restrict_recipients && form.target_employee_ids.length === 0) {
+    ElMessage.warning('已選「指定員工」，請至少選擇一位員工')
+    return
+  }
   if (!form.title.trim() || !form.content.trim()) {
     ElMessage.warning('請填寫標題和內容')
     return

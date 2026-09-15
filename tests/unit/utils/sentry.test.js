@@ -887,3 +887,9 @@ describe('收款累計快照遮罩', () => {
     })
   })
 })
+
+
+it('沖銷範圍巢狀姓名仍被遮罩', () => {
+  const result = scrubMapping({ reversal_scope: [{ student_name: '合成測試幼生', amount: 100 }] })
+  expect(result.reversal_scope[0].student_name).toBe('[Filtered]')
+})

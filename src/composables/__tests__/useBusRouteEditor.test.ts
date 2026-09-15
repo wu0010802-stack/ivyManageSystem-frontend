@@ -868,3 +868,28 @@ describe('registerExtraDirty', () => {
     expect(reorderBusRoutes).toHaveBeenCalled()
   })
 })
+
+
+describe('帶入名單的班次上下文', () => {
+  it('預覽晚回不覆蓋已切換的班次', async () => {
+    const editor = await boot([routeA({ stops: [] }), routeA({ id: 5, stops: [] })])
+    let resolve!: (value: unknown) => void
+    vi.mocked(copyBusRouteFrom).mockReturnValueOnce(new Promise((done) => { resolve = done }) as never)
+    const pending = editor.copyFromRoute(5)
+    await editor.selectRoute(5)
+    resolve({ data: { stops: [stop({ student_id: 103 })] } })
+    expect(await pending).toBe(false)
+    expect(editor.stops.value).toEqual([])
+    expect(editor.dirty.value).toBe(false)
+  })
+  it('確認框期間切換班次後不送出預覽', async () => {
+    const editor = await boot([routeA(), routeA({ id: 5, stops: [] })])
+    let resolve!: (value: string) => void
+    vi.mocked(ElMessageBox.confirm).mockReturnValueOnce(new Promise((done) => { resolve = done }) as never)
+    const pending = editor.copyFromRoute(5)
+    await editor.selectRoute(5)
+    resolve('confirm')
+    expect(await pending).toBe(false)
+    expect(copyBusRouteFrom).not.toHaveBeenCalled()
+  })
+})

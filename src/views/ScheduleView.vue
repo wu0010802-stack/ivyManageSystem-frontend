@@ -115,6 +115,7 @@ const weekEndDate = computed(() => {
 })
 
 let weekFetchEpoch = 0
+const loadedWeek = ref('')
 
 const fetchLeaveContext = async (
   requestedStart = weekStart.value,
@@ -153,6 +154,11 @@ const fetchAssignments = async () => {
   const requestedStart = weekStart.value
   const requestedEnd = weekEndDate.value
   loading.value = true
+  loadedWeek.value = ''
+  assignments.value = {}
+  weekLeaves.value = []
+  weekDailyOverrides.value = []
+  saveWarnings.value = []
   // 請假摘要與全員每日調整跟著週切換一起刷新（各自有錯誤處理，不擋主流程）
   void fetchLeaveContext(requestedStart, requestedEnd, requestEpoch)
   void fetchWeekDailyOverrides(requestedStart, requestedEnd, requestEpoch)
@@ -165,6 +171,7 @@ const fetchAssignments = async () => {
       map[a.employee_id] = { shift_type_id: a.shift_type_id, notes: a.notes }
     }
     assignments.value = map
+    loadedWeek.value = requestedStart
   } catch (e) {
     if (requestEpoch !== weekFetchEpoch) return
     ElMessage.error(friendlyError('載入排班失敗', e))
@@ -213,7 +220,9 @@ const getShiftInfo = (shiftTypeId: number | null) => shiftTypeId != null ? shift
 const saveWarnings = ref<WeeklyWarning[]>([])
 
 const saveAll = async () => {
-  if (loading.value) return
+  if (loading.value || saving.value || loadedWeek.value !== weekStart.value) return
+  const requestedStart = weekStart.value
+  const requestEpoch = weekFetchEpoch
   saving.value = true
   try {
     const items = []
@@ -226,9 +235,10 @@ const saveAll = async () => {
       })
     }
     const res = await saveAssignments({
-      week_start_date: weekStart.value,
+      week_start_date: requestedStart,
       assignments: items,
     })
+    if (requestEpoch !== weekFetchEpoch || requestedStart !== weekStart.value) return
     saveWarnings.value = res.data.warnings ?? []
     if (saveWarnings.value.length) {
       ElMessage.warning(`排班已儲存，但有 ${saveWarnings.value.length} 位員工週工時超過上限，詳見下方警告`)
@@ -236,7 +246,7 @@ const saveAll = async () => {
       ElMessage.success('排班已儲存')
     }
   } catch (error) {
-    ElMessage.error(apiError(error, '儲存失敗'))
+    if (requestEpoch === weekFetchEpoch && requestedStart === weekStart.value) ElMessage.error(apiError(error, '儲存失敗'))
   } finally {
     saving.value = false
   }
@@ -645,7 +655,7 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
             <el-button @click="exportCurrentWeekShifts">匯出本週班表</el-button>
             <el-button @click="downloadShiftTemplate">下載範本</el-button>
             <el-button @click="shiftImportVisible = true">匯入班表</el-button>
-            <el-button type="primary" @click="saveAll" :loading="saving" :disabled="loading">儲存排班</el-button>
+            <el-button type="primary" @click="saveAll" :loading="saving" :disabled="loading || loadedWeek !== weekStart">儲存排班</el-button>
             </div>
           </div>
         </section>

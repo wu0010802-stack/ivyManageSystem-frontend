@@ -322,6 +322,21 @@ describe('RuleEditorDialog', () => {
 
   // ── DISCIPLINARY_TIERED（3 case）────────────────────────
   describe('DISCIPLINARY_TIERED', () => {
+    it('只改備註建立新版仍保留原有加分側', async () => {
+      const config = { warning_delta: -2, minor_delta: -5, major_delta: -10,
+        commend_delta: 2, minor_merit_delta: 5, major_merit_delta: 10 }
+      const wrapper = await mountDialog({ itemCode: 'REWARD_PUNISH', existingRule: {
+        rule_type: 'DISCIPLINARY_TIERED', rule_config: config,
+      } })
+      await wrapper.setProps({ visible: false })
+      await wrapper.setProps({ visible: true })
+      await setEffectiveFrom(wrapper, '2027-04-01')
+      await wrapper.find('[data-test="notes-input"]').setValue('更新備註')
+      await wrapper.find('[data-test="submit-btn"]').trigger('click')
+      await flushPromises()
+      expect(createScoringRule.mock.calls[0][0].rule_config).toEqual(config)
+    })
+
     it('切到 DISCIPLINARY_TIERED 後渲染警告/小過/大過 3 欄', async () => {
       const wrapper = await mountDialog()
       await setRuleType(wrapper, 'DISCIPLINARY_TIERED')
@@ -366,6 +381,9 @@ describe('RuleEditorDialog', () => {
         warning_delta: -1,
         minor_delta: -3,
         major_delta: -9,
+        commend_delta: 0,
+        minor_merit_delta: 0,
+        major_merit_delta: 0,
       })
     })
   })

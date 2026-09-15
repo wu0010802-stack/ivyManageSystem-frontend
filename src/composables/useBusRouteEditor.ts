@@ -406,7 +406,9 @@ export function useBusRouteEditor() {
     return weekdayLoads.value.flatMap((load, i) => (load > cap ? [i] : []))
   })
 
+  let editingEpoch = 0
   function resetEditing(): void {
+    editingEpoch += 1
     stops.value = savedStops.value.map((s) => ({ ...s }))
     copyConflicts.value = []
     dirty.value = false
@@ -808,6 +810,7 @@ export function useBusRouteEditor() {
    * 讓使用者能看到全貌後自己決定要移除誰。
    */
   async function copyFromRoute(sourceRouteId: number, reverse = true): Promise<boolean> {
+    const epoch = editingEpoch
     const routeId = activeRouteId.value
     if (routeId === null || copying.value) return false
     // 站點被全部刪光時 `length === 0` 但 `dirty === true`，那也是「會被覆寫掉的
@@ -822,11 +825,13 @@ export function useBusRouteEditor() {
         return false
       }
     }
+    if (routeId !== activeRouteId.value || epoch !== editingEpoch || copying.value) return false
     copying.value = true
     try {
       const res = await copyBusRouteFrom(routeId, {
         source_route_id: sourceRouteId, reverse, preview: true,
       })
+      if (routeId !== activeRouteId.value || epoch !== editingEpoch) return false
       const raw = dataOf(res).stops
       const preview = normalizeStops(raw)
       if (!preview.length) {
@@ -856,7 +861,7 @@ export function useBusRouteEditor() {
       }
       return true
     } catch (e) {
-      ElMessage.error(apiError(e, '帶入名單失敗，請稍後再試'))
+      if (routeId === activeRouteId.value && epoch === editingEpoch) ElMessage.error(apiError(e, '帶入名單失敗，請稍後再試'))
       return false
     } finally {
       copying.value = false

@@ -6,6 +6,8 @@
  * - flushParentQueue: 依 kind dispatch 對應 api saveFn
  * - flushAllParent: 5 kind 全跑、debounce 1s
  */
+import { watch } from 'vue'
+import type { AxiosRequestConfig } from 'axios'
 import {
   enqueueOp,
   listOps,
@@ -85,25 +87,28 @@ export async function enqueueParent(args: ParentEnqueueArgs) {
   })
 }
 
-const SAVE_FN_BY_KIND: Record<ParentOpKind, (payload: Record<string, unknown>) => Promise<unknown>> = {
+const SAVE_FN_BY_KIND: Record<ParentOpKind, (payload: Record<string, unknown>, config?: AxiosRequestConfig) => Promise<unknown>> = {
   // 後端端點仍在（本次只下架家長端 UI），故直接打；不再經 api/messages wrapper。
-  [OP_KINDS.PARENT_MESSAGE]: (p) => api.post(`/parent/messages/threads/${p['thread_id']}/messages`, p),
-  [OP_KINDS.CONTACT_BOOK_REPLY]: (p) => replyContactBook(p['entry_id'] as number, {
+  [OP_KINDS.PARENT_MESSAGE]: (p, config) => api.post(`/parent/messages/threads/${p['thread_id']}/messages`, p, config),
+  [OP_KINDS.CONTACT_BOOK_REPLY]: (p, config) => replyContactBook(p['entry_id'] as number, {
     body: p['body'] as string,
     client_request_id: p['client_request_id'] as string | undefined,
-  }),
-  [OP_KINDS.CONTACT_BOOK_ACK]: (p) => ackContactBook(p['entry_id'] as number),
-  [OP_KINDS.EVENT_ACK]: (p) => acknowledgeEvent(p['event_id'] as number, p),
-  [OP_KINDS.PARENT_LEAVE_REQUEST]: (p) => createLeave(p),
+  }, config),
+  [OP_KINDS.CONTACT_BOOK_ACK]: (p, config) => ackContactBook(p['entry_id'] as number, config),
+  [OP_KINDS.EVENT_ACK]: (p, config) => acknowledgeEvent(p['event_id'] as number, p, config),
+  [OP_KINDS.PARENT_LEAVE_REQUEST]: (p, config) => createLeave(p, config),
 }
 
 export async function flushParentQueue(
   kind: ParentOpKind,
-  saveFn?: (payload: Record<string, unknown>) => Promise<unknown>
+  saveFn?: (payload: Record<string, unknown>) => Promise<unknown>,
+  logoutContext?: LogoutFlushContext,
 ): Promise<FlushResult> {
   const fn = saveFn ?? SAVE_FN_BY_KIND[kind]
-  const userId = currentParentUserId()
+  const generation = _flushGeneration
+  const userId = logoutContext?.userId ?? currentParentUserId()
   if (userId === null) return emptyFlushResult()
+  const valid = () => generation === _flushGeneration && (logoutContext ? logoutContext.valid() : currentParentUserId() === userId)
   const ops = await listOps({
     kind,
     status: OP_STATUS.PENDING,
@@ -113,15 +118,19 @@ export async function flushParentQueue(
   for (const [index, op] of ops.entries()) {
     // 每筆送出前都重新核對目前登入者與 record owner，避免 flush 途中登出/換帳號後
     // 繼續用新 cookie 送出前一位家長的離線操作。
-    if (currentParentUserId() !== userId || op['user_id'] !== userId) {
+    if (!valid() || op['user_id'] !== userId) {
       result.kept += ops.length - index
       break
     }
     try {
-      await fn(op.payload as Record<string, unknown>)
+      await fn(op.payload as Record<string, unknown>, logoutContext?.config)
       await removeOp(op.id as string)
       result.succeeded += 1
     } catch (e) {
+      if (!valid()) {
+        result.kept += ops.length - index
+        break
+      }
       const err = e as {
         response?: { status?: number; data?: { detail?: string } }
         message?: string
@@ -173,6 +182,43 @@ export async function flushParentQueue(
     }
   }
   return result
+}
+
+
+interface LogoutFlushContext {
+  userId: number | string
+  valid: () => boolean
+  config: AxiosRequestConfig
+}
+
+/** 僅登出流程使用：畫面已清空後，以本輪 owner 送出，絕不恢復 auth。 */
+export function createParentLogoutFlush(userId: number | string) {
+  const generation = _flushGeneration
+  const controller = new AbortController()
+  const auth = useParentAuthStore()
+  const stop = watch(() => auth.user, () => controller.abort(), { flush: 'sync' })
+  const valid = () => !controller.signal.aborted && generation === _flushGeneration && auth.user === null
+  const context: LogoutFlushContext = {
+    userId,
+    valid,
+    config: { signal: controller.signal, parentSessionGuard: valid },
+  }
+  return {
+    revoke() { controller.abort(); stop() },
+    async flush() {
+      const total = emptyFlushResult()
+      for (const kind of PARENT_KINDS) {
+        if (!valid()) break
+        const result = await flushParentQueue(kind, undefined, context)
+        total.succeeded += result.succeeded
+        total.needs_review += result.needs_review
+        total.kept += result.kept
+        total.auth_failed ||= result.auth_failed
+        if (result.auth_failed) break
+      }
+      return total
+    },
+  }
 }
 
 let _flushAllDebounceTimer: ReturnType<typeof setTimeout> | null = null

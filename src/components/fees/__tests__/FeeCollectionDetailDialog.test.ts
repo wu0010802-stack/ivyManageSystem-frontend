@@ -35,8 +35,15 @@ const STUBS = {
   'el-skeleton': { template: '<div data-testid="coll-skeleton" />' },
 }
 
+const scope = [
+  { allocation_id: 1, allocation_type: 'fee_record', student_id: 1, student_name: '學生甲', recruitment_visit_id: null, fee_record_id: 21, target_month: '2026-08', fee_item_name: '月費', amount: 10800 },
+  { allocation_id: 2, allocation_type: 'fee_record', student_id: 2, student_name: '學生乙', recruitment_visit_id: null, fee_record_id: 31, target_month: '2026-09', fee_item_name: '教材費', amount: 2000 },
+  { allocation_id: 3, allocation_type: 'prepayment', student_id: 2, student_name: '學生乙', recruitment_visit_id: null, fee_record_id: null, target_month: null, fee_item_name: '預繳款', amount: 3000 },
+]
+
 const event = (over: Record<string, unknown>) => ({
   kind: 'cash',
+  reversal_scope: scope,
   amount: 10800,
   is_reversal: false,
   occurred_at: '2026-08-05T09:30:00',
@@ -384,8 +391,80 @@ describe('FeeCollectionDetailDialog', () => {
     await reverseBtn(w).trigger('click')
     await flushPromises()
 
-    expect(apiMocks.getFeeRecordCollections).toHaveBeenCalledTimes(2)
+    expect(apiMocks.getFeeRecordCollections).toHaveBeenCalledTimes(3)
     expect(w.emitted('reversed')).toBeTruthy()
+  })
+
+  it('沖銷前重抓完整來源範圍，原因框揭露其他學生、月份、預繳與合計', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValueOnce({ records: [record({ events: [cashEvent({ reversal_scope: scope.slice(0, 1) })] })] })
+    apiMocks.getFeeRecordCollections.mockResolvedValue({ records: [record({ events: [cashEvent()] })] })
+    const w = mountDialog(); await flushPromises()
+    await reverseBtn(w).trigger('click'); await flushPromises()
+    expect(apiMocks.getFeeRecordCollections).toHaveBeenCalledTimes(3)
+    const content = epMocks.ElMessageBox.prompt.mock.calls[0][0]
+    const message = typeof content === 'string' ? content : String(content.children)
+    for (const part of ['學生甲', '學生乙', '2026-08', '2026-09', '月費', '教材費', '預繳款', '10,800', '2,000', '3,000', '15,800', '整筆']) expect(message).toContain(part)
+    expect(apiMocks.reverseCashReceipt).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([undefined, null, []])('完整沖銷範圍缺失 %j 時阻擋', async (reversal_scope) => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({ records: [record({ events: [cashEvent({ reversal_scope })] })] })
+    const w = mountDialog(); await flushPromises()
+    await reverseBtn(w).trigger('click'); await flushPromises()
+    expect(epMocks.ElMessageBox.prompt).not.toHaveBeenCalled()
+    expect(apiMocks.reverseCashReceipt).not.toHaveBeenCalled()
+    expect(epMocks.ElMessage.error).toHaveBeenCalled()
+  })
+
+  it.each(['failed', 'locked', 'removed'])('重新查詢發現 %s 時不得沖銷', async (state) => {
+    apiMocks.getFeeRecordCollections.mockResolvedValueOnce({ records: [record({ events: [cashEvent()] })] })
+    const w = mountDialog(); await flushPromises()
+    if (state === 'failed') apiMocks.getFeeRecordCollections.mockRejectedValueOnce(new Error('載入失敗'))
+    else apiMocks.getFeeRecordCollections.mockResolvedValueOnce({ records: [record({ events: state === 'removed' ? [] : [cashEvent({ handover: { status: 'confirmed' } })] })] })
+    await reverseBtn(w).trigger('click'); await flushPromises()
+    expect(epMocks.ElMessageBox.prompt).not.toHaveBeenCalled()
+    expect(apiMocks.reverseCashReceipt).not.toHaveBeenCalled()
+  })
+
+  it.each(['load', 'prompt'])('%s 等待期間切換學生不得送出沖銷，且重複點擊不得開第二筆操作', async (stage) => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({ records: [record({ events: [cashEvent()] })] })
+    const w = mountDialog(); await flushPromises()
+    let resolve!: (value: unknown) => void
+    const pending = new Promise((done) => { resolve = done })
+    if (stage === 'load') apiMocks.getFeeRecordCollections.mockReturnValueOnce(pending)
+    else epMocks.ElMessageBox.prompt.mockReturnValueOnce(pending)
+    await reverseBtn(w).trigger('click'); await flushPromises()
+    await reverseBtn(w).trigger('click'); await flushPromises()
+    await w.setProps({ recordIds: [31], studentName: '學生乙' }); await flushPromises()
+    resolve(stage === 'load' ? { records: [record({ events: [cashEvent()] })] } : { value: '錯誤收款需要沖銷' })
+    await flushPromises()
+    expect(apiMocks.reverseCashReceipt).not.toHaveBeenCalled()
+    expect(epMocks.ElMessageBox.prompt).toHaveBeenCalledTimes(stage === 'load' ? 0 : 1)
+  })
+
+  it('關閉重開相同學生後，舊原因框確認也不得沖銷', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({ records: [record({ events: [cashEvent()] })] })
+    const w = mountDialog(); await flushPromises()
+    let resolve!: (value: unknown) => void
+    epMocks.ElMessageBox.prompt.mockReturnValueOnce(new Promise((done) => { resolve = done }))
+    await reverseBtn(w).trigger('click'); await flushPromises()
+    await w.setProps({ modelValue: false }); await w.setProps({ modelValue: true }); await flushPromises()
+    resolve({ value: '錯誤收款需要沖銷' }); await flushPromises()
+    expect(apiMocks.reverseCashReceipt).not.toHaveBeenCalled()
+  })
+
+  it('沖銷回覆晚到時不刷新另一學生的明細或宣稱該學生已沖銷', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({ records: [record({ events: [cashEvent()] })] })
+    const w = mountDialog(); await flushPromises()
+    let resolve!: (value: unknown) => void
+    apiMocks.reverseCashReceipt.mockReturnValueOnce(new Promise((done) => { resolve = done }))
+    await reverseBtn(w).trigger('click'); await flushPromises()
+    await w.setProps({ recordIds: [31], studentName: '學生乙' }); await flushPromises()
+    const count = apiMocks.getFeeRecordCollections.mock.calls.length
+    resolve({}); await flushPromises()
+    expect(apiMocks.getFeeRecordCollections).toHaveBeenCalledTimes(count)
+    expect(epMocks.ElMessage.success).not.toHaveBeenCalled()
+    expect(w.emitted('reversed')).toBeUndefined()
   })
 
   it('取消輸入原因就不送出', async () => {
@@ -544,4 +623,22 @@ describe('FeeCollectionDetailDialog', () => {
     expect(rows(w)[0].find('[data-test="coll-action"]').exists()).toBe(false)
     expect(reverseBtn(w).exists()).toBe(false)
   })
+})
+
+it.each(['load', 'prompt'])('沖銷%s等待期間卸載不可繼續開確認或寫入', async stage => {
+  vi.clearAllMocks()
+  const data = { records: [record({ events: [event({})] })] }
+  apiMocks.getFeeRecordCollections.mockResolvedValue(data)
+  const w = mountDialog()
+  await flushPromises()
+  let finish!: (value: unknown) => void
+  if (stage === 'load') apiMocks.getFeeRecordCollections.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  else epMocks.ElMessageBox.prompt.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  await w.find('[data-test="coll-reverse"]').trigger('click')
+  await flushPromises()
+  w.unmount()
+  finish(stage === 'load' ? data : { value: '誤收更正原因完整' })
+  await flushPromises()
+  if (stage === 'load') expect(epMocks.ElMessageBox.prompt).not.toHaveBeenCalled()
+  expect(apiMocks.reverseCashReceipt).not.toHaveBeenCalled()
 })

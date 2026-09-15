@@ -101,6 +101,9 @@ describe('summarizeRule', () => {
         rule_config: { warning_delta: -1, minor_delta: -3, major_delta: -5 },
       })
       expect(lines).toEqual([
+        '嘉獎：0 分',
+        '小功：0 分',
+        '大功：0 分',
         '警告：-1 分',
         '小過：-3 分',
         '大過：-5 分',

@@ -10,7 +10,7 @@ import { useConsentGate } from './useConsentGate'
 import { clearSnackbarQueue } from './useSnackbar'
 import { invalidateCachedAsync } from '@/composables/useCachedAsync'
 import {
-  flushAllParent,
+  createParentLogoutFlush,
   resetParentOfflineQueueRuntime,
   PARENT_KINDS,
 } from '@/parent/utils/parentOfflineQueue'
@@ -169,16 +169,14 @@ export const LOGOUT_FLUSH_TIMEOUT_MS = 3000
 
 async function flushPendingBeforeLogout(userId?: number | string): Promise<void> {
   if (!userId) return
+  const context = createParentLogoutFlush(userId)
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    // 先確認真的有東西要送。`flushAllParent()` 帶 1 秒固定 debounce，佇列空著
-    // 也會等——登出是使用者按下就該完成的操作，不能為了空佇列平白多等。
-    const grouped = await listOpsForKinds({ kinds: [...PARENT_KINDS], userId })
-    const hasPending = PARENT_KINDS.some((kind) => grouped[kind]?.pending?.length)
-    if (!hasPending) return
-
     await Promise.race([
-      flushAllParent(),
+      (async () => {
+        const grouped = await listOpsForKinds({ kinds: [...PARENT_KINDS], userId })
+        if (PARENT_KINDS.some((kind) => grouped[kind]?.pending?.length)) await context.flush()
+      })(),
       new Promise<void>((resolve) => {
         timer = setTimeout(resolve, LOGOUT_FLUSH_TIMEOUT_MS)
       }),
@@ -186,6 +184,7 @@ async function flushPendingBeforeLogout(userId?: number | string): Promise<void>
   } catch {
     /* 送不出去（離線／伺服器錯誤）就留在佇列，登出照常繼續 */
   } finally {
+    context.revoke()
     if (timer) clearTimeout(timer)
   }
 }

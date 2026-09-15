@@ -100,14 +100,28 @@ const ElTableStub = defineComponent({
   },
 })
 
+const EmployeeSwitchStub = defineComponent({ props: ['modelValue', 'activeText'], emits: ['update:modelValue'], template: `<button :data-switch="activeText" @click="$emit('update:modelValue', !modelValue)">切換</button>` })
+
 const mountView = () => mount(AnnouncementView, {
-  global: { stubs: { 'el-dialog': ElDialogStub, 'el-table': ElTableStub, 'el-table-column': ElTableColumnStub } },
+  global: { stubs: { 'el-switch': EmployeeSwitchStub, 'el-dialog': ElDialogStub, 'el-table': ElTableStub, 'el-table-column': ElTableColumnStub } },
 })
 
 describe('AnnouncementView 指定學生 scope', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+  })
+
+  it('指定員工但未選人時，更新不得擴大成全員公告', async () => {
+    const wrapper = mountView()
+    await flushPromises(); await nextTick()
+    await wrapper.findAll('el-button').find((b) => b.text().includes('編輯')).trigger('click')
+    await flushPromises(); await nextTick()
+    await wrapper.find('[data-switch="指定員工"]').trigger('click')
+    await nextTick()
+    await wrapper.findAll('el-button').find((b) => b.text().includes('更新')).trigger('click')
+    await flushPromises()
+    expect(updateAnnouncement).not.toHaveBeenCalled()
   })
 
   it('編輯含 student+guardian scope 公告：custom radio 可選、學生選擇器渲染、保留提示顯示筆數', async () => {

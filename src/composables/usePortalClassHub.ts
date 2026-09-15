@@ -26,24 +26,33 @@ export function usePortalClassHub(classroomId?: Ref<number | null>) {
   // data（下拉選單看起來「自己彈回去」）。key 用 undefined 代表未指定班級。
   let inflightKey: number | null | undefined = undefined
 
+  let requestId = 0
+  let disposed = false
+
   async function refresh() {
+    if (disposed) return
+
     const key = classroomId?.value ?? undefined
     if (inflight && inflightKey === key) return inflight
+    const id = ++requestId
+    const ownsRequest = () => !disposed && id === requestId && key === (classroomId?.value ?? undefined)
     loading.value = true
     error.value = null
     inflightKey = key
     inflight = getTodayHub(key)
       .then((d) => {
-        data.value = d
+        if (ownsRequest()) data.value = d
         return d
       })
       .catch((e) => {
-        error.value = e
+        if (ownsRequest()) error.value = e
         throw e
       })
       .finally(() => {
-        loading.value = false
-        inflight = null
+        if (ownsRequest()) {
+          loading.value = false
+          inflight = null
+        }
       })
     return inflight
   }
@@ -67,8 +76,9 @@ export function usePortalClassHub(classroomId?: Ref<number | null>) {
   // 短時間連按同一班不會打爆後端，切班當下也不會誤用舊班的 inflight promise。
   if (classroomId) {
     watch(classroomId, () => {
+      data.value = null
       refresh().catch(() => {})
-    })
+    }, { flush: 'sync' })
   }
 
   onMounted(() => {
@@ -85,6 +95,8 @@ export function usePortalClassHub(classroomId?: Ref<number | null>) {
   })
 
   onBeforeUnmount(() => {
+    disposed = true
+    requestId += 1
     if (timer) clearInterval(timer)
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisible)

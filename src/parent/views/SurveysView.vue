@@ -6,7 +6,7 @@
  * 深連結（推播）：route.params.surveyId 存在時，載入完成後自動找到「該生 × 該調查」
  * 對應的卡片開啟填寫 sheet；若清單中找不到（非自己小孩的調查等），不拋錯，僅 toast 提示。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { getParentSurvey, listParentSurveys, submitSurveyResponse } from '../api/surveys'
 import { useFriendlyError } from '@/composables/useFriendlyError'
@@ -95,12 +95,30 @@ const form = ref<{ attending: boolean | null; answers: Record<string, unknown>; 
   note: '',
 })
 
+let fillRequestId = 0
+let disposed = false
+function closeFill() {
+  fillRequestId += 1
+  showSheet.value = false
+  activeCard.value = null
+  activeSurvey.value = null
+}
+onBeforeUnmount(() => { disposed = true; closeFill() })
+
 async function openFill(card: Card) {
-  activeCard.value = card
+  if (disposed || submitting.value || !canFill(card)) return
+  const requestId = ++fillRequestId
+  const ownsRequest = () => !disposed && requestId === fillRequestId
+  showSheet.value = false
+  activeCard.value = null
+  activeSurvey.value = null
   try {
     const res = await getParentSurvey(card.survey_id)
+    if (!ownsRequest()) return
     activeSurvey.value = res.data as SurveyDetail
+    activeCard.value = card
   } catch (err) {
+    if (!ownsRequest()) return
     _toastFriendly(err, '載入失敗')
     activeCard.value = null
     return
@@ -113,19 +131,19 @@ async function openFill(card: Card) {
 }
 
 async function submit() {
-  if (!activeCard.value || form.value.attending === null) return
+  if (disposed || submitting.value || !showSheet.value || !activeCard.value || form.value.attending === null) return
+  const card = activeCard.value
+  const requestId = fillRequestId
+  const payload = { attending: form.value.attending, answers: { ...form.value.answers }, note: form.value.note || null }
   submitting.value = true
   try {
-    await submitSurveyResponse(activeCard.value.survey_id, activeCard.value.student_id, {
-      attending: form.value.attending,
-      answers: form.value.answers,
-      note: form.value.note || null,
-    })
+    await submitSurveyResponse(card.survey_id, card.student_id, payload)
+    if (disposed || requestId !== fillRequestId) return
     toast.success('已送出回覆')
     showSheet.value = false
     await fetchData()
   } catch (err) {
-    _toastFriendly(err, '送出失敗')
+    if (!disposed && requestId === fillRequestId) _toastFriendly(err, '送出失敗')
   } finally {
     submitting.value = false
   }
@@ -226,7 +244,8 @@ defineExpose({ pullRefresh })
     </template>
 
     <SurveyFillSheet
-      v-model="showSheet"
+      :model-value="showSheet"
+      @update:model-value="!$event && closeFill()"
       :survey="activeSurvey"
       :student-name="activeCard?.student_name ?? ''"
       :form-data="form"
