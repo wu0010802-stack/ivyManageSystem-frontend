@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { List, Plus, Paperclip, InfoFilled, Calendar, Loading } from '@element-plus/icons-vue'
+import { List, Plus, Paperclip, InfoFilled, Calendar, Loading, ArrowLeft, ArrowRight, Wallet } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import LoadingPanel from '@/components/common/LoadingPanel.vue'
-import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
+import AdminListToolbar, { type FilterGroup } from '@/components/common/AdminListToolbar.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator, useApprovalOperation, useClientTableFilter } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
 import { downloadFile } from '@/utils/download'
-import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS, validateLeaveRules } from '@/utils/leaves'
+import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS, validateLeaveRules, leaveRequiresAttachment } from '@/utils/leaves'
 import LeaveAttachmentDialog from './leave/LeaveAttachmentDialog.vue'
 import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
 import LeaveBatchRejectDialog from './leave/LeaveBatchRejectDialog.vue'
@@ -27,23 +28,82 @@ import { useFormDraft } from '@/composables/useFormDraft'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 
-const { currentYear, query } = useDateQuery()
+const { query } = useDateQuery()
 const employeeStore = useEmployeeStore()
 
 // 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）；
 // 批次勾選為桌機工作流，手機以單筆核准/駁回為主
 const { isMobile } = useIsMobile()
 
+// ── 日期／扣薪／需注意訊號的顯示 helper（function 宣告，宣告位置不影響 hoist）───
+
+const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+
+function formatMD(dateStr: unknown): string {
+  const s = dateStr as string | undefined
+  if (!s) return ''
+  const parts = s.split('-')
+  if (parts.length < 3) return s
+  return `${Number(parts[1])}/${Number(parts[2])}`
+}
+
+function weekdayLabel(dateStr: unknown): string {
+  const s = dateStr as string | undefined
+  if (!s) return ''
+  const dt = new Date(`${s}T00:00:00`)
+  if (Number.isNaN(dt.getTime())) return ''
+  return `（${WEEKDAY_LABELS[dt.getDay()]}）`
+}
+
+/** 桌機表格／手機卡片共用的日期欄文字：單日整天／單日時段／多日區間三種寫法，帶星期，不重複日期字串。 */
+function leaveDateRangeLabel(row: Record<string, unknown>): string {
+  const sd = row.start_date
+  const ed = row.end_date
+  const st = row.start_time as string | undefined
+  const et = row.end_time as string | undefined
+  if (sd === ed) {
+    if (st && et) return `${formatMD(sd)}${weekdayLabel(sd)} ${st}–${et}`
+    return `${formatMD(sd)}${weekdayLabel(sd)} 整天`
+  }
+  return `${formatMD(sd)}${weekdayLabel(sd)} – ${formatMD(ed)}${weekdayLabel(ed)}`
+}
+
+function leaveDeductionLabel(row: Record<string, unknown>): string {
+  const r = row.deduction_ratio
+  if (r === 0) return '不扣'
+  if (r === 1) return '全扣'
+  if (r === undefined || r === null) return ''
+  return '扣半薪'
+}
+
+/**
+ * 核准前的三個「需注意」訊號，皆從既有回傳欄位算出、不需額外打 API：
+ * - 缺附件：門檻抄後端 `requires_supporting_document`（>2 個日曆天），對齊 approve 端點的 400 守衛
+ * - 代理人未確認：待回應或已拒絕，且假單本身仍待審（已核准/已駁回的舊資料不再提示）
+ * - 換班中：綁定 `related_swap`
+ */
+function leaveNeedsAttachment(row: Record<string, unknown>): boolean {
+  return row.status === 'pending'
+    && leaveRequiresAttachment(row.start_date, row.end_date)
+    && !((row.attachment_paths as string[] | undefined)?.length)
+}
+function leaveSubstituteAttention(row: Record<string, unknown>): boolean {
+  return row.status === 'pending' && ['pending', 'rejected'].includes(row.substitute_status as string)
+}
+function leaveHasSwap(row: Record<string, unknown>): boolean {
+  return Boolean(row.related_swap)
+}
+
 // 手機卡片視圖欄位（__ 前綴為 slot-only 欄，值由對應 #cell- slot 渲染）
 const leaveCardColumns = [
   { label: '假別', prop: '__type' },
-  { label: '開始', prop: '__start', formatter: (r: Record<string, unknown>) => `${r.start_date ?? ''} ${r.start_time ?? ''}`.trim() },
-  { label: '結束', prop: '__end', formatter: (r: Record<string, unknown>) => `${r.end_date ?? ''} ${r.end_time ?? ''}`.trim() },
-  { label: '時數', prop: '__hours', formatter: (r: Record<string, unknown>) => `${r.leave_hours}h` },
-  { label: '審核', prop: '__status' },
-  { label: '代理人', prop: '__substitute' },
+  { label: '日期', prop: '__date', formatter: (r: Record<string, unknown>) => leaveDateRangeLabel(r) },
+  { label: '時數', prop: '__hours', formatter: (r: Record<string, unknown>) => {
+    const d = leaveDeductionLabel(r)
+    return `${r.leave_hours}h${d ? '　' + d : ''}`
+  } },
+  { label: '狀態', prop: '__status' },
   { label: '原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
-  { label: '附件', prop: '__attach' },
 ]
 
 const loading = ref(false)
@@ -56,9 +116,8 @@ const formRef = ref<{ validate: () => Promise<boolean>; clearValidate?: () => vo
 const attachRef = ref<{ open: (row: { id: number; attachment_paths: string[] }) => void } | null>(null)
 const rejectRef = ref<{ open: (row: Record<string, unknown>) => void } | null>(null)
 
-// 行事曆 / 配額 Dialog 的顯示控制
+// 行事曆 / 配額頁籤的顯示控制
 const activeTab = ref('list')
-const quotaDialogVisible = ref(false)
 
 const ATTACHMENT_HINTS = {
   default: '請假超過 2 天時，核准前需補上證明附件',
@@ -172,18 +231,81 @@ const openEditWithDraft = async (row: Record<string, unknown>) => {
   await leaveDraft.maybePromptRestore()
 }
 
-const statusFilter = ref('')
+// 狀態／需注意 兩組計數：一律從「本月全量」leaveRecords 算，與過濾條件無關
+// （AdminListToolbar 的「共 N 筆」也是讀同一份 total，語意一致）
+const leaveStatusCounts = computed(() => {
+  const c = { pending: 0, approved: 0, rejected: 0 }
+  for (const r of leaveRecords.value) {
+    const s = r.status as string
+    if (s in c) c[s as keyof typeof c]++
+  }
+  return c
+})
+const leaveSignalCounts = computed(() => {
+  const c = { missing_attachment: 0, substitute_attention: 0, swap: 0 }
+  for (const r of leaveRecords.value) {
+    if (leaveNeedsAttachment(r)) c.missing_attachment++
+    if (leaveSubstituteAttention(r)) c.substitute_attention++
+    if (leaveHasSwap(r)) c.swap++
+  }
+  return c
+})
+const leaveFilterGroups = computed<FilterGroup[]>(() => [
+  {
+    key: 'status',
+    label: '狀態',
+    options: [
+      { value: 'pending', label: `待審核（${leaveStatusCounts.value.pending}）` },
+      { value: 'approved', label: `已核准（${leaveStatusCounts.value.approved}）` },
+      { value: 'rejected', label: `已駁回（${leaveStatusCounts.value.rejected}）` },
+    ],
+  },
+  {
+    key: 'signal',
+    label: '需注意',
+    options: [
+      { value: 'missing_attachment', label: `缺附件（${leaveSignalCounts.value.missing_attachment}）` },
+      { value: 'substitute_attention', label: `代理人未確認（${leaveSignalCounts.value.substitute_attention}）` },
+      { value: 'swap', label: `換班中（${leaveSignalCounts.value.swap}）` },
+    ],
+  },
+])
 
-// 客端關鍵字過濾：單月資料已全載，姓名/原因即打即濾，與上方年月/員工/狀態下拉（伺服器端）交集
+// 客端關鍵字過濾 + 狀態／需注意篩選：單月資料已全載，即打即濾／即點即濾，
+// 不需為了篩選重新打 API（原本 statusFilter 走伺服器端已移除）
 const {
   searchQuery: leaveSearch,
+  filterValues: leaveFilterValues,
   filtered: filteredLeaves,
   total: leaveTotal,
   shown: leaveShown,
 } = useClientTableFilter<Record<string, unknown>>({
   source: () => leaveRecords.value,
   searchFields: (r) => [r.employee_name as string | undefined, r.reason as string | undefined],
+  filters: {
+    status: (row, value) => row.status === value,
+    signal: (row, value) => {
+      if (value === 'missing_attachment') return leaveNeedsAttachment(row)
+      if (value === 'substitute_attention') return leaveSubstituteAttention(row)
+      if (value === 'swap') return leaveHasSwap(row)
+      return true
+    },
+  },
 })
+
+// 待審核排最前面（穩定排序，同組內維持原順序），降低「5 筆待審散在 14 筆裡」的掃視成本
+const displayLeaves = computed(() => {
+  const pending: Record<string, unknown>[] = []
+  const rest: Record<string, unknown>[] = []
+  for (const r of filteredLeaves.value) {
+    (r.status === 'pending' ? pending : rest).push(r)
+  }
+  return [...pending, ...rest]
+})
+
+function leaveRowClassName({ row }: { row: Record<string, unknown> }) {
+  return row.status === 'pending' ? 'leave-row-pending' : ''
+}
 
 // 全域搜尋（Ctrl+K）深連結：?search=<員工姓名> 預填客端關鍵字過濾
 // （useRoute 在無 router 的測試掛載下回 undefined，防禦式取值）
@@ -266,7 +388,6 @@ const fetchLeaves = async () => {
   try {
     const params: Record<string, unknown> = { year: query.year, month: query.month }
     if (query.employee_id) params.employee_id = query.employee_id
-    if (statusFilter.value) params.status = statusFilter.value
     const page = await getLeaves(params)
     leaveRecords.value = page.items
     // 後端單次最多回 5000 筆；超量時明講，不讓使用者以為看到了全部
@@ -276,6 +397,26 @@ const fetchLeaves = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 月份／員工改變即重新查詢，取代原本的「查詢」按鈕（onMounted 已自行呼叫一次，不設 immediate 避免重複）
+watch(
+  () => [query.year, query.month, query.employee_id],
+  () => { fetchLeaves() },
+)
+
+function leaveGoPrevMonth() {
+  if (query.month === 1) { query.month = 12; query.year-- }
+  else query.month--
+}
+function leaveGoNextMonth() {
+  if (query.month === 12) { query.month = 1; query.year++ }
+  else query.month++
+}
+function leaveGoThisMonth() {
+  const now = new Date()
+  query.year = now.getFullYear()
+  query.month = now.getMonth() + 1
 }
 
 const saveLeave = async () => {
@@ -412,11 +553,9 @@ const cancelApprove = (row: Record<string, unknown>) =>
   executeApproval(row.id, { approved: false, rejection_reason: '取消核准' }, '已取消核准')
 
 // 行操作的「更多」dropdown：把次要/危險動作集中收斂，降低表格視覺密度
+// （駁回已於列上直接外露，不再走 command 分派）
 function handleRowCommand(cmd: string, row: Record<string, unknown>) {
   switch (cmd) {
-    case 'reject':
-      rejectRef.value?.open(row)
-      break
     case 'cancel-approve':
       cancelApprove(row)
       break
@@ -461,280 +600,272 @@ onMounted(() => {
 
 <template>
   <div class="leave-page">
-    <h2>請假管理</h2>
+    <PageHeader title="請假管理" subtitle="審核員工假單、查看請假行事曆與年度配額">
+      <template #actions>
+        <el-button @click="downloadImportTemplate">下載範本</el-button>
+        <el-button @click="importVisible = true">匯入 Excel</el-button>
+        <el-button @click="downloadFile(`/exports/leaves?year=${query.year}&month=${query.month}`, `${query.year}年${query.month}月請假記錄.xlsx`)">匯出 Excel</el-button>
+        <el-button type="primary" @click="openCreateWithDraft">
+          <el-icon><Plus /></el-icon> 新增請假
+        </el-button>
+      </template>
+    </PageHeader>
 
     <el-tabs v-model="activeTab" class="leave-tabs">
 
-      <!-- ─── 列表 Tab ─── -->
+      <!-- ─── 假單 Tab ─── -->
       <el-tab-pane name="list">
-        <template #label><el-icon><List /></el-icon> 列表</template>
+        <template #label><el-icon><List /></el-icon> 假單</template>
 
-    <el-card class="control-panel">
-      <div class="controls">
-        <el-select v-model="query.employee_id" placeholder="全部員工" clearable filterable class="ctl-emp">
-          <el-option v-for="emp in employeeStore.employees" :key="emp.id" :label="emp.name" :value="emp.id" />
-        </el-select>
-        <el-select v-model="query.year" class="ctl-year">
-          <el-option v-for="y in 5" :key="y" :label="(currentYear - 2 + y) + ' 年'" :value="currentYear - 2 + y" />
-        </el-select>
-        <el-select v-model="query.month" class="ctl-month">
-          <el-option v-for="m in 12" :key="m" :label="m + ' 月'" :value="m" />
-        </el-select>
-        <el-select v-model="statusFilter" placeholder="全部狀態" clearable class="ctl-status">
-          <el-option label="待審核" value="pending" />
-          <el-option label="已核准" value="approved" />
-          <el-option label="已駁回" value="rejected" />
-        </el-select>
-        <el-button type="primary" @click="fetchLeaves" :loading="loading">查詢</el-button>
-        <el-button type="warning" @click="downloadFile(`/exports/leaves?year=${query.year}&month=${query.month}`, `${query.year}年${query.month}月請假記錄.xlsx`)">匯出 Excel</el-button>
-        <el-button @click="quotaDialogVisible = true">配額管理</el-button>
-        <el-button @click="downloadImportTemplate">下載範本</el-button>
-        <el-button @click="importVisible = true">匯入 Excel</el-button>
-        <el-button
-          v-if="selectedLeaves.length > 0"
-          type="success"
-          :loading="batchLoading"
-          @click="showBatchApproveConfirm"
-        >批次核准 ({{ selectedLeaves.length }})</el-button>
-        <el-button
-          v-if="selectedLeaves.length > 0"
-          type="danger"
-          :loading="batchLoading"
-          @click="openBatchReject"
-        >批次駁回 ({{ selectedLeaves.length }})</el-button>
-        <el-button type="success" @click="openCreateWithDraft">
-          <el-icon><Plus /></el-icon> 新增請假
-        </el-button>
-      </div>
-    </el-card>
+        <div class="leave-month-bar">
+          <el-button-group>
+            <el-button :icon="ArrowLeft" @click="leaveGoPrevMonth" />
+            <el-button @click="leaveGoThisMonth">本月</el-button>
+            <el-button :icon="ArrowRight" @click="leaveGoNextMonth" />
+          </el-button-group>
+          <span class="leave-month-title">{{ query.year }} 年 {{ query.month }} 月</span>
+          <el-select v-model="query.employee_id" placeholder="全部員工" clearable filterable class="ctl-emp">
+            <el-option v-for="emp in employeeStore.employees" :key="emp.id" :label="emp.name" :value="emp.id" />
+          </el-select>
+          <span class="leave-month-count">
+            本月 {{ leaveRecords.length }} 筆
+            <template v-if="leaveStatusCounts.pending">・待審 {{ leaveStatusCounts.pending }} 筆</template>
+          </span>
+        </div>
 
-    <el-alert
-      v-if="truncatedTotal"
-      type="warning"
-      show-icon
-      :closable="false"
-      class="leave-truncated-alert"
-      :title="`查詢結果共 ${truncatedTotal} 筆，目前僅載入前 ${leaveRecords.length} 筆`"
-      description="請縮小查詢範圍（例如指定員工或改查單一月份）以取得完整資料。"
-    />
+        <el-alert
+          v-if="truncatedTotal"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="leave-truncated-alert"
+          :title="`查詢結果共 ${truncatedTotal} 筆，目前僅載入前 ${leaveRecords.length} 筆`"
+          description="請縮小查詢範圍（例如指定員工或改查單一月份）以取得完整資料。"
+        />
 
-    <AdminListToolbar
-      v-model:search="leaveSearch"
-      search-placeholder="搜尋員工姓名或請假原因"
-      :total="leaveTotal"
-      :shown="leaveShown"
-    />
-
-    <LoadingPanel
-      :loading="loading && !leaveRecords.length"
-      :empty="!loading && !leaveRecords.length"
-      variant="skeleton"
-      class="leave-table-panel"
-    >
-      <template #skeleton><TableSkeleton :columns="8" /></template>
-      <template #empty><el-empty description="尚無請假紀錄" /></template>
-      <el-table v-if="!isMobile" :data="filteredLeaves" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
-      <template #empty>
-        <el-empty :description="leaveSearch ? '沒有符合搜尋條件的請假紀錄' : '尚無請假紀錄'" />
-      </template>
-      <el-table-column type="selection" width="45" />
-      <el-table-column prop="employee_name" label="員工" width="100" />
-      <el-table-column label="假別" width="100">
-        <template #default="scope">
-          <el-tag :type="(getLeaveTypeTag(scope.row.leave_type as string).color as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined)" size="small">
-            {{ scope.row.leave_type_label }}
-          </el-tag>
-        </template>
-      </el-table-column>
-        <el-table-column label="開始時間" width="140">
-          <template #default="scope">
-            {{ scope.row.start_date }} {{ scope.row.start_time || '' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="結束時間" width="140">
-          <template #default="scope">
-            {{ scope.row.end_date }} {{ scope.row.end_time || '' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="時數" width="80">
-          <template #default="scope">{{ scope.row.leave_hours }}h</template>
-        </el-table-column>
-        <el-table-column label="扣薪比例" width="90">
-          <template #default="scope">
-            {{ scope.row.deduction_ratio === 0 ? '不扣' : (scope.row.deduction_ratio === 1 ? '全扣' : '半薪') }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="reason" label="原因" min-width="120" show-overflow-tooltip />
-        <el-table-column label="附件" width="70" align="center">
-          <template #default="scope">
+        <AdminListToolbar
+          v-model:search="leaveSearch"
+          v-model:filter-values="leaveFilterValues"
+          search-placeholder="搜尋員工姓名或請假原因"
+          :filters="leaveFilterGroups"
+          :total="leaveTotal"
+          :shown="leaveShown"
+        >
+          <template #actions>
             <el-button
-              v-if="scope.row.attachment_paths && scope.row.attachment_paths.length > 0"
-              link
-              type="primary"
-              size="small"
-              @click="openAttachment(scope.row)"
-            >
-              <el-icon><Paperclip /></el-icon>
-              {{ scope.row.attachment_paths.length }}
-            </el-button>
-            <span v-else class="text-secondary" style="font-size:12px">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="審核" width="120">
-          <template #default="scope">
-            <el-tag v-if="scope.row.status === 'approved'" type="success" size="small">已核准</el-tag>
-            <template v-else-if="scope.row.status === 'rejected'">
-              <el-tag type="danger" size="small">已駁回</el-tag>
-              <el-tooltip v-if="scope.row.rejection_reason" :content="scope.row.rejection_reason" placement="top">
-                <el-icon style="margin-left:4px;color:var(--el-color-danger);cursor:help;vertical-align:middle;"><InfoFilled /></el-icon>
-              </el-tooltip>
-            </template>
-            <el-tag v-else type="info" size="small">待審核</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="代理人" width="140">
-          <template #default="scope">
-            <template v-if="scope.row.substitute_employee_name">
-              <span style="font-size:12px;">{{ scope.row.substitute_employee_name }}</span>
-              <el-tag
-                size="small"
-                :type="(({ not_required:'info', pending:'warning', accepted:'success', rejected:'danger', waived:'info' } as Record<string, string>)[scope.row.substitute_status as string] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined"
-                style="margin-left:4px;"
-              >{{ ({ not_required:'—', pending:'待回應', accepted:'已接受', rejected:'已拒絕', waived:'主管略過' } as Record<string, string>)[scope.row.substitute_status as string] || scope.row.substitute_status }}</el-tag>
-            </template>
-            <span v-else style="color:var(--el-text-color-secondary);font-size:12px;">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="換班關聯" width="100" align="center">
-          <template #default="scope">
-            <el-tooltip
-              v-if="scope.row.related_swap"
-              placement="top"
-              :content="`換班申請 #${scope.row.related_swap.id}（${scope.row.related_swap.swap_date}，狀態：${scope.row.related_swap.status}）`"
-            >
-              <el-tag type="warning" size="small" effect="plain">換班中</el-tag>
-            </el-tooltip>
-            <span v-else style="color:var(--el-text-color-secondary);font-size:12px;">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="scope">
-            <!-- 主動作：依狀態決定，最常用的操作直接外露 -->
-            <template v-if="scope.row.status === 'pending' && canApprove(scope.row)">
-              <el-button type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
-            </template>
-            <el-button
-              v-else-if="scope.row.status === 'rejected' && canApprove(scope.row)"
+              v-if="selectedLeaves.length > 0"
               type="success"
-              size="small"
-              link
-              @click="approveLeave(scope.row)"
-            >核准</el-button>
+              :loading="batchLoading"
+              @click="showBatchApproveConfirm"
+            >批次核准 ({{ selectedLeaves.length }})</el-button>
             <el-button
-              v-else
-              type="primary"
-              size="small"
-              link
-              @click="openEditWithDraft(scope.row)"
-            >編輯</el-button>
+              v-if="selectedLeaves.length > 0"
+              type="danger"
+              :loading="batchLoading"
+              @click="openBatchReject"
+            >批次駁回 ({{ selectedLeaves.length }})</el-button>
+          </template>
+        </AdminListToolbar>
 
-            <!-- 次要/危險動作收進 dropdown，降低誤觸與視覺密度 -->
-            <el-dropdown trigger="click" @command="(cmd) => handleRowCommand(cmd, scope.row)">
-              <el-button type="info" size="small" link>更多 ▾</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item
-                    v-if="scope.row.status === 'pending' && canApprove(scope.row)"
-                    command="reject"
-                  >駁回</el-dropdown-item>
-                  <el-dropdown-item
-                    v-if="scope.row.status === 'approved' && canApprove(scope.row)"
-                    command="cancel-approve"
-                  >取消核准</el-dropdown-item>
-                  <!-- 編輯：當主動作是「核准」（待審/已駁回 且可核准）時補上入口，
-                       審核者常需在核准前先修錯字。其他情況主動作就是編輯，無需重複。 -->
-                  <el-dropdown-item
-                    v-if="scope.row.status !== 'approved' && canApprove(scope.row)"
-                    command="edit"
-                  >編輯</el-dropdown-item>
-                  <el-dropdown-item command="logs">審核紀錄</el-dropdown-item>
-                  <el-dropdown-item divided command="delete">刪除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </template>
-        </el-table-column>
-      </el-table>
-      <AdminListCards
-        v-else
-        :items="filteredLeaves"
-        :columns="leaveCardColumns"
-        row-key="id"
-        :loading="loading"
-        :empty-text="leaveSearch ? '沒有符合搜尋條件的請假紀錄' : '尚無請假紀錄'"
-      >
-        <template #title="{ item }">{{ item.employee_name }}</template>
-        <template #cell-__type="{ item }">
-          <el-tag :type="(getLeaveTypeTag(item.leave_type as string).color as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined)" size="small">
-            {{ item.leave_type_label }}
-          </el-tag>
-        </template>
-        <template #cell-__status="{ item }">
-          <el-tag v-if="item.status === 'approved'" type="success" size="small">已核准</el-tag>
-          <template v-else-if="item.status === 'rejected'">
-            <el-tag type="danger" size="small">已駁回</el-tag>
-            <!-- 桌機用 hover tooltip 呈現駁回原因；觸控裝置無 hover，改為直接顯示 -->
-            <div v-if="item.rejection_reason" class="card-reject-reason">{{ item.rejection_reason }}</div>
-          </template>
-          <el-tag v-else type="info" size="small">待審核</el-tag>
-        </template>
-        <template #cell-__substitute="{ item }">
-          <template v-if="item.substitute_employee_name">
-            {{ item.substitute_employee_name }}
-            <el-tag
-              size="small"
-              :type="(({ not_required:'info', pending:'warning', accepted:'success', rejected:'danger', waived:'info' } as Record<string, string>)[item.substitute_status as string] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined"
-              style="margin-left:4px;"
-            >{{ ({ not_required:'—', pending:'待回應', accepted:'已接受', rejected:'已拒絕', waived:'主管略過' } as Record<string, string>)[item.substitute_status as string] || item.substitute_status }}</el-tag>
-          </template>
-          <span v-else>—</span>
-        </template>
-        <template #cell-__attach="{ item }">
-          <el-button
-            v-if="item.attachment_paths && (item.attachment_paths as string[]).length > 0"
-            link
-            type="primary"
-            size="small"
-            @click="openAttachment(item)"
+        <LoadingPanel
+          :loading="loading && !leaveRecords.length"
+          :empty="!loading && !leaveRecords.length"
+          variant="skeleton"
+          class="leave-table-panel"
+        >
+          <template #skeleton><TableSkeleton :columns="8" /></template>
+          <template #empty><el-empty description="尚無請假紀錄" /></template>
+          <el-table
+            v-if="!isMobile"
+            :data="displayLeaves"
+            border
+            stripe
+            style="width: 100%; margin-top: 12px;"
+            v-loading="loading"
+            max-height="600"
+            :row-class-name="leaveRowClassName"
+            @selection-change="handleSelectionChange"
           >
-            <el-icon><Paperclip /></el-icon> {{ (item.attachment_paths as string[]).length }}
-          </el-button>
-          <span v-else>—</span>
-        </template>
-        <template #actions="{ item }">
-          <el-button
-            v-if="(item.status === 'pending' || item.status === 'rejected') && canApprove(item)"
-            type="success"
-            size="small"
-            link
-            @click="approveLeave(item)"
-          >核准</el-button>
-          <el-button v-else type="primary" size="small" link @click="openEditWithDraft(item)">編輯</el-button>
-          <el-dropdown trigger="click" @command="(cmd) => handleRowCommand(cmd, item)">
-            <el-button type="info" size="small" link>更多 ▾</el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item v-if="item.status === 'pending' && canApprove(item)" command="reject">駁回</el-dropdown-item>
-                <el-dropdown-item v-if="item.status === 'approved' && canApprove(item)" command="cancel-approve">取消核准</el-dropdown-item>
-                <el-dropdown-item v-if="item.status !== 'approved' && canApprove(item)" command="edit">編輯</el-dropdown-item>
-                <el-dropdown-item command="logs">審核紀錄</el-dropdown-item>
-                <el-dropdown-item divided command="delete">刪除</el-dropdown-item>
-              </el-dropdown-menu>
+            <template #empty>
+              <el-empty :description="leaveSearch ? '沒有符合搜尋條件的請假紀錄' : '尚無請假紀錄'" />
             </template>
-          </el-dropdown>
-        </template>
-      </AdminListCards>
-    </LoadingPanel>
+            <el-table-column type="selection" width="45" />
+            <el-table-column prop="employee_name" label="員工" width="100" />
+            <el-table-column label="假別" width="110">
+              <template #default="scope">
+                <el-tag :type="(getLeaveTypeTag(scope.row.leave_type as string).color as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined)" size="small">
+                  {{ scope.row.leave_type_label }}
+                </el-tag>
+                <span v-if="leaveDeductionLabel(scope.row)" class="leave-dedu">{{ leaveDeductionLabel(scope.row) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="日期" width="200">
+              <template #default="scope">
+                <div class="leave-date-cell">
+                  <span>{{ leaveDateRangeLabel(scope.row) }}</span>
+                  <el-tooltip
+                    v-if="scope.row.related_swap"
+                    placement="top"
+                    :content="`換班申請 #${scope.row.related_swap.id}（${scope.row.related_swap.swap_date}，狀態：${scope.row.related_swap.status}）`"
+                  >
+                    <el-tag type="warning" size="small" effect="plain" class="leave-swap-tag">換班中</el-tag>
+                  </el-tooltip>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="時數" width="70">
+              <template #default="scope">{{ scope.row.leave_hours }}h</template>
+            </el-table-column>
+            <el-table-column label="代理人" width="140">
+              <template #default="scope">
+                <template v-if="scope.row.substitute_employee_name">
+                  <span style="font-size:12px;">{{ scope.row.substitute_employee_name }}</span>
+                  <el-tag
+                    size="small"
+                    :type="(({ not_required:'info', pending:'warning', accepted:'success', rejected:'danger', waived:'info' } as Record<string, string>)[scope.row.substitute_status as string] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined"
+                    style="margin-left:4px;"
+                  >{{ ({ not_required:'—', pending:'待回應', accepted:'已接受', rejected:'已拒絕', waived:'主管略過' } as Record<string, string>)[scope.row.substitute_status as string] || scope.row.substitute_status }}</el-tag>
+                </template>
+                <span v-else style="color:var(--el-text-color-secondary);font-size:12px;">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="原因" min-width="150">
+              <template #default="scope">
+                <span class="leave-reason-text" :title="(scope.row.reason as string) || ''">{{ scope.row.reason || '—' }}</span>
+                <el-button
+                  v-if="scope.row.attachment_paths && scope.row.attachment_paths.length > 0"
+                  link
+                  type="primary"
+                  size="small"
+                  class="leave-reason-attach"
+                  @click="openAttachment(scope.row)"
+                >
+                  <el-icon><Paperclip /></el-icon>
+                  {{ scope.row.attachment_paths.length }}
+                </el-button>
+              </template>
+            </el-table-column>
+            <el-table-column label="狀態" width="150">
+              <template #default="scope">
+                <div class="leave-status-cell">
+                  <el-tag v-if="scope.row.status === 'approved'" type="success" size="small">已核准</el-tag>
+                  <template v-else-if="scope.row.status === 'rejected'">
+                    <el-tag type="danger" size="small">已駁回</el-tag>
+                    <el-tooltip v-if="scope.row.rejection_reason" :content="scope.row.rejection_reason" placement="top">
+                      <el-icon style="margin-left:4px;color:var(--el-color-danger);cursor:help;vertical-align:middle;"><InfoFilled /></el-icon>
+                    </el-tooltip>
+                  </template>
+                  <el-tag v-else type="warning" size="small">待審核</el-tag>
+                  <div v-if="leaveNeedsAttachment(scope.row) || leaveSubstituteAttention(scope.row)" class="leave-signal-chips">
+                    <el-tag v-if="leaveNeedsAttachment(scope.row)" type="danger" size="small" effect="plain">缺附件</el-tag>
+                    <el-tag v-if="leaveSubstituteAttention(scope.row)" type="warning" size="small" effect="plain">
+                      {{ scope.row.substitute_status === 'rejected' ? '代理人已拒絕' : '代理人待回應' }}
+                    </el-tag>
+                  </div>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="190" fixed="right">
+              <template #default="scope">
+                <!-- 主動作：待審／已駁回且可核准者，核准與駁回並排外露；缺附件時核准鈕停用並說明原因 -->
+                <template v-if="(scope.row.status === 'pending' || scope.row.status === 'rejected') && canApprove(scope.row)">
+                  <el-tooltip v-if="leaveNeedsAttachment(scope.row)" content="請假超過 2 天需檢附證明附件後才能核准" placement="top">
+                    <span><el-button type="success" size="small" link disabled>核准</el-button></span>
+                  </el-tooltip>
+                  <el-button v-else type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
+                  <el-button
+                    v-if="scope.row.status === 'pending'"
+                    type="danger"
+                    size="small"
+                    link
+                    @click="rejectRef?.open(scope.row)"
+                  >駁回</el-button>
+                </template>
+                <el-button
+                  v-else
+                  type="primary"
+                  size="small"
+                  link
+                  @click="openEditWithDraft(scope.row)"
+                >編輯</el-button>
+
+                <!-- 次要/危險動作收進 dropdown，降低誤觸與視覺密度 -->
+                <el-dropdown trigger="click" @command="(cmd) => handleRowCommand(cmd, scope.row)">
+                  <el-button type="info" size="small" link>更多 ▾</el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item
+                        v-if="scope.row.status === 'approved' && canApprove(scope.row)"
+                        command="cancel-approve"
+                      >取消核准</el-dropdown-item>
+                      <!-- 編輯：當主動作是「核准」（待審/已駁回 且可核准）時補上入口，
+                           審核者常需在核准前先修錯字。其他情況主動作就是編輯，無需重複。 -->
+                      <el-dropdown-item
+                        v-if="scope.row.status !== 'approved' && canApprove(scope.row)"
+                        command="edit"
+                      >編輯</el-dropdown-item>
+                      <el-dropdown-item command="logs">審核紀錄</el-dropdown-item>
+                      <el-dropdown-item divided command="delete">刪除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+            </el-table-column>
+          </el-table>
+          <AdminListCards
+            v-else
+            :items="displayLeaves"
+            :columns="leaveCardColumns"
+            row-key="id"
+            :loading="loading"
+            :empty-text="leaveSearch ? '沒有符合搜尋條件的請假紀錄' : '尚無請假紀錄'"
+          >
+            <template #title="{ item }">{{ item.employee_name }}</template>
+            <template #cell-__type="{ item }">
+              <el-tag :type="(getLeaveTypeTag(item.leave_type as string).color as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined)" size="small">
+                {{ item.leave_type_label }}
+              </el-tag>
+            </template>
+            <template #cell-__status="{ item }">
+              <div class="leave-card-status">
+                <el-tag v-if="item.status === 'approved'" type="success" size="small">已核准</el-tag>
+                <template v-else-if="item.status === 'rejected'">
+                  <el-tag type="danger" size="small">已駁回</el-tag>
+                  <!-- 手機無 hover，駁回原因直接顯示 -->
+                  <div v-if="item.rejection_reason" class="card-reject-reason">{{ item.rejection_reason }}</div>
+                </template>
+                <el-tag v-else type="warning" size="small">待審核</el-tag>
+                <el-tag v-if="leaveNeedsAttachment(item)" type="danger" size="small" effect="plain">缺附件</el-tag>
+                <el-tag v-if="leaveSubstituteAttention(item)" type="warning" size="small" effect="plain">
+                  {{ item.substitute_status === 'rejected' ? '代理人已拒絕' : '代理人待回應' }}
+                </el-tag>
+                <span v-if="item.substitute_employee_name" class="leave-card-substitute">代理 {{ item.substitute_employee_name }}</span>
+                <span v-if="item.attachment_paths && (item.attachment_paths as string[]).length > 0" class="leave-card-attach">
+                  <el-icon><Paperclip /></el-icon>{{ (item.attachment_paths as string[]).length }}
+                </span>
+              </div>
+            </template>
+            <template #actions="{ item }">
+              <template v-if="(item.status === 'pending' || item.status === 'rejected') && canApprove(item)">
+                <el-button v-if="leaveNeedsAttachment(item)" type="success" size="small" disabled>核准</el-button>
+                <el-button v-else type="success" size="small" @click="approveLeave(item)">核准</el-button>
+                <el-button v-if="item.status === 'pending'" type="danger" size="small" @click="rejectRef?.open(item)">駁回</el-button>
+              </template>
+              <el-button v-else type="primary" size="small" @click="openEditWithDraft(item)">編輯</el-button>
+              <el-dropdown trigger="click" @command="(cmd) => handleRowCommand(cmd, item)">
+                <el-button type="info" size="small">更多 ▾</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="item.status === 'approved' && canApprove(item)" command="cancel-approve">取消核准</el-dropdown-item>
+                    <el-dropdown-item v-if="item.status !== 'approved' && canApprove(item)" command="edit">編輯</el-dropdown-item>
+                    <el-dropdown-item command="logs">審核紀錄</el-dropdown-item>
+                    <el-dropdown-item divided command="delete">刪除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </template>
+          </AdminListCards>
+        </LoadingPanel>
 
       </el-tab-pane>
 
@@ -744,20 +875,24 @@ onMounted(() => {
         <LeaveCalendar :activeTab="activeTab" />
       </el-tab-pane>
 
-      <!-- ─── 到期管理 Tab ─── -->
+      <!-- ─── 配額與到期 Tab（2026-09-15 合併：原「配額管理」彈窗＋「到期管理」頁籤）─── -->
       <el-tab-pane
         v-if="hasPermission('LEAVES_READ') || hasPermission('SALARY_READ')"
-        label="到期管理"
-        name="expiry"
+        name="quota"
       >
-        <LeaveQuotaExpiryTab v-if="activeTab === 'expiry'" />
+        <template #label><el-icon><Wallet /></el-icon> 配額與到期</template>
+        <template v-if="activeTab === 'quota'">
+          <LeaveQuotaManager />
+          <el-divider />
+          <h3 class="leave-expiry-title">到期管理</h3>
+          <LeaveQuotaExpiryTab />
+        </template>
       </el-tab-pane>
 
     </el-tabs>
 
     <!-- 子元件 -->
     <LeaveRejectDialog ref="rejectRef" @rejected="fetchLeaves()" />
-    <LeaveQuotaManager v-model:visible="quotaDialogVisible" />
     <LeaveAttachmentDialog ref="attachRef" />
 
     <!-- Create/Edit Dialog -->
@@ -956,29 +1091,100 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.control-panel {
-  margin-bottom: var(--space-5);
-}
-.controls {
+.leave-month-bar {
   display: flex;
-  gap: var(--space-3);
   align-items: center;
+  gap: var(--space-3);
   flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+.leave-expiry-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+}
+.leave-month-title {
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 100px;
+}
+.leave-month-count {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  margin-left: auto;
 }
 .ctl-emp { width: 180px; }
-.ctl-year { width: 110px; }
-.ctl-month { width: 90px; }
-.ctl-status { width: 120px; }
 
-/* 手機：查詢列控制項改流式填滿、按鈕觸控目標對齊 44px */
+/* 手機：月份列控制項改流式填滿、按鈕觸控目標對齊 44px */
 @media (--to-sm) {
+  .leave-month-count { margin-left: 0; flex: 1 1 100%; }
   .ctl-emp { width: auto; flex: 1 1 100%; }
-  .ctl-status { width: auto; flex: 1 1 44%; }
-  .ctl-year { width: auto; flex: 1 1 28%; }
-  .ctl-month { width: auto; flex: 1 1 18%; }
-  .controls .el-button {
+  .leave-month-bar .el-button {
     min-height: var(--touch-target-min);
   }
+}
+
+/* 待審核列淺色高亮，呼應工具列的「待審核」分組 */
+:deep(tr.leave-row-pending td) {
+  background: var(--el-color-warning-light-9);
+}
+
+.leave-dedu {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
+.leave-date-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.leave-swap-tag {
+  flex-shrink: 0;
+}
+
+.leave-reason-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.leave-reason-attach {
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.leave-status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.leave-signal-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.leave-card-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.leave-card-substitute,
+.leave-card-attach {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 /* 手機卡片：駁回原因直接顯示（無 hover 可用） */

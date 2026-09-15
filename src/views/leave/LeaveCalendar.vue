@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { ArrowLeft, ArrowRight, Loading } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
-import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
+import { LEAVE_TYPES as leaveTypes, getLeaveCategory } from '@/utils/leaves'
 import type { LeaveListItem } from '@/api/leaves'
 
 /**
@@ -56,23 +56,9 @@ const calDetailDate    = ref('')
 const calDetailLeaves  = ref<LeaveRecord[]>([])
 const calDetailVisible = ref(false)
 
-// 假別顏色對應（左邊框色）
-const LEAVE_COLOR_MAP: Record<string, string> = {
-  personal:        '#e6a23c',
-  sick:            '#409eff',
-  menstrual:       '#a78bfa',
-  annual:          '#67c23a',
-  maternity:       '#f472b6',
-  paternity:       '#34d399',
-  official:        '#38bdf8',
-  marriage:        '#f59e0b',
-  bereavement:     '#94a3b8',
-  prenatal:        '#c084fc',
-  paternity_new:   '#2dd4bf',
-  miscarriage:     '#fb923c',
-  family_care:     '#fbbf24',
-  parental_unpaid: '#64748b',
-}
+// 假別 → 六類事件底色 class（.cal-event--<key>，見 <style>）；不再用側邊色條標色
+// （側邊色條是 impeccable 設計稽核的絕對禁止項，2026-09-15 移除）
+const eventCategoryClass = (type: string) => `cal-event--${getLeaveCategory(type)}`
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const getLeaveTypeTag = (type: string): { label: string; color: ElTagType } => {
@@ -213,12 +199,14 @@ watch(calFilterEmp, () => {
       />
     </el-select>
 
-    <!-- 圖例 -->
+    <!-- 圖例：六類涵蓋全部 18 種假別（見 utils/leaves.ts LEAVE_CATEGORY_MAP） -->
     <div class="cal-legend">
-      <span class="cal-legend-item"><span class="legend-dot" style="background:#e6a23c"></span>事假</span>
-      <span class="cal-legend-item"><span class="legend-dot" style="background:var(--color-info)"></span>病/生理假</span>
-      <span class="cal-legend-item"><span class="legend-dot" style="background:#67c23a"></span>特休/公假</span>
-      <span class="cal-legend-item"><span class="legend-dot" style="background:#f472b6"></span>產假/陪產</span>
+      <span class="cal-legend-item"><span class="legend-dot legend-dot--per"></span>事假類</span>
+      <span class="cal-legend-item"><span class="legend-dot legend-dot--sick"></span>病假類</span>
+      <span class="cal-legend-item"><span class="legend-dot legend-dot--ann"></span>特休／補休</span>
+      <span class="cal-legend-item"><span class="legend-dot legend-dot--off"></span>公假</span>
+      <span class="cal-legend-item"><span class="legend-dot legend-dot--mat"></span>產育類</span>
+      <span class="cal-legend-item"><span class="legend-dot legend-dot--oth"></span>其他</span>
       <span class="cal-legend-item"><span class="legend-dot pending-dot"></span>待審核</span>
     </div>
   </div>
@@ -267,8 +255,7 @@ watch(calFilterEmp, () => {
             v-for="lv in cell.leaves.slice(0, 4)"
             :key="lv.id"
             class="cal-event"
-            :class="{ 'is-pending': lv.status === 'pending' }"
-            :style="{ borderLeftColor: LEAVE_COLOR_MAP[lv.leave_type] || '#ccc' }"
+            :class="[eventCategoryClass(lv.leave_type), { 'is-pending': lv.status === 'pending' }]"
           >
             <span class="cal-event-name">{{ lv.employee_name }}</span>
             <span class="cal-event-type">{{ lv.leave_type_label }}</span>
@@ -373,6 +360,17 @@ watch(calFilterEmp, () => {
 .pending-dot {
   background: transparent !important;
   border: 2px dashed var(--el-color-info);
+}
+
+/* 六類事件底色（legend 圓點與 .cal-event 底色共用同一組變數） */
+.legend-dot--per,  .cal-event--per  { --cal-cat-bg: #fdf3dc; --cal-cat-fg: #b7791f; }
+.legend-dot--sick, .cal-event--sick { --cal-cat-bg: #e6f1f8; --cal-cat-fg: #0b4f78; }
+.legend-dot--ann,  .cal-event--ann  { --cal-cat-bg: #e8f5ec; --cal-cat-fg: #15803d; }
+.legend-dot--off,  .cal-event--off  { --cal-cat-bg: #e6f7f5; --cal-cat-fg: #0f5f57; }
+.legend-dot--mat,  .cal-event--mat  { --cal-cat-bg: #fbe9f1; --cal-cat-fg: #8a2a55; }
+.legend-dot--oth,  .cal-event--oth  { --cal-cat-bg: #f0f2f5; --cal-cat-fg: #4a4f57; }
+.legend-dot--per, .legend-dot--sick, .legend-dot--ann, .legend-dot--off, .legend-dot--mat, .legend-dot--oth {
+  background: var(--cal-cat-fg);
 }
 
 /* 載入中 */
@@ -498,15 +496,15 @@ watch(calFilterEmp, () => {
   gap: 2px;
 }
 
-/* 單筆請假 chip */
+/* 單筆請假 chip：假別底色 pill（2026-09-15 起取代側邊色條，見上方六類色票） */
 .cal-event {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 2px 5px;
-  border-radius: 3px;
-  background: var(--el-fill-color-light);
-  border-left: 3px solid #ccc;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--cal-cat-bg, var(--el-fill-color-light));
+  border: 1px solid transparent;
   font-size: 12px;
   overflow: hidden;
   white-space: nowrap;
@@ -514,26 +512,28 @@ watch(calFilterEmp, () => {
   cursor: pointer;
 }
 
-/* 待審核用虛線左邊框 + 降低透明度 */
+/* 待審核：虛線外框 + 白底，與已核准的實色 pill 一望可辨 */
 .cal-event.is-pending {
-  border-left-style: dashed;
-  opacity: 0.75;
+  background: #fff;
+  border-style: dashed;
+  border-color: var(--cal-cat-fg, var(--el-color-info));
 }
 
 .cal-event-name {
   font-weight: 600;
-  color: var(--el-text-color-primary);
-  max-width: 48px;
+  color: var(--cal-cat-fg, var(--el-text-color-primary));
+  max-width: 52px;
   overflow: hidden;
   text-overflow: ellipsis;
   flex-shrink: 0;
 }
 
 .cal-event-type {
-  color: var(--el-text-color-secondary);
-  font-size: 10px;
+  color: var(--cal-cat-fg, var(--el-text-color-secondary));
+  font-size: 10.5px;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 0.85;
 }
 
 /* 超過 4 筆的 "more" 提示 */

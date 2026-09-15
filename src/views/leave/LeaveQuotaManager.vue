@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { getLeaveQuotas, initLeaveQuotas, updateLeaveQuota } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -21,20 +21,8 @@ interface QuotaRow {
   _newTotal: number
 }
 
-const props = defineProps<{
-  visible: boolean
-}>()
-const emit = defineEmits<{
-  (e: 'update:visible', value: boolean): void
-}>()
-
 const employeeStore = useEmployeeStore()
 const currentYear: number = new Date().getFullYear()
-
-const dialogModel = computed({
-  get: () => props.visible,
-  set: (val) => emit('update:visible', val),
-})
 
 const quotaMgrYear = ref(new Date().getFullYear())
 const quotaMgrEmpId = ref<number | null>(null)
@@ -97,7 +85,8 @@ const saveQuotaRow = async (row: QuotaRow) => {
 </script>
 
 <template>
-  <el-dialog v-model="dialogModel" title="假別配額管理" width="720px" destroy-on-close>
+  <div class="quota-manager">
+    <h3 class="quota-manager__title">年度配額</h3>
     <div class="quota-toolbar">
       <el-select
         v-model="quotaMgrEmpId"
@@ -190,10 +179,15 @@ const saveQuotaRow = async (row: QuotaRow) => {
         </template>
       </el-table-column>
     </el-table>
-  </el-dialog>
+  </div>
 </template>
 
 <style scoped>
+.quota-manager__title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+}
 .quota-toolbar {
   display: flex;
   gap: var(--space-3);

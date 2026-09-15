@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LEAVE_TYPES, LEAVE_TYPE_MAP } from '@/utils/leaves'
+import { LEAVE_TYPES, LEAVE_TYPE_MAP, LEAVE_CATEGORY_MAP, LEAVE_CATEGORY_LABELS, getLeaveCategory } from '@/utils/leaves'
 
 describe('LEAVE_TYPES', () => {
   it('至少包含 18 種假別（容許未來新增不打破測試）', () => {
@@ -92,5 +92,42 @@ describe('LEAVE_TYPE_MAP', () => {
 
   it('O(1) 查詢：annual → 特休', () => {
     expect(LEAVE_TYPE_MAP['annual'].label).toBe('特休')
+  })
+})
+
+// 2026-09-15：行事曆事件底色改用六大類（取代側邊色條），每個假別必須有明確歸類，
+// 落到 fallback「其他」視為漏登記，故用 LEAVE_TYPES 逐一驗證而非只驗證 map 本身。
+describe('LEAVE_CATEGORY_MAP / getLeaveCategory', () => {
+  const KNOWN_CATEGORIES = new Set(['per', 'sick', 'ann', 'off', 'mat', 'oth'])
+
+  it('每個假別皆有明確歸類（不落到未登記的 fallback）', () => {
+    for (const t of LEAVE_TYPES) {
+      expect(LEAVE_CATEGORY_MAP).toHaveProperty(t.value)
+    }
+  })
+
+  it('歸類值皆屬六大已知類別', () => {
+    for (const category of Object.values(LEAVE_CATEGORY_MAP)) {
+      expect(KNOWN_CATEGORIES.has(category)).toBe(true)
+    }
+  })
+
+  it('LEAVE_CATEGORY_LABELS 涵蓋六大類且皆有中文標籤', () => {
+    expect(new Set(Object.keys(LEAVE_CATEGORY_LABELS))).toEqual(KNOWN_CATEGORIES)
+    for (const label of Object.values(LEAVE_CATEGORY_LABELS)) {
+      expect(typeof label).toBe('string')
+      expect(label.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('getLeaveCategory 對已知假別回傳對應類別', () => {
+    expect(getLeaveCategory('sick')).toBe('sick')
+    expect(getLeaveCategory('annual')).toBe('ann')
+    expect(getLeaveCategory('compensatory')).toBe('ann')
+    expect(getLeaveCategory('maternity')).toBe('mat')
+  })
+
+  it('getLeaveCategory 對未知假別 fallback 到「其他」，不拋錯', () => {
+    expect(getLeaveCategory('not_a_real_type')).toBe('oth')
   })
 })
