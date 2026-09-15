@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Warning, ArrowRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { usePortalDashboard } from '@/composables/usePortalDashboard'
 import { usePortalClassHub } from '@/composables/usePortalClassHub'
 import { usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
@@ -60,7 +61,7 @@ interface HubSummary {
 
 // null = 用後端解析的預設班（head > assistant > art）
 const classroomId = ref<number | null>(null)
-const { data: hubData, refresh: refreshHub } = usePortalClassHub(classroomId)
+const { data: hubData, error: hubError, refresh: refreshHub } = usePortalClassHub(classroomId)
 
 // classroom_id=0＝未綁班（class-hub 同語意）；403／載入失敗時 data 仍是 null。
 // 三者都隱藏置頂卡與班級列，但**不影響功能格**——格子是靜態清單，沒有 hub
@@ -69,6 +70,17 @@ const { data: hubData, refresh: refreshHub } = usePortalClassHub(classroomId)
 const hub = computed<HubSummary | null>(() => {
   const d = hubData.value as HubSummary | null
   return d && d.classroom_id ? d : null
+})
+
+// 只在「使用者主動切班」後失敗才提示；首次載入（沒帶班的行政同仁預設拿
+// 403）維持原本靜默。切班失敗不是本來就該預期的狀態，完全不提示會讓老師
+// 以為自己點錯，或誤以為畫面已經切過去（composable 已把 data 清空，
+// 但不主動告知就等於沒發生過）。
+let switchAttempted = false
+watch(hubError, (e) => {
+  if (!e || !switchAttempted) return
+  switchAttempted = false
+  ElMessage.error('切換班級失敗，請重新選擇或稍後再試')
 })
 
 function onFocusJump(deepLink?: string) {
@@ -305,6 +317,24 @@ const studentCount = computed(() => {
 
 function onSwitchClassroom(id: number) {
   classroomId.value = id
+  switchAttempted = true
+  // 主動觸發一次（composable 內部的 watch(classroomId) 也會觸發，但 key
+  // 相同會被 inflight 去重共用同一個 promise，不會打兩次 API）：
+  // 藉由這個 promise 的 settle 結果，知道要不要在成功時歸位旗標——
+  // 失敗時旗標交由上面 watch(hubError) 歸位。
+  //
+  // ⚠ 兩者「互斥」只在沒有連續快速切班時成立（2026-09-15 審查 P2 修正）：
+  // 快速切 A 再切 B，A 的請求可能較慢、在 B 之後才 resolve。若 A 成功時
+  // 無條件歸位旗標，會把「B（使用者最後一個動作）真正失敗」的提示悶掉——
+  // B 的 hubError 觸發時旗標已被 A 的成功結算清成 false，watch(hubError)
+  // 直接 return。修法：settle 當下若 classroomId 已經不是這次 dispatch
+  // 的目標（代表又被更新的切班取代），就不歸位——留給那個更新的請求自己
+  // 的 settle 處理。
+  refreshHub()
+    .then(() => {
+      if (classroomId.value === id) switchAttempted = false
+    })
+    .catch(() => {})
 }
 
 watch(

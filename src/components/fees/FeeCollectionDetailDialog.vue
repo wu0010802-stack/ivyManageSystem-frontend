@@ -245,9 +245,22 @@ async function reverseEvent(ev: EventOut) {
 
   let reason = ''
   try {
-    const result = await ElMessageBox.prompt('請輸入沖銷原因（至少 5 字）', '沖銷收款', {
-      inputValidator: (v: string) => (v && v.trim().length >= 5 ? true : '原因至少 5 個字'),
-    })
+    // 本對話框是 per-student，但沖銷端點是 per-payment-instrument
+    // （txn_id／payment_id，見 reverseTarget）——一筆銀行交易或代收明細
+    // 明確支援拆多名學生／多筆帳款，端點簽名裡沒有任何可以把沖銷縮到
+    // 單一學生的參數。確認文案必須講清楚，否則承辦會在不知情的情況下
+    // 把別的學生的分配一起沖掉（2026-09-14 審查 P1）。
+    const result = await ElMessageBox.prompt(
+      '此操作會沖銷整筆來源款項；若這筆錢當初分配給不只一個學生／帳款，' +
+        '會一併沖銷、不只影響目前這位學生。請輸入沖銷原因（至少 5 字）：',
+      '沖銷收款',
+      {
+        inputValidator: (v: string) => (v && v.trim().length >= 5 ? true : '原因至少 5 個字'),
+        confirmButtonText: '確認沖銷',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
     reason = typeof result === 'object' ? result.value : ''
   } catch {
     return // 使用者取消
@@ -256,10 +269,17 @@ async function reverseEvent(ev: EventOut) {
   reversingKey.value = `${target.api}-${target.id}`
   try {
     const payload = { reason } as never
-    if (target.api === 'cash') await reverseCashReceipt(target.id, payload)
-    else if (target.api === 'bank') await reverseTransaction(target.id, payload)
-    else await reverseCollectionPayment(target.id, payload)
-    ElMessage.success('已沖銷這筆收款')
+    let result: { reversed_count?: number } | undefined
+    if (target.api === 'cash') result = await reverseCashReceipt(target.id, payload)
+    else if (target.api === 'bank') result = await reverseTransaction(target.id, payload)
+    else result = await reverseCollectionPayment(target.id, payload)
+
+    // 後端回的 reversed_count 是「這次沖銷實際動到幾筆分配」——曾經被寫死
+    // 成固定文案、從未讀取，承辦看不出這次沖銷其實跨了不只一筆。
+    const count = result?.reversed_count ?? 1
+    ElMessage.success(
+      count > 1 ? `已沖銷，共影響 ${count} 筆分配（請確認是否含其他學生）` : '已沖銷這筆收款',
+    )
     await fetchDetail()
     emit('reversed')
   } catch (e) {

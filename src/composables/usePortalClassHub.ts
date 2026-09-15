@@ -25,26 +25,49 @@ export function usePortalClassHub(classroomId?: Ref<number | null>) {
   // watch 觸發的 refresh() 會沿用舊班級的 promise，resolve 後把舊班資料塞回
   // data（下拉選單看起來「自己彈回去」）。key 用 undefined 代表未指定班級。
   let inflightKey: number | null | undefined = undefined
+  // data.value 目前對應的 key，用來判斷「同班重試失敗」（保留舊資料，避免
+  // 網路抖動就閃爍清空）還是「切班後失敗」（清空，見下方 .catch）。
+  let currentDataKey: number | null | undefined = undefined
+  // 遞增序號：只有序號等於「當前最新一次呼叫」的回應才能寫入 data/error/
+  // loading。防止舊班的回應在新班之後才 resolve，把畫面蓋回舊班
+  // （2026-09-14 審查 P1：inflightKey 去重只防止重複發出同 key 請求，
+  // 不防止舊請求的回應在新請求之後落地時覆寫狀態）。
+  let requestSeq = 0
 
   async function refresh() {
     const key = classroomId?.value ?? undefined
     if (inflight && inflightKey === key) return inflight
+    const seq = ++requestSeq
     loading.value = true
     error.value = null
     inflightKey = key
-    inflight = getTodayHub(key)
+    const p = getTodayHub(key)
       .then((d) => {
-        data.value = d
+        if (seq === requestSeq) {
+          data.value = d
+          currentDataKey = key
+        }
         return d
       })
       .catch((e) => {
-        error.value = e
+        if (seq === requestSeq) {
+          error.value = e
+          // 切班後失敗：舊資料屬於別的班級，繼續顯示會讓標題／功能格深連結
+          // 錯配到舊班。同班重試失敗則保留舊資料（避免每次抖動就閃爍清空）。
+          if (key !== currentDataKey) {
+            data.value = null
+            currentDataKey = key
+          }
+        }
         throw e
       })
       .finally(() => {
-        loading.value = false
-        inflight = null
+        if (seq === requestSeq) {
+          loading.value = false
+          inflight = null
+        }
       })
+    inflight = p
     return inflight
   }
 
