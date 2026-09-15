@@ -1,77 +1,156 @@
 <template>
   <div v-if="authorized" class="survey-form">
-    <el-form label-width="100px" :disabled="locked">
-      <el-form-item label="標題" required>
-        <el-input v-model="draft.title" maxlength="100" show-word-limit />
-      </el-form-item>
-      <el-form-item label="說明">
-        <el-input v-model="draft.description" type="textarea" :rows="3" />
-      </el-form-item>
-      <el-form-item label="活動日期" :disabled="lockStructure">
-        <el-date-picker v-model="draft.event_date" type="date" value-format="YYYY-MM-DD" :disabled="lockStructure" />
-      </el-form-item>
-      <el-form-item label="地點">
-        <el-input v-model="draft.location" />
-      </el-form-item>
-      <el-form-item label="費用備註">
-        <el-input v-model="draft.fee_note" />
-      </el-form-item>
-      <el-form-item label="回覆截止日" required>
-        <el-date-picker v-model="draft.reply_deadline" type="date" value-format="YYYY-MM-DD" />
-      </el-form-item>
+    <PageHeader
+      :title="isEdit ? '編輯調查' : '建立調查'"
+      :subtitle="isEdit ? draft.title : '建立後先存成草稿，到詳情頁確認題目再發布推播給家長。'"
+    />
 
-      <el-form-item label="調查對象" :disabled="lockStructure">
-        <el-radio-group v-model="draft.audience_type" :disabled="lockStructure">
-          <el-radio label="all">全園</el-radio>
-          <el-radio label="classrooms">指定班級</el-radio>
-        </el-radio-group>
-        <div v-if="draft.audience_type === 'classrooms'" class="classroom-picker">
-          <el-checkbox-group v-model="draft.classroom_ids" :disabled="lockStructure">
-            <el-checkbox v-for="c in classroomOptions" :key="c.id" :label="c.id">{{ c.name }}</el-checkbox>
-          </el-checkbox-group>
+    <el-alert
+      v-if="locked"
+      type="info"
+      show-icon
+      :closable="false"
+      title="調查已結束，內容僅供檢視"
+      class="form-alert"
+    />
+    <el-alert
+      v-else-if="lockStructure"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="已發布：題目、調查對象與活動日期已鎖定"
+      description="仍可修改標題、說明、地點、費用備註與回覆截止日；要延長截止就改截止日後儲存。"
+      class="form-alert"
+      data-test="lock-alert"
+    />
+
+    <el-form label-position="top" :disabled="locked" class="form">
+      <section class="form-section">
+        <h3 class="form-section__title">活動資訊</h3>
+        <el-form-item label="調查標題" required>
+          <el-input v-model="draft.title" maxlength="100" show-word-limit placeholder="例如：秋季戶外教學參加調查" />
+        </el-form-item>
+        <el-form-item label="活動說明">
+          <el-input
+            v-model="draft.description"
+            type="textarea"
+            :rows="4"
+            placeholder="家長在 LINE 會看到這段說明：活動內容、集合時間地點、注意事項…"
+          />
+        </el-form-item>
+        <div class="form-grid">
+          <el-form-item label="活動日期">
+            <el-date-picker v-model="draft.event_date" type="date" value-format="YYYY-MM-DD" :disabled="lockStructure" placeholder="選擇日期" class="form-grid__picker" />
+          </el-form-item>
+          <el-form-item label="地點">
+            <el-input v-model="draft.location" maxlength="200" placeholder="例如：宜蘭綠色博覽會園區" />
+          </el-form-item>
+          <el-form-item label="費用備註">
+            <el-input v-model="draft.fee_note" maxlength="200" placeholder="例如：每人 350 元，活動當天現場繳交" />
+            <div class="field-hint">純文字告知，不會產生繳費紀錄。</div>
+          </el-form-item>
         </div>
-      </el-form-item>
+      </section>
 
-      <el-form-item label="題目" :disabled="lockStructure">
+      <section class="form-section">
+        <h3 class="form-section__title">對象與截止</h3>
+        <el-form-item label="調查對象">
+          <el-radio-group v-model="draft.audience_type" :disabled="lockStructure">
+            <el-radio value="all">全園</el-radio>
+            <el-radio value="classrooms">指定班級</el-radio>
+          </el-radio-group>
+          <div v-if="draft.audience_type === 'classrooms'" class="classroom-picker" data-test="classroom-picker">
+            <el-checkbox-group v-model="draft.classroom_ids" :disabled="lockStructure">
+              <el-checkbox v-for="c in classroomOptions" :key="c.id" :value="c.id">{{ c.name }}</el-checkbox>
+            </el-checkbox-group>
+            <div class="field-hint">
+              已選 {{ draft.classroom_ids.length }} 個班級<template v-if="!draft.classroom_ids.length">，發布前至少要選一個</template>
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item label="回覆截止日" required>
+          <el-date-picker v-model="draft.reply_deadline" type="date" value-format="YYYY-MM-DD" placeholder="選擇日期" class="form-grid__picker" />
+          <div class="field-hint">家長可填寫至截止當日；截止後只能由老師或行政代填。</div>
+          <div v-for="hint in deadlineWarnings" :key="hint" class="field-hint field-hint--warn" data-test="deadline-hint">{{ hint }}</div>
+        </el-form-item>
+      </section>
+
+      <section class="form-section">
+        <h3 class="form-section__title">
+          題目
+          <span class="form-section__hint">家長先回答是否參加；回答「不參加」就不用填附加題</span>
+        </h3>
+
+        <div class="fixed-question" data-test="fixed-question">
+          <div class="question-row">
+            <span class="question-index">主題目</span>
+            <span class="fixed-question__text">是否參加</span>
+            <el-tag size="small" effect="plain">固定</el-tag>
+            <el-tag size="small" type="danger" effect="plain">必填</el-tag>
+          </div>
+          <div class="fixed-question__options">選項：參加／不參加</div>
+        </div>
+
         <div class="questions">
-          <el-card v-for="(q, i) in draft.questions" :key="i" class="question-card" shadow="never">
+          <div v-for="(q, i) in draft.questions" :key="i" class="question-card" data-test="question-card">
             <div class="question-row">
-              <el-select v-model="q.question_type" placeholder="題型" style="width: 140px" :disabled="lockStructure" @change="onTypeChange(i)">
+              <span class="question-index">附加題 {{ i + 1 }}</span>
+              <el-select v-model="q.question_type" placeholder="題型" class="question-type" :disabled="lockStructure" @change="onTypeChange(i)">
                 <el-option label="單選" :value="SURVEY_QUESTION_TYPES.SINGLE_CHOICE" />
                 <el-option label="多選" :value="SURVEY_QUESTION_TYPES.MULTI_CHOICE" />
                 <el-option label="數字" :value="SURVEY_QUESTION_TYPES.NUMBER" />
                 <el-option label="文字" :value="SURVEY_QUESTION_TYPES.TEXT" />
               </el-select>
-              <el-input v-model="q.question_text" placeholder="題目文字" maxlength="200" :disabled="lockStructure" />
-              <el-switch v-model="q.is_required" active-text="必填" :disabled="lockStructure" />
-              <el-button-group>
-                <el-button :disabled="lockStructure || i === 0" :icon="ArrowUp" @click="moveQuestion(draft, i, -1)" />
-                <el-button :disabled="lockStructure || i === draft.questions.length - 1" :icon="ArrowDown" @click="moveQuestion(draft, i, 1)" />
-                <el-button :disabled="lockStructure" :icon="Delete" type="danger" @click="removeQuestion(draft, i)" />
+              <el-input v-model="q.question_text" :placeholder="questionPlaceholder(q.question_type)" maxlength="200" :disabled="lockStructure" class="question-text" />
+              <el-switch v-model="q.is_required" active-text="必填" :disabled="lockStructure" class="question-required" />
+              <el-button-group class="question-tools">
+                <el-button :disabled="lockStructure || i === 0" :icon="ArrowUp" aria-label="上移" @click="moveQuestion(draft, i, -1)" />
+                <el-button :disabled="lockStructure || i === draft.questions.length - 1" :icon="ArrowDown" aria-label="下移" @click="moveQuestion(draft, i, 1)" />
+                <el-button :disabled="lockStructure" :icon="Delete" aria-label="刪除題目" @click="removeQuestion(draft, i)" />
               </el-button-group>
             </div>
-            <div v-if="q.options" class="options-row">
+            <div v-if="q.options" class="options-list">
               <div v-for="(_, oi) in q.options" :key="oi" class="option-item">
-                <el-input v-model="q.options[oi]" placeholder="選項內容" maxlength="50" :disabled="lockStructure" />
-                <el-button :disabled="lockStructure || q.options.length <= 2" :icon="Close" circle size="small" @click="q.options?.splice(oi, 1)" />
+                <span class="option-item__index">{{ oi + 1 }}.</span>
+                <el-input v-model="q.options[oi]" placeholder="選項內容" maxlength="50" :disabled="lockStructure" class="option-item__input" />
+                <el-button
+                  :disabled="lockStructure || q.options.length <= 2"
+                  :icon="Close"
+                  link
+                  aria-label="移除選項"
+                  @click="q.options?.splice(oi, 1)"
+                />
               </div>
-              <el-button :disabled="lockStructure" size="small" @click="q.options?.push('')">新增選項</el-button>
+              <el-button :disabled="lockStructure" link type="primary" class="add-option" @click="q.options?.push('')">＋ 新增選項</el-button>
             </div>
-          </el-card>
-          <div class="add-question-bar" v-if="!lockStructure">
-            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.SINGLE_CHOICE)">+ 單選題</el-button>
-            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.MULTI_CHOICE)">+ 多選題</el-button>
-            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.NUMBER)">+ 數字題</el-button>
-            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.TEXT)">+ 文字題</el-button>
           </div>
-        </div>
-      </el-form-item>
 
-      <el-form-item v-if="!locked">
-        <el-button type="primary" :loading="submitting" @click="onSubmit">{{ isEdit ? '儲存' : '建立' }}</el-button>
-        <el-button @click="onCancel">取消</el-button>
-      </el-form-item>
+          <div v-if="!lockStructure" class="add-question-bar">
+            <span class="add-question-bar__label">新增附加題</span>
+            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.SINGLE_CHOICE)">單選</el-button>
+            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.MULTI_CHOICE)">多選</el-button>
+            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.NUMBER)">數字</el-button>
+            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.TEXT)">文字</el-button>
+            <span v-if="!draft.questions.length" class="field-hint">沒有附加題也可以發布，家長只回答是否參加。</span>
+          </div>
+          <div v-else-if="!draft.questions.length" class="field-hint">沒有附加題。</div>
+        </div>
+      </section>
     </el-form>
+
+    <div class="form-footer">
+      <ul v-if="errors.length" class="form-errors" role="alert" data-test="form-errors">
+        <li v-for="err in errors" :key="err">{{ err }}</li>
+      </ul>
+      <div class="form-footer__actions">
+        <template v-if="!locked">
+          <el-button type="primary" :loading="submitting" data-test="submit" @click="onSubmit">{{ isEdit ? '儲存' : '建立草稿' }}</el-button>
+          <el-button @click="onCancel">取消</el-button>
+          <span v-if="!isEdit" class="field-hint">建立後家長還看不到，要到詳情頁按「發布並推播」。</span>
+        </template>
+        <el-button v-else @click="router.push(surveyId ? { name: 'survey-detail', params: { id: surveyId } } : { name: 'surveys' })">返回</el-button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -80,13 +159,16 @@ import { computed, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, ArrowUp, Close, Delete } from '@element-plus/icons-vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import { createSurvey, getSurvey, updateSurvey } from '@/api/surveys'
 import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
 import { friendlyError } from '@/utils/errorMessages'
+import { todayTaipeiISO } from '@/utils/format'
 import { SURVEY_QUESTION_TYPES, isSurveyChoiceType } from '@/constants/surveyQuestionTypes'
 import {
   addQuestion,
+  deadlineHints,
   emptyDraft,
   isDraftDirty,
   moveQuestion,
@@ -121,14 +203,24 @@ const draft = ref<SurveyDraft>(emptyDraft())
 const baseline = ref<SurveyDraft>(emptyDraft())
 const status = ref('draft')
 const submitting = ref(false)
+const errors = ref<string[]>([])
 let allowRouteLeave = false
+const today = todayTaipeiISO()
 
 // closed：全鎖；published：僅結構（event_date/對象/題目）鎖，其餘（title/description/location/fee_note/reply_deadline）可改
 const locked = computed(() => status.value === 'closed')
 const lockStructure = computed(() => status.value === 'published' || status.value === 'closed')
+const deadlineWarnings = computed(() => deadlineHints(draft.value, today))
 
 interface ClassroomOption { id: number; name: string }
 const classroomOptions = ref<ClassroomOption[]>([])
+
+function questionPlaceholder(type: string): string {
+  if (type === SURVEY_QUESTION_TYPES.NUMBER) return '題目文字，例如：隨行家長人數'
+  if (type === SURVEY_QUESTION_TYPES.TEXT) return '題目文字，例如：飲食需求或過敏事項'
+  if (type === SURVEY_QUESTION_TYPES.MULTI_CHOICE) return '題目文字，例如：需要的服務（可複選）'
+  return '題目文字，例如：是否搭乘遊覽車'
+}
 
 async function loadClassrooms() {
   try {
@@ -178,9 +270,9 @@ function onTypeChange(i: number) {
 
 async function onSubmit() {
   const forPublish = status.value === 'published'
-  const errors = validateDraft(draft.value, forPublish)
-  if (errors.length > 0) {
-    ElMessage.warning(errors[0])
+  errors.value = validateDraft(draft.value, forPublish)
+  if (errors.value.length > 0) {
+    ElMessage.warning(errors.value[0])
     return
   }
   submitting.value = true
@@ -204,7 +296,7 @@ async function onSubmit() {
     } else {
       const res = await createSurvey(payload)
       const data = res.data as unknown as { id: number }
-      ElMessage.success('已建立')
+      ElMessage.success('已建立草稿，確認題目後再發布')
       allowRouteLeave = true
       router.push({ name: 'survey-detail', params: { id: data.id } })
     }
@@ -251,31 +343,180 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.form-alert {
+  margin-bottom: var(--space-4);
+}
+.form {
+  max-width: 880px;
+}
+.form-section {
+  padding: var(--space-4) 0 var(--space-2);
+  border-bottom: 1px solid var(--neutral-200);
+  margin-bottom: var(--space-4);
+}
+.form-section:last-of-type {
+  border-bottom: 0;
+}
+.form-section__title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.form-section__hint {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--el-text-color-secondary);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr 1fr;
+  gap: 0 var(--space-4);
+}
+.form-grid__picker {
+  width: 100%;
+}
+.field-hint {
+  width: 100%;
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+  line-height: var(--line-height-base);
+}
+.field-hint--warn {
+  color: var(--color-warning-darker);
+}
+.classroom-picker {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+.fixed-question {
+  background: var(--neutral-50);
+  border: 1px dashed var(--neutral-300);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.fixed-question__text {
+  font-weight: var(--font-weight-medium);
+}
+.fixed-question__options {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+}
 .question-card {
-  margin-bottom: 12px;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
 }
 .question-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-.options-row {
-  margin-top: 8px;
-  display: flex;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+}
+.question-index {
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  min-width: 56px;
+}
+.question-type {
+  width: 110px;
+  flex-shrink: 0;
+}
+.question-text {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+.question-required {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.question-required :deep(.el-switch__label) {
+  white-space: nowrap;
+}
+.question-tools {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.options-list {
+  margin-top: var(--space-2);
+  padding-left: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 .option-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
+}
+.option-item__index {
+  width: 20px;
+  text-align: right;
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.option-item__input {
+  max-width: 360px;
+}
+.add-option {
+  align-self: flex-start;
+  padding-left: 28px;
 }
 .add-question-bar {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
-.classroom-picker {
-  margin-top: 8px;
+.add-question-bar__label {
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+  margin-right: var(--space-1);
+}
+
+.form-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--el-bg-color, #fff);
+  border-top: 1px solid var(--neutral-200);
+  padding: var(--space-3) 0;
+  margin-top: var(--space-4);
+  max-width: 880px;
+}
+.form-footer__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.form-errors {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-darker);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .options-list {
+    padding-left: 0;
+  }
+  .question-tools {
+    margin-left: 0;
+  }
 }
 </style>

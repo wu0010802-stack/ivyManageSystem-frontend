@@ -720,7 +720,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/surveys',
             name: 'surveys',
             component: () => import('../views/surveys/SurveyListView.vue'),
-            meta: { title: '活動調查' }
+            meta: { title: '調查管理' }
         },
         {
             path: '/surveys/new',

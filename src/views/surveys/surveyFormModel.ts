@@ -84,7 +84,8 @@ export function validateDraft(d: SurveyDraft, forPublish = true): string[] {
   }
 
   d.questions.forEach((q, i) => {
-    const label = `第 ${i + 1} 題`
+    // 主題目「是否參加」固定不編號，附加題從 1 起算，與表單／詳情頁的編號一致。
+    const label = `附加題 ${i + 1}`
     const text = q.question_text.trim()
     if (!text) errors.push(`${label}請填寫題目文字`)
     else if (text.length > 200) errors.push(`${label}題目文字請勿超過 200 字`)
@@ -102,4 +103,17 @@ export function validateDraft(d: SurveyDraft, forPublish = true): string[] {
   })
 
   return errors
+}
+
+/**
+ * 回覆截止日的非阻擋提示（畫面上顯示在欄位下方，不擋儲存）：
+ * - 截止日已過：草稿發布時後端會拒絕（reply_deadline 須 ≥ 今天），家長也無法填寫。
+ * - 截止日晚於活動日：多半是填反了，提醒一下但不硬擋（活動後仍可能收回條）。
+ */
+export function deadlineHints(d: Pick<SurveyDraft, 'reply_deadline' | 'event_date'>, today: string): string[] {
+  const hints: string[] = []
+  if (!d.reply_deadline) return hints
+  if (d.reply_deadline < today) hints.push('截止日已過：家長無法填寫，發布時也會被拒絕')
+  if (d.event_date && d.reply_deadline > d.event_date) hints.push('截止日晚於活動日期，家長可能在活動結束後才回覆')
+  return hints
 }
