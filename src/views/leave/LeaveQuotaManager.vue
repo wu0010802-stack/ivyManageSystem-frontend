@@ -82,11 +82,20 @@ const saveQuotaRow = async (row: QuotaRow) => {
     quotaSaving.value = false
   }
 }
+
+// 供父層（配額總覽表的「調整」連結）呼叫：選定員工並立即查詢，
+// 把本元件從「等使用者手動選人」變成「可被外部帶入焦點」。
+defineExpose({
+  focusEmployee: (employeeId: number) => {
+    quotaMgrEmpId.value = employeeId
+    loadQuotaMgr()
+  },
+})
 </script>
 
 <template>
   <div class="quota-manager">
-    <h3 class="quota-manager__title">年度配額</h3>
+    <h3 class="quota-manager__title">調整員工配額</h3>
     <div class="quota-toolbar">
       <el-select
         v-model="quotaMgrEmpId"

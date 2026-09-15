@@ -20,6 +20,8 @@ import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
 import LeaveBatchRejectDialog from './leave/LeaveBatchRejectDialog.vue'
 import LeaveImportDialog from './leave/LeaveImportDialog.vue'
 import LeaveQuotaManager from './leave/LeaveQuotaManager.vue'
+import LeaveQuotaOverviewTable from './leave/LeaveQuotaOverviewTable.vue'
+import LeaveReviewDrawer from './leave/LeaveReviewDrawer.vue'
 import LeaveRejectDialog from './leave/LeaveRejectDialog.vue'
 import LeaveCalendar from './leave/LeaveCalendar.vue'
 import LeaveQuotaExpiryTab from '@/components/leave/LeaveQuotaExpiryTab.vue'
@@ -115,6 +117,7 @@ const formRef = ref<{ validate: () => Promise<boolean>; clearValidate?: () => vo
 // 子元件 ref
 const attachRef = ref<{ open: (row: { id: number; attachment_paths: string[] }) => void } | null>(null)
 const rejectRef = ref<{ open: (row: Record<string, unknown>) => void } | null>(null)
+const quotaManagerRef = ref<{ focusEmployee: (employeeId: number) => void } | null>(null)
 
 // 行事曆 / 配額頁籤的顯示控制
 const activeTab = ref('list')
@@ -305,6 +308,38 @@ const displayLeaves = computed(() => {
 
 function leaveRowClassName({ row }: { row: Record<string, unknown> }) {
   return row.status === 'pending' ? 'leave-row-pending' : ''
+}
+
+// ── 審核抽屜（畫面 B）：從「點列或⋯查看」開啟，訊號集中一處看 ─────────────────
+const reviewRow = ref<Record<string, unknown> | null>(null)
+const reviewVisible = ref(false)
+
+function openReview(row: Record<string, unknown>) {
+  reviewRow.value = row
+  reviewVisible.value = true
+}
+
+// 同期間還有多少人請假：從「本月已全載」的 leaveRecords 算重疊區間，
+// 不需額外打 API；只算待審／已核准（已駁回不佔人力）
+const reviewSameDayCount = computed(() => {
+  const row = reviewRow.value
+  if (!row) return 0
+  const sd = row.start_date as string
+  const ed = row.end_date as string
+  return leaveRecords.value.filter((r) => {
+    if (r.id === row.id) return false
+    if (!['pending', 'approved'].includes(r.status as string)) return false
+    return !(((r.end_date as string) < sd) || ((r.start_date as string) > ed))
+  }).length
+})
+
+function onAdjustQuota(employeeId: number) {
+  quotaManagerRef.value?.focusEmployee(employeeId)
+}
+
+// 模板內插值不支援 TS `as` 轉型，審核抽屜的 @logs 改走這個 wrapper
+function openReviewLogs(row: Record<string, unknown>) {
+  openApprovalLogs(row as { id: unknown })
 }
 
 // 全域搜尋（Ctrl+K）深連結：?search=<員工姓名> 預填客端關鍵字過濾
@@ -556,6 +591,9 @@ const cancelApprove = (row: Record<string, unknown>) =>
 // （駁回已於列上直接外露，不再走 command 分派）
 function handleRowCommand(cmd: string, row: Record<string, unknown>) {
   switch (cmd) {
+    case 'review':
+      openReview(row)
+      break
     case 'cancel-approve':
       cancelApprove(row)
       break
@@ -582,6 +620,28 @@ const openAttachment = (row: Record<string, unknown>) =>
 // quotaInfo typed helper for template access
 interface QuotaInfoTyped { remaining_hours: number; used_hours: number; pending_hours: number; total_hours: number }
 const typedQuotaInfo = computed(() => quotaInfo.value as QuotaInfoTyped | null)
+
+// 新增假單彈窗的配額進度列（畫面 C）：已核准／待審／剩餘三段式，取代原本純文字＋單顆 tag 的寫法
+const quotaUsedPct = computed(() => {
+  const q = typedQuotaInfo.value
+  if (!q || !q.total_hours) return 0
+  return Math.min(100, (q.used_hours / q.total_hours) * 100)
+})
+const quotaPendingPct = computed(() => {
+  const q = typedQuotaInfo.value
+  if (!q || !q.total_hours) return 0
+  return Math.max(0, Math.min(100 - quotaUsedPct.value, (q.pending_hours / q.total_hours) * 100))
+})
+
+// 整天模式改用單一日期區間選擇器（畫面 C）：get/set 直接映射 form.start_date/end_date，
+// useWorkdayCalculator 對這兩個欄位的 watch 不分辨是誰寫入的，行為與原本兩顆日期選擇器逐字相同
+const fullRangeModel = computed<[string, string] | null>({
+  get: () => (form.start_date && form.end_date ? [form.start_date, form.end_date] as [string, string] : null),
+  set: (v: [string, string] | null) => {
+    form.start_date = v?.[0] ?? ''
+    form.end_date = v?.[1] ?? ''
+  },
+})
 
 // approvalLogs cast for ApprovalLogDrawer (its ApprovalLog type is component-local)
 const castApprovalLogsLeave = computed(() => approvalLogs.value as unknown as { id: number; action: string; created_at?: string; approver_username?: string; approver_role?: string }[])
@@ -794,6 +854,7 @@ onMounted(() => {
                   <el-button type="info" size="small" link>更多 ▾</el-button>
                   <template #dropdown>
                     <el-dropdown-menu>
+                      <el-dropdown-item command="review">查看詳情</el-dropdown-item>
                       <el-dropdown-item
                         v-if="scope.row.status === 'approved' && canApprove(scope.row)"
                         command="cancel-approve"
@@ -856,6 +917,7 @@ onMounted(() => {
                 <el-button type="info" size="small">更多 ▾</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item command="review">查看詳情</el-dropdown-item>
                     <el-dropdown-item v-if="item.status === 'approved' && canApprove(item)" command="cancel-approve">取消核准</el-dropdown-item>
                     <el-dropdown-item v-if="item.status !== 'approved' && canApprove(item)" command="edit">編輯</el-dropdown-item>
                     <el-dropdown-item command="logs">審核紀錄</el-dropdown-item>
@@ -882,7 +944,9 @@ onMounted(() => {
       >
         <template #label><el-icon><Wallet /></el-icon> 配額與到期</template>
         <template v-if="activeTab === 'quota'">
-          <LeaveQuotaManager />
+          <LeaveQuotaOverviewTable :employees="employeeStore.employees" @adjust="onAdjustQuota" />
+          <el-divider />
+          <LeaveQuotaManager ref="quotaManagerRef" />
           <el-divider />
           <h3 class="leave-expiry-title">到期管理</h3>
           <LeaveQuotaExpiryTab />
@@ -894,6 +958,19 @@ onMounted(() => {
     <!-- 子元件 -->
     <LeaveRejectDialog ref="rejectRef" @rejected="fetchLeaves()" />
     <LeaveAttachmentDialog ref="attachRef" />
+
+    <!-- 審核抽屜（畫面 B）：核准/駁回/編輯/審核紀錄/查看附件皆委派回既有流程，本身只做訊號彙整 -->
+    <LeaveReviewDrawer
+      v-model:visible="reviewVisible"
+      :row="reviewRow"
+      :same-day-count="reviewSameDayCount"
+      :can-approve="reviewRow ? canApprove(reviewRow) : false"
+      @approve="(row) => { approveLeave(row); reviewVisible = false }"
+      @reject="(row) => { reviewVisible = false; rejectRef?.open(row) }"
+      @edit="(row) => { reviewVisible = false; openEditWithDraft(row) }"
+      @logs="(row) => { reviewVisible = false; openReviewLogs(row) }"
+      @attachment="(row) => openAttachment(row)"
+    />
 
     <!-- Create/Edit Dialog -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? '編輯請假' : '新增請假申請'" width="550px">
@@ -919,13 +996,16 @@ onMounted(() => {
               <el-icon class="is-loading" style="vertical-align: middle;"><Loading /></el-icon> 查詢配額…
             </span>
             <template v-else-if="typedQuotaInfo">
-              <el-tag
-                size="small"
-                :type="typedQuotaInfo.remaining_hours <= 0 ? 'danger' : typedQuotaInfo.remaining_hours < 16 ? 'warning' : 'success'"
-                style="margin-right: 6px;"
-              >
-                剩餘 {{ typedQuotaInfo.remaining_hours }}h
-              </el-tag>
+              <div class="leave-quota-bar-row">
+                <span
+                  class="leave-quota-bar-remaining"
+                  :class="typedQuotaInfo.remaining_hours <= 0 ? 'is-danger' : typedQuotaInfo.remaining_hours < 16 ? 'is-warning' : 'is-success'"
+                >剩餘 {{ typedQuotaInfo.remaining_hours }}h</span>
+                <div class="leave-quota-bar" data-test="leave-quota-bar">
+                  <div class="leave-quota-bar__seg leave-quota-bar__seg--used" :style="{ width: quotaUsedPct + '%' }" />
+                  <div class="leave-quota-bar__seg leave-quota-bar__seg--pending" :style="{ width: quotaPendingPct + '%' }" />
+                </div>
+              </div>
               <span style="color: var(--el-text-color-secondary);">
                 已核准 {{ typedQuotaInfo.used_hours }}h
                 <template v-if="typedQuotaInfo.pending_hours > 0">
@@ -970,11 +1050,16 @@ onMounted(() => {
 
         <!-- 整天模式：只選日期 -->
         <template v-if="leaveMode === 'full'">
-          <el-form-item label="開始日期" prop="start_date">
-            <el-date-picker v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇開始日期" />
-          </el-form-item>
-          <el-form-item label="結束日期" prop="end_date">
-            <el-date-picker v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇結束日期" :disabled-date="disabledEndDate" />
+          <el-form-item label="請假日期" prop="start_date">
+            <el-date-picker
+              v-model="fullRangeModel"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              range-separator="–"
+              start-placeholder="開始日期"
+              end-placeholder="結束日期"
+              style="width: 100%;"
+            />
           </el-form-item>
         </template>
 
@@ -1098,6 +1183,32 @@ onMounted(() => {
   flex-wrap: wrap;
   margin-bottom: var(--space-4);
 }
+.leave-quota-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.leave-quota-bar-remaining {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.leave-quota-bar-remaining.is-success { color: var(--el-color-success); }
+.leave-quota-bar-remaining.is-warning { color: var(--el-color-warning); }
+.leave-quota-bar-remaining.is-danger { color: var(--el-color-danger); }
+.leave-quota-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--el-fill-color);
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+}
+.leave-quota-bar__seg { height: 100%; }
+.leave-quota-bar__seg--used { background: var(--el-color-success); }
+.leave-quota-bar__seg--pending { background: var(--el-color-warning-light-3); }
+
 .leave-expiry-title {
   font-size: 15px;
   font-weight: 600;

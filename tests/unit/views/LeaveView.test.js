@@ -151,6 +151,8 @@ const GLOBAL_STUBS = {
   LeaveBatchRejectDialog: true,
   LeaveImportDialog: true,
   LeaveQuotaManager: true,
+  LeaveQuotaOverviewTable: true,
+  LeaveReviewDrawer: true,
   LeaveRejectDialog: true,
   LeaveCalendar: true,
   'el-tabs': { template: '<div><slot /></div>' },
@@ -681,6 +683,76 @@ describe('LeaveView', () => {
       await flushPromises()
 
       expect(wrapper.vm.$.setupState.displayLeaves.map((r) => r.id)).toEqual([2, 4, 1, 3])
+    })
+  })
+
+  describe('審核抽屜（畫面 B）：查看詳情、同期間人力計算', () => {
+    it('handleRowCommand("review", row) 開啟抽屜並記住該筆', async () => {
+      const wrapper = mountLeaveView()
+      await flushPromises()
+
+      const row = { id: 9, employee_name: '王小明' }
+      wrapper.vm.$.setupState.handleRowCommand('review', row)
+
+      expect(wrapper.vm.$.setupState.reviewVisible).toBe(true)
+      expect(wrapper.vm.$.setupState.reviewRow).toEqual(row)
+    })
+
+    it('reviewSameDayCount：只算與本筆日期重疊、非本筆、待審或已核准的其他假單', async () => {
+      getLeaves.mockResolvedValue(paged([
+        { id: 1, status: 'pending', start_date: '2026-03-10', end_date: '2026-03-15' },
+        { id: 2, status: 'approved', start_date: '2026-03-01', end_date: '2026-03-11' }, // 重疊
+        { id: 3, status: 'rejected', start_date: '2026-03-10', end_date: '2026-03-12' }, // 已駁回不計
+        { id: 4, status: 'pending', start_date: '2026-03-20', end_date: '2026-03-25' }, // 不重疊
+      ]))
+      const wrapper = mountLeaveView()
+      await flushPromises()
+
+      wrapper.vm.$.setupState.reviewRow = { id: 1, start_date: '2026-03-10', end_date: '2026-03-15' }
+      expect(wrapper.vm.$.setupState.reviewSameDayCount).toBe(1)
+    })
+
+    it('reviewRow 為 null 時 reviewSameDayCount 為 0', async () => {
+      const wrapper = mountLeaveView()
+      await flushPromises()
+      expect(wrapper.vm.$.setupState.reviewSameDayCount).toBe(0)
+    })
+  })
+
+  describe('新增假單彈窗（畫面 C）：日期區間 model 與配額進度列', () => {
+    it('fullRangeModel getter：兩個日期都有值才回傳 tuple，否則 null', async () => {
+      const wrapper = mountLeaveView()
+      await flushPromises()
+
+      expect(wrapper.vm.$.setupState.fullRangeModel).toBeNull()
+      wrapper.vm.$.setupState.form.start_date = '2026-03-01'
+      wrapper.vm.$.setupState.form.end_date = '2026-03-05'
+      expect(wrapper.vm.$.setupState.fullRangeModel).toEqual(['2026-03-01', '2026-03-05'])
+    })
+
+    it('fullRangeModel setter：寫回 form.start_date / form.end_date；清空時回空字串', async () => {
+      const wrapper = mountLeaveView()
+      await flushPromises()
+
+      wrapper.vm.$.setupState.fullRangeModel = ['2026-04-01', '2026-04-03']
+      expect(wrapper.vm.$.setupState.form.start_date).toBe('2026-04-01')
+      expect(wrapper.vm.$.setupState.form.end_date).toBe('2026-04-03')
+
+      wrapper.vm.$.setupState.fullRangeModel = null
+      expect(wrapper.vm.$.setupState.form.start_date).toBe('')
+      expect(wrapper.vm.$.setupState.form.end_date).toBe('')
+    })
+
+    it('quotaUsedPct / quotaPendingPct 依 total_hours 算百分比，無配額時為 0', async () => {
+      const wrapper = mountLeaveView()
+      await flushPromises()
+
+      expect(wrapper.vm.$.setupState.quotaUsedPct).toBe(0)
+      expect(wrapper.vm.$.setupState.quotaPendingPct).toBe(0)
+
+      wrapper.vm.$.setupState.quotaInfo = { used_hours: 24, pending_hours: 40, remaining_hours: 16, total_hours: 80 }
+      expect(wrapper.vm.$.setupState.quotaUsedPct).toBe(30)
+      expect(wrapper.vm.$.setupState.quotaPendingPct).toBe(50)
     })
   })
 })
