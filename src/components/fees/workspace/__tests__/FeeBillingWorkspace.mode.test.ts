@@ -301,6 +301,37 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
     expect(recordsMocks.applySearch).toHaveBeenCalledWith('陳部分')
   })
 
+  it('recordsMode 回流比一個 nextTick 慢時，open-list 仍要帶到姓名（2026-09-14 審查 P1）', async () => {
+    // mountBilling 的殼層在同一輪微任務內把 emit 寫回 prop（void setProps(...)，
+    // 沒有額外延遲），剛好落在 onOpenList 內單一 await nextTick() 等得到的範圍，
+    // 蓋不住真正的 bug：2026-09-07 起 recordsMode 是 router ?mode= 受控的 prop，
+    // 真實的 router.push() 要跨導覽守衛與歷史 API，至少橫跨好幾個 promise
+    // resolve，不是一個 microtask 就能落地。這裡用 setTimeout（巨集任務）
+    // 模擬那個跨不過 nextTick() 的真實延遲。
+    let wrapper!: ReturnType<typeof mount>
+    wrapper = mount(FeeBillingWorkspace, {
+      props: {
+        recordsMode: 'statement',
+        'onChange-mode': (mode: string) => {
+          setTimeout(() => {
+            void wrapper.setProps({ recordsMode: mode })
+          }, 0)
+        },
+      },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    await flushAll()
+
+    wrapper.findComponent({ name: 'FeeMonthlyStatement' }).vm.$emit('open-list', '遲到姓名')
+    // 真的等過巨集任務（setTimeout 落地），而不是只等微任務——
+    // 單一 nextTick() 在這個時間點還看不到新 prop。
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await flushAll()
+
+    expect(wrapper.find('[data-testid="records-tab"]').exists()).toBe(true)
+    expect(recordsMocks.applySearch).toHaveBeenCalledWith('遲到姓名')
+  })
+
   it('切回應收帳款檢視時刷新作用中的月表', async () => {
     const wrapper = mountBilling()
     await flushAll()
