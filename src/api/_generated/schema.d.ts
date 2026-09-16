@@ -12408,6 +12408,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/photo-recaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Parent Photo Recaps
+         * @description 相簿回顧：1 個月 / 3 個月 / 半年 / 1 年 / 2 年前的同期照片。
+         *
+         *     照片池與 `/api/parent/photos` 完全同一口徑（共用
+         *     `_parent_visible_photo_conditions`），六種 owner_type 全收；空窗不回傳。
+         */
+        get: operations["parent_photo_recaps_api_parent_photo_recaps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/photos": {
         parameters: {
             query?: never;
@@ -36407,6 +36430,69 @@ export interface components {
         PermissionAdminOkOut: {
             /** Ok */
             ok: boolean;
+        };
+        /** PhotoRecapListOut */
+        PhotoRecapListOut: {
+            /** Items */
+            items: components["schemas"]["PhotoRecapWindowOut"][];
+        };
+        /** PhotoRecapPhotoOut */
+        PhotoRecapPhotoOut: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "work" | "life";
+            /** Created At */
+            created_at?: string | null;
+            /** Display Url */
+            display_url?: string | null;
+            /** Id */
+            id: number;
+            /** Original Filename */
+            original_filename: string;
+            /** Owner Id */
+            owner_id: number;
+            /** Owner Type */
+            owner_type: string;
+            /**
+             * Photo Date
+             * Format: date
+             */
+            photo_date: string;
+            /** Thumb Url */
+            thumb_url?: string | null;
+            /** Url */
+            url: string;
+        };
+        /** PhotoRecapWindowOut */
+        PhotoRecapWindowOut: {
+            /**
+             * Anchor Date
+             * Format: date
+             */
+            anchor_date: string;
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "1m" | "3m" | "6m" | "1y" | "2y";
+            /** Label */
+            label: string;
+            /** Photo Count */
+            photo_count: number;
+            /** Photos */
+            photos: components["schemas"]["PhotoRecapPhotoOut"][];
+            /**
+             * Range End
+             * Format: date
+             */
+            range_end: string;
+            /**
+             * Range Start
+             * Format: date
+             */
+            range_start: string;
         };
         /** PhotoTagsItem */
         PhotoTagsItem: {
@@ -69494,6 +69580,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parent_photo_recaps_api_parent_photo_recaps_get: {
+        parameters: {
+            query: {
+                student_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoRecapListOut"];
                 };
             };
             /** @description Validation Error */
