@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { fetchChildPhotos } from '../api/childPhotos'
+import { fetchChildPhotos, fetchChildRecaps, type PhotoRecap } from '../api/childPhotos'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import M3SegmentedButton from '../components/m3/M3SegmentedButton.vue'
+import RecapRail from '../components/recap/RecapRail.vue'
+import RecapViewer from '../components/recap/RecapViewer.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 interface PhotoItem {
@@ -44,6 +46,11 @@ const { visible: visibleRaw, hasMore, sentinelRef } = useIncrementalRender(
 const visible = computed(() => visibleRaw.value as PhotoItem[])
 const previewIdx = ref<number | null>(null)
 const lightboxRef = ref<HTMLElement | null>(null)
+
+// 相簿回顧：空窗後端不回傳，拿到什麼就顯示什麼；不跟著 category 重取
+// （回顧的口徑是「那個時間窗的全部照片」，與照片牆的分類篩選無關）。
+const recaps = ref<PhotoRecap[]>([])
+const openRecap = ref<PhotoRecap | null>(null)
 // 開啟 lightbox 前的焦點元素，關閉時還原（focus trap a11y）。
 let previousActiveElement: Element | null = null
 
@@ -67,6 +74,20 @@ async function load() {
   }
 }
 
+/**
+ * 回顧是照片牆的加值區塊，載入失敗一律靜默降級成「沒有回顧」：
+ * 照片本體還在，不該因為回顧掛掉就把整頁推進錯誤態，也不該再疊一次 toast。
+ */
+async function loadRecaps() {
+  if (!studentId.value) return
+  try {
+    const r = await fetchChildRecaps(studentId.value)
+    recaps.value = r.data?.items || []
+  } catch {
+    recaps.value = []
+  }
+}
+
 function onCategoryChange(v: string) {
   // 篩選後陣列可能變短，先關掉 lightbox（含 clamp previewIdx）避免殘留的
   // previewIdx 指向已不存在的項目，template 讀 items[previewIdx] 炸掉。
@@ -75,7 +96,17 @@ function onCategoryChange(v: string) {
   load()
 }
 
+/**
+ * 兩個全螢幕照片層互斥。既有 lightbox 沒有 Tab trap，兩層同時開著時鍵盤焦點
+ * 會跑到被遮住的那一層，Enter 下去等於操作一個看不見的畫面。
+ */
+function openRecapViewer(recap: PhotoRecap) {
+  closePreview()
+  openRecap.value = recap
+}
+
 async function openPreview(idx: number) {
+  openRecap.value = null
   // 記住開啟前焦點所在的元素（通常就是被點擊的縮圖按鈕），關閉時還原。
   previousActiveElement = typeof document !== 'undefined' ? document.activeElement : null
   previewIdx.value = idx
@@ -110,7 +141,10 @@ function onLightboxKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadRecaps()
+})
 </script>
 
 <template>
@@ -120,6 +154,8 @@ onMounted(load)
       <h1 class="pt-page-hero-title">{{ total }} 張珍藏</h1>
       <p class="pt-page-hero-note">老師為您拍下的學校點滴</p>
     </header>
+
+    <RecapRail :items="recaps" @select="openRecapViewer" />
 
     <M3SegmentedButton
       :model-value="category"
@@ -185,6 +221,9 @@ onMounted(load)
       </button>
       <div class="counter">{{ previewIdx + 1 }} / {{ items.length }}</div>
     </div>
+
+    <!-- 回顧檢視器：mount 即開啟，焦點進出與自動播放生命週期都在元件內 -->
+    <RecapViewer v-if="openRecap" :recap="openRecap" @close="openRecap = null" />
   </div>
 </template>
 
@@ -247,7 +286,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: var(--z-modal);
 }
 .lightbox:focus { outline: none; }
 
