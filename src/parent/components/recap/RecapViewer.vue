@@ -13,6 +13,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { prefersReducedMotion } from '@/utils/reducedMotion'
+import { useFocusTrap } from '../../composables/useFocusTrap'
 import M3Icon from '../m3/M3Icon.vue'
 import type { PhotoRecap, RecapPhoto } from '../../api/childPhotos'
 import { formatRecapDate, formatRecapRange, recapDisplaySrc, recapThumbSrc } from './recapFormat'
@@ -33,8 +34,6 @@ const NEIGHBOR_SCALE = 0.86
 const NEIGHBOR_OPACITY = 0.45
 /** 相鄰兩張的間距（相對自身寬度）：>100% 才會在中央大圖左右各露出一截。 */
 const SLIDE_STEP_PERCENT = 106
-
-const FOCUSABLE = 'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
 
 const photos = computed<RecapPhoto[]>(() => props.recap.photos || [])
 const index = ref(0)
@@ -65,6 +64,9 @@ const dragging = ref(false)
 
 const rootRef = ref<HTMLElement | null>(null)
 const filmRef = ref<HTMLElement | null>(null)
+
+/** Tab 循環鎖在檢視器內：底下的照片牆還在 DOM 裡，不鎖會 Tab 出去。 */
+const { trapTab } = useFocusTrap(rootRef)
 
 let timer: ReturnType<typeof setTimeout> | null = null
 let dragStartX = 0
@@ -177,27 +179,6 @@ function close(): void {
 }
 
 /* ---------- 鍵盤 ---------- */
-
-/** Tab 循環鎖在檢視器內：底下的照片牆還在 DOM 裡，不鎖會 Tab 出去。 */
-function trapTab(e: KeyboardEvent): void {
-  const root = rootRef.value
-  if (!root) return
-  const nodes = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE))
-  if (nodes.length === 0) {
-    e.preventDefault()
-    return
-  }
-  const first = nodes[0]
-  const last = nodes[nodes.length - 1]
-  const active = typeof document !== 'undefined' ? document.activeElement : null
-  if (e.shiftKey && (active === first || active === root)) {
-    e.preventDefault()
-    last.focus()
-  } else if (!e.shiftKey && active === last) {
-    e.preventDefault()
-    first.focus()
-  }
-}
 
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {

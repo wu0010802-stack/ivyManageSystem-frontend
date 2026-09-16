@@ -11,6 +11,7 @@ import M3SegmentedButton from '../components/m3/M3SegmentedButton.vue'
 import RecapRail from '../components/recap/RecapRail.vue'
 import RecapViewer from '../components/recap/RecapViewer.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
+import { useFocusTrap } from '../composables/useFocusTrap'
 
 interface PhotoItem {
   id: number | string
@@ -46,6 +47,9 @@ const { visible: visibleRaw, hasMore, sentinelRef } = useIncrementalRender(
 const visible = computed(() => visibleRaw.value as PhotoItem[])
 const previewIdx = ref<number | null>(null)
 const lightboxRef = ref<HTMLElement | null>(null)
+// Tab 鎖在 lightbox 內：底下的照片牆縮圖與回顧卡都還在 tab order 裡，
+// 不鎖的話焦點會跑到黑幕後面看不見的按鈕上（與 RecapViewer 共用同一份 trap）。
+const { trapTab } = useFocusTrap(lightboxRef)
 
 // 相簿回顧：空窗後端不回傳，拿到什麼就顯示什麼；不跟著 category 重取
 // （回顧的口徑是「那個時間窗的全部照片」，與照片牆的分類篩選無關）。
@@ -97,8 +101,9 @@ function onCategoryChange(v: string) {
 }
 
 /**
- * 兩個全螢幕照片層互斥。既有 lightbox 沒有 Tab trap，兩層同時開著時鍵盤焦點
- * 會跑到被遮住的那一層，Enter 下去等於操作一個看不見的畫面。
+ * 兩個全螢幕照片層互斥：兩層各自 trap 自己的 Tab，同時開著的話焦點會被關進
+ * 下面那一層，畫面上看得見的卻是上面那層，Enter 下去等於操作一個看不見的畫面。
+ * 各自的關閉焦點還原也會互相蓋掉。
  */
 function openRecapViewer(recap: PhotoRecap) {
   closePreview()
@@ -138,6 +143,8 @@ function onLightboxKeydown(e: KeyboardEvent) {
   } else if (e.key === 'ArrowLeft') {
     e.preventDefault()
     prevImg()
+  } else if (e.key === 'Tab') {
+    trapTab(e)
   }
 }
 
