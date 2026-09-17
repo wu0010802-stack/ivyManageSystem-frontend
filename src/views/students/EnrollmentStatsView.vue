@@ -385,17 +385,17 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
         :row-class-name="rowClassName"
         class="enrollment-table"
       >
-        <el-table-column label="年級" prop="grade_name" width="120" align="center" />
-        <el-table-column label="班級" prop="class_name" width="110" align="center" />
-        <el-table-column label="男生" prop="male" width="80" align="right" />
-        <el-table-column label="女生" prop="female" width="80" align="right" />
-        <el-table-column label="未填" prop="unknown" width="80" align="right">
+        <el-table-column label="年級" prop="grade_name" :width="isMobile ? 60 : 120" align="center" />
+        <el-table-column label="班級" prop="class_name" :width="isMobile ? 80 : 110" align="center" />
+        <el-table-column label="男生" prop="male" :width="isMobile ? 54 : 80" align="right" />
+        <el-table-column label="女生" prop="female" :width="isMobile ? 54 : 80" align="right" />
+        <el-table-column label="未填" prop="unknown" :width="isMobile ? 54 : 80" align="right">
           <template #default="{ row }">
             <span v-if="row.unknown > 0" class="num-unknown">{{ row.unknown }}</span>
             <span v-else class="ratio-empty">0</span>
           </template>
         </el-table-column>
-        <el-table-column label="合計" prop="total" width="90" align="right">
+        <el-table-column label="合計" prop="total" :width="isMobile ? 66 : 90" align="right">
           <template #default="{ row }">
             <span class="num-total">{{ row.total }}</span>
           </template>
@@ -615,6 +615,25 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 /* ===== Stats Table ===== */
 .num-total {
   font-weight: 600;
+}
+
+/* 手機收欄（2026-09-17）：拿掉男女比例欄（原本佔表格 53% 寬）後，剩餘 6 欄
+   配合 template 內 isMobile 縮窄的欄寬（見下）大多數情況已不必橫向捲動；
+   縮小 cell padding 換出一點空間給數字，不強行擠到會讓文字折行的地步——
+   折行比小幅橫向捲動更傷可讀性。卡片 padding 一起收窄，避免兩側留白吃掉
+   本就緊繃的表格寬度。 */
+@media (--to-sm) {
+  .enrollment-table :deep(.el-table__cell) {
+    padding: 8px 2px;
+  }
+  /* el-table 的儲存格內還有一層 .cell，左右各吃掉 12px padding——只縮外層
+     td 沒用，數字欄照樣被這層內距擠到折行（實測 39px 的 td 只剩 15px 可用）。 */
+  .enrollment-table :deep(.el-table .cell) {
+    padding: 0 4px;
+  }
+  .table-card :deep(.el-card__body) {
+    padding: 12px;
+  }
 }
 
 .num-unknown {
