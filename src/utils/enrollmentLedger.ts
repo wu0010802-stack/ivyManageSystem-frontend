@@ -88,18 +88,50 @@ export const EVENT_KIND_TAG_TYPE: Record<
 }
 
 /**
+ * 異動類型的顯示文案（2026-09-17 UI/UX 審查）。
+ *
+ * 只換顯示文字，`event_kind` 的原始值（篩選下拉的 value、EVENT_KIND_TAG_TYPE 的
+ * key）不動——「開帳」是後端 SPEC-021 §5 的正式詞，園務同仁看到卻像工程術語，
+ * 這裡只把**畫面上**的字換成「起算基準」。
+ */
+export const EVENT_KIND_DISPLAY_LABELS: Record<string, string> = {
+  開帳: '起算基準',
+}
+
+export const eventKindLabel = (kind: string): string =>
+  EVENT_KIND_DISPLAY_LABELS[kind] ?? kind
+
+/**
+ * 異動來源的顯示文案。value 對應後端 `source` 欄位原始值，不可改；
+ * label 是園務同仁看得懂的白話（原文「程式記帳」「來源不明」偏工程語彙）。
+ */
+export const SOURCE_LABELS: { value: string; label: string }[] = [
+  { value: 'app', label: '系統自動' },
+  { value: 'db_trigger', label: '未經系統（需查核）' },
+  { value: 'opening', label: '起算基準' },
+]
+
+/**
  * 對帳橫幅的層級與文案。
  *
  * 使用者裁定「憑證值與現值兩個都要」，這裡就是那個「都要」呈現給人看的地方：
  * 不符時要同時說出兩個數字，人才知道差在哪、差多少。
+ *
+ * `action`（2026-09-17）：不符且有來源不明列時，回傳可操作的動作描述，讓呼叫端
+ * 渲染一個**真的按鈕**——舊版文案寫「點此查看」但 `el-alert` 沒綁任何 click，
+ * 是死文字；改成回傳結構化資料，UI 層才有東西可以掛。
  */
 export const describeReconcile = (
   r: ReconcileResult,
-): { level: 'ok' | 'warning' | 'info'; text: string } => {
+): {
+  level: 'ok' | 'warning' | 'info'
+  text: string
+  action?: { label: string; unknownCount: number }
+} => {
   if (!r.opened) {
     return {
       level: 'info',
-      text: `本帳尚未起帳（第一筆人數異動發生時自動開帳），目前名冊 ${r.roster_total} 人`,
+      text: `本帳尚未起帳（第一筆入學、離園或轉班發生時自動起算，不回填歷史），目前名冊 ${r.roster_total} 人`,
     }
   }
   if (r.status === 'ok') {
@@ -108,11 +140,16 @@ export const describeReconcile = (
   const gap = Math.abs(r.roster_total - (r.ledger_total ?? 0))
   const base = `對帳不符：帳上累加 ${r.ledger_total} 人，實際名冊 ${r.roster_total} 人（差 ${gap} 人）`
   const unknownCount = r.unknown_rows?.length ?? 0
+  if (unknownCount > 0) {
+    return {
+      level: 'warning',
+      text: `${base}。帳上有 ${unknownCount} 筆來源不明的異動`,
+      action: { label: `查看未經系統的 ${unknownCount} 筆`, unknownCount },
+    }
+  }
   return {
     level: 'warning',
-    text: unknownCount
-      ? `${base}。帳上有 ${unknownCount} 筆來源不明的異動，點此查看`
-      : `${base}。可能有異動未經系統記帳`,
+    text: `${base}。可能有異動未經系統記帳`,
   }
 }
 

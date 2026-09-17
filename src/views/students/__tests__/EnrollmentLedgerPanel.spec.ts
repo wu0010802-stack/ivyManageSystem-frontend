@@ -105,9 +105,12 @@ vi.mock('@/composables/useChartJs', () => ({
   LineChart: { name: 'LineChart', template: '<div class="stub-line-chart" />' },
 }))
 
-const mountPanel = (dateRange: [string, string] = ['2026-08-01', '2026-09-07']) =>
+const mountPanel = (
+  dateRange: [string, string] = ['2026-08-01', '2026-09-07'],
+  extraProps: Record<string, unknown> = {},
+) =>
   mount(EnrollmentLedgerPanel, {
-    props: { dateRange },
+    props: { dateRange, ...extraProps },
     global: { plugins: [ElementPlus] },
   })
 
@@ -224,5 +227,96 @@ describe('EnrollmentLedgerPanel', () => {
     expect(api.getEnrollmentLedger).toHaveBeenCalled()
     expect(api.getLedgerTrend).toHaveBeenCalled()
     expect(api.getLedgerReconcile).not.toHaveBeenCalled()
+  })
+
+  it('查詢區間超過 400 天時還原並提示，超限的那組值不會送去打 API（2026-09-17）', async () => {
+    // 後端 /ledger/trend 對跨度 >400 天回 422；舊版沒有前端防呆，使用者只會看到
+    // 一則看不懂的裸 toast。這裡守的是「超限值絕不送出」與「自動還原成合法值」。
+    const api = await import('@/api/studentEnrollment')
+    const wrapper = mountPanel(['2026-08-01', '2026-09-07'])
+    await flushPromises()
+    vi.mocked(api.getEnrollmentLedger).mockClear()
+
+    await wrapper.setProps({ dateRange: ['2025-01-01', '2026-09-07'] })
+    await flushPromises()
+
+    expect(api.getEnrollmentLedger).not.toHaveBeenCalledWith(
+      expect.objectContaining({ date_from: '2025-01-01' }),
+    )
+    expect(api.getEnrollmentLedger).toHaveBeenCalledWith(
+      expect.objectContaining({ date_from: '2026-08-01', date_to: '2026-09-07' }),
+    )
+    expect(wrapper.emitted('update:dateRange')?.at(-1)).toEqual([
+      ['2026-08-01', '2026-09-07'],
+    ])
+  })
+
+  it('帶入 defaultRange 且目前區間不同時顯示「回到本學期」，點擊會還原', async () => {
+    const wrapper = mountPanel(['2026-08-20', '2026-09-05'], {
+      defaultRange: ['2026-08-01', '2026-09-07'],
+    })
+    await flushPromises()
+    const resetBtn = wrapper.find('[data-testid="reset-default-range-btn"]')
+    expect(resetBtn.exists()).toBe(true)
+
+    await resetBtn.trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('update:dateRange')?.at(-1)).toEqual([
+      ['2026-08-01', '2026-09-07'],
+    ])
+  })
+
+  it('目前區間已是 defaultRange 時不顯示「回到本學期」', async () => {
+    const wrapper = mountPanel(['2026-08-01', '2026-09-07'], {
+      defaultRange: ['2026-08-01', '2026-09-07'],
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="reset-default-range-btn"]').exists()).toBe(false)
+  })
+
+  it('defineExpose 的 setSourceFilter 供父層對帳按鈕一鍵切到「未經系統」', async () => {
+    const api = await import('@/api/studentEnrollment')
+    const wrapper = mountPanel()
+    await flushPromises()
+    vi.mocked(api.getEnrollmentLedger).mockClear()
+
+    ;(wrapper.vm as unknown as { setSourceFilter: (v: string) => void }).setSourceFilter(
+      'db_trigger',
+    )
+    await flushPromises()
+
+    expect(api.getEnrollmentLedger).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'db_trigger' }),
+    )
+  })
+
+  it('開帳列在異動欄顯示「起算基準」，不是原始詞「開帳」', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentLedger).mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            ...ledgerRow,
+            id: 3,
+            event_kind: '開帳',
+            student_id: null,
+            student_name: null,
+            student_display_id: null,
+            to_classroom_id: null,
+            to_class_name: null,
+            school_delta: 0,
+            reason: null,
+            actor_name: null,
+            source: 'opening',
+            source_path: 'services.enrollment_ledger.ensure_opening_row',
+          },
+        ],
+        total: 1,
+        opened: true,
+      },
+    } as never)
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.text()).toContain('起算基準')
   })
 })

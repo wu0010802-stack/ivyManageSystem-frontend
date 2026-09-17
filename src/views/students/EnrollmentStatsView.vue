@@ -19,6 +19,7 @@ import {
 } from '@/api/studentEnrollment'
 import { coerceRocYear, getTermDateRange } from '@/utils/academic'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { apiError } from '@/utils/error'
 import { describeReconcile, type ReconcileResult } from '@/utils/enrollmentLedger'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -34,15 +35,24 @@ interface EnrollmentStats {
 }
 
 const termStore = useAcademicTermStore()
+const { isMobile } = useIsMobile()
 const loading = ref(false)
 const stats = ref<EnrollmentStats | null>(null)
 const termOptions = ref<TermOption[]>([])
+/** 下方異動帳面板的元件實例，供對帳橫幅按鈕呼叫其 setSourceFilter。 */
+const ledgerPanelRef = ref<InstanceType<typeof EnrollmentLedgerPanel> | null>(null)
+/** 「人數異動」整段的容器，對帳按鈕點擊後捲到這裡讓人看見篩選結果。 */
+const ledgerSectionRef = ref<HTMLElement | null>(null)
 
 /**
  * 異動帳的查詢區間，跟著頁首的學年學期走。使用者仍可在下方面板內縮小範圍，
  * 那個改動會回寫這裡，讓對帳橫幅與明細看的是同一個結束日。
  */
 const dateRange = ref<[string, string]>(
+  getTermDateRange(termStore.school_year, termStore.semester),
+)
+/** 每次學期切換都重算，供面板「回到本學期」按鈕還原用。 */
+const defaultDateRange = computed<[string, string]>(() =>
   getTermDateRange(termStore.school_year, termStore.semester),
 )
 /** 「重新整理」的訊號，遞增即通知下方面板重抓。 */
@@ -52,6 +62,18 @@ const reconcileResult = ref<ReconcileResult | null>(null)
 const banner = computed(() =>
   reconcileResult.value ? describeReconcile(reconcileResult.value) : null,
 )
+/** 相符（ok）只在狀態列露出小 pill；不符／尚未起帳才升成整條警示（見下方 template）。 */
+const showBannerAlert = computed(() => !!banner.value && banner.value.level !== 'ok')
+
+/**
+ * 對帳橫幅「查看未經系統的 N 筆」按鈕（2026-09-17）：舊版文案承諾「點此查看」
+ * 卻沒綁任何 click，是死文字。這裡把來源篩選切到 db_trigger 並捲到明細，
+ * 讓「有異常」與「異常在哪」中間有一步真的路可以走。
+ */
+const viewUnknownRows = () => {
+  ledgerPanelRef.value?.setSourceFilter('db_trigger')
+  ledgerSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 const selectedTerm = computed({
   get: () => `${termStore.school_year}-${termStore.semester}`,
@@ -123,45 +145,43 @@ onMounted(async () => {
 })
 
 // ---------------------------------------------------------------------------
-// Summary cards
+// 狀態列（2026-09-17 取代原本四張同型 KPI 卡）
 // ---------------------------------------------------------------------------
-const summaryCards = computed(() => {
+/**
+ * 性別「未填」（2026-09-17）：total − male − female 舊版被當不存在，staging
+ * 197 人有 196 人未填卻顯示「男生 1 占全園 1%」、比例條幾乎全空又沒有任何提示。
+ * `Math.max(0, …)` 是防呆——後端理論上不會給出 male+female > total，但顯示層
+ * 不該因為一筆髒資料就冒出負數。
+ */
+const unknownGenderOf = (total: number, male: number, female: number) =>
+  Math.max(0, total - male - female)
+
+const statusSummary = computed(() => {
   const s = stats.value?.summary
   const total = s?.total ?? 0
   const male = s?.male ?? 0
   const female = s?.female ?? 0
+  const unknown = s ? unknownGenderOf(total, male, female) : 0
+  const filled = male + female
   const cls = s?.class_count ?? 0
-  const pct = (n: number) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '—')
+  const pct = (n: number) => (filled > 0 ? `${Math.round((n / filled) * 100)}%` : '—')
   const avg = cls > 0 ? Math.round(total / cls) : null
-  return [
-    {
-      key: 'total',
-      label: '在籍總人數',
-      value: s ? total : '—',
-      sub: cls > 0 ? `分布於 ${cls} 個班級` : '尚無班級資料',
-    },
-    {
-      key: 'male',
-      label: '男生',
-      value: s ? male : '—',
-      sub: s ? `占全園 ${pct(male)}` : '—',
-    },
-    {
-      key: 'female',
-      label: '女生',
-      value: s ? female : '—',
-      sub: s ? `占全園 ${pct(female)}` : '—',
-    },
-    {
-      key: 'class',
-      label: '班級數',
-      value: s ? cls : '—',
-      sub: avg != null ? `平均 ${avg} 人 / 班` : '—',
-    },
-  ]
+  return {
+    total,
+    hasData: !!s,
+    male,
+    female,
+    unknown,
+    filled,
+    malePct: pct(male),
+    femalePct: pct(female),
+    classCount: cls,
+    classAvgLabel: avg != null ? `平均 ${avg} 人 / 班` : '—',
+  }
 })
 
-const ratioPct = (n: number, total: number) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '0%')
+/** 百分比分母改成「已填性別者」而非總人數——未填不該被靜默算進男／女的占比。 */
+const ratioPct = (n: number, denom: number) => (denom > 0 ? `${Math.round((n / denom) * 100)}%` : '0%')
 
 // ---------------------------------------------------------------------------
 // 表格資料（展開 + 年級小計 + 全園總計）
@@ -177,6 +197,7 @@ const tableData = computed(() => {
         class_name: cls.class_name,
         male: cls.male,
         female: cls.female,
+        unknown: unknownGenderOf(cls.total, cls.male, cls.female),
         total: cls.total,
         _gradeClassCount: grade.classes.length,
       })
@@ -187,6 +208,7 @@ const tableData = computed(() => {
       class_name: '',
       male: grade.male,
       female: grade.female,
+      unknown: unknownGenderOf(grade.total, grade.male, grade.female),
       total: grade.total,
     })
   }
@@ -196,6 +218,11 @@ const tableData = computed(() => {
     class_name: '',
     male: stats.value.summary.male,
     female: stats.value.summary.female,
+    unknown: unknownGenderOf(
+      stats.value.summary.total,
+      stats.value.summary.male,
+      stats.value.summary.female,
+    ),
     total: stats.value.summary.total,
   })
   return rows
@@ -259,46 +286,91 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 
     <div v-if="stats" class="page-meta">
       <span>{{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}</span>
-      <span v-if="stats.summary?.total != null" class="meta-sep">|</span>
-      <span v-if="stats.summary?.total != null">在籍 {{ stats.summary.total }} 人</span>
     </div>
 
     <!--
       對帳橫幅：實際名冊（現值）與帳上累加（憑證）的比對，是本頁上下兩段的接點。
-      置頂，因為「這頁的數字可不可信」要先講。
+      2026-09-17 起相符（ok）只在下方狀態列露出小 pill，不再常駐一整條置頂警示；
+      不符／尚未起帳仍是全寬警示，因為那才是「這頁的數字可不可信」要先講的時刻。
     -->
     <el-alert
-      v-if="banner"
+      v-if="showBannerAlert"
       data-testid="reconcile-banner"
-      :title="banner.text"
-      :type="banner.level === 'ok' ? 'success' : banner.level === 'info' ? 'info' : 'warning'"
-      :closable="banner.level === 'ok'"
+      :title="banner!.text"
+      :type="banner!.level === 'info' ? 'info' : 'warning'"
+      :closable="false"
       show-icon
       class="reconcile-banner"
-    />
+    >
+      <template v-if="banner!.action" #default>
+        <el-button
+          data-testid="reconcile-action-btn"
+          size="small"
+          type="warning"
+          plain
+          @click="viewUnknownRows"
+        >
+          {{ banner!.action.label }}
+        </el-button>
+      </template>
+    </el-alert>
 
-    <!-- 現值：此刻各班多少人 -->
-    <el-row :gutter="16" class="summary-cards">
-      <el-col :xs="12" :sm="6" v-for="card in summaryCards" :key="card.key">
-        <el-card class="summary-card" shadow="never">
-          <template v-if="loading && stats == null">
-            <el-skeleton :rows="2" animated />
-          </template>
-          <template v-else>
-            <div class="card-label">{{ card.label }}</div>
-            <div class="card-value">{{ card.value }}</div>
-            <div class="card-sub">{{ card.sub }}</div>
-          </template>
-        </el-card>
-      </el-col>
-    </el-row>
+    <!-- 現值：此刻各班多少人，2026-09-17 起收成一條狀態列（原四張同型 KPI 卡）。 -->
+    <el-card class="status-strip" shadow="never">
+      <el-skeleton v-if="loading && stats == null" :rows="1" animated />
+      <div v-else class="status-strip-row">
+        <div class="status-group status-group--hero">
+          <div class="status-label">在籍總人數</div>
+          <div class="status-value">{{ statusSummary.hasData ? statusSummary.total : '—' }}</div>
+        </div>
+        <div class="status-group">
+          <div class="status-label">
+            性別
+            <span v-if="statusSummary.hasData" class="status-label-meta">
+              （已填 {{ statusSummary.filled }} 人）
+            </span>
+          </div>
+          <div class="status-row-inline">
+            <span class="gender-dot gender-dot--male" />男 {{ statusSummary.male }}
+            <span class="gender-dot gender-dot--female" />女 {{ statusSummary.female }}
+            <span v-if="statusSummary.unknown > 0" class="gender-dot gender-dot--unknown" />
+            <span v-if="statusSummary.unknown > 0">未填 {{ statusSummary.unknown }}</span>
+          </div>
+        </div>
+        <div class="status-group">
+          <div class="status-label">班級</div>
+          <div class="status-row-inline">
+            <span>{{ statusSummary.classCount }} 班</span>
+            <span class="status-sep">·</span>
+            <span>{{ statusSummary.classAvgLabel }}</span>
+          </div>
+        </div>
+        <div class="status-group">
+          <div class="status-label">帳目狀態</div>
+          <div v-if="banner" class="status-row-inline">
+            <span
+              data-testid="reconcile-pill"
+              class="status-pill"
+              :class="`status-pill--${banner.level}`"
+            >
+              <span class="status-pill-dot" />
+              {{ banner.level === 'ok' ? '帳目相符' : banner.level === 'info' ? '尚未起帳' : '對帳不符' }}
+            </span>
+            <span class="status-sep">·</span>
+            <span class="status-meta">截至 {{ dateRange[1] }}</span>
+          </div>
+        </div>
+      </div>
+    </el-card>
 
     <el-card class="table-card" shadow="never">
       <template #header>
         <div class="card-header-row">
           <span class="card-header-title">各班在籍人數表</span>
-          <span v-if="stats" class="card-header-meta">
-            {{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}
+          <span class="card-header-legend">
+            <span class="gender-dot gender-dot--male" />男
+            <span class="gender-dot gender-dot--female" />女
+            <span class="gender-dot gender-dot--unknown" />未填
           </span>
         </div>
       </template>
@@ -315,22 +387,31 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
       >
         <el-table-column label="年級" prop="grade_name" width="120" align="center" />
         <el-table-column label="班級" prop="class_name" width="110" align="center" />
-        <el-table-column label="男生" prop="male" width="90" align="center" />
-        <el-table-column label="女生" prop="female" width="90" align="center" />
-        <el-table-column label="合計" prop="total" width="90" align="center">
+        <el-table-column label="男生" prop="male" width="80" align="right" />
+        <el-table-column label="女生" prop="female" width="80" align="right" />
+        <el-table-column label="未填" prop="unknown" width="80" align="right">
+          <template #default="{ row }">
+            <span v-if="row.unknown > 0" class="num-unknown">{{ row.unknown }}</span>
+            <span v-else class="ratio-empty">0</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="合計" prop="total" width="90" align="right">
           <template #default="{ row }">
             <span class="num-total">{{ row.total }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="男女比例" min-width="180">
+        <el-table-column v-if="!isMobile" label="男女比例" min-width="180">
           <template #default="{ row }">
-            <div v-if="row.total > 0" class="ratio-bar">
+            <span v-if="row.total > 0 && row.male + row.female === 0" class="ratio-empty">
+              性別未填
+            </span>
+            <div v-else-if="row.total > 0" class="ratio-bar">
               <div class="ratio-track">
-                <div class="ratio-male" :style="{ width: ratioPct(row.male, row.total) }" />
-                <div class="ratio-female" :style="{ width: ratioPct(row.female, row.total) }" />
+                <div class="ratio-male" :style="{ width: ratioPct(row.male, row.male + row.female) }" />
+                <div class="ratio-female" :style="{ width: ratioPct(row.female, row.male + row.female) }" />
               </div>
               <div class="ratio-text">
-                {{ ratioPct(row.male, row.total) }} / {{ ratioPct(row.female, row.total) }}
+                {{ ratioPct(row.male, row.male + row.female) }} / {{ ratioPct(row.female, row.male + row.female) }}
               </div>
             </div>
             <span v-else class="ratio-empty">—</span>
@@ -342,17 +423,23 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
         description="此學期尚無在籍資料"
         :image-size="80"
       />
+      <p v-if="tableData.length" class="table-footnote">
+        百分比以已填性別者為分母，未填不計入男／女占比。
+      </p>
     </el-card>
 
     <!-- 帳：人數怎麼變成上面那樣（趨勢圖 + 逐筆明細） -->
-    <section class="ledger-section">
+    <section ref="ledgerSectionRef" class="ledger-section">
       <h3 class="section-title">人數異動</h3>
       <p class="section-hint">
-        逐筆自動記錄，不需人工登錄。預設看本學期，可在下方縮小日期範圍。
+        逐筆自動記錄，不需人工登錄。第一筆入學、離園或轉班發生時自動起算，
+        上線之前的歷史不回填。預設看本學期，可在下方縮小日期範圍。
       </p>
       <EnrollmentLedgerPanel
+        ref="ledgerPanelRef"
         v-model:date-range="dateRange"
         :refresh-token="refreshToken"
+        :default-range="defaultDateRange"
       />
     </section>
   </div>
@@ -361,6 +448,10 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 <style scoped>
 .enrollment-stats-view {
   padding: var(--space-5, 20px);
+  /* 女生比例色（plum）：刻意不沿用全站 danger 紅——下方明細表的「退學/減少」
+     也用 danger 紅，兩者同色會讓「女生」與「人數變少」混淆。 */
+  --enroll-female: #b5427a;
+  --enroll-female-soft: #f6e6ee;
 }
 
 .page-meta {
@@ -369,40 +460,124 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
   align-items: center;
   font-size: 13px;
   color: var(--text-tertiary);
-  margin-bottom: var(--space-5, 20px);
-}
-
-.meta-sep {
-  color: #dcdfe6;
-}
-
-/* ===== Summary Cards ===== */
-.summary-cards {
   margin-bottom: var(--space-4, 16px);
 }
 
-.summary-card :deep(.el-card__body) {
-  padding: 16px 18px;
+/* ===== 狀態列（2026-09-17 取代原四張同型 KPI 卡） ===== */
+.status-strip {
+  margin-bottom: var(--space-4, 16px);
 }
 
-.card-label {
-  font-size: 13px;
+.status-strip :deep(.el-card__body) {
+  padding: 14px 18px;
+}
+
+.status-strip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px 32px;
+}
+
+.status-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.status-group--hero {
+  min-width: 90px;
+}
+
+.status-label {
+  font-size: 12px;
   color: var(--text-tertiary);
-  margin-bottom: 6px;
 }
 
-.card-value {
+.status-label-meta {
+  color: var(--text-tertiary);
+}
+
+.status-value {
   font-size: 1.75rem;
   font-weight: 600;
   line-height: 1.2;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
-.card-sub {
-  margin-top: 6px;
-  font-size: 12px;
+.status-row-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+
+.status-sep {
   color: var(--text-tertiary);
 }
+
+.status-meta {
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.gender-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: 2px;
+}
+
+.gender-dot--male {
+  background: var(--color-info);
+}
+
+.gender-dot--female {
+  background: var(--enroll-female);
+}
+
+.gender-dot--unknown {
+  background: var(--neutral-300);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.status-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.status-pill--ok {
+  background: var(--color-success-lighter, #f0f9eb);
+  color: var(--color-success, #67c23a);
+}
+.status-pill--ok .status-pill-dot { background: var(--color-success, #67c23a); }
+
+.status-pill--info {
+  background: var(--neutral-100);
+  color: var(--text-secondary);
+}
+.status-pill--info .status-pill-dot { background: var(--neutral-300); }
+
+.status-pill--warning {
+  background: var(--color-warning-lighter, #fdf6ec);
+  color: var(--color-warning, #e6a23c);
+}
+.status-pill--warning .status-pill-dot { background: var(--color-warning, #e6a23c); }
 
 /* ===== Card ===== */
 .table-card {
@@ -413,6 +588,8 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .card-header-title {
@@ -421,14 +598,27 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
   color: var(--text-primary);
 }
 
-.card-header-meta {
+.card-header-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   color: var(--text-tertiary);
+}
+.card-header-legend .gender-dot {
+  margin-left: 10px;
+}
+.card-header-legend .gender-dot:first-child {
+  margin-left: 0;
 }
 
 /* ===== Stats Table ===== */
 .num-total {
   font-weight: 600;
+}
+
+.num-unknown {
+  color: var(--text-secondary);
 }
 
 .ratio-bar {
@@ -454,7 +644,7 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 }
 
 .ratio-female {
-  background: #f56c6c;
+  background: var(--enroll-female);
 }
 
 .ratio-text {
@@ -469,13 +659,19 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
   color: var(--neutral-300);
 }
 
+.table-footnote {
+  margin: 8px 4px 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
 :deep(.row-subtotal) td {
-  background-color: #fafafa !important;
+  background-color: var(--neutral-50) !important;
   font-weight: 600;
 }
 
 :deep(.row-grand-total) td {
-  background-color: #f5f7fa !important;
+  background-color: var(--neutral-100) !important;
   font-weight: 700;
   color: var(--text-primary);
 }

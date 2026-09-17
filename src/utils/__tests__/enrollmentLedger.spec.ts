@@ -5,6 +5,8 @@ import {
   describeReconcile,
   buildTrendChartData,
   EVENT_KIND_TAG_TYPE,
+  eventKindLabel,
+  SOURCE_LABELS,
   classChangeText,
   changeSummary,
 } from '@/utils/enrollmentLedger'
@@ -89,6 +91,35 @@ describe('describeReconcile', () => {
     expect(r.text).toContain('1')
   })
 
+  it('有來源不明列時回傳可操作的 action（舊版「點此查看」是死文字，改成結構化資料供 UI 掛真按鈕）', () => {
+    const r = describeReconcile({
+      opened: true,
+      status: 'mismatch',
+      ledger_total: 197,
+      roster_total: 198,
+      difference: 1,
+      unknown_rows: [
+        { id: 5, event_date: '2026-08-19', event_kind: '來源不明異動', student_name: '張小美', field_changed: null, old_value: null, new_value: null },
+        { id: 6, event_date: '2026-08-20', event_kind: '來源不明異動', student_name: '王小華', field_changed: null, old_value: null, new_value: null },
+      ],
+    })
+    expect(r.action).toBeDefined()
+    expect(r.action?.unknownCount).toBe(2)
+    expect(r.action?.label).toContain('2')
+  })
+
+  it('沒有來源不明列時不回傳 action（沒有東西可查）', () => {
+    const r = describeReconcile({
+      opened: true,
+      status: 'mismatch',
+      ledger_total: 197,
+      roster_total: 198,
+      difference: 1,
+      unknown_rows: [],
+    })
+    expect(r.action).toBeUndefined()
+  })
+
   it('尚未起帳時說明現況，不假裝相符', () => {
     const r = describeReconcile({
       opened: false,
@@ -139,6 +170,23 @@ describe('EVENT_KIND_TAG_TYPE', () => {
     expect(EVENT_KIND_TAG_TYPE['來源不明異動']).toBe('warning')
     expect(EVENT_KIND_TAG_TYPE['入學']).toBe('success')
     expect(EVENT_KIND_TAG_TYPE['退學']).toBe('danger')
+  })
+})
+
+describe('eventKindLabel', () => {
+  it('開帳的顯示文字換成起算基準，原始值不變（篩選 value／EVENT_KIND_TAG_TYPE key 仍是「開帳」）', () => {
+    expect(eventKindLabel('開帳')).toBe('起算基準')
+  })
+  it('其餘類型原樣顯示', () => {
+    expect(eventKindLabel('入學')).toBe('入學')
+    expect(eventKindLabel('來源不明異動')).toBe('來源不明異動')
+  })
+})
+
+describe('SOURCE_LABELS', () => {
+  it('value 對應後端原始 source 值，label 換成白話', () => {
+    expect(SOURCE_LABELS.map((s) => s.value)).toEqual(['app', 'db_trigger', 'opening'])
+    expect(SOURCE_LABELS.find((s) => s.value === 'db_trigger')?.label).toContain('查核')
   })
 })
 

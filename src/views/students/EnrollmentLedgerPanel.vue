@@ -20,13 +20,16 @@ import {
 } from '@/api/studentEnrollment'
 import { apiError } from '@/utils/error'
 import { LineChart } from '@/composables/useChartJs'
+import { useIsMobile } from '@/composables/useIsMobile'
 import {
   EVENT_KIND_TAG_TYPE,
+  SOURCE_LABELS,
   TREND_CHART_OPTIONS,
   buildTrendChartData,
   changeSummary,
   decorateDatasets,
   deltaClass,
+  eventKindLabel,
   formatDelta,
   type LedgerRow,
   type TrendPoint,
@@ -39,7 +42,16 @@ import {
 const dateRange = defineModel<[string, string]>('dateRange', { required: true })
 
 /** 父層「重新整理」的訊號。值變了就重抓，不在意值本身。 */
-const props = defineProps<{ refreshToken?: number }>()
+const props = defineProps<{
+  refreshToken?: number
+  /**
+   * 父層依學期算出的預設區間，供「回到本學期」按鈕還原用（2026-09-17）。
+   * 未帶入時不顯示還原按鈕。
+   */
+  defaultRange?: [string, string]
+}>()
+
+const { isMobile } = useIsMobile()
 
 const classroomId = ref<number | undefined>(undefined)
 const eventKind = ref<string | undefined>(undefined)
@@ -56,11 +68,26 @@ const overlayClassIds = ref<number[]>([])
 const classOptions = ref<{ id: number; name: string }[]>([])
 
 const eventKindOptions = Object.keys(EVENT_KIND_TAG_TYPE)
-const sourceOptions = [
-  { value: 'app', label: '程式記帳' },
-  { value: 'db_trigger', label: '來源不明' },
-  { value: 'opening', label: '開帳' },
-]
+const sourceOptions = SOURCE_LABELS
+
+/**
+ * 查詢跨度上限（2026-09-17）：後端 `/ledger/trend` 的 `_MAX_TREND_DAYS = 400`
+ * 硬性拒絕（422），舊版沒有前端防呆，使用者拉超過就看到一則裸 toast。
+ * ⚠ 這個數字要跟後端 `api/enrollment_ledger.py::_MAX_TREND_DAYS` 手動保持一致。
+ */
+const MAX_RANGE_DAYS = 400
+
+const isDefaultRange = computed(
+  () =>
+    !!props.defaultRange &&
+    dateRange.value[0] === props.defaultRange[0] &&
+    dateRange.value[1] === props.defaultRange[1],
+)
+
+const resetToDefaultRange = () => {
+  if (!props.defaultRange) return
+  dateRange.value = [...props.defaultRange] as [string, string]
+}
 
 const classNameMap = computed(() =>
   Object.fromEntries(classOptions.value.map((c) => [c.id, c.name])),
@@ -117,7 +144,16 @@ const reload = async () => {
 }
 
 onMounted(reload)
-watch([dateRange, classroomId, eventKind, source], () => {
+watch([dateRange, classroomId, eventKind, source], ([range], [prevRange]) => {
+  // 跨度超過後端上限：還原成上一個合法值並提示，不要送出注定 422 的請求
+  // （舊版沒有這道防呆，使用者只會看到一則看不懂的裸 toast）。
+  const days =
+    (new Date(range[1]).getTime() - new Date(range[0]).getTime()) / 86400000
+  if (days > MAX_RANGE_DAYS) {
+    ElMessage.warning(`查詢區間不可超過 ${MAX_RANGE_DAYS} 天，已還原`)
+    dateRange.value = [...prevRange] as [string, string]
+    return
+  }
   page.value = 1
   void reload()
 })
@@ -145,6 +181,16 @@ const isSentinel = (row: LedgerRow) => row.source === 'db_trigger'
 /** 來源不明列整列標記，讓它在一片正常紀錄中一眼可辨。 */
 const rowClassName = ({ row }: { row: LedgerRow }) =>
   isSentinel(row) ? 'sentinel-row' : ''
+
+/**
+ * 供父層對帳橫幅的「查看未經系統的 N 筆」按鈕呼叫（2026-09-17）：
+ * 把來源篩選切到 `db_trigger` 並重置頁碼，讓使用者一鍵從「有異常」跳到「異常在哪」。
+ * `wrapper.vm.setSourceFilter()` 可在測試直接呼叫（同 LeaveQuotaManager.focusEmployee 慣例）。
+ */
+const setSourceFilter = (value: string) => {
+  source.value = value
+}
+defineExpose({ setSourceFilter })
 </script>
 
 <template>
@@ -194,12 +240,21 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
         range-separator="至"
         start-placeholder="開始日期"
         end-placeholder="結束日期"
+        class="filter-daterange"
       />
+      <el-button
+        v-if="props.defaultRange && !isDefaultRange"
+        data-testid="reset-default-range-btn"
+        text
+        @click="resetToDefaultRange"
+      >
+        回到本學期
+      </el-button>
       <el-select v-model="classroomId" clearable placeholder="全部班級" class="filter-item">
         <el-option v-for="c in classOptions" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
       <el-select v-model="eventKind" clearable placeholder="全部異動類型" class="filter-item">
-        <el-option v-for="k in eventKindOptions" :key="k" :label="k" :value="k" />
+        <el-option v-for="k in eventKindOptions" :key="k" :label="eventKindLabel(k)" :value="k" />
       </el-select>
       <el-select v-model="source" clearable placeholder="全部來源" class="filter-item">
         <el-option
@@ -221,6 +276,7 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
       <el-table-column type="expand">
         <template #default="{ row }">
           <div class="expand-detail" :data-testid="`ledger-detail-${row.id}`">
+            <p v-if="isMobile && row.actor_name">操作者：{{ row.actor_name }}</p>
             <p v-if="row.notes">備註：{{ row.notes }}</p>
             <p v-if="isOrphanStudent(row)" class="source-path">
               學生資料已刪除，本列靠冗餘欄保留姓名與學號
@@ -249,7 +305,7 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
       <el-table-column label="異動" width="120">
         <template #default="{ row }">
           <el-tag :type="tagType(row.event_kind)" size="small">
-            {{ row.event_kind }}
+            {{ eventKindLabel(row.event_kind) }}
           </el-tag>
         </template>
       </el-table-column>
@@ -260,14 +316,14 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
         </template>
       </el-table-column>
 
-      <el-table-column label="班人數" width="90" align="right">
+      <el-table-column label="班級人數（後）" width="120" align="right">
         <template #default="{ row }">
           <span v-if="isSentinel(row)" class="delta-unknown">?</span>
           <span v-else>{{ row.to_class_count_after ?? row.from_class_count_after ?? '—' }}</span>
         </template>
       </el-table-column>
 
-      <el-table-column label="全校" width="110" align="right">
+      <el-table-column label="全校人數（後）" width="130" align="right">
         <template #default="{ row }">
           <span v-if="isSentinel(row)" class="delta-unknown">?</span>
           <template v-else>
@@ -279,7 +335,7 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
         </template>
       </el-table-column>
 
-      <el-table-column label="操作者" width="110">
+      <el-table-column v-if="!isMobile" label="操作者" width="110">
         <template #default="{ row }">
           <span v-if="row.actor_name">{{ row.actor_name }}</span>
           <span v-else class="muted">系統</span>
@@ -289,7 +345,7 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
       <el-table-column label="原因" min-width="130">
         <template #default="{ row }">
           <span v-if="isSentinel(row)">
-            <el-tag type="warning" size="small">來源不明</el-tag>
+            <el-tag type="warning" size="small">來源不明（需查核）</el-tag>
           </span>
           <span v-else>{{ row.reason ?? '—' }}</span>
         </template>
@@ -297,7 +353,11 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
 
       <template #empty>
         <el-empty
-          :description="opened ? '本期間沒有人數異動' : '本帳尚未起帳'"
+          :description="
+            opened
+              ? '本期間沒有人數異動'
+              : '本帳尚未起帳：第一筆入學、離園或轉班發生時會自動起算，上線之前的歷史不回填'
+          "
           :image-size="80"
         />
       </template>
@@ -338,10 +398,18 @@ const rowClassName = ({ row }: { row: LedgerRow }) =>
 .filters {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+.filter-daterange {
+  max-width: 100%;
 }
 .filter-item {
   width: 170px;
+  max-width: 100%;
+}
+.ledger-table :deep(.is-right) {
+  font-variant-numeric: tabular-nums;
 }
 .student-no {
   margin-left: 6px;

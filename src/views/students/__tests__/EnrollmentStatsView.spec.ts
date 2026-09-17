@@ -6,12 +6,18 @@
  * 一份數字只畫一次。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import EnrollmentStatsView from '../EnrollmentStatsView.vue'
 import EnrollmentLedgerPanel from '../EnrollmentLedgerPanel.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+
+const mockIsMobile = ref(false)
+vi.mock('@/composables/useIsMobile', () => ({
+  useIsMobile: () => ({ isMobile: mockIsMobile, cleanup: () => {} }),
+}))
 
 const statsResponse = {
   school_year: 115,
@@ -135,6 +141,7 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
     const store = useAcademicTermStore()
     store.setTerm(115, 1)
     vi.clearAllMocks()
+    mockIsMobile.value = false
   })
 
   it('一頁到底，不再有頁籤', async () => {
@@ -236,5 +243,164 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
     expect(api.getEnrollmentStats).toHaveBeenCalled()
     expect(api.getLedgerReconcile).toHaveBeenCalled()
     expect(api.getEnrollmentLedger).toHaveBeenCalled()
+  })
+
+  // ---------------------------------------------------------------------
+  // 2026-09-17 UI/UX 審查：性別未填、狀態列、對帳按鈕聯動、手機收欄
+  // ---------------------------------------------------------------------
+
+  it('性別未填不再被靜默當成 0：狀態列要看得到「已填」與「未填」', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce({
+      data: {
+        school_year: 115,
+        semester: 1,
+        semester_label: '上學期',
+        summary: { total: 197, male: 100, female: 90, class_count: 11 },
+        by_grade: [
+          {
+            grade_name: '大班',
+            total: 190,
+            male: 100,
+            female: 90,
+            classes: [{ class_name: '天堂鳥', total: 190, male: 100, female: 90 }],
+          },
+        ],
+      },
+    } as never)
+    const wrapper = mountView()
+    await flushPromises()
+    const text = wrapper.text()
+    // 已填 190 人（100 男 + 90 女），未填 7 人；不是「男生 100 占全園 51%」這種靜默失真。
+    expect(text).toContain('已填 190 人')
+    expect(text).toContain('未填 7')
+  })
+
+  it('整班性別都未填時，比例格顯示「性別未填」文字，不是一條空的比例條', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce({
+      data: {
+        school_year: 115,
+        semester: 1,
+        semester_label: '上學期',
+        summary: { total: 27, male: 0, female: 0, class_count: 1 },
+        by_grade: [
+          {
+            grade_name: '大班',
+            total: 27,
+            male: 0,
+            female: 0,
+            classes: [{ class_name: '天堂鳥', total: 27, male: 0, female: 0 }],
+          },
+        ],
+      },
+    } as never)
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('性別未填')
+    expect(wrapper.find('.ratio-bar').exists()).toBe(false)
+  })
+
+  it('百分比分母是已填人數（男+女），不是總人數——未填不該被靜默算進男／女占比', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce({
+      data: {
+        school_year: 115,
+        semester: 1,
+        semester_label: '上學期',
+        summary: { total: 25, male: 10, female: 10, class_count: 1 },
+        by_grade: [
+          {
+            grade_name: '大班',
+            total: 25,
+            male: 10,
+            female: 10,
+            // 5 人未填：分母若誤用 total(25) 會算成 40%/40%；改用已填(20) 應是 50%/50%
+            classes: [{ class_name: '天堂鳥', total: 25, male: 10, female: 10 }],
+          },
+        ],
+      },
+    } as never)
+    const wrapper = mountView()
+    await flushPromises()
+    const ratioText = wrapper.find('.ratio-text').text()
+    expect(ratioText).toContain('50%')
+    expect(ratioText).not.toContain('40%')
+  })
+
+  it('帳目狀態 pill 顯示對帳結果，帶「截至」日期', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const pill = wrapper.find('[data-testid="reconcile-pill"]')
+    expect(pill.exists()).toBe(true)
+    expect(pill.text()).toContain('對帳不符')
+    expect(wrapper.text()).toContain('截至')
+  })
+
+  it('相符時不再是整條警示，改成狀態列裡的小 pill', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getLedgerReconcile).mockResolvedValueOnce({
+      data: {
+        opened: true,
+        status: 'ok',
+        ledger_total: 197,
+        roster_total: 197,
+        difference: 0,
+        unknown_rows: [],
+      },
+    } as never)
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="reconcile-banner"]').exists()).toBe(false)
+    const pill = wrapper.find('[data-testid="reconcile-pill"]')
+    expect(pill.exists()).toBe(true)
+    expect(pill.text()).toContain('帳目相符')
+  })
+
+  it('有來源不明列時橫幅掛真按鈕，點擊後把下方明細的來源篩選切到未經系統', async () => {
+    // 舊版文案寫「點此查看」但沒綁任何 click，是死文字——這裡守的是「點了真的會動」。
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getLedgerReconcile).mockResolvedValueOnce({
+      data: {
+        opened: true,
+        status: 'mismatch',
+        ledger_total: 197,
+        roster_total: 198,
+        difference: 1,
+        unknown_rows: [
+          { id: 9, event_date: '2026-08-19', event_kind: '來源不明異動', student_name: '張小美' },
+        ],
+      },
+    } as never)
+    const wrapper = mountView()
+    await flushPromises()
+    vi.mocked(api.getEnrollmentLedger).mockClear()
+
+    const actionBtn = wrapper.find('[data-testid="reconcile-action-btn"]')
+    expect(actionBtn.exists()).toBe(true)
+    expect(actionBtn.text()).toContain('1')
+
+    await actionBtn.trigger('click')
+    await flushPromises()
+
+    expect(api.getEnrollmentLedger).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'db_trigger' }),
+    )
+  })
+
+  it('沒有來源不明列時橫幅不掛按鈕（沒有東西可查）', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    // 預設 fixture 的 mismatch 沒有 unknown_rows
+    expect(wrapper.find('[data-testid="reconcile-action-btn"]').exists()).toBe(false)
+  })
+
+  it('手機寬度收起男女比例欄，避免表格橫向捲動', async () => {
+    mockIsMobile.value = true
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.ratio-bar').exists()).toBe(false)
+    // 未填欄等其餘欄位仍在，不是整張表消失
+    expect(wrapper.text()).toContain('各班在籍人數表')
   })
 })
