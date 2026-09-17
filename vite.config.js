@@ -183,7 +183,15 @@ function manualChunks(id) {
         // （2026-08-10 whole-branch review Critical 修復：三端原本各自手抄字面值，
         // 家長端曾誤植不存在的 'single'/'multi'）。與 weekdaySchedule/publicCopy
         // 同型：跨端共用純函式檔未 pin 時會被吸進單端 chunk，讓另一端靜態橋接整包。
-        id.includes('/src/constants/surveyQuestionTypes.ts')
+        id.includes('/src/constants/surveyQuestionTypes.ts') ||
+        // reducedMotion：`prefers-reduced-motion` 偵測（零 import、EP-free），
+        // admin 的 DismissalPosCountdownBar（DismissalQueueView 靜態依賴鏈上）與
+        // 2026-09-16「家長端相簿回顧 UI」新增的 RecapViewer 兩端都用同一份。
+        // 未 pin 時被吸進 parent-app chunk → DismissalQueueView 靜態橋接
+        // parent-app 整包，check-entry-chunks 紅、staging 前端部署連兩筆失敗
+        // （2026-09-16 起）。「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」
+        // 第七次同型回歸。
+        id.includes('/src/utils/reducedMotion.ts')
     ) {
         return 'shared-common'
     }

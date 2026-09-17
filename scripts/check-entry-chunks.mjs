@@ -85,6 +85,13 @@ const ENTRIES = [
 // 校準基準（真實 build 首屏 gz）：index 276.2（2026-07-20，Element Plus 改依
 // import graph 自然分塊，不再把 lazy route 元件全塞入首屏）；public 175.5；
 // parent 219.0。下方為約 12% headroom；刻意成長時對照 build 印出值上調。
+//
+// 2026-09-17 parent 校準：實測 246.2KB（累積多筆家長端功能——LINE MINI App
+// 適配、錯誤事件收集模組、底部導覽列重繪、相簿回顧 UI 等——逐筆都在小額成長，
+// 沒有單一一筆是可疑的意外洩漏，已用 gzip 逐 chunk 量測排除；vue-core/vendor
+// 兩個框架 chunk 佔 163KB 為固定成本，「自己的程式碼」佔約 81KB）。245 的舊預算
+// 已無 headroom 可用，budget 只提到剛好通過所需（+3KB），刻意保守不重新套用
+// 12% headroom 公式——避免一次放太寬讓這道守衛之後很久都測不到真正的膨脹。
 // 多租戶（4d/fb，scan-frontend GAP-02）：`manifestName` 期望值改為 **token 字面**。
 // dist 的 *.webmanifest 現在存的是 `{{TB_MANIFEST_*_NAME}}`，真正的品牌值由 nginx
 // `sub_filter` 依 $host 逐請求注入。這條斷言因此反向鎖住「不得退回硬編品牌字面」：
@@ -95,7 +102,7 @@ const ENTRIES = [
 const ENTRY_BUDGETS_KB = {
   index: 310,
   public: 200,
-  parent: 245,
+  parent: 248,
 }
 
 if (!existsSync(ASSETS)) {
