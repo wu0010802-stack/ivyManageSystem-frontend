@@ -16,12 +16,13 @@ import {
   getEnrollmentStats,
   getEnrollmentOptions,
   getLedgerReconcile,
+  getLedgerSummary,
 } from '@/api/studentEnrollment'
 import { coerceRocYear, getTermDateRange } from '@/utils/academic'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { apiError } from '@/utils/error'
-import { describeReconcile, type ReconcileResult } from '@/utils/enrollmentLedger'
+import { describeReconcile, type LedgerSummary, type ReconcileResult } from '@/utils/enrollmentLedger'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EnrollmentLedgerPanel from './EnrollmentLedgerPanel.vue'
 
@@ -58,6 +59,8 @@ const defaultDateRange = computed<[string, string]>(() =>
 /** 「重新整理」的訊號，遞增即通知下方面板重抓。 */
 const refreshToken = ref(0)
 const reconcileResult = ref<ReconcileResult | null>(null)
+/** 本學期（查詢區間內）入學／離園淨增減摘要，2026-09-17 第二批。 */
+const ledgerSummary = ref<LedgerSummary | null>(null)
 
 const banner = computed(() =>
   reconcileResult.value ? describeReconcile(reconcileResult.value) : null,
@@ -119,29 +122,50 @@ const fetchReconcile = async () => {
   }
 }
 
+/** 本學期入學／離園淨增減：整段查詢區間都要，跟對帳（只看結束日）不同。 */
+const fetchLedgerSummary = async () => {
+  try {
+    const res = await getLedgerSummary({
+      date_from: dateRange.value[0],
+      date_to: dateRange.value[1],
+    })
+    ledgerSummary.value = res.data
+  } catch (e) {
+    ElMessage.error(apiError(e, '載入在籍異動摘要失敗'))
+  }
+}
+
 watch(selectedTerm, () => {
   stats.value = null
   // 學年學期是全頁唯一主控制項：現值與帳的區間一起換，不讓兩邊各講各的學期。
   dateRange.value = getTermDateRange(termStore.school_year, termStore.semester)
   fetchStats()
-  // 對帳交給下面的 dateRange watch，避免換學期時重複打同一支端點。
+  // 對帳與摘要交給下面的 dateRange watch，避免換學期時重複打同一支端點。
 })
 
 // 區間結束日換了（換學期，或使用者在面板內縮小範圍）就重新對帳，
 // 否則橫幅講的日子會與下方明細對不起來。
 watch(() => dateRange.value[1], fetchReconcile)
+// 摘要要整段區間（不只結束日），開始日單獨變也要重抓。
+watch(dateRange, fetchLedgerSummary)
 
-/** 頁首「重新整理」：現值、對帳、帳三邊一起刷，不是只刷一半。 */
+/** 頁首「重新整理」：現值、對帳、帳、摘要四邊一起刷，不是只刷一半。 */
 const refreshAll = () => {
   fetchStats()
   fetchReconcile()
+  fetchLedgerSummary()
   refreshToken.value += 1
 }
 
 onMounted(async () => {
   // 效能（2026-08-21）：fetchStats 讀 termStore.school_year/semester、不依賴
   // fetchOptions 回傳的 termOptions，零交集，改平行發送。
-  await Promise.all([fetchOptions(), fetchStats(), fetchReconcile()])
+  await Promise.all([
+    fetchOptions(),
+    fetchStats(),
+    fetchReconcile(),
+    fetchLedgerSummary(),
+  ])
 })
 
 // ---------------------------------------------------------------------------
@@ -182,6 +206,21 @@ const statusSummary = computed(() => {
 
 /** 百分比分母改成「已填性別者」而非總人數——未填不該被靜默算進男／女的占比。 */
 const ratioPct = (n: number, denom: number) => (denom > 0 ? `${Math.round((n / denom) * 100)}%` : '0%')
+
+/**
+ * 本學期變化（2026-09-17 第二批）：由後端 `/ledger/summary` 直接彙總，
+ * 取代原本得在前端分頁 200 筆上限內自己數 event_kind 的暫行算法。
+ */
+const changeSummary = computed(() => {
+  const s = ledgerSummary.value
+  if (!s) return null
+  return {
+    netLabel: s.net_delta > 0 ? `+${s.net_delta}` : `${s.net_delta}`,
+    netSign: s.net_delta > 0 ? 'positive' : s.net_delta < 0 ? 'negative' : 'zero',
+    enrolled: s.enrolled_count,
+    departed: s.departed_count,
+  }
+})
 
 // ---------------------------------------------------------------------------
 // 表格資料（展開 + 年級小計 + 全園總計）
@@ -345,6 +384,18 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
             <span>{{ statusSummary.classAvgLabel }}</span>
           </div>
         </div>
+        <div v-if="changeSummary" class="status-group" data-testid="term-change-summary">
+          <div class="status-label">本學期變化</div>
+          <div class="status-row-inline">
+            <span class="change-net" :class="`change-net--${changeSummary.netSign}`">
+              {{ changeSummary.netLabel }}
+            </span>
+            <span class="status-sep">·</span>
+            <span>入學 {{ changeSummary.enrolled }}</span>
+            <span class="status-sep">·</span>
+            <span>離園 {{ changeSummary.departed }}</span>
+          </div>
+        </div>
         <div class="status-group">
           <div class="status-label">帳目狀態</div>
           <div v-if="banner" class="status-row-inline">
@@ -357,7 +408,7 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
               {{ banner.level === 'ok' ? '帳目相符' : banner.level === 'info' ? '尚未起帳' : '對帳不符' }}
             </span>
             <span class="status-sep">·</span>
-            <span class="status-meta">截至 {{ dateRange[1] }}</span>
+            <span class="status-meta">截至 {{ reconcileResult?.as_of ?? dateRange[1] }}</span>
           </div>
         </div>
       </div>
@@ -524,6 +575,20 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 .status-meta {
   color: var(--text-tertiary);
   font-size: 13px;
+}
+
+/* 本學期淨變化：+N 用綠、-N 用紅（跟下方明細表的 delta-up/delta-down 同語意），
+   0 用中性色——沒有變化不必用任何顏色搶眼。 */
+.change-net {
+  font-weight: 600;
+  color: var(--color-success, #67c23a);
+}
+.change-net--negative {
+  color: var(--color-danger, #f56c6c);
+}
+.change-net--zero {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .gender-dot {

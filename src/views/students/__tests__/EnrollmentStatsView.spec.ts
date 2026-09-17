@@ -83,7 +83,13 @@ vi.mock('@/api/studentEnrollment', () => ({
         roster_total: 198,
         difference: 1,
         unknown_rows: [],
+        as_of: '2026-09-17',
       },
+    }),
+  ),
+  getLedgerSummary: vi.fn(() =>
+    Promise.resolve({
+      data: { opened: true, enrolled_count: 4, departed_count: 1, net_delta: 3 },
     }),
   ),
   getLedgerTrend: vi.fn(() =>
@@ -236,6 +242,7 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
     vi.mocked(api.getEnrollmentStats).mockClear()
     vi.mocked(api.getLedgerReconcile).mockClear()
     vi.mocked(api.getEnrollmentLedger).mockClear()
+    vi.mocked(api.getLedgerSummary).mockClear()
 
     await wrapper.find('[data-testid="refresh-btn"]').trigger('click')
     await flushPromises()
@@ -243,11 +250,49 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
     expect(api.getEnrollmentStats).toHaveBeenCalled()
     expect(api.getLedgerReconcile).toHaveBeenCalled()
     expect(api.getEnrollmentLedger).toHaveBeenCalled()
+    expect(api.getLedgerSummary).toHaveBeenCalled()
   })
 
   // ---------------------------------------------------------------------
   // 2026-09-17 UI/UX 審查：性別未填、狀態列、對帳按鈕聯動、手機收欄
   // ---------------------------------------------------------------------
+
+  it('本學期變化：狀態列顯示後端彙總的淨變化與入學/離園筆數（第二批）', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const group = wrapper.find('[data-testid="term-change-summary"]')
+    expect(group.exists()).toBe(true)
+    expect(group.text()).toContain('+3')
+    expect(group.text()).toContain('入學 4')
+    expect(group.text()).toContain('離園 1')
+  })
+
+  it('本學期變化：net_delta 為負時顯示負號且不強加正號', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getLedgerSummary).mockResolvedValueOnce({
+      data: { opened: true, enrolled_count: 1, departed_count: 3, net_delta: -2 },
+    } as never)
+    const wrapper = mountView()
+    await flushPromises()
+    const group = wrapper.find('[data-testid="term-change-summary"]')
+    expect(group.text()).toContain('-2')
+    expect(group.text()).not.toContain('+-2')
+  })
+
+  it('切換學年學期會用新的查詢區間重抓本學期變化摘要', async () => {
+    const api = await import('@/api/studentEnrollment')
+    mountView()
+    await flushPromises()
+    vi.mocked(api.getLedgerSummary).mockClear()
+
+    useAcademicTermStore().setTerm(115, 2)
+    await flushPromises()
+
+    // 115 下學期 = 2027-02-01 ~ 2027-07-31
+    expect(api.getLedgerSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ date_from: '2027-02-01', date_to: '2027-07-31' }),
+    )
+  })
 
   it('性別未填不再被靜默當成 0：狀態列要看得到「已填」與「未填」', async () => {
     const api = await import('@/api/studentEnrollment')

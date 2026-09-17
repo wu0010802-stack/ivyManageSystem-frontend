@@ -9,6 +9,7 @@ import type { components } from '@/api/_generated/schema'
 export type LedgerRow = components['schemas']['LedgerRowOut']
 export type ReconcileResult = components['schemas']['ReconcileResponse']
 export type TrendPoint = components['schemas']['TrendPoint']
+export type LedgerSummary = components['schemas']['LedgerSummaryResponse']
 
 /**
  * 人數增減的顯示文字。

@@ -18434,6 +18434,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/student-enrollment/ledger/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ledger Summary
+         * @description 區間內淨增減摘要（2026-09-17，SPEC-021 延伸）。
+         *
+         *     給在籍統計頁狀態列用的「本學期 +N（入學 a／離園 b）」——前端原本得自己
+         *     在 200 筆分頁上限內數 event_kind，樣本一旦超過 200 筆就會數錯；這裡改
+         *     由資料庫直接彙總，不受分頁限制。
+         */
+        get: operations["get_ledger_summary_api_student_enrollment_ledger_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/student-enrollment/ledger/trend": {
         parameters: {
             query?: never;
@@ -32889,6 +32913,23 @@ export interface components {
             /** To Classroom Id */
             to_classroom_id: number | null;
         };
+        /**
+         * LedgerSummaryResponse
+         * @description 區間內的淨增減摘要（2026-09-17，供在籍統計頁狀態列用）。
+         *
+         *     只回答「入學類 / 離園類各幾筆、淨變化多少人」，不是完整事件統計——
+         *     分類沿用 _ENROLLED_KINDS / _DEPARTED_KINDS，見上方註解。
+         */
+        LedgerSummaryResponse: {
+            /** Departed Count */
+            departed_count: number;
+            /** Enrolled Count */
+            enrolled_count: number;
+            /** Net Delta */
+            net_delta: number;
+            /** Opened */
+            opened: boolean;
+        };
         /** LedgerTrendResponse */
         LedgerTrendResponse: {
             /** Opened */
@@ -40568,6 +40609,8 @@ export interface components {
         };
         /** ReconcileResponse */
         ReconcileResponse: {
+            /** As Of */
+            as_of: string;
             /** Difference */
             difference: number | null;
             /** Ledger Total */
@@ -79696,6 +79739,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconcileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ledger_summary_api_student_enrollment_ledger_summary_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerSummaryResponse"];
                 };
             };
             /** @description Validation Error */

@@ -25,6 +25,12 @@ export const getLedgerTrend = (
 ): AxiosResp<'/student-enrollment/ledger/trend', 'get'> =>
   api.get('/student-enrollment/ledger/trend', { params })
 
+// 區間內入學/離園淨增減摘要（2026-09-17，第二批），供在籍統計頁狀態列用。
+export const getLedgerSummary = (
+  params: ApiQuery<'/student-enrollment/ledger/summary', 'get'>,
+): AxiosResp<'/student-enrollment/ledger/summary', 'get'> =>
+  api.get('/student-enrollment/ledger/summary', { params })
+
 export const getHeadcountOn = (
   params: ApiQuery<'/student-enrollment/headcount-on', 'get'>,
 ): AxiosResp<'/student-enrollment/headcount-on', 'get'> =>

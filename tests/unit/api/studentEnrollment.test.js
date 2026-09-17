@@ -53,4 +53,12 @@ describe('studentEnrollment api', () => {
       params: { school_year: 114, semester: 1, grade_id: 2 },
     })
   })
+
+  it('getLedgerSummary GET /student-enrollment/ledger/summary with params', async () => {
+    mockGet.mockResolvedValue({ data: {} })
+    await mod.getLedgerSummary({ date_from: '2026-08-01', date_to: '2026-09-17' })
+    expect(mockGet).toHaveBeenCalledWith('/student-enrollment/ledger/summary', {
+      params: { date_from: '2026-08-01', date_to: '2026-09-17' },
+    })
+  })
 })
