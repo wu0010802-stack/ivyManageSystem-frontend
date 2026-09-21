@@ -342,6 +342,33 @@ function gotoListMode() {
   if (recordsMode.value !== 'list') emit('change-mode', 'list')
 }
 
+/**
+ * 等到 recordsMode 真的回流成 'list'（而不是假設一個 nextTick 就夠）。
+ *
+ * recordsMode 是 router ?mode= 受控的 prop（見上方 computed 與殼層的
+ * router.push），本元件只 emit change-mode，實際寫回要等父層完成一次
+ * router 導覽（跨導覽守衛與歷史 API，通常橫跨不只一個 microtask）才會
+ * 以新 prop 傳回來。單一 await nextTick() 只能flush 本元件自己排隊中的
+ * reactive 更新，跨不過那個真正的往返——曾經因此讓 recordsTabRef 在
+ * applySearch 呼叫當下還是 undefined，預帶的學生姓名就這樣遺失
+ * （2026-09-14 審查 P1）。
+ *
+ * 改成 watch recordsMode 本身：不管中間經過幾輪 tick，只要它變成 'list'
+ * 就代表這輪 DOM patch 已經把逐筆明細元件掛上去、ref 已經可用。
+ */
+function waitForListMode(): Promise<void> {
+  if (recordsMode.value === 'list') return nextTick()
+  return new Promise((resolve) => {
+    const stop = watch(recordsMode, (mode) => {
+      if (mode !== 'list') return
+      stop()
+      // recordsMode 剛變 'list'：v-if 分支這輪才會 patch 出新元件，
+      // 還要再等一次 DOM 更新，ref 才會指到新掛載的實例。
+      nextTick().then(resolve)
+    })
+  })
+}
+
 const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 const canCreateManualFee = computed(() => canWrite.value && hasPermission(PERMISSION_NAMES.STUDENTS_READ))
 const manualFeeOpen = ref(false)
@@ -494,8 +521,10 @@ async function onManualFeeCreated(record: Schema<'FeeRecordOut'>) {
 // 月表「到逐筆明細處理」：切換模式並預帶學生姓名
 async function onOpenList(studentName: string) {
   gotoListMode()
-  await nextTick()
-  if (studentName) recordsTabRef.value?.applySearch?.(studentName)
+  if (studentName) {
+    await waitForListMode()
+    recordsTabRef.value?.applySearch?.(studentName)
+  }
 }
 
 // 切回收款工作區時刷新（KeepAlive activate）：在結算頁簽收、或別的 session
@@ -534,7 +563,7 @@ watch(
     createdStudentSearch.value = ''
     if (recordsMode.value !== 'list') {
       gotoListMode()
-      await nextTick()
+      await waitForListMode()
     }
     recordsTabRef.value?.applySearch?.(kw)
   },

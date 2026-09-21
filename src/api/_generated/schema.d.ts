@@ -33878,6 +33878,11 @@ export interface components {
          *     total_paid>=total_due → paid；其餘 → partial。
          */
         MonthlyStatementStudentOut: {
+            /**
+             * Adjustment Unapplied
+             * @default false
+             */
+            adjustment_unapplied: boolean;
             /** Billing Code Suffix */
             billing_code_suffix?: string | null;
             /** Classroom Name */

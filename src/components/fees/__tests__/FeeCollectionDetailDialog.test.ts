@@ -557,6 +557,57 @@ describe('FeeCollectionDetailDialog', () => {
     expect(apiMocks.reverseCollectionPayment).toHaveBeenCalledWith(9, { reason: '誤登現金，沖銷更正' })
   })
 
+  it('沖銷前的確認文案要講清楚這是整筆來源沖銷、可能影響其他學生（2026-09-14 審查 P1）', async () => {
+    // 對話框是 per-student，但沖銷端點是 per-payment-instrument（txn_id／
+    // payment_id）：一筆銀行交易明確支援拆多名學生，端點簽名裡沒有任何可以
+    // 把沖銷縮到單一學生的參數。承辦看不到這件事就按下去，會把別的學生的
+    // 分配一起沖掉而不自知。
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [record({ events: [cashEvent()] })],
+    })
+    const w = mountDialog()
+    await flushPromises()
+
+    await reverseBtn(w).trigger('click')
+    await flushPromises()
+
+    const [message] = epMocks.ElMessageBox.prompt.mock.calls[0]
+    expect(String(message)).toContain('整筆')
+    expect(String(message)).toMatch(/其他學生|不只.*這位學生|一併/)
+  })
+
+  it('沖銷成功訊息依 reversed_count 揭露實際受影響筆數（2026-09-14 審查 P1）', async () => {
+    // 現況：成功訊息寫死「已沖銷這筆收款」，後端回的 reversed_count 從未被
+    // 讀取——承辦看不出這次沖銷其實動到了不只一筆分配。
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [record({ events: [cashEvent({ receipt_id: 77 })] })],
+    })
+    apiMocks.reverseCashReceipt.mockResolvedValue({ reversed_count: 3, receipt_id: 77 })
+    const w = mountDialog()
+    await flushPromises()
+
+    await reverseBtn(w).trigger('click')
+    await flushPromises()
+
+    const [message] = epMocks.ElMessage.success.mock.calls[0]
+    expect(String(message)).toContain('3')
+  })
+
+  it('單筆沖銷（reversed_count=1）維持簡潔訊息，不製造無意義的「共 1 筆」雜訊', async () => {
+    apiMocks.getFeeRecordCollections.mockResolvedValue({
+      records: [record({ events: [cashEvent({ receipt_id: 77 })] })],
+    })
+    apiMocks.reverseCashReceipt.mockResolvedValue({ reversed_count: 1, receipt_id: 77 })
+    const w = mountDialog()
+    await flushPromises()
+
+    await reverseBtn(w).trigger('click')
+    await flushPromises()
+
+    const [message] = epMocks.ElMessage.success.mock.calls[0]
+    expect(String(message)).not.toContain('共')
+  })
+
   it('沖銷失敗顯示原因，且不清掉畫面上的明細', async () => {
     apiMocks.getFeeRecordCollections.mockResolvedValue({
       records: [record({ events: [cashEvent()] })],
