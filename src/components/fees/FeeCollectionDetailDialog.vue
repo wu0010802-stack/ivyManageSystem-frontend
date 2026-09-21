@@ -288,11 +288,18 @@ async function reverseEvent(ev: EventOut) {
     }
     if (!isCurrent() || reason.length < 5) return
     const payload = { reason } as never
-    if (target.api === 'cash') await reverseCashReceipt(target.id, payload)
-    else if (target.api === 'bank') await reverseTransaction(target.id, payload)
-    else await reverseCollectionPayment(target.id, payload)
+    let result: { reversed_count?: number } | undefined
+    if (target.api === 'cash') result = await reverseCashReceipt(target.id, payload)
+    else if (target.api === 'bank') result = await reverseTransaction(target.id, payload)
+    else result = await reverseCollectionPayment(target.id, payload)
     if (!isCurrent()) return
-    ElMessage.success('已沖銷整筆來源收款')
+    // 上面的確認框已逐筆列出完整範圍，但那是**送出前**重查的結果；確認到實際
+    // 執行之間若有人再動這筆來源，後端真正沖掉的筆數會不一樣。reversed_count
+    // 是唯一反映「實際動了幾筆」的訊號，不讀等於承辦無從察覺（2026-09-14 審查 P1）。
+    const count = result?.reversed_count ?? scope.length
+    ElMessage.success(
+      count > 1 ? `已沖銷整筆來源收款，共 ${count} 筆分配` : '已沖銷這筆收款',
+    )
     await fetchDetail()
     if (isCurrent()) emit('reversed')
   } catch (e) {

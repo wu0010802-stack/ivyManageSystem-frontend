@@ -571,9 +571,13 @@ describe('FeeCollectionDetailDialog', () => {
     await reverseBtn(w).trigger('click')
     await flushPromises()
 
-    const [message] = epMocks.ElMessageBox.prompt.mock.calls[0]
-    expect(String(message)).toContain('整筆')
-    expect(String(message)).toMatch(/其他學生|不只.*這位學生|一併/)
+    // 確認框的內容是 vnode 不是字串（要可捲動地列出完整範圍），直接 String()
+    // 會拿到 '[object Object]'——與上面那條「揭露其他學生、月份、預繳與合計」
+    // 同一個讀法。
+    const content = epMocks.ElMessageBox.prompt.mock.calls[0][0]
+    const message = typeof content === 'string' ? content : String(content.children)
+    expect(message).toContain('整筆')
+    expect(message).toMatch(/其他學生|不只.*這位學生|一併/)
   })
 
   it('沖銷成功訊息依 reversed_count 揭露實際受影響筆數（2026-09-14 審查 P1）', async () => {
