@@ -168,6 +168,51 @@ describe('PullToRefresh', () => {
     wrapper.unmount()
   })
 
+  it('捲離頂端時拆掉非 passive touchmove，回到頂端再掛回（中段滑動不阻塞 compositor）', async () => {
+    const addSpy = vi.spyOn(HTMLElement.prototype, 'addEventListener')
+    const removeSpy = vi.spyOn(HTMLElement.prototype, 'removeEventListener')
+    // 同步執行 callback；回傳 0 讓 composable 的節流旗標立即釋放
+    vi.stubGlobal('requestAnimationFrame', (cb) => { cb(0); return 0 })
+    setScrollY(120)
+    const wrapper = mount(PullToRefresh, {
+      props: { onRefresh: vi.fn() },
+      slots: { default: '<div>x</div>' },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const root = wrapper.find('.ptr-root').element
+    // 只看非 passive 的 touchmove（@vue/test-utils 自己也會掛 emit 記錄用的 listener）
+    const moveAdds = () => addSpy.mock.calls.filter(([t, , o], i) => t === 'touchmove' && o?.passive === false && addSpy.mock.contexts[i] === root)
+
+    // 掛載時不在頂端 → 不掛 touchmove
+    expect(moveAdds()).toHaveLength(0)
+
+    // 捲回頂端 → 掛上非 passive touchmove
+    setScrollY(0)
+    window.dispatchEvent(new Event('scroll'))
+    expect(moveAdds()).toHaveLength(1)
+
+    // 再捲離頂端 → 拆掉
+    setScrollY(300)
+    window.dispatchEvent(new Event('scroll'))
+    expect(removeSpy.mock.calls.some(([t], i) => t === 'touchmove' && removeSpy.mock.contexts[i] === root)).toBe(true)
+
+    addSpy.mockRestore()
+    removeSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('靜止時內容不帶 transform（避免常駐合成層與破壞內部 fixed 定位）', async () => {
+    const wrapper = mount(PullToRefresh, {
+      props: { onRefresh: vi.fn() },
+      slots: { default: '<div>x</div>' },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    expect(wrapper.find('.ptr-content').attributes('style')).toContain('transform: none')
+    wrapper.unmount()
+  })
+
   it('往上拉（dy < 0）不應啟動 pulling', async () => {
     const onRefresh = vi.fn().mockResolvedValue(undefined)
     const wrapper = mount(PullToRefresh, {
