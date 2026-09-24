@@ -728,7 +728,10 @@ const submitPassword = async () => {
   --pt-text-soft: var(--color-portal-text-soft);
   --color-portal-text-faint: #475569;
   --pt-text-faint: var(--color-portal-text-faint);
+  /* 手機網址列展開時 100vh 比可視區高，會多出一層 body 捲動、與 .el-main 內捲
+     互相搶手勢（滑起來一頓一頓）。改用 100dvh 對齊可視區；100vh 留作舊瀏覽器 fallback。 */
   height: 100vh;
+  height: 100dvh;
   background-color: var(--bg-color);
   color: var(--pt-text-body);
 }
@@ -1226,6 +1229,7 @@ html.dark .portal-layout {
     top: 0;
     left: 0;
     height: 100vh;
+    height: 100dvh;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
   }
 
