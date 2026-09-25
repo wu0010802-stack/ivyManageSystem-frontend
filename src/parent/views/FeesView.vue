@@ -341,13 +341,14 @@ async function pullRefresh() {
   display: flex;
   flex-direction: column;
   gap: var(--pt-page-gap, 18px);
+  /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
+  padding-inline: var(--space-4, 16px);
 }
 
 .single-totals {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 16px;
   font-size: 13px;
   color: var(--pt-text-body);
   background: var(--cream, #fffcf2);
@@ -378,6 +379,6 @@ async function pullRefresh() {
 
 /* 分組標題：貼齊卡片左緣，與 hero/totals 拉開節奏 */
 .fee-group-head {
-  margin: 4px 16px -8px;
+  margin: 4px 0 -8px;
 }
 </style>

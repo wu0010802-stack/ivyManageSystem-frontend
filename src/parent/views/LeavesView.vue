@@ -493,6 +493,8 @@ async function pullRefresh() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
+  padding-inline: var(--space-4, 16px);
 }
 
 .render-sentinel { height: 1px; }

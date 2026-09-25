@@ -213,6 +213,13 @@ const PREFS = [
   flex-direction: column;
   gap: 12px;
   padding-bottom: 16px;
+  /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
+  padding-inline: var(--space-4, 16px);
+}
+
+/* 全域 .pt-list-group 自帶左右 16px，容器已給留白，這裡歸零避免疊成 32px */
+.me-view .pt-list-group {
+  margin-inline: 0;
 }
 
 .pref-link {
@@ -258,8 +265,8 @@ const PREFS = [
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: calc(100% - 32px);
-  margin: 8px 16px 0;
+  width: 100%;
+  margin: 8px 0 0;
   min-height: 48px;
   padding: 12px;
   background: var(--pt-surface-card, #fff);
