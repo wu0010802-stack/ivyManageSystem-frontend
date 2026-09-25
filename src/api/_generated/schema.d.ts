@@ -1510,13 +1510,34 @@ export interface paths {
         };
         /**
          * Get Registration Detail
-         * @description 取得報名詳情（含課程/用品/修改紀錄）
+         * @description 取得報名詳情（含課程/用品/修改紀錄）。
+         *
+         *     2026-08-06：唯讀詳情放行 `match_status='rejected'` 的軟刪列。被拒報名自
+         *     2026-07-31「只留拒絕（軟刪）」改版後刻意保留在列表中供稽核與復原（見
+         *     GET /registrations 的 include_inactive 說明，前端預設就帶
+         *     include_inactive=true 且詳情鈕無 v-if），原本寫死 is_active=True 讓這些列
+         *     點「詳情」必定 404 —— 連帶把繳費/退費明細也擋死：前端 openDetail 先 await
+         *     詳情、拋錯就進 catch，`loadPayments` 永遠不會被呼叫，而
+         *     registrations_payments.get_registration_payments 刻意不要求 is_active
+         *     （軟刪報名的沖帳歷史仍需供財務查核）等於白放寬。已繳費後被拒（force_refund
+         *     沖帳）的報名，後台唯一的退費明細入口就是這裡。
+         *     一般刪除／學生離園自動軟刪的列仍維持 404（那些列 match_status 保留刪除前
+         *     原值、無任何「已刪除」標記，同 list 端點的收斂口徑）。**只放寬本唯讀端點**，
+         *     下方所有寫入型端點維持 is_active=True。
          */
         get: operations["get_registration_detail_api_activity_registrations__registration_id__get"];
         /**
          * Update Registration Basic
          * @description 後台編輯報名基本欄位（姓名、生日、班級、Email）。
          *     學期不可變更，若需更改請重新建立報名。
+         *
+         *     2026-08-06 起 `birthday` 為 **partial-update** 語意（與前端議定的契約）：
+         *     request body **未帶** birthday key ＝ 不變更該欄位；帶了 key 但值為
+         *     null/空字串 ＝ 明確清空為 None。Why：缺 STUDENTS_READ 的員工在詳情看到的
+         *     生日空白是**遮罩**（`reg.birthday if can_see_student else None`），不是真的
+         *     沒資料；原本無條件 `reg.birthday = new_bday` 會讓這種員工一按儲存就把真實
+         *     生日靜默清成 NULL（2026-08-03 生日退出公開表單、前端解除必填後必然發生）。
+         *     前端對應行為：生日欄未載入到值時 payload 不帶 birthday key。
          */
         put: operations["update_registration_basic_api_activity_registrations__registration_id__put"];
         post?: never;
