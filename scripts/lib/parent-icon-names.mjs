@@ -77,8 +77,15 @@ function collectFromSource(src, names, opts = {}) {
   }
   // 5) 行內含 icon 字樣的字串字面值（涵蓋 icon: 'x'、icon: cond ? 'a' : 'b'、
   //    iconMapping 的 ICON_MAP 值等）。寬鬆但受 NAME_RE 過濾。
+  //    另：宣告名含 icon 且以 `{` 結尾的多行物件字面值（`const MOOD_STAT_ICON = {`），
+  //    值行 `happy: 'sentiment_very_satisfied',` 不含 icon 字樣，整個區塊到收尾 `}`
+  //    為止都當 icon 行掃（2026-09-26 聯絡簿心情格缺字的根因）。
+  let inIconBlock = false
   for (const line of src.split('\n')) {
-    if (!opts.scanAllLines && !/icon/i.test(line)) continue
+    const isIconLine = opts.scanAllLines || inIconBlock || /icon/i.test(line)
+    if (inIconBlock && /^\s*\}/.test(line)) inIconBlock = false
+    else if (!inIconBlock && /icon[\w$]*\s*(?::[^=]+)?=\s*\{\s*$/i.test(line)) inIconBlock = true
+    if (!isIconLine) continue
     for (const lit of line.matchAll(/['"]([a-z][a-z0-9_]*)['"]/g)) names.add(lit[1])
   }
 }

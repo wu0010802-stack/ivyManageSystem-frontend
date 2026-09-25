@@ -50,4 +50,25 @@ describe('parent-icon-names 抽取器', () => {
     expect(names).not.toContain('success')
     expect(names).not.toContain('emoji_events')
   })
+
+  // 2026-09-26：ContactBookDayCard 的 MOOD_STAT_ICON 值行（`happy: 'sentiment_very_satisfied',`）
+  // 不含 icon 字樣、檔名也不含 icon，心情統計格在 prod render 成亂碼。
+  // 宣告名含 icon 的多行物件字面值，整個區塊的值都要收。
+  it('宣告名含 icon 的多行物件字面值，區塊內每行的值都會被收進候選', () => {
+    const root = makeRepo({
+      'src/parent/components/Foo.vue':
+        "<script setup lang=\"ts\">\n"
+        + "const MOOD_STAT_ICON: Record<string, string> = {\n"
+        + "  happy: 'sentiment_very_satisfied',\n"
+        + "  sick: 'sick',\n"
+        + "}\n"
+        + "const tone = 'success'\n"
+        + "</script>\n",
+    })
+    const names = extractIconNames(root)
+    expect(names).toContain('sentiment_very_satisfied')
+    expect(names).toContain('sick')
+    // 區塊結束後不再擴散
+    expect(names).not.toContain('success')
+  })
 })
