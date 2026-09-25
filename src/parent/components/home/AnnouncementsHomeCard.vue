@@ -120,6 +120,10 @@ defineExpose({ refresh: load })
 .ann-home-list {
   display: flex;
   flex-direction: column;
+  /* 清掉瀏覽器預設 bullet 與縮排：原本黑點和未讀紅點疊成雙點，左側多縮約 40px */
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 .ann-home-list li + li {
   border-top: 1px solid var(--pt-border-light, #ecf5f9);
