@@ -31,7 +31,7 @@ describe('useHomeSummary', () => {
     expect(badges.value.pendingSurveyCount).toBe(3)
   })
 
-  it('adminTabBadge 加計活動調查', () => {
+  it('adminTabBadge 加計活動調查，但不計資訊性的近期請假審核（與首頁待辦件數一致）', () => {
     dataRef.value = {
       summary: {
         fees: { outstanding_count: 1, overdue: 0 },
@@ -42,7 +42,13 @@ describe('useHomeSummary', () => {
       },
     }
     const { adminTabBadge } = useHomeSummary()
-    expect(adminTabBadge.value).toBe(6)
+    expect(adminTabBadge.value).toBe(5)
+  })
+
+  it('不再提供聯絡簿 tab 徽章（原本是未讀公告數，聯絡簿頁已無公告分頁，紅點找不到來源）', () => {
+    dataRef.value = { summary: { unread_announcements: 3 } }
+    const result = useHomeSummary() as Record<string, unknown>
+    expect(result.contactBookTabBadge).toBeUndefined()
   })
 
   it('欄位缺漏時 pendingSurveyCount 為 0', () => {

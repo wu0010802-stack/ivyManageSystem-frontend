@@ -76,7 +76,7 @@ function onTabClick(item: NavItem): void {
         <span
           v-if="badgeLabel(item.badge)"
           class="m3-nav-tab-badge"
-          :aria-label="`未讀 ${badgeLabel(item.badge)} 則`"
+          :aria-label="`${badgeLabel(item.badge)} 件待處理`"
         >{{ badgeLabel(item.badge) }}</span>
       </span>
       <span class="m3-nav-tab-label m3-label-medium">{{ item.label }}</span>

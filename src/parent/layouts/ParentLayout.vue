@@ -95,7 +95,7 @@ function onTabSelect(_key: string, item: { key: string; icon: string; label: str
  * immediate: false —— 這個 layout 在 /login、/bind 等公開頁也會掛載，
  * 未登入就打 summary 會拿到 401。
  */
-const { refresh: refreshSummary, contactBookTabBadge, adminTabBadge } = useHomeSummary({
+const { refresh: refreshSummary, adminTabBadge } = useHomeSummary({
   immediate: false,
 })
 
@@ -121,7 +121,8 @@ const TABS = computed<TabItem[]>(() => [
     icon: 'menu_book',
     activeIcon: 'menu_book',
     path: '/contact-book',
-    badge: contactBookTabBadge.value,
+    // 2026-09-26：不掛徽章。原本是未讀公告數，但聯絡簿頁已無公告分頁，家長點進來
+    // 找不到紅點來源；未讀公告由首頁鈴鐺呈現。待後端 summary 補「未讀聯絡簿」再掛。
     // 2026-09-08：正中央改為永久隆起的圓形主按鈕（bottom-app-bar 凹槽造型）。
     prominent: true,
   },

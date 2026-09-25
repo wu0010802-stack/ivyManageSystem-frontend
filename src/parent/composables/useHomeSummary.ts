@@ -74,8 +74,9 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
   /**
    * 底部「事務」tab 的總數徽章。
    *
-   * 只加「需要家長動作或該知道結果」的五項。今日用藥單是資訊性的
-   * （家長已經送出、老師照表執行），計進去只會讓紅點天天亮著而失去意義。
+   * 只加「需要家長動作」的四項，與首頁待辦標題的「N 件」（useParentTodos
+   * actionCount）同一口徑。今日用藥單、近 7 天請假審核結果是資訊性的，
+   * 計進去會讓 tab 數字比首頁多、紅點天天亮著而失去意義（2026-09-26）。
    *
    * 刻意不加入首頁待辦清單的另外兩項（入學文件簽署、臨時接送）：那兩支是
    * summary 之外的獨立 API，而 ParentLayout 在登入頁也會掛載，為了徽章
@@ -87,20 +88,9 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
       b.outstandingFees +
       b.pendingEventAcks +
       b.pendingActivityPromotions +
-      b.recentLeaveReviews +
       b.pendingSurveyCount
     )
   })
-
-  /**
-   * 底部「聯絡簿」tab 徽章。
-   *
-   * 目前只有未讀公告——後端 summary 尚無「未讀聯絡簿」計數，加上去要另開欄位；
-   * 聯絡簿本身的未讀在頁內以「N 則未讀」pill 呈現。
-   */
-  const contactBookTabBadge = computed<number>(
-    () => badges.value.unreadAnnouncements,
-  )
 
   return {
     data,
@@ -110,6 +100,5 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
     summary,
     badges,
     adminTabBadge,
-    contactBookTabBadge,
   }
 }
