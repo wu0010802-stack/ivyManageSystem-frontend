@@ -71,7 +71,6 @@ function mountIt() {
       stubs: {
         TodayFocusCard: true,
         ClassroomOpsCard: true,
-        PortalBatchMeasurementSheet: true,
         ElButton: { template: '<button><slot /></button>' },
         ElCard: {
           template: '<div class="el-card"><slot name="header" /><slot /></div>',

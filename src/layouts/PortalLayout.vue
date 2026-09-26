@@ -459,9 +459,6 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/medications">
             <span>用藥執行</span>
           </el-menu-item>
-          <el-menu-item index="/portal/home?sheet=measurement">
-            <span>全班量體位</span>
-          </el-menu-item>
           <!-- 娃娃車：BUS_TRIPS_OPERATE 是 per-user 顯式授權（絕大多數老師沒有），
                不過濾的話所有人都會看到入口、點進去再被 router guard 踢回首頁。 -->
           <el-menu-item v-if="canOperateBusTrips" index="/portal/bus-trip">
