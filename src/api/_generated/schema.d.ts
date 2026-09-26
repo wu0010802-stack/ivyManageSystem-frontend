@@ -6084,6 +6084,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/duty-rotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Duty Rotation */
+        get: operations["get_duty_rotation_api_duty_rotations_get"];
+        put?: never;
+        /** Create Duty Rotation */
+        post: operations["create_duty_rotation_api_duty_rotations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/duty-rotations/{rotation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace Duty Rotation */
+        put: operations["replace_duty_rotation_api_duty_rotations__rotation_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/duty-rotations/{rotation_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Duty Rotation */
+        post: operations["apply_duty_rotation_api_duty_rotations__rotation_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/duty-rotations/{rotation_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Duty Rotation */
+        get: operations["export_duty_rotation_api_duty_rotations__rotation_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/duty-rotations/{rotation_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Duty Rotation */
+        post: operations["import_duty_rotation_api_duty_rotations__rotation_id__import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/e2e/preflight": {
         parameters: {
             query?: never;
@@ -22311,6 +22397,31 @@ export interface components {
             /** Rejection Reason */
             rejection_reason?: string | null;
         };
+        /** ApplyChangeOut */
+        ApplyChangeOut: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "create" | "update" | "unchanged" | "removed" | "skip";
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** From Shift Type Id */
+            from_shift_type_id?: number | null;
+            /** Label */
+            label?: string | null;
+            /** Skip Reason */
+            skip_reason?: ("manual" | "finalized" | "recorded") | null;
+            /** To Shift Type Id */
+            to_shift_type_id?: number | null;
+            /**
+             * Week Start Date
+             * Format: date
+             */
+            week_start_date: string;
+        };
         /** ApplyTemplatePayload */
         ApplyTemplatePayload: {
             /** Entry Ids */
@@ -23831,6 +23942,11 @@ export interface components {
             file: string;
             /** Title */
             title: string;
+        };
+        /** Body_import_duty_rotation_api_duty_rotations__rotation_id__import_post */
+        Body_import_duty_rotation_api_duty_rotations__rotation_id__import_post: {
+            /** File */
+            file: string;
         };
         /** Body_import_events_preview_api_events_import_preview_post */
         Body_import_events_preview_api_events_import_preview_post: {
@@ -28662,6 +28778,184 @@ export interface components {
             subject_entity_type: string | null;
             /** Submitted At */
             submitted_at: string;
+        };
+        /** DutyRotationApplyIn */
+        DutyRotationApplyIn: {
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+            /** From Week Start */
+            from_week_start?: string | null;
+            /** Overwrite Manual */
+            overwrite_manual?: components["schemas"]["OverwriteKeyIn"][];
+        };
+        /** DutyRotationApplyOut */
+        DutyRotationApplyOut: {
+            /** Applied */
+            applied: boolean;
+            /** Changes */
+            changes: components["schemas"]["ApplyChangeOut"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+        };
+        /** DutyRotationCellIn */
+        DutyRotationCellIn: {
+            /** Classroom Id */
+            classroom_id: number;
+            /**
+             * Row Index
+             * @description 對應 rows 陣列索引
+             */
+            row_index: number;
+            /**
+             * Week Start Date
+             * Format: date
+             */
+            week_start_date: string;
+        };
+        /** DutyRotationCellOut */
+        DutyRotationCellOut: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Row Id */
+            row_id: number;
+            /**
+             * Week Start Date
+             * Format: date
+             */
+            week_start_date: string;
+        };
+        /** DutyRotationCreate */
+        DutyRotationCreate: {
+            /** Default Assistant Shift Type Id */
+            default_assistant_shift_type_id?: number | null;
+            /** Default Head Shift Type Id */
+            default_head_shift_type_id?: number | null;
+            /** Name */
+            name: string;
+            /** School Year */
+            school_year: number;
+            /**
+             * Semester
+             * @enum {integer}
+             */
+            semester: 1 | 2;
+        };
+        /** DutyRotationDocumentIn */
+        DutyRotationDocumentIn: {
+            /** Cells */
+            cells?: components["schemas"]["DutyRotationCellIn"][];
+            /** Default Assistant Shift Type Id */
+            default_assistant_shift_type_id?: number | null;
+            /** Default Head Shift Type Id */
+            default_head_shift_type_id?: number | null;
+            /** Name */
+            name: string;
+            /** Rows */
+            rows?: components["schemas"]["DutyRotationRowIn"][];
+            /** Weeks */
+            weeks?: components["schemas"]["DutyRotationWeekIn"][];
+        };
+        /** DutyRotationImportResultOut */
+        DutyRotationImportResultOut: {
+            /** Applied */
+            applied: boolean;
+            /** Cell Count */
+            cell_count: number;
+            /** Errors */
+            errors: string[];
+            rotation?: components["schemas"]["DutyRotationOut"] | null;
+            /** Week Count */
+            week_count: number;
+        };
+        /** DutyRotationOut */
+        DutyRotationOut: {
+            /** Cells */
+            cells: components["schemas"]["DutyRotationCellOut"][];
+            /** Classrooms */
+            classrooms: components["schemas"]["RotationClassroomOut"][];
+            /** Default Assistant Shift Type Id */
+            default_assistant_shift_type_id?: number | null;
+            /** Default Head Shift Type Id */
+            default_head_shift_type_id?: number | null;
+            /** Id */
+            id: number;
+            /** Issues */
+            issues: components["schemas"]["RotationIssueOut"][];
+            /** Last Applied At */
+            last_applied_at?: string | null;
+            /** Last Applied By */
+            last_applied_by?: string | null;
+            /** Name */
+            name: string;
+            reapply_hint: components["schemas"]["ReapplyHintOut"];
+            /** Rows */
+            rows: components["schemas"]["DutyRotationRowOut"][];
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Weeks */
+            weeks: components["schemas"]["DutyRotationWeekOut"][];
+        };
+        /** DutyRotationRowIn */
+        DutyRotationRowIn: {
+            /** Label */
+            label: string;
+            /** Shift Type Id */
+            shift_type_id: number;
+            /**
+             * Sort Order
+             * @default 0
+             */
+            sort_order: number;
+            /**
+             * Teacher Role
+             * @enum {string}
+             */
+            teacher_role: "head" | "assistant";
+        };
+        /** DutyRotationRowOut */
+        DutyRotationRowOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Shift Type Id */
+            shift_type_id: number;
+            /** Sort Order */
+            sort_order: number;
+            /**
+             * Teacher Role
+             * @enum {string}
+             */
+            teacher_role: "head" | "assistant";
+        };
+        /** DutyRotationWeekIn */
+        DutyRotationWeekIn: {
+            /** Label */
+            label: string;
+            /**
+             * Week Start Date
+             * Format: date
+             */
+            week_start_date: string;
+        };
+        /** DutyRotationWeekOut */
+        DutyRotationWeekOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /**
+             * Week Start Date
+             * Format: date
+             */
+            week_start_date: string;
         };
         /**
          * E2ERuntimeSafetyResponse
@@ -34975,6 +35269,16 @@ export interface components {
             /** Warning */
             warning?: string | null;
         };
+        /** OverwriteKeyIn */
+        OverwriteKeyIn: {
+            /** Employee Id */
+            employee_id: number;
+            /**
+             * Week Start Date
+             * Format: date
+             */
+            week_start_date: string;
+        };
         /**
          * ParentActivityBootstrapOut
          * @description GET /parent/activity/bootstrap：家長端首屏一次聚合。
@@ -40612,6 +40916,18 @@ export interface components {
             /** Read At */
             read_at?: string | null;
         };
+        /** ReapplyHintOut */
+        ReapplyHintOut: {
+            /**
+             * Affected Count
+             * @default 0
+             */
+            affected_count: number;
+            /** From Week Start */
+            from_week_start?: string | null;
+            /** Pending */
+            pending: boolean;
+        };
         /** ReconcileResponse */
         ReconcileResponse: {
             /** As Of */
@@ -42963,6 +43279,43 @@ export interface components {
             seq: number;
             /** Status Tag */
             status_tag: string | null;
+        };
+        /** RotationClassroomOut */
+        RotationClassroomOut: {
+            /** Assistant Teacher Id */
+            assistant_teacher_id?: number | null;
+            /** Assistant Teacher Name */
+            assistant_teacher_name?: string | null;
+            /** Class Code */
+            class_code?: string | null;
+            /** Head Teacher Id */
+            head_teacher_id?: number | null;
+            /** Head Teacher Name */
+            head_teacher_name?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /** RotationIssueOut */
+        RotationIssueOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Code */
+            code: string;
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Message */
+            message: string;
+            /** Row Id */
+            row_id?: number | null;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "error" | "warning";
+            /** Week Start Date */
+            week_start_date?: string | null;
         };
         /**
          * RouteCreateIn
@@ -58665,6 +59018,209 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_duty_rotation_api_duty_rotations_get: {
+        parameters: {
+            query: {
+                school_year: number;
+                semester: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DutyRotationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_duty_rotation_api_duty_rotations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DutyRotationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DutyRotationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_duty_rotation_api_duty_rotations__rotation_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rotation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DutyRotationDocumentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DutyRotationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_duty_rotation_api_duty_rotations__rotation_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rotation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DutyRotationApplyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DutyRotationApplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_duty_rotation_api_duty_rotations__rotation_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rotation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_duty_rotation_api_duty_rotations__rotation_id__import_post: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path: {
+                rotation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_duty_rotation_api_duty_rotations__rotation_id__import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DutyRotationImportResultOut"];
                 };
             };
             /** @description Validation Error */
