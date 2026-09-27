@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { getAssignments, saveAssignments, copyMonthAssignments, getDaily, saveDaily, deleteDaily, getScheduleRoster, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts, getLeaveContext } from '@/api/shifts'
 import { computeWeekCoverage, leaveWindowForDate, type LeaveContextItem, type DailyOverrideLike, type AbsenceWindow } from '@/utils/scheduleCoverage'
 import type { ApiResponse } from '@/api/_generated/typed'
@@ -16,6 +16,9 @@ import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
 import { useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+// 學期輪值表（SPEC-026）：非同步載入，未切到該頁籤不進排班頁 chunk
+const DutyRotationPanel = defineAsyncComponent(() => import('@/components/schedule/DutyRotationPanel.vue'))
 
 const props = defineProps<{ initialDate?: string }>()
 // dateChange 曾用於與 hub 頁的出勤分頁同步 date query；2026-09-10 拆為獨立路由後
@@ -502,6 +505,10 @@ const fetchSwapHistory = async () => {
   }
 }
 
+const onRotationApplied = () => {
+  fetchAssignments()
+}
+
 const onTabChange = (tab: string | number) => {
   if (tab === 'swap-history') {
     fetchSwapHistory()
@@ -897,6 +904,10 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
             <el-tag :type="swapStatusType(item.status as string)" size="small">{{ swapStatusLabel(item.status as string) }}</el-tag>
           </template>
         </AdminListCards>
+      </el-tab-pane>
+
+      <el-tab-pane label="學期輪值表" name="duty-rotation">
+        <DutyRotationPanel v-if="activeTab === 'duty-rotation'" @applied="onRotationApplied" />
       </el-tab-pane>
     </el-tabs>
 

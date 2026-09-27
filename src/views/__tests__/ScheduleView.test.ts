@@ -380,6 +380,16 @@ describe('ScheduleView', () => {
     expect(String(mockMessage.error.mock.calls[0][0])).toContain('已封存')
   })
 
+  it('有「學期輪值表」頁籤，未切換前不載入輪值表元件', async () => {
+    const wrapper = await mountView()
+    const panes = wrapper.findAllComponents(globalConfig.stubs['el-tab-pane'])
+    expect(panes.map((p) => [p.props('name'), p.props('label')])).toContainEqual([
+      'duty-rotation',
+      '學期輪值表',
+    ])
+    expect(wrapper.find('[data-test="grid"]').exists()).toBe(false)
+  })
+
   describe('每日調整（三態、整週 7 天）', () => {
     const openDialog = async () => {
       const wrapper = await mountView()
