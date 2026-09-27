@@ -91,7 +91,7 @@ async function runMark(
     const next = new Set(busyIds.value)
     next.delete(studentId)
     busyIds.value = next
-    void refreshDayStatus()
+    void refreshDayStatus({ force: true })
     if (refreshCalls) emit('refresh-calls')
   }
 }

@@ -3,7 +3,8 @@
  *
  * 資料來自 GET /dismissal-calls/pos-status。放學車上車打卡不會經過接送通知的
  * WebSocket，所以這裡自己輪詢（預設 60 秒，分頁在背景時跳過），補登／撤銷後
- * 由呼叫端手動 refresh()。只保留最後一次請求的結果，避免較舊的回應晚到蓋掉新狀態。
+ * 由呼叫端 refresh({ force: true })——force 繞過 apiDedupe，否則若輪詢請求正在途，
+ * 會合併成同一個 promise 而拿到補登前的快照。只保留最後一次請求的結果，避免較舊的回應晚到蓋掉新狀態。
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getDismissalPosStatus, type DismissalPosStatus } from '@/api/dismissalCalls'
@@ -30,10 +31,10 @@ export function useDismissalPosDayStatus(pollMs: number = POS_DAY_STATUS_POLL_MS
   let seq = 0
   let timer: ReturnType<typeof setInterval> | null = null
 
-  async function refresh(): Promise<void> {
+  async function refresh({ force = false }: { force?: boolean } = {}): Promise<void> {
     const mySeq = ++seq
     try {
-      const res = await getDismissalPosStatus()
+      const res = await getDismissalPosStatus(force ? { force } : undefined)
       if (mySeq === seq) raw.value = res.data
     } catch {
       // 狀態名單是輔助資訊：載入失敗時保留上一次結果、不彈錯打斷接送作業，下一輪輪詢再試

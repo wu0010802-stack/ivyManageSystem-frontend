@@ -182,6 +182,8 @@ describe('DismissalPosBoard', () => {
 
       expect(api.markPosBus).toHaveBeenCalledWith({ student_id: 101 })
       expect(api.getDismissalPosStatus).toHaveBeenCalledTimes(2)
+      // 補登後的重抓必須繞過 apiDedupe，否則會領到在途輪詢的補登前快照
+      expect(api.getDismissalPosStatus).toHaveBeenLastCalledWith({ force: true })
       expect(w.emitted('refresh-calls')).toHaveLength(1)
     })
 

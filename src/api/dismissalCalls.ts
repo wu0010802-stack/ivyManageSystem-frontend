@@ -1,19 +1,30 @@
+import type { AxiosRequestConfig } from 'axios'
 import api from './index'
 import type { ApiBody, ApiResponse, AxiosResp } from './_generated/typed'
+
+/** apiDedupe 逃生口（比照 src/api/activity.ts withDedupeEscape）：寫入後的重抓不可領到在途的舊快照 */
+const DEDUPE_ESCAPE: AxiosRequestConfig & { meta: { allowConcurrent: boolean } } = {
+  meta: { allowConcurrent: true },
+}
 
 // 管理端
 export const createDismissalCall = (
   data: ApiBody<'/dismissal-calls', 'post'>,
 ): AxiosResp<'/dismissal-calls', 'post'> => api.post('/dismissal-calls', data)
 export const getDismissalCalls = (params: unknown) => api.get('/dismissal-calls', { params })
+/** 寫入後的重抓：繞過 apiDedupe 的 in-flight 合併 */
+export const getDismissalCallsFresh = (params: unknown) =>
+  api.get('/dismissal-calls', { ...DEDUPE_ESCAPE, params })
 export const cancelDismissalCall = (id: number) => api.post(`/dismissal-calls/${id}/cancel`)
 // 標記已到門口（pnotice01 家長預告接送：辦公室代替忘記按抵達的家長操作）
 export const arriveDismissalCall = (id: number) => api.post(`/dismissal-calls/${id}/arrive`)
 
 // 接送 POS 串接請假／娃娃車（posbus01）：全園今日請假＋已上放學車名單，與辦公室手動補登
 export type DismissalPosStatus = ApiResponse<'/dismissal-calls/pos-status', 'get'>
-export const getDismissalPosStatus = (): AxiosResp<'/dismissal-calls/pos-status', 'get'> =>
-  api.get('/dismissal-calls/pos-status')
+export const getDismissalPosStatus = (
+  { force = false }: { force?: boolean } = {},
+): AxiosResp<'/dismissal-calls/pos-status', 'get'> =>
+  force ? api.get('/dismissal-calls/pos-status', DEDUPE_ESCAPE) : api.get('/dismissal-calls/pos-status')
 export const markPosLeave = (
   data: ApiBody<'/dismissal-calls/pos-leave', 'post'>,
 ): AxiosResp<'/dismissal-calls/pos-leave', 'post'> => api.post('/dismissal-calls/pos-leave', data)
