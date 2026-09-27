@@ -6,6 +6,7 @@ import { useShiftStore } from '@/stores/shift'
 import { friendlyError } from '@/utils/errorMessages'
 import {
   ACTION_LABELS,
+  ALL_WEEKS,
   SKIP_REASON_LABELS,
   countChangesInGroups,
   groupChangesByWeek,
@@ -37,8 +38,14 @@ const applying = ref(false)
 const changes = ref<ApplyChange[]>([])
 const selected = ref<Set<string>>(new Set())
 const errorText = ref('')
-const selectedFromWeekStart = ref<string | null>(props.fromWeekStart)
+// 選單一律用 ALL_WEEKS 哨兵值代表「全部週」，只在組 API payload 時轉回 null
+// （Final re-review R2）。
+const selectedFromWeekStart = ref<string>(props.fromWeekStart ?? ALL_WEEKS)
+// 目前畫面所顯示預覽對應的起始週；null＝尚未有任何預覽抵達。用來擋過期
+// dry-run 解鎖確認鈕（Final re-review R1）。
+const previewedFrom = ref<string | null>(null)
 const showCollapsedSkips = ref(false)
+const toApiFromWeekStart = (v: string): string | null => (v === ALL_WEEKS ? null : v)
 
 const keyOf = (c: ApplyChange) => `${c.employee_id}|${c.week_start_date}`
 const summary = computed(() => summarizeChanges(changes.value))
@@ -52,32 +59,45 @@ const collapsedSkipItems = computed(() =>
   changes.value.filter((c) => c.action === 'skip' && (c.skip_reason === 'finalized' || c.skip_reason === 'recorded'))
 )
 
+// 每次呼叫給一個遞增序號；只有「目前最新一次」的請求可以寫 changes／
+// errorText／selected／loading——先送出但後回來的舊請求（或舊請求的錯誤）
+// 一律忽略，不覆寫畫面、也不解鎖確認鈕（Final re-review R1：起始週選單快速
+// 改選會讓兩個 dry-run 重疊，先回來的一個原本會把 loading 設回 false）。
+let requestSeq = 0
+
 const loadPreview = async () => {
+  requestSeq += 1
+  const myRequestId = requestSeq
+  const requestedFrom = selectedFromWeekStart.value
   loading.value = true
   errorText.value = ''
-  selected.value = new Set()
   try {
     const res = await applyDutyRotation(props.rotationId, {
       dry_run: true,
-      from_week_start: selectedFromWeekStart.value,
+      from_week_start: toApiFromWeekStart(requestedFrom),
       overwrite_manual: [],
     })
+    if (myRequestId !== requestSeq) return // 過期回應：已有更新的請求接手，忽略
     changes.value = res.data.changes
+    selected.value = new Set()
+    previewedFrom.value = requestedFrom
   } catch (e) {
+    if (myRequestId !== requestSeq) return // 過期錯誤：不可覆寫較新請求的結果
     changes.value = []
     errorText.value = friendlyError('預覽套用結果失敗', e)
   } finally {
-    loading.value = false
+    if (myRequestId === requestSeq) loading.value = false
   }
 }
 
 // 每次開啟對話框：起始週回到父元件傳入的值（主按鈕＝全部週／重新套用＝提示
-// 週），並收合上一次展開的略過明細。
+// 週），清掉上一次的預覽對應紀錄，並收合上一次展開的略過明細。
 watch(
   () => props.modelValue,
   (open) => {
     if (open) {
-      selectedFromWeekStart.value = props.fromWeekStart
+      selectedFromWeekStart.value = props.fromWeekStart ?? ALL_WEEKS
+      previewedFrom.value = null
       showCollapsedSkips.value = false
     }
   },
@@ -105,7 +125,13 @@ const onCheckboxChange = (c: ApplyChange, event: Event) => {
   toggle(c, (event.target as HTMLInputElement).checked)
 }
 
+// confirm 的按鈕已鎖到 previewedFrom === selectedFromWeekStart 才可點擊，這裡
+// 仍以 previewedFrom 為準送出（而非 selectedFromWeekStart）：確保送出的值一律
+// 是「畫面上這份預覽算給哪個起始週」，不會是選了但還沒 dry-run 過的值
+// （Final re-review R1）。
 const confirm = async () => {
+  const previewedForApply = previewedFrom.value
+  if (previewedForApply === null) return // 理論上到不了：按鈕在此之前已鎖
   applying.value = true
   try {
     const overwrite = changes.value
@@ -113,7 +139,7 @@ const confirm = async () => {
       .map((c) => ({ employee_id: c.employee_id, week_start_date: c.week_start_date }))
     const res = await applyDutyRotation(props.rotationId, {
       dry_run: false,
-      from_week_start: selectedFromWeekStart.value,
+      from_week_start: toApiFromWeekStart(previewedForApply),
       overwrite_manual: overwrite,
     })
     ElMessage.success('已套用到週班表')
@@ -137,8 +163,13 @@ const confirm = async () => {
     <div class="drad-body">
       <label class="drad-from-week">
         從哪一週開始
-        <el-select v-model="selectedFromWeekStart" data-test="from-week-select" size="small">
-          <el-option label="全部週" :value="null as unknown as string" />
+        <el-select
+          v-model="selectedFromWeekStart"
+          data-test="from-week-select"
+          size="small"
+          :disabled="loading"
+        >
+          <el-option label="全部週" :value="ALL_WEEKS" />
           <el-option
             v-for="w in weeks"
             :key="w.week_start_date"
@@ -239,7 +270,12 @@ const confirm = async () => {
           type="primary"
           data-test="confirm-apply"
           :loading="applying"
-          :disabled="loading || !!errorText || (!pastGroups.length && !upcomingGroups.length)"
+          :disabled="
+            loading ||
+            !!errorText ||
+            previewedFrom !== selectedFromWeekStart ||
+            (!pastGroups.length && !upcomingGroups.length)
+          "
           @click="confirm"
         >
           確認套用

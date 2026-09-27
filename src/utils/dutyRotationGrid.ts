@@ -14,6 +14,15 @@ export type ApplyResult = ApiResponse<'/duty-rotations/{rotation_id}/apply', 'po
 export type ApplyChange = ApplyResult['changes'][number]
 export type TeacherRole = 'head' | 'assistant'
 
+/**
+ * 套用預覽起始週選單的「全部週」哨兵值（Final re-review R2）。Element Plus
+ * 2.13.2 的 `DEFAULT_EMPTY_VALUES` 含 `null`（`hooks/use-empty-values`），
+ * 若直接把 `null` 當 `el-option` 的 value，`hasModelValue` 恆為 false，選單
+ * 只會顯示 placeholder、看不到「全部週」。呼叫端只在邊界（初始化、組
+ * API payload）與 `null` 互轉，元件內部一律用這個字串。
+ */
+export const ALL_WEEKS = '__all__'
+
 export const ROLE_LABELS: Record<TeacherRole, string> = { head: '班導', assistant: '副班導' }
 export const SKIP_REASON_LABELS: Record<string, string> = {
   manual: '行政手動設定過',
