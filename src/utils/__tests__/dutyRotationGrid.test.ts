@@ -12,16 +12,20 @@ import { describe, it, expect } from 'vitest'
 import {
   addRow,
   cellKey,
+  countChangesInGroups,
   fromRotation,
   generateWeeks,
   groupChangesByWeek,
   issueSeverityByCell,
   mergeWeeks,
+  partitionWeekGroups,
   removeRow,
   removeWeek,
   setCell,
+  shiftTypeLabel,
   snapshotKey,
   summarizeChanges,
+  thisWeekMonday,
   toDocumentBody,
   type ApplyChange,
   type RotationOut,
@@ -146,8 +150,41 @@ describe('問題標示與差異彙總', () => {
     expect(summarizeChanges(changes)).toEqual({
       create: 1, update: 0, removed: 0, unchanged: 1, manual: 1, finalized: 1, recorded: 0,
     })
+    // Final fix FE-1：groupChangesByWeek 只列「真正的變動」——unchanged 與
+    // finalized/recorded 略過列都不逐筆列出（上百筆會淹沒真正變動，另有彙總
+    // 計數區塊呈現，見 summarizeChanges）；manual 略過列仍逐筆列出（需要
+    // checkbox 讓行政勾選覆寫）。
     const groups = groupChangesByWeek(changes)
-    expect(groups.map((g) => [g.week, g.items.length])).toEqual([['2026-09-14', 1], ['2026-09-21', 2]])
+    expect(groups.map((g) => [g.week, g.items.length])).toEqual([['2026-09-14', 1], ['2026-09-21', 1]])
+    expect(groups[1].items[0].skip_reason).toBe('manual')
+  })
+
+  it('partitionWeekGroups 依本週一拆成本週以前／本週及以後；countChangesInGroups 計總筆數', () => {
+    const base = { employee_name: 'A', from_shift_type_id: null, to_shift_type_id: 6, label: '早車', skip_reason: null }
+    const groups = groupChangesByWeek([
+      { ...base, employee_id: 1, week_start_date: '2026-09-07', action: 'create' },
+      { ...base, employee_id: 2, week_start_date: '2026-09-14', action: 'create' },
+      { ...base, employee_id: 3, week_start_date: '2026-09-14', action: 'update' },
+      { ...base, employee_id: 4, week_start_date: '2026-09-21', action: 'create' },
+    ])
+    const { past, upcoming } = partitionWeekGroups(groups, '2026-09-14')
+    expect(past.map((g) => g.week)).toEqual(['2026-09-07'])
+    expect(upcoming.map((g) => g.week)).toEqual(['2026-09-14', '2026-09-21'])
+    expect(countChangesInGroups(past)).toBe(1)
+    expect(countChangesInGroups(upcoming)).toBe(3)
+  })
+
+  it('shiftTypeLabel：null 顯示（無）；查不到（如已停用未帶入清單）顯示 #id', () => {
+    const types = [{ id: 6, name: '早車' }, { id: 7, name: '無值週' }]
+    expect(shiftTypeLabel(types, null)).toBe('（無）')
+    expect(shiftTypeLabel(types, 6)).toBe('早車')
+    expect(shiftTypeLabel(types, 999)).toBe('#999')
+  })
+
+  it('thisWeekMonday 用本機日期算本週一（local-noon，不受時區推算誤差影響）', () => {
+    expect(thisWeekMonday(new Date('2026-09-23T03:00:00'))).toBe('2026-09-21') // 週三
+    expect(thisWeekMonday(new Date('2026-09-21T20:00:00'))).toBe('2026-09-21') // 週一本身
+    expect(thisWeekMonday(new Date('2026-09-20T20:00:00'))).toBe('2026-09-14') // 週日 → 上週一
   })
 
   it('snapshotKey 對內容變化敏感', () => {

@@ -175,6 +175,30 @@ export function issueSeverityByCell(issues: RotationIssue[], rows: EditableRow[]
   return map
 }
 
+export interface ShiftTypeLite {
+  id: number
+  name: string
+}
+
+/**
+ * 套用預覽列的「目前 → 輪值表」班別名稱（Final fix FE-1）。id 為 null（create
+ * 無目前 / removed 無輪值表）顯示「（無）」；清單裡查不到（含已停用班別，呼叫端
+ * 應傳完整清單而非 activeShiftTypes）顯示 `#id` 而非直接消失。
+ */
+export function shiftTypeLabel(shiftTypes: ShiftTypeLite[], id: number | null): string {
+  if (id == null) return '（無）'
+  return shiftTypes.find((t) => t.id === id)?.name ?? `#${id}`
+}
+
+/** 本機「本週一」日期（local-noon 慣例避免 DST/時區把日期推前一天；不可用 toISOString）。 */
+export function thisWeekMonday(now: Date = new Date()): string {
+  const d = new Date(now)
+  d.setHours(12, 0, 0, 0)
+  const day = d.getDay()
+  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
+  return toIso(d)
+}
+
 export function summarizeChanges(changes: ApplyChange[]) {
   const out = { create: 0, update: 0, removed: 0, unchanged: 0, manual: 0, finalized: 0, recorded: 0 }
   for (const c of changes) {
@@ -189,15 +213,41 @@ export function summarizeChanges(changes: ApplyChange[]) {
   return out
 }
 
-export function groupChangesByWeek(changes: ApplyChange[]): { week: string; items: ApplyChange[] }[] {
+export interface ChangeWeekGroup {
+  week: string
+  items: ApplyChange[]
+}
+
+/**
+ * 依週分組供套用預覽列出，只含「真正的變動」：unchanged 排除；已封存／已有打卡
+ * 略過列另有彙總計數區塊呈現（Final fix FE-1，避免上百筆淹沒真正變動），這裡
+ * 不逐筆列出；手動略過列仍逐筆列出（需要保留 checkbox 讓行政勾選覆寫）。
+ */
+export function groupChangesByWeek(changes: ApplyChange[]): ChangeWeekGroup[] {
   const map = new Map<string, ApplyChange[]>()
   for (const c of changes) {
     if (c.action === 'unchanged') continue
+    if (c.action === 'skip' && (c.skip_reason === 'finalized' || c.skip_reason === 'recorded')) continue
     const list = map.get(c.week_start_date) ?? []
     list.push(c)
     map.set(c.week_start_date, list)
   }
   return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([week, items]) => ({ week, items }))
+}
+
+/** 依「本週一」把週分組拆成本週以前／本週及以後兩批（Final fix FE-1）。 */
+export function partitionWeekGroups(
+  groups: ChangeWeekGroup[],
+  todayMonday: string
+): { past: ChangeWeekGroup[]; upcoming: ChangeWeekGroup[] } {
+  return {
+    past: groups.filter((g) => g.week < todayMonday),
+    upcoming: groups.filter((g) => g.week >= todayMonday),
+  }
+}
+
+export function countChangesInGroups(groups: ChangeWeekGroup[]): number {
+  return groups.reduce((sum, g) => sum + g.items.length, 0)
 }
 
 export function snapshotKey(s: EditableState): string {
