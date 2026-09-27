@@ -187,6 +187,13 @@ const confirmImport = async () => {
   }
   try {
     const res = await importDutyRotation(rotation.value.id, importPreview.value.file, false)
+    if (!res.data.applied || res.data.errors.length > 0) {
+      // 後端二次驗證失敗（HTTP 200，例如 preview 後、confirm 前有人改了班級代號）：
+      // 保留對話框開啟並更新錯誤訊息（確認鈕因此自動停用），不 adopt、不當作成功
+      importPreview.value = { ...importPreview.value, errors: res.data.errors }
+      ElMessage.error(`匯入未完成：${res.data.errors[0] ?? '請重新確認匯入內容'}`)
+      return
+    }
     if (res.data.rotation) adopt(res.data.rotation)
     importPreview.value = null
     ElMessage.success('已匯入輪值表')
@@ -375,8 +382,15 @@ onMounted(async () => {
           </ul>
           <p v-else>將匯入 {{ importPreview.weekCount }} 週、{{ importPreview.cellCount }} 格（覆蓋現有週次與格子，職務設定不變）。</p>
           <div class="drp-dialog-actions">
-            <el-button @click="closeImport">取消</el-button>
-            <el-button type="primary" :disabled="importPreview.errors.length > 0" @click="confirmImport">確認匯入</el-button>
+            <el-button data-test="cancel-import" @click="closeImport">取消</el-button>
+            <el-button
+              type="primary"
+              data-test="confirm-import"
+              :disabled="importPreview.errors.length > 0"
+              @click="confirmImport"
+            >
+              確認匯入
+            </el-button>
           </div>
         </div>
       </el-dialog>

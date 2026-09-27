@@ -30,6 +30,7 @@ vi.mock('@/stores/academicTerm', () => ({
   useAcademicTermStore: () => ({ school_year: 115, semester: 1 }),
 }))
 
+import { ElMessage } from 'element-plus'
 import DutyRotationPanel from '../DutyRotationPanel.vue'
 
 // 比照 src/views/__tests__/ScheduleView.test.ts 的 stub 慣例
@@ -104,5 +105,44 @@ describe('DutyRotationPanel', () => {
     await wrapper.find('[data-test="save"]').trigger('click')
     await flushPromises()
     expect(mockReplace).toHaveBeenCalledWith(7, expect.objectContaining({ weeks: [], cells: [] }))
+  })
+
+  it('確認匯入時後端二次驗證失敗（HTTP 200 但 applied:false）不當作成功，對話框保留開啟並顯示錯誤', async () => {
+    mockGet.mockResolvedValueOnce({ data: rotation })
+    mockImport
+      // 預覽（dry_run=true）：當下沒有錯誤
+      .mockResolvedValueOnce({ data: { applied: false, errors: [], week_count: 1, cell_count: 1, rotation: null } })
+      // 確認匯入（dry_run=false）：後端重新驗證後發現班級代號找不到
+      .mockResolvedValueOnce({
+        data: {
+          applied: false,
+          errors: ['第 05 週「早車」的班級代號「大9」找不到'],
+          week_count: 0,
+          cell_count: 0,
+          rotation: null,
+        },
+      })
+    const wrapper = mount(DutyRotationPanel, { global: globalConfig })
+    await flushPromises()
+
+    const upload = wrapper.findComponent('.upload') as unknown as {
+      props: (k: string) => (f: { raw: File }) => Promise<void>
+    }
+    await upload.props('onChange')({ raw: new File([''], 'x.xlsx') })
+    await flushPromises()
+    expect(wrapper.find('.dlg').exists()).toBe(true)
+    expect(isDisabled(wrapper, 'confirm-import')).toBe(false)
+
+    await wrapper.find('[data-test="confirm-import"]').trigger('click')
+    await flushPromises()
+
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(ElMessage.error).toHaveBeenCalled()
+    // 對話框仍開著，且顯示後端回傳的錯誤訊息
+    expect(wrapper.find('.dlg').exists()).toBe(true)
+    expect(wrapper.text()).toContain('第 05 週「早車」的班級代號「大9」找不到')
+    expect(isDisabled(wrapper, 'confirm-import')).toBe(true)
+    // 輪值表本體未被替換（原本的問題清單仍在，未被 res.data.rotation=null 蓋掉）
+    expect(wrapper.find('[data-test="issues"]').text()).toContain('未設定班導未輪值時的班別')
   })
 })
