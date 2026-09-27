@@ -30,7 +30,7 @@ vi.mock('@/stores/academicTerm', () => ({
   useAcademicTermStore: () => ({ school_year: 115, semester: 1 }),
 }))
 
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import DutyRotationPanel from '../DutyRotationPanel.vue'
 
 // 比照 src/views/__tests__/ScheduleView.test.ts 的 stub 慣例
@@ -41,14 +41,21 @@ const globalConfig = {
       emits: ['click'],
       template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
     },
-    'el-select': { props: ['modelValue'], template: '<div class="sel"><slot /></div>' },
+    'el-select': {
+      props: ['modelValue'],
+      emits: ['update:modelValue', 'change'],
+      template: '<div class="sel"><slot /></div>',
+    },
     'el-option': { props: ['label', 'value'], template: '<div class="opt">{{ label }}</div>' },
     'el-input': { props: ['modelValue'], template: '<input class="inp" />' },
     'el-alert': { props: ['title', 'type', 'closable'], template: '<div class="alert"><b>{{ title }}</b><slot /></div>' },
     'el-upload': { props: ['onChange', 'autoUpload', 'accept', 'showFileList'], template: '<div class="upload"><slot /></div>' },
     'el-date-picker': { props: ['modelValue'], template: '<input class="dp" />' },
     'el-dialog': { props: ['modelValue', 'title', 'width'], template: '<div v-if="modelValue" class="dlg"><slot /></div>' },
-    DutyRotationApplyDialog: { props: ['modelValue', 'rotationId', 'fromWeekStart'], template: '<div class="apply-dlg" />' },
+    DutyRotationApplyDialog: {
+      props: ['modelValue', 'rotationId', 'fromWeekStart', 'weeks'],
+      template: '<div class="apply-dlg" />',
+    },
   },
 }
 
@@ -144,5 +151,30 @@ describe('DutyRotationPanel', () => {
     expect(isDisabled(wrapper, 'confirm-import')).toBe(true)
     // 輪值表本體未被替換（原本的問題清單仍在，未被 res.data.rotation=null 蓋掉）
     expect(wrapper.find('[data-test="issues"]').text()).toContain('未設定班導未輪值時的班別')
+  })
+
+  it('Final fix FE-2：dirty 時切換學期會先確認，取消則不載入且值還原', async () => {
+    mockGet.mockResolvedValueOnce({ data: rotation })
+    const wrapper = mount(DutyRotationPanel, { global: globalConfig })
+    await flushPromises()
+    await wrapper.find('[data-test="remove-week-2026-09-14"]').trigger('click')
+    expect(isDisabled(wrapper, 'save')).toBe(false) // 現在是 dirty
+
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+    mockGet.mockClear()
+
+    const semesterSelect = wrapper.findComponent('[data-test="term-semester"]')
+    expect(semesterSelect.props('modelValue')).toBe(1)
+    await semesterSelect.vm.$emit('update:modelValue', 2)
+    await semesterSelect.vm.$emit('change', 2)
+    await flushPromises()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      '有未儲存的變更，切換學期會捨棄這些變更，確定？',
+      expect.any(String),
+      expect.objectContaining({ type: 'warning' })
+    )
+    expect(mockGet).not.toHaveBeenCalled() // 取消則不載入
+    expect(semesterSelect.props('modelValue')).toBe(1) // 值還原
   })
 })

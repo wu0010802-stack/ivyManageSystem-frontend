@@ -45,6 +45,9 @@ const schoolYear = ref<number>(termStore.school_year)
 // 學期只會是 1 或 2（下方 el-select 選項亦僅此兩值）；DutyRotationCreate.semester 是 1|2 enum，
 // termStore 型別為 number，這裡收窄以符合建立輪值表的請求 body 型別。
 const semester = ref<1 | 2>(termStore.semester as 1 | 2)
+// 記住「上一個已確認」的學年／學期，切換時若使用者取消確認要能還原（Final fix FE-2）。
+const confirmedSchoolYear = ref(schoolYear.value)
+const confirmedSemester = ref(semester.value)
 const yearOptions = buildSchoolYearOptions(termStore.school_year, 2)
 const termLabel = computed(() => `${schoolYear.value} 學年${semester.value === 1 ? '上' : '下'}學期`)
 
@@ -83,6 +86,34 @@ const load = async () => {
     loading.value = false
   }
 }
+
+// 學年／學期切換時若有未儲存的網格編輯，先確認才捨棄（Final fix FE-2，最終審查
+// I4）；取消則把選單值還原為原學期、不重新載入。v-model 在 @change 觸發前已把
+// schoolYear/semester 更新成新值，故這裡的「還原」是把 ref 撥回 confirmed* 快照。
+const guardedTermChange = async (revert: () => void, commit: () => void) => {
+  if (dirty.value) {
+    try {
+      await ElMessageBox.confirm('有未儲存的變更，切換學期會捨棄這些變更，確定？', '切換學期', {
+        type: 'warning',
+      })
+    } catch {
+      revert()
+      return
+    }
+  }
+  commit()
+  await load()
+}
+const onYearChange = () =>
+  guardedTermChange(
+    () => { schoolYear.value = confirmedSchoolYear.value },
+    () => { confirmedSchoolYear.value = schoolYear.value }
+  )
+const onSemesterChange = () =>
+  guardedTermChange(
+    () => { semester.value = confirmedSemester.value },
+    () => { confirmedSemester.value = semester.value }
+  )
 
 const create = async () => {
   try {
@@ -226,10 +257,10 @@ onMounted(async () => {
 <template>
   <div class="drp">
     <div class="drp-toolbar">
-      <el-select v-model="schoolYear" data-test="term-year" class="drp-term" @change="load">
+      <el-select v-model="schoolYear" data-test="term-year" class="drp-term" @change="onYearChange">
         <el-option v-for="y in yearOptions" :key="y" :label="`${y} 學年`" :value="y" />
       </el-select>
-      <el-select v-model="semester" data-test="term-semester" class="drp-term" @change="load">
+      <el-select v-model="semester" data-test="term-semester" class="drp-term" @change="onSemesterChange">
         <el-option label="上學期" :value="1" />
         <el-option label="下學期" :value="2" />
       </el-select>
@@ -368,6 +399,7 @@ onMounted(async () => {
         v-model="applyVisible"
         :rotation-id="rotation.id"
         :from-week-start="applyFrom"
+        :weeks="state.weeks"
         @applied="onApplied"
       />
       <el-dialog

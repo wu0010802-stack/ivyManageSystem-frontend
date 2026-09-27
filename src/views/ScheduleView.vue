@@ -906,8 +906,8 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
         </AdminListCards>
       </el-tab-pane>
 
-      <el-tab-pane label="學期輪值表" name="duty-rotation">
-        <DutyRotationPanel v-if="activeTab === 'duty-rotation'" @applied="onRotationApplied" />
+      <el-tab-pane label="學期輪值表" name="duty-rotation" lazy>
+        <DutyRotationPanel @applied="onRotationApplied" />
       </el-tab-pane>
     </el-tabs>
 

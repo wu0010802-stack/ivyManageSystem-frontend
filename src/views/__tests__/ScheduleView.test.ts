@@ -10,7 +10,7 @@
  * - 每日調整整週 7 天（含週末）；三態：繼承／指定班別／day_off 明確排休
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ref } from 'vue'
+import { type ComputedRef, computed, inject, provide, ref, watch } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const {
@@ -174,8 +174,36 @@ const globalConfig = {
       template: '<div class="upload"><slot /></div>',
     },
     'el-card': { template: '<div class="card"><slot /></div>' },
-    'el-tabs': { props: ['modelValue'], emits: ['update:modelValue', 'tab-change'], template: '<div><slot /></div>' },
-    'el-tab-pane': { props: ['label', 'name'], template: '<section><slot /></section>' },
+    'el-tabs': {
+      props: ['modelValue'],
+      emits: ['update:modelValue', 'tab-change'],
+      setup(props: { modelValue: string }) {
+        // 真 el-tabs 會把目前 active 頁籤名稱 provide 給子 el-tab-pane，讓
+        // lazy pane 判斷是否已第一次進場；未實作這層的話 `lazy` pane 的 stub
+        // 只能永遠渲染 slot，測試會假綠（見「未切換前不載入」）。
+        provide('scheduleActiveTabName', computed(() => props.modelValue))
+      },
+      template: '<div><slot /></div>',
+    },
+    'el-tab-pane': {
+      props: { label: String, name: String, lazy: { type: Boolean, default: false } },
+      setup(props: { name?: string; lazy: boolean }) {
+        const activeTabName = inject<ComputedRef<unknown> | undefined>(
+          'scheduleActiveTabName',
+          undefined
+        )
+        const everActive = ref(!props.lazy)
+        watch(
+          () => activeTabName?.value,
+          (v) => {
+            if (v === props.name) everActive.value = true
+          },
+          { immediate: true }
+        )
+        return { everActive }
+      },
+      template: '<section v-if="everActive"><slot /></section>',
+    },
     'el-date-picker': { props: ['modelValue'], emits: ['update:modelValue', 'change'], template: '<input class="dp" />' },
     'el-tag': { props: ['type', 'size'], template: '<span><slot /></span>' },
     'el-icon': { template: '<i><slot /></i>' },
@@ -387,6 +415,12 @@ describe('ScheduleView', () => {
       'duty-rotation',
       '學期輪值表',
     ])
+    const dutyPane = panes.find((p) => p.props('name') === 'duty-rotation')!
+    expect(dutyPane.props('lazy')).toBe(true)
+    // Final fix FE-2：pane 標了 lazy，stub 依 active 狀態渲染 slot——真正驗證
+    // DutyRotationPanel 連掛載都沒發生（而不只是巧合地因為 async component
+    // 尚未 resolve 而恰好沒東西可看），否則之後 stub 語意一改就會靜默假綠。
+    expect(dutyPane.find('section').exists()).toBe(false)
     expect(wrapper.find('[data-test="grid"]').exists()).toBe(false)
   })
 
