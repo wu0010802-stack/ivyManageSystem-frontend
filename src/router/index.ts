@@ -828,8 +828,7 @@ export const routes: RouteRecordRaw[] = [
                 {
                     // 班級功能 2026-09-14 整頁併入首頁（見 PortalHomeView 的功能格區）。
                     // 同樣是永久轉址：老師書籤、側欄舊連結與 class-hub 轉來的流量都落
-                    // 在這裡。必須用 function 形式才保得住 query——側欄「全班量體位」與
-                    // 存量通知走的是 ?sheet=measurement，query 掉了抽屜就不會開。
+                    // 在這裡。用 function 形式保住 query（例如 classroom_id）。
                     //
                     // 原本掛在本路由的 meta.permission（STUDENTS_READ）不隨之搬到首頁：
                     // 首頁對全體 portal 使用者開放，掛上去會把沒有該權限的行政同仁擋在

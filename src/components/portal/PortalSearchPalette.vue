@@ -17,7 +17,6 @@ import {
   UserFilled,
   Notebook,
   List,
-  Odometer,
 } from '@element-plus/icons-vue'
 import { searchPortal } from '@/api/portalSearch'
 import { usePortalSearch } from '@/composables/usePortalSearch'
@@ -38,7 +37,6 @@ const COMMANDS: { id: string; keywords: string[]; label: string; icon: Component
   { id: 'class', keywords: ['班級', 'class', '工作台'], label: '班級功能', icon: HomeFilled, route: '/portal/home' },
   { id: 'student-attendance', keywords: ['點名', '學生點名', 'attendance'], label: '學生點名', icon: List, route: '/portal/student-attendance' },
   { id: 'contact-book', keywords: ['聯絡簿', '每日聯絡簿', 'contact book'], label: '每日聯絡簿', icon: Notebook, route: '/portal/contact-book' },
-  { id: 'measurement', keywords: ['量體位', '全班量體位', 'measurement'], label: '全班量體位', icon: Odometer, route: '/portal/home?sheet=measurement' },
 ]
 
 // 結果分類圖示（對齊 EP icon 系統，取代原本的裝飾 emoji）

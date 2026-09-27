@@ -2,8 +2,7 @@
  * 首頁整併（/portal/class 併入 /portal/home）後的功能格區契約。
  *
  * 本檔承接原 PortalClassView.test.ts 的守衛：SPEC-024 的「每格一律顯示、有待辦
- * 才掛數字」與量體位抽屜的深連結行為，是隨功能搬到首頁的，不可跟著被收掉的
- * 頁面一起消失。另加首頁特有的「我的」組斷言（原「今日待辦」卡）。
+ * 才掛數字」是隨功能搬到首頁的，不可跟著被收掉的頁面一起消失。另加首頁特有的「我的」組斷言（原「今日待辦」卡）。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -51,10 +50,6 @@ vi.mock('@/api/portalLeaveQuotaExpiry', () => ({
   getMyLeaveQuotaExpiry: mockLeaveQuota,
 }))
 
-vi.mock('@/api/portalMeasurements', () => ({
-  getMeasurementsLatest: vi.fn(() => Promise.resolve({ data: [] })),
-}))
-
 // 權限過濾本身由 portalClassFeatures.test.ts 守，這裡固定放行以聚焦版面行為。
 vi.mock('@/utils/auth', async (orig) => {
   const actual = await (orig as () => Promise<Record<string, unknown>>)()
@@ -69,12 +64,6 @@ const router = createRouter({
 })
 
 const STUBS = {
-  PortalBatchMeasurementSheet: {
-    // 抽屜走 v-model（modelValue: boolean）。data-show 明確 String() 轉字串——
-    // Vue 3 對 :attr="false" 會直接移除屬性，不轉會拿到 undefined。
-    props: ['modelValue'],
-    template: '<div class="measurement-sheet-stub" :data-show="String(modelValue)" />',
-  },
   TodayFocusCard: true,
   ClassroomOpsCard: true,
 }
@@ -139,7 +128,6 @@ describe('PortalHomeView 功能格區（/portal/class 整併後）', () => {
     hubData.value = { classroom_id: 3, classroom_name: '向日葵班', counts: {} }
     const wrapper = await mountView()
     expect(wrapper.find('[data-test="feature-albums"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="feature-measurement"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="feature-work-samples"]').exists()).toBe(true)
   })
 
@@ -210,14 +198,9 @@ describe('PortalHomeView 功能格區（/portal/class 整併後）', () => {
     expect(push).toHaveBeenCalledWith('/portal/contact-book')
   })
 
-  it('點量體位格開抽屜、不跳頁', async () => {
-    const push = vi.spyOn(router, 'push')
-    push.mockClear()
+  it('全班量體位已下架，首頁不再有該格', async () => {
     const wrapper = await mountView()
-    await wrapper.find('[data-test="feature-measurement"]').trigger('click')
-    await flushPromises()
-    expect(wrapper.find('.measurement-sheet-stub').attributes('data-show')).toBe('true')
-    expect(push).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="feature-measurement"]').exists()).toBe(false)
   })
 
   // ===== 「我的」組：原「今日待辦」卡的四項 =====

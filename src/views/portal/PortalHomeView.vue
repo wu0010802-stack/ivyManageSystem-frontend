@@ -8,8 +8,6 @@ import { usePortalClassHub } from '@/composables/usePortalClassHub'
 import { usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
 import { getMyLeaveQuotaExpiry } from '@/api/portalLeaveQuotaExpiry'
 import { getPortalPickupPendingCount } from '@/api/portal'
-import { getMeasurementsLatest } from '@/api/portalMeasurements'
-import PortalBatchMeasurementSheet from '@/components/portal/sheets/PortalBatchMeasurementSheet.vue'
 import TodayFocusCard from '@/components/portal/home/TodayFocusCard.vue'
 import ClassroomOpsCard from '@/components/portal/home/ClassroomOpsCard.vue'
 import {
@@ -112,7 +110,6 @@ const doRefresh = () => {
 
 onMounted(() => {
   loadLeaveQuotaExpiry()
-  refreshLastBatchDate()
   loadPickupCount()
 })
 
@@ -220,10 +217,6 @@ const anomalyTarget = computed(() => {
 })
 
 function onFeatureClick(f: ClassFeatureDef) {
-  if (f.action === 'measurement') {
-    measurementSheetOpen.value = true
-    return
-  }
   if (f.key === 'anomalies') {
     router.push(anomalyTarget.value)
     return
@@ -238,57 +231,6 @@ function onFeatureClick(f: ClassFeatureDef) {
   }
   router.push(f.to)
 }
-
-// ── 全班量體位抽屜（無獨立頁，只有抽屜）──
-const measurementSheetOpen = ref(false)
-const lastBatchMeasuredOn = ref<string | null>(null)
-
-async function refreshLastBatchDate() {
-  try {
-    const { data: latestData } = await getMeasurementsLatest()
-    const dates = (latestData as { last_measurement?: { measured_on?: string } }[])
-      .map((r) => r.last_measurement?.measured_on)
-      .filter((d): d is string => Boolean(d))
-      .sort()
-    lastBatchMeasuredOn.value = dates.length > 0 ? dates[dates.length - 1] : null
-  } catch (_) {
-    lastBatchMeasuredOn.value = null
-  }
-}
-
-function captionOf(f: ClassFeatureDef): string {
-  if (f.action === 'measurement') {
-    return lastBatchMeasuredOn.value ? `上次 ${lastBatchMeasuredOn.value}` : '尚未量測'
-  }
-  return ''
-}
-
-function onMeasurementDone() {
-  refreshLastBatchDate()
-}
-
-// 深連結：桌機側欄「全班量體位」與存量通知都靠 ?sheet=measurement 進來。
-// immediate 讓直接貼網址也有效；已在本頁時 push 只改 query 不重掛元件，
-// 沒有這個 watch 抽屜就不會開。
-watch(
-  () => route.query.sheet,
-  (name) => {
-    const key = Array.isArray(name) ? name[0] : name
-    if (key === 'measurement') measurementSheetOpen.value = true
-  },
-  { immediate: true },
-)
-
-// 抽屜關閉要把 URL 上的 ?sheet=measurement 清掉，否則第二次點側欄同一項時
-// query 沒變化、上面的 watch 不會觸發，抽屜就再也開不了。用 replace 避免多留
-// 一筆瀏覽紀錄；保留 query 裡其他參數（例如 classroom_id）。
-watch(measurementSheetOpen, (open) => {
-  if (open) return
-  if (route.query.sheet === undefined) return
-  const query = { ...route.query }
-  delete query.sheet
-  router.replace({ query })
-})
 
 // ── 班級切換（多班教師）──
 interface ClassroomOption {
@@ -444,7 +386,6 @@ watch(
           >
             <span class="feature-label">{{ f.label }}</span>
             <span v-if="badgeOf(f) > 0" class="feature-badge">{{ badgeOf(f) }}</span>
-            <span v-if="captionOf(f)" class="feature-caption">{{ captionOf(f) }}</span>
           </button>
         </div>
       </div>
@@ -505,11 +446,6 @@ watch(
         />
       </div>
     </template>
-
-    <PortalBatchMeasurementSheet
-      v-model="measurementSheetOpen"
-      @done="onMeasurementDone"
-    />
   </div>
 </template>
 
@@ -721,11 +657,6 @@ watch(
 .feature-label {
   font-size: var(--text-sm);
   color: var(--el-text-color-primary);
-}
-
-.feature-caption {
-  font-size: var(--text-xs);
-  color: var(--el-text-color-secondary);
 }
 
 .feature-badge {

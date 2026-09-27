@@ -87,17 +87,15 @@ describe('portalClassFeatures', () => {
     expect(featureBadge(byKey('student-attendance'), undefined)).toBe(0)
   })
 
-  it('量體位格沒有路由、改走 action', () => {
-    const m = CLASS_FEATURES.find((f) => f.key === 'measurement')!
-    expect(m.to).toBeUndefined()
-    expect(m.action).toBe('measurement')
+  it('全班量體位已下架（2026-09-27），不再有格子', () => {
+    expect(CLASS_FEATURES.find((f) => f.key === 'measurement')).toBeUndefined()
   })
 
-  it('每個 key 唯一，且每格都有 to 或 action 其中之一', () => {
+  it('每個 key 唯一，且每格都有目的地路由', () => {
     const keys = CLASS_FEATURES.map((f) => f.key)
     expect(new Set(keys).size).toBe(keys.length)
     for (const f of CLASS_FEATURES) {
-      expect(Boolean(f.to) !== Boolean(f.action)).toBe(true)
+      expect(Boolean(f.to)).toBe(true)
     }
   })
 

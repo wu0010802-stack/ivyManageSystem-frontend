@@ -57,13 +57,10 @@ vi.mock('@/api/portal', () => ({
   getPortalPickupPendingCount: vi.fn(() => Promise.resolve({ data: { count: 0 } })),
 }))
 
-vi.mock('@/api/portalMeasurements', () => ({
-  getMeasurementsLatest: vi.fn(() => Promise.resolve({ data: [] })),
-}))
 
 import PortalHomeView from '../PortalHomeView.vue'
 
-// 功能格的量體位抽屜深連結會在 setup 立刻讀 route.query，沒有 router 直接爆。
+// 首頁在 setup 立刻讀 route.query（classroom_id），沒有 router 直接爆。
 const router = createRouter({
   history: createWebHistory(),
   routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
@@ -91,7 +88,7 @@ const mountHome = async () => {
   const wrapper = mount(PortalHomeView, {
     global: {
       plugins: [ElementPlus, router],
-      stubs: { PortalBatchMeasurementSheet: true, TodayFocusCard: true },
+      stubs: { TodayFocusCard: true },
     },
   })
   await flushPromises()

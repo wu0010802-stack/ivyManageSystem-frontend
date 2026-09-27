@@ -6084,6 +6084,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dismissal-calls/pos-bus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Pos Bus
+         * @description 接送台補登「已被娃娃車接走」：建立 request_source='bus' 的已完成接送紀錄。
+         */
+        post: operations["mark_pos_bus_api_dismissal_calls_pos_bus_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dismissal-calls/pos-bus/{call_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unmark Pos Bus
+         * @description 撤銷補登的娃娃車接走（限原補登者或管理角色）。
+         */
+        delete: operations["unmark_pos_bus_api_dismissal_calls_pos_bus__call_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dismissal-calls/pos-leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Pos Leave
+         * @description 接送台補登今日請假：寫入今日出缺勤並排除當日娃娃車站點。
+         */
+        post: operations["mark_pos_leave_api_dismissal_calls_pos_leave_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dismissal-calls/pos-leave/{student_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unmark Pos Leave
+         * @description 撤銷接送台補登的今日請假（家長申請或老師點名寫入的不能從這裡撤）。
+         */
+        delete: operations["unmark_pos_leave_api_dismissal_calls_pos_leave__student_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dismissal-calls/pos-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dismissal Pos Status
+         * @description 全園指定日（預設今日）的請假名單與已上放學車名單，供接送 POS 學生卡顯示。
+         */
+        get: operations["get_dismissal_pos_status_api_dismissal_calls_pos_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/duty-rotations": {
         parameters: {
             query?: never;
@@ -38844,6 +38944,20 @@ export interface components {
             /** Items */
             items: components["schemas"]["PortalSurveyItemOut"][];
         };
+        /** PosBusCreate */
+        PosBusCreate: {
+            /** Student Id */
+            student_id: number;
+        };
+        /** PosBusDepartedOut */
+        PosBusDepartedOut: {
+            /** Departed At */
+            departed_at: string | null;
+            /** Route Name */
+            route_name: string;
+            /** Student Id */
+            student_id: number;
+        };
         /** POSCheckoutItem */
         POSCheckoutItem: {
             /**
@@ -39376,6 +39490,25 @@ export interface components {
             nurse?: number | null;
             /** Principal */
             principal?: number | null;
+        };
+        /** PosLeaveCreate */
+        PosLeaveCreate: {
+            /**
+             * Leave Type
+             * @enum {string}
+             */
+            leave_type: "病假" | "事假";
+            /** Student Id */
+            student_id: number;
+        };
+        /** PosLeaveOut */
+        PosLeaveOut: {
+            /** Leave Type */
+            leave_type: string;
+            /** Marked By Pos */
+            marked_by_pos: boolean;
+            /** Student Id */
+            student_id: number;
         };
         /**
          * PosOperatorActivityItemOut
@@ -39949,6 +40082,13 @@ export interface components {
         PosSemesterSignoffVoid: {
             /** Reason */
             reason: string;
+        };
+        /** PosStatusOut */
+        PosStatusOut: {
+            /** Bus Departed */
+            bus_departed: components["schemas"]["PosBusDepartedOut"][];
+            /** Leaves */
+            leaves: components["schemas"]["PosLeaveOut"][];
         };
         /**
          * PosSupplyDetailItemOut
@@ -59018,6 +59158,164 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_pos_bus_api_dismissal_calls_pos_bus_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosBusCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissalCallOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unmark_pos_bus_api_dismissal_calls_pos_bus__call_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissalCallOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_pos_leave_api_dismissal_calls_pos_leave_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosLeaveCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosLeaveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unmark_pos_leave_api_dismissal_calls_pos_leave__student_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dismissal_pos_status_api_dismissal_calls_pos_status_get: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD，預設今日 */
+                target_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosStatusOut"];
                 };
             };
             /** @description Validation Error */

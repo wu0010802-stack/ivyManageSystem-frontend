@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { Plus, Refresh } from '@element-plus/icons-vue'
-import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
+import { getDismissalCalls, getDismissalCallsFresh, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
 import { getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
 import DismissalPosBoard from '@/components/dismissal/pos/DismissalPosBoard.vue'
@@ -165,7 +165,11 @@ const stopAllConnections = () => {
 }
 
 // ─── HTTP 載入 ───────────────────────────────────────────
-const fetchCalls = async () => {
+// force：寫入後的重抓（POS 補登娃娃車）繞過 apiDedupe，避免領到在途輪詢的舊快照
+const fetchCalls = () => loadCalls(false)
+const refetchCallsAfterWrite = () => loadCalls(true)
+
+const loadCalls = async (force: boolean) => {
   const mySeq = ++fetchDispatchSeq
   loading.value = true
   try {
@@ -180,7 +184,7 @@ const fetchCalls = async () => {
     if (filterStatus.value !== 'all' && filterStatus.value !== 'active') {
       params.status = filterStatus.value
     }
-    const res = await getDismissalCalls(params)
+    const res = await (force ? getDismissalCallsFresh(params) : getDismissalCalls(params))
     if (mySeq !== fetchDispatchSeq) return
     calls.value = (res.data || []) as DismissalCall[]
   } catch (e) {
@@ -589,6 +593,7 @@ onUnmounted(() => {
         :classrooms="classrooms"
         :students="students"
         :calls="posBoardCalls"
+        @refresh-calls="refetchCallsAfterWrite"
       />
     </template>
 

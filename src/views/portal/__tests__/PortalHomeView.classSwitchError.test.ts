@@ -54,9 +54,6 @@ vi.mock('@/composables/usePortalDismissalAlerts', () => ({
 vi.mock('@/api/portal', () => ({ getPortalPickupPendingCount: mockPickupCount }))
 vi.mock('@/api/portalHome', () => ({ getHomeSummary: mockHomeSummary }))
 vi.mock('@/api/portalLeaveQuotaExpiry', () => ({ getMyLeaveQuotaExpiry: mockLeaveQuota }))
-vi.mock('@/api/portalMeasurements', () => ({
-  getMeasurementsLatest: vi.fn(() => Promise.resolve({ data: [] })),
-}))
 vi.mock('@/utils/auth', async (orig) => {
   const actual = await (orig as () => Promise<Record<string, unknown>>)()
   return { ...actual, hasPortalPermission: vi.fn(() => true) }
@@ -85,7 +82,7 @@ async function mountView() {
   const wrapper = mount(PortalHomeView, {
     global: {
       plugins: [ElementPlus, createPinia(), router],
-      stubs: { TodayFocusCard: true, ClassroomOpsCard: true, PortalBatchMeasurementSheet: true },
+      stubs: { TodayFocusCard: true, ClassroomOpsCard: true },
     },
   })
   await flushPromises()

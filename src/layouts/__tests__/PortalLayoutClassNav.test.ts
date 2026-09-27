@@ -37,9 +37,8 @@ describe('PortalLayout 班級導覽（SPEC-024 → 2026-09-14 首頁整併）', 
     expect(PortalLayoutSource).not.toContain('<span>班級總覽</span>')
   })
 
-  it('側欄「全班量體位」改指首頁的抽屜深連結', () => {
-    expect(PortalLayoutSource).toContain('<span>全班量體位</span>')
-    expect(PortalLayoutSource).toContain('index="/portal/home?sheet=measurement"')
-    expect(PortalLayoutSource).not.toContain('index="/portal/class?sheet=measurement"')
+  it('側欄不再有「全班量體位」——功能已下架（2026-09-27）', () => {
+    expect(PortalLayoutSource).not.toContain('<span>全班量體位</span>')
+    expect(PortalLayoutSource).not.toContain('sheet=measurement')
   })
 })

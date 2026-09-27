@@ -18,6 +18,7 @@
 import { computed } from 'vue'
 import DismissalPosStudentCard, {
   type DismissalPosStudentCardStudent,
+  type PosLeaveType,
 } from './DismissalPosStudentCard.vue'
 import {
   buildRoster,
@@ -26,23 +27,32 @@ import {
   type ClassroomInput,
 } from '@/composables/useDismissalRoster'
 import { useStudentPosStatus, type PosStudentCallInput } from '@/composables/useStudentPosStatus'
-import type { PosStudentStatus } from '@/types/dismissalPos'
+import type { PosDayStatus, PosStudentStatus, PosStudentStatusDetail } from '@/types/dismissalPos'
 
 const props = defineProps<{
   selectedClassroomId: number | null
   students: RosterStudentInput[]
   classrooms: ClassroomInput[]
   calls: RosterCallInput[]
+  /** 全園今日請假／已上放學車（posbus01）；未傳＝只看接送通知 */
+  dayStatus?: PosDayStatus
+  /** 補登／撤銷請求進行中的學生 id */
+  busyIds?: ReadonlySet<number>
 }>()
 
 const emit = defineEmits<{
   'quick-dispatch': [student: DismissalPosStudentCardStudent]
+  'mark-bus': [student: DismissalPosStudentCardStudent]
+  'mark-leave': [student: DismissalPosStudentCardStudent, leaveType: PosLeaveType]
+  'unmark-bus': [student: DismissalPosStudentCardStudent, callId: number]
+  'unmark-leave': [student: DismissalPosStudentCardStudent]
 }>()
 
 interface GridCard {
   student: DismissalPosStudentCardStudent
   status: PosStudentStatus
   sortWeight: number
+  detail: PosStudentStatusDetail
 }
 
 /** 直接重用既有 buildRoster 做分班/去重，不重新實作。 */
@@ -55,11 +65,12 @@ const cards = computed<GridCard[]>(() => {
   if (!group) return []
   return group.students
     .map((s) => {
-      const { status, sortWeight } = useStudentPosStatus(
+      const { status, sortWeight, detail } = useStudentPosStatus(
         { id: s.id },
         props.calls as PosStudentCallInput[],
+        props.dayStatus,
       )
-      return { student: { id: s.id, name: s.name }, status, sortWeight }
+      return { student: { id: s.id, name: s.name }, status, sortWeight, detail }
     })
     .sort((a, b) => a.sortWeight - b.sortWeight)
 })
@@ -77,7 +88,13 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
       :key="card.student.id"
       :student="card.student"
       :status="card.status"
+      :detail="card.detail"
+      :busy="busyIds?.has(card.student.id) ?? false"
       @quick-dispatch="handleQuickDispatch"
+      @mark-bus="emit('mark-bus', $event)"
+      @mark-leave="(student, leaveType) => emit('mark-leave', student, leaveType)"
+      @unmark-bus="(student, callId) => emit('unmark-bus', student, callId)"
+      @unmark-leave="emit('unmark-leave', $event)"
     />
   </div>
 </template>

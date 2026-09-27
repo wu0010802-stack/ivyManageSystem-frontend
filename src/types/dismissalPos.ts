@@ -11,7 +11,8 @@
 import type { DismissalCallView } from '@/composables/useDismissalUrgency'
 
 /**
- * 學生接送狀態（供卡片徽章與排序）。on_leave / bus_picked 本輪無資料來源（D3/D4），永遠回傳固定值。
+ * 學生接送狀態（供卡片徽章與排序）。on_leave／bus_picked 自 posbus01 起有資料來源：
+ * 今日出缺勤病假/事假、放學車上車打卡、辦公室補登（見 useStudentPosStatus.ts）。
  * proxy_picked（T-023）：委託代理人（request_source='proxy' 的 completed call）已接走，
  * 與 guardian_picked（本人家長）刻意分開成獨立值，讓辦公室能一眼分辨是誰接走學生（D10）。
  */
@@ -21,9 +22,32 @@ export type PosStudentStatus = 'unpicked' | 'on_leave' | 'bus_picked' | 'guardia
  * 佇列項目來源標籤。
  * - onsite：現場（request_source=staff）
  * - reservation：家長預約（request_source=parent）
- * - proxy：代理接送，本輪只保留型別值（BD-004 尚待產品定義），沒有任何資料來源會產生它
+ * - proxy：委託代理人（request_source=proxy）
+ * - bus：辦公室補登「已被娃娃車接走」（request_source=bus，建立即完成，只出現在 done 區）
  */
-export type PosQueueSource = 'onsite' | 'reservation' | 'proxy'
+export type PosQueueSource = 'onsite' | 'reservation' | 'proxy' | 'bus'
+
+/**
+ * 全園當日請假／已上放學車名單（GET /dismissal-calls/pos-status 攤平成以 student_id
+ * 為 key 的 Map，供每張學生卡 O(1) 查詢）。
+ */
+export interface PosDayStatus {
+  leaves: Map<number, { leaveType: string; markedByPos: boolean }>
+  busDeparted: Map<number, { routeName: string }>
+}
+
+/**
+ * 卡片 ⋮ 選單需要的狀態來源細節：是否為接送台補登（可撤銷）或系統帶入（不可從 POS 撤銷）。
+ * - busManualCallId：補登的 request_source=bus 接送紀錄 id（撤銷時用）
+ * - busRouteName：隨車老師端上車打卡帶入時的路線名稱
+ * - leaveMarkedByPos：請假是否為接送台補登
+ */
+export interface PosStudentStatusDetail {
+  leaveType?: string
+  leaveMarkedByPos?: boolean
+  busManualCallId?: number
+  busRouteName?: string
+}
 
 /** 倒數中尚未送出後端的本地 staging 資訊（見 useDismissalPosQueue.ts 的 staging Map）。 */
 export interface PosQueueCountdown {

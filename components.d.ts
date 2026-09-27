@@ -258,7 +258,6 @@ declare module 'vue' {
     PlanRosterTable: typeof import('./src/components/enrollment/planning/PlanRosterTable.vue')['default']
     PlanSidePanel: typeof import('./src/components/enrollment/planning/PlanSidePanel.vue')['default']
     PlanStatusCard: typeof import('./src/components/classroom/PlanStatusCard.vue')['default']
-    PortalBatchMeasurementSheet: typeof import('./src/components/portal/sheets/PortalBatchMeasurementSheet.vue')['default']
     PortalErrorState: typeof import('./src/components/portal/PortalErrorState.vue')['default']
     PortalFilterBar: typeof import('./src/components/portal/PortalFilterBar.vue')['default']
     PortalLeaveForm: typeof import('./src/components/portal/PortalLeaveForm.vue')['default']

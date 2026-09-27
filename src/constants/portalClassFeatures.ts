@@ -2,7 +2,7 @@
  * 教師端首頁（/portal/home）的功能格清單——單一事實來源。
  *
  * 背景（SPEC-024）：原本 /portal/class-hub 以「時段軸」呈現，只列出今天有待辦
- * 的功能，今天沒待辦的入口整個消失；每日聯絡簿、學生點名、全班量體位甚至
+ * 的功能，今天沒待辦的入口整個消失；每日聯絡簿、學生點名甚至
  * 從來沒有出現在側欄。改為「每格一律顯示、有待辦才掛數字」。
  *
  * 2026-09-14 首頁整併：/portal/class 整頁收進首頁「現在該做」下方，同時吸收
@@ -56,10 +56,8 @@ export interface ClassFeatureDef {
    * 未宣告 ＝ 該路由本身沒有 meta.permission（全體 portal 使用者可進），一律顯示。
    */
   permission?: string
-  /** 目的地路由；與 action 二擇一 */
+  /** 目的地路由 */
   to?: string
-  /** 無路由的格子（開抽屜）；與 to 二擇一 */
-  action?: 'measurement'
   /** badge 取值的 counts 欄位；未宣告 ＝ 此格不從 counts 取 badge */
   badgeKey?: string
   /** badge 取自首頁 dashboard summary.actions 的欄位 */
@@ -180,15 +178,6 @@ export const CLASS_FEATURES: readonly ClassFeatureDef[] = [
     permission: 'STUDENTS_READ',
     to: '/portal/pickup-authorizations',
     externalBadge: 'pickup',
-  },
-  {
-    // 全班量體位沒有獨立頁，只有抽屜。權限取 PORTFOLIO_WRITE：量測寫入走
-    // admin endpoint POST /students/{id}/measurements，教師靠它通過。
-    key: 'measurement',
-    label: '全班量體位',
-    group: 'manage',
-    permission: 'PORTFOLIO_WRITE',
-    action: 'measurement',
   },
   {
     key: 'bus-trip',

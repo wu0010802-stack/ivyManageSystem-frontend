@@ -55,8 +55,8 @@ describe('/portal/class-hub 舊連結 redirect', () => {
  * /portal/class 於 2026-09-14 整頁併進 /portal/home。這條轉址同樣是永久的：
  * 老師的書籤、側欄舊連結與 class-hub 轉過來的流量都落在這裡。
  *
- * 必須保留 query——側欄「全班量體位」與存量通知走的是 ?sheet=measurement，
- * 字串形式的 redirect 會把 query 丟掉，抽屜就再也不會開。
+ * 必須保留 query（例如多班教師的 ?classroom_id=），字串形式的 redirect 會把
+ * query 丟掉。
  */
 describe('/portal/class 併入首頁後的 redirect', () => {
   function classRedirect(): RedirectFn {
@@ -68,13 +68,6 @@ describe('/portal/class 併入首頁後的 redirect', () => {
 
   it('轉到 /portal/home', () => {
     expect(classRedirect()({ query: {} })).toEqual({ path: '/portal/home', query: {} })
-  })
-
-  it('保留 ?sheet=measurement，否則側欄的全班量體位再也開不了抽屜', () => {
-    expect(classRedirect()({ query: { sheet: 'measurement' } })).toEqual({
-      path: '/portal/home',
-      query: { sheet: 'measurement' },
-    })
   })
 
   it('保留 ?classroom_id=（多班教師的深連結）', () => {
