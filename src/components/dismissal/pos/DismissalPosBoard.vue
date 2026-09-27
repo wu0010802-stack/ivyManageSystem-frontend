@@ -10,26 +10,39 @@
  * useDismissalPosQueue 的 addToQueue（其 PosDispatchStudent 契約需要這兩個
  * 欄位），不是單純透傳。
  *
+ * 請假／娃娃車（posbus01）：useDismissalPosDayStatus 取全園今日名單交給中欄算徽章；
+ * 卡片 ⋮ 選單的補登／撤銷在這裡打 API，完成後 refresh 名單並 emit refresh-calls
+ * 讓父層重抓接送通知（娃娃車補登是一筆 request_source=bus 的 completed call）。
+ *
  * 範圍決策：左欄 count 徽章（T-005 選配欄位）本輪未串接——要正確算出「每班
  * unpicked 人數」需要對所有班級（非僅選中班級）各自跑一次 buildRoster +
  * useStudentPosStatus，屬於額外範圍，acceptance_criteria 未要求，先不做，
  * 如需要可另拆 task。
  */
 import { computed, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import DismissalPosClassroomRail from './DismissalPosClassroomRail.vue'
 import DismissalPosStudentGrid from './DismissalPosStudentGrid.vue'
 import DismissalPosQueuePanel from './DismissalPosQueuePanel.vue'
-import type { DismissalPosStudentCardStudent } from './DismissalPosStudentCard.vue'
+import type { DismissalPosStudentCardStudent, PosLeaveType } from './DismissalPosStudentCard.vue'
 import type { RosterStudentInput, ClassroomInput } from '@/composables/useDismissalRoster'
 import type { DismissalCallView } from '@/composables/useDismissalUrgency'
 import { useDismissalPosQueue } from '@/composables/useDismissalPosQueue'
 import { useDismissalReservationChime } from '@/composables/useDismissalReservationChime'
+import { useDismissalPosDayStatus } from '@/composables/useDismissalPosDayStatus'
+import { markPosBus, markPosLeave, unmarkPosBus, unmarkPosLeave } from '@/api/dismissalCalls'
+import { friendlyError } from '@/utils/errorMessages'
 
 const props = defineProps<{
   classrooms: ClassroomInput[]
   students: RosterStudentInput[]
   /** 今日 dismissal calls：同時供中欄 roster 分組與右欄 active 佇列使用（不重複打兩支 API）。 */
   calls: DismissalCallView[]
+}>()
+
+const emit = defineEmits<{
+  /** 補登／撤銷娃娃車後通知父層重抓今日接送通知 */
+  'refresh-calls': []
 }>()
 
 const selectedClassroomId = ref<number | null>(null)
@@ -58,6 +71,63 @@ const { queue, addToQueue, cancel, confirmProxyPickup, confirmingIds } =
 // 右欄家長預約倒數 10 / 5 分鐘柔和提示（見 useDismissalReservationChime.ts）。
 useDismissalReservationChime(activeCalls)
 
+const { dayStatus, refresh: refreshDayStatus } = useDismissalPosDayStatus()
+const busyIds = ref<Set<number>>(new Set())
+
+/** 同一學生同時只允許一個補登／撤銷請求；完成後重抓名單與（視需要）接送通知。 */
+async function runMark(
+  studentId: number,
+  action: () => Promise<unknown>,
+  { success, failure, refreshCalls }: { success: string; failure: string; refreshCalls: boolean },
+) {
+  if (busyIds.value.has(studentId)) return
+  busyIds.value = new Set(busyIds.value).add(studentId)
+  try {
+    await action()
+    ElMessage.success(success)
+  } catch (e) {
+    ElMessage.error(friendlyError(failure, e))
+  } finally {
+    const next = new Set(busyIds.value)
+    next.delete(studentId)
+    busyIds.value = next
+    void refreshDayStatus()
+    if (refreshCalls) emit('refresh-calls')
+  }
+}
+
+function handleMarkBus(student: DismissalPosStudentCardStudent) {
+  void runMark(student.id, () => markPosBus({ student_id: student.id }), {
+    success: `已標記 ${student.name} 被娃娃車接走`,
+    failure: '標記娃娃車接走失敗',
+    refreshCalls: true,
+  })
+}
+
+function handleUnmarkBus(student: DismissalPosStudentCardStudent, callId: number) {
+  void runMark(student.id, () => unmarkPosBus(callId), {
+    success: `已撤銷 ${student.name} 的娃娃車接走標記`,
+    failure: '撤銷娃娃車接走標記失敗',
+    refreshCalls: true,
+  })
+}
+
+function handleMarkLeave(student: DismissalPosStudentCardStudent, leaveType: PosLeaveType) {
+  void runMark(student.id, () => markPosLeave({ student_id: student.id, leave_type: leaveType }), {
+    success: `已標記 ${student.name} 今天${leaveType}`,
+    failure: '標記請假失敗',
+    refreshCalls: false,
+  })
+}
+
+function handleUnmarkLeave(student: DismissalPosStudentCardStudent) {
+  void runMark(student.id, () => unmarkPosLeave(student.id), {
+    success: `已撤銷 ${student.name} 的請假標記`,
+    failure: '撤銷請假標記失敗',
+    refreshCalls: false,
+  })
+}
+
 function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
   if (selectedClassroomId.value == null) return
   const classroom = props.classrooms.find(c => c.id === selectedClassroomId.value)
@@ -84,7 +154,13 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
       :students="students"
       :classrooms="classrooms"
       :calls="calls"
+      :day-status="dayStatus"
+      :busy-ids="busyIds"
       @quick-dispatch="handleQuickDispatch"
+      @mark-bus="handleMarkBus"
+      @mark-leave="handleMarkLeave"
+      @unmark-bus="handleUnmarkBus"
+      @unmark-leave="handleUnmarkLeave"
     />
     <DismissalPosQueuePanel
       class="pos-board__queue"

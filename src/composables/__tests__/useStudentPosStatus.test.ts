@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { useStudentPosStatus, type PosStudentCallInput } from '../useStudentPosStatus'
+import type { PosDayStatus } from '@/types/dismissalPos'
 
 describe('useStudentPosStatus', () => {
   const student = { id: 1 }
@@ -179,5 +180,86 @@ describe('useStudentPosStatus', () => {
       expect(unpicked.sortWeight).toBeLessThan(proxyPicked.sortWeight)
       expect(proxyPicked.sortWeight).toBe(guardianPicked.sortWeight)
     })
+  })
+})
+
+describe('useStudentPosStatus：請假／娃娃車（posbus01）', () => {
+  const student = { id: 1 }
+  const day = (over: Partial<PosDayStatus> = {}): PosDayStatus => ({
+    leaves: new Map(),
+    busDeparted: new Map(),
+    ...over,
+  })
+
+  it('今日請假（系統帶入）→ on_leave，detail 標示非接送台補登', () => {
+    const result = useStudentPosStatus(student, [], day({
+      leaves: new Map([[1, { leaveType: '病假', markedByPos: false }]]),
+    }))
+    expect(result.status).toBe('on_leave')
+    expect(result.detail).toEqual({ leaveType: '病假', leaveMarkedByPos: false })
+  })
+
+  it('今日請假（接送台補登）→ detail.leaveMarkedByPos=true', () => {
+    const result = useStudentPosStatus(student, [], day({
+      leaves: new Map([[1, { leaveType: '事假', markedByPos: true }]]),
+    }))
+    expect(result.status).toBe('on_leave')
+    expect(result.detail.leaveMarkedByPos).toBe(true)
+  })
+
+  it('已上放學車（隨車老師打卡）→ bus_picked，帶路線名稱', () => {
+    const result = useStudentPosStatus(student, [], day({
+      busDeparted: new Map([[1, { routeName: '放學一號車' }]]),
+    }))
+    expect(result.status).toBe('bus_picked')
+    expect(result.detail).toEqual({ busRouteName: '放學一號車' })
+  })
+
+  it('補登的 bus completed call → bus_picked（不是 guardian_picked），帶 call id 供撤銷', () => {
+    const calls: PosStudentCallInput[] = [
+      { id: 55, student_id: 1, status: 'completed', request_source: 'bus' },
+    ]
+    const result = useStudentPosStatus(student, calls)
+    expect(result.status).toBe('bus_picked')
+    expect(result.detail.busManualCallId).toBe(55)
+  })
+
+  it('已取消的 bus call 不算 → unpicked', () => {
+    const calls: PosStudentCallInput[] = [
+      { id: 55, student_id: 1, status: 'cancelled', request_source: 'bus' },
+    ]
+    expect(useStudentPosStatus(student, calls).status).toBe('unpicked')
+  })
+
+  it('家長已接走優先於請假／娃娃車（接走是最終事實）', () => {
+    const calls: PosStudentCallInput[] = [{ student_id: 1, status: 'completed', request_source: 'staff' }]
+    const result = useStudentPosStatus(student, calls, day({
+      leaves: new Map([[1, { leaveType: '病假', markedByPos: false }]]),
+    }))
+    expect(result.status).toBe('guardian_picked')
+  })
+
+  it('娃娃車優先於請假', () => {
+    const result = useStudentPosStatus(student, [], day({
+      leaves: new Map([[1, { leaveType: '病假', markedByPos: false }]]),
+      busDeparted: new Map([[1, { routeName: '放學一號車' }]]),
+    }))
+    expect(result.status).toBe('bus_picked')
+  })
+
+  it('有進行中通知時仍以進行中為準（即使已請假）', () => {
+    const calls: PosStudentCallInput[] = [{ student_id: 1, status: 'pending' }]
+    const result = useStudentPosStatus(student, calls, day({
+      leaves: new Map([[1, { leaveType: '病假', markedByPos: false }]]),
+    }))
+    expect(result.status).toBe('unpicked')
+  })
+
+  it('其他學生的請假不影響本人', () => {
+    const result = useStudentPosStatus(student, [], day({
+      leaves: new Map([[2, { leaveType: '病假', markedByPos: false }]]),
+    }))
+    expect(result.status).toBe('unpicked')
+    expect(result.detail).toEqual({})
   })
 })

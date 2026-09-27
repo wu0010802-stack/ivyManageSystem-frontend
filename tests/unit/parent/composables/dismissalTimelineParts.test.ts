@@ -67,4 +67,16 @@ describe('dismissalTimelineParts', () => {
     expect(legacy.secondary).toBe('老師已收到')
     expect(legacy.path).toBe('/attendance')
   })
+
+  it('園方補登娃娃車接走（request_source=bus）→ 顯示已搭娃娃車離園', () => {
+    const parts = dismissalTimelineParts({
+      status: 'completed',
+      request_source: 'bus',
+      requested_at: '2026-09-28T16:30:00',
+      completed_at: '2026-09-28T16:30:00',
+    })
+    expect(parts.sourceTs).toBe('2026-09-28T16:30:00')
+    expect(parts.secondary).toBe('已搭娃娃車離園')
+    expect(parts.path).toBe('/attendance')
+  })
 })

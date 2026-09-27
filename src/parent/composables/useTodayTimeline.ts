@@ -52,7 +52,8 @@ export interface TimelineDismissal {
  * dismissal 事件的時間軸語意（pnotice01，純函式可測）：
  * - 家長預告未抵達：時間=預計抵達、secondary=「已預告 · 預計抵達 · 老師狀態」
  * - 已到門口未完成：時間=arrived_at、secondary=「已到門口 · 老師狀態」
- * - 完成/其他（含 staff 舊流程）：行為與改造前一致
+ * - 完成/其他（含 staff 舊流程）：行為與改造前一致；園方補登娃娃車接走
+ *   （request_source=bus，posbus01）改顯示「已搭娃娃車離園」
  * 家長預告的事件導向 /pickup-notice（追蹤卡同源，避免兩張矛盾接送卡）。
  */
 export function dismissalTimelineParts(d: TimelineDismissal): {
@@ -66,7 +67,7 @@ export function dismissalTimelineParts(d: TimelineDismissal): {
   if (completed) {
     return {
       sourceTs: d.completed_at || d.requested_at,
-      secondary: dismissalLabel(d.status),
+      secondary: d.request_source === 'bus' ? '已搭娃娃車離園' : dismissalLabel(d.status),
       path,
     }
   }

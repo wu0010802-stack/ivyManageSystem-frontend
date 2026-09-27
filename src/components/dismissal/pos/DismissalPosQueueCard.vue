@@ -67,6 +67,7 @@ const SOURCE_LABEL: Record<PosQueueSource, string> = {
   onsite: '現場',
   reservation: '預約',
   proxy: '代理',
+  bus: '娃娃車',
 }
 
 const sourceLabel = computed(() => SOURCE_LABEL[props.item.source])
@@ -358,6 +359,11 @@ const bodyStyle = computed(() => ({
 .pos-queue-card__source-tag--reservation {
   background: var(--color-info-soft);
   color: var(--color-info-darker);
+}
+
+.pos-queue-card__source-tag--bus {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-darker);
 }
 
 .pos-queue-card__source-tag--proxy {

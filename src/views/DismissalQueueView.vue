@@ -589,6 +589,7 @@ onUnmounted(() => {
         :classrooms="classrooms"
         :students="students"
         :calls="posBoardCalls"
+        @refresh-calls="fetchCalls"
       />
     </template>
 
