@@ -4,6 +4,7 @@ import { computed, ref, onMounted, onUnmounted, provide, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
+import { getAttendanceConfirmPendingCount } from '@/api/portalAttendanceConfirm'
 import { initPortalDismissalAlerts, teardownPortalDismissalAlerts, usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
 import { getTodayHub } from '@/api/portalClassHub'
 import { changePassword, endImpersonate } from '@/api/auth'
@@ -83,6 +84,7 @@ const unreadCount = ref(0)
 // Swap pending count
 const swapPendingCount = ref(0)
 const substitutePendingCount = ref(0)
+const attendanceConfirmPendingCount = ref(0)
 
 // 接送待處理數：由 module-singleton composable 即時維護（WS 推播驅動），殼層不另外 fetch
 const { pendingCount: dismissalPendingCount } = usePortalDismissalAlerts()
@@ -126,6 +128,15 @@ const fetchSubstitutePendingCount = async () => {
   }
 }
 
+const fetchAttendanceConfirmPendingCount = async () => {
+  try {
+    const res = await getAttendanceConfirmPendingCount()
+    attendanceConfirmPendingCount.value = (res.data as Record<string, unknown>)?.pending_count as number || 0
+  } catch {
+    // Silent fail
+  }
+}
+
 const fetchHubPendingCount = async () => {
   try {
     const data = await getTodayHub()
@@ -147,6 +158,7 @@ const refreshPortalCounts = ({ force = false }: { force?: boolean } = {}) => {
   fetchUnreadCount()
   fetchSwapPendingCount()
   fetchSubstitutePendingCount()
+  fetchAttendanceConfirmPendingCount()
   // dismissal count 由 composable 透過 WS 即時維護，不走輪詢
   fetchHubPendingCount()
 }
@@ -403,6 +415,10 @@ const submitPassword = async () => {
           </el-menu-item>
           <el-menu-item index="/portal/anomalies">
             <span>異常確認</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/attendance-confirm">
+            <span>月底出勤確認</span>
+            <el-badge v-if="attendanceConfirmPendingCount > 0" :value="attendanceConfirmPendingCount" :max="99" class="announcement-badge" />
           </el-menu-item>
         </el-sub-menu>
 

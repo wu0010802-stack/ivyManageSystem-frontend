@@ -232,6 +232,18 @@ describe('PortalHomeView 功能格區（/portal/class 整併後）', () => {
     expect(push).toHaveBeenCalledWith('/portal/anomalies')
   })
 
+  it('月底出勤確認格的數字取自 dashboard actions，點擊導向確認頁', async () => {
+    mockHomeSummary.mockResolvedValue({
+      data: { ...SUMMARY, actions: { ...SUMMARY.actions, pending_attendance_confirmations: 2 } },
+    })
+    const push = vi.spyOn(router, 'push')
+    push.mockClear()
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-test="feature-attendance-confirm"]').text()).toContain('2')
+    await wrapper.find('[data-test="feature-attendance-confirm"]').trigger('click')
+    expect(push).toHaveBeenCalledWith('/portal/attendance-confirm')
+  })
+
   it('成長軌跡與活動調查有入口——側欄沒有它們，刪掉快速進入而不接住就進不去了', async () => {
     const wrapper = await mountView()
     expect(wrapper.find('[data-test="feature-growth"]').exists()).toBe(true)

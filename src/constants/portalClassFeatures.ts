@@ -30,6 +30,7 @@ export interface PortalPendingActions {
   pending_substitute?: number
   pending_swap?: number
   pending_anomaly_confirms?: number
+  pending_attendance_confirmations?: number
   unread_announcements?: number
   [key: string]: unknown
 }
@@ -218,6 +219,13 @@ export const CLASS_FEATURES: readonly ClassFeatureDef[] = [
     group: 'mine',
     to: '/portal/anomalies',
     actionsKey: 'pending_anomaly_confirms',
+  },
+  {
+    key: 'attendance-confirm',
+    label: '月底出勤確認',
+    group: 'mine',
+    to: '/portal/attendance-confirm',
+    actionsKey: 'pending_attendance_confirmations',
   },
   {
     key: 'announcements',
