@@ -47,12 +47,19 @@ interface AmendForm {
   punchOut: string
   note: string
   submitting: boolean
+  agreeing: boolean
 }
 
 const route = useRoute()
 const [thisYear, thisMonth] = todayTaipeiISO().split('-').map(Number)
-const year = ref(Number(route.query.year) || thisYear)
-const month = ref(Number(route.query.month) || thisMonth)
+// 比照 PortalAnomalyView.vue 的 _queryInt：不是整數或超出合理範圍（誤帶壞掉的網址、
+// 手改網址列）一律退回本月，不要把 NaN／越界值送進 API 查詢參數。
+function _queryInt(v: unknown, fallback: number, min: number, max: number): number {
+  const n = Number(Array.isArray(v) ? v[0] : v)
+  return Number.isInteger(n) && n >= min && n <= max ? n : fallback
+}
+const year = ref(_queryInt(route.query.year, thisYear, 2000, 2100))
+const month = ref(_queryInt(route.query.month, thisMonth, 1, 12))
 const data = ref<ViewData | null>(null)
 const loading = ref(false)
 const signing = ref(false)
@@ -71,7 +78,7 @@ function formOf(item: PortalConfirmationItem): AmendForm {
   const id = item.id ?? 0
   if (!forms[id]) {
     forms[id] = { open: false, kind: '', partner: null, leaveType: 'personal', correctionType: 'both',
-      punchIn: '', punchOut: '', note: '', submitting: false }
+      punchIn: '', punchOut: '', note: '', submitting: false, agreeing: false }
   }
   return forms[id]
 }
@@ -87,14 +94,21 @@ function kindDisabled(item: PortalConfirmationItem, kind: AmendKind): boolean {
   return (kind === 'swap_with' || kind === 'cover_for') && partnerChoices(item, kind).length === 0
 }
 
+// 切年／月很快時，較慢回來的舊請求可能在新請求之後才 resolve；沒有序號防護會把舊月份
+// 資料寫進 data，但下拉已顯示新年月，形成顯示與選取不一致。比照 ConfirmationRoundBar.vue
+// 的寫法：每次 load() 領一個序號，只有序號仍是最新的回應才能寫入 data／loading。
+let loadSeq = 0
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   try {
-    data.value = (await getMyAttendanceConfirmations({ year: year.value, month: month.value })).data
+    const res = await getMyAttendanceConfirmations({ year: year.value, month: month.value })
+    if (seq !== loadSeq) return
+    data.value = res.data
   } catch {
-    ElMessage.error('讀取出勤確認失敗')
+    if (seq === loadSeq) ElMessage.error('讀取出勤確認失敗')
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -117,11 +131,16 @@ function errorText(e: unknown): string {
 
 async function agree(item: PortalConfirmationItem) {
   if (item.id == null) return
+  const form = formOf(item)
+  if (form.agreeing) return
+  form.agreeing = true
   try {
     replaceItem((await respondAttendanceConfirmation(item.id, { action: 'agree' })).data)
     ElMessage.success('已回覆')
   } catch (e) {
     ElMessage.error(errorText(e))
+  } finally {
+    form.agreeing = false
   }
 }
 
@@ -212,7 +231,7 @@ async function signoff() {
         <p class="attendance-confirm__text">{{ describeSuggestion(item, viewerId(item)) }}</p>
         <div v-if="item.needs_my_response || (item.status === 'pending' && item.can_repair)" class="attendance-confirm__actions">
           <el-button v-if="item.can_agree && item.needs_my_response" type="primary"
-            :data-test="`agree-${item.id}`" @click="agree(item)">對</el-button>
+            :loading="formOf(item).agreeing" :data-test="`agree-${item.id}`" @click="agree(item)">對</el-button>
           <el-button :data-test="`amend-${item.id}`" @click="formOf(item).open = !formOf(item).open">
             不對，改成…
           </el-button>

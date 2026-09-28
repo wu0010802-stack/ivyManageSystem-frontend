@@ -42,12 +42,12 @@ function view(items: ReturnType<typeof item>[], pending: number, signedAt: strin
 }
 
 let wrapper: VueWrapper
-async function mountView() {
+async function mountView(query = '?year=2026&month=9') {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/portal/attendance-confirm', component: PortalAttendanceConfirmView },
     { path: '/portal/anomalies', component: { template: '<div />' } },
   ] })
-  await router.push('/portal/attendance-confirm?year=2026&month=9')
+  await router.push(`/portal/attendance-confirm${query}`)
   wrapper = mount(PortalAttendanceConfirmView, { global: { plugins: [ElementPlus, router] }, attachTo: document.body })
   await flushPromises()
 }
@@ -120,5 +120,47 @@ describe('PortalAttendanceConfirmView', () => {
     api.get.mockResolvedValue(view([item()], 1))
     await mountView()
     expect(wrapper.get('[data-test="signoff"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('discards a stale month response that resolves after a newer one (race guard)', async () => {
+    let resolveSept!: (v: unknown) => void
+    const septPromise = new Promise((resolve) => { resolveSept = resolve })
+    api.get.mockImplementationOnce(() => septPromise)
+    api.get.mockImplementationOnce(() => Promise.resolve(view([item({ id: 22, date: '2026-10-05' })], 1)))
+    await mountView()
+
+    const monthSelect = wrapper.findAllComponents({ name: 'ElSelect' })[1]
+    await monthSelect.vm.$emit('update:modelValue', 10)
+    await flushPromises()
+    // 較慢的 9 月請求在 10 月請求之後才 resolve；沒有序號防護會把 9 月資料蓋掉已顯示的 10 月
+    resolveSept(view([item({ id: 11 })], 1))
+    await flushPromises()
+
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="agree-22"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="agree-11"]').exists()).toBe(false)
+  })
+
+  it('locks the 對 button while a response is in flight, preventing a double-submit', async () => {
+    api.get.mockResolvedValue(view([item()], 1))
+    let resolveRespond!: (v: unknown) => void
+    api.respond.mockImplementation(() => new Promise((resolve) => { resolveRespond = resolve }))
+    await mountView()
+
+    const button = wrapper.get('[data-test="agree-11"]')
+    await button.trigger('click')
+    await button.trigger('click')
+    expect(api.respond).toHaveBeenCalledTimes(1)
+
+    resolveRespond({ data: item({ employee_response: 'agree', needs_my_response: false }) })
+    await flushPromises()
+    expect(wrapper.find('[data-test="agree-11"]').exists()).toBe(false)
+  })
+
+  it('falls back to this month when the route query year/month are invalid', async () => {
+    api.get.mockResolvedValue(view([], 0))
+    await mountView('?year=abc&month=13')
+    // fake system time 為 2026-10-02（Asia/Taipei），本月＝2026 年 10 月
+    expect(api.get).toHaveBeenCalledWith({ year: 2026, month: 10 })
   })
 })
