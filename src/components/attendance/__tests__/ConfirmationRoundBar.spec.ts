@@ -93,6 +93,28 @@ describe('ConfirmationRoundBar', () => {
     expect(wrapper.get('[data-test="round-summary"]').text()).toContain('確認輪次 #7')
   })
 
+  it('invalidates the previewed draft and disables release once the form changes without re-previewing', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    api.create.mockResolvedValueOnce({ data: { round: null, items: [ITEM], eligible_count: 2 } })
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="open-create"]').trigger('click')
+    await wrapper.get('[data-test="preview"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="draft"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="release"]').attributes('disabled')).toBeUndefined()
+
+    // 改動表單其中一欄（用真實 ElDatePicker 驅動 v-model，而非直改元件內部 state）；
+    // 預覽後改表單卻沒重新預覽，發送不可再送出剛才預覽以外的內容。
+    const periodStartPicker = wrapper.findAllComponents({ name: 'ElDatePicker' })[0]
+    await periodStartPicker.vm.$emit('update:modelValue', '2026-09-02')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="draft"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="release"]').attributes('disabled')).toBeDefined()
+    expect(api.create).not.toHaveBeenCalledWith(expect.objectContaining({ dry_run: false }))
+  })
+
   it('shows progress, emits items and applies agreed items after a dry run', async () => {
     api.list.mockResolvedValue({ data: [ROUND] })
     api.get.mockResolvedValue({ data: PROGRESS })

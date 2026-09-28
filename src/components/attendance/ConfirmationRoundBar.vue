@@ -33,7 +33,7 @@ type ApplyResult = ApiResponse<'/attendance/confirmation-items/apply-agreed', 'p
 const props = defineProps<{ start: string; end: string }>()
 const emit = defineEmits<{ items: [items: ConfirmationItem[]] }>()
 
-const canWrite = hasPermission('ATTENDANCE_WRITE') && hasPermission('SCHEDULE')
+const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE') && hasPermission('SCHEDULE'))
 const loading = ref(false)
 const busy = ref(false)
 const round = ref<Round | null>(null)
@@ -99,6 +99,9 @@ async function load() {
 }
 
 watch(() => [props.start, props.end], () => void load(), { immediate: true })
+// 預覽後若又改動表單（期間起／迄／回覆期限），已預覽的 draft 不再代表目前表單內容，
+// 「發送」必須連動失效，逼行政重新預覽才能再按發送——避免發出的是改過而未重新預覽的值。
+watch(form, () => { draft.value = null }, { deep: true })
 
 function openCreate() {
   form.value = defaultForm()
