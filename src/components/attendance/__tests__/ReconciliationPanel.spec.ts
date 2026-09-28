@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 import ElementPlus from 'element-plus'
 import Panel from '../ReconciliationPanel.vue'
 const api = vi.hoisted(() => ({ preview: vi.fn(), confirm: vi.fn() }))
@@ -24,7 +25,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   api.preview.mockResolvedValue({ data: { rows: [row(1), row(2)], shift_types: shifts, coverage: coverage() } })
   api.confirm.mockResolvedValue({ data: { message: '已確認', updated_count: 2 } })
-  wrapper = mount(Panel, { props: { year: 2026, month: 8, revision: 0 }, global: { plugins: [ElementPlus], stubs: { teleport: true, ElDialog: { name: 'ElDialog', props: ['modelValue'], template: '<section v-if="modelValue" role="dialog"><slot /><slot name="footer" /></section>' } } } })
+  wrapper = mount(Panel, { props: { year: 2026, month: 8, revision: 0 }, global: { plugins: [ElementPlus], stubs: { teleport: true, ElDialog: { name: 'ElDialog', props: ['modelValue'], template: '<section v-if="modelValue" role="dialog"><slot /><slot name="footer" /></section>' }, ConfirmationRoundBar: true } } })
 })
 afterEach(() => { wrapper.unmount(); vi.useRealTimers() })
 describe('核對清單互動', () => {
@@ -170,5 +171,51 @@ describe('系統判定涵蓋顯示（2026-09-10 改版，取代人工勾選）',
     expect(detail).toContain('2026-08-01 至 2026-08-31')
     expect(detail).toContain('實際 2 天')
     expect(detail).toContain('12 人')
+  })
+})
+
+describe('月底出勤確認狀態（SPEC-026 §3.6，計畫裁定 P8）', () => {
+  it('shows teacher confirmation status on matching rows', async () => {
+    // 與 row(1)（employee_id 1、date 2026-08-03）同員工同日、status 'agreed' 的項目；
+    // partner_employee_id 刻意設 null，避免透過 itemsByPersonDay 誤標到 row(2)。
+    const confirmedItem = {
+      id: 99, round_id: 5, employee_id: 1, employee_name: '測試員工1', partner_employee_id: null,
+      partner_name: null, date: '2026-08-03', kind: 'swap',
+      suggestion: {
+        confidence: 'teacher' as const,
+        parties: {
+          '1': { employee_id: 1, employee_name: '測試員工1', status: 'possible_shift_change', punch_in: '2026-08-03T08:00:00', punch_out: '2026-08-03T17:00:00', expected_start: '07:00', expected_end: '16:00', original: shifts[0] },
+        },
+        proposed: [], partner_options: [], shift_candidates: [], leave_missing: false,
+      },
+      employee_response: 'agree' as const, partner_response: 'agree' as const, resolution: null, status: 'agreed' as const,
+      escalated: false, linked_leave_id: null, linked_punch_correction_id: null, initiated_by: 'system' as const, applied_at: null,
+    }
+    const ConfirmationRoundBarStub = defineComponent({
+      name: 'ConfirmationRoundBar',
+      emits: ['items'],
+      mounted() {
+        this.$emit('items', [confirmedItem])
+      },
+      template: '<div />',
+    })
+    wrapper.unmount()
+    wrapper = mount(Panel, {
+      props: { year: 2026, month: 8, revision: 0 },
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          teleport: true,
+          ElDialog: { name: 'ElDialog', props: ['modelValue'], template: '<section v-if="modelValue" role="dialog"><slot /><slot name="footer" /></section>' },
+          ConfirmationRoundBar: ConfirmationRoundBarStub,
+        },
+      },
+    })
+    await flushPromises()
+    const rows = wrapper.findAll('article')
+    const row1 = rows.find(item => item.text().includes('測試員工1'))
+    const row2 = rows.find(item => item.text().includes('測試員工2'))
+    expect(row1?.text()).toContain('老師確認：雙方已確認')
+    expect(row2?.text()).not.toContain('老師確認')
   })
 })

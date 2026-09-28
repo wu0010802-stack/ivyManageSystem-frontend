@@ -7,6 +7,8 @@ import { hasPermission } from '@/utils/auth'
 import { formatDateTimeTW, todayTaipeiISO } from '@/utils/format'
 import { reconciliationRanges, reconciliationRangeError } from '@/utils/attendanceReconciliationRange'
 import FormDialog from '@/components/common/FormDialog.vue'
+import ConfirmationRoundBar from '@/components/attendance/ConfirmationRoundBar.vue'
+import { itemsByPersonDay, STATUS_LABELS, type ConfirmationItem } from '@/utils/attendanceConfirm'
 
 type Row = ApiResponse<'/attendance/reconciliation/preview', 'post'>['rows'][number]
 // active=false（頁籤切到「出勤明細」）時本面板仍掛載著以保留核對狀態，但不得
@@ -34,6 +36,16 @@ const selected = ref<Row | null>(null)
 const selectedShift = ref<number | null>(null)
 const includePair = ref(false)
 const reason = ref('')
+// 月底出勤確認（SPEC-026 §3.6，計畫裁定 P8）：老師的回覆只是證詞，這裡只讀來在核對列
+// 顯示狀態 tag，不影響核對本身的資料流；ConfirmationRoundBar 內部自行依 start/end 查詢。
+const confirmationByPersonDay = ref(new Map<string, ConfirmationItem>())
+function onConfirmationItems(items: ConfirmationItem[]) {
+  confirmationByPersonDay.value = itemsByPersonDay(items)
+}
+function confirmationLabel(row: Row): string {
+  const item = confirmationByPersonDay.value.get(`${row.employee_id}|${row.date}`)
+  return item ? `老師確認：${STATUS_LABELS[item.status]}` : ''
+}
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE') && hasPermission('SCHEDULE'))
 const today = computed(() => todayTaipeiISO())
 const ranges = computed(() => reconciliationRanges(props.year, props.month, today.value))
@@ -178,6 +190,7 @@ async function saveShift() {
       <label>迄日<input v-model="end" type="date" :min="ranges.first" :max="ranges.last" @input="onCustomRange" :disabled="saving" aria-label="核對迄日" /></label>
       <el-button type="primary" :loading="loading" :disabled="saving || !!rangeError" @click="runPreview">重新核對</el-button>
     </div>
+    <ConfirmationRoundBar :start="start" :end="end" @items="onConfirmationItems" />
     <p v-if="rangeError" role="alert" class="reconciliation__hint">{{ rangeError }}</p>
     <p v-if="data" class="reconciliation__coverage" role="status" :class="{ 'reconciliation__coverage--none': coveredCount === 0 }">
       {{ coverageLabel }}
@@ -218,7 +231,7 @@ async function saveShift() {
       <component v-for="group in groups" :is="group.incomplete ? 'details' : 'div'" :key="group.key" :open="group.incomplete && expandedEmployees.has(group.rows[0].employee_id)" @toggle="onGroupToggle(group.rows[0].employee_id, $event)" :data-employee-id="group.incomplete ? group.rows[0].employee_id : undefined" class="reconciliation__group">
       <summary v-if="group.incomplete"><strong>{{ group.rows[0].employee_name }}</strong> · {{ group.rows[0].employee_number }} · {{ group.rows.length }} 天資料待補<span>展開逐日核對與匯入</span></summary>
       <article v-for="row in group.rows" :key="`${row.employee_id}:${row.date}`" class="reconciliation__row">
-        <header><strong>{{ row.employee_name }}</strong><span>{{ row.employee_number }} · {{ row.date }}</span><el-tag :type="['matched', 'leave', 'off_day'].includes(row.status) ? 'info' : 'warning'">{{ labels[row.status] }}</el-tag></header>
+        <header><strong>{{ row.employee_name }}</strong><span>{{ row.employee_number }} · {{ row.date }}</span><el-tag :type="['matched', 'leave', 'off_day'].includes(row.status) ? 'info' : 'warning'">{{ labels[row.status] }}</el-tag><el-tag v-if="confirmationLabel(row)" size="small" type="warning">{{ confirmationLabel(row) }}</el-tag></header>
         <dl>
           <div><dt>原班表</dt><dd>{{ row.day_off ? '非應出勤日' : `${row.expected_start}–${row.expected_end}` }}</dd></div>
           <div><dt>上班打卡</dt><dd>{{ row.punch_in ? formatDateTimeTW(row.punch_in) : '無紀錄' }}</dd></div>
