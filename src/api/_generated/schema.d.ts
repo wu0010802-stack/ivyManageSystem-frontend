@@ -3774,6 +3774,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/confirmation-items/apply-agreed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Agreed Confirmations
+         * @description 套用所有雙方已確認的調班（或指定 item_ids）；每項獨立交易（見 apply.py）。
+         */
+        post: operations["apply_agreed_confirmations_api_attendance_confirmation_items_apply_agreed_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/confirmation-rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Confirmation Rounds
+         * @description 列出與期間重疊的確認輪次（打卡核對頁據此找目前輪次）。
+         */
+        get: operations["list_confirmation_rounds_api_attendance_confirmation_rounds_get"];
+        put?: never;
+        /**
+         * Create Confirmation Round
+         * @description 發給老師確認：跑核對＋跨人配對建立輪次與項目；dry_run 只回預計項目。
+         */
+        post: operations["create_confirmation_round_api_attendance_confirmation_rounds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/confirmation-rounds/{round_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Confirmation Round
+         * @description 輪次進度：適用名單內每位員工的項目狀態、逾期與簽認。
+         */
+        get: operations["get_confirmation_round_api_attendance_confirmation_rounds__round_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/confirmation-rounds/{round_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Confirmation Round
+         * @description 重新匯入打卡或班表變動後重跑；版本失效的項目標 superseded 並重推。
+         */
+        post: operations["refresh_confirmation_round_api_attendance_confirmation_rounds__round_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/import-settings": {
         parameters: {
             query?: never;
@@ -13778,6 +13862,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/attendance-confirmations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Attendance Confirmations
+         * @description 本人為當事人或對象的確認項目＋本月簽認狀態。
+         */
+        get: operations["get_my_attendance_confirmations_api_portal_attendance_confirmations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/attendance-confirmations/{item_id}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Respond Attendance Confirmation
+         * @description 逐筆「對」或「不對，改成…」；回覆只是證詞，不改班表。
+         */
+        post: operations["respond_attendance_confirmation_api_portal_attendance_confirmations__item_id__respond_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/attendance-confirmations/pending-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Attendance Confirmation Pending Count
+         * @description 待本人回覆的確認項目數（側欄徽章）。
+         */
+        get: operations["get_attendance_confirmation_pending_count_api_portal_attendance_confirmations_pending_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/attendance-sheet": {
         parameters: {
             query?: never;
@@ -13812,6 +13956,26 @@ export interface paths {
         get: operations["print_attendance_sheet_pdf_api_portal_attendance_sheet_pdf_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/attendance-signoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Attendance Month
+         * @description 本月出勤確認完成（取代紙本考核表）；仍有待回覆項目時 409。
+         */
+        post: operations["sign_attendance_month_api_portal_attendance_signoff_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -22497,6 +22661,29 @@ export interface components {
             /** Rejection Reason */
             rejection_reason?: string | null;
         };
+        /** ApplyAgreedIn */
+        ApplyAgreedIn: {
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+            /** Item Ids */
+            item_ids?: number[] | null;
+        };
+        /** ApplyAgreedOut */
+        ApplyAgreedOut: {
+            /** Applied */
+            applied: number[];
+            /** Failed */
+            failed: components["schemas"]["ApplyIssueOut"][];
+            /** Planned */
+            planned: components["schemas"]["PlannedApplyOut"][];
+            /** Skipped */
+            skipped: components["schemas"]["ApplyIssueOut"][];
+            /** Superseded */
+            superseded: number[];
+        };
         /** ApplyChangeOut */
         ApplyChangeOut: {
             /**
@@ -22521,6 +22708,13 @@ export interface components {
              * Format: date
              */
             week_start_date: string;
+        };
+        /** ApplyIssueOut */
+        ApplyIssueOut: {
+            /** Item Id */
+            item_id: number;
+            /** Reason */
+            reason: string;
         };
         /** ApplyTemplatePayload */
         ApplyTemplatePayload: {
@@ -26845,6 +27039,177 @@ export interface components {
             link?: string | null;
             /** Ok */
             ok?: boolean | null;
+        };
+        /** ConfirmationAmendIn */
+        ConfirmationAmendIn: {
+            /** Correction Type */
+            correction_type?: ("punch_in" | "punch_out" | "both") | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "swap_with" | "cover_for" | "leave" | "forgot_punch" | "other";
+            /** Leave Type */
+            leave_type?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Partner Employee Id */
+            partner_employee_id?: number | null;
+            /** Requested Punch In */
+            requested_punch_in?: string | null;
+            /** Requested Punch Out */
+            requested_punch_out?: string | null;
+        };
+        /** ConfirmationItemOut */
+        ConfirmationItemOut: {
+            /** Applied At */
+            applied_at?: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * Employee Response
+             * @enum {string}
+             */
+            employee_response: "pending" | "agree" | "amend";
+            /** Escalated */
+            escalated: boolean;
+            /** Id */
+            id: number | null;
+            /**
+             * Initiated By
+             * @enum {string}
+             */
+            initiated_by: "system" | "employee";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "swap" | "cover" | "shift_changed";
+            /** Linked Leave Id */
+            linked_leave_id?: number | null;
+            /** Linked Punch Correction Id */
+            linked_punch_correction_id?: number | null;
+            /** Partner Employee Id */
+            partner_employee_id: number | null;
+            /** Partner Name */
+            partner_name: string | null;
+            /** Partner Response */
+            partner_response: ("pending" | "agree" | "amend") | null;
+            /** Resolution */
+            resolution?: {
+                [key: string]: unknown;
+            } | null;
+            /** Round Id */
+            round_id: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "agreed" | "disputed" | "applied" | "superseded";
+            suggestion: components["schemas"]["SuggestionOut"];
+        };
+        /** ConfirmationPendingCountOut */
+        ConfirmationPendingCountOut: {
+            /** Pending Count */
+            pending_count: number;
+        };
+        /** ConfirmationRespondIn */
+        ConfirmationRespondIn: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "agree" | "amend";
+            amend?: components["schemas"]["ConfirmationAmendIn"] | null;
+        };
+        /** ConfirmationRoundCreateIn */
+        ConfirmationRoundCreateIn: {
+            /**
+             * Deadline Date
+             * Format: date
+             */
+            deadline_date: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+        };
+        /** ConfirmationRoundCreateOut */
+        ConfirmationRoundCreateOut: {
+            /** Eligible Count */
+            eligible_count: number;
+            /** Items */
+            items: components["schemas"]["ConfirmationItemOut"][];
+            round: components["schemas"]["ConfirmationRoundOut"] | null;
+        };
+        /** ConfirmationRoundOut */
+        ConfirmationRoundOut: {
+            /**
+             * Deadline Date
+             * Format: date
+             */
+            deadline_date: string;
+            /** Eligible Count */
+            eligible_count: number;
+            /** Id */
+            id: number;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Released At
+             * Format: date-time
+             */
+            released_at: string;
+            /** Released By */
+            released_by: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+        };
+        /** ConfirmationRoundProgressOut */
+        ConfirmationRoundProgressOut: {
+            /** Employees */
+            employees: components["schemas"]["RoundEmployeeProgressOut"][];
+            /** Items */
+            items: components["schemas"]["ConfirmationItemOut"][];
+            round: components["schemas"]["ConfirmationRoundOut"];
+        };
+        /** ConfirmationRoundRefreshOut */
+        ConfirmationRoundRefreshOut: {
+            /** Created */
+            created: number;
+            /** Kept */
+            kept: number;
+            /** Superseded */
+            superseded: number;
         };
         /** ConfirmPromotionPayload */
         ConfirmPromotionPayload: {
@@ -36274,6 +36639,36 @@ export interface components {
             retention: components["schemas"]["ClassRetentionAggregateOut"];
             role_group: components["schemas"]["RoleGroup"];
         };
+        /** PartnerOptionOut */
+        PartnerOptionOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "swap" | "cover";
+            /** Partner Employee Id */
+            partner_employee_id: number;
+            /** Proposed */
+            proposed: components["schemas"]["ProposedOut"][];
+        };
+        /** PartyOut */
+        PartyOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Expected End */
+            expected_end?: string | null;
+            /** Expected Start */
+            expected_start?: string | null;
+            original?: components["schemas"]["ShiftBrief"] | null;
+            /** Punch In */
+            punch_in?: string | null;
+            /** Punch Out */
+            punch_out?: string | null;
+            /** Status */
+            status: string;
+        };
         /** PaymentListOut */
         PaymentListOut: {
             /** Paid Amount */
@@ -37259,6 +37654,23 @@ export interface components {
             /** Target School Year */
             target_school_year?: number | null;
         };
+        /** PlannedApplyOut */
+        PlannedApplyOut: {
+            /** Changes */
+            changes: components["schemas"]["ShiftChangeOut"][];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Item Id */
+            item_id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "swap" | "cover";
+        };
         /**
          * PlanStateResultOut
          * @description publish/unpublish/cancel 共用 — {status, version}。
@@ -38132,6 +38544,85 @@ export interface components {
             /** Grants */
             grants: components["schemas"]["PortalCompLeaveGrantItemOut"][];
         };
+        /** PortalConfirmationItemOut */
+        PortalConfirmationItemOut: {
+            /** Applied At */
+            applied_at?: string | null;
+            /** Can Agree */
+            can_agree: boolean;
+            /** Can Repair */
+            can_repair: boolean;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * Employee Response
+             * @enum {string}
+             */
+            employee_response: "pending" | "agree" | "amend";
+            /** Escalated */
+            escalated: boolean;
+            /** Id */
+            id: number | null;
+            /**
+             * Initiated By
+             * @enum {string}
+             */
+            initiated_by: "system" | "employee";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "swap" | "cover" | "shift_changed";
+            /** Linked Leave Id */
+            linked_leave_id?: number | null;
+            /** Linked Punch Correction Id */
+            linked_punch_correction_id?: number | null;
+            /**
+             * My Role
+             * @enum {string}
+             */
+            my_role: "employee" | "partner";
+            /** Needs My Response */
+            needs_my_response: boolean;
+            /** Partner Employee Id */
+            partner_employee_id: number | null;
+            /** Partner Name */
+            partner_name: string | null;
+            /** Partner Response */
+            partner_response: ("pending" | "agree" | "amend") | null;
+            /** Resolution */
+            resolution?: {
+                [key: string]: unknown;
+            } | null;
+            /** Round Id */
+            round_id: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "agreed" | "disputed" | "applied" | "superseded";
+            suggestion: components["schemas"]["SuggestionOut"];
+        };
+        /** PortalConfirmationsOut */
+        PortalConfirmationsOut: {
+            /** Items */
+            items: components["schemas"]["PortalConfirmationItemOut"][];
+            /** Month */
+            month: number;
+            /** Pending Count */
+            pending_count: number;
+            /** Signed At */
+            signed_at: string | null;
+            /** Year */
+            year: number;
+        };
         /** PortalDismissalCallOut */
         PortalDismissalCallOut: {
             /** Acknowledged At */
@@ -38888,6 +39379,27 @@ export interface components {
              * @enum {string}
              */
             salary_status: "none" | "draft" | "recalc_pending" | "finalized";
+            /** Year */
+            year: number;
+        };
+        /** PortalSignoffIn */
+        PortalSignoffIn: {
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /** PortalSignoffOut */
+        PortalSignoffOut: {
+            /** Month */
+            month: number;
+            /** Round Id */
+            round_id: number | null;
+            /**
+             * Signed At
+             * Format: date-time
+             */
+            signed_at: string;
             /** Year */
             year: number;
         };
@@ -40489,6 +41001,12 @@ export interface components {
             emergency_contact_phone?: string | null;
             /** Phone */
             phone?: string | null;
+        };
+        /** ProposedOut */
+        ProposedOut: {
+            /** Employee Id */
+            employee_id: number;
+            shift: components["schemas"]["ShiftBrief"];
         };
         /**
          * PublicBootstrapOut
@@ -43457,6 +43975,27 @@ export interface components {
             /** Week Start Date */
             week_start_date?: string | null;
         };
+        /** RoundEmployeeProgressOut */
+        RoundEmployeeProgressOut: {
+            /** Agreed */
+            agreed: number;
+            /** Applied */
+            applied: number;
+            /** Awaiting Response */
+            awaiting_response: number;
+            /** Disputed */
+            disputed: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Escalated */
+            escalated: boolean;
+            /** Item Count */
+            item_count: number;
+            /** Signed */
+            signed: boolean;
+        };
         /**
          * RouteCreateIn
          * @description `direction` 定案後不可變更（改方向＝另建班次，見 `RouteUpdateIn`
@@ -45811,6 +46350,26 @@ export interface components {
             /** Week Start Date */
             week_start_date: string;
         };
+        /** ShiftBrief */
+        ShiftBrief: {
+            /** Name */
+            name: string;
+            /** Shift Type Id */
+            shift_type_id: number;
+            /** Work End */
+            work_end?: string | null;
+            /** Work Start */
+            work_start?: string | null;
+        };
+        /** ShiftChangeOut */
+        ShiftChangeOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            from_shift: components["schemas"]["ShiftBrief"] | null;
+            to_shift: components["schemas"]["ShiftBrief"];
+        };
         /**
          * ShiftImportResultOut
          * @description POST /import Excel 批次匯入回傳。
@@ -47655,6 +48214,38 @@ export interface components {
         SubstituteRespondOut: {
             /** Message */
             message: string;
+        };
+        /** SuggestionOut */
+        SuggestionOut: {
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low" | "teacher";
+            /**
+             * Leave Missing
+             * @default false
+             */
+            leave_missing: boolean;
+            /** Parties */
+            parties: {
+                [key: string]: components["schemas"]["PartyOut"];
+            };
+            /**
+             * Partner Options
+             * @default []
+             */
+            partner_options: components["schemas"]["PartnerOptionOut"][];
+            /**
+             * Proposed
+             * @default []
+             */
+            proposed: components["schemas"]["ProposedOut"][];
+            /**
+             * Shift Candidates
+             * @default []
+             */
+            shift_candidates: components["schemas"]["ShiftBrief"][];
         };
         /** SummaryLogOut */
         SummaryLogOut: {
@@ -55225,6 +55816,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttendanceCalendarOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_agreed_confirmations_api_attendance_confirmation_items_apply_agreed_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyAgreedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyAgreedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_confirmation_rounds_api_attendance_confirmation_rounds_get: {
+        parameters: {
+            query: {
+                end_date: string;
+                start_date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationRoundOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_confirmation_round_api_attendance_confirmation_rounds_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationRoundCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationRoundCreateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_confirmation_round_api_attendance_confirmation_rounds__round_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                round_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationRoundProgressOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_confirmation_round_api_attendance_confirmation_rounds__round_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                round_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationRoundRefreshOut"];
                 };
             };
             /** @description Validation Error */
@@ -72586,6 +73337,93 @@ export interface operations {
             };
         };
     };
+    get_my_attendance_confirmations_api_portal_attendance_confirmations_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalConfirmationsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    respond_attendance_confirmation_api_portal_attendance_confirmations__item_id__respond_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationRespondIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalConfirmationItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_attendance_confirmation_pending_count_api_portal_attendance_confirmations_pending_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationPendingCountOut"];
+                };
+            };
+        };
+    };
     get_attendance_sheet_api_portal_attendance_sheet_get: {
         parameters: {
             query: {
@@ -72637,6 +73475,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_attendance_month_api_portal_attendance_signoff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortalSignoffIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalSignoffOut"];
                 };
             };
             /** @description Validation Error */
