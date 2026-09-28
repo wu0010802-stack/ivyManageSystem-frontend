@@ -75,15 +75,20 @@ export function describeSuggestion(item: ConfirmationItem, viewerId: number | nu
   const head = `${formatMonthDay(item.date)} ${who}打卡 ${punchText(subject)}，原班${shiftText(subject?.original)}。`
   const otherId = subjectId === item.employee_id ? item.partner_employee_id : item.employee_id
   const other = otherId != null ? s.parties[String(otherId)] : undefined
-  if (item.kind === 'swap' && other) {
-    return `${head}推測：與 ${other.employee_name}（${other.original?.name ?? '無原班'}）對調`
-  }
-  if (item.kind === 'cover' && other) {
+  // swap／cover 一定有對象（otherId 保證非 null）；suggestion.parties 缺對方那筆時
+  // （例如打卡匯入順序或版本落差）不可落到「找不到對調或代班的同事」，姓名退回
+  // item.partner_name／item.employee_name。
+  if ((item.kind === 'swap' || item.kind === 'cover') && otherId != null) {
+    const otherDisplayName =
+      other?.employee_name ?? (otherId === item.employee_id ? item.employee_name : item.partner_name) ?? `#${otherId}`
+    if (item.kind === 'swap') {
+      return `${head}推測：與 ${otherDisplayName}（${other?.original?.name ?? '無原班'}）對調`
+    }
     if (subjectId === item.employee_id) {
-      return `${head}推測：代 ${other.employee_name} 上${other.original?.name ?? '班'}`
+      return `${head}推測：代 ${otherDisplayName} 上${other?.original?.name ?? '班'}`
     }
     const tail = s.leave_missing ? '（你當天沒有請假紀錄，可在下方補請假）' : ''
-    return `${head}推測：${other.employee_name} 代你上${subject?.original?.name ?? '班'}${tail}`
+    return `${head}推測：${otherDisplayName} 代你上${subject?.original?.name ?? '班'}${tail}`
   }
   if (s.partner_options.length) {
     const options = s.partner_options.map((o) =>

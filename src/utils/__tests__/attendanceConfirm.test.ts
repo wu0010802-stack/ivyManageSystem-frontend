@@ -66,6 +66,31 @@ describe('attendanceConfirm', () => {
     expect(describeSuggestion(cover)).toContain('10/3 張副導打卡 07:00–16:30')
   })
 
+  it('still names the partner for swap/cover even when parties is missing their entry', () => {
+    const missingPartner = makeItem({
+      suggestion: {
+        ...makeItem().suggestion,
+        parties: { '10': party(10, '王副導', BUS, '2026-10-03T08:31:00', '2026-10-03T18:02:00') },
+      },
+    })
+    const text = describeSuggestion(missingPartner, 10)
+    expect(text).toContain('推測：與 張副導')
+    expect(text).not.toContain('找不到')
+  })
+
+  it('shows a placeholder when the original shift is missing', () => {
+    const noOriginal = makeItem({
+      suggestion: {
+        ...makeItem().suggestion,
+        parties: {
+          '10': party(10, '王副導', null, '2026-10-03T08:31:00', '2026-10-03T18:02:00'),
+          '20': party(20, '張副導', LATE, '2026-10-03T07:01:00', '2026-10-03T16:31:00'),
+        },
+      },
+    })
+    expect(describeSuggestion(noOriginal, 10)).toContain('（無原班）')
+  })
+
   it('lists options for multi-candidate items and explains items without partner', () => {
     const multi = makeItem({
       kind: 'shift_changed', partner_employee_id: null, partner_name: null,
