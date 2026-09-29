@@ -26,8 +26,27 @@ describe('AttachmentGallery', () => {
       },
       global: { plugins: [ElementPlus] },
     })
-    await w.find('.thumb').trigger('click')
+    await w.find('.thumb-open').trigger('click')
     // previewVisible is exposed via defineExpose
     expect(w.vm.previewVisible).toBe(true)
+  })
+
+  it('deletable=false（預設）不顯示刪除鈕', () => {
+    const w = mount(AttachmentGallery, {
+      props: { items: [{ id: 1, url: '/x/1.jpg' }] },
+      global: { plugins: [ElementPlus] },
+    })
+    expect(w.find('.thumb-delete').exists()).toBe(false)
+  })
+
+  it('deletable 時點刪除鈕 emit delete，且不開啟預覽', async () => {
+    const item = { id: 7, url: '/x/7.jpg', owner_type: 'observation' }
+    const w = mount(AttachmentGallery, {
+      props: { items: [item], deletable: true },
+      global: { plugins: [ElementPlus] },
+    })
+    await w.find('.thumb-delete').trigger('click')
+    expect(w.emitted('delete')).toEqual([[item]])
+    expect(w.vm.previewVisible).toBe(false)
   })
 })
