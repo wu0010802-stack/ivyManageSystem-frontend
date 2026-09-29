@@ -697,7 +697,7 @@ const renderLeafletMap = async () => {
     marker.bindPopup(
       `<div class="map-popup">` +
       `<strong>${escapeHtml(bucket.district)}</strong><br/>` +
-      `<span>本街區共 ${bucket.visit_count} 筆 visit / ${bucket.deposit_count} 筆 deposit</span>` +
+      `<span>本街區共 ${escapeHtml(bucket.visit_count)} 筆 visit / ${escapeHtml(bucket.deposit_count)} 筆 deposit</span>` +
       `</div>`
     )
     markerLayer.addLayer(marker)

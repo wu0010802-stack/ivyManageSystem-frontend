@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 
 // ── Leaflet mock（動態 import 也走這裡）────────────────────────────────────
 const polylineCalls: Array<{ points: Array<[number, number]>; opts: Record<string, unknown> }> = []
-const markerCalls: Array<{ center: [number, number]; tooltip: string }> = []
+const markerCalls: Array<{ center: [number, number]; tooltip: unknown }> = []
 const fitBoundsCalls: Array<Array<[number, number]>> = []
 const setViewCalls: Array<[number, number]> = []
 /** 每個 marker 目前套用的 icon（divIcon 的 opts），用來斷言高亮放大 */
@@ -52,7 +52,7 @@ vi.mock('leaflet', () => {
           },
           getLatLng: () => ({ lat: center[0], lng: center[1] }),
           addTo: () => ({
-            bindTooltip: (tooltip: string) => {
+            bindTooltip: (tooltip: unknown) => {
               markerCalls.push({ center, tooltip })
               return marker
             },
@@ -146,6 +146,28 @@ describe('BusRoutePreviewMap', () => {
     expect(polylineCalls).toHaveLength(0)
     expect(markerCalls).toHaveLength(0)
     expect(setViewCalls).toHaveLength(1)
+    w.unmount()
+  })
+
+  /**
+   * F124（MT-30）：Leaflet 1.9.4 的 DivOverlay._updateContent 遇到字串 content 直接
+   * `node.innerHTML = content`（Vue 的模板跳脫管不到 Leaflet 自己操作的 DOM）。學生名
+   * 只限 50 字、不限字元，未跳脫就是 stored HTML injection。這裡照 Leaflet 的分支
+   * 把 tooltip 內容真的塞進 DOM，斷言不會長出任何元素、文字原樣呈現。
+   */
+  it('學生名含 HTML 時 tooltip 只呈現純文字，不會被 Leaflet 當 HTML 解析（F124）', async () => {
+    const payload = '<img src=x onerror=alert(1)><meta http-equiv=refresh content=0>'
+    const w = await mountMap({
+      stops: [{ seq: 1, label: payload, lat: 22.70, lng: 120.31 }],
+    })
+    const stopTooltip = markerCalls.find((m) => m.center[0] === 22.70)?.tooltip
+    // 比照 Leaflet 1.9.4 DivOverlay._updateContent 的兩個分支
+    const node = document.createElement('div')
+    if (typeof stopTooltip === 'string') node.innerHTML = stopTooltip
+    else if (stopTooltip instanceof Node) node.appendChild(stopTooltip)
+    expect(node.children).toHaveLength(0)
+    expect(node.querySelector('img, meta')).toBeNull()
+    expect(node.textContent).toBe(`1. ${payload}`)
     w.unmount()
   })
 

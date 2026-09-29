@@ -18,11 +18,15 @@
  * console／Sentry／URL query／localStorage／sessionStorage／page title；
  * marker 的 tooltip 只放學生名與順位，不放座標數字。
  *
+ * XSS（F124）：Leaflet 的 bindTooltip／bindPopup 收到字串會直接寫 innerHTML，
+ * Vue 模板跳脫管不到——字串內容一律先 `escapeHtml`（`leafletHtmlSinkGuard.spec.ts` 把關）。
+ *
  * Leaflet 一律**動態** import（含 CSS），比照 BusStopMapTuner.vue：靜態 import
  * 會把 ~150KB 的地圖庫橋接進首屏 bundle。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getBranding } from '@/composables/useTenantBranding'
+import { escapeHtml } from '@/utils/html'
 
 export interface RoutePreviewStop {
   /** 顯示順位（1-based），即最佳化後的新順序 */
@@ -209,7 +213,8 @@ async function renderMap(): Promise<void> {
   stops.forEach((s) => {
     const marker = L.marker([s.lat, s.lng], { icon: seqIcon(L, s.seq, false) })
       .addTo(map)
-      .bindTooltip(`${s.seq}. ${s.label}`)
+      // F124：Leaflet 對字串 content 直接 innerHTML，學生名（只限長度、不限字元）必先跳脫
+      .bindTooltip(escapeHtml(`${s.seq}. ${s.label}`))
     markersBySeq.set(s.seq, marker)
   })
 
