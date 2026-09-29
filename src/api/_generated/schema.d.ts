@@ -19210,6 +19210,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/students/{student_id}/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Student Attachment
+         * @description 從該生照片牆刪除一張照片。
+         *
+         *     - 一般來源（觀察 / 聯絡簿 / 用藥單 / 報告 / 作品集）：軟刪 Attachment 本體，
+         *       原始紀錄上的這張照片也會一併消失（同 DELETE /api/attachments/{id}）。
+         *     - 班級相簿：一張照片標記整班多位幼兒，軟刪本體會連帶從其他幼兒的照片牆
+         *       消失；故只解除「該生」的標記，照片本身與其他幼兒的標記保留。
+         *       要整張刪除請走班級相簿管理（DELETE /api/portal/class-albums/.../photos/...）。
+         */
+        delete: operations["delete_student_attachment_api_students__student_id__attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/students/{student_id}/graduate": {
         parameters: {
             query?: never;
@@ -82438,6 +82464,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StudentAttachmentListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_student_attachment_api_students__student_id__attachments__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: number;
+                student_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
