@@ -25,3 +25,26 @@ describe('PortalLayout 月底出勤確認徽章', () => {
     )
   })
 })
+
+/**
+ * 入口依適用與否顯示（SPEC-026 第二期待辦 #6、Task 9、Q6）：側欄「月底出勤確認」
+ * 只對「近 120 天內是適用者」的老師顯示，依後端 pending-count 回傳的 eligible 判定。
+ * 搜尋指令面板刻意維持原樣，不受此限制。
+ */
+describe('PortalLayout 月底出勤確認入口依適用與否顯示', () => {
+  it('宣告 attendanceConfirmEligible ref，預設 false（未取得資料前不誤顯示）', () => {
+    expect(PortalLayoutSource).toContain('const attendanceConfirmEligible = ref(false)')
+  })
+
+  it('fetchAttendanceConfirmPendingCount 一併讀取 eligible 並寫入 attendanceConfirmEligible', () => {
+    expect(PortalLayoutSource).toMatch(
+      /attendanceConfirmEligible\.value = \(res\.data as Record<string, unknown>\)\?\.eligible === true/,
+    )
+  })
+
+  it('側欄項目以 v-if="attendanceConfirmEligible" 把關', () => {
+    expect(PortalLayoutSource).toMatch(
+      /<el-menu-item v-if="attendanceConfirmEligible" index="\/portal\/attendance-confirm">/,
+    )
+  })
+})

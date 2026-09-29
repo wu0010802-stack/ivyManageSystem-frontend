@@ -33,6 +33,11 @@ export interface PortalPendingActions {
   pending_attendance_confirmations?: number
   /** 待本人回覆的最早確認項目月份（"YYYY-MM"），功能格據此帶 ?year=&month= */
   pending_attendance_confirmations_earliest?: string | null
+  /**
+   * 本人是否為「近 120 天內」月底出勤確認的適用者（Q6，計畫層裁定）。入口
+   * （側欄、首頁功能格）依此顯示；搜尋指令面板不受此限制、維持原樣。
+   */
+  attendance_confirm_eligible?: boolean
   unread_announcements?: number
   [key: string]: unknown
 }
@@ -67,6 +72,11 @@ export interface ClassFeatureDef {
   actionsKey?: keyof PortalPendingActions
   /** badge 來自 counts／actions 以外的來源 */
   externalBadge?: 'dismissal' | 'pickup'
+  /**
+   * 此格是否顯示，改看 actions 的這個布林欄位（而非權限或待辦數字）——用於
+   * 「入口依適用與否顯示」（Q6）：未帶 actions 或該欄位不為 true 一律不顯示。
+   */
+  visibleWhenAction?: keyof PortalPendingActions
   /**
    * 目的頁會讀 ?classroom_id=（見 utils/portalQuery.pickClassroomIdFromQuery 的
    * 消費端），點擊時要帶上當前班級。多班老師切了班卻不帶，目的頁會落回它自己的
@@ -230,6 +240,7 @@ export const CLASS_FEATURES: readonly ClassFeatureDef[] = [
     group: 'mine',
     to: '/portal/attendance-confirm',
     actionsKey: 'pending_attendance_confirmations',
+    visibleWhenAction: 'attendance_confirm_eligible',
   },
   {
     key: 'announcements',
@@ -252,11 +263,22 @@ export const CLASS_FEATURES: readonly ClassFeatureDef[] = [
 /**
  * 該組中此使用者有權看到的格子。
  * 未宣告 permission 的格子（其路由本身沒有 meta.permission）一律顯示。
+ *
+ * `actions` 為選填（第二參數，舊呼叫不帶時行為不變）：帶 `visibleWhenAction` 的格子
+ * 額外要求 `actions?.[flag] === true` 才顯示，未帶 actions 或該欄位非 true 一律隱藏——
+ * 用於「入口依適用與否顯示」（Q6，月底出勤確認只對近 120 天內是適用者的老師顯示）。
+ * 沒有 `visibleWhenAction` 的格子不受此參數影響。
  */
-export function visibleClassFeatures(group: ClassFeatureGroup): ClassFeatureDef[] {
-  return CLASS_FEATURES.filter(
-    (f) => f.group === group && (!f.permission || hasPortalPermission(f.permission)),
-  )
+export function visibleClassFeatures(
+  group: ClassFeatureGroup,
+  actions?: PortalPendingActions,
+): ClassFeatureDef[] {
+  return CLASS_FEATURES.filter((f) => {
+    if (f.group !== group) return false
+    if (f.permission && !hasPortalPermission(f.permission)) return false
+    if (f.visibleWhenAction && actions?.[f.visibleWhenAction] !== true) return false
+    return true
+  })
 }
 
 /** 此格要掛的 badge 數字；0 代表不掛。 */

@@ -193,7 +193,7 @@ const GROUPS: { id: ClassFeatureGroup; title: string }[] = [
 ]
 
 function featuresOf(group: ClassFeatureGroup): ClassFeatureDef[] {
-  return visibleClassFeatures(group)
+  return visibleClassFeatures(group, actions.value as PortalPendingActions)
 }
 
 const badgeSources = computed(() => ({
