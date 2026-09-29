@@ -6,7 +6,7 @@ import { apiError } from '@/utils/error'
 import { isSuperAdmin } from '@/utils/auth'
 import PermissionPicker from '@/components/settings/PermissionPicker.vue'
 import ApprovalChainEditor from './ApprovalChainEditor.vue'
-import { FLAG_SUPER_ADMIN, FLAG_PARENT, FLAG_PORTAL_ONLY, type RoleDef, type RolesDefinition } from './types'
+import { FLAG_SUPER_ADMIN, FLAG_PARENT, FLAG_PORTAL_ONLY, isGlobalRoleCode, type RoleDef, type RolesDefinition } from './types'
 
 const props = defineProps<{
   code: string
@@ -110,25 +110,35 @@ const expandWildcard = async () => {
 // 於是可以把「薪資管理」勾給家長並成功儲存。改為唯讀＋說明，避免誘導出危險設定。
 const isParentRole = computed(() => form.flagParent)
 
+// ── 全域角色（F46／MT-69；整合審查 R7／R14）──
+//
+// 全域角色（目前只有 parent）由各分校共用，分校改名稱／說明／身份／權限都會被後端
+// 403 擋下，且每次嘗試都寫一筆高風險 BLOCKED_UPDATE 稽核，稀釋平台端真正的越權訊號。
+// 整張表單改唯讀、停用儲存並說明原因；權威仍是後端 403。
+const isGlobalRole = computed(() => isGlobalRoleCode(props.code))
+
 const permissionsReadonly = computed(
-  () => (isWildcardRole.value && !expandedFromWildcard.value) || isParentRole.value,
+  () => (isWildcardRole.value && !expandedFromWildcard.value) || isParentRole.value || isGlobalRole.value,
 )
 
 // ── flag checkbox disabled 規則（後端 apply_role_flags 為權威，此處只是預檢 UX）──
-const superAdminDisabled = computed(() => !isSuperAdmin() || props.code === 'admin')
+const superAdminDisabled = computed(() => isGlobalRole.value || !isSuperAdmin() || props.code === 'admin')
 const superAdminTooltip = computed(() => {
+  if (isGlobalRole.value) return '全域角色由平台管理，分校不可變更'
   if (!isSuperAdmin()) return '僅超級管理員可變更此身份'
   if (props.code === 'admin') return '系統預設 admin 角色的超級管理員身份不可移除'
   return ''
 })
 
 const parentDisabled = computed(() => {
+  if (isGlobalRole.value) return true
   if (props.code === 'parent') return true
   // 帳號數 > 0 不可「加上」家長 flag（spec §5.3 M9）；已勾者（理論上帳號數必為 0）可取消
   if (!form.flagParent && props.accountCount !== null && props.accountCount > 0) return true
   return false
 })
 const parentTooltip = computed(() => {
+  if (isGlobalRole.value) return '全域角色由平台管理，分校不可變更'
   if (props.code === 'parent') return '系統預設家長角色的家長身份不可移除'
   if (!form.flagParent && props.accountCount !== null && props.accountCount > 0) return '已有帳號的角色不可標記為家長身份'
   return ''
@@ -147,6 +157,8 @@ const buildFlags = (): string[] => {
 }
 
 const handleSave = async () => {
+  // 儲存鈕已停用；此處再擋一次，避免任何其他入口對全域角色送出注定 403 的請求。
+  if (isGlobalRole.value) return
   const n = props.accountCount
   const msg = n === null
     ? '權限或身份變更後，該角色帳號需重新登入生效。確定儲存？'
@@ -180,7 +192,7 @@ const deleteTooltip = computed(() => {
 })
 const requestDelete = () => emit('delete-role')
 
-defineExpose({ form, isDirty, activeTab, superAdminDisabled, superAdminTooltip, parentDisabled, parentTooltip, deleteDisabled, deleteTooltip, handleSave, requestDelete, buildFlags, saving, isWildcardRole, isParentRole, permissionsReadonly, expandWildcard, expandedFromWildcard, chainRef })
+defineExpose({ form, isDirty, activeTab, superAdminDisabled, superAdminTooltip, parentDisabled, parentTooltip, deleteDisabled, deleteTooltip, handleSave, requestDelete, buildFlags, saving, isWildcardRole, isParentRole, isGlobalRole, permissionsReadonly, expandWildcard, expandedFromWildcard, chainRef })
 </script>
 
 <template>
@@ -194,10 +206,29 @@ defineExpose({ form, isDirty, activeTab, superAdminDisabled, superAdminTooltip, 
               <el-button type="danger" plain size="small" :disabled="deleteDisabled" data-testid="delete-role" @click="requestDelete">刪除角色</el-button>
             </span>
           </el-tooltip>
-          <el-button type="primary" size="small" :loading="saving" data-testid="save-role" @click="handleSave">儲存</el-button>
+          <el-button
+            type="primary"
+            size="small"
+            :loading="saving"
+            :disabled="isGlobalRole"
+            data-testid="save-role"
+            @click="handleSave"
+          >
+            儲存
+          </el-button>
         </div>
       </div>
     </template>
+
+    <el-alert
+      v-if="isGlobalRole"
+      type="info"
+      :closable="false"
+      class="perm-notice"
+      data-testid="global-role-notice"
+      title="全域角色由平台管理"
+      description="此角色由各分校共用，分校無法修改名稱、說明、身份與權限；如需調整請聯繫平台管理員。"
+    />
 
     <el-tabs v-model="activeTab">
       <!-- 1. 權限 -->
@@ -263,10 +294,16 @@ defineExpose({ form, isDirty, activeTab, superAdminDisabled, superAdminTooltip, 
               <el-input :model-value="code" disabled />
             </el-form-item>
             <el-form-item label="名稱">
-              <el-input v-model="form.label" />
+              <el-input v-model="form.label" :disabled="isGlobalRole" data-testid="role-label-input" />
             </el-form-item>
             <el-form-item label="說明">
-              <el-input v-model="form.description" type="textarea" :rows="2" />
+              <el-input
+                v-model="form.description"
+                type="textarea"
+                :rows="2"
+                :disabled="isGlobalRole"
+                data-testid="role-description-input"
+              />
             </el-form-item>
           </el-form>
         </section>
