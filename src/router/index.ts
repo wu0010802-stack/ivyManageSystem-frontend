@@ -900,6 +900,12 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '異常確認' },
                 },
                 {
+                    path: 'attendance-confirm',
+                    name: 'portal-attendance-confirm',
+                    component: () => import('../views/portal/PortalAttendanceConfirmView.vue'),
+                    meta: { title: '本月出勤確認' },
+                },
+                {
                     path: 'students',
                     name: 'portal-students',
                     component: () => import('../views/portal/PortalStudentsView.vue'),

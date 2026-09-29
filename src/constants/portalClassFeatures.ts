@@ -30,6 +30,9 @@ export interface PortalPendingActions {
   pending_substitute?: number
   pending_swap?: number
   pending_anomaly_confirms?: number
+  pending_attendance_confirmations?: number
+  /** 待本人回覆的最早確認項目月份（"YYYY-MM"），功能格據此帶 ?year=&month= */
+  pending_attendance_confirmations_earliest?: string | null
   unread_announcements?: number
   [key: string]: unknown
 }
@@ -218,6 +221,15 @@ export const CLASS_FEATURES: readonly ClassFeatureDef[] = [
     group: 'mine',
     to: '/portal/anomalies',
     actionsKey: 'pending_anomaly_confirms',
+  },
+  {
+    // 目的地帶最早待回覆月份（見 PortalHomeView 的 attendanceConfirmTarget）；
+    // 側欄與搜尋指令不帶 query，由確認頁自行決定落點。
+    key: 'attendance-confirm',
+    label: '月底出勤確認',
+    group: 'mine',
+    to: '/portal/attendance-confirm',
+    actionsKey: 'pending_attendance_confirmations',
   },
   {
     key: 'announcements',

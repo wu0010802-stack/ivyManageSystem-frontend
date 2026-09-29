@@ -152,6 +152,7 @@ export const TEACHER_PORTAL_ROUTES = [
   '/portal/punch-correction',
   '/portal/schedule',
   '/portal/anomalies',
+  '/portal/attendance-confirm',
   '/portal/students',
   '/portal/student-attendance',
   '/portal/student-leaves',

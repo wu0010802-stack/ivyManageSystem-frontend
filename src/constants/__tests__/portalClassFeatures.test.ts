@@ -101,12 +101,13 @@ describe('portalClassFeatures', () => {
 
   // ===== 首頁整併（/portal/class 併入 /portal/home）新增的「我的」組 =====
 
-  it('「我的」組五格都不需權限，空權限帳號一樣看得到', () => {
+  it('「我的」組六格都不需權限，空權限帳號一樣看得到', () => {
     setUserInfo({ role: 'teacher', permission_names: [] })
     expect(visibleClassFeatures('mine').map((f) => f.key)).toEqual([
       'pending-substitute',
       'pending-swap',
       'anomalies',
+      'attendance-confirm',
       'announcements',
       'growth',
     ])

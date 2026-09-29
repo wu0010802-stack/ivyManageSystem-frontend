@@ -167,7 +167,7 @@ onMounted(() => {
     <M3SegmentedButton
       :model-value="category"
       :items="categoryItems"
-      class="category-segmented pt-section-pad-x"
+      class="category-segmented"
       @update:model-value="onCategoryChange($event as string)"
     />
 
@@ -243,7 +243,8 @@ onMounted(() => {
 }
 .skeleton-wrap { padding: 0 16px; }
 
-.category-segmented { align-self: flex-start; }
+/* 左右留白用 margin：padding 會落在元件外框內，選中底色被擠開、填不滿（2026-09-29） */
+.category-segmented { margin-inline: 16px; }
 
 .grid {
   display: grid;
