@@ -232,9 +232,16 @@ describe('PortalHomeView 功能格區（/portal/class 整併後）', () => {
     expect(push).toHaveBeenCalledWith('/portal/anomalies')
   })
 
-  it('月底出勤確認格的數字取自 dashboard actions，點擊導向確認頁', async () => {
+  it('月底出勤確認格的數字取自 dashboard actions，點擊導向確認頁（適用者）', async () => {
     mockHomeSummary.mockResolvedValue({
-      data: { ...SUMMARY, actions: { ...SUMMARY.actions, pending_attendance_confirmations: 2 } },
+      data: {
+        ...SUMMARY,
+        actions: {
+          ...SUMMARY.actions,
+          pending_attendance_confirmations: 2,
+          attendance_confirm_eligible: true,
+        },
+      },
     })
     const push = vi.spyOn(router, 'push')
     push.mockClear()
@@ -252,6 +259,7 @@ describe('PortalHomeView 功能格區（/portal/class 整併後）', () => {
           ...SUMMARY.actions,
           pending_attendance_confirmations: 2,
           pending_attendance_confirmations_earliest: '2026-08',
+          attendance_confirm_eligible: true,
         },
       },
     })
@@ -260,6 +268,21 @@ describe('PortalHomeView 功能格區（/portal/class 整併後）', () => {
     const wrapper = await mountView()
     await wrapper.find('[data-test="feature-attendance-confirm"]').trigger('click')
     expect(push).toHaveBeenCalledWith('/portal/attendance-confirm?year=2026&month=8')
+  })
+
+  it('actions.attendance_confirm_eligible 為 false 時，首頁沒有月底出勤確認格（Q6：入口只對近 120 天內適用者顯示）', async () => {
+    mockHomeSummary.mockResolvedValue({
+      data: {
+        ...SUMMARY,
+        actions: {
+          ...SUMMARY.actions,
+          pending_attendance_confirmations: 2,
+          attendance_confirm_eligible: false,
+        },
+      },
+    })
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-test="feature-attendance-confirm"]').exists()).toBe(false)
   })
 
   it('成長軌跡與活動調查有入口——側欄沒有它們，刪掉快速進入而不接住就進不去了', async () => {

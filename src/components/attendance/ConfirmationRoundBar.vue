@@ -5,14 +5,17 @@
  * 不發推播（D4）：發送後請行政口頭提醒老師上系統確認。
  */
 import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ApiResponse } from '@/api/_generated/typed'
 import {
   applyAgreedConfirmations,
+  closeConfirmationRound,
   createConfirmationRound,
+  dismissConfirmationItem,
   getConfirmationRound,
   listConfirmationRounds,
   refreshConfirmationRound,
+  updateConfirmationRound,
 } from '@/api/attendanceConfirmation'
 import { hasPermission } from '@/utils/auth'
 import { todayTaipeiISO } from '@/utils/format'
@@ -34,6 +37,16 @@ type ApplyResult = ApiResponse<'/attendance/confirmation-items/apply-agreed', 'p
 const props = defineProps<{ start: string; end: string }>()
 const emit = defineEmits<{ items: [items: ConfirmationItem[]] }>()
 
+// 行政端項目狀態 tag 顏色（Q4：dismissed 用 info，與「已失效」同色，皆表示不再需要處理）。
+const STATUS_TAG_TYPE: Record<ConfirmationItem['status'], 'success' | 'warning' | 'info' | 'danger'> = {
+  pending: 'info',
+  agreed: 'success',
+  disputed: 'warning',
+  applied: 'success',
+  superseded: 'info',
+  dismissed: 'info',
+}
+
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE') && hasPermission('SCHEDULE'))
 const loading = ref(false)
 const busy = ref(false)
@@ -42,9 +55,11 @@ const detail = ref<Progress | null>(null)
 const createOpen = ref(false)
 const progressOpen = ref(false)
 const applyOpen = ref(false)
+const deadlineOpen = ref(false)
 const draft = ref<Draft | null>(null)
 const applyPlan = ref<ApplyResult | null>(null)
 const form = ref(defaultForm())
+const deadlineForm = ref({ deadline_date: '' })
 
 function defaultForm() {
   const today = todayTaipeiISO()
@@ -62,6 +77,7 @@ const agreedIds = computed(
   () => detail.value?.items.flatMap((i) => (i.status === 'agreed' && i.id != null ? [i.id] : [])) ?? [],
 )
 const agreedCount = computed(() => agreedIds.value.length)
+const agreedItems = computed(() => detail.value?.items.filter((i) => i.status === 'agreed') ?? [])
 const summary = computed(() => {
   const employees = detail.value?.employees ?? []
   return {
@@ -74,6 +90,19 @@ const summary = computed(() => {
 const needsAdmin = computed(
   () => detail.value?.items.filter((i) => i.status === 'disputed' || i.escalated) ?? [],
 )
+const isClosed = computed(() => round.value?.status === 'closed')
+// 本輪進度尚未載入（或讀取失敗、手上仍是別輪的舊進度）時停用「關閉輪次」：
+// 確認對話框的筆數來自 detail，沒有它會顯示「0 筆」而誤導行政。
+const closeDisabled = computed(() => !detail.value || detail.value.round.id !== round.value?.id)
+// 關閉輪次確認對話框逐類列出筆數（Q2）：只算未完成（尚未套用／尚未失效）的項目。
+const closeCounts = computed(() => {
+  const items = detail.value?.items ?? []
+  return {
+    pending: items.filter((i) => i.status === 'pending').length,
+    agreed: items.filter((i) => i.status === 'agreed').length,
+    disputed: items.filter((i) => i.status === 'disputed').length,
+  }
+})
 
 function errorText(e: unknown): string {
   const detailText = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
@@ -185,6 +214,85 @@ async function confirmApply() {
     busy.value = false
   }
 }
+
+function openDeadline() {
+  if (!round.value) return
+  deadlineForm.value = { deadline_date: round.value.deadline_date }
+  deadlineOpen.value = true
+}
+
+async function saveDeadline() {
+  if (!round.value) return
+  busy.value = true
+  try {
+    await updateConfirmationRound(round.value.id, { deadline_date: deadlineForm.value.deadline_date })
+    ElMessage.success('已更新回覆期限')
+    deadlineOpen.value = false
+    await load()
+  } catch (e) {
+    ElMessage.error(errorText(e))
+  } finally {
+    busy.value = false
+  }
+}
+
+async function closeRound() {
+  if (!round.value || closeDisabled.value) return
+  const counts = closeCounts.value
+  const total = counts.pending + counts.agreed + counts.disputed
+  // 雙方已確認、尚未套用的調班一關閉就失效、不會寫進班表（影響出勤異常與扣款判讀），特別提醒。
+  const applyHint =
+    counts.agreed > 0 ? '建議先按「套用雙方已確認」再關閉，否則這些調班不會寫進班表。' : ''
+  try {
+    await ElMessageBox.confirm(
+      `關閉後，本輪 ${total} 筆未完成的項目（待回覆 ${counts.pending}、雙方已確認未套用 ${counts.agreed}、` +
+        `轉行政 ${counts.disputed}）都會失效，已送出的請假／補卡申請不受影響。關閉後同一期間可以重新發送。` +
+        applyHint,
+      '關閉輪次',
+      { confirmButtonText: '關閉輪次', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  busy.value = true
+  try {
+    const r = (await closeConfirmationRound(round.value.id)).data
+    ElMessage.success(`輪次已關閉，${r.superseded} 筆項目已失效`)
+    await load()
+  } catch (e) {
+    ElMessage.error(errorText(e))
+  } finally {
+    busy.value = false
+  }
+}
+
+async function dismissItem(item: ConfirmationItem) {
+  if (item.id == null) return
+  let note: string | null
+  try {
+    const res = await ElMessageBox.prompt('結案說明（選填）', '結案', {
+      inputPlaceholder: '例如：該月已封存，已人工處理',
+      confirmButtonText: '確定',
+      cancelButtonText: '取消',
+    })
+    // 取消時 prompt 是 reject 不是 resolve；resolve 時型別仍是聯集（MessageBoxInputData | Action），
+    // 用 typeof 縮窄避免對字串常值誤取 .value。
+    const value = typeof res === 'string' ? '' : res.value.trim()
+    note = value ? value : null
+  } catch {
+    return
+  }
+  busy.value = true
+  try {
+    await dismissConfirmationItem(item.id, { note })
+    ElMessage.success('已結案')
+    await load()
+  } catch (e) {
+    ElMessage.error(errorText(e))
+  } finally {
+    busy.value = false
+  }
+}
 </script>
 
 <template>
@@ -199,26 +307,49 @@ async function confirmApply() {
       </el-button>
     </template>
     <template v-else>
-      <p class="confirm-bar__line" data-test="round-summary">
+      <p v-if="isClosed" class="confirm-bar__line" data-test="round-summary">
+        確認輪次 #{{ round.id }}（已關閉）：{{ round.period_start }}～{{ round.period_end }}
+      </p>
+      <p v-else class="confirm-bar__line" data-test="round-summary">
         確認輪次 #{{ round.id }}：{{ round.period_start }}～{{ round.period_end }}，期限
         {{ round.deadline_date }}｜待回覆 {{ summary.awaiting }} 人・逾期 {{ summary.escalated }}
         人・已簽認 {{ summary.signed }}/{{ summary.total }}
       </p>
       <div class="confirm-bar__actions">
         <el-button data-test="open-progress" @click="progressOpen = true">進度</el-button>
-        <el-button v-if="canWrite" :loading="busy" data-test="refresh" @click="refresh">
-          重新推測
-        </el-button>
-        <el-button
-          v-if="canWrite"
-          type="primary"
-          :disabled="agreedCount === 0"
-          :loading="busy"
-          data-test="plan-apply"
-          @click="planApply"
-        >
-          套用雙方已確認（{{ agreedCount }}）
-        </el-button>
+        <template v-if="isClosed">
+          <el-button v-if="canWrite" type="primary" data-test="open-create" @click="openCreate">
+            發給老師確認
+          </el-button>
+        </template>
+        <template v-else>
+          <el-button v-if="canWrite" :loading="busy" data-test="refresh" @click="refresh">
+            重新推測
+          </el-button>
+          <el-button v-if="canWrite" data-test="open-deadline" @click="openDeadline">
+            改期限
+          </el-button>
+          <el-button
+            v-if="canWrite"
+            type="danger"
+            plain
+            :disabled="closeDisabled"
+            data-test="close-round"
+            @click="closeRound"
+          >
+            關閉輪次
+          </el-button>
+          <el-button
+            v-if="canWrite"
+            type="primary"
+            :disabled="agreedCount === 0"
+            :loading="busy"
+            data-test="plan-apply"
+            @click="planApply"
+          >
+            套用雙方已確認（{{ agreedCount }}）
+          </el-button>
+        </template>
       </div>
     </template>
 
@@ -254,6 +385,26 @@ async function confirmApply() {
       </template>
     </el-dialog>
 
+    <el-dialog v-model="deadlineOpen" title="改期限" width="420px">
+      <el-form label-position="top">
+        <el-form-item label="回覆期限">
+          <el-date-picker
+            v-model="deadlineForm.deadline_date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+          />
+        </el-form-item>
+      </el-form>
+      <p class="confirm-bar__hint">只改回覆期限，不改期間；期間發錯請改用「關閉輪次」後重發。</p>
+      <template #footer>
+        <el-button @click="deadlineOpen = false">取消</el-button>
+        <el-button type="primary" :loading="busy" data-test="save-deadline" @click="saveDeadline">
+          儲存
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-drawer v-model="progressOpen" title="確認進度" size="520px">
       <el-table v-if="detail" :data="detail.employees" data-test="progress-table">
         <el-table-column prop="employee_name" label="老師" />
@@ -271,12 +422,40 @@ async function confirmApply() {
       <h4 class="confirm-bar__subhead">需要行政處理的項目</h4>
       <ul class="confirm-bar__list">
         <li v-for="item in needsAdmin" :key="item.id ?? 0">
-          {{ describeSuggestion(item) }}（{{ item.escalated ? '逾期未回覆' : STATUS_LABELS[item.status] }}）
+          {{ describeSuggestion(item) }}
+          <el-tag size="small" :type="STATUS_TAG_TYPE[item.status]">
+            {{ item.escalated ? '逾期未回覆' : STATUS_LABELS[item.status] }}
+          </el-tag>
           <p v-if="describeResolution(item)" class="confirm-bar__resolution" data-test="needs-admin-resolution">
             {{ describeResolution(item) }}
           </p>
+          <el-button
+            v-if="canWrite && item.id != null"
+            size="small"
+            text
+            :data-test="`dismiss-${item.id}`"
+            @click="dismissItem(item)"
+          >
+            結案
+          </el-button>
         </li>
         <li v-if="!needsAdmin.length">無</li>
+      </ul>
+      <h4 class="confirm-bar__subhead">雙方已確認、尚未套用</h4>
+      <ul class="confirm-bar__list">
+        <li v-for="item in agreedItems" :key="item.id ?? 0">
+          {{ describeSuggestion(item) }}
+          <el-button
+            v-if="canWrite && item.id != null"
+            size="small"
+            text
+            :data-test="`dismiss-${item.id}`"
+            @click="dismissItem(item)"
+          >
+            不套用，結案
+          </el-button>
+        </li>
+        <li v-if="!agreedItems.length">無</li>
       </ul>
     </el-drawer>
 

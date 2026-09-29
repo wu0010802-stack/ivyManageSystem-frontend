@@ -85,6 +85,9 @@ const unreadCount = ref(0)
 const swapPendingCount = ref(0)
 const substitutePendingCount = ref(0)
 const attendanceConfirmPendingCount = ref(0)
+// 月底出勤確認入口是否顯示（Q6：近 120 天內是適用者）。預設 false——取得資料前
+// 不誤顯示；只有側欄與首頁功能格受此把關，搜尋指令面板刻意維持原樣。
+const attendanceConfirmEligible = ref(false)
 
 // 接送待處理數：由 module-singleton composable 即時維護（WS 推播驅動），殼層不另外 fetch
 const { pendingCount: dismissalPendingCount } = usePortalDismissalAlerts()
@@ -132,6 +135,7 @@ const fetchAttendanceConfirmPendingCount = async () => {
   try {
     const res = await getAttendanceConfirmPendingCount()
     attendanceConfirmPendingCount.value = (res.data as Record<string, unknown>)?.pending_count as number || 0
+    attendanceConfirmEligible.value = (res.data as Record<string, unknown>)?.eligible === true
   } catch {
     // Silent fail
   }
@@ -423,7 +427,7 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/anomalies">
             <span>異常確認</span>
           </el-menu-item>
-          <el-menu-item index="/portal/attendance-confirm">
+          <el-menu-item v-if="attendanceConfirmEligible" index="/portal/attendance-confirm">
             <span>月底出勤確認</span>
             <el-badge v-if="attendanceConfirmPendingCount > 0" :value="attendanceConfirmPendingCount" :max="99" class="announcement-badge" />
           </el-menu-item>

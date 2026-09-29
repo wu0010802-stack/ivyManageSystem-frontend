@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 import ConfirmationRoundBar from '@/components/attendance/ConfirmationRoundBar.vue'
 
 const api = vi.hoisted(() => ({
   list: vi.fn(), create: vi.fn(), get: vi.fn(), refresh: vi.fn(), apply: vi.fn(),
+  update: vi.fn(), close: vi.fn(), dismiss: vi.fn(),
 }))
 const perm = vi.hoisted(() => ({ allow: true }))
 vi.mock('@/api/attendanceConfirmation', () => ({
@@ -13,6 +14,9 @@ vi.mock('@/api/attendanceConfirmation', () => ({
   getConfirmationRound: api.get,
   refreshConfirmationRound: api.refresh,
   applyAgreedConfirmations: api.apply,
+  updateConfirmationRound: api.update,
+  closeConfirmationRound: api.close,
+  dismissConfirmationItem: api.dismiss,
 }))
 vi.mock('@/utils/auth', () => ({ hasPermission: () => perm.allow }))
 
@@ -184,5 +188,126 @@ describe('ConfirmationRoundBar', () => {
     mountBar()
     await flushPromises()
     expect(wrapper.find('[data-test="open-create"]').exists()).toBe(false)
+  })
+
+  it('shows closed round with resend button', async () => {
+    const closedRound = { ...ROUND, status: 'closed' }
+    api.list.mockResolvedValue({ data: [closedRound] })
+    api.get.mockResolvedValue({ data: { ...PROGRESS, round: closedRound } })
+    mountBar()
+    await flushPromises()
+    const summary = wrapper.get('[data-test="round-summary"]').text()
+    expect(summary).toContain('確認輪次 #7（已關閉）')
+    expect(wrapper.find('[data-test="open-create"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="refresh"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="plan-apply"]').exists()).toBe(false)
+  })
+
+  it('updates deadline', async () => {
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS })
+    api.update.mockResolvedValueOnce({ data: { ...ROUND, deadline_date: '2026-10-10' } })
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="open-deadline"]').trigger('click')
+    await flushPromises()
+    const picker = wrapper.findComponent({ name: 'ElDatePicker' })
+    await picker.vm.$emit('update:modelValue', '2026-10-10')
+    await flushPromises()
+    api.list.mockResolvedValue({ data: [{ ...ROUND, deadline_date: '2026-10-10' }] })
+    api.get.mockResolvedValue({ data: { ...PROGRESS, round: { ...ROUND, deadline_date: '2026-10-10' } } })
+    await wrapper.get('[data-test="save-deadline"]').trigger('click')
+    await flushPromises()
+    expect(api.update).toHaveBeenCalledWith(7, { deadline_date: '2026-10-10' })
+  })
+
+  it('closes round after confirm', async () => {
+    const pendingItem = { ...ITEM, id: 12, status: 'pending', employee_response: 'pending', partner_response: 'pending' }
+    const disputedItem = { ...ITEM, id: 13, status: 'disputed' }
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: { ...PROGRESS, items: [ITEM, pendingItem, disputedItem] } })
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    api.close.mockResolvedValueOnce({ data: { round: { ...ROUND, status: 'closed' }, superseded: 2 } })
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="close-round"]').trigger('click')
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalled()
+    const message = confirmSpy.mock.calls[0][0] as string
+    expect(message).toContain('待回覆 1')
+    expect(message).toContain('雙方已確認未套用 1')
+    expect(message).toContain('轉行政 1')
+    expect(api.close).toHaveBeenCalledWith(7)
+  })
+
+  it('recommends applying agreed items before closing when some are agreed', async () => {
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS }) // ITEM 為 agreed
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="close-round"]').trigger('click')
+    await flushPromises()
+    const message = confirmSpy.mock.calls[0][0] as string
+    expect(message).toContain('雙方已確認未套用 1')
+    expect(message).toContain('建議先按「套用雙方已確認」再關閉，否則這些調班不會寫進班表。')
+    expect(api.close).not.toHaveBeenCalled()
+  })
+
+  it('omits the apply recommendation when nothing is agreed', async () => {
+    const pendingItem = { ...ITEM, id: 12, status: 'pending', employee_response: 'pending', partner_response: 'pending' }
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: { ...PROGRESS, items: [pendingItem] } })
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="close-round"]').trigger('click')
+    await flushPromises()
+    const message = confirmSpy.mock.calls[0][0] as string
+    expect(message).toContain('雙方已確認未套用 0')
+    expect(message).not.toContain('建議先按「套用雙方已確認」')
+  })
+
+  it('disables closing until the round detail has loaded', async () => {
+    // 進度讀取失敗時 detail 仍是 null：確認框會顯示「0 筆」而誤導行政，關閉鈕必須停用
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockRejectedValue(new Error('network'))
+    mountBar()
+    await flushPromises()
+    expect(wrapper.get('[data-test="round-summary"]').text()).toContain('確認輪次 #7')
+    expect(wrapper.get('[data-test="close-round"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('disables closing when only a previous round\'s detail is on hand', async () => {
+    // 換期間後列到另一輪（#8），但它的進度讀取失敗：手上的 detail 仍是 #7 的，不可拿來關 #8
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.get('[data-test="close-round"]').attributes('disabled')).toBeUndefined()
+    api.list.mockResolvedValue({ data: [{ ...ROUND, id: 8, period_start: '2026-10-01', period_end: '2026-10-31' }] })
+    api.get.mockRejectedValue(new Error('network'))
+    await wrapper.setProps({ start: '2026-10-01', end: '2026-10-31' })
+    await flushPromises()
+    expect(wrapper.get('[data-test="round-summary"]').text()).toContain('確認輪次 #8')
+    expect(wrapper.get('[data-test="close-round"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('dismisses an item', async () => {
+    const disputedItem = { ...ITEM, id: 21, status: 'disputed' }
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: { ...PROGRESS, items: [ITEM, disputedItem] } })
+    const promptSpy = vi.spyOn(ElMessageBox, 'prompt').mockResolvedValue({ value: '已處理', action: 'confirm' } as never)
+    api.dismiss.mockResolvedValueOnce({ data: { ...disputedItem, status: 'dismissed' } })
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="open-progress"]').trigger('click')
+    await flushPromises()
+    // 「雙方已確認、尚未套用」區塊列出 agreed 項目（ITEM.id=11），也有同樣的結案按鈕
+    expect(wrapper.find('[data-test="dismiss-11"]').exists()).toBe(true)
+    await wrapper.get('[data-test="dismiss-21"]').trigger('click')
+    await flushPromises()
+    expect(promptSpy).toHaveBeenCalled()
+    expect(api.dismiss).toHaveBeenCalledWith(21, { note: '已處理' })
   })
 })

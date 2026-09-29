@@ -30,3 +30,23 @@ export const applyAgreedConfirmations = (
   body: ApiBody<'/attendance/confirmation-items/apply-agreed', 'post'>,
 ): AxiosResp<'/attendance/confirmation-items/apply-agreed', 'post'> =>
   api.post('/attendance/confirmation-items/apply-agreed', body)
+
+/** 改回覆期限；只改 deadline_date，不改期間（期間發錯請關閉後重發）。 */
+export const updateConfirmationRound = (
+  roundId: number,
+  body: ApiBody<'/attendance/confirmation-rounds/{round_id}', 'patch'>,
+): AxiosResp<'/attendance/confirmation-rounds/{round_id}', 'patch'> =>
+  api.patch(`/attendance/confirmation-rounds/${roundId}`, body)
+
+/** 關閉輪次：本輪未完成的項目一律失效，關閉後同期間可重新發送。 */
+export const closeConfirmationRound = (
+  roundId: number,
+): AxiosResp<'/attendance/confirmation-rounds/{round_id}/close', 'post'> =>
+  api.post(`/attendance/confirmation-rounds/${roundId}/close`)
+
+/** 行政結案：不套用此項目、不再列為待回覆或待處理（已送出的假單／補卡不受影響）。 */
+export const dismissConfirmationItem = (
+  itemId: number,
+  body: ApiBody<'/attendance/confirmation-items/{item_id}/dismiss', 'post'>,
+): AxiosResp<'/attendance/confirmation-items/{item_id}/dismiss', 'post'> =>
+  api.post(`/attendance/confirmation-items/${itemId}/dismiss`, body)

@@ -101,13 +101,12 @@ describe('portalClassFeatures', () => {
 
   // ===== 首頁整併（/portal/class 併入 /portal/home）新增的「我的」組 =====
 
-  it('「我的」組六格都不需權限，空權限帳號一樣看得到', () => {
+  it('「我的」組六格都不需權限，空權限帳號一樣看得到（月底出勤確認格另受 visibleWhenAction 把關，見下方專屬測試）', () => {
     setUserInfo({ role: 'teacher', permission_names: [] })
     expect(visibleClassFeatures('mine').map((f) => f.key)).toEqual([
       'pending-substitute',
       'pending-swap',
       'anomalies',
-      'attendance-confirm',
       'announcements',
       'growth',
     ])
@@ -159,5 +158,51 @@ describe('portalClassFeatures', () => {
     expect(resolveFeatureBadge(byKey('student-attendance'), {})).toBe(0)
     expect(resolveFeatureBadge(byKey('announcements'), {})).toBe(0)
     expect(resolveFeatureBadge(byKey('dismissal-calls'), {})).toBe(0)
+  })
+
+  // ===== 月底出勤確認入口依「近 120 天內是適用者」顯示（Q6，計畫層裁定） =====
+
+  it('月底出勤確認格宣告 visibleWhenAction，對應 attendance_confirm_eligible', () => {
+    const f = CLASS_FEATURES.find((x) => x.key === 'attendance-confirm')!
+    expect(f.visibleWhenAction).toBe('attendance_confirm_eligible')
+  })
+
+  it('actions.attendance_confirm_eligible 為 false 時，mine 組不含月底出勤確認格', () => {
+    setUserInfo({ role: 'teacher', permission_names: [] })
+    const keys = visibleClassFeatures('mine', { attendance_confirm_eligible: false }).map(
+      (f) => f.key,
+    )
+    expect(keys).not.toContain('attendance-confirm')
+  })
+
+  it('actions.attendance_confirm_eligible 為 true 時，mine 組含月底出勤確認格', () => {
+    setUserInfo({ role: 'teacher', permission_names: [] })
+    const keys = visibleClassFeatures('mine', { attendance_confirm_eligible: true }).map(
+      (f) => f.key,
+    )
+    expect(keys).toContain('attendance-confirm')
+  })
+
+  it('不帶 actions 參數時（舊呼叫），mine 組不含月底出勤確認格', () => {
+    setUserInfo({ role: 'teacher', permission_names: [] })
+    const keys = visibleClassFeatures('mine').map((f) => f.key)
+    expect(keys).not.toContain('attendance-confirm')
+  })
+
+  it('沒有 visibleWhenAction 的格子不受 actions 參數影響，帶或不帶結果相同', () => {
+    setUserInfo({ role: 'teacher', permission_names: [] })
+    const withoutActions = visibleClassFeatures('mine').map((f) => f.key)
+    const withActions = visibleClassFeatures('mine', { attendance_confirm_eligible: false }).map(
+      (f) => f.key,
+    )
+    const rest = (keys: string[]) => keys.filter((k) => k !== 'attendance-confirm')
+    expect(rest(withoutActions)).toEqual(rest(withActions))
+    expect(rest(withoutActions)).toEqual([
+      'pending-substitute',
+      'pending-swap',
+      'anomalies',
+      'announcements',
+      'growth',
+    ])
   })
 })

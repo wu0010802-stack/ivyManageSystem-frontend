@@ -3774,6 +3774,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/confirmation-items/{item_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Confirmation Item
+         * @description 行政結案：不套用此項目、不再列為待回覆或待處理（已送出的假單／補卡不受影響）。
+         */
+        post: operations["dismiss_confirmation_item_api_attendance_confirmation_items__item_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/confirmation-items/apply-agreed": {
         parameters: {
             query?: never;
@@ -3832,6 +3852,30 @@ export interface paths {
         get: operations["get_confirmation_round_api_attendance_confirmation_rounds__round_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Confirmation Round
+         * @description 修改回覆期限（期間發錯請關閉後重發）。
+         */
+        patch: operations["update_confirmation_round_api_attendance_confirmation_rounds__round_id__patch"];
+        trace?: never;
+    };
+    "/attendance/confirmation-rounds/{round_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close Confirmation Round
+         * @description 關閉輪次：本輪未完成的項目一律失效，關閉後同期間可重新發送。
+         */
+        post: operations["close_confirmation_round_api_attendance_confirmation_rounds__round_id__close_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13913,6 +13957,9 @@ export interface paths {
         /**
          * Get Attendance Confirmation Pending Count
          * @description 待本人回覆的確認項目數（側欄徽章）與最早待回覆月份（確認頁落點）。
+         *
+         *     eligible（入口顯示）：有待本人回覆的項目就一定顯示（最終審查 M2：超過 120 天仍待
+         *     回覆的項目不可失去入口），否則看近 120 天內是否為適用者。
          */
         get: operations["get_attendance_confirmation_pending_count_api_portal_attendance_confirmations_pending_count_get"];
         put?: never;
@@ -27071,6 +27118,27 @@ export interface components {
             /** Ok */
             ok?: boolean | null;
         };
+        /**
+         * ConfirmationAbsenceDayOut
+         * @description 沒有打卡、也沒有請假紀錄、又不在任何確認項目內的日期（Q1 選項 C）。
+         */
+        ConfirmationAbsenceDayOut: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Expected End */
+            expected_end?: string | null;
+            /** Expected Start */
+            expected_start?: string | null;
+            /** Pending Leave Id */
+            pending_leave_id?: number | null;
+            /** Pending Punch Correction Id */
+            pending_punch_correction_id?: number | null;
+            /** Shift Name */
+            shift_name?: string | null;
+        };
         /** ConfirmationAmendIn */
         ConfirmationAmendIn: {
             /** Correction Type */
@@ -27090,6 +27158,14 @@ export interface components {
             requested_punch_in?: string | null;
             /** Requested Punch Out */
             requested_punch_out?: string | null;
+        };
+        /**
+         * ConfirmationItemDismissIn
+         * @description 行政結案（Q4）：不套用此項目、不再列為待回覆或待處理。
+         */
+        ConfirmationItemDismissIn: {
+            /** Note */
+            note?: string | null;
         };
         /** ConfirmationItemOut */
         ConfirmationItemOut: {
@@ -27143,13 +27219,18 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "agreed" | "disputed" | "applied" | "superseded";
+            status: "pending" | "agreed" | "disputed" | "applied" | "superseded" | "dismissed";
             suggestion: components["schemas"]["SuggestionOut"];
         };
         /** ConfirmationPendingCountOut */
         ConfirmationPendingCountOut: {
             /** Earliest Month */
             earliest_month?: string | null;
+            /**
+             * Eligible
+             * @default false
+             */
+            eligible: boolean;
             /** Pending Count */
             pending_count: number;
         };
@@ -27161,6 +27242,15 @@ export interface components {
              */
             action: "agree" | "amend";
             amend?: components["schemas"]["ConfirmationAmendIn"] | null;
+        };
+        /**
+         * ConfirmationRoundCloseOut
+         * @description 關閉輪次（Q2）：本輪未完成項目一律標 superseded，回傳筆數。
+         */
+        ConfirmationRoundCloseOut: {
+            round: components["schemas"]["ConfirmationRoundOut"];
+            /** Superseded */
+            superseded: number;
         };
         /** ConfirmationRoundCreateIn */
         ConfirmationRoundCreateIn: {
@@ -27243,6 +27333,17 @@ export interface components {
             kept: number;
             /** Superseded */
             superseded: number;
+        };
+        /**
+         * ConfirmationRoundUpdateIn
+         * @description 修改回覆期限（Q3）：只改 deadline_date，不改期間；期間發錯走「關閉→重發」。
+         */
+        ConfirmationRoundUpdateIn: {
+            /**
+             * Deadline Date
+             * Format: date
+             */
+            deadline_date: string;
         };
         /** ConfirmPromotionPayload */
         ConfirmPromotionPayload: {
@@ -38672,15 +38773,25 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "agreed" | "disputed" | "applied" | "superseded";
+            status: "pending" | "agreed" | "disputed" | "applied" | "superseded" | "dismissed";
             suggestion: components["schemas"]["SuggestionOut"];
         };
         /** PortalConfirmationsOut */
         PortalConfirmationsOut: {
+            /**
+             * Absence Days
+             * @default []
+             */
+            absence_days: components["schemas"]["ConfirmationAbsenceDayOut"][];
             /** Items */
             items: components["schemas"]["PortalConfirmationItemOut"][];
             /** Month */
             month: number;
+            /**
+             * Participant
+             * @default false
+             */
+            participant: boolean;
             /** Pending Count */
             pending_count: number;
             /** Signed At */
@@ -55894,6 +56005,41 @@ export interface operations {
             };
         };
     };
+    dismiss_confirmation_item_api_attendance_confirmation_items__item_id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationItemDismissIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     apply_agreed_confirmations_api_attendance_confirmation_items_apply_agreed_post: {
         parameters: {
             query?: never;
@@ -56010,6 +56156,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfirmationRoundProgressOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_confirmation_round_api_attendance_confirmation_rounds__round_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                round_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmationRoundUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationRoundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_confirmation_round_api_attendance_confirmation_rounds__round_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                round_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationRoundCloseOut"];
                 };
             };
             /** @description Validation Error */
