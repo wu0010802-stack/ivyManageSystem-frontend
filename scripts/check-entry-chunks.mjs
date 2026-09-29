@@ -92,6 +92,13 @@ const ENTRIES = [
 // 兩個框架 chunk 佔 163KB 為固定成本，「自己的程式碼」佔約 81KB）。245 的舊預算
 // 已無 headroom 可用，budget 只提到剛好通過所需（+3KB），刻意保守不重新套用
 // 12% headroom 公式——避免一次放太寬讓這道守衛之後很久都測不到真正的膨脹。
+//
+// 2026-09-29 parent 校準（多租戶稽核修補）：Railway 實際 build 量到 248.0KB
+// （同 commit 本機 build 246.6KB——Railway build 帶入的 VITE_* 環境值讓首屏固定比
+// 本機大約 1.4KB，本機通過不代表 Railway 通過）。成長來源：解析負載削減
+// TENANT_RESOLUTION_BUSY 的自動重試（R5，家長端 axios 攔截器與 tenant-meta）、
+// 非預設租戶不退回義華品牌的 normalizeBranding（F65），本機逐 build 比對約 +0.4KB，
+// 屬刻意成長。沿用 09-17 的保守原則，只上調 1KB 到剛好通過。
 // 多租戶（4d/fb，scan-frontend GAP-02）：`manifestName` 期望值改為 **token 字面**。
 // dist 的 *.webmanifest 現在存的是 `{{TB_MANIFEST_*_NAME}}`，真正的品牌值由 nginx
 // `sub_filter` 依 $host 逐請求注入。這條斷言因此反向鎖住「不得退回硬編品牌字面」：
@@ -102,7 +109,7 @@ const ENTRIES = [
 const ENTRY_BUDGETS_KB = {
   index: 310,
   public: 200,
-  parent: 248,
+  parent: 249,
 }
 
 if (!existsSync(ASSETS)) {
