@@ -9312,6 +9312,7 @@ export interface paths {
          *             "line": {...},
          *             "storage": {...},
          *             "db_pool": {...},
+         *             "tenant_assertion": {...},
          *           },
          *         }
          */
@@ -16801,6 +16802,10 @@ export interface paths {
          *     否則又是一個繞過 transition 的旁門。
          *
          *     入學學期缺值時補當前學期：沒有 target 的訪視不會出現在任何學年看板。
+         *
+         *     本租戶沒有合法官網來源（非預設租戶且沒有自己的 `ivykids_sync_configs`）→ 409：
+         *     這種租戶名下的官網報名只可能是 MT-01 外洩列，轉入等於把他校家長 PII 複製進
+         *     本校招生漏斗，且事後刪 ivykids 列帶不走已轉出的訪視（稽核 F98）。
          */
         post: operations["convert_ivykids_record_to_visit_api_recruitment_ivykids_records__record_id__to_visit_post"];
         delete?: never;
@@ -37925,6 +37930,32 @@ export interface components {
             /** Tenant Id */
             tenant_id: number;
         };
+        /**
+         * PlatformRoleChangeOut
+         * @description 單一角色的權限差異（F57／MT-08；形狀對齊角色編輯稽核）。
+         */
+        PlatformRoleChangeOut: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "created" | "updated";
+            /** Code */
+            code: string;
+            /**
+             * Description Changed
+             * @default false
+             */
+            description_changed: boolean;
+            /** Label From */
+            label_from?: string | null;
+            /** Label To */
+            label_to?: string | null;
+            /** Permissions Added */
+            permissions_added?: string[];
+            /** Permissions Removed */
+            permissions_removed?: string[];
+        };
         /** PlatformRoleSyncIn */
         PlatformRoleSyncIn: {
             /**
@@ -37938,6 +37969,8 @@ export interface components {
              * @enum {string}
              */
             mode: "merge" | "overwrite";
+            /** Source Snapshot Hash */
+            source_snapshot_hash?: string | null;
             /** Source Tenant Id */
             source_tenant_id: number;
             /** Target Tenant Ids */
@@ -37957,6 +37990,8 @@ export interface components {
             mode: "merge" | "overwrite";
             /** Results */
             results?: components["schemas"]["PlatformRoleSyncTargetOut"][];
+            /** Source Snapshot Hash */
+            source_snapshot_hash?: string | null;
             /** Source Tenant Id */
             source_tenant_id: number;
         };
@@ -37976,6 +38011,8 @@ export interface components {
              * @default 0
              */
             legacy_snapshots_migrated: number;
+            /** Role Changes */
+            role_changes?: components["schemas"]["PlatformRoleChangeOut"][];
             /** Skipped */
             skipped?: string[];
             /** Tenant Id */
@@ -72604,7 +72641,7 @@ export interface operations {
                     "application/json": components["schemas"]["PlatformRoleSyncOut"];
                 };
             };
-            /** @description 全部 target 都被其他同步佔用（advisory lock） */
+            /** @description 全部 target 都被其他同步佔用（advisory lock），或來源角色在預覽後已變動（source_snapshot_hash 不一致） */
             409: {
                 headers: {
                     [name: string]: unknown;
