@@ -8,6 +8,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { ApiBody, ApiResponse } from '@/api/_generated/typed'
 import {
+  getAttendanceConfirmPendingCount,
   getMyAttendanceConfirmations,
   respondAttendanceConfirmation,
   signoffAttendanceMonth,
@@ -53,15 +54,34 @@ interface AmendForm {
 const route = useRoute()
 const [thisYear, thisMonth] = todayTaipeiISO().split('-').map(Number)
 // 比照 PortalAnomalyView.vue 的 _queryInt：不是整數或超出合理範圍（誤帶壞掉的網址、
-// 手改網址列）一律退回本月，不要把 NaN／越界值送進 API 查詢參數。
-function _queryInt(v: unknown, fallback: number, min: number, max: number): number {
+// 手改網址列）一律視為沒帶，不要把 NaN／越界值送進 API 查詢參數。
+function _queryInt(v: unknown, min: number, max: number): number | null {
   const n = Number(Array.isArray(v) ? v[0] : v)
-  return Number.isInteger(n) && n >= min && n <= max ? n : fallback
+  return Number.isInteger(n) && n >= min && n <= max ? n : null
 }
-const year = ref(_queryInt(route.query.year, thisYear, 2000, 2100))
-const month = ref(_queryInt(route.query.month, thisMonth, 1, 12))
+/** "YYYY-MM" → [年, 月]；格式不對回 null。 */
+function _parseMonth(value: string | null | undefined): [number, number] | null {
+  const [y, m] = (value ?? '').split('-').map(Number)
+  return Number.isInteger(y) && Number.isInteger(m) && m >= 1 && m <= 12 ? [y, m] : null
+}
+// 落點月份（最終審查 I-3）：網址有合法 year／month 照舊優先；否則先落在上個月
+// （月底確認在次月進行），再以 pending-count 的 earliest_month 改到最早還待本人
+// 回覆的月份——徽章統計全期間，確認頁一次只看一個月，不帶過去就找不到那筆。
+const queryYear = _queryInt(route.query.year, 2000, 2100)
+const queryMonth = _queryInt(route.query.month, 1, 12)
+const fromQuery = queryYear !== null && queryMonth !== null
+const [initialYear, initialMonth]: [number, number] =
+  queryYear !== null && queryMonth !== null
+    ? [queryYear, queryMonth]
+    : thisMonth === 1
+      ? [thisYear - 1, 12]
+      : [thisYear, thisMonth - 1]
+const year = ref(initialYear)
+const month = ref(initialMonth)
+// 落點決定前不載入，避免先抓上個月、再抓最早月份的重複請求
+const landingReady = ref(fromQuery)
 const data = ref<ViewData | null>(null)
-const loading = ref(false)
+const loading = ref(!fromQuery)
 const signing = ref(false)
 const forms = reactive<Record<number, AmendForm>>({})
 
@@ -112,7 +132,35 @@ async function load() {
   }
 }
 
-watch([year, month], () => void load(), { immediate: true })
+watch(
+  [year, month, landingReady],
+  () => {
+    if (landingReady.value) void load()
+  },
+  { immediate: true },
+)
+
+async function resolveLanding() {
+  const before = [year.value, month.value]
+  try {
+    const landing = _parseMonth((await getAttendanceConfirmPendingCount()).data.earliest_month)
+    // 等待期間老師已自己切了年月就尊重他的選擇
+    if (landing && year.value === before[0] && month.value === before[1]) {
+      year.value = landing[0]
+      month.value = landing[1]
+    }
+  } catch {
+    // 取不到最早月份就留在上個月
+  } finally {
+    landingReady.value = true
+  }
+}
+if (!fromQuery) void resolveLanding()
+
+/** 回覆／簽認後讓側欄徽章立即重抓（PortalLayout 監聽），不必等 30 秒 TTL。 */
+function notifyCountChanged() {
+  window.dispatchEvent(new Event('portal-attendance-confirm-count-changed'))
+}
 
 function replaceItem(updated: PortalConfirmationItem) {
   if (!data.value) return
@@ -136,6 +184,7 @@ async function agree(item: PortalConfirmationItem) {
   form.agreeing = true
   try {
     replaceItem((await respondAttendanceConfirmation(item.id, { action: 'agree' })).data)
+    notifyCountChanged()
     ElMessage.success('已回覆')
   } catch (e) {
     ElMessage.error(errorText(e))
@@ -178,6 +227,7 @@ async function submitAmend(item: PortalConfirmationItem) {
   form.submitting = true
   try {
     replaceItem((await respondAttendanceConfirmation(item.id, { action: 'amend', amend })).data)
+    notifyCountChanged()
     form.open = false
     ElMessage.success('已送出修正')
   } catch (e) {
@@ -192,6 +242,7 @@ async function signoff() {
   try {
     const res = await signoffAttendanceMonth({ year: year.value, month: month.value })
     if (data.value) data.value = { ...data.value, signed_at: res.data.signed_at }
+    notifyCountChanged()
     ElMessage.success('已完成本月出勤確認')
   } catch (e) {
     ElMessage.error(errorText(e))

@@ -4,12 +4,12 @@ import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import PortalAttendanceConfirmView from '@/views/portal/PortalAttendanceConfirmView.vue'
 
-const api = vi.hoisted(() => ({ get: vi.fn(), respond: vi.fn(), signoff: vi.fn() }))
+const api = vi.hoisted(() => ({ get: vi.fn(), respond: vi.fn(), signoff: vi.fn(), pendingCount: vi.fn() }))
 vi.mock('@/api/portalAttendanceConfirm', () => ({
   getMyAttendanceConfirmations: api.get,
   respondAttendanceConfirmation: api.respond,
   signoffAttendanceMonth: api.signoff,
-  getAttendanceConfirmPendingCount: vi.fn(),
+  getAttendanceConfirmPendingCount: api.pendingCount,
 }))
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<typeof import('element-plus')>('element-plus')
@@ -68,6 +68,8 @@ describe('PortalAttendanceConfirmView', () => {
     api.respond.mockResolvedValue({ data: item({ employee_response: 'agree', needs_my_response: false }) })
     await mountView()
     expect(api.get).toHaveBeenCalledWith({ year: 2026, month: 9 })
+    // 網址有合法 year／month 時照舊優先，不必再問最早待回覆月份
+    expect(api.pendingCount).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('推測：與 張副導（晚車）對調')
     await wrapper.get('[data-test="agree-11"]').trigger('click')
     await flushPromises()
@@ -157,10 +159,60 @@ describe('PortalAttendanceConfirmView', () => {
     expect(wrapper.find('[data-test="agree-11"]').exists()).toBe(false)
   })
 
-  it('falls back to this month when the route query year/month are invalid', async () => {
+  it('treats invalid route query year/month like no query (last month when nothing is pending)', async () => {
     api.get.mockResolvedValue(view([], 0))
+    api.pendingCount.mockResolvedValue({ data: { pending_count: 0, earliest_month: null } })
     await mountView('?year=abc&month=13')
-    // fake system time 為 2026-10-02（Asia/Taipei），本月＝2026 年 10 月
-    expect(api.get).toHaveBeenCalledWith({ year: 2026, month: 10 })
+    // fake system time 為 2026-10-02（Asia/Taipei）；月底確認在次月進行，預設上個月＝2026 年 9 月
+    expect(api.get).toHaveBeenCalledTimes(1)
+    expect(api.get).toHaveBeenCalledWith({ year: 2026, month: 9 })
+  })
+
+  it('lands on the earliest month still awaiting my response when the URL has no year/month', async () => {
+    api.get.mockResolvedValue(view([item({ date: '2026-08-20' })], 1))
+    api.pendingCount.mockResolvedValue({ data: { pending_count: 3, earliest_month: '2026-08' } })
+    await mountView('')
+    expect(api.pendingCount).toHaveBeenCalledTimes(1)
+    expect(api.get).toHaveBeenCalledTimes(1)
+    expect(api.get).toHaveBeenCalledWith({ year: 2026, month: 8 })
+  })
+
+  it('defaults to last month when nothing is awaiting my response', async () => {
+    api.get.mockResolvedValue(view([], 0))
+    api.pendingCount.mockResolvedValue({ data: { pending_count: 0, earliest_month: null } })
+    await mountView('')
+    expect(api.get).toHaveBeenCalledTimes(1)
+    expect(api.get).toHaveBeenCalledWith({ year: 2026, month: 9 })
+  })
+
+  it('defaults to December of last year in January', async () => {
+    vi.setSystemTime(new Date('2027-01-05T10:00:00+08:00'))
+    api.get.mockResolvedValue(view([], 0))
+    api.pendingCount.mockResolvedValue({ data: { pending_count: 0, earliest_month: null } })
+    await mountView('')
+    expect(api.get).toHaveBeenCalledWith({ year: 2026, month: 12 })
+  })
+
+  it('still loads last month when the pending-count lookup fails', async () => {
+    api.get.mockResolvedValue(view([], 0))
+    api.pendingCount.mockRejectedValue(new Error('network'))
+    await mountView('')
+    expect(api.get).toHaveBeenCalledWith({ year: 2026, month: 9 })
+  })
+
+  it('asks the sidebar badge to refetch after a reply and after sign-off', async () => {
+    const dispatch = vi.spyOn(window, 'dispatchEvent')
+    api.get.mockResolvedValue(view([item()], 1))
+    api.respond.mockResolvedValue({ data: item({ employee_response: 'agree', needs_my_response: false }) })
+    api.signoff.mockResolvedValue({ data: { year: 2026, month: 9, signed_at: '2026-10-02T10:00:00', round_id: 7 } })
+    await mountView()
+    const fired = () => dispatch.mock.calls.filter(([e]) => e.type === 'portal-attendance-confirm-count-changed').length
+    await wrapper.get('[data-test="agree-11"]').trigger('click')
+    await flushPromises()
+    expect(fired()).toBe(1)
+    await wrapper.get('[data-test="signoff"]').trigger('click')
+    await flushPromises()
+    expect(fired()).toBe(2)
+    dispatch.mockRestore()
   })
 })

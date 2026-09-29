@@ -3849,7 +3849,7 @@ export interface paths {
         put?: never;
         /**
          * Refresh Confirmation Round
-         * @description 重新匯入打卡或班表變動後重跑；版本失效的項目標 superseded 並重推。
+         * @description 重新匯入打卡或班表變動後重跑；有對象的項目配對判準不成立、或單方項目資料已變，才標 superseded 並重推（已交行政的項目一律保留）。
          */
         post: operations["refresh_confirmation_round_api_attendance_confirmation_rounds__round_id__refresh_post"];
         delete?: never;
@@ -13911,7 +13911,7 @@ export interface paths {
         };
         /**
          * Get Attendance Confirmation Pending Count
-         * @description 待本人回覆的確認項目數（側欄徽章）。
+         * @description 待本人回覆的確認項目數（側欄徽章）與最早待回覆月份（確認頁落點）。
          */
         get: operations["get_attendance_confirmation_pending_count_api_portal_attendance_confirmations_pending_count_get"];
         put?: never;
@@ -27117,6 +27117,8 @@ export interface components {
         };
         /** ConfirmationPendingCountOut */
         ConfirmationPendingCountOut: {
+            /** Earliest Month */
+            earliest_month?: string | null;
             /** Pending Count */
             pending_count: number;
         };

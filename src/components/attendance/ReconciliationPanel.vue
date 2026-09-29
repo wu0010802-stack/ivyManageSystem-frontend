@@ -8,7 +8,7 @@ import { formatDateTimeTW, todayTaipeiISO } from '@/utils/format'
 import { reconciliationRanges, reconciliationRangeError } from '@/utils/attendanceReconciliationRange'
 import FormDialog from '@/components/common/FormDialog.vue'
 import ConfirmationRoundBar from '@/components/attendance/ConfirmationRoundBar.vue'
-import { itemsByPersonDay, STATUS_LABELS, type ConfirmationItem } from '@/utils/attendanceConfirm'
+import { itemsByPersonDay, resolutionTooltip, STATUS_LABELS, type ConfirmationItem } from '@/utils/attendanceConfirm'
 
 type Row = ApiResponse<'/attendance/reconciliation/preview', 'post'>['rows'][number]
 // active=false（頁籤切到「出勤明細」）時本面板仍掛載著以保留核對狀態，但不得
@@ -45,6 +45,10 @@ function onConfirmationItems(items: ConfirmationItem[]) {
 function confirmationLabel(row: Row): string {
   const item = confirmationByPersonDay.value.get(`${row.employee_id}|${row.date}`)
   return item ? `老師確認：${STATUS_LABELS[item.status]}` : ''
+}
+/** 轉行政且老師有寫說明時，tag 以 tooltip 顯示修正內容（最終審查 I-4）；否則空字串。 */
+function confirmationNote(row: Row): string {
+  return resolutionTooltip(confirmationByPersonDay.value.get(`${row.employee_id}|${row.date}`))
 }
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE') && hasPermission('SCHEDULE'))
 const today = computed(() => todayTaipeiISO())
@@ -231,7 +235,7 @@ async function saveShift() {
       <component v-for="group in groups" :is="group.incomplete ? 'details' : 'div'" :key="group.key" :open="group.incomplete && expandedEmployees.has(group.rows[0].employee_id)" @toggle="onGroupToggle(group.rows[0].employee_id, $event)" :data-employee-id="group.incomplete ? group.rows[0].employee_id : undefined" class="reconciliation__group">
       <summary v-if="group.incomplete"><strong>{{ group.rows[0].employee_name }}</strong> · {{ group.rows[0].employee_number }} · {{ group.rows.length }} 天資料待補<span>展開逐日核對與匯入</span></summary>
       <article v-for="row in group.rows" :key="`${row.employee_id}:${row.date}`" class="reconciliation__row">
-        <header><strong>{{ row.employee_name }}</strong><span>{{ row.employee_number }} · {{ row.date }}</span><el-tag :type="['matched', 'leave', 'off_day'].includes(row.status) ? 'info' : 'warning'">{{ labels[row.status] }}</el-tag><el-tag v-if="confirmationLabel(row)" size="small" type="warning">{{ confirmationLabel(row) }}</el-tag></header>
+        <header><strong>{{ row.employee_name }}</strong><span>{{ row.employee_number }} · {{ row.date }}</span><el-tag :type="['matched', 'leave', 'off_day'].includes(row.status) ? 'info' : 'warning'">{{ labels[row.status] }}</el-tag><el-tooltip v-if="confirmationNote(row)" :content="confirmationNote(row)" placement="top"><el-tag size="small" type="warning" data-test="confirmation-tag" tabindex="0">{{ confirmationLabel(row) }}</el-tag></el-tooltip><el-tag v-else-if="confirmationLabel(row)" size="small" type="warning" data-test="confirmation-tag">{{ confirmationLabel(row) }}</el-tag></header>
         <dl>
           <div><dt>原班表</dt><dd>{{ row.day_off ? '非應出勤日' : `${row.expected_start}–${row.expected_end}` }}</dd></div>
           <div><dt>上班打卡</dt><dd>{{ row.punch_in ? formatDateTimeTW(row.punch_in) : '無紀錄' }}</dd></div>

@@ -168,6 +168,11 @@ const onSubstituteChanged = () => {
   fetchSubstitutePendingCount()
 }
 
+// 月底出勤確認：回覆／簽認後由確認頁發事件，徽章立即重抓，不必等 TTL
+const onAttendanceConfirmChanged = () => {
+  fetchAttendanceConfirmPendingCount()
+}
+
 // tab 切回前景時，若距上次刷新超過 TTL 再抓一次（不切頁就不刷）
 const onVisibilityChange = () => {
   if (document.visibilityState === 'visible') {
@@ -206,6 +211,7 @@ onMounted(() => {
   // 比照 AdminLayout 的 ivy-admin：掛在 <html> 讓 teleport 到 body 的 dialog/sheet 也吃到
   document.documentElement.classList.add('ivy-portal')
   window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  window.addEventListener('portal-attendance-confirm-count-changed', onAttendanceConfirmChanged)
   window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.addEventListener('visibilitychange', onVisibilityChange)
   refreshPortalCounts({ force: true })
@@ -245,6 +251,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.documentElement.classList.remove('ivy-portal')
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  window.removeEventListener('portal-attendance-confirm-count-changed', onAttendanceConfirmChanged)
   window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   teardownPortalDismissalAlerts()

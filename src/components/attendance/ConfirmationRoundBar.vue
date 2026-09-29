@@ -18,6 +18,7 @@ import { hasPermission } from '@/utils/auth'
 import { todayTaipeiISO } from '@/utils/format'
 import {
   addWorkdays,
+  describeResolution,
   describeSuggestion,
   KIND_LABELS,
   STATUS_LABELS,
@@ -55,7 +56,12 @@ function defaultForm() {
   }
 }
 
-const agreedCount = computed(() => detail.value?.items.filter((i) => i.status === 'agreed').length ?? 0)
+// 套用預覽只帶本輪 agreed 項目（最終審查 M-1）：不帶 item_ids 時後端會列出全租戶所有
+// agreed 項目，預覽清單就跟按鈕上的計數對不起來。
+const agreedIds = computed(
+  () => detail.value?.items.flatMap((i) => (i.status === 'agreed' && i.id != null ? [i.id] : [])) ?? [],
+)
+const agreedCount = computed(() => agreedIds.value.length)
 const summary = computed(() => {
   const employees = detail.value?.employees ?? []
   return {
@@ -151,7 +157,7 @@ async function refresh() {
 async function planApply() {
   busy.value = true
   try {
-    applyPlan.value = (await applyAgreedConfirmations({ dry_run: true })).data
+    applyPlan.value = (await applyAgreedConfirmations({ dry_run: true, item_ids: agreedIds.value })).data
     applyOpen.value = true
   } catch (e) {
     ElMessage.error(errorText(e))
@@ -266,6 +272,9 @@ async function confirmApply() {
       <ul class="confirm-bar__list">
         <li v-for="item in needsAdmin" :key="item.id ?? 0">
           {{ describeSuggestion(item) }}（{{ item.escalated ? '逾期未回覆' : STATUS_LABELS[item.status] }}）
+          <p v-if="describeResolution(item)" class="confirm-bar__resolution" data-test="needs-admin-resolution">
+            {{ describeResolution(item) }}
+          </p>
         </li>
         <li v-if="!needsAdmin.length">無</li>
       </ul>
@@ -331,5 +340,9 @@ async function confirmApply() {
 }
 .confirm-bar__subhead {
   margin: 16px 0 4px;
+}
+.confirm-bar__resolution {
+  margin: 2px 0 6px;
+  color: var(--el-text-color-secondary);
 }
 </style>

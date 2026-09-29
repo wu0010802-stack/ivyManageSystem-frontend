@@ -130,11 +130,52 @@ describe('ConfirmationRoundBar', () => {
     expect(wrapper.emitted('items')?.at(-1)?.[0]).toEqual([ITEM])
     await wrapper.get('[data-test="plan-apply"]').trigger('click')
     await flushPromises()
-    expect(api.apply).toHaveBeenNthCalledWith(1, { dry_run: true })
+    // 預覽只含本輪 agreed 項目（與按鈕計數一致，最終審查 M-1）
+    expect(api.apply).toHaveBeenNthCalledWith(1, { dry_run: true, item_ids: [11] })
     expect(wrapper.get('[data-test="apply-plan"]').text()).toContain('王副導 早車 → 晚車')
     await wrapper.get('[data-test="confirm-apply"]').trigger('click')
     await flushPromises()
     expect(api.apply).toHaveBeenNthCalledWith(2, { dry_run: false, item_ids: [11] })
+  })
+
+  it('previews apply with only this round\'s agreed item ids, matching the button count', async () => {
+    const pendingItem = { ...ITEM, id: 12, status: 'pending', employee_response: 'agree', partner_response: 'pending' }
+    const secondAgreed = { ...ITEM, id: 13, date: '2026-09-16' }
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: { ...PROGRESS, items: [ITEM, pendingItem, secondAgreed] } })
+    api.apply.mockResolvedValueOnce({ data: { planned: [], applied: [], skipped: [], superseded: [], failed: [] } })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.get('[data-test="plan-apply"]').text()).toContain('套用雙方已確認（2）')
+    await wrapper.get('[data-test="plan-apply"]').trigger('click')
+    await flushPromises()
+    expect(api.apply).toHaveBeenCalledWith({ dry_run: true, item_ids: [11, 13] })
+  })
+
+  it('shows the teacher amendment note and linked leave / punch-correction ids in the progress drawer', async () => {
+    const leaveItem = {
+      ...ITEM, id: 21, kind: 'cover', status: 'disputed', employee_response: 'agree', partner_response: 'amend',
+      resolution: { kind: 'leave', leave_type: 'personal', note: '家裡臨時有事', by_role: 'partner' },
+      linked_leave_id: 31,
+    }
+    const punchItem = {
+      ...ITEM, id: 22, status: 'disputed', employee_response: 'amend', partner_response: 'pending',
+      resolution: { kind: 'forgot_punch', note: '忘了刷下班卡', by_role: 'employee' },
+      linked_punch_correction_id: 42,
+    }
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: { ...PROGRESS, items: [leaveItem, punchItem] } })
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="open-progress"]').trigger('click')
+    await flushPromises()
+    const rows = wrapper.findAll('[data-test="needs-admin-resolution"]')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('張副導的修正：補請假（事假）')
+    expect(rows[0].text()).toContain('說明：家裡臨時有事')
+    expect(rows[0].text()).toContain('已建立請假申請 #31')
+    expect(rows[1].text()).toContain('說明：忘了刷下班卡')
+    expect(rows[1].text()).toContain('已建立補卡申請 #42')
   })
 
   it('hides write actions without ATTENDANCE_WRITE', async () => {

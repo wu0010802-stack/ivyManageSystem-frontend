@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   addWorkdays,
   amendKindsFor,
+  describeResolution,
   describeSuggestion,
   formatMonthDay,
   itemsByPersonDay,
   partnerChoices,
+  resolutionTooltip,
   yesterdayISO,
   type ConfirmationItem,
   type PortalConfirmationItem,
@@ -121,5 +123,29 @@ describe('attendanceConfirm', () => {
     expect(map.get('10|2026-10-03')?.id).toBe(1)
     expect(map.get('20|2026-10-03')?.id).toBe(1)
     expect(map.has('30|2026-10-03')).toBe(false)
+  })
+
+  it('describes the teacher amendment for admins: who, kind, leave type, note and linked requests', () => {
+    const leave = makeItem({
+      status: 'disputed', partner_response: 'amend', linked_leave_id: 31,
+      resolution: { kind: 'leave', leave_type: 'personal', note: '家裡有事', by_role: 'partner' },
+    })
+    expect(describeResolution(leave)).toBe('張副導的修正：補請假（事假）；說明：家裡有事；已建立請假申請 #31')
+    const punch = makeItem({
+      status: 'disputed', employee_response: 'amend', linked_punch_correction_id: 42,
+      resolution: { kind: 'forgot_punch', note: null, by_role: 'employee' },
+    })
+    expect(describeResolution(punch)).toBe('王副導的修正：忘了打卡（補卡）；已建立補卡申請 #42')
+    expect(describeResolution(makeItem())).toBe('')
+  })
+
+  it('shows the tag tooltip only for items handed to admins with a note', () => {
+    const disputed = makeItem({
+      status: 'disputed', resolution: { kind: 'other', note: '那天是園務會議', by_role: 'employee' },
+    })
+    expect(resolutionTooltip(disputed)).toBe('王副導的修正：其他；說明：那天是園務會議')
+    expect(resolutionTooltip({ ...disputed, status: 'pending' })).toBe('')
+    expect(resolutionTooltip({ ...disputed, resolution: { kind: 'leave', leave_type: 'sick', by_role: 'employee' } })).toBe('')
+    expect(resolutionTooltip(undefined)).toBe('')
   })
 })

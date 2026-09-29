@@ -218,4 +218,47 @@ describe('月底出勤確認狀態（SPEC-026 §3.6，計畫裁定 P8）', () =>
     expect(row1?.text()).toContain('老師確認：雙方已確認')
     expect(row2?.text()).not.toContain('老師確認')
   })
+
+  it('shows the teacher note in a tooltip on the tag when the item was handed to admins', async () => {
+    const disputedItem = {
+      id: 98, round_id: 5, employee_id: 1, employee_name: '測試員工1', partner_employee_id: null,
+      partner_name: null, date: '2026-08-03', kind: 'shift_changed' as const,
+      suggestion: {
+        confidence: 'low' as const,
+        parties: {
+          '1': { employee_id: 1, employee_name: '測試員工1', status: 'possible_shift_change', punch_in: '2026-08-03T08:00:00', punch_out: '2026-08-03T17:00:00', expected_start: '07:00', expected_end: '16:00', original: shifts[0] },
+        },
+        proposed: [], partner_options: [], shift_candidates: [], leave_missing: false,
+      },
+      employee_response: 'amend' as const, partner_response: null,
+      resolution: { kind: 'other', note: '那天是園務會議', by_role: 'employee' }, status: 'disputed' as const,
+      escalated: false, linked_leave_id: null, linked_punch_correction_id: null, initiated_by: 'system' as const, applied_at: null,
+    }
+    const ConfirmationRoundBarStub = defineComponent({
+      name: 'ConfirmationRoundBar',
+      emits: ['items'],
+      mounted() {
+        this.$emit('items', [disputedItem])
+      },
+      template: '<div />',
+    })
+    wrapper.unmount()
+    wrapper = mount(Panel, {
+      props: { year: 2026, month: 8, revision: 0 },
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          teleport: true,
+          ElDialog: { name: 'ElDialog', props: ['modelValue'], template: '<section v-if="modelValue" role="dialog"><slot /><slot name="footer" /></section>' },
+          ConfirmationRoundBar: ConfirmationRoundBarStub,
+        },
+      },
+    })
+    await flushPromises()
+    const row1 = wrapper.findAll('article').find(item => item.text().includes('測試員工1'))
+    expect(row1?.text()).toContain('老師確認：轉行政')
+    const tooltip = row1?.findComponent({ name: 'ElTooltip' })
+    expect(tooltip?.exists()).toBe(true)
+    expect(tooltip?.props('content')).toBe('測試員工1的修正：其他；說明：那天是園務會議')
+  })
 })

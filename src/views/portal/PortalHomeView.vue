@@ -216,9 +216,20 @@ const anomalyTarget = computed(() => {
   return e ? `/portal/anomalies?year=${e.year}&month=${e.month}` : '/portal/anomalies'
 })
 
+// 同理：月底出勤確認帶最早待回覆月份（後端給 "YYYY-MM"）；沒有就交給確認頁自行決定落點。
+const attendanceConfirmTarget = computed(() => {
+  const earliest = (actions.value as PortalPendingActions).pending_attendance_confirmations_earliest
+  const [y, m] = (earliest ?? '').split('-').map(Number)
+  return y && m ? `/portal/attendance-confirm?year=${y}&month=${m}` : '/portal/attendance-confirm'
+})
+
 function onFeatureClick(f: ClassFeatureDef) {
   if (f.key === 'anomalies') {
     router.push(anomalyTarget.value)
+    return
+  }
+  if (f.key === 'attendance-confirm') {
+    router.push(attendanceConfirmTarget.value)
     return
   }
   if (!f.to) return

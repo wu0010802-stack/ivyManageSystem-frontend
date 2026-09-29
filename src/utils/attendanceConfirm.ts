@@ -4,6 +4,7 @@
  */
 import type { ApiResponse } from '@/api/_generated/typed'
 import { dateToLocalISO } from '@/utils/format'
+import { LEAVE_TYPE_MAP } from '@/utils/leaves'
 
 export type ConfirmationItem = ApiResponse<'/attendance/confirmation-rounds/{round_id}', 'get'>['items'][number]
 export type PortalConfirmationItem = ApiResponse<'/portal/attendance-confirmations', 'get'>['items'][number]
@@ -37,6 +38,50 @@ export const AMEND_LABELS: Record<AmendKind, string> = {
   leave: '我那天請假',
   forgot_punch: '我忘了打卡',
   other: '其他（請說明）',
+}
+
+/** 老師修正類型（行政端顯示用；AMEND_LABELS 是老師第一人稱的選項文字）。 */
+export const RESOLUTION_LABELS: Record<AmendKind, string> = {
+  swap_with: '改為與他人對調',
+  cover_for: '改為代他人上班',
+  leave: '補請假',
+  forgot_punch: '忘了打卡（補卡）',
+  other: '其他',
+}
+
+function isAmendKind(value: unknown): value is AmendKind {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(RESOLUTION_LABELS, value)
+}
+
+function textField(record: Record<string, unknown>, key: string): string {
+  const value = record[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * 行政端：老師的修正內容（最終審查 I-4）——誰修正、修正類型、假別、說明，以及流程
+ * 建立的請假／補卡申請編號。沒有任何可顯示內容時回空字串。
+ */
+export function describeResolution(item: ConfirmationItem): string {
+  const r = item.resolution ?? {}
+  const parts: string[] = []
+  if (isAmendKind(r.kind)) {
+    const who = r.by_role === 'partner' ? item.partner_name : r.by_role === 'employee' ? item.employee_name : null
+    const leaveCode = textField(r, 'leave_type')
+    const leave = leaveCode ? `（${LEAVE_TYPE_MAP[leaveCode]?.label ?? leaveCode}）` : ''
+    parts.push(`${who ? `${who}的修正` : '老師修正'}：${RESOLUTION_LABELS[r.kind]}${leave}`)
+  }
+  const note = textField(r, 'note')
+  if (note) parts.push(`說明：${note}`)
+  if (item.linked_leave_id != null) parts.push(`已建立請假申請 #${item.linked_leave_id}`)
+  if (item.linked_punch_correction_id != null) parts.push(`已建立補卡申請 #${item.linked_punch_correction_id}`)
+  return parts.join('；')
+}
+
+/** 核對列「老師確認」tag 的 tooltip：只在轉行政且老師有寫說明時顯示，其餘回空字串。 */
+export function resolutionTooltip(item: ConfirmationItem | undefined): string {
+  if (!item || item.status !== 'disputed' || !textField(item.resolution ?? {}, 'note')) return ''
+  return describeResolution(item)
 }
 
 export function formatMonthDay(iso: string): string {
