@@ -13956,6 +13956,9 @@ export interface paths {
         /**
          * Get Attendance Confirmation Pending Count
          * @description 待本人回覆的確認項目數（側欄徽章）與最早待回覆月份（確認頁落點）。
+         *
+         *     eligible（入口顯示）：有待本人回覆的項目就一定顯示（最終審查 M2：超過 120 天仍待
+         *     回覆的項目不可失去入口），否則看近 120 天內是否為適用者。
          */
         get: operations["get_attendance_confirmation_pending_count_api_portal_attendance_confirmations_pending_count_get"];
         put?: never;
