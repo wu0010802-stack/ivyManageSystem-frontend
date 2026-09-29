@@ -223,6 +223,34 @@ export function tenantErrorCodeOf(status: number | undefined, body: unknown): Te
     : null
 }
 
+/**
+ * 後端 middleware 冷啟動「未知 Host 解析負載削減」的回應碼（整合審查 R5；MT-54／F58）。
+ *
+ * **不是**租戶三態：503 `{"detail":{"code":"TENANT_RESOLUTION_BUSY"}}`＋`Retry-After`，
+ * 屬暫時性。請求在 middleware 就被擋下、尚未進任何 handler，任何 method 重送都安全。
+ * 呼叫端延遲後自動重試（上限 `TENANT_BUSY_MAX_RETRIES`），**不得**掛全螢幕遮罩——
+ * 掛了就是「園所開通中」的終態畫面，使用者只能手動重新整理。
+ */
+export const TENANT_RESOLUTION_BUSY = 'TENANT_RESOLUTION_BUSY'
+export const TENANT_BUSY_MAX_RETRIES = 2
+
+export function isTenantResolutionBusy(status: number | undefined, body: unknown): boolean {
+  if (status !== 503) return false
+  const detail = (body as { detail?: unknown } | undefined)?.detail
+  return !!detail && typeof detail === 'object' && (detail as { code?: unknown }).code === TENANT_RESOLUTION_BUSY
+}
+
+/**
+ * `Retry-After`（秒數）→ 重試前等待毫秒數，上限 5 秒。缺值、負數或 HTTP-date 格式
+ * 一律退回 1 秒（後端固定送 `1`）。
+ */
+export function tenantBusyRetryDelayMs(retryAfter: unknown): number {
+  const raw = typeof retryAfter === 'string' || typeof retryAfter === 'number' ? String(retryAfter).trim() : ''
+  const seconds = raw === '' ? NaN : Number(raw)
+  if (!Number.isFinite(seconds) || seconds < 0) return 1000
+  return Math.min(seconds * 1000, 5000)
+}
+
 /** 測試專用：清掉 module-level cache（含 env 快取）。 */
 export function _resetTenantCacheForTests(): void {
   _cached = undefined

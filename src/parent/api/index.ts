@@ -18,7 +18,13 @@ import { reportClientEvent } from '@/parent/utils/clientEvents'
 import { toast } from '@/parent/utils/toast'
 import { useConsentGate } from '@/parent/composables/useConsentGate'
 import { useStaffSessionGate } from '@/parent/composables/useStaffSessionGate'
-import { tenantErrorCodeOf, tenantHeaders } from '@/utils/tenant'
+import {
+  isTenantResolutionBusy,
+  TENANT_BUSY_MAX_RETRIES,
+  tenantBusyRetryDelayMs,
+  tenantErrorCodeOf,
+  tenantHeaders,
+} from '@/utils/tenant'
 import { showTenantBlocked } from '@/utils/tenantBlocked'
 
 // Lazy router import：避免將 createRouter side effect 灌進所有 partial-mock
@@ -48,6 +54,7 @@ declare module 'axios' {
   interface InternalAxiosRequestConfig {
     metadata?: { startedAt: number; sessionGeneration: number }
     _retried?: boolean
+    _tenantBusyRetries?: number
   }
 }
 
@@ -270,6 +277,22 @@ api.interceptors.response.use(
       showTenantBlocked(tenantErrorCode)
       error.errorDetail = error.response?.data
       return Promise.reject(error)
+    }
+
+    // 解析負載削減（整合審查 R5）：暫時性 503，不是租戶三態、不掛遮罩。請求停在
+    // middleware、handler 未執行，依 Retry-After 延遲後直接重送（含 mutating）；
+    // 重試用盡才落到下方一般錯誤處理。走 api(config) 繞過 dedupe（同管理端）。
+    if (originalRequest && isTenantResolutionBusy(error.response?.status, error.response?.data)) {
+      const attempt = (originalRequest._tenantBusyRetries ?? 0) + 1
+      if (attempt <= TENANT_BUSY_MAX_RETRIES) {
+        originalRequest._tenantBusyRetries = attempt
+        const generation = originalRequest.metadata?.sessionGeneration
+        await new Promise((resolve) => setTimeout(resolve, tenantBusyRetryDelayMs(error.response?.headers?.['retry-after'])))
+        if (generation !== _apiSessionGeneration) {
+          return Promise.reject(new axios.CanceledError('Parent session changed before tenant-busy retry'))
+        }
+        return api(originalRequest)
+      }
     }
 
     const url = originalRequest?.url || ''

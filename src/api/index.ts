@@ -10,7 +10,13 @@ import {
     isAdminSessionCurrent,
     onAdminSessionReset,
 } from '@/utils/adminSession'
-import { tenantErrorCodeOf, tenantHeaders } from '@/utils/tenant'
+import {
+    isTenantResolutionBusy,
+    TENANT_BUSY_MAX_RETRIES,
+    tenantBusyRetryDelayMs,
+    tenantErrorCodeOf,
+    tenantHeaders,
+} from '@/utils/tenant'
 import { showTenantBlocked } from '@/utils/tenantBlocked'
 
 // Lazy router import：直接 top-level import 會把 createRouter side effect 拉進
@@ -39,6 +45,7 @@ declare module 'axios' {
     interface InternalAxiosRequestConfig {
         _retried?: boolean
         _adminSessionGeneration?: number
+        _tenantBusyRetries?: number
     }
 }
 
@@ -155,6 +162,23 @@ api.interceptors.response.use(
             error.errorDetail = error.response?.data
             error.errorType = classifyError(error)
             return Promise.reject(error)
+        }
+
+        // 解析負載削減（整合審查 R5）：不是租戶三態、不掛遮罩——後端冷啟動時未知 Host
+        // 並行解析額滿的暫時性 503。請求停在 middleware、handler 未執行，依 Retry-After
+        // 延遲後直接重送（含 mutating）；重試用盡才落到下方一般 503 處理。
+        // 走 api(config) 而非 api.get/post：後者經 dedupe，會拿到本請求自己的 in-flight promise。
+        if (originalRequest && isTenantResolutionBusy(error.response?.status, error.response?.data)) {
+            const attempt = (originalRequest._tenantBusyRetries ?? 0) + 1
+            if (attempt <= TENANT_BUSY_MAX_RETRIES) {
+                originalRequest._tenantBusyRetries = attempt
+                const generation = originalRequest._adminSessionGeneration
+                await new Promise((resolve) => setTimeout(resolve, tenantBusyRetryDelayMs(error.response?.headers?.['retry-after'])))
+                if (!isAdminSessionCurrent(generation)) {
+                    return Promise.reject(new axios.CanceledError('Admin session changed before tenant-busy retry'))
+                }
+                return api(originalRequest)
+            }
         }
 
         // 只對 401 且非登入/refresh 請求嘗試刷新

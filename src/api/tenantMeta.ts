@@ -24,7 +24,14 @@
  * - 逾時 10s（`AbortSignal.timeout`）：家長端 `initLiff()` 依賴這支，網路卡住不得讓登入永久轉圈。
  */
 
-import { isTenantModeEnabled, TENANT_HEADER, tenantSlug } from '@/utils/tenant'
+import {
+  isTenantModeEnabled,
+  TENANT_BUSY_MAX_RETRIES,
+  TENANT_HEADER,
+  TENANT_RESOLUTION_BUSY,
+  tenantBusyRetryDelayMs,
+  tenantSlug,
+} from '@/utils/tenant'
 
 /** §2.1 的 payload 契約。所有欄位皆可缺（消費端逐欄 fallback 到 `BRANDING_DEFAULTS`）。 */
 export interface TenantMeta {
@@ -90,7 +97,7 @@ function buildHeaders(): Record<string, string> {
   return headers
 }
 
-async function _doFetch(): Promise<TenantMeta> {
+async function _doFetch(attempt = 0): Promise<TenantMeta> {
   const res = await fetch(ENDPOINT, {
     method: 'GET',
     credentials: 'omit',
@@ -109,6 +116,12 @@ async function _doFetch(): Promise<TenantMeta> {
     // 僅辨識 FastAPI「route 不存在」的精確 response。HTML 404、壞 JSON、tenant
     // middleware 的結構化 404 都不是 legacy 證據，不能據此借用 default tenant env。
     const legacyRouteMissing = res.status === 404 && detail === 'Not Found'
+    // 冷啟動解析負載削減（整合審查 R5）：暫時性，延遲後重打；boot 的第一支請求
+    // 就是這支，最容易撞上。重試用盡才以該碼拒絕，呼叫端據此 fail-soft 而非掛遮罩。
+    if (res.status === 503 && code === TENANT_RESOLUTION_BUSY && attempt < TENANT_BUSY_MAX_RETRIES) {
+      await new Promise((resolve) => setTimeout(resolve, tenantBusyRetryDelayMs(res.headers.get('Retry-After'))))
+      return _doFetch(attempt + 1)
+    }
     throw new TenantMetaError(res.status, code, legacyRouteMissing)
   }
   return (await res.json()) as TenantMeta

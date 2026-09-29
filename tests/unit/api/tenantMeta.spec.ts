@@ -188,3 +188,30 @@ describe('錯誤分類與去重（CT-F-01）', () => {
     expect(spy).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('解析負載削減 TENANT_RESOLUTION_BUSY（整合審查 R5）', () => {
+  const busy = () =>
+    new Response(JSON.stringify({ detail: { code: 'TENANT_RESOLUTION_BUSY' } }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': '0' },
+    })
+
+  it('削減後重試成功 → 正常回傳，不當成錯誤', async () => {
+    let n = 0
+    const spy = stubFetch(() => (n++ === 0 ? busy() : jsonResponse({ org_name: 'X' })))
+    await expect(fetchTenantMeta()).resolves.toMatchObject({ org_name: 'X' })
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('最多重試 2 次，仍削減就以 TENANT_RESOLUTION_BUSY 拒絕（呼叫端據此 fail-soft）', async () => {
+    const spy = stubFetch(() => busy())
+    await expect(fetchTenantMeta()).rejects.toMatchObject({ status: 503, code: 'TENANT_RESOLUTION_BUSY' })
+    expect(spy).toHaveBeenCalledTimes(3)
+  })
+
+  it('開通中（TENANT_PROVISIONING）不重試', async () => {
+    const spy = stubFetch(() => jsonResponse({ detail: { code: 'TENANT_PROVISIONING' } }, 503))
+    await expect(fetchTenantMeta()).rejects.toMatchObject({ status: 503, code: 'TENANT_PROVISIONING' })
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+})

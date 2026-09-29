@@ -20,7 +20,7 @@ import {
   TenantMetaError,
   type TenantMeta,
 } from '@/api/tenantMeta'
-import { tenantSlugOrPlaceholder } from '@/utils/tenant'
+import { TENANT_RESOLUTION_BUSY, tenantSlugOrPlaceholder } from '@/utils/tenant'
 // 三態遮罩（CT-F-01）：與 fc 的 boot 檢查、兩個 axios interceptor 共用**同一款畫面**
 // （CT-F-08）。fb 刻意不自建第二款——三種長相不同的「無法識別園所」是使用者的災難。
 import { showTenantBlocked } from '@/utils/tenantBlocked'
@@ -319,7 +319,9 @@ async function _fetchOnce(): Promise<void> {
       if (e.code === TENANT_META_DISABLED) return // 灰度未開，不是錯誤
       if (e.status === 404) return showTenantBlocked('TENANT_NOT_FOUND')
       if (e.status === 403) return showTenantBlocked('TENANT_SUSPENDED')
-      if (e.status === 503) return showTenantBlocked('TENANT_PROVISIONING')
+      // 解析負載削減（TENANT_RESOLUTION_BUSY）不是開通中：fetchTenantMeta 已重試過，
+      // 仍削減就與 5xx 同樣 fail-soft，不掛「園所開通中」終態遮罩（整合審查 R5）。
+      if (e.status === 503 && e.code !== TENANT_RESOLUTION_BUSY) return showTenantBlocked('TENANT_PROVISIONING')
     }
     // 網路錯誤 / 5xx → fail-soft，保留 defaults 或 snapshot。
     // 刻意不呼叫 captureException：Sentry / global handler 已涵蓋 unhandled，

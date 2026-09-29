@@ -209,6 +209,24 @@ describe('CT-F-01 錯誤分類', () => {
     expect(branding.value).toEqual(BRANDING_DEFAULTS)
   })
 
+  it('解析負載削減（TENANT_RESOLUTION_BUSY）重試用盡 → fail-soft，**不**掛「開通中」遮罩（整合審查 R5）', async () => {
+    const fetchSpy = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ detail: { code: 'TENANT_RESOLUTION_BUSY' } }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json', 'Retry-After': '0' },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+    const { branding } = useTenantBranding()
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(3))
+    await flush()
+
+    expect(isTenantBlocked()).toBe(false)
+    expect(branding.value).toEqual(BRANDING_DEFAULTS)
+  })
+
   it('網路錯誤 → fail-soft', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('network'))))
     useTenantBranding()
