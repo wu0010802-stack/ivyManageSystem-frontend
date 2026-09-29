@@ -12,7 +12,7 @@
  * 靜態 import 會把 ~150KB 的地圖庫橋接進首屏 bundle。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getBranding } from '@/composables/useTenantBranding'
+import { getBranding, NEUTRAL_MAP_VIEW } from '@/composables/useTenantBranding'
 
 const props = defineProps<{
   visible: boolean
@@ -20,7 +20,10 @@ const props = defineProps<{
   lng: number | null
   /** 站點學生名或「園所位置」 */
   label: string
-  /** 無座標時的初始中心（園所座標）；亦無時退租戶 branding.map */
+  /**
+   * 無座標時的初始中心（園所座標）；亦無時退租戶 branding.map；
+   * 非預設租戶連 branding.map 都沒設定時退中性全台視角（F65）。
+   */
   schoolCoords: { lat: number; lng: number } | null
 }>()
 
@@ -43,8 +46,14 @@ let map: any = null
 let marker: any = null
 
 const mapEl = ref<HTMLElement | null>(null)
-/** 目前 marker 位置（confirm 時回傳；初值＝initialCenter） */
+/** 目前 marker 位置（confirm 時回傳；初值＝initialView().center） */
 const current = ref<{ lat: number; lng: number } | null>(null)
+/**
+ * 初始中心是中性全台視角（沒有任何真實座標可用）時為 true：圖釘所在的「台灣中心」
+ * 不是任何人的上下車點，必須拖曳過才准確認，否則會被當真實座標存下去（F65）。
+ */
+const usingNeutralView = ref(false)
+const moved = ref(false)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function ensureLeaflet(): Promise<any> {
@@ -62,11 +71,27 @@ async function ensureLeaflet(): Promise<any> {
   return leafletPromise
 }
 
-function initialCenter(): [number, number] {
-  if (props.lat != null && props.lng != null) return [props.lat, props.lng]
-  if (props.schoolCoords) return [props.schoolCoords.lat, props.schoolCoords.lng]
-  const { lat, lng } = getBranding().map
-  return [lat, lng]
+interface InitialView {
+  center: [number, number]
+  zoom: number
+  neutral: boolean
+}
+
+function initialView(): InitialView {
+  if (props.lat != null && props.lng != null) {
+    return { center: [props.lat, props.lng], zoom: MAP_ZOOM, neutral: false }
+  }
+  if (props.schoolCoords) {
+    return { center: [props.schoolCoords.lat, props.schoolCoords.lng], zoom: MAP_ZOOM, neutral: false }
+  }
+  const brand = getBranding().map
+  if (brand) return { center: [brand.lat, brand.lng], zoom: MAP_ZOOM, neutral: false }
+  // 非預設租戶未設園所座標：不借用義華座標（F65）
+  return {
+    center: [NEUTRAL_MAP_VIEW.lat, NEUTRAL_MAP_VIEW.lng],
+    zoom: NEUTRAL_MAP_VIEW.zoom,
+    neutral: true,
+  }
 }
 
 async function renderMap(): Promise<void> {
@@ -74,10 +99,12 @@ async function renderMap(): Promise<void> {
   if (!mapEl.value) return
   const L = await ensureLeaflet()
   if (!mapEl.value || !props.visible) return
-  const center = initialCenter()
+  const { center, zoom, neutral } = initialView()
   current.value = { lat: center[0], lng: center[1] }
+  usingNeutralView.value = neutral
+  moved.value = false
   destroyMap()
-  map = L.map(mapEl.value).setView(center, MAP_ZOOM)
+  map = L.map(mapEl.value).setView(center, zoom)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors', maxZoom: 19,
   }).addTo(map)
@@ -85,6 +112,7 @@ async function renderMap(): Promise<void> {
   marker.on('dragend', () => {
     const pos = marker.getLatLng()
     current.value = { lat: pos.lat, lng: pos.lng }
+    moved.value = true
   })
 }
 
@@ -112,7 +140,7 @@ watch(
 
 function onConfirm(): void {
   const c = current.value
-  if (!c) return
+  if (!c || (usingNeutralView.value && !moved.value)) return
   emit('confirm', c.lat, c.lng)
 }
 
@@ -129,6 +157,9 @@ onBeforeUnmount(destroyMap)
     <p class="bus-stop-map-tuner__hint" data-test="tune-hint">
       {{ label }}：若定位跟實際上下車點有落差，請拖曳圖釘微調。
     </p>
+    <p v-if="usingNeutralView" class="bus-stop-map-tuner__hint" data-test="tune-neutral-hint">
+      尚未設定園所座標，地圖先顯示全台灣；請放大後把圖釘拖到正確位置再按「確認」。
+    </p>
     <!--
       role 用 region 而非 img：img 會讓容器內容變 presentational，連 Leaflet 的
       縮放鈕與 OpenStreetMap attribution 連結（授權要求可觸及）一起被輔助科技
@@ -137,7 +168,12 @@ onBeforeUnmount(destroyMap)
     <div ref="mapEl" class="bus-stop-map-tuner__map" role="region" aria-label="位置微調地圖" />
     <template #footer>
       <el-button data-test="cancel-btn" @click="emit('cancel')">取消</el-button>
-      <el-button type="primary" data-test="confirm-btn" @click="onConfirm">確認</el-button>
+      <el-button
+        type="primary"
+        data-test="confirm-btn"
+        :disabled="usingNeutralView && !moved"
+        @click="onConfirm"
+      >確認</el-button>
     </template>
   </el-dialog>
 </template>

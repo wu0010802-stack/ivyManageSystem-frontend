@@ -25,7 +25,7 @@
  * 會把 ~150KB 的地圖庫橋接進首屏 bundle。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getBranding } from '@/composables/useTenantBranding'
+import { getBranding, NEUTRAL_MAP_VIEW } from '@/composables/useTenantBranding'
 import { escapeHtml } from '@/utils/html'
 
 export interface RoutePreviewStop {
@@ -228,8 +228,10 @@ async function renderMap(): Promise<void> {
   } else if (bounds.length === 1) {
     map.setView(bounds[0], FALLBACK_ZOOM)
   } else {
-    const { lat, lng } = getBranding().map
-    map.setView([lat, lng], FALLBACK_ZOOM)
+    // 非預設租戶沒設園所座標時 branding.map 為 null → 中性全台視角，不借用義華座標（F65）
+    const center = getBranding().map
+    if (center) map.setView([center.lat, center.lng], FALLBACK_ZOOM)
+    else map.setView([NEUTRAL_MAP_VIEW.lat, NEUTRAL_MAP_VIEW.lng], NEUTRAL_MAP_VIEW.zoom)
   }
 
   applyHighlight()  // 重建後恢復目前的 hover 狀態

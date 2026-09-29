@@ -6,6 +6,7 @@ const polylineCalls: Array<{ points: Array<[number, number]>; opts: Record<strin
 const markerCalls: Array<{ center: [number, number]; tooltip: unknown }> = []
 const fitBoundsCalls: Array<Array<[number, number]>> = []
 const setViewCalls: Array<[number, number]> = []
+const setViewZooms: Array<number | undefined> = []
 /** 每個 marker 目前套用的 icon（divIcon 的 opts），用來斷言高亮放大 */
 const markerIcons: Array<Record<string, unknown>> = []
 const panToCalls: Array<{ lat: number; lng: number }> = []
@@ -18,8 +19,9 @@ vi.mock('leaflet', () => {
       fitBoundsCalls.push(bounds)
       return fakeMap
     },
-    setView: (center: [number, number]) => {
+    setView: (center: [number, number], zoom?: number) => {
       setViewCalls.push(center)
+      setViewZooms.push(zoom)
       return fakeMap
     },
     getBounds: () => ({ contains: () => boundsContains }),
@@ -65,7 +67,17 @@ vi.mock('leaflet', () => {
 })
 vi.mock('leaflet/dist/leaflet.css', () => ({}))
 
+// 租戶 branding 的地圖中心：預設＝義華（BRANDING_DEFAULTS），F65 測試改成 null（非預設租戶未設定）
+const brandingMap = vi.hoisted(() => ({
+  current: { lat: 22.642, lng: 120.3243 } as { lat: number; lng: number } | null,
+}))
+vi.mock('@/composables/useTenantBranding', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/composables/useTenantBranding')>()
+  return { ...actual, getBranding: () => ({ ...actual.BRANDING_DEFAULTS, map: brandingMap.current }) }
+})
+
 import BusRoutePreviewMap from '../BusRoutePreviewMap.vue'
+import { NEUTRAL_MAP_VIEW } from '@/composables/useTenantBranding'
 
 const ORIGIN = { lat: 22.689, lng: 120.302 }
 const STOPS = [
@@ -95,6 +107,8 @@ describe('BusRoutePreviewMap', () => {
     markerCalls.length = 0
     fitBoundsCalls.length = 0
     setViewCalls.length = 0
+    setViewZooms.length = 0
+    brandingMap.current = { lat: 22.642, lng: 120.3243 }
     markerIcons.length = 0
     panToCalls.length = 0
     boundsContains = true
@@ -145,7 +159,21 @@ describe('BusRoutePreviewMap', () => {
     const w = await mountMap({ polyline: [], stops: [], origin: null })
     expect(polylineCalls).toHaveLength(0)
     expect(markerCalls).toHaveLength(0)
-    expect(setViewCalls).toHaveLength(1)
+    expect(setViewCalls).toEqual([[22.642, 120.3243]])
+    expect(setViewZooms).toEqual([14])
+    w.unmount()
+  })
+
+  /**
+   * F65（MT-59）：非預設租戶沒設園所座標時 branding.map 為 null——地圖改顯示
+   * 中性的全台視角，不再以義華座標為中心（別校的地圖會「錯得很像真的」）。
+   */
+  it('非預設租戶未設園所座標時退中性全台視角，不定位到義華（F65）', async () => {
+    brandingMap.current = null
+    const w = await mountMap({ polyline: [], stops: [], origin: null })
+    expect(setViewCalls).toEqual([[NEUTRAL_MAP_VIEW.lat, NEUTRAL_MAP_VIEW.lng]])
+    expect(setViewZooms).toEqual([NEUTRAL_MAP_VIEW.zoom])
+    expect(setViewCalls[0]).not.toEqual([22.642, 120.3243])
     w.unmount()
   })
 
@@ -185,6 +213,8 @@ describe('BusRoutePreviewMap 單段高亮', () => {
     markerCalls.length = 0
     fitBoundsCalls.length = 0
     setViewCalls.length = 0
+    setViewZooms.length = 0
+    brandingMap.current = { lat: 22.642, lng: 120.3243 }
     markerIcons.length = 0
     panToCalls.length = 0
     boundsContains = true

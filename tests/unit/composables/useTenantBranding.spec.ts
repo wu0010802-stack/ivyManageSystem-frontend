@@ -107,6 +107,84 @@ describe('逐欄 fallback（normalizeBranding）', () => {
   })
 })
 
+/**
+ * F65（MT-59）：`school_keywords`／`school_aliases`／`map` 是**義華專屬**的值，
+ * 不是品牌字串。後端對非預設租戶未設定時刻意回 `[]`／`{}`（「把義華的關鍵字套到
+ * B 校＝把別人的幼兒園標成自家分校」、「B 校生活圈以義華經緯度為圓心，錯得很像
+ * 真的」），前端逐欄 fallback 不得把它們蓋回義華的值。
+ * 預設租戶（slug = BRANDING_DEFAULTS.slug）與沒帶 slug 的 payload 維持原行為（DEV-12）。
+ */
+describe('非預設租戶不退回義華專屬值（F65）', () => {
+  // prod renwu 實測的 tenant-meta 形狀（2026-09 查核）
+  const RENWU = {
+    tenant: { slug: 'renwu', kind: 'school' },
+    school_name: '仁武幼兒園',
+    short_name: '高雄市私立常春藤仁武幼兒園',
+    school_keywords: [] as string[],
+    school_aliases: [] as string[],
+    map: {},
+  }
+
+  it('school_keywords 給空陣列＝權威，不退回義華的「常春藤」', () => {
+    expect(normalizeBranding(RENWU).school_keywords).toEqual([])
+  })
+
+  it('payload 缺 school_keywords／school_aliases 時也給空陣列，不借用義華的「常春藤」「明華幼兒園」', () => {
+    const out = normalizeBranding({ tenant: { slug: 'renwu' } })
+    expect(out.school_keywords).toEqual([])
+    expect(out.school_aliases).toEqual([])
+  })
+
+  it('有設定時照用該租戶自己的關鍵字與別名', () => {
+    const out = normalizeBranding({ ...RENWU, school_keywords: ['仁武'], school_aliases: ['舊仁武'] })
+    expect(out.school_keywords).toEqual(['仁武'])
+    expect(out.school_aliases).toEqual(['舊仁武'])
+  })
+
+  it('map 未設定時為 null（中性），不退回義華的 22.642／120.3243', () => {
+    expect(normalizeBranding(RENWU).map).toBeNull()
+    expect(normalizeBranding({ tenant: { slug: 'renwu' } }).map).toBeNull()
+  })
+
+  it('map 只給一半座標時也是 null，不拿義華的另一半拼出一個不存在的點', () => {
+    expect(normalizeBranding({ ...RENWU, map: { lat: 22.73 } }).map).toBeNull()
+  })
+
+  it('map 有設定時照用該租戶自己的座標（含 0）', () => {
+    expect(normalizeBranding({ ...RENWU, map: { lat: 22.73, lng: 120.33 } }).map).toEqual({ lat: 22.73, lng: 120.33 })
+    expect(normalizeBranding({ ...RENWU, map: { lat: 0, lng: 0 } }).map).toEqual({ lat: 0, lng: 0 })
+  })
+
+  it('其他品牌字串仍逐欄 fallback（仁武本身是常春藤體系，標題沿用預設字面是既定設計）', () => {
+    expect(normalizeBranding(RENWU).titles.admin).toBe(BRANDING_DEFAULTS.titles.admin)
+  })
+
+  it('預設租戶（義華）維持原行為：空 keywords、缺 map 仍退回預設值', () => {
+    const out = normalizeBranding({
+      tenant: { slug: BRANDING_DEFAULTS.slug },
+      school_keywords: [],
+      map: {},
+    })
+    expect(out.school_keywords).toEqual(['常春藤'])
+    expect(out.school_aliases).toEqual(['明華幼兒園'])
+    expect(out.map).toEqual(BRANDING_DEFAULTS.map)
+  })
+
+  it('BRANDING_DEFAULTS.map 本身仍是義華座標（灰度模式地圖中心不變）', () => {
+    expect(BRANDING_DEFAULTS.map).toEqual({ lat: 22.642, lng: 120.3243 })
+  })
+
+  it('成功載入非預設租戶後，runtime branding 不含義華專屬值', async () => {
+    stub(200, RENWU)
+    const { branding } = useTenantBranding()
+    await flush()
+    expect(branding.value.slug).toBe('renwu')
+    expect(branding.value.school_keywords).toEqual([])
+    expect(branding.value.school_aliases).toEqual([])
+    expect(branding.value.map).toBeNull()
+  })
+})
+
 describe('CT-F-01 錯誤分類', () => {
   it.each([
     [404, 'TENANT_NOT_FOUND'],
