@@ -91,6 +91,9 @@ const needsAdmin = computed(
   () => detail.value?.items.filter((i) => i.status === 'disputed' || i.escalated) ?? [],
 )
 const isClosed = computed(() => round.value?.status === 'closed')
+// 本輪進度尚未載入（或讀取失敗、手上仍是別輪的舊進度）時停用「關閉輪次」：
+// 確認對話框的筆數來自 detail，沒有它會顯示「0 筆」而誤導行政。
+const closeDisabled = computed(() => !detail.value || detail.value.round.id !== round.value?.id)
 // 關閉輪次確認對話框逐類列出筆數（Q2）：只算未完成（尚未套用／尚未失效）的項目。
 const closeCounts = computed(() => {
   const items = detail.value?.items ?? []
@@ -234,13 +237,17 @@ async function saveDeadline() {
 }
 
 async function closeRound() {
-  if (!round.value) return
+  if (!round.value || closeDisabled.value) return
   const counts = closeCounts.value
   const total = counts.pending + counts.agreed + counts.disputed
+  // 雙方已確認、尚未套用的調班一關閉就失效、不會寫進班表（影響出勤異常與扣款判讀），特別提醒。
+  const applyHint =
+    counts.agreed > 0 ? '建議先按「套用雙方已確認」再關閉，否則這些調班不會寫進班表。' : ''
   try {
     await ElMessageBox.confirm(
       `關閉後，本輪 ${total} 筆未完成的項目（待回覆 ${counts.pending}、雙方已確認未套用 ${counts.agreed}、` +
-        `轉行政 ${counts.disputed}）都會失效，已送出的請假／補卡申請不受影響。關閉後同一期間可以重新發送。`,
+        `轉行政 ${counts.disputed}）都會失效，已送出的請假／補卡申請不受影響。關閉後同一期間可以重新發送。` +
+        applyHint,
       '關閉輪次',
       { confirmButtonText: '關閉輪次', cancelButtonText: '取消', type: 'warning' },
     )
@@ -322,7 +329,14 @@ async function dismissItem(item: ConfirmationItem) {
           <el-button v-if="canWrite" data-test="open-deadline" @click="openDeadline">
             改期限
           </el-button>
-          <el-button v-if="canWrite" type="danger" plain data-test="close-round" @click="closeRound">
+          <el-button
+            v-if="canWrite"
+            type="danger"
+            plain
+            :disabled="closeDisabled"
+            data-test="close-round"
+            @click="closeRound"
+          >
             關閉輪次
           </el-button>
           <el-button

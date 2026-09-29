@@ -240,6 +240,59 @@ describe('ConfirmationRoundBar', () => {
     expect(api.close).toHaveBeenCalledWith(7)
   })
 
+  it('recommends applying agreed items before closing when some are agreed', async () => {
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS }) // ITEM 為 agreed
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="close-round"]').trigger('click')
+    await flushPromises()
+    const message = confirmSpy.mock.calls[0][0] as string
+    expect(message).toContain('雙方已確認未套用 1')
+    expect(message).toContain('建議先按「套用雙方已確認」再關閉，否則這些調班不會寫進班表。')
+    expect(api.close).not.toHaveBeenCalled()
+  })
+
+  it('omits the apply recommendation when nothing is agreed', async () => {
+    const pendingItem = { ...ITEM, id: 12, status: 'pending', employee_response: 'pending', partner_response: 'pending' }
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: { ...PROGRESS, items: [pendingItem] } })
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="close-round"]').trigger('click')
+    await flushPromises()
+    const message = confirmSpy.mock.calls[0][0] as string
+    expect(message).toContain('雙方已確認未套用 0')
+    expect(message).not.toContain('建議先按「套用雙方已確認」')
+  })
+
+  it('disables closing until the round detail has loaded', async () => {
+    // 進度讀取失敗時 detail 仍是 null：確認框會顯示「0 筆」而誤導行政，關閉鈕必須停用
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockRejectedValue(new Error('network'))
+    mountBar()
+    await flushPromises()
+    expect(wrapper.get('[data-test="round-summary"]').text()).toContain('確認輪次 #7')
+    expect(wrapper.get('[data-test="close-round"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('disables closing when only a previous round\'s detail is on hand', async () => {
+    // 換期間後列到另一輪（#8），但它的進度讀取失敗：手上的 detail 仍是 #7 的，不可拿來關 #8
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.get('[data-test="close-round"]').attributes('disabled')).toBeUndefined()
+    api.list.mockResolvedValue({ data: [{ ...ROUND, id: 8, period_start: '2026-10-01', period_end: '2026-10-31' }] })
+    api.get.mockRejectedValue(new Error('network'))
+    await wrapper.setProps({ start: '2026-10-01', end: '2026-10-31' })
+    await flushPromises()
+    expect(wrapper.get('[data-test="round-summary"]').text()).toContain('確認輪次 #8')
+    expect(wrapper.get('[data-test="close-round"]').attributes('disabled')).toBeDefined()
+  })
+
   it('dismisses an item', async () => {
     const disputedItem = { ...ITEM, id: 21, status: 'disputed' }
     api.list.mockResolvedValue({ data: [ROUND] })
