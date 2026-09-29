@@ -30,6 +30,7 @@ export const STATUS_LABELS: Record<ConfirmationItem['status'], string> = {
   disputed: '轉行政',
   applied: '已套用',
   superseded: '已失效',
+  dismissed: '行政已結案',
 }
 
 export const AMEND_LABELS: Record<AmendKind, string> = {
@@ -75,6 +76,10 @@ export function describeResolution(item: ConfirmationItem): string {
   if (note) parts.push(`說明：${note}`)
   if (item.linked_leave_id != null) parts.push(`已建立請假申請 #${item.linked_leave_id}`)
   if (item.linked_punch_correction_id != null) parts.push(`已建立補卡申請 #${item.linked_punch_correction_id}`)
+  // 行政結案（Q4）：說明與申請編號之後才加行政段落，維持「老師修正在前、行政結案在後」的閱讀順序。
+  const adminNote = textField(r, 'admin_note')
+  if (adminNote) parts.push(`行政結案：${adminNote}`)
+  else if (textField(r, 'admin_by')) parts.push('行政已結案')
   return parts.join('；')
 }
 

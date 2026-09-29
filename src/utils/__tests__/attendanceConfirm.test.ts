@@ -8,6 +8,7 @@ import {
   itemsByPersonDay,
   partnerChoices,
   resolutionTooltip,
+  STATUS_LABELS,
   yesterdayISO,
   type ConfirmationItem,
   type PortalConfirmationItem,
@@ -147,5 +148,25 @@ describe('attendanceConfirm', () => {
     expect(resolutionTooltip({ ...disputed, status: 'pending' })).toBe('')
     expect(resolutionTooltip({ ...disputed, resolution: { kind: 'leave', leave_type: 'sick', by_role: 'employee' } })).toBe('')
     expect(resolutionTooltip(undefined)).toBe('')
+  })
+
+  it('labels the dismissed status and appends the admin dismissal note to describeResolution', () => {
+    expect(STATUS_LABELS.dismissed).toBe('行政已結案')
+    const dismissedWithNote = makeItem({
+      status: 'dismissed',
+      resolution: {
+        kind: 'leave', leave_type: 'personal', by_role: 'partner',
+        admin_note: '已人工處理', admin_by: 'admin1',
+      },
+    })
+    const text = describeResolution(dismissedWithNote)
+    expect(text).toContain('補請假')
+    expect(text).toContain('行政結案：已人工處理')
+
+    const dismissedWithoutNote = makeItem({
+      status: 'dismissed',
+      resolution: { admin_by: 'admin1' },
+    })
+    expect(describeResolution(dismissedWithoutNote)).toContain('行政已結案')
   })
 })
