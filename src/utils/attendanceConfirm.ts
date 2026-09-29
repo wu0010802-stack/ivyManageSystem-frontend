@@ -94,6 +94,16 @@ export function formatMonthDay(iso: string): string {
   return `${Number(m)}/${Number(d)}`
 }
 
+export type ConfirmationAbsenceDay = ApiResponse<'/portal/attendance-confirmations', 'get'>['absence_days'][number]
+
+/** 缺勤日文案（Q1 選項 C）：有原班資訊時附上班別與時段，否則只顯示日期。 */
+export function absenceDayText(day: ConfirmationAbsenceDay): string {
+  const md = formatMonthDay(day.date)
+  if (!day.shift_name) return md
+  const range = day.expected_start && day.expected_end ? ` ${day.expected_start}–${day.expected_end}` : ''
+  return `${md}（原班${day.shift_name}${range}）`
+}
+
 export function shiftText(shift: Shift | null | undefined): string {
   if (!shift) return '（無原班）'
   const range = shift.work_start && shift.work_end ? ` ${shift.work_start}–${shift.work_end}` : ''
@@ -157,6 +167,22 @@ export function amendKindsFor(item: PortalConfirmationItem): AmendKind[] {
   return item.can_repair
     ? ['swap_with', 'cover_for', 'leave', 'forgot_punch', 'other']
     : ['leave', 'forgot_punch', 'other']
+}
+
+/** 被代班者：代班項目由被代班的一方（my_role=partner）看，他該做的多半是補請假，不是重新指定對象。 */
+function isCoveredPartner(item: PortalConfirmationItem): boolean {
+  return item.kind === 'cover' && item.my_role === 'partner'
+}
+
+/** 修正按鈕文案：被代班者看到的是「補請假或其他…」，其餘身分維持原本的「不對，改成…」。 */
+export function amendButtonLabel(item: PortalConfirmationItem): string {
+  return isCoveredPartner(item) ? '補請假或其他…' : '不對，改成…'
+}
+
+/** 修正選項文案：被代班者的「我那天請假」選項改成貼近他情境的措辞（一併送出假單），其餘沿用 AMEND_LABELS。 */
+export function amendLabel(item: PortalConfirmationItem, kind: AmendKind): string {
+  if (kind === 'leave' && isCoveredPartner(item)) return '對，我那天請假（一併送出假單）'
+  return AMEND_LABELS[kind]
 }
 
 /** 修正時可選的對象：以系統推測的候選為限（後端也要求兩人打卡互相吻合）。 */

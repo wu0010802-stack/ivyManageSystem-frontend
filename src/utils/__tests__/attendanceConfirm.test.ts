@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   addWorkdays,
+  absenceDayText,
+  AMEND_LABELS,
+  amendButtonLabel,
   amendKindsFor,
+  amendLabel,
   describeResolution,
   describeSuggestion,
   formatMonthDay,
@@ -10,6 +14,7 @@ import {
   resolutionTooltip,
   STATUS_LABELS,
   yesterdayISO,
+  type ConfirmationAbsenceDay,
   type ConfirmationItem,
   type PortalConfirmationItem,
 } from '@/utils/attendanceConfirm'
@@ -168,5 +173,32 @@ describe('attendanceConfirm', () => {
       resolution: { admin_by: 'admin1' },
     })
     expect(describeResolution(dismissedWithoutNote)).toContain('行政已結案')
+  })
+
+  it('labels the amend button per role and kind (Task 8 #1)', () => {
+    expect(amendButtonLabel(portal({ kind: 'cover', my_role: 'partner' }))).toBe('補請假或其他…')
+    expect(amendButtonLabel(portal({ kind: 'cover', my_role: 'employee' }))).toBe('不對，改成…')
+    expect(amendButtonLabel(portal({ kind: 'swap' }))).toBe('不對，改成…')
+  })
+
+  it('phrases the leave amend option for the covered-for teacher (Task 8 #1)', () => {
+    expect(amendLabel(portal({ kind: 'cover', my_role: 'partner' }), 'leave')).toBe(
+      '對，我那天請假（一併送出假單）',
+    )
+    expect(amendLabel(portal({ kind: 'cover', my_role: 'employee' }), 'leave')).toBe(AMEND_LABELS.leave)
+    expect(amendLabel(portal(), 'other')).toBe(AMEND_LABELS.other)
+  })
+
+  it('formats an absence day with and without a known shift (Task 8 #1)', () => {
+    const withShift: ConfirmationAbsenceDay = {
+      date: '2026-09-03', shift_name: '早車', expected_start: '07:00', expected_end: '16:30',
+      pending_leave_id: null, pending_punch_correction_id: null,
+    }
+    expect(absenceDayText(withShift)).toBe('9/3（原班早車 07:00–16:30）')
+    const noShift: ConfirmationAbsenceDay = {
+      date: '2026-09-03', shift_name: null, expected_start: null, expected_end: null,
+      pending_leave_id: null, pending_punch_correction_id: null,
+    }
+    expect(absenceDayText(noShift)).toBe('9/3')
   })
 })

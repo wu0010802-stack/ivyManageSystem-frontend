@@ -37,8 +37,24 @@ function item(over: Record<string, unknown> = {}) {
     ...over,
   }
 }
-function view(items: ReturnType<typeof item>[], pending: number, signedAt: string | null = null) {
-  return { data: { year: 2026, month: 9, items, pending_count: pending, signed_at: signedAt } }
+function view(
+  items: ReturnType<typeof item>[],
+  pending: number,
+  signedAt: string | null = null,
+  extra: Record<string, unknown> = {},
+) {
+  return {
+    data: {
+      year: 2026, month: 9, items, pending_count: pending, signed_at: signedAt,
+      participant: true, absence_days: [], ...extra,
+    },
+  }
+}
+function absenceDay(over: Record<string, unknown> = {}) {
+  return {
+    date: '2026-09-03', shift_name: '早車', expected_start: '07:00', expected_end: '16:30',
+    pending_leave_id: null, pending_punch_correction_id: null, ...over,
+  }
 }
 
 let wrapper: VueWrapper
@@ -46,6 +62,8 @@ async function mountView(query = '?year=2026&month=9') {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/portal/attendance-confirm', component: PortalAttendanceConfirmView },
     { path: '/portal/anomalies', component: { template: '<div />' } },
+    { path: '/portal/leave', component: { template: '<div />' } },
+    { path: '/portal/punch-correction', component: { template: '<div />' } },
   ] })
   await router.push(`/portal/attendance-confirm${query}`)
   wrapper = mount(PortalAttendanceConfirmView, { global: { plugins: [ElementPlus, router] }, attachTo: document.body })
@@ -214,5 +232,63 @@ describe('PortalAttendanceConfirmView', () => {
     await flushPromises()
     expect(fired()).toBe(2)
     dispatch.mockRestore()
+  })
+
+  it('disables signoff before month end (Task 8 #5/#6)', async () => {
+    api.get.mockResolvedValue(view([], 0))
+    await mountView('?year=2026&month=10')
+    const button = wrapper.get('[data-test="signoff"]')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('月底後才能簽認本月出勤')
+  })
+
+  it('enables signoff for ended month (Task 8 #5)', async () => {
+    api.get.mockResolvedValue(view([], 0))
+    await mountView('?year=2026&month=9')
+    const button = wrapper.get('[data-test="signoff"]')
+    expect(button.attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).not.toContain('月底後才能簽認本月出勤')
+  })
+
+  it('hides signoff for non-participant (Task 8 #6)', async () => {
+    api.get.mockResolvedValue(view([], 0, null, { participant: false }))
+    await mountView()
+    expect(wrapper.text()).toContain('不需要做出勤確認')
+    expect(wrapper.find('[data-test="signoff"]').exists()).toBe(false)
+  })
+
+  it('lists absence days with links (Task 8 #1)', async () => {
+    api.get.mockResolvedValue(view([], 0, null, {
+      absence_days: [
+        absenceDay({ date: '2026-09-03' }),
+        absenceDay({ date: '2026-09-10', pending_leave_id: 9 }),
+      ],
+    }))
+    await mountView()
+    const openRow = wrapper.get('[data-test="absence-day-2026-09-03"]')
+    expect(openRow.text()).toContain('9/3（原班早車 07:00–16:30）')
+    expect(openRow.text()).toContain('去請假')
+    expect(openRow.text()).toContain('去補卡')
+    expect(wrapper.find('a[href="/portal/leave"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/portal/punch-correction"]').exists()).toBe(true)
+
+    const pendingRow = wrapper.get('[data-test="absence-day-2026-09-10"]')
+    expect(pendingRow.text()).toContain('請假審核中')
+    expect(pendingRow.text()).not.toContain('去請假')
+  })
+
+  it('year options include the landing year (Task 8 #1)', async () => {
+    api.get.mockResolvedValue(view([], 0))
+    api.pendingCount.mockResolvedValue({ data: { pending_count: 1, earliest_month: '2024-05', eligible: true } })
+    await mountView('')
+    const yearSelect = wrapper.findAllComponents({ name: 'ElSelect' })[0]
+    const labels = yearSelect.findAllComponents({ name: 'ElOption' }).map((o) => o.props('label'))
+    expect(labels).toContain('2024 年')
+  })
+
+  it('cover partner sees leave-oriented copy (Task 8 #1)', async () => {
+    api.get.mockResolvedValue(view([item({ kind: 'cover', my_role: 'partner' })], 1))
+    await mountView()
+    expect(wrapper.get('[data-test="amend-11"]').text()).toBe('補請假或其他…')
   })
 })

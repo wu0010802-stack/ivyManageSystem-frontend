@@ -17,8 +17,10 @@ import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { todayTaipeiISO } from '@/utils/format'
 import {
-  AMEND_LABELS,
+  absenceDayText,
+  amendButtonLabel,
   amendKindsFor,
+  amendLabel,
   describeSuggestion,
   KIND_LABELS,
   partnerChoices,
@@ -88,7 +90,14 @@ const forms = reactive<Record<number, AmendForm>>({})
 const items = computed(() => data.value?.items ?? [])
 const pending = computed(() => data.value?.pending_count ?? 0)
 const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1)
-const yearOptions = [thisYear - 1, thisYear]
+// 落點（resolveLanding）可能落在 thisYear-2（很久沒回覆），下拉要含入該年份，否則選不到目前查看的月份。
+const yearOptions = computed(() => [...new Set([thisYear - 1, thisYear, year.value])].sort((a, b) => a - b))
+// Q5：簽認時點＝該月已結束（period_end < today 與「月已結束」等價，前端直接比對年月）。
+const monthEnded = computed(() => year.value < thisYear || (year.value === thisYear && month.value < thisMonth))
+// Q1 D7 選項 C：沒有打卡、也沒有請假紀錄、又不在任何確認項目內的日期。
+const absenceDays = computed(() => data.value?.absence_days ?? [])
+// Q6：非適用者（participant === false）不需要做出勤確認；舊回應沒有這個欄位時視為適用（向下相容）。
+const isParticipant = computed(() => data.value?.participant !== false)
 
 function viewerId(item: PortalConfirmationItem): number | null {
   return item.my_role === 'employee' ? item.employee_id : item.partner_employee_id
@@ -270,7 +279,9 @@ async function signoff() {
 
     <div v-loading="loading">
       <EmptyState v-if="!loading && !items.length" variant="mobile"
-        description="本月沒有需要確認的換班或代班。確認無誤後按下方「本月出勤確認完成」即可。" />
+        :description="isParticipant
+          ? '本月沒有需要確認的換班或代班。確認無誤後按下方「本月出勤確認完成」即可。'
+          : '你不在班導／副班導的輪值確認名單內，這個月不需要做出勤確認。'" />
       <el-card v-for="item in items" :key="item.id ?? 0" class="attendance-confirm__card" shadow="never">
         <div class="attendance-confirm__head">
           <el-tag size="small">{{ KIND_LABELS[item.kind] }}</el-tag>
@@ -284,13 +295,13 @@ async function signoff() {
           <el-button v-if="item.can_agree && item.needs_my_response" type="primary"
             :loading="formOf(item).agreeing" :data-test="`agree-${item.id}`" @click="agree(item)">對</el-button>
           <el-button :data-test="`amend-${item.id}`" @click="formOf(item).open = !formOf(item).open">
-            不對，改成…
+            {{ amendButtonLabel(item) }}
           </el-button>
         </div>
         <div v-if="formOf(item).open" class="attendance-confirm__form">
           <el-radio-group v-model="formOf(item).kind" class="attendance-confirm__kinds">
             <el-radio v-for="k in amendKindsFor(item)" :key="k" :value="k"
-              :disabled="kindDisabled(item, k)" :data-test="`amend-kind-${k}`">{{ AMEND_LABELS[k] }}</el-radio>
+              :disabled="kindDisabled(item, k)" :data-test="`amend-kind-${k}`">{{ amendLabel(item, k) }}</el-radio>
           </el-radio-group>
           <el-select v-if="formOf(item).kind === 'swap_with' || formOf(item).kind === 'cover_for'"
             v-model="formOf(item).partner" placeholder="選擇同事">
@@ -319,17 +330,40 @@ async function signoff() {
       </el-card>
     </div>
 
+    <el-card v-if="absenceDays.length" class="attendance-confirm__card attendance-confirm__absence" shadow="never">
+      <p class="attendance-confirm__text">以下日期沒有打卡，也沒有請假紀錄</p>
+      <p class="attendance-confirm__hint">
+        若那天有請假或忘了打卡，請補送申請；確實缺勤不用處理，行政會依打卡核對處理。這些日期不影響本月簽認。
+      </p>
+      <ul class="attendance-confirm__absence-list">
+        <li v-for="day in absenceDays" :key="day.date" class="attendance-confirm__absence-row"
+          :data-test="`absence-day-${day.date}`">
+          <span>{{ absenceDayText(day) }}</span>
+          <el-tag v-if="day.pending_leave_id != null" size="small" type="info">請假審核中</el-tag>
+          <el-tag v-else-if="day.pending_punch_correction_id != null" size="small" type="info">補卡審核中</el-tag>
+          <template v-else>
+            <router-link to="/portal/leave">去請假</router-link>
+            <router-link to="/portal/punch-correction">去補卡</router-link>
+          </template>
+        </li>
+      </ul>
+    </el-card>
+
     <p class="attendance-confirm__hint">
       遲到、早退與漏卡請到
       <router-link :to="{ path: '/portal/anomalies', query: { year, month } }">異常確認</router-link>
       處理。
     </p>
 
-    <div class="attendance-confirm__footer">
+    <div v-if="isParticipant" class="attendance-confirm__footer">
       <span v-if="data?.signed_at">已完成本月出勤確認（{{ data.signed_at.slice(0, 16).replace('T', ' ') }}）</span>
-      <el-button v-else type="success" :disabled="pending > 0" :loading="signing" data-test="signoff" @click="signoff">
-        本月出勤確認完成
-      </el-button>
+      <template v-else>
+        <span v-if="!monthEnded" class="attendance-confirm__footer-hint">月底後才能簽認本月出勤</span>
+        <el-button type="success" :disabled="pending > 0 || !monthEnded" :loading="signing"
+          data-test="signoff" @click="signoff">
+          本月出勤確認完成
+        </el-button>
+      </template>
     </div>
   </div>
 </template>
@@ -367,12 +401,32 @@ async function signoff() {
 .attendance-confirm__hint {
   color: var(--el-text-color-secondary);
 }
+.attendance-confirm__absence-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.attendance-confirm__absence-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .attendance-confirm__footer {
   position: sticky;
   bottom: 0;
   padding: 12px 0;
   background: var(--el-bg-color);
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
+}
+.attendance-confirm__footer-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 </style>
