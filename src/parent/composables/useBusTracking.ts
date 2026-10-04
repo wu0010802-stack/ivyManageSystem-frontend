@@ -264,6 +264,12 @@ function recomputeStale(): void {
 function handleEvent(event: Record<string, unknown>): void {
   const type = asStr(event.type)
   const payload = asRecord(event.payload) ?? {}
+  // F07：手足可能分屬不同班次，位置／站點事件帶 trip_id；不是目前班次的一律忽略，
+  // 否則會覆寫目前班次的 GPS、新鮮度、孩子站數與 ETA。
+  if (type === 'bus_position' || type === 'bus_stop_update') {
+    const eventTripId = asNum(payload.trip_id)
+    if (state.trip && eventTripId !== null && eventTripId !== state.trip.id) return
+  }
   if (type === 'bus_position') {
     const position = normalizePosition(payload)
     if (!position) return
