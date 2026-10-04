@@ -121,7 +121,12 @@ onMounted(async () => {
   flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
 })
 
-watch(selectedStudentId, fetchAll, { immediate: true })
+// F14：換孩子先清掉前一位的資料——否則新孩子載入失敗時，舊資料仍在，
+// 既不顯示錯誤，還會把甲的內容掛在乙的名字下。
+watch(selectedStudentId, (_next, prev) => {
+  if (prev !== undefined) cbBundle.value = null
+  return fetchAll()
+}, { immediate: true })
 
 function entryHref(id: number | string) {
   return `/contact-book/${id}`
