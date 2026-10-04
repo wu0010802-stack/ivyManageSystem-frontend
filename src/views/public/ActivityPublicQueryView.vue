@@ -817,7 +817,7 @@ const {
   tokenValid, phoneValid,
   activeQueryCredentials, activeQueryToken, canMutate, isPaymentLocked, lockedSummarySupplies,
   editForm, statusBadgeFor, waitlistCourses, fieldState, classEditable, identityEditable,
-  handleQuery, createHydrationGuard, hydrateResult, refetchCurrent, initFromRoute,
+  handleQuery, beginQueryRequest, isLatestQueryRequest, createHydrationGuard, hydrateResult, refetchCurrent, initFromRoute,
 } = usePublicRegistrationQuery({ refreshAvailability, startPolling })
 
 // #3 a11y：查詢完成（成功或失敗）後把 focus 移到結果/錯誤區塊（同目錄
@@ -856,8 +856,11 @@ const identityQueryNotice = ref('')
 // canMutate=false 僅供檢視 UI（鎖定提示、隱藏候補確認/放棄、儲存鍵 disabled）
 // 整套自動生效。
 async function onRecoverySubmit() {
-  const outcome = await submitIdentityQuery()
-  if (!outcome) return
+  // F20：與 token 查詢共用請求序號；較舊請求的回應一律丟棄。
+  const requestId = beginQueryRequest()
+  const isStale = () => !isLatestQueryRequest(requestId)
+  const outcome = await submitIdentityQuery(isStale)
+  if (!outcome || isStale()) return
   recoveryOpen.value = false
   searchError.value = ''
   hydrateResult(outcome.registration, {
