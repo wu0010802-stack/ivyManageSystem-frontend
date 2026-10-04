@@ -69,4 +69,29 @@ describe('ActivityPublicQueryView 查詢請求序號（F20）', () => {
       expect(state.canMutate).toBe(true)
     } finally { wrapper.unmount() }
   })
+
+  it('三欄救援表單不完整時按送出，不得作廢仍在飛的查詢碼查詢', async () => {
+    const { default: QueryView } = await import('@/views/public/ActivityPublicQueryView.vue')
+    const pending = deferred<unknown>()
+    mocks.tokenQuery.mockReturnValue(pending.promise)
+    const wrapper = mount(QueryView)
+    try {
+      await flushPromises()
+      await wrapper.find('#searchToken').setValue('synthetic-query-token')
+      await wrapper.find('#searchPhone').setValue('0911111111')
+      await wrapper.find('[data-test="query-submit"]').trigger('click')
+      await wrapper.find('[data-test="recovery-toggle"]').trigger('click')
+      await wrapper.find('[data-test="recovery-submit"]').trigger('click')
+      expect(mocks.identityQuery).not.toHaveBeenCalled()
+      pending.resolve({ data: {
+        id: 303, name: '合成孩子303', birthday: '', class_name: '合成班', school_year: 115, semester: 1,
+        parent_phone: '0911111111', courses: [], supplies: [], total_amount: 0, paid_amount: 0,
+        query_token_required: true, is_paid: false,
+        field_state: { class_editable: false, identity_editable: false },
+      } })
+      await flushPromises()
+      const state = wrapper.vm as unknown as { queryResult: { id: number } | null }
+      expect(state.queryResult?.id).toBe(303)
+    } finally { wrapper.unmount() }
+  })
 })

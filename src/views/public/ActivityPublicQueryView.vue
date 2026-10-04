@@ -856,6 +856,12 @@ const identityQueryNotice = ref('')
 // canMutate=false 僅供檢視 UI（鎖定提示、隱藏候補確認/放棄、儲存鍵 disabled）
 // 整套自動生效。
 async function onRecoverySubmit() {
+  // 表單不完整時 submitIdentityQuery 只標 touched、不發請求；此時不可作廢仍在飛的
+  // 查詢碼查詢（否則那次結果被靜默丟掉）。
+  if (!recoveryFormValid.value) {
+    await submitIdentityQuery()
+    return
+  }
   // F20：與 token 查詢共用請求序號；較舊請求的回應一律丟棄。
   const requestId = beginQueryRequest()
   const isStale = () => !isLatestQueryRequest(requestId)
