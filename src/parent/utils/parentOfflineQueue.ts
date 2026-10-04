@@ -136,11 +136,9 @@ export async function flushParentQueue(
         message?: string
       }
       const status = err?.response?.status
-      if (status === 409) {
-        await removeOp(op.id as string)
-        result.succeeded += 1
-        continue
-      }
+      // F15：409 不再視同成功。後端各佇列端點的冪等重播回 2xx，409 一律是衝突
+      // （leaves client_request_id 用於不同請假＝永久、請求衝突請重試＝可重試），
+      // 走下方一般失敗路徑：attempts+1、滿 5 次轉 needs_review、保留 last_error。
       if (status === 401) {
         result.auth_failed = true
         const processed = result.succeeded + result.needs_review + result.kept
