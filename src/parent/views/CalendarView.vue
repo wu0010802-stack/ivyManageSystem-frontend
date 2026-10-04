@@ -33,6 +33,10 @@ const days = ref(7)
  */
 const mode = ref<'days' | 'month'>('days')
 let fetchEpoch = 0
+// S04：最近一次成功套用到畫面的範圍；切換失敗時退回此範圍，讓標題／按鈕狀態與
+// 畫面上仍顯示的資料一致，且再按同一顆按鈕可重試（selectMonth 對 month 模式會直接 return）。
+let appliedMode: 'days' | 'month' = 'days'
+let appliedDays = 7
 const now = new Date()
 const monthYear = now.getFullYear()
 const monthNo = now.getMonth() + 1
@@ -80,8 +84,12 @@ async function fetchData() {
       || (requestedMode === 'days' && days.value !== requestedDays)
     ) return
     data.value = d
+    appliedMode = requestedMode
+    appliedDays = requestedDays
   } catch (err) {
     if (requestEpoch !== fetchEpoch) return
+    mode.value = appliedMode
+    days.value = appliedDays
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入行事曆失敗'))
   } finally {
