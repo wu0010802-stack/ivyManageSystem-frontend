@@ -89,10 +89,20 @@ async function fetchClassrooms() {
 
 // request-sequence guard：快速切班/切日時，較舊的慢回應不得覆寫最新列表
 let classDayRequestSeq = 0
+// 目前 items 所屬的 (班級, 日期)；與選取 context 不同代表 items 是舊資料（F5）
+let loadedContextKey = ''
 
 async function fetchClassDay() {
   if (!selectedClassroomId.value || !selectedDate.value) return
   const seq = ++classDayRequestSeq
+  const contextKey = `${selectedClassroomId.value}|${selectedDate.value}`
+  if (contextKey !== loadedContextKey) {
+    // 切班／切日：舊 context 的列表不得續留——否則新讀取失敗時，使用者看似在編輯新日期，
+    // 實際 PUT／批次發布的仍是舊日期的 entry id（教師端深度掃描 F5）
+    items.value = []
+    completion.value = { roster: 0, draft: 0, published: 0, missing: 0 }
+    if (drawerVisible.value) closeDrawer()
+  }
   listLoading.value = true
   try {
     const res = await getClassDay({
@@ -102,6 +112,7 @@ async function fetchClassDay() {
     if (seq !== classDayRequestSeq) return
     items.value = res.data?.items || []
     completion.value = res.data?.completion || { roster: 0, draft: 0, published: 0, missing: 0 }
+    loadedContextKey = contextKey
   } catch (err) {
     if (seq !== classDayRequestSeq) return
     notify(err, 'PortalContactBook:loadEntries', '載入聯絡簿失敗')

@@ -248,11 +248,21 @@ async function submitAmend(item: PortalConfirmationItem) {
 
 async function signoff() {
   signing.value = true
+  // 送出當下的年月（F8）：簽認 POST 在途時使用者可能已切到別的月份
+  const signedYear = year.value
+  const signedMonth = month.value
   try {
-    const res = await signoffAttendanceMonth({ year: year.value, month: month.value })
-    if (data.value) data.value = { ...data.value, signed_at: res.data.signed_at }
+    const res = await signoffAttendanceMonth({ year: signedYear, month: signedMonth })
+    // 只在目前畫面仍是被簽認的月份時才更新 signed_at；否則別月份會被誤標「已完成」、簽認鈕消失
+    if (data.value && year.value === signedYear && month.value === signedMonth) {
+      data.value = { ...data.value, signed_at: res.data.signed_at }
+    }
     notifyCountChanged()
-    ElMessage.success('已完成本月出勤確認')
+    ElMessage.success(
+      year.value === signedYear && month.value === signedMonth
+        ? '已完成本月出勤確認'
+        : `已完成 ${signedYear} 年 ${signedMonth} 月出勤確認`,
+    )
   } catch (e) {
     ElMessage.error(errorText(e))
   } finally {

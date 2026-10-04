@@ -37,15 +37,22 @@ const query = reactive({
   month: now.getMonth() + 1,
 })
 
+// request-sequence guard（F7）：快速換月時，晚到的舊月份回應不得覆寫目前月份的畫面
+let fetchSeq = 0
 const fetchSalary = async () => {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const res = await getSalaryPreview({ year: query.year, month: query.month })
+    if (seq !== fetchSeq) return
     salaryData.value = res.data
   } catch (error) {
+    if (seq !== fetchSeq) return
+    // 新月份載入失敗不保留別月份的明細，免得把 A 月金額當成 B 月顯示
+    salaryData.value = null
     ElMessage.error('載入失敗')
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 

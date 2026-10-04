@@ -70,10 +70,15 @@ watch(isMobile, (m) => {
   if (!m && viewMode.value === 'cards') viewMode.value = 'table'
 }, { immediate: true })
 
+// request-sequence guard（F7）：換月（含切回已快取月份）時，在途的舊月份請求不得蓋掉目前畫面；
+// 舊請求的結果仍以它自己的 key 寫入快取（唯讀資料，之後切回該月可直接用）。
+let fetchSeq = 0
 const fetchSheet = async (force = false) => {
+  const seq = ++fetchSeq
   const key = `${query.year}-${query.month}`
   if (!force && sheetCache.has(key)) {
     sheetData.value = sheetCache.get(key)
+    loading.value = false
     return
   }
   loading.value = true
@@ -81,12 +86,16 @@ const fetchSheet = async (force = false) => {
     const res = await getAttendanceSheet({ year: query.year, month: query.month })
     // 後端缺 response_model，res.data 為 unknown，narrow 成本元件的 SheetData。
     const sheet = res.data as SheetData
-    sheetData.value = sheet
     sheetCache.set(key, sheet)
+    if (seq !== fetchSeq) return
+    sheetData.value = sheet
   } catch (error) {
+    if (seq !== fetchSeq) return
+    // 新月份載入失敗不保留別月份的內容
+    sheetData.value = null
     ElMessage.error('載入失敗: ' + apiError(error, (error as Error)?.message ?? '錯誤'))
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 

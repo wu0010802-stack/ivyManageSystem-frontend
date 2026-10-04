@@ -291,6 +291,9 @@ export function useActivityAttendanceDrawer({
       ElMessage.warning('沒有需要儲存的點名異動')
       return
     }
+    // F6（教師端深度掃描）：成功後的基準必須是「送出當下」的內容，不是「回應回來時」的表單——
+    // 在途期間老師又改的輸入尚未送出，不可被一併標成已存（否則 isDirty=false、再按儲存不發請求）。
+    const submittedSnapshot = serializeAttendanceInputs(drawerSession.value)
     saveLoading.value = true
     try {
       const response = await updateFn(drawerSession.value.id, records)
@@ -316,8 +319,12 @@ export function useActivityAttendanceDrawer({
         }
         return
       }
-      captureBaseline()
-      captureSnapshot()
+      const nextBaseline = new Map(baseline.value)
+      for (const r of records) {
+        nextBaseline.set(r.registration_id, { is_present: r.is_present, notes: r.notes })
+      }
+      baseline.value = nextBaseline
+      dirtySnapshot.value = submittedSnapshot
       ElMessage.success(`已儲存 ${records.length} 筆點名`)
       if (closeOnSuccess) drawerVisible.value = false
       if (onSuccess) onSuccess()

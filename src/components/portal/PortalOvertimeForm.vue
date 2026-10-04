@@ -97,7 +97,8 @@ const calcHours = () => {
         form.hours = 0
         return
     }
-    form.hours = Math.round(minutes / 60 * 2) / 2
+    // 無條件捨去到 0.5h：四捨五入會讓 18:00–18:45 變成 1h，超過實際時段（後端 hours ≤ 時段差會拒絕）
+    form.hours = Math.floor(minutes / 30) / 2
 }
 watch(() => form.start_time, calcHours)
 watch(() => form.end_time, calcHours)
