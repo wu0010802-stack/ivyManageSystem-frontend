@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 
+const emit = defineEmits<{ (e: 'clear'): void }>()
+
 withDefaults(defineProps<{
   width?: number
   height?: number
@@ -58,6 +60,9 @@ function clear(): void {
   if (!ctx || !canvas.value) return
   ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
   hasInk = false
+  // F06：mouseup 先於 click 冒泡，父層此時讀到的 hasInk 還是 true；
+  // 清除本身同步通知父層「已無筆跡」。
+  emit('clear')
 }
 
 function isEmpty(): boolean {
