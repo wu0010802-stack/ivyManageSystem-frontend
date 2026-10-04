@@ -82,7 +82,12 @@ async function loadPersonsForFirstSelected() {
     personsResp.value = null
   }
 }
-watch(() => selectedStudentIds.value[0], loadPersonsForFirstSelected)
+// F05：常用接送人名單依第一位選中孩子而異；首位孩子改變時，先前選的接送人
+// 已不在畫面名單內，必須清掉並要求重新選擇，避免「看不見的舊選擇」被送出。
+watch(() => selectedStudentIds.value[0], () => {
+  selectedPersonId.value = null
+  return loadPersonsForFirstSelected()
+})
 
 // 比照 MedicationListView/ContactBookView/AttendanceView/TodayView 同款
 // useAbortableFetch 用例：watch error 統一彈 toast（abort 不會進到這裡，
