@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
 import { bind } from '../api/auth'
-import { useParentAuthStore } from '../stores/parentAuth'
+import { switchParentIdentity } from '../composables/useParentLogout'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import { resolveSafeRedirect } from '../utils/safeRedirect'
@@ -11,7 +11,6 @@ import { useTenantBranding } from '@/composables/useTenantBranding'
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useParentAuthStore()
 const { getFriendly } = useFriendlyError()
 
 const code = ref('')
@@ -56,7 +55,8 @@ async function submit() {
   try {
     const { data } = await bind(trimmedCode.value)
     if (data?.status === 'ok' && data?.user) {
-      authStore.setUser(data.user)
+      // 首次綁定也是身分轉換：先清前一位家長的個人化快取再寫入（深掃 F02）。
+      switchParentIdentity(data.user)
       router.replace(resolveSafeRedirect(route.query.redirect))
     } else {
       _setLocalError('綁定失敗，請聯絡園所')

@@ -103,6 +103,20 @@ export function clearParentLocalState(): Promise<void> {
 }
 
 /**
+ * 家長身分轉換的唯一入口（設定碼／LINE 登入成功、首次綁定成功）：先清掉前一位
+ * 家長的個人化狀態，再寫入新使用者。
+ *
+ * 2026-10-04 家長端深掃 F02：LoginView 在 2026-08-25 補過這一步，BindView 卻仍直接
+ * `authStore.setUser()`，家長 A 未登出、同分頁改由 B 首次綁定時，A 的今日狀態／
+ * 摘要／children store 原樣留給 B。收斂成單一函式，並由
+ * tests/unit/parent-identity-switch-guard.test.ts 擋住新的直接 setUser 呼叫點。
+ */
+export function switchParentIdentity(user: unknown): void {
+  clearParentPersonalizedCaches()
+  useParentAuthStore().setUser(user)
+}
+
+/**
  * 建立跨分頁家長 session 通道。遠端 logout 只清本地狀態，不呼叫後端、也不重播訊息。
  * `logout-complete` 到達前維持 blocking shield，避免 LIFF 尚未登出就被登入頁自動認回舊帳號。
  */

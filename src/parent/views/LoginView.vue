@@ -15,8 +15,7 @@ import {
   getMyConsents,
   type PolicyVersionOut,
 } from '../api/consent'
-import { useParentAuthStore } from '../stores/parentAuth'
-import { clearParentPersonalizedCaches } from '../composables/useParentLogout'
+import { clearParentLocalState, switchParentIdentity } from '../composables/useParentLogout'
 import { reportClientEvent } from '../utils/clientEvents'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
@@ -28,7 +27,6 @@ const { branding } = useTenantBranding()
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useParentAuthStore()
 const { getFriendly } = useFriendlyError()
 
 // 深連結保存：guard 導來 /login 時會帶 ?redirect=<原本要去的頁>；redirect
@@ -61,9 +59,8 @@ async function completeLogin(user: unknown) {
   // 若沒點登出就離開，today-status/useCachedAsync 快取與 children/messages
   // store 會原樣留在裝置上；在設定新使用者前先清掉，避免下一位家長在快取
   // TTL 內看到上一位家長的小孩資料。與登出流程共用同一份清單，見
-  // useParentLogout.ts::clearParentPersonalizedCaches。
-  clearParentPersonalizedCaches()
-  authStore.setUser(user)
+  // useParentLogout.ts::switchParentIdentity／clearParentPersonalizedCaches。
+  switchParentIdentity(user)
   const needsConsent = await checkConsentRequired()
   if (needsConsent) {
     status.value = 'consent'
@@ -125,6 +122,11 @@ async function startLogin({ forceFresh = false } = {}) {
       await completeLogin(data.user)
     } else if (data?.status === 'need_binding') {
       clearLiffTokenRefreshMarker()
+      // 此瀏覽器的身分已換成「尚未綁定的 LINE 使用者」：前一位家長若沒登出，其
+      // auth sessionStorage 與個人化快取要在導向 /bind 前清掉，否則公開頁 layout
+      // 與後續首頁會據此重新暖出前一位家長的孩子資料（2026-10-04 家長端深掃
+      // F02；後端 need_binding 同步清 access／refresh cookie）。
+      void clearParentLocalState()
       // 把 redirect 一併轉給 /bind，讓「深連結 → 過期 → 登入 → 發現未綁定 →
       // 綁定成功」這條完整鏈路最終仍能回到原本要去的頁（見 BindView.vue）。
       const bindQuery: Record<string, string> = { name_hint: data.name_hint || '' }
