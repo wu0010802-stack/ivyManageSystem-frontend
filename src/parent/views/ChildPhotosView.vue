@@ -58,8 +58,13 @@ const openRecap = ref<PhotoRecap | null>(null)
 // 開啟 lightbox 前的焦點元素，關閉時還原（focus trap a11y）。
 let previousActiveElement: Element | null = null
 
+// F12：切換生活照／作品會連發請求；以 request generation 讓較舊請求的回應
+// （成功或失敗）一律丟棄，不得覆蓋目前篩選的清單。
+let loadSeq = 0
+
 async function load() {
   if (!studentId.value) return
+  const seq = ++loadSeq
   loading.value = true
   loadError.value = false
   try {
@@ -67,14 +72,16 @@ async function load() {
       limit: 200,
       ...(category.value !== 'all' ? { category: category.value } : {}),
     })
+    if (seq !== loadSeq) return
     items.value = r.data.items || []
     total.value = r.data.total || 0
   } catch (e) {
+    if (seq !== loadSeq) return
     loadError.value = true
     const err = e as Record<string, unknown>
     toast.error(String(err?.displayMessage || '載入失敗'))
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
