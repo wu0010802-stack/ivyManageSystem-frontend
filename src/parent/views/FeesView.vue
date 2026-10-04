@@ -52,12 +52,18 @@ const records = ref<FeeRecord[]>([])
 const loading = ref(false)
 const loadError = ref(false)
 const detail = ref<FeeDetail | null>(null)
+// F18：收據彈窗請求序號。關閉或換開另一筆時遞增，A 的晚回應（付款、收據編號、退款
+// 同一路徑）一律丟棄，不得寫進 B 或已關閉的彈窗。
+let detailSeq = 0
 const detailLoading = ref(false)
 
 const detailOpen = computed({
   get: () => detail.value !== null,
   set: (v: boolean) => {
-    if (!v) detail.value = null
+    if (!v) {
+      detailSeq += 1
+      detail.value = null
+    }
   },
 })
 
@@ -175,17 +181,22 @@ async function retryLoad() {
 }
 
 async function openDetail(record: FeeRecord) {
-  detail.value = { record, payments: [], refunds: [] }
+  const seq = ++detailSeq
+  const mine = { record, payments: [] as Payment[], refunds: [] as unknown[] }
+  detail.value = mine
   detailLoading.value = true
   try {
     const { data } = await getFeePayments(record.id)
-    detail.value!.payments = (data as { payments?: Payment[] })?.payments || []
-    detail.value!.refunds = (data as { refunds?: unknown[] })?.refunds || []
+    if (seq !== detailSeq) return
+    mine.payments = (data as { payments?: Payment[] })?.payments || []
+    mine.refunds = (data as { refunds?: unknown[] })?.refunds || []
+    detail.value = { ...mine }
   } catch (err) {
+    if (seq !== detailSeq) return
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
-    detailLoading.value = false
+    if (seq === detailSeq) detailLoading.value = false
   }
 }
 
@@ -252,6 +263,9 @@ onMounted(async () => {
 
 watch(selectedId, () => {
   loadError.value = false
+  // F19：換孩子先清掉前一位的帳單；新孩子載入失敗時才會落到持久錯誤＋重試，
+  // 不會因為舊 records 非空而繼續顯示 A 的帳單、同時抑制錯誤提示。
+  records.value = []
   fetchRecords().catch(() => { loadError.value = true })
 })
 
