@@ -133,7 +133,13 @@ onMounted(async () => {
   fetchData()
 })
 
-watch([selectedId, year, month], fetchData)
+// F17：換孩子或換月份後，前一查詢所選的日卡（含其備註快照）必須清除；換孩子時
+// 一併丟掉前一位的月資料，避免新資料抵達前後畫面仍帶著舊脈絡。
+watch([selectedId, year, month], ([sid], [prevSid]) => {
+  selected.value = null
+  if (prevSid !== undefined && sid !== prevSid) attRes.value = null
+  return fetchData()
+})
 
 async function pullRefresh() { await fetchData() }
 </script>
