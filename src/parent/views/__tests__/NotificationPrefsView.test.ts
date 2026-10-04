@@ -22,12 +22,12 @@ beforeEach(() => {
   getNotificationPreferencesMock.mockResolvedValue({
     data: {
       prefs: {
-        message_received: true,
-        announcement: true,
-        event_ack_required: true,
-        fee_due: true,
-        leave_result: true,
-        attendance_alert: true,
+        'parent.message_received': true,
+        'parent.announcement': true,
+        'parent.event_ack_required': true,
+        'parent.fee_due': true,
+        'parent.leave_result': true,
+        'parent.attendance_alert': true,
         'bus.approaching': true,
       },
     },
