@@ -22,6 +22,7 @@ import { toast } from '../../utils/toast'
 import PullToRefresh from '../PullToRefresh.vue'
 import SkeletonBlock from '../SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import AnnouncementDetailModal from './AnnouncementDetailModal.vue'
 import { useIncrementalRender } from '../../composables/useIncrementalRender'
@@ -46,6 +47,8 @@ const PAGE_LIMIT = 50
 const items = ref<AnnItem[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
+// S03：初載失敗必須是持久錯誤態，不得與「目前沒有公告」空狀態同形（500／離線 ≠ 沒資料）。
+const loadError = ref(false)
 const total = ref(0)
 // 未讀數以後端權威值（/announcements/unread-count）為準，不是
 // items.filter(...).length——那只算「目前已載入的這一批」，筆數一多就會
@@ -86,6 +89,7 @@ async function refreshUnreadCount() {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const [{ data }] = await Promise.all([
       listAnnouncements({ limit: PAGE_LIMIT }),
@@ -94,6 +98,7 @@ async function fetchData() {
     items.value = (data?.items || []) as AnnItem[]
     total.value = typeof data?.total === 'number' ? data.total : items.value.length
   } catch (err: unknown) {
+    loadError.value = true
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
@@ -155,6 +160,11 @@ defineExpose({ refresh: fetchData })
         <SkeletonBlock variant="card" :count="3" />
       </div>
     </template>
+
+    <MobileErrorRetry
+      v-else-if="loadError && items.length === 0"
+      @retry="fetchData"
+    />
 
     <EmptyState
       v-else-if="items.length === 0"
