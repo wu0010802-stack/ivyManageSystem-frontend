@@ -8,13 +8,17 @@ import { join } from 'node:path'
 // `authStore.setUser()`，於是同一個洞換個入口又出現。
 //
 // 此 gate 把「寫入家長身分只能經 switchParentIdentity()」固化成 CI 紅線：
-// 任何新的 `.setUser(` 呼叫點都會失敗，迫使改走統一程序或有意識地加白名單。
+// 任何新的寫入點（`setUser`、直接指定 `.user =`、`$patch(`）都會失敗，迫使改走
+// 統一程序或有意識地加白名單；src/parent 以外也不得取用家長 auth store。
 
 const SCAN_DIR = 'src/parent'
-const SET_USER_CALL = /\.setUser\(/
+// 涵蓋解構後直接呼叫 setUser、Pinia setup store 的 ref 直接賦值與 $patch。
+const IDENTITY_WRITE = /\bsetUser\b|\.user\s*=(?!=)|\$patch\(/
 
 // 白名單（路徑 → 理由）。
 const ALLOWED: Record<string, string> = {
+  // store 定義本身。
+  'src/parent/stores/parentAuth.ts': 'setUser 的定義與匯出',
   // 統一的身分轉換程序本身。
   'src/parent/composables/useParentLogout.ts': 'switchParentIdentity() 先清快取再 setUser',
   // 冷啟動探測：只在 store 尚無使用者時（新分頁／sessionStorage 被清）以 cookie
@@ -22,13 +26,13 @@ const ALLOWED: Record<string, string> = {
   'src/parent/main.ts': 'ensureSessionProbed：store 為空時的同身分 hydrate',
 }
 
-function collectFiles(dir: string): string[] {
+function collectFiles(dir: string, skip: string[] = []): string[] {
   const out: string[] = []
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, e.name)
     if (e.isDirectory()) {
-      if (e.name === '__tests__') continue
-      out.push(...collectFiles(full))
+      if (e.name === '__tests__' || skip.includes(full)) continue
+      out.push(...collectFiles(full, skip))
     } else if (/\.(vue|ts)$/.test(e.name) && !/\.(test|spec)\./.test(e.name)) {
       out.push(full)
     }
@@ -37,13 +41,13 @@ function collectFiles(dir: string): string[] {
 }
 
 describe('家長身分轉換統一入口守衛', () => {
-  it('src/parent 內只有白名單檔案可以直接呼叫 authStore.setUser()', () => {
+  it('src/parent 內只有白名單檔案可以寫入家長身分', () => {
     const offenders = collectFiles(SCAN_DIR)
       .filter((file) => !(file in ALLOWED))
       .filter((file) =>
         readFileSync(file, 'utf8')
           .split('\n')
-          .some((line) => SET_USER_CALL.test(line) && !/^\s*(\/\/|\*)/.test(line)),
+          .some((line) => IDENTITY_WRITE.test(line) && !/^\s*(\/\/|\*)/.test(line)),
       )
     expect(
       offenders,
@@ -51,9 +55,16 @@ describe('家長身分轉換統一入口守衛', () => {
     ).toEqual([])
   })
 
+  it('src/parent 以外不得取用家長 auth store', () => {
+    const offenders = collectFiles('src', [SCAN_DIR]).filter((file) =>
+      readFileSync(file, 'utf8').includes('useParentAuthStore'),
+    )
+    expect(offenders).toEqual([])
+  })
+
   it('白名單沒有過時項目', () => {
     for (const file of Object.keys(ALLOWED)) {
-      expect(readFileSync(file, 'utf8')).toMatch(SET_USER_CALL)
+      expect(readFileSync(file, 'utf8')).toMatch(IDENTITY_WRITE)
     }
   })
 })
