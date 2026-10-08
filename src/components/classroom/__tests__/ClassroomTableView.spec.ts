@@ -241,15 +241,15 @@ describe('ClassroomTableView 操作與 emit', () => {
     expect(wrapper.emitted('open')).toEqual([[c], [c]])
   })
 
-  it('整列點擊也 emit open；操作欄的點擊不會冒泡成開啟名冊', async () => {
+  it('整列本身不是點擊目標：開名冊一律走班名／「名冊」按鈕（鍵盤與滑鼠同一條路）；點 ⋯ 不會開名冊', async () => {
     const c = mk({ name: '甲' })
     const wrapper = mountTable([c])
 
     await wrapper.find('[data-test="classroom-row"]').trigger('click')
-    expect(wrapper.emitted('open')).toEqual([[c]])
+    expect(wrapper.emitted('open')).toBeUndefined()
 
     await wrapper.find('[data-test="row-menu"]').trigger('click')
-    expect(wrapper.emitted('open')).toEqual([[c]])
+    expect(wrapper.emitted('open')).toBeUndefined()
   })
 
   it('⋯ 按鈕帶班名 aria-label；選單項點擊 emit command(cmd, classroom)', async () => {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // 班級管理主頁預設檢視：依年級分組的密集表。一眼比較各班在籍/容量/師資，取代「一班一張卡」。
 // 資料由父層過濾好後傳入（搜尋／年級／快篩都在父層），本元件只負責分組、排序與呈現。
-// 手機（useIsMobile）改渲染分組清單：整列可點、≥44px，不出現橫向捲動的 table。
+// 開名冊的入口：桌機＝班名按鈕與「名冊」按鈕（都是可 Tab 的 <button>）；不掛整列 @click——
+// <tr> 沒有鍵盤路徑，會被 check:a11y 棘輪計為「可點擊但鍵盤到不了」。
+// 手機（useIsMobile）改渲染分組清單：整列本身就是 <button>、≥44px，不出現橫向捲動的 table。
 import { computed } from 'vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { capacityPercent, capacityStatus } from '@/utils/classroomCapacity'
@@ -184,11 +186,10 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
             :class="{ 'is-inactive': !isActive(c) }"
             data-test="classroom-row"
             :data-id="c.id"
-            @click="open(c)"
           >
             <td class="col-name">
               <div class="name-cell">
-                <button type="button" class="class-name-btn" @click.stop="open(c)">{{ c.name }}</button>
+                <button type="button" class="class-name-btn" @click="open(c)">{{ c.name }}</button>
                 <span v-if="c.class_code" class="class-code">{{ c.class_code }}</span>
                 <span v-if="!isActive(c)" class="tag-inactive">已停用</span>
               </div>
@@ -206,7 +207,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
             <td class="col-head" :class="{ 'is-missing': headMissing(c), 'is-empty': !c.head_teacher_name && !headMissing(c) }">{{ headText(c) }}</td>
             <td class="col-assistant" :class="{ 'is-empty': !c.assistant_teacher_name }">{{ c.assistant_teacher_name || '—' }}</td>
             <td class="col-english" :class="{ 'is-empty': englishText(c) === '—' }">{{ englishText(c) }}</td>
-            <td class="col-actions" @click.stop>
+            <td class="col-actions">
               <div class="actions">
                 <button
                   v-if="canReadStudents"
@@ -271,7 +272,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
             </span>
             <span class="m-row__teachers" :class="{ 'is-missing': headMissing(c) }">{{ teachersLine(c) }}</span>
           </button>
-          <div class="m-row__menu" @click.stop>
+          <div class="m-row__menu">
             <ClassroomRowMenu
               :classroom="c"
               :can-write="canWrite"
@@ -369,7 +370,6 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
 
 /* ── 班級列 ───────────────────────────────────────────────────────────── */
 .class-row {
-  cursor: pointer;
   transition: background var(--transition-fast);
 }
 
