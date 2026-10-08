@@ -586,11 +586,12 @@ const disableConfirmMessage = (classroom: ClassroomRow) => {
 
 const handleDelete = async (classroom: ClassroomRow) => {
   // 班上還有在學生時後端會拒絕停用；選單內已 disabled，這裡是直接呼叫（深連結/鍵盤）時的第二道防線。
-  // 文案指向介面上真有的動作：學生資料的「編輯基本資料」改班級、「變更狀態」辦理休學／退學／畢業。
+  // 文案指向介面上真有的動作：學生資料的「編輯基本資料」改班級、「變更狀態」辦理退學／畢業。
+  // 不列「休學」：休學仍保留 is_active 與 classroom_id，學生照算在籍，辦了也停用不了。
   const enrolled = classroom.current_count ?? 0
   if (enrolled > 0) {
     ElMessage.warning(
-      `「${classroom.name}」仍有 ${enrolled} 名在學，請先在學生資料改班級，或按「變更狀態」辦理休學／退學／畢業後再停用`,
+      `「${classroom.name}」仍有 ${enrolled} 名在學，請先在學生資料改班級，或按「變更狀態」辦理退學／畢業後再停用`,
     )
     return
   }

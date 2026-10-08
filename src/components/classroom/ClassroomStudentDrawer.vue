@@ -527,7 +527,7 @@ const close = () => emit('update:visible', false)
 
               <div class="leave-note" role="note">
                 <el-icon class="leave-note-icon" :size="18" aria-hidden="true"><InfoFilled /></el-icon>
-                <span>學生要離開本班：選取學生後，按學生資料右上的「⋯」→「編輯基本資料」改班級，或按「變更狀態」辦理休學、退學、畢業。名冊上不提供刪除，所有離班都會留下異動紀錄。</span>
+                <span>學生要離開本班：選取學生後，按學生資料右上的「⋯」→「編輯基本資料」改班級，或按「變更狀態」辦理退學、畢業。名冊上不提供刪除，所有離班都會留下異動紀錄。</span>
               </div>
             </div>
           </section>

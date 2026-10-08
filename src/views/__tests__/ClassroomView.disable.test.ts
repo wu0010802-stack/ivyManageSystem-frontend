@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { isVNode, render, type VNode } from 'vue'
 
 // 停用班級防呆：
-//  - 班上仍有在學生（current_count > 0）→ 不開確認框，直接警示請先改班或辦理休學／退學／畢業（後端會拒絕，不如前端先擋）
+//  - 班上仍有在學生（current_count > 0）→ 不開確認框，直接警示請先改班或辦理退學／畢業（後端會拒絕，不如前端先擋）
 //  - 沒有在學生 → 確認框列出停用的連帶後果（清空師資指派、教師薪資需重算、清單不再顯示），
 //    再呼叫 deleteClassroom
 // 與四支既有 ClassroomView.*.test.ts 同樣的 mock 邊界（element-plus 只暴露 ElMessage / ElMessageBox.confirm）。
@@ -153,8 +153,9 @@ describe('ClassroomView 停用班級防呆', () => {
     await state.handleDelete({ ...baseRow, current_count: 12 })
 
     expect(warningMock).toHaveBeenCalledWith(
-      '「向日葵班」仍有 12 名在學，請先在學生資料改班級，或按「變更狀態」辦理休學／退學／畢業後再停用',
+      '「向日葵班」仍有 12 名在學，請先在學生資料改班級，或按「變更狀態」辦理退學／畢業後再停用',
     )
+    expect(warningMock.mock.calls[0][0]).not.toContain('休學') // 休學仍算在籍，不是解除停用限制的方法
     expect(confirmMock).not.toHaveBeenCalled()
     expect(deleteClassroomMock).not.toHaveBeenCalled()
     wrapper.unmount()
@@ -230,7 +231,7 @@ describe('ClassroomView 停用班級防呆', () => {
     table.vm.$emit('command', 'disable', full)
     await flushPromises()
     expect(warningMock).toHaveBeenCalledWith(
-      '「玫瑰班」仍有 3 名在學，請先在學生資料改班級，或按「變更狀態」辦理休學／退學／畢業後再停用',
+      '「玫瑰班」仍有 3 名在學，請先在學生資料改班級，或按「變更狀態」辦理退學／畢業後再停用',
     )
     expect(confirmMock).not.toHaveBeenCalled()
 

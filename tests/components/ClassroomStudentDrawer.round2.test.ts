@@ -245,9 +245,12 @@ describe('ClassroomStudentDrawer 第二輪改版', () => {
       // 文案必須與介面字面一致（StudentSummaryHeader 的「⋯→編輯基本資料」「變更狀態」），
       // 不可再寫介面上不存在的「轉班」鈕。
       expect(text).toContain(
-        '學生要離開本班：選取學生後，按學生資料右上的「⋯」→「編輯基本資料」改班級，或按「變更狀態」辦理休學、退學、畢業。名冊上不提供刪除，所有離班都會留下異動紀錄。',
+        '學生要離開本班：選取學生後，按學生資料右上的「⋯」→「編輯基本資料」改班級，或按「變更狀態」辦理退學、畢業。名冊上不提供刪除，所有離班都會留下異動紀錄。',
       )
       expect(text).not.toContain('「轉班」')
+      // 休學仍保留 is_active 與 classroom_id（BE services/student_lifecycle.py），學生照算在籍，
+      // 不是離開本班的方法，文案不可列為選項
+      expect(text).not.toContain('休學')
       expect(text).not.toContain('從左側選擇學生以查看詳情')
     })
 
