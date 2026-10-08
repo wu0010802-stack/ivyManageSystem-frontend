@@ -237,12 +237,14 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
       <section v-for="g in groups" :key="g.key" class="m-group">
         <div class="m-group__head" data-test="group-row">
           <span class="group-name">{{ g.name }}</span>{{ ' ' }}
-          <span class="group-meta">{{ groupMeta(g) }}</span>
-          <span
-            v-if="g.reserved > 0"
-            class="group-meta group-reserved"
-            :title="`同年級暫定編班（未註冊）${g.reserved} 人`"
-          >{{ reservedText(g) }}</span>
+          <span class="group-meta-line">
+            <span class="group-meta">{{ groupMeta(g) }}</span>
+            <span
+              v-if="g.reserved > 0"
+              class="group-meta group-reserved"
+              :title="`同年級暫定編班（未註冊）${g.reserved} 人`"
+            >{{ reservedText(g) }}</span>
+          </span>
         </div>
         <div
           v-for="c in g.rows"
@@ -298,11 +300,17 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
 
 .grade-table {
   width: 100%;
-  min-width: 960px;
+  min-width: 1040px;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--text-base);
   color: var(--text-primary);
 }
+
+/* 固定欄寬：數字欄/操作欄定寬，其餘（班級、班導、副班導、美語）平分剩餘空間 */
+.grade-table thead th.col-count { width: 300px; }
+.grade-table thead th.col-remain { width: 88px; }
+.grade-table thead th.col-actions { width: 132px; }
 
 /* ── 表頭 ─────────────────────────────────────────────────────────────── */
 .grade-table thead th {
@@ -402,14 +410,14 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
 }
 
 .class-name-btn:hover {
-  color: var(--brand-primary-hover);
+  color: var(--el-color-primary-dark-2);
   text-decoration: underline;
 }
 
 .class-name-btn:focus-visible,
 .roster-btn:focus-visible,
 .m-row__main:focus-visible {
-  outline: 2px solid var(--brand-primary-strong);
+  outline: 2px solid var(--el-color-primary);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -464,14 +472,14 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
   width: 120px;
   height: 6px;
   border-radius: var(--radius-full);
-  background: var(--neutral-200);
+  background: var(--color-neutral-200);
   overflow: hidden;
 }
 
 .bar-fill {
   display: block;
   height: 100%;
-  background: var(--neutral-400);
+  background: var(--el-text-color-placeholder);
 }
 
 .bar-fill.is-warning {
@@ -503,7 +511,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
 .col-head.is-empty,
 .col-assistant.is-empty,
 .col-english.is-empty {
-  color: var(--neutral-400);
+  color: var(--el-text-color-placeholder);
 }
 
 /* ── 操作 ─────────────────────────────────────────────────────────────── */
@@ -521,12 +529,12 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
   background: none;
   font: inherit;
   font-size: var(--text-sm);
-  color: var(--brand-primary-strong);
+  color: var(--el-color-primary);
   cursor: pointer;
 }
 
 .roster-btn:hover {
-  color: var(--brand-primary-hover);
+  color: var(--el-color-primary-dark-2);
   text-decoration: underline;
 }
 
