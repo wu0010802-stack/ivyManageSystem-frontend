@@ -132,10 +132,15 @@ const clearFilters = () => {
 
 // 容量進度（與班級卡片同一套口徑）
 const capacityPct = computed(() => capacityPercent(activeStudents.value.length, props.classroom?.capacity))
-const capacityProgressStatus = computed<'' | 'success' | 'warning' | 'exception'>(() => {
+// 比照班級卡片：正常不上色（整條綠會稀釋真正的警訊），改由 capacityProgressColor 給中性灰；
+// 只有接近額滿（warning）／已滿（exception）才用 el-progress 的狀態色。
+const capacityProgressStatus = computed<'' | 'warning' | 'exception'>(() => {
   const s = capacityStatus(activeStudents.value.length, props.classroom?.capacity)
-  return s === 'full' ? 'exception' : s === 'warning' ? 'warning' : 'success'
+  return s === 'full' ? 'exception' : s === 'warning' ? 'warning' : ''
 })
+const capacityProgressColor = computed(() => (
+  capacityProgressStatus.value === '' ? 'var(--el-text-color-placeholder)' : ''
+))
 
 const studentStats = computed(() => {
   const students = activeStudents.value
@@ -370,6 +375,7 @@ const close = () => emit('update:visible', false)
           <el-progress
             :percentage="capacityPct"
             :status="capacityProgressStatus"
+            :color="capacityProgressColor"
             :stroke-width="6"
             :show-text="false"
           />
@@ -521,7 +527,7 @@ const close = () => emit('update:visible', false)
 
               <div class="leave-note" role="note">
                 <el-icon class="leave-note-icon" :size="18" aria-hidden="true"><InfoFilled /></el-icon>
-                <span>學生要離開本班，請在學生資料中選擇「轉班」「休學」或「退學」。名冊上不提供刪除，所有離班都會留下異動紀錄。</span>
+                <span>學生要離開本班：選取學生後，按學生資料右上的「⋯」→「編輯基本資料」改班級，或按「變更狀態」辦理休學、退學、畢業。名冊上不提供刪除，所有離班都會留下異動紀錄。</span>
               </div>
             </div>
           </section>

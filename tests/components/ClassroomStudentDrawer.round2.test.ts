@@ -187,6 +187,49 @@ describe('ClassroomStudentDrawer 第二輪改版', () => {
     })
   })
 
+  describe('容量條：正常不上色（中性灰），只有接近額滿／已滿才上色', () => {
+    const withActive = (count: number, capacity: number) => ({
+      ...baseClassroom,
+      capacity,
+      students: Array.from({ length: count }, (_, i) => ({
+        id: 100 + i,
+        name: `學生${i}`,
+        gender: '男',
+        is_active: true,
+      })),
+    })
+    const progressOf = (wrapper: ReturnType<typeof mountDrawer>) =>
+      wrapper.findComponent({ name: 'ElProgress' })
+
+    it('容量正常（4 / 30）：不設 status、以中性 token 給色，不再是綠色 success', async () => {
+      const wrapper = mountDrawer()
+      await flushPromises()
+
+      const progress = progressOf(wrapper)
+      expect(progress.exists()).toBe(true)
+      expect(progress.props('status')).toBe('')
+      expect(progress.props('color')).toBe('var(--el-text-color-placeholder)')
+    })
+
+    it('接近額滿（9 / 10）維持 warning，不覆寫顏色', async () => {
+      const wrapper = mountDrawer(withActive(9, 10))
+      await flushPromises()
+
+      const progress = progressOf(wrapper)
+      expect(progress.props('status')).toBe('warning')
+      expect(progress.props('color')).toBe('')
+    })
+
+    it('已滿（10 / 10）維持 exception，不覆寫顏色', async () => {
+      const wrapper = mountDrawer(withActive(10, 10))
+      await flushPromises()
+
+      const progress = progressOf(wrapper)
+      expect(progress.props('status')).toBe('exception')
+      expect(progress.props('color')).toBe('')
+    })
+  })
+
   describe('未選學生時右側顯示班級摘要', () => {
     it('顯示師資姓名與離班說明文字，不再是「從左側選擇學生」空狀態', async () => {
       const wrapper = mountDrawer()
@@ -199,9 +242,12 @@ describe('ClassroomStudentDrawer 第二輪改版', () => {
       expect(text).toContain('陳怡君')
       expect(text).toContain('林雅婷')
       expect(text).toContain('張書豪')
+      // 文案必須與介面字面一致（StudentSummaryHeader 的「⋯→編輯基本資料」「變更狀態」），
+      // 不可再寫介面上不存在的「轉班」鈕。
       expect(text).toContain(
-        '學生要離開本班，請在學生資料中選擇「轉班」「休學」或「退學」。名冊上不提供刪除，所有離班都會留下異動紀錄。',
+        '學生要離開本班：選取學生後，按學生資料右上的「⋯」→「編輯基本資料」改班級，或按「變更狀態」辦理休學、退學、畢業。名冊上不提供刪除，所有離班都會留下異動紀錄。',
       )
+      expect(text).not.toContain('「轉班」')
       expect(text).not.toContain('從左側選擇學生以查看詳情')
     })
 
