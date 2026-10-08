@@ -214,7 +214,7 @@ const sheetCandidates = computed(() => availableModules())
 }
 .qa-edit .material-symbols-rounded { font-size: 16px; }
 /* 小字綠底一律 --m3-primary（#006d3d，白字過 AA）；--brand-primary(#0d9053) 白字僅 4.1:1（aaContrast gate） */
-.qa-edit.is-active { background: var(--m3-primary, #006d3d); color: var(--pt-on-accent, #fff); }
+.qa-edit.is-active { background: var(--m3-primary, #006d3d); color: var(--color-primary-contrast, #fff); }
 
 .qa-cb-bar {
   display: flex; align-items: center; gap: 12px;
@@ -222,7 +222,7 @@ const sheetCandidates = computed(() => availableModules())
   padding: 15px 16px;
   border-radius: var(--pt-hero-radius, 30px);
   background: var(--m3-primary, #006d3d);
-  color: var(--pt-on-accent, #fff);
+  color: var(--color-primary-contrast, #fff);
   text-decoration: none;
   box-shadow: var(--pt-shadow-float);
   transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -282,7 +282,7 @@ const sheetCandidates = computed(() => availableModules())
 .qa-mod-badge {
   position: absolute; top: -6px; right: -6px;
   width: 20px; height: 20px; border-radius: 50%;
-  background: var(--m3-primary, #006d3d); color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, #006d3d); color: var(--color-primary-contrast, #fff);
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }

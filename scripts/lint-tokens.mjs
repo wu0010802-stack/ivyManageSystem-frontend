@@ -39,9 +39,9 @@ const SELF_PATH = 'scripts/lint-tokens.mjs';
 const BASELINE = {
   brand: 204,
   ivy: 29,
-  m3: 381,
+  m3: 385,
   neutral: 285,
-  pt: 876,
+  pt: 871,
 };
 
 /**
