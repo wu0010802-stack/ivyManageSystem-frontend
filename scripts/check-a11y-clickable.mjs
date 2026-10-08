@@ -55,12 +55,12 @@ const SELF_PATH = 'scripts/check-a11y-clickable.mjs';
  *        useRovingGrid composable —— 屬獨立重構，尚未做。
  *
  *   D. 已有等價鍵盤路徑的滑鼠捷徑（POSSearchPanel 的 .pos-reg ×2、
- *      PortalAlbumDetailView 的 <img>）
- *      → 這些元素內部／旁邊已經有 el-checkbox，本身就能 Tab + Space。
+ *      PortalAlbumDetailView 的 <img>、ClassroomTableView 的 .class-row）
+ *      → 這些元素內部／旁邊已經有 el-checkbox／<button>（班名、「名冊」），本身就能 Tab + Enter/Space。
  *        外層 @click 只是「點整列也能選」的便利。補 tabindex 會讓同一個功能
  *        出現兩個 Tab 停點，反而更糟。這類**不必**再收斂。
  */
-const BASELINE = 4;
+const BASELINE = 5;
 
 /** 非語意元素：本身不帶互動語意，掛 @click 就需要自己補鍵盤可及性。 */
 const NON_SEMANTIC = new Set([
