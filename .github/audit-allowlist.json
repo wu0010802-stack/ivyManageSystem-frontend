@@ -5,5 +5,31 @@
     "每筆都必須有 expires，過期會讓 gate 轉紅以強制重新檢討。",
     "當上游修好、漏洞消失後，script 會提示把對應項目刪掉。"
   ],
-  "allow": []
+  "allow": [
+    {
+      "package": "braces",
+      "reason": "GHSA-vfj7-8cjw-p6xm braces 堆疊耗盡 DoS；braces 最新 3.0.3 仍在受影響範圍，stylelint 最新 17.16 仍依賴 fast-glob/micromatch，上游無版本可升。僅開發期 lint 工具鏈，glob 輸入為 repo 自有路徑，不進 bundle",
+      "expires": "2026-11-30"
+    },
+    {
+      "package": "micromatch",
+      "reason": "經 braces 傳遞（同 GHSA-vfj7-8cjw-p6xm），micromatch 最新 4.0.8 仍依賴受影響的 braces",
+      "expires": "2026-11-30"
+    },
+    {
+      "package": "fast-glob",
+      "reason": "經 micromatch 傳遞（同 GHSA-vfj7-8cjw-p6xm），fast-glob 最新 3.3.3 仍依賴 micromatch 4.0.8",
+      "expires": "2026-11-30"
+    },
+    {
+      "package": "globby",
+      "reason": "經 fast-glob 傳遞（同 GHSA-vfj7-8cjw-p6xm），僅 stylelint 使用",
+      "expires": "2026-11-30"
+    },
+    {
+      "package": "stylelint",
+      "reason": "經 globby/fast-glob/micromatch 傳遞（同 GHSA-vfj7-8cjw-p6xm）；stylelint 本身無獨立 advisory，最新版仍依賴上述套件",
+      "expires": "2026-11-30"
+    }
+  ]
 }
