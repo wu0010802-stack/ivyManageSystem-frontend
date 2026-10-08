@@ -351,7 +351,7 @@ onMounted(async () => {
 }
 .form-section {
   padding: var(--space-4) 0 var(--space-2);
-  border-bottom: 1px solid var(--neutral-200);
+  border-bottom: 1px solid var(--color-neutral-200);
   margin-bottom: var(--space-4);
 }
 .form-section:last-of-type {
@@ -394,8 +394,8 @@ onMounted(async () => {
 }
 
 .fixed-question {
-  background: var(--neutral-50);
-  border: 1px dashed var(--neutral-300);
+  background: var(--color-neutral-50);
+  border: 1px dashed var(--color-neutral-300);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   margin-bottom: var(--space-3);
@@ -409,7 +409,7 @@ onMounted(async () => {
   color: var(--el-text-color-secondary);
 }
 .question-card {
-  border: 1px solid var(--neutral-200);
+  border: 1px solid var(--color-neutral-200);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   margin-bottom: var(--space-3);
@@ -487,7 +487,7 @@ onMounted(async () => {
   position: sticky;
   bottom: 0;
   background: var(--el-bg-color, #fff);
-  border-top: 1px solid var(--neutral-200);
+  border-top: 1px solid var(--color-neutral-200);
   padding: var(--space-3) 0;
   margin-top: var(--space-4);
   max-width: 880px;

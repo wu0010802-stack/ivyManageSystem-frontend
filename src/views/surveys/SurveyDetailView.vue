@@ -719,14 +719,14 @@ onMounted(async () => {
   height: 14px;
   border-radius: var(--radius-full);
   overflow: hidden;
-  background: var(--neutral-200);
+  background: var(--color-neutral-200);
 }
 .overview__seg {
   height: 100%;
   transition: width var(--transition-base);
 }
 .overview__seg--attending { background: var(--color-success); }
-.overview__seg--not_attending { background: var(--neutral-400); }
+.overview__seg--not_attending { background: var(--color-neutral-400); }
 .overview__seg--not_replied { background: var(--color-warning-soft); }
 .overview__legend {
   list-style: none;
@@ -747,7 +747,7 @@ onMounted(async () => {
   height: 10px;
   border-radius: var(--radius-full);
   display: inline-block;
-  border: 1px solid var(--neutral-300);
+  border: 1px solid var(--color-neutral-300);
 }
 
 .progress-cell {
@@ -770,7 +770,7 @@ onMounted(async () => {
   gap: var(--space-4);
 }
 .qstat {
-  border: 1px solid var(--neutral-200);
+  border: 1px solid var(--color-neutral-200);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
 }
@@ -810,7 +810,7 @@ onMounted(async () => {
 .qstat__track {
   height: 8px;
   border-radius: var(--radius-full);
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   overflow: hidden;
 }
 .qstat__fill {
@@ -828,7 +828,7 @@ onMounted(async () => {
 }
 .qstat__texts li {
   padding: 2px 0;
-  border-bottom: 1px dashed var(--neutral-200);
+  border-bottom: 1px dashed var(--color-neutral-200);
 }
 .qstat__texts li:last-child {
   border-bottom: 0;
@@ -864,13 +864,13 @@ onMounted(async () => {
 }
 .preview__q {
   padding: var(--space-3) var(--space-3);
-  border-bottom: 1px solid var(--neutral-200);
+  border-bottom: 1px solid var(--color-neutral-200);
 }
 .preview__q:last-child {
   border-bottom: 0;
 }
 .preview__q--fixed {
-  background: var(--neutral-50);
+  background: var(--color-neutral-50);
   border-radius: var(--radius-md);
   border-bottom: 0;
   margin-bottom: var(--space-2);

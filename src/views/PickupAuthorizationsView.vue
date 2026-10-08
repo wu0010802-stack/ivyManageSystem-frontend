@@ -615,7 +615,7 @@ onMounted(fetchData)
   object-fit: cover;
 }
 .thumb--none {
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
 }
 .person-cell {
   display: flex;
@@ -690,7 +690,7 @@ onMounted(fetchData)
   align-items: center;
   justify-content: center;
   text-align: center;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   color: var(--text-secondary);
   font-size: 12px;
   padding: 12px;

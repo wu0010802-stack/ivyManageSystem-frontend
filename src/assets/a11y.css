@@ -94,13 +94,16 @@ html.dark {
    * 寫死 hex，alias 在 main.css 才綁到 scale，所以翻 scale 一處同時帶動 alias
    * 與直接引用兩種寫法。 */
   --neutral-0: #0f172a;
-  --neutral-50: #1e293b;
+  --color-neutral-50: #1e293b;
+  --neutral-50: var(--color-neutral-50);
   --color-neutral-100: #334155;
   --neutral-100: var(--color-neutral-100);
   --color-neutral-200: #475569;
   --neutral-200: var(--color-neutral-200);
-  --neutral-300: #64748b;
-  --neutral-400: #94a3b8;
+  --color-neutral-300: #64748b;
+  --neutral-300: var(--color-neutral-300);
+  --color-neutral-400: #94a3b8;
+  --neutral-400: var(--color-neutral-400);
   --neutral-500: #cbd5e1;
   --neutral-600: #e2e8f0;
   --color-neutral-700: #f1f5f9;

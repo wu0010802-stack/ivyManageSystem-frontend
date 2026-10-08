@@ -16,6 +16,25 @@ describe('上線修復 token 的亮暗色等值契約', () => {
       }
     }
   })
+  it('neutral 50/300/400 升格後保留 light/dark 原值與舊 alias', () => {
+    for (const [path, values] of [
+      ['src/assets/design-tokens.css', ['#f8fafc', '#cbd5e1', '#94a3b8']],
+      ['src/assets/a11y.css', ['#1e293b', '#64748b', '#94a3b8']],
+    ] as const) {
+      const css = read(path)
+      for (const [index, level] of [50, 300, 400].entries()) {
+        expect(css).toContain(`--color-neutral-${level}: ${values[index]};`)
+        expect(css).toContain(`--neutral-${level}: var(--color-neutral-${level});`)
+      }
+    }
+  })
+  it('家長 --pt-on-accent 與 canonical --color-primary-contrast 同為白且亮暗色皆未覆寫', () => {
+    const css = read('src/parent/styles/globals.css')
+    expect(css.match(/--pt-on-accent: #ffffff;/g)).toHaveLength(1)
+    expect(css.match(/--color-primary-contrast: #ffffff;/g)).toHaveLength(1)
+    expect(css.match(/--pt-on-accent:/g)).toHaveLength(1)
+    expect(css.match(/--color-primary-contrast:/g)).toHaveLength(1)
+  })
   it('家長綠色中階在亮暗色都沿用原值，既有引用仍可解析', () => {
     const css = read('src/parent/styles/globals.css')
     expect(css).toContain('--color-green-mid: #41a074;')
