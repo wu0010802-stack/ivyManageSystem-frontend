@@ -3,21 +3,19 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  Delete,
+  Close,
   Edit,
+  InfoFilled,
   Plus,
   Search,
   Warning,
   ArrowLeft,
-  Switch as SwitchIcon,
 } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import { downloadFile } from '@/utils/download'
 import { capacityPercent, capacityStatus } from '@/utils/classroomCapacity'
-import { useConfirmDelete } from '@/composables'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useClassroomProspects } from '@/composables/useClassroomProspects'
-import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 import StudentEditDialog from '@/components/student/StudentEditDialog.vue'
 import StudentDetailPanel from '@/components/student/StudentDetailPanel.vue'
 
@@ -37,6 +35,7 @@ interface StudentRecord {
 interface ClassroomProp {
   id?: number
   name?: string
+  class_code?: string | null
   grade_name?: string
   grade_id?: number
   school_year?: number
@@ -44,8 +43,16 @@ interface ClassroomProp {
   semester_label?: string
   is_active?: boolean
   capacity?: number
+  current_count?: number
+  head_teacher_name?: string | null
+  assistant_teacher_name?: string | null
+  english_teacher_name?: string | null
+  art_teacher_name?: string | null
   students?: StudentRecord[]
 }
+
+/** 性別篩選值；「未填」＝性別不是「男」也不是「女」（含空字串／null）。 */
+type GenderFilter = '' | '男' | '女' | '未填'
 
 const props = withDefaults(defineProps<{
   visible?: boolean
@@ -83,9 +90,11 @@ watch(
 
 // ── 名冊篩選 ────────────────────────────────────────
 const studentSearch = ref('')
-const studentGenderFilter = ref('')
+const studentGenderFilter = ref<GenderFilter>('')
 const showHealthOnly = ref(false)
 const showInactive = ref(false)
+
+const isKnownGender = (gender: string | undefined) => gender === '男' || gender === '女'
 
 const activeStudents = computed(() =>
   (props.classroom?.students || []).filter((s) => s.is_active !== false),
@@ -101,14 +110,15 @@ const visibleStudents = computed(() => {
     const matchSearch = !studentSearch.value
       || (s.name || '').includes(studentSearch.value)
       || s.student_id?.includes(studentSearch.value)
-    const matchGender = !studentGenderFilter.value || s.gender === studentGenderFilter.value
+    const matchGender = !studentGenderFilter.value
+      || (studentGenderFilter.value === '未填' ? !isKnownGender(s.gender) : s.gender === studentGenderFilter.value)
     const matchHealth = !showHealthOnly.value || !!hasHealthAlert(s)
     return matchSearch && matchGender && matchHealth
   })
 })
 
 // 統計 pill 兼作快速篩選：再點一次同條件即取消
-const toggleGenderFilter = (gender: string) => {
+const toggleGenderFilter = (gender: Exclude<GenderFilter, ''>) => {
   studentGenderFilter.value = studentGenderFilter.value === gender ? '' : gender
 }
 const toggleHealthFilter = () => {
@@ -133,10 +143,11 @@ const studentStats = computed(() => {
     (acc, s) => {
       if (s.gender === '男') acc.maleCount++
       else if (s.gender === '女') acc.femaleCount++
+      else acc.unknownGenderCount++
       if (s.allergy || s.medication || s.special_needs) acc.healthAlertCount++
       return acc
     },
-    { maleCount: 0, femaleCount: 0, healthAlertCount: 0 },
+    { maleCount: 0, femaleCount: 0, unknownGenderCount: 0, healthAlertCount: 0 },
   )
 })
 
@@ -156,6 +167,14 @@ const healthAlertText = (s: StudentRecord) =>
   ]
     .filter(Boolean)
     .join('／')
+
+// 未選學生時右側的「師資」摘要（欄位來自 getClassroom 詳情）
+const teacherRows = computed(() => [
+  { label: '班導', name: props.classroom?.head_teacher_name },
+  { label: '副班導', name: props.classroom?.assistant_teacher_name },
+  // 與班級列表一致：english_teacher_name 為標準欄位，art_teacher_name 為 legacy 同義
+  { label: '美語老師', name: props.classroom?.english_teacher_name || props.classroom?.art_teacher_name },
+])
 
 // ── 詳情選擇 ────────────────────────────────────────
 const selectedStudentId = ref<number | null>(null)
@@ -203,18 +222,6 @@ const handleStudentEdit = (student: StudentRecord) => {
 }
 
 const handleEditSaved = () => emit('student-updated')
-
-// ── 刪除學生 ────────────────────────────────────────
-const { confirmDelete: handleStudentDelete } = useConfirmDelete({
-  endpoint: '/students',
-  onSuccess: (row) => {
-    const rowId = (row as { id?: number })?.id
-    domainBus.emit(STUDENT_EVENTS.DELETED, { id: rowId })
-    if (selectedStudentId.value === rowId) selectedStudentId.value = null
-    emit('student-updated')
-  },
-  successMsg: '刪除成功',
-})
 
 // ── 開完整檔案 ──────────────────────────────────────
 /**
@@ -270,83 +277,88 @@ const close = () => emit('update:visible', false)
   >
     <div v-loading="loading" class="drawer-body">
       <template v-if="classroom">
-        <!-- 頂部 banner -->
-        <div class="drawer-banner">
-          <div class="banner-left">
-            <div class="banner-title">{{ classroom.name }}</div>
-            <div class="banner-subtitle">
+        <!-- 標頭：白底、下框線分隔；動作分主次（新增學生為 primary），關閉為 icon-only -->
+        <header class="drawer-header">
+          <div class="header-main">
+            <div class="header-title-row">
+              <h2 class="header-title">{{ classroom.name }}</h2>
+              <span v-if="classroom.class_code" class="code-chip">{{ classroom.class_code }}</span>
+              <span
+                class="status-label"
+                :class="classroom.is_active ? 'status-label--on' : 'status-label--off'"
+              >
+                <span class="status-dot" aria-hidden="true" />
+                {{ classroom.is_active ? '啟用中' : '已停用' }}
+              </span>
+            </div>
+            <div class="header-subtitle">
               {{ classroom.semester_label }} · {{ classroom.grade_name || '未設定年級' }}
             </div>
           </div>
-          <div class="banner-right">
-            <el-tag :type="classroom.is_active ? 'success' : 'info'" effect="dark">
-              {{ classroom.is_active ? '啟用中' : '已停用' }}
-            </el-tag>
-            <el-button
-              v-if="canWriteStudents"
-              type="primary"
-              size="small"
-              :icon="Plus"
-              @click="handleStudentAdd"
-              class="banner-btn"
-            >新增學生</el-button>
+          <div class="header-actions">
             <el-button
               v-if="selectedStudentId"
-              size="small"
               class="banner-btn"
               @click="handleOpenFullPage"
             >開完整檔案</el-button>
             <el-button
-              size="small"
               class="banner-btn"
               @click="handleExportRoster"
             >匯出名冊</el-button>
-            <el-button size="small" class="banner-btn" @click="close">關閉</el-button>
+            <el-button
+              v-if="canWriteStudents"
+              type="primary"
+              :icon="Plus"
+              class="banner-btn"
+              @click="handleStudentAdd"
+            >新增學生</el-button>
           </div>
-        </div>
+          <el-button
+            class="header-close"
+            text
+            :icon="Close"
+            aria-label="關閉名冊"
+            @click="close"
+          />
+        </header>
 
-        <!-- 統計 pill row（兼作快速篩選；再點一次取消）-->
+        <!-- 統計 pill row（兼作快速篩選；再點一次取消）。平常中性色，只有 pressed 才上色 -->
         <div class="stat-pills-row" role="group" aria-label="學生統計與篩選">
           <button
             type="button"
             class="stat-pill stat-pill--primary"
-            :class="{ 'is-active': !studentGenderFilter && !showHealthOnly }"
+            :class="{ 'is-active': !studentGenderFilter && !showHealthOnly, 'is-zero': activeStudents.length === 0 }"
             :aria-pressed="!studentGenderFilter && !showHealthOnly"
             @click="clearFilters"
-          >
-            <div class="stat-pill-value">在學 {{ activeStudents.length }}</div>
-            <div class="stat-pill-label">全部在讀</div>
-          </button>
+          >在學 <span class="stat-pill-value">{{ activeStudents.length }}</span></button>
           <button
             type="button"
             class="stat-pill stat-pill--info"
-            :class="{ 'is-active': studentGenderFilter === '男' }"
+            :class="{ 'is-active': studentGenderFilter === '男', 'is-zero': studentStats.maleCount === 0 }"
             :aria-pressed="studentGenderFilter === '男'"
             @click="toggleGenderFilter('男')"
-          >
-            <div class="stat-pill-value">{{ studentStats.maleCount }}</div>
-            <div class="stat-pill-label">男生</div>
-          </button>
+          >男生 <span class="stat-pill-value">{{ studentStats.maleCount }}</span></button>
           <button
             type="button"
             class="stat-pill stat-pill--danger"
-            :class="{ 'is-active': studentGenderFilter === '女' }"
+            :class="{ 'is-active': studentGenderFilter === '女', 'is-zero': studentStats.femaleCount === 0 }"
             :aria-pressed="studentGenderFilter === '女'"
             @click="toggleGenderFilter('女')"
-          >
-            <div class="stat-pill-value">{{ studentStats.femaleCount }}</div>
-            <div class="stat-pill-label">女生</div>
-          </button>
+          >女生 <span class="stat-pill-value">{{ studentStats.femaleCount }}</span></button>
+          <button
+            type="button"
+            class="stat-pill stat-pill--unknown"
+            :class="{ 'is-active': studentGenderFilter === '未填', 'is-zero': studentStats.unknownGenderCount === 0 }"
+            :aria-pressed="studentGenderFilter === '未填'"
+            @click="toggleGenderFilter('未填')"
+          >性別未填 <span class="stat-pill-value">{{ studentStats.unknownGenderCount }}</span></button>
           <button
             type="button"
             class="stat-pill stat-pill--warning"
-            :class="{ 'is-active': showHealthOnly }"
+            :class="{ 'is-active': showHealthOnly, 'is-zero': studentStats.healthAlertCount === 0 }"
             :aria-pressed="showHealthOnly"
             @click="toggleHealthFilter"
-          >
-            <div class="stat-pill-value">{{ studentStats.healthAlertCount }}</div>
-            <div class="stat-pill-label">需注意</div>
-          </button>
+          >需注意 <span class="stat-pill-value">{{ studentStats.healthAlertCount }}</span></button>
         </div>
 
         <!-- 容量進度（在學/容量 + 保留座位）-->
@@ -376,11 +388,6 @@ const close = () => emit('update:visible', false)
               >
                 <template #prefix><el-icon><Search /></el-icon></template>
               </el-input>
-              <el-radio-group v-model="studentGenderFilter" size="small">
-                <el-radio-button value="">全部</el-radio-button>
-                <el-radio-button value="男">男</el-radio-button>
-                <el-radio-button value="女">女</el-radio-button>
-              </el-radio-group>
               <el-switch
                 v-if="inactiveStudents.length > 0"
                 v-model="showInactive"
@@ -449,17 +456,6 @@ const close = () => emit('update:visible', false)
                         @click="handleStudentEdit(s)"
                       />
                     </el-tooltip>
-                    <el-tooltip content="刪除" placement="top">
-                      <el-button
-                        :aria-label="`刪除 ${s.name} 的資料`"
-                        size="small"
-                        :icon="Delete"
-                        type="danger"
-                        plain
-                        circle
-                        @click="handleStudentDelete(s)"
-                      />
-                    </el-tooltip>
                   </div>
                 </li>
               </ul>
@@ -509,12 +505,24 @@ const close = () => emit('update:visible', false)
               @student-updated="emit('student-updated')"
               @lifecycle-changed="emit('student-updated')"
             />
-            <div v-else class="detail-empty">
-              <el-empty description="從左側選擇學生以查看詳情">
-                <template #image>
-                  <el-icon :size="64" color="#c0c4cc"><SwitchIcon /></el-icon>
-                </template>
-              </el-empty>
+            <!-- 未選學生：顯示班級摘要，不留白 -->
+            <div v-else class="detail-summary">
+              <p class="summary-hint">點選左側學生查看完整資料；以下為本班摘要。</p>
+
+              <section class="summary-section" aria-labelledby="summary-teachers-title">
+                <h3 id="summary-teachers-title" class="summary-title">師資</h3>
+                <dl class="teacher-list">
+                  <template v-for="row in teacherRows" :key="row.label">
+                    <dt>{{ row.label }}</dt>
+                    <dd :class="{ 'is-empty': !row.name }">{{ row.name || '未指派' }}</dd>
+                  </template>
+                </dl>
+              </section>
+
+              <div class="leave-note" role="note">
+                <el-icon class="leave-note-icon" :size="18" aria-hidden="true"><InfoFilled /></el-icon>
+                <span>學生要離開本班，請在學生資料中選擇「轉班」「休學」或「退學」。名冊上不提供刪除，所有離班都會留下異動紀錄。</span>
+              </div>
             </div>
           </section>
         </div>
@@ -534,7 +542,9 @@ const close = () => emit('update:visible', false)
 </template>
 
 <style scoped>
-.classroom-student-drawer :deep(.el-drawer__body) {
+/* class 落在 teleport 出去的 .el-drawer 面板上，拿不到 scoped 的 data-v 屬性，
+   所以 :deep() 寫法永遠不命中（EP 預設 20px body padding 一直在，標頭因此不滿版）；改用 :global。 */
+:global(.classroom-student-drawer .el-drawer__body) {
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -547,103 +557,165 @@ const close = () => emit('update:visible', false)
   min-height: 0;
 }
 
-.drawer-banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 22px;
-  background: var(--el-color-primary);
-  color: #fff;
-  gap: 12px;
-  flex-shrink: 0;
-}
-.banner-left { min-width: 0; }
-.banner-title { font-size: 1.3rem; font-weight: 700; line-height: 1.3; }
-.banner-subtitle { font-size: 0.85rem; opacity: 0.85; }
-.banner-right {
+/* ── 標頭（白底、下框線分隔）──────────────────────────────── */
+.drawer-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
   flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  background: var(--el-bg-color);
+  border-bottom: 1px solid var(--color-neutral-200);
+  flex-shrink: 0;
 }
-.banner-btn {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.5);
-  color: #fff;
+.header-main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
-.banner-btn:hover {
-  background: rgba(255, 255, 255, 0.28);
-  border-color: rgba(255, 255, 255, 0.7);
-  color: #fff;
+.header-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+.header-title {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.code-chip {
+  flex-shrink: 0;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--el-text-color-regular);
+  white-space: nowrap;
+}
+.status-label {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+}
+/* 狀態同時有圓點與文字，不單靠顏色 */
+.status-label--on { color: var(--color-success-darker); }
+.status-label--on .status-dot { background: var(--color-success); }
+.status-label--off { color: var(--el-text-color-secondary); }
+.status-label--off .status-dot { background: var(--el-text-color-placeholder); }
+.header-subtitle {
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+/* el-button 相鄰預設 margin-left: 12px，間距統一由 gap 負責 */
+.header-actions .banner-btn + .banner-btn { margin-left: 0; }
+.header-close {
+  flex-shrink: 0;
+  color: var(--el-text-color-regular);
 }
 
+/* ── 統計 pill（兼作快速篩選）──────────────────────────────── */
 .stat-pills-row {
   display: flex;
-  gap: 10px;
-  padding: 10px 22px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6) var(--space-2);
   flex-wrap: wrap;
-  border-bottom: 1px solid var(--el-border-color-lighter);
   flex-shrink: 0;
 }
 .stat-pill {
-  flex: 1;
-  min-width: 70px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  text-align: center;
-  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-neutral-200);
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-regular);
   font-family: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  white-space: nowrap;
   cursor: pointer;
-  transition: filter 0.15s, box-shadow 0.15s;
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
 }
 .stat-pill:hover {
-  filter: brightness(0.97);
+  background: var(--el-fill-color-light);
 }
 .stat-pill:focus-visible {
   outline: 2px solid var(--el-color-primary);
   outline-offset: 2px;
 }
+.stat-pill-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-text-color-primary);
+}
+/* 數值 0 時整顆降為次要文字 */
+.stat-pill.is-zero:not(.is-active),
+.stat-pill.is-zero:not(.is-active) .stat-pill-value {
+  color: var(--el-text-color-placeholder);
+}
+/* 只有 pressed 才上色；同時加粗＋內框，不單靠顏色表達選取 */
 .stat-pill.is-active {
-  box-shadow: inset 0 0 0 2px currentColor;
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+.stat-pill.is-active .stat-pill-value {
+  color: inherit;
+}
+.stat-pill--primary.is-active {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary-dark-2);
+}
+.stat-pill--info.is-active {
+  background: var(--color-info-soft);
+  color: var(--color-info-darker);
+}
+.stat-pill--danger.is-active {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-darker);
+}
+.stat-pill--unknown.is-active {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+}
+.stat-pill--warning.is-active {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-darker);
 }
 @media (prefers-reduced-motion: reduce) {
   .stat-pill {
     transition: none;
   }
 }
-.stat-pill--primary {
-  background: var(--el-color-primary-light-9);
-  border-color: var(--el-color-primary-light-5);
-  color: var(--el-color-primary);
-}
-.stat-pill--info {
-  background: var(--el-color-info-light-9);
-  border-color: var(--el-color-info-light-5);
-  color: var(--el-color-info);
-}
-.stat-pill--danger {
-  background: var(--el-color-danger-light-9);
-  border-color: var(--el-color-danger-light-5);
-  color: var(--el-color-danger);
-}
-.stat-pill--warning {
-  background: var(--el-color-warning-light-9);
-  border-color: var(--el-color-warning-light-5);
-  color: var(--el-color-warning);
-}
-.stat-pill-value {
-  font-size: 1.05rem;
-  font-weight: 700;
-  line-height: 1.1;
-}
-.stat-pill-label {
-  font-size: 0.72rem;
-  opacity: 0.8;
-}
 
 .capacity-bar {
-  padding: 0 22px 10px;
+  padding: 0 var(--space-6) var(--space-3);
   border-bottom: 1px solid var(--el-border-color-lighter);
   flex-shrink: 0;
 }
@@ -757,12 +829,49 @@ const close = () => emit('update:visible', false)
   background: var(--el-bg-color);
 }
 
-.detail-empty {
+.detail-summary {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 400px;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 560px;
+  padding: var(--space-2);
+}
+.summary-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+}
+.summary-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.teacher-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  row-gap: var(--space-2);
+  font-size: var(--text-base);
+}
+.teacher-list dt { color: var(--el-text-color-secondary); }
+.teacher-list dd { margin: 0; color: var(--el-text-color-primary); }
+.teacher-list dd.is-empty { color: var(--el-text-color-placeholder); }
+.leave-note {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--el-fill-color-light);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+}
+.leave-note-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--el-color-primary);
 }
 
 /* 準新生姓名可點進招生入學訪視明細（2026-09-06）。用 button 保留鍵盤可及性，
@@ -790,11 +899,39 @@ const close = () => emit('update:visible', false)
   .split-view {
     grid-template-columns: 1fr;
   }
-  .roster-pane { display: flex; }
+  .roster-pane { display: flex; border-right: 0; }
   .detail-pane { display: none; }
   .split-view.mobile-show-detail .roster-pane { display: none; }
   .split-view.mobile-show-detail .detail-pane { display: block; }
   .split-view.mobile-show-detail .mobile-back { display: block; }
-  .drawer-banner { padding: 14px 16px; }
+
+  /* 標頭：標題列（班名＋關閉鈕）一行，動作按鈕整列換到下一行 */
+  .drawer-header {
+    padding: var(--space-2) var(--space-2) var(--space-3) var(--space-4);
+    gap: var(--space-2);
+  }
+  .header-close {
+    order: 2;
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+  }
+  .header-actions {
+    order: 3;
+    flex: 1 0 100%;
+    padding-right: var(--space-2);
+  }
+  .header-actions .banner-btn {
+    flex: 1 1 0;
+    min-height: var(--touch-target-min);
+  }
+
+  .stat-pills-row { padding: var(--space-3) var(--space-4) var(--space-2); }
+  .stat-pill { min-height: var(--touch-target-min); align-items: center; }
+  .capacity-bar { padding: 0 var(--space-4) var(--space-3); }
+  .roster-filters :deep(.el-input__wrapper) { min-height: var(--touch-target-min); }
+  .roster-actions .el-button {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+  }
 }
 </style>
