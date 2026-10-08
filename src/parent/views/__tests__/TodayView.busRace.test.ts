@@ -48,13 +48,12 @@ const summaryErrorRef = ref<unknown>(null)
 const summaryPendingRef = ref(false)
 const refreshSummaryMock = vi.fn()
 vi.mock('@/composables/useCachedAsync', () => ({
-  useCachedAsync: () => ({
-    data: summaryDataRef,
-    error: summaryErrorRef,
-    pending: summaryPendingRef,
-    refresh: refreshSummaryMock,
-  }),
+  useCachedAsync: (key: string) => (key === 'parent/today/summary'
+    ? { data: summaryDataRef, error: summaryErrorRef, pending: summaryPendingRef, refresh: refreshSummaryMock }
+    : { data: ref(0), error: ref(null), pending: ref(false), refresh: vi.fn() }),
 }))
+vi.mock('@/parent/api/signDocuments', () => ({ listMySignRequests: vi.fn() }))
+vi.mock('@/parent/api/pickup', () => ({ listPickupAuthorizations: vi.fn() }))
 
 // ── 其餘 composable / API：靜態 stub（不影響娃娃車競態邏輯） ──────────────────
 vi.mock('@/parent/api/contactBook', () => ({
@@ -98,9 +97,11 @@ beforeEach(() => {
   }
 })
 
-type Vm = { busTileValue: string }
+// 2026-10-08 首頁改版：娃娃車從 Bento 小卡改列在「進行中」，讀 liveItems 的 bus 項說明
+type Vm = { liveItems: { key: string; detail: string }[] }
+const busDetail = (vm: Vm) => vm.liveItems.find((i) => i.key === 'bus')?.detail
 
-describe('TodayView — 娃娃車小卡請求競態', () => {
+describe('TodayView — 娃娃車（進行中）請求競態', () => {
   it('重疊觸發時，較舊（mount）回應晚到不得覆寫較新（下拉刷新）回應', async () => {
     const TodayView = (await import('@/parent/views/TodayView.vue')).default
     const wrapper = shallowMount(TodayView)
@@ -124,7 +125,7 @@ describe('TodayView — 娃娃車小卡請求競態', () => {
     await flushPromises()
 
     const vm = wrapper.vm as unknown as Vm
-    expect(vm.busTileValue).toBe('還有 3 站')
+    expect(busDetail(vm)).toBe('班次進行中，還有 3 站')
 
     // 較舊（mount）的請求才慢慢回來：舊資料 7 站，不得覆寫上面的 3 站
     resolveBus(0, {
@@ -133,12 +134,12 @@ describe('TodayView — 娃娃車小卡請求競態', () => {
     await flushPromises()
     await pullPromise.catch(() => undefined)
 
-    expect(vm.busTileValue).toBe('還有 3 站')
+    expect(busDetail(vm)).toBe('班次進行中，還有 3 站')
 
     wrapper.unmount()
   })
 
-  it('正常情況：娃娃車小卡正確載入（行為不變）', async () => {
+  it('正常情況：娃娃車正確載入（行為不變）', async () => {
     const TodayView = (await import('@/parent/views/TodayView.vue')).default
     const wrapper = shallowMount(TodayView)
     await flushPromises()
@@ -149,7 +150,7 @@ describe('TodayView — 娃娃車小卡請求競態', () => {
     await flushPromises()
 
     const vm = wrapper.vm as unknown as Vm
-    expect(vm.busTileValue).toBe('還有 2 站')
+    expect(busDetail(vm)).toBe('班次進行中，還有 2 站')
 
     wrapper.unmount()
   })

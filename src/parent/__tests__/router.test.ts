@@ -28,7 +28,7 @@ describe('parent router IA (2026-05-22 restructure)', () => {
       expect(r).toBeDefined()
       expect(r?.name).toBe('parent-admin')
       expect(r?.meta?.tab).toBe('admin')
-      expect(r?.meta?.title).toBe('事務')
+      expect(r?.meta?.title).toBe('待辦')
     })
   })
 

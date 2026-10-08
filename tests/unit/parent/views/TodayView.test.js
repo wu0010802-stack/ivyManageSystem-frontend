@@ -1,54 +1,61 @@
+/**
+ * 家長首頁（2026-10-08 改版，方向 A＋C）。
+ *
+ * 結構：問候列 → 每位孩子一張狀態卡（多寶並列）→ 進行中 → 待你處理 → 常用 →
+ * 今日動態。ChildTodayCard / PendingInbox 用真元件掛載（它們就是首頁的主角），
+ * 時間軸、常用功能列、推播 CTA 等各有專屬測試，這裡 stub 掉。
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { ref } from 'vue'
 
-// useCachedAsync 的 stub：直接給最新 data，pending=false、error=null
+// useCachedAsync 依 key 分流：summary 給測試控制的 summaryRef，兩支輔助計數各自一個 ref
 const summaryRef = ref(null)
+const enrollDocsRef = ref(0)
+const pickupActiveRef = ref(0)
 vi.mock('@/composables/useCachedAsync', () => ({
-  useCachedAsync: (_key, _fetcher, _opts) => ({
-    data: summaryRef,
-    error: ref(null),
-    pending: ref(false),
-    refresh: vi.fn(),
-  }),
+  useCachedAsync: (key) => {
+    if (key === 'parent/pending/enroll-docs') {
+      return { data: enrollDocsRef, error: ref(null), pending: ref(false), refresh: vi.fn() }
+    }
+    if (key === 'parent/pending/pickup-active') {
+      return { data: pickupActiveRef, error: ref(null), pending: ref(false), refresh: vi.fn() }
+    }
+    return { data: summaryRef, error: ref(null), pending: ref(false), refresh: vi.fn() }
+  },
 }))
 
 const todayStatusRef = ref(null)
-const refreshTodayMock = vi.fn()
 vi.mock('@/parent/composables/useTodayStatusCache', () => ({
-  useTodayStatusCache: () => ({
-    status: todayStatusRef,
-    refresh: refreshTodayMock,
-    markStale: vi.fn(),
-  }),
+  useTodayStatusCache: () => ({ status: todayStatusRef, refresh: vi.fn(), markStale: vi.fn() }),
 }))
 
 vi.mock('@/parent/composables/useTodayTimeline', () => ({
   useTodayTimeline: () => ({ buckets: ref([]) }),
 }))
 
-vi.mock('@/parent/api/profile', () => ({
-  getHomeSummary: vi.fn().mockResolvedValue({ data: null }),
+const selectionMock = vi.hoisted(() => ({ setSelected: vi.fn(), ensureSelected: vi.fn() }))
+vi.mock('@/parent/composables/useChildSelection', () => ({
+  useChildSelection: () => selectionMock,
 }))
 
-vi.mock('@/parent/stores/parentAuth', () => ({
-  useParentAuthStore: () => ({ setUser: vi.fn() }),
+vi.mock('@/parent/api/profile', () => ({ getHomeSummary: vi.fn() }))
+vi.mock('@/parent/api/signDocuments', () => ({ listMySignRequests: vi.fn() }))
+vi.mock('@/parent/api/pickup', () => ({ listPickupAuthorizations: vi.fn() }))
+vi.mock('@/parent/api/childPhotos', () => ({
+  fetchChildPhotos: vi.fn().mockResolvedValue({ data: { items: [] } }),
 }))
 
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}))
+const pushMock = vi.fn()
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: pushMock }) }))
 
-// 連帶在 P1-16 加 immediate watch 後，每次 mount 都會打 contact-book API；
-// 既存測試對「孩子今日狀態 hero」邏輯為主，這裡 mock 回 null entry 不影響該斷言。
 const contactBookMock = vi.hoisted(() => ({
   getTodayContactBook: vi.fn().mockResolvedValue({ data: { entry: null } }),
 }))
 vi.mock('@/parent/api/contactBook', () => contactBookMock)
 
-// 娃娃車入口卡：首頁 mount 時抓一次今日快照。預設回無班次（不渲染卡片），
-// 個別測試以 busTodayMock.getBusToday.mockResolvedValueOnce 覆寫。
+// 娃娃車：預設無班次；個別測試以 mockResolvedValueOnce 覆寫
 const busTodayMock = vi.hoisted(() => ({
   getBusToday: vi.fn().mockResolvedValue({
     data: { trip: null, position: null, stale: false, school: null, children: [] },
@@ -56,40 +63,7 @@ const busTodayMock = vi.hoisted(() => ({
 }))
 vi.mock('@/parent/api/bus', () => busTodayMock)
 
-// 常用功能列（quickact01）：QuickActionsBar 掛載時自己打 /parent/quick-actions，
-// 這裡不是測試重點，mock 回預設三格避免真的打網路。
-vi.mock('@/parent/api/quickActions', () => ({
-  getQuickActions: vi.fn().mockResolvedValue({
-    data: { slots: ['pickup', 'proxy', 'announce'], is_default: true },
-  }),
-  updateQuickActions: vi.fn().mockResolvedValue({ data: {} }),
-}))
-
-// HomeHeroHeader：一樣掛載時自己打 /parent/photos，非本檔測試重點。
-vi.mock('@/parent/api/childPhotos', () => ({
-  fetchChildPhotos: vi.fn().mockResolvedValue({ data: { items: [] } }),
-}))
-
 import TodayView from '@/parent/views/TodayView.vue'
-
-/**
- * 出席狀態 / 孩子姓名的斷言來源。
- *
- * 2026-08-10 首頁重整後 hero 一度改由 ContactBookDayCard 三態承載；
- * 2026-08-16 首頁再改版（quickact01）後，孩子姓名/日期/班級搬到
- * HomeHeroHeader（.hh-name / .hh-meta），出席狀態搬到 QuickActionsBar
- * 聯絡簿大按鈕上的 pill（.qa-cb-pill）——ContactBookDayCard 那張獨立
- * 「今日聯絡簿」hero 卡本身因與這兩者重複，已整塊移除（見 TodayView.vue）。
- */
-
-/** 讀出席狀態（等同舊 .status-pill-stub 的文字） */
-function statusOf(w) {
-  return w.find('.qa-cb-pill').text()
-}
-/** 讀孩子姓名（等同舊 .today-hero 的文字） */
-function heroNameOf(w) {
-  return w.find('.hh-name').text()
-}
 
 function mountWith(summary, today) {
   summaryRef.value = summary
@@ -102,403 +76,246 @@ function mountWith(summary, today) {
         MobileErrorRetry: true,
         TodayTimeline: true,
         PushCta: true,
-        ChildrenStrip: {
-          props: ['children', 'selectedId'],
-          emits: ['select', 'navigate'],
-          template: '<div class="children-strip-stub" :data-count="children.length" :data-selected="selectedId"></div>',
-        },
-        ChildContextHeader: { props: ['variant'], template: '<div class="cch-stub" :data-variant="variant"></div>' },
-        RouterLink: { template: '<a :href="to"><slot /></a>', props: ['to'] },
-        StatTile: {
-          props: ['label', 'value', 'sub', 'icon', 'tone', 'to'],
-          template: '<div class="stat-tile-stub" :data-label="label" :data-value="value" :data-tone="tone" :data-to="to"></div>',
-        },
-        SectionHeader: {
-          props: ['title'],
-          template: '<div class="section-header-stub" :data-title="title"><slot name="action" /></div>',
-        },
-        PendingSignBanner: { props: ['count'], template: '<div class="pending-sign-stub" :data-count="count"></div>' },
-        PendingSurveyBanner: true,
-        M3Card: { template: '<div class="m3-card-stub"><slot /></div>' },
+        QuickActionsBar: { template: '<div class="qa-stub"></div>' },
+        HomeHeroHeader: { template: '<div class="hh-stub"></div>' },
+        RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
+        CrownIcon: true,
       },
     },
   })
 }
 
-describe('TodayView hero - 以孩子今日狀態為主角', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    summaryRef.value = null
-    todayStatusRef.value = null
-    // 鎖定為平日（週四）避免「今天放假」分支干擾單一孩子相關測試
-    vi.setSystemTime(new Date('2026-05-14T09:30:00+08:00'))
-  })
+const ONE_CHILD = (extra = {}) => ({
+  me: { name: '王太太', can_push: true },
+  children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }],
+  summary: {},
+  ...extra,
+})
+const today = (child) => ({ children: [{ student_id: 1, name: '小明', ...child }] })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+const card = (w, sid = 1) => w.find(`[data-child-card="${sid}"]`)
+const statusOf = (w, sid = 1) => card(w, sid).find('.ctc-status-label').text()
 
-  it('單一孩子在園：頁面帶孩子姓名、班級與出席狀態', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班', attendance: { status: '已入園' } }] },
-    )
+beforeEach(() => {
+  setActivePinia(createPinia())
+  summaryRef.value = null
+  todayStatusRef.value = null
+  enrollDocsRef.value = 0
+  pickupActiveRef.value = 0
+  pushMock.mockClear()
+  selectionMock.setSelected.mockClear()
+  selectionMock.ensureSelected.mockClear()
+  contactBookMock.getTodayContactBook.mockReset()
+  contactBookMock.getTodayContactBook.mockResolvedValue({ data: { entry: null } })
+  busTodayMock.getBusToday.mockClear()
+  // 鎖定平日（週四）避免「今天放假」分支干擾
+  vi.setSystemTime(new Date('2026-05-14T09:30:00+08:00'))
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+describe('TodayView 孩子狀態卡', () => {
+  it('單一孩子在園：卡片帶姓名、班級與「在園中」', async () => {
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
-
-    expect(heroNameOf(w)).toBe('小明')
-    expect(w.find('.hh-meta').text()).toContain('太陽班')
-    expect(statusOf(w)).toBe('已入園')
-    expect(w.find('.qa-cb-pill').classes()).toContain('tone-ok')
-  })
-
-  it('單一孩子在園但 status 為「遲到」：出席狀態 pill 顯示「遲到」（保留 backend 細節）', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班', attendance: { status: '遲到' } }] },
-    )
-    await flushPromises()
-    expect(heroNameOf(w)).toBe('小明')
-    expect(statusOf(w)).toBe('遲到')
-  })
-
-  it('單一孩子在園但 attendance 無 status 欄位：fallback 為「在園中」', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', attendance: {} }] },
-    )
-    await flushPromises()
-    expect(heroNameOf(w)).toBe('小明')
+    expect(card(w).find('.ctc-name').text()).toBe('小明')
+    expect(card(w).find('.ctc-class').text()).toContain('太陽班')
     expect(statusOf(w)).toBe('在園中')
   })
 
-  it('單一孩子請假：出席狀態 pill 顯示「請假」且聯絡簿副標套 offday 文案', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班', leave: { type: '事假' } }] },
-    )
+  it('後端出席狀態為「遲到」：照實顯示在說明', async () => {
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '遲到' } }))
     await flushPromises()
-    expect(heroNameOf(w)).toBe('小明')
+    expect(card(w).find('.ctc-status-detail').text()).toBe('今天遲到')
+  })
+
+  it('請假：大字「請假」，聯絡簿副標為請假無紀錄', async () => {
+    const w = mountWith(ONE_CHILD(), today({ leave: { type: '病假' } }))
+    await flushPromises()
     expect(statusOf(w)).toBe('請假')
-    expect(w.find('.qa-cb-pill').classes()).toContain('tone-info')
-    // 請假走 offday 態，聯絡簿副標有專屬文案，不套用「今天放假」的字樣
-    expect(w.find('.qa-cb-sub').text()).toBe('今天請假，暫無紀錄')
+    expect(card(w).find('.ctc-cb-sub').text()).toBe('今天請假，暫無紀錄')
+    expect(card(w).find('.ctc-steps').exists()).toBe(false)
   })
 
-  it('單一孩子尚未到校：出席狀態 pill 顯示「尚未到校」，聯絡簿副標走 awaiting 文案', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }] },
-    )
+  it('尚未到校：聯絡簿副標為老師還沒寫', async () => {
+    const w = mountWith(ONE_CHILD(), today({}))
     await flushPromises()
-    expect(heroNameOf(w)).toBe('小明')
     expect(statusOf(w)).toBe('尚未到校')
-    expect(w.find('.qa-cb-sub').text()).toBe('老師還沒有寫今天的紀錄')
+    expect(card(w).find('.ctc-cb-sub').text()).toBe('老師還沒有寫今天的紀錄')
   })
 
-  it('單一孩子已離園：出席狀態 pill 顯示「已離園」', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' }, dismissal: { status: 'completed' } }] },
-    )
+  it('已離園', async () => {
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' }, dismissal: { status: 'completed' } }))
     await flushPromises()
-    expect(heroNameOf(w)).toBe('小明')
     expect(statusOf(w)).toBe('已離園')
-    expect(w.find('.qa-cb-pill').classes()).toContain('tone-ok')
   })
 
-  it('多孩子：hero 渲染 ChildContextHeader（hero variant）+ ChildrenStrip 接力，不再顯示「今天 N 位」聚合文案', async () => {
+  it('週末沒有紀錄：今天放假，聯絡簿副標為放假無紀錄', async () => {
+    vi.setSystemTime(new Date('2026-05-16T10:00:00+08:00')) // 週六
+    const w = mountWith(ONE_CHILD(), { children: [] })
+    await flushPromises()
+    expect(statusOf(w)).toBe('今天放假')
+    expect(card(w).find('.ctc-cb-sub').text()).toBe('今天放假，暫無紀錄')
+  })
+
+  it('多寶家庭：每位孩子各一張卡並列，不再有切換器或底部孩子條', async () => {
+    // 頭像字取名字最後一字（同姓兄弟姊妹才分得出來），見下方斷言
     const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }, { student_id: 2, name: '小華' }], summary: {} },
-      { children: [
-        { student_id: 1, name: '小明', attendance: { status: '已入園' } },
-        { student_id: 2, name: '小華', leave: { type: '病假' } },
-      ] },
+      {
+        me: { name: '王太太' },
+        children: [
+          { student_id: 1, name: '小明', classroom_name: '太陽班' },
+          { student_id: 2, name: '小華', classroom_name: '月亮班' },
+        ],
+        summary: {},
+      },
+      {
+        children: [
+          { student_id: 1, name: '小明', attendance: { status: '已入園' } },
+          { student_id: 2, name: '小華', leave: { type: '事假' } },
+        ],
+      },
     )
     await flushPromises()
-    // 新行為：hero 區渲染 ChildContextHeader stub variant=hero
-    expect(w.find('.cch-stub[data-variant="hero"]').exists()).toBe(true)
-    // 不再有「今天 N 位」聚合文案
-    expect(w.text()).not.toContain('今天 2 位小朋友')
-    // ChildrenStrip 接力顯示
-    expect(w.find('.children-strip-stub').exists()).toBe(true)
-    expect(w.find('.children-strip-stub').attributes('data-count')).toBe('2')
+    expect(statusOf(w, 1)).toBe('在園中')
+    expect(statusOf(w, 2)).toBe('請假')
+    expect(card(w, 1).find('.ctc-avatar-initial').text()).toBe('明')
+    expect(card(w, 2).find('.ctc-avatar-initial').text()).toBe('華')
+    expect(w.find('.child-context-header').exists()).toBe(false)
+    expect(w.find('.children-section').exists()).toBe(false)
+    // 每位孩子各抓自己的今日聯絡簿
+    expect(contactBookMock.getTodayContactBook).toHaveBeenCalledWith(1)
+    expect(contactBookMock.getTodayContactBook).toHaveBeenCalledWith(2)
   })
 
-  it('尚未綁定子女：走 EmptyState 空狀態，不渲染孩子 hero 區', async () => {
+  it('點卡片頭：設為選定孩子並進孩子檔案', async () => {
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
+    await flushPromises()
+    await card(w).find('.ctc-head').trigger('click')
+    expect(selectionMock.setSelected).toHaveBeenCalledWith(1)
+    expect(pushMock).toHaveBeenCalledWith('/children/1')
+  })
+
+  it('今天有用藥委託：卡片顯示用藥提示', async () => {
     const w = mountWith(
-      { me: { name: '王太太' }, children: [], summary: {} },
-      { children: [] },
+      ONE_CHILD(),
+      today({ attendance: { status: '已入園' }, medication: { has_order: true, order_count: 2 } }),
     )
     await flushPromises()
-    expect(w.text()).toContain('尚未綁定子女')
-    expect(w.text()).toContain('加綁')
-    expect(w.find('.hh-name').exists()).toBe(false)
-    expect(w.find('.qa-cb-bar').exists()).toBe(false)
+    expect(card(w).find('[data-child-medication]').text()).toContain('今日用藥委託 2 次')
   })
 
-  it('有綁定子女但今日狀態尚未就緒：不誤顯示「尚未綁定子女」（QA P2-15）', async () => {
-    const w = mountWith(
-      // home-summary 已確認有綁定子女，但 today-status 為空（放假/尚未載入）
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [] },
-    )
-    await flushPromises()
-    // 絕不可據 today-status 空而誤報「尚未綁定子女」。
-    // 重整後這種情況仍渲染孩子 hero 區（awaiting/offday 態），而不是隱藏 hero。
-    expect(w.text()).not.toContain('尚未綁定子女')
-    expect(w.find('.hh-name').exists()).toBe(true)
-    expect(heroNameOf(w)).toBe('小明')
-  })
-
-  // 2026-05-16（66093e97）拿掉的是「晚安, 王太太」樣板 hero——問候語當時是首頁
-  // 主視覺、搶走孩子狀態的主角地位。2026-08-14 P3（M3 Expressive 改版 spec §6/§9）
-  // 依 mockup 加回問候語，但份量降到最低：頂端一小行文字+插畫、不含家長稱謂。
-  // 2026-08-16 首頁改版（quickact01）把問候語＋孩子照片／姓名合併成
-  // HomeHeroHeader hero，份量比 P3 更重——這是使用者這次明確要的新方向，
-  // 取代 2026-08-14 那次「份量降到最低」的裁定；家長稱謂本身仍不出現，是唯一
-  // 延續的部分。問候語/日期細節斷言已搬到 HomeHeroHeader 自己的測試
-  // （src/parent/components/home/__tests__/HomeHeroHeader.test.ts），
-  // 這裡只留「不含家長稱謂」這條全頁級守則。
   it('頁面不含家長稱謂（王太太不應出現在首頁任何角落）', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
     expect(w.text()).not.toContain('王太太')
   })
-
-  it('不再顯示 IA migration banner（舊版 class 不應出現）', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    // 舊斷言曾含 `w.text()).not.toContain('公告')`：2026-08-16 常用功能列
-    // （quickact01）讓「公告」成為合法的模組按鈕標籤，此頁本來就該顯示這兩個
-    // 字，不再是回歸信號；改回單純守 IA migration banner 本身的 class。
-    expect(w.html()).not.toContain('ia-banner')
-  })
-
-  it('週末單一孩子無 attendance：顯示「今天放假」而非「尚未到校」', async () => {
-    vi.setSystemTime(new Date('2026-05-16T10:00:00+08:00')) // 星期六
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }] },
-    )
-    await flushPromises()
-    expect(heroNameOf(w)).toBe('小明')
-    expect(statusOf(w)).toBe('今天放假')
-    expect(w.find('.qa-cb-sub').text()).toBe('今天放假，暫無紀錄')
-  })
-
-  it('週日單一孩子無 attendance：顯示「今天放假」，用預設休息文案', async () => {
-    vi.setSystemTime(new Date('2026-05-17T10:00:00+08:00')) // 星期日
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明' }] },
-    )
-    await flushPromises()
-    expect(heroNameOf(w)).toBe('小明')
-    expect(statusOf(w)).toBe('今天放假')
-    // 放假（非請假）套一般休息文案，不誤用請假專屬那句
-    expect(w.find('.qa-cb-sub').text()).toBe('今天放假，暫無紀錄')
-  })
-
-  // 2026-08-16 首頁改版（quickact01）：日期行搬進 HomeHeroHeader 的 .hh-meta，
-  // 格式也從「N 月 N 日　星期X」改成「M/D · 星期X」（見該元件註解），
-  // 但「星期」用中文全形字、不用英文縮寫的精神不變，這條斷言照舊保留。
-  it('HomeHeroHeader 日期行顯示「M/D · 星期X」格式（非 weekday-uppercase 樣板）', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const dateText = w.find('.hh-meta').text()
-    expect(dateText).toMatch(/\d+\/\d+ · 星期[日一二三四五六]/)
-    // 不再是 letterspace uppercase eyebrow
-    expect(dateText).not.toMatch(/SUNDAY|MONDAY|MON|TUE|WED|星期\s*[A-Z]/)
-  })
 })
 
-describe('TodayView 聯絡簿狀態 — cache hit 也要正確反映（P1-16）', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    summaryRef.value = null
-    todayStatusRef.value = null
-    vi.setSystemTime(new Date('2026-05-14T09:30:00+08:00'))
-    contactBookMock.getTodayContactBook.mockReset()
+describe('TodayView 今日聯絡簿入口', () => {
+  it('有今天的紀錄：連到該筆詳情；未讀時標「未讀」', async () => {
     contactBookMock.getTodayContactBook.mockResolvedValue({
-      data: { entry: { id: 77, mood: 'happy', teacher_note: '今天表現很棒' } },
+      data: { entry: { id: 77, isRead: false, readAt: null } },
     })
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  /**
-   * 真正能重現 P1-16 的場景：
-   *   useCachedAsync 命中 cache → children 立刻有值
-   *   selectedStudentId 也已從 sessionStorage 還原成同一個 id（多孩家庭跨頁切換）
-   *
-   *   原本 watch(() => children.value?.length) 不會 fire（length 未變）
-   *   watch(selectedStudentId) 也不會 fire（id 未變）
-   *   → loadContactBook 永遠沒被呼叫，contactBookEntry 永遠是 null
-   *
-   * 修補後（onMounted 直接 loadContactBook）：API 仍會被呼叫，
-   * QuickActionsBar 聯絡簿大按鈕的連結會反映拿到的 entry。
-   */
-  it('cache-hit 且 selectedStudentId 與 children 同步：仍 fire contact-book fetch 並反映到聯絡簿大按鈕', async () => {
-    // 模擬上一頁已 ensureSelected 過 selectedId=1（同 module-level ref 跨測殘留）
-    // 為穩健，使用 mock 取代 useChildSelection 避免狀態漏到此 describe 影響邏輯
-    const { useChildSelection: real } = await import('@/parent/composables/useChildSelection')
-    real() // 觸發初始化
-    // 確保起始 selectedId 為 1（模擬已選好小明）
-    vi.spyOn(JSON, 'parse') // 占位，避免 lint
-    const mod = await import('@/parent/composables/useChildSelection')
-    // 直接讀導出的 selectedId 來設值
-    const { selectedId } = mod.useChildSelection()
-    selectedId.value = 1
-
-    summaryRef.value = {
-      me: { name: '王太太' },
-      children: [{ student_id: 1, name: '小明' }],
-      summary: {},
-    }
-    todayStatusRef.value = {
-      children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }],
-    }
-
-    const w = mountWith(summaryRef.value, todayStatusRef.value)
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
+    const cb = card(w).find('[data-child-contact-book]')
+    expect(cb.attributes('href')).toBe('/contact-book/77')
+    expect(cb.find('.ctc-new').exists()).toBe(true)
+    expect(cb.find('.ctc-cb-sub').text()).toBe('老師寫好了，點開看看')
+  })
 
-    // 必須有打 contact-book API（修補前 cache-hit 不會 fire watch）
+  it('已讀：副標改為查看完整紀錄、無未讀標記', async () => {
+    contactBookMock.getTodayContactBook.mockResolvedValue({
+      data: { entry: { id: 77, isRead: true, readAt: '2026-05-14T16:00:00' } },
+    })
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
+    await flushPromises()
+    const cb = card(w).find('[data-child-contact-book]')
+    expect(cb.find('.ctc-new').exists()).toBe(false)
+    expect(cb.find('.ctc-cb-sub').text()).toBe('查看今天的完整紀錄')
+  })
+
+  it('cache-hit（子女清單一開始就有值）也會抓聯絡簿（P1-16）', async () => {
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
+    await flushPromises()
+    expect(contactBookMock.getTodayContactBook).toHaveBeenCalledTimes(1)
     expect(contactBookMock.getTodayContactBook).toHaveBeenCalledWith(1)
-    // 聯絡簿大按鈕必須連到拿到的 entry（id=77），而非退回列表頁
-    const cbBar = w.find('.qa-cb-bar')
-    expect(cbBar.exists()).toBe(true)
-    expect(cbBar.attributes('href')).toBe('/contact-book/77')
-    expect(w.find('.qa-cb-sub').text()).toBe('查看今天的完整紀錄')
+    expect(w.find('[data-child-contact-book]').attributes('href')).toBe('/contact-book')
+  })
+
+  it('聯絡簿 API 失敗：退回列表頁，不擋卡片其他內容', async () => {
+    contactBookMock.getTodayContactBook.mockRejectedValue(new Error('boom'))
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
+    await flushPromises()
+    expect(statusOf(w)).toBe('在園中')
+    expect(w.find('[data-child-contact-book]').attributes('href')).toBe('/contact-book')
   })
 })
 
-describe('TodayView Bento 儀表板 — StatTile 依 summary 條件渲染', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    summaryRef.value = null
-    todayStatusRef.value = null
-    vi.setSystemTime(new Date('2026-05-14T09:30:00+08:00'))
-    contactBookMock.getTodayContactBook.mockReset()
-    contactBookMock.getTodayContactBook.mockResolvedValue({ data: { entry: null } })
-  })
-  afterEach(() => {
-    vi.useRealTimers()
+describe('TodayView 尚未綁定子女', () => {
+  it('home-summary 子女清單為空：顯示加綁入口，不渲染狀態卡與待辦', async () => {
+    const w = mountWith({ me: { name: '王太太' }, children: [], summary: {} }, { children: [] })
+    await flushPromises()
+    expect(w.text()).toContain('尚未綁定子女')
+    expect(w.find('a[href="/bind-additional"]').exists()).toBe(true)
+    // 舊文案指向已不存在的「右上角個人選單」
+    expect(w.text()).not.toContain('右上角')
+    expect(w.findAll('[data-child-card]').length).toBe(0)
+    expect(w.text()).not.toContain('待你處理')
   })
 
-  it('mount 後不拋例外、孩子 hero 區存在（render smoke）', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
+  it('有綁定子女但今日狀態尚未就緒：不誤顯示「尚未綁定子女」（QA P2-15）', async () => {
+    const w = mountWith(ONE_CHILD(), null)
     await flushPromises()
-    expect(w.find('.hh-name').exists()).toBe(true)
-  })
-
-  it('summary.fees.outstanding_count > 0：渲染待繳學費 StatTile（tone=amber, to=/fees）', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { fees: { outstanding_count: 2, outstanding: 8000, overdue: 0 } },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const feeTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')
-    expect(feeTile).toBeTruthy()
-    expect(feeTile.attributes('data-tone')).toBe('amber')
-    expect(feeTile.attributes('data-to')).toBe('/fees')
-    expect(feeTile.attributes('data-value')).toBe('2 筆')
-  })
-
-  it('pending_event_acks > 0：渲染待簽文件 StatTile（tone=coral, to=/events）', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { pending_event_acks: 3 },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const signTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待簽文件')
-    expect(signTile).toBeTruthy()
-    expect(signTile.attributes('data-tone')).toBe('coral')
-    expect(signTile.attributes('data-to')).toBe('/events')
-    expect(signTile.attributes('data-value')).toBe('3 份')
-  })
-
-  it('summary 無學費欄位：不渲染待繳學費 StatTile', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: {},
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const feeTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')
-    expect(feeTile).toBeFalsy()
-  })
-
-  it('summary.fees.outstanding_count = 0：不渲染待繳學費 StatTile', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { fees: { outstanding_count: 0, outstanding: 0, overdue: 0 } },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const feeTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')
-    expect(feeTile).toBeFalsy()
-  })
-
-  it('pending_event_acks = 0：不渲染待簽文件 StatTile', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { pending_event_acks: 0 },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const signTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待簽文件')
-    expect(signTile).toBeFalsy()
+    expect(w.text()).not.toContain('尚未綁定子女')
+    expect(card(w).exists()).toBe(true)
   })
 })
 
-describe('TodayView 娃娃車入口卡', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    summaryRef.value = null
-    todayStatusRef.value = null
-    vi.setSystemTime(new Date('2026-05-14T09:30:00+08:00'))
-    busTodayMock.getBusToday.mockClear()
+describe('TodayView 待你處理', () => {
+  it('summary 有待辦：列在「待你處理」，不再有頂部 banner 或 Bento 小卡', async () => {
+    const w = mountWith(
+      ONE_CHILD({ summary: { fees: { outstanding_count: 1, outstanding: 3000, overdue: 0 }, pending_event_acks: 1 } }),
+      today({ attendance: { status: '已入園' } }),
+    )
+    await flushPromises()
+    const keys = w.findAll('[data-pending]').map((n) => n.attributes('data-pending'))
+    expect(keys).toEqual(['acks', 'fees'])
+    expect(w.find('.pending-sign-banner').exists()).toBe(false)
+    expect(w.find('.today-bento').exists()).toBe(false)
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
+  it('超過 3 項：只露前 3 項，並給「查看全部」導去待辦 tab', async () => {
+    enrollDocsRef.value = 1
+    const w = mountWith(
+      ONE_CHILD({
+        summary: {
+          fees: { outstanding_count: 1, outstanding: 3000, overdue: 3000 },
+          pending_event_acks: 1,
+          pending_survey_count: 1,
+          unread_announcements: 2,
+        },
+      }),
+      today({ attendance: { status: '已入園' } }),
+    )
+    await flushPromises()
+    expect(w.findAll('[data-pending]').map((n) => n.attributes('data-pending'))).toEqual(['fees', 'acks', 'enrollDocs'])
+    const more = w.find('a.pi-more')
+    expect(more.attributes('href')).toBe('/admin')
+    expect(more.text()).toBe('查看全部')
   })
 
-  const HOME = [
-    { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-    { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-  ]
+  it('沒有待辦：顯示安心文案', async () => {
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
+    await flushPromises()
+    expect(w.text()).toContain('目前沒有要處理的事')
+  })
+})
 
+describe('TodayView 進行中：娃娃車與臨時接送', () => {
   const inProgressBus = () => ({
     data: {
       trip: { id: 7, direction: 'morning', status: 'in_progress', auto_closed: false },
@@ -512,74 +329,57 @@ describe('TodayView 娃娃車入口卡', () => {
     },
   })
 
-  it('班次進行中：顯示娃娃車 StatTile 並連到 /bus', async () => {
+  it('班次進行中：列出娃娃車並連到 /bus', async () => {
     busTodayMock.getBusToday.mockResolvedValueOnce(inProgressBus())
-    const w = mountWith(...HOME)
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
-    const tile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')
-    expect(tile).toBeTruthy()
-    expect(tile.attributes('data-value')).toBe('還有 2 站')
-    expect(tile.attributes('data-to')).toBe('/bus')
+    const bus = w.find('[data-pending="bus"]')
+    expect(bus.text()).toContain('還有 2 站')
+    expect(bus.attributes('href')).toBe('/bus')
   })
 
-  it('已上車：顯示進行中而非站數', async () => {
+  it('已上車：顯示班次進行中而非站數', async () => {
     const resp = inProgressBus()
     resp.data.children[0].stop_status = 'departed'
-    resp.data.children[0].stops_ahead = 0
     busTodayMock.getBusToday.mockResolvedValueOnce(resp)
-    const w = mountWith(...HOME)
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
-    const tile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')
-    expect(tile.attributes('data-value')).toBe('進行中')
+    expect(w.find('[data-pending="bus"]').text()).toContain('班次進行中')
+    expect(w.find('[data-pending="bus"]').text()).not.toContain('站')
   })
 
-  it('班次未進行中：不渲染娃娃車卡', async () => {
+  it('班次未進行中、也沒有接送授權：不渲染「進行中」', async () => {
     const resp = inProgressBus()
     resp.data.trip.status = 'completed'
     busTodayMock.getBusToday.mockResolvedValueOnce(resp)
-    const w = mountWith(...HOME)
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
-    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
+    expect(w.find('[data-pending="bus"]').exists()).toBe(false)
+    expect(w.find('section[aria-label="進行中"]').exists()).toBe(false)
   })
 
-  it('有待繳學費但今天沒有娃娃車班次：bento 出現但不得有空白娃娃車卡', async () => {
-    // 外層 .today-bento 的 v-if 會因為 feesInfo 有值而成立，內層 StatTile 必須自己擋住，
-    // 否則會渲染出 value 空白卻連到 /bus 的卡片。
-    busTodayMock.getBusToday.mockResolvedValueOnce({
-      data: { trip: null, position: null, stale: false, school: null, children: [] },
-    })
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { fees: { outstanding_count: 2, outstanding: 3000, overdue: 0 } },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
+  it('有進行中的臨時接送授權：列出並連到 /pickup', async () => {
+    pickupActiveRef.value = 1
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
-    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')).toBeTruthy()
-    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
+    const pickup = w.find('[data-pending="pickupAuth"]')
+    expect(pickup.text()).toContain('1 筆授權進行中')
+    expect(pickup.attributes('href')).toBe('/pickup')
   })
 
   it('娃娃車快照失敗不得擋住首頁其他區塊', async () => {
     busTodayMock.getBusToday.mockRejectedValueOnce(new Error('boom'))
-    const w = mountWith(...HOME)
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
-    expect(heroNameOf(w)).toBe('小明')
-    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
+    expect(statusOf(w)).toBe('在園中')
+    expect(w.find('[data-pending="bus"]').exists()).toBe(false)
   })
 
   it('站點座標（家庭住址）不得進入首頁畫面', async () => {
     busTodayMock.getBusToday.mockResolvedValueOnce(inProgressBus())
-    const w = mountWith(...HOME)
+    const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
     expect(w.html()).not.toContain('22.61')
     expect(w.html()).not.toContain('120.28')
   })
 })
-
-// 「我要接小孩」CTA（pnotice01 預告接送，獨立於今日聯絡簿卡的另一塊區域）
-// 2026-08-16 業主裁定：與 QuickActionsBar 常用功能列的「接送」快捷模組
-// （key=pickup，路由同為 /pickup-notice）重複，隨今日聯絡簿卡一併整塊移除
-// （見 TodayView.vue）。相關測試（原「TodayView 預告接送 CTA」describe）
-// 一併移除，不再保留。

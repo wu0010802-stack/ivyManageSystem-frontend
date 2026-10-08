@@ -5,6 +5,7 @@ import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
+import { PARENT_SERVICES } from '../utils/parentServices'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -41,35 +42,36 @@ const items = computed<HubItem[]>(() => {
       key: 'contact-book',
       headline: '今日聯絡簿',
       supportingText: '出席、餐點、午睡、老師留言',
-      leadingIcon: 'auto_stories',
+      leadingIcon: PARENT_SERVICES.contactBook.icon,
       path: id ? '/contact-book' : null,
     },
     {
       key: 'photos',
-      headline: '照片牆',
+      headline: PARENT_SERVICES.childPhotos.label,
       supportingText: '在園日常隨手拍',
-      leadingIcon: 'photo_library',
+      leadingIcon: PARENT_SERVICES.childPhotos.icon,
       path: id ? `/children/${id}/photos` : null,
     },
     {
       key: 'reports',
-      headline: '成長報告',
+      headline: PARENT_SERVICES.childReports.label,
       supportingText: '歷次評量與發展紀錄',
-      leadingIcon: 'insights',
+      leadingIcon: PARENT_SERVICES.childReports.icon,
       path: id ? `/children/${id}/reports` : null,
     },
     {
       key: 'measurements',
-      headline: '健康紀錄',
-      supportingText: '身高體重、疫苗、過敏資訊',
-      leadingIcon: 'monitor_heart',
+      headline: PARENT_SERVICES.childMeasurements.label,
+      // 過敏與用藥提醒在孩子檔案頁，不在這裡（舊文案寫「疫苗、過敏」但頁面沒有）
+      supportingText: '身高體重紀錄',
+      leadingIcon: PARENT_SERVICES.childMeasurements.icon,
       path: id ? `/children/${id}/measurements` : null,
     },
     {
       key: 'profile',
-      headline: '孩子檔案',
+      headline: PARENT_SERVICES.childProfile.label,
       supportingText: childSupporting.value,
-      leadingIcon: 'folder_shared',
+      leadingIcon: PARENT_SERVICES.childProfile.icon,
       path: id ? `/children/${id}` : null,
     },
   ]

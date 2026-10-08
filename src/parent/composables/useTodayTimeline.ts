@@ -1,6 +1,4 @@
 import { computed } from 'vue'
-// 純函式、零依賴，不會把 admin 端 chunk 拉進 parent bundle
-import { formatCurrency } from '@/utils/currency'
 // 接送時間是後端台北 naive 字串；統一走零依賴的 taipeiTime 工具顯式錨定 +08:00
 // 並以 Asia/Taipei 取時/格式化，避免非台灣裝置差 8 小時導致時段桶分錯、時間顯示錯
 // （與 admin 歷史表格 / portal 同源）。
@@ -95,13 +93,16 @@ export function dismissalTimelineParts(d: TimelineDismissal): {
   }
 }
 
-// 把後端 summary + today-status 攤平成依時段桶分組的事件流。
+// 把 today-status 攤平成依時段桶分組的事件流。
 // 桶子：morning (6-12) / noon (12-14) / afternoon (14-18) / later (其餘)
 // 每個 event：{ id, bucket, variant: 'past'|'pending'|'info', time, primary, secondary, tone, path, motif? }
-export function useTodayTimeline({ summary, todayChildren }: { summary: { value: Record<string, unknown> | null | undefined }; todayChildren: { value: Record<string, unknown>[] | null | undefined } }) {
+//
+// 2026-10-08 起只放「今天發生的事」（出席／請假／用藥／接送）。待繳費、待簽收、
+// 才藝候補、未讀公告、請假審核結果原本固定塞進「晚一些」桶，等於把待辦清單混進
+// 時間軸；它們已移到首頁「待你處理」（utils/pendingItems.ts），不再在這裡重複。
+export function useTodayTimeline({ todayChildren }: { todayChildren: { value: Record<string, unknown>[] | null | undefined } }) {
   const events = computed(() => {
     const out = []
-    const summaryV = summary.value
     const childrenStatus = todayChildren.value || []
 
     for (const _c of childrenStatus) {
@@ -180,80 +181,6 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
           path,
         })
       }
-    }
-
-    type SummaryShape = {
-      fees?: { outstanding_count?: number; outstanding?: number; overdue?: number }
-      pending_event_acks?: number; pending_activity_promotions?: number
-      unread_announcements?: number; recent_leave_reviews?: number
-    }
-    const sv = summaryV as SummaryShape | null | undefined
-    const fees = sv?.fees
-    if ((fees?.outstanding_count ?? 0) > 0) {
-      out.push({
-        id: 'fees',
-        bucket: 'later',
-        variant: 'pending',
-        time: null,
-        primary: `待繳費 ${formatCurrency(fees?.outstanding ?? 0)}`,
-        secondary: (fees?.overdue ?? 0) > 0
-          ? `逾期 ${formatCurrency(fees?.overdue ?? 0)}`
-          : `${fees?.outstanding_count} 筆`,
-        tone: (fees?.overdue ?? 0) > 0 ? 'danger' : 'money',
-        path: '/fees',
-      })
-    }
-
-    if ((sv?.pending_event_acks ?? 0) > 0) {
-      out.push({
-        id: 'acks',
-        bucket: 'later',
-        variant: 'pending',
-        time: null,
-        primary: '待簽閱事件',
-        secondary: `${sv?.pending_event_acks} 件`,
-        tone: 'event',
-        path: '/events',
-      })
-    }
-
-    if ((sv?.pending_activity_promotions ?? 0) > 0) {
-      out.push({
-        id: 'promotions',
-        bucket: 'later',
-        variant: 'pending',
-        time: null,
-        primary: '才藝候補待確認',
-        secondary: `${sv?.pending_activity_promotions} 件`,
-        tone: 'activity',
-        path: '/activity',
-      })
-    }
-
-    if ((sv?.unread_announcements ?? 0) > 0) {
-      out.push({
-        id: 'announcements',
-        bucket: 'later',
-        variant: 'info',
-        time: null,
-        primary: '未讀公告',
-        secondary: `${sv?.unread_announcements} 則`,
-        tone: 'announcement',
-        path: '/announcements',
-      })
-    }
-
-    if ((sv?.recent_leave_reviews ?? 0) > 0) {
-      out.push({
-        id: 'leaveReviews',
-        bucket: 'later',
-        variant: 'info',
-        time: null,
-        primary: '最近請假審核結果',
-        secondary: `${sv?.recent_leave_reviews} 件`,
-        tone: 'leave',
-        path: '/leaves',
-      })
     }
 
     return out

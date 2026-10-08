@@ -1,9 +1,8 @@
 /**
  * 首頁「常用功能」三格模組目錄與驗證。
  *
- * 背景：2026-08-16 首頁改版——聯絡簿獨立成滿版大按鈕，下方三格預設「接送・
- * 代理接送・公告」，家長各自在自己手機上編輯、存 DB（`/parent/quick-actions`
- * GET/PUT，見 composables/useQuickActionSlots.ts；不是租戶層級統一配置，
+ * 背景：2026-08-16 首頁改版——常用功能三格預設「預告接送・臨時接送・公告」，
+ * 家長各自在自己手機上編輯、存 DB（`/parent/quick-actions` GET/PUT，見 composables/useQuickActionSlots.ts；不是租戶層級統一配置，
  * 也不是 localStorage）。
  *
  * 本檔只放純資料/驗證，不持有狀態：
@@ -12,34 +11,27 @@
  *    驗證失敗一律退回預設三格——防禦性複查，後端 api/parent_portal/
  *    quick_actions.py 已做過一次同樣驗證，這裡是第二層。
  *
- * icon 一律用既有 manifest 已收錄的名稱（見 src/parent/assets/fonts/
- * material-symbols-manifest.json），避免另外跑 gen:parent-icons。
+ * 名稱／圖示的單一來源是 parentServices.ts（見下方 QUICK_ACTION_KEYS 註解）。
  */
 
-export type QuickActionTone = 'brand' | 'amber' | 'coral' | 'sky' | 'leaf' | 'grape' | 'teal'
+import { PARENT_SERVICES, type ParentService, type ParentServiceKey, type ServiceTone } from './parentServices'
 
-export interface QuickActionModule {
+export type QuickActionTone = ServiceTone
+
+export interface QuickActionModule extends ParentService {
   key: string
-  label: string
-  sub: string
-  tone: QuickActionTone
-  route: string
-  icon: string
 }
 
 /**
- * 目錄：key 對齊既有首頁 bento／CTA 的路由與圖示語意，不另立一套。
+ * 常用功能可選的模組 key——**必須與後端 api/parent_portal/quick_actions.py 的
+ * 白名單一致**（家長的設定以 key 存 DB），新增／改名 key 要兩端一起改。
  *
- * ⚠ 每個模組的欄位刻意拆成多行：icon 子集字型的抽取器（scripts/lib/
- * parent-icon-names.mjs 規則 5）是「同一行只要出現 icon 字樣，該行所有引號
- * 字串都當候選名」的寬鬆規則，寫成單行會把其他欄位（如 key／tone 的字面值）
- * 誤判成缺字型的 icon 名。拆行後 icon 那行只留 icon 字串。
+ * 名稱、副標、圖示、路由一律取自 parentServices.ts 的 PARENT_SERVICES（全家長端
+ * 單一事實來源，2026-10-08 起）；這裡只決定「哪些服務可以放進常用三格」。
  *
- * 2026-08-17 補齊「事務」hub（AdminListView）與「孩子」hub（ChildHubView）既有
- * 但先前漏收錄的模組（leaves/medications/activity/surveys/child*）——原目錄只
- * 涵蓋首頁 bento 既有路由，未隨功能成長同步擴充，家長端點編輯永遠只看得到
- * 寥寥幾個候選。**不收錄聯絡簿**：聯絡簿已是 QuickActionsBar.vue 的滿版大按鈕
- * （固定顯示，不經三格 slots 機制），收進 catalog 會造成重複入口。
+ * 2026-08-17 補齊「事務」hub 與「孩子」hub 既有但先前漏收錄的模組
+ * （leaves/medications/activity/surveys/child*）。**不收錄聯絡簿**：聯絡簿入口
+ * 已在首頁每張孩子狀態卡上，收進 catalog 會造成重複入口。
  *
  * ⚠ route 含 `:studentId` 佔位符的模組（child* 四項）代表該路由需要「目前選定
  * 孩子」才能導覽——catalog 本身是純資料，不持有 selectedId 狀態，實際替換成
@@ -47,136 +39,28 @@ export interface QuickActionModule {
  * useChildSelection() 的單例 selectedId；缺選定孩子時退回 `/child` 孩子 hub
  * 讓家長自己選）。
  */
-export const QUICK_ACTION_CATALOG: Record<string, QuickActionModule> = {
-  pickup: {
-    key: 'pickup',
-    label: '接送',
-    sub: '預告接送',
-    tone: 'teal',
-    route: '/pickup-notice',
-    icon: 'directions_walk',
-  },
-  arrived: {
-    key: 'arrived',
-    label: '已抵達',
-    sub: '校門口報到',
-    tone: 'coral',
-    route: '/pickup-notice',
-    icon: 'pin_drop',
-  },
-  proxy: {
-    key: 'proxy',
-    label: '代理接送',
-    sub: '接送授權',
-    tone: 'grape',
-    route: '/pickup',
-    icon: 'hail',
-  },
-  announce: {
-    key: 'announce',
-    label: '公告',
-    sub: '最新公告',
-    tone: 'coral',
-    route: '/announcements',
-    icon: 'campaign',
-  },
-  bus: {
-    key: 'bus',
-    label: '娃娃車',
-    sub: '即時位置',
-    tone: 'sky',
-    route: '/bus',
-    icon: 'directions_bus',
-  },
-  fees: {
-    key: 'fees',
-    label: '學費',
-    sub: '待繳款項',
-    tone: 'amber',
-    route: '/fees',
-    icon: 'payments',
-  },
-  sign: {
-    key: 'sign',
-    label: '待簽文件',
-    sub: '事件簽閱',
-    tone: 'brand',
-    route: '/events',
-    icon: 'edit_document',
-  },
-  calendar: {
-    key: 'calendar',
-    label: '行事曆',
-    sub: '活動與假期',
-    tone: 'leaf',
-    route: '/calendar',
-    icon: 'calendar_month',
-  },
-  leaves: {
-    key: 'leaves',
-    label: '請假',
-    sub: '申請與查詢',
-    tone: 'coral',
-    route: '/leaves',
-    icon: 'event_busy',
-  },
-  medications: {
-    key: 'medications',
-    label: '用藥委託',
-    sub: '委託用藥單',
-    tone: 'grape',
-    route: '/medications',
-    icon: 'medication',
-  },
-  activity: {
-    key: 'activity',
-    label: '課後才藝',
-    sub: '報名與紀錄',
-    tone: 'sky',
-    route: '/activity',
-    icon: 'palette',
-  },
-  surveys: {
-    key: 'surveys',
-    label: '活動調查',
-    sub: '參加意願回覆',
-    tone: 'amber',
-    route: '/surveys',
-    icon: 'fact_check',
-  },
-  childProfile: {
-    key: 'childProfile',
-    label: '孩子檔案',
-    sub: '基本資料',
-    tone: 'teal',
-    route: '/children/:studentId',
-    icon: 'person',
-  },
-  childReports: {
-    key: 'childReports',
-    label: '成長報告',
-    sub: '歷次報告',
-    tone: 'brand',
-    route: '/children/:studentId/reports',
-    icon: 'insights',
-  },
-  childPhotos: {
-    key: 'childPhotos',
-    label: '照片牆',
-    sub: '孩子的照片',
-    tone: 'grape',
-    route: '/children/:studentId/photos',
-    icon: 'photo_library',
-  },
-  childMeasurements: {
-    key: 'childMeasurements',
-    label: '健康紀錄',
-    sub: '生長曲線',
-    tone: 'sky',
-    route: '/children/:studentId/measurements',
-    icon: 'monitor_weight',
-  },
-}
+const QUICK_ACTION_KEYS = [
+  'pickup',
+  'arrived',
+  'proxy',
+  'announce',
+  'bus',
+  'fees',
+  'sign',
+  'calendar',
+  'leaves',
+  'medications',
+  'activity',
+  'surveys',
+  'childProfile',
+  'childReports',
+  'childPhotos',
+  'childMeasurements',
+] as const satisfies readonly ParentServiceKey[]
+
+export const QUICK_ACTION_CATALOG: Record<string, QuickActionModule> = Object.fromEntries(
+  QUICK_ACTION_KEYS.map((key) => [key, { key, ...PARENT_SERVICES[key] }]),
+)
 
 export const DEFAULT_SLOTS: readonly string[] = ['pickup', 'proxy', 'announce']
 

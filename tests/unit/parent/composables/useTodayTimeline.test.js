@@ -2,10 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { ref } from 'vue'
 import { useTodayTimeline } from '@/parent/composables/useTodayTimeline'
 
-function setup({ summaryValue = null, childrenValue = [] } = {}) {
-  const summary = ref(summaryValue)
+function setup({ childrenValue = [] } = {}) {
   const todayChildren = ref(childrenValue)
-  return useTodayTimeline({ summary, todayChildren })
+  return useTodayTimeline({ todayChildren })
 }
 
 describe('useTodayTimeline — bucket 分組', () => {
@@ -105,47 +104,16 @@ describe('useTodayTimeline — bucket 分組', () => {
     expect(item.variant).toBe('past')
   })
 
-  // 2026-08-28：訊息自家長端下架，unread_messages 不再產生 timeline 待辦項。
-  it('summary 待辦（fees / acks / promotions） → later bucket pending', () => {
-    const { buckets } = setup({
-      summaryValue: {
-        fees: { outstanding: 5200, overdue: 0, outstanding_count: 1 },
-        pending_event_acks: 2,
-        unread_messages: 1,
-        pending_activity_promotions: 1,
-      },
+  // 2026-10-08：待繳費／待簽收／才藝候補／未讀公告／請假結果移到首頁「待你處理」
+  // （utils/pendingItems.ts，另有專屬測試），時間軸只放今天發生的事。
+  it('useTodayTimeline 不再接受 summary，待辦類事件不出現在時間軸', () => {
+    const todayChildren = ref([{ student_id: 1, name: '小明', attendance: { status: '出席' } }])
+    const { events } = useTodayTimeline({
+      todayChildren,
+      // 舊呼叫端多傳 summary 也不該冒出待辦事件
+      summary: ref({ fees: { outstanding: 5200, overdue: 3000, outstanding_count: 1 }, pending_event_acks: 2 }),
     })
-    const later = buckets.value.find((b) => b.key === 'later')
-    expect(later.items.length).toBe(3)
-    expect(later.items.some((i) => i.id === 'messages')).toBe(false)
-    expect(later.items.every((i) => i.variant === 'pending')).toBe(true)
-  })
-
-  it('fees 逾期 → tone=danger 並顯示「逾期」secondary', () => {
-    const { buckets } = setup({
-      summaryValue: {
-        fees: { outstanding: 5200, overdue: 3000, outstanding_count: 1 },
-      },
-    })
-    const later = buckets.value.find((b) => b.key === 'later')
-    const fees = later.items.find((i) => i.id === 'fees')
-    expect(fees.tone).toBe('danger')
-    expect(fees.secondary).toContain('逾期')
-    // 金額走全站 canonical 格式 NT$1,234（無空格，src/utils/currency.ts）
-    expect(fees.primary).toBe('待繳費 NT$5,200')
-    expect(fees.secondary).toBe('逾期 NT$3,000')
-  })
-
-  it('announcements / leaveReviews → later bucket info', () => {
-    const { buckets } = setup({
-      summaryValue: {
-        unread_announcements: 3,
-        recent_leave_reviews: 1,
-      },
-    })
-    const later = buckets.value.find((b) => b.key === 'later')
-    expect(later.items.length).toBe(2)
-    expect(later.items.every((i) => i.variant === 'info')).toBe(true)
+    expect(events.value.map((e) => e.id)).toEqual(['att:1'])
   })
 
   it('生日當天 → motif=crown', () => {
@@ -166,21 +134,15 @@ describe('useTodayTimeline — bucket 分組', () => {
     expect(morning.items[0].motif).toBe('crown')
   })
 
-  it('桶內排序：past → pending → info；同類別有 time 則升冪', () => {
+  it('桶內排序：past → pending → info', () => {
     const { buckets } = setup({
-      summaryValue: {
-        unread_announcements: 1,
-        pending_event_acks: 1,
-      },
       childrenValue: [
-        { student_id: 1, name: '小明', attendance: { status: '出席' } },
+        { student_id: 1, name: '小芬' }, // 尚未到校 → info
+        { student_id: 2, name: '小明', attendance: { status: '出席' } }, // past
       ],
     })
     const morning = buckets.value.find((b) => b.key === 'morning')
-    const later = buckets.value.find((b) => b.key === 'later')
-    expect(morning.items[0].variant).toBe('past')
-    expect(later.items[0].variant).toBe('pending')
-    expect(later.items[1].variant).toBe('info')
+    expect(morning.items.map((i) => i.variant)).toEqual(['past', 'info'])
   })
 
   it('空桶不渲染（later 全空時不存在）', () => {

@@ -34,7 +34,7 @@ const routes: RouteRecordRaw[] = [
       path: '/attendance',
       name: 'parent-attendance',
       component: () => import('./views/AttendanceView.vue'),
-      meta: { title: '出席', tab: 'admin', showBack: true },
+      meta: { title: '出席紀錄', tab: 'admin', showBack: true },
     },
     {
       // 娃娃車即時位置：從首頁入口卡進來，屬 home 分頁
@@ -93,25 +93,25 @@ const routes: RouteRecordRaw[] = [
       path: '/fees',
       name: 'parent-fees',
       component: () => import('./views/FeesView.vue'),
-      meta: { title: '費用查詢', tab: 'admin', showBack: true },
+      meta: { title: '繳費', tab: 'admin', showBack: true },
     },
     {
       path: '/events',
       name: 'parent-events',
       component: () => import('./views/EventsView.vue'),
-      meta: { title: '事件簽閱', tab: 'admin', showBack: true },
+      meta: { title: '簽收通知', tab: 'admin', showBack: true },
     },
     {
       path: '/sign',
       name: 'parent-sign-list',
       component: () => import('./views/SignListView.vue'),
-      meta: { title: '文件簽署', tab: 'admin', showBack: true },
+      meta: { title: '入學文件', tab: 'admin', showBack: true },
     },
     {
       path: '/sign/:id',
       name: 'parent-sign-detail',
       component: () => import('./views/SignDetailView.vue'),
-      meta: { title: '文件簽署', tab: 'admin', showBack: true },
+      meta: { title: '入學文件', tab: 'admin', showBack: true },
     },
     {
       path: '/events/:eventId/ack',
@@ -123,7 +123,7 @@ const routes: RouteRecordRaw[] = [
       path: '/medications',
       name: 'parent-medications',
       component: () => import('./views/MedicationListView.vue'),
-      meta: { title: '用藥', tab: 'admin', showBack: true },
+      meta: { title: '用藥委託', tab: 'admin', showBack: true },
     },
     {
       path: '/medications/new',
@@ -147,7 +147,7 @@ const routes: RouteRecordRaw[] = [
       path: '/activity',
       name: 'parent-activity',
       component: () => import('./views/ActivityView.vue'),
-      meta: { title: '才藝課', tab: 'admin', showBack: true },
+      meta: { title: '課後才藝', tab: 'admin', showBack: true },
     },
     {
       path: '/pickup',
@@ -185,7 +185,7 @@ const routes: RouteRecordRaw[] = [
       path: '/children/:studentId/reports',
       name: 'parent-child-reports',
       component: () => import('./views/ChildReportsView.vue'),
-      meta: { title: '歷次成長報告', tab: 'child', showBack: true },
+      meta: { title: '成長報告', tab: 'child', showBack: true },
     },
     {
       path: '/children/:studentId/photos',
@@ -241,7 +241,7 @@ const routes: RouteRecordRaw[] = [
       path: '/admin',
       name: 'parent-admin',
       component: () => import('./views/AdminListView.vue'),
-      meta: { title: '事務', tab: 'admin' },
+      meta: { title: '待辦', tab: 'admin' },
     },
     {
       // kill-switch redirect target；axios interceptor 偵測 503 + MAINTENANCE_MODE 時 router.replace 進來。

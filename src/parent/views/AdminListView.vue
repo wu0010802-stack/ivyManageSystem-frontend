@@ -1,235 +1,158 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useHomeSummary } from '../composables/useHomeSummary'
-import { listPickupAuthorizations } from '../api/pickup'
-import M3List from '../components/m3/M3List.vue'
-import M3ListItem from '../components/m3/M3ListItem.vue'
+/**
+ * 「待辦」tab（路由 /admin，2026-10-08 由「事務」改版）。
+ *
+ * 改版前是 8 列平鋪、順序寫死、各自掛徽章的清單：家長得逐列看紅點才知道哪件
+ * 事要先處理，入學文件簽署與出席紀錄、常見問題則根本不在清單裡。現在分三段：
+ *  1. 待處理：與首頁「待你處理」同一份 buildPendingItems()，依急迫度排序
+ *  2. 進行中：今日用藥單、臨時接送授權（資訊性，不計徽章）
+ *  3. 所有服務：每個功能一個固定入口，名稱／圖示取自 parentServices.ts
+ *
+ * F5（沿用）：summary 失敗時不能把計數 fallback 成 0 當成「都處理完了」（含逾期
+ * 款項），首次載入的 pending／error 會擋住「待處理」段並給可重試的錯誤態；
+ * 「所有服務」是靜態入口，不受 summary 失敗影響，照常顯示。
+ */
+import { computed } from 'vue'
+import { usePendingItems } from '../composables/usePendingItems'
+import { ALL_SERVICES_ORDER, PARENT_SERVICES } from '../utils/parentServices'
+import type { PendingItem } from '../utils/pendingItems'
+import PendingInbox from '../components/home/PendingInbox.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
-const router = useRouter()
-// F5：原本只解構 badges/summary，丟掉 error/pending——API 失敗時 num() 把
-// 每個徽章 fallback 成 0，會被誤讀成「一切都處理完了」（含逾期款項這種需要
-// 提醒的項目）。比照 TodayView：pending 時顯示骨架、error 時顯示可重試的
-// 錯誤態，只有兩者皆無資料（首次載入）時才擋住清單，避免誤導性的 0。
 const {
   badges,
-  summary,
   data: summaryData,
   error: summaryError,
   pending: summaryPending,
-  refresh: refreshSummary,
-} = useHomeSummary()
+  items: pendingItems,
+  pickupActiveCount,
+  refreshAll,
+} = usePendingItems()
 
-// pending_survey_count 尚未併入 HomeBadges（該 interface 之後才擴充），
-// 直接讀 summary 原始欄位，做法比照 TodayView 的 pendingSurveyCount。
-const pendingSurveyCount = computed(() => {
-  const v = (summary.value as { pending_survey_count?: unknown } | null)?.pending_survey_count
-  return typeof v === 'number' ? v : 0
-})
-
-// 臨時接送授權同樣尚未併入 HomeBadges（後端 home/summary 未加此欄位）；
-// 比照 TodayView 的 pickupActiveCount，走獨立輕量 fetch，失敗降為 0。
-const pendingPickupCount = ref(0)
-onMounted(async () => {
-  try {
-    const { data } = await listPickupAuthorizations({ status: 'active' })
-    pendingPickupCount.value = ((data as { items?: unknown[] })?.items || []).length
-  } catch {
-    pendingPickupCount.value = 0
+const ongoingItems = computed<PendingItem[]>(() => {
+  const out: PendingItem[] = []
+  const meds = badges.value.activeMedicationOrders
+  if (meds > 0) {
+    out.push({
+      key: 'medications',
+      title: PARENT_SERVICES.medications.label,
+      detail: `今天有 ${meds} 張用藥單`,
+      icon: PARENT_SERVICES.medications.icon,
+      tone: 'info',
+      path: PARENT_SERVICES.medications.route,
+      count: 0,
+    })
   }
+  if (pickupActiveCount.value > 0) {
+    out.push({
+      key: 'pickupAuth',
+      title: PARENT_SERVICES.proxy.label,
+      detail: `${pickupActiveCount.value} 筆授權進行中`,
+      icon: PARENT_SERVICES.proxy.icon,
+      tone: 'info',
+      path: PARENT_SERVICES.proxy.route,
+      count: 0,
+    })
+  }
+  return out
 })
 
-/**
- * 徽章語意分兩種，色調要分開，否則「今天有藥要吃」會被讀成「有事沒處理」：
- *  - action：需要家長處理或該知道結果 → 品牌綠（逾期款項轉 coral）
- *  - info：純資訊 → 中性藍
- * 數字為 0 時不顯示徽章（不要出現「0 筆」）。
- */
-interface AdminItem {
-  headline: string
-  supportingText: string
-  leadingIcon: string
-  path: string
-  badge: number
-  badgeTone: 'action' | 'info' | 'alert'
-  badgeLabel: string
-}
+const services = ALL_SERVICES_ORDER.map((key) => ({ key, ...PARENT_SERVICES[key] }))
 
-const items = computed<AdminItem[]>(() => {
-  const b = badges.value
-  return [
-    {
-      headline: '請假',
-      supportingText: '送出請假申請、查詢假單狀態',
-      leadingIcon: 'event_busy',
-      path: '/leaves',
-      badge: b.recentLeaveReviews,
-      badgeTone: 'action',
-      badgeLabel: `${b.recentLeaveReviews} 筆假單有審核結果`,
-    },
-    {
-      headline: '繳費',
-      supportingText: '查詢應繳/已繳費用',
-      leadingIcon: 'payments',
-      path: '/fees',
-      badge: b.outstandingFees,
-      badgeTone: b.overdueFees > 0 ? 'alert' : 'action',
-      badgeLabel:
-        b.overdueFees > 0
-          ? `${b.outstandingFees} 筆待繳，含逾期款項`
-          : `${b.outstandingFees} 筆待繳`,
-    },
-    {
-      headline: '用藥委託',
-      supportingText: '新增/查詢委託用藥單',
-      leadingIcon: 'medication',
-      path: '/medications',
-      badge: b.activeMedicationOrders,
-      badgeTone: 'info',
-      badgeLabel: `今日 ${b.activeMedicationOrders} 張用藥單`,
-    },
-    {
-      headline: '課後才藝',
-      supportingText: '才藝課程報名與紀錄',
-      leadingIcon: 'palette',
-      path: '/activity',
-      badge: b.pendingActivityPromotions,
-      badgeTone: 'action',
-      badgeLabel: `${b.pendingActivityPromotions} 筆候補待確認`,
-    },
-    {
-      headline: '待簽紀錄',
-      supportingText: '需家長簽收的通知事項',
-      leadingIcon: 'mark_email_read',
-      path: '/events',
-      badge: b.pendingEventAcks,
-      badgeTone: 'action',
-      badgeLabel: `${b.pendingEventAcks} 份待簽`,
-    },
-    {
-      headline: '活動調查',
-      supportingText: '戶外教學/親子活動參加意願回覆',
-      leadingIcon: 'fact_check',
-      path: '/surveys',
-      badge: pendingSurveyCount.value,
-      badgeTone: 'action',
-      badgeLabel: `${pendingSurveyCount.value} 份待回覆`,
-    },
-    {
-      // 預告接送與臨時接送是兩個功能：前者=本人預告抵達時間，後者=授權親友代接。
-      headline: '預告接送',
-      supportingText: '通知園所我多久後抵達',
-      leadingIcon: 'directions_walk',
-      path: '/pickup-notice',
-      badge: 0,
-      badgeTone: 'info',
-      badgeLabel: '',
-    },
-    {
-      headline: '臨時接送',
-      supportingText: '授權親友代為到園接送',
-      leadingIcon: 'hail',
-      path: '/pickup',
-      badge: pendingPickupCount.value,
-      badgeTone: 'info',
-      badgeLabel: `${pendingPickupCount.value} 筆進行中授權`,
-    },
-  ]
-})
-
-function go(path: string) {
-  router.push(path)
+function retry(): void {
+  void refreshAll(true)
 }
 </script>
 
 <template>
   <div class="admin-list-view">
-    <template v-if="summaryPending && !summaryData">
-      <div class="skeleton-wrap">
-        <SkeletonBlock variant="row" :count="6" />
-      </div>
-    </template>
+    <div v-if="summaryPending && !summaryData" class="skeleton-wrap">
+      <SkeletonBlock variant="row" :count="3" />
+    </div>
 
     <MobileErrorRetry
       v-else-if="summaryError && !summaryData"
       :error="summaryError"
-      @retry="refreshSummary"
+      @retry="retry"
     />
 
-    <M3List v-else>
-      <M3ListItem
-        v-for="item in items"
-        :key="item.path"
-        :headline="item.headline"
-        :supporting-text="item.supportingText"
-        :leading-icon="item.leadingIcon"
-        clickable
-        @click="go(item.path)"
-      >
-        <template #trailing>
-          <span class="admin-trailing">
-            <span
-              v-if="item.badge > 0"
-              class="admin-badge"
-              :class="`admin-badge-${item.badgeTone}`"
-              role="status"
-              :aria-label="item.badgeLabel"
-            >{{ item.badge }}</span>
-            <span class="material-symbols-rounded admin-chevron" aria-hidden="true">chevron_right</span>
+    <template v-else>
+      <PendingInbox title="待處理" :items="pendingItems" empty-text="目前沒有要處理的事" />
+      <PendingInbox v-if="ongoingItems.length" title="進行中" :items="ongoingItems" />
+    </template>
+
+    <section class="svc" aria-labelledby="svc-title">
+      <h2 id="svc-title" class="pt-section-title">所有服務</h2>
+      <div class="svc-grid">
+        <router-link
+          v-for="s in services"
+          :key="s.key"
+          :to="s.route"
+          class="svc-item"
+          :data-service="s.key"
+        >
+          <span class="svc-icon" :class="`tone-${s.tone}`">
+            <span class="material-symbols-rounded" aria-hidden="true">{{ s.icon }}</span>
           </span>
-        </template>
-      </M3ListItem>
-    </M3List>
+          <span class="svc-label">{{ s.label }}</span>
+          <span class="svc-sub">{{ s.sub }}</span>
+        </router-link>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .admin-list-view {
-  padding: 8px 0 16px;
-  background: var(--m3-surface, #f7fbf3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 20px);
+  padding: var(--space-2, 8px) var(--space-4, 16px) var(--space-8, 32px);
   min-height: 100%;
 }
 .skeleton-wrap {
-  padding: 8px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3, 12px);
 }
 
-.admin-trailing {
-  display: inline-flex;
+.svc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2, 8px);
+}
+.svc-item {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  min-height: 96px;
+  padding: var(--space-3, 12px) 4px;
+  box-sizing: border-box;
+  border-radius: 20px;
+  background: var(--pt-surface-card);
+  box-shadow: var(--pt-shadow-card);
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
 }
-
-.admin-badge {
-  display: inline-flex;
+.svc-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 7px;
-  border-radius: 11px;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--pt-on-accent, #fff);
-  background: var(--m3-primary, #006d3d);
 }
-/* 逾期款項：唯一該讓家長心跳快一下的情況 */
-.admin-badge-alert {
-  background: var(--coral-700, #b14545);
-}
-/* 資訊性（今日用藥單）：中性藍，避免被讀成待辦 */
-.admin-badge-info {
-  background: var(--sky-700, #2d6f8e);
-}
-
-.admin-chevron {
-  font-size: 20px;
-  color: var(--pt-text-muted, #6b5e54);
-  font-variation-settings: 'wght' 400;
-}
+.svc-icon .material-symbols-rounded { font-size: 22px; }
+.svc-icon.tone-amber { background: var(--pt-accent-sun-container); color: var(--pt-accent-sun-on); }
+.svc-icon.tone-coral { background: var(--pt-accent-coral-container); color: var(--pt-accent-coral-on); }
+.svc-icon.tone-sky { background: var(--pt-accent-sky-container); color: var(--pt-accent-sky-on); }
+.svc-icon.tone-leaf { background: var(--pt-accent-leaf-container); color: var(--pt-accent-leaf-on); }
+.svc-icon.tone-grape { background: var(--pt-accent-grape-container); color: var(--pt-accent-grape-on); }
+.svc-icon.tone-brand { background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
+.svc-icon.tone-teal { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
+.svc-label { font-size: 14px; font-weight: 800; }
+.svc-sub { font-size: 11px; font-weight: 600; opacity: 0.72; line-height: 1.3; }
 </style>

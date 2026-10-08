@@ -203,7 +203,7 @@ onMounted(load)
 <template>
   <div class="meas-view">
     <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">成長量測</p>
+      <p class="pt-page-hero-eyebrow">健康紀錄</p>
       <h1 class="pt-page-hero-title">{{ currentMetric?.label }}曲線</h1>
       <p v-if="latestValue != null" class="pt-page-hero-note">
         最新 <strong>{{ latestValue }} {{ currentMetric?.unit }}</strong>

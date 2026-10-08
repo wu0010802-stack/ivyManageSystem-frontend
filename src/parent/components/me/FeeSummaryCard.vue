@@ -24,7 +24,7 @@ function fmt(n: number): string {
 <template>
   <section class="fee-summary-card" aria-labelledby="fee-summary-title">
     <header class="header">
-      <h2 id="fee-summary-title" class="title">繳費中心</h2>
+      <h2 id="fee-summary-title" class="title">繳費</h2>
     </header>
 
     <div v-if="hasOutstanding" class="amounts">

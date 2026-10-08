@@ -26,11 +26,11 @@ function mountView() {
 describe('SignListView', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('無待簽文件時顯示空狀態', async () => {
+  it('無待簽的入學文件時顯示空狀態', async () => {
     mockList.mockResolvedValue({ data: { pending: [], signed: [] } })
     const w = mountView()
     await flushPromises()
-    expect(w.text()).toContain('目前沒有待簽文件')
+    expect(w.text()).toContain('目前沒有待簽的入學文件')
   })
 
   it('顯示待簽與已簽文件卡片', async () => {

@@ -302,11 +302,11 @@ onMounted(() => {
       </div>
     </section>
 
-    <!-- 成長量測 -->
+    <!-- 健康紀錄（名稱與 parentServices.childMeasurements 一致） -->
     <section class="pt-card growth-section" aria-labelledby="measurements-title">
       <h2 id="measurements-title" class="section-title">
         <ParentIcon name="ruler" size="sm" />
-        成長量測
+        健康紀錄
       </h2>
       <button class="pt-ghost-btn link-btn" type="button" @click="goMeasurements">
         查看身高/體重曲線
@@ -314,14 +314,14 @@ onMounted(() => {
       </button>
     </section>
 
-    <!-- 歷次報告 -->
+    <!-- 成長報告 -->
     <section class="pt-card growth-section" aria-labelledby="reports-title">
       <h2 id="reports-title" class="section-title">
         <ParentIcon name="document" size="sm" />
-        歷次報告
+        成長報告
       </h2>
       <button class="pt-ghost-btn link-btn" type="button" @click="goReports">
-        查看歷次成長報告
+        查看所有成長報告
         <ParentIcon name="chevron-right" size="xs" />
       </button>
     </section>

@@ -59,7 +59,7 @@ function onTabSelect(_key: string, item: { key: string; icon: string; label: str
  * 這裡原本另外打 announcements/unread-count 與 messages/unread-count 兩支，
  * 但 summary 早就回傳 unread_announcements，等於每次換頁都多送請求拿
  * 已經有的數字。改走共用 composable 後，同 key 的
- * useCachedAsync 會與首頁 / 事務頁共用 cache 並 dedupe in-flight 請求，
+ * useCachedAsync 會與首頁 / 待辦頁共用 cache 並 dedupe in-flight 請求，
  * 節流也由它的 60s TTL 負責（原本的 unreadThrottle 因此退場）。
  *
  * immediate: false —— 這個 layout 在 /login、/bind 等公開頁也會掛載，
@@ -88,14 +88,17 @@ const TABS = computed<TabItem[]>(() => [
     // 2026-08-28：親師訊息自家長端下架，這一格改放聯絡簿（公告併為其第二分頁）。
     key: 'contact-book',
     label: '聯絡簿',
-    icon: 'menu_book',
-    activeIcon: 'menu_book',
+    // 與首頁狀態卡、孩子 hub 的聯絡簿入口同一個 icon（parentServices.contactBook）
+    icon: 'auto_stories',
+    activeIcon: 'auto_stories',
     path: '/contact-book',
     badge: contactBookTabBadge.value,
   },
   {
+    // 2026-10-08：「事務」改名「待辦」——頁面改為依急迫度排序的待處理清單＋所有服務；
+    // key／路由維持 admin，既有深連結與 meta.tab 不受影響。
     key: 'admin',
-    label: '事務',
+    label: '待辦',
     icon: 'assignment',
     activeIcon: 'assignment',
     path: '/admin',
