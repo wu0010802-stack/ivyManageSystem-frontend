@@ -2,15 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ClassroomView from '@/views/ClassroomView.vue'
+import { tenantGetItem, tenantRemoveItem } from '@/utils/tenantStorage'
 
 // ── 2026-08-24 班級管理頁 UI/UX 改版回歸 ──────────────────────────────────
 // 涵蓋：可點擊統計列（接近額滿/已滿/未指派班導）、年級客端篩選、卡片學生預覽
-// 頭像（student_preview 首度上 UI）、歷史紀錄併入 ⋯ 選單、工具列收斂。
+// 頭像（student_preview 首度上 UI）、異動紀錄併入 ⋯ 選單、工具列收斂。
+// 2026-10-08 第二輪：預設改為年級分組密集表（viewMode='table'），卡片為次要檢視；
+// 篩選類案例以預設的表格列（classroom-row）驗證，卡片專屬案例先切到 viewMode='card'。
 
 const push = vi.fn(() => Promise.resolve())
 
 let classroomsResponse: () => Promise<{ data: unknown[] }> = () => Promise.resolve({ data: [] })
 const getClassrooms = vi.fn(() => classroomsResponse())
+const VIEW_MODE_KEY = 'classrooms_view_mode'
 const getClassroom = vi.fn(() => Promise.resolve({ data: { id: 1, students: [] } }))
 
 vi.mock('vue-router', () => ({
@@ -165,7 +169,17 @@ const flush = async () => {
   await nextTick()
 }
 
+// 切到卡片檢視：走真實的檢視切換鈕（同時驗證切換鈕本身可用）
+const switchToCard = async (wrapper: ReturnType<typeof mountView>) => {
+  await wrapper.find('[data-test="view-toggle-card"]').trigger('click')
+  await nextTick()
+}
+
+const rows = (wrapper: ReturnType<typeof mountView>) => wrapper.findAll('[data-test="classroom-row"]')
+
 interface SetupState {
+  viewMode: 'table' | 'card'
+  fetchClassrooms: () => Promise<void>
   classroomSearch: string
   gradeFilter: string | null
   statFilter: string | null
@@ -176,11 +190,14 @@ const setupState = (wrapper: ReturnType<typeof mountView>): SetupState => (
   (wrapper.vm.$ as unknown as { setupState: SetupState }).setupState
 )
 
+const resetEach = () => {
+  vi.clearAllMocks()
+  tenantRemoveItem(VIEW_MODE_KEY)
+  classroomsResponse = () => Promise.resolve({ data: threeClassrooms })
+}
+
 describe('ClassroomView 改版：統計列', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    classroomsResponse = () => Promise.resolve({ data: threeClassrooms })
-  })
+  beforeEach(resetEach)
 
   it('依容量狀態計數：班級數/在籍容量/接近額滿/已滿/未指派班導', async () => {
     const wrapper = mountView()
@@ -193,24 +210,40 @@ describe('ClassroomView 改版：統計列', () => {
     expect(wrapper.find('[data-test="stat-tile-nohead"]').text()).toContain('1')
   })
 
+  it('狀態列一條：班級數帶尚餘名額；快篩 chip 數值為 0 才加 is-zero（0 不上色）', async () => {
+    const wrapper = mountView()
+    await flush()
+
+    expect(wrapper.find('[data-test="stat-tile-classes"]').text()).toContain('尚餘 17 名')
+    for (const key of ['near', 'full', 'nohead']) {
+      expect(wrapper.find(`[data-test="stat-tile-${key}"]`).classes()).not.toContain('is-zero')
+    }
+
+    classroomsResponse = () => Promise.resolve({ data: [threeClassrooms[0]] })
+    const calm = mountView()
+    await flush()
+    for (const key of ['near', 'full', 'nohead']) {
+      expect(calm.find(`[data-test="stat-tile-${key}"]`).classes()).toContain('is-zero')
+    }
+  })
+
   it('點「已滿」只顯示已滿班級並標記 aria-pressed，再點一次還原', async () => {
     const wrapper = mountView()
     await flush()
 
-    expect(wrapper.findAll('.classroom-card').length).toBe(3)
+    expect(rows(wrapper).length).toBe(3)
 
     const fullTile = wrapper.find('[data-test="stat-tile-full"]')
     await fullTile.trigger('click')
     await nextTick()
 
     expect(fullTile.attributes('aria-pressed')).toBe('true')
-    const cards = wrapper.findAll('.classroom-card')
-    expect(cards.length).toBe(1)
-    expect(cards[0].text()).toContain('玫瑰班')
+    expect(rows(wrapper).length).toBe(1)
+    expect(rows(wrapper)[0].text()).toContain('玫瑰班')
 
     await fullTile.trigger('click')
     await nextTick()
-    expect(wrapper.findAll('.classroom-card').length).toBe(3)
+    expect(rows(wrapper).length).toBe(3)
   })
 
   it('點「未指派班導」只剩缺班導的班級', async () => {
@@ -220,19 +253,15 @@ describe('ClassroomView 改版：統計列', () => {
     await wrapper.find('[data-test="stat-tile-nohead"]').trigger('click')
     await nextTick()
 
-    const cards = wrapper.findAll('.classroom-card')
-    expect(cards.length).toBe(1)
-    expect(cards[0].text()).toContain('百合班')
+    expect(rows(wrapper).length).toBe(1)
+    expect(rows(wrapper)[0].text()).toContain('百合班')
   })
 })
 
 describe('ClassroomView 改版：年級篩選', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    classroomsResponse = () => Promise.resolve({ data: threeClassrooms })
-  })
+  beforeEach(resetEach)
 
-  it('gradeFilter 收斂 visibleClassrooms 與卡片', async () => {
+  it('gradeFilter 收斂 visibleClassrooms 與表格列', async () => {
     const wrapper = mountView()
     await flush()
     const state = setupState(wrapper)
@@ -241,6 +270,18 @@ describe('ClassroomView 改版：年級篩選', () => {
     await nextTick()
 
     expect(state.visibleClassrooms.map((c) => c.id)).toEqual([2, 3])
+    expect(rows(wrapper).length).toBe(2)
+  })
+
+  it('卡片檢視同樣吃篩選：gradeFilter 收斂卡片數', async () => {
+    const wrapper = mountView()
+    await flush()
+    await switchToCard(wrapper)
+    const state = setupState(wrapper)
+
+    state.gradeFilter = '大班'
+    await nextTick()
+
     expect(wrapper.findAll('.classroom-card').length).toBe(2)
   })
 
@@ -249,26 +290,96 @@ describe('ClassroomView 改版：年級篩選', () => {
     await flush()
     const state = setupState(wrapper)
 
-    // 林老師帶玫瑰班（已滿）、也是向日葵班副班——搜尋只比對班名/班導
+    // 林老師帶玫瑰班（已滿）、也是向日葵班副班——搜尋只比對班名/代號/班導
     state.classroomSearch = '林老師'
     await nextTick()
-    expect(wrapper.findAll('.classroom-card').length).toBe(1)
+    expect(rows(wrapper).length).toBe(1)
 
     await wrapper.find('[data-test="stat-tile-near"]').trigger('click')
     await nextTick()
-    expect(wrapper.findAll('.classroom-card').length).toBe(0)
+    expect(rows(wrapper).length).toBe(0)
+  })
+
+  it('搜尋涵蓋班級代號；filteredClassrooms 仍是僅關鍵字語意', async () => {
+    const wrapper = mountView()
+    await flush()
+    const state = setupState(wrapper)
+
+    state.classroomSearch = 'rose'
+    await nextTick()
+
+    expect(state.visibleClassrooms.map((c) => c.id)).toEqual([2])
+    expect(rows(wrapper).length).toBe(1)
   })
 })
 
-describe('ClassroomView 改版：卡片內容', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    classroomsResponse = () => Promise.resolve({ data: threeClassrooms })
+describe('ClassroomView 改版：檢視切換（表格 / 卡片）', () => {
+  beforeEach(resetEach)
+
+  it('預設渲染年級分組表，不渲染卡片；表格切換鈕 aria-pressed=true', async () => {
+    const wrapper = mountView()
+    await flush()
+
+    expect(wrapper.find('[data-test="classroom-table"]').exists()).toBe(true)
+    expect(wrapper.findAll('.classroom-card').length).toBe(0)
+    expect(wrapper.find('[data-test="view-toggle-table"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('[data-test="view-toggle-card"]').attributes('aria-pressed')).toBe('false')
+    // 組序依 grades.sort_order（中班 3、大班 4），不是班級清單的出現順序
+    expect(wrapper.findAll('[data-test="group-row"]').map((g) => g.find('.group-name').text())).toEqual(['中班', '大班'])
   })
+
+  it('切到卡片：表格消失、卡片出現、偏好寫入 tenantStorage；重新 mount 還原卡片', async () => {
+    const first = mountView()
+    await flush()
+    await switchToCard(first)
+
+    expect(first.find('[data-test="classroom-table"]').exists()).toBe(false)
+    expect(first.findAll('.classroom-card').length).toBe(3)
+    expect(first.find('[data-test="view-toggle-card"]').attributes('aria-pressed')).toBe('true')
+    expect(tenantGetItem(VIEW_MODE_KEY)).toBe('card')
+    first.unmount()
+
+    const second = mountView()
+    await flush()
+    expect(second.findAll('.classroom-card').length).toBe(3)
+    expect(second.find('[data-test="classroom-table"]').exists()).toBe(false)
+    expect(second.find('[data-test="view-toggle-card"]').attributes('aria-pressed')).toBe('true')
+  })
+
+  it('切回表格會覆寫偏好；非法的儲存值一律當作 table', async () => {
+    const wrapper = mountView()
+    await flush()
+    await switchToCard(wrapper)
+    await wrapper.find('[data-test="view-toggle-table"]').trigger('click')
+    await nextTick()
+
+    expect(tenantGetItem(VIEW_MODE_KEY)).toBe('table')
+    expect(wrapper.find('[data-test="classroom-table"]').exists()).toBe(true)
+    wrapper.unmount()
+
+    localStorage.setItem(VIEW_MODE_KEY, 'grid')
+    const odd = mountView()
+    await flush()
+    expect(odd.find('[data-test="classroom-table"]').exists()).toBe(true)
+  })
+
+  it('表格列的班名按鈕接上名冊抽屜（getClassroom）', async () => {
+    const wrapper = mountView()
+    await flush()
+
+    await wrapper.find('[data-test="classroom-row"] .class-name-btn').trigger('click')
+    await flush()
+    expect(getClassroom).toHaveBeenCalledWith(1)
+  })
+})
+
+describe('ClassroomView 改版：卡片內容（卡片檢視）', () => {
+  beforeEach(resetEach)
 
   it('顯示 student_preview 頭像（姓名末字）與學生人數', async () => {
     const wrapper = mountView()
     await flush()
+    await switchToCard(wrapper)
 
     const card = wrapper.findAll('.classroom-card')[0]
     const avatars = card.findAll('.student-avatar')
@@ -280,6 +391,7 @@ describe('ClassroomView 改版：卡片內容', () => {
   it('卡片不再重複顯示學期標籤（頁面已鎖定學期）', async () => {
     const wrapper = mountView()
     await flush()
+    await switchToCard(wrapper)
 
     const card = wrapper.findAll('.classroom-card')[0]
     expect(card.text()).not.toContain('學年度')
@@ -288,6 +400,7 @@ describe('ClassroomView 改版：卡片內容', () => {
   it('容量狀態文案：已滿/接近額滿・尚餘 N 名/尚餘 N 名', async () => {
     const wrapper = mountView()
     await flush()
+    await switchToCard(wrapper)
 
     const cards = wrapper.findAll('.classroom-card')
     expect(cards[0].text()).toContain('尚餘 15 名')
@@ -295,21 +408,34 @@ describe('ClassroomView 改版：卡片內容', () => {
     expect(cards[2].text()).toContain('接近額滿・尚餘 2 名')
   })
 
-  it('「歷史紀錄」併入 ⋯ 選單，不再是卡片上的獨立按鈕', async () => {
+  it('「異動紀錄」併入 ⋯ 選單（原「歷史紀錄」改名），不再是卡片上的獨立按鈕', async () => {
     const wrapper = mountView()
     await flush()
+    await switchToCard(wrapper)
 
     const actions = wrapper.findAll('.classroom-card')[0].find('.card-actions')
-    expect(actions.text()).toContain('歷史紀錄')
+    expect(actions.text()).toContain('異動紀錄')
     expect(actions.text()).toContain('編輯班級')
+    expect(actions.text()).not.toContain('歷史紀錄')
 
     const buttonLabels = wrapper.findAll('button').map((b) => b.text())
-    expect(buttonLabels).not.toContain('歷史紀錄')
+    expect(buttonLabels).not.toContain('異動紀錄')
+  })
+
+  it('卡片 ⋯ 選單的停用項同樣防呆：仍有在學生者顯示原因', async () => {
+    const wrapper = mountView()
+    await flush()
+    await switchToCard(wrapper)
+
+    const cards = wrapper.findAll('.classroom-card')
+    expect(cards[0].find('.card-actions').text()).toContain('仍有 15 名在學，請先轉班')
+    expect(cards[1].find('.card-actions').text()).toContain('仍有 25 名在學，請先轉班')
   })
 
   it('未指派班導顯示警示 chip', async () => {
     const wrapper = mountView()
     await flush()
+    await switchToCard(wrapper)
 
     const lily = wrapper.findAll('.classroom-card')[2]
     expect(lily.find('.teacher-chip--missing').exists()).toBe(true)
@@ -318,10 +444,7 @@ describe('ClassroomView 改版：卡片內容', () => {
 })
 
 describe('ClassroomView 改版：工具列收斂', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    classroomsResponse = () => Promise.resolve({ data: threeClassrooms })
-  })
+  beforeEach(resetEach)
 
   it('標題列不再有「重新整理」，顯示停用開關移入工具列', async () => {
     const wrapper = mountView()
@@ -333,11 +456,22 @@ describe('ClassroomView 改版：工具列收斂', () => {
     expect(toggle.text()).toContain('顯示停用班級')
   })
 
-  it('頁首帶副標', async () => {
+  it('頁首帶副標；「統計表」按鈕改名「在籍記錄表」', async () => {
     const wrapper = mountView()
     await flush()
 
     expect(wrapper.text()).toContain('各班在籍概況')
+    const labels = wrapper.findAll('button').map((b) => b.text())
+    expect(labels).toContain('在籍記錄表')
+    expect(labels).not.toContain('統計表')
+  })
+
+  it('搜尋框 placeholder 涵蓋代號', async () => {
+    const wrapper = mountView()
+    await flush()
+
+    const toolbar = wrapper.findComponent({ name: 'AdminListToolbar' })
+    expect(toolbar.props('searchPlaceholder')).toBe('搜尋班級名稱、代號或班導')
   })
 
   it('篩選後無結果顯示「清除篩選條件」，點擊還原', async () => {
@@ -348,7 +482,7 @@ describe('ClassroomView 改版：工具列收斂', () => {
     state.classroomSearch = '不存在的班級'
     await nextTick()
 
-    expect(wrapper.findAll('.classroom-card').length).toBe(0)
+    expect(rows(wrapper).length).toBe(0)
     const clearBtn = wrapper.find('[data-test="clear-filters"]')
     expect(clearBtn.exists()).toBe(true)
 
@@ -356,6 +490,74 @@ describe('ClassroomView 改版：工具列收斂', () => {
     await nextTick()
 
     expect(state.classroomSearch).toBe('')
-    expect(wrapper.findAll('.classroom-card').length).toBe(3)
+    expect(rows(wrapper).length).toBe(3)
+  })
+})
+
+describe('ClassroomView 改版：載入失敗', () => {
+  beforeEach(resetEach)
+
+  it('首次載入失敗且無資料：顯示錯誤區塊，不假裝「尚無班級」也不提供新增 CTA', async () => {
+    classroomsResponse = () => Promise.reject(new Error('503'))
+    const wrapper = mountView()
+    await flush()
+
+    const alert = wrapper.find('[data-test="load-error"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.attributes('role')).toBe('alert')
+    expect(alert.text()).toContain('班級資料載入失敗')
+    expect(alert.text()).toContain('的班級清單沒有載入成功')
+    expect(wrapper.text()).not.toContain('尚無班級資料')
+    expect(wrapper.find('.empty-create-btn').exists()).toBe(false)
+    expect(wrapper.find('[data-test="classroom-table"]').exists()).toBe(false)
+    // 狀態列也隱藏：「0 班 · 在籍 0 / 0」會和「尚無班級」一樣誤導
+    expect(wrapper.find('.roster-stats').exists()).toBe(false)
+  })
+
+  it('按「重新載入」再打一次 getClassrooms；成功後錯誤區塊消失、列表出現', async () => {
+    classroomsResponse = () => Promise.reject(new Error('503'))
+    const wrapper = mountView()
+    await flush()
+    expect(getClassrooms).toHaveBeenCalledTimes(1)
+
+    classroomsResponse = () => Promise.resolve({ data: threeClassrooms })
+    await wrapper.find('[data-test="load-error-retry"]').trigger('click')
+    await flush()
+
+    expect(getClassrooms).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="load-error"]').exists()).toBe(false)
+    expect(rows(wrapper).length).toBe(3)
+  })
+
+  it('確定沒有班級（API 成功回空）仍是「尚無班級資料」＋新增 CTA，與載入失敗區分', async () => {
+    classroomsResponse = () => Promise.resolve({ data: [] })
+    const wrapper = mountView()
+    await flush()
+
+    expect(wrapper.find('[data-test="load-error"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('尚無班級資料')
+    expect(wrapper.find('.empty-create-btn').exists()).toBe(true)
+  })
+
+  it('已有舊資料時重載失敗：保留列表並在上方顯示警示橫幅，重試成功後橫幅消失', async () => {
+    const wrapper = mountView()
+    await flush()
+    const state = setupState(wrapper)
+    expect(rows(wrapper).length).toBe(3)
+
+    classroomsResponse = () => Promise.reject(new Error('503'))
+    await state.fetchClassrooms()
+    await flush()
+
+    expect(wrapper.find('[data-test="load-error"]').exists()).toBe(false)
+    const banner = wrapper.find('[data-test="load-error-banner"]')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('最新資料載入失敗，畫面可能不是最新')
+    expect(rows(wrapper).length).toBe(3)
+
+    classroomsResponse = () => Promise.resolve({ data: threeClassrooms })
+    await wrapper.find('[data-test="load-error-banner-retry"]').trigger('click')
+    await flush()
+    expect(wrapper.find('[data-test="load-error-banner"]').exists()).toBe(false)
   })
 })

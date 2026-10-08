@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref, watch, computed } from 'vue'
+import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   createClassroom,
@@ -14,18 +14,21 @@ import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } f
 import { getIntakePlan } from '@/api/recruitmentIntake'
 import { mapReservedByGrade, reservedCountFor, type IntakePlanRowLite } from '@/utils/classroomReserved'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, Clock, Delete, Edit, Grid, Plus, MoreFilled } from '@element-plus/icons-vue'
+import { ArrowRight, Grid, List, Menu, Plus, WarningFilled } from '@element-plus/icons-vue'
 import { capacityStatus, capacityPercent } from '@/utils/classroomCapacity'
 import { formatTeacherOptionLabel } from '@/utils/teacherOption'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 import { apiError } from '@/utils/error'
 import ClassroomStudentDrawer from '@/components/classroom/ClassroomStudentDrawer.vue'
 import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogDrawer.vue'
 import PlanStatusCard from '@/components/classroom/PlanStatusCard.vue'
-import type { ClassroomRow } from '@/components/classroom/types'
+import ClassroomTableView from '@/components/classroom/ClassroomTableView.vue'
+import ClassroomRowMenu from '@/components/classroom/ClassroomRowMenu.vue'
+import type { ClassroomCommand, ClassroomRow } from '@/components/classroom/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -64,7 +67,18 @@ const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
 const canReadStudents = computed(() => hasPermission('STUDENTS_READ'))
 const reservedByGrade = ref<Record<number, number>>({})
 
-// 客端關鍵字過濾：班級清單已全載，班級名稱/班導姓名即打即濾。
+// 檢視方式：預設「年級分組表」（掃視各班在籍/師資最快），卡片為次要檢視。
+// 偏好存 tenantStorage（含租戶前綴）；watch 寫入讓「點切換鈕」與程式直接改值都會落地。
+type ViewMode = 'table' | 'card'
+const VIEW_MODE_KEY = 'classrooms_view_mode'
+const viewMode = ref<ViewMode>(tenantGetItem(VIEW_MODE_KEY) === 'card' ? 'card' : 'table')
+watch(viewMode, (mode) => tenantSetItem(VIEW_MODE_KEY, mode))
+
+// 載入失敗狀態：與「確定沒有班級」分開，避免把網路/伺服器錯誤誤報成「尚無班級」並誘導重建
+const loadError = ref<string | null>(null)
+const loadFailedEmpty = computed(() => Boolean(loadError.value) && classrooms.value.length === 0 && !loading.value)
+
+// 客端關鍵字過濾：班級清單已全載，班級名稱/代號/班導姓名即打即濾。
 // 用 ClassroomRow（而非 recipe 常見的 Record<string, unknown>）避免 filteredClassrooms
 // 流入模板後對 openStudentDrawer 等既有函式簽章造成型別破口（該幾支函式吃 ClassroomRow）。
 const {
@@ -73,7 +87,7 @@ const {
   total: classroomTotal,
 } = useClientTableFilter<ClassroomRow>({
   source: () => classrooms.value,
-  searchFields: (r) => [r.name, r.head_teacher_name],
+  searchFields: (r) => [r.name, r.class_code, r.head_teacher_name],
 })
 
 // ── 結構化篩選（2026-08-24 改版）───────────────────────────────────────────
@@ -101,6 +115,16 @@ const rosterStats = computed(() => {
   }
   return { classCount: activeClassrooms.value.length, enrolled, capacity, near, full, noHead }
 })
+
+const remainingSeats = computed(() => Math.max(0, rosterStats.value.capacity - rosterStats.value.enrolled))
+const enrolledPercent = computed(() => capacityPercent(rosterStats.value.enrolled, rosterStats.value.capacity))
+
+// 快篩 chip：數值為 0 不上色（is-zero），避免三個永遠亮著的紅黃色塊稀釋真正的警訊
+const quickChips = computed<{ key: StatFilterKey; label: string; tone: 'warning' | 'danger'; count: number }[]>(() => [
+  { key: 'near', label: '接近額滿', tone: 'warning', count: rosterStats.value.near },
+  { key: 'full', label: '已滿', tone: 'danger', count: rosterStats.value.full },
+  { key: 'nohead', label: '未指派班導', tone: 'danger', count: rosterStats.value.noHead },
+])
 
 const toggleStatFilter = (key: StatFilterKey) => {
   statFilter.value = statFilter.value === key ? null : key
@@ -184,6 +208,11 @@ const selectedTermKey = computed({
     filterSemester.value = s
   },
 })
+// 載入失敗文案用：「115學年度 上學期」
+const termLabel = computed(() => (
+  `${filterSchoolYear.value}學年度 ${filterSemester.value === 1 ? '上學期' : '下學期'}`
+))
+
 const form = reactive<{
   id: number | null; name: string; class_code: string; school_year: number; semester: number
   grade_id: number | null; capacity: number; head_teacher_id: number | null
@@ -210,13 +239,17 @@ const rules = {
 
 const dialogTitle = computed(() => (isEdit.value ? '編輯班級' : '新增班級'))
 const getCapacityStatus = (classroom: ClassroomRow) => capacityStatus(classroom.current_count, classroom.capacity)
-// el-progress 的 status：滿載→紅、接近額滿→黃、正常→綠
-const progressStatus = (classroom: ClassroomRow): '' | 'success' | 'warning' | 'exception' => {
+// el-progress 的 status：滿載→紅、接近額滿→黃；正常不上色（一整片綠條會稀釋真正的警訊），
+// 改由 progressColor 給中性灰。
+const progressStatus = (classroom: ClassroomRow): '' | 'warning' | 'exception' => {
   const s = getCapacityStatus(classroom)
   if (s === 'full') return 'exception'
   if (s === 'warning') return 'warning'
-  return 'success'
+  return ''
 }
+const progressColor = (classroom: ClassroomRow): string => (
+  getCapacityStatus(classroom) === 'normal' ? 'var(--el-text-color-placeholder)' : ''
+)
 
 // 容量狀態文案：與 capacityStatus 同口徑，容量缺失時不顯示（count-text 已是「N / —」）
 const capacityCaption = (classroom: ClassroomRow): string => {
@@ -255,8 +288,8 @@ const studentCountText = (classroom: ClassroomRow): string => (
   (classroom.current_count ?? 0) > 0 ? `${classroom.current_count} 名學生` : '尚無學生'
 )
 
-// 卡片右上角「⋯」選單：編輯/歷史紀錄/停用集中一處，卡片主熱區只留「點卡開名單」
-const handleCardCommand = (command: string, classroom: ClassroomRow) => {
+// 「⋯」選單（表格列與卡片共用）：編輯/異動紀錄/停用集中一處，主熱區只留「開名冊」
+const handleRowCommand = (command: ClassroomCommand, classroom: ClassroomRow) => {
   if (command === 'edit') void openEdit(classroom)
   else if (command === 'history') openChangeLogDrawer(classroom)
   else if (command === 'disable') void handleDelete(classroom)
@@ -304,9 +337,12 @@ const fetchClassrooms = async () => {
     })
     if (seq !== fetchSeq) return // 過期回應：已切到別學期，丟棄不覆寫
     classrooms.value = response.data as ClassroomRow[]
+    loadError.value = null
   } catch (error) {
     if (seq !== fetchSeq) return
-    ElMessage.error(apiError(error, '載入班級資料失敗'))
+    const message = apiError(error, '載入班級資料失敗')
+    loadError.value = message
+    ElMessage.error(message)
   } finally {
     if (seq === fetchSeq) {
       loading.value = false
@@ -468,14 +504,43 @@ const submitForm = async () => {
   })
 }
 
+// 停用的連帶後果寫在確認框裡：後端會清空三位教師的指派並讓相關薪資待重算，使用者需要先知道
+const assignedTeacherNames = (classroom: ClassroomRow): string[] => (
+  [
+    classroom.head_teacher_name,
+    classroom.assistant_teacher_name,
+    classroom.english_teacher_name || classroom.art_teacher_name,
+  ].filter((name): name is string => Boolean(name))
+)
+
+const disableConfirmMessage = (classroom: ClassroomRow) => {
+  const names = assignedTeacherNames(classroom)
+  const who = names.length > 0 ? names.join('、') : '目前無指派'
+  return h('div', null, [
+    h('p', { style: 'margin: 0 0 var(--space-2)' }, '停用後會同時：'),
+    h('ul', { style: 'margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1)' }, [
+      h('li', `清空班導、副班導、美語老師的指派（${who}）`),
+      h('li', '相關教師本月薪資會標記為需要重新計算'),
+      h('li', '本學期班級清單不再顯示，可用「顯示停用班級」找回'),
+    ]),
+  ])
+}
+
 const handleDelete = async (classroom: ClassroomRow) => {
+  // 班上還有在學生時後端會拒絕停用；選單內已 disabled，這裡是直接呼叫（深連結/鍵盤）時的第二道防線
+  const enrolled = classroom.current_count ?? 0
+  if (enrolled > 0) {
+    ElMessage.warning(`「${classroom.name}」仍有 ${enrolled} 名在學，請先轉班再停用`)
+    return
+  }
   try {
     await ElMessageBox.confirm(
-      `確定要停用「${classroom.name}」嗎？`,
-      '確認停用',
+      disableConfirmMessage(classroom),
+      `停用「${classroom.name}」？`,
       {
-        confirmButtonText: '停用',
+        confirmButtonText: '停用班級',
         cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
         type: 'warning',
       },
     )
@@ -539,65 +604,85 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
             :value="t.key"
           />
         </el-select>
-        <el-button :icon="Grid" @click="statsDialogVisible = true">統計表</el-button>
+        <el-button :icon="Grid" @click="statsDialogVisible = true">在籍記錄表</el-button>
         <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
       </template>
     </PageHeader>
 
-    <div class="roster-stats" role="group" aria-label="班級統計與快速篩選">
-      <div class="stat-tile" data-test="stat-tile-classes">
-        <span class="stat-tile__label">班級數</span>
-        <span class="stat-tile__value">{{ rosterStats.classCount }}</span>
+    <!-- 狀態列：一條。左＝全園在籍/容量/尚餘，右＝三顆快篩 chip（0 值不上色）。
+         載入失敗且沒有資料時整條隱藏——「0 班 · 在籍 0 / 0」會跟「尚無班級」一樣誤導 -->
+    <div v-if="!loadFailedEmpty" class="roster-stats" role="group" aria-label="班級統計與快速篩選">
+      <div class="roster-overview">
+        <div class="roster-enrolled" data-test="stat-tile-enrolled">
+          <span class="roster-enrolled__label">在籍</span>
+          <strong class="roster-enrolled__num">{{ rosterStats.enrolled }}</strong> <span class="roster-enrolled__cap">/ {{ rosterStats.capacity }}</span>
+        </div>
+        <span class="roster-bar" aria-hidden="true">
+          <span class="roster-bar__fill" :style="{ width: `${enrolledPercent}%` }" />
+        </span>
+        <span class="roster-classes" data-test="stat-tile-classes">{{ rosterStats.classCount }} 班 · 尚餘 {{ remainingSeats }} 名</span>
       </div>
-      <div class="stat-tile" data-test="stat-tile-enrolled">
-        <span class="stat-tile__label">在籍幼生／容量</span>
-        <span class="stat-tile__value">{{ rosterStats.enrolled }} / {{ rosterStats.capacity }}</span>
+      <div class="roster-divider" aria-hidden="true" />
+      <div class="roster-chips">
+        <span class="roster-chips__label">快篩</span>
+        <button
+          v-for="chip in quickChips"
+          :key="chip.key"
+          type="button"
+          class="filter-chip"
+          :class="[`filter-chip--${chip.tone}`, { 'is-zero': chip.count === 0 }]"
+          :data-test="`stat-tile-${chip.key}`"
+          :aria-pressed="statFilter === chip.key ? 'true' : 'false'"
+          @click="toggleStatFilter(chip.key)"
+        >
+          <span>{{ chip.label }}</span>
+          <span class="filter-chip__n">{{ chip.count }}</span>
+        </button>
       </div>
-      <button
-        type="button"
-        class="stat-tile stat-tile--toggle"
-        data-test="stat-tile-near"
-        :aria-pressed="statFilter === 'near' ? 'true' : 'false'"
-        @click="toggleStatFilter('near')"
-      >
-        <span class="stat-tile__label">接近額滿</span>
-        <span class="stat-tile__value stat-tile__value--warning">{{ rosterStats.near }}</span>
-      </button>
-      <button
-        type="button"
-        class="stat-tile stat-tile--toggle"
-        data-test="stat-tile-full"
-        :aria-pressed="statFilter === 'full' ? 'true' : 'false'"
-        @click="toggleStatFilter('full')"
-      >
-        <span class="stat-tile__label">已滿</span>
-        <span class="stat-tile__value stat-tile__value--danger">{{ rosterStats.full }}</span>
-      </button>
-      <button
-        type="button"
-        class="stat-tile stat-tile--toggle"
-        data-test="stat-tile-nohead"
-        :aria-pressed="statFilter === 'nohead' ? 'true' : 'false'"
-        @click="toggleStatFilter('nohead')"
-      >
-        <span class="stat-tile__label">未指派班導</span>
-        <span class="stat-tile__value stat-tile__value--info">{{ rosterStats.noHead }}</span>
-      </button>
     </div>
 
     <PlanStatusCard />
 
-    <!-- 載入骨架：初次載入或切到尚無資料的學期時，避免先閃「尚無班級資料」再跳出卡片 -->
-    <div v-if="loading && classrooms.length === 0" class="classroom-grid classroom-skeleton" aria-hidden="true">
-      <el-card v-for="n in 6" :key="`sk-${n}`" class="classroom-card is-skeleton" shadow="never">
-        <el-skeleton :rows="5" animated />
-      </el-card>
+    <!-- 載入骨架：初次載入或切到尚無資料的學期時，避免先閃「尚無班級資料」再跳出列表 -->
+    <div
+      v-if="loading && classrooms.length === 0"
+      class="classroom-skeleton"
+      :class="{ 'classroom-grid': viewMode === 'card' }"
+      aria-hidden="true"
+    >
+      <template v-if="viewMode === 'card'">
+        <el-card v-for="n in 6" :key="`sk-${n}`" class="classroom-card is-skeleton" shadow="never">
+          <el-skeleton :rows="5" animated />
+        </el-card>
+      </template>
+      <div v-else class="table-skeleton">
+        <el-skeleton :rows="8" animated />
+      </div>
+    </div>
+
+    <!-- 載入失敗且沒有任何資料：不假裝「尚無班級」，也不提供「新增班級」（避免使用者以為班級不見而重建） -->
+    <div
+      v-else-if="loadFailedEmpty"
+      class="load-error"
+      role="alert"
+      data-test="load-error"
+    >
+      <span class="load-error__icon" aria-hidden="true"><el-icon><WarningFilled /></el-icon></span>
+      <strong class="load-error__title">班級資料載入失敗</strong>
+      <p class="load-error__desc">{{ termLabel }} 的班級清單沒有載入成功。請稍後重試；若持續發生，請告知系統管理員。</p>
+      <p class="load-error__detail">{{ loadError }}</p>
+      <el-button type="primary" data-test="load-error-retry" @click="fetchClassrooms">重新載入</el-button>
     </div>
 
     <template v-else>
+    <div v-if="loadError" class="load-error-banner" role="status" data-test="load-error-banner">
+      <span>最新資料載入失敗，畫面可能不是最新</span>
+      <el-button size="small" text type="primary" data-test="load-error-banner-retry" @click="fetchClassrooms">重新載入</el-button>
+    </div>
+
     <AdminListToolbar
       v-model:search="classroomSearch"
-      search-placeholder="搜尋班級名稱或帶班老師"
+      search-placeholder="搜尋班級名稱、代號或班導"
       :filters="gradeFilterGroup"
       :filter-values="listFilterValues"
       :total="classroomTotal"
@@ -609,111 +694,131 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
           <span>顯示停用班級</span>
           <el-switch v-model="showInactive" />
         </label>
+        <div class="view-toggle" role="group" aria-label="檢視方式">
+          <button
+            type="button"
+            class="view-toggle__btn"
+            data-test="view-toggle-table"
+            :aria-pressed="viewMode === 'table' ? 'true' : 'false'"
+            @click="viewMode = 'table'"
+          >
+            <el-icon aria-hidden="true"><List /></el-icon>表格
+          </button>
+          <button
+            type="button"
+            class="view-toggle__btn"
+            data-test="view-toggle-card"
+            :aria-pressed="viewMode === 'card' ? 'true' : 'false'"
+            @click="viewMode = 'card'"
+          >
+            <el-icon aria-hidden="true"><Menu /></el-icon>卡片
+          </button>
+        </div>
       </template>
     </AdminListToolbar>
 
-    <div class="classroom-grid" v-if="visibleClassrooms.length > 0" v-loading="loading">
-      <el-card
-        v-for="classroom in visibleClassrooms"
-        :key="classroom.id"
-        class="classroom-card"
-        shadow="hover"
-        role="button"
-        tabindex="0"
-        :aria-label="`開啟 ${classroom.name} 學生管理`"
-        @click="openStudentDrawer(classroom)"
-        @keydown.enter.prevent="openStudentDrawer(classroom)"
-        @keydown.space.prevent="openStudentDrawer(classroom)"
-      >
-        <template #header>
-          <div class="card-header">
-            <div class="header-title">
-              <span class="class-name">{{ classroom.name }}</span>
-              <span class="grade-chip" :class="gradeChipClass(classroom.grade_name)">
-                {{ classroom.grade_name || '未設定年級' }}
-              </span>
-              <el-tag v-if="!classroom.is_active" type="info" size="small">已停用</el-tag>
-            </div>
-            <div class="card-actions" @click.stop>
-              <el-dropdown
-                v-if="canWrite || canReadStudents"
-                trigger="click"
-                @command="(cmd: string) => handleCardCommand(cmd, classroom)"
-              >
-                <el-button size="small" text :icon="MoreFilled" aria-label="更多操作" />
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item v-if="canWrite" command="edit" :icon="Edit">編輯班級</el-dropdown-item>
-                    <el-dropdown-item v-if="canReadStudents" command="history" :icon="Clock">歷史紀錄</el-dropdown-item>
-                    <el-dropdown-item
-                      v-if="canWrite && classroom.is_active"
-                      command="disable"
-                      :icon="Delete"
-                      divided
-                      class="dropdown-danger"
-                    >停用班級</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
-          </div>
-          <p class="class-code">班級代號 {{ classroom.class_code || '—' }}</p>
-        </template>
+    <div v-if="visibleClassrooms.length > 0" v-loading="loading" class="classroom-list">
+      <ClassroomTableView
+        v-if="viewMode === 'table'"
+        :classrooms="visibleClassrooms"
+        :grades="grades"
+        :can-write="canWrite"
+        :can-read-students="canReadStudents"
+        :reserved-by-grade="reservedByGrade"
+        @open="openStudentDrawer"
+        @command="handleRowCommand"
+      />
 
-        <div class="card-content">
-          <div class="capacity-block">
-            <div class="capacity-line">
-              <span class="count-text">{{ classroom.current_count ?? 0 }} / {{ classroom.capacity ?? '—' }} 人</span>
-              <span class="capacity-side">
-                <el-tag
-                  v-if="reservedCountFor(reservedByGrade, classroom) > 0"
-                  type="warning"
-                  effect="plain"
-                  size="small"
-                  :title="`同年級暫定編班（未註冊）${reservedCountFor(reservedByGrade, classroom)} 人`"
-                >保留 {{ reservedCountFor(reservedByGrade, classroom) }}</el-tag>
-                <span class="capacity-caption" :class="`capacity-caption--${getCapacityStatus(classroom)}`">
-                  {{ capacityCaption(classroom) }}
+      <div v-else class="classroom-grid">
+        <el-card
+          v-for="classroom in visibleClassrooms"
+          :key="classroom.id"
+          class="classroom-card"
+          shadow="hover"
+          role="button"
+          tabindex="0"
+          :aria-label="`開啟 ${classroom.name} 學生管理`"
+          @click="openStudentDrawer(classroom)"
+          @keydown.enter.prevent="openStudentDrawer(classroom)"
+          @keydown.space.prevent="openStudentDrawer(classroom)"
+        >
+          <template #header>
+            <div class="card-header">
+              <div class="header-title">
+                <span class="class-name">{{ classroom.name }}</span>
+                <span class="grade-chip" :class="gradeChipClass(classroom.grade_name)">
+                  {{ classroom.grade_name || '未設定年級' }}
                 </span>
+                <el-tag v-if="!classroom.is_active" type="info" size="small">已停用</el-tag>
+              </div>
+              <div class="card-actions" @click.stop>
+                <ClassroomRowMenu
+                  :classroom="classroom"
+                  :can-write="canWrite"
+                  :can-read-students="canReadStudents"
+                  @command="(cmd) => handleRowCommand(cmd, classroom)"
+                />
+              </div>
+            </div>
+            <p class="class-code">班級代號 {{ classroom.class_code || '—' }}</p>
+          </template>
+
+          <div class="card-content">
+            <div class="capacity-block">
+              <div class="capacity-line">
+                <span class="count-text">{{ classroom.current_count ?? 0 }} / {{ classroom.capacity ?? '—' }} 人</span>
+                <span class="capacity-side">
+                  <el-tag
+                    v-if="reservedCountFor(reservedByGrade, classroom) > 0"
+                    type="warning"
+                    effect="plain"
+                    size="small"
+                    :title="`同年級暫定編班（未註冊）${reservedCountFor(reservedByGrade, classroom)} 人`"
+                  >保留 {{ reservedCountFor(reservedByGrade, classroom) }}</el-tag>
+                  <span class="capacity-caption" :class="`capacity-caption--${getCapacityStatus(classroom)}`">
+                    {{ capacityCaption(classroom) }}
+                  </span>
+                </span>
+              </div>
+              <el-progress
+                class="capacity-progress"
+                :percentage="capacityPercent(classroom.current_count, classroom.capacity)"
+                :status="progressStatus(classroom)"
+                :color="progressColor(classroom)"
+                :stroke-width="6"
+                :show-text="false"
+                aria-hidden="true"
+              />
+            </div>
+
+            <div class="teacher-info">
+              <span v-if="!classroom.head_teacher_name" class="teacher-chip teacher-chip--missing">未指派班導</span>
+              <span v-else class="teacher-chip">班導・{{ classroom.head_teacher_name }}</span>
+              <span v-if="classroom.assistant_teacher_name" class="teacher-chip">副班・{{ classroom.assistant_teacher_name }}</span>
+              <span v-if="classroom.english_teacher_name || classroom.art_teacher_name" class="teacher-chip">
+                美語・{{ classroom.english_teacher_name || classroom.art_teacher_name }}
               </span>
             </div>
-            <el-progress
-              class="capacity-progress"
-              :percentage="capacityPercent(classroom.current_count, classroom.capacity)"
-              :status="progressStatus(classroom)"
-              :stroke-width="6"
-              :show-text="false"
-              aria-hidden="true"
-            />
-          </div>
 
-          <div class="teacher-info">
-            <span v-if="!classroom.head_teacher_name" class="teacher-chip teacher-chip--missing">未指派班導</span>
-            <span v-else class="teacher-chip">班導・{{ classroom.head_teacher_name }}</span>
-            <span v-if="classroom.assistant_teacher_name" class="teacher-chip">副班・{{ classroom.assistant_teacher_name }}</span>
-            <span v-if="classroom.english_teacher_name || classroom.art_teacher_name" class="teacher-chip">
-              美語・{{ classroom.english_teacher_name || classroom.art_teacher_name }}
-            </span>
-          </div>
-
-          <div class="card-footer">
-            <div class="student-preview">
-              <span
-                v-for="s in previewStudents(classroom)"
-                :key="s.key"
-                class="student-avatar"
-                :class="s.cls"
-                aria-hidden="true"
-              >{{ s.initial }}</span>
-              <span class="student-count">{{ studentCountText(classroom) }}</span>
+            <div class="card-footer">
+              <div class="student-preview">
+                <span
+                  v-for="s in previewStudents(classroom)"
+                  :key="s.key"
+                  class="student-avatar"
+                  :class="s.cls"
+                  aria-hidden="true"
+                >{{ s.initial }}</span>
+                <span class="student-count">{{ studentCountText(classroom) }}</span>
+              </div>
+              <span v-if="canReadStudents" class="card-go" aria-hidden="true">
+                查看名單
+                <el-icon><ArrowRight /></el-icon>
+              </span>
             </div>
-            <span v-if="canReadStudents" class="card-go" aria-hidden="true">
-              查看名單
-              <el-icon><ArrowRight /></el-icon>
-            </span>
           </div>
-        </div>
-      </el-card>
+        </el-card>
+      </div>
     </div>
 
     <EmptyState
@@ -874,64 +979,142 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 </template>
 
 <style scoped>
-/* ── 統計列（可點擊快速篩選）───────────────────────────────────────────── */
+/* ── 狀態列（單條：全園在籍概況＋快篩 chip）──────────────────────────── */
 .roster-stats {
   display: flex;
-  gap: var(--space-3);
   flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-6);
   margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
 }
 
-.stat-tile {
+.roster-overview {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 10px 16px;
-  min-width: 112px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--el-border-color-light);
-  background: var(--el-bg-color);
-  text-align: left;
+  align-items: center;
+  gap: var(--space-4);
 }
 
-button.stat-tile {
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  transition: border-color var(--transition-base), background var(--transition-base);
+.roster-enrolled {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
 }
 
-button.stat-tile:hover {
-  border-color: var(--el-color-primary-light-5);
+.roster-enrolled__label {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
-button.stat-tile:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
-}
-
-button.stat-tile[aria-pressed='true'] {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-}
-
-.stat-tile__label {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-
-.stat-tile__value {
-  font-size: var(--text-xl);
-  font-weight: 700;
+.roster-enrolled__num {
+  font-size: var(--text-2xl);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.25;
   color: var(--text-primary);
 }
 
-.stat-tile__value--warning { color: var(--color-warning-darker); }
-.stat-tile__value--danger { color: var(--color-danger-darker); }
-.stat-tile__value--info { color: var(--color-info-darker); }
+.roster-enrolled__cap {
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+.roster-bar {
+  width: 140px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-200);
+  overflow: hidden;
+}
+
+.roster-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--el-text-color-placeholder);
+}
+
+.roster-classes {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.roster-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border-color);
+}
+
+.roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.roster-chips__label {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+/* 底色用語意色對 transparent 混色：淡底在深色模式下自動跟著表面色走，不另寫 hex */
+.filter-chip {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--surface-color);
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.filter-chip__n {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.filter-chip.is-zero .filter-chip__n {
+  font-weight: 400;
+}
+
+.filter-chip--warning:not(.is-zero) {
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  color: var(--color-warning-darker);
+}
+
+.filter-chip--danger:not(.is-zero) {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
+  color: var(--color-danger-darker);
+}
+
+.filter-chip:hover {
+  border-color: var(--el-text-color-placeholder);
+}
+
+.filter-chip:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+/* 按下＝品牌淡底，必須排在語意色規則之後才蓋得過 */
+.filter-chip[aria-pressed='true'] {
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary-dark-2);
+}
 
 /* ── 工具列 ──────────────────────────────────────────────────────────── */
 .show-inactive-toggle {
@@ -942,6 +1125,108 @@ button.stat-tile[aria-pressed='true'] {
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-color);
+  overflow: hidden;
+}
+
+.view-toggle__btn {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 0;
+  background: var(--surface-color);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.view-toggle__btn + .view-toggle__btn {
+  border-left: 1px solid var(--border-color);
+}
+
+.view-toggle__btn[aria-pressed='true'] {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary-dark-2);
+}
+
+.view-toggle__btn:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: -2px;
+}
+
+/* ── 載入骨架（表格檢視）與載入失敗 ────────────────────────────────────── */
+.table-skeleton {
+  padding: var(--space-4);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+}
+
+.load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-12) var(--space-6);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.load-error__icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-darker);
+  font-size: var(--text-4xl);
+}
+
+.load-error__title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.load-error__desc {
+  max-width: 420px;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.load-error__detail {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.load-error-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  color: var(--color-warning-darker);
+  font-size: var(--text-sm);
 }
 
 /* ── 卡片網格 ─────────────────────────────────────────────────────────── */
@@ -1166,10 +1451,6 @@ html.dark .avatar--rose { background: rgba(190, 18, 60, 0.3); color: #fda4af; }
   }
 }
 
-.dropdown-danger {
-  color: var(--el-color-danger);
-}
-
 .empty-create-btn {
   margin-top: var(--space-3);
 }
@@ -1197,16 +1478,39 @@ html.dark .avatar--rose { background: rgba(190, 18, 60, 0.3); color: #fda4af; }
 }
 
 @media (--to-sm) {
-  /* 觸控目標：卡片動作按鈕與統計列在手機上維持 ≥44px，降低誤觸 */
+  /* 觸控目標：卡片動作按鈕、快篩 chip、檢視切換在手機上維持 ≥44px，降低誤觸 */
   .card-actions :deep(.el-button) {
     min-height: var(--touch-target-min);
     min-width: var(--touch-target-min);
   }
-  .stat-tile {
+  .filter-chip,
+  .view-toggle__btn {
     min-height: var(--touch-target-min);
   }
   .show-inactive-toggle {
     min-height: var(--touch-target-min);
+  }
+
+  /* 狀態列：在籍數字與「N 班 · 尚餘」同列，進度條獨佔下一列，快篩 chip 再下一列 */
+  .roster-stats {
+    padding: var(--space-3) var(--space-4);
+  }
+  .roster-overview {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'enrolled classes'
+      'bar bar';
+    align-items: baseline;
+    gap: var(--space-2) var(--space-3);
+  }
+  .roster-enrolled { grid-area: enrolled; }
+  .roster-classes { grid-area: classes; }
+  .roster-bar { grid-area: bar; width: 100%; }
+  .roster-divider { display: none; }
+  .load-error {
+    padding: var(--space-8) var(--space-4);
   }
 }
 </style>
