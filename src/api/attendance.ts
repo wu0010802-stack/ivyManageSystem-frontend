@@ -28,6 +28,16 @@ export const previewExcel = (
     params,
   })
 
+/** 打卡鐘報表（txt）逐列預覽（唯讀；confirm 走 uploadCsv） */
+export const previewClockReport = (
+  formData: FormData,
+  params: ApiQuery<'/attendance/upload/preview-clock-report', 'post'>,
+): AxiosResp<'/attendance/upload/preview-clock-report', 'post'> =>
+  api.post('/attendance/upload/preview-clock-report', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    params,
+  })
+
 // ── 查詢 ─────────────────────────────────────────────────────────────────────
 
 export const getRecords = (

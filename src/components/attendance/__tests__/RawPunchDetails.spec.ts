@@ -13,6 +13,16 @@ describe('原始打卡詳情', () => {
     expect(wrapper.text()).toContain('2026-08-03 12:00:00')
     expect(wrapper.text()).toContain('已人工核對')
   })
+  it('顯示打卡鐘報表的原文與推估區塊確認', () => {
+    const wrapper = mount(RawPunchDetails, { props: { importMetadata: {
+      import_format: 'clock_report', device_id: 'default', source_employee_number: '901',
+      source_tokens: ['08:24-11:28', '14:10-16:05'], block_id: '901:21', block_confirmed: true, review_confirmed: true,
+    } } })
+    expect(wrapper.text()).toContain('卡號 901')
+    expect(wrapper.findAll('li').map(li => li.text())).toEqual(['08:24-11:28', '14:10-16:05'])
+    expect(wrapper.text()).toContain('由推估區塊匯入')
+    expect(wrapper.text()).toContain('已人工核對')
+  })
   it('沒有逐筆匯入資料時不顯示入口', () => {
     expect(mount(RawPunchDetails, { props: { importMetadata: null } }).find('details').exists()).toBe(false)
   })
