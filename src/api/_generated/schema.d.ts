@@ -26559,6 +26559,8 @@ export interface components {
             art_teacher_name: string | null;
             /** Assistant Teacher Name */
             assistant_teacher_name: string | null;
+            /** Class Code */
+            class_code?: string | null;
             /** Class Name */
             class_name: string;
             /** Class Number */
@@ -44200,6 +44202,8 @@ export interface components {
             seq: number;
             /** Status Tag */
             status_tag: string | null;
+            /** Student Id */
+            student_id: number;
         };
         /** RotationClassroomOut */
         RotationClassroomOut: {

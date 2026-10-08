@@ -608,7 +608,7 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 }
 
 .gender-dot--unknown {
-  background: var(--neutral-300);
+  background: var(--color-neutral-300);
 }
 
 .status-pill {
@@ -633,10 +633,10 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 .status-pill--ok .status-pill-dot { background: var(--color-success, #67c23a); }
 
 .status-pill--info {
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   color: var(--text-secondary);
 }
-.status-pill--info .status-pill-dot { background: var(--neutral-300); }
+.status-pill--info .status-pill-dot { background: var(--color-neutral-300); }
 
 .status-pill--warning {
   background: var(--color-warning-lighter, #fdf6ec);
@@ -750,12 +750,12 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 }
 
 :deep(.row-subtotal) td {
-  background-color: var(--neutral-50) !important;
+  background-color: var(--color-neutral-50) !important;
   font-weight: 600;
 }
 
 :deep(.row-grand-total) td {
-  background-color: var(--neutral-100) !important;
+  background-color: var(--color-neutral-100) !important;
   font-weight: 700;
   color: var(--text-primary);
 }

@@ -15,6 +15,7 @@ import {
 } from '@/api/portalAttendanceConfirm'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { apiError } from '@/utils/error'
 import { todayTaipeiISO } from '@/utils/format'
 import {
   absenceDayText,
@@ -182,8 +183,7 @@ function replaceItem(updated: PortalConfirmationItem) {
 }
 
 function errorText(e: unknown): string {
-  const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  return typeof detail === 'string' ? detail : '送出失敗，請稍後再試'
+  return apiError(e, '送出失敗，請稍後再試')
 }
 
 async function agree(item: PortalConfirmationItem) {

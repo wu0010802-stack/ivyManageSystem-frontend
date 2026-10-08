@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: rgba(0, 0, 0, 0.94);
-  color: var(--pt-on-accent);
+  color: var(--color-primary-contrast);
   animation: recap-viewer-in var(--motion-page) var(--motion-emphasized);
 }
 .recap-viewer:focus {
@@ -515,7 +515,7 @@ onBeforeUnmount(() => {
   height: 100%;
   width: 0;
   border-radius: 2px;
-  background: var(--pt-on-accent);
+  background: var(--color-primary-contrast);
 }
 .v-segs .s.done > i {
   width: 100%;
@@ -571,7 +571,7 @@ onBeforeUnmount(() => {
   margin: 6px 0 0;
   font-size: 12px;
   font-weight: 500;
-  color: var(--pt-on-accent);
+  color: var(--color-primary-contrast);
   opacity: 0.68;
   font-variant-numeric: tabular-nums;
 }
@@ -591,7 +591,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.14);
-  color: var(--pt-on-accent);
+  color: var(--color-primary-contrast);
   cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -601,7 +601,7 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.24);
 }
 .icon-btn:focus-visible {
-  outline: 2px solid var(--pt-on-accent);
+  outline: 2px solid var(--color-primary-contrast);
   outline-offset: 2px;
 }
 
@@ -657,7 +657,7 @@ onBeforeUnmount(() => {
   background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
   font-size: 12px;
   font-weight: 600;
-  color: var(--pt-on-accent);
+  color: var(--color-primary-contrast);
   font-variant-numeric: tabular-nums;
   display: flex;
   justify-content: space-between;
@@ -679,7 +679,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.13);
-  color: var(--pt-on-accent);
+  color: var(--color-primary-contrast);
   cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -690,7 +690,7 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 .v-nav:focus-visible {
-  outline: 2px solid var(--pt-on-accent);
+  outline: 2px solid var(--color-primary-contrast);
   outline-offset: 2px;
 }
 .v-nav.prev {
@@ -742,7 +742,7 @@ onBeforeUnmount(() => {
   transition: outline-color var(--motion-quick) ease;
 }
 .filmstrip .f.is-current img {
-  outline-color: var(--pt-on-accent);
+  outline-color: var(--color-primary-contrast);
 }
 .filmstrip .f:focus-visible img {
   outline-color: var(--m3-primary);

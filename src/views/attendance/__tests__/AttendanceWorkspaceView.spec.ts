@@ -633,7 +633,9 @@ it('新月份名冊不再包含原選人時回到可用員工', async () => {
   await wrapper.findComponent(RosterColumnStub).vm.$emit('select', sampleRoster[1]!.employee_id)
   await flushPromises()
   getSummaryMock.mockResolvedValue({ data: [sampleRoster[0]] })
-  await wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:month', 10)
+  // 初始月份取自今天：寫死 10 會在 10 月變成同月 no-op（2026-10 起此測試即因此紅）
+  const header = wrapper.findComponent(WorkspaceHeaderStub)
+  await header.vm.$emit('update:month', header.props('month') === 10 ? 11 : 10)
   await flushPromises()
   expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(sampleRoster[0]!.employee_id)
   wrapper.unmount()

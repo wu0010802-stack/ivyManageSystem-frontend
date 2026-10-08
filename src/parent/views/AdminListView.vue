@@ -234,7 +234,7 @@ function go(path: string) {
   font-size: 13px;
   font-weight: 700;
   line-height: 1;
-  color: var(--pt-on-accent, #fff);
+  color: var(--color-primary-contrast, #fff);
   background: var(--m3-primary, #006d3d);
 }
 /* 逾期款項：唯一該讓家長心跳快一下的情況 */

@@ -198,7 +198,7 @@ function cardLabel(recap: PhotoRecap): string {
   position: absolute;
   inset: auto 0 0 0;
   padding: 10px 11px 11px;
-  color: var(--pt-on-accent);
+  color: var(--color-primary-contrast);
 }
 .when {
   display: block;
@@ -226,7 +226,7 @@ function cardLabel(recap: PhotoRecap): string {
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  color: var(--pt-on-accent);
+  color: var(--color-primary-contrast);
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
