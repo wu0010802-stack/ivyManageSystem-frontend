@@ -18,6 +18,7 @@ import {
   updateConfirmationRound,
 } from '@/api/attendanceConfirmation'
 import { hasPermission } from '@/utils/auth'
+import { apiError } from '@/utils/error'
 import { todayTaipeiISO } from '@/utils/format'
 import {
   addWorkdays,
@@ -105,8 +106,7 @@ const closeCounts = computed(() => {
 })
 
 function errorText(e: unknown): string {
-  const detailText = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  return typeof detailText === 'string' ? detailText : '操作失敗，請稍後再試'
+  return apiError(e, '操作失敗，請稍後再試')
 }
 
 let seq = 0
