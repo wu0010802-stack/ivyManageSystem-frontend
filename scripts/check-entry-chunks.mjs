@@ -99,6 +99,13 @@ const ENTRIES = [
 // TENANT_RESOLUTION_BUSY 的自動重試（R5，家長端 axios 攔截器與 tenant-meta）、
 // 非預設租戶不退回義華品牌的 normalizeBranding（F65），本機逐 build 比對約 +0.4KB，
 // 屬刻意成長。沿用 09-17 的保守原則，只上調 1KB 到剛好通過。
+//
+// 2026-10-08 parent 校準（依賴 CVE 修補）：axios 1.18.1→1.20.0（12 筆 high）、
+// vue 3.5.39→3.5.43（@vue/server-renderer high）。同機逐 build 比對 origin/staging
+// 36ed4eca：vendor +1.77KB、vue-core +1.29KB gz，三個 entry 皆 +3.0KB；parent 本機
+// 246.9→249.9KB，加 Railway 固定 +1.4KB ≈ 251.3KB。屬刻意成長（安全升級無法延後，
+// allowlist 只收無版可升者）。照保守原則只調到剛好通過：249→252。index 304.1／public
+// 186.3 仍在預算內不動。⚠ parent 餘裕仍僅 ~0.7KB，下一個家長端首屏功能前應先瘦身。
 // 多租戶（4d/fb，scan-frontend GAP-02）：`manifestName` 期望值改為 **token 字面**。
 // dist 的 *.webmanifest 現在存的是 `{{TB_MANIFEST_*_NAME}}`，真正的品牌值由 nginx
 // `sub_filter` 依 $host 逐請求注入。這條斷言因此反向鎖住「不得退回硬編品牌字面」：
@@ -109,7 +116,7 @@ const ENTRIES = [
 const ENTRY_BUDGETS_KB = {
   index: 310,
   public: 200,
-  parent: 249,
+  parent: 252,
 }
 
 if (!existsSync(ASSETS)) {
