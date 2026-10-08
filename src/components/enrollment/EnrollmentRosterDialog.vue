@@ -164,7 +164,7 @@ const onSelectStudent = ({ id, name }: { id: number; name: string }) => {
             :value="`${opt.school_year}-${opt.semester}`"
           />
         </el-select>
-        <div class="form-hint term-hint">只套用在這張表，不會改變班級管理頁的學期</div>
+        <div class="form-hint">只套用在這張表，不會改變班級管理頁的學期</div>
       </div>
       <el-button :icon="Download" @click="exportXlsx">匯出 Excel</el-button>
       <el-button :icon="Printer" @click="printRoster">列印</el-button>
@@ -216,11 +216,31 @@ const onSelectStudent = ({ id, name }: { id: number; name: string }) => {
 .dialog-toolbar {
   display: flex;
   justify-content: flex-end;
-  align-items: center;
+  /* 學期欄含說明文字比其他 32px 控制項高；置中會讓其他控制項下沉，改頂端對齊 */
+  align-items: flex-start;
   gap: var(--space-3, 12px);
   flex-wrap: nowrap;
   overflow-x: auto;
   margin-bottom: var(--space-3, 12px);
+}
+
+/* EP 的相鄰按鈕自帶 margin-left: 12px，與工具列 gap 重複；換行後落單的按鈕也會被縮排 */
+.dialog-toolbar .el-button + .el-button {
+  margin-left: 0;
+}
+
+/* 工具列一列約需 935px（含 12px 間距），內容區窄於此時 flex-end＋nowrap 會把最左的
+   搜尋框推出可捲動範圍之外（負方向溢位不可捲），改成可換行；手機再改靠左起排 */
+@media (--to-lg) {
+  .dialog-toolbar {
+    flex-wrap: wrap;
+  }
+}
+
+@media (--to-sm) {
+  .dialog-toolbar {
+    justify-content: flex-start;
+  }
 }
 
 .field-match-width {
@@ -228,13 +248,11 @@ const onSelectStudent = ({ id, name }: { id: number; name: string }) => {
   flex-shrink: 0;
 }
 
-/* 學期選單＋就地說明：說明不換行，欄寬由說明文字撐開，避免工具列橫向捲動時被截斷 */
+/* 學期選單＋就地說明：寬螢幕單列時欄寬由說明文字撐開（不換行）；換行模式下以
+   max-width 限縮到容器寬，說明文字自然折行，不會超出可視範圍 */
 .term-field {
   flex-shrink: 0;
-}
-
-.term-hint {
-  white-space: nowrap;
+  max-width: 100%;
 }
 
 .roster-subtoolbar {
