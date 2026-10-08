@@ -35,17 +35,26 @@ watch(searchInput, (v) => {
   _searchTimer = setTimeout(() => { searchKeyword.value = v }, 300)
 })
 
+// ── 學期 ───────────────────────────────────────
+// 在籍記錄表是「單張表的瀏覽器」，學期選單只影響這張表：開啟時從全域學期上下文讀一次當
+// 初值，之後只改本地、不回寫 store——寫 store 會連動底下班級管理頁換學期並重抓
+// （同 ClassroomChangeLogDrawer 的 drawerTerm）。
+const localTerm = ref({
+  school_year: termStore.school_year,
+  semester: termStore.semester,
+})
+
 const selectedTerm = computed({
-  get: () => `${termStore.school_year}-${termStore.semester}`,
+  get: () => `${localTerm.value.school_year}-${localTerm.value.semester}`,
   set: (val: string) => {
-    const [sy, sem] = val.split('-').map(Number)
-    termStore.setTerm(sy, sem)
+    const [school_year, semester] = val.split('-').map(Number)
+    localTerm.value = { school_year, semester }
   },
 })
 
 const termParams = () => ({
-  school_year: termStore.school_year,
-  semester: termStore.semester,
+  school_year: localTerm.value.school_year,
+  semester: localTerm.value.semester,
 })
 
 const fetchOptions = async () => {
@@ -69,13 +78,14 @@ const fetchRoster = async () => {
   }
 }
 
-watch(selectedTerm, () => {
-  fetchRoster()
-})
-
 // el-dialog 的 @open 每次開啟都會觸發（與 destroy-on-close 無關），確保每次開啟
-// 統計表都是最新資料，不需仰賴元件是否重新掛載。
+// 記錄表都是最新資料，不需仰賴元件是否重新掛載；學期初值也在此重新讀取（僅讀不寫）。
+// 選單改以 @change（僅使用者操作觸發）重抓，避免這裡重設學期時 watcher 造成雙重載入。
 const onOpen = () => {
+  localTerm.value = {
+    school_year: termStore.school_year,
+    semester: termStore.semester,
+  }
   void fetchOptions()
   void fetchRoster()
 }
@@ -113,7 +123,7 @@ const onSelectStudent = ({ id, name }: { id: number; name: string }) => {
 <template>
   <el-dialog
     :model-value="visible"
-    title="統計表"
+    title="在籍記錄表"
     :width="isMobile ? '100%' : '92%'"
     :top="isMobile ? '0' : '2vh'"
     :fullscreen="isMobile"
@@ -140,14 +150,22 @@ const onSelectStudent = ({ id, name }: { id: number; name: string }) => {
       >
         <el-option v-for="g in gradeOptions" :key="g" :label="g" :value="g" />
       </el-select>
-      <el-select v-model="selectedTerm" placeholder="選擇學年學期" style="width: 200px">
-        <el-option
-          v-for="opt in termOptions"
-          :key="`${opt.school_year}-${opt.semester}`"
-          :label="opt.label"
-          :value="`${opt.school_year}-${opt.semester}`"
-        />
-      </el-select>
+      <div class="term-field">
+        <el-select
+          v-model="selectedTerm"
+          placeholder="選擇學年學期"
+          style="width: 200px"
+          @change="fetchRoster"
+        >
+          <el-option
+            v-for="opt in termOptions"
+            :key="`${opt.school_year}-${opt.semester}`"
+            :label="opt.label"
+            :value="`${opt.school_year}-${opt.semester}`"
+          />
+        </el-select>
+        <div class="form-hint term-hint">只套用在這張表，不會改變班級管理頁的學期</div>
+      </div>
       <el-button :icon="Download" @click="exportXlsx">匯出 Excel</el-button>
       <el-button :icon="Printer" @click="printRoster">列印</el-button>
     </div>
@@ -208,6 +226,15 @@ const onSelectStudent = ({ id, name }: { id: number; name: string }) => {
 .field-match-width {
   width: 220px;
   flex-shrink: 0;
+}
+
+/* 學期選單＋就地說明：說明不換行，欄寬由說明文字撐開，避免工具列橫向捲動時被截斷 */
+.term-field {
+  flex-shrink: 0;
+}
+
+.term-hint {
+  white-space: nowrap;
 }
 
 .roster-subtoolbar {
