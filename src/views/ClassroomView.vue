@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, h, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   createClassroom,
@@ -13,13 +13,15 @@ import {
 import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
 import { getIntakePlan } from '@/api/recruitmentIntake'
 import { mapReservedByGrade, reservedCountFor, type IntakePlanRowLite } from '@/utils/classroomReserved'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, Grid, List, Menu, Plus, WarningFilled } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox, type FormItemRule } from 'element-plus'
+import { ArrowRight, Grid, List, Lock, Menu, Plus, WarningFilled } from '@element-plus/icons-vue'
 import { capacityStatus, capacityPercent } from '@/utils/classroomCapacity'
 import { formatTeacherOptionLabel } from '@/utils/teacherOption'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { required } from '@/validators/rules'
 import { hasPermission } from '@/utils/auth'
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 import { apiError } from '@/utils/error'
@@ -30,6 +32,7 @@ import ClassroomTableView from '@/components/classroom/ClassroomTableView.vue'
 import ClassroomRowMenu from '@/components/classroom/ClassroomRowMenu.vue'
 import type { ClassroomCommand, ClassroomRow } from '@/components/classroom/types'
 import PageHeader from '@/components/common/PageHeader.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
@@ -49,14 +52,10 @@ const detailLoading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const formRef = ref<{ validate: (cb: (valid: boolean) => void) => void } | null>(null)
+const formDialogRef = ref<InstanceType<typeof FormDialog> | null>(null)
 const isEdit = ref(false)
 const showInactive = ref(false)
 const currentClassroom = ref<ClassroomRow | null>(null)
-// 編輯 dialog 的學生名單母集合：在讀生（is_active !== false），對齊後端
-// current_count 口徑；混列已離園/已刪除學生會與人數對不上（2026-08-01 稽核）
-const activeDialogStudents = computed(() => (
-  (currentClassroom.value?.students ?? []).filter((s) => s.is_active !== false)
-))
 const classroomDrawerVisible = ref(false)
 const classroomDrawerLoading = ref(false)
 const drawerClassroom = ref<ClassroomRow | null>(null)
@@ -208,10 +207,11 @@ const selectedTermKey = computed({
     filterSemester.value = s
   },
 })
+const formatTermLabel = (schoolYear: number, semester: number) => (
+  `${schoolYear}學年度 ${semester === 1 ? '上學期' : '下學期'}`
+)
 // 載入失敗文案用：「115學年度 上學期」
-const termLabel = computed(() => (
-  `${filterSchoolYear.value}學年度 ${filterSemester.value === 1 ? '上學期' : '下學期'}`
-))
+const termLabel = computed(() => formatTermLabel(filterSchoolYear.value, filterSemester.value))
 
 const form = reactive<{
   id: number | null; name: string; class_code: string; school_year: number; semester: number
@@ -231,13 +231,45 @@ const form = reactive<{
   is_active: true,
 })
 
+// 開啟／載入初值後 snapshot()；FormDialog 關閉前依 formDirty 決定是否詢問捨棄
+const { isDirty: formDirty, snapshot: snapshotForm } = useFormDirty(form)
+
+// 容量下限：僅「編輯、容量有改、且新值低於在學人數」才擋（提前提示；後端 PUT 同樣會 400）。
+// 容量沒動就放行——既有班級容量可能早已低於在學人數，不能因為改別的欄位而被卡住。
+const capacityFloorRule: FormItemRule = {
+  trigger: 'change',
+  validator: (_rule, value, callback) => {
+    const classroom = currentClassroom.value
+    if (!isEdit.value || !classroom || typeof value !== 'number') return callback()
+    const enrolled = classroom.current_count ?? 0
+    if (value === (classroom.capacity ?? 30) || value >= enrolled) return callback()
+    callback(new Error(`目前在學 ${enrolled} 人，容量不可低於 ${enrolled}`))
+  },
+}
+
 const rules = {
-  name: [{ required: true, message: '請輸入班級名稱', trigger: 'blur' }],
-  capacity: [{ required: true, message: '請輸入班級容量', trigger: 'change' }],
-  grade_id: [{ required: true, message: '請選擇年級', trigger: 'change' }],
+  name: [required('班級名稱')],
+  grade_id: [required('年級', { kind: 'select' })],
+  capacity: [required('班級容量', { kind: 'input', trigger: 'change' }), capacityFloorRule],
 }
 
 const dialogTitle = computed(() => (isEdit.value ? '編輯班級' : '新增班級'))
+// 編輯模式的學期唯讀顯示：學期在建立時決定，之後不可改（換學年請走預編班）
+const editTermLabel = computed(() => formatTermLabel(normalizeSchoolYear(form.school_year), form.semester))
+
+const teacherIdsOf = (c: ClassroomRow) => [
+  c.head_teacher_id ?? null,
+  c.assistant_teacher_id ?? null,
+  c.english_teacher_id ?? c.art_teacher_id ?? null,
+]
+// 編輯時任一教師指派與載入時不同：相關教師本月薪資會待重算，先告知
+const teacherChanged = computed(() => {
+  const classroom = currentClassroom.value
+  if (!isEdit.value || !classroom) return false
+  const initial = teacherIdsOf(classroom)
+  const current = [form.head_teacher_id ?? null, form.assistant_teacher_id ?? null, form.english_teacher_id ?? null]
+  return current.some((id, i) => id !== initial[i])
+})
 const getCapacityStatus = (classroom: ClassroomRow) => capacityStatus(classroom.current_count, classroom.capacity)
 // el-progress 的 status：滿載→紅、接近額滿→黃；正常不上色（一整片綠條會稀釋真正的警訊），
 // 改由 progressColor 給中性灰。
@@ -383,6 +415,7 @@ const openCreate = async () => {
   editSeq += 1
   detailLoading.value = false
   resetForm()
+  snapshotForm()
   isEdit.value = false
   await fetchOptions()
   dialogVisible.value = true
@@ -432,6 +465,7 @@ const openEdit = async (classroom: ClassroomRow) => {
     if (seq !== editSeq) return
     currentClassroom.value = response.data as ClassroomRow
     populateForm(response.data as ClassroomRow)
+    snapshotForm()
     isEdit.value = true
     dialogVisible.value = true
   } catch (error) {
@@ -446,12 +480,26 @@ const closeDialog = () => {
   dialogVisible.value = false
 }
 
+// 編輯對話框內的「開啟名冊」：先關閉編輯框再開學生抽屜（學生的加入/離開都在名冊處理）。
+// 有未儲存變更時按鈕本身已 disabled，這裡再守一次，避免靜默丟棄表單內容。
+const openRosterFromDialog = () => {
+  const classroom = currentClassroom.value
+  if (!classroom || formDirty.value) return
+  closeDialog()
+  void openStudentDrawer(classroom)
+}
+
 const submitForm = async () => {
   if (submitting.value) return
   if (!formRef.value) return
 
   await formRef.value.validate(async (valid) => {
-    if (!valid) return
+    if (!valid) {
+      // 等 is-error 樣式落到 DOM 後再捲動／聚焦第一個錯誤欄
+      await nextTick()
+      formDialogRef.value?.scrollToFirstError()
+      return
+    }
     if (submitting.value) return
 
     const fullPayload: Record<string, unknown> = {
@@ -844,127 +892,124 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
     </EmptyState>
     </template>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="720px">
+    <!-- 新增/編輯班級：FormDialog 標準殼（關閉保護、Enter 送出、錯誤捲動）。
+         學期在建立時決定：編輯只唯讀顯示；「啟用狀態」不在此編輯（停用走列選單的確認流程）。 -->
+    <FormDialog
+      ref="formDialogRef"
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      size="standard"
+      required-legend="* 為必填"
+      :dirty="formDirty"
+      :loading="submitting"
+      :disabled="!canWrite"
+      :submit-text="isEdit ? '儲存變更' : '建立班級'"
+      @submit="submitForm"
+    >
       <div v-loading="detailLoading">
-        <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
-          <el-row :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="班級名稱" prop="name">
-                <el-input v-model="form.name" :disabled="!canWrite" placeholder="例如：向日葵班" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="班級代號">
-                <el-input v-model="form.class_code" :disabled="!canWrite" placeholder="例如：SUN-01" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-
-          <el-row :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="學年度">
-                <el-select v-model="form.school_year" :disabled="!canWrite" filterable allow-create default-first-option style="width: 100%">
-                  <el-option
-                    v-for="year in schoolYearOptions"
-                    :key="year"
-                    :label="`${year}學年度`"
-                    :value="year"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="學期">
-                <el-select v-model="form.semester" :disabled="!canWrite" style="width: 100%">
-                  <el-option
-                    v-for="option in semesterOptions"
-                    :key="option.value"
-                    :label="option.label"
-                    :value="option.value"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
-
-          <el-row :gutter="16">
-            <el-col :span="12">
-              <el-form-item label="年級" prop="grade_id">
-                <el-select v-model="form.grade_id" :disabled="!canWrite" placeholder="選擇年級" style="width: 100%">
-                  <el-option v-for="grade in grades" :key="grade.id" :label="grade.name" :value="grade.id" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="班級容量" prop="capacity">
-                <el-input-number v-model="form.capacity" :disabled="!canWrite" :min="1" :max="200" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-
-          <el-form-item v-if="isEdit" label="啟用狀態">
-            <el-switch v-model="form.is_active" :disabled="!canWrite" inline-prompt active-text="啟用" inactive-text="停用" />
+        <el-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          label-position="top"
+          class="form-grid"
+          scroll-to-error
+          @submit.prevent
+        >
+          <h4 class="fg-12 dialog-section-title">基本資料</h4>
+          <el-form-item label="班級名稱" prop="name" class="fg-6">
+            <el-input v-model="form.name" :disabled="!canWrite" placeholder="例如：向日葵班" />
+          </el-form-item>
+          <el-form-item label="班級代號" class="fg-6">
+            <el-input v-model="form.class_code" :disabled="!canWrite" placeholder="例如：SUN-01" />
+            <div class="form-hint">名冊、在籍記錄表的欄位代號都使用這個值</div>
+          </el-form-item>
+          <el-form-item label="年級" prop="grade_id" class="fg-6">
+            <el-select v-model="form.grade_id" :disabled="!canWrite" placeholder="選擇年級" style="width: 100%">
+              <el-option v-for="grade in grades" :key="grade.id" :label="grade.name" :value="grade.id" />
+            </el-select>
+          </el-form-item>
+          <!-- 容量不綁動態 :min：el-input-number 會把既有值自動往上修；下限交給 rules 的 capacityFloorRule -->
+          <el-form-item label="班級容量" prop="capacity" class="fg-6 field-capacity">
+            <el-input-number v-model="form.capacity" :disabled="!canWrite" :min="1" :max="200" style="width: 100%" />
+            <div v-if="isEdit && currentClassroom" class="form-hint">
+              目前在學 {{ currentClassroom.current_count ?? 0 }} 人
+            </div>
           </el-form-item>
 
-          <h4>教師指派</h4>
-          <el-row :gutter="16">
-            <el-col :span="8">
-              <el-form-item label="班導師" label-width="90px">
-                <el-select v-model="form.head_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
-                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="副班導" label-width="90px">
-                <el-select v-model="form.assistant_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
-                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="美語老師" label-width="90px">
-                <el-select v-model="form.english_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
-                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </el-form>
+          <el-form-item v-if="isEdit" label="學年度與學期" class="fg-12">
+            <div class="term-readonly" data-test="term-readonly">
+              <el-icon class="term-readonly__icon" aria-hidden="true"><Lock /></el-icon>
+              <span>{{ editTermLabel }}</span>
+            </div>
+            <div class="form-hint">學期在建立班級時決定。下一學年的班級請用「新學年預編班」產生。</div>
+          </el-form-item>
+          <template v-else>
+            <el-form-item label="學年度" class="fg-6" data-test="field-school-year">
+              <el-select v-model="form.school_year" :disabled="!canWrite" filterable allow-create default-first-option style="width: 100%">
+                <el-option
+                  v-for="year in schoolYearOptions"
+                  :key="year"
+                  :label="`${year}學年度`"
+                  :value="year"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="學期" class="fg-6" data-test="field-semester">
+              <el-select v-model="form.semester" :disabled="!canWrite" style="width: 100%">
+                <el-option
+                  v-for="option in semesterOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </el-form-item>
+          </template>
 
-        <div v-if="isEdit && currentClassroom" class="detail-section">
-          <el-descriptions :column="3" border>
-            <el-descriptions-item label="班級名稱">{{ currentClassroom.name }}</el-descriptions-item>
-            <el-descriptions-item label="學期">{{ currentClassroom.semester_label }}</el-descriptions-item>
-            <el-descriptions-item label="年級">{{ currentClassroom.grade_name || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="學生人數">{{ currentClassroom.current_count }}</el-descriptions-item>
-          </el-descriptions>
-
-          <h4 style="margin-top: 20px;">學生名單</h4>
-          <!-- 只列在讀生（is_active !== false，NULL 視為在讀對齊後端口徑），
-               與上方「學生人數」同一母集合；已離園/已刪除學生看 ClassroomStudentDrawer -->
-          <div class="student-list">
-            <el-tag
-              v-for="student in activeDialogStudents"
-              :key="student.id as string | number"
-              class="student-tag"
-              :type="student.gender === '男' ? 'primary' : 'danger'"
-              effect="plain"
-            >
-              {{ student.name }}
-            </el-tag>
-            <p v-if="activeDialogStudents.length === 0" class="text-muted">
-              尚無學生
-            </p>
+          <h4 class="fg-12 dialog-section-title">教師指派</h4>
+          <el-form-item label="班導師" class="fg-4">
+            <el-select v-model="form.head_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
+              <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="副班導" class="fg-4">
+            <el-select v-model="form.assistant_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
+              <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="美語老師" class="fg-4">
+            <el-select v-model="form.english_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
+              <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
+            </el-select>
+          </el-form-item>
+          <div v-if="teacherChanged" class="fg-12 teacher-change-warning" role="status" data-test="teacher-change-warning">
+            <el-icon aria-hidden="true"><WarningFilled /></el-icon>
+            <span>變更教師指派後，相關教師本月薪資會標記為需要重新計算。</span>
           </div>
-        </div>
-      </div>
 
-      <template #footer>
-        <el-button @click="closeDialog">取消</el-button>
-        <el-button v-if="canWrite" type="primary" :loading="submitting" @click="submitForm">儲存</el-button>
-      </template>
-    </el-dialog>
+          <div v-if="isEdit && currentClassroom" class="fg-12 roster-row" data-test="roster-row">
+            <div class="roster-row__text">
+              <span class="roster-row__title">班級學生</span>
+              <span class="roster-row__desc">{{ currentClassroom.current_count ?? 0 }} 人在學 · 學生的加入與離開在名冊中處理</span>
+            </div>
+            <div v-if="canReadStudents" class="roster-row__action">
+              <span v-if="formDirty" class="roster-row__hint" data-test="roster-dirty-hint">請先儲存或取消變更</span>
+              <el-button
+                text
+                type="primary"
+                data-test="open-roster"
+                :disabled="formDirty"
+                :title="formDirty ? '請先儲存或取消變更' : undefined"
+                @click="openRosterFromDialog"
+              >
+                開啟名冊
+              </el-button>
+            </div>
+          </div>
+        </el-form>
+      </div>
+    </FormDialog>
 
     <ClassroomStudentDrawer
       v-model:visible="classroomDrawerVisible"
@@ -1471,22 +1516,95 @@ html.dark .avatar--rose { background: rgba(190, 18, 60, 0.3); color: #fda4af; }
   flex-shrink: 0;
 }
 
-.detail-section {
-  margin-top: var(--space-5);
+/* ── 編輯／新增班級對話框（FormDialog 內，form-grid 12 欄）─────────────────── */
+.dialog-section-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 
-.text-muted {
-  color: var(--text-tertiary);
+.dialog-section-title:not(:first-child) {
+  margin-top: var(--space-4);
 }
 
-.student-list {
+/* 學期唯讀：虛線＋鎖頭＝「這裡看得到但不能改」，與一般輸入框區隔 */
+.term-readonly {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--el-component-size, 32px);
+  padding: 0 var(--space-3);
+  box-sizing: border-box;
+  border: 1px dashed var(--el-border-color);
+  border-radius: var(--radius-md);
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-regular);
+  font-size: var(--text-base);
+}
+
+.term-readonly__icon {
+  color: var(--el-text-color-placeholder);
+}
+
+/* 容量驗證失敗時，錯誤訊息（目前在學 N 人，容量不可低於 N）已涵蓋「目前在學 N 人」，隱藏就地說明避免兩行重複 */
+.field-capacity.is-error .form-hint {
+  display: none;
+}
+
+.teacher-change-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  color: var(--color-warning-darker);
+  font-size: var(--text-sm);
+}
+
+.teacher-change-warning .el-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.roster-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--radius-md);
 }
 
-.student-tag {
-  margin-right: 5px;
-  margin-bottom: 5px;
+.roster-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.roster-row__title {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.roster-row__desc,
+.roster-row__hint {
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+}
+
+.roster-row__action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 @media (--to-sm) {
@@ -1505,6 +1623,9 @@ html.dark .avatar--rose { background: rgba(190, 18, 60, 0.3); color: #fda4af; }
     min-height: var(--touch-target-min);
   }
   .show-inactive-toggle {
+    min-height: var(--touch-target-min);
+  }
+  .roster-row__action .el-button {
     min-height: var(--touch-target-min);
   }
 
