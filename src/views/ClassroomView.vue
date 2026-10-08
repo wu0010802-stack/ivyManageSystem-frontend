@@ -415,7 +415,11 @@ const openChangeLogDrawer = (classroom: ClassroomRow) => {
   changeLogDrawerVisible.value = true
 }
 
+// 抽屜內編輯/退學/轉班後：除了重開抽屜，也要重抓班級清單——列上的在籍數是停用防呆
+// （停用項 disabled、handleDelete 前端直接擋）的依據，不更新會讓使用者照提示轉完班仍停用不了。
+// fetchClassrooms 自帶 fetchSeq 守衛，與切學期的請求互不覆寫。
 const handleStudentUpdated = async () => {
+  void fetchClassrooms()
   if (drawerClassroom.value) await openStudentDrawer(drawerClassroom.value)
 }
 
@@ -596,7 +600,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
   <div class="classroom-page">
     <PageHeader :title="PAGE_TERMS.classrooms" subtitle="各班在籍概況、師資指派與容量狀態">
       <template #actions>
-        <el-select v-model="selectedTermKey" style="width: 220px">
+        <el-select v-model="selectedTermKey" class="term-select">
           <el-option
             v-for="t in termOptions"
             :key="t.key"
@@ -605,7 +609,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
           />
         </el-select>
         <el-button :icon="Grid" @click="statsDialogVisible = true">在籍記錄表</el-button>
-        <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
+        <el-button v-if="canWrite && !loadFailedEmpty" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
       </template>
     </PageHeader>
 
@@ -669,7 +673,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
     >
       <span class="load-error__icon" aria-hidden="true"><el-icon><WarningFilled /></el-icon></span>
       <strong class="load-error__title">班級資料載入失敗</strong>
-      <p class="load-error__desc">{{ termLabel }} 的班級清單沒有載入成功。請稍後重試；若持續發生，請告知系統管理員。</p>
+      <p class="load-error__desc">{{ termLabel }}的班級清單沒有載入成功。請稍後重試；若持續發生，請告知系統管理員。</p>
       <p class="load-error__detail">{{ loadError }}</p>
       <el-button type="primary" data-test="load-error-retry" @click="fetchClassrooms">重新載入</el-button>
     </div>
@@ -1116,6 +1120,14 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
   color: var(--el-color-primary-dark-2);
 }
 
+/* ── 頁首學期選擇 ─────────────────────────────────────────────────────────
+ * 「115學年度 上學期（本學期）」在 220px 會被截成「（本學…」；mockup 桌機寬 248px 才完整顯示。
+ * 手機由 PageHeader 的 .header-actions > * 預設切半（flex-basis 50%），標籤同樣被截，
+ * 這裡讓它獨佔一列（對齊 MobileMain mockup）。 */
+.term-select {
+  width: 248px;
+}
+
 /* ── 工具列 ──────────────────────────────────────────────────────────── */
 .show-inactive-toggle {
   display: inline-flex;
@@ -1478,6 +1490,11 @@ html.dark .avatar--rose { background: rgba(190, 18, 60, 0.3); color: #fda4af; }
 }
 
 @media (--to-sm) {
+  /* .term-select.el-select 的 specificity 高於 PageHeader 的 .header-actions > *，才蓋得過它的 50% 基準 */
+  .term-select.el-select {
+    width: 100%;
+    flex: 1 1 100%;
+  }
   /* 觸控目標：卡片動作按鈕、快篩 chip、檢視切換在手機上維持 ≥44px，降低誤觸 */
   .card-actions :deep(.el-button) {
     min-height: var(--touch-target-min);

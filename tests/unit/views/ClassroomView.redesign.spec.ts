@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ClassroomView from '@/views/ClassroomView.vue'
 import { tenantGetItem, tenantRemoveItem } from '@/utils/tenantStorage'
+import ClassroomStudentDrawer from '@/components/classroom/ClassroomStudentDrawer.vue'
 
 // ── 2026-08-24 班級管理頁 UI/UX 改版回歸 ──────────────────────────────────
 // 涵蓋：可點擊統計列（接近額滿/已滿/未指派班導）、年級客端篩選、卡片學生預覽
@@ -506,12 +507,29 @@ describe('ClassroomView 改版：載入失敗', () => {
     expect(alert.exists()).toBe(true)
     expect(alert.attributes('role')).toBe('alert')
     expect(alert.text()).toContain('班級資料載入失敗')
-    expect(alert.text()).toContain('的班級清單沒有載入成功')
+    // 學期與「的」之間不留空格
+    expect(alert.text()).toContain('114學年度 上學期的班級清單沒有載入成功')
     expect(wrapper.text()).not.toContain('尚無班級資料')
     expect(wrapper.find('.empty-create-btn').exists()).toBe(false)
     expect(wrapper.find('[data-test="classroom-table"]').exists()).toBe(false)
     // 狀態列也隱藏：「0 班 · 在籍 0 / 0」會和「尚無班級」一樣誤導
     expect(wrapper.find('.roster-stats').exists()).toBe(false)
+    // 頁首「新增班級」也隱藏：失敗時使用者可能以為班級不見而重建一份（States mockup A）
+    expect(wrapper.findAll('button').map((b) => b.text())).not.toContain('新增班級')
+  })
+
+  it('載入成功時頁首仍有「新增班級」；重試成功後失敗態的隱藏會解除', async () => {
+    classroomsResponse = () => Promise.reject(new Error('503'))
+    const wrapper = mountView()
+    await flush()
+    expect(wrapper.findAll('button').map((b) => b.text())).not.toContain('新增班級')
+
+    classroomsResponse = () => Promise.resolve({ data: threeClassrooms })
+    await wrapper.find('[data-test="load-error-retry"]').trigger('click')
+    await flush()
+
+    expect(wrapper.findAll('button').map((b) => b.text())).toContain('新增班級')
+    expect(wrapper.find('.roster-stats').exists()).toBe(true)
   })
 
   it('按「重新載入」再打一次 getClassrooms；成功後錯誤區塊消失、列表出現', async () => {
@@ -559,5 +577,34 @@ describe('ClassroomView 改版：載入失敗', () => {
     await wrapper.find('[data-test="load-error-banner-retry"]').trigger('click')
     await flush()
     expect(wrapper.find('[data-test="load-error-banner"]').exists()).toBe(false)
+  })
+})
+
+describe('ClassroomView 改版：名冊抽屜異動後同步列表', () => {
+  beforeEach(resetEach)
+
+  // 停用防呆吃 current_count；使用者照提示在名冊把學生轉班/退學後，列表必須自己更新，
+  // 否則停用項會一直 disabled 到整頁重整（student-updated 原本只重開抽屜、不重抓清單）。
+  it('抽屜 student-updated 後重抓班級清單：在籍數更新、停用項解鎖', async () => {
+    const before = threeClassrooms.map((c) => ({ ...c }))
+    const after = threeClassrooms.map((c) => (c.id === 1 ? { ...c, current_count: 0 } : { ...c }))
+    classroomsResponse = () => Promise.resolve({ data: before })
+    const wrapper = mountView()
+    await flush()
+
+    const rowOf = (id: number) => wrapper.find(`[data-test="classroom-row"][data-id="${id}"]`)
+    expect(rowOf(1).text()).toContain('15 / 30')
+    expect(rowOf(1).text()).toContain('仍有 15 名在學，請先轉班')
+    expect(getClassrooms).toHaveBeenCalledTimes(1)
+
+    classroomsResponse = () => Promise.resolve({ data: after })
+    wrapper.findComponent(ClassroomStudentDrawer).vm.$emit('student-updated')
+    await flush()
+
+    expect(getClassrooms).toHaveBeenCalledTimes(2)
+    expect(rowOf(1).text()).toContain('0 / 30')
+    expect(rowOf(1).text()).not.toContain('仍有')
+    // 其他班不受影響
+    expect(rowOf(2).text()).toContain('仍有 25 名在學，請先轉班')
   })
 })
