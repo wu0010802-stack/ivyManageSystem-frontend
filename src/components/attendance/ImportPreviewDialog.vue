@@ -381,6 +381,10 @@ async function handleExcelUpload(options: { file: File }) {
     ElMessage.warning('.txt 檔請將打卡格式改為「自動辨識」或「打卡鐘報表」')
     return
   }
+  if (!isClockReportFile && selectedFormat.value === 'clock_report') {
+    ElMessage.warning('打卡鐘報表格式請上傳 .txt；Excel 請將打卡格式改為「自動辨識」')
+    return
+  }
   clearPreview()
   const request = generation
   sourceFile.value = options.file

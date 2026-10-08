@@ -1233,6 +1233,16 @@ describe('打卡鐘報表預覽', () => {
     expect(mockPreviewExcel).not.toHaveBeenCalled()
   })
 
+  it('Excel 搭配「打卡鐘報表」格式時提醒並且不呼叫 API', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('select[aria-label="打卡格式"]').setValue('clock_report')
+    await uploadTxt(wrapper, '2026-06.xlsx')
+    expect(mockElMessageWarning).toHaveBeenCalledWith(expect.stringContaining('.txt'))
+    expect(mockPreviewExcel).not.toHaveBeenCalled()
+    expect(mockPreviewClockReport).not.toHaveBeenCalled()
+  })
+
   it('勾選區塊後重新預覽，帶上原文與確認狀態並保留區塊清單', async () => {
     mockPreviewClockReport.mockResolvedValueOnce({ data: clockFixture() })
     mockPreviewImport.mockResolvedValueOnce({ data: { ...clockFixture(), blocks: [], summary: { importable: 2, problems: 0, overwrites: 0 },
