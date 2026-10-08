@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>家長端 UIUX 三方向</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<style>
+body{margin:0;padding:32px;background:#e8e6df;font-family:'Noto Sans TC',-apple-system,sans-serif;color:#191c19}
+h1{margin:0 0 8px;font-size:28px}
+.lead{margin:0 0 32px;max-width:880px;line-height:1.7}
+.group{margin-bottom:56px}
+.group h2{margin:0 0 8px;font-size:22px}
+.note{margin:0 0 20px;max-width:880px;font-size:14px;line-height:1.7;color:#414942}
+.row{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+.board{margin:0;display:flex;flex-direction:column;gap:8px}
+.board figcaption{font-size:13px;font-weight:700;color:#414942}
+.board > div{box-shadow:0 8px 30px -10px rgba(0,0,0,.25);border-radius:12px}
+.ms{font-family:'Material Symbols Rounded';font-weight:normal;font-style:normal;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;font-feature-settings:'liga';-webkit-font-smoothing:antialiased;font-variation-settings:'FILL' 0,'wght' 500,'GRAD' 0,'opsz' 24}
+a{color:#006d3d}
+</style>
+</head>
+<body>
+<h1>家長端 UIUX 三方向（2026-10-08）</h1>
+<p class="lead">靜態探索稿（假資料、非真實個資），用於裁定首頁／導覽改版方向。<strong>裁定：以方向 A 為主體，借方向 C 的「多寶家庭在首頁並列摘要」與「白話動詞命名（每個功能一個名稱）」</strong>。實作見 src/parent/views/TodayView.vue、AdminListView.vue、utils/parentServices.ts、utils/pendingItems.ts。實作時依實際資料做的調整：狀態卡進度改為「到校→接送→離園」（today-status 沒有午餐／午睡即時資料，不捏造）；首頁「待你處理」只露前 3 項、其餘導去待辦 tab。</p>
+<section class="group"><h2>現況（改版前）</h2><p class="note">現況觀察<br>• 待辦散在 4 種容器：頂部 banner×2、Bento 小卡、tab 徽章、PushCta<br>• 「待簽文件」(事件簽閱) 與「入學文件簽署」兩個簽名入口並存<br>• 孩子今天的出席狀態只是聯絡簿按鈕裡的小 pill<br>• 多寶切換有兩處：頂部 chip＋底部 ChildrenStrip<br>• 頂部帳號 icon 與「我的」tab 重複；行事曆藏在頁尾</p><div class="row">
+<figure class="board"><figcaption>現況｜首頁（多寶家庭、有待辦時）</figcaption>
+<div style="width: 390px; height: 1360px; box-sizing: border-box; background: #f7f6ef; color: #191c19; font-family: 'Noto Sans TC', -apple-system, sans-serif; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="display: flex; flex-direction: column; gap: 16px; padding-top: 12px;">
+    <!-- banners -->
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 16px;">
+      <button type="button" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: none; border-radius: 16px; background: #ffddd1; color: #7a2e18; font: inherit; text-align: left;">
+        <span class="ms" style="font-size: 22px;" aria-hidden="true">priority_high</span>
+        <span style="display: flex; flex-direction: column; flex: 1;">
+          <span style="font-size: 15px; font-weight: 700;">待簽 1 件</span>
+          <span style="font-size: 12px;">需家長簽收的通知</span>
+        </span>
+        <span style="font-size: 13px; font-weight: 700; display: flex; align-items: center;">檢視<span class="ms" style="font-size: 18px;" aria-hidden="true">chevron_right</span></span>
+      </button>
+      <button type="button" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: none; border-radius: 16px; background: #cfecf7; color: #0b4a5c; font: inherit; text-align: left;">
+        <span class="ms" style="font-size: 22px;" aria-hidden="true">fact_check</span>
+        <span style="display: flex; flex-direction: column; flex: 1;">
+          <span style="font-size: 15px; font-weight: 700;">活動調查 1 份</span>
+          <span style="font-size: 12px;">園所想知道您的意見</span>
+        </span>
+        <span style="font-size: 13px; font-weight: 700; display: flex; align-items: center;">填寫<span class="ms" style="font-size: 18px;" aria-hidden="true">chevron_right</span></span>
+      </button>
+    </div>
+
+    <!-- hero -->
+    <section style="padding: 8px 16px 0; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 4px; border-radius: 999px; background: #f3f4ef; box-shadow: 0 1px 2px rgba(27,60,38,.05), 0 6px 20px -8px rgba(27,60,38,.14);">
+          <span style="width: 26px; height: 26px; border-radius: 50%; background: #0d9053; color: #fff; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 16px;" aria-hidden="true">eco</span></span>
+          <span class="ms" style="font-size: 26px; color: #e0a100; font-variation-settings: 'FILL' 1;" aria-hidden="true">sunny</span>
+          <span style="font-size: 13px; font-weight: 700;">早安</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px #f7f6ef, 0 6px 20px -8px rgba(27,60,38,.14);"><span class="ms" style="font-size: 26px;" aria-hidden="true">photo_camera</span></div>
+          <div style="display: flex; gap: 4px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #0d9053;"></span><span style="width: 5px; height: 5px; border-radius: 50%; background: #c0c9bf;"></span><span style="width: 5px; height: 5px; border-radius: 50%; background: #c0c9bf;"></span></div>
+        </div>
+      </div>
+      <h2 style="margin: 2px 0 0; font-size: 24px; font-weight: 900; line-height: 1.15;">林小禾</h2>
+      <p style="margin: 0; font-size: 13px; font-weight: 600; color: #414942;">10/8 · 星期四 · 向日葵班</p>
+    </section>
+
+    <!-- child switcher -->
+    <div style="padding: 0 16px;">
+      <button type="button" style="width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid #c0c9bf; border-radius: 16px; background: #ffffff; font: inherit; text-align: left;" aria-label="切換孩子">
+        <span style="width: 36px; height: 36px; border-radius: 50%; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center; font-weight: 700;">禾</span>
+        <span style="display: flex; flex-direction: column; flex: 1;"><span style="font-size: 15px; font-weight: 700;">林小禾</span><span style="font-size: 12px; color: #414942;">向日葵班</span></span>
+        <span class="ms" style="font-size: 22px; color: #414942;" aria-hidden="true">expand_more</span>
+      </button>
+    </div>
+
+    <!-- quick actions -->
+    <section style="padding: 0 16px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 style="margin: 0; font-size: 16px; font-weight: 700;">常用功能</h3>
+        <button type="button" style="display: flex; align-items: center; gap: 4px; border: none; background: transparent; color: #414942; font: inherit; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 18px;" aria-hidden="true">edit_note</span>編輯</button>
+      </div>
+      <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; background: #ffffff; text-decoration: none; color: #191c19; box-shadow: 0 1px 2px rgba(27,60,38,.05), 0 6px 20px -8px rgba(27,60,38,.14);">
+        <span style="width: 44px; height: 44px; border-radius: 14px; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 24px;" aria-hidden="true">auto_stories</span></span>
+        <span style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+          <span style="display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700;">聯絡簿 <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #d8f1de; color: #1c5232;">已入園</span></span>
+          <span style="font-size: 13px; color: #414942;">老師還沒有寫今天的紀錄</span>
+        </span>
+        <span class="ms" style="font-size: 22px; color: #717971;" aria-hidden="true">chevron_right</span>
+      </a>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+        <button type="button" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px; border: none; border-radius: 16px; background: #ffffff; font: inherit; box-shadow: 0 1px 2px rgba(27,60,38,.05);"><span style="width: 40px; height: 40px; border-radius: 12px; background: #cfecf7; color: #0b4a5c; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">directions_walk</span></span><span style="font-size: 14px; font-weight: 700;">接送</span><span style="font-size: 11px; color: #414942;">預告抵達時間</span></button>
+        <button type="button" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px; border: none; border-radius: 16px; background: #ffffff; font: inherit; box-shadow: 0 1px 2px rgba(27,60,38,.05);"><span style="width: 40px; height: 40px; border-radius: 12px; background: #eadfff; color: #4a3277; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">event_busy</span></span><span style="font-size: 14px; font-weight: 700;">請假</span><span style="font-size: 11px; color: #414942;">事假病假</span></button>
+        <button type="button" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px; border: none; border-radius: 16px; background: #ffffff; font: inherit; box-shadow: 0 1px 2px rgba(27,60,38,.05);"><span style="width: 40px; height: 40px; border-radius: 12px; background: #ffedb8; color: #5c4300; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">payments</span></span><span style="font-size: 14px; font-weight: 700;">學費</span><span style="font-size: 11px; color: #414942;">繳費紀錄</span></button>
+      </div>
+    </section>
+
+    <!-- push cta -->
+    <div style="margin: 0 16px; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: #fffcf2; border: 1px dashed #c0c9bf;">
+      <span class="ms" style="font-size: 22px; color: #0d9053;" aria-hidden="true">notifications_active</span>
+      <span style="flex: 1; font-size: 13px; color: #414942;">開啟通知，聯絡簿與接送提醒不漏接</span>
+      <span style="font-size: 13px; font-weight: 700; color: #006d3d;">開啟</span>
+    </div>
+
+    <!-- bento -->
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 16px;">
+      <div style="padding: 12px; border-radius: 16px; background: #ffffff; box-shadow: 0 1px 2px rgba(27,60,38,.05), 0 6px 20px -8px rgba(27,60,38,.14); display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 12px; color: #414942; font-weight: 600;">待繳學費</span><span style="width: 28px; height: 28px; border-radius: 10px; background: #ffedb8; color: #5c4300; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 18px;" aria-hidden="true">payments</span></span></div>
+        <span style="font-size: 20px; font-weight: 900;">1 筆</span><span style="font-size: 12px; color: #b14545; font-weight: 600;">有逾期款項</span>
+      </div>
+      <div style="padding: 12px; border-radius: 16px; background: #ffffff; box-shadow: 0 1px 2px rgba(27,60,38,.05), 0 6px 20px -8px rgba(27,60,38,.14); display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 12px; color: #414942; font-weight: 600;">待簽文件</span><span style="width: 28px; height: 28px; border-radius: 10px; background: #ffddd1; color: #7a2e18; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 18px;" aria-hidden="true">edit_document</span></span></div>
+        <span style="font-size: 20px; font-weight: 900;">1 份</span>
+      </div>
+      <div style="padding: 12px; border-radius: 16px; background: #ffffff; box-shadow: 0 1px 2px rgba(27,60,38,.05), 0 6px 20px -8px rgba(27,60,38,.14); display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 12px; color: #414942; font-weight: 600;">入學文件簽署</span><span style="width: 28px; height: 28px; border-radius: 10px; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 18px;" aria-hidden="true">history_edu</span></span></div>
+        <span style="font-size: 20px; font-weight: 900;">1 份</span>
+      </div>
+    </div>
+
+    <!-- timeline -->
+    <section style="padding: 0 16px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 style="margin: 0; font-size: 16px; font-weight: 700;">今日動態</h3>
+        <a href="#" style="display: flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 600; text-decoration: none;">更多動態<span class="ms" style="font-size: 18px;" aria-hidden="true">arrow_forward</span></a>
+      </div>
+      <div style="background: #ffffff; border-radius: 16px; padding: 4px 14px; box-shadow: 0 1px 2px rgba(27,60,38,.05);">
+        <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #edeee9;"><span style="font-size: 13px; color: #414942; width: 40px; font-variant-numeric: tabular-nums;">08:12</span><span class="ms" style="font-size: 20px; color: #0d9053;" aria-hidden="true">login</span><span style="font-size: 14px;">林小禾 已到校</span></div>
+        <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #edeee9;"><span style="font-size: 13px; color: #414942; width: 40px;">09:30</span><span class="ms" style="font-size: 20px; color: #2d6f8e;" aria-hidden="true">campaign</span><span style="font-size: 14px;">公告：10/17 秋季戶外教學</span></div>
+        <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0;"><span style="font-size: 13px; color: #414942; width: 40px;">—</span><span class="ms" style="font-size: 20px; color: #8a5d00;" aria-hidden="true">payments</span><span style="font-size: 14px;">10 月月費 尚未繳</span></div>
+      </div>
+    </section>
+
+    <!-- children strip -->
+    <section style="padding: 0 16px; display: flex; flex-direction: column; gap: 8px;">
+      <h3 style="margin: 0; font-size: 16px; font-weight: 700;">我的孩子</h3>
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 1; padding: 12px; border-radius: 16px; background: #ffffff; border: 2px solid #0d9053; display: flex; gap: 10px; align-items: center;"><span style="width: 36px; height: 36px; border-radius: 50%; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center; font-weight: 700;">禾</span><span style="display: flex; flex-direction: column;"><span style="font-size: 14px; font-weight: 700;">林小禾</span><span style="font-size: 12px; color: #414942;">向日葵班</span></span></div>
+        <div style="flex: 1; padding: 12px; border-radius: 16px; background: #ffffff; border: 1px solid #c0c9bf; display: flex; gap: 10px; align-items: center;"><span style="width: 36px; height: 36px; border-radius: 50%; background: #cfecf7; color: #0b4a5c; display: flex; align-items: center; justify-content: center; font-weight: 700;">樹</span><span style="display: flex; flex-direction: column;"><span style="font-size: 14px; font-weight: 700;">林小樹</span><span style="font-size: 12px; color: #414942;">小星星班</span></span></div>
+      </div>
+    </section>
+
+    <!-- footer -->
+    <div style="padding: 0 16px;">
+      <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-radius: 14px; background: #edeee9; color: #191c19; text-decoration: none; font-size: 15px; font-weight: 600;"><span class="ms" style="font-size: 22px; color: #0d9053;" aria-hidden="true">calendar_month</span>行事曆<span class="ms" style="font-size: 20px; color: #414942; margin-left: auto;" aria-hidden="true">chevron_right</span></a>
+    </div>
+  </div>
+
+  <!-- nav -->
+  <nav style="margin-top: auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 10px 4px 14px; background: #f4f7fa; border-top: 1px solid #e1e3de;" aria-label="主導覽">
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #191c19; font-size: 12px; font-weight: 700;"><span style="width: 56px; height: 32px; border-radius: 16px; background: #0d9053; color: #fff; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px; font-variation-settings: 'FILL' 1;" aria-hidden="true">home</span></span>首頁</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">child_care</span></span>孩子</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px; position: relative;"><span style="height: 32px; display: flex; align-items: center; position: relative;"><span class="ms" style="font-size: 22px;" aria-hidden="true">menu_book</span><span style="position: absolute; top: 2px; right: -8px; min-width: 16px; height: 16px; border-radius: 8px; background: #ba1a1a; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center;">1</span></span>聯絡簿</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center; position: relative;"><span class="ms" style="font-size: 22px;" aria-hidden="true">assignment</span><span style="position: absolute; top: 2px; right: -8px; min-width: 16px; height: 16px; border-radius: 8px; background: #ba1a1a; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center;">3</span></span>事務</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">account_circle</span></span>我的</a>
+  </nav>
+</div>
+</figure>
+</div></section>
+<section class="group"><h2>方向 A｜今日儀表＋待辦收件匣（採用主體）</h2><p class="note">主張：首頁回答「孩子現在好不好」＋「我有什麼要處理」兩件事。<br>• 狀態卡把今日進度（到校→用藥→在園→預告離園）做成主角，只用既有資料<br>• banner／Bento／徽章合併成單一「待辦」清單，事務 tab 改名「待辦」<br>代價：最低。沿用 M3 元件與現有 API，主要是首頁重排＋事務頁改版。</p><div class="row">
+<figure class="board"><figcaption>A｜首頁：狀態卡＋待辦收件匣</figcaption>
+<div style="width: 390px; height: 1240px; box-sizing: border-box; background: #f7f6ef; color: #191c19; font-family: 'Noto Sans TC', -apple-system, sans-serif; display: flex; flex-direction: column; overflow: hidden;">
+  <div style="display: flex; flex-direction: column; gap: 20px; padding: 20px 16px 24px;">
+
+    <!-- header: greeting + single child switcher -->
+    <header style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 13px; font-weight: 600; color: #414942;">10/8 星期四</span>
+        <span style="font-size: 22px; font-weight: 900;">早安</span>
+      </div>
+      <div style="display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #edeee9;" role="tablist" aria-label="切換孩子">
+        <button type="button" role="tab" aria-selected="true" style="display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px 0 4px; border: none; border-radius: 999px; background: #ffffff; font: inherit; font-size: 14px; font-weight: 700; color: #191c19; box-shadow: 0 1px 3px rgba(27,60,38,.12);"><span style="width: 32px; height: 32px; border-radius: 50%; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center; font-size: 13px;">禾</span>小禾</button>
+        <button type="button" role="tab" aria-selected="false" style="display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px 0 4px; border: none; border-radius: 999px; background: transparent; font: inherit; font-size: 14px; font-weight: 600; color: #414942;"><span style="width: 32px; height: 32px; border-radius: 50%; background: #cfecf7; color: #0b4a5c; display: flex; align-items: center; justify-content: center; font-size: 13px;">樹</span>小樹</button>
+      </div>
+    </header>
+
+    <!-- status hero -->
+    <section style="background: #ffffff; border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 2px rgba(27,60,38,.05), 0 6px 20px -8px rgba(27,60,38,.14);" aria-label="林小禾今日狀態">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 64px; height: 64px; border-radius: 20px; background: #d8f1de; color: #1c5232; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex-shrink: 0;"><span class="ms" style="font-size: 24px;" aria-hidden="true">image</span><span style="font-size: 10px;">今日照片</span></div>
+        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
+          <span style="font-size: 13px; color: #414942; font-weight: 600;">林小禾 · 向日葵班</span>
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 24px; font-weight: 900; color: #006d3d;"><span class="ms" style="font-size: 26px; font-variation-settings: 'FILL' 1;" aria-hidden="true">check_circle</span>在園中</span>
+        </div>
+      </div>
+
+      <!-- progress track -->
+      <ol style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: relative;" aria-label="今日進度">
+        <li style="display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative;">
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: #0d9053; color: #fff; display: flex; align-items: center; justify-content: center; z-index: 1;"><span class="ms" style="font-size: 18px;" aria-hidden="true">check</span></span>
+          <span style="font-size: 13px; font-weight: 700;">到校</span><span style="font-size: 12px; color: #414942; font-variant-numeric: tabular-nums;">08:12</span>
+        </li>
+        <li style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: #0d9053; color: #fff; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 18px;" aria-hidden="true">check</span></span>
+          <span style="font-size: 13px; font-weight: 700;">用藥</span><span style="font-size: 12px; color: #414942;">12:30 已餵</span>
+        </li>
+        <li style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: #ffffff; border: 3px solid #0d9053; box-sizing: border-box; display: flex; align-items: center; justify-content: center;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #0d9053;"></span></span>
+          <span style="font-size: 13px; font-weight: 700; color: #006d3d;">在園中</span><span style="font-size: 12px; color: #414942;">現在</span>
+        </li>
+        <li style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: #ffffff; border: 2px dashed #717971; box-sizing: border-box;"></span>
+          <span style="font-size: 13px; font-weight: 700; color: #414942;">離園</span><span style="font-size: 12px; color: #414942;">預告 16:30</span>
+        </li>
+      </ol>
+
+      <div style="display: flex; flex-direction: column; border-top: 1px solid #edeee9; padding-top: 4px;">
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 10px 0; text-decoration: none; color: #191c19; min-height: 44px;">
+          <span class="ms" style="font-size: 22px; color: #0d9053;" aria-hidden="true">auto_stories</span>
+          <span style="display: flex; flex-direction: column; flex: 1;"><span style="font-size: 15px; font-weight: 700;">今日聯絡簿</span><span style="font-size: 13px; color: #414942;">老師通常 15:30 後填寫，寫好會通知您</span></span>
+          <span class="ms" style="font-size: 22px; color: #717971;" aria-hidden="true">chevron_right</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- unified inbox -->
+    <section style="display: flex; flex-direction: column; gap: 10px;" aria-label="待你處理">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 900;">待你處理 <span style="font-size: 15px; color: #b14545;">4</span></h2>
+        <a href="#" style="font-size: 14px; font-weight: 700; text-decoration: none;">全部待辦</a>
+      </div>
+      <div style="background: #ffffff; border-radius: 20px; padding: 4px 16px; box-shadow: 0 1px 2px rgba(27,60,38,.05), 0 6px 20px -8px rgba(27,60,38,.14);">
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #edeee9; text-decoration: none; color: #191c19; min-height: 48px;">
+          <span style="width: 40px; height: 40px; border-radius: 12px; background: #ffddd1; color: #7a2e18; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="ms" style="font-size: 22px;" aria-hidden="true">payments</span></span>
+          <span style="display: flex; flex-direction: column; flex: 1; gap: 2px;"><span style="font-size: 15px; font-weight: 700;">繳費｜10 月月費</span><span style="font-size: 13px; color: #b14545; font-weight: 600;">NT$ 8,500 · 已逾期 3 天</span></span>
+          <span style="font-size: 14px; font-weight: 700; color: #006d3d;">去繳費</span>
+        </a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #edeee9; text-decoration: none; color: #191c19; min-height: 48px;">
+          <span style="width: 40px; height: 40px; border-radius: 12px; background: #ffedb8; color: #5c4300; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="ms" style="font-size: 22px;" aria-hidden="true">draw</span></span>
+          <span style="display: flex; flex-direction: column; flex: 1; gap: 2px;"><span style="font-size: 15px; font-weight: 700;">簽收｜秋季戶外教學通知</span><span style="font-size: 13px; color: #414942;">10/15 前 · 小禾、小樹</span></span>
+          <span style="font-size: 14px; font-weight: 700; color: #006d3d;">簽收</span>
+        </a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; text-decoration: none; color: #191c19; min-height: 48px;">
+          <span style="width: 40px; height: 40px; border-radius: 12px; background: #cfecf7; color: #0b4a5c; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="ms" style="font-size: 22px;" aria-hidden="true">fact_check</span></span>
+          <span style="display: flex; flex-direction: column; flex: 1; gap: 2px;"><span style="font-size: 15px; font-weight: 700;">填寫｜家長日時段調查</span><span style="font-size: 13px; color: #414942;">10/12 前 · 約 1 分鐘</span></span>
+          <span style="font-size: 14px; font-weight: 700; color: #006d3d;">填寫</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- quick actions -->
+    <section style="display: flex; flex-direction: column; gap: 10px;" aria-label="常用功能">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 900;">常用</h2>
+        <button type="button" style="border: none; background: transparent; font: inherit; font-size: 14px; font-weight: 700; color: #414942; min-height: 44px;">編輯</button>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 2px; border-radius: 18px; background: #ffffff; text-decoration: none; color: #191c19; box-shadow: 0 1px 2px rgba(27,60,38,.05);"><span style="width: 44px; height: 44px; border-radius: 14px; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 24px;" aria-hidden="true">directions_walk</span></span><span style="font-size: 13px; font-weight: 700;">預告接送</span></a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 2px; border-radius: 18px; background: #ffffff; text-decoration: none; color: #191c19; box-shadow: 0 1px 2px rgba(27,60,38,.05);"><span style="width: 44px; height: 44px; border-radius: 14px; background: #eadfff; color: #4a3277; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 24px;" aria-hidden="true">event_busy</span></span><span style="font-size: 13px; font-weight: 700;">請假</span></a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 2px; border-radius: 18px; background: #ffffff; text-decoration: none; color: #191c19; box-shadow: 0 1px 2px rgba(27,60,38,.05);"><span style="width: 44px; height: 44px; border-radius: 14px; background: #cfecf7; color: #0b4a5c; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 24px;" aria-hidden="true">medication</span></span><span style="font-size: 13px; font-weight: 700;">用藥委託</span></a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 2px; border-radius: 18px; background: #ffffff; text-decoration: none; color: #191c19; box-shadow: 0 1px 2px rgba(27,60,38,.05);"><span style="width: 44px; height: 44px; border-radius: 14px; background: #ffedb8; color: #5c4300; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 24px;" aria-hidden="true">calendar_month</span></span><span style="font-size: 13px; font-weight: 700;">行事曆</span></a>
+      </div>
+    </section>
+
+    <!-- today stream: events only -->
+    <section style="display: flex; flex-direction: column; gap: 10px;" aria-label="今日動態">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 900;">今日動態</h2>
+        <a href="#" style="font-size: 14px; font-weight: 700; text-decoration: none;">成長時間軸</a>
+      </div>
+      <div style="background: #ffffff; border-radius: 20px; padding: 6px 16px; box-shadow: 0 1px 2px rgba(27,60,38,.05);">
+        <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #edeee9;"><span style="font-size: 13px; color: #414942; width: 42px; font-variant-numeric: tabular-nums;">13:05</span><span class="ms" style="font-size: 20px; color: #0d9053;" aria-hidden="true">directions_walk</span><span style="font-size: 14px;">您已預告 16:30 接送</span></div>
+        <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #edeee9;"><span style="font-size: 13px; color: #414942; width: 42px;">12:30</span><span class="ms" style="font-size: 20px; color: #2d6f8e;" aria-hidden="true">medication</span><span style="font-size: 14px;">用藥委託：老師已餵藥</span></div>
+        <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #edeee9;"><span style="font-size: 13px; color: #414942; width: 42px;">09:30</span><span class="ms" style="font-size: 20px; color: #2d6f8e;" aria-hidden="true">campaign</span><span style="font-size: 14px;">公告：10/17 秋季戶外教學</span></div>
+        <div style="display: flex; gap: 12px; align-items: center; padding: 10px 0;"><span style="font-size: 13px; color: #414942; width: 42px;">08:12</span><span class="ms" style="font-size: 20px; color: #0d9053;" aria-hidden="true">login</span><span style="font-size: 14px;">到校（爸爸送）</span></div>
+      </div>
+    </section>
+  </div>
+
+  <nav style="margin-top: auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 10px 4px 14px; background: #edeee9;" aria-label="主導覽">
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #191c19; font-size: 12px; font-weight: 700;"><span style="width: 56px; height: 32px; border-radius: 16px; background: #0d9053; color: #fff; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px; font-variation-settings: 'FILL' 1;" aria-hidden="true">home</span></span>首頁</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">child_care</span></span>孩子</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">auto_stories</span></span>聯絡簿</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center; position: relative;"><span class="ms" style="font-size: 22px;" aria-hidden="true">inbox</span><span style="position: absolute; top: 2px; right: -9px; min-width: 16px; height: 16px; border-radius: 8px; background: #ba1a1a; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center;">4</span></span>待辦</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">account_circle</span></span>我的</a>
+  </nav>
+</div>
+</figure>
+<figure class="board"><figcaption>A｜「待辦」tab（取代事務）</figcaption>
+<div style="width: 390px; height: 1000px; box-sizing: border-box; background: #f7f6ef; color: #191c19; font-family: 'Noto Sans TC', -apple-system, sans-serif; display: flex; flex-direction: column; overflow: hidden;">
+  <header style="height: 64px; display: flex; align-items: center; padding: 0 16px; background: #f7f6ef;">
+    <h1 style="margin: 0; font-size: 22px; font-weight: 900;">待辦</h1>
+  </header>
+
+  <div style="display: flex; flex-direction: column; gap: 20px; padding: 4px 16px 24px;">
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 4px; border-radius: 999px; background: #edeee9;" role="tablist" aria-label="待辦分類">
+      <button type="button" role="tab" aria-selected="true" style="height: 40px; border: none; border-radius: 999px; background: #ffffff; font: inherit; font-size: 14px; font-weight: 700; color: #191c19; box-shadow: 0 1px 3px rgba(27,60,38,.12);">待處理 4</button>
+      <button type="button" role="tab" aria-selected="false" style="height: 40px; border: none; border-radius: 999px; background: transparent; font: inherit; font-size: 14px; font-weight: 600; color: #414942;">進行中 3</button>
+      <button type="button" role="tab" aria-selected="false" style="height: 40px; border: none; border-radius: 999px; background: transparent; font: inherit; font-size: 14px; font-weight: 600; color: #414942;">已完成</button>
+    </div>
+
+    <!-- needs action, sorted by deadline -->
+    <section style="display: flex; flex-direction: column; gap: 8px;" aria-label="需要您處理">
+      <span style="font-size: 13px; font-weight: 700; color: #414942;">依截止日排序</span>
+
+      <div style="background: #ffffff; border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(27,60,38,.05), 0 6px 20px -8px rgba(27,60,38,.14); border: 1.5px solid #ffb5ad;">
+        <div style="display: flex; gap: 12px; align-items: flex-start;">
+          <span style="width: 40px; height: 40px; border-radius: 12px; background: #ffddd1; color: #7a2e18; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="ms" style="font-size: 22px;" aria-hidden="true">payments</span></span>
+          <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+            <span style="font-size: 12px; font-weight: 700; color: #b14545;">繳費 · 已逾期 3 天</span>
+            <span style="font-size: 16px; font-weight: 700;">10 月月費（小禾、小樹）</span>
+            <span style="font-size: 14px; color: #414942; font-variant-numeric: tabular-nums;">NT$ 8,500</span>
+          </div>
+        </div>
+        <a href="#" style="align-self: stretch; height: 44px; border-radius: 999px; background: #006d3d; color: #ffffff; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700;">查看繳費方式</a>
+      </div>
+
+      <div style="background: #ffffff; border-radius: 20px; padding: 4px 16px; box-shadow: 0 1px 2px rgba(27,60,38,.05);">
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #edeee9; text-decoration: none; color: #191c19; min-height: 48px;">
+          <span style="width: 40px; height: 40px; border-radius: 12px; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="ms" style="font-size: 22px;" aria-hidden="true">history_edu</span></span>
+          <span style="display: flex; flex-direction: column; flex: 1; gap: 2px;"><span style="font-size: 12px; font-weight: 700; color: #414942;">文件簽署 · 10/10 前</span><span style="font-size: 15px; font-weight: 700;">個資蒐集同意書</span></span>
+          <span class="ms" style="font-size: 22px; color: #717971;" aria-hidden="true">chevron_right</span>
+        </a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #edeee9; text-decoration: none; color: #191c19; min-height: 48px;">
+          <span style="width: 40px; height: 40px; border-radius: 12px; background: #cfecf7; color: #0b4a5c; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="ms" style="font-size: 22px;" aria-hidden="true">fact_check</span></span>
+          <span style="display: flex; flex-direction: column; flex: 1; gap: 2px;"><span style="font-size: 12px; font-weight: 700; color: #414942;">活動調查 · 10/12 前</span><span style="font-size: 15px; font-weight: 700;">家長日時段調查</span></span>
+          <span class="ms" style="font-size: 22px; color: #717971;" aria-hidden="true">chevron_right</span>
+        </a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; text-decoration: none; color: #191c19; min-height: 48px;">
+          <span style="width: 40px; height: 40px; border-radius: 12px; background: #ffedb8; color: #5c4300; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="ms" style="font-size: 22px;" aria-hidden="true">draw</span></span>
+          <span style="display: flex; flex-direction: column; flex: 1; gap: 2px;"><span style="font-size: 12px; font-weight: 700; color: #414942;">簽收 · 10/15 前</span><span style="font-size: 15px; font-weight: 700;">秋季戶外教學通知</span></span>
+          <span class="ms" style="font-size: 22px; color: #717971;" aria-hidden="true">chevron_right</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- all services: one canonical name each -->
+    <section style="display: flex; flex-direction: column; gap: 10px;" aria-label="所有服務">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 900;">所有服務</h2>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; background: #ffffff; border-radius: 20px; padding: 14px 8px; box-shadow: 0 1px 2px rgba(27,60,38,.05);">
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #4a3277;" aria-hidden="true">event_busy</span>請假</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #5c4300;" aria-hidden="true">payments</span>繳費</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #0b4a5c;" aria-hidden="true">medication</span>用藥委託</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #1c5232;" aria-hidden="true">directions_walk</span>預告接送</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #1c5232;" aria-hidden="true">hail</span>臨時接送</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #5c4300;" aria-hidden="true">draw</span>簽收</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #1c5232;" aria-hidden="true">history_edu</span>文件簽署</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #0b4a5c;" aria-hidden="true">fact_check</span>活動調查</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #7a2e18;" aria-hidden="true">palette</span>課後才藝</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #1c5232;" aria-hidden="true">how_to_reg</span>出席紀錄</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #5c4300;" aria-hidden="true">calendar_month</span>行事曆</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0; text-decoration: none; color: #191c19; font-size: 13px; font-weight: 600;"><span class="ms" style="font-size: 26px; color: #414942;" aria-hidden="true">help</span>常見問題</a>
+      </div>
+    </section>
+  </div>
+
+  <nav style="margin-top: auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 10px 4px 14px; background: #edeee9;" aria-label="主導覽">
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">home</span></span>首頁</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">child_care</span></span>孩子</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">auto_stories</span></span>聯絡簿</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #191c19; font-size: 12px; font-weight: 700;"><span style="width: 56px; height: 32px; border-radius: 16px; background: #0d9053; color: #fff; display: flex; align-items: center; justify-content: center; position: relative;"><span class="ms" style="font-size: 22px; font-variation-settings: 'FILL' 1;" aria-hidden="true">inbox</span><span style="position: absolute; top: -4px; right: 6px; min-width: 16px; height: 16px; border-radius: 8px; background: #ba1a1a; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center;">4</span></span>待辦</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #414942; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">account_circle</span></span>我的</a>
+  </nav>
+</div>
+</figure>
+</div></section>
+<section class="group"><h2>方向 B｜成長日記流（未採用）</h2><p class="note">主張：家長最常打開是為了看孩子今天的樣子。首頁＝聯絡簿＝今天的日記。<br>• 首頁與聯絡簿 tab 合併成「今天」，照片當封面<br>• 孩子 tab 改為「成長」，收照片牆／報告／健康紀錄<br>• 待辦收成頂部一顆膠囊，點開為 bottom sheet<br>代價：中高。需聚合當日聯絡簿＋照片＋動態；聯絡簿 tab 消失需重做導覽與推播深連結。</p><div class="row">
+<figure class="board"><figcaption>B｜今天：照片日記流</figcaption>
+<div style="width: 390px; height: 1400px; box-sizing: border-box; background: #fffcf2; color: #2a2520; font-family: 'Noto Sans TC', -apple-system, sans-serif; display: flex; flex-direction: column; overflow: hidden;">
+  <div style="display: flex; flex-direction: column; gap: 18px; padding: 18px 16px 24px;">
+
+    <!-- date + pending capsule -->
+    <header style="display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; flex-direction: column;">
+        <span style="font-size: 13px; font-weight: 600; color: #6b5e54;">星期四</span>
+        <h1 style="margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 0.01em;">10 月 8 日</h1>
+      </div>
+      <button type="button" style="display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 8px 0 14px; border: none; border-radius: 999px; background: #ffedb8; color: #5c4300; font: inherit; font-size: 14px; font-weight: 700;" aria-label="4 件待辦，點擊查看">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #b14545;"></span>4 件待辦<span class="ms" style="font-size: 20px;" aria-hidden="true">expand_more</span>
+      </button>
+    </header>
+
+    <!-- child rings -->
+    <div style="display: flex; gap: 18px;" role="tablist" aria-label="切換孩子">
+      <button type="button" role="tab" aria-selected="true" style="display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; background: transparent; font: inherit; padding: 0;">
+        <span style="width: 60px; height: 60px; border-radius: 50%; padding: 3px; box-sizing: border-box; border: 3px solid #0d9053; display: flex;"><span style="flex: 1; border-radius: 50%; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700;">禾</span></span>
+        <span style="font-size: 13px; font-weight: 700; color: #2a2520;">小禾</span>
+      </button>
+      <button type="button" role="tab" aria-selected="false" style="display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; background: transparent; font: inherit; padding: 0;">
+        <span style="width: 60px; height: 60px; border-radius: 50%; padding: 3px; box-sizing: border-box; border: 3px solid transparent; display: flex;"><span style="flex: 1; border-radius: 50%; background: #cfecf7; color: #0b4a5c; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700;">樹</span></span>
+        <span style="font-size: 13px; font-weight: 600; color: #6b5e54;">小樹</span>
+      </button>
+    </div>
+
+    <!-- cover -->
+    <article style="background: #ffffff; border-radius: 28px; overflow: hidden; box-shadow: 0 1px 2px rgba(42,37,32,.05), 0 10px 30px -12px rgba(42,37,32,.18);">
+      <div style="height: 230px; background: #e8f5e3; color: #1b5e20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;">
+        <span class="ms" style="font-size: 40px;" aria-hidden="true">image</span>
+        <span style="font-size: 13px; font-weight: 600;">[今日照片封面 1/6]</span>
+        <span style="position: absolute; left: 14px; bottom: 14px; display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.94); color: #1c5232; font-size: 13px; font-weight: 700;"><span class="ms" style="font-size: 18px; font-variation-settings: 'FILL' 1;" aria-hidden="true">check_circle</span>在園中 · 08:12 到校</span>
+      </div>
+      <div style="padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="width: 36px; height: 36px; border-radius: 50%; background: #ffddd1; color: #7a2e18; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;">陳</span>
+          <span style="display: flex; flex-direction: column;"><span style="font-size: 14px; font-weight: 700;">陳老師</span><span style="font-size: 12px; color: #6b5e54;">向日葵班 · 15:20</span></span>
+        </div>
+        <p style="margin: 0; font-size: 17px; line-height: 1.7; font-weight: 500;">小禾今天在積木區蓋了一座好高的橋，還主動幫忙收玩具。午睡前說想念妹妹，抱抱後就安心睡了。</p>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-radius: 16px; background: #fff8d8;"><span class="ms" style="font-size: 24px; color: #8a5d00;" aria-hidden="true">sentiment_very_satisfied</span><span style="font-size: 12px; color: #6b5e54;">心情</span><span style="font-size: 14px; font-weight: 700;">開心</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-radius: 16px; background: #e8f5e3;"><span class="ms" style="font-size: 24px; color: #1b5e20;" aria-hidden="true">restaurant</span><span style="font-size: 12px; color: #6b5e54;">午餐</span><span style="font-size: 14px; font-weight: 700;">3/3</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-radius: 16px; background: #efe5f5;"><span class="ms" style="font-size: 24px; color: #6e3f94;" aria-hidden="true">bedtime</span><span style="font-size: 12px; color: #6b5e54;">午睡</span><span style="font-size: 14px; font-weight: 700;">1.5 時</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-radius: 16px; background: #d3ecec;"><span class="ms" style="font-size: 24px; color: #145555;" aria-hidden="true">thermostat</span><span style="font-size: 12px; color: #6b5e54;">體溫</span><span style="font-size: 14px; font-weight: 700;">36.6°</span></div>
+        </div>
+        <div style="padding: 12px 14px; border-radius: 16px; background: #fffce8; display: flex; gap: 10px; align-items: flex-start;">
+          <span class="ms" style="font-size: 22px; color: #8a5d00;" aria-hidden="true">lightbulb</span>
+          <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 12px; font-weight: 700; color: #6b5e54;">今天學到了</span><span style="font-size: 15px;">認識秋天的落葉顏色，用葉子拓印做書籤</span></span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;">
+          <div style="aspect-ratio: 1; border-radius: 14px; background: #ffe8e4; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 24px; color: #b14545;" aria-hidden="true">image</span></div>
+          <div style="aspect-ratio: 1; border-radius: 14px; background: #d3ecec; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 24px; color: #145555;" aria-hidden="true">image</span></div>
+          <div style="aspect-ratio: 1; border-radius: 14px; background: #2a2520; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700;">+3</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <a href="#" style="flex: 1; height: 44px; border-radius: 999px; background: #006d3d; color: #ffffff; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 15px; font-weight: 700;"><span class="ms" style="font-size: 20px;" aria-hidden="true">chat_bubble</span>回覆老師</a>
+          <a href="#" style="flex: 1; height: 44px; border-radius: 999px; border: 1.5px solid #c0c9bf; box-sizing: border-box; color: #2a2520; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700;">完整聯絡簿</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- other events of the day, inline -->
+    <section style="display: flex; flex-direction: column; gap: 4px;" aria-label="今天的其他動態">
+      <div style="display: flex; gap: 12px; align-items: center; padding: 10px 4px;"><span style="font-size: 13px; color: #6b5e54; width: 42px; font-variant-numeric: tabular-nums;">13:05</span><span class="ms" style="font-size: 20px; color: #1c5232;" aria-hidden="true">directions_walk</span><span style="font-size: 15px;">您已預告 16:30 接送</span></div>
+      <div style="display: flex; gap: 12px; align-items: center; padding: 10px 4px;"><span style="font-size: 13px; color: #6b5e54; width: 42px;">12:30</span><span class="ms" style="font-size: 20px; color: #0b4a5c;" aria-hidden="true">medication</span><span style="font-size: 15px;">用藥委託：老師已餵藥</span></div>
+      <div style="display: flex; gap: 12px; align-items: center; padding: 10px 4px;"><span style="font-size: 13px; color: #6b5e54; width: 42px;">09:30</span><span class="ms" style="font-size: 20px; color: #2d6f8e;" aria-hidden="true">campaign</span><span style="font-size: 15px;">公告：10/17 秋季戶外教學</span></div>
+    </section>
+
+    <!-- yesterday -->
+    <div style="display: flex; align-items: center; gap: 10px; color: #6b5e54; font-size: 13px; font-weight: 700;"><span style="flex: 1; height: 1px; background: #e7dccb;"></span>昨天 · 10/7 星期三<span style="flex: 1; height: 1px; background: #e7dccb;"></span></div>
+    <a href="#" style="display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: 22px; background: #ffffff; text-decoration: none; color: #2a2520; box-shadow: 0 1px 2px rgba(42,37,32,.05);">
+      <span style="width: 64px; height: 64px; border-radius: 16px; background: #efe5f5; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="ms" style="font-size: 24px; color: #6e3f94;" aria-hidden="true">image</span></span>
+      <span style="display: flex; flex-direction: column; gap: 4px; flex: 1;"><span style="font-size: 13px; color: #6b5e54; display: flex; align-items: center; gap: 4px;"><span class="ms" style="font-size: 16px;" aria-hidden="true">sentiment_satisfied</span>平穩 · 4 張照片</span><span style="font-size: 15px; line-height: 1.5;">今天的音樂課學了新的手指謠，回家可以一起唱唱看…</span></span>
+    </a>
+  </div>
+
+  <nav style="margin-top: auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 10px 8px 14px; background: #fff8e6; border-top: 1px solid #f1e7d2;" aria-label="主導覽">
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #2a2520; font-size: 12px; font-weight: 700;"><span style="width: 60px; height: 32px; border-radius: 16px; background: #0d9053; color: #fff; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px; font-variation-settings: 'FILL' 1;" aria-hidden="true">wb_sunny</span></span>今天</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #6b5e54; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">photo_library</span></span>成長</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #6b5e54; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center; position: relative;"><span class="ms" style="font-size: 22px;" aria-hidden="true">inbox</span><span style="position: absolute; top: 2px; right: -9px; min-width: 16px; height: 16px; border-radius: 8px; background: #ba1a1a; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center;">4</span></span>辦事</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #6b5e54; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">account_circle</span></span>我的</a>
+  </nav>
+</div>
+</figure>
+<figure class="board"><figcaption>B｜成長 tab（孩子＋相簿＋報告）</figcaption>
+<div style="width: 390px; height: 1180px; box-sizing: border-box; background: #fffcf2; color: #2a2520; font-family: 'Noto Sans TC', -apple-system, sans-serif; display: flex; flex-direction: column; overflow: hidden;">
+  <div style="display: flex; flex-direction: column; gap: 22px; padding: 18px 16px 24px;">
+
+    <header style="display: flex; align-items: center; gap: 14px;">
+      <span style="width: 60px; height: 60px; border-radius: 50%; padding: 3px; box-sizing: border-box; border: 3px solid #0d9053; display: flex; flex-shrink: 0;"><span style="flex: 1; border-radius: 50%; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700;">禾</span></span>
+      <div style="display: flex; flex-direction: column; flex: 1;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 900;">林小禾</h1>
+        <span style="font-size: 13px; color: #6b5e54; font-weight: 600;">4 歲 3 個月 · 向日葵班</span>
+      </div>
+      <button type="button" style="height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid #e7dccb; background: #ffffff; font: inherit; font-size: 14px; font-weight: 700; color: #2a2520; display: flex; align-items: center; gap: 4px;" aria-label="切換孩子"><span class="ms" style="font-size: 18px;" aria-hidden="true">swap_horiz</span>小樹</button>
+    </header>
+
+    <!-- milestone -->
+    <article style="padding: 18px; border-radius: 28px; background: #fff8d8; display: flex; flex-direction: column; gap: 10px;">
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #8a5d00;"><span class="ms" style="font-size: 18px; font-variation-settings: 'FILL' 1;" aria-hidden="true">star</span>本月里程碑</span>
+      <span style="font-size: 20px; font-weight: 900; line-height: 1.4;">會自己扣上外套的釦子了</span>
+      <span style="font-size: 13px; color: #6b5e54;">10/3 · 陳老師記錄</span>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" style="height: 40px; padding: 0 14px; border-radius: 999px; border: none; background: #ffffff; font: inherit; font-size: 14px; font-weight: 700; color: #2a2520; display: flex; align-items: center; gap: 6px;"><span class="ms" style="font-size: 18px; color: #b14545;" aria-hidden="true">favorite</span>好棒</button>
+        <a href="#" style="height: 40px; padding: 0 14px; border-radius: 999px; font-size: 14px; font-weight: 700; display: flex; align-items: center; text-decoration: none;">所有里程碑 (12)</a>
+      </div>
+    </article>
+
+    <!-- photos -->
+    <section style="display: flex; flex-direction: column; gap: 10px;" aria-label="照片">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;"><h2 style="margin: 0; font-size: 18px; font-weight: 900;">照片 <span style="font-size: 14px; font-weight: 600; color: #6b5e54;">10 月 · 23 張</span></h2><a href="#" style="font-size: 14px; font-weight: 700; text-decoration: none;">全部</a></div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;">
+        <div style="grid-column: span 2; grid-row: span 2; border-radius: 20px; background: #e8f5e3; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 32px; color: #1b5e20;" aria-hidden="true">image</span></div>
+        <div style="aspect-ratio: 1; border-radius: 14px; background: #ffe8e4; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px; color: #b14545;" aria-hidden="true">image</span></div>
+        <div style="aspect-ratio: 1; border-radius: 14px; background: #d3ecec; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px; color: #145555;" aria-hidden="true">image</span></div>
+        <div style="aspect-ratio: 1; border-radius: 14px; background: #efe5f5; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px; color: #6e3f94;" aria-hidden="true">image</span></div>
+        <div style="aspect-ratio: 1; border-radius: 14px; background: #fff8d8; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px; color: #8a5d00;" aria-hidden="true">image</span></div>
+        <div style="aspect-ratio: 1; border-radius: 14px; background: #2a2520; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700;">+17</div>
+      </div>
+    </section>
+
+    <!-- report + health -->
+    <section style="display: flex; flex-direction: column; gap: 10px;" aria-label="報告與健康">
+      <a href="#" style="display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 22px; background: #ffffff; text-decoration: none; color: #2a2520; box-shadow: 0 1px 2px rgba(42,37,32,.05), 0 10px 30px -14px rgba(42,37,32,.16);">
+        <span style="width: 48px; height: 48px; border-radius: 16px; background: #efe5f5; color: #6e3f94; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="ms" style="font-size: 26px;" aria-hidden="true">insights</span></span>
+        <span style="display: flex; flex-direction: column; gap: 2px; flex: 1;"><span style="font-size: 16px; font-weight: 700;">期中成長報告</span><span style="font-size: 13px; color: #6b5e54;">10/1 發布 · 共 3 份報告</span></span>
+        <span style="font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: #ffddd1; color: #7a2e18;">未讀</span>
+      </a>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+        <a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 22px; background: #ffffff; text-decoration: none; color: #2a2520; box-shadow: 0 1px 2px rgba(42,37,32,.05);"><span style="font-size: 13px; color: #6b5e54; font-weight: 600;">身高</span><span style="font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums;">104.2<span style="font-size: 14px; font-weight: 600;"> cm</span></span><span style="font-size: 12px; color: #2d7c56; font-weight: 700;">比 4 月 +1.3 cm</span></a>
+        <a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 22px; background: #ffffff; text-decoration: none; color: #2a2520; box-shadow: 0 1px 2px rgba(42,37,32,.05);"><span style="font-size: 13px; color: #6b5e54; font-weight: 600;">體重</span><span style="font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums;">16.8<span style="font-size: 14px; font-weight: 600;"> kg</span></span><span style="font-size: 12px; color: #2d7c56; font-weight: 700;">比 4 月 +0.6 kg</span></a>
+      </div>
+      <span style="font-size: 12px; color: #6b5e54;">9/20 園內量測</span>
+    </section>
+
+    <!-- profile -->
+    <section style="display: flex; flex-direction: column; gap: 10px;" aria-label="孩子資料">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 900;">資料</h2>
+      <div style="background: #ffffff; border-radius: 22px; padding: 4px 16px; box-shadow: 0 1px 2px rgba(42,37,32,.05);">
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f1e7d2; text-decoration: none; color: #2a2520; min-height: 44px;"><span class="ms" style="font-size: 22px; color: #6b5e54;" aria-hidden="true">badge</span><span style="flex: 1; font-size: 15px; font-weight: 600;">基本資料</span><span class="ms" style="font-size: 22px; color: #a39889;" aria-hidden="true">chevron_right</span></a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f1e7d2; text-decoration: none; color: #2a2520; min-height: 44px;"><span class="ms" style="font-size: 22px; color: #6b5e54;" aria-hidden="true">group</span><span style="flex: 1; font-size: 15px; font-weight: 600;">監護人與接送人</span><span style="font-size: 13px; color: #6b5e54;">3 位</span><span class="ms" style="font-size: 22px; color: #a39889;" aria-hidden="true">chevron_right</span></a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 12px 0; text-decoration: none; color: #2a2520; min-height: 44px;"><span class="ms" style="font-size: 22px; color: #b14545;" aria-hidden="true">warning</span><span style="flex: 1; font-size: 15px; font-weight: 600;">過敏與用藥提醒</span><span style="font-size: 13px; color: #b14545; font-weight: 600;">花生</span><span class="ms" style="font-size: 22px; color: #a39889;" aria-hidden="true">chevron_right</span></a>
+      </div>
+    </section>
+  </div>
+
+  <nav style="margin-top: auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 10px 8px 14px; background: #fff8e6; border-top: 1px solid #f1e7d2;" aria-label="主導覽">
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #6b5e54; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">wb_sunny</span></span>今天</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #2a2520; font-size: 12px; font-weight: 700;"><span style="width: 60px; height: 32px; border-radius: 16px; background: #0d9053; color: #fff; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 22px; font-variation-settings: 'FILL' 1;" aria-hidden="true">photo_library</span></span>成長</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #6b5e54; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center; position: relative;"><span class="ms" style="font-size: 22px;" aria-hidden="true">inbox</span><span style="position: absolute; top: 2px; right: -9px; min-width: 16px; height: 16px; border-radius: 8px; background: #ba1a1a; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center;">4</span></span>辦事</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #6b5e54; font-size: 12px;"><span style="height: 32px; display: flex; align-items: center;"><span class="ms" style="font-size: 22px;" aria-hidden="true">account_circle</span></span>我的</a>
+  </nav>
+</div>
+</figure>
+</div></section>
+<section class="group"><h2>方向 C｜一指辦事（借用：多寶並列、白話命名）</h2><p class="note">主張：很多家長（含阿公阿嬤）只為了辦一件事打開：接送、請假、繳費、簽名。<br>• 多寶家庭所有孩子並列，不再需要切換<br>• 底部中央「辦事」大按鈕取代事務 tab，用動詞分組<br>• 基準字級 17px、對比更高、觸控目標 56px<br>代價：中。導覽結構改動大，但頁面本身沿用；需處理「辦事」面板與常用功能列的關係。</p><div class="row">
+<figure class="board"><figcaption>C｜首頁：多寶並列＋大字</figcaption>
+<div style="width: 390px; height: 1060px; box-sizing: border-box; background: #f3f4ef; color: #111511; font-family: 'Noto Sans TC', -apple-system, sans-serif; font-size: 17px; display: flex; flex-direction: column; overflow: hidden;">
+  <div style="display: flex; flex-direction: column; gap: 16px; padding: 20px 16px 24px;">
+
+    <header style="display: flex; flex-direction: column; gap: 4px;">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 900;">10 月 8 日（四）</h1>
+      <p style="margin: 0; font-size: 17px; color: #2f3a31;">早安！今天有 <strong style="color: #b3261e;">3 件事</strong>要辦</p>
+    </header>
+
+    <!-- child 1 -->
+    <article style="background: #ffffff; border-radius: 18px; border: 1.5px solid #c0c9bf; padding: 16px; display: flex; flex-direction: column; gap: 14px;" aria-label="林小禾">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="width: 48px; height: 48px; border-radius: 50%; background: #d8f1de; color: #1c5232; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 900;">禾</span>
+        <div style="display: flex; flex-direction: column; flex: 1;"><span style="font-size: 20px; font-weight: 900;">林小禾</span><span style="font-size: 15px; color: #2f3a31;">向日葵班</span></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #e3f4e7;">
+        <span class="ms" style="font-size: 28px; color: #00522c; font-variation-settings: 'FILL' 1;" aria-hidden="true">check_circle</span>
+        <span style="display: flex; flex-direction: column;"><span style="font-size: 19px; font-weight: 900; color: #00522c;">在學校</span><span style="font-size: 15px; color: #1f2b22;">08:12 到校 · 您預告 16:30 來接</span></span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+        <a href="#" style="height: 56px; border-radius: 14px; border: 1.5px solid #717971; box-sizing: border-box; text-decoration: none; color: #111511; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 17px; font-weight: 700;"><span class="ms" style="font-size: 24px;" aria-hidden="true">auto_stories</span>聯絡簿</a>
+        <a href="#" style="height: 56px; border-radius: 14px; background: #006d3d; text-decoration: none; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 17px; font-weight: 700;"><span class="ms" style="font-size: 24px;" aria-hidden="true">pin_drop</span>我到了</a>
+      </div>
+    </article>
+
+    <!-- child 2 -->
+    <article style="background: #ffffff; border-radius: 18px; border: 1.5px solid #c0c9bf; padding: 16px; display: flex; flex-direction: column; gap: 14px;" aria-label="林小樹">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="width: 48px; height: 48px; border-radius: 50%; background: #cfecf7; color: #0b4a5c; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 900;">樹</span>
+        <div style="display: flex; flex-direction: column; flex: 1;"><span style="font-size: 20px; font-weight: 900;">林小樹</span><span style="font-size: 15px; color: #2f3a31;">小星星班</span></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #e1f1f8;">
+        <span class="ms" style="font-size: 28px; color: #0b4a5c;" aria-hidden="true">event_busy</span>
+        <span style="display: flex; flex-direction: column;"><span style="font-size: 19px; font-weight: 900; color: #0b4a5c;">今天請病假</span><span style="font-size: 15px; color: #1f2b22;">10/8–10/9 · 老師已確認</span></span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+        <a href="#" style="height: 56px; border-radius: 14px; border: 1.5px solid #717971; box-sizing: border-box; text-decoration: none; color: #111511; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 17px; font-weight: 700;"><span class="ms" style="font-size: 24px;" aria-hidden="true">auto_stories</span>聯絡簿</a>
+        <a href="#" style="height: 56px; border-radius: 14px; border: 1.5px solid #717971; box-sizing: border-box; text-decoration: none; color: #111511; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 17px; font-weight: 700;"><span class="ms" style="font-size: 24px;" aria-hidden="true">description</span>假單</a>
+      </div>
+    </article>
+
+    <!-- to-dos -->
+    <section style="display: flex; flex-direction: column; gap: 8px;" aria-label="要辦的事">
+      <h2 style="margin: 4px 0 0; font-size: 20px; font-weight: 900;">要辦的事</h2>
+      <div style="background: #ffffff; border-radius: 18px; border: 1.5px solid #c0c9bf; overflow: hidden;">
+        <a href="#" style="display: flex; align-items: center; gap: 14px; min-height: 68px; padding: 10px 16px; border-bottom: 1.5px solid #e1e3de; text-decoration: none; color: #111511; box-sizing: border-box;">
+          <span class="ms" style="font-size: 28px; color: #b3261e;" aria-hidden="true">payments</span>
+          <span style="display: flex; flex-direction: column; flex: 1;"><span style="font-size: 18px; font-weight: 700;">繳 10 月月費</span><span style="font-size: 15px; color: #b3261e; font-weight: 700;">NT$ 8,500 · 已逾期</span></span>
+          <span class="ms" style="font-size: 28px; color: #414942;" aria-hidden="true">chevron_right</span>
+        </a>
+        <a href="#" style="display: flex; align-items: center; gap: 14px; min-height: 68px; padding: 10px 16px; border-bottom: 1.5px solid #e1e3de; text-decoration: none; color: #111511; box-sizing: border-box;">
+          <span class="ms" style="font-size: 28px; color: #5c4300;" aria-hidden="true">draw</span>
+          <span style="display: flex; flex-direction: column; flex: 1;"><span style="font-size: 18px; font-weight: 700;">簽收戶外教學通知</span><span style="font-size: 15px; color: #2f3a31;">10/15 前</span></span>
+          <span class="ms" style="font-size: 28px; color: #414942;" aria-hidden="true">chevron_right</span>
+        </a>
+        <a href="#" style="display: flex; align-items: center; gap: 14px; min-height: 68px; padding: 10px 16px; text-decoration: none; color: #111511; box-sizing: border-box;">
+          <span class="ms" style="font-size: 28px; color: #0b4a5c;" aria-hidden="true">fact_check</span>
+          <span style="display: flex; flex-direction: column; flex: 1;"><span style="font-size: 18px; font-weight: 700;">填家長日時段</span><span style="font-size: 15px; color: #2f3a31;">10/12 前 · 約 1 分鐘</span></span>
+          <span class="ms" style="font-size: 28px; color: #414942;" aria-hidden="true">chevron_right</span>
+        </a>
+      </div>
+    </section>
+  </div>
+
+  <nav style="margin-top: auto; position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: end; padding: 10px 4px 14px; background: #ffffff; border-top: 1.5px solid #c0c9bf;" aria-label="主導覽">
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #00522c; font-size: 13px; font-weight: 900;"><span class="ms" style="font-size: 28px; font-variation-settings: 'FILL' 1, 'wght' 600;" aria-hidden="true">home</span>首頁</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #2f3a31; font-size: 13px; font-weight: 700;"><span class="ms" style="font-size: 28px;" aria-hidden="true">auto_stories</span>聯絡簿</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #111511; font-size: 13px; font-weight: 900; margin-top: -28px;" aria-label="辦事"><span style="width: 64px; height: 64px; border-radius: 50%; background: #006d3d; color: #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 5px #ffffff, 0 8px 20px -6px rgba(0,82,44,.5);"><span class="ms" style="font-size: 34px;" aria-hidden="true">add</span></span>辦事</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #2f3a31; font-size: 13px; font-weight: 700;"><span class="ms" style="font-size: 28px;" aria-hidden="true">child_care</span>孩子</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #2f3a31; font-size: 13px; font-weight: 700;"><span class="ms" style="font-size: 28px;" aria-hidden="true">account_circle</span>我的</a>
+  </nav>
+</div>
+</figure>
+<figure class="board"><figcaption>C｜中央「辦事」面板展開</figcaption>
+<div style="width: 390px; height: 960px; box-sizing: border-box; background: #5b605b; color: #111511; font-family: 'Noto Sans TC', -apple-system, sans-serif; font-size: 17px; display: flex; flex-direction: column; overflow: hidden;">
+  <!-- dimmed page behind -->
+  <div style="height: 72px; padding: 20px 16px 0; box-sizing: border-box;" aria-hidden="true">
+    <div style="width: 180px; height: 22px; border-radius: 6px; background: #737873;"></div>
+  </div>
+
+  <section style="flex: 1; background: #ffffff; border-radius: 28px 28px 0 0; padding: 10px 16px 24px; display: flex; flex-direction: column; gap: 18px;" role="dialog" aria-label="辦事">
+    <span style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #c0c9bf;"></span>
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h2 style="margin: 0; font-size: 24px; font-weight: 900;">您要辦什麼？</h2>
+      <button type="button" aria-label="關閉" style="width: 48px; height: 48px; border-radius: 50%; border: none; background: #edeee9; color: #111511; display: flex; align-items: center; justify-content: center;"><span class="ms" style="font-size: 26px;" aria-hidden="true">close</span></button>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 15px; font-weight: 700; color: #2f3a31;">接送</span>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+        <a href="#" style="grid-column: span 2; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 16px; border-radius: 16px; background: #006d3d; color: #ffffff; text-decoration: none; font-size: 18px; font-weight: 700;"><span class="ms" style="font-size: 30px;" aria-hidden="true">directions_walk</span>告訴老師我幾點來接</a>
+        <a href="#" style="display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 84px; padding: 12px 14px; border-radius: 16px; border: 1.5px solid #c0c9bf; color: #111511; text-decoration: none; font-size: 17px; font-weight: 700; box-sizing: border-box;"><span class="ms" style="font-size: 28px; color: #00522c;" aria-hidden="true">pin_drop</span>我到門口了</a>
+        <a href="#" style="display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 84px; padding: 12px 14px; border-radius: 16px; border: 1.5px solid #c0c9bf; color: #111511; text-decoration: none; font-size: 17px; font-weight: 700; box-sizing: border-box;"><span class="ms" style="font-size: 28px; color: #00522c;" aria-hidden="true">hail</span>請親友代接</a>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 15px; font-weight: 700; color: #2f3a31;">請假與健康</span>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+        <a href="#" style="display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 84px; padding: 12px 14px; border-radius: 16px; border: 1.5px solid #c0c9bf; color: #111511; text-decoration: none; font-size: 17px; font-weight: 700; box-sizing: border-box;"><span class="ms" style="font-size: 28px; color: #4a3277;" aria-hidden="true">event_busy</span>幫孩子請假</a>
+        <a href="#" style="display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 84px; padding: 12px 14px; border-radius: 16px; border: 1.5px solid #c0c9bf; color: #111511; text-decoration: none; font-size: 17px; font-weight: 700; box-sizing: border-box;"><span class="ms" style="font-size: 28px; color: #0b4a5c;" aria-hidden="true">medication</span>請老師餵藥</a>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 15px; font-weight: 700; color: #2f3a31;">繳費與文件</span>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+        <a href="#" style="position: relative; display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 84px; padding: 12px 14px; border-radius: 16px; border: 1.5px solid #c0c9bf; color: #111511; text-decoration: none; font-size: 17px; font-weight: 700; box-sizing: border-box;"><span class="ms" style="font-size: 28px; color: #5c4300;" aria-hidden="true">payments</span>繳費<span style="position: absolute; top: 10px; right: 10px; padding: 2px 8px; border-radius: 999px; background: #b3261e; color: #ffffff; font-size: 13px; font-weight: 700;">逾期 1</span></a>
+        <a href="#" style="position: relative; display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 84px; padding: 12px 14px; border-radius: 16px; border: 1.5px solid #c0c9bf; color: #111511; text-decoration: none; font-size: 17px; font-weight: 700; box-sizing: border-box;"><span class="ms" style="font-size: 28px; color: #5c4300;" aria-hidden="true">draw</span>簽收通知<span style="position: absolute; top: 10px; right: 10px; padding: 2px 8px; border-radius: 999px; background: #b3261e; color: #ffffff; font-size: 13px; font-weight: 700;">1</span></a>
+        <a href="#" style="position: relative; display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 84px; padding: 12px 14px; border-radius: 16px; border: 1.5px solid #c0c9bf; color: #111511; text-decoration: none; font-size: 17px; font-weight: 700; box-sizing: border-box;"><span class="ms" style="font-size: 28px; color: #00522c;" aria-hidden="true">history_edu</span>簽入學文件<span style="position: absolute; top: 10px; right: 10px; padding: 2px 8px; border-radius: 999px; background: #b3261e; color: #ffffff; font-size: 13px; font-weight: 700;">1</span></a>
+        <a href="#" style="position: relative; display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 84px; padding: 12px 14px; border-radius: 16px; border: 1.5px solid #c0c9bf; color: #111511; text-decoration: none; font-size: 17px; font-weight: 700; box-sizing: border-box;"><span class="ms" style="font-size: 28px; color: #0b4a5c;" aria-hidden="true">fact_check</span>填活動調查<span style="position: absolute; top: 10px; right: 10px; padding: 2px 8px; border-radius: 999px; background: #b3261e; color: #ffffff; font-size: 13px; font-weight: 700;">1</span></a>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 15px; font-weight: 700; color: #2f3a31;">其他</span>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 76px; border-radius: 16px; background: #f3f4ef; color: #111511; text-decoration: none; font-size: 16px; font-weight: 700;"><span class="ms" style="font-size: 26px; color: #7a2e18;" aria-hidden="true">palette</span>才藝課</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 76px; border-radius: 16px; background: #f3f4ef; color: #111511; text-decoration: none; font-size: 16px; font-weight: 700;"><span class="ms" style="font-size: 26px; color: #5c4300;" aria-hidden="true">calendar_month</span>行事曆</a>
+        <a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 76px; border-radius: 16px; background: #f3f4ef; color: #111511; text-decoration: none; font-size: 16px; font-weight: 700;"><span class="ms" style="font-size: 26px; color: #2f3a31;" aria-hidden="true">help</span>常見問題</a>
+      </div>
+    </div>
+  </section>
+</div>
+</figure>
+</div></section>
+</body>
+</html>
