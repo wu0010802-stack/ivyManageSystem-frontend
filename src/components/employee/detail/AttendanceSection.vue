@@ -83,7 +83,8 @@ const editAttendance = (row: Record<string, unknown>) => {
            punch_in: inTime,
            punch_out: outTime,
            review_required: false,
-           review_confirmed: false
+           review_confirmed: false,
+           block_confirmed: false
         }]
      }
      try {

@@ -4313,6 +4313,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/upload/preview-clock-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Attendance Clock Report
+         * @description 打卡鐘報表（txt）匯入預覽（唯讀）。
+         *
+         *     confirm 沿用 POST /attendance/upload-csv（normalized 列 + year/month）。
+         */
+        post: operations["preview_attendance_clock_report_api_attendance_upload_preview_clock_report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/upload/preview-excel": {
         parameters: {
             query?: never;
@@ -22949,6 +22971,15 @@ export interface components {
          * @description CSV 考勤記錄格式
          */
         AttendanceCSVRow: {
+            /**
+             * Block Confirmed
+             * @default false
+             */
+            block_confirmed: boolean;
+            /** Block Id */
+            block_id?: string | null;
+            /** Block Layout */
+            block_layout?: ("interleaved" | "grid") | null;
             /** Date */
             date: string;
             /** Department */
@@ -22958,7 +22989,7 @@ export interface components {
             /** Employee Number */
             employee_number: string;
             /** Import Format */
-            import_format?: "punch_events" | null;
+            import_format?: ("punch_events" | "clock_report") | null;
             /** Name */
             name: string;
             /** Punch In */
@@ -22981,6 +23012,8 @@ export interface components {
             source_employee_number?: string | null;
             /** Source Rows */
             source_rows?: number[];
+            /** Source Tokens */
+            source_tokens?: string[];
             /** Weekday */
             weekday: string;
         };
@@ -23015,7 +23048,7 @@ export interface components {
              * @default auto
              * @enum {string}
              */
-            default_format: "auto" | "daily_columns" | "punch_events";
+            default_format: "auto" | "daily_columns" | "punch_events" | "clock_report";
             /**
              * Device Id
              * @default default
@@ -23036,7 +23069,7 @@ export interface components {
              * @default auto
              * @enum {string}
              */
-            default_format: "auto" | "daily_columns" | "punch_events";
+            default_format: "auto" | "daily_columns" | "punch_events" | "clock_report";
             /**
              * Device Id
              * @default default
@@ -23145,6 +23178,8 @@ export interface components {
         };
         /** AttendancePreviewResult */
         AttendancePreviewResult: {
+            /** Blocks */
+            blocks?: components["schemas"]["ClockReportBlockOut"][];
             /** Date End */
             date_end?: string | null;
             /** Date Start */
@@ -24352,6 +24387,11 @@ export interface components {
         };
         /** Body_import_shifts_api_shifts_import_post */
         Body_import_shifts_api_shifts_import_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_attendance_clock_report_api_attendance_upload_preview_clock_report_post */
+        Body_preview_attendance_clock_report_api_attendance_upload_preview_clock_report_post: {
             /** File */
             file: string;
         };
@@ -26664,6 +26704,42 @@ export interface components {
         ClientEventsBatchIn: {
             /** Events */
             events: components["schemas"]["ClientEventIn"][];
+        };
+        /**
+         * ClockReportBlockOut
+         * @description 打卡鐘報表中只能推估日期的區塊（SPEC-027 §12.3），需人工確認後才可匯入。
+         */
+        ClockReportBlockOut: {
+            /** Block Id */
+            block_id: string;
+            /** Date Line */
+            date_line: string;
+            /** Department */
+            department: string;
+            /** First Day */
+            first_day: number;
+            /**
+             * Layout
+             * @enum {string}
+             */
+            layout: "interleaved" | "grid";
+            /** Proposals */
+            proposals: components["schemas"]["ClockReportProposalOut"][];
+            /** Raw Lines */
+            raw_lines: string[];
+            /** Source Employee Number */
+            source_employee_number: string;
+            /** Source Name */
+            source_name: string;
+        };
+        /** ClockReportProposalOut */
+        ClockReportProposalOut: {
+            /** Date */
+            date: string;
+            /** Punch In */
+            punch_in?: string | null;
+            /** Punch Out */
+            punch_out?: string | null;
         };
         /** ClosePeriodListOut */
         ClosePeriodListOut: {
@@ -41032,6 +41108,15 @@ export interface components {
         /** PreviewRow */
         PreviewRow: {
             /**
+             * Block Confirmed
+             * @default false
+             */
+            block_confirmed: boolean;
+            /** Block Id */
+            block_id?: string | null;
+            /** Block Layout */
+            block_layout?: ("interleaved" | "grid") | null;
+            /**
              * Check
              * @enum {string}
              */
@@ -41045,7 +41130,7 @@ export interface components {
             /** Employee Number */
             employee_number: string;
             /** Import Format */
-            import_format?: "punch_events" | null;
+            import_format?: ("punch_events" | "clock_report") | null;
             /** Matched Employee Id */
             matched_employee_id?: number | null;
             /** Punch In */
@@ -41070,6 +41155,8 @@ export interface components {
             source_employee_number?: string | null;
             /** Source Rows */
             source_rows?: number[];
+            /** Source Tokens */
+            source_tokens?: string[];
             /** Status */
             status?: string | null;
         };
@@ -56881,11 +56968,48 @@ export interface operations {
             };
         };
     };
+    preview_attendance_clock_report_api_attendance_upload_preview_clock_report_post: {
+        parameters: {
+            query: {
+                device_id?: string;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_attendance_clock_report_api_attendance_upload_preview_clock_report_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendancePreviewResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     preview_attendance_excel_api_attendance_upload_preview_excel_post: {
         parameters: {
             query?: {
                 device_id?: string;
-                format?: "auto" | "daily_columns" | "punch_events";
+                format?: "auto" | "daily_columns" | "punch_events" | "clock_report";
                 month?: number | null;
                 year?: number | null;
             };
