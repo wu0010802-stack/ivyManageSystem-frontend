@@ -25,13 +25,13 @@ import { apiError } from '@/utils/error'
 import ClassroomStudentDrawer from '@/components/classroom/ClassroomStudentDrawer.vue'
 import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogDrawer.vue'
 import PlanStatusCard from '@/components/classroom/PlanStatusCard.vue'
+import type { ClassroomRow } from '@/components/classroom/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import EnrollmentRosterDialog from '@/components/enrollment/EnrollmentRosterDialog.vue'
 
-interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
 interface TeacherOption { id: number; name: string; employee_id?: string | null; position?: string | null; [key: string]: unknown }
 
