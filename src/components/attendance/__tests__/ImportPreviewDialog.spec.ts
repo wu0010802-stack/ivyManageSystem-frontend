@@ -4,9 +4,10 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 // ── hoisted mocks ──────────────────────────────────────────────────────────────
-const { mockPreviewImport, mockPreviewExcel, mockUploadCsv, mockUploadFile, mockNotify, mockGetImportSettings, mockSaveImportSettings } = vi.hoisted(() => ({
+const { mockPreviewImport, mockPreviewExcel, mockPreviewClockReport, mockUploadCsv, mockUploadFile, mockNotify, mockGetImportSettings, mockSaveImportSettings } = vi.hoisted(() => ({
   mockPreviewImport: vi.fn(),
   mockPreviewExcel: vi.fn(),
+  mockPreviewClockReport: vi.fn(),
   mockUploadCsv: vi.fn(),
   mockUploadFile: vi.fn(),
   mockNotify: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: mock
 vi.mock('@/api/attendance', () => ({
   previewImport: mockPreviewImport,
   previewExcel: mockPreviewExcel,
+  previewClockReport: mockPreviewClockReport,
   uploadCsv: mockUploadCsv,
   uploadFile: mockUploadFile,
   getImportSettings: mockGetImportSettings,
@@ -1180,4 +1182,101 @@ describe('班表輔助核對', () => {
     await wrapper.vm.handleConfirmImport(); expect(mockUploadCsv).not.toHaveBeenCalled()
   })
 
+})
+
+
+describe('打卡鐘報表預覽', () => {
+  const block = {
+    block_id: '901:21', source_employee_number: '901', source_name: '測試甲', department: '教師',
+    first_day: 21, layout: 'grid', date_line: '21 一', raw_lines: ['  15:52-17:13'],
+    proposals: [{ date: '2026-06-23', punch_in: '15:52', punch_out: '17:13' }],
+  }
+  function clockRow(over: Record<string, unknown> = {}) {
+    return { ...previewFixture.rows[0], row_num: 2, employee_name: '測試甲', employee_number: '', matched_employee_id: 7,
+      date: '2026-06-23', punch_in: '15:52', punch_out: '17:13', import_format: 'clock_report', device_id: 'default',
+      source_employee_number: '901', source_rows: [], punches: ['2026-06-23T15:52:00', '2026-06-23T17:13:00'],
+      source_tokens: ['15:52-17:13'], block_id: '901:21', block_layout: 'grid', block_confirmed: false,
+      review_required: false, review_confirmed: false, check: 'review_required', ...over }
+  }
+  const sibling = () => clockRow({ row_num: 3, date: '2026-06-22', block_id: null, block_layout: null, source_tokens: ['08:00-17:00'] })
+  function clockFixture(over: Record<string, unknown> = {}) {
+    return { ...previewFixture, import_format: 'clock_report', device_id: 'default', source_count: 2,
+      date_start: '2026-06-22', date_end: '2026-06-23', summary: { importable: 0, problems: 2, overwrites: 0 },
+      normalized: [], rows: [clockRow(), sibling()], blocks: [block], ...over }
+  }
+  type Vm = { handleExcelUpload: (options: { file: File }) => Promise<void> }
+  async function uploadTxt(wrapper: ReturnType<typeof mountDialog>, name = '2026-06.txt') {
+    await flushPromises()
+    await (wrapper.vm as unknown as Vm).handleExcelUpload({ file: new File(['x'], name) })
+  }
+  beforeEach(() => { vi.clearAllMocks(); mockHasPermission.mockReturnValue(true) })
+
+  it('.txt 走打卡鐘報表預覽，並顯示推估區塊與人數統計', async () => {
+    mockPreviewClockReport.mockResolvedValueOnce({ data: clockFixture() })
+    const wrapper = mountDialog()
+    await uploadTxt(wrapper)
+    expect(mockPreviewClockReport).toHaveBeenCalledWith(expect.any(FormData), { year: 2026, month: 6, device_id: 'default' })
+    expect(mockPreviewExcel).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('已辨識：打卡鐘報表')
+    expect(wrapper.text()).toContain('打卡人日 2 個')
+    expect(wrapper.text()).toContain('推估區塊 1 個')
+    expect(wrapper.text()).toContain('推估區塊確認')
+  })
+
+  it('.txt 搭配不相容的打卡格式時提醒並且不呼叫 API', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('select[aria-label="打卡格式"]').setValue('daily_columns')
+    await uploadTxt(wrapper)
+    expect(mockElMessageWarning).toHaveBeenCalledWith(expect.stringContaining('.txt'))
+    expect(mockPreviewClockReport).not.toHaveBeenCalled()
+    expect(mockPreviewExcel).not.toHaveBeenCalled()
+  })
+
+  it('勾選區塊後重新預覽，帶上原文與確認狀態並保留區塊清單', async () => {
+    mockPreviewClockReport.mockResolvedValueOnce({ data: clockFixture() })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...clockFixture(), blocks: [], summary: { importable: 2, problems: 0, overwrites: 0 },
+      rows: [clockRow({ check: 'importable', block_confirmed: true }), { ...sibling(), check: 'importable' }],
+      normalized: [{ employee_number: 'T901', date: '2026-06-23', punch_in: '15:52', punch_out: '17:13' }] } })
+    const wrapper = mountDialog()
+    await uploadTxt(wrapper)
+    await wrapper.find('[data-block-id="901:21"] input[type="checkbox"]').setValue(true)
+    await wrapper.find('[data-reapply]').trigger('click')
+    await flushPromises()
+    expect(mockPreviewImport).toHaveBeenLastCalledWith(expect.objectContaining({ year: 2026, month: 6, records: [
+      expect.objectContaining({ import_format: 'clock_report', source_employee_number: '901', source_tokens: ['15:52-17:13'],
+        block_id: '901:21', block_layout: 'grid', block_confirmed: true }),
+      expect.objectContaining({ import_format: 'clock_report', source_tokens: ['08:00-17:00'], block_id: null, block_confirmed: false }),
+    ] }))
+    expect(wrapper.text()).toContain('推估區塊確認')
+    expect(wrapper.text()).toContain('所有區塊皆已確認')
+  })
+
+  it('區塊確認變更後必須重新預覽才能匯入', async () => {
+    const ready = clockFixture({ summary: { importable: 1, problems: 0, overwrites: 0 }, rows: [sibling()],
+      normalized: [{ employee_number: 'T902', date: '2026-06-22', punch_in: '08:00', punch_out: '17:00' }] })
+    mockPreviewClockReport.mockResolvedValueOnce({ data: ready })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...ready, blocks: [] } })
+    const wrapper = mountDialog()
+    await uploadTxt(wrapper)
+    const confirm = () => wrapper.findAll('button').find(b => b.text().includes('確認匯入'))
+    expect(confirm()?.attributes('disabled')).toBeUndefined()
+    await wrapper.find('[data-block-id="901:21"] input[type="checkbox"]').setValue(true)
+    expect(confirm()?.attributes('disabled')).toBeDefined()
+    await wrapper.find('[data-reapply]').trigger('click')
+    await flushPromises()
+    expect(confirm()?.attributes('disabled')).toBeUndefined()
+  })
+
+  it('區塊列與同員工其他列各自顯示不同的待確認原因', async () => {
+    const rows = [clockRow(), { ...sibling(), source_employee_number: '901' }]
+    mockPreviewClockReport.mockResolvedValueOnce({ data: clockFixture({ rows }) })
+    const wrapper = mount(ImportPreviewDialog, { props: { modelValue: true, year: 2026, month: 6 }, global: { stubs: { ...stubs,
+      'el-table': { template: '<div><slot /></div>' },
+      'el-table-column': { data: () => ({ rows }), template: '<div><slot v-for="row in rows" :row="row" /></div>' },
+    } } })
+    await uploadTxt(wrapper as unknown as ReturnType<typeof mountDialog>)
+    expect(wrapper.text()).toContain('推估區塊待確認')
+    expect(wrapper.text()).toContain('同員工尚有推估區塊未確認')
+  })
 })

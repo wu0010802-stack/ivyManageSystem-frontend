@@ -9,11 +9,14 @@
  *   el-upload → previewExcel（唯讀逐列檢核，新格式）→ 共用預覽表 → 確認匯入 uploadCsv
  *   legacy 月統計格式無逐列可預覽 → 後端 400，另提供「以 legacy 格式直接匯入」退路
  *
+ * Tab B 也收打卡鐘「員工上下班時間表」txt：previewClockReport（SPEC-027 §12）。
+ *   報表中只能推估日期的區塊須在 ClockReportBlockReview 人工確認，未確認者該員工整月不匯入。
+ *
  * 兩條路徑的 confirm 都走 uploadCsv（normalized 列 + year/month），與 preview 同規則。
  */
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { previewImport, previewExcel, uploadCsv, uploadFile, getImportSettings, saveImportSettings } from '@/api/attendance'
+import { previewImport, previewExcel, previewClockReport, uploadCsv, uploadFile, getImportSettings, saveImportSettings } from '@/api/attendance'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
@@ -23,6 +26,7 @@ import type { ReviewEdit, ReviewAction, ReviewFilter } from '@/utils/attendanceB
 import { useAttendanceScheduleReview } from '@/composables/useAttendanceScheduleReview'
 import { reviewFingerprint, proposeScheduleReview, SCHEDULE_WINDOW_MINUTES } from '@/utils/attendanceScheduleReview'
 import { csvRow } from '@/utils/csv'
+import ClockReportBlockReview from './ClockReportBlockReview.vue'
 
 // ── Props / Emits ──────────────────────────────────────────────────────────────
 const props = defineProps<{
@@ -125,7 +129,18 @@ function confirmBatch() {
 let generation = 0
 let settingsGeneration = 0
 const busy = computed(() => previewing.value || uploading.value || importing.value || savingSettings.value || scheduleLoading.value)
-const isPunchEvents = computed(() => previewResult.value?.import_format === 'punch_events')
+const isClockReport = computed(() => previewResult.value?.import_format === 'clock_report')
+const isDeviceFormat = computed(() => previewResult.value?.import_format === 'punch_events' || isClockReport.value)
+const confirmedBlocks = ref(new Set<string>())
+const clockBlocks = computed(() => previewResult.value?.blocks ?? [])
+const pendingBlockCards = computed(() => new Set(clockBlocks.value.filter(block => !confirmedBlocks.value.has(block.block_id)).map(block => block.source_employee_number)))
+const multiSegmentCount = computed(() => previewResult.value?.rows.filter(row => (row.source_tokens?.length ?? 0) > 1).length ?? 0)
+function toggleBlock(blockId: string, checked: boolean) {
+  const next = new Set(confirmedBlocks.value)
+  if (checked) next.add(blockId); else next.delete(blockId)
+  confirmedBlocks.value = next
+  reviewDirty.value = true
+}
 const singlePunchCount = computed(() => previewResult.value?.rows.filter(row => row.punches?.length === 1).length ?? 0)
 const multiPunchCount = computed(() => previewResult.value?.rows.filter(row => (row.punches?.length ?? 0) > 2).length ?? 0)
 const sourceEmployees = computed(() => {
@@ -164,7 +179,11 @@ function applyMappingSuggestions() {
 }
 
 function checkLabel(row: PreviewRow): string {
-  if (row.check !== 'employee_not_found' || row.import_format !== 'punch_events') return CHECK_LABEL[row.check]
+  if (row.check === 'review_required' && row.import_format === 'clock_report') {
+    if (row.block_id && !confirmedBlocks.value.has(row.block_id)) return '推估區塊待確認'
+    if (row.source_employee_number && pendingBlockCards.value.has(row.source_employee_number)) return '同員工尚有推估區塊未確認'
+  }
+  if (row.check !== 'employee_not_found' || !row.import_format) return CHECK_LABEL[row.check]
   const number = row.source_employee_number
   const saved = settings.value?.employee_mappings?.find(entry => entry.source_employee_number === number)?.employee_id
   if (number && mappings.value[number] !== saved) return '對照尚未儲存，請儲存並重新預覽'
@@ -174,6 +193,7 @@ function checkLabel(row: PreviewRow): string {
 
 function clearPreview() {
   generation++
+  confirmedBlocks.value = new Set()
   invalidateSchedule()
   manualTimeKeys.value = new Set()
   clearReviewSelection()
@@ -261,6 +281,8 @@ async function handleReviewPreview() {
     source_employee_number: row.source_employee_number, source_rows: row.source_rows,
     punches: row.punches, review_required: row.review_required || scheduleRequiredKeys.value.has(reviewFingerprint(row)),
     review_confirmed: reviewEdits.value[row.row_num]?.confirmed ?? false,
+    source_tokens: row.source_tokens, block_id: row.block_id, block_layout: row.block_layout,
+    block_confirmed: row.block_id ? confirmedBlocks.value.has(row.block_id) : false,
   }))
   const request = ++generation
   previewing.value = true
@@ -269,7 +291,8 @@ async function handleReviewPreview() {
     const res = await previewImport({ records, year: props.year, month: props.month })
     if (request !== generation) return
     previewResult.value = { ...res.data, import_format: current.import_format, device_id: current.device_id,
-      source_count: current.source_count, date_start: current.date_start, date_end: current.date_end }
+      source_count: current.source_count, date_start: current.date_start, date_end: current.date_end,
+      blocks: current.blocks }
     initializeReview()
   } catch (err) {
     if (request === generation) {
@@ -353,6 +376,11 @@ function isLegacyFormatError(err: unknown): boolean {
 
 async function handleExcelUpload(options: { file: File }) {
   if (!canWrite.value || settingsError.value) return
+  const isClockReportFile = /\.txt$/i.test(options.file.name)
+  if (isClockReportFile && selectedFormat.value !== 'auto' && selectedFormat.value !== 'clock_report') {
+    ElMessage.warning('.txt 檔請將打卡格式改為「自動辨識」或「打卡鐘報表」')
+    return
+  }
   clearPreview()
   const request = generation
   sourceFile.value = options.file
@@ -362,9 +390,11 @@ async function handleExcelUpload(options: { file: File }) {
   try {
     const formData = new FormData()
     formData.append('file', options.file)
-    const res = await previewExcel(formData, { year: props.year, month: props.month,
-      ...(settings.value ? { format: selectedFormat.value, device_id: deviceId.value } : {}),
-    })
+    const res = isClockReportFile
+      ? await previewClockReport(formData, { year: props.year, month: props.month, device_id: deviceId.value })
+      : await previewExcel(formData, { year: props.year, month: props.month,
+        ...(settings.value ? { format: selectedFormat.value, device_id: deviceId.value } : {}),
+      })
     if (request !== generation) return
     previewResult.value = res.data
     initializeReview()
@@ -374,7 +404,7 @@ async function handleExcelUpload(options: { file: File }) {
       legacyExcelFile.value = options.file
       ElMessage.warning('此檔為 legacy 月統計格式，無法逐列預覽；可改用直接匯入')
     } else {
-      notify(err, 'ImportPreviewDialog.excelPreview', null, { prefix: 'Excel 預覽失敗' })
+      notify(err, 'ImportPreviewDialog.excelPreview', null, { prefix: isClockReportFile ? '打卡鐘報表預覽失敗' : 'Excel 預覽失敗' })
     }
   } finally {
     if (request === generation) uploading.value = false
@@ -565,7 +595,7 @@ defineExpose({
       <el-tab-pane label="上傳 Excel 檔" name="excel">
         <div class="import-preview-dialog__excel-section">
           <p class="import-preview-dialog__note">
-            支援 .xlsx / .xls，每日上下班欄位與逐筆刷卡格式會自動辨識。
+            支援 .xlsx / .xls（每日上下班欄位與逐筆刷卡格式會自動辨識）與打卡鐘匯出的「員工上下班時間表」.txt。
             上傳後先逐列預覽，確認後才匯入。
           </p>
           <div class="import-preview-dialog__settings">
@@ -574,6 +604,7 @@ defineExpose({
                 <option value="auto">自動辨識</option>
                 <option value="daily_columns">每日上下班欄位</option>
                 <option value="punch_events">逐筆刷卡</option>
+                <option value="clock_report">打卡鐘報表（txt）</option>
               </select>
             </label>
             <label>設備代號
@@ -588,7 +619,7 @@ defineExpose({
           <p v-if="settingsLoading" role="status">讀取本校打卡設定中…</p>
           <el-upload
             drag
-            accept=".xlsx,.xls"
+            accept=".xlsx,.xls,.txt"
             :http-request="handleExcelUpload"
             :show-file-list="false"
             :multiple="false"
@@ -596,7 +627,7 @@ defineExpose({
           >
             <el-icon><span>⬆</span></el-icon>
             <div class="el-upload__text">
-              拖曳或 <em>點擊上傳</em> Excel 檔
+              拖曳或 <em>點擊上傳</em> Excel 或打卡鐘 txt 檔
             </div>
           </el-upload>
           <div v-if="!canWrite" class="import-preview-dialog__note">
@@ -625,9 +656,11 @@ defineExpose({
 
     <!-- ── 預覽結果（Tab A / Tab B 共用）──────────────────────────────────── -->
     <template v-if="previewResult">
-      <section v-if="isPunchEvents" class="import-preview-dialog__device" aria-label="逐筆刷卡核對">
-        <p>已辨識：逐筆刷卡 · 原始刷卡 {{ previewResult.source_count }} 筆 · {{ previewResult.date_start }} ～ {{ previewResult.date_end }}</p>
-        <p>{{ sourceEmployees.length }} 人 · 未對照 {{ unmappedCount }} 人 · 單筆卡 {{ singlePunchCount }} 人日 · 多筆卡 {{ multiPunchCount }} 人日</p>
+      <section v-if="isDeviceFormat" class="import-preview-dialog__device" :aria-label="isClockReport ? '打卡鐘報表核對' : '逐筆刷卡核對'">
+        <p v-if="isClockReport">已辨識：打卡鐘報表 · 打卡人日 {{ previewResult.source_count }} 個 · {{ previewResult.date_start }} ～ {{ previewResult.date_end }}</p>
+        <p v-else>已辨識：逐筆刷卡 · 原始刷卡 {{ previewResult.source_count }} 筆 · {{ previewResult.date_start }} ～ {{ previewResult.date_end }}</p>
+        <p v-if="isClockReport">{{ sourceEmployees.length }} 人 · 未對照 {{ unmappedCount }} 人 · 多段打卡 {{ multiSegmentCount }} 人日 · 推估區塊 {{ clockBlocks.length }} 個</p>
+        <p v-else>{{ sourceEmployees.length }} 人 · 未對照 {{ unmappedCount }} 人 · 單筆卡 {{ singlePunchCount }} 人日 · 多筆卡 {{ multiPunchCount }} 人日</p>
         <p v-if="unmappedCount > 0" role="status">請先完成 {{ unmappedCount }} 人的員工對照，再儲存並重新預覽。</p>
         <p v-if="mappingDirty" role="status">對照尚未儲存，請按「儲存對照並重新預覽」更新檢核結果。</p>
         <details v-if="settings" :open="unmappedCount > 0 || mappingDirty">
@@ -654,6 +687,15 @@ defineExpose({
           <p v-if="scheduleFailed" role="alert">{{ scheduleFailed }} 位員工班表讀取失敗；已保留人工調整，可重試或人工核對。<el-button data-retry-schedule :disabled="busy || mappingDirty" @click="handleLoadSchedule">重試班表建議</el-button></p>
           <p v-if="unresolvedScheduleCount" role="status">原可匯入紀錄中另有 {{ unresolvedScheduleCount }} 個人日尚待班表人工核對，完成核對並重新預覽前不能匯入。</p>
         </section>
+        <ClockReportBlockReview
+          v-if="isClockReport && clockBlocks.length"
+          :blocks="clockBlocks"
+          :confirmed="confirmedBlocks"
+          :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"
+          :dirty="reviewDirty"
+          @toggle="toggleBlock"
+          @reapply="handleReviewPreview"
+        />
         <details v-if="reviewRows.length">
           <summary>核對單筆、多筆或重複刷卡</summary>
           <p class="import-preview-dialog__note">選擇實際上下班時間；缺卡的一側請保留空白。原始刷卡與來源列號均保留。</p>
@@ -670,7 +712,7 @@ defineExpose({
               <tbody><tr v-for="row in filteredReviewRows" :key="row.row_num" :data-review-row="row.row_num">
                 <td><input v-model="selectedReviewRows" :value="row.row_num" type="checkbox" :aria-label="`選取 ${row.employee_name} ${row.date}`" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch || !punchOptions(row).length" /></td>
                 <td>{{ row.employee_name }}<br />{{ row.date }}<br /><small>{{ row.source_employee_number }}</small></td>
-                <td>{{ row.punches?.map(time => time.slice(11)).join('、') }}<br /><small>來源列 {{ row.source_rows?.join('、') }}</small></td>
+                <td>{{ row.punches?.map(time => time.slice(11)).join('、') }}<br /><small v-if="row.source_tokens?.length">報表原文 {{ row.source_tokens.join('、') }}</small><small v-else>來源列 {{ row.source_rows?.join('、') }}</small></td>
                 <td>{{ reviewReasons(row).join('、') || checkLabel(row) }}<template v-if="scheduleLoaded || scheduleRequiredKeys.has(reviewFingerprint(row))"><br /><small>{{ scheduleHints[reviewFingerprint(row)]?.schedule || '班表未提供' }}</small><br />{{ scheduleReason(row) }}</template></td>
                 <td><select v-model="reviewEdits[row.row_num]!.punch_in" :aria-label="`${row.employee_name} ${row.date} 上班`" @change="markTimeEdit(row)" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"><option value="">缺卡</option><option v-for="time in punchOptions(row)" :key="time" :value="time">{{ time }}</option></select></td>
                 <td><select v-model="reviewEdits[row.row_num]!.punch_out" :aria-label="`${row.employee_name} ${row.date} 下班`" @change="markTimeEdit(row)" :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"><option value="">缺卡</option><option v-for="time in punchOptions(row)" :key="time" :value="time">{{ time }}</option></select></td>
@@ -733,7 +775,7 @@ defineExpose({
       </el-table>
 
       <p v-if="previewResult.summary.problems > 0" role="status">
-        {{ previewResult.summary.problems }} 筆問題資料不會匯入，<template v-if="isPunchEvents">請先完成工號對照與刷卡核對，再重新預覽；其他問題可下載清單查核。</template><template v-else>請先下載問題清單，修正後再重新上傳。</template>
+        {{ previewResult.summary.problems }} 筆問題資料不會匯入，<template v-if="isDeviceFormat">請先完成工號對照與刷卡核對，再重新預覽；其他問題可下載清單查核。</template><template v-else>請先下載問題清單，修正後再重新上傳。</template>
       </p>
       <!-- 操作列 -->
       <div class="import-preview-dialog__confirm-row">
