@@ -157,8 +157,13 @@ const statsCards = computed(() => {
   const s = summary.value || {}
   const enter = (s['入學'] || 0) + (s['復學'] || 0) + (s['轉入'] || 0)
   const leave = (s['退學'] || 0) + (s['轉出'] || 0) + (s['畢業'] || 0) + (s['休學'] || 0)
-  const base = props.classroom?.current_count ?? props.classroom?.students?.length ?? 0
-  const retention = base > 0 ? Math.round(((base - leave) / base) * 100) : null
+  // 保留率分母是「期初人數」：目前在籍 + 本學期離班 − 本學期入班。
+  // 若直接用目前在籍當分母，畢業季（離班 > 現有人數）會算出負值。
+  const current = props.classroom?.current_count ?? props.classroom?.students?.length ?? 0
+  const start = current + leave - enter
+  const retention = start > 0
+    ? Math.min(100, Math.max(0, Math.round(((start - leave) / start) * 100)))
+    : null
   return { enter, leave, net: enter - leave, retention }
 })
 
