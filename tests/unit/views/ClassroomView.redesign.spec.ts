@@ -312,6 +312,43 @@ describe('ClassroomView 改版：年級篩選', () => {
     expect(state.visibleClassrooms.map((c) => c.id)).toEqual([2])
     expect(rows(wrapper).length).toBe(1)
   })
+
+  // 表尾只加總「目前顯示的班」，狀態列則是全校不隨篩選變動；有篩選時標籤改「篩選結果合計」，
+  // 免得兩組數字被誤讀成同一口徑。搜尋／年級／快篩三種篩選都要觸發。
+  it('有任何篩選（搜尋／年級／快篩）時表尾標籤為「篩選結果合計」，清除後還原「合計」', async () => {
+    const wrapper = mountView()
+    await flush()
+    const state = setupState(wrapper)
+    const table = () => wrapper.find('[data-test="classroom-table"]').text()
+
+    expect(table()).toContain('合計 3 班')
+    expect(table()).not.toContain('篩選結果')
+
+    state.classroomSearch = '向日葵'
+    await nextTick()
+    expect(table()).toContain('篩選結果合計 1 班')
+
+    // 只有空白不算篩選（useClientTableFilter 會 trim）
+    state.classroomSearch = '   '
+    await nextTick()
+    expect(table()).toContain('合計 3 班')
+    expect(table()).not.toContain('篩選結果')
+
+    state.classroomSearch = ''
+    state.gradeFilter = '大班'
+    await nextTick()
+    expect(table()).toContain('篩選結果合計 2 班')
+
+    state.gradeFilter = null
+    state.statFilter = 'full'
+    await nextTick()
+    expect(table()).toContain('篩選結果合計 1 班')
+
+    state.statFilter = null
+    await nextTick()
+    expect(table()).toContain('合計 3 班')
+    expect(table()).not.toContain('篩選結果')
+  })
 })
 
 describe('ClassroomView 改版：檢視切換（表格 / 卡片）', () => {
@@ -429,8 +466,8 @@ describe('ClassroomView 改版：卡片內容（卡片檢視）', () => {
     await switchToCard(wrapper)
 
     const cards = wrapper.findAll('.classroom-card')
-    expect(cards[0].find('.card-actions').text()).toContain('仍有 15 名在學，請先轉班')
-    expect(cards[1].find('.card-actions').text()).toContain('仍有 25 名在學，請先轉班')
+    expect(cards[0].find('.card-actions').text()).toContain('仍有 15 名在學，請先把學生改到其他班')
+    expect(cards[1].find('.card-actions').text()).toContain('仍有 25 名在學，請先把學生改到其他班')
   })
 
   it('未指派班導顯示警示 chip', async () => {
@@ -583,7 +620,7 @@ describe('ClassroomView 改版：載入失敗', () => {
 describe('ClassroomView 改版：名冊抽屜異動後同步列表', () => {
   beforeEach(resetEach)
 
-  // 停用防呆吃 current_count；使用者照提示在名冊把學生轉班/退學後，列表必須自己更新，
+  // 停用防呆吃 current_count；使用者照提示把學生改班/退學後，列表必須自己更新，
   // 否則停用項會一直 disabled 到整頁重整（student-updated 原本只重開抽屜、不重抓清單）。
   it('抽屜 student-updated 後重抓班級清單：在籍數更新、停用項解鎖', async () => {
     const before = threeClassrooms.map((c) => ({ ...c }))
@@ -594,7 +631,7 @@ describe('ClassroomView 改版：名冊抽屜異動後同步列表', () => {
 
     const rowOf = (id: number) => wrapper.find(`[data-test="classroom-row"][data-id="${id}"]`)
     expect(rowOf(1).text()).toContain('15 / 30')
-    expect(rowOf(1).text()).toContain('仍有 15 名在學，請先轉班')
+    expect(rowOf(1).text()).toContain('仍有 15 名在學，請先把學生改到其他班')
     expect(getClassrooms).toHaveBeenCalledTimes(1)
 
     classroomsResponse = () => Promise.resolve({ data: after })
@@ -605,6 +642,6 @@ describe('ClassroomView 改版：名冊抽屜異動後同步列表', () => {
     expect(rowOf(1).text()).toContain('0 / 30')
     expect(rowOf(1).text()).not.toContain('仍有')
     // 其他班不受影響
-    expect(rowOf(2).text()).toContain('仍有 25 名在學，請先轉班')
+    expect(rowOf(2).text()).toContain('仍有 25 名在學，請先把學生改到其他班')
   })
 })

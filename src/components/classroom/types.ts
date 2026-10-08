@@ -26,7 +26,7 @@ export interface ClassroomRow {
 }
 
 /** ⋯ 選單與表格 emit 的操作代號（對應卡片 ⋯ 選單的 command）。 */
-export type ClassroomCommand = 'edit' | 'history' | 'disable'
+export type ClassroomCommand = 'edit' | 'history' | 'disable' | 'enable'
 
 /** 年級排序所需的最小欄位（ClassroomView 的 GradeRow 結構相容）。 */
 export interface GradeLite {

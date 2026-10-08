@@ -11,13 +11,18 @@ import { reservedCountFor } from '@/utils/classroomReserved'
 import ClassroomRowMenu from './ClassroomRowMenu.vue'
 import type { ClassroomCommand, ClassroomRow, GradeLite } from './types'
 
-const props = defineProps<{
+// filtered：父層正套用搜尋／年級／快篩。表尾只加總目前顯示的班，頁面狀態列卻是全校數字，
+// 有篩選時表尾標籤改「篩選結果合計」，避免兩組數字被誤讀成同一口徑。
+const props = withDefaults(defineProps<{
   classrooms: ClassroomRow[]
   grades: GradeLite[]
   canWrite: boolean
   canReadStudents: boolean
   reservedByGrade: Record<number, number>
-}>()
+  filtered?: boolean
+}>(), {
+  filtered: false,
+})
 
 const emit = defineEmits<{
   open: [classroom: ClassroomRow]
@@ -108,7 +113,7 @@ const groupMeta = (g: RowGroup): string => (
 )
 const reservedText = (g: RowGroup): string => ` · 保留 ${g.reserved}`
 const totalsText = computed(() => (
-  `合計 ${totals.value.classCount} 班 · 在籍 ${totals.value.enrolled} / ${totals.value.capacity} · 尚餘 ${totals.value.remaining}`
+  `${props.filtered ? '篩選結果合計' : '合計'} ${totals.value.classCount} 班 · 在籍 ${totals.value.enrolled} / ${totals.value.capacity} · 尚餘 ${totals.value.remaining}`
 ))
 
 type Tone = 'normal' | 'warning' | 'full'

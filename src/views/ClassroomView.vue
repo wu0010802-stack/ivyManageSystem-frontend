@@ -143,6 +143,11 @@ const visibleClassrooms = computed(() => filteredClassrooms.value.filter((c) => 
   (!gradeFilter.value || c.grade_name === gradeFilter.value) && matchesStatFilter(c)
 )))
 
+// 任一篩選生效（關鍵字／年級／快篩）：關鍵字比對與 useClientTableFilter 同口徑（trim 後空字串不算）
+const hasListFilters = computed(() => (
+  classroomSearch.value.trim() !== '' || Boolean(gradeFilter.value) || Boolean(statFilter.value)
+))
+
 // 年級選項：取當前清單實際出現的年級（避免死選項），依 grades.sort_order 排序
 const gradeFilterGroup = computed(() => {
   const names = Array.from(new Set(
@@ -320,11 +325,12 @@ const studentCountText = (classroom: ClassroomRow): string => (
   (classroom.current_count ?? 0) > 0 ? `${classroom.current_count} 名學生` : '尚無學生'
 )
 
-// 「⋯」選單（表格列與卡片共用）：編輯/異動紀錄/停用集中一處，主熱區只留「開名冊」
+// 「⋯」選單（表格列與卡片共用）：編輯/異動紀錄/停用/重新啟用集中一處，主熱區只留「開名冊」
 const handleRowCommand = (command: ClassroomCommand, classroom: ClassroomRow) => {
   if (command === 'edit') void openEdit(classroom)
   else if (command === 'history') openChangeLogDrawer(classroom)
   else if (command === 'disable') void handleDelete(classroom)
+  else if (command === 'enable') void handleEnable(classroom)
 }
 
 const resetForm = () => {
@@ -573,16 +579,19 @@ const disableConfirmMessage = (classroom: ClassroomRow) => {
     h('ul', { style: 'margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1)' }, [
       h('li', `清空班導、副班導、美語老師的指派（${who}）`),
       h('li', '相關教師本月薪資會標記為需要重新計算'),
-      h('li', '本學期班級清單不再顯示，可用「顯示停用班級」找回'),
+      h('li', '本學期班級清單不再顯示，可在「顯示停用班級」中重新啟用'),
     ]),
   ])
 }
 
 const handleDelete = async (classroom: ClassroomRow) => {
-  // 班上還有在學生時後端會拒絕停用；選單內已 disabled，這裡是直接呼叫（深連結/鍵盤）時的第二道防線
+  // 班上還有在學生時後端會拒絕停用；選單內已 disabled，這裡是直接呼叫（深連結/鍵盤）時的第二道防線。
+  // 文案指向介面上真有的動作：學生資料的「編輯基本資料」改班級、「變更狀態」辦理休學／退學／畢業。
   const enrolled = classroom.current_count ?? 0
   if (enrolled > 0) {
-    ElMessage.warning(`「${classroom.name}」仍有 ${enrolled} 名在學，請先轉班再停用`)
+    ElMessage.warning(
+      `「${classroom.name}」仍有 ${enrolled} 名在學，請先在學生資料改班級，或按「變更狀態」辦理休學／退學／畢業後再停用`,
+    )
     return
   }
   try {
@@ -604,6 +613,30 @@ const handleDelete = async (classroom: ClassroomRow) => {
   } catch (error) {
     if (error === 'cancel') return
     ElMessage.error(apiError(error, '停用失敗'))
+  }
+}
+
+// 重新啟用：編輯框已移除「啟用狀態」開關，這是停用後唯一的復原路徑。
+// 停用時後端已清空三位教師的指派且不會自動還原，確認框先講清楚，避免使用者以為師資跟著回來。
+const handleEnable = async (classroom: ClassroomRow) => {
+  try {
+    await ElMessageBox.confirm(
+      '班級會回到本學期清單。停用時已清空的教師指派不會自動恢復，需要重新指派。',
+      `重新啟用「${classroom.name}」？`,
+      {
+        confirmButtonText: '重新啟用',
+        cancelButtonText: '取消',
+        type: 'info',
+      },
+    )
+
+    await updateClassroom(classroom.id, { is_active: true })
+    ElMessage.success('班級已重新啟用')
+    await fetchClassrooms()
+    await classroomStore.refresh()
+  } catch (error) {
+    if (error === 'cancel') return
+    ElMessage.error(apiError(error, '重新啟用失敗'))
   }
 }
 
@@ -777,6 +810,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
         :can-write="canWrite"
         :can-read-students="canReadStudents"
         :reserved-by-grade="reservedByGrade"
+        :filtered="hasListFilters"
         @open="openStudentDrawer"
         @command="handleRowCommand"
       />

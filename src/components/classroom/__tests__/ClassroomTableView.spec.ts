@@ -172,6 +172,31 @@ describe('ClassroomTableView 組標頭與表尾彙總', () => {
     ])
 
     expect(wrapper.find('tfoot').text()).toContain('合計 2 班 · 在籍 52 / 55 · 尚餘 3')
+    // 未篩選時維持「合計」，不加「篩選結果」前綴
+    expect(wrapper.find('tfoot').text()).not.toContain('篩選結果')
+  })
+
+  // 有篩選時表尾只加總「目前顯示的班」，與頁面狀態列（全校，不隨篩選變動）口徑不同，
+  // 標籤改「篩選結果合計」避免兩組數字被當成同一口徑。
+  it('套用篩選（filtered）時表尾標籤改為「篩選結果合計」，數字口徑不變', () => {
+    const wrapper = mountTable(
+      [
+        mk({ grade_name: '大班', capacity: 30, current_count: 27 }),
+        mk({ grade_name: '小班', grade_id: 2, capacity: 25, current_count: 25 }),
+      ],
+      { filtered: true },
+    )
+
+    expect(wrapper.find('tfoot').text()).toContain('篩選結果合計 2 班 · 在籍 52 / 55 · 尚餘 3')
+  })
+
+  it('手機版同樣：未篩選「合計」、篩選時「篩選結果合計」', () => {
+    mobile.value = true
+    const rows = [mk({ capacity: 30, current_count: 10 })]
+
+    expect(mountTable(rows).find('.m-total').text()).toBe('合計 1 班 · 在籍 10 / 30 · 尚餘 20')
+    expect(mountTable(rows, { filtered: true }).find('.m-total').text())
+      .toBe('篩選結果合計 1 班 · 在籍 10 / 30 · 尚餘 20')
   })
 })
 
@@ -284,7 +309,9 @@ describe('ClassroomTableView 操作與 emit', () => {
     const item = wrapper.find('[data-command="disable"]')
     expect(item.attributes('aria-disabled')).toBe('true')
     expect(item.text()).toContain('停用班級')
-    expect(item.text()).toContain('仍有 12 名在學，請先轉班')
+    // 原因必須指向介面上真的有的動作（改學生的班級），不可再寫不存在的「轉班」鈕
+    expect(item.text()).toContain('仍有 12 名在學，請先把學生改到其他班')
+    expect(item.text()).not.toContain('轉班')
 
     await item.trigger('click')
     expect(wrapper.emitted('command')).toBeUndefined()
@@ -295,13 +322,48 @@ describe('ClassroomTableView 操作與 emit', () => {
 
     const item = wrapper.find('[data-command="disable"]')
     expect(item.attributes('aria-disabled')).toBeUndefined()
-    expect(item.text()).not.toContain('請先轉班')
+    expect(item.text()).not.toContain('請先把學生改到其他班')
   })
 
   it('已停用的班沒有「停用班級」項', () => {
     const wrapper = mountTable([mk({ is_active: false, current_count: 0 })])
 
     expect(wrapper.find('[data-command="disable"]').exists()).toBe(false)
+  })
+
+  // 底座唯一的重新啟用入口（編輯框的「啟用狀態」開關）已移除，沒有這一項誤停用就無法復原。
+  it('已停用的班有「重新啟用」項，點了 emit command(enable, classroom)', async () => {
+    const c = mk({ name: '舊班', is_active: false, current_count: 0 })
+    const wrapper = mountTable([c])
+
+    const item = wrapper.find('[data-command="enable"]')
+    expect(item.exists()).toBe(true)
+    expect(item.text()).toContain('重新啟用')
+    expect(item.attributes('aria-disabled')).toBeUndefined()
+
+    await item.trigger('click')
+    expect(wrapper.emitted('command')).toEqual([['enable', c]])
+  })
+
+  it('啟用中的班沒有「重新啟用」項', () => {
+    const wrapper = mountTable([mk({ is_active: true, current_count: 0 })])
+
+    expect(wrapper.find('[data-command="enable"]').exists()).toBe(false)
+  })
+
+  it('沒有 CLASSROOMS_WRITE 時，停用班也看不到「重新啟用」', () => {
+    const wrapper = mountTable([mk({ is_active: false, current_count: 0 })], { canWrite: false })
+
+    expect(wrapper.find('[data-command="enable"]').exists()).toBe(false)
+  })
+
+  it('手機版停用班同樣有「重新啟用」項', async () => {
+    mobile.value = true
+    const c = mk({ name: '舊班', is_active: false, current_count: 0 })
+    const wrapper = mountTable([c])
+
+    await wrapper.find('[data-command="enable"]').trigger('click')
+    expect(wrapper.emitted('command')).toEqual([['enable', c]])
   })
 
   it('權限：無 CLASSROOMS_WRITE 沒有編輯/停用；無 STUDENTS_READ 沒有名冊鈕與異動紀錄', () => {

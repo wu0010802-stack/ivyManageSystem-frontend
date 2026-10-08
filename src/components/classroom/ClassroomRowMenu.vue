@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // 班級「⋯」操作選單：年級分組表（桌機列／手機列）與卡片檢視共用同一份項目與停用防呆。
 // 停用項在班上仍有在學生時 disabled 並寫出原因——後端會拒絕，與其按下去才報錯，不如選單內就說清楚。
+// 已停用的班改顯示「重新啟用」：編輯框已不提供「啟用狀態」開關，這是停用之後唯一的復原入口。
 import { computed } from 'vue'
-import { Clock, Delete, Edit, MoreFilled } from '@element-plus/icons-vue'
+import { Clock, Delete, Edit, MoreFilled, RefreshLeft } from '@element-plus/icons-vue'
 import type { ClassroomCommand, ClassroomRow } from './types'
 
 const props = defineProps<{
@@ -15,6 +16,7 @@ const emit = defineEmits<{ command: [cmd: ClassroomCommand] }>()
 
 const enrolled = computed(() => props.classroom.current_count ?? 0)
 const canDisable = computed(() => props.canWrite && props.classroom.is_active !== false)
+const canEnable = computed(() => props.canWrite && props.classroom.is_active === false)
 const disableBlocked = computed(() => enrolled.value > 0)
 </script>
 
@@ -46,9 +48,15 @@ const disableBlocked = computed(() => enrolled.value > 0)
         >
           <span class="menu-item-text">
             <span>停用班級</span>
-            <span v-if="disableBlocked" class="menu-item-hint">仍有 {{ enrolled }} 名在學，請先轉班</span>
+            <span v-if="disableBlocked" class="menu-item-hint">仍有 {{ enrolled }} 名在學，請先把學生改到其他班</span>
           </span>
         </el-dropdown-item>
+        <el-dropdown-item
+          v-if="canEnable"
+          command="enable"
+          :icon="RefreshLeft"
+          divided
+        >重新啟用</el-dropdown-item>
       </el-dropdown-menu>
     </template>
   </el-dropdown>
