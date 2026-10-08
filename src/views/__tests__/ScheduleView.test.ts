@@ -10,7 +10,7 @@
  * - 每日調整整週 7 天（含週末）；三態：繼承／指定班別／day_off 明確排休
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ref } from 'vue'
+import { type ComputedRef, computed, inject, provide, ref, watch } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const {
@@ -79,8 +79,9 @@ vi.mock('@/stores/shift', () => ({
   }),
 }))
 
+const mockIsMobile = ref(false)
 vi.mock('@/composables/useIsMobile', () => ({
-  useIsMobile: () => ({ isMobile: ref(false) }),
+  useIsMobile: () => ({ isMobile: mockIsMobile }),
 }))
 
 vi.mock('@/composables', () => ({
@@ -109,6 +110,12 @@ const SUNDAY = (() => {
   d.setDate(d.getDate() + 6)
   return fmt(d)
 })()
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
 
 // ── scoped-slot 版 el-table stub（讓 cell 模板與按鈕真的渲染） ──
 const ElTableStub = {
@@ -167,8 +174,36 @@ const globalConfig = {
       template: '<div class="upload"><slot /></div>',
     },
     'el-card': { template: '<div class="card"><slot /></div>' },
-    'el-tabs': { props: ['modelValue'], emits: ['update:modelValue', 'tab-change'], template: '<div><slot /></div>' },
-    'el-tab-pane': { props: ['label', 'name'], template: '<section><slot /></section>' },
+    'el-tabs': {
+      props: ['modelValue'],
+      emits: ['update:modelValue', 'tab-change'],
+      setup(props: { modelValue: string }) {
+        // 真 el-tabs 會把目前 active 頁籤名稱 provide 給子 el-tab-pane，讓
+        // lazy pane 判斷是否已第一次進場；未實作這層的話 `lazy` pane 的 stub
+        // 只能永遠渲染 slot，測試會假綠（見「未切換前不載入」）。
+        provide('scheduleActiveTabName', computed(() => props.modelValue))
+      },
+      template: '<div><slot /></div>',
+    },
+    'el-tab-pane': {
+      props: { label: String, name: String, lazy: { type: Boolean, default: false } },
+      setup(props: { name?: string; lazy: boolean }) {
+        const activeTabName = inject<ComputedRef<unknown> | undefined>(
+          'scheduleActiveTabName',
+          undefined
+        )
+        const everActive = ref(!props.lazy)
+        watch(
+          () => activeTabName?.value,
+          (v) => {
+            if (v === props.name) everActive.value = true
+          },
+          { immediate: true }
+        )
+        return { everActive }
+      },
+      template: '<section v-if="everActive"><slot /></section>',
+    },
     'el-date-picker': { props: ['modelValue'], emits: ['update:modelValue', 'change'], template: '<input class="dp" />' },
     'el-tag': { props: ['type', 'size'], template: '<span><slot /></span>' },
     'el-icon': { template: '<i><slot /></i>' },
@@ -191,6 +226,7 @@ const mountView = async () => {
 describe('ScheduleView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockIsMobile.value = false
     mockGetRoster.mockResolvedValue({ data: ROSTER })
     mockGetAssignments.mockResolvedValue({ data: [] })
     mockGetSwapHistory.mockResolvedValue({ data: [] })
@@ -201,14 +237,97 @@ describe('ScheduleView', () => {
     mockSaveAssignments.mockResolvedValue({ data: { message: 'ok', week_start_date: MONDAY } })
   })
 
-  it('名冊走 /shifts/roster；classroom_name 正常顯示、無班級者被排除', async () => {
+  it('切換週次載入失敗後不可儲存上一週班表', async () => {
+    mockGetAssignments.mockResolvedValueOnce({ data: [{ employee_id: 1, shift_type_id: 3, notes: null }] })
+    const wrapper = await mountView()
+    mockGetAssignments.mockRejectedValueOnce(new Error('載入失敗'))
+    await wrapper.setProps({ initialDate: '2027-01-04' })
+    await flushPromises()
+    await wrapper.findAll('button').find((b) => b.text() === '儲存排班')!.trigger('click')
+    await flushPromises()
+    expect(mockSaveAssignments).not.toHaveBeenCalled()
+  })
+
+  it('儲存回覆晚到時不可把前一週警告顯示在新週', async () => {
+    let resolve!: (value: unknown) => void
+    mockSaveAssignments.mockReturnValueOnce(new Promise((done) => { resolve = done }))
+    const wrapper = await mountView()
+    await wrapper.findAll('button').find((b) => b.text() === '儲存排班')!.trigger('click')
+    await wrapper.setProps({ initialDate: '2027-01-04' })
+    await flushPromises()
+    resolve({ data: { warnings: [{ employee_id: 1, employee_name: '舊週警告', weekly_hours: 48 }] } })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('舊週警告')
+    expect(mockMessage.warning).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('名冊走 /shifts/roster；未指派班級的在職員工也能排班（手機：%s）', async (isMobile) => {
+    mockIsMobile.value = isMobile
     const wrapper = await mountView()
     expect(mockGetRoster).toHaveBeenCalledTimes(1)
     const text = wrapper.text()
     expect(text).toContain('王一')
     expect(text).toContain('小熊班')
     expect(text).toContain('李二')
-    expect(text).not.toContain('無班級者') // 只列有班級指派者
+    expect(text).toContain('無班級者')
+    expect(text).toContain('未指派班級')
+  })
+
+  it('未指派班級員工選班後可儲存，既有員工的班別與備註仍保留', async () => {
+    mockGetAssignments.mockResolvedValue({ data: [
+      { employee_id: 1, shift_type_id: 3, notes: '既有備註' },
+      { employee_id: 9, shift_type_id: 3, notes: '行政備註' },
+    ] })
+    const wrapper = await mountView()
+    const selects = wrapper.find('[data-label="班別"]').findAllComponents(ElSelectStub)
+    expect(selects).toHaveLength(3)
+    expect(selects[2].props('modelValue')).toBe(3)
+    selects[2].vm.$emit('update:modelValue', 4)
+    await wrapper.findAll('button').find((b) => b.text() === '儲存排班')!.trigger('click')
+    await flushPromises()
+    expect(mockSaveAssignments).toHaveBeenCalledWith({
+      week_start_date: MONDAY,
+      assignments: [
+        { employee_id: 1, shift_type_id: 3, notes: '既有備註' },
+        { employee_id: 2, shift_type_id: null, notes: null },
+        { employee_id: 9, shift_type_id: 4, notes: '行政備註' },
+      ],
+    })
+  })
+
+  it('快速切到下一週時，較晚回來的舊週資料不得覆蓋新週後被儲存', async () => {
+    const oldWeek = deferred<{ data: Array<{ employee_id: number; shift_type_id: number | null; notes: string | null }> }>()
+    const newWeek = deferred<{ data: Array<{ employee_id: number; shift_type_id: number | null; notes: string | null }> }>()
+    mockGetAssignments
+      .mockReturnValueOnce(oldWeek.promise)
+      .mockReturnValueOnce(newWeek.promise)
+
+    const wrapper = await mountView()
+    await wrapper.findAll('button').find((b) => b.text().includes('下週'))!.trigger('click')
+    await flushPromises()
+
+    newWeek.resolve({
+      data: [{ employee_id: 2, shift_type_id: 4, notes: '新週備註' }],
+    })
+    await flushPromises()
+    oldWeek.resolve({
+      data: [{ employee_id: 1, shift_type_id: 3, notes: '舊週備註' }],
+    })
+    await flushPromises()
+
+    await wrapper.findAll('button').find((b) => b.text() === '儲存排班')!.trigger('click')
+    await flushPromises()
+
+    const nextMonday = new Date(`${MONDAY}T12:00:00`)
+    nextMonday.setDate(nextMonday.getDate() + 7)
+    expect(mockSaveAssignments).toHaveBeenCalledWith({
+      week_start_date: fmt(nextMonday),
+      assignments: [
+        { employee_id: 1, shift_type_id: null, notes: null },
+        { employee_id: 2, shift_type_id: 4, notes: '新週備註' },
+        { employee_id: 9, shift_type_id: null, notes: null },
+      ],
+    })
   })
 
   it('saveAll 接住並顯示後端週工時 warnings', async () => {
@@ -287,6 +406,22 @@ describe('ScheduleView', () => {
     expect(mockConfirm).not.toHaveBeenCalled()
     expect(mockMessage.error).toHaveBeenCalled()
     expect(String(mockMessage.error.mock.calls[0][0])).toContain('已封存')
+  })
+
+  it('有「學期輪值表」頁籤，未切換前不載入輪值表元件', async () => {
+    const wrapper = await mountView()
+    const panes = wrapper.findAllComponents(globalConfig.stubs['el-tab-pane'])
+    expect(panes.map((p) => [p.props('name'), p.props('label')])).toContainEqual([
+      'duty-rotation',
+      '學期輪值表',
+    ])
+    const dutyPane = panes.find((p) => p.props('name') === 'duty-rotation')!
+    expect(dutyPane.props('lazy')).toBe(true)
+    // Final fix FE-2：pane 標了 lazy，stub 依 active 狀態渲染 slot——真正驗證
+    // DutyRotationPanel 連掛載都沒發生（而不只是巧合地因為 async component
+    // 尚未 resolve 而恰好沒東西可看），否則之後 stub 語意一改就會靜默假綠。
+    expect(dutyPane.find('section').exists()).toBe(false)
+    expect(wrapper.find('[data-test="grid"]').exists()).toBe(false)
   })
 
   describe('每日調整（三態、整週 7 天）', () => {

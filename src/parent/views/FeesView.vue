@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
 import DashboardHero from '../components/DashboardHero.vue'
+import SectionHeader from '../components/SectionHeader.vue'
 import FeeListGroup from '../components/fees/FeeListGroup.vue'
 import FeeReceiptSheet from '../components/fees/FeeReceiptSheet.vue'
 import { useChildrenStore } from '../stores/children'
@@ -12,6 +13,7 @@ import {
   getFeePayments,
 } from '../api/fees'
 import { toast } from '../utils/toast'
+import { formatSemesterLabel } from '../utils/semesterLabel'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
@@ -50,12 +52,19 @@ const records = ref<FeeRecord[]>([])
 const loading = ref(false)
 const loadError = ref(false)
 const detail = ref<FeeDetail | null>(null)
+// F18：收據彈窗請求序號。關閉或換開另一筆時遞增，A 的晚回應（付款、收據編號、退款
+// 同一路徑）一律丟棄，不得寫進 B 或已關閉的彈窗。
+let detailSeq = 0
 const detailLoading = ref(false)
+const detailError = ref(false)
 
 const detailOpen = computed({
   get: () => detail.value !== null,
   set: (v: boolean) => {
-    if (!v) detail.value = null
+    if (!v) {
+      detailSeq += 1
+      detail.value = null
+    }
   },
 })
 
@@ -88,6 +97,17 @@ const unpaidRecords = computed(() =>
   records.value.filter((r) => r.status === 'unpaid' || r.status === 'partial'),
 )
 const unpaidCount = computed(() => unpaidRecords.value.length)
+
+// 列表分組：原本按 API 時間序混排、未繳散落中段要靠跳轉尋找；改為「待繳」
+// （到期日近→遠）置頂、「已結清」隨後（維持原序），家長打開即見要處理的項目。
+const pendingRecords = computed(() =>
+  unpaidRecords.value
+    .slice()
+    .sort((a, b) => String(a.due_date ?? '9999').localeCompare(String(b.due_date ?? '9999'))),
+)
+const settledRecords = computed(() =>
+  records.value.filter((r) => r.status !== 'unpaid' && r.status !== 'partial'),
+)
 const nearestDueDate = computed(() => {
   const sorted = unpaidRecords.value
     .filter((r) => r.due_date)
@@ -113,15 +133,6 @@ const heroStatusLabel = computed(() => {
   if (unpaidCount.value > 0) return '有待繳費用'
   return '繳費無欠款'
 })
-
-function onJumpUnpaid() {
-  const el = document.querySelector('[data-unpaid-anchor]')
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    el.classList.add('fee-highlight')
-    setTimeout(() => el.classList.remove('fee-highlight'), 1000)
-  }
-}
 
 async function fetchSummary() {
   try {
@@ -171,17 +182,22 @@ async function retryLoad() {
 }
 
 async function openDetail(record: FeeRecord) {
-  detail.value = { record, payments: [], refunds: [] }
+  const seq = ++detailSeq
+  const mine = { record, payments: [] as Payment[], refunds: [] as unknown[] }
+  detail.value = mine
+  detailError.value = false
   detailLoading.value = true
   try {
     const { data } = await getFeePayments(record.id)
-    detail.value!.payments = (data as { payments?: Payment[] })?.payments || []
-    detail.value!.refunds = (data as { refunds?: unknown[] })?.refunds || []
-  } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    if (seq !== detailSeq) return
+    mine.payments = (data as { payments?: Payment[] })?.payments || []
+    mine.refunds = (data as { refunds?: unknown[] })?.refunds || []
+    detail.value = { ...mine }
+  } catch {
+    // 失敗改在收據彈窗內顯示可重試的錯誤態，不再只跳 toast（避免顯示「無付款紀錄」的假空態）
+    if (seq === detailSeq) detailError.value = true
   } finally {
-    detailLoading.value = false
+    if (seq === detailSeq) detailLoading.value = false
   }
 }
 
@@ -214,7 +230,7 @@ async function copyText(text: string | null | undefined) {
 
 function buildReceiptText(record: FeeRecord, payments: Payment[]) {
   const lines = [
-    `${record.fee_item_name}（${record.period}）`,
+    `${record.fee_item_name}（${formatSemesterLabel(record.period)}）`,
     `學生：${record.student_name || '—'}`,
     `應繳：$${formatNum(record.amount_due)}`,
     `已繳：$${formatNum(record.amount_paid)}`,
@@ -248,6 +264,9 @@ onMounted(async () => {
 
 watch(selectedId, () => {
   loadError.value = false
+  // F19：換孩子先清掉前一位的帳單；新孩子載入失敗時才會落到持久錯誤＋重試，
+  // 不會因為舊 records 非空而繼續顯示 A 的帳單、同時抑制錯誤提示。
+  records.value = []
   fetchRecords().catch(() => { loadError.value = true })
 })
 
@@ -273,14 +292,6 @@ async function pullRefresh() {
       :status-label="heroStatusLabel"
       :status-tone="heroStatusTone"
     />
-    <!-- 有未繳款時提供跳至應繳的快捷按鈕 -->
-    <div v-if="summary && unpaidCount > 0" class="jump-unpaid-wrap">
-      <button type="button" class="jump-unpaid-btn" @click="onJumpUnpaid">
-        <span class="material-symbols-rounded" aria-hidden="true">arrow_downward</span>
-        跳到應繳
-      </button>
-    </div>
-
     <ChildContextHeader variant="page" />
 
     <div v-if="myTotals" class="single-totals">
@@ -309,9 +320,20 @@ async function pullRefresh() {
       <p class="pt-empty-note">園所開立帳單後會出現在這裡</p>
     </div>
 
-    <!-- 費用列表：使用 StatusPill tone 取代舊 STATUS_COLOR map -->
+    <!-- 費用列表：待繳置頂、已結清隨後；全繳清時單一列表不加組標題 -->
+    <template v-if="pendingRecords.length > 0">
+      <SectionHeader :title="`待繳（${pendingRecords.length} 筆）`" class="fee-group-head" />
+      <FeeListGroup
+        :records="pendingRecords"
+        :status-label="(s) => STATUS_LABEL[s] || s"
+        :status-tone="(s) => STATUS_TONE[s] ?? 'neutral'"
+        @record-click="(r) => { openDetail(r as FeeRecord) }"
+      />
+      <SectionHeader v-if="settledRecords.length > 0" title="已結清" class="fee-group-head" />
+    </template>
     <FeeListGroup
-      :records="records"
+      v-if="settledRecords.length > 0"
+      :records="settledRecords"
       :status-label="(s) => STATUS_LABEL[s] || s"
       :status-tone="(s) => STATUS_TONE[s] ?? 'neutral'"
       @record-click="(r) => { openDetail(r as FeeRecord) }"
@@ -323,6 +345,8 @@ async function pullRefresh() {
       :payments="detail?.payments || []"
       :refunds="(detail?.refunds || []) as never[]"
       :loading="detailLoading"
+      :error="detailError"
+      @retry="detail && openDetail(detail.record)"
       @copy-info="(r, p) => onCopyInfo(r as FeeRecord, p as Payment[])"
       @copy-no="onCopyNo"
     />
@@ -334,13 +358,14 @@ async function pullRefresh() {
   display: flex;
   flex-direction: column;
   gap: var(--pt-page-gap, 18px);
+  /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
+  padding-inline: var(--space-4, 16px);
 }
 
 .single-totals {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 16px;
   font-size: 13px;
   color: var(--pt-text-body);
   background: var(--cream, #fffcf2);
@@ -369,26 +394,8 @@ async function pullRefresh() {
   color: var(--brand-primary, #0d9053);
 }
 
-/* 跳至應繳快捷列 */
-.jump-unpaid-wrap {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 16px;
-}
-.jump-unpaid-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--brand-primary, #0d9053);
-  background: var(--brand-primary-soft, color-mix(in srgb, var(--brand-primary, #0d9053) 10%, transparent));
-  border: 1px solid var(--brand-primary-border, color-mix(in srgb, var(--brand-primary, #0d9053) 20%, transparent));
-  border-radius: 999px;
-  padding: 6px 14px;
-  cursor: pointer;
-}
-.jump-unpaid-btn .material-symbols-rounded {
-  font-size: 16px;
+/* 分組標題：貼齊卡片左緣，與 hero/totals 拉開節奏 */
+.fee-group-head {
+  margin: 4px 0 -8px;
 }
 </style>

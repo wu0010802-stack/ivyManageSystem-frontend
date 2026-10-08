@@ -50,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import {
   ElSelect,
   ElOption,
@@ -84,8 +84,28 @@ interface GradeRow {
 }
 
 const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
-const schoolYear = ref<number>(currentRocYear())
-const semester = ref<1 | 2>(1)
+// 入學學年／學期由父層統一持有（2026-09-06）；本面板需要具體學期，
+// 父層未指定時退回上學期。
+const props = withDefaults(defineProps<{
+  schoolYear?: number | null
+  semester?: 1 | 2 | null
+}>(), { schoolYear: null, semester: null })
+
+const emit = defineEmits<{
+  'update:schoolYear': [value: number | null]
+  'update:semester': [value: 1 | 2 | null]
+}>()
+
+const schoolYear = computed<number>({
+  get: () => props.schoolYear ?? currentRocYear(),
+  set: (v: number) => emit('update:schoolYear', v),
+})
+const semester = computed<1 | 2>({
+  get: () => props.semester ?? 1,
+  set: (v: 1 | 2) => emit('update:semester', v),
+})
+
+watch(() => [props.schoolYear, props.semester], () => { void reload() })
 const loading = ref(false)
 const saving = ref(false)
 const rows = ref<PlanRow[]>([])

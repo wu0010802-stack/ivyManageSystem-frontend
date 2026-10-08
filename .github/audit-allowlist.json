@@ -5,5 +5,36 @@
     "每筆都必須有 expires，過期會讓 gate 轉紅以強制重新檢討。",
     "當上游修好、漏洞消失後，script 會提示把對應項目刪掉。"
   ],
-  "allow": []
+  "allow": [
+    {
+      "package": "braces",
+      "severity": "high",
+      "reason": "GHSA-vfj7-8cjw-p6xm 範圍 <=3.0.3，而 braces 最新版即 3.0.3（2026-10-08 查 registry），無修補版可升；僅 devDependency（stylelint 鏈），glob pattern 皆為 repo 內固定字串",
+      "expires": "2026-12-07"
+    },
+    {
+      "package": "micromatch",
+      "severity": "high",
+      "reason": "僅經由 braces 漏洞傳遞（micromatch 最新 4.0.8 仍依賴 braces ^3.0.3）；devDependency",
+      "expires": "2026-12-07"
+    },
+    {
+      "package": "fast-glob",
+      "severity": "high",
+      "reason": "僅經由 micromatch→braces 傳遞（fast-glob 最新 3.3.3）；devDependency",
+      "expires": "2026-12-07"
+    },
+    {
+      "package": "globby",
+      "severity": "high",
+      "reason": "僅經由 fast-glob→micromatch→braces 傳遞；devDependency（stylelint 鏈）",
+      "expires": "2026-12-07"
+    },
+    {
+      "package": "stylelint",
+      "severity": "high",
+      "reason": "僅經由 fast-glob／globby／micromatch→braces 傳遞；最新 stylelint 17.16.0 仍依賴 micromatch ^4.0.8，升 major 也解不掉；只在 lint 時執行",
+      "expires": "2026-12-07"
+    }
+  ]
 }

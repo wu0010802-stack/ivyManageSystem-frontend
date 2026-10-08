@@ -10,6 +10,7 @@ import {
 } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import { useIsMobile } from '@/composables/useIsMobile'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const props = withDefaults(defineProps<{
   refreshTrigger?: number
@@ -300,7 +301,7 @@ defineExpose({ fetchLeaves })
         </el-table-column>
       </el-table>
     </div>
-    <el-empty v-if="!loading && leaves.length === 0" description="本月無請假記錄" />
+    <EmptyState v-if="!loading && leaves.length === 0" variant="inline" title="本月無請假記錄" />
   </el-card>
 
   <!-- 附件預覽 Dialog -->

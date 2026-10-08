@@ -109,4 +109,51 @@ describe('M3NavigationBar', () => {
     const activeTab = w.findAll('.m3-nav-tab')[0]
     expect(activeTab.find('.material-symbols-rounded').text()).toBe('cottage')
   })
+
+  describe('prominent tab（永久隆起 FAB）', () => {
+    const PROMINENT_ITEMS = [
+      ITEMS[0],
+      ITEMS[1],
+      { key: 'contact-book', label: '聯絡簿', icon: 'menu_book', path: '/contact-book', badge: 2, prominent: true },
+      ITEMS[2],
+      ITEMS[3],
+    ]
+
+    it('沒有 prominent item 時不渲染 m3-nav-fab', () => {
+      const w = mount(M3NavigationBar, { props: { items: ITEMS, currentKey: 'home' } })
+      expect(w.find('.m3-nav-fab').exists()).toBe(false)
+      expect(w.find('.is-prominent').exists()).toBe(false)
+    })
+
+    it('prominent item 掛 is-prominent + m3-nav-fab；列本身不掛凹槽 class / 變數（平整列）', () => {
+      const w = mount(M3NavigationBar, { props: { items: PROMINENT_ITEMS, currentKey: 'home' } })
+      expect(w.classes()).not.toContain('has-prominent')
+      expect(w.attributes('style') || '').not.toContain('--m3-nav-notch-x')
+      const tab = w.findAll('.m3-nav-tab')[2]
+      expect(tab.classes()).toContain('is-prominent')
+      expect(tab.find('.m3-nav-fab').exists()).toBe(true)
+      expect(tab.find('.m3-nav-tab-indicator').exists()).toBe(false)
+      expect(tab.find('.m3-nav-tab-dot').exists()).toBe(true)
+    })
+
+    it('prominent tab 不論是否 active 都保留 aria-label / 標籤 / badge', () => {
+      const w = mount(M3NavigationBar, { props: { items: PROMINENT_ITEMS, currentKey: 'home' } })
+      const tab = w.findAll('.m3-nav-tab')[2]
+      expect(tab.attributes('aria-label')).toBe('聯絡簿')
+      expect(tab.attributes('aria-current')).toBeUndefined()
+      expect(tab.find('.m3-nav-tab-label').text()).toBe('聯絡簿')
+      expect(tab.find('.m3-nav-fab .m3-nav-tab-badge').text()).toBe('2')
+      expect(tab.find('.material-symbols-rounded').attributes('style')).toContain('"FILL" 0')
+    })
+
+    it('prominent tab 為 active 時：aria-current=page + filled icon + is-active', async () => {
+      const w = mount(M3NavigationBar, { props: { items: PROMINENT_ITEMS, currentKey: 'contact-book' } })
+      const tab = w.findAll('.m3-nav-tab')[2]
+      expect(tab.classes()).toContain('is-active')
+      expect(tab.attributes('aria-current')).toBe('page')
+      expect(tab.find('.material-symbols-rounded').attributes('style')).toContain('"FILL" 1')
+      await tab.trigger('click')
+      expect(w.emitted('select')[0][0]).toBe('contact-book')
+    })
+  })
 })

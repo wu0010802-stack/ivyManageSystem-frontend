@@ -208,20 +208,18 @@ import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepos
 import RecruitmentCampusDialog from '@/components/recruitment/RecruitmentCampusDialog.vue'
 import AllChannelSummaryCard from '@/components/recruitment/AllChannelSummaryCard.vue'
 import { LazyBar, LazyLine } from '@/components/recruitment/lazyChartComponents'
-import {
-  GRADES_ORDER,
-  FALLBACK_SCHOOL_LAT,
-  FALLBACK_SCHOOL_LNG,
-  TRAVEL_BANDS,
-} from '@/constants/recruitment'
+import { GRADES_ORDER, TRAVEL_BANDS } from '@/constants/recruitment'
 import { useTenantBranding } from '@/composables/useTenantBranding'
 
-// 園所座標的三層優先序（scan-frontend GAP-08）：
-//   後端 campus 設定 > 品牌 API 的 per-tenant 座標 > constants 的最終硬編 fallback。
-// 中間這層是多租戶新增的：沒有它，第二間園所在還沒設 campus_lat/lng 前地圖會落在高雄。
+// 園所座標的優先序（scan-frontend GAP-08）：
+//   後端 campus 設定 > 品牌 API 的 per-tenant 座標 > null（未設定）。
+// 預設租戶的 branding.map 恆有值（義華座標，灰度不變式）。非預設租戶沒設座標時是
+// null，**不再**退回義華的硬編座標（F65）：後端對非預設租戶也刻意不給座標
+// （`get_default_campus_payload`：以義華為圓心的生活圈分析「錯得很像真的」），
+// 熱點圖改顯示「尚未設定本園座標」。
 const { branding } = useTenantBranding()
-const brandingCampusLat = computed(() => branding.value.map.lat ?? FALLBACK_SCHOOL_LAT)
-const brandingCampusLng = computed(() => branding.value.map.lng ?? FALLBACK_SCHOOL_LNG)
+const brandingCampusLat = computed(() => branding.value.map?.lat ?? null)
+const brandingCampusLng = computed(() => branding.value.map?.lng ?? null)
 
 // -------- props / emits --------
 const props = defineProps<{ dashboard: ReturnType<typeof useRecruitmentDashboard> }>()

@@ -3,13 +3,9 @@ import { todayISO } from '@/utils/format'
 
 export const GRADES_ORDER = ['幼幼班', '小班', '中班', '大班']
 
-// 本園座標的**最終**備援值（scan-frontend GAP-08）。
-// 優先序：後端 campus 設定 > 品牌 API 的 `branding.map.{lat,lng}`（per-tenant）> 這兩個常數。
-// 多租戶下硬編高雄座標對第二間園所是錯的，故一般不應走到這裡；保留是為了
-// 「品牌 API 也掛掉」時地圖仍有一個可拖曳的起點，而不是 NaN。
-// 消費點請改用 `getBranding().map`，見 RecruitmentStatsPanel.vue。
-export const FALLBACK_SCHOOL_LAT = 22.6420
-export const FALLBACK_SCHOOL_LNG = 120.3243
+// 本園座標沒有硬編備援值（F65 已移除原 FALLBACK_SCHOOL_LAT/LNG＝義華座標）：
+// 優先序是 後端 campus 設定 > 品牌 API 的 `branding.map`（per-tenant）> null。
+// 預設租戶的義華座標只存在 `BRANDING_DEFAULTS.map`，勿在這裡加回任何園所的座標。
 
 // 分級通勤距離（公里）
 export const TRAVEL_BANDS = [10, 15, 20]
@@ -47,6 +43,8 @@ export interface VisitFormState {
   birthday: string | null
   grade: string | null
   phone: string
+  /** 主要聯絡人姓名（rvcontact01）：轉學生時用來建立監護人 */
+  contact_name: string
   address: string
   source: string
   source_category: string | null
@@ -65,6 +63,12 @@ export interface VisitFormState {
   notes: string
   parent_response: string
   geocoding_consent: boolean
+  /**
+   * 後端算好的預繳金對帳結果（唯讀，僅編輯既有訪視時有值）。
+   * 純顯示用，送出前會被剔除，不回寫後端。
+   */
+  deposit_mismatch?: string | null
+  prepayment_state?: string | null
 }
 
 export function emptyVisitForm(): VisitFormState {
@@ -75,7 +79,7 @@ export function emptyVisitForm(): VisitFormState {
   const rocMonth = `${toRocYear(parseInt(ty, 10))}.${tm}`
   return {
     month: rocMonth, month_raw: today, visit_date: rocDate, seq_no: '', child_name: '',
-    birthday: null, grade: null, phone: '', address: '',
+    birthday: null, grade: null, phone: '', contact_name: '', address: '',
     source: '', source_category: null, referrer: '',
     deposit_collector: '', tour_guide_employee_id: null,
     has_deposit: false, rides_bus: false, enrolled: false, transfer_term: false,

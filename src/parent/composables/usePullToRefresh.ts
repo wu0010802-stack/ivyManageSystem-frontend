@@ -9,6 +9,10 @@
  *      * touchmove 必須 `{ passive: false }` 才能 e.preventDefault()
  *      * 但只在「真正進入下拉狀態（armed && dy > 0）」才 prevent，
  *        否則正常往上滑會被卡住
+ *  - 捲動順暢度：非 passive 的 touchmove 會讓瀏覽器每次滑動都先等主執行緒
+ *    跑完 handler 才能捲（主執行緒一忙就掉幀）。因此只在「捲動位置在最頂端」
+ *    時才掛上 touchmove；捲離頂端就拆掉，中段滑動完全交給 compositor。
+ *    位置由 passive scroll listener（rAF 節流）同步。
  *  - reduced-motion：不做動畫，直接觸發 refresh（也不顯示 transform）
  *
  * 使用方式（建議透過 <PullToRefresh> 元件包裝，不直接呼叫 composable）：
@@ -58,12 +62,42 @@ export function usePullToRefresh({
 
   let startY = 0
   let pulling = false
+  let moveBound = false
+  let scrollRaf = 0
+  let scrollTarget: HTMLElement | Window | null = null
+
+  function resolveScrollEl(): HTMLElement | null {
+    const el = typeof scrollEl === 'function' ? scrollEl() : scrollEl
+    return el && typeof el.scrollTop === 'number' ? el : null
+  }
 
   function getScrollTop() {
-    const el = typeof scrollEl === 'function' ? scrollEl() : scrollEl
-    if (el && typeof el.scrollTop === 'number') return el.scrollTop
+    const el = resolveScrollEl()
+    if (el) return el.scrollTop
     if (typeof window === 'undefined') return 0
     return window.scrollY || document.documentElement.scrollTop || 0
+  }
+
+  /** 只在頁頂（或下拉進行中）掛非 passive touchmove，其餘時間讓捲動走 compositor。 */
+  function syncMoveListener() {
+    const el = rootRef.value
+    if (!el) return
+    const want = armed.value || pulling || getScrollTop() <= 0
+    if (want && !moveBound) {
+      el.addEventListener('touchmove', onTouchMove, { passive: false })
+      moveBound = true
+    } else if (!want && moveBound) {
+      el.removeEventListener('touchmove', onTouchMove)
+      moveBound = false
+    }
+  }
+
+  function onScroll() {
+    if (scrollRaf) return
+    scrollRaf = requestAnimationFrame(() => {
+      scrollRaf = 0
+      syncMoveListener()
+    })
   }
 
   function onTouchStart(e: TouchEvent) {
@@ -79,6 +113,8 @@ export function usePullToRefresh({
     armed.value = true
     pulling = false
     startY = e.touches[0].clientY
+    // scroll 事件可能還沒來得及同步（例如慣性捲回頂端），這裡補掛一次
+    syncMoveListener()
   }
 
   function onTouchMove(e: TouchEvent) {
@@ -101,6 +137,7 @@ export function usePullToRefresh({
       armed.value = false
       pulling = false
       pullDistance.value = 0
+      syncMoveListener()
       return
     }
 
@@ -117,9 +154,11 @@ export function usePullToRefresh({
     armed.value = false
     if (!pulling) {
       pullDistance.value = 0
+      syncMoveListener()
       return
     }
     pulling = false
+    syncMoveListener()
 
     if (pullDistance.value >= threshold) {
       triggerRefresh()
@@ -132,6 +171,7 @@ export function usePullToRefresh({
     armed.value = false
     pulling = false
     pullDistance.value = 0
+    syncMoveListener()
   }
 
   async function triggerRefresh() {
@@ -161,20 +201,29 @@ export function usePullToRefresh({
   function bind() {
     const el = rootRef.value
     if (!el) return
-    // touchstart/touchend 用 passive: true（不需 prevent）；touchmove 必須 false
+    // touchstart/touchend 用 passive: true（不需 prevent）；touchmove（非 passive）由 syncMoveListener 按需掛
     el.addEventListener('touchstart', onTouchStart, { passive: true })
-    el.addEventListener('touchmove', onTouchMove, { passive: false })
     el.addEventListener('touchend', onTouchEnd, { passive: true })
     el.addEventListener('touchcancel', onTouchCancel, { passive: true })
+    scrollTarget = resolveScrollEl() ?? (typeof window === 'undefined' ? null : window)
+    scrollTarget?.addEventListener('scroll', onScroll, { passive: true })
+    syncMoveListener()
   }
 
   function unbind() {
+    scrollTarget?.removeEventListener('scroll', onScroll)
+    scrollTarget = null
+    if (scrollRaf) {
+      cancelAnimationFrame(scrollRaf)
+      scrollRaf = 0
+    }
     const el = rootRef.value
     if (!el) return
     el.removeEventListener('touchstart', onTouchStart)
     el.removeEventListener('touchmove', onTouchMove)
     el.removeEventListener('touchend', onTouchEnd)
     el.removeEventListener('touchcancel', onTouchCancel)
+    moveBound = false
   }
 
   onMounted(bind)

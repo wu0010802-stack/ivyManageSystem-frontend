@@ -10,6 +10,7 @@
  *  - copy-no(receiptNo): 父層呼叫 copyText
  */
 import { computed } from 'vue'
+import { formatSemesterLabel } from '@/parent/utils/semesterLabel'
 import ParentBottomSheet from '@/parent/components/ParentBottomSheet.vue'
 import ParentIcon from '@/parent/components/ParentIcon.vue'
 
@@ -40,17 +41,20 @@ const props = withDefaults(defineProps<{
   payments?: Payment[]
   refunds?: Refund[]
   loading?: boolean
+  error?: boolean
 }>(), {
   record: null,
   payments: () => [],
   refunds: () => [],
   loading: false,
+  error: false,
 })
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'copy-info': [record: FeeRecord, payments: Payment[]]
   'copy-no': [receiptNo: string]
+  retry: []
 }>()
 
 function fmt(n: number | undefined): string { return Number(n ?? 0).toLocaleString('en-US') }
@@ -68,8 +72,12 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
   >
     <template v-if="record">
       <div class="detail-name">{{ record.fee_item_name }}</div>
-      <div class="detail-period">{{ record.period }}</div>
+      <div class="detail-period">{{ formatSemesterLabel(record.period) }}</div>
       <div v-if="loading" class="detail-loading">載入中...</div>
+      <div v-else-if="error" role="alert">
+        <p>收據載入失敗，請重新載入以確認繳費紀錄。</p>
+        <button type="button" class="action-btn" data-testid="receipt-retry" @click="emit('retry')">重新載入</button>
+      </div>
       <template v-else>
         <h4 class="section-h">繳費紀錄</h4>
         <div v-if="payments.length === 0" class="section-empty">尚無繳費</div>
@@ -94,7 +102,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
       </template>
     </template>
 
-    <template v-if="record && !loading" #footer>
+    <template v-if="record && !loading && !error" #footer>
       <div class="receipt-actions">
         <button
           type="button"

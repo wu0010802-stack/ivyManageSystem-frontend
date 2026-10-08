@@ -1,17 +1,29 @@
 /**
  * 彙總繳費表 × 預繳款整合（2026-08-26 預繳併入帳款）：
- * 預繳欄顯示與點擊開抽屜、工具列訪視預繳/預繳退款入口、mutation 後整體重抓。
+ * 預繳欄顯示與點擊開抽屜、mutation 後整體重抓。
+ *
+ * SPEC-019（2026-09-02）：工具列「預繳款」下拉（訪視預繳／預繳退款）移到
+ * 現金項目檢視，本表只保留每列「預繳」欄與 PrepaymentDrawer。
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const getFeeMonthlyStatement = vi.fn()
 const getPrepayments = vi.fn()
-const getPrepaymentRefunds = vi.fn()
 vi.mock('@/api/fees', () => ({
   getFeeMonthlyStatement: (...args: unknown[]) => getFeeMonthlyStatement(...args),
   getPrepayments: (...args: unknown[]) => getPrepayments(...args),
-  getPrepaymentRefunds: (...args: unknown[]) => getPrepaymentRefunds(...args),
+}))
+
+const elMessageMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  warning: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+}))
+vi.mock('element-plus', async (orig) => ({
+  ...((await orig()) as Record<string, unknown>),
+  ElMessage: elMessageMocks,
 }))
 
 const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
@@ -45,21 +57,25 @@ vi.mock('@/components/fees/PrepaymentDrawer.vue', () => ({
       '<div v-if="modelValue" data-testid="prepay-drawer" :data-title="title" :data-count="credits.length" />',
   },
 }))
-vi.mock('@/components/fees/PrepaymentRefundsDialog.vue', () => ({
+vi.mock('@/components/fees/StudentCashReceiptDialog.vue', () => ({
   __esModule: true,
   default: {
-    name: 'PrepaymentRefundsDialog',
-    props: {
-      modelValue: { type: Boolean, default: false },
-      refunds: { type: Array, default: () => [] },
-    },
-    emits: ['update:modelValue', 'refresh'],
-    template:
-      '<div v-if="modelValue" data-testid="prepay-refunds-dialog" :data-count="refunds.length" />',
+    name: 'StudentCashReceiptDialog',
+    props: { modelValue: { type: Boolean, default: false } },
+    template: '<div data-testid="cash-dialog-stub" />',
   },
 }))
 
 import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
+
+/** settlement 五桶（MonthlyStatementItemOut.settlement 為必填欄） */
+const ZERO_SETTLEMENT = {
+  cash_registered: 0,
+  cash_submitted: 0,
+  cash_confirmed: 0,
+  bank_reconciled: 0,
+  unreceipted: 0,
+}
 
 const STATEMENT = {
   month: '2026-08',
@@ -82,6 +98,8 @@ const STATEMENT = {
           status: 'unpaid',
           payment_date: null,
           payment_method: null,
+          source: 'bill_slip',
+          settlement: { ...ZERO_SETTLEMENT },
         },
       ],
     },
@@ -103,6 +121,8 @@ const STATEMENT = {
           status: 'unpaid',
           payment_date: null,
           payment_method: null,
+          source: 'bill_slip',
+          settlement: { ...ZERO_SETTLEMENT },
         },
       ],
     },
@@ -134,20 +154,6 @@ const CREDITS = {
   ],
 }
 
-const REFUNDS = {
-  total: 2,
-  items: [
-    {
-      id: 11, prepayment_credit_id: 3, amount: 5000, status: 'requested',
-      reason: '不就讀', recipient_name: null, disbursed_at: null,
-    },
-    {
-      id: 12, prepayment_credit_id: 3, amount: 5000, status: 'completed',
-      reason: '不就讀', recipient_name: '張媽媽', disbursed_at: '2026-08-01T10:00:00',
-    },
-  ],
-}
-
 const GLOBAL_STUBS = {
   'el-button': {
     template: '<button type="button" v-bind="$attrs" :disabled="disabled"><slot /></button>',
@@ -160,6 +166,16 @@ const GLOBAL_STUBS = {
       '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
   'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
+  'el-select': {
+    props: { modelValue: { type: String, default: '' } },
+    emits: ['update:modelValue'],
+    template: '<select v-bind="$attrs" :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
+  },
+  'el-option': {
+    props: { value: { type: String, default: '' }, label: { type: String, default: '' } },
+    template: '<option :value="value" v-bind="$attrs">{{ label }}</option>',
+  },
+  'el-icon': { template: '<i aria-hidden="true"><slot /></i>' },
   'el-skeleton': { template: '<div data-testid="stmt-skeleton" />' },
 }
 
@@ -174,13 +190,13 @@ beforeEach(() => {
   authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE'])
   getFeeMonthlyStatement.mockResolvedValue(STATEMENT)
   getPrepayments.mockResolvedValue(CREDITS)
-  getPrepaymentRefunds.mockResolvedValue(REFUNDS)
 })
 
 describe('預繳欄', () => {
-  it('有可用額度顯示「可用 NT$5,000」，無額度顯示 —', async () => {
+  it('完整欄位有可用額度顯示「可用 NT$5,000」，無額度顯示 —', async () => {
     const wrapper = mountStatement()
     await flushPromises()
+    await wrapper.find('[data-test="stmt-columns"]').trigger('click')
     const cells = wrapper.findAll('[data-test="stmt-prepay-cell"]')
     expect(cells).toHaveLength(1)
     expect(cells[0].text()).toContain('可用 NT$5,000')
@@ -189,10 +205,11 @@ describe('預繳欄', () => {
     expect(rows[1].text()).not.toContain('可用')
   })
 
-  it('點預繳格開抽屜，只帶該生額度、標題含學生姓名', async () => {
+  it('從精簡清單明細開預繳抽屜，只帶該生額度、標題含學生姓名', async () => {
     const wrapper = mountStatement()
     await flushPromises()
-    await wrapper.find('[data-test="stmt-prepay-cell"]').trigger('click')
+    await wrapper.find('[data-test="stmt-expand"]').trigger('click')
+    await wrapper.find('[data-test="stmt-detail"] [data-test="stmt-prepay-cell"]').trigger('click')
     await flushPromises()
     const drawer = wrapper.find('[data-testid="prepay-drawer"]')
     expect(drawer.exists()).toBe(true)
@@ -202,45 +219,12 @@ describe('預繳欄', () => {
 })
 
 describe('工具列入口', () => {
-  it('訪視預繳只計有效額度（refunded 不計），點擊開抽屜帶訪視額度', async () => {
+  it('工具列不再有預繳款下拉（移到現金項目檢視）', async () => {
     const wrapper = mountStatement()
     await flushPromises()
-    const visitBtn = wrapper.find('[data-test="stmt-visit-prepay"]')
-    expect(visitBtn.text()).toContain('訪視預繳 1 筆')
-    await visitBtn.trigger('click')
-    await flushPromises()
-    const drawer = wrapper.find('[data-testid="prepay-drawer"]')
-    expect(drawer.attributes('data-title')).toBe('訪視預繳（待轉正式學生）')
-    expect(drawer.attributes('data-count')).toBe('1')
-  })
-
-  it('無有效訪視額度時不顯示訪視預繳入口', async () => {
-    getPrepayments.mockResolvedValue({
-      total: 1,
-      items: [CREDITS.items[0]],
-    })
-    const wrapper = mountStatement()
-    await flushPromises()
+    expect(wrapper.find('[data-test="stmt-prepay-menu"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="stmt-visit-prepay"]').exists()).toBe(false)
-  })
-
-  it('預繳退款入口顯示待辦數（requested/approved 才算），點擊開退款清單', async () => {
-    const wrapper = mountStatement()
-    await flushPromises()
-    const refundBtn = wrapper.find('[data-test="stmt-refund-todo"]')
-    expect(refundBtn.text()).toContain('預繳退款（1 待辦）')
-    await refundBtn.trigger('click')
-    await flushPromises()
-    const dialog = wrapper.find('[data-testid="prepay-refunds-dialog"]')
-    expect(dialog.exists()).toBe(true)
-    expect(dialog.attributes('data-count')).toBe('2')
-  })
-
-  it('無待辦時入口文字不帶數字', async () => {
-    getPrepaymentRefunds.mockResolvedValue({ total: 0, items: [] })
-    const wrapper = mountStatement()
-    await flushPromises()
-    expect(wrapper.find('[data-test="stmt-refund-todo"]').text()).toBe('預繳退款')
+    expect(wrapper.find('[data-test="stmt-refund-todo"]').exists()).toBe(false)
   })
 })
 
@@ -248,16 +232,15 @@ describe('mutation 後重抓', () => {
   it('抽屜 emit refresh 時帳款與預繳一起重抓（套用會建立折抵影響應繳）', async () => {
     const wrapper = mountStatement()
     await flushPromises()
-    await wrapper.find('[data-test="stmt-prepay-cell"]').trigger('click')
+    await wrapper.find('[data-test="stmt-expand"]').trigger('click')
+    await wrapper.find('[data-test="stmt-detail"] [data-test="stmt-prepay-cell"]').trigger('click')
     await flushPromises()
     getFeeMonthlyStatement.mockClear()
     getPrepayments.mockClear()
-    getPrepaymentRefunds.mockClear()
     wrapper.findComponent({ name: 'PrepaymentDrawer' }).vm.$emit('refresh')
     await flushPromises()
     expect(getFeeMonthlyStatement).toHaveBeenCalledTimes(1)
     expect(getPrepayments).toHaveBeenCalledTimes(1)
-    expect(getPrepaymentRefunds).toHaveBeenCalledTimes(1)
   })
 
   it('exposed refresh（帳單工作區切回時）也會重抓預繳', async () => {
@@ -277,5 +260,24 @@ describe('載入失敗', () => {
     await flushPromises()
     expect(wrapper.findAll('[data-test="stmt-row"]')).toHaveLength(2)
     expect(wrapper.find('[data-test="stmt-prepay-cell"]').exists()).toBe(false)
+  })
+})
+
+describe('預繳筆數撞到查詢上限', () => {
+  // 回歸：端點有列表上限，撞到時被截掉的學生預繳欄會顯示成「—」＝看起來沒有預繳。
+  // 後端 total 已回真實總數，前端要據此明講，不讓它靜默。
+  it('total 大於實際回傳筆數時提示顯示不完整', async () => {
+    getPrepayments.mockResolvedValue({ total: 2100, items: CREDITS.items })
+    mountStatement()
+    await flushPromises()
+
+    expect(elMessageMocks.warning).toHaveBeenCalledTimes(1)
+    expect(String(elMessageMocks.warning.mock.calls[0][0])).toContain('2,100')
+  })
+
+  it('total 與回傳筆數一致時不提示', async () => {
+    mountStatement()
+    await flushPromises()
+    expect(elMessageMocks.warning).not.toHaveBeenCalled()
   })
 })

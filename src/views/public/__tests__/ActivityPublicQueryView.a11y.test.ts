@@ -4,6 +4,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 // ── 模擬 vue-router（view 用 useRoute 取 query.token、useRouter 導回報名頁）──
 const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }))
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ query: {} }),
   useRouter: () => ({ push: routerPushMock }),
 }))

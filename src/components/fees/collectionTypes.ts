@@ -1,6 +1,17 @@
 /** SPEC-016 代收明細共用型別與顯示常數。 */
 
-export interface CollectionPaymentRow {
+export type { BillSlipKind } from '@/api/fees'
+import type { BillSlipKind } from '@/api/fees'
+import type { Schema } from '@/api/_generated/typed'
+export const BILL_SLIP_KIND_LABELS: Record<BillSlipKind, string> = {
+  monthly: '月費批',
+  registration: '註冊費批',
+}
+export const BILL_SLIP_KIND_OPTIONS = (Object.keys(BILL_SLIP_KIND_LABELS) as BillSlipKind[]).map(
+  (key) => ({ key, label: BILL_SLIP_KIND_LABELS[key] }),
+)
+
+export interface CollectionPaymentRow extends Pick<Schema<'CollectionPaymentOut'>, 'full_collection_number' | 'match_level' | 'match_reasons'> {
   id: number
   import_id: number
   customer_paid_date: string
@@ -11,13 +22,22 @@ export interface CollectionPaymentRow {
   collection_suffix: string | null
   bill_year: number | null
   bill_month: number | null
-  posting_date: string
+  /** null＝在途：家長已在超商繳款，銀行尚未撥入 */
+  posting_date: string | null
   expected_posting_date: string | null
+  is_pending: boolean
+  /** 逾預計入帳日仍未入帳（錢真的沒撥進來，要追） */
+  overdue_pending: boolean
   occurrence_index: number
   reconciliation_status: string
   status_note: string | null
   allocated_total: number
   unallocated: number
+}
+
+export interface CollectionImportRowError {
+  row_number: number
+  reason: string
 }
 
 export interface CollectionImportPreview {
@@ -30,10 +50,18 @@ export interface CollectionImportPreview {
   decoded_count: number
   old_period_count: number
   duplicate_count: number
+  /** 本檔尚未入帳的列數（超商已收、銀行未撥） */
+  pending_count: number
+  /** 會回填既有在途列入帳日的筆數 */
+  backfill_count: number
   error_count: number
+  errors: CollectionImportRowError[]
   already_imported: boolean
   parser_version: string
 }
+
+/** 入帳狀態篩選（後端 posting_state query param）。 */
+export type CollectionPostingState = 'pending' | 'posted' | 'overdue'
 
 export interface CoveragePair {
   payment_id: number | null
@@ -114,6 +142,45 @@ export interface BillSlipBatchRow {
   note: string | null
   created_at: string
   created?: boolean | null
+  /** SPEC-018：該批已產生的費用單筆數（0＝尚未產單） */
+  records_generated_count: number
+  /** SPEC-019 §6.1：月費批／註冊費批，匯入時宣告，未產單前可改 */
+  batch_kind: BillSlipKind
+}
+
+/** SPEC-018：發單批次產生費用單的計畫/結果（dry_run 與實際產生同構） */
+export interface BillSlipGenerateResult {
+  batch_id: number
+  dry_run: boolean
+  created: number
+  skipped_zero: number
+  skipped_existing: number
+  unresolved: {
+    slip_item_id: number
+    student_name: string
+    collection_suffix: string
+    net_amount: number
+  }[]
+  conflicts: {
+    student_id: number
+    student_name: string
+    record_id: number
+    source: string
+    source_bill_slip_batch_id: number | null
+  }[]
+  total_amount_due: number
+  due_date: string
+  target_month: string | null
+  batch_kind: BillSlipKind
+  /** SPEC-019 §6.3：註冊費批產單後自動標記已套用的預繳額度數 */
+  prepayment_applied: number
+  prepayment_pending: { credit_id: number; student_id: number; student_name: string; reason: string }[]
+  preview: {
+    student_id: number
+    student_name: string
+    classroom_name: string | null
+    amount_due: number
+  }[]
 }
 
 export interface BillSlipPreview {

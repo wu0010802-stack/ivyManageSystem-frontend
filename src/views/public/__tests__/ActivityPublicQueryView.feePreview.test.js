@@ -9,6 +9,7 @@ import { mount } from '@vue/test-utils'
 // supplies[].price），新增品項才用目前 option 價，與後端 diff 行為對齊。
 
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ query: {} }),
   useRouter: () => ({ push: vi.fn() }),
 }))

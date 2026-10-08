@@ -24,25 +24,25 @@
       class="platform-tenant-detail__alert"
     />
 
-    <el-tabs v-if="tenant" v-model="activeTab" data-testid="detail-tabs">
+    <el-tabs v-if="tenant" :key="tenant.id" v-model="activeTab" data-testid="detail-tabs">
       <el-tab-pane label="基本資料" name="basic">
-        <TenantBasicTab :tenant="tenant" @updated="onUpdated" />
+        <TenantBasicTab :key="`basic:${tenant.id}`" :tenant="tenant" @updated="onUpdated" />
       </el-tab-pane>
       <el-tab-pane label="品牌設定" name="brand">
-        <TenantBrandTab v-if="activeTab === 'brand'" :tenant-id="tenant.id" />
+        <TenantBrandTab v-if="activeTab === 'brand'" :key="`brand:${tenant.id}`" :tenant-id="tenant.id" />
       </el-tab-pane>
       <el-tab-pane label="LINE 憑證" name="line">
-        <TenantLineTab v-if="activeTab === 'line'" :tenant-id="tenant.id" />
+        <TenantLineTab v-if="activeTab === 'line'" :key="`line:${tenant.id}`" :tenant-id="tenant.id" />
       </el-tab-pane>
       <el-tab-pane label="Email 設定" name="email">
-        <TenantEmailTab v-if="activeTab === 'email'" :tenant-id="tenant.id" />
+        <TenantEmailTab v-if="activeTab === 'email'" :key="`email:${tenant.id}`" :tenant-id="tenant.id" />
       </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -63,6 +63,7 @@ const activeTab = ref<'basic' | 'brand' | 'line' | 'email'>('basic')
 const tenant = ref<TenantDetail | null>(null)
 const loading = ref(false)
 const loadError = ref<string | null>(null)
+let loadGeneration = 0
 
 const tenantId = computed(() => Number(route.params.id))
 const headerTitle = computed(() => tenant.value?.display_name || tenant.value?.name || '分校詳情')
@@ -77,33 +78,40 @@ const headerTitle = computed(() => tenant.value?.display_name || tenant.value?.n
  * 避免甲校的回應落在乙校畫面上。
  */
 async function load(): Promise<void> {
+  const generation = ++loadGeneration
   const id = tenantId.value
+  // 路由一換就先卸載上一校所有可寫表單，避免新租戶載入期間仍可操作舊資料。
+  tenant.value = null
+  loadError.value = null
   if (!Number.isFinite(id) || id <= 0) {
     loadError.value = '網址中的分校編號無效'
+    loading.value = false
     return
   }
   loading.value = true
-  loadError.value = null
   try {
     const res = await getTenant(id)
-    tenant.value = res.data ?? null
-    if (tenant.value) {
+    if (generation !== loadGeneration || id !== tenantId.value) return
+    const nextTenant = res.data ?? null
+    tenant.value = nextTenant
+    if (nextTenant) {
       setActingTenant({
-        id: tenant.value.id,
-        slug: tenant.value.slug,
-        name: tenant.value.display_name || tenant.value.name,
-        public_origin: tenant.value.public_origin,
+        id: nextTenant.id,
+        slug: nextTenant.slug,
+        name: nextTenant.display_name || nextTenant.name,
+        public_origin: nextTenant.public_origin,
       })
     }
   } catch (err) {
+    if (generation !== loadGeneration || id !== tenantId.value) return
     loadError.value = getErrorMessage(err, '分校資料載入失敗')
-    tenant.value = null
   } finally {
-    loading.value = false
+    if (generation === loadGeneration) loading.value = false
   }
 }
 
 function onUpdated(next: TenantDetail): void {
+  if (next.id !== tenantId.value) return
   tenant.value = next
   setActingTenant({
     id: next.id,
@@ -115,6 +123,8 @@ function onUpdated(next: TenantDetail): void {
 
 async function changeStatus(action: 'suspend' | 'resume'): Promise<void> {
   if (!tenant.value) return
+  const targetTenantId = tenant.value.id
+  const generation = loadGeneration
   const label = action === 'suspend' ? '停用' : '恢復'
   try {
     await ElMessageBox.confirm(`確定要${label}「${headerTitle.value}」嗎？`, `${label}分校`, {
@@ -125,16 +135,24 @@ async function changeStatus(action: 'suspend' | 'resume'): Promise<void> {
   } catch {
     return
   }
+  if (generation !== loadGeneration || tenant.value?.id !== targetTenantId) return
   try {
-    await (action === 'suspend' ? suspendTenant : resumeTenant)(tenant.value.id)
+    await (action === 'suspend' ? suspendTenant : resumeTenant)(targetTenantId)
+    if (generation !== loadGeneration || tenantId.value !== targetTenantId) return
     ElMessage.success(`${label}完成`)
     await load()
   } catch (err) {
+    if (generation !== loadGeneration || tenantId.value !== targetTenantId) return
     ElMessage.error(getErrorMessage(err, `${label}失敗`))
   }
 }
 
-watch(tenantId, load, { immediate: true })
+watch(tenantId, load, { immediate: true, flush: 'sync' })
+
+onUnmounted(() => {
+  // 不清 acting tenant，但要讓離頁後才回來的 request 失效，避免切回舊校視角。
+  loadGeneration += 1
+})
 
 // ⚠ 刻意**不在** `onUnmounted` 清 acting tenant：`setActingTenant(null)` 會
 // `advanceAdminSession()`，那會中止「正要進入的下一頁」剛送出的請求，並且對其他分頁

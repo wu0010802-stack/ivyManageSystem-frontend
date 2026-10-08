@@ -1,3 +1,4 @@
+vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }) }))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import AttendanceWorkspaceView from '../AttendanceWorkspaceView.vue'
@@ -18,9 +19,11 @@ vi.mock('@/api/attendance', () => ({
   upsertRecord: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
+const mockHasFullSalaryView = vi.fn(() => false)
 const mockHasPermission = vi.fn(() => true)
 vi.mock('@/utils/auth', () => ({
   hasPermission: (...args: unknown[]) => mockHasPermission(...args),
+  hasFullSalaryView: () => mockHasFullSalaryView(),
 }))
 
 vi.mock('@/composables/useIsMobile', () => ({
@@ -58,26 +61,30 @@ const AnomalyQueueColumnStub = {
 
 const DetailColumnStub = {
   name: 'DetailColumn',
-  props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month'],
+  props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month', 'focusDate'],
   emits: ['resolved', 'navigate', 'switchMode'],
   template: `<div class="detail-column-stub"><slot /></div>`,
 }
 
 const ImportPreviewDialogStub = {
   name: 'ImportPreviewDialog',
-  props: ['modelValue', 'year', 'month'],
+  props: ['modelValue', 'year', 'month', 'sourceContext'],
   emits: ['update:modelValue', 'imported'],
   template: `<div class="import-preview-dialog-stub"><slot /></div>`,
 }
 
 const WorkspaceHeaderStub = {
   name: 'WorkspaceHeader',
-  props: ['year', 'month', 'kpis'],
+  props: ['year', 'month', 'kpis', 'displayState'],
   emits: ['update:year', 'update:month', 'import', 'export'],
-  template: `<div class="workspace-header-stub"><slot /></div>`,
+  template: `<div class="workspace-header-stub"><slot /><slot name="month-tools" /></div>`,
 }
 
+const ReconciliationPanelStub = { name: 'ReconciliationPanel', props: ['revision', 'active'], emits: ['records', 'import'], template: '<div />' }
 const STUBS = {
+  ElDrawer: { props: ['modelValue'], template: '<section data-test="anomaly-drawer" :data-open="String(modelValue)"><slot /></section>' },
+  PayrollComparisonDialog: { props: ['modelValue'], template: '<div />' },
+  ReconciliationPanel: ReconciliationPanelStub,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,
   DetailColumn: DetailColumnStub,
@@ -112,6 +119,7 @@ const mountView = () =>
 
 describe('AttendanceWorkspaceView', () => {
   beforeEach(() => {
+    mockHasFullSalaryView.mockReturnValue(false)
     getSummaryMock.mockReset()
     getAnomalyListMock.mockReset()
     getRecordsMock.mockReset()
@@ -131,17 +139,17 @@ describe('AttendanceWorkspaceView', () => {
     expect(getAnomalyListMock).toHaveBeenCalledTimes(1)
   })
 
-  // ── 三欄渲染 ────────────────────────────────────────────────────────────────
-  it('桌機模式：三欄容器 class 存在', async () => {
+  // ── 兩欄渲染 ────────────────────────────────────────────────────────────────
+  it('桌機模式：保留名冊與明細兩欄', async () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.find('.workspace-cols').exists()).toBe(true)
     expect(wrapper.find('.col-roster').exists()).toBe(true)
-    expect(wrapper.find('.col-anomaly').exists()).toBe(true)
+    expect(wrapper.find('.workspace-cols .col-anomaly').exists()).toBe(false)
     expect(wrapper.find('.col-detail').exists()).toBe(true)
   })
 
-  it('桌機模式：三欄子元件都渲染', async () => {
+  it('桌機模式：異常清單位於抽屜，名冊與明細保留', async () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.findComponent(RosterColumnStub).exists()).toBe(true)
@@ -288,6 +296,10 @@ describe('AttendanceWorkspaceView', () => {
     const rc = wrapper.findComponent(RosterColumnStub)
     await rc.vm.$emit('select', 1)
     await flushPromises()
+    // recordsCache 只餵 resolve 模式的 ResolveCard；整月明細由 EmployeeMonthPanel
+    // 自己抓同一支 API（2026-09-11 起不再兩邊都抓），故先切到 resolve 再驗證。
+    wrapper.findComponent(DetailColumnStub).vm.$emit('switchMode', 'resolve')
+    await flushPromises()
 
     expect(getRecordsMock).toHaveBeenCalledTimes(1)
     expect(getRecordsMock).toHaveBeenLastCalledWith(
@@ -318,6 +330,10 @@ describe('AttendanceWorkspaceView', () => {
     const rc = wrapper.findComponent(RosterColumnStub)
     await rc.vm.$emit('select', 1)
     await flushPromises()
+    // recordsCache 只餵 resolve 模式的 ResolveCard；整月明細由 EmployeeMonthPanel
+    // 自己抓同一支 API（2026-09-11 起不再兩邊都抓），故先切到 resolve 再驗證。
+    wrapper.findComponent(DetailColumnStub).vm.$emit('switchMode', 'resolve')
+    await flushPromises()
     expect(getRecordsMock).toHaveBeenCalledTimes(1)
 
     // 補卡成功（DetailColumn emit resolved）→ 快取應失效並以同員工重抓
@@ -343,6 +359,10 @@ describe('AttendanceWorkspaceView', () => {
 
     const rc = wrapper.findComponent(RosterColumnStub)
     await rc.vm.$emit('select', 1)
+    await flushPromises()
+    // recordsCache 只餵 resolve 模式的 ResolveCard；整月明細由 EmployeeMonthPanel
+    // 自己抓同一支 API（2026-09-11 起不再兩邊都抓），故先切到 resolve 再驗證。
+    wrapper.findComponent(DetailColumnStub).vm.$emit('switchMode', 'resolve')
     await flushPromises()
     expect(getRecordsMock).toHaveBeenCalledTimes(1)
 
@@ -424,4 +444,199 @@ describe('WorkspaceHeader', () => {
     // 重設，避免污染後續 test
     mockHasPermission.mockReturnValue(true)
   })
+})
+
+describe('核對跨月明細導向', () => {
+  it('完全沒有紀錄時可在該月份開啟補匯入', async () => {
+    getSummaryMock.mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+    const wrapper = mount(AttendanceWorkspaceView, { props: { initialDate: '2026-09-06', defaultReconcile: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(ReconciliationPanelStub).vm.$emit('import', { employee_id: 2, employee_name: '測試員工', date: '2026-08-31' })
+    await flushPromises()
+    const dialog = wrapper.findComponent(ImportPreviewDialogStub)
+    expect(dialog.props('modelValue')).toBe(true)
+    expect(dialog.props('month')).toBe(8)
+    expect(dialog.props('sourceContext')).toEqual({ employee_id: 2, employee_name: '測試員工', date: '2026-08-31' })
+    wrapper.unmount()
+  })
+  it('?tab= 深連結在已停留於本頁時仍切換頁籤，且隱藏的核對面板標記為非啟用', async () => {
+    getSummaryMock.mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+    // 先以 tab=records（defaultReconcile=false）進頁，再導到 tab=reconcile：
+    // router props function 會重算 props，頁籤必須跟著換（過去只有 date 會生效）。
+    const wrapper = mount(AttendanceWorkspaceView, { props: { defaultReconcile: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('active')).toBe(true)
+
+    await wrapper.setProps({ defaultReconcile: false })
+    await flushPromises()
+    // 面板以 v-show 常駐保留核對狀態，但必須標成非啟用，避免背景重跑 preview
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('active')).toBe(false)
+
+    await wrapper.setProps({ defaultReconcile: true })
+    await flushPromises()
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('active')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('依所點人日的月份載入該員工明細', async () => {
+    getSummaryMock.mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+    const wrapper = mount(AttendanceWorkspaceView, { props: { initialDate: '2026-09-06', defaultReconcile: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(ReconciliationPanelStub).vm.$emit('records', { employee_id: 2, date: '2026-08-31' })
+    await flushPromises()
+    // 切到該人日所屬月份的整月明細；實際打卡列由 EmployeeMonthPanel 依這幾個 prop
+    // 自行載入（2026-09-11 起父層不再重複抓同一支 /attendance/records）。
+    const detail = wrapper.findComponent(DetailColumnStub)
+    expect(detail.props('mode')).toBe('month')
+    expect(detail.props('employeeId')).toBe(2)
+    expect(detail.props('year')).toBe(2026)
+    expect(detail.props('month')).toBe(8)
+    expect(detail.props('focusDate')).toBe('2026-08-31')
+    await wrapper.findComponent(DetailColumnStub).vm.$emit('resolved')
+    await flushPromises()
+    expect(wrapper.findComponent(ReconciliationPanelStub).props('revision')).toBe(1)
+    await wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:month', 9)
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('focusDate')).toBeNull()
+    wrapper.unmount()
+  })
+})
+
+
+describe('薪資核對入口權限', () => {
+  it('有完整薪資和出勤讀權限，不需班表管理權限即可使用', async () => {
+    mockHasFullSalaryView.mockReturnValue(true)
+    mockHasPermission.mockImplementation((code: unknown) => code === 'SALARY_READ' || code === 'ATTENDANCE_READ')
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('薪資扣項核對')
+  })
+  it('沒有全員薪資視野則隱藏入口', async () => {
+    mockHasFullSalaryView.mockReturnValue(false)
+    mockHasPermission.mockReturnValue(true)
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('薪資扣項核對')
+  })
+})
+
+
+describe('明細整體空態', () => {
+  it('只有成功且沒有紀錄時合併三欄，提供匯入入口', async () => {
+    mockHasPermission.mockReturnValue(true)
+    getSummaryMock.mockResolvedValue({ data: [] })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('本月尚無出勤紀錄')
+    expect(wrapper.find('.workspace-cols').exists()).toBe(false)
+    await wrapper.findAll('button').find(button => button.text() === '匯入打卡紀錄')!.trigger('click')
+    expect(wrapper.findComponent(ImportPreviewDialogStub).props('modelValue')).toBe(true)
+    wrapper.unmount()
+  })
+  it('載入失敗顯示重試，不宣稱本月沒有資料', async () => {
+    getSummaryMock.mockRejectedValue(new Error('測試失敗'))
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('本月尚無出勤紀錄')
+    expect(wrapper.text()).toContain('重新載入')
+    expect(wrapper.find('.workspace-cols').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+
+it('跨月失敗隱藏前月三欄與統計，重試成功後恢復', async () => {
+  getSummaryMock.mockResolvedValue({ data: sampleRoster })
+  getAnomalyListMock.mockResolvedValue({ data: { items: sampleAnomalies, total: 2, pending: 2, confirmed: 0 } })
+  const wrapper = mountView()
+  await flushPromises()
+  const header = wrapper.findComponent(WorkspaceHeaderStub)
+  expect(header.props('displayState')).toBe('ready')
+  getSummaryMock.mockRejectedValueOnce(new Error('測試失敗'))
+  await header.vm.$emit('update:month', header.props('month') === 9 ? 8 : 9)
+  await flushPromises()
+  expect(wrapper.find('.workspace-cols').exists()).toBe(false)
+  expect(header.props('displayState')).toBe('unavailable')
+  await wrapper.findAll('button').find(button => button.text() === '重新載入')!.trigger('click')
+  await flushPromises()
+  expect(wrapper.find('.workspace-cols').exists()).toBe(true)
+  expect(header.props('displayState')).toBe('ready')
+  wrapper.unmount()
+})
+
+it('沒有當月資料時統計不顯示舊月數字', () => {
+  const wrapper = mount(WorkspaceHeader, {
+    props: { year: 2026, month: 9, displayState: 'unavailable', kpis: { fullAttendance: 9876, lateCount: 0, missingCount: 0, pendingAnomalies: 0 } },
+    global: { stubs: WH_STUBS },
+  })
+  expect(wrapper.text()).toContain('出勤統計尚未載入成功')
+  expect(wrapper.text()).not.toContain('9876')
+  expect(wrapper.find('[aria-label="月結工具"]').text()).toContain('匯出月報')
+  wrapper.unmount()
+})
+
+
+it('整月無出勤紀錄仍保留從核對進入的指定人日明細', async () => {
+  mockHasPermission.mockReturnValue(true)
+  getSummaryMock.mockResolvedValue({ data: [] })
+  getAnomalyListMock.mockResolvedValue({ data: { items: [], total: 0, pending: 0, confirmed: 0 } })
+  getRecordsMock.mockResolvedValue({ data: [] })
+  const wrapper = mount(AttendanceWorkspaceView, { props: { initialDate: '2026-09-10', defaultReconcile: true }, global: { stubs: STUBS } })
+  await flushPromises()
+  await wrapper.findComponent(ReconciliationPanelStub).vm.$emit('records', { employee_id: 7, date: '2026-09-03' })
+  await flushPromises()
+  const detail = wrapper.findComponent(DetailColumnStub)
+  expect(detail.exists()).toBe(true)
+  expect(detail.props('employeeId')).toBe(7)
+  expect(detail.props('focusDate')).toBe('2026-09-03')
+  expect(wrapper.find('[aria-label="出勤紀錄空狀態"]').exists()).toBe(false)
+  await wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:month', 10)
+  await flushPromises()
+  expect(wrapper.find('[aria-label="出勤紀錄空狀態"]').exists()).toBe(true)
+  wrapper.unmount()
+})
+
+
+it('預設整月明細，異常清單收進抽屜且點選後關閉', async () => {
+  getSummaryMock.mockResolvedValue({ data: sampleRoster })
+  getAnomalyListMock.mockResolvedValue({ data: { items: sampleAnomalies, total: 2, pending: 2, confirmed: 0 } })
+  const wrapper = mountView()
+  await flushPromises()
+  expect(wrapper.findComponent(DetailColumnStub).props('mode')).toBe('month')
+  expect(wrapper.findComponent(RosterColumnStub).props('selectedEmployeeId')).toBe(wrapper.findComponent(DetailColumnStub).props('employeeId'))
+  expect(wrapper.find('.workspace-cols .col-anomaly').exists()).toBe(false)
+  await wrapper.findAll('button').find(button => button.text().includes('待處理異常'))!.trigger('click')
+  expect(wrapper.find('[data-test="anomaly-drawer"]').attributes('data-open')).toBe('true')
+  await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 1)
+  await flushPromises()
+  expect(wrapper.find('[data-test="anomaly-drawer"]').attributes('data-open')).toBe('false')
+  expect(wrapper.findComponent(DetailColumnStub).props('mode')).toBe('resolve')
+  const employee = wrapper.findComponent(DetailColumnStub).props('employeeId')
+  await wrapper.findComponent(DetailColumnStub).vm.$emit('switch-mode', 'month')
+  await flushPromises()
+  expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(employee)
+  wrapper.unmount()
+})
+
+it('新月份名冊不再包含原選人時回到可用員工', async () => {
+  getSummaryMock.mockResolvedValue({ data: sampleRoster })
+  getAnomalyListMock.mockResolvedValue({ data: { items: [], total: 0, pending: 0, confirmed: 0 } })
+  const wrapper = mountView()
+  await flushPromises()
+  await wrapper.findComponent(RosterColumnStub).vm.$emit('select', sampleRoster[1]!.employee_id)
+  await flushPromises()
+  getSummaryMock.mockResolvedValue({ data: [sampleRoster[0]] })
+  // 初始月份取自今天：寫死 10 會在 10 月變成同月 no-op（2026-10 起此測試即因此紅）
+  const header = wrapper.findComponent(WorkspaceHeaderStub)
+  await header.vm.$emit('update:month', header.props('month') === 10 ? 11 : 10)
+  await flushPromises()
+  expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(sampleRoster[0]!.employee_id)
+  wrapper.unmount()
 })

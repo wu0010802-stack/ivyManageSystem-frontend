@@ -10,6 +10,7 @@ import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 interface MedLog {
@@ -80,7 +81,12 @@ onMounted(async () => {
   fetchData()
 })
 
-watch(selectedStudentId, fetchData)
+// 換孩子先清掉前一位的用藥單（同 ContactBookView／FeesView）：useAbortableFetch
+// 失敗時不清 data，新孩子載入失敗就會把前一位的藥名掛在新孩子名下（深掃審查 FE-R1）。
+watch(selectedStudentId, () => {
+  medData.value = null
+  return fetchData()
+})
 
 function goNew() {
   if (((childrenStore.items || []) as unknown[]).length === 0) {
@@ -119,6 +125,13 @@ const today = todayISO()
         <SkeletonBlock variant="card" :count="2" />
       </div>
     </template>
+
+    <!-- 載入失敗且無資料：持久錯誤態，不得與「沒有用藥紀錄」同形 -->
+    <MobileErrorRetry
+      v-else-if="medError && items.length === 0"
+      :error="medError as Error"
+      @retry="fetchData"
+    />
 
     <EmptyState
       v-else-if="items.length === 0"

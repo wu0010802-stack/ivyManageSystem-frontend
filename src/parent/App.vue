@@ -4,9 +4,12 @@ import { useRouter } from 'vue-router'
 import ParentLayout from './layouts/ParentLayout.vue'
 import ConsentModal from './components/ConsentModal.vue'
 import ParentLogoutOverlay from './components/ParentLogoutOverlay.vue'
+import StaffSessionNotice from './components/StaffSessionNotice.vue'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import { useConsentGate } from './composables/useConsentGate'
 import { getCurrentPolicy, type PolicyVersionOut } from './api/consent'
+import { reportClientEvent } from './utils/clientEvents'
+import { sanitizeUrl } from '@/utils/sentry'
 
 const gate = useConsentGate()
 const consentPolicy = ref<PolicyVersionOut | null>(null)
@@ -63,13 +66,30 @@ router.beforeEach((to, from) => {
   else if (dt < 0) transitionName.value = 'parent-slide-back'
   else transitionName.value = 'parent-fade'
 })
+
+/**
+ * ErrorBoundary 攔到子樹錯誤時的回報（SPEC-023 批次 3 Task 3）。
+ * 只有家長端接這個事件——ErrorBoundary 是 admin/parent 共用元件，管理端不監聽
+ * 此事件就完全無副作用，理由見 ErrorBoundary.vue 的 emit 註解。
+ */
+function onBoundaryError(payload: { error: unknown; variant: string }) {
+  const err = payload.error
+  reportClientEvent('error_boundary', {
+    message: err instanceof Error ? err.message : String(err),
+    // 過 sanitizeUrl 與 api/index.ts 的四個掛點一致：路徑裡的 id 要遮掉，
+    // 別讓遙測欄位變成另一條 PII 出口。（2026-09-05 複審 F3）
+    // sanitizeUrl 的參數型別是 unknown，回傳型別也跟著是 unknown；
+    // 這裡傳進去的必定是字串，用 String() 收斂而不是 as 硬轉。
+    route_name: String(sanitizeUrl(router.currentRoute.value.path)),
+  })
+}
 </script>
 
 <template>
   <ParentLayout>
     <!-- 全域錯誤邊界：單頁元件 render/computed throw 時降級成 fallback，
          而非白屏整個家長端 App（parent entry 無 app.config.errorHandler）。 -->
-    <ErrorBoundary variant="parent">
+    <ErrorBoundary variant="parent" @error-captured="onBoundaryError">
       <router-view v-slot="{ Component, route }">
         <transition :name="transitionName" mode="out-in">
           <component :is="Component" :key="route.fullPath" />
@@ -87,6 +107,10 @@ router.beforeEach((to, from) => {
 
   <!-- 登出網路/LIFF 清理期間以不透明遮罩阻擋舊帳號 PII 與任何互動。 -->
   <ParentLogoutOverlay />
+
+  <!-- 這個瀏覽器目前是員工身分（管理端／家長端同源共用 access_token）時，
+       家長端每支 API 都會 403；用明確提示取代滿頁 api 錯誤。 -->
+  <StaffSessionNotice />
 </template>
 
 <style>

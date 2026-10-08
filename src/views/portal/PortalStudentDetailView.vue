@@ -3,10 +3,11 @@ import { onMounted, ref, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getStudentDetail } from '@/api/portalStudentDetail'
-import { Odometer, Star } from '@element-plus/icons-vue'
+import { Odometer, Star, WarningFilled, StarFilled } from '@element-plus/icons-vue'
 import PortalMeasurementSheet from '@/components/portal/sheets/PortalMeasurementSheet.vue'
 import PortalMilestoneSheet from '@/components/portal/sheets/PortalMilestoneSheet.vue'
 import PortalErrorState from '@/components/portal/PortalErrorState.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import { LIFECYCLE_LABELS_PORTAL } from '@/constants/lifecycle'
 
 const props = defineProps({
@@ -103,7 +104,7 @@ function back() {
 
 <template>
   <div class="student-detail">
-    <el-button text @click="back">← 返回班級學生</el-button>
+    <PortalPageHeader back-label="返回班級學生" @back="back" />
 
     <div v-if="loading" class="loading">
       <div class="pt-shimmer skeleton-block"></div>
@@ -127,13 +128,19 @@ function back() {
             {{ lifecycleLabel((studentInfo as Record<string, unknown>)?.lifecycle_status as string) }}
           </el-tag>
         </div>
+        <!-- 沒有值的欄位整段不畫，不要留「—｜—（—）」（P2-11） -->
         <p class="meta">
-          班級：{{ classroomInfo?.name || '—' }}
-          ｜ 生日：{{ (studentInfo as Record<string, unknown>)?.birthday || '—' }}
-          ｜ 主要家長：{{ primaryGuardian?.name || '—' }}（{{ primaryGuardian?.phone_masked || '—' }}）
+          <span v-if="classroomInfo?.name">班級：{{ classroomInfo.name }}</span>
+          <span v-if="(studentInfo as Record<string, unknown>)?.birthday">
+            生日：{{ (studentInfo as Record<string, unknown>).birthday }}
+          </span>
+          <span v-if="primaryGuardian?.name">
+            主要家長：{{ primaryGuardian.name
+            }}<template v-if="primaryGuardian.phone_masked">（{{ primaryGuardian.phone_masked }}）</template>
+          </span>
         </p>
         <div v-if="(healthInfo?.allergies as Record<string, unknown>[] | undefined)?.length" class="warn-row">
-          ⚠ 過敏：
+          <el-icon aria-hidden="true"><WarningFilled /></el-icon>過敏：
           <span v-for="a in (healthInfo?.allergies as Record<string, unknown>[])" :key="a.id as number" class="chip danger">
             {{ a.allergen }}（{{ a.severity }}）
           </span>
@@ -204,7 +211,7 @@ function back() {
               <li v-for="o in observations" :key="o.id as number">
                 <strong>{{ o.observation_date }}</strong>
                 <span v-if="o.domain" class="domain-tag">{{ o.domain }}</span>
-                <span v-if="o.is_highlight" class="highlight">✨ 成長亮點</span>
+                <span v-if="o.is_highlight" class="highlight"><el-icon aria-hidden="true"><StarFilled /></el-icon> 成長亮點</span>
                 <p>{{ o.narrative }}</p>
               </li>
             </ul>
@@ -308,14 +315,23 @@ function back() {
   margin: 0;
   font-size: var(--text-2xl);
   font-weight: 700;
-  color: var(--pt-text-strong);
+  color: var(--color-portal-text-strong);
 }
-.age { color: var(--pt-text-muted); font-size: var(--text-base); }
+.age { color: var(--color-portal-text-muted); font-size: var(--text-base); }
 
 .meta {
   margin: 0;
-  color: var(--pt-text-muted);
+  color: var(--color-portal-text-muted);
   font-size: var(--text-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+/* 欄位之間的分隔線（取代原本寫死在文字裡的「｜」） */
+.meta > span + span::before {
+  content: '｜';
+  margin-right: 12px;
+  color: var(--el-text-color-placeholder);
 }
 
 .warn-row {
@@ -325,6 +341,9 @@ function back() {
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
+}
+.warn-row .el-icon {
+  vertical-align: -2px;
 }
 .chip.danger {
   background: var(--color-danger-lighter);
@@ -345,7 +364,7 @@ function back() {
 .panel h4 {
   margin: var(--space-3) 0 var(--space-2);
   font-size: var(--text-base);
-  color: var(--pt-text-strong);
+  color: var(--color-portal-text-strong);
 }
 .panel h4:first-child { margin-top: 0; }
 
@@ -357,13 +376,13 @@ function back() {
 }
 .list li:last-child { border-bottom: none; }
 .list.compact li { padding: var(--space-1) 0; }
-.note { color: var(--pt-text-muted); }
+.note { color: var(--color-portal-text-muted); }
 .aid { font-size: var(--text-xs); color: var(--color-warning); margin: 4px 0 0; }
-.date { color: var(--pt-text-faint); margin-left: var(--space-2); }
+.date { color: var(--color-portal-text-faint); margin-left: var(--space-2); }
 
-.empty { color: var(--pt-text-muted); padding: var(--space-3) 0; }
+.empty { color: var(--color-portal-text-muted); padding: var(--space-3) 0; }
 .stat-row { display: flex; gap: var(--space-4); margin-bottom: var(--space-3); }
-.stat b { font-size: var(--text-xl); color: var(--pt-text-strong); }
+.stat b { font-size: var(--text-xl); color: var(--color-portal-text-strong); }
 
 .status-tag, .severity-tag, .domain-tag, .source-tag, .badge, .published-tag, .draft-tag, .highlight, .mood {
   display: inline-block;
@@ -373,16 +392,22 @@ function back() {
   margin-left: var(--space-1);
 }
 .domain-tag { background: var(--pt-tint-event); color: var(--pt-tint-event-fg); }
-.source-tag { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
+.source-tag { background: var(--color-portal-surface-mute); color: var(--color-portal-text-muted); }
 .published-tag { background: var(--color-success-lighter); color: var(--color-success); }
-.draft-tag { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
-.highlight { background: var(--color-warning-lighter); color: var(--color-warning); }
+.draft-tag { background: var(--color-portal-surface-mute); color: var(--color-portal-text-muted); }
+.highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--color-warning-lighter);
+  color: var(--color-warning-darker);
+}
 .mood { background: var(--pt-tint-event); color: var(--pt-tint-event-fg); }
 
 .status-tag.出席 { background: var(--color-success-lighter); color: var(--color-success); }
 .status-tag.缺席 { background: var(--color-danger-lighter); color: var(--color-danger); }
 .status-tag.遲到 { background: var(--color-warning-lighter); color: var(--color-warning); }
-.status-tag.病假, .status-tag.事假 { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
+.status-tag.病假, .status-tag.事假 { background: var(--color-portal-surface-mute); color: var(--color-portal-text-muted); }
 
 .severity-tag.嚴重 { background: var(--color-danger-lighter); color: var(--color-danger); }
 .severity-tag.中度 { background: var(--color-warning-lighter); color: var(--color-warning); }

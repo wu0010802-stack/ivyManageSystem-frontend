@@ -1,0 +1,160 @@
+<script setup lang="ts">
+/**
+ * 首頁「待辦」區塊。
+ *
+ * 取代 2026-09-02 之前的三處重複：頂部兩張 sticky 橫幅（待簽／活動調查）、
+ * bento 的四格待辦方格、今日動態「晚一些」桶裡的五種寫死事件。資料一律來自
+ * useParentTodos，本元件只負責呈現與三態。
+ *
+ * 刻意不引入 @/components/common/EmptyState：那支落在 admin-core chunk，
+ * 首頁是家長端 entry 首屏，靜態 import 會被 check-entry-chunks gate 擋下。
+ *
+ * 首頁與待辦頁（AdminListView，2026-10-08 起）共用本元件：
+ *  - 首頁：不帶 emptyText，沒有待辦時整區不渲染（首頁不為「沒事」佔位）
+ *  - 待辦頁：title="待處理"、帶 emptyText，沒有待辦時明確告訴家長「都處理完了」
+ */
+import { useParentTodos } from '../../composables/useParentTodos'
+import SectionHeader from '../SectionHeader.vue'
+import SkeletonBlock from '../SkeletonBlock.vue'
+import M3List from '../m3/M3List.vue'
+import M3Icon from '../m3/M3Icon.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+
+withDefaults(defineProps<{
+  title?: string
+  emptyText?: string
+}>(), {
+  title: '待辦',
+  emptyText: '',
+})
+
+const { todos, actionCount, pending, error, refresh } = useParentTodos()
+</script>
+
+<template>
+  <section v-if="pending && todos.length === 0" class="home-todo" data-testid="home-todo-skeleton">
+    <SkeletonBlock variant="row" :count="2" />
+  </section>
+
+  <section
+    v-else-if="error && todos.length === 0"
+    class="home-todo"
+    data-testid="home-todo-error"
+  >
+    <MobileErrorRetry :error="error" @retry="refresh" />
+  </section>
+
+  <section
+    v-else-if="todos.length > 0"
+    class="home-todo"
+    data-testid="home-todo-list"
+  >
+    <SectionHeader :title="title">
+      <template #action>
+        <span v-if="actionCount > 0" class="home-todo-count" data-testid="home-todo-count">
+          {{ actionCount }} 件
+        </span>
+      </template>
+    </SectionHeader>
+
+    <M3List>
+      <li v-for="todo in todos" :key="todo.key">
+        <router-link
+          :to="todo.to"
+          class="home-todo-row"
+          :class="`tone-${todo.tone}`"
+          :data-testid="`home-todo-row-${todo.key}`"
+          :aria-label="`${todo.label}，${todo.count} 件`"
+        >
+          <M3Icon :name="todo.icon" aria-hidden="true" />
+          <span class="home-todo-copy">
+            <span class="m3-body-large">{{ todo.label }}</span>
+            <span v-if="todo.sub" class="m3-body-medium">{{ todo.sub }}</span>
+          </span>
+          <span class="home-todo-badge">{{ todo.count }}</span>
+          <span class="material-symbols-rounded home-todo-chevron" aria-hidden="true">chevron_right</span>
+        </router-link>
+      </li>
+    </M3List>
+  </section>
+
+  <section v-else-if="emptyText" class="home-todo" data-testid="home-todo-empty">
+    <SectionHeader :title="title" />
+    <p class="home-todo-empty">
+      <span class="material-symbols-rounded" aria-hidden="true">task_alt</span>
+      {{ emptyText }}
+    </p>
+  </section>
+</template>
+
+<style scoped>
+.home-todo {
+  padding: 0 var(--space-4, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.home-todo-count {
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+  color: var(--pt-text-muted, #6b5e54);
+}
+
+/* 整列使用原生連結，包含標題、副標與右側徽章。 */
+.home-todo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  min-height: 56px;
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  text-decoration: none;
+  color: inherit;
+}
+
+.home-todo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-primary-contrast, #fff);
+  background: var(--m3-primary, #006d3d);
+}
+/* 逾期款項：唯一該讓家長心跳快一下的情況 */
+.tone-alert .home-todo-badge {
+  background: var(--coral-700, #b14545);
+}
+/* 資訊性（未讀公告、請假結果、進行中授權）：中性藍，避免被讀成待辦 */
+.tone-info .home-todo-badge {
+  background: var(--sky-700, #2d6f8e);
+}
+
+.home-todo-chevron {
+  font-size: 20px;
+  color: var(--pt-text-muted, #6b5e54);
+  font-variation-settings: 'wght' 400;
+}
+
+.home-todo-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin: 0;
+  padding: var(--space-2, 8px) 0;
+  color: var(--pt-text-muted, #6b5e54);
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+}
+.home-todo-empty .material-symbols-rounded {
+  font-size: 20px;
+  color: var(--brand-primary, #0d9053);
+}
+
+.home-todo-copy { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+</style>

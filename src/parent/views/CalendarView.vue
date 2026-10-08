@@ -32,6 +32,11 @@ const days = ref(7)
  * 「這個月還有什麼活動」。兩者共用同一份 items 形狀，只差查詢區間。
  */
 const mode = ref<'days' | 'month'>('days')
+let fetchEpoch = 0
+// S04：最近一次成功套用到畫面的範圍；切換失敗時退回此範圍，讓標題／按鈕狀態與
+// 畫面上仍顯示的資料一致，且再按同一顆按鈕可重試（selectMonth 對 month 模式會直接 return）。
+let appliedMode: 'days' | 'month' = 'days'
+let appliedDays = 7
 const now = new Date()
 const monthYear = now.getFullYear()
 const monthNo = now.getMonth() + 1
@@ -64,18 +69,31 @@ const groupedByDate = computed(() => {
 })
 
 async function fetchData() {
+  const requestEpoch = ++fetchEpoch
+  const requestedMode = mode.value
+  const requestedDays = days.value
   loading.value = true
   try {
     const { data: d } =
-      mode.value === 'month'
+      requestedMode === 'month'
         ? await getMonthAgenda(monthYear, monthNo)
-        : await getWeekAgenda(days.value)
+        : await getWeekAgenda(requestedDays)
+    if (
+      requestEpoch !== fetchEpoch
+      || mode.value !== requestedMode
+      || (requestedMode === 'days' && days.value !== requestedDays)
+    ) return
     data.value = d
+    appliedMode = requestedMode
+    appliedDays = requestedDays
   } catch (err) {
+    if (requestEpoch !== fetchEpoch) return
+    mode.value = appliedMode
+    days.value = appliedDays
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入行事曆失敗'))
   } finally {
-    loading.value = false
+    if (requestEpoch === fetchEpoch) loading.value = false
   }
 }
 
@@ -121,6 +139,7 @@ onMounted(() => {
   }, 60 * 1000)
 })
 onBeforeUnmount(() => {
+  fetchEpoch += 1
   if (todayInterval) clearInterval(todayInterval)
 })
 
@@ -136,8 +155,8 @@ function dayLabel(iso: string) {
 
 <template>
   <div class="cal-view">
+    <!-- top bar 已標「行事曆」，hero eyebrow 同名屬冗餘，僅留內容性標題 -->
     <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">行事曆</p>
       <h1 class="pt-page-hero-title">{{ rangeLabel }}</h1>
       <div class="day-filter" role="group" aria-label="行事曆範圍">
         <button

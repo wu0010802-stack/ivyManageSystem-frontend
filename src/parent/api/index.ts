@@ -14,9 +14,17 @@ import axios, {
 import { applyDedupe, clearDedupe } from '@/utils/apiDedupe'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { captureException as sentryCapture, sanitizeUrl } from '@/utils/sentry'
+import { reportClientEvent } from '@/parent/utils/clientEvents'
 import { toast } from '@/parent/utils/toast'
 import { useConsentGate } from '@/parent/composables/useConsentGate'
-import { tenantErrorCodeOf, tenantHeaders } from '@/utils/tenant'
+import { useStaffSessionGate } from '@/parent/composables/useStaffSessionGate'
+import {
+  isTenantResolutionBusy,
+  TENANT_BUSY_MAX_RETRIES,
+  tenantBusyRetryDelayMs,
+  tenantErrorCodeOf,
+  tenantHeaders,
+} from '@/utils/tenant'
 import { showTenantBlocked } from '@/utils/tenantBlocked'
 
 // Lazy router import：避免將 createRouter side effect 灌進所有 partial-mock
@@ -34,6 +42,9 @@ async function getParentRouter(): Promise<ParentRouterShape> {
 }
 
 declare module 'axios' {
+  interface AxiosRequestConfig {
+    parentSessionGuard?: () => boolean
+  }
   interface AxiosError {
     displayMessage?: string | null
     // 後端 BusinessError envelope 的完整 detail：{ code, message, request_id, ...extra }
@@ -43,14 +54,37 @@ declare module 'axios' {
   interface InternalAxiosRequestConfig {
     metadata?: { startedAt: number; sessionGeneration: number }
     _retried?: boolean
+    _tenantBusyRetries?: number
   }
 }
 
 export const PARENT_API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
+/**
+ * 後端 `require_parent_role()` 對非家長身分回的 403 detail（ivy-backend
+ * utils/auth.py:918）。此文案是既有契約、後端有逐字斷言測試守著；家長端據此
+ * 分辨「身分不對」與「家長本人真的沒權限」兩種 403。
+ */
+export const PARENT_ROLE_REQUIRED_DETAIL = '此 API 僅限家長端使用'
+
 export function buildParentRefreshUrl(base: string = PARENT_API_BASE): string {
   return `${base}/parent/auth/refresh`
 }
+
+/**
+ * 家長登入的兩支端點。走到這裡的網路層失敗要回報成 `login_failed`
+ * 而不是通用的 `api_timeout`——「家長登不進來」是後台燈號真正在看的訊號
+ * （`client_events` 燈只數 liff_init_failed ＋ login_failed），降級成
+ * api_timeout 會讓整校登不進去的事故在燈上完全不亮。
+ *
+ * ⚠ 路徑字面值與 `src/parent/api/auth.ts` 的 `liffLogin` / `deviceSetup`
+ * 必須一致，已由 `__tests__` 的漂移守衛測試釘住（改動時兩邊一起改）。
+ * 常數放在本檔而非 auth.ts：auth.ts `import api from './index'`，
+ * 反向 import 會形成循環。
+ *
+ * export 是為了讓漂移守衛測試能直接比對這個集合本身（而非猜字面值）。
+ */
+export const PARENT_LOGIN_PATHS = new Set(['/parent/auth/liff-login', '/parent/auth/device-setup'])
 
 const api: AxiosInstance = axios.create({
   baseURL: PARENT_API_BASE,
@@ -87,6 +121,9 @@ function combineAbortSignals(
 }
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (config.parentSessionGuard && !config.parentSessionGuard()) {
+    throw new axios.CanceledError('家長登出送出作業已失效', config)
+  }
   config.metadata = {
     startedAt: performance.now(),
     sessionGeneration: _apiSessionGeneration,
@@ -97,6 +134,35 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   for (const [name, value] of Object.entries(tenantHeaders())) config.headers.set(name, value)
   return config
 })
+
+/** `sanitizeUrl` 對非字串輸入原樣回傳（型別是 `unknown`），這裡窄化成
+ * `clientEvents` 的 `route_name` 欄位需要的 `string | null`。 */
+function _routeNameOf(url: unknown): string | null {
+  return typeof url === 'string' ? url : null
+}
+
+/**
+ * 把 axios `config.url` 正規化成乾淨路徑，用於比對 `PARENT_LOGIN_PATHS`。
+ *
+ * `config.url` 理論上就是呼叫端傳入的相對路徑（例如 `/parent/auth/liff-login`），
+ * 但這裡不假設——先去掉 query／hash，再用 `URL` 解析吃掉可能出現的完整
+ * origin（例如某些 adapter／重試邏輯把絕對網址塞進 config.url 的情況）；
+ * 相對路徑沒有 protocol 會讓 `new URL()` 丟例外，此時去 query 後的字串
+ * 本身就是路徑，直接回傳即可。
+ */
+function _pathnameOf(url: string | undefined): string {
+  if (!url) return ''
+  const withoutQueryOrHash = url.split('?')[0].split('#')[0]
+  try {
+    return new URL(withoutQueryOrHash).pathname
+  } catch {
+    return withoutQueryOrHash
+  }
+}
+
+function _isParentLoginPath(url: string | undefined): boolean {
+  return PARENT_LOGIN_PATHS.has(_pathnameOf(url))
+}
 
 function _recordTiming(method: string, url: string, status: number, durationMs: number) {
   if (import.meta.env.DEV) {
@@ -192,6 +258,9 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined
+    // 登出佇列只在本輪限時 context 內嘗試；失敗交由佇列保留，不啟動
+    // 脫離 context 的 refresh／重新導頁，也不在登出後彈全域提示。
+    if (originalRequest?.parentSessionGuard) return Promise.reject(error)
     if (
       originalRequest?.metadata?.sessionGeneration !== undefined &&
       originalRequest.metadata.sessionGeneration !== _apiSessionGeneration
@@ -208,6 +277,22 @@ api.interceptors.response.use(
       showTenantBlocked(tenantErrorCode)
       error.errorDetail = error.response?.data
       return Promise.reject(error)
+    }
+
+    // 解析負載削減（整合審查 R5）：暫時性 503，不是租戶三態、不掛遮罩。請求停在
+    // middleware、handler 未執行，依 Retry-After 延遲後直接重送（含 mutating）；
+    // 重試用盡才落到下方一般錯誤處理。走 api(config) 繞過 dedupe（同管理端）。
+    if (originalRequest && isTenantResolutionBusy(error.response?.status, error.response?.data)) {
+      const attempt = (originalRequest._tenantBusyRetries ?? 0) + 1
+      if (attempt <= TENANT_BUSY_MAX_RETRIES) {
+        originalRequest._tenantBusyRetries = attempt
+        const generation = originalRequest.metadata?.sessionGeneration
+        await new Promise((resolve) => setTimeout(resolve, tenantBusyRetryDelayMs(error.response?.headers?.['retry-after'])))
+        if (generation !== _apiSessionGeneration) {
+          return Promise.reject(new axios.CanceledError('Parent session changed before tenant-busy retry'))
+        }
+        return api(originalRequest)
+      }
     }
 
     const url = originalRequest?.url || ''
@@ -286,6 +371,12 @@ api.interceptors.response.use(
         }
         error.displayMessage = typeof ksObj.message === 'string' ? ksObj.message : '系統維護中，請稍後再回來'
         error.errorDetail = ksObj
+        // SPEC-023 批次 3：家長端監控事件（走 fetch keepalive 直送，不經本
+        // axios instance——它的攔截器正是這裡，用它送會遞迴）。
+        reportClientEvent('maintenance_hit', {
+          route_name: _routeNameOf(sanitizeUrl(originalRequest?.url)),
+          status_code: 503,
+        })
         return Promise.reject(error)
       }
       if (ksObj.code === 'READ_ONLY_MODE') {
@@ -301,6 +392,18 @@ api.interceptors.response.use(
     const consentScope = error.response?.headers?.['x-consent-required']
     if (error.response?.status === 403 && consentScope) {
       useConsentGate().require(String(consentScope))
+    }
+
+    // 員工身分 cookie：管理端與家長端同源、共用同一顆 access_token（後端
+    // utils/cookie.py `_COOKIE_PATH = "/api"`），先登管理端再開家長端時每支
+    // API 都會撞 require_parent_role() 的 403。這種 403 refresh 與重試都救不了
+    // （cookie 本身就是別人的身分），也不該被當成一般 api 錯誤噴給使用者，
+    // 升成全域提示讓他知道要先登出或換無痕視窗（見 useStaffSessionGate）。
+    if (error.response?.status === 403 && !consentScope) {
+      const roleGuardDetail = (error.response?.data as { detail?: unknown } | undefined)?.detail
+      if (roleGuardDetail === PARENT_ROLE_REQUIRED_DETAIL) {
+        useStaffSessionGate().require()
+      }
     }
 
     // 正規化錯誤訊息：對齊 admin (src/api/index.ts) 對 BusinessError envelope 的處理
@@ -340,6 +443,35 @@ api.interceptors.response.use(
         method: error.config?.method,
         status,
       }).catch(() => {})
+      // SPEC-023 批次 3：家長端監控事件（走 fetch keepalive 直送，不經本
+      // axios instance——它的攔截器正是這裡，用它送會遞迴）。無 response
+      // 涵蓋逾時（ECONNABORTED）與純網路錯誤——白名單沒有獨立的
+      // network_error 型別，兩者一律歸 api_timeout；**除非**打的是
+      // `PARENT_LOGIN_PATHS` 內的登入端點（09-05 修正重複回報）——這種情況
+      // 改報成 login_failed，且 LoginView.vue 兩處呼叫端已同步改成只在
+      // 「錯誤根本不是 axios 發出」時才自己補報，兩邊合起來每次故障只算一筆。
+      const routeName = _routeNameOf(sanitizeUrl(error.config?.url))
+      if (!error.response) {
+        if (_isParentLoginPath(error.config?.url)) {
+          reportClientEvent('login_failed', {
+            route_name: routeName,
+            error_code: error.code ?? null,
+            message: error.message,
+          })
+        } else {
+          reportClientEvent('api_timeout', {
+            route_name: routeName,
+            error_code: error.code ?? null,
+            message: error.message,
+          })
+        }
+      } else {
+        reportClientEvent('api_5xx', {
+          route_name: routeName,
+          status_code: status,
+          message: error.message,
+        })
+      }
     }
     return Promise.reject(error)
   },

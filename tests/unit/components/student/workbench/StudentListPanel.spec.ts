@@ -1,6 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { reactive, nextTick } from 'vue'
-import { shallowMount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  computed,
+  defineComponent,
+  h,
+  inject,
+  nextTick,
+  provide,
+  reactive,
+  type ComputedRef,
+} from 'vue'
+import { flushPromises, shallowMount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import StudentListPanel from '@/components/student/workbench/StudentListPanel.vue'
 
@@ -51,10 +60,32 @@ vi.mock('@/utils/download', () => ({
 
 import { downloadFile } from '@/utils/download'
 
-const flushPromises = async () => {
-  await Promise.resolve()
-  await Promise.resolve()
-}
+afterEach(() => vi.unstubAllGlobals())
+
+const tableRowsKey = Symbol('student-table-rows')
+
+const ElTableStub = defineComponent({
+  props: {
+    data: {
+      type: Array,
+      default: () => [],
+    },
+  },
+  setup(props, { slots }) {
+    provide(tableRowsKey, computed(() => props.data))
+    return () => h('div', { 'data-testid': 'student-table' }, slots.default?.())
+  },
+})
+
+const ElTableColumnStub = defineComponent({
+  setup(_, { slots }) {
+    const rows = inject<ComputedRef<unknown[]>>(tableRowsKey)
+    return () => h(
+      'div',
+      rows?.value.flatMap((row) => slots.default?.({ row }) ?? []) ?? [],
+    )
+  },
+})
 
 const mountPanel = () => shallowMount(StudentListPanel, {
   global: {
@@ -63,11 +94,16 @@ const mountPanel = () => shallowMount(StudentListPanel, {
     },
     stubs: {
       TableSkeleton: true,
+      PageHeader: { template: '<header><slot name="actions" /></header>' },
+      AdminListToolbar: { template: '<div><slot name="actions" /></div>' },
+      AdminListCards: false,
+      'el-card': { template: '<article><slot /></article>' },
+      'el-checkbox': true,
       'el-tabs': { template: '<div><slot /></div>' },
       'el-tab-pane': { template: '<div><slot /></div>' },
       'el-input': { template: '<input />' },
-      'el-table': { template: '<div><slot /></div>' },
-      'el-table-column': true,
+      'el-table': ElTableStub,
+      'el-table-column': ElTableColumnStub,
       'el-pagination': true,
       'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
       'el-form': { template: '<form><slot /></form>' },
@@ -78,8 +114,12 @@ const mountPanel = () => shallowMount(StudentListPanel, {
       'el-button': { template: '<button><slot /></button>' },
       'el-date-picker': true,
       'el-radio-group': { template: '<div><slot /></div>' },
+      'el-radio-button': { template: '<label><slot /></label>' },
       'el-radio': { template: '<label><slot /></label>' },
       'el-divider': true,
+      'el-dropdown': { template: '<div><slot /><slot name="dropdown" /></div>' },
+      'el-dropdown-menu': { template: '<div><slot /></div>' },
+      'el-dropdown-item': { template: '<button role="menuitem"><slot /></button>' },
       'el-tag': true,
       'el-tooltip': { template: '<div><slot /></div>' },
       'el-icon': true,
@@ -87,15 +127,98 @@ const mountPanel = () => shallowMount(StudentListPanel, {
   },
 })
 
+beforeEach(() => {
+  setActivePinia(createPinia())
+  vi.clearAllMocks()
+  route.query = { school_year: '2025', semester: '2', classroom_id: '8', action: 'create' }
+  getStudents.mockResolvedValue({ data: { items: [], total: 0 } })
+  getClassrooms.mockResolvedValue({ data: [{
+    id: 8, name: '向日葵班', school_year: 2025, semester: 2,
+    semester_label: '2025學年度下學期', grade_name: '中班',
+  }] })
+})
+
 describe('StudentListPanel', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.clearAllMocks()
-    route.query = {
-      school_year: '2025',
-      semester: '2',
-      classroom_id: '8',
-      action: 'create',
+  it('清除班級與搜尋時保留學年、學期與在籍狀態，並回到第一頁及清除選取', async () => {
+    const wrapper = mountPanel()
+
+    await flushPromises()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      activeTab: string
+      currentPage: number
+      debouncedSearch: string
+      filterClassroomId: number | null
+      filterSchoolYear: number
+      filterSemester: number
+      searchQuery: string
+      selectedStudents: Array<{ id: number; name: string }>
+    }
+    vm.currentPage = 3
+    vm.searchQuery = '測試學生'
+    vm.debouncedSearch = '測試學生'
+    vm.selectedStudents = [{ id: 99, name: '測試學生' }]
+    await nextTick()
+
+    await wrapper.get('[data-test="clear-roster-quick-filters"]').trigger('click')
+    await nextTick()
+
+    expect(vm.filterClassroomId).toBeNull()
+    expect(vm.searchQuery).toBe('')
+    expect(vm.debouncedSearch).toBe('')
+    expect(vm.currentPage).toBe(1)
+    expect(vm.selectedStudents).toEqual([])
+    expect(vm.filterSchoolYear).toBe(2025)
+    expect(vm.filterSemester).toBe(2)
+    expect(vm.activeTab).toBe('active')
+
+    wrapper.unmount()
+  })
+
+  it('搜尋防抖生效前清除仍同步第一頁的網址與資料', async () => {
+    route.query = { school_year: '2025', semester: '2', page: '3' } as typeof route.query
+    const wrapper = mountPanel()
+
+    await flushPromises()
+    await nextTick()
+
+    const vm = wrapper.vm as unknown as {
+      currentPage: number
+      debouncedSearch: string
+      filterClassroomId: number | null
+      searchQuery: string
+    }
+    expect(vm.currentPage).toBe(3)
+    expect(vm.filterClassroomId).toBeNull()
+    expect(vm.debouncedSearch).toBe('')
+
+    vi.useFakeTimers()
+    try {
+      push.mockClear()
+      getStudents.mockClear()
+
+      vm.searchQuery = '尚未套用的搜尋'
+      await nextTick()
+      expect(vi.getTimerCount()).toBe(1)
+      expect(vm.debouncedSearch).toBe('')
+
+      await wrapper.get('[data-test="clear-roster-quick-filters"]').trigger('click')
+      await nextTick()
+      await flushPromises()
+
+      expect(vm.currentPage).toBe(1)
+      expect(push).toHaveBeenCalledWith({
+        query: expect.objectContaining({ page: '1' }),
+      })
+      expect(getStudents).toHaveBeenCalledWith(expect.objectContaining({
+        skip: 0,
+        classroom_id: undefined,
+        search: undefined,
+      }))
+    } finally {
+      wrapper.unmount()
+      vi.useRealTimers()
     }
   })
 
@@ -117,6 +240,7 @@ describe('StudentListPanel', () => {
         school_year: '2025',
         semester: '2',
         classroom_id: '8',
+        tab: 'roster',
       },
     })
   })
@@ -127,15 +251,14 @@ describe('StudentListPanel', () => {
     await flushPromises()
     await nextTick()
 
-    // mount 初期 classrooms 尚未載入時，term 變更 watch 會清掉 route 預載的
-    // classroom_id；改在載入完成後經 route.query watch 套用篩選（等同使用者選班級）。
+    // 模擬透過 URL 選班級，確認匯出使用更新後的篩選。
     route.query = { school_year: '2025', semester: '2', classroom_id: '8' }
     await flushPromises()
     await nextTick()
     await flushPromises()
 
     const exportBtn = wrapper
-      .findAll('button')
+      .findAll('[role="menuitem"]')
       .find((btn) => btn.text().includes('匯出教育局格式'))
     expect(exportBtn).toBeTruthy()
     await exportBtn!.trigger('click')
@@ -151,4 +274,110 @@ describe('StudentListPanel', () => {
       }),
     )
   })
+
+  it('顯示所選學期的歷史班級，不顯示學生目前班級', async () => {
+    getClassrooms.mockResolvedValue({
+      data: [
+        {
+          id: 10,
+          name: '歷史學期班',
+          school_year: 2025,
+          semester: 2,
+          semester_label: '2025學年度下學期',
+          grade_name: '中班',
+        },
+        {
+          id: 20,
+          name: '目前班級',
+          school_year: 2026,
+          semester: 1,
+          semester_label: '2026學年度上學期',
+          grade_name: '大班',
+        },
+      ],
+    })
+    getStudents.mockResolvedValue({
+      data: {
+        items: [{
+          id: 1,
+          student_id: 'TEST-001',
+          name: '測試學生',
+          classroom_id: 20,
+          term_classroom_id: 10,
+        }],
+        total: 1,
+      },
+    })
+
+    const wrapper = mountPanel()
+    await flushPromises()
+    await nextTick()
+    await flushPromises()
+
+    const table = wrapper.get('[data-testid="student-table"]')
+    expect(table.text()).toContain('歷史學期班')
+    expect(table.text()).not.toContain('目前班級')
+  })
+})
+
+it('未選學生不顯示批次工具列，選取後可清除', async () => {
+  setActivePinia(createPinia())
+  const wrapper = mountPanel()
+  await flushPromises()
+  expect(wrapper.find('[data-test="student-batch-toolbar"]').exists()).toBe(false)
+  wrapper.findComponent(ElTableStub).vm.$emit('selection-change', [{ id: 99, name: '測試' }])
+  await nextTick()
+  expect(wrapper.get('[data-test="student-batch-toolbar"]').text()).toContain('已選 1')
+  await wrapper.get('[data-test="clear-student-selection"]').trigger('click')
+  expect(wrapper.find('[data-test="student-batch-toolbar"]').exists()).toBe(false)
+  wrapper.unmount()
+})
+
+it('分頁寫入非PII路由，返回 query 更新會恢復頁碼', async () => {
+  setActivePinia(createPinia())
+  const wrapper = mountPanel()
+  await flushPromises()
+  const vm = wrapper.vm as unknown as { handlePageChange: (page: number) => void; currentPage: number }
+  vm.handlePageChange(3)
+  await nextTick()
+  expect(push).toHaveBeenCalledWith({ query: expect.objectContaining({ page: '3' }) })
+  const last = push.mock.calls.at(-1)?.[0]
+  expect(last?.query).not.toHaveProperty('q')
+  route.query = { school_year: '2025', semester: '2', classroom_id: '8', page: '2' } as typeof route.query
+  await nextTick()
+  await flushPromises()
+  expect(vm.currentPage).toBe(2)
+  expect(getStudents).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 50 }))
+  wrapper.unmount()
+})
+
+it('手機卡片保留學生檔案、編輯、更多操作與批次勾選', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+  setActivePinia(createPinia())
+  route.query = { school_year: '2025', semester: '2', classroom_id: '8' } as typeof route.query
+  getStudents.mockResolvedValue({ data: { items: [{ id: 99, name: '手機測試', classroom_id: 8 }], total: 1 } })
+  const wrapper = mountPanel()
+  await flushPromises()
+  await nextTick()
+  const cards = wrapper.get('.admin-list-cards')
+  expect(cards.text()).toContain('檔案')
+  expect(cards.text()).toContain('編輯')
+  expect(cards.text()).toContain('更多')
+  const checkbox = wrapper.findAllComponents({ name: 'ElCheckbox' }).find(c => c.attributes('aria-label') === '選取 手機測試')
+  expect(checkbox).toBeTruthy()
+  checkbox!.vm.$emit('update:modelValue', true)
+  await nextTick()
+  expect(wrapper.get('[data-test="student-batch-toolbar"]').text()).toContain('已選 1')
+
+  const detailedData = wrapper.findAllComponents({ name: 'ElCheckbox' })
+    .find(c => c.attributes('aria-label') === '詳細資料')
+  expect(detailedData).toBeTruthy()
+  detailedData!.vm.$emit('update:modelValue', true)
+  await nextTick()
+  const mobileList = wrapper.findComponent({ name: 'AdminListCards' })
+  expect((mobileList.props('columns') as Array<{ prop: string }>).map(column => column.prop))
+    .toEqual(expect.arrayContaining(['student_id', 'gender', 'birthday', 'enrollment_date']))
+
+  wrapper.unmount()
+  vi.unstubAllGlobals()
 })

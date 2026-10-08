@@ -45,6 +45,10 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
 }))
 
+vi.mock('@/utils/auth', () => ({
+  hasPermission: (permission: string) => permission === 'SCHEDULE',
+}))
+
 import SettingsShiftTab from '../SettingsShiftTab.vue'
 
 // ── el-table / el-table-column scoped-slot stub：讓 cell 模板真的渲染 ──

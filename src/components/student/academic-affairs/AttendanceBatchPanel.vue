@@ -48,10 +48,19 @@ const dailyRecords = ref<AttendanceRecord[]>([])
 const dailyLoading = ref(false)
 const saving = ref(false)
 
+let fetchEpoch = 0
+const loadedContext = ref('')
+const contextKey = computed(() => JSON.stringify([localClassroomId.value, localDate.value]))
+const canSave = computed(() => !dailyLoading.value && !saving.value && loadedContext.value === contextKey.value && dailyRecords.value.length > 0)
+
 const fetchDaily = async () => {
+  const epoch = ++fetchEpoch
+  const requestedContext = contextKey.value
+  loadedContext.value = ''
+  dailyRecords.value = []
   const classroomId = Number(localClassroomId.value)
   if (!localClassroomId.value || !localDate.value || Number.isNaN(classroomId)) {
-    dailyRecords.value = []
+    dailyLoading.value = false
     return
   }
   dailyLoading.value = true
@@ -60,15 +69,17 @@ const fetchDaily = async () => {
       date: localDate.value,
       classroom_id: classroomId,
     })
+    if (epoch !== fetchEpoch || requestedContext !== contextKey.value) return
+    loadedContext.value = requestedContext
     dailyRecords.value = (res.data.records ?? []).map((record) => ({
       ...record,
       status: record.status ?? '出席',
       remark: record.remark ?? '',
     }))
   } catch (error) {
-    ElMessage.error(apiError(error, '載入點名編修資料失敗'))
+    if (epoch === fetchEpoch && requestedContext === contextKey.value) ElMessage.error(apiError(error, '載入點名編修資料失敗'))
   } finally {
-    dailyLoading.value = false
+    if (epoch === fetchEpoch) dailyLoading.value = false
   }
 }
 
@@ -79,26 +90,27 @@ const markAll = (status: string) => {
 }
 
 const saveDaily = async () => {
-  if (!dailyRecords.value.length) return
+  if (!canSave.value) return
+  const savedContext = contextKey.value
+  const epoch = fetchEpoch
+  const payloadContext = { date: localDate.value, classroom_id: localClassroomId.value }
   saving.value = true
   try {
     await batchSaveAttendance({
-      date: localDate.value,
+      date: payloadContext.date,
       entries: dailyRecords.value.map((record) => ({
         student_id: record.student_id,
         status: record.status,
         remark: record.remark || null,
       })),
     })
+    domainBus.emit(ATTENDANCE_EVENTS.CHANGED, payloadContext)
+    if (epoch !== fetchEpoch || savedContext !== contextKey.value) return
     ElMessage.success('點名編修儲存成功')
-    domainBus.emit(ATTENDANCE_EVENTS.CHANGED, {
-      date: localDate.value,
-      classroom_id: localClassroomId.value,
-    })
-    emit('saved', { date: localDate.value, classroom_id: localClassroomId.value })
+    emit('saved', payloadContext)
     await fetchDaily()
   } catch (error) {
-    ElMessage.error(apiError(error, '儲存失敗'))
+    if (epoch === fetchEpoch && savedContext === contextKey.value) ElMessage.error(apiError(error, '儲存失敗'))
   } finally {
     saving.value = false
   }
@@ -145,7 +157,7 @@ defineExpose({ fetchDaily })
         type="primary"
         style="margin-left: auto"
         :loading="saving"
-        :disabled="!dailyRecords.length"
+        :disabled="!canSave"
         @click="saveDaily"
       >
         儲存編修

@@ -20,6 +20,18 @@ export function formatCurrency(val: unknown): string {
 }
 
 /**
+ * 密集表格專用：同 `formatCurrency` 的千分位與「—」fallback，但**不帶 `NT$` 前綴**。
+ *
+ * 只在幣別已由表頭／分組表頭／合計列標示的表格儲存格內使用——每格重複前綴會吃掉
+ * 欄寬、數字也對不齊。單獨出現的金額（摘要、對話框、訊息、匯出）仍一律走
+ * `formatCurrency`，幣別不可省。
+ */
+export function formatAmount(val: unknown): string {
+  if (val == null || val === '' || Number.isNaN(Number(val))) return EMPTY
+  return _twd.format(Number(val))
+}
+
+/**
  * 顯示層專用：金額先四捨五入到整數元，再走 `formatCurrency`（NT$ 千分位）。
  *
  * 用於彙總大表等「畫面顯示」場景（金額欄與整數欄並列時，小數點易造成欄寬不足

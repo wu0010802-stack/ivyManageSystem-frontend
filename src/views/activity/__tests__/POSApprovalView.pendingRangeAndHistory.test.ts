@@ -66,9 +66,10 @@ interface SetupState {
 /** 以 UTC 曆算推移天數，與元件內 taipeiOffsetISO 的做法一致。 */
 function isoOffset(days: number): string {
   const [y, m, d] = todayTaipeiISO().split('-').map(Number)
-  const anchor = new Date(Date.UTC(y, m - 1, d) + days * 86400000)
+  const base = Date.UTC(y, m - 1, d) + days * 86400000
+  const shifted = new Date(base)
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${anchor.getUTCFullYear()}-${pad(anchor.getUTCMonth() + 1)}-${pad(anchor.getUTCDate())}`
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`
 }
 
 function daysBetween(a: string, b: string): number {

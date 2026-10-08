@@ -1,21 +1,28 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onScopeDispose, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 import { Bell, Camera, Collection, Delete } from '@element-plus/icons-vue'
 import type { UploadRequestOptions } from 'element-plus'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { MOOD_OPTIONS } from './moods'
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
   entry: { type: Object, default: null },
+  studentId: { type: Number, default: null },
+  saveDraftForClose: { type: Function as PropType<(payload: Record<string, unknown>, version: unknown) => Promise<boolean>>, default: undefined },
   studentName: { type: String, default: '' },
   saving: { type: Boolean, default: false },
   publishing: { type: Boolean, default: false },
   photoUploading: { type: Boolean, default: false },
+  /** 名單上還有下一位未填的學生時，底部才出現「儲存並填下一位」 */
+  hasNext: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
   'update:modelValue',
   'save-draft',    // (formPayload, version)
+  'save-and-next', // (formPayload, version) — 儲存後直接開下一位（P1-03）
   'save-as-template',  // (fields) — 形狀同後端 TemplateFields
   'publish',       // ()
   'upload-photo',  // (opts) — el-upload style { file }
@@ -23,13 +30,7 @@ const emit = defineEmits([
   'close',
 ])
 
-const MOOD_OPTIONS = [
-  { value: 'happy', label: '😄 開心' },
-  { value: 'normal', label: '🙂 普通' },
-  { value: 'tired', label: '😴 疲倦' },
-  { value: 'sad', label: '😢 難過' },
-  { value: 'sick', label: '🤒 不適' },
-]
+const MAX_PHOTOS = 5
 
 const MEAL_OPTIONS = [
   { value: 0, label: '未進食' },
@@ -45,43 +46,58 @@ const BOWEL_OPTIONS = [
   { value: 'none', label: '未排便' },
 ]
 
-const form = ref({
-  mood: null,
-  meal_lunch: null,
-  meal_snack: null,
-  nap_minutes: null,
-  bowel: null,
-  temperature_c: null,
+/**
+ * 表單值用 undefined 表示「未記錄」而非 null：el-radio-group 的 v-model
+ * 型別不接受 null，而 buildPayload() 的 norm() 會把 undefined 轉回 null，
+ * 送出去的 payload 形狀不變。
+ */
+interface EntryForm {
+  mood: string | undefined
+  meal_lunch: number | undefined
+  meal_snack: number | undefined
+  nap_minutes: number | undefined
+  bowel: string | undefined
+  temperature_c: number | undefined
+  teacher_note: string
+  learning_highlight: string
+}
+
+const EMPTY_FORM: EntryForm = {
+  mood: undefined,
+  meal_lunch: undefined,
+  meal_snack: undefined,
+  nap_minutes: undefined,
+  bowel: undefined,
+  temperature_c: undefined,
   teacher_note: '',
   learning_highlight: '',
-})
+}
+
+const form = ref<EntryForm>({ ...EMPTY_FORM })
+const savedForm = ref('')
+const closePromptVisible = ref(false)
+const closeSaving = ref(false)
+const busy = computed(() => props.saving || props.publishing || props.photoUploading || closeSaving.value)
+const isDirty = computed(() => JSON.stringify(form.value) !== savedForm.value)
 
 watch(
-  () => props.entry,
-  (e) => {
+  () => [props.entry, props.studentId, props.modelValue] as const,
+  ([e]) => {
     if (e) {
       form.value = {
-        mood: e.mood ?? null,
-        meal_lunch: e.meal_lunch ?? null,
-        meal_snack: e.meal_snack ?? null,
-        nap_minutes: e.nap_minutes ?? null,
-        bowel: e.bowel ?? null,
-        temperature_c: e.temperature_c ?? null,
+        mood: e.mood ?? undefined,
+        meal_lunch: e.meal_lunch ?? undefined,
+        meal_snack: e.meal_snack ?? undefined,
+        nap_minutes: e.nap_minutes ?? undefined,
+        bowel: e.bowel ?? undefined,
+        temperature_c: e.temperature_c ?? undefined,
         teacher_note: e.teacher_note ?? '',
         learning_highlight: e.learning_highlight ?? '',
       }
     } else {
-      form.value = {
-        mood: null,
-        meal_lunch: null,
-        meal_snack: null,
-        nap_minutes: null,
-        bowel: null,
-        temperature_c: null,
-        teacher_note: '',
-        learning_highlight: '',
-      }
+      form.value = { ...EMPTY_FORM }
     }
+    savedForm.value = JSON.stringify(form.value)
   },
   { immediate: true },
 )
@@ -95,6 +111,18 @@ const visible = computed({
 
 const isPublished = computed(() => !!props.entry?.published_at)
 const photos = computed(() => props.entry?.photos || [])
+const photoLimitReached = computed(() => photos.value.length >= MAX_PHOTOS)
+
+// 家長端回流（2026-09-02 對齊稽核前教師端完全看不到已讀／回覆）
+interface ParentAck { guardian_user_id: number; guardian_name?: string | null; read_at?: string | null }
+interface ParentReply { id: number; guardian_name?: string | null; body: string; created_at?: string | null }
+const parentAcks = computed<ParentAck[]>(() => (props.entry?.parent_acks as ParentAck[] | undefined) || [])
+const parentReplies = computed<ParentReply[]>(() => (props.entry?.parent_replies as ParentReply[] | undefined) || [])
+/** ISO naive 台北時間 → 'MM-DD HH:mm'；與上方發布時間同樣不走 new Date()（避免時區位移）。 */
+function fmtTs(iso?: string | null): string {
+  if (!iso) return ''
+  return iso.replace('T', ' ').slice(5, 16)
+}
 
 function buildPayload() {
   const f = form.value
@@ -117,6 +145,13 @@ function handleSaveDraft() {
 
 // 存為範本：buildPayload() 產出的形狀與後端 TemplateFields 完全同構，
 // 且只讀 form 不依賴 entry.id，因此尚未存成草稿時也能用。
+function handleSaveAndNext() {
+  emit('save-and-next', buildPayload(), props.entry?.version ?? 0)
+}
+
+// 午睡常見時長快選：原本只有 15 分鐘一格的加減鈕，填 90 分鐘要按 6 次
+const NAP_PRESETS = [30, 60, 90, 120]
+
 function handleSaveAsTemplate() {
   emit('save-as-template', buildPayload())
 }
@@ -130,10 +165,62 @@ function handleUploadPhoto(opts: UploadRequestOptions): Promise<unknown> {
   return Promise.resolve()
 }
 
-function handleClose() {
-  visible.value = false
-  emit('close')
+let resolveLeave: ((allowed: boolean) => void) | undefined
+let pendingLeave: Promise<boolean> | undefined
+
+function requestLeave(): Promise<boolean> {
+  if (busy.value) return Promise.resolve(false)
+  if (!props.modelValue || !isDirty.value) return Promise.resolve(true)
+  if (pendingLeave) return pendingLeave
+  closePromptVisible.value = true
+  pendingLeave = new Promise<boolean>((resolve) => { resolveLeave = resolve })
+  return pendingLeave
 }
+
+function finishLeave(allowed: boolean) {
+  closePromptVisible.value = false
+  resolveLeave?.(allowed)
+  resolveLeave = undefined
+  pendingLeave = undefined
+}
+
+async function saveBeforeClose() {
+  if (busy.value || !props.saveDraftForClose) return
+  closeSaving.value = true
+  try {
+    const ok = await props.saveDraftForClose(buildPayload(), props.entry?.version ?? 0)
+    if (ok) {
+      savedForm.value = JSON.stringify(form.value)
+      finishLeave(true)
+    }
+  } finally {
+    closeSaving.value = false
+  }
+}
+
+async function handleClose() {
+  if (await requestLeave()) {
+    visible.value = false
+    emit('close')
+  }
+}
+
+async function beforeClose(done: () => void) {
+  if (await requestLeave()) done()
+}
+
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (props.modelValue && (isDirty.value || busy.value)) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+onMounted(() => window.addEventListener('beforeunload', beforeUnload))
+onScopeDispose(() => {
+  window.removeEventListener('beforeunload', beforeUnload)
+  finishLeave(false)
+})
+defineExpose({ requestLeave })
 </script>
 
 <template>
@@ -142,10 +229,12 @@ function handleClose() {
     :title="studentName ? `${studentName} 的聯絡簿` : '聯絡簿'"
     direction="rtl"
     :size="isMobile ? '100%' : '520px'"
-    :close-on-click-modal="!saving && !publishing"
-    @close="handleClose"
+    :close-on-click-modal="!busy"
+    :close-on-press-escape="!busy"
+    :before-close="beforeClose"
+    @close="emit('close')"
   >
-    <el-form v-if="entry !== undefined" label-position="top" class="drawer-form">
+    <el-form :disabled="busy" v-if="entry !== undefined" label-position="top" class="drawer-form">
       <el-alert
         v-if="entry?.published_at"
         type="success"
@@ -157,28 +246,67 @@ function handleClose() {
         </template>
       </el-alert>
 
+      <section v-if="isPublished" class="parent-signals" data-testid="cb-parent-signals" aria-label="家長回應">
+        <h4 class="parent-signals__title">家長回應</h4>
+        <p v-if="parentAcks.length" class="parent-signals__acks">
+          已讀：<span v-for="(a, i) in parentAcks" :key="a.guardian_user_id">{{ i ? '、' : '' }}{{ a.guardian_name || '家長' }}<span class="muted">（{{ fmtTs(a.read_at) }}）</span></span>
+        </p>
+        <p v-else class="parent-signals__acks muted">家長尚未讀取</p>
+        <ul v-if="parentReplies.length" class="parent-signals__replies">
+          <li v-for="r in parentReplies" :key="r.id" class="parent-signals__reply">
+            <div class="parent-signals__meta">
+              <strong>{{ r.guardian_name || '家長' }}</strong>
+              <span class="muted">{{ fmtTs(r.created_at) }}</span>
+            </div>
+            <p class="parent-signals__body">{{ r.body }}</p>
+          </li>
+        </ul>
+      </section>
+
+      <!-- 心情／午餐／點心／排便改單選 chip（P1-03）：這四欄每位學生都要填，
+           下拉每次要「點開→捲動→選」三個動作，chip 一下就到。 -->
       <el-form-item label="心情">
-        <el-select v-model="form.mood" placeholder="選擇心情" clearable style="width: 220px; max-width: 100%">
-          <el-option v-for="o in MOOD_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-        </el-select>
+        <el-radio-group v-model="form.mood" class="chip-group">
+          <el-radio-button v-for="o in MOOD_OPTIONS" :key="o.value" :value="o.value">
+            {{ o.label }}
+          </el-radio-button>
+          <el-radio-button :value="undefined">未記錄</el-radio-button>
+        </el-radio-group>
+      </el-form-item>
+
+      <el-form-item label="午餐">
+        <el-radio-group v-model="form.meal_lunch" class="chip-group">
+          <el-radio-button v-for="o in MEAL_OPTIONS" :key="o.value" :value="o.value">
+            {{ o.label }}
+          </el-radio-button>
+          <el-radio-button :value="undefined">未記錄</el-radio-button>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item label="點心">
+        <el-radio-group v-model="form.meal_snack" class="chip-group">
+          <el-radio-button v-for="o in MEAL_OPTIONS" :key="o.value" :value="o.value">
+            {{ o.label }}
+          </el-radio-button>
+          <el-radio-button :value="undefined">未記錄</el-radio-button>
+        </el-radio-group>
       </el-form-item>
 
       <div class="form-row">
-        <el-form-item label="午餐">
-          <el-select v-model="form.meal_lunch" placeholder="選擇" clearable>
-            <el-option v-for="o in MEAL_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="點心">
-          <el-select v-model="form.meal_snack" placeholder="選擇" clearable>
-            <el-option v-for="o in MEAL_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-      </div>
-
-      <div class="form-row">
         <el-form-item label="午睡（分鐘）">
-          <el-input-number v-model="form.nap_minutes" :min="0" :max="600" :step="15" />
+          <div class="nap-field">
+            <el-input-number v-model="form.nap_minutes" :min="0" :max="600" :step="15" />
+            <div class="nap-presets">
+              <el-button
+                v-for="m in NAP_PRESETS"
+                :key="m"
+                size="small"
+                :type="form.nap_minutes === m ? 'primary' : 'default'"
+                @click="form.nap_minutes = m"
+              >
+                {{ m }}
+              </el-button>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="體溫（°C）">
           <el-input-number
@@ -192,9 +320,12 @@ function handleClose() {
       </div>
 
       <el-form-item label="排便">
-        <el-select v-model="form.bowel" placeholder="選擇排便狀況" clearable style="width: 220px; max-width: 100%">
-          <el-option v-for="o in BOWEL_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-        </el-select>
+        <el-radio-group v-model="form.bowel" class="chip-group">
+          <el-radio-button v-for="o in BOWEL_OPTIONS" :key="o.value" :value="o.value">
+            {{ o.label }}
+          </el-radio-button>
+          <el-radio-button :value="undefined">未記錄</el-radio-button>
+        </el-radio-group>
       </el-form-item>
 
       <el-form-item label="今日學習亮點">
@@ -241,6 +372,7 @@ function handleClose() {
             </div>
           </div>
           <el-upload
+            v-if="!photoLimitReached"
             :auto-upload="true"
             :show-file-list="false"
             :http-request="handleUploadPhoto"
@@ -250,16 +382,18 @@ function handleClose() {
               上傳照片
             </el-button>
             <template #tip>
-              <div class="upload-tip muted">支援 JPG / PNG / HEIC，一次一張</div>
+              <div class="upload-tip muted">支援 JPG / PNG / HEIC，一次一張，最多 {{ MAX_PHOTOS }} 張（{{ photos.length }}/{{ MAX_PHOTOS }}）</div>
             </template>
           </el-upload>
+          <div v-else class="hint muted">已達上限（{{ MAX_PHOTOS }}/{{ MAX_PHOTOS }} 張），如需更換請先刪除照片</div>
         </div>
       </el-form-item>
     </el-form>
 
     <template #footer>
       <div class="drawer-footer">
-        <el-button @click="handleClose">關閉</el-button>
+        <span role="status">{{ busy ? '儲存處理中…' : isDirty ? '有未儲存的變更' : '尚無未儲存的變更' }}</span>
+        <el-button :disabled="busy" @click="handleClose">關閉</el-button>
         <el-button :icon="Collection" @click="handleSaveAsTemplate">
           存為範本
         </el-button>
@@ -270,6 +404,16 @@ function handleClose() {
           @click="handleSaveDraft"
         >
           儲存草稿
+        </el-button>
+        <el-button
+          v-if="hasNext"
+          type="primary"
+          plain
+          :loading="saving"
+          :disabled="publishing"
+          @click="handleSaveAndNext"
+        >
+          儲存並填下一位
         </el-button>
         <el-button
           type="success"
@@ -283,6 +427,23 @@ function handleClose() {
       </div>
     </template>
   </el-drawer>
+  <el-dialog
+    :model-value="closePromptVisible"
+    title="未儲存變更"
+    width="min(440px, 92vw)"
+    append-to-body
+    :close-on-click-modal="false"
+    :close-on-press-escape="!busy"
+    :show-close="!busy"
+    @update:model-value="finishLeave(false)"
+  >
+    <p>尚有未儲存的變更。儲存草稿後再離開，或繼續編輯。</p>
+    <template #footer>
+      <el-button :disabled="busy" @click="finishLeave(false)">繼續編輯</el-button>
+      <el-button :disabled="busy" type="danger" plain @click="finishLeave(true)">捨棄變更</el-button>
+      <el-button data-testid="save-before-close" :disabled="busy || !saveDraftForClose" :loading="closeSaving" type="primary" @click="saveBeforeClose">儲存草稿並離開</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -348,5 +509,78 @@ function handleClose() {
   .form-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* 家長回應（唯讀；只在已發布時出現） */
+.parent-signals {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-color-page);
+}
+.parent-signals__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.parent-signals__acks {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.parent-signals__replies {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.parent-signals__reply {
+  padding: var(--space-2) var(--space-3);
+  border-radius: 8px;
+  background: var(--surface-color, #fff);
+}
+.parent-signals__meta {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-size: var(--text-xs);
+}
+.parent-signals__body {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 單選 chip 群組：換行不擠壓，觸控目標 ≥44px */
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip-group :deep(.el-radio-button__inner) {
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-full);
+  border-left: 1px solid var(--el-border-color);
+}
+.chip-group :deep(.el-radio-button) {
+  margin: 0;
+}
+.nap-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.nap-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 </style>

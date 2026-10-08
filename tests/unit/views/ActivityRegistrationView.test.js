@@ -148,7 +148,7 @@ vi.mock('vue-router', () => ({
 // ── element-plus mocks ─────────────────────────────────────────────────────
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
-  ElMessageBox: { confirm: vi.fn() },
+  ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() },
 }))
 
 // ── download util mock ──────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ const GLOBAL_STUBS = {
   'el-input': { template: '<input />' },
   'el-select': { template: '<div><slot /></div>' },
   'el-option': true,
-  'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+  'el-button': { emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-table': { template: '<div><slot /></div>', methods: { clearSelection: vi.fn(), toggleRowSelection: vi.fn() } },
   'el-table-column': true,
   'el-pagination': true,
@@ -575,5 +575,38 @@ describe('ActivityRegistrationView', () => {
     expect(wrapper.vm.addCourseDialogVisible).toBe(false)
     expect(wrapper.vm.addSupplyDialogVisible).toBe(false)
     expect(updateRemark).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('退課確認的報名者上下文', () => {
+  it.each([['confirm', '切換報名者'], ['prompt', '切換報名者'], ['confirm', '離開頁面'], ['prompt', '離開頁面']])('%s 等待期間%s不得續送退課', async (stage, change) => {
+    const { withdrawCourse } = await import('@/api/activity')
+    const { ElMessageBox } = await import('element-plus')
+    vi.clearAllMocks()
+    getRegistrationDetail.mockImplementation(async (id) => ({ data: { id, courses: [{ id: 20, course_id: 2, name: '課程', status: 'enrolled' }], supplies: [] } }))
+    getRegistrationPayments.mockResolvedValue({ data: { records: [], total_amount: 0, paid_amount: 0 } })
+    let resolve
+    const pendingConfirm = new Promise((done) => { resolve = done })
+    ElMessageBox.confirm.mockResolvedValue('confirm')
+    ElMessageBox.prompt.mockResolvedValue({ value: '這是足夠十五字以上的退款稽核原因測試' })
+    ElMessageBox[stage].mockReturnValueOnce(pendingConfirm)
+    withdrawCourse.mockRejectedValueOnce({ response: { status: 409 } })
+    const wrapper = mount(ActivityRegistrationView, { global: { directives: { loading: () => {} }, stubs: {
+      ...GLOBAL_STUBS,
+      'el-table': { props: ['data'], provide() { return { rows: () => this.data || [] } }, template: '<div><slot /></div>' },
+      'el-table-column': { inject: ['rows'], template: '<div><template v-for="row in rows()"><slot :row="row" :$index="0" /></template></div>' },
+    } } })
+    await wrapper.vm.openDetail({ id: 7 })
+    await flushPromises()
+    await wrapper.findAll('button').find((b) => b.text() === '退課').trigger('click')
+    await flushPromises()
+    if (change === '離開頁面') wrapper.unmount()
+    else await wrapper.vm.openDetail({ id: 8 })
+    resolve(stage === 'prompt' ? { value: '這是足夠十五字以上的退款稽核原因測試' } : 'confirm')
+    await flushPromises(); await flushPromises()
+    expect(withdrawCourse.mock.calls.some(([id]) => id === 8)).toBe(false)
+    expect(withdrawCourse).toHaveBeenCalledTimes(stage === 'confirm' ? 0 : 1)
+    if (change !== '離開頁面') wrapper.unmount()
   })
 })

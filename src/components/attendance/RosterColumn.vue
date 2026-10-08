@@ -11,56 +11,63 @@
     <div v-if="!loading && sortedFiltered.length === 0" class="roster-column__empty">
       <EmptyState
         variant="inline"
-        title="無符合人員"
-        description="請調整搜尋條件或確認該月是否有出勤資料"
+        :title="searchQuery.trim() ? '沒有符合搜尋的人員' : '目前沒有出勤人員紀錄'"
+        :description="searchQuery.trim() ? '請調整搜尋條件' : '請確認該月出勤資料'"
       />
+      <el-button v-if="searchQuery.trim()" @click="searchQuery = ''">清除搜尋</el-button>
     </div>
 
     <ul v-else class="roster-column__list" role="listbox" aria-label="人員名冊">
-      <li
-        v-for="row in sortedFiltered"
-        :key="row.employee_id"
-        class="roster-item"
-        :class="{ 'roster-item--selected': row.employee_id === props.selectedEmployeeId }"
-        role="option"
-        :aria-selected="row.employee_id === props.selectedEmployeeId"
-        @click="emit('select', row.employee_id)"
-      >
-        <div class="roster-item__info">
-          <span class="roster-item__name">{{ row.employee_name }}</span>
-          <span v-if="row.employee_number" class="roster-item__number">
-            {{ row.employee_number }}
-          </span>
-        </div>
-        <div class="roster-item__badges">
-          <template v-if="anomalyCount(row) === 0">
-            <!-- P1-3：expected workdays 未定義前不宣稱「全勤」（待業主裁定） -->
-            <el-tag type="success" size="small">紀錄無異常</el-tag>
-          </template>
-          <template v-else>
-            <el-tag
-              v-if="row.late_count > 0 || row.early_leave_count > 0"
-              type="warning"
-              size="small"
-            >
-              遲{{ row.late_count + row.early_leave_count }}
-            </el-tag>
-            <el-tag
-              v-if="row.missing_punch_in > 0 || row.missing_punch_out > 0"
-              type="danger"
-              size="small"
-            >
-              缺{{ row.missing_punch_in + row.missing_punch_out }}
-            </el-tag>
-          </template>
-        </div>
-      </li>
+      <template v-for="group in groupedRows" :key="group.key">
+        <li v-if="group.rows.length" class="roster-column__group-label" role="presentation">
+          {{ group.label }}<span class="roster-column__group-count">{{ group.rows.length }}</span>
+        </li>
+        <li
+          v-for="row in group.rows"
+          :key="row.employee_id"
+          class="roster-item"
+          :class="{ 'roster-item--selected': row.employee_id === props.selectedEmployeeId }"
+          role="option"
+          :aria-selected="row.employee_id === props.selectedEmployeeId"
+          @click="emit('select', row.employee_id)"
+        >
+          <div class="roster-item__info">
+            <span class="roster-item__name">{{ row.employee_name }}</span>
+            <span v-if="row.employee_number" class="roster-item__number">
+              {{ row.employee_number }}
+            </span>
+          </div>
+          <div class="roster-item__badges">
+            <el-tag v-if="row.has_summary === false" type="info" size="small">尚無統計</el-tag>
+            <template v-else-if="anomalyCount(row) === 0">
+              <!-- P1-3：expected workdays 未定義前不宣稱「全勤」（待業主裁定） -->
+              <el-tag type="success" size="small">紀錄無異常</el-tag>
+            </template>
+            <template v-else>
+              <el-tag
+                v-if="row.late_count > 0 || row.early_leave_count > 0"
+                type="warning"
+                size="small"
+              >
+                遲{{ row.late_count + row.early_leave_count }}
+              </el-tag>
+              <el-tag
+                v-if="row.missing_punch_in > 0 || row.missing_punch_out > 0"
+                type="danger"
+                size="small"
+              >
+                缺{{ row.missing_punch_in + row.missing_punch_out }}
+              </el-tag>
+            </template>
+          </div>
+        </li>
+      </template>
     </ul>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { RosterRow } from '@/composables/useAttendanceWorkspace'
 
@@ -68,20 +75,34 @@ const props = defineProps<{
   roster: RosterRow[]
   selectedEmployeeId: number | null
   loading: boolean
+  /**
+   * 每位員工「尚未處理」的異常日卡數（key＝employee_number），由父層以
+   * anomalyQueue 的 confirmed_action 計算。名冊上的 late_count 等欄位來自月統計，
+   * **不會**因為管理者接受扣款或豁免而減少；分組若沿用它，處理完的人仍掛在
+   * 「有待處理」底下。未提供時退回月統計數（單元測試等獨立掛載情境）。
+   */
+  pendingCounts?: Record<string, number>
 }>()
 
 const emit = defineEmits<{
   (e: 'select', employeeId: number): void
 }>()
 
-const searchQuery = ref('')
+const searchQuery = defineModel<string>('search', { default: '' })
 
 function anomalyCount(r: RosterRow): number {
   return r.late_count + r.early_leave_count + r.missing_punch_in + r.missing_punch_out
 }
 
+/** 尚待處理的異常數：有 pendingCounts 就用它，否則退回月統計數（見 props 註解）。 */
+function pendingCount(r: RosterRow): number {
+  const counts = props.pendingCounts
+  if (!counts) return anomalyCount(r)
+  return counts[r.employee_number ?? ''] ?? 0
+}
+
 const sortedFiltered = computed<RosterRow[]>(() => {
-  const q = searchQuery.value.toLowerCase()
+  const q = searchQuery.value.trim().toLowerCase()
 
   const filtered = q
     ? props.roster.filter(
@@ -96,6 +117,25 @@ const sortedFiltered = computed<RosterRow[]>(() => {
     if (diff !== 0) return diff
     return a.employee_name.localeCompare(b.employee_name, 'zh-TW')
   })
+})
+
+// 名冊依「有待處理 → 無異常 → 尚無打卡」分組（UI/UX 改版提案 09-10）；組內沿用
+// sortedFiltered 既有的 anomalyCount 遞減排序，只是按組拆段呈現，不改變排序邏輯。
+const groupedRows = computed(() => {
+  const pending: RosterRow[] = []
+  const clean: RosterRow[] = []
+  const noSummary: RosterRow[] = []
+  for (const row of sortedFiltered.value) {
+    if (row.has_summary === false) noSummary.push(row)
+    else if (pendingCount(row) > 0) pending.push(row)
+    else clean.push(row)
+  }
+  return [
+    { key: 'pending', label: '有待處理', rows: pending },
+    // 「無待處理」而非「無異常」：本月有過異常但已接受扣款／豁免的人也歸在這裡
+    { key: 'clean', label: '無待處理', rows: clean },
+    { key: 'no-summary', label: '尚無打卡', rows: noSummary },
+  ]
 })
 </script>
 
@@ -141,9 +181,23 @@ const sortedFiltered = computed<RosterRow[]>(() => {
 }
 
 .roster-item--selected {
-  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin） */
+  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin）；2026-09-10 改版
+     移除側邊色條（impeccable AI-slop 偵測命中），選取態單純以底色區分。 */
   background-color: var(--brand-primary-soft, #e0f2fe);
-  border-left: 3px solid var(--brand-primary, #0284c7);
+}
+
+.roster-column__group-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3) 2px;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-tertiary, #94a3b8);
+  letter-spacing: 0.04em;
+}
+
+.roster-column__group-count {
+  color: var(--text-tertiary, #94a3b8);
 }
 
 .roster-item__info {

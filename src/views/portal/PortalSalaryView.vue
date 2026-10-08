@@ -5,6 +5,8 @@ import { InfoFilled, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { useIsMobile } from '@/composables/useIsMobile'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 // 2026-08-24 起吃後端 PortalSalaryPreviewOut 生成型別：salary 為
 // build_history_breakdown 三區明細（income/deductions/separate_transfer 皆為
@@ -35,27 +37,65 @@ const query = reactive({
   month: now.getMonth() + 1,
 })
 
+// request-sequence guard（F7）：快速換月時，晚到的舊月份回應不得覆寫目前月份的畫面
+let fetchSeq = 0
 const fetchSalary = async () => {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const res = await getSalaryPreview({ year: query.year, month: query.month })
+    if (seq !== fetchSeq) return
     salaryData.value = res.data
   } catch (error) {
+    if (seq !== fetchSeq) return
+    // 新月份載入失敗不保留別月份的明細，免得把 A 月金額當成 B 月顯示
+    salaryData.value = null
     ElMessage.error('載入失敗')
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
+function stepMonth(delta: -1 | 1) {
+  if (delta === -1) {
+    if (query.month === 1) { query.year -= 1; query.month = 12 } else { query.month -= 1 }
+  } else if (query.month === 12) { query.year += 1; query.month = 1 } else { query.month += 1 }
+}
+
+/**
+ * 進頁預設落在「最近一個已計算的月份」（P2-07）。
+ *
+ * 原本一律開當月，而當月薪資在月底結算前永遠是 none，於是老師每次進來
+ * 都先看到「本月薪資尚未計算」的空狀態，得自己按上一月才看得到東西。
+ * 往前找最多兩個月；都沒有就回到當月（維持原本的空狀態說明）。
+ */
+const autoFellBack = ref(false)
+const initialLoad = async () => {
+  await fetchSalary()
+  if ((salaryData.value?.salary_status as string) !== 'none') return
+  const origin = { year: query.year, month: query.month }
+  for (let i = 0; i < 2; i += 1) {
+    stepMonth(-1)
+    await fetchSalary()
+    if ((salaryData.value?.salary_status as string) !== 'none') {
+      autoFellBack.value = true
+      return
+    }
+  }
+  query.year = origin.year
+  query.month = origin.month
+  await fetchSalary()
+}
+
 const prevMonth = () => {
-  if (query.month === 1) { query.year--; query.month = 12 }
-  else { query.month-- }
+  autoFellBack.value = false
+  stepMonth(-1)
   fetchSalary()
 }
 
 const nextMonth = () => {
-  if (query.month === 12) { query.year++; query.month = 1 }
-  else { query.month++ }
+  autoFellBack.value = false
+  stepMonth(1)
   fetchSalary()
 }
 
@@ -74,52 +114,25 @@ const separateLines = computed(() => nonZero(salary.value?.separate_transfer))
 
 const fmt = (n: number | undefined | null) => (n ?? 0).toLocaleString()
 
-onMounted(fetchSalary)
+onMounted(initialLoad)
 </script>
 
 <template>
   <div class="portal-salary">
-    <div class="page-header">
-      <h2>薪資查詢</h2>
-      <div class="month-nav">
-        <el-button class="month-nav-btn" :icon="ArrowLeft" circle aria-label="上個月" @click="prevMonth" />
-        <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
-        <el-button class="month-nav-btn" :icon="ArrowRight" circle aria-label="下個月" @click="nextMonth" />
-      </div>
-    </div>
+    <PortalPageHeader title="薪資查詢">
+      <template #actions>
+        <div class="month-nav">
+          <el-button class="month-nav-btn" :icon="ArrowLeft" circle aria-label="上個月" @click="prevMonth" />
+          <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
+          <el-tag v-if="autoFellBack" type="info" effect="plain" class="fallback-tag">
+            當月尚未計算，顯示最近一期
+          </el-tag>
+          <el-button class="month-nav-btn" :icon="ArrowRight" circle aria-label="下個月" @click="nextMonth" />
+        </div>
+      </template>
+    </PortalPageHeader>
 
     <div v-loading="loading">
-      <!-- Attendance Stats -->
-      <el-card v-if="salaryData" class="stats-card">
-        <h3>出勤統計</h3>
-        <div class="stats-row">
-          <div class="stat-item">
-            <div class="stat-value blue">{{ attendanceStats?.work_days }}</div>
-            <div class="stat-label">出勤天數</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value orange">{{ attendanceStats?.late_count }}</div>
-            <div class="stat-label">遲到次數</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value orange">{{ attendanceStats?.early_leave_count }}</div>
-            <div class="stat-label">早退次數</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value red">{{ attendanceStats?.missing_punch_count }}</div>
-            <div class="stat-label">缺卡次數</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value gray">{{ attendanceStats?.leave_days }}</div>
-            <div class="stat-label">請假天數</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value gray">{{ attendanceStats?.leave_hours }}h</div>
-            <div class="stat-label">請假時數</div>
-          </div>
-        </div>
-      </el-card>
-
       <!-- Salary Breakdown：三區明細直接吃後端 build_history_breakdown 契約，
            保證 收入各項相加=應發、扣款各項相加=扣款合計、應發−扣款=實發 -->
       <el-card v-if="salary" class="salary-card">
@@ -201,15 +214,40 @@ onMounted(fetchSalary)
         <el-tag type="success" style="margin-top: 12px;">已結算</el-tag>
       </el-card>
 
+
       <el-card v-else-if="salaryData && !salaryData.salary">
-        <el-empty :description="statusMessage.title">
-          <template #description>
-            <p style="margin: 0; font-weight: 600;">{{ statusMessage.title }}</p>
-            <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: var(--text-sm);">
-              {{ statusMessage.desc }}
-            </p>
-          </template>
-        </el-empty>
+        <EmptyState variant="mobile" :title="statusMessage.title" :description="statusMessage.desc" />
+      </el-card>
+
+      <!-- 出勤統計：薪資明細才是本頁主體，統計移到明細之後（P2-07） -->
+      <el-card v-if="salaryData" class="stats-card">
+        <h3>出勤統計</h3>
+        <div class="stats-row">
+          <div class="stat-item">
+            <div class="stat-value blue">{{ attendanceStats?.work_days }}</div>
+            <div class="stat-label">出勤天數</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value orange">{{ attendanceStats?.late_count }}</div>
+            <div class="stat-label">遲到次數</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value orange">{{ attendanceStats?.early_leave_count }}</div>
+            <div class="stat-label">早退次數</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value red">{{ attendanceStats?.missing_punch_count }}</div>
+            <div class="stat-label">缺卡次數</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value gray">{{ attendanceStats?.leave_days }}</div>
+            <div class="stat-label">請假天數</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value gray">{{ attendanceStats?.leave_hours }}h</div>
+            <div class="stat-label">請假時數</div>
+          </div>
+        </div>
       </el-card>
     </div>
   </div>
@@ -362,5 +400,8 @@ onMounted(fetchSalary)
   .net-value {
     font-size: 28px;
   }
+}
+.fallback-tag {
+  margin-left: var(--space-2, 8px);
 }
 </style>

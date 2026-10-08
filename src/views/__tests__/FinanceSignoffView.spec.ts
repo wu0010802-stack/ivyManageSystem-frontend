@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { onBeforeRouteUpdate } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 
 const replaceMock = vi.fn()
 let mockQuery: Record<string, string> = {}
@@ -7,6 +9,7 @@ let mockQuery: Record<string, string> = {}
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: mockQuery }),
   useRouter: () => ({ replace: replaceMock }),
+  onBeforeRouteUpdate: vi.fn(),
 }))
 vi.mock('@/utils/auth', () => ({
   hasPermission: vi.fn().mockReturnValue(true),
@@ -42,6 +45,7 @@ const PanelStub = {
 
 const globalStubs = {
   SignoffPanel: PanelStub,
+  MonthlyFixedCostPanel: { name: 'MonthlyFixedCostPanel', props: ['year', 'highlightMonth'], emits: ['update:dirty'], template: '<div data-test="fixed-cost-panel" :data-year="year" :data-month="highlightMonth" />' },
   'el-tabs': { template: '<div class="tabs-stub"><slot /></div>', props: ['modelValue'] },
   'el-tab-pane': { template: '<div class="tab-pane-stub" :data-label="label" />', props: ['label', 'name'] },
   'el-dropdown': {
@@ -69,7 +73,7 @@ describe('FinanceSignoffView', () => {
   it('雙權限：顯示兩個 tab，預設第一個（vendor），頁名為收付款管理', () => {
     const wrapper = mountView()
     expect(wrapper.find('.tabs-stub').exists()).toBe(true)
-    expect(wrapper.findAll('.tab-pane-stub')).toHaveLength(2)
+    expect(wrapper.findAll('.tab-pane-stub')).toHaveLength(3)
     expect(wrapper.find('.panel-stub').attributes('data-key')).toBe('vendor')
     expect(wrapper.text()).toContain('收付款管理')
     expect(wrapper.text()).not.toContain('收支簽收')
@@ -79,6 +83,48 @@ describe('FinanceSignoffView', () => {
     mockQuery = { tab: 'misc' }
     const wrapper = mountView()
     expect(wrapper.find('.panel-stub').attributes('data-key')).toBe('misc')
+  })
+
+  it('固定支出深連結帶入年度與月份，且不顯示廠商新增或簽收面板', () => {
+    mockQuery = { tab: 'fixed-cost', year: '2025', month: '8' }
+    const wrapper = mountView()
+    expect(wrapper.find('[data-test="fixed-cost-panel"]').attributes('data-year')).toBe('2025')
+    expect(wrapper.find('[data-test="fixed-cost-panel"]').attributes('data-month')).toBe('8')
+    expect(wrapper.find('.panel-stub').exists()).toBe(false)
+    expect(wrapper.find('[data-test="header-create"]').exists()).toBe(false)
+  })
+
+  it('只有雜項收款權限不能透過 query 開固定支出', () => {
+    vi.mocked(hasPermission).mockImplementation(p => p === 'MISC_RECEIPT_READ')
+    mockQuery = { tab: 'fixed-cost' }
+    const wrapper = mountView()
+    expect(wrapper.find('[data-test="fixed-cost-panel"]').exists()).toBe(false)
+    expect(wrapper.find('.panel-stub').attributes('data-key')).toBe('misc')
+  })
+
+  it('超出固定支出 API 年度範圍時退回今年，非法月份不標示', () => {
+    mockQuery = { tab: 'fixed-cost', year: '2101', month: '13' }
+    const wrapper = mountView()
+    expect(wrapper.find('[data-test="fixed-cost-panel"]').attributes('data-year')).toBe(String(new Date().getFullYear()))
+    expect(wrapper.find('[data-test="fixed-cost-panel"]').attributes('data-month')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('同頁返回換年度時，未儲存且取消不得離開', async () => {
+    mockQuery = { tab: 'fixed-cost', year: '2025' }
+    const wrapper = mountView()
+    wrapper.findComponent({ name: 'MonthlyFixedCostPanel' }).vm.$emit('update:dirty', true)
+    const confirm = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValueOnce('cancel')
+    const guard = vi.mocked(onBeforeRouteUpdate).mock.calls.at(-1)![0]
+    const result = await guard(
+      { query: { tab: 'fixed-cost', year: '2026' } } as never,
+      { query: mockQuery } as never,
+      vi.fn(),
+    )
+    expect(result).toBe(false)
+    expect(confirm).toHaveBeenCalled()
+    confirm.mockRestore()
+    wrapper.unmount()
   })
 
   it('?tab 無效值 fallback 到第一個可見模組', () => {

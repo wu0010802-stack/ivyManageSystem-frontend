@@ -3,6 +3,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { listAppraisalCycles, getAppraisalCurrentCycle } from '@/api/appraisal'
 import { CYCLE_STATUS_LABEL, cycleStatusLabel } from '@/constants/appraisalYearEnd'
+import { hasPermission } from '@/utils/auth'
+import CreateCycleDialog from './components/CreateCycleDialog.vue'
+import type { CreatedCycle } from './composables/useCreateCycle'
 import EmptyState from '@/components/common/EmptyState.vue'
 import CurrentSemesterOverview from './CurrentSemesterOverview.vue'
 import CycleDetailPanel from './CycleDetailPanel.vue'
@@ -19,6 +22,14 @@ const currentCycleId = ref<number | null>(null)
 const selectedCycleId = ref<number | null>(null)
 const loading = ref(true)
 const loadError = ref(false)
+const createDialogVisible = ref(false)
+const canCreateCycle = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+async function onCreated(created: CreatedCycle) {
+  createDialogVisible.value = false
+  await load()
+  selectedCycleId.value = created.id
+  await router.replace({ query: { ...route.query, cycle: String(created.id), stage: 'prepare' } })
+}
 
 const stage = computed<AppraisalStepKey>(() => normalizeAppraisalStep(route.query.stage))
 
@@ -79,13 +90,16 @@ defineExpose({ selectedCycleId, stage, cycles, currentCycleId, loadError, select
       載入失敗
       <el-button data-test="workspace-retry" size="small" text type="primary" @click="load">重試</el-button>
     </div>
-    <EmptyState v-else-if="!loading && cycles.length === 0" title="尚無考核週期" description="請先建立本學期考核週期。" />
+    <EmptyState v-else-if="!loading && cycles.length === 0" title="尚無考核週期" :description="canCreateCycle ? '建立本學期考核後，即可準備資料與簽核。' : '請由有建立權限的管理人員建立本學期考核。'">
+      <template #action><el-button v-if="canCreateCycle" type="primary" data-test="create-cycle" @click="createDialogVisible = true">建立本學期考核</el-button></template>
+    </EmptyState>
     <template v-else>
       <div class="ap-workspace__head">
+        <el-button v-if="!currentCycleId && canCreateCycle && !loading" data-test="create-cycle" type="primary" @click="createDialogVisible = true">建立本學期考核</el-button>
         <el-select
           v-if="selectedCycleId != null"
           :model-value="selectedCycleId"
-          class="ap-workspace__cycle-select"
+          class="ap-workspace__cycle-select" aria-label="選擇考核學期"
           @change="selectCycle"
         >
           <el-option v-for="opt in cycleOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
@@ -111,12 +125,15 @@ defineExpose({ selectedCycleId, stage, cycles, currentCycleId, loadError, select
       <div v-if="selectedCycleId != null" class="ap-workspace__body">
         <template v-if="stage === 'prepare'">
           <CurrentSemesterOverview v-if="isLiveCurrentCycle" />
-          <EmptyState v-else title="此週期無需準備資料" description="準備資料僅適用於目前進行中的學期；歷史週期請直接查看簽核完成頁。" />
+          <EmptyState v-else title="此週期無需準備資料" description="準備資料僅適用於目前進行中的學期；歷史週期可查看簽核結果。">
+            <template #action><el-button @click="selectStage('sign')">查看歷史簽核</el-button></template>
+          </EmptyState>
         </template>
         <AppraisalCycleExceptionsSummary v-else-if="stage === 'exceptions'" :key="selectedCycleId" :cycle-id="selectedCycleId" />
         <CycleDetailPanel v-else :key="selectedCycleId" :cycle-id="selectedCycleId" />
       </div>
     </template>
+    <CreateCycleDialog v-if="createDialogVisible" v-model:visible="createDialogVisible" :can-write="canCreateCycle" @created="onCreated" />
   </div>
 </template>
 
@@ -130,7 +147,7 @@ defineExpose({ selectedCycleId, stage, cycles, currentCycleId, loadError, select
   font-size: var(--text-sm);
   margin-bottom: var(--space-3);
 }
-.ap-workspace__head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.ap-workspace__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
 .ap-workspace__cycle-select { width: 220px; }
 .ap-workspace__readonly {
   background: var(--el-color-info-light-9);

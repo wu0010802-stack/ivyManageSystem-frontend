@@ -24,11 +24,6 @@ vi.mock('@/api/index', () => ({
   },
 }))
 
-// usePortalFromHub composable
-vi.mock('@/composables/usePortalFromHub', () => ({
-  usePortalFromHub: () => ({ fromHub: false, backToHub: vi.fn() }),
-}))
-
 import PortalIncidentView from '@/views/portal/PortalIncidentView.vue'
 
 const stubs = {

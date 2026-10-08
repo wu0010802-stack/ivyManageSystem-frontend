@@ -2,7 +2,7 @@
   <el-dialog
     :model-value="visible"
     title="設定園所中心點"
-    width="540px"
+    width="min(540px, 94vw)"
     @update:model-value="$emit('update:visible', $event)"
   >
     <el-form :model="form" label-width="100px" size="small">

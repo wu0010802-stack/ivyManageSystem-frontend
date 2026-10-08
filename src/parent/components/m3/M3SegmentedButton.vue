@@ -76,8 +76,17 @@ function onSegmentClick(value: string): void {
 </template>
 
 <style scoped>
+/*
+ * inline-grid + 1fr 欄：M3 規格各 segment 等寬。
+ * - 自然寬度（shrink-to-fit）時，1fr 以最寬 segment 的內容為準，全部拉齊；
+ * - 被父層撐滿（width:100% / flex stretch）時平均分配，選中底色填滿整格。
+ * 原本 inline-flex 下各 segment 依文字寬度各自長，撐滿時右側留白、選中底色填不滿。
+ */
 .m3-segmented-button {
-  display: inline-flex;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  box-sizing: border-box;
   height: 40px;
   border: 1px solid var(--m3-outline, #727970);
   border-radius: 9999px;
@@ -92,6 +101,7 @@ function onSegmentClick(value: string): void {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-width: 0;
   padding: 0 16px;
   height: 100%;
   border: none;

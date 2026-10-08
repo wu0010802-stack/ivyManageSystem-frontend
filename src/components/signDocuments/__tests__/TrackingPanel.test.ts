@@ -59,6 +59,12 @@ const sampleRequest = {
   signed_at: null,
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 describe('TrackingPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -179,6 +185,43 @@ describe('TrackingPanel', () => {
       student_ids: [10, 11],
       template_ids: [1],
     })
+  })
+
+  it('快速切班時應丟棄較晚回來的舊班名單，不得發送給舊班家長', async () => {
+    const classA = deferred<{ data: { items: Array<{ id: number; name: string }>; limit: number; skip: number; total: number } }>()
+    const classB = deferred<{ data: { items: Array<{ id: number; name: string }>; limit: number; skip: number; total: number } }>()
+    mockGetStudents
+      .mockReturnValueOnce(classA.promise)
+      .mockReturnValueOnce(classB.promise)
+    mockCreateBatch.mockResolvedValue({
+      data: { created: 1, batch_id: 'b2', skipped: [], unnotifiable_student_ids: [] },
+    })
+
+    const w = mountPanel(true)
+    await flushPromises()
+    await w.findAllComponents({ name: 'ElButton' }).find((b) => b.text() === '發送文件')!.trigger('click')
+
+    const classroomSelect = w.findComponent({ name: 'ElDialog' }).findComponent({ name: 'ElSelect' })
+    await classroomSelect.vm.$emit('update:modelValue', 5)
+    await classroomSelect.vm.$emit('change', 5)
+    await classroomSelect.vm.$emit('update:modelValue', 6)
+    await classroomSelect.vm.$emit('change', 6)
+
+    classB.resolve({ data: { items: [{ id: 20, name: '新班幼生' }], limit: 500, skip: 0, total: 1 } })
+    await flushPromises()
+    classA.resolve({ data: { items: [{ id: 10, name: '舊班幼生' }], limit: 500, skip: 0, total: 1 } })
+    await flushPromises()
+
+    let nextBtn = w.findAllComponents({ name: 'ElButton' }).find((b) => b.text() === '下一步')
+    await nextBtn!.trigger('click')
+    await w.findComponent({ name: 'ElCheckboxGroup' }).vm.$emit('update:modelValue', [1])
+    await flushPromises()
+    nextBtn = w.findAllComponents({ name: 'ElButton' }).find((b) => b.text() === '下一步')
+    await nextBtn!.trigger('click')
+    await w.findAllComponents({ name: 'ElButton' }).find((b) => b.text() === '確認送出')!.trigger('click')
+    await flushPromises()
+
+    expect(mockCreateBatch).toHaveBeenCalledWith({ student_ids: [20], template_ids: [1] })
   })
 
   it('filter 變更時帶對應參數重新載入', async () => {

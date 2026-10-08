@@ -22,6 +22,9 @@ vi.mock('../../api/childPhotos', () => ({
   fetchChildPhotos: vi.fn(() =>
     Promise.resolve({ data: { items: photos, total: photos.length } }),
   ),
+  // 回顧列與照片牆共用同一個 api module，factory mock 必須把 view 用到的
+  // export 都列出來，否則 vitest 的 mock proxy 會在存取時直接丟錯。
+  fetchChildRecaps: vi.fn(() => Promise.resolve({ data: { items: [] } })),
 }))
 
 // 模擬 vue-router（ChildPhotosView 用 useRoute 拿 params.studentId）

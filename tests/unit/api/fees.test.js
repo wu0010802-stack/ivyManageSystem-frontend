@@ -1,9 +1,9 @@
 /**
  * tests/unit/api/fees.test.js
  *
- * 薄殼測試：涵蓋 src/api/fees.ts 中「非 templates」端點。
- * templates 端點（getFeeTemplates / createFeeTemplate / updateFeeTemplate /
- * deleteFeeTemplate）已由 tests/api/fees-templates.spec.js 涵蓋，此處不重複。
+ * 薄殼測試：涵蓋 src/api/fees.ts 的端點。
+ * templates 端點已於 SPEC-019 移除（費用範本退場），原 tests/api/fees-templates.spec.js
+ * 一併刪除，此處不再有對應涵蓋。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

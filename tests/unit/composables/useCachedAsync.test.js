@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it, beforeEach, vi } from 'vitest'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 
 import {
@@ -106,6 +106,97 @@ describe('useCachedAsync', () => {
       expect(a.captured.data.value).toEqual({ value: 'shared' })
       expect(b.captured.data.value).toEqual({ value: 'shared' })
     })
+  })
+
+  it.each(['resolve', 'reject'])('載入中離頁後，同 key 重訪可恢復（%s）', async (outcome) => {
+    let finishOld
+    const old = makeHarness('cancelled', () => new Promise((resolve, reject) => {
+      finishOld = outcome === 'resolve' ? resolve : reject
+    }))
+    const completed = old.captured.refresh()
+    old.wrapper.unmount()
+    finishOld(outcome === 'resolve' ? { value: 'old' } : new Error('已取消'))
+    // 等待舊共用請求及其清理完成，再模擬下一次造訪。
+    await completed
+
+    const fetcher = vi.fn().mockResolvedValue({ value: 'recovered' })
+    const current = makeHarness('cancelled', fetcher)
+    await current.captured.refresh(true)
+
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(current.captured.data.value).toEqual({ value: 'recovered' })
+    expect(current.captured.pending.value).toBe(false)
+    expect(current.captured.error.value).toBeNull()
+    current.wrapper.unmount()
+  })
+
+  it('共用請求的發起元件離頁後，仍掛載的 consumer 可強制重抓', async () => {
+    let finishOld
+    const owner = makeHarness('shared-cancelled', () => new Promise((resolve) => { finishOld = resolve }))
+    const fetcher = vi.fn().mockResolvedValue({ value: 'current' })
+    const consumer = makeHarness('shared-cancelled', fetcher)
+    owner.wrapper.unmount()
+    finishOld({ value: 'old' })
+    await owner.captured.refresh()
+
+    await consumer.captured.refresh(true)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(consumer.captured.data.value).toEqual({ value: 'current' })
+    consumer.wrapper.unmount()
+  })
+
+  it('舊取消請求稍晚結束，不可清掉 invalidate 後的新共用請求', async () => {
+    let finishOld
+    const old = makeHarness('replacement', () => new Promise((resolve) => { finishOld = resolve }))
+    old.captured.invalidate()
+    let finishCurrent
+    const fetcher = vi.fn().mockImplementation(() => new Promise((resolve) => { finishCurrent = resolve }))
+    const current = makeHarness('replacement', fetcher)
+
+    finishOld({ value: 'old' })
+    await vi.waitFor(() => expect(old.captured.pending.value).toBe(false))
+    const unexpectedFetcher = vi.fn().mockResolvedValue({ value: 'unexpected' })
+    const consumer = makeHarness('replacement', unexpectedFetcher)
+    expect(unexpectedFetcher).not.toHaveBeenCalled()
+
+    finishCurrent({ value: 'current' })
+    await vi.waitFor(() => expect(consumer.captured.data.value).toEqual({ value: 'current' }))
+    expect(current.captured.data.value).toEqual({ value: 'current' })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    old.wrapper.unmount()
+    current.wrapper.unmount()
+    consumer.wrapper.unmount()
+  })
+
+  it('取消尚未結束就重訪，同 key 立即改用新請求', async () => {
+    let finishOld
+    const owner = makeHarness('early-remount', () => new Promise((resolve) => { finishOld = resolve }))
+    owner.wrapper.unmount()
+    const fetcher = vi.fn().mockResolvedValue({ value: 'new' })
+    const current = makeHarness('early-remount', fetcher)
+    await vi.waitFor(() => expect(current.captured.data.value).toEqual({ value: 'new' }))
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    finishOld({ value: 'old' })
+    await nextTick()
+    expect(current.captured.data.value).toEqual({ value: 'new' })
+    current.wrapper.unmount()
+  })
+
+  it('仍有 consumer 等待時，owner 離頁不取消共用請求', async () => {
+    let finishOld
+    let requestSignal
+    const owner = makeHarness('waiting-consumer', (signal) => {
+      requestSignal = signal
+      return new Promise((resolve) => { finishOld = resolve })
+    })
+    const fetcher = vi.fn().mockResolvedValue({ value: 'new' })
+    const current = makeHarness('waiting-consumer', fetcher)
+    owner.wrapper.unmount()
+    expect(requestSignal.aborted).toBe(false)
+    finishOld({ value: 'shared' })
+    await vi.waitFor(() => expect(current.captured.data.value).toEqual({ value: 'shared' }))
+    expect(fetcher).not.toHaveBeenCalled()
+    current.wrapper.unmount()
   })
 
   it('失敗時保留舊資料，error 物件被填入', async () => {
@@ -236,5 +327,55 @@ describe('useCachedAsync', () => {
     await nextTick()
     expect(reread.captured.data.value).toEqual({ owner: 'B' })
     expect(shouldNotRun).not.toHaveBeenCalled()
+  })
+
+  it('reactive key 切換後，較慢的舊請求不得覆寫目前 key 的資料或 pending', async () => {
+    const key = ref('tenant-a')
+    let resolveTenantA
+    let resolveTenantB
+    const fetcher = vi.fn().mockImplementation(() => {
+      const requestedKey = key.value
+      return new Promise((resolve) => {
+        if (requestedKey === 'tenant-a') resolveTenantA = resolve
+        else resolveTenantB = resolve
+      })
+    })
+    const current = makeHarness(key, fetcher, { ttl: 60_000 })
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+
+    key.value = 'tenant-b'
+    current.captured.data.value = null
+    const tenantBRequest = current.captured.refresh(false)
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+
+    resolveTenantB({ owner: 'B' })
+    await tenantBRequest
+    expect(current.captured.data.value).toEqual({ owner: 'B' })
+    expect(current.captured.pending.value).toBe(false)
+
+    resolveTenantA({ owner: 'A' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(current.captured.data.value).toEqual({ owner: 'B' })
+    expect(current.captured.pending.value).toBe(false)
+  })
+
+  it('reactive key 切換後離頁，會解除目前 key consumer 並中止其在途請求', async () => {
+    const key = ref('tenant-a')
+    const signals = new Map()
+    const fetcher = vi.fn().mockImplementation((signal) => {
+      signals.set(key.value, signal)
+      return new Promise(() => {})
+    })
+    const current = makeHarness(key, fetcher, { ttl: 60_000 })
+    await vi.waitFor(() => expect(signals.has('tenant-a')).toBe(true))
+
+    key.value = 'tenant-b'
+    void current.captured.refresh(false)
+    await vi.waitFor(() => expect(signals.has('tenant-b')).toBe(true))
+    expect(signals.get('tenant-a').aborted).toBe(true)
+
+    current.wrapper.unmount()
+    expect(signals.get('tenant-b').aborted).toBe(true)
   })
 })

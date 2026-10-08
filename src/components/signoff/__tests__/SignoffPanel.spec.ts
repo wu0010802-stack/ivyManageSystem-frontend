@@ -146,6 +146,14 @@ function makeSummary() {
   }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 function makeMockApi(cfg: SignoffModuleConfig): SignoffModuleApi {
   return {
     list: vi.fn().mockResolvedValue({ data: { items: makeItems(cfg), total: 2, page: 1, page_size: 20 } }),
@@ -415,6 +423,32 @@ describe.each(CASES)('SignoffPanel (%s)', (_name, baseCfg) => {
     const vm = wrapper.vm as unknown as PanelVm
     expect(vm.dialogVisible).toBe(true)
     expect(vm.editingId).toBe(1)
+  })
+
+  it('快速由 A 開啟 B 時，A 的晚到事件不得覆蓋 B 的流程紀錄', async () => {
+    const requestA = deferred<{ data: { items: Array<Record<string, unknown>> } }>()
+    const requestB = deferred<{ data: { items: Array<Record<string, unknown>> } }>()
+    vi.mocked(mockApi.events)
+      .mockImplementationOnce(() => requestA.promise)
+      .mockImplementationOnce(() => requestB.promise)
+    const wrapper = mountPanel()
+    await flushPromises()
+    const vm = wrapper.vm as unknown as PanelVm
+    const [rowA, rowB] = makeItems(cfg)
+
+    vm.openEdit(rowA)
+    vm.openEdit(rowB)
+    requestB.resolve({
+      data: { items: [{ id: 22, action: 'approve', actor_name: '最新 B', created_at: null }] },
+    })
+    await flushPromises()
+    requestA.resolve({
+      data: { items: [{ id: 11, action: 'submit', actor_name: '過期 A', created_at: null }] },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="signoff-timeline"]').text()).toContain('最新 B')
+    expect(wrapper.get('[data-test="signoff-timeline"]').text()).not.toContain('過期 A')
   })
 
   it('isMobile 時改用卡片列表，不渲染桌面表格', async () => {

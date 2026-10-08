@@ -95,7 +95,10 @@ watch(
       <el-table-column label="假別" prop="leave_type" width="70" align="center" />
       <el-table-column label="期間" min-width="170">
         <template #default="{ row }">
-          {{ formatDate(row.start_date) }} ~ {{ formatDate(row.end_date) }}
+          <span class="leave-period">
+            <span>{{ formatDate(row.start_date) }}</span>
+            <span>至 {{ formatDate(row.end_date) }}</span>
+          </span>
         </template>
       </el-table-column>
       <el-table-column label="原因" prop="reason" min-width="140" show-overflow-tooltip />
@@ -109,3 +112,15 @@ watch(
     </el-table>
   </SectionCard>
 </template>
+
+<style scoped>
+.leave-period {
+  display: inline-flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-1);
+}
+
+.leave-period > span {
+  white-space: nowrap;
+}
+</style>

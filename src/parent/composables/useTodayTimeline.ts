@@ -8,7 +8,7 @@ const BUCKET_LABEL = {
   morning: '早上',
   noon: '中午',
   afternoon: '下午',
-  later: '晚一些',
+  later: '傍晚',
 }
 const BUCKET_ORDER = ['morning', 'noon', 'afternoon', 'later']
 
@@ -32,7 +32,8 @@ function isBirthdayToday(birthday: string | null | undefined) {
 function dismissalLabel(status: string | null | undefined) {
   if (status === 'pending') return '老師處理中'
   if (status === 'acknowledged') return '老師已收到'
-  if (status === 'completed') return '已接送'
+  // 2026-09-02：與首頁狀態 pill 統一為「已離園」（原為「已接送」，同一狀態兩種用詞）
+  if (status === 'completed') return '已離園'
   return status || '處理中'
 }
 
@@ -51,7 +52,8 @@ export interface TimelineDismissal {
  * dismissal 事件的時間軸語意（pnotice01，純函式可測）：
  * - 家長預告未抵達：時間=預計抵達、secondary=「已預告 · 預計抵達 · 老師狀態」
  * - 已到門口未完成：時間=arrived_at、secondary=「已到門口 · 老師狀態」
- * - 完成/其他（含 staff 舊流程）：行為與改造前一致
+ * - 完成/其他（含 staff 舊流程）：行為與改造前一致；園方補登娃娃車接走
+ *   （request_source=bus，posbus01）改顯示「已搭娃娃車離園」
  * 家長預告的事件導向 /pickup-notice（追蹤卡同源，避免兩張矛盾接送卡）。
  */
 export function dismissalTimelineParts(d: TimelineDismissal): {
@@ -65,7 +67,7 @@ export function dismissalTimelineParts(d: TimelineDismissal): {
   if (completed) {
     return {
       sourceTs: d.completed_at || d.requested_at,
-      secondary: dismissalLabel(d.status),
+      secondary: d.request_source === 'bus' ? '已搭娃娃車離園' : dismissalLabel(d.status),
       path,
     }
   }
@@ -97,10 +99,9 @@ export function dismissalTimelineParts(d: TimelineDismissal): {
 // 桶子：morning (6-12) / noon (12-14) / afternoon (14-18) / later (其餘)
 // 每個 event：{ id, bucket, variant: 'past'|'pending'|'info', time, primary, secondary, tone, path, motif? }
 //
-// 2026-10-08 起只放「今天發生的事」（出席／請假／用藥／接送）。待繳費、待簽收、
-// 才藝候補、未讀公告、請假審核結果原本固定塞進「晚一些」桶，等於把待辦清單混進
-// 時間軸；它們已移到首頁「待你處理」（utils/pendingItems.ts），不再在這裡重複。
-export function useTodayTimeline({ todayChildren }: { todayChildren: { value: Record<string, unknown>[] | null | undefined } }) {
+// 2026-09-02 瘦身後 `summary` 已不再被讀取（五種 summary 衍生待辦事件移交
+// HomeTodoList），但呼叫端仍會傳入，簽章刻意保留以免擴大影響面。
+export function useTodayTimeline({ summary: _summary, todayChildren }: { summary: { value: Record<string, unknown> | null | undefined }; todayChildren: { value: Record<string, unknown>[] | null | undefined } }) {
   const events = computed(() => {
     const out = []
     const childrenStatus = todayChildren.value || []
@@ -138,19 +139,9 @@ export function useTodayTimeline({ todayChildren }: { todayChildren: { value: Re
           path: '/leaves',
           motif: crown,
         })
-      } else {
-        out.push({
-          id: `pending:${c.student_id}`,
-          bucket: 'morning',
-          variant: 'info',
-          time: null,
-          primary: `${c.name} 尚未到校`,
-          secondary: c.classroom_name || null,
-          tone: 'muted',
-          path: '/attendance',
-          motif: crown,
-        })
       }
+      // 2026-09-02：原本這裡有「尚未到校」占位事件。首頁頂部聯絡簿按鈕的
+      // 狀態 pill 已經寫著同一句，時間軸再推一列等於同屏重複。
 
       if (c.medication?.has_order) {
         out.push({
@@ -182,6 +173,12 @@ export function useTodayTimeline({ todayChildren }: { todayChildren: { value: Re
         })
       }
     }
+
+    // 2026-09-02：原本這裡有五種 summary 衍生事件（待繳費／待簽閱／才藝候補／
+    // 未讀公告／請假審核結果），全部硬編碼塞進 later 桶——它們沒有時間點，
+    // 塞進時間軸讓「今日動態」變成第二份待辦清單，且與首頁 bento、頂部橫幅
+    // 三處重複。改由 HomeTodoList（useParentTodos）單一承載。
+    // 本 composable 從此只處理「今天真的發生了什麼」。
 
     return out
   })

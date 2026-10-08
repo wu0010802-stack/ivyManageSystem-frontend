@@ -119,7 +119,7 @@ describe('QuickActionsBar — 非編輯態：點模組即導覽', () => {
     expect(pushMock).toHaveBeenCalledWith('/pickup-notice')
   })
 
-  it('點「代理接送」導向 /pickup', async () => {
+  it('點「臨時接送」導向 /pickup', async () => {
     const w = mountBar()
     await flushPromises()
     await w.findAll('.qa-mod')[1].trigger('click')

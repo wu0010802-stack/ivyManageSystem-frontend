@@ -595,7 +595,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, watch, defineAsyncComponent } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -833,6 +833,7 @@ const loadingDetail = ref(false)
 // Why: 防止使用者快速點兩列、或關閉 drawer 後 in-flight 請求覆蓋 detail/paymentInfo
 const drawerSeq = ref(0)
 watch(drawerVisible, (v) => { if (!v) drawerSeq.value++ })
+onBeforeUnmount(() => { drawerSeq.value++ })
 const remarkText = ref('')
 const savingPromote = ref(false)
 const savingRemark = ref(false)
@@ -878,6 +879,7 @@ async function openDetail(row: RegistrationRow) {
   const seq = ++drawerSeq.value
   drawerVisible.value = true
   detail.value = null
+  withdrawingCourseId.value = null
   remarkText.value = ''
   loadingDetail.value = true
   paymentLoadFailed.value = false
@@ -1025,6 +1027,9 @@ async function handlePromote(course: RegistrationCourse) {
 
 async function handleWithdrawCourse(course: RegistrationCourse) {
   if (!detail.value || !ensureMutableDetail()) return
+  const targetId = detail.value.id
+  const seq = drawerSeq.value
+  const targetCourse = { ...course }
   try {
     await ElMessageBox.confirm(
       `確定要退出課程「${course.name}」？退課後將無法復原，若為正式報名則自動升位候補。`,
@@ -1034,13 +1039,12 @@ async function handleWithdrawCourse(course: RegistrationCourse) {
   } catch {
     return
   }
-  await doWithdrawCourse(course, false)
+  if (seq !== drawerSeq.value || detail.value?.id !== targetId) return
+  await doWithdrawCourse(targetCourse, false, targetId, seq)
 }
 
-async function doWithdrawCourse(course: RegistrationCourse, forceRefund: boolean, refundReason?: string) {
-  if (!detail.value) return
-  const targetId = detail.value.id
-  const seq = drawerSeq.value
+async function doWithdrawCourse(course: RegistrationCourse, forceRefund: boolean, targetId: number, seq: number, refundReason?: string) {
+  if (seq !== drawerSeq.value || detail.value?.id !== targetId || !ensureMutableDetail()) return
   withdrawingCourseId.value = course.id
   try {
     await withdrawCourse(targetId, course.course_id, { forceRefund, refundReason })
@@ -1058,6 +1062,7 @@ async function doWithdrawCourse(course: RegistrationCourse, forceRefund: boolean
   } catch (e) {
     // 409：退課後將超繳，需二次確認以 force_refund=true 自動沖帳；
     // 後端要求自動沖帳必填 refund_reason（≥15 字），故此處用 prompt 收原因。
+    if (seq !== drawerSeq.value || detail.value?.id !== targetId) return
     const err = e as ApiErr
     if (err?.response?.status === 409 && !forceRefund) {
       const detailMsg = err?.response?.data?.detail || '退課將產生超繳'
@@ -1070,16 +1075,16 @@ async function doWithdrawCourse(course: RegistrationCourse, forceRefund: boolean
           forceRefundReasonPromptOptions('確認退課並沖帳')
         )) as { value: string }
       } catch {
-        withdrawingCourseId.value = null
+        if (seq === drawerSeq.value) withdrawingCourseId.value = null
         return
       }
       const reason = (reasonResult.value || '').trim()
-      await doWithdrawCourse(course, true, reason)
+      await doWithdrawCourse(course, true, targetId, seq, reason)
       return
     }
     ElMessage.error(err?.response?.data?.detail || '退課失敗')
   } finally {
-    withdrawingCourseId.value = null
+    if (seq === drawerSeq.value) withdrawingCourseId.value = null
   }
 }
 

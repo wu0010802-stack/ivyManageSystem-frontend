@@ -7,6 +7,9 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { loadBranding, replaceTokens, tokenMapFor } from './scripts/brand-tokens-lib.mjs'
+import { createPrecacheStaticDependencies } from './scripts/precache-static-dependencies.mjs'
+
+const precacheDependencies = createPrecacheStaticDependencies()
 
 /**
  * dev server 專用：把三個 HTML 的 `{{TB_*}}` 換成 default tenant 的值。
@@ -180,7 +183,15 @@ function manualChunks(id) {
         // （2026-08-10 whole-branch review Critical 修復：三端原本各自手抄字面值，
         // 家長端曾誤植不存在的 'single'/'multi'）。與 weekdaySchedule/publicCopy
         // 同型：跨端共用純函式檔未 pin 時會被吸進單端 chunk，讓另一端靜態橋接整包。
-        id.includes('/src/constants/surveyQuestionTypes.ts')
+        id.includes('/src/constants/surveyQuestionTypes.ts') ||
+        // reducedMotion：`prefers-reduced-motion` 偵測（零 import、EP-free），
+        // admin 的 DismissalPosCountdownBar（DismissalQueueView 靜態依賴鏈上）與
+        // 2026-09-16「家長端相簿回顧 UI」新增的 RecapViewer 兩端都用同一份。
+        // 未 pin 時被吸進 parent-app chunk → DismissalQueueView 靜態橋接
+        // parent-app 整包，check-entry-chunks 紅、staging 前端部署連兩筆失敗
+        // （2026-09-16 起）。「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」
+        // 第七次同型回歸。
+        id.includes('/src/utils/reducedMotion.ts')
     ) {
         return 'shared-common'
     }
@@ -320,6 +331,14 @@ function manualChunks(id) {
         return 'qrcode'
     }
 
+    // gsap：僅家長端聯絡簿「已讀蓋章」ReadStampButton.vue 用到，且該元件以
+    // `await import('gsap')` 懶載入（元件本身在 parent-app eager chunk，但 gsap
+    // 只在進到聯絡簿詳情頁才下載）。不 pin 會落進 vendor catch-all 被三端首屏
+    // eager 載入（~25KB gz 的無用死碼）。
+    if (id.includes('/node_modules/gsap/')) {
+        return 'gsap'
+    }
+
     // marked + dompurify：僅家長端 FAQ FaqAnswer.vue 渲染 + 消毒 markdown 用到。
     if (
         id.includes('/node_modules/marked/') ||
@@ -378,6 +397,7 @@ function manualChunks(id) {
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [
+        precacheDependencies.plugin,
         brandTokensDevPlugin(),
         vue(),
         AutoImport({
@@ -411,6 +431,7 @@ export default defineConfig({
             manifest: false,
 
             workbox: {
+                manifestTransforms: [precacheDependencies.manifestTransform],
                 // 新 SW 一就緒就接管，避免舊 SW 繼續攔截到已不存在的 chunk hash → 404 白屏。
                 // 與 boot-time chunk-fail 自救（main.js）合作：雙保險避免 PWA 升級卡住。
                 skipWaiting: true,

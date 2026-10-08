@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
@@ -50,6 +50,17 @@ const specialBonuses = ref<SpecialBonus[]>([])
 const classTargets = ref<ClassTarget[]>([])
 const loading = ref(false)
 const busy = ref(false)
+const signingId = ref<number | null>(null)
+const showFullDetails = ref(false)
+const compact = ref(false)
+let compactQuery: MediaQueryList | undefined
+function updateCompact() { compact.value = compactQuery?.matches ?? false }
+onMounted(() => {
+  compactQuery = window.matchMedia('(max-width: 600px)')
+  updateCompact()
+  compactQuery.addEventListener('change', updateCompact)
+})
+onUnmounted(() => compactQuery?.removeEventListener('change', updateCompact))
 const route = useRoute()
 const router = useRouter()
 
@@ -179,6 +190,8 @@ function canAccountingSign(row: { status: string }): boolean {
 }
 
 async function sign(s: Settlement, stage: string) {
+  if (busy.value || signingId.value != null) return
+  signingId.value = s.id
   busy.value = true
   try {
     if (stage === 'supervisor') await signSupervisorSettlement(s.id)
@@ -189,6 +202,7 @@ async function sign(s: Settlement, stage: string) {
   } catch (e) {
     ElMessage.error(apiError(e, '簽核失敗'))
   } finally {
+    signingId.value = null
     busy.value = false
   }
 }
@@ -227,12 +241,13 @@ async function submitReject() {
 // ── 批次簽核/核定 ────────────────────────────────────────────────
 const selectedSettlements = ref<Settlement[]>([])
 const batchFailures = ref<string[]>([])
+watch([compact, showFullDetails], () => { selectedSettlements.value = [] })
 function handleSelectionChange(rows: Settlement[]) {
   selectedSettlements.value = rows
 }
 
 async function signBatch(stage: 'supervisor' | 'accounting' | 'finalize') {
-  if (!selectedSettlements.value.length) return
+  if (busy.value || !selectedSettlements.value.length) return
   const ids = selectedSettlements.value.map((s) => s.id)
   busy.value = true
   try {
@@ -287,6 +302,7 @@ onMounted(() => {
 
     <el-tabs v-model="tab">
       <el-tab-pane label="員工結算單" name="settlements">
+        <el-switch v-model="showFullDetails" active-text="完整對帳" inactive-text="簽核摘要" aria-label="顯示完整對帳欄位" />
         <div v-if="selectedSettlements.length" class="batch-bar">
           <span>已選 {{ selectedSettlements.length }} 筆：</span>
           <el-button v-if="hasPermission('YEAR_END_REVIEW')" size="small" :loading="busy" @click="signBatch('supervisor')">批次主管簽核</el-button>
@@ -306,28 +322,42 @@ onMounted(() => {
             <li v-for="line in batchFailures" :key="line">{{ line }}</li>
           </ul>
         </el-alert>
-        <el-table :data="settlements" v-loading="loading" stripe size="small" @selection-change="handleSelectionChange">
+        <div v-if="compact && !showFullDetails" class="settlement-cards" :aria-busy="loading">
+          <p v-if="loading" role="status">正在載入結算單…</p>
+          <p v-if="!loading && !settlements.length">尚無結算單，請先完成試算。</p>
+          <article v-for="row in settlements" :key="row.id" class="settlement-card">
+            <div class="settlement-card__head"><strong>{{ row.employee_name }}</strong><el-tag :type="SIGN_STATUS_TAG[row.status]">{{ statusLabel(row.status) }}</el-tag></div>
+            <p>應領總額 <strong>{{ formatCurrency(row.total_amount) }}</strong></p>
+            <el-button link @click="openProvenanceDrawer(row.employee_id)">查看扣項來源</el-button>
+            <div class="settlement-card__actions">
+              <el-button v-if="canAccountingSign(row)" :loading="signingId === row.id" :disabled="busy" @click="sign(row, 'accounting')">會計簽核</el-button>
+              <el-button v-else-if="row.status === 'ACCOUNTING_SIGNED' && hasPermission('YEAR_END_FINALIZE')" type="primary" :loading="signingId === row.id" :disabled="busy" @click="sign(row, 'finalize')">老闆核定</el-button>
+              <el-button v-if="canReject(row)" :disabled="busy" @click="openReject(row)">退回</el-button>
+            </div>
+          </article>
+        </div>
+        <el-table v-else :key="`${compact}-${showFullDetails}`" :data="settlements" v-loading="loading" stripe size="small" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="44" />
-          <el-table-column label="員工" width="110">
+          <el-table-column label="員工" width="110" fixed="left">
             <template #default="{ row }">
               <span :title="`ID ${row.employee_id}`">{{ row.employee_name }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="平均績效%" prop="avg_performance_rate" width="100" sortable :sort-method="sortByField('avg_performance_rate')" />
-          <el-table-column label="基本薪俸" width="100" sortable :sort-method="sortByField('base_salary')">
+          <el-table-column v-if="showFullDetails" label="平均績效%" prop="avg_performance_rate" width="100" sortable :sort-method="sortByField('avg_performance_rate')" />
+          <el-table-column v-if="showFullDetails" label="基本薪俸" align="right" width="100" sortable :sort-method="sortByField('base_salary')">
             <template #default="{ row }">{{ formatCurrency(row.base_salary) }}</template>
           </el-table-column>
-          <el-table-column label="節慶獎金" width="100" sortable :sort-method="sortByField('festival_total')">
+          <el-table-column v-if="showFullDetails" label="節慶獎金" align="right" width="100" sortable :sort-method="sortByField('festival_total')">
             <template #default="{ row }">{{ formatCurrency(row.festival_total) }}</template>
           </el-table-column>
-          <el-table-column label="毛額" width="110" sortable :sort-method="sortByField('gross_amount')">
+          <el-table-column v-if="showFullDetails" label="毛額" align="right" width="110" sortable :sort-method="sortByField('gross_amount')">
             <template #default="{ row }">{{ formatCurrency(row.gross_amount) }}</template>
           </el-table-column>
-          <el-table-column label="達成%" prop="org_achievement_rate" width="80" sortable :sort-method="sortByField('org_achievement_rate')" />
-          <el-table-column label="小計" width="110" sortable :sort-method="sortByField('subtotal_amount')">
+          <el-table-column v-if="showFullDetails" label="達成%" prop="org_achievement_rate" width="80" sortable :sort-method="sortByField('org_achievement_rate')" />
+          <el-table-column v-if="showFullDetails" label="小計" align="right" width="110" sortable :sort-method="sortByField('subtotal_amount')">
             <template #default="{ row }">{{ formatCurrency(row.subtotal_amount) }}</template>
           </el-table-column>
-          <el-table-column label="扣項合計" width="120" sortable :sort-method="sortByField('deduction_total')">
+          <el-table-column label="扣項合計" align="right" width="120" sortable :sort-method="sortByField('deduction_total')">
             <template #default="{ row }">
               <el-button
                 type="primary"
@@ -339,14 +369,14 @@ onMounted(() => {
               </el-button>
             </template>
           </el-table-column>
-          <el-table-column label="到職月" prop="hire_months" width="80" sortable :sort-method="sortByField('hire_months')" />
-          <el-table-column label="應領小計" width="120" sortable :sort-method="sortByField('payable_amount')">
+          <el-table-column v-if="showFullDetails" label="到職月" prop="hire_months" width="80" sortable :sort-method="sortByField('hire_months')" />
+          <el-table-column v-if="showFullDetails" label="應領小計" align="right" width="120" sortable :sort-method="sortByField('payable_amount')">
             <template #default="{ row }">{{ formatCurrency(row.payable_amount) }}</template>
           </el-table-column>
-          <el-table-column label="特別獎金" width="110" sortable :sort-method="sortByField('special_bonus_total')">
+          <el-table-column v-if="showFullDetails" label="特別獎金" align="right" width="110" sortable :sort-method="sortByField('special_bonus_total')">
             <template #default="{ row }">{{ formatCurrency(row.special_bonus_total) }}</template>
           </el-table-column>
-          <el-table-column label="總額" width="120" sortable :sort-method="sortByField('total_amount')">
+          <el-table-column label="總額" align="right" width="120" sortable :sort-method="sortByField('total_amount')">
             <template #default="{ row }">
               <strong>{{ formatCurrency(row.total_amount) }}</strong>
             </template>
@@ -356,18 +386,20 @@ onMounted(() => {
               <el-tag size="small" :type="SIGN_STATUS_TAG[row.status]">{{ statusLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="簽核" width="220">
+          <el-table-column label="簽核" width="220" fixed="right">
             <template #default="{ row }">
               <!-- 簽核流程：DRAFT →（可選批次主管簽）→ 會計簽核 → 老闆核定 -->
               <el-button
                 v-if="canAccountingSign(row)"
                 size="small"
+                :loading="signingId === row.id" :disabled="busy"
                 @click="sign(row, 'accounting')"
               >會計簽核</el-button>
               <el-button
                 v-else-if="row.status === 'ACCOUNTING_SIGNED' && hasPermission('YEAR_END_FINALIZE')"
                 size="small"
                 type="primary"
+                :loading="signingId === row.id" :disabled="busy"
                 @click="sign(row, 'finalize')"
               >老闆核定</el-button>
               <el-tag
@@ -380,7 +412,7 @@ onMounted(() => {
                 size="small"
                 type="warning"
                 plain
-                @click="openReject(row)"
+                :disabled="busy" @click="openReject(row)"
               >退回</el-button>
             </template>
           </el-table-column>
@@ -396,7 +428,7 @@ onMounted(() => {
           </el-table-column>
           <el-table-column label="獎金類型" prop="bonus_type" width="220" />
           <el-table-column label="期間" prop="period_label" width="160" />
-          <el-table-column label="金額" width="120" sortable :sort-method="sortByField('amount')">
+          <el-table-column label="金額" align="right" width="120" sortable :sort-method="sortByField('amount')">
             <template #default="{ row }">{{ formatCurrency(row.amount) }}</template>
           </el-table-column>
           <el-table-column label="班級" width="100">
@@ -485,4 +517,7 @@ onMounted(() => {
 .sign-progress-wrap { margin: 0 0 var(--space-3); }
 .toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 .batch-bar { margin: 0 0 var(--space-2); display: flex; align-items: center; gap: var(--space-2); font-size: 13px; }
+.settlement-card { padding: var(--space-3); margin: var(--space-3) 0; border: 1px solid var(--el-border-color); border-radius: var(--radius-md); }
+.settlement-card__head, .settlement-card__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: space-between; }
+.settlement-card__actions { margin-top: var(--space-2); }
 </style>

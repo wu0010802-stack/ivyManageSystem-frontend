@@ -32,6 +32,19 @@ const props = withDefaults(
   },
 )
 
+/**
+ * `error-captured`（選填監聽，SPEC-023 批次 3 Task 3）：子樹錯誤被攔截時額外
+ * 觸發一次，只給**家長端** `src/parent/App.vue` 接上，送進「家長端監控」
+ * （`src/parent/utils/clientEvents.ts` 的 `error_boundary`）。本元件是
+ * admin／teacher／parent 共用的全域錯誤邊界，**不可**在這裡直接 import
+ * 家長端的 `clientEvents`——那會讓管理端的 render 錯誤也一起送進
+ * `/api/parent/client-events`，污染監控資料，且該端點的 Host／cookie 情境與
+ * 管理端完全不同。管理端不監聽此事件則完全無副作用。
+ */
+const emit = defineEmits<{
+  (e: 'error-captured', payload: { error: unknown; variant: 'admin' | 'parent' }): void
+}>()
+
 // 是否處於錯誤狀態（顯示 fallback）
 const hasError = ref(false)
 // render key：重試時 +1 強制重新掛載 slot 子樹，丟棄壞掉的元件實例
@@ -42,6 +55,11 @@ onErrorCaptured((err) => {
   // 上報：console + Sentry（DSN 缺時 captureException 為 no-op，回傳已 resolve 的 promise）
   console.error('[ErrorBoundary] 子元件錯誤已隔離', err)
   captureException(err, { source: 'ErrorBoundary', variant: props.variant }).catch(() => {})
+  try {
+    emit('error-captured', { error: err, variant: props.variant })
+  } catch {
+    // 監聽端（家長端上報 client event）出錯不應反過來讓 ErrorBoundary 失效。
+  }
   // return false 阻止錯誤繼續往上傳播，避免摧毀整個 app
   return false
 })

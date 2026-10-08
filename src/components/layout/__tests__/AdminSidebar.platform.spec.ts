@@ -49,6 +49,7 @@ const PLATFORM_ITEMS = [
   '/platform/reports',
   '/platform/roles-sync',
   '/platform/audit',
+  '/platform/observability',
 ]
 
 describe('AdminSidebar 總部選單 gate', () => {
@@ -66,7 +67,7 @@ describe('AdminSidebar 總部選單 gate', () => {
     expect(items(w)).not.toContain('/platform/tenants')
   })
 
-  it('platform admin 看得到總部五頁，且分校業務群組全部隱藏', () => {
+  it('platform admin 看得到總部頁面，且分校業務群組全部隱藏', () => {
     const w = mountWith(
       ['PLATFORM_TENANTS_MANAGE', 'PLATFORM_REPORTS_VIEW', 'PLATFORM_AUDIT_VIEW'],
       ['platform_admin'],
@@ -86,4 +87,12 @@ describe('AdminSidebar 總部選單 gate', () => {
     // 角色同步借道 PLATFORM_TENANTS_MANAGE，只有報表碼看不到
     expect(items(w)).not.toContain('/platform/roles-sync')
   })
+})
+
+
+it('只有平台維運權限也能看到排程監控入口，不需分校設定權限', () => {
+  const w = mountWith(['PLATFORM_TENANTS_MANAGE'], ['platform_admin'])
+  expect(items(w)).toContain('/platform/observability')
+  expect(items(w)).not.toContain('/settings')
+  w.unmount()
 })

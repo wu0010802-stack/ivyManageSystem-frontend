@@ -138,44 +138,22 @@ beforeEach(() => {
 })
 
 describe('家長端假線上 → 寫入必須 fallback 進離線佇列', () => {
-  it('聯絡簿標記已讀：ackContactBook 丟 ERR_NETWORK → enqueue CONTACT_BOOK_ACK', async () => {
+  it('聯絡簿標記已讀（點擊蓋章）：ackContactBook 丟 ERR_NETWORK → enqueue CONTACT_BOOK_ACK', async () => {
     h.getContactBookDetail.mockResolvedValue(cbEntry({ isRead: false }))
     h.ackContactBook.mockRejectedValue(networkError())
 
-    mount(ContactBookDetailView)
+    const w = mount(ContactBookDetailView)
     await flushPromises()
 
-    // 未讀 entry mount 後會自動 markAsRead
+    // 已讀改為主動點擊蓋章（2026-09-08 起不再進頁自動 markAsRead）
+    await w.find('.stamp-target').trigger('click')
+    await flushPromises()
+
     expect(h.ackContactBook).toHaveBeenCalled()
     expect(h.enqueueParent).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: OP_KINDS.CONTACT_BOOK_ACK,
         payload: expect.objectContaining({ entry_id: 1 }),
-      })
-    )
-  })
-
-  it('聯絡簿回覆：replyContactBook 丟 ERR_NETWORK → enqueue CONTACT_BOOK_REPLY，內容不遺失', async () => {
-    h.getContactBookDetail.mockResolvedValue(cbEntry({ isRead: true }))
-    h.replyContactBook.mockRejectedValue(networkError())
-
-    const w = mount(ContactBookDetailView)
-    await flushPromises()
-
-    const textarea = w.find('textarea')
-    expect(textarea.exists()).toBe(true)
-    await textarea.setValue('老師好，明天請假')
-
-    const sendBtn = w.findAll('button').find((b) => b.text().includes('送出'))
-    expect(sendBtn).toBeTruthy()
-    await sendBtn!.trigger('click')
-    await flushPromises()
-
-    expect(h.replyContactBook).toHaveBeenCalled()
-    expect(h.enqueueParent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: OP_KINDS.CONTACT_BOOK_REPLY,
-        payload: expect.objectContaining({ entry_id: 1, body: '老師好，明天請假' }),
       })
     )
   })
@@ -229,18 +207,17 @@ describe('家長端假線上 → 寫入必須 fallback 進離線佇列', () => {
   it('伺服器回 4xx（非網路層）→ 不入列，維持錯誤提示', async () => {
     // 守住 fallback 的邊界：只有網路層失敗才進佇列，業務錯誤照常報錯，
     // 否則會把「後端已明確拒絕」的操作反覆重送。
-    h.getContactBookDetail.mockResolvedValue(cbEntry({ isRead: true }))
-    h.replyContactBook.mockRejectedValue(
+    h.getContactBookDetail.mockResolvedValue(cbEntry({ isRead: false }))
+    h.ackContactBook.mockRejectedValue(
       Object.assign(new Error('Bad Request'), { response: { status: 400, data: { detail: '內容不合法' } } })
     )
 
     const w = mount(ContactBookDetailView)
     await flushPromises()
-    await w.find('textarea').setValue('測試回覆')
-    await w.findAll('button').find((b) => b.text().includes('送出'))!.trigger('click')
+    await w.find('.stamp-target').trigger('click')
     await flushPromises()
 
-    expect(h.replyContactBook).toHaveBeenCalled()
+    expect(h.ackContactBook).toHaveBeenCalled()
     expect(h.enqueueParent).not.toHaveBeenCalled()
     expect(h.toastError).toHaveBeenCalled()
   })
@@ -251,33 +228,17 @@ describe('家長端離線（navigator.onLine === false）→ 直接入列不打 
     setOnline(false)
   })
 
-  it('聯絡簿標記已讀 → enqueue CONTACT_BOOK_ACK，不呼叫 ackContactBook', async () => {
+  it('聯絡簿標記已讀（點擊蓋章）→ enqueue CONTACT_BOOK_ACK，不呼叫 ackContactBook', async () => {
     h.getContactBookDetail.mockResolvedValue(cbEntry({ isRead: false }))
 
-    mount(ContactBookDetailView)
+    const w = mount(ContactBookDetailView)
+    await flushPromises()
+    await w.find('.stamp-target').trigger('click')
     await flushPromises()
 
     expect(h.ackContactBook).not.toHaveBeenCalled()
     expect(h.enqueueParent).toHaveBeenCalledWith(
       expect.objectContaining({ kind: OP_KINDS.CONTACT_BOOK_ACK })
-    )
-  })
-
-  it('聯絡簿回覆 → enqueue CONTACT_BOOK_REPLY，不呼叫 replyContactBook', async () => {
-    h.getContactBookDetail.mockResolvedValue(cbEntry({ isRead: true }))
-
-    const w = mount(ContactBookDetailView)
-    await flushPromises()
-    await w.find('textarea').setValue('離線回覆')
-    await w.findAll('button').find((b) => b.text().includes('送出'))!.trigger('click')
-    await flushPromises()
-
-    expect(h.replyContactBook).not.toHaveBeenCalled()
-    expect(h.enqueueParent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: OP_KINDS.CONTACT_BOOK_REPLY,
-        payload: expect.objectContaining({ body: '離線回覆' }),
-      })
     )
   })
 

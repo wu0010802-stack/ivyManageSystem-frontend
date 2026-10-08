@@ -4,6 +4,7 @@ import { todayISO } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 import { createMeasurement } from '@/api/portalMeasurements'
 import { apiError } from '@/utils/error'
+import { CircleCheck, CaretRight, CaretBottom } from '@element-plus/icons-vue'
 
 interface Prefill {
   measured_on?: string
@@ -168,7 +169,8 @@ function close() {
         </div>
 
         <button class="advanced-toggle" @click="advancedOpen = !advancedOpen">
-          {{ advancedOpen ? '▼' : '▶' }} 進階（頭圍、視力）
+          <el-icon aria-hidden="true"><component :is="advancedOpen ? CaretBottom : CaretRight" /></el-icon>
+          進階（頭圍、視力）
         </button>
         <div v-if="advancedOpen" class="advanced">
           <div class="row">
@@ -205,7 +207,7 @@ function close() {
 
       <template v-else>
         <div class="recorded">
-          <div class="ok">✓ 已記錄</div>
+          <div class="ok"><el-icon aria-hidden="true"><CircleCheck /></el-icon> 已記錄</div>
           <div class="actions">
             <button data-test="record-another-btn" class="primary" @click="recordAnother">
               再記一個
@@ -244,6 +246,9 @@ function close() {
   color: var(--el-text-color-primary);
 }
 .advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   align-self: flex-start;
   background: transparent;
   border: none;
@@ -286,8 +291,15 @@ function close() {
   padding: 24px;
 }
 .recorded .ok {
-  font-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 20px;
   color: var(--el-color-success, #67c23a);
   margin-bottom: 16px;
+}
+.recorded .ok .el-icon {
+  font-size: 28px;
 }
 </style>

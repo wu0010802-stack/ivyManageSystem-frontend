@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { fetchChildPhotos } from '../api/childPhotos'
+import { fetchChildPhotos, fetchChildRecaps, type PhotoRecap } from '../api/childPhotos'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import M3SegmentedButton from '../components/m3/M3SegmentedButton.vue'
+import RecapRail from '../components/recap/RecapRail.vue'
+import RecapViewer from '../components/recap/RecapViewer.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
+import { useFocusTrap } from '../composables/useFocusTrap'
 
 interface PhotoItem {
   id: number | string
@@ -44,11 +47,24 @@ const { visible: visibleRaw, hasMore, sentinelRef } = useIncrementalRender(
 const visible = computed(() => visibleRaw.value as PhotoItem[])
 const previewIdx = ref<number | null>(null)
 const lightboxRef = ref<HTMLElement | null>(null)
+// Tab 鎖在 lightbox 內：底下的照片牆縮圖與回顧卡都還在 tab order 裡，
+// 不鎖的話焦點會跑到黑幕後面看不見的按鈕上（與 RecapViewer 共用同一份 trap）。
+const { trapTab } = useFocusTrap(lightboxRef)
+
+// 相簿回顧：空窗後端不回傳，拿到什麼就顯示什麼；不跟著 category 重取
+// （回顧的口徑是「那個時間窗的全部照片」，與照片牆的分類篩選無關）。
+const recaps = ref<PhotoRecap[]>([])
+const openRecap = ref<PhotoRecap | null>(null)
 // 開啟 lightbox 前的焦點元素，關閉時還原（focus trap a11y）。
 let previousActiveElement: Element | null = null
 
+// F12：切換生活照／作品會連發請求；以 request generation 讓較舊請求的回應
+// （成功或失敗）一律丟棄，不得覆蓋目前篩選的清單。
+let loadSeq = 0
+
 async function load() {
   if (!studentId.value) return
+  const seq = ++loadSeq
   loading.value = true
   loadError.value = false
   try {
@@ -56,14 +72,30 @@ async function load() {
       limit: 200,
       ...(category.value !== 'all' ? { category: category.value } : {}),
     })
+    if (seq !== loadSeq) return
     items.value = r.data.items || []
     total.value = r.data.total || 0
   } catch (e) {
+    if (seq !== loadSeq) return
     loadError.value = true
     const err = e as Record<string, unknown>
     toast.error(String(err?.displayMessage || '載入失敗'))
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
+  }
+}
+
+/**
+ * 回顧是照片牆的加值區塊，載入失敗一律靜默降級成「沒有回顧」：
+ * 照片本體還在，不該因為回顧掛掉就把整頁推進錯誤態，也不該再疊一次 toast。
+ */
+async function loadRecaps() {
+  if (!studentId.value) return
+  try {
+    const r = await fetchChildRecaps(studentId.value)
+    recaps.value = r.data?.items || []
+  } catch {
+    recaps.value = []
   }
 }
 
@@ -75,7 +107,18 @@ function onCategoryChange(v: string) {
   load()
 }
 
+/**
+ * 兩個全螢幕照片層互斥：兩層各自 trap 自己的 Tab，同時開著的話焦點會被關進
+ * 下面那一層，畫面上看得見的卻是上面那層，Enter 下去等於操作一個看不見的畫面。
+ * 各自的關閉焦點還原也會互相蓋掉。
+ */
+function openRecapViewer(recap: PhotoRecap) {
+  closePreview()
+  openRecap.value = recap
+}
+
 async function openPreview(idx: number) {
+  openRecap.value = null
   // 記住開啟前焦點所在的元素（通常就是被點擊的縮圖按鈕），關閉時還原。
   previousActiveElement = typeof document !== 'undefined' ? document.activeElement : null
   previewIdx.value = idx
@@ -107,10 +150,15 @@ function onLightboxKeydown(e: KeyboardEvent) {
   } else if (e.key === 'ArrowLeft') {
     e.preventDefault()
     prevImg()
+  } else if (e.key === 'Tab') {
+    trapTab(e)
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadRecaps()
+})
 </script>
 
 <template>
@@ -121,10 +169,12 @@ onMounted(load)
       <p class="pt-page-hero-note">老師為您拍下的學校點滴</p>
     </header>
 
+    <RecapRail :items="recaps" @select="openRecapViewer" />
+
     <M3SegmentedButton
       :model-value="category"
       :items="categoryItems"
-      class="category-segmented pt-section-pad-x"
+      class="category-segmented"
       @update:model-value="onCategoryChange($event as string)"
     />
 
@@ -185,6 +235,9 @@ onMounted(load)
       </button>
       <div class="counter">{{ previewIdx + 1 }} / {{ items.length }}</div>
     </div>
+
+    <!-- 回顧檢視器：mount 即開啟，焦點進出與自動播放生命週期都在元件內 -->
+    <RecapViewer v-if="openRecap" :recap="openRecap" @close="openRecap = null" />
   </div>
 </template>
 
@@ -197,7 +250,8 @@ onMounted(load)
 }
 .skeleton-wrap { padding: 0 16px; }
 
-.category-segmented { align-self: flex-start; }
+/* 左右留白用 margin：padding 會落在元件外框內，選中底色被擠開、填不滿（2026-09-29） */
+.category-segmented { margin-inline: 16px; }
 
 .grid {
   display: grid;
@@ -247,7 +301,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: var(--z-modal);
 }
 .lightbox:focus { outline: none; }
 
@@ -272,7 +326,7 @@ onMounted(load)
   top: 50%;
   transform: translateY(-50%);
   background: rgba(255, 255, 255, 0.16);
-  color: var(--pt-on-accent, #fff);
+  color: var(--color-primary-contrast, #fff);
   border: none;
   width: 48px;
   height: 48px;
@@ -294,7 +348,7 @@ onMounted(load)
   top: max(16px, env(safe-area-inset-top));
   right: 16px;
   background: rgba(255, 255, 255, 0.16);
-  color: var(--pt-on-accent, #fff);
+  color: var(--color-primary-contrast, #fff);
   border: none;
   width: 40px;
   height: 40px;
@@ -313,7 +367,7 @@ onMounted(load)
   bottom: max(24px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  color: var(--pt-on-accent, #fff);
+  color: var(--color-primary-contrast, #fff);
   background: rgba(0, 0, 0, 0.4);
   border-radius: 999px;
   font-size: 13px;

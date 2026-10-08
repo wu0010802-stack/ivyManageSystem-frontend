@@ -326,7 +326,7 @@ function dayHeaderClass(day: DayEntry) {
   padding: 8px 4px;
   text-align: center;
   min-width: 48px;
-  color: var(--pt-text-body, var(--text-primary));
+  color: var(--color-portal-text-body, var(--text-primary));
 }
 
 .att-table tbody tr:hover td:not(.label-col):not(.is-weekend):not(.is-holiday) {
@@ -346,7 +346,7 @@ function dayHeaderClass(day: DayEntry) {
   display: block;
   font-size: var(--text-base);
   font-weight: 700;
-  color: var(--pt-text-strong, var(--text-primary));
+  color: var(--color-portal-text-strong, var(--text-primary));
   font-variant-numeric: tabular-nums;
 }
 
@@ -354,7 +354,7 @@ function dayHeaderClass(day: DayEntry) {
   display: block;
   font-size: 11px;
   font-weight: 500;
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   margin-top: 1px;
 }
 
@@ -365,7 +365,7 @@ function dayHeaderClass(day: DayEntry) {
   font-weight: 600;
   font-size: var(--text-xs);
   background: var(--neutral-50);
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   text-align: left;
   padding-left: var(--space-3);
   letter-spacing: 0.02em;
@@ -376,12 +376,12 @@ function dayHeaderClass(day: DayEntry) {
 /* ===== Weekend / Holiday：去 danger-soft，改用中性靜默 ===== */
 .is-weekend {
   background: var(--neutral-50);
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
 }
 
 .day-head.is-weekend .day-head__num,
 .day-head.is-weekend .day-head__week {
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
 }
 
 .is-holiday {
@@ -398,7 +398,7 @@ function dayHeaderClass(day: DayEntry) {
 
 /* ===== 時間 / 工時：突出 tabular nums，異常用文字色 ===== */
 .time-col {
-  color: var(--pt-text-body, var(--text-primary));
+  color: var(--color-portal-text-body, var(--text-primary));
 }
 
 .time-col.late {
@@ -408,7 +408,7 @@ function dayHeaderClass(day: DayEntry) {
 
 .hours-col {
   font-weight: 600;
-  color: var(--pt-text-strong, var(--text-primary));
+  color: var(--color-portal-text-strong, var(--text-primary));
 }
 
 .hours-col.hours-short {
@@ -417,7 +417,7 @@ function dayHeaderClass(day: DayEntry) {
 
 .shift-col {
   font-size: 11px;
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   letter-spacing: -0.02em;
 }
 
@@ -436,7 +436,7 @@ function dayHeaderClass(day: DayEntry) {
   border-radius: var(--radius-full);
   white-space: nowrap;
   background: transparent;
-  color: var(--pt-text-body, var(--text-primary));
+  color: var(--color-portal-text-body, var(--text-primary));
 }
 
 .status-pill__dot {
@@ -473,7 +473,7 @@ function dayHeaderClass(day: DayEntry) {
 }
 
 .status-pill--weekend {
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   font-weight: 400;
 }
 
@@ -490,7 +490,7 @@ function dayHeaderClass(day: DayEntry) {
 
 .badge--approved {
   background: var(--neutral-100);
-  color: var(--pt-text-muted, var(--text-secondary));
+  color: var(--color-portal-text-muted, var(--text-secondary));
   border: 1px solid var(--neutral-200);
 }
 

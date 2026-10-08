@@ -19,6 +19,7 @@ import {
 import { apiError } from '@/utils/error'
 import { useLeaveHoursCalculator } from '@/composables/useLeaveHoursCalculator'
 import FormSection from '@/components/common/FormSection.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 withDefaults(defineProps<{
   allEmployees?: Record<string, unknown>[]
@@ -47,6 +48,8 @@ const submitLoading = ref(false)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fileList = ref<any[]>([])
 const uploadRef = ref(null)
+// F4（教師端深度掃描）：假單建立成功但附件上傳失敗時記住 ID，重送只補傳附件，不再建立第二張
+const createdLeaveId = ref<number | null>(null)
 
 const _QUOTA_TYPES_LOCAL = new Set(['annual', 'sick', 'menstrual', 'personal', 'family_care'])
 
@@ -152,6 +155,7 @@ const resetForm = () => {
   form.substitute_employee_id = null
   form.is_hospitalized = false
   fileList.value = []
+  createdLeaveId.value = null
   resetCalculatorState()
 }
 
@@ -212,28 +216,36 @@ const submitLeave = async () => {
     const ed = form.end_date ? form.end_date.substring(0, 10) : ''
     const et = form.end_date && form.end_date.length > 10 ? form.end_date.substring(11, 16) : ''
 
-    const res = await createMyLeave({
-      leave_type: form.leave_type,
-      start_date: sd,
-      // 「整天」模式的 picker 是 YYYY-MM-DD（長度 10），上面的 length > 10 判斷因此
-      // 恆為 false、st/et 為空字串。後端 validate_hhmm_format 只放行 null，空字串會
-      // raise ValueError → 422，整天請假永遠送不出去。與管理端 LeaveView.vue 一致補 || null。
-      start_time: st || null,
-      end_date: ed,
-      end_time: et || null,
-      leave_hours: form.leave_hours,
-      reason: form.reason,
-      substitute_employee_id: form.substitute_employee_id || null,
-      is_hospitalized: form.leave_type === 'sick' ? form.is_hospitalized : false,
-    })
-    const leaveId = res.data.id
+    if (createdLeaveId.value === null) {
+      const res = await createMyLeave({
+        leave_type: form.leave_type,
+        start_date: sd,
+        // 「整天」模式的 picker 是 YYYY-MM-DD（長度 10），上面的 length > 10 判斷因此
+        // 恆為 false、st/et 為空字串。後端 validate_hhmm_format 只放行 null，空字串會
+        // raise ValueError → 422，整天請假永遠送不出去。與管理端 LeaveView.vue 一致補 || null。
+        start_time: st || null,
+        end_date: ed,
+        end_time: et || null,
+        leave_hours: form.leave_hours,
+        reason: form.reason,
+        substitute_employee_id: form.substitute_employee_id || null,
+        is_hospitalized: form.leave_type === 'sick' ? form.is_hospitalized : false,
+      })
+      createdLeaveId.value = res.data.id
+    }
+    const leaveId = createdLeaveId.value as number
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawFiles: File[] = fileList.value.map((f: any) => f.raw).filter((f: any): f is File => !!f)
     if (rawFiles.length > 0) {
       const formData = new FormData()
       rawFiles.forEach(f => formData.append('files', f))
-      await uploadMyLeaveAttachments(leaveId, formData)
+      try {
+        await uploadMyLeaveAttachments(leaveId, formData)
+      } catch (error) {
+        ElMessage.error(`假單已建立，但附件上傳失敗，請重新按「送出申請」補傳附件（不會重複建立假單）：${apiError(error, '附件上傳失敗')}`)
+        return
+      }
     }
 
     ElMessage.success('請假申請已送出，待主管核准')
@@ -244,11 +256,21 @@ const submitLeave = async () => {
     submitLoading.value = false
   }
 }
+
+// 假單已建立（僅附件待補）時關閉表單也要通知上層刷新列表，否則使用者看不到那張已存在的假單
+const handleCancel = () => {
+  if (createdLeaveId.value !== null) emit('submitted')
+  else emit('cancel')
+}
+
+// 手機改用頂端標籤，避免固定 label-width 把「開始時間」等標籤折行（P1-02）
+const { isMobile } = useIsMobile()
 </script>
 
 <template>
   <div class="portal-leave-form">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
+    <el-form ref="formRef" :model="form" :rules="rules" :label-position="isMobile ? 'top' : 'right'"
+            :label-width="isMobile ? undefined : '90px'">
       <el-form-item label="假別" prop="leave_type">
         <el-select v-model="form.leave_type" placeholder="請選擇" style="width: 100%;">
           <el-option v-for="lt in leaveTypes" :key="lt.value" :label="lt.label" :value="lt.value">
@@ -329,16 +351,16 @@ const submitLeave = async () => {
 
       <template v-if="leaveMode === 'full'">
         <el-form-item label="開始日期" prop="start_date">
-          <el-date-picker v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇開始日期" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇開始日期" />
         </el-form-item>
         <el-form-item label="結束日期" prop="end_date">
-          <el-date-picker v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇結束日期" :disabled-date="disabledEndDate" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇結束日期" :disabled-date="disabledEndDate" />
         </el-form-item>
       </template>
 
       <template v-else-if="leaveMode === 'morning' || leaveMode === 'afternoon'">
         <el-form-item label="請假日期" prop="start_date">
-          <el-date-picker v-model="leaveSingleDate" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇請假日期" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="leaveSingleDate" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇請假日期" />
           <div v-if="form.start_date && form.end_date" style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
             時段：{{ form.start_date.substring(11, 16) }} – {{ form.end_date.substring(11, 16) }}
             <el-icon v-if="calcLoading" class="is-loading" style="vertical-align: middle; margin-left: 6px;"><Loading /></el-icon>
@@ -348,10 +370,10 @@ const submitLeave = async () => {
 
       <template v-else>
         <el-form-item label="開始時間" prop="start_date">
-          <el-date-picker v-model="form.start_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" placeholder="例如: 2026-02-23 08:30" style="width: 100%;" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="form.start_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" placeholder="例如: 2026-02-23 08:30" style="width: 100%;" />
         </el-form-item>
         <el-form-item label="結束時間" prop="end_date">
-          <el-date-picker v-model="form.end_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" placeholder="例如: 2026-02-23 17:30" style="width: 100%;" :disabled-date="disabledEndDate" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="form.end_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" placeholder="例如: 2026-02-23 17:30" style="width: 100%;" :disabled-date="disabledEndDate" />
         </el-form-item>
       </template>
 
@@ -440,7 +462,7 @@ const submitLeave = async () => {
     </el-form>
 
     <div class="form-footer">
-      <el-button @click="emit('cancel')">取消</el-button>
+      <el-button @click="handleCancel">取消</el-button>
       <el-button type="primary" :loading="submitLoading" :disabled="!canSubmit" @click="submitLeave">送出申請</el-button>
     </div>
   </div>

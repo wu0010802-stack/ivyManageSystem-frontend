@@ -463,7 +463,10 @@ describe('YearEndDetailView — Task 11 明細頁重整', () => {
     expect(wrapper.text()).toContain('王小明')
     expect(wrapper.text()).not.toContain('員工 ID')
     // 金額欄改用 formatCurrency（NT$ 千分位前綴），非裸數字/toLocaleString
-    expect(wrapper.text()).toContain('NT$40,000') // base_salary
+    expect(wrapper.text()).not.toContain('NT$40,000')
+    ;(wrapper.vm as unknown as { showFullDetails: boolean }).showFullDetails = true
+    await nextTick()
+    expect(wrapper.text()).toContain('NT$40,000') // 完整對帳仍顯示基本薪俸
     expect(wrapper.text()).toContain('NT$50,000') // total_amount
     // 簽核狀態 tag 依 SIGN_STATUS_TAG 上色（DRAFT → info），非全預設灰(undefined)
     const statusTag = wrapper.findAll('.el-tag-stub').find((t) => t.text() === '草稿')
@@ -671,4 +674,37 @@ describe('YearEndDetailView — tab／employee query 同步', () => {
     expect(vm.provenanceDrawerVisible).toBe(true)
     expect(vm.provenanceEmployeeId).toBe(10)
   })
+})
+
+
+describe('年終逐筆簽核防重送', () => {
+  it('同一筆尚未完成時再次點擊只送一次，完成後解除忙碌狀態', async () => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+    setupApiMocks([makeSettlement()])
+    let finish!: () => void
+    vi.mocked(api.signAccountingSettlement).mockImplementation(() => new Promise(resolve => { finish = () => resolve({ data: {} } as never) }))
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { sign: (row: Settlement, stage: string) => Promise<void> }
+    const first = vm.sign(makeSettlement(), 'accounting')
+    const second = vm.sign(makeSettlement(), 'accounting')
+    expect(api.signAccountingSettlement).toHaveBeenCalledTimes(1)
+    finish()
+    await Promise.all([first, second])
+  })
+})
+
+
+it('切換手機摘要清除桌機選取，並在載入中提供回饋', async () => {
+  setupApiMocks([makeSettlement()])
+  const wrapper = await mountView()
+  const vm = wrapper.vm as unknown as { compact: boolean; loading: boolean; selectedSettlements: Settlement[] }
+  vm.selectedSettlements = [makeSettlement()]
+  vm.compact = true
+  vm.loading = true
+  await nextTick()
+  expect(vm.selectedSettlements).toEqual([])
+  expect(wrapper.text()).toContain('正在載入結算單')
+  expect(wrapper.find('.batch-bar').exists()).toBe(false)
+  expect(wrapper.find('.settlement-card').exists()).toBe(true)
 })

@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import {
   getMyColleagues,
   getMyLeaveStats,
@@ -13,6 +14,8 @@ import PortalLeaveList from '@/components/portal/PortalLeaveList.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import PortalSubstituteCardList from '@/components/portal/PortalSubstituteCardList.vue'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { isMobile } = useIsMobile()
 
@@ -153,10 +156,11 @@ onMounted(() => {
 
 <template>
   <div class="portal-leave">
-    <div class="page-header">
-      <h2>請假申請</h2>
-      <el-button type="primary" @click="showForm = true">新增請假</el-button>
-    </div>
+    <PortalPageHeader title="請假申請">
+      <template #actions>
+        <el-button type="primary" :icon="Plus" @click="showForm = true">新增請假</el-button>
+      </template>
+    </PortalPageHeader>
 
     <el-alert
       v-if="pendingSubstituteCount > 0"
@@ -172,29 +176,22 @@ onMounted(() => {
       </template>
     </el-alert>
 
-    <!-- Stats Card -->
+    <!-- 特休摘要（P2-07）：原本是 5 個大數字方塊，第 5 格還孤立成一行。
+         老師要的是「還剩幾天」一句話，到職日與年資屬個人資料層級的背景資訊。 -->
     <el-card class="rules-card" v-if="leaveStats">
-      <div class="stats-container">
-        <div class="stat-item">
-          <div class="stat-label">到職日期</div>
-          <div class="stat-value">{{ leaveStats.hire_date || '未設定' }}</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">目前年資</div>
-          <div class="stat-value">{{ leaveStats.seniority_years }} 年 {{ leaveStats.seniority_months }} 個月</div>
-        </div>
-        <div class="stat-item highlight">
-          <div class="stat-label">法定特休 (週年制)</div>
-          <div class="stat-value">{{ leaveStats.annual_leave_quota }} 天</div>
-        </div>
-        <div class="stat-item highlight">
-          <div class="stat-label">今年已休 ({{ new Date().getFullYear() }})</div>
-          <div class="stat-value">{{ leaveStats.annual_leave_used_days }} 天</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">剩餘可用 (概算)</div>
-          <div class="stat-value">{{ Math.max(0, (leaveStats.annual_leave_quota ?? 0) - (leaveStats.annual_leave_used_days ?? 0)) }} 天</div>
-        </div>
+      <div class="quota-summary">
+        <p class="quota-summary__line">
+          特休還剩
+          <strong class="quota-summary__remain">
+            {{ Math.max(0, (leaveStats.annual_leave_quota ?? 0) - (leaveStats.annual_leave_used_days ?? 0)) }}
+          </strong>
+          天，今年已休 {{ leaveStats.annual_leave_used_days }} 天
+          <span class="quota-summary__total">（全年 {{ leaveStats.annual_leave_quota }} 天・週年制）</span>
+        </p>
+        <p class="quota-summary__meta">
+          <span v-if="leaveStats.hire_date">到職 {{ leaveStats.hire_date }}</span>
+          <span>年資 {{ leaveStats.seniority_years }} 年 {{ leaveStats.seniority_months }} 個月</span>
+        </p>
       </div>
     </el-card>
 
@@ -281,20 +278,13 @@ onMounted(() => {
         </el-table>
       </div>
 
-      <el-empty v-if="!substituteLoading && mySubstituteRequests.length === 0" description="目前無待代理的假單" />
+      <EmptyState v-if="!substituteLoading && mySubstituteRequests.length === 0" variant="inline" title="目前無待代理的假單" />
     </el-card>
   </div>
 </template>
 
 <style scoped>
 .substitute-alert {
-  margin-bottom: var(--space-4);
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: var(--space-4);
 }
 
@@ -356,5 +346,30 @@ onMounted(() => {
   .stat-value {
     font-size: var(--text-base);
   }
+}
+
+.quota-summary__line {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--el-text-color-primary);
+}
+.quota-summary__remain {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--el-color-primary);
+  margin: 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.quota-summary__total {
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
+}
+.quota-summary__meta {
+  margin: 6px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
 }
 </style>

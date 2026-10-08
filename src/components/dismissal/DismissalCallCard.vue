@@ -56,8 +56,13 @@ const etaText = computed(() => {
   const rel = etaRelativeText(props.call.expected_arrival_at, props.now)
   return [expected, rel].filter(Boolean).join(' · ')
 })
-/** 來源/抵達標記：家長預告（未抵達）→「家長預告」；家長已到門口 →「已到門口」。 */
-const sourceFlag = computed<{ text: string; kind: 'notice' | 'arrived' } | null>(() => {
+/**
+ * 來源/抵達標記：家長預告（未抵達）→「家長預告」；家長已到門口 →「已到門口」；
+ * 臨時接送授權連動建立（proxy）→「委託接送」——代接人不是常見監護人，老師需核對證件／取件碼，
+ * 2026-09-02 對齊稽核前只能靠備註文字間接得知。
+ */
+const sourceFlag = computed<{ text: string; kind: 'notice' | 'arrived' | 'proxy' } | null>(() => {
+  if (props.call.request_source === 'proxy') return { text: '委託接送', kind: 'proxy' }
   if (props.call.request_source !== 'parent') return null
   if (!props.call.arrived_at) return { text: '家長預告', kind: 'notice' }
   return { text: '已到門口', kind: 'arrived' }
@@ -293,6 +298,10 @@ html.dark .dcall--ack .dcall__mono {
 .dcall__flag--arrived {
   background: var(--color-success-soft);
   color: var(--color-success-darker);
+}
+.dcall__flag--proxy {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-darker);
 }
 
 .dcall__note {

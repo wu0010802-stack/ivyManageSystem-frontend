@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { getSignStatusSummary } from '@/api/appraisal'
@@ -30,10 +30,13 @@ const props = withDefaults(
 const emit = defineEmits<{
   'action': [payload: unknown]
   'selected-changed': [ids: number[]]
+  'loaded': [summaries: Summary[]]
 }>()
 
 const data = ref<{ counts: Record<string, number>; buckets: Bucket[] }>({ counts: {}, buckets: [] })
 const loading = ref(false)
+let loadSequence = 0
+onUnmounted(() => { loadSequence += 1 })
 const selectedIds = ref<number[]>([])
 
 const COLUMN_DEFS = [
@@ -44,9 +47,13 @@ const COLUMN_DEFS = [
 ]
 
 async function load() {
+  const sequence = ++loadSequence
+  const requestedCycleId = props.cycleId
+  const isCurrent = () => sequence === loadSequence && requestedCycleId === props.cycleId
   loading.value = true
   try {
-    const r = await getSignStatusSummary(props.cycleId)
+    const r = await getSignStatusSummary(requestedCycleId)
+    if (!isCurrent()) return
     // 注入 status（見上方型別註解）：schema item 無此欄，SummaryCard 主按鈕與
     // 簽核 stage 推導都吃 summary.status，漏注入 = 主按鈕永不顯示 + 簽核靜默 no-op。
     data.value = {
@@ -56,10 +63,12 @@ async function load() {
         summaries: b.summaries.map((s) => ({ ...s, status: b.status })),
       })),
     }
+    emit('loaded', data.value.buckets.flatMap(bucket => bucket.summaries))
   } catch (e) {
+    if (!isCurrent()) return
     ElMessage.error(apiError(e, '載入看板失敗'))
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 

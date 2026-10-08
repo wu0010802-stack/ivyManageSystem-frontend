@@ -22,10 +22,18 @@ import router from '@/parent/router'
 
 /** 觸發 useTodayTimeline 內每一條會產生 event 的分支，讓每一種 path 都被涵蓋到。 */
 function buildAllBranchesFixture() {
+  const summary = ref({
+    fees: { outstanding: 5200, overdue: 3000, outstanding_count: 1 },
+    pending_event_acks: 1,
+    unread_messages: 1,
+    pending_activity_promotions: 1,
+    unread_announcements: 1,
+    recent_leave_reviews: 1,
+  })
   const todayChildren = ref([
     { student_id: 1, name: '小明', attendance: { status: '出席' } },
     { student_id: 2, name: '小華', leave: { type: '病假' } },
-    { student_id: 3, name: '小芬' }, // 無 attendance/leave → 尚未到校（pending）
+    { student_id: 3, name: '小芬' }, // 無 attendance/leave → 瘦身後不再產生事件
     { student_id: 4, name: '小美', medication: { has_order: true, order_count: 1 } },
     {
       student_id: 5,
@@ -37,19 +45,18 @@ function buildAllBranchesFixture() {
       },
     },
   ])
-  return { todayChildren }
+  return { summary, todayChildren }
 }
 
 describe('useTodayTimeline — path × router parity', () => {
   it('每一個 event.path 都能被家長端 router 解析到真實具名路由（不落進 catch-all）', () => {
-    const { todayChildren } = buildAllBranchesFixture()
-    const { events } = useTodayTimeline({ todayChildren })
+    const { summary, todayChildren } = buildAllBranchesFixture()
+    const { events } = useTodayTimeline({ summary, todayChildren })
 
     // 防 fixture 本身失效（例如改壞了 buildAllBranchesFixture）造成假綠：
-    // 目前分支數應涵蓋 attendance/leave/pending/medication/dismissal 5 種子女事件
-    // （summary 待辦已於 2026-10-08 移到 utils/pendingItems.ts，其路由 parity 見
-    // tests/unit/parent/utils/pendingItems.test.ts）。
-    expect(events.value.length).toBeGreaterThanOrEqual(5)
+    // 瘦身後（2026-09-02）只剩 attendance/leave/medication/dismissal 四種子女
+    // 事件；summary 衍生待辦已移交 HomeTodoList，不再進時間軸。
+    expect(events.value.length).toBeGreaterThanOrEqual(4)
 
     const offenders = events.value
       .map((event) => ({ id: event.id, path: event.path, resolved: router.resolve(event.path) }))

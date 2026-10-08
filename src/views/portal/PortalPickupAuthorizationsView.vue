@@ -14,6 +14,8 @@ import {
   overridePickupAuthorization,
   verifyPickupAuthorization,
 } from '@/api/portal'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface PortalPickupAuth {
   id: number
@@ -131,9 +133,9 @@ defineExpose({ items, pendingCount, fetchData })
 
 <template>
   <div class="portal-pickup-view" v-loading="loading">
-    <h1 class="page-title">今日接送授權（{{ pendingCount }} 筆進行中）</h1>
+    <PortalPageHeader title="今日接送授權" :subtitle="`${pendingCount} 筆進行中`" />
 
-    <div v-if="!loading && items.length === 0" class="empty-state">今日無接送授權</div>
+    <EmptyState v-if="!loading && items.length === 0" variant="mobile" title="今日無接送授權" />
 
     <div class="auth-cards">
       <el-card v-for="item in items" :key="item.id" class="auth-card">
@@ -224,15 +226,6 @@ defineExpose({ items, pendingCount, fetchData })
 <style scoped>
 .portal-pickup-view {
   padding: 16px;
-}
-.page-title {
-  font-size: 16px;
-  margin: 0 0 12px;
-}
-.empty-state {
-  padding: 32px;
-  text-align: center;
-  color: var(--el-text-color-secondary);
 }
 .auth-cards {
   display: flex;

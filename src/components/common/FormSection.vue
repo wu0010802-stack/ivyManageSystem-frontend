@@ -34,15 +34,14 @@ defineExpose({ expand })
 
 <template>
   <div class="form-section">
-    <div
+    <!-- 真正的 button（非 div role="button"）：Enter/Space 原生觸發 click、
+         焦點語意正確；type="button" 避免在 el-form 內觸發 submit -->
+    <button
       v-if="collapsible"
+      type="button"
       class="form-section__header"
-      role="button"
-      tabindex="0"
       :aria-expanded="isOpen"
       @click="toggle"
-      @keydown.enter.prevent="toggle"
-      @keydown.space.prevent="toggle"
     >
       <el-icon class="form-section__chevron" :class="{ 'is-open': isOpen }"><ArrowRight /></el-icon>
       <span class="form-section__title">{{ title }}</span>
@@ -52,7 +51,7 @@ defineExpose({ expand })
         :class="{ 'is-error': badgeType === 'error', 'is-info': badgeType === 'info' }"
       >{{ badgeCount }}</span>
       <span v-else-if="summary" class="form-section__summary" data-test="section-summary">{{ summary }}</span>
-    </div>
+    </button>
     <div v-else class="form-section__label">{{ title }}</div>
 
     <div v-show="isOpen" class="form-section__body">
@@ -71,9 +70,12 @@ defineExpose({ expand })
 }
 .form-section__header {
   display: flex; align-items: center; gap: var(--space-2);
+  width: 100%;
   padding: var(--space-2) 0;
   cursor: pointer; user-select: none;
   border-radius: var(--radius-sm);
+  /* button reset：沿用原 div 視覺 */
+  background: none; border: none; font: inherit; text-align: left; color: inherit;
 }
 .form-section__header:hover .form-section__title,
 .form-section__header:hover .form-section__chevron { color: var(--el-color-primary); }

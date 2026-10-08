@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { getMyStudents } from '@/api/portal'
-import { usePortalFromHub } from '@/composables/usePortalFromHub'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import {
   applyTemplate,
   batchPublish,
@@ -26,22 +26,15 @@ const { notify } = useErrorNotify()
 import ContactBookEntryCard from './components/contactBook/ContactBookEntryCard.vue'
 import ContactBookEntryDrawer from './components/contactBook/ContactBookEntryDrawer.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
-const { fromHub, backToHub } = usePortalFromHub()
+const { isMobile } = useIsMobile()
 
 interface Photo { id: number; url?: string; [key: string]: unknown }
 interface EntryRecord { id: number; published_at?: string | null; photos?: Photo[]; version?: number; [key: string]: unknown }
 interface ClassroomEntry { classroom_id?: number; classroom_name?: string; [key: string]: unknown }
 interface ItemEntry { student_id: number; student_name?: string; entry?: EntryRecord | null; [key: string]: unknown }
 interface Completion { roster: number; draft: number; published: number; missing: number }
-
-const MOOD_EMOJI = {
-  happy: '😄',
-  normal: '🙂',
-  tired: '😴',
-  sad: '😢',
-  sick: '🤒',
-}
 
 const route = useRoute()
 const classrooms = ref<ClassroomEntry[]>([])
@@ -55,6 +48,8 @@ const completion = ref<Completion>({ roster: 0, draft: 0, published: 0, missing:
 const listLoading = ref(false)
 
 // Drawer state
+const drawerRef = ref<InstanceType<typeof ContactBookEntryDrawer> | null>(null)
+onBeforeRouteLeave(() => drawerRef.value?.requestLeave() ?? true)
 const drawerVisible = ref(false)
 const drawerStudent = ref<{ student_id: number; student_name?: string } | null>(null)
 const drawerEntry = ref<EntryRecord | null>(null) // server entry or null
@@ -94,10 +89,20 @@ async function fetchClassrooms() {
 
 // request-sequence guard：快速切班/切日時，較舊的慢回應不得覆寫最新列表
 let classDayRequestSeq = 0
+// 目前 items 所屬的 (班級, 日期)；與選取 context 不同代表 items 是舊資料（F5）
+let loadedContextKey = ''
 
 async function fetchClassDay() {
   if (!selectedClassroomId.value || !selectedDate.value) return
   const seq = ++classDayRequestSeq
+  const contextKey = `${selectedClassroomId.value}|${selectedDate.value}`
+  if (contextKey !== loadedContextKey) {
+    // 切班／切日：舊 context 的列表不得續留——否則新讀取失敗時，使用者看似在編輯新日期，
+    // 實際 PUT／批次發布的仍是舊日期的 entry id（教師端深度掃描 F5）
+    items.value = []
+    completion.value = { roster: 0, draft: 0, published: 0, missing: 0 }
+    if (drawerVisible.value) closeDrawer()
+  }
   listLoading.value = true
   try {
     const res = await getClassDay({
@@ -107,6 +112,7 @@ async function fetchClassDay() {
     if (seq !== classDayRequestSeq) return
     items.value = res.data?.items || []
     completion.value = res.data?.completion || { roster: 0, draft: 0, published: 0, missing: 0 }
+    loadedContextKey = contextKey
   } catch (err) {
     if (seq !== classDayRequestSeq) return
     notify(err, 'PortalContactBook:loadEntries', '載入聯絡簿失敗')
@@ -114,6 +120,12 @@ async function fetchClassDay() {
     if (seq === classDayRequestSeq) listLoading.value = false
   }
 }
+
+const hasNextStudent = computed(() => {
+  const list = visibleItems.value as ItemEntry[]
+  const idx = list.findIndex((i) => i.student_id === drawerStudent.value?.student_id)
+  return idx >= 0 && idx < list.length - 1
+})
 
 function openDrawer(item: ItemEntry) {
   drawerStudent.value = { student_id: item.student_id, student_name: item.student_name }
@@ -128,7 +140,7 @@ function closeDrawer() {
 }
 
 // ── 統一 save / publish 失敗處理（含 409 衝突局部寫回） ────────────────
-function handleSaveError(err: unknown) {
+async function handleSaveError(err: unknown) {
   const e = err as { response?: { status?: number; data?: { detail?: unknown } } }
   if (e?.response?.status === 409) {
     const detail = e.response?.data?.detail
@@ -137,8 +149,17 @@ function handleSaveError(err: unknown) {
       // 局部寫回：用後端最新版本覆蓋本地，不再 fetchClassDay 整撈
       const idx = items.value.findIndex((i) => i.entry?.id === currentEntry.id)
       if (idx >= 0) items.value[idx].entry = currentEntry
-      drawerEntry.value = currentEntry
-      ElMessage.warning('資料已被他人更新，已載入最新版，請確認後重新儲存')
+      // 不覆蓋輸入；教師確認後才採用新版號供下一次儲存使用。
+      try {
+        await ElMessageBox.confirm('資料已被他人更新，您的輸入仍保留。若繼續，下一次儲存將以目前表單覆寫最新內容。', '聯絡簿版本衝突', {
+          type: 'warning',
+          confirmButtonText: '確認後重新儲存',
+          cancelButtonText: '先保留，不覆寫',
+        })
+        if (drawerEntry.value) drawerEntry.value.version = currentEntry.version
+      } catch {
+        // 保留原版本與輸入，取消不代表授權覆寫。
+      }
     } else {
       // fallback 整撈
       fetchClassDay()
@@ -149,8 +170,8 @@ function handleSaveError(err: unknown) {
   }
 }
 
-async function handleSaveDraft(formPayload: Record<string, unknown>, version: unknown) {
-  if (!drawerStudent.value) return
+async function handleSaveDraft(formPayload: Record<string, unknown>, version: unknown): Promise<boolean> {
+  if (!drawerStudent.value) return false
   drawerSaving.value = true
   try {
     if (drawerEntry.value?.id) {
@@ -180,11 +201,37 @@ async function handleSaveDraft(formPayload: Record<string, unknown>, version: un
       }
       ElMessage.success('草稿已建立')
     }
+    return true
   } catch (err) {
-    handleSaveError(err)
+    await handleSaveError(err)
+    return false
   } finally {
     drawerSaving.value = false
   }
+}
+
+/**
+ * 儲存後直接開下一位（P1-03）。
+ *
+ * 一班 27 人，原本每位都要「回列表 → 找到卡片 → 點開 → 填 → 儲存」，
+ * 每天光是找人就多花十幾分鐘。這裡沿用畫面上的排序（visibleItems），
+ * 只是把「回列表再點下一張」這一步省掉。
+ */
+function openNextStudent() {
+  const list = visibleItems.value as ItemEntry[]
+  const idx = list.findIndex((i) => i.student_id === drawerStudent.value?.student_id)
+  const next = idx >= 0 ? list[idx + 1] : undefined
+  if (next) {
+    openDrawer(next)
+  } else {
+    closeDrawer()
+    ElMessage.success('已是名單最後一位')
+  }
+}
+
+async function handleSaveAndNext(formPayload: Record<string, unknown>, version: unknown) {
+  const ok = await handleSaveDraft(formPayload, version)
+  if (ok) openNextStudent()
 }
 
 async function handlePublish(formPayload: Record<string, unknown>, version: unknown) {
@@ -196,6 +243,7 @@ async function handlePublish(formPayload: Record<string, unknown>, version: unkn
   const confirmText = wasPublished
     ? '確定再次發布？將再次推播 LINE 與通知家長。'
     : '確定發布？發布後家長 App 與 LINE 將立即收到通知。'
+  drawerPublishing.value = true
   try {
     await ElMessageBox.confirm(confirmText, wasPublished ? '再次發布' : '發布給家長', {
       type: 'warning',
@@ -203,9 +251,9 @@ async function handlePublish(formPayload: Record<string, unknown>, version: unkn
       cancelButtonText: '取消',
     })
   } catch {
+    drawerPublishing.value = false
     return
   }
-  drawerPublishing.value = true
   try {
     // 先 update 欄位（若有變），樂觀更新本地
     const updateRes = await updateEntry(drawerEntry.value.id, formPayload, version as number | null | undefined)
@@ -222,7 +270,7 @@ async function handlePublish(formPayload: Record<string, unknown>, version: unkn
     drawerEntry.value = published
     ElMessage.success(wasPublished ? '已再次發布' : '已發布')
   } catch (err) {
-    handleSaveError(err)
+    await handleSaveError(err)
   } finally {
     drawerPublishing.value = false
   }
@@ -442,14 +490,7 @@ watch([selectedClassroomId, selectedDate], () => {
 
 <template>
   <div class="contact-book-page">
-    <div v-if="fromHub" class="from-hub-bar">
-      <el-button type="primary" link @click="backToHub">
-        ← 返回今日工作台
-      </el-button>
-    </div>
-    <div class="page-header">
-      <h2>每日聯絡簿</h2>
-    </div>
+    <PortalPageHeader title="每日聯絡簿" />
 
     <ContactBookFilterBar
       v-model:classroom-id="(selectedClassroomId as number | undefined)"
@@ -487,25 +528,30 @@ watch([selectedClassroomId, selectedDate], () => {
       :description="showOnlyUnpublished ? '無未發布草稿' : '此日期此班級無學生資料'"
     />
 
-    <div v-else class="card-grid" v-loading="listLoading">
+    <div v-else :class="isMobile ? 'entry-list' : 'card-grid'" v-loading="listLoading">
       <ContactBookEntryCard
         v-for="it in visibleItems"
         :key="it.student_id"
         :item="it"
-        :mood-emoji="MOOD_EMOJI"
+        :compact="isMobile"
         @click="(it) => openDrawer(it as ItemEntry)"
       />
     </div>
 
     <!-- Drawer：單筆編輯 -->
     <ContactBookEntryDrawer
+      ref="drawerRef"
+      :student-id="drawerStudent?.student_id"
+      :save-draft-for-close="handleSaveDraft"
       v-model="drawerVisible"
       :entry="drawerEntry ?? undefined"
       :student-name="drawerStudent?.student_name || ''"
       :saving="drawerSaving"
       :publishing="drawerPublishing"
       :photo-uploading="drawerPhotoUploading"
+      :has-next="hasNextStudent"
       @save-draft="handleSaveDraft"
+      @save-and-next="handleSaveAndNext"
       @save-as-template="handleSaveAsTemplate"
       @publish="handlePublish"
       @upload-photo="handlePhotoUpload"
@@ -562,30 +608,11 @@ watch([selectedClassroomId, selectedDate], () => {
   gap: var(--space-4);
 }
 
-.from-hub-bar {
-  margin: 0 0 12px;
-  padding: 4px 0;
-}
-
 .tpl-list { display: flex; flex-direction: column; gap: var(--space-2); }
 .tpl-row { display: flex; gap: var(--space-2); align-items: center; }
 .hint { font-size: var(--text-xs); color: var(--pt-text-muted); margin-top: var(--space-2); }
 .empty { color: var(--pt-text-muted); padding: var(--space-3); text-align: center; }
 
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  color: var(--text-primary);
-}
 
 .completion-card {
   border: 1px solid var(--border-color-light);
@@ -619,4 +646,11 @@ watch([selectedClassroomId, selectedDate], () => {
   gap: var(--space-3);
 }
 
+
+/* 手機單列清單：原本 27 張 200px 卡片讓整頁長到 10,500px（P1-03） */
+.entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 </style>

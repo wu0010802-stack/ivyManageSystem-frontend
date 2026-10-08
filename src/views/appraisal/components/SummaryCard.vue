@@ -71,7 +71,7 @@ function onPrimaryAction() {
 <template>
   <div class="summary-card" :class="{ selected }">
     <div class="card-header">
-      <el-checkbox :model-value="selected" @update:model-value="onCheckboxChange"
+      <el-checkbox :aria-label="`選取 ${summary.employee_name ?? '員工'} 的考核`" :model-value="selected" @update:model-value="onCheckboxChange"
                    :data-test="`card-checkbox-${summary.id}`" />
       <el-button
         link

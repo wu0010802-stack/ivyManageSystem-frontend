@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ElDrawer, ElTabs, ElTabPane, ElTag, ElEmpty, ElMessage } from 'element-plus'
-import { View, Hide } from '@element-plus/icons-vue'
+import { ElDrawer, ElTabs, ElTabPane, ElTag, ElMessage } from 'element-plus'
+import { View, Hide, ArrowRight } from '@element-plus/icons-vue'
 import { usePortalStudent } from '@/composables/usePortalStudent'
 import { apiError } from '@/utils/error'
 import { LIFECYCLE_LABELS_PORTAL } from '@/constants/lifecycle'
 import type { Schema } from '@/api/_generated/typed'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 // 後端 transfer_history 子欄位型別未收在 response_model 內（openapi-typescript 因而
 // 產出 unknown），依前端實際消費欄位補一個窄型別橋接；非既有 bug，是後端 schema 缺口。
@@ -202,9 +203,11 @@ function isRevealed(target: string, guardianId: number | string | null = null) {
         </el-tab-pane>
 
         <el-tab-pane label="健康" name="health">
-          <div v-if="!health.allergies.length && !health.recent_medication_orders.length && !student.special_needs" class="empty">
-            <el-empty description="無健康警告" :image-size="80" />
-          </div>
+          <EmptyState
+            v-if="!health.allergies.length && !health.recent_medication_orders.length && !student.special_needs"
+            variant="inline"
+            title="無健康警告"
+          />
           <template v-else>
             <div v-if="student.special_needs" class="psd-section">
               <div class="psd-section-title">特殊需求</div>
@@ -235,9 +238,7 @@ function isRevealed(target: string, guardianId: number | string | null = null) {
         </el-tab-pane>
 
         <el-tab-pane label="監護人" name="guardians">
-          <div v-if="!guardians.length" class="empty">
-            <el-empty description="尚無監護人資料" :image-size="80" />
-          </div>
+          <EmptyState v-if="!guardians.length" variant="inline" title="尚無監護人資料" />
           <ul class="psd-cards">
             <li v-for="g in guardians" :key="g.id" class="psd-card">
               <div class="psd-card-head">
@@ -308,16 +309,16 @@ function isRevealed(target: string, guardianId: number | string | null = null) {
         </el-tab-pane>
 
         <el-tab-pane label="轉班" name="transfers">
-          <div v-if="!transferHistory.length" class="empty">
-            <el-empty description="本生未在您管轄班級內有轉班紀錄" :image-size="80" />
-          </div>
+          <EmptyState v-if="!transferHistory.length" variant="inline" title="本生未在您管轄班級內有轉班紀錄" />
           <ul class="psd-timeline">
             <li v-for="t in transferHistory" :key="t.transferred_at || ''">
               <span class="dot" />
               <div>
                 <strong>{{ (t.transferred_at || '').slice(0, 10) }}</strong>
-                <div class="muted small">
-                  {{ t.from_classroom_name || '初次分班' }} → {{ t.to_classroom_name || '—' }}
+                <div class="muted small transfer-flow">
+                  <span>{{ t.from_classroom_name || '初次分班' }}</span>
+                  <el-icon aria-hidden="true"><ArrowRight /></el-icon>
+                  <span>{{ t.to_classroom_name || '—' }}</span>
                 </div>
               </div>
             </li>
@@ -491,6 +492,11 @@ function isRevealed(target: string, guardianId: number | string | null = null) {
   font-size: 12px;
   margin-top: 2px;
 }
+.transfer-flow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .psd-timeline {
   list-style: none;
   margin: 0;
@@ -509,8 +515,5 @@ function isRevealed(target: string, guardianId: number | string | null = null) {
   background: var(--color-primary, #16a34a);
   border-radius: 50%;
   flex-shrink: 0;
-}
-.empty {
-  padding: 20px 0;
 }
 </style>

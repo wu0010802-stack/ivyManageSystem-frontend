@@ -82,6 +82,24 @@ export const leaveRequiresAttachment = (startDate: unknown, endDate: unknown) =>
   getRequestedCalendarDays(startDate, endDate) > 2
 
 /**
+ * 假別 → 六大類（供行事曆事件底色與圖例用）。18 種假別若各配一色圖例會爆版，
+ * 收斂成六類：事假類／病假類／特休補休／公假／產育類／其他。
+ * 類別鍵值與 CSS class 對齊（見 LeaveCalendar.vue 的 .cal-event--<key>）。
+ */
+export const LEAVE_CATEGORY_MAP: Record<string, string> = {
+  personal: 'per', family_care: 'per', typhoon: 'per',
+  sick: 'sick', menstrual: 'sick', pregnancy_rest: 'sick', occupational_injury: 'sick',
+  annual: 'ann', compensatory: 'ann',
+  official: 'off',
+  maternity: 'mat', paternity: 'mat', prenatal: 'mat', paternity_new: 'mat', miscarriage: 'mat',
+  marriage: 'oth', bereavement: 'oth', parental_unpaid: 'oth',
+}
+export const LEAVE_CATEGORY_LABELS: Record<string, string> = {
+  per: '事假類', sick: '病假類', ann: '特休／補休', off: '公假', mat: '產育類', oth: '其他',
+}
+export const getLeaveCategory = (type: string): string => LEAVE_CATEGORY_MAP[type] || 'oth'
+
+/**
  * 檢查請假申請是否違反業務規則（病假 4h 倍數、事假提前 2 日）。
  * 回傳違規訊息陣列；caller 可選擇 hard block 或 confirm 後繼續。
  */

@@ -103,13 +103,19 @@ describe('PortalLeaveView smoke', () => {
     document.body.innerHTML = ''
   })
 
-  it('渲染特休統計卡（含剩餘可用概算）', async () => {
+  it('渲染特休摘要（剩餘天數是主角，年資與到職日退為背景）', async () => {
+    // 2026-09-03 UI/UX 稽核 P2-07：原本是 5 個大數字方塊（到職日／年資／
+    // 法定特休／今年已休／剩餘可用），改成一句話，老師要的「還剩幾天」直接可讀。
     const wrapper = await mountView()
-    expect(wrapper.text()).toContain('2020-08-01')
-    expect(wrapper.text()).toContain('法定特休')
-    expect(wrapper.text()).toContain('15 天')
+    const text = wrapper.text()
     // 剩餘可用 = quota 15 - used 4
-    expect(wrapper.text()).toContain('11 天')
+    expect(text).toContain('特休還剩')
+    expect(text).toContain('11')
+    expect(text).toContain('今年已休 4 天')
+    expect(text).toContain('全年 15 天')
+    // 到職日與年資仍在，只是降為次要資訊
+    expect(text).toContain('2020-08-01')
+    expect(text).toContain('6 年 0 個月')
   })
 
   it('無代理請求時不顯示待回應 alert、顯示空狀態', async () => {

@@ -85,6 +85,27 @@ const ENTRIES = [
 // 校準基準（真實 build 首屏 gz）：index 276.2（2026-07-20，Element Plus 改依
 // import graph 自然分塊，不再把 lazy route 元件全塞入首屏）；public 175.5；
 // parent 219.0。下方為約 12% headroom；刻意成長時對照 build 印出值上調。
+//
+// 2026-09-17 parent 校準：實測 246.2KB（累積多筆家長端功能——LINE MINI App
+// 適配、錯誤事件收集模組、底部導覽列重繪、相簿回顧 UI 等——逐筆都在小額成長，
+// 沒有單一一筆是可疑的意外洩漏，已用 gzip 逐 chunk 量測排除；vue-core/vendor
+// 兩個框架 chunk 佔 163KB 為固定成本，「自己的程式碼」佔約 81KB）。245 的舊預算
+// 已無 headroom 可用，budget 只提到剛好通過所需（+3KB），刻意保守不重新套用
+// 12% headroom 公式——避免一次放太寬讓這道守衛之後很久都測不到真正的膨脹。
+//
+// 2026-09-29 parent 校準（多租戶稽核修補）：Railway 實際 build 量到 248.0KB
+// （同 commit 本機 build 246.6KB——Railway build 帶入的 VITE_* 環境值讓首屏固定比
+// 本機大約 1.4KB，本機通過不代表 Railway 通過）。成長來源：解析負載削減
+// TENANT_RESOLUTION_BUSY 的自動重試（R5，家長端 axios 攔截器與 tenant-meta）、
+// 非預設租戶不退回義華品牌的 normalizeBranding（F65），本機逐 build 比對約 +0.4KB，
+// 屬刻意成長。沿用 09-17 的保守原則，只上調 1KB 到剛好通過。
+//
+// 2026-10-08 parent 校準（依賴 CVE 修補）：axios 1.18.1→1.20.0（12 筆 high）、
+// vue 3.5.39→3.5.43（@vue/server-renderer high）。同機逐 build 比對 origin/staging
+// 36ed4eca：vendor +1.77KB、vue-core +1.29KB gz，三個 entry 皆 +3.0KB；parent 本機
+// 246.9→249.9KB，加 Railway 固定 +1.4KB ≈ 251.3KB。屬刻意成長（安全升級無法延後，
+// allowlist 只收無版可升者）。照保守原則只調到剛好通過：249→252。index 304.1／public
+// 186.3 仍在預算內不動。⚠ parent 餘裕仍僅 ~0.7KB，下一個家長端首屏功能前應先瘦身。
 // 多租戶（4d/fb，scan-frontend GAP-02）：`manifestName` 期望值改為 **token 字面**。
 // dist 的 *.webmanifest 現在存的是 `{{TB_MANIFEST_*_NAME}}`，真正的品牌值由 nginx
 // `sub_filter` 依 $host 逐請求注入。這條斷言因此反向鎖住「不得退回硬編品牌字面」：
@@ -95,7 +116,7 @@ const ENTRIES = [
 const ENTRY_BUDGETS_KB = {
   index: 310,
   public: 200,
-  parent: 245,
+  parent: 252,
 }
 
 if (!existsSync(ASSETS)) {

@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
 import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTab.vue'
+import { ElMessageBox } from 'element-plus'
 
 const getRecruitmentIvykidsBackendStatus = vi.fn()
 const getRecruitmentIvykidsStats = vi.fn()
@@ -118,6 +119,15 @@ describe('RecruitmentIvykidsTab', () => {
     expect(getRecruitmentIvykidsStats).toHaveBeenCalledTimes(1)
     expect(getRecruitmentIvykidsRecords).toHaveBeenCalledWith({ page: 1, page_size: 50 })
     expect(wrapper.text()).toContain('共 1 筆')
+    expect(wrapper.find('.ivk-sync-actions').text()).not.toContain('刪除全部資料')
+    const maintenance = wrapper.find('details')
+    expect(maintenance.attributes('open')).toBeUndefined()
+    expect(maintenance.find('summary').text()).toBe('資料維護')
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    await maintenance.find('button').trigger('click')
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalled()
+    expect(deleteRecruitmentIvykidsBackendRecords).not.toHaveBeenCalled()
   })
 
   it('provider 文案無校名硬編：狀態未載入時 fallback 為中性字面（4e / DEV-15）', async () => {

@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { getMyOvertimes, createMyOvertime, deleteMyOvertime } from '@/api/portal'
 import type { ApiBody } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'
@@ -9,6 +10,8 @@ import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
 import { useIsMobile } from '@/composables/useIsMobile'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 import PortalOvertimeForm from '@/components/portal/PortalOvertimeForm.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { isMobile } = useIsMobile()
 
@@ -98,10 +101,11 @@ onMounted(() => {
 
 <template>
     <div class="portal-overtime">
-        <div class="page-header">
-            <h2>加班申請</h2>
-            <el-button type="primary" @click="openForm">新增加班</el-button>
-        </div>
+        <PortalPageHeader title="加班申請">
+            <template #actions>
+                <el-button type="primary" :icon="Plus" @click="openForm">新增加班</el-button>
+            </template>
+        </PortalPageHeader>
 
         <!-- Pay rules -->
         <el-card class="rules-card">
@@ -205,7 +209,7 @@ onMounted(() => {
                     </el-table-column>
                 </el-table>
             </div>
-            <el-empty v-if="!loading && overtimes.length === 0" description="本月無加班記錄" />
+            <EmptyState v-if="!loading && overtimes.length === 0" variant="inline" title="本月無加班記錄" />
         </el-card>
 
         <!-- Mobile: BottomSheet -->

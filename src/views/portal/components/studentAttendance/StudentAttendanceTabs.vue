@@ -1,5 +1,6 @@
 <script setup lang="ts">
 defineProps<{
+  disabled?: boolean
   activeTab: string
   classrooms: { classroom_id?: number; classroom_name?: string; [key: string]: unknown }[]
   classroomId?: number | null
@@ -16,6 +17,7 @@ defineEmits<{
     <div class="tabs-header">
       <el-radio-group
         :model-value="activeTab"
+        :disabled="disabled"
         @update:model-value="(v) => $emit('update:activeTab', String(v))"
       >
         <el-radio-button label="daily">日點名</el-radio-button>
@@ -24,6 +26,7 @@ defineEmits<{
 
       <el-select
         :model-value="classroomId"
+        :disabled="disabled"
         placeholder="選擇班級"
         style="width: 200px"
         @update:model-value="$emit('update:classroomId', $event)"

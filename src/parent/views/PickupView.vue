@@ -3,7 +3,7 @@
  * 臨時接送：進行中/歷史授權列表 + 常用接送人管理。
  * 建立新授權導去 /pickup/new（Task 11）。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
@@ -91,18 +91,28 @@ const STATUS_LABEL: Record<string, string> = {
   expired: '已過期',
 }
 
+// F09：常用接送人依「頁首目前孩子」載入；序號守衛讓換孩子後較舊的回應不得覆寫，
+// personsSid 記錄目前清單所屬（或正在載入）的孩子，供 watch 判斷是否需重載。
+let personsSeq = 0
+let personsSid: number | null = null
+
 async function fetchData() {
   loading.value = true
   loadError.value = false
+  const seq = ++personsSeq
+  const sid = selectedId.value
+  personsSid = sid
   try {
     const [authRes, personRes] = await Promise.all([
       listPickupAuthorizations(),
-      selectedId.value
-        ? listPickupPersons(selectedId.value)
+      sid
+        ? listPickupPersons(sid)
         : Promise.resolve({ data: { items: [] } }),
     ])
     authorizations.value = (authRes.data as { items?: PickupAuth[] })?.items || []
-    persons.value = (personRes.data as { items?: PickupPerson[] })?.items || []
+    if (seq === personsSeq) {
+      persons.value = (personRes.data as { items?: PickupPerson[] })?.items || []
+    }
   } catch (err) {
     loadError.value = true
     _toastFriendly(err, '載入失敗')
@@ -110,6 +120,21 @@ async function fetchData() {
     loading.value = false
   }
 }
+
+watch(selectedId, async (sid) => {
+  if (sid === personsSid) return
+  persons.value = []
+  const seq = ++personsSeq
+  personsSid = sid
+  if (!sid) return
+  try {
+    const res = await listPickupPersons(sid)
+    if (seq !== personsSeq) return
+    persons.value = (res.data as { items?: PickupPerson[] })?.items || []
+  } catch (err) {
+    if (seq === personsSeq) _toastFriendly(err, '載入常用接送人失敗')
+  }
+})
 
 function goCreate() {
   router.push('/pickup/new')
@@ -119,11 +144,29 @@ function goCreate() {
 const codeCardAuth = ref<PickupAuth | null>(null)
 const codeCardCode = ref('')
 
+async function refreshAuthorizations() {
+  try {
+    const res = await listPickupAuthorizations()
+    authorizations.value = (res.data as { items?: PickupAuth[] })?.items || []
+  } catch {
+    // 已以回應就地更新碼；背景對齊失敗不打擾使用者
+  }
+}
+
 async function askRegenerate(auth: PickupAuth) {
   try {
     const { data } = await regeneratePickupCode(auth.id)
-    codeCardCode.value = (data as { code: string }).code
+    const code = (data as { code: string }).code
+    codeCardCode.value = code
     codeCardAuth.value = auth
+    // F10：後端重發會更新整批授權的碼；畫面上同批（無 batch_key 則僅該筆）仍顯示的
+    // 授權卡立刻換成新碼，再背景重載授權清單對齊後端，不得保留已失效舊碼。
+    authorizations.value = authorizations.value.map((a) =>
+      a.id === auth.id || (auth.batch_key && a.batch_key === auth.batch_key)
+        ? { ...a, pickup_code: code }
+        : a,
+    )
+    refreshAuthorizations()
   } catch (err) {
     _toastFriendly(err, '重發取件碼失敗')
   }
@@ -397,6 +440,8 @@ onMounted(async () => {
   flex-direction: column;
   gap: 16px;
   padding-bottom: 16px;
+  /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
+  padding-inline: var(--space-4, 16px);
 }
 
 .create-cta {

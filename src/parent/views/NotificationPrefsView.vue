@@ -8,33 +8,38 @@ import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import M3Switch from '../components/m3/M3Switch.vue'
 
+// F13：key 一律是後端 canonical event_type（models/parent_notification.py），
+// GET 回傳、渲染、PUT 皆同一組 key，不做新舊名稱轉換。
 const EVENT_LABELS: Record<string, string> = {
-  message_received: '老師訊息',
-  announcement: '園所公告',
-  event_ack_required: '事件待簽',
-  fee_due: '學費到期',
-  leave_result: '請假審核結果',
-  attendance_alert: '出席異常',
+  'parent.message_received': '老師訊息',
+  'parent.announcement': '園所公告',
+  'parent.event_ack_required': '事件待簽',
+  'parent.fee_due': '學費到期',
+  'parent.leave_result': '請假審核結果',
+  'parent.attendance_alert': '出席異常',
+  'parent.contact_book_published': '每日聯絡簿',
   'bus.approaching': '娃娃車快到提醒',
 }
 
 const EVENT_META: Record<string, { icon: string; tone: string }> = {
-  message_received:   { icon: 'chat_bubble',  tone: 'leaf' },
-  announcement:       { icon: 'campaign',     tone: 'coral' },
-  event_ack_required: { icon: 'event',        tone: 'grape' },
-  fee_due:            { icon: 'payments',     tone: 'sun' },
-  leave_result:       { icon: 'event_busy',   tone: 'sky' },
-  attendance_alert:   { icon: 'notifications', tone: 'coral' },
+  'parent.message_received': { icon: 'chat_bubble',  tone: 'leaf' },
+  'parent.announcement': { icon: 'campaign',     tone: 'coral' },
+  'parent.event_ack_required': { icon: 'event',        tone: 'grape' },
+  'parent.fee_due': { icon: 'payments',     tone: 'sun' },
+  'parent.leave_result': { icon: 'event_busy',   tone: 'sky' },
+  'parent.attendance_alert': { icon: 'notifications', tone: 'coral' },
+  'parent.contact_book_published': { icon: 'menu_book', tone: 'leaf' },
   'bus.approaching':  { icon: 'directions_bus', tone: 'sky' },
 }
 
 const EVENT_HINTS: Record<string, string> = {
-  message_received: '老師主動傳訊或回覆時通知',
-  announcement: '園所發布新公告時通知',
-  event_ack_required: '有事件需要您簽收時通知',
-  fee_due: '學費到期前提醒',
-  leave_result: '學生請假審核結果',
-  attendance_alert: '孩子出席異常時提醒',
+  'parent.message_received': '老師主動傳訊或回覆時通知',
+  'parent.announcement': '園所發布新公告時通知',
+  'parent.event_ack_required': '有事件需要您簽收時通知',
+  'parent.fee_due': '學費到期前提醒',
+  'parent.leave_result': '學生請假審核結果',
+  'parent.attendance_alert': '孩子出席異常時提醒',
+  'parent.contact_book_published': '老師發布當日聯絡簿時通知',
   'bus.approaching': '娃娃車即將抵達站牌時通知',
 }
 

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import AppModal from '../AppModal.vue'
 import ParentIcon from '../ParentIcon.vue'
+import type { AnnouncementCategoryBrief } from '../../api/announcements'
 
 type AttachmentItem = {
   id: number
@@ -19,6 +20,7 @@ interface Announcement {
   content?: string
   created_at: string
   attachments?: AttachmentItem[]
+  category?: AnnouncementCategoryBrief | null
 }
 
 const props = defineProps<{
@@ -64,11 +66,21 @@ function formatSize(bytes: number) {
   <AppModal v-model:open="open" labelled-by="announcement-detail-title">
     <template v-if="announcement">
       <div class="detail-header">
-        <span
-          class="pt-pill"
-          :class="`pt-pill-${PRIORITY_META[announcement.priority]?.tone || 'info'}`"
-        >
-          {{ PRIORITY_META[announcement.priority]?.label || announcement.priority }}
+        <span class="detail-badges">
+          <span
+            class="pt-pill"
+            :class="`pt-pill-${PRIORITY_META[announcement.priority]?.tone || 'info'}`"
+          >
+            {{ PRIORITY_META[announcement.priority]?.label || announcement.priority }}
+          </span>
+          <span
+            v-if="announcement.category"
+            class="detail-cat"
+            :style="{ '--cat-color': announcement.category.color || 'var(--brand-primary, #0d9053)' }"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">{{ announcement.category.icon || 'campaign' }}</span>
+            {{ announcement.category.name }}
+          </span>
         </span>
         <button class="close" type="button" aria-label="關閉" @click="close">
           <ParentIcon name="close" size="sm" />
@@ -107,6 +119,24 @@ function formatSize(bytes: number) {
   justify-content: space-between;
   padding: 14px 18px 8px;
 }
+.detail-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.detail-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--cat-color);
+  background: color-mix(in srgb, var(--cat-color) 14%, transparent);
+}
+.detail-cat .material-symbols-rounded { font-size: 14px; }
 .detail-title {
   margin: 0 18px;
   font-weight: 700;

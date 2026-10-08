@@ -35,8 +35,13 @@ const ITEMS = [
     status: 'active',
     effective_status: 'active',
     code_locked: false,
+    code_attempts: 0,
     completed_at: null,
     completed_via: null,
+    completed_by_name: null,
+    override_note: null,
+    cancelled_at: null,
+    created_at: '2026-08-18T07:00:00',
   },
   {
     id: 2,
@@ -52,8 +57,13 @@ const ITEMS = [
     status: 'completed',
     effective_status: 'completed',
     code_locked: false,
+    code_attempts: 0,
     completed_at: '2026-08-18T09:00:00',
     completed_via: 'code',
+    completed_by_name: '陳老師',
+    override_note: null,
+    cancelled_at: null,
+    created_at: '2026-08-17T20:00:00',
   },
 ]
 
@@ -92,11 +102,11 @@ describe('PickupAuthorizationsView 手機任務卡片', () => {
     expect(text).toContain('王小明')
     expect(text).toContain('陳阿姨')
     expect(text).toContain('幼幼班')
-    // 授權家長／核銷方式等非決策欄位不塞進卡片正文
+    // 授權家長／交接紀錄等非決策欄位不塞進卡片正文
     expect(text).not.toContain('王媽媽')
   })
 
-  it('只有進行中的授權出現核銷鈕；無寫入權限則完全不出現', async () => {
+  it('只有進行中的授權出現確認交接鈕；無寫入權限則完全不出現', async () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.findAll('[data-test="pickup-card-verify"]')).toHaveLength(1)
@@ -107,7 +117,7 @@ describe('PickupAuthorizationsView 手機任務卡片', () => {
     expect(wrapper2.findAll('[data-test="pickup-card-verify"]')).toHaveLength(0)
   })
 
-  it('卡片核銷鈕開啟與桌機同一個核銷對話框', async () => {
+  it('卡片確認交接鈕開啟與桌機同一個核銷對話框', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -127,20 +137,21 @@ describe('PickupAuthorizationsView 手機任務卡片', () => {
     expect(desktop.findComponent({ name: 'ElDialog' }).props('fullscreen')).toBe(false)
   })
 
-  it('篩選列在手機收成單欄（每個 el-col 都宣告 xs=24）', async () => {
+  it('手機篩選改用全站共用 AdminListToolbar，不再是自製 el-row/el-col', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const cols = wrapper.findAllComponents({ name: 'ElCol' })
-    expect(cols.length).toBeGreaterThan(0)
-    cols.forEach((c) => expect(c.props('xs')).toBe(24))
+    expect(wrapper.findComponent({ name: 'AdminListToolbar' }).exists()).toBe(true)
+    expect(wrapper.find('.filter-row').exists()).toBe(false)
   })
 
-  it('空清單時卡片顯示空狀態文案', async () => {
+  it('空清單時卡片顯示空狀態文案，說明授權從哪來', async () => {
     listMock.mockResolvedValue({ data: { items: [] } })
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.findComponent({ name: 'AdminListCards' }).text()).toContain('無接送授權')
+    const text = wrapper.findComponent({ name: 'AdminListCards' }).text()
+    expect(text).toContain('沒有臨時接送授權')
+    expect(text).toContain('LINE 家長端')
   })
 })

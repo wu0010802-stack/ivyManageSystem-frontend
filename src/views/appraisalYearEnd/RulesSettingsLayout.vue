@@ -42,6 +42,14 @@ const TABS = [
     permLabel: '考核核定',
   },
   {
+    // 節慶人數沿用薪資權限（業主裁定 D4）——只持 APPRAISAL_*/YEAR_END_* 者看不到本頁。
+    name: 'festival-headcount',
+    label: '節慶人數',
+    can: () => hasPermission('SALARY_READ'),
+    canWrite: () => hasPermission('SALARY_WRITE'),
+    permLabel: '薪資編輯',
+  },
+  {
     name: 'year-end-rules',
     label: '年終規則',
     can: () => hasPermission('SETTINGS_READ'),

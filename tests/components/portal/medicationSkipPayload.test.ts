@@ -8,6 +8,10 @@
  *
  * 型別層已於 src/api/portalMedications.ts 收緊（skipLog 改吃 OpenAPI 產生型別），
  * 本檔額外釘住執行期真正送出的 payload。
+ *
+ * SPEC-024：原本掛在「今日班級工作台」的用藥抽屜 ClassHubMedicationSheet 已移除，
+ * /portal/medications 獨立頁是唯一入口，本守衛跟著功能搬家改指向 PortalMedicationView，
+ * 斷言不變。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -16,9 +20,12 @@ import ElementPlus from 'element-plus'
 vi.mock('@/api/portalMedications', () => ({
   listToday: vi.fn().mockResolvedValue({
     data: {
+      date: '2026-09-11',
       groups: [
         {
+          classroom_id: 1,
           classroom_name: '小班',
+          stats: { pending: 1, administered: 0, skipped: 0 },
           items: [
             {
               log_id: 7,
@@ -48,30 +55,23 @@ vi.mock('element-plus', async () => {
 })
 
 import { skipLog } from '@/api/portalMedications'
-import ClassHubMedicationSheet from '@/components/portal/class-hub/ClassHubMedicationSheet.vue'
+import PortalMedicationView from '@/views/portal/PortalMedicationView.vue'
 
 describe('教師端略過用藥送出的 payload', () => {
   beforeEach(() => {
     vi.mocked(skipLog).mockClear()
   })
 
-  it('工作台用藥抽屜送 skipped_reason，而非後端不認得的 reason', async () => {
-    const wrapper = mount(ClassHubMedicationSheet, {
+  it('用藥獨立頁送 skipped_reason，而非後端不認得的 reason', async () => {
+    const wrapper = mount(PortalMedicationView, {
       global: { plugins: [ElementPlus] },
-      props: { show: true },
-      attachTo: document.body,
     })
-    // el-drawer 的 @open 由 transition 觸發，jsdom 不會跑；直接發事件模擬抽屜開啟
-    wrapper.findComponent({ name: 'ElDrawer' }).vm.$emit('open')
     await flushPromises()
 
-    // 抽屜內容 teleport 到 body，不在 wrapper 的子樹裡
-    const skipBtn = Array.from(document.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('未執行'),
-    )
-    expect(skipBtn, '找不到「未執行」按鈕，測試前提已失效').toBeTruthy()
+    const skipBtn = wrapper.findAll('button').find((b) => b.text().includes('略過'))
+    expect(skipBtn, '找不到「略過」按鈕，測試前提已失效').toBeTruthy()
 
-    skipBtn!.click()
+    await skipBtn!.trigger('click')
     await flushPromises()
 
     expect(skipLog).toHaveBeenCalledTimes(1)

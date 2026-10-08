@@ -140,3 +140,30 @@ describe('CycleDetailPanel load() — A6 併發載入', () => {
     expect(vm.summaries[0].id).toBe(21)
   })
 })
+
+
+it('搜尋全選只取可簽列，切篩選清除隱藏選取，批次依階段篩選', async () => {
+  vi.mocked(api.listAppraisalCycles).mockResolvedValue({ data: [{ id: 5, status: 'OPEN' }] } as never)
+  vi.mocked(api.listAppraisalParticipants).mockResolvedValue({ data: [
+    { id: 1, employee_name: '測試甲' }, { id: 2, employee_name: '測試乙' },
+    { id: 3, employee_name: '測試丙' }, { id: 4, employee_name: '測試丁', is_excluded: true },
+  ] } as never)
+  vi.mocked(api.listAppraisalSummaries).mockResolvedValue({ data: [
+    { id: 11, participant_id: 1, status: 'DRAFT' },
+    { id: 12, participant_id: 2, status: 'SUPERVISOR_SIGNED' },
+    { id: 14, participant_id: 4, status: 'DRAFT' },
+  ] } as never)
+  vi.mocked(api.listAppraisalCatalog).mockResolvedValue({ data: [] } as never)
+  const wrapper = mountPanel()
+  await flush()
+  const vm = wrapper.vm as unknown as { search: string; filter: string; selectedIds: number[]; selectableIds: number[]; toggleAllVisible: (value: boolean) => void; eligibleSelected: (status: string) => number[] }
+  expect(vm.selectableIds).toEqual([11, 12])
+  vm.toggleAllVisible(true)
+  expect(vm.eligibleSelected('DRAFT')).toEqual([11])
+  vm.search = '乙'
+  await flush()
+  expect(vm.selectedIds).toEqual([12])
+  vm.filter = 'missing'
+  await flush()
+  expect(vm.selectedIds).toEqual([])
+})

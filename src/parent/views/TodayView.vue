@@ -1,38 +1,36 @@
 <script setup lang="ts">
 /**
- * 家長首頁（2026-10-08 改版，方向 A「今日儀表＋待辦收件匣」＋方向 C 的
- * 「多寶並列」與白話命名；三方向預覽稿見 docs/mockups/2026-10-08-parent-uiux-directions.html）。
+ * 家長首頁。
  *
- * 首頁只回答兩件事：
- *  1. 孩子現在好不好 → 每位孩子一張狀態卡（ChildTodayCard），多寶直接並列
- *  2. 我有什麼要處理 → 「待你處理」單一清單（utils/pendingItems.ts）
- * 其餘依序是「進行中」（娃娃車、臨時接送授權）、常用功能、今日動態。
+ * 2026-10-08 改版（方向 A＋C，三方向預覽稿見 docs/mockups/2026-10-08-parent-uiux-directions.html）：
+ * 每位孩子一張狀態卡（ChildTodayCard），多寶家庭直接並列，不必先切換才看得到
+ * 另一個孩子今天的狀態。原本分三處的孩子資訊——HomeHeroHeader 的照片＋姓名、
+ * ChildContextHeader 切換器、底部 ChildrenStrip（生日、在籍狀態、進孩子檔案）——
+ * 與 QuickActionsBar 的聯絡簿大按鈕＋出席 pill，全部收進狀態卡。
  *
- * 改版前待辦散在頂部 banner×2、Bento 小卡、今日動態「晚一些」桶與 tab 徽章
- * 四種容器，同一筆待簽最多出現三次；多寶切換也分在頂部 ChildContextHeader
- * 與底部 ChildrenStrip 兩處。這些容器已全部收斂掉。
+ * 版面由上而下：問候列（含公告鈴鐺）→ 孩子狀態卡 → 常用功能 → 校園公告卡 →
+ * 待辦清單（HomeTodoList）→ 娃娃車列（HomeBusRow）→ 今日動態 → 行事曆。
+ * 後四者沿用 2026-09-02／09-08 首頁改版的元件，本次未改動。
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getTodayContactBook, type ContactBookEntry } from '../api/contactBook'
-import { getBusToday } from '../api/bus'
+import { useHomeSummary } from '../composables/useHomeSummary'
 import { useTodayStatusCache } from '../composables/useTodayStatusCache'
 import { useTodayTimeline } from '../composables/useTodayTimeline'
 import { useChildSelection } from '../composables/useChildSelection'
-import { usePendingItems } from '../composables/usePendingItems'
 import { childTodayStatus, type TodayChildLike } from '../utils/childTodayStatus'
-import { PARENT_SERVICES } from '../utils/parentServices'
-import type { PendingItem } from '../utils/pendingItems'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
-import SectionHeader from '../components/SectionHeader.vue'
 import TodayTimeline from '../components/home-timeline/TodayTimeline.vue'
-import PushCta from '../components/home/PushCta.vue'
+import SectionHeader from '../components/SectionHeader.vue'
 import HomeHeroHeader from '../components/home/HomeHeroHeader.vue'
 import ChildTodayCard from '../components/home/ChildTodayCard.vue'
-import PendingInbox from '../components/home/PendingInbox.vue'
 import QuickActionsBar from '../components/home/QuickActionsBar.vue'
+import AnnouncementsHomeCard from '../components/home/AnnouncementsHomeCard.vue'
+import HomeTodoList from '../components/home/HomeTodoList.vue'
+import HomeBusRow from '../components/home/HomeBusRow.vue'
 
 interface HomeChild {
   student_id: number
@@ -59,16 +57,14 @@ const {
   data: summaryData,
   error: summaryError,
   pending: summaryPending,
-  items: pendingItems,
-  pickupActiveCount,
-  refreshAll: refreshPending,
-} = usePendingItems()
+  refresh: refreshSummary,
+  summary,
+  badges,
+} = useHomeSummary()
 
-const homeData = computed(
-  () => summaryData.value as { me?: { can_push?: boolean } | null; children?: HomeChild[] } | null, // TODO(ts-strict): waiting on backend response_model
+const children = computed<HomeChild[]>(
+  () => (summaryData.value as { children?: HomeChild[] } | null)?.children || [], // TODO(ts-strict): waiting on backend response_model
 )
-const children = computed<HomeChild[]>(() => homeData.value?.children || [])
-const showPushCta = computed(() => !!homeData.value?.me && !homeData.value.me.can_push)
 
 /**
  * 「尚未綁定子女」須依 home-summary 的權威子女清單判定，而非 today-status：
@@ -110,6 +106,7 @@ async function loadContactBooks(): Promise<void> {
   contactBooks.value = Object.fromEntries(results)
 }
 
+// immediate：useCachedAsync cache-hit 時 children 從一開始就有值（P1-16）
 const childIdsKey = computed(() => children.value.map((c) => c.student_id).join(','))
 watch(
   childIdsKey,
@@ -146,77 +143,23 @@ function openChild(sid: number): void {
   router.push(`/children/${sid}`)
 }
 
-// 娃娃車：只在班次進行中才出現在「進行中」。首頁刻意**不**用 useBusTracking——
-// 那支 composable 會開 WebSocket，掛在首頁等於每位家長一進 App 就多一條長連線；
-// 這裡只要一次性快照，即時位置留給 /bus 頁。
-// 隱私：回應含 stop_lat / stop_lng（＝家庭住址），只取用得到的兩個欄位，座標不進
-// 首頁任何狀態。
-const busInfo = ref<{ stopStatus: string; stopsAhead: number } | null>(null)
+const { buckets } = useTodayTimeline({ summary, todayChildren })
 
-// request-sequence guard：下拉刷新與重試可能重疊觸發 loadBusToday，較舊的回應
-// 可能晚到覆蓋較新的回應，讓「還有 N 站」短暫顯示過期資訊。只套用最新一次呼叫
-// 的結果，較舊的回應（含錯誤）一律丟棄。
-let busSeq = 0
-
-async function loadBusToday(): Promise<void> {
-  const mySeq = ++busSeq
-  try {
-    const res = await getBusToday()
-    if (mySeq !== busSeq) return
-    const data = res.data as {
-      trip?: { status?: string } | null
-      children?: { stop_status?: string; stops_ahead?: number }[]
-    } | null // TODO(ts-strict): 待 gen:api 產出 /parent/bus/today 型別後改用 AxiosResp
-    const child = data?.trip?.status === 'in_progress' ? data.children?.[0] : null
-    busInfo.value = child
-      ? { stopStatus: child.stop_status ?? 'pending', stopsAhead: child.stops_ahead ?? 0 }
-      : null
-  } catch {
-    if (mySeq !== busSeq) return
-    // 娃娃車失敗不擋首頁其他區塊（真正需要誠實降級的是 /bus 頁）
-    busInfo.value = null
-  }
-}
-
-/** 「進行中」：不是待辦、但今天正在發生、家長會想點進去看的事 */
-const liveItems = computed<PendingItem[]>(() => {
-  const out: PendingItem[] = []
-  if (busInfo.value) {
-    out.push({
-      key: 'bus',
-      title: PARENT_SERVICES.bus.label,
-      detail: busInfo.value.stopStatus === 'pending'
-        ? `班次進行中，還有 ${busInfo.value.stopsAhead} 站`
-        : '班次進行中',
-      icon: PARENT_SERVICES.bus.icon,
-      tone: 'info',
-      path: PARENT_SERVICES.bus.route,
-      count: 0,
-    })
-  }
-  if (pickupActiveCount.value > 0) {
-    out.push({
-      key: 'pickupAuth',
-      title: PARENT_SERVICES.proxy.label,
-      detail: `${pickupActiveCount.value} 筆授權進行中`,
-      icon: PARENT_SERVICES.proxy.icon,
-      tone: 'info',
-      path: PARENT_SERVICES.proxy.route,
-      count: 0,
-    })
-  }
-  return out
-})
-
-const { buckets } = useTodayTimeline({ todayChildren })
+// 娃娃車兩格在 HomeBusRow（2026-09-02），它自己 onMounted 抓資料；
+// 下拉刷新與錯誤重試要一併帶到它，故透過 defineExpose 的 reload 呼叫。
+const busRow = ref<{ reload: () => Promise<void> } | null>(null)
 
 onMounted(() => {
   refreshToday()
-  loadBusToday()
 })
 
 async function pullRefresh(): Promise<void> {
-  await Promise.all([refreshPending(true), refreshToday(), loadContactBooks(), loadBusToday()])
+  await Promise.all([
+    refreshSummary(true),
+    refreshToday(),
+    loadContactBooks(),
+    busRow.value?.reload() ?? Promise.resolve(),
+  ])
 }
 
 function refresh(): void {
@@ -230,7 +173,10 @@ function go(path: string): void {
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="today-view">
-    <HomeHeroHeader />
+    <HomeHeroHeader
+      :unread-announcements="badges.unreadAnnouncements"
+      @open-announcements="go('/announcements')"
+    />
 
     <div v-if="summaryPending && !summaryData" class="today-section skeleton-wrap">
       <SkeletonBlock variant="card" />
@@ -248,74 +194,76 @@ function go(path: string): void {
       的 shared-common，落在 admin-core chunk。首頁是家長端 entry 的首屏，靜態
       import 它會把整包 admin-core 拖進首屏（check-entry-chunks gate 會擋 build）。
     -->
-    <template v-else-if="isUnbound">
-      <section class="today-section">
-        <div class="unbound">
-          <p class="unbound-title">尚未綁定子女</p>
-          <p class="unbound-desc">可到「我的」頁加綁子女，或請園所協助。</p>
-          <router-link to="/bind-additional" class="unbound-cta">加綁子女</router-link>
-        </div>
-      </section>
-      <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
-    </template>
+    <section v-else-if="isUnbound" class="today-section">
+      <div class="unbound">
+        <p class="unbound-title">尚未綁定子女</p>
+        <p class="unbound-desc">綁定孩子後即可查看在園紀錄，也可請園所協助。</p>
+        <router-link to="/bind-additional" class="pt-action-btn">綁定孩子</router-link>
+      </div>
+    </section>
 
-    <template v-else>
-      <section class="today-section today-children" aria-label="孩子今天的狀態">
-        <ChildTodayCard
-          v-for="c in children"
-          :key="c.student_id"
-          :student-id="c.student_id"
-          :name="c.name || ''"
-          :classroom-name="c.classroom_name"
-          :birthday="c.birthday"
-          :lifecycle-status="c.lifecycle_status"
-          :today="todayOf(c.student_id)"
-          :contact-book-href="contactBookHref(c.student_id)"
-          :contact-book-sub="contactBookSub(c.student_id)"
-          :contact-book-unread="contactBookUnread(c.student_id)"
-          @open="openChild"
-          @select="setSelected"
-        />
-      </section>
-
-      <PendingInbox v-if="liveItems.length" class="today-section" title="進行中" :items="liveItems" />
-
-      <PendingInbox
-        class="today-section"
-        title="待你處理"
-        :items="pendingItems"
-        :limit="3"
-        more-to="/admin"
-        empty-text="目前沒有要處理的事"
+    <section v-else class="today-section today-children" aria-label="孩子今天的狀態">
+      <ChildTodayCard
+        v-for="c in children"
+        :key="c.student_id"
+        :student-id="c.student_id"
+        :name="c.name || ''"
+        :classroom-name="c.classroom_name"
+        :birthday="c.birthday"
+        :lifecycle-status="c.lifecycle_status"
+        :today="todayOf(c.student_id)"
+        :contact-book-href="contactBookHref(c.student_id)"
+        :contact-book-sub="contactBookSub(c.student_id)"
+        :contact-book-unread="contactBookUnread(c.student_id)"
+        @open="openChild"
+        @select="setSelected"
       />
+    </section>
 
-      <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
+    <QuickActionsBar v-if="children.length > 0" />
 
-      <QuickActionsBar />
+    <!--
+      校園公告預覽卡（2026-09-08）：公告的首頁入口統一收斂到這裡（待辦清單不再
+      重複列未讀公告）。
+    -->
+    <AnnouncementsHomeCard />
 
-      <section class="today-section today-stream">
-        <SectionHeader title="今日動態">
-          <!-- 單一孩子才給直達出口；多寶家庭由各自狀態卡進孩子檔案（避免連到「目前選定」的錯孩子） -->
-          <template v-if="children.length === 1" #action>
-            <router-link :to="`/children/${children[0].student_id}`" class="cb-open">
-              成長時間軸
-              <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
-            </router-link>
-          </template>
-        </SectionHeader>
-        <TodayTimeline :buckets="buckets" @navigate="go" />
-      </section>
-    </template>
+    <!-- 待辦清單（2026-09-02）：同一筆待辦在首頁只出現一次，資料來源為 useParentTodos。 -->
+    <HomeTodoList />
+
+    <HomeBusRow ref="busRow" />
+
+    <section v-if="summaryData" class="today-section today-stream">
+      <SectionHeader title="今日動態">
+        <!--
+          今日動態只講「今天」，更長的歷史在孩子檔案頁。單一孩子才給直達出口；
+          多寶家庭由各自狀態卡進孩子檔案（避免連到「目前選定」的錯孩子）。
+        -->
+        <template v-if="children.length === 1" #action>
+          <router-link :to="`/children/${children[0].student_id}`" class="cb-open">
+            更多動態
+            <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+          </router-link>
+        </template>
+      </SectionHeader>
+      <TodayTimeline :buckets="buckets" @navigate="go" />
+    </section>
+
+    <footer class="today-footer">
+      <router-link to="/calendar" class="today-footer-link">
+        <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+        <span>行事曆</span>
+        <span class="material-symbols-rounded today-footer-chevron" aria-hidden="true">chevron_right</span>
+      </router-link>
+    </footer>
   </PullToRefresh>
 </template>
 
 <style scoped>
 .today-view :deep(.ptr-content) {
-  --today-accent: var(--m3-primary);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5, 20px);
-  padding-bottom: var(--space-8, 32px);
+  gap: var(--space-4, 16px);
 }
 
 .today-section { padding: 0 var(--space-4, 16px); }
@@ -326,57 +274,88 @@ function go(path: string): void {
   gap: var(--space-3, 12px);
 }
 
-.skeleton-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3, 12px);
-}
-
 /* 尚未綁定子女（首屏不引入共用 EmptyState，見 template 註解） */
 .unbound {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--space-2, 8px);
   padding: var(--space-8, 32px) var(--space-5, 20px);
   text-align: center;
+  background: var(--cream, #fffcf2);
+  border: 1px solid rgba(13, 144, 83, 0.12);
   border-radius: 20px;
-  background: var(--pt-surface-card);
 }
-.unbound-title { margin: 0; font-size: 17px; font-weight: 700; }
-.unbound-desc { margin: 0; font-size: 14px; line-height: 1.65; opacity: 0.78; }
-.unbound-cta {
-  margin-top: var(--space-2, 8px);
-  min-height: var(--touch-target-min, 44px);
-  padding: 0 var(--space-5, 20px);
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  font-size: 15px;
+.unbound-title {
+  margin: 0;
+  font-size: 17px;
   font-weight: 700;
-  text-decoration: none;
-  background: var(--today-accent);
-  color: var(--pt-on-accent);
+  color: var(--pt-text-strong);
 }
-
-.today-stream {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2, 8px);
+.unbound-desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--pt-text-muted);
 }
 
 .cb-open {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  min-height: var(--touch-target-min, 44px);
-  color: var(--today-accent);
+  background: transparent;
+  border: none;
+  color: var(--brand-primary, #0d9053);
   font-size: var(--text-sm, 13px);
-  font-weight: 700;
+  font-weight: 600;
+  cursor: pointer;
+  padding: var(--space-1, 4px) 0;
   text-decoration: none;
 }
 .cb-open .material-symbols-rounded {
   font-size: 18px;
   font-variation-settings: 'wght' 500;
+}
+
+.skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.today-stream {
+  padding-bottom: var(--space-3, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.today-footer {
+  padding: 0 var(--space-4, 16px) var(--space-12, 48px);
+}
+.today-footer-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  border-radius: 14px;
+  background: var(--m3-surface-container, #ebefe8);
+  color: var(--pt-text-strong, #2a2520);
+  text-decoration: none;
+  font-size: var(--text-base, 15px);
+  font-weight: 600;
+  transition: background-color 120ms ease;
+}
+.today-footer-link:hover {
+  background: var(--m3-surface-container-high, #e1e8df);
+}
+.today-footer-link .material-symbols-rounded {
+  font-size: 22px;
+  color: var(--brand-primary, #0d9053);
+  font-variation-settings: 'wght' 500;
+}
+.today-footer-chevron {
+  margin-left: auto;
+  font-size: 20px !important;
+  color: var(--pt-text-muted, #6b5e54) !important;
 }
 </style>

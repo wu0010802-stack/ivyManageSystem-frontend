@@ -12,7 +12,10 @@
       <span class="today-banner__text">{{ todayState.text }}</span>
     </div>
 
-    <div class="toolbar">
+    <!-- 2026-09-02：登記現金收款／重新整理上移到結算工作區的共用工具列，
+         鐵律說明收進該工具列的問號 popover；此處不再自帶一列。
+         embedded=false（單獨使用）時保留原本的工具列。 -->
+    <div v-if="!embedded" class="toolbar">
       <el-button
         v-if="canWrite"
         type="primary"
@@ -131,27 +134,9 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-form-item label="含預繳款" class="mt-1">
-          <el-switch v-model="cashForm.withPrepay" />
-          <template v-if="cashForm.withPrepay">
-            <el-input-number
-              v-model="cashForm.prepayStudentId"
-              :controls="false"
-              placeholder="學生 ID"
-              style="width: 110px"
-            />
-            <el-input-number
-              v-model="cashForm.prepayYear"
-              :controls="false"
-              placeholder="目標學年"
-              style="width: 100px"
-            />
-            <el-select v-model="cashForm.prepaySemester" style="width: 90px" placeholder="學期">
-              <el-option label="上" :value="1" />
-              <el-option label="下" :value="2" />
-            </el-select>
-          </template>
-        </el-form-item>
+        <p class="hint" data-test="cash-prepay-hint">
+          新生預繳請到「收款 › 現金項目 › 新生預繳」登記
+        </p>
         <el-form-item label="收款合計">
           <strong data-test="cash-total">{{ formatCurrency(cashTotal) }}</strong>
         </el-form-item>
@@ -264,17 +249,16 @@ const canApprove = computed(() => hasPermission(PERMISSION_NAMES.FEE_CLOSE_APPRO
 const batches = ref<BatchRow[]>([])
 const loading = ref(false)
 
+const { embedded } = defineProps<{ embedded?: boolean }>()
+
 const cashVisible = ref(false)
 const cashSubmitting = ref(false)
+let pendingCashAttempt: { fingerprint: string; key: string } | null = null
 const cashSearch = ref('')
 const unpaidRecords = ref<FeeRecordRow[]>([])
 const selectedRecords = ref<FeeRecordRow[]>([])
 const cashForm = reactive({
   received_date: todayISO(),
-  withPrepay: false,
-  prepayStudentId: undefined as number | undefined,
-  prepayYear: undefined as number | undefined,
-  prepaySemester: undefined as number | undefined,
 })
 
 const confirmVisible = ref(false)
@@ -312,13 +296,9 @@ const todayState = computed<{ kind: 'idle' | 'pending' | 'done'; text: string }>
   }
 })
 
-const cashTotal = computed(() => {
-  const records = selectedRecords.value.reduce(
-    (sum, r) => sum + (r.amount_due - r.amount_paid),
-    0,
-  )
-  return records + (cashForm.withPrepay ? 5000 : 0)
-})
+const cashTotal = computed(() =>
+  selectedRecords.value.reduce((sum, r) => sum + (r.amount_due - r.amount_paid), 0),
+)
 
 function statusTag(status: string): 'success' | 'info' | 'warning' {
   return (
@@ -364,35 +344,30 @@ async function searchUnpaid() {
 }
 
 async function submitCash() {
-  const parts: CashReceiptBody['parts'] = selectedRecords.value.map((r) => ({
-    part_type: 'fee_record' as const,
-    fee_record_id: r.id,
-    amount: r.amount_due - r.amount_paid,
-  }))
-  if (cashForm.withPrepay) {
-    const studentId = cashForm.prepayStudentId
-    const schoolYear = cashForm.prepayYear
-    const semester = cashForm.prepaySemester
-    if (studentId == null || schoolYear == null || semester == null) {
-      ElMessage.warning('請完整選擇預繳學生、目標學年與學期')
-      return
-    }
-    parts.push({
-      part_type: 'prepayment',
-      student_id: studentId,
-      amount: 5000,
-      target_school_year: schoolYear,
-      target_semester: semester,
-    })
+  const parts: CashReceiptBody['parts'] = selectedRecords.value
+    .map((r) => ({
+      part_type: 'fee_record' as const,
+      fee_record_id: r.id,
+      amount: r.amount_due - r.amount_paid,
+    }))
+    .sort((a, b) => (a.fee_record_id ?? 0) - (b.fee_record_id ?? 0))
+  const payload = {
+    amount: parts.reduce((sum, part) => sum + part.amount, 0),
+    received_date: cashForm.received_date,
+    parts,
   }
+  const fingerprint = JSON.stringify(payload)
+  if (pendingCashAttempt?.fingerprint !== fingerprint) {
+    pendingCashAttempt = {
+      fingerprint,
+      key: `cashui-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+    }
+  }
+  const key = pendingCashAttempt.key
   cashSubmitting.value = true
   try {
-    await createCashReceipt({
-      amount: cashTotal.value,
-      received_date: cashForm.received_date,
-      parts,
-      idempotency_key: `cashui-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
-    })
+    await createCashReceipt({ ...payload, idempotency_key: key })
+    pendingCashAttempt = null
     ElMessage.success('現金收款已登記並掛入當日交接批')
     cashVisible.value = false
     fetchBatches()
@@ -463,7 +438,7 @@ async function doReopen(row: BatchRow) {
 }
 
 onMounted(fetchBatches)
-defineExpose({ fetchBatches })
+defineExpose({ fetchBatches, openCashDialog, canWrite })
 </script>
 
 <style scoped>

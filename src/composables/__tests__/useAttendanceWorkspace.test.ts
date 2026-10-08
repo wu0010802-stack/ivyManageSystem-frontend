@@ -1,3 +1,5 @@
+const { mockMonthRoster } = vi.hoisted(() => ({ mockMonthRoster: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }) }))
+vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: mockMonthRoster }))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import {
@@ -120,4 +122,74 @@ describe('useAttendanceWorkspace load', () => {
     await p1
     expect(ws.roster.value.find(r => r.employee_id === 999)).toBeUndefined()
   })
+})
+
+
+describe('出勤載入狀態與月份', () => {
+  beforeEach(() => { vi.mocked(getSummary).mockReset(); vi.mocked(getAnomalyList).mockReset() })
+  it('失敗不得當作成功空資料，重試成功後才標示成功', async () => {
+    vi.mocked(getSummary).mockRejectedValueOnce(new Error('測試失敗')).mockResolvedValue({ data: [] })
+    vi.mocked(getAnomalyList).mockResolvedValue({ data: { items: [], total: 0, pending: 0, confirmed: 0 } })
+    const ws = useAttendanceWorkspace(ref(2026), ref(9))
+    await ws.refresh()
+    expect(ws.loadState.value).toBe('error')
+    expect(ws.hasCurrentData.value).toBe(false)
+    await ws.refresh()
+    expect(ws.loadState.value).toBe('success')
+    expect(ws.hasCurrentData.value).toBe(true)
+  })
+  it('跨月失敗時，不得將前月資料標記為當月可操作資料', async () => {
+    vi.mocked(getSummary).mockResolvedValueOnce({ data: [] }).mockRejectedValue(new Error('測試失敗'))
+    vi.mocked(getAnomalyList).mockResolvedValue({ data: { items: [], total: 0, pending: 0, confirmed: 0 } })
+    const month = ref(8)
+    const ws = useAttendanceWorkspace(ref(2026), month)
+    await ws.refresh()
+    month.value = 9
+    await ws.refresh()
+    expect(ws.loadState.value).toBe('error')
+    expect(ws.hasCurrentData.value).toBe(false)
+    expect(ws.loadedPeriod.value).toBe('2026-08')
+  })
+})
+
+
+it.each(['success', 'error'])('晚到的舊請求 %s 不得改變新月份載入狀態', async (outcome) => {
+  let resolveOld!: (value: unknown) => void
+  let rejectOld!: (reason: unknown) => void
+  vi.mocked(getSummary).mockReset().mockReturnValueOnce(new Promise((resolve, reject) => { resolveOld = resolve; rejectOld = reject }))
+    .mockResolvedValue({ data: [] })
+  vi.mocked(getAnomalyList).mockReset().mockResolvedValue({ data: { items: [], total: 0, pending: 0, confirmed: 0 } })
+  const month = ref(8)
+  const ws = useAttendanceWorkspace(ref(2026), month)
+  const old = ws.refresh()
+  month.value = 9
+  await ws.refresh()
+  if (outcome === 'success') resolveOld({ data: [] })
+  else rejectOld(new Error('測試舊請求失敗'))
+  await old
+  expect(ws.loadState.value).toBe('success')
+  expect(ws.loadedPeriod.value).toBe('2026-09')
+  expect(ws.hasCurrentData.value).toBe(true)
+})
+
+it('同月更新失敗保留前次成功資料並標為錯誤', async () => {
+  vi.mocked(getSummary).mockReset().mockResolvedValueOnce({ data: [{ employee_id: 7 }] }).mockRejectedValue(new Error('測試失敗'))
+  vi.mocked(getAnomalyList).mockReset().mockResolvedValue({ data: { items: [], total: 0, pending: 0, confirmed: 0 } })
+  const ws = useAttendanceWorkspace(ref(2026), ref(9))
+  await ws.refresh()
+  await ws.refresh()
+  expect(ws.loadState.value).toBe('error')
+  expect(ws.hasCurrentData.value).toBe(true)
+  expect(ws.roster.value[0].employee_id).toBe(7)
+})
+
+
+it('月份任職名冊包含零打卡員工，但不增加紀錄無異常KPI', async () => {
+  vi.mocked(getSummary).mockReset().mockResolvedValue({ data: [] })
+  vi.mocked(getAnomalyList).mockReset().mockResolvedValue({ data: { items: [], total: 0, pending: 0, confirmed: 0 } })
+  mockMonthRoster.mockResolvedValue({ data: { roster: [{ employee_id: 7, employee_name: '測試員工', employee_number: 'T007' }], days: [] } })
+  const ws = useAttendanceWorkspace(ref(2026), ref(9))
+  await ws.refresh()
+  expect(ws.roster.value.map(row => row.employee_id)).toEqual([7])
+  expect(ws.kpis.value.fullAttendance).toBe(0)
 })

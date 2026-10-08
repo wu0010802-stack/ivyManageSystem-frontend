@@ -1,33 +1,33 @@
 /**
  * 「待辦」tab（AdminListView，路由 /admin；2026-10-08 由「事務」改版）。
  *
- * 三段：待處理（buildPendingItems，依急迫度排序）／進行中（今日用藥單、臨時
- * 接送授權）／所有服務（parentServices 固定入口）。
+ * 兩段：待處理（與首頁同一支 HomeTodoList／useParentTodos，固定順序）／所有服務
+ * （parentServices 固定入口）。
  *
  * F5 三態（沿用）：/parent/home/summary 失敗時不可把計數 fallback 成 0 讓家長
  * 誤以為「都處理完了」（含逾期款項）——首次載入的 pending 顯示骨架、error 顯示
- * 可重試的錯誤態；「所有服務」是靜態入口，不受影響。
+ * 可重試的錯誤態、都不顯示「目前沒有要處理的事」；「所有服務」是靜態入口，不受影響。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ref } from 'vue'
 
-const dataRef = ref<Record<string, unknown> | null>(null)
-const errorRef = ref<unknown>(null)
-const pendingRef = ref(false)
-const refreshMock = vi.fn()
-const enrollDocsRef = ref<number | null>(0)
-const pickupActiveRef = ref<number | null>(0)
+const summaryData = ref<Record<string, unknown> | null>(null)
+const summaryError = ref<unknown>(null)
+const summaryPending = ref(false)
+const refreshSummary = vi.fn()
+const signDocsData = ref<Record<string, unknown> | null>(null)
+const pickupData = ref<Record<string, unknown> | null>(null)
 
 vi.mock('@/composables/useCachedAsync', () => ({
   useCachedAsync: (key: string) => {
-    if (key === 'parent/pending/enroll-docs') {
-      return { data: enrollDocsRef, error: ref(null), pending: ref(false), refresh: vi.fn() }
+    if (key === 'parent/sign-requests/mine') {
+      return { data: signDocsData, error: ref(null), pending: ref(false), refresh: vi.fn() }
     }
-    if (key === 'parent/pending/pickup-active') {
-      return { data: pickupActiveRef, error: ref(null), pending: ref(false), refresh: vi.fn() }
+    if (key === 'parent/pickup/active') {
+      return { data: pickupData, error: ref(null), pending: ref(false), refresh: vi.fn() }
     }
-    return { data: dataRef, error: errorRef, pending: pendingRef, refresh: refreshMock }
+    return { data: summaryData, error: summaryError, pending: summaryPending, refresh: refreshSummary }
   },
 }))
 
@@ -36,17 +36,21 @@ vi.mock('@/parent/api/signDocuments', () => ({ listMySignRequests: vi.fn() }))
 vi.mock('@/parent/api/pickup', () => ({ listPickupAuthorizations: vi.fn() }))
 
 import AdminListView from '@/parent/views/AdminListView.vue'
+import { ALL_SERVICES_ORDER, PARENT_SERVICES } from '@/parent/utils/parentServices'
 
-const SUMMARY = {
-  summary: {
-    unread_announcements: 2,
-    fees: { outstanding: 8500, outstanding_count: 3, overdue: 1200 },
-    pending_event_acks: 1,
-    pending_activity_promotions: 0,
-    pending_survey_count: 1,
-    recent_leave_reviews: 0,
-    active_medication_orders: 0,
-  },
+function summary(over: Record<string, unknown> = {}) {
+  return {
+    summary: {
+      unread_announcements: 0,
+      fees: { outstanding: 0, outstanding_count: 0, overdue: 0 },
+      pending_event_acks: 0,
+      pending_activity_promotions: 0,
+      pending_survey_count: 0,
+      recent_leave_reviews: 0,
+      active_medication_orders: 0,
+      ...over,
+    },
+  }
 }
 
 function mountView() {
@@ -59,116 +63,86 @@ function mountView() {
   })
 }
 
+const rowKeys = (w: ReturnType<typeof mountView>) =>
+  w.findAll('[data-testid^="home-todo-row-"]').map((n) => n.attributes('data-testid')!.replace('home-todo-row-', ''))
+
 beforeEach(() => {
-  dataRef.value = null
-  errorRef.value = null
-  pendingRef.value = false
-  enrollDocsRef.value = 0
-  pickupActiveRef.value = 0
-  refreshMock.mockReset()
+  summaryData.value = null
+  summaryError.value = null
+  summaryPending.value = false
+  signDocsData.value = null
+  pickupData.value = null
+  refreshSummary.mockReset()
 })
 
 describe('AdminListView 三態（F5）', () => {
-  it('pending 且尚無資料：顯示骨架，不渲染待處理清單（不出現誤導性的「沒有待辦」）', () => {
-    pendingRef.value = true
+  it('pending 且尚無資料：顯示骨架，不顯示「目前沒有要處理的事」', () => {
+    summaryPending.value = true
     const w = mountView()
     expect(w.findComponent({ name: 'SkeletonBlock' }).exists()).toBe(true)
-    expect(w.findAll('[data-pending]').length).toBe(0)
     expect(w.text()).not.toContain('目前沒有要處理的事')
   })
 
-  it('error 且尚無資料：顯示 MobileErrorRetry，按重試會重新抓 summary', async () => {
-    errorRef.value = { displayMessage: '網路錯誤' }
+  it('error 且尚無資料：顯示可重試錯誤態，按重試重新抓 summary', async () => {
+    summaryError.value = new Error('boom')
     const w = mountView()
-    const errComp = w.findComponent({ name: 'MobileErrorRetry' })
-    expect(errComp.exists()).toBe(true)
+    const retry = w.findComponent({ name: 'MobileErrorRetry' })
+    expect(retry.exists()).toBe(true)
     expect(w.text()).not.toContain('目前沒有要處理的事')
-    await errComp.find('button').trigger('click')
-    expect(refreshMock).toHaveBeenCalledTimes(1)
+    await retry.vm.$emit('retry')
+    expect(refreshSummary).toHaveBeenCalledWith(true)
   })
 
-  it('error 時「所有服務」仍可用（靜態入口不受 summary 失敗影響）', () => {
-    errorRef.value = { displayMessage: '網路錯誤' }
+  it('有資料但全為 0：明確顯示「目前沒有要處理的事」', () => {
+    summaryData.value = summary()
     const w = mountView()
-    expect(w.findAll('[data-service]').length).toBe(12)
-  })
-
-  it('已有資料時背景 refresh 又 pending：清單持續顯示', () => {
-    dataRef.value = SUMMARY
-    pendingRef.value = true
-    const w = mountView()
-    expect(w.findComponent({ name: 'SkeletonBlock' }).exists()).toBe(false)
-    expect(w.findAll('[data-pending]').length).toBeGreaterThan(0)
+    expect(w.find('[data-testid="home-todo-empty"]').text()).toContain('目前沒有要處理的事')
   })
 })
 
 describe('AdminListView 待處理', () => {
-  it('依急迫度排序：逾期繳費 → 簽收通知 → 入學文件 → 活動調查 → 公告', () => {
-    dataRef.value = SUMMARY
-    enrollDocsRef.value = 1
+  it('標題為「待處理」，列依 useParentTodos 固定順序、名稱取自 parentServices', () => {
+    summaryData.value = summary({
+      fees: { outstanding: 8500, outstanding_count: 3, overdue: 1200 },
+      pending_event_acks: 1,
+      pending_survey_count: 2,
+    })
+    signDocsData.value = { pending: [{ id: 1 }] }
+    pickupData.value = { items: [{ id: 9 }] }
     const w = mountView()
-    const keys = w.findAll('[data-pending]').map((n) => n.attributes('data-pending'))
-    expect(keys).toEqual(['fees', 'acks', 'enrollDocs', 'surveys', 'announcements'])
-  })
-
-  it('逾期款項帶 urgent 樣式與逾期金額，入口連到 /fees', () => {
-    dataRef.value = SUMMARY
-    const w = mountView()
-    const fees = w.find('[data-pending="fees"]')
-    expect(fees.classes()).toContain('tone-urgent')
-    expect(fees.text()).toContain('逾期 NT$1,200')
-    expect(fees.attributes('href')).toBe('/fees')
-  })
-
-  it('標題旁的數字只算待辦（公告是資訊性，不計入）', () => {
-    dataRef.value = SUMMARY
-    const w = mountView()
-    expect(w.find('.pi-count').text()).toBe('3')
-  })
-
-  it('沒有任何待辦：顯示安心文案', () => {
-    dataRef.value = { summary: {} }
-    const w = mountView()
-    expect(w.findAll('[data-pending]').length).toBe(0)
-    expect(w.text()).toContain('目前沒有要處理的事')
-  })
-})
-
-describe('AdminListView 進行中', () => {
-  it('沒有用藥單與接送授權：不渲染進行中段', () => {
-    dataRef.value = SUMMARY
-    const w = mountView()
-    expect(w.text()).not.toContain('進行中')
-  })
-
-  it('今日用藥單與臨時接送授權：列在進行中（資訊性，不進待處理）', () => {
-    dataRef.value = { summary: { active_medication_orders: 2 } }
-    pickupActiveRef.value = 1
-    const w = mountView()
-    expect(w.text()).toContain('進行中')
-    expect(w.find('[data-pending="medications"]').text()).toContain('今天有 2 張用藥單')
-    expect(w.find('[data-pending="pickupAuth"]').text()).toContain('1 筆授權進行中')
-    expect(w.find('[data-pending="medications"]').classes()).toContain('tone-info')
+    expect(w.text()).toContain('待處理')
+    expect(rowKeys(w)).toEqual(['fees', 'signDocs', 'eventAcks', 'surveys', 'pickup'])
+    const fees = w.find('[data-testid="home-todo-row-fees"]')
+    expect(fees.text()).toContain('繳費')
+    expect(fees.text()).toContain('逾期')
+    expect(fees.classes()).toContain('tone-alert')
+    expect(w.find('[data-testid="home-todo-row-eventAcks"]').text()).toContain('簽收通知')
+    expect(w.find('[data-testid="home-todo-row-signDocs"]').text()).toContain('簽署入學文件')
   })
 })
 
 describe('AdminListView 所有服務', () => {
-  it('12 個固定入口，名稱統一（含先前找不到入口的入學文件、出席紀錄、常見問題）', () => {
-    dataRef.value = SUMMARY
+  it('依 ALL_SERVICES_ORDER 列出每個服務，名稱與路由取自 parentServices', () => {
+    summaryData.value = summary()
     const w = mountView()
-    const labels = w.findAll('.svc-label').map((n) => n.text())
-    expect(labels).toEqual([
-      '請假', '繳費', '用藥委託', '預告接送', '臨時接送', '簽收通知',
-      '入學文件', '活動調查', '課後才藝', '出席紀錄', '行事曆', '常見問題',
-    ])
+    const tiles = w.findAll('[data-service]')
+    expect(tiles.map((t) => t.attributes('data-service'))).toEqual([...ALL_SERVICES_ORDER])
+    const fees = w.find('[data-service="fees"]')
+    expect(fees.text()).toContain(PARENT_SERVICES.fees.label)
+    expect(fees.attributes('href')).toBe(PARENT_SERVICES.fees.route)
+    expect(w.find('[data-service="announce"]').attributes('href')).toBe('/announcements')
   })
 
-  it('每格連到對應路由', () => {
-    dataRef.value = SUMMARY
+  it('summary 失敗時「所有服務」照常顯示（靜態入口）', () => {
+    summaryError.value = new Error('boom')
     const w = mountView()
-    expect(w.find('[data-service="enrollDocs"]').attributes('href')).toBe('/sign')
-    expect(w.find('[data-service="sign"]').attributes('href')).toBe('/events')
-    expect(w.find('[data-service="assistant"]').attributes('href')).toBe('/assistant')
-    expect(w.find('[data-service="attendance"]').attributes('href')).toBe('/attendance')
+    expect(w.findAll('[data-service]').length).toBe(ALL_SERVICES_ORDER.length)
+  })
+
+  it('今天有用藥單：用藥委託格副標改為「今天 N 張用藥單」，不進待處理', () => {
+    summaryData.value = summary({ active_medication_orders: 2 })
+    const w = mountView()
+    expect(w.find('[data-service="medications"]').text()).toContain('今天 2 張用藥單')
+    expect(rowKeys(w)).toEqual([])
   })
 })

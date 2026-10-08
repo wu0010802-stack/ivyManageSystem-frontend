@@ -22,7 +22,7 @@ const { mockLiff, mockLogout, mockFlushAll, mockResetRuntime, mockListOpsForKind
 vi.mock('@/parent/services/liff', () => ({ liff: mockLiff }))
 vi.mock('@/parent/api/auth', () => ({ logout: mockLogout }))
 vi.mock('@/parent/utils/parentOfflineQueue', () => ({
-  flushAllParent: mockFlushAll,
+  createParentLogoutFlush: () => ({ flush: mockFlushAll, revoke: vi.fn() }),
   resetParentOfflineQueueRuntime: mockResetRuntime,
   PARENT_KINDS: ['parent_leave', 'parent_message'],
 }))

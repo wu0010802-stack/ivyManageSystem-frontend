@@ -432,12 +432,12 @@ defineExpose({ locateStudent, locateClass })
   border-right: none !important;
   border-top: none !important;
   border-left: none !important;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
 }
 
 .plan-roster-table .grade-group-cell {
   font-weight: 700;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   border-right: 2px solid var(--neutral-600) !important;
 }
 
@@ -446,7 +446,7 @@ defineExpose({ locateStudent, locateClass })
   left: 0;
   z-index: 2;
   font-weight: 600;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   border-right: 2px solid var(--neutral-600) !important;
   white-space: nowrap;
 }
@@ -465,7 +465,7 @@ defineExpose({ locateStudent, locateClass })
   padding: 1px 6px;
   border-radius: var(--radius-full, 9999px);
   font-weight: 600;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
 }
 
 .capacity-badge.over-capacity {
@@ -493,7 +493,7 @@ defineExpose({ locateStudent, locateClass })
   position: sticky;
   left: 0;
   z-index: 2;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   color: var(--text-secondary);
   font-size: 12px;
   border-right: 2px solid var(--neutral-600) !important;
@@ -565,7 +565,7 @@ tfoot tr:first-child td {
 }
 
 .plan-roster-table .grade-total-cell {
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   font-weight: 700;
   font-size: 13px;
 }

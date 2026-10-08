@@ -7,6 +7,7 @@ import {
   toAdYear,
   currentRocYear,
   coerceRocYear,
+  getTermDateRange,
 } from '@/utils/academic'
 
 // 民國年換算：西元年 - 1911
@@ -143,5 +144,49 @@ describe('buildSchoolYearOptions', () => {
     expect(result).toContain(114)
     expect(result).toContain(115)
     expect(result).toContain(116)
+  })
+})
+
+describe('getTermDateRange', () => {
+  it('上學期＝該學年 8/1 至隔年 1/31', () => {
+    // 115 學年 = 西元 2026 起
+    expect(getTermDateRange(115, 1, new Date(2027, 5, 15))).toEqual([
+      '2026-08-01',
+      '2027-01-31',
+    ])
+  })
+
+  it('下學期＝隔年 2/1 至 7/31', () => {
+    expect(getTermDateRange(115, 2, new Date(2028, 0, 10))).toEqual([
+      '2027-02-01',
+      '2027-07-31',
+    ])
+  })
+
+  it('今天落在學期之中時，結束日截到今天（帳本沒有未來的異動）', () => {
+    expect(getTermDateRange(115, 1, new Date(2026, 8, 7))).toEqual([
+      '2026-08-01',
+      '2026-09-07',
+    ])
+  })
+
+  it('學期尚未開始時不截斷，回傳完整區間（避免起訖顛倒）', () => {
+    expect(getTermDateRange(116, 1, new Date(2026, 8, 7))).toEqual([
+      '2027-08-01',
+      '2028-01-31',
+    ])
+  })
+
+  it('起訖一律早於或等於結束，不會顛倒', () => {
+    for (const [sy, sem] of [[114, 1], [114, 2], [115, 1], [115, 2], [116, 1]]) {
+      const [from, to] = getTermDateRange(sy, sem, new Date(2026, 8, 7))
+      expect(from <= to).toBe(true)
+    }
+  })
+
+  it('日期以本地時區計算，不受 UTC 位移影響（台北清晨也拿到當天）', () => {
+    // 台北 2026-09-07 07:00 → UTC 仍是 09-06；toISOString() 會少一天
+    const taipeiEarlyMorning = new Date(2026, 8, 7, 7, 0, 0)
+    expect(getTermDateRange(115, 1, taipeiEarlyMorning)[1]).toBe('2026-09-07')
   })
 })

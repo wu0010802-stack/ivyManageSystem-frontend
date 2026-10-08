@@ -9,9 +9,11 @@ vi.mock('@/stores/shift', () => ({
 
 // --- Mock auth（hasPermission 預設傳回 false；各 test 依需求覆寫）---
 const mockHasPermission = vi.fn().mockReturnValue(false)
+const mockIsPlatformAdmin = vi.fn().mockReturnValue(false)
 
 vi.mock('@/utils/auth', () => ({
   hasPermission: (...args: unknown[]) => mockHasPermission(...args),
+  isPlatformAdmin: () => mockIsPlatformAdmin(),
   PERMISSION_NAMES: { DSR_MANAGE: 'DSR_MANAGE' },
 }))
 
@@ -56,13 +58,15 @@ const globalConfig = {
 describe('SettingsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockHasPermission.mockReturnValue(false)
+    mockHasPermission.mockImplementation((permission: string) => permission === 'SCHEDULE')
+    mockIsPlatformAdmin.mockReturnValue(false)
     mockQuery = reactive({})
     replace.mockClear()
   })
 
   it('無 DSR_MANAGE 權限時不顯示「個資權利請求」tab', async () => {
     mockHasPermission.mockReturnValue(false)
+    mockIsPlatformAdmin.mockReturnValue(false)
     const wrapper = shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
     expect(wrapper.html()).not.toContain('個資權利請求')
@@ -83,11 +87,29 @@ describe('SettingsView', () => {
     expect(wrapper.html()).toContain('隱私政策版本')
   })
 
-  it('預設 activeTab 為 shifts，固定 tab 永遠顯示', async () => {
+  it('有 SCHEDULE 時預設 activeTab 為 shifts 並顯示輪班別管理', async () => {
     const wrapper = shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
     // 確認固定存在的 tab（不受權限影響）
     expect(wrapper.html()).toContain('輪班別管理')
+  })
+
+  it('只有 SETTINGS_READ 時不掛載輪班別管理，預設退到 LINE 設定', async () => {
+    mockHasPermission.mockImplementation((permission: string) => permission === 'SETTINGS_READ')
+    const wrapper = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(wrapper.html()).not.toContain('輪班別管理')
+    expect(wrapper.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('line')
+  })
+
+  it('只有 DSR_MANAGE 時只掛載個資治理 tabs，不觸發一般設定 API', async () => {
+    mockHasPermission.mockImplementation((permission: string) => permission === 'DSR_MANAGE')
+    const wrapper = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(wrapper.find('[data-name="shifts"]').exists()).toBe(false)
+    expect(wrapper.find('[data-name="line"]').exists()).toBe(false)
+    expect(wrapper.find('[data-name="tenant-config"]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('dsr-requests')
   })
 
   it('帳號分頁已自 /settings 移除', async () => {
@@ -108,7 +130,8 @@ describe('SettingsView', () => {
 describe('SettingsView tab ↔ URL 同步', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockHasPermission.mockReturnValue(false)
+    mockHasPermission.mockImplementation((permission: string) => permission === 'SCHEDULE')
+    mockIsPlatformAdmin.mockReturnValue(false)
     mockQuery = reactive({})
     replace.mockClear()
   })
@@ -158,5 +181,32 @@ describe('SettingsView tab ↔ URL 同步', () => {
     w.findComponent({ name: 'ElTabs' }).vm.$emit('tab-change', 'shifts')
     await flushPromises()
     expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
+  })
+})
+
+
+describe('排程觀測的平台權限', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+    mockIsPlatformAdmin.mockReturnValue(false)
+    mockQuery = reactive({ tab: 'observability' })
+  })
+
+  it('一般租戶即使有全部權限也不顯示排程分頁，深連結回到輪班設定', async () => {
+    const wrapper = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(wrapper.find('[data-name="observability"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="observability-tab"]').exists()).toBe(false)
+    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
+  })
+
+  it('平台管理員也不保留舊排程分頁，設定頁不重複提供平台入口', async () => {
+    mockIsPlatformAdmin.mockReturnValue(true)
+    const wrapper = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(wrapper.find('[data-name="observability"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="observability-tab"]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('shifts')
   })
 })

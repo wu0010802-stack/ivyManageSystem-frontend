@@ -93,6 +93,12 @@ describe('sanitizeUrl', () => {
 })
 
 describe('scrubMapping', () => {
+  it('遮罩代收列表巢狀資料中的完整銷帳碼', () => {
+    expect(scrubMapping({ items: [{ full_collection_number: '00998172001206', match_level: 'manual' }] })).toEqual({
+      items: [{ full_collection_number: '[Filtered]', match_level: 'manual' }],
+    })
+  })
+
   it('filters finance / identity / medical PII keys', () => {
     const res = scrubMapping({
       base_salary: 50000,
@@ -153,6 +159,63 @@ describe('scrubMapping', () => {
     ]) {
       expect(res[k]).toBe('[Filtered]')
     }
+  })
+
+  it('filters contacts 整包 (娃娃車司機端接送聯絡人，2026-08-26 bussch)', () => {
+    // 為什麼整包遮而不是只靠內層的 phone：`contacts` 這個 key 不命中任何 needle，
+    // scrubber 會遞迴進去，而內層的裸字 `name` 也不在清單裡（清單是逐一列舉
+    // student_name / parent_name / person_name…），聯絡人姓名會原樣通過。
+    // 裸字 `name` 刻意不加進 denylist——同檔下方那支測試釘住 `name: 'Alice'`
+    // 不該被遮（會誤傷 route_name / classroom_name 等非 PII 欄位）。
+    const res = scrubMapping({
+      contacts: [{ name: '王媽媽', phone: '0912345678' }],
+    })
+    expect(res.contacts).toBe('[Filtered]')
+    expect(JSON.stringify(res)).not.toContain('王媽媽')
+  })
+
+  it('filters 站點座標 lat/lng (接送地址 geocode 快照＝家庭住址，2026-08-26 bussch)', () => {
+    // 走 PII_KEY_EXACT 而非 substring：'lat' 會誤傷 latest / related / translation。
+    const res = scrubMapping({
+      lat: 22.61, lng: 120.28, latest_version: 3, translation_key: 'bus.title',
+    })
+    expect(res.lat).toBe('[Filtered]')
+    expect(res.lng).toBe('[Filtered]')
+    // 整字相等比對不得誤傷這兩個
+    expect(res.latest_version).toBe(3)
+    expect(res.translation_key).toBe('bus.title')
+  })
+
+  it('filters 家長端座標鍵名 stop_lat/stop_lng (BusChildOut，2026-08-26 review 補漏)', () => {
+    // 裸字 lat/lng 只涵蓋司機端 payload 鍵名；家長端 /parent/bus/today 與 WS
+    // payload 的家庭座標鍵名是 stop_lat/stop_lng，同一類資料兩種鍵名缺一即漏。
+    const res = scrubMapping({
+      stop_lat: 22.61, stop_lng: 120.28, stop_status: 'pending', stops_ahead: 2,
+    })
+    expect(res.stop_lat).toBe('[Filtered]')
+    expect(res.stop_lng).toBe('[Filtered]')
+    // 整字相等比對不得誤傷同前綴的非座標欄位
+    expect(res.stop_status).toBe('pending')
+    expect(res.stops_ahead).toBe(2)
+  })
+
+  it('filters camelCase Vue prop 名 (attachProps 會把 props 塞進 contexts.vue.propsData)', () => {
+    // @sentry/vue 預設 attachProps: true。denylist 詞條全是 snake_case，
+    // 'childName'.toLowerCase() = 'childname' 不含 'child_name' 子字串，
+    // 也不等於 PII_KEY_EXACT 的 'child'——原樣上傳。
+    const res = scrubMapping({
+      childName: '王小明',
+      studentName: '王小明',
+      parentName: '王媽媽',
+      personName: '王阿嬤',
+      routeName: 'A 線',
+    })
+    expect(res.childName).toBe('[Filtered]')
+    expect(res.studentName).toBe('[Filtered]')
+    expect(res.parentName).toBe('[Filtered]')
+    expect(res.personName).toBe('[Filtered]')
+    // 非 PII 的 camelCase 欄位不得誤遮
+    expect(res.routeName).toBe('A 線')
   })
 
   it('filters exclude_reason (新學年預編班行政自由輸入，對齊既有 resign_reason 先例)', () => {
@@ -443,6 +506,39 @@ describe('scrubEvent', () => {
     expect(res.extra.note).toBe('ok')
     expect(res.contexts.runtime.name).toBe('chrome')
     expect(res.contexts.user.phone).toBe('[Filtered]')
+  })
+
+  it('sanitizes URL-like values stored in extra path fields', () => {
+    const res = scrubEvent({
+      extra: {
+        path: '/students/profile/123?parent_name=王小明&email=parent@example.com&tab=health',
+        from: '/students/456?phone=0912345678',
+      },
+    })
+
+    expect(res.extra.path).toBe('/students/profile/:id?parent_name=%5BFiltered%5D&email=%5BFiltered%5D&tab=health')
+    expect(res.extra.from).toBe('/students/:id?phone=%5BFiltered%5D')
+    expect(JSON.stringify(res.extra)).not.toContain('王小明')
+    expect(JSON.stringify(res.extra)).not.toContain('parent@example.com')
+    expect(JSON.stringify(res.extra)).not.toContain('0912345678')
+  })
+
+  it('contexts.vue.propsData 整包遮罩（通用鍵名 prop 承載 PII，2026-08-26 bussch）', () => {
+    // attachProps 會把 render error 元件的整包 props 塞進來。key 比對攔得住
+    // childName 等具名 PII prop，但 StatTile 的 `value` prop 承載學生姓名，而
+    // 'value' 不可能進 denylist（會誤遮全站）——只能整包收掉。
+    const ev = {
+      contexts: {
+        vue: { componentName: 'StatTile', propsData: { label: '今天不搭', value: '王小明' } },
+        runtime: { name: 'chrome' },
+      },
+    }
+    const res = scrubEvent(ev)
+    expect(res.contexts.vue.propsData).toBe('[Filtered]')
+    expect(JSON.stringify(res)).not.toContain('王小明')
+    // 只收 propsData，vue context 的其他欄位與其他 context 不受影響
+    expect(res.contexts.vue.componentName).toBe('StatTile')
+    expect(res.contexts.runtime.name).toBe('chrome')
   })
 
   it('hashes string user.id', () => {
@@ -737,4 +833,63 @@ describe('scrubEvent logentry / message PII', () => {
     expect(res.message).not.toContain('user@example.com')
     expect(res.message).toContain('[Filtered]')
   })
+})
+
+
+describe('打卡匯入個資遮罩', () => {
+  it('遮罩設備工號、原始刷卡與匯入來源資料', () => {
+    const data = {
+      source_employee_number: '101', sourceEmployeeNumber: '101',
+      source_rows: [2, 3], sourceRows: [2, 3], punches: ['2026-08-03T08:00:00'],
+      import_metadata: { source_employee_number: '101' }, importMetadata: { sourceEmployeeNumber: '101' },
+    }
+    expect(Object.values(scrubMapping(data))).toEqual(Array(7).fill('[Filtered]'))
+  })
+})
+
+
+describe('薪資表核對個資遮罩', () => {
+  it('整包核對結果、姓名、兩端金額與差額均遮罩', () => {
+    const data = { payrollResult: { rows: [{ name: '合成員工' }] }, source_name: '合成員工', sourceName: '合成員工', source_amount: '20', sourceAmount: '20', system_amount: '10', systemAmount: '10', difference: '10', worksheets: ['合成員工薪資'] }
+    expect(Object.values(scrubMapping(data))).toEqual(Array(9).fill('[Filtered]'))
+  })
+})
+
+
+describe('接送地址聯絡人姓名遮罩', () => {
+  it('遮罩 snake_case 與 Vue camelCase 姓名，保留非個資 metadata', () => {
+    expect(scrubMapping({ contact_name: '測試聯絡人', contactName: '測試聯絡人', contact_count: 2, status: 'active' })).toEqual({
+      contact_name: '[Filtered]', contactName: '[Filtered]', contact_count: 2, status: 'active',
+    })
+  })
+  it('遮罩 SQL exception parameters 內的聯絡人姓名', () => {
+    const event = scrubEvent({ exception: { values: [{ type: 'Error', value: "constraint failed [parameters: {'contact_name': '測試聯絡人', 'contactName': '另一測試聯絡人', 'status': 'active'}]" }] } })
+    const value = event.exception.values[0].value
+    expect(value).not.toContain('測試聯絡人')
+    expect(value).toContain('[Filtered]')
+    expect(value).toContain("'status': 'active'")
+  })
+})
+
+
+describe('收款累計快照遮罩', () => {
+  it('遮罩累計與前額的兩種鍵名格式，保留非金額計數', () => {
+    expect(scrubMapping({
+      amount_paid: 10000,
+      previous_amount_paid: 5000,
+      nested: { amountPaid: 10000, previousAmountPaid: 5000 },
+      payment_count: 2,
+    })).toEqual({
+      amount_paid: '[Filtered]',
+      previous_amount_paid: '[Filtered]',
+      nested: { amountPaid: '[Filtered]', previousAmountPaid: '[Filtered]' },
+      payment_count: 2,
+    })
+  })
+})
+
+
+it('沖銷範圍巢狀姓名仍被遮罩', () => {
+  const result = scrubMapping({ reversal_scope: [{ student_name: '合成測試幼生', amount: 100 }] })
+  expect(result.reversal_scope[0].student_name).toBe('[Filtered]')
 })

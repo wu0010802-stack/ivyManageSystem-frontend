@@ -1300,9 +1300,21 @@ onUnmounted(() => {
   line-height: 1.6;
   color: var(--color-text);
   background-color: var(--color-bg);
-  background-image: linear-gradient(180deg, #fff1ee 0%, #fffce8 55%, #fffce8 100%);
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
+  /* 讓下方 ::before 漸層層疊在本頁底色之上、內容之下 */
+  isolation: isolate;
+}
+
+/* 固定漸層背景：原本用 background-attachment: fixed，Android Chrome 每捲一幀都要
+   重繪整頁背景（捲動改走主執行緒，明顯卡頓）。改成 position: fixed 的獨立圖層，
+   視覺相同但捲動時由 compositor 直接合成。 */
+.public-activity-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: linear-gradient(180deg, #fff1ee 0%, #fffce8 55%, #fffce8 100%);
 }
 
 .public-activity-page *,

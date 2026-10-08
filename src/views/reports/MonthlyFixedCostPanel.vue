@@ -14,6 +14,7 @@ import { computeReportPeriod } from './useReportPeriod'
 
 const props = defineProps<{
   year: number
+  highlightMonth?: number
 }>()
 
 const emit = defineEmits<{ 'update:dirty': [boolean] }>()
@@ -282,8 +283,9 @@ async function saveAll() {
     <div class="panel-toolbar">
       <div class="toolbar-left">
         <h3 class="panel-title">固定費用登錄</h3>
+        <p v-if="highlightMonth" role="status">目前核對 {{ year }} 年 {{ highlightMonth }} 月，對應月份已標示。</p>
         <span class="panel-hint">
-          每格金額為當月實際支出；defaultAmount 提示僅供參考，不會自動帶入。
+          每格金額為當月實際支出；預設金額提示僅供參考，不會自動帶入。
         </span>
       </div>
       <div class="toolbar-right">
@@ -318,7 +320,7 @@ async function saveAll() {
           type="info"
           :closable="false"
           show-icon
-          title="此年度尚未登錄任何固定費用，直接點 cell 即可輸入。"
+          title="此年度尚未登錄任何固定費用，直接點選儲存格即可輸入。"
         />
       </div>
       <table class="fc-table">
@@ -329,7 +331,7 @@ async function saveAll() {
               v-for="m in MONTHS"
               :key="m"
               class="col-month"
-              :class="{ 'col-current': period.isCurrentYear && m === period.cutoffMonth }"
+              :class="{ 'col-current': m === (highlightMonth ?? (period.isCurrentYear ? period.cutoffMonth : null)) }"
             >{{ m }} 月</th>
             <th class="col-total">合計</th>
           </tr>
@@ -352,7 +354,7 @@ async function saveAll() {
               class="cell-edit"
               :class="{
                 'cell-dirty': isDirty(m, c.key),
-                'col-current': period.isCurrentYear && m === period.cutoffMonth,
+                'col-current': m === (highlightMonth ?? (period.isCurrentYear ? period.cutoffMonth : null)),
               }"
               :data-cell-key="`${m}-${c.key}`"
             >
@@ -387,7 +389,7 @@ async function saveAll() {
               v-for="m in MONTHS"
               :key="m"
               class="cell-num"
-              :class="{ 'col-current': period.isCurrentYear && m === period.cutoffMonth }"
+              :class="{ 'col-current': m === (highlightMonth ?? (period.isCurrentYear ? period.cutoffMonth : null)) }"
               :data-month-total="m"
             >
               {{ formatTotal(monthTotal(m)) }}

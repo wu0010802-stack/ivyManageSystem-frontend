@@ -81,7 +81,9 @@ const editAttendance = (row: Record<string, unknown>) => {
            date: (row.date as string).replace(/-/g, '/'),
            weekday: "",
            punch_in: inTime,
-           punch_out: outTime
+           punch_out: outTime,
+           review_required: false,
+           review_confirmed: false
         }]
      }
      try {

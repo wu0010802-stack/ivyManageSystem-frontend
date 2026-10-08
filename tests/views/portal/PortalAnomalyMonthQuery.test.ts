@@ -59,39 +59,10 @@ describe('教師端異常頁的年月來源', () => {
   })
 })
 
-describe('首頁待辦卡片的異常連結', () => {
-  it('有最早待確認月份時，連結必須帶上 year/month', async () => {
-    const PendingActionsCard = (
-      await import('@/components/portal/home/PendingActionsCard.vue')
-    ).default
-    const wrapper = mount(PendingActionsCard, {
-      global: { plugins: [ElementPlus] },
-      props: {
-        actions: {
-          pending_anomaly_confirms: 1,
-          pending_anomaly_earliest: { year: 2026, month: 3 },
-        },
-      },
-    })
-
-    const item = (
-      wrapper.vm as unknown as { items: { key: string; to: string }[] }
-    ).items.find((i) => i.key === 'pending_anomaly_confirms')
-    expect(item?.to).toBe('/portal/anomalies?year=2026&month=3')
-  })
-
-  it('沒有待確認時退回原本的路徑', async () => {
-    const PendingActionsCard = (
-      await import('@/components/portal/home/PendingActionsCard.vue')
-    ).default
-    const wrapper = mount(PendingActionsCard, {
-      global: { plugins: [ElementPlus] },
-      props: { actions: { pending_anomaly_confirms: 0 } },
-    })
-
-    const item = (
-      wrapper.vm as unknown as { items: { key: string; to: string }[] }
-    ).items.find((i) => i.key === 'pending_anomaly_confirms')
-    expect(item?.to).toBe('/portal/anomalies')
-  })
-})
+// 本檔原本的第二個 describe 測「首頁待辦卡」的異常連結有沒有帶 year/month。
+// PendingActionsCard 已於 2026-09-14 併入首頁功能格（同一功能不留兩個入口），
+// 等價且更貼近實際操作的斷言改在
+// src/views/portal/__tests__/PortalHomeView.features.test.ts：
+//   -「異常待確認帶最早待確認月份，否則舊異常永遠找不到、badge 也消不掉」
+//   -「沒有最早待確認月份時退回不帶 query 的異常頁」
+// 那兩條測的是真的點下去 router.push 收到什麼，而不是元件內部的 items 陣列。

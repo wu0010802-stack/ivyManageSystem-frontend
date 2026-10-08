@@ -159,6 +159,29 @@ function currentSemesterRange(today = new Date()) {
   }
 }
 
+/**
+ * F08：請假天數。後端 `duration_days`（期間內應到日天數）是有限數字就用它；
+ * 否則 fallback 為 start..end（含頭尾）週一～週五天數。日期以字串解析、用 UTC
+ * 計算星期，不受裝置時區位移。
+ */
+function leaveDays(l: LeaveItem): number {
+  const raw = l.duration_days
+  if (raw !== null && raw !== undefined && raw !== '' && Number.isFinite(Number(raw))) return Number(raw)
+  const parse = (v?: string | null) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || '')
+    return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN
+  }
+  const start = parse(l.start_date)
+  const end = parse(l.end_date || l.start_date)
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return 0
+  let days = 0
+  for (let t = start; t <= end; t += 86400000) {
+    const dow = new Date(t).getUTCDay()
+    if (dow !== 0 && dow !== 6) days += 1
+  }
+  return days
+}
+
 const heroSummary = computed(() => {
   const { start, end, label } = currentSemesterRange()
   const inSemester = (filteredItems.value ?? []).filter((l) => {
@@ -169,7 +192,7 @@ const heroSummary = computed(() => {
   let total = 0
   for (const l of inSemester) {
     const t = l.leave_type || ''
-    const days = Number(l.duration_days) || 0
+    const days = leaveDays(l)
     by_type[t] = (by_type[t] || 0) + days
     total += days
   }
@@ -493,6 +516,8 @@ async function pullRefresh() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
+  padding-inline: var(--space-4, 16px);
 }
 
 .render-sentinel { height: 1px; }

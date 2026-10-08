@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCurrency } from '@/utils/currency'
+import { formatAmount, formatCurrency } from '@/utils/currency'
 
 describe('formatCurrency()', () => {
   it('以 NT$ 前綴 + 千分位格式化（無空格）', () => {
@@ -27,5 +27,24 @@ describe('formatCurrency()', () => {
     expect(formatCurrency(undefined)).toBe('—')
     expect(formatCurrency('')).toBe('—')
     expect(formatCurrency('abc')).toBe('—')
+  })
+})
+
+describe('formatAmount()（表格儲存格：無 NT$ 前綴）', () => {
+  it('千分位、無前綴', () => {
+    expect(formatAmount(13000)).toBe('13,000')
+    expect(formatAmount('9680')).toBe('9,680')
+  })
+
+  it('0 與負數', () => {
+    expect(formatAmount(0)).toBe('0')
+    expect(formatAmount(-500)).toBe('-500')
+  })
+
+  it('null / undefined / 空字串 / 非數字 → 破折號 —（與 formatCurrency 同 fallback）', () => {
+    expect(formatAmount(null)).toBe('—')
+    expect(formatAmount(undefined)).toBe('—')
+    expect(formatAmount('')).toBe('—')
+    expect(formatAmount('abc')).toBe('—')
   })
 })

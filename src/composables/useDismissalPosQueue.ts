@@ -72,7 +72,9 @@ function toActiveItem(call: DismissalCallView): PosQueueItem {
       ? 'reservation'
       : call.request_source === 'proxy'
         ? 'proxy'
-        : 'onsite'
+        : call.request_source === 'bus'
+          ? 'bus'
+          : 'onsite'
   return {
     id: call.id,
     phase: 'active',

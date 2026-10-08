@@ -26,13 +26,6 @@ vi.mock('element-plus', () => {
     ElTabs: passthrough('el-tabs'),
     ElTabPane: passthrough('el-tab-pane'),
     ElTag: passthrough('el-tag'),
-    ElEmpty: defineComponent({
-      name: 'ElEmpty',
-      props: ['description', 'imageSize'],
-      render() {
-        return h('div', { class: 'el-empty' }, this.description)
-      },
-    }),
     ElIcon: passthrough('el-icon'),
     ElMessage: { error: vi.fn() },
   }

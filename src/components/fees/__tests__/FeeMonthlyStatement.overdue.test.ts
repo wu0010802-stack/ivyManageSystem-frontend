@@ -9,11 +9,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 
 const getFeeMonthlyStatement = vi.fn()
 const getPrepayments = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
-const getPrepaymentRefunds = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
 vi.mock('@/api/fees', () => ({
   getFeeMonthlyStatement: (...args: unknown[]) => getFeeMonthlyStatement(...args),
   getPrepayments: (...args: unknown[]) => getPrepayments(...args),
-  getPrepaymentRefunds: (...args: unknown[]) => getPrepaymentRefunds(...args),
 }))
 
 vi.mock('@/utils/auth', () => ({ hasPermission: () => false }))
@@ -27,9 +25,9 @@ vi.mock('@/components/fees/PrepaymentDrawer.vue', () => ({
   __esModule: true,
   default: { name: 'PrepaymentDrawer', template: '<div />' },
 }))
-vi.mock('@/components/fees/PrepaymentRefundsDialog.vue', () => ({
+vi.mock('@/components/fees/StudentCashReceiptDialog.vue', () => ({
   __esModule: true,
-  default: { name: 'PrepaymentRefundsDialog', template: '<div />' },
+  default: { name: 'StudentCashReceiptDialog', template: '<div />' },
 }))
 vi.mock('@/components/fees/BatchPayDialog.vue', () => ({
   __esModule: true,
@@ -50,6 +48,14 @@ const item = (over: Record<string, unknown>) => ({
   billing_start_date: '2026-08-01',
   target_month: null,
   period: '115-1',
+  source: 'bill_slip',
+  settlement: {
+    cash_registered: 0,
+    cash_submitted: 0,
+    cash_confirmed: 0,
+    bank_reconciled: 0,
+    unreceipted: 0,
+  },
   ...over,
 })
 
@@ -128,5 +134,38 @@ describe('FeeMonthlyStatement — SPEC-015 逾期標註', () => {
     // 再點一次取消，回復預設（未繳＋部分繳費可見）
     await tile.trigger('click')
     expect(wrapper.findAll('[data-test="stmt-row"]').length).toBeGreaterThan(1)
+  })
+})
+
+describe('FeeMonthlyStatement — 篩選後整表無列時的說明', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  // 回歸：逾期 0 人時 visibleStudents 為空，但分組表頭仍逐班列出（表頭統計講的是
+  // 收款狀況，與逾期無關）→ 畫面只剩一排無關數字、沒有任何一句話說明為什麼沒有列。
+  it('逾期快篩 0 人：明說沒有逾期學生，不留一排與逾期無關的班級表頭', async () => {
+    getFeeMonthlyStatement.mockResolvedValue({
+      ...STATEMENT,
+      students: [STATEMENT.students[1], STATEMENT.students[2]],
+    })
+    const w = mount(FeeMonthlyStatement, { props: { classrooms: [] } })
+    await flushPromises()
+
+    await w.find('[data-test="stmt-flt-overdue"]').trigger('click')
+    expect(w.findAll('[data-test="stmt-row"]').length).toBe(0)
+    expect(w.findAll('[data-test="stmt-class-group"]').length).toBe(0)
+    expect(w.find('[data-test="stmt-no-match"]').text()).toContain('沒有逾期')
+  })
+
+  it('狀態快篩把人全篩掉時說出是狀態造成的', async () => {
+    getFeeMonthlyStatement.mockResolvedValue({
+      ...STATEMENT,
+      students: [STATEMENT.students[2]],
+    })
+    const w = mount(FeeMonthlyStatement, { props: { classrooms: [] } })
+    await flushPromises()
+
+    // 預設關「已繳清」，範圍內只有一位已繳清學生 → 一列都不會通過
+    expect(w.findAll('[data-test="stmt-row"]').length).toBe(0)
+    expect(w.find('[data-test="stmt-no-match"]').text()).toContain('已收齊')
   })
 })

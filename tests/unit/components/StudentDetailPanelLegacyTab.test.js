@@ -11,6 +11,11 @@ import StudentDetailPanel from '@/components/student/StudentDetailPanel.vue'
  * StudentDetailPanel.LEGACY_TAB_MAP 把 4 個原獨立 tab 都 map 成 growth_profile，
  * 但 GrowthProfileTab.vue:24 是讀 route.query.sub（不是 tab），預設回
  * milestones。修補：legacy tab 名稱也要寫進 ?sub=。
+ *
+ * 2026-09-09（需求 2）：health_growth／growth_profile 兩個一級 tab 合併為
+ * health_growth_profile，故上述 4 個舊名稱現在改導向 health_growth_profile
+ * （而非 growth_profile），並額外補 ?group=growth 讓 HealthAndGrowthTab
+ * 跳到「成長類」分組。
  */
 
 vi.mock('@/api/students', async (importOriginal) => {
@@ -81,8 +86,7 @@ async function mountWithQuery(initialQuery, initialTab) {
         RecordsTab: true,
         FeesTab: true,
         ActivityTab: true,
-        HealthGrowthTab: true,
-        GrowthProfileTab: true,
+        HealthAndGrowthTab: true,
         CommunicationTab: true,
         StudentDisabilityDocsPanel: true,
         'el-tabs': { template: '<div class="el-tabs"><slot /></div>' },
@@ -105,9 +109,11 @@ describe('StudentDetailPanel legacy tab → sub mapping', () => {
   ])('?tab=%s 應補 ?sub=%s', async (legacy, expectedSub) => {
     const { router } = await mountWithQuery({ tab: legacy }, legacy)
     // 修補前：?tab=timeline → activeTab=growth_profile 但 ?sub 未設
-    // 修補後：URL 加 ?sub=<legacy>
+    // 修補後：URL 加 ?sub=<legacy>；合併後 ?tab= 落在 health_growth_profile，
+    // 並補 ?group=growth 讓 HealthAndGrowthTab 跳到「成長類」分組。
     expect(router.currentRoute.value.query.sub).toBe(expectedSub)
-    expect(router.currentRoute.value.query.tab).toBe('growth_profile')
+    expect(router.currentRoute.value.query.tab).toBe('health_growth_profile')
+    expect(router.currentRoute.value.query.group).toBe('growth')
   })
 
   it('非 legacy tab 不額外寫 sub', async () => {

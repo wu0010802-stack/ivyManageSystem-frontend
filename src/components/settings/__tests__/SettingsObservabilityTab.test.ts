@@ -5,6 +5,9 @@ vi.mock('@/api/internalMetrics', () => ({
   getSchedulerMetrics: vi.fn(),
 }))
 
+const mockIsPlatformAdmin = vi.fn(() => true)
+vi.mock('@/utils/auth', () => ({ isPlatformAdmin: () => mockIsPlatformAdmin() }))
+
 import SettingsObservabilityTab from '../SettingsObservabilityTab.vue'
 import * as api from '@/api/internalMetrics'
 
@@ -61,6 +64,7 @@ const _failingMetrics = {
 describe('SettingsObservabilityTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockIsPlatformAdmin.mockReturnValue(true)
   })
 
   it('shows empty state when no schedulers have run', async () => {
@@ -129,5 +133,21 @@ describe('SettingsObservabilityTab', () => {
     await flushPromises()
     expect(api.getSchedulerMetrics).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('medication_reminder')
+  })
+})
+
+
+describe('排程 API 平台邊界', () => {
+  it('一般租戶直接掛載或點重新整理皆不呼叫全程序 metrics', async () => {
+    vi.clearAllMocks()
+    mockIsPlatformAdmin.mockReturnValue(false)
+    const wrapper = mount(SettingsObservabilityTab, {
+      global: { directives: { loading: () => {} } },
+    })
+    await flushPromises()
+    await wrapper.find('[data-testid="refresh-btn"]').trigger('click')
+    await flushPromises()
+    expect(api.getSchedulerMetrics).not.toHaveBeenCalled()
+    wrapper.unmount()
   })
 })

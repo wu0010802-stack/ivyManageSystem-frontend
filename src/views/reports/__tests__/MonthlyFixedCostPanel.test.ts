@@ -37,6 +37,15 @@ async function mountLoaded() {
 }
 
 describe('MonthlyFixedCostPanel 套用到全年', () => {
+  it('深連結月份標示於表頭與合計，不改動金額', async () => {
+    const w = mount(MonthlyFixedCostPanel, { props: { year: 2025, highlightMonth: 8 } })
+    await flushPromises()
+    expect(w.find('thead .col-current').text()).toBe('8 月')
+    expect(w.find('[data-month-total="8"]').classes()).toContain('col-current')
+    expect((w.find('input[data-grid-row="0"][data-grid-col="0"]').element as HTMLInputElement).value).toBe('500,000')
+    expect(w.text()).toContain('目前核對 2025 年 8 月')
+    w.unmount()
+  })
   it('套用後該類 12 月 current 一致且全 dirty，emit update:dirty', async () => {
     promptMock.mockResolvedValue({ value: '12345' })
     const w = mountPanel()

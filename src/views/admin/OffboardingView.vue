@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { Search } from '@element-plus/icons-vue'
@@ -149,6 +149,15 @@ const drawerRow = ref<ListItem | null>(null)
 const drawerDetail = ref<OffboardingDetail | null>(null)
 const drawerLoading = ref(false)
 const drawerError = ref(false)
+let drawerRequestSeq = 0
+
+watch(drawerVisible, (visible) => {
+    if (visible) return
+    drawerRequestSeq += 1
+    drawerDetail.value = null
+    drawerLoading.value = false
+    drawerError.value = false
+})
 
 function openManage(row: ListItem): void {
     drawerRow.value = row
@@ -157,15 +166,18 @@ function openManage(row: ListItem): void {
 }
 
 async function loadDrawerDetail(id: number): Promise<void> {
+    const seq = ++drawerRequestSeq
     drawerLoading.value = true
     drawerError.value = false
     drawerDetail.value = null
     try {
-        drawerDetail.value = await store.refreshDetail(id)
+        const detail = await store.refreshDetail(id)
+        if (seq !== drawerRequestSeq || !drawerVisible.value || drawerRow.value?.employee_id !== id) return
+        drawerDetail.value = detail
     } catch {
-        drawerError.value = true
+        if (seq === drawerRequestSeq) drawerError.value = true
     } finally {
-        drawerLoading.value = false
+        if (seq === drawerRequestSeq) drawerLoading.value = false
     }
 }
 
@@ -186,7 +198,7 @@ async function onMagicLinkUpdate(): Promise<void> {
 // el-switch 未覆寫 active-value/inactive-value，change 事件實際值恆為 boolean；
 // 型別仍宣告聯集以符合 SwitchEmits 簽章，故用 Boolean() 明確窄化。
 async function handleNhiUnenrollToggle(value: string | number | boolean): Promise<void> {
-    if (!drawerRow.value) return
+    if (!drawerRow.value || drawerDetail.value?.employee_id !== drawerRow.value.employee_id) return
     const id = drawerRow.value.employee_id
     const submitted = Boolean(value)
     try {

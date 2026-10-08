@@ -1,74 +1,90 @@
 <template>
   <div class="attendance-workspace">
+    <PageHeader title="出勤管理" subtitle="打卡核對與出勤明細；每月結算前完成核對再匯出月報" />
+    <!-- 2026-09-10 拆分：無獨立頁面層級權限閘（本站慣例＝側欄隱藏＋後端 403，
+         非 /portal/* 頁不另掛 client 閘，見 router/index.ts 開頭註解）。 -->
     <WorkspaceHeader
       :year="query.year"
       :month="query.month"
       :kpis="kpis"
+      :display-state="statsDisplayState"
       @update:year="(v) => { query.year = v }"
       @update:month="(v) => { query.month = v }"
-      @import="importOpen = true"
+      @import="openImport"
       @export="onExport"
-    />
+    >
+      <template #month-tools><el-button v-if="canPayrollCompare" @click="payrollOpen = true">薪資扣項核對</el-button></template>
+    </WorkspaceHeader>
 
-    <!-- 桌機三欄 -->
+    <!-- 2026-09-10：原「班表與打卡核對／出勤明細與補卡」兩顆切換鈕改標籤語彙與樣式，
+         對應改版提案頁籤命名（打卡核對／出勤明細）。班表已獨立至 /schedule。 -->
+    <div v-if="canReconcile" class="workspace-mode" role="tablist" aria-label="出勤管理檢視">
+      <button type="button" role="tab" class="workspace-mode__tab" :class="{ 'workspace-mode__tab--active': reconcileOpen }" :aria-selected="reconcileOpen" @click="reconcileOpen = true">打卡核對</button>
+      <button type="button" role="tab" class="workspace-mode__tab" :class="{ 'workspace-mode__tab--active': !reconcileOpen }" :aria-selected="!reconcileOpen" @click="reconcileOpen = false">出勤明細</button>
+    </div>
+    <PayrollComparisonDialog v-if="payrollOpen && canPayrollCompare" v-model="payrollOpen" :year="query.year" :month="query.month" />
+    <!-- active：面板用 v-show 常駐以保留核對狀態，但隱藏時不得在背景重跑
+         reconciliation/preview（整月＝人數×天數的重運算，使用者根本看不到）。 -->
+    <ReconciliationPanel v-if="canReconcile && reconciliationVisited" v-show="reconcileOpen" :active="reconcileOpen" :year="query.year" :month="query.month" :revision="importRevision" @confirmed="onResolved" @records="onReconciliationRecords" @import="onReconciliationImport" />
+    <div v-show="!reconcileOpen || !canReconcile">
+    <p v-if="ws.loading.value" role="status">正在載入 {{ query.year }} 年 {{ query.month }} 月出勤紀錄…</p>
+    <div v-if="ws.loadState.value === 'error'" class="workspace-status" role="alert">
+      <p>{{ query.year }} 年 {{ query.month }} 月出勤資料載入失敗。{{ ws.hasCurrentData.value ? '目前顯示此月份上次成功載入的資料。' : '目前尚無此月份可顯示的資料。' }}</p>
+      <el-button @click="ws.refresh()">重新載入</el-button>
+    </div>
+    <section v-if="showEmptyRecords" class="workspace-status" aria-label="出勤紀錄空狀態">
+      <h2>本月尚無出勤紀錄</h2>
+      <p>{{ query.year }} 年 {{ query.month }} 月尚無已載入的出勤紀錄；班表與打卡核對仍可能有待補資料。</p>
+      <el-button v-if="hasPermission('ATTENDANCE_WRITE')" type="primary" @click="openImport">匯入打卡紀錄</el-button>
+    </section>
+    <template v-else-if="ws.hasCurrentData.value">
+    <div class="workspace-record-actions"><el-button @click="anomalyDrawerOpen = true">全月待處理異常（{{ ws.kpis.value.pendingAnomalies }}）</el-button><span>名冊搜尋只篩選人員；異常清單可另外搜尋與批次處理。</span></div>
+    <!-- 桌機名冊與整月明細 -->
     <div v-if="isDesktop" class="workspace-cols">
       <div class="col-roster">
         <RosterColumn
+          v-model:search="rosterSearch"
           :roster="ws.roster.value"
-          :selected-employee-id="selectedEmployeeId"
+          :selected-employee-id="currentEmployeeId"
+          :pending-counts="pendingCountsByEmployee"
           :loading="ws.loading.value"
           @select="onRosterSelect"
-        />
-      </div>
-      <div class="col-anomaly">
-        <AnomalyQueueColumn
-          :items="ws.anomalyQueue.value"
-          :selected-index="selectedAnomalyIndex"
-          :loading="ws.loading.value"
-          @select="onAnomalySelect"
-          @filter-change="onFilterChange"
-          @resolved="onResolved"
         />
       </div>
       <div class="col-detail">
         <DetailColumn
           :mode="detailMode"
+          @anomalies="anomalyDrawerOpen = true"
           :anomaly="currentAnomaly"
           :anomaly-index="selectedAnomalyIndex"
           :anomaly-total="ws.anomalyQueue.value.length"
           :context="context"
           :employee-id="currentEmployeeId"
+          :employee-name="currentEmployeeName"
+          :focus-date="focusDate"
+          :revision="importRevision"
+          @import="openImport"
           :year="query.year"
           :month="query.month"
-          @resolved="onResolved"
+          @resolved="onDetailResolved"
           @navigate="onNavigate"
-          @switch-mode="(m: 'resolve' | 'month') => { detailMode = m }"
+          @switch-mode="switchDetailMode"
         />
       </div>
     </div>
 
-    <!-- 行動三段流程：名冊／異常 → 明細。tab 受控，選取後自動推進到明細，
+    <!-- 行動流程：名冊 → 明細，異常另開抽屜。tab 受控，選取後自動推進到明細，
          否則使用者在名冊點了人卻停在原頁，看不出發生了什麼。 -->
     <el-tabs v-else v-model="mobileTab" class="workspace-tabs">
       <el-tab-pane label="名冊" name="roster">
         <div class="col-roster">
           <RosterColumn
+            v-model:search="rosterSearch"
             :roster="ws.roster.value"
-            :selected-employee-id="selectedEmployeeId"
+            :selected-employee-id="currentEmployeeId"
+          :pending-counts="pendingCountsByEmployee"
             :loading="ws.loading.value"
             @select="onRosterSelect"
-          />
-        </div>
-      </el-tab-pane>
-      <el-tab-pane :label="anomalyTabLabel" name="anomaly">
-        <div class="col-anomaly">
-          <AnomalyQueueColumn
-            :items="ws.anomalyQueue.value"
-            :selected-index="selectedAnomalyIndex"
-            :loading="ws.loading.value"
-            @select="onAnomalySelect"
-            @filter-change="onFilterChange"
-            @resolved="onResolved"
           />
         </div>
       </el-tab-pane>
@@ -85,33 +101,44 @@
           </el-button>
           <DetailColumn
             :mode="detailMode"
+            @anomalies="anomalyDrawerOpen = true"
             :anomaly="currentAnomaly"
             :anomaly-index="selectedAnomalyIndex"
             :anomaly-total="ws.anomalyQueue.value.length"
             :context="context"
             :employee-id="currentEmployeeId"
+            :employee-name="currentEmployeeName"
+            :focus-date="focusDate"
+            :revision="importRevision"
+            @import="openImport"
             :year="query.year"
             :month="query.month"
-            @resolved="onResolved"
+            @resolved="onDetailResolved"
             @navigate="onNavigate"
-            @switch-mode="(m: 'resolve' | 'month') => { detailMode = m }"
+            @switch-mode="switchDetailMode"
           />
         </div>
       </el-tab-pane>
     </el-tabs>
+    </template>
 
+    </div>
+    <el-drawer v-if="ws.hasCurrentData.value" v-model="anomalyDrawerOpen" title="全月出勤異常（全體人員）" :size="isMobile ? '100%' : '480px'" append-to-body>
+      <AnomalyQueueColumn :items="ws.anomalyQueue.value" :selected-index="selectedAnomalyIndex" :loading="ws.loading.value" @select="onAnomalySelect" @filter-change="onFilterChange" @resolved="onDetailResolved" />
+    </el-drawer>
     <!-- 匯入 dialog -->
     <ImportPreviewDialog
       v-model="importOpen"
       :year="query.year"
       :month="query.month"
+      :source-context="importContext"
       @imported="onImported"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, toRef, onMounted, provide, computed, ref, watch } from 'vue'
+import { reactive, toRef, onMounted, provide, computed, ref, watch, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useAttendanceWorkspace } from '@/composables/useAttendanceWorkspace'
@@ -121,22 +148,42 @@ import { useErrorNotify } from '@/composables/useErrorNotify'
 import { downloadFile } from '@/utils/download'
 import { getRecords } from '@/api/attendance'
 import type { ApiResponse } from '@/api/_generated/typed'
+import PageHeader from '@/components/common/PageHeader.vue'
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
 import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
 import DetailColumn from '@/components/attendance/DetailColumn.vue'
 import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue'
+import { hasPermission, hasFullSalaryView } from '@/utils/auth'
+const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
+const ReconciliationPanel = defineAsyncComponent(() => import('@/components/attendance/ReconciliationPanel.vue'))
+
+const props = defineProps<{ initialDate?: string; defaultReconcile?: boolean }>()
+const emit = defineEmits<{ dateChange: [date: string] }>()
 
 // ── getRecords 回傳列（OpenAPI 契約型別）────────────────────────────────────
 type RecordRow = ApiResponse<'/attendance/records', 'get'>[number]
 
 // ── 查詢狀態 ────────────────────────────────────────────────────────────────
-const now = new Date()
+const now = props.initialDate ? new Date(`${props.initialDate}T12:00:00`) : new Date()
 const query = reactive({ year: now.getFullYear(), month: now.getMonth() + 1 })
 
 // ── workspace composable ───────────────────────────────────────────────────
 const ws = useAttendanceWorkspace(toRef(query, 'year'), toRef(query, 'month'))
 const kpis = computed(() => ws.kpis.value)
+const rosterSearch = ref('')
+// 名冊分組要用「還沒處理完的」異常數：roster 的 late_count 等來自月統計，不會因為
+// 管理者接受扣款或豁免而減少，直接拿來分組會讓處理完的人一直掛在「有待處理」。
+const pendingCountsByEmployee = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = {}
+  for (const card of ws.anomalyQueue.value) {
+    if (card.confirmed_action !== null) continue
+    counts[card.employee_number] = (counts[card.employee_number] ?? 0) + 1
+  }
+  return counts
+})
+const statsDisplayState = computed(() => ws.hasCurrentData.value ? (ws.loadState.value === 'success' ? 'ready' : 'stale') : (ws.loading.value ? 'loading' : 'unavailable'))
+const showEmptyRecords = computed(() => !focusDate.value && !rosterSearch.value.trim() && ws.loadState.value === 'success' && ws.hasCurrentData.value && ws.roster.value.length === 0 && ws.anomalyQueue.value.length === 0)
 
 // ── 錯誤通知 ────────────────────────────────────────────────────────────────
 const { notify } = useErrorNotify()
@@ -148,23 +195,45 @@ const isDesktop = computed(() => !isMobile.value)
 // ── UI 狀態機 ────────────────────────────────────────────────────────────────
 const selectedEmployeeId = ref<number | null>(null)
 const selectedAnomalyIndex = ref(0)
-const detailMode = ref<'resolve' | 'month'>('resolve')
+const detailMode = ref<'resolve' | 'month'>('month')
+const anomalyDrawerOpen = ref(false)
 const importOpen = ref(false)
-
-// ── 手機三段流程 ────────────────────────────────────────────────────────────
-// 桌機三欄同時可見，不需要這個狀態；手機一次只看得到一段，故需記錄目前在哪一段。
-type MobileTab = 'roster' | 'anomaly' | 'detail'
-const mobileTab = ref<MobileTab>('roster')
-
-// 異常分頁標籤帶待處理筆數，讓使用者不必切過去才知道有沒有事情要處理
-const anomalyTabLabel = computed(() => {
-  const n = ws.anomalyQueue.value.length
-  return n > 0 ? `異常（${n}）` : '異常'
+const focusDate = ref<string | null>(null)
+const importContext = ref<{ employee_id: number; employee_name: string; date: string } | null>(null)
+function openImport(): void { importContext.value = null; importOpen.value = true }
+const payrollOpen = ref(false)
+const canPayrollCompare = computed(() => hasPermission('ATTENDANCE_READ') && hasPermission('SALARY_READ') && hasFullSalaryView())
+const canReconcile = computed(() => hasPermission('SCHEDULE') && hasPermission('ATTENDANCE_READ'))
+const reconcileOpen = ref(props.defaultReconcile ?? false)
+const reconciliationVisited = ref(reconcileOpen.value)
+watch(reconcileOpen, value => { if (value) reconciliationVisited.value = true })
+// ?tab= 深連結在「已經停在本頁」時也要生效（date 深連結一直都有 watch，tab 沒有，
+// 於是從 /attendance 導到 /attendance?tab=reconcile 只會換月、不會換頁籤）。
+// props 由 router props function 依 query 重算，值沒變時 watch 不會觸發，因此
+// 使用者自己按的頁籤不會被 query 重算蓋掉。
+watch(() => props.defaultReconcile, value => { if (value !== undefined) reconcileOpen.value = value })
+const importRevision = ref(0)
+watch(() => [query.year, query.month], () => {
+  const monthPrefix = `${query.year}-${String(query.month).padStart(2, '0')}`
+  if (focusDate.value && !focusDate.value.startsWith(`${monthPrefix}-`)) focusDate.value = null
+  emit('dateChange', `${monthPrefix}-01`)
+})
+watch(() => props.initialDate, value => {
+  if (!value) return
+  const date = new Date(`${value}T12:00:00`)
+  query.year = date.getFullYear()
+  query.month = date.getMonth() + 1
 })
 
-// 返回鍵回到「來的那一段」：resolve 模式來自異常佇列，month 模式來自名冊
+// ── 手機名冊與明細流程 ────────────────────────────────────────────────────────────
+// 桌機兩欄同時可見，不需要這個狀態；手機一次只看得到一段，故需記錄目前在哪一段。
+type MobileTab = 'roster' | 'detail'
+const mobileTab = ref<MobileTab>('roster')
+
+// 手機從異常明細返回抽屜，整月明細返回名冊。
 function backFromDetail(): void {
-  mobileTab.value = detailMode.value === 'resolve' ? 'anomaly' : 'roster'
+  if (detailMode.value === 'resolve') anomalyDrawerOpen.value = true
+  else mobileTab.value = 'roster'
 }
 
 // ── 員工月記錄快取 ───────────────────────────────────────────────────────────
@@ -181,10 +250,21 @@ const currentAnomaly = computed<AnomalyDayCard | null>(
 // 從 AnomalyQueue 選取時 selectedEmployeeId=null，用 anomaly.employee_number 對照名冊
 const currentEmployeeId = computed<number | null>(() => {
   if (selectedEmployeeId.value != null) return selectedEmployeeId.value
+  if (detailMode.value === 'month') return ws.roster.value[0]?.employee_id ?? null
   const a = currentAnomaly.value
   if (!a) return null
   return ws.roster.value.find((r) => r.employee_number === a.employee_number)?.employee_id ?? null
 })
+
+watch([ws.roster, ws.loadedPeriod], () => {
+  if (!ws.hasCurrentData.value || ws.loadState.value !== 'success') return
+  if (selectedEmployeeId.value !== null && !ws.roster.value.some(row => row.employee_id === selectedEmployeeId.value)) {
+    selectedEmployeeId.value = null
+    focusDate.value = null
+  }
+})
+
+const currentEmployeeName = computed(() => ws.roster.value.find(row => row.employee_id === currentEmployeeId.value)?.employee_name ?? '')
 
 // ── 監聽 [currentEmployeeId, year, month]：換月先清快取再載入 ──────────────
 // 合併為單一 watch 避免換月時 Watch1（載入）先跑命中舊快取、Watch2（清快取）後跑的競態。
@@ -192,15 +272,20 @@ const currentEmployeeId = computed<number | null>(() => {
 // request-sequence guard（recSeq）：換月/換員工時，舊一次 in-flight 的 getRecords 回應
 // 可能在較新一次之後才 resolve；若無守衛會用舊月資料回填快取覆寫最新月，造成顯示與快取不一致。
 // 每次觸發遞增 recSeq 並在 await 後比對，過期回應直接丟棄。
+// 本快取只餵 context → ResolveCard，而 ResolveCard 只在 detailMode==='resolve'
+// 下渲染（DetailColumn 的 month 分支不吃 context）。整月明細由 EmployeeMonthPanel
+// 自己抓同一支 /attendance/records，兩邊都抓會讓每次換月／換人送出兩個內容相同、
+// 只有 query 參數順序不同的請求（dedupe 只併同時 in-flight 的，差一個 tick 就漏）。
 let recSeq = 0
 watch(
-  [currentEmployeeId, () => query.year, () => query.month] as const,
-  async ([empId, y, m], [, oldY, oldM]) => {
+  [currentEmployeeId, () => query.year, () => query.month, detailMode] as const,
+  async ([empId, y, m, mode], [, oldY, oldM]) => {
     const seq = ++recSeq
     // 換月或換年 → 清快取（確保不命中舊月資料）
     if (y !== oldY || m !== oldM) {
       recordsCache.value = new Map()
     }
+    if (mode !== 'resolve') return
     if (empId == null) return
     if (recordsCache.value.has(empId)) return
     try {
@@ -235,13 +320,24 @@ const context = computed(() => {
 
 // ── 事件 handlers ─────────────────────────────────────────────────────────
 
+function switchDetailMode(mode: 'resolve' | 'month'): void {
+  if (mode === 'month') {
+    selectedEmployeeId.value = currentEmployeeId.value
+    focusDate.value = currentAnomaly.value?.date ?? focusDate.value
+  }
+  detailMode.value = mode
+}
+
 function onRosterSelect(id: number): void {
+  focusDate.value = null
   selectedEmployeeId.value = id
   detailMode.value = 'month'
   if (isMobile.value) mobileTab.value = 'detail'
 }
 
 function onAnomalySelect(idx: number): void {
+  anomalyDrawerOpen.value = false
+  focusDate.value = null
   selectedAnomalyIndex.value = idx
   selectedEmployeeId.value = null // 走 anomaly.employee_number → roster 對照
   detailMode.value = 'resolve'
@@ -259,6 +355,8 @@ function clampSelectedIndex(): void {
 // 當前員工，其餘員工待選取時 cache-miss 重載。
 async function invalidateRecordsCache(): Promise<void> {
   recordsCache.value = new Map()
+  // 同上：只有 resolve 模式吃這份快取；整月明細由 EmployeeMonthPanel 自行重載。
+  if (detailMode.value !== 'resolve') return
   const empId = currentEmployeeId.value
   if (empId == null) return
   const seq = ++recSeq
@@ -283,12 +381,38 @@ async function onResolved(): Promise<void> {
   clampSelectedIndex()
 }
 
+async function onDetailResolved(): Promise<void> {
+  await onResolved()
+  importRevision.value += 1
+}
+
 function onNavigate(delta: number): void {
   const max = Math.max(0, ws.anomalyQueue.value.length - 1)
   selectedAnomalyIndex.value = Math.min(Math.max(0, selectedAnomalyIndex.value + delta), max)
 }
 
+function onReconciliationRecords(row: { employee_id: number; date: string }): void {
+  const [year, month] = row.date.split('-').map(Number)
+  query.year = year
+  query.month = month
+  reconcileOpen.value = false
+  selectedEmployeeId.value = row.employee_id
+  focusDate.value = row.date
+  detailMode.value = 'month'
+  if (!isDesktop.value) mobileTab.value = 'detail'
+}
+
+function onReconciliationImport(row: { employee_id: number; employee_name: string; date: string }): void {
+  importContext.value = { employee_id: row.employee_id, employee_name: row.employee_name, date: row.date }
+  const [year, month] = row.date.split('-').map(Number)
+  query.year = year
+  query.month = month
+  importOpen.value = true
+}
+
 async function onImported(): Promise<void> {
+  importRevision.value += 1
+  if (canReconcile.value) reconcileOpen.value = true
   await Promise.all([ws.refresh(), invalidateRecordsCache()])
   clampSelectedIndex()
   ElMessage.success('匯入完成')
@@ -312,9 +436,30 @@ provide('attendanceWs', ws)
   padding: var(--space-4);
 }
 
+.workspace-status { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-6); text-align: center; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); }
+.workspace-status h2, .workspace-status p { margin: 0; }
+.workspace-status h2 { font-size: var(--text-lg); }
+.workspace-status p { color: var(--el-text-color-secondary); }
+.workspace-mode { display: flex; gap: var(--space-5); border-bottom: 1px solid var(--el-border-color-light); margin-bottom: var(--space-4); }
+.workspace-mode__tab {
+  min-height: var(--touch-target-min);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--el-text-color-regular);
+  padding: var(--space-2) 0 var(--space-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+}
+.workspace-mode__tab--active { color: var(--el-color-primary); border-bottom-color: var(--el-color-primary); font-weight: 600; }
+.workspace-mode__tab:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+
+.workspace-record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.workspace-record-actions > span { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .workspace-cols {
   display: grid;
-  grid-template-columns: 240px 280px 1fr;
+  grid-template-columns: 240px minmax(0, 1fr);
   gap: var(--space-3);
   align-items: start;
 }
@@ -340,7 +485,7 @@ provide('attendanceWs', ws)
   .attendance-workspace {
     padding: var(--space-3);
   }
-  /* 三段標籤在窄機平均分配寬度，避免「異常（12）」把「明細」擠出視窗 */
+  /* 兩段標籤在窄機平均分配寬度 */
   .workspace-tabs :deep(.el-tabs__nav) {
     display: flex;
     width: 100%;

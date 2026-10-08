@@ -1,7 +1,10 @@
 <template>
   <div class="funnel-column" :style="{ '--accent': accentColor }">
     <div class="funnel-column__header">
-      <span class="funnel-column__title">{{ title }}</span>
+      <span class="funnel-column__title">
+        <span class="funnel-column__dot" aria-hidden="true"></span>
+        {{ title }}
+      </span>
       <el-badge :value="cards.length" :max="99" />
     </div>
     <draggable
@@ -80,7 +83,10 @@ function onDragChange(evt: DragChangeEvent) {
 <style scoped>
 .funnel-column {
   background: var(--bg-color-soft);
-  border-top: 3px solid var(--accent);
+  /* 2026-09-06：漏斗四欄的階段色標原本是圓角欄位上的 border-top 粗色條（設計禁忌）；
+   * 改為欄框用中性 1px 完整邊框，色彩語意移到標題旁的小圓點（見 __dot），
+   * 四色仍取自 FUNNEL_STAGE_COLORS，四欄可辨識度不變。 */
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   min-height: 400px;
   padding: 12px;
@@ -96,7 +102,20 @@ function onDragChange(evt: DragChangeEvent) {
   margin-bottom: 12px;
 }
 .funnel-column__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
+  /* 標題不吃 --accent：「已訪視」的階段色是淺灰 #909399，當文字色在淺底上
+     只有約 2.8:1，達不到 WCAG AA 的 4.5:1。色彩語意交給旁邊的圓點承載
+     （圓點是 graphical object，門檻 3:1），文字維持一般前景色。 */
+}
+.funnel-column__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
 }
 .funnel-column__body {
   flex: 1;

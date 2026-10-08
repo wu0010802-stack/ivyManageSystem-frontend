@@ -3,8 +3,8 @@
  * 家長端 `GET /parent/home/summary` 的共用讀取層。
  *
  * summary 一支就帶齊多個計數（未讀公告 / 待繳 / 待簽 / 才藝候補待確認 /
- * 假單審核結果 / 活動調查 / 今日用藥單），所以待辦頁、首頁「待你處理」、底部
- * tab 徽章都從這裡拿，不再各自打 API。
+ * 假單審核結果 / 今日用藥單），所以待辦清單、底部 tab 徽章都從這裡拿，
+ * 不再各自打 API。
  *
  * 後端仍回傳 unread_messages，但親師訊息已於 2026-08-28 自家長端下架，
  * 前端不再讀取該欄位。
@@ -26,7 +26,8 @@ export interface HomeBadges {
   pendingEventAcks: number
   pendingActivityPromotions: number
   recentLeaveReviews: number
-  pendingSurveys: number
+  /** 待回覆的活動調查份數（2026-09-02 併入，原本事務頁（現待辦頁）自己 cast summary 讀） */
+  pendingSurveyCount: number
   /** 今日生效的委託用藥單張數；資訊性，不計入 tab 徽章 */
   activeMedicationOrders: number
 }
@@ -65,18 +66,21 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
       pendingEventAcks: num(s.pending_event_acks),
       pendingActivityPromotions: num(s.pending_activity_promotions),
       recentLeaveReviews: num(s.recent_leave_reviews),
-      pendingSurveys: num(s.pending_survey_count),
+      pendingSurveyCount: num(s.pending_survey_count),
       activeMedicationOrders: num(s.active_medication_orders),
     }
   })
 
   /**
-   * 底部「待辦」tab 的總數徽章。
+   * 底部「待辦」tab（2026-10-08 前叫「事務」）的總數徽章。
    *
-   * 只加「需要家長動作或該知道結果」的項目（與待辦頁清單對齊，2026-10-08 補上
-   * 先前漏算的活動調查）。今日用藥單是資訊性的（家長已經送出、老師照表執行），
-   * 計進去只會讓紅點天天亮著而失去意義。入學文件待簽數不在 summary 內，layout
-   * 不為了徽章另打一支 API，該項只在待辦頁／首頁清單中出現。
+   * 只加「需要家長動作」的四項，與首頁待辦標題的「N 件」（useParentTodos
+   * actionCount）同一口徑。今日用藥單、近 7 天請假審核結果是資訊性的，
+   * 計進去會讓 tab 數字比首頁多、紅點天天亮著而失去意義（2026-09-26）。
+   *
+   * 刻意不加入首頁待辦清單的另外兩項（入學文件簽署、臨時接送）：那兩支是
+   * summary 之外的獨立 API，而 ParentLayout 在登入頁也會掛載，為了徽章
+   * 多打兩支請求不划算。因此待辦清單的件數可能比 tab 徽章多，屬已知取捨。
    */
   const adminTabBadge = computed<number>(() => {
     const b = badges.value
@@ -84,20 +88,9 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
       b.outstandingFees +
       b.pendingEventAcks +
       b.pendingActivityPromotions +
-      b.recentLeaveReviews +
-      b.pendingSurveys
+      b.pendingSurveyCount
     )
   })
-
-  /**
-   * 底部「聯絡簿」tab 徽章。
-   *
-   * 目前只有未讀公告——後端 summary 尚無「未讀聯絡簿」計數，加上去要另開欄位；
-   * 聯絡簿本身的未讀在頁內以「N 則未讀」pill 呈現。
-   */
-  const contactBookTabBadge = computed<number>(
-    () => badges.value.unreadAnnouncements,
-  )
 
   return {
     data,
@@ -107,6 +100,5 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
     summary,
     badges,
     adminTabBadge,
-    contactBookTabBadge,
   }
 }

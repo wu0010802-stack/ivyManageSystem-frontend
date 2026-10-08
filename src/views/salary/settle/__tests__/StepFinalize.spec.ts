@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import StepFinalize from '../StepFinalize.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -72,10 +72,19 @@ const STUBS = {
     'el-icon': true,
 }
 
-const mountStep = (settlement: ReturnType<typeof makeSettlement>) =>
+const mountStep = (
+    settlement: ReturnType<typeof makeSettlement>,
+    query = reactive({ year: 2026, month: 5 }),
+) =>
     mount(StepFinalize, {
-        global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
+        global: { stubs: STUBS, provide: { settlement, settleQuery: query } },
     })
+
+function deferred<T>() {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((done) => { resolve = done })
+    return { promise, resolve }
+}
 
 describe('StepFinalize', () => {
     beforeEach(() => {
@@ -127,6 +136,43 @@ describe('StepFinalize', () => {
         expect(finalizeMonthMock).toHaveBeenLastCalledWith({
             year: 2026, month: 5, force: true, force_reason: '理由理由理由理由理由',
         })
+    })
+
+    it('切換月份後清除前一月份的 blockers，不得讓舊問題觸發新月份強制封存', async () => {
+        finalizeMonthMock.mockRejectedValueOnce({
+            response: { status: 409, data: { detail: ['5 月缺薪資紀錄'] } },
+        })
+        const query = reactive({ year: 2026, month: 5 })
+        const wrapper = mountStep(makeSettlement([rec()]), query)
+        const finalize = wrapper.findAll('button').find((b) => b.text().includes('整月定案'))!
+        await finalize.trigger('click')
+        await flushPromises()
+        expect(wrapper.text()).toContain('5 月缺薪資紀錄')
+
+        query.month = 6
+        await flushPromises()
+
+        expect(wrapper.text()).not.toContain('5 月缺薪資紀錄')
+        expect(wrapper.findAll('button').some((b) => b.text().includes('強制封存'))).toBe(false)
+    })
+
+    it('確認框等待期間鎖住重複操作；切月後舊確認不得封存新月份', async () => {
+        const confirmation = deferred<unknown>()
+        vi.mocked(ElMessageBox.confirm).mockReturnValue(confirmation.promise as never)
+        const query = reactive({ year: 2026, month: 5 })
+        const wrapper = mountStep(makeSettlement([rec()]), query)
+        const finalize = wrapper.findAll('button').find((b) => b.text().includes('整月定案'))!
+
+        await finalize.trigger('click')
+        await finalize.trigger('click')
+        expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
+
+        query.month = 6
+        await flushPromises()
+        confirmation.resolve('confirm')
+        await flushPromises()
+
+        expect(finalizeMonthMock).not.toHaveBeenCalled()
     })
 
     it('無財務覆核權限 → 不顯示強制封存按鈕', async () => {

@@ -39,7 +39,7 @@ describe('student workbench routing', () => {
   })
 
   // 防回歸：/classrooms 不得再掛回外層 tabs 殼（ClassroomWorkbenchView）——
-  // 在籍記錄表已折入本頁「統計表」modal、統計圖表獨立為 /enrollment-stats。
+  // 在籍記錄表已折入本頁「統計表」modal、在籍統計獨立為 /enrollment-stats。
   it('/classrooms resolves to ClassroomView without a tabs shell', async () => {
     const resolved = router.resolve('/classrooms')
     expect(resolved.name).toBe('classrooms')

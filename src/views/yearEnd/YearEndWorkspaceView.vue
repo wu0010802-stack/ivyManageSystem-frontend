@@ -138,13 +138,13 @@ async function closeCycle() {
   const pending = progress.value.pending_sign_count
   if (pending > 0) {
     ElMessageBox.alert(
-      `尚有 ${pending} 筆結算單未核定（FINALIZED），無法封存。請先完成簽核。`,
+      `尚有 ${pending} 筆結算單未核定，無法封存。請先完成簽核。`,
       '無法封存',
       { type: 'error' },
     )
     return
   }
-  return transitionStatus('CLOSED', `封存前請確認：此週期所有結算單須全數核定（FINALIZED）。確定要封存「${cycle.value?.academic_year} 學年度」週期嗎？`)
+  return transitionStatus('CLOSED', `封存前請確認：此週期所有結算單須全數核定。確定要封存「${cycle.value?.academic_year} 學年度」週期嗎？`)
 }
 function reopenToLocked() {
   return transitionStatus('LOCKED', `確定要將「${cycle.value?.academic_year} 學年度」退回鎖定狀態嗎？（救援用途）`)
@@ -292,4 +292,13 @@ function reopenToOpen() {
 .ye-header__meta { margin: var(--space-3) 0; padding: var(--space-3); background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .ye-header__progress { margin-left: auto; font-size: var(--text-sm); color: var(--text-secondary); }
 .ye-toolbar { margin: var(--space-2) 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+@media (max-width: 900px) {
+  .ye-workspace { flex-direction: column; }
+  .ye-rail, .ye-workspace--collapsed .ye-rail { flex: none; position: static; width: 100%; }
+  .ye-rail__toggle { display: none; }
+  .ye-rail__steps { flex-direction: row; overflow-x: auto; }
+  .ye-rail__steps > li { flex: 0 0 auto; }
+  .ye-rail__step { min-height: 44px; }
+  .ye-rail__hint { display: none; }
+}
 </style>

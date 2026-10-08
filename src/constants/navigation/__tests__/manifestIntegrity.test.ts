@@ -152,6 +152,8 @@ const LEGACY_ROUTE_PERMISSION_RULES: { path: string; permission: string; prefix?
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },
   { path: '/data-quality', permission: 'DATA_QUALITY_READ' },
   { path: '/settings', permission: 'SETTINGS_READ' },
+  { path: '/settings', permission: 'SCHEDULE' },
+  { path: '/settings', permission: 'DSR_MANAGE' },
   { path: '/settings/accounts', permission: 'USER_MANAGEMENT_READ' },
   { path: '/settings/roles', permission: 'ROLES_MANAGE' },
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
@@ -244,6 +246,8 @@ const INTENTIONAL_DIVERGENCE = {
     '/platform/audit × PLATFORM_AUDIT_VIEW',
     // 2026-08-10 娃娃車乘車歷史頁新增（fixture 凍結於 2026-07-31，此路由更晚才有）。
     '/bus-history × BUS_READ',
+    // 2026-09-06 排班與出勤共用入口曾借道 SCHEDULE；2026-09-10 拆回獨立側欄項目後
+    // 移除 sharedViews，此條差異隨之消失（見 manifest.ts attendance 頁註解）。
     // 2026-08-10 活動參加調查表（Task 13）新增（fixture 凍結於 2026-07-31，此模組更晚才有）。
     '/surveys × SURVEYS_READ × prefix',
     '/surveys/new × SURVEYS_WRITE',
@@ -258,10 +262,26 @@ const INTENTIONAL_DIVERGENCE = {
     '/bus/monitor × BUS_READ',
     '/bus/history × BUS_READ',
     '/bus/routes × BUS_WRITE',
+    // 2026-08-26 班次排程新增兩分頁：今日調度（進頁 BUS_READ，發車後寫入由
+    // BUS_IN_PROGRESS_WRITE 在頁內控制，故不進 route 規則）與娃娃車設定（BUS_WRITE）。
+    '/bus/dispatch × BUS_READ',
+    '/bus/settings × BUS_WRITE',
     // 2026-08-18 總部「政府資料同步」頁新增（fixture 凍結於 2026-07-31）。
     // 借道 PLATFORM_TENANTS_MANAGE 而非新增第四個 PLATFORM_* 碼——後端
     // PLATFORM_ONLY_CODES parity 與角色 seed 都吃那三碼。
     '/platform/gov-data × PLATFORM_TENANTS_MANAGE',
+    // 排程監控改為總部專屬頁，沿用平台維運權限。
+    '/platform/observability × PLATFORM_TENANTS_MANAGE',
+    // 2026-08-20 節慶人數月底結算：新頁掛在「考核與年終 › 規則設定」下，權限沿用
+    // SALARY_READ（業主裁定 D4；該碼本就在 appraisalYearEnd 群組 sharedViews 內）。
+    '/appraisal-year-end/rules/festival-headcount × SALARY_READ',
+    // 2026-09-04 家長端服務監控新分頁（SPEC-023 批次 1）：沿用操作紀錄的
+    // AUDIT_LOGS，不新增權限碼；一律 exact，禁用 prefix（外溢會讓 DATA_QUALITY_READ
+    // 深連結進監控頁）。
+    '/governance/parent-monitor × AUDIT_LOGS',
+    // 2026-09-08 公告分類管理新頁（anncat01）：沿用 ANNOUNCEMENTS_READ 借道
+    // sharedViews，不新增權限碼（fixture 凍結於 2026-07-31，此頁更晚才有）。
+    '/announcement-categories × ANNOUNCEMENTS_READ',
   ],
 }
 

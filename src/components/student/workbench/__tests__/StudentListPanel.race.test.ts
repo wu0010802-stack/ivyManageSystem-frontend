@@ -43,7 +43,7 @@ vi.mock('@/stores/student', () => ({
 
 import { getStudent, getStudents } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
-import { getDismissalCalls } from '@/api/dismissalCalls'
+import { createDismissalCall, getDismissalCalls } from '@/api/dismissalCalls'
 import StudentListPanel from '../StudentListPanel.vue'
 
 function deferred<T>() {
@@ -166,9 +166,78 @@ describe('StudentListPanel 學生清單請求競態', () => {
     expect(vm.students.map((s) => s.id)).toEqual([5])
     expect(vm.totalStudents).toBe(1)
   })
+
+  it('切換學期後舊回應不得覆蓋新學期名單', async () => {
+    const wrapper = await mountPanel()
+    const vm = wrapper.vm as unknown as {
+      fetchStudents: () => Promise<void>
+      filterSemester: number
+      students: Array<{ id: number }>
+    }
+    const oldSemester = vm.filterSemester
+    const newSemester = oldSemester === 1 ? 2 : 1
+    const slowOldTerm = deferred<{ data: { items: Array<{ id: number }>; total: number } }>()
+    vi.mocked(getStudents)
+      .mockReturnValueOnce(slowOldTerm.promise as never)
+      .mockResolvedValueOnce({ data: { items: [{ id: 202 }], total: 1 } } as never)
+
+    const oldRun = vm.fetchStudents()
+    vm.filterSemester = newSemester
+    await flushPromises()
+
+    expect(vi.mocked(getStudents)).toHaveBeenLastCalledWith(expect.objectContaining({
+      semester: newSemester,
+    }))
+    expect(vm.students.map((student) => student.id)).toEqual([202])
+
+    slowOldTerm.resolve({ data: { items: [{ id: 101 }], total: 1 } })
+    await oldRun
+    await flushPromises()
+
+    expect(vm.students.map((student) => student.id)).toEqual([202])
+  })
 })
 
 describe('StudentListPanel 異動防重送', () => {
+  it('歷史學期列的通知、編輯與轉班都維持目前班級作為異動來源', async () => {
+    const wrapper = await mountPanel()
+    const vm = wrapper.vm as unknown as {
+      handleNotifyDismissal: (row: { id: number; classroom_id: number; term_classroom_id: number }) => Promise<void>
+      handleEdit: (row: { id: number; classroom_id: number; term_classroom_id: number }) => Promise<void>
+      editInitial: { classroom_id?: number | null; term_classroom_id?: number | null } | null
+      pendingClassroomId: number | null
+      selectedStudents: Array<{ id: number; classroom_id: number; term_classroom_id: number }>
+      transferTargetClassroomId: number | null
+      submitTransfer: () => Promise<void>
+    }
+    const row = { id: 1, classroom_id: 20, term_classroom_id: 10 }
+    vi.mocked(getStudent).mockResolvedValue({ data: row } as never)
+    vi.mocked(createDismissalCall).mockResolvedValue({ data: {} } as never)
+    bulkTransferMock.mockResolvedValue({ data: {} })
+
+    await vm.handleNotifyDismissal(row)
+    await vm.handleEdit(row)
+    vm.selectedStudents = [row]
+    vm.transferTargetClassroomId = 30
+    await vm.submitTransfer()
+
+    expect(vi.mocked(createDismissalCall)).toHaveBeenCalledWith({
+      student_id: 1,
+      classroom_id: 20,
+    })
+    expect(vi.mocked(getStudent)).toHaveBeenCalledWith(1)
+    expect(vm.editInitial).toEqual(expect.objectContaining({
+      classroom_id: 20,
+      term_classroom_id: 10,
+    }))
+    expect(vm.pendingClassroomId).toBe(20)
+    expect(bulkTransferMock).toHaveBeenCalledWith({
+      student_ids: [1],
+      target_classroom_id: 30,
+      source_classroom_id: 20,
+    })
+  })
+
   it('轉班請求尚未完成時忽略第二次送出', async () => {
     const wrapper = await mountPanel()
     const vm = wrapper.vm as unknown as {

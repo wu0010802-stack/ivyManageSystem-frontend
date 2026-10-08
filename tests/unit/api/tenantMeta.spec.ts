@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   fetchTenantMeta,
-  fetchTenantMetaForLiff,
+  fetchTenantMetaForLine,
   isTenantMetaEnabled,
+  shouldUseLegacyLineEnvFallback,
   TENANT_META_DISABLED,
   TenantMetaError,
   _resetTenantMetaCacheForTests,
@@ -75,12 +76,12 @@ describe('灰度閘門 isTenantMetaEnabled()', () => {
    * 拿不到 LIFF ID 而完全無法登入。LIFF ID 是登入前置，必須有一條不受此閘門
    * 限制的管道；品牌／遮罩行為仍走 `fetchTenantMeta()`，灰度不變式不受影響。
    */
-  it('fetchTenantMetaForLiff 不受閘門限制：灰度全關仍會發請求', async () => {
+  it('fetchTenantMetaForLine 不受閘門限制：灰度全關仍會發請求', async () => {
     setEnv({ VITE_TENANT_META_ENABLED: '', VITE_TENANT_BASE_DOMAIN: '', VITE_TENANT_DOMAIN_MAP: '' })
     const spy = stubFetch(() => jsonResponse({ liff_id: 'tenant-liff-9' }))
     expect(isTenantMetaEnabled()).toBe(false)
 
-    await expect(fetchTenantMetaForLiff()).resolves.toMatchObject({ liff_id: 'tenant-liff-9' })
+    await expect(fetchTenantMetaForLine()).resolves.toMatchObject({ liff_id: 'tenant-liff-9' })
     expect(spy).toHaveBeenCalledTimes(1)
     // 同一時間 branding 那條仍必須被閘門擋住（灰度不變式沒有被順手放寬）
     await expect(fetchTenantMeta()).rejects.toMatchObject({ code: TENANT_META_DISABLED })
@@ -139,6 +140,29 @@ describe('錯誤分類與去重（CT-F-01）', () => {
     await expect(fetchTenantMeta()).rejects.toMatchObject({ status, code })
   })
 
+  it('只把 FastAPI 精確的 detail="Not Found" 404 標成舊版路由不存在', async () => {
+    setEnv({ VITE_TENANT_META_ENABLED: '', VITE_TENANT_BASE_DOMAIN: '', VITE_TENANT_DOMAIN_MAP: '' })
+    stubFetch(() => jsonResponse({ detail: 'Not Found' }, 404))
+
+    const error = await fetchTenantMetaForLine().catch((caught: unknown) => caught)
+
+    expect(error).toMatchObject({ status: 404, code: undefined, legacyRouteMissing: true })
+    expect(shouldUseLegacyLineEnvFallback(error)).toBe(true)
+  })
+
+  it.each([
+    ['結構化 tenant 404', jsonResponse({ detail: { code: 'TENANT_NOT_FOUND' } }, 404)],
+    ['畸形 JSON 404', new Response('{', { status: 404, headers: { 'Content-Type': 'application/json' } })],
+    ['HTML 404', new Response('<h1>Not Found</h1>', { status: 404, headers: { 'Content-Type': 'text/html' } })],
+  ])('%s 不開啟 legacy env fallback', async (_label, response) => {
+    setEnv({ VITE_TENANT_META_ENABLED: '', VITE_TENANT_BASE_DOMAIN: '', VITE_TENANT_DOMAIN_MAP: '' })
+    stubFetch(() => response)
+
+    const error = await fetchTenantMetaForLine().catch((caught: unknown) => caught)
+
+    expect(shouldUseLegacyLineEnvFallback(error)).toBe(false)
+  })
+
   it('非 JSON 的錯誤 body 不會讓錯誤處理自己炸掉', async () => {
     stubFetch(() => new Response('<html>502</html>', { status: 502 }))
     const err = await fetchTenantMeta().catch((e: unknown) => e)
@@ -162,5 +186,32 @@ describe('錯誤分類與去重（CT-F-01）', () => {
     await expect(fetchTenantMeta()).rejects.toBeInstanceOf(TenantMetaError)
     await expect(fetchTenantMeta()).resolves.toMatchObject({ org_name: 'X' })
     expect(spy).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('解析負載削減 TENANT_RESOLUTION_BUSY（整合審查 R5）', () => {
+  const busy = () =>
+    new Response(JSON.stringify({ detail: { code: 'TENANT_RESOLUTION_BUSY' } }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': '0' },
+    })
+
+  it('削減後重試成功 → 正常回傳，不當成錯誤', async () => {
+    let n = 0
+    const spy = stubFetch(() => (n++ === 0 ? busy() : jsonResponse({ org_name: 'X' })))
+    await expect(fetchTenantMeta()).resolves.toMatchObject({ org_name: 'X' })
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('最多重試 2 次，仍削減就以 TENANT_RESOLUTION_BUSY 拒絕（呼叫端據此 fail-soft）', async () => {
+    const spy = stubFetch(() => busy())
+    await expect(fetchTenantMeta()).rejects.toMatchObject({ status: 503, code: 'TENANT_RESOLUTION_BUSY' })
+    expect(spy).toHaveBeenCalledTimes(3)
+  })
+
+  it('開通中（TENANT_PROVISIONING）不重試', async () => {
+    const spy = stubFetch(() => jsonResponse({ detail: { code: 'TENANT_PROVISIONING' } }, 503))
+    await expect(fetchTenantMeta()).rejects.toMatchObject({ status: 503, code: 'TENANT_PROVISIONING' })
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 })

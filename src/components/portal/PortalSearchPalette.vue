@@ -16,6 +16,7 @@ import {
   User,
   UserFilled,
   Notebook,
+  List,
 } from '@element-plus/icons-vue'
 import { searchPortal } from '@/api/portalSearch'
 import { usePortalSearch } from '@/composables/usePortalSearch'
@@ -28,11 +29,15 @@ const COMMANDS: { id: string; keywords: string[]; label: string; icon: Component
   { id: 'punch', keywords: ['補打卡', 'punch'], label: '補打卡申請', icon: Timer, route: '/portal/punch-correction' },
   { id: 'overtime', keywords: ['加班', '加班申請', 'overtime'], label: '加班申請', icon: Clock, route: '/portal/overtime' },
   { id: 'swap', keywords: ['換班', '代課', 'swap'], label: '換班 / 代課', icon: Refresh, route: '/portal/schedule' },
+  { id: 'attendance-confirm', keywords: ['出勤確認', '月底', '考核', '簽認'], label: '月底出勤確認', icon: Refresh, route: '/portal/attendance-confirm' },
   { id: 'salary', keywords: ['薪資', '薪水', 'salary'], label: '薪資預覽', icon: Money, route: '/portal/salary' },
   { id: 'calendar', keywords: ['行事曆', 'calendar'], label: '行事曆', icon: Calendar, route: '/portal/calendar' },
   { id: 'observation', keywords: ['觀察', '新增觀察', 'observation'], label: '新增觀察', icon: View, route: '/portal/observations' },
   { id: 'announcement', keywords: ['公告', 'announcement'], label: '公告通知', icon: Bell, route: '/portal/announcements' },
-  { id: 'hub', keywords: ['今日', '工作台', 'hub', 'today'], label: '今日工作台', icon: HomeFilled, route: '/portal/class-hub' },
+  // 班級功能 2026-09-14 併進首頁；關鍵字保留，落點改為首頁。
+  { id: 'class', keywords: ['班級', 'class', '工作台'], label: '班級功能', icon: HomeFilled, route: '/portal/home' },
+  { id: 'student-attendance', keywords: ['點名', '學生點名', 'attendance'], label: '學生點名', icon: List, route: '/portal/student-attendance' },
+  { id: 'contact-book', keywords: ['聯絡簿', '每日聯絡簿', 'contact book'], label: '每日聯絡簿', icon: Notebook, route: '/portal/contact-book' },
 ]
 
 // 結果分類圖示（對齊 EP icon 系統，取代原本的裝飾 emoji）

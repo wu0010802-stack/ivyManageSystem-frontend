@@ -273,7 +273,7 @@ const signoffLinkState = computed<'hidden' | 'action' | 'omitted' | 'neutral'>((
 // severity：影響右欄待辦項的圓點顏色（方向A 改版）——薪資未封存擋結薪流程屬 danger；
 // 固定支出未登錄/廠商付款待補憑證屬 warning；雜項收款待補憑證屬 info。純視覺分級，
 // 不影響排序與導覽行為。
-interface TodoItem { key: string; text: string; severity: 'danger' | 'warning' | 'info' }
+interface TodoItem { key: string; text: string; severity: 'danger' | 'warning' | 'info'; month?: number }
 const todoItems = computed<TodoItem[]>(() => {
   const items: TodoItem[] = []
   if (salaryPendingAlert.value) {
@@ -284,7 +284,7 @@ const todoItems = computed<TodoItem[]>(() => {
     })
   }
   for (const m of missingFixedCostMonths.value) {
-    items.push({ key: `fixed-cost-${m}`, text: `${m} 月固定支出尚未登錄`, severity: 'warning' })
+    items.push({ key: `fixed-cost-${m}`, text: `${m} 月固定支出尚未登錄`, severity: 'warning', month: m })
   }
   if (vendorSignoff.value && vendorSignoff.value.count > 0) {
     items.push({
@@ -458,7 +458,8 @@ const formatFetchedAt = (ts: number) => {
             <ul class="todo-list" data-test="todo-list">
               <li v-for="item in todoItems" :key="item.key" class="todo-item" :data-test="`todo-item-${item.key}`">
                 <span class="todo-dot" :class="`todo-dot--${item.severity}`" aria-hidden="true"></span>
-                <span>{{ item.text }}</span>
+                <router-link v-if="item.month" :to="{ path: '/finance-signoffs', query: { tab: 'fixed-cost', year: String(year), month: String(item.month) } }">{{ item.text }} → 前往登錄</router-link>
+                <span v-else>{{ item.text }}</span>
               </li>
               <li v-if="todoItems.length === 0" class="todo-item todo-empty" data-test="todo-empty">
                 <el-icon :size="14" class="todo-icon-ok"><CircleCheck /></el-icon>

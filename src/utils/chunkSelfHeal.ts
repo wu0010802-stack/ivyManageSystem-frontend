@@ -53,17 +53,42 @@ export function selfHealIfChunkError(err: unknown): boolean {
   return true
 }
 
-/** 掛 error / unhandledrejection 監聽，命中 chunk 載入錯誤即自救。三端 entry 各呼叫一次。 */
-export function installChunkSelfHeal(): void {
+/**
+ * 掛 error / unhandledrejection 監聽，命中 chunk 載入錯誤即自救。三端 entry 各呼叫一次。
+ *
+ * `onChunkError`（選填，SPEC-023 批次 3 Task 3）：命中 chunk 載入錯誤時額外呼叫一次，
+ * 只給**家長端** entry（`src/parent/main.ts`）用來把事件送進「家長端監控」
+ * （`src/parent/utils/clientEvents.ts` 的 `chunk_load_failed`）。本檔是
+ * admin／teacher／public／parent 四端共用的公用模組，**不可**在這裡直接 import
+ * 家長端的 `clientEvents`——那會讓 admin/public 端的 chunk 錯誤也一起送進
+ * `/api/parent/client-events`，污染監控資料，且該端點的 Host／cookie 情境與管理端
+ * 完全不同。改用可選 callback，由呼叫端決定要不要接、接了要送去哪。callback 本身
+ * 也包一層 try/catch：它是「附加的回報動作」，絕不能反過來讓自救流程（reload）
+ * 失敗或變慢。
+ */
+export function installChunkSelfHeal(onChunkError?: (message: string) => void): void {
+  const notify = (msg: string) => {
+    try {
+      onChunkError?.(msg)
+    } catch {
+      // 回報端（例如家長端 clientEvents）出錯不影響自救本身。
+    }
+  }
   window.addEventListener('error', (e: ErrorEvent) => {
     const errMsg = (e.error as { message?: string } | undefined)?.message
     const msg = e.message || errMsg || ''
-    if (looksLikeChunkLoadError(msg)) void selfHealAndReload()
+    if (looksLikeChunkLoadError(msg)) {
+      notify(msg)
+      void selfHealAndReload()
+    }
   })
   window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
     const reason = e.reason as { message?: string } | string | undefined
     const msg =
       (reason && (typeof reason === 'string' ? reason : reason.message || String(reason))) || ''
-    if (looksLikeChunkLoadError(msg)) void selfHealAndReload()
+    if (looksLikeChunkLoadError(msg)) {
+      notify(msg)
+      void selfHealAndReload()
+    }
   })
 }

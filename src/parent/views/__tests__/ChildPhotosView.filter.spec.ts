@@ -10,6 +10,9 @@ const fetchChildPhotos = vi.fn(() =>
   Promise.resolve({ data: { items: [{ id: 1, thumb_url: 't.jpg', category: 'work' }], total: 1 } }))
 vi.mock('../../api/childPhotos', () => ({
   fetchChildPhotos: (...a: unknown[]) => fetchChildPhotos(...a),
+  // 回顧列與照片牆共用同一個 api module，factory mock 必須把 view 用到的
+  // export 都列出來，否則 vitest 的 mock proxy 會在存取時直接丟錯。
+  fetchChildRecaps: vi.fn(() => Promise.resolve({ data: { items: [] } })),
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { studentId: '1' } }),

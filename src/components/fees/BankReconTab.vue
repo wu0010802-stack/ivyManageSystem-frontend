@@ -1,15 +1,20 @@
 <template>
   <div class="bank-recon-tab">
     <!-- ── 對帳流程（資訊性導引，非精靈）───────────────────────────── -->
-    <ol class="flow-strip" aria-label="銀行對帳流程">
+    <ol v-if="!embedded" class="flow-strip" aria-label="銀行對帳流程">
       <li v-for="(step, i) in FLOW_STEPS" :key="step" class="flow-step">
         <span class="flow-step__num" aria-hidden="true">{{ i + 1 }}</span>
         <span>{{ step }}</span>
       </li>
     </ol>
 
-    <!-- ── 步驟 1：匯入 ───────────────────────────────────────────── -->
-    <section class="import-section" aria-label="匯入永豐對帳單">
+    <!-- ── 步驟 1：匯入（嵌入模式下收合，由收款工作區工具列觸發）────────── -->
+    <section
+      v-if="!embedded || importOpen"
+      class="import-section"
+      aria-label="匯入永豐對帳單"
+      data-test="bank-import-section"
+    >
       <div class="import-row">
         <el-upload
           :auto-upload="false"
@@ -26,6 +31,7 @@
           v-if="canWrite && pickedFile"
           data-test="run-preview"
           :loading="previewing"
+          :disabled="importing"
           aria-label="安全預覽匯入內容（不寫入）"
           @click="runPreview"
         >
@@ -255,6 +261,19 @@ interface Preview {
   parser_version: string
 }
 
+/**
+ * embedded＝嵌在收款工作區的「入帳媒合」檢視裡（2026-09-02 IA 合併）。
+ * 此模式下流程說明改由工具列的問號 popover 提供、匯入面板收合成工具列按鈕；
+ * 元件單獨使用時（embedded=false）行為與改版前逐字相同。
+ */
+const { embedded } = defineProps<{ embedded?: boolean }>()
+
+const importOpen = ref(false)
+
+function openImport() {
+  importOpen.value = true
+}
+
 const FLOW_STEPS = ['匯入永豐 CSV', '自動媒合建議', '處理例外（拆分/非學費/沖銷）', '確認全數分類']
 
 const STATUS_LABELS: Record<string, string> = {
@@ -283,6 +302,8 @@ const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 
 const pickedFile = ref<File | null>(null)
 const preview = ref<Preview | null>(null)
+const previewedFile = ref<File | null>(null)
+let previewSequence = 0
 const previewing = ref(false)
 const importing = ref(false)
 
@@ -354,34 +375,49 @@ const emptyDescription = computed(() => {
 })
 
 function onFileChange(file: UploadFile) {
+  previewSequence++
+  previewing.value = false
+  previewedFile.value = null
   pickedFile.value = (file.raw as File) ?? null
   preview.value = null
 }
 
 async function runPreview() {
-  if (!pickedFile.value) return
+  const file = pickedFile.value
+  if (!file || importing.value) return
+  const sequence = ++previewSequence
+  preview.value = null
+  previewedFile.value = null
   previewing.value = true
   try {
-    preview.value = (await previewBankImport(pickedFile.value)) as Preview
+    const result = (await previewBankImport(file)) as Preview
+    if (sequence !== previewSequence || pickedFile.value !== file) return
+    preview.value = result
+    previewedFile.value = file
   } catch (e) {
-    ElMessage.error(friendlyError('預覽失敗', e))
+    if (sequence === previewSequence) ElMessage.error(friendlyError('預覽失敗', e))
   } finally {
-    previewing.value = false
+    if (sequence === previewSequence) previewing.value = false
   }
 }
 
 async function runImport() {
-  if (!pickedFile.value) return
+  const file = previewedFile.value
+  if (!file || file !== pickedFile.value || !preview.value || previewing.value || importing.value) return
+  const sequence = previewSequence
   importing.value = true
   try {
-    const result = await confirmBankImport(pickedFile.value)
+    const result = await confirmBankImport(file)
     if (result.created === false) {
       ElMessage.warning('此檔先前已匯入，未重複入帳')
     } else {
       ElMessage.success(`匯入完成：${result.row_count} 筆（略過重複 ${result.duplicate_count}）`)
     }
-    pickedFile.value = null
-    preview.value = null
+    if (sequence === previewSequence && pickedFile.value === file) {
+      pickedFile.value = null
+      preview.value = null
+      previewedFile.value = null
+    }
     refetch()
   } catch (e) {
     ElMessage.error(friendlyError('匯入失敗', e))
@@ -390,7 +426,11 @@ async function runImport() {
   }
 }
 
+let querySequence = 0
 async function fetchTxns() {
+  const sequence = ++querySequence
+  txns.value = []
+  total.value = 0
   loading.value = true
   try {
     const data = await getBankTransactions({
@@ -401,12 +441,13 @@ async function fetchTxns() {
       page: page.value,
       page_size: pageSize,
     })
+    if (sequence !== querySequence) return
     txns.value = data.items as TxnRow[]
     total.value = data.total
   } catch (e) {
-    ElMessage.error(friendlyError('載入交易失敗', e))
+    if (sequence === querySequence) ElMessage.error(friendlyError('載入交易失敗', e))
   } finally {
-    loading.value = false
+    if (sequence === querySequence) loading.value = false
   }
 }
 
@@ -467,7 +508,7 @@ async function reverseTxn(row: TxnRow) {
 }
 
 onMounted(fetchTxns)
-defineExpose({ fetchTxns, setScope, filters })
+defineExpose({ fetchTxns, openImport, setScope, filters })
 </script>
 
 <style scoped>

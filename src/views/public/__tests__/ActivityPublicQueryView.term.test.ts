@@ -1,7 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
+  useRoute: () => ({ query: {} }),
+  useRouter: () => ({ push: vi.fn() }),
+}))
 vi.mock('@/api/activityPublic', () => ({
   publicQueryByToken: vi.fn(),
   publicUpdateRegistration: vi.fn(),

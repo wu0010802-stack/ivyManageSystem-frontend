@@ -1,22 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
 import { getProfile, updateProfile, setPunchPin } from '@/api/portal'
 import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/api/lineBinding'
+import { fetchTenantMetaForLine, shouldUseLegacyLineEnvFallback } from '@/api/tenantMeta'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { useIsMobile } from '@/composables/useIsMobile'
-import { useTenantBranding } from '@/composables/useTenantBranding'
+import { WarningFilled } from '@element-plus/icons-vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 const { notify } = useErrorNotify()
-// 多租戶（4d/fb）：加好友連結改由品牌 API 提供（system_configs `brand.line_bot_friend_url`）。
-// `VITE_LINE_BOT_FRIEND_URL` 的 Dockerfile 預設值是 **default tenant 的 OA**，多租戶下
-// 烤進 bundle 必錯（B 校老師加到 A 校的 OA），故品牌值優先、env 只作過渡 fallback。
-const { branding } = useTenantBranding()
-const lineBotFriendUrl = computed(
-  () => branding.value.line_bot_friend_url || import.meta.env.VITE_LINE_BOT_FRIEND_URL || '',
-)
-
 const loading = ref(false)
 const saving = ref(false)
 const isEditing = ref(false)
@@ -116,8 +110,22 @@ const lineUserId = ref<string | null>(null)
 const lineBindInput = ref('')
 const loadingLine = ref(false)
 const savingLine = ref(false)
+const lineBotFriendUrl = ref('')
 const lineBotQrDataUrl = ref('')
 const LINE_ID_RE = /^U[0-9a-f]{32}$/
+
+const loadLineBotFriendUrl = async () => {
+  try {
+    // LINE OA 是各租戶的身分，必須讀原始 tenant-meta，不能讀已混入品牌
+    // 預設值的正規化結果。成功但欄位空白即代表該園尚未設定。
+    lineBotFriendUrl.value = (await fetchTenantMetaForLine()).line_bot_friend_url || ''
+  } catch (error) {
+    // 僅舊單租戶後端明確沒有 tenant-meta route 時沿用過渡 env。
+    lineBotFriendUrl.value = shouldUseLegacyLineEnvFallback(error)
+      ? import.meta.env.VITE_LINE_BOT_FRIEND_URL || ''
+      : ''
+  }
+}
 
 const generateLineBotQr = async () => {
   if (!lineBotFriendUrl.value) return
@@ -227,13 +235,13 @@ async function savePunchPin() {
 onMounted(() => {
   fetchProfile()
   fetchLineBinding()
-  generateLineBotQr()
+  void loadLineBotFriendUrl().then(generateLineBotQr)
 })
 </script>
 
 <template>
   <div class="portal-profile" v-loading="loading">
-    <h3 style="margin: 0 0 16px;">個人資料</h3>
+    <PortalPageHeader title="個人資料" />
 
     <!-- Read-only: Basic Info -->
     <el-card class="profile-card" shadow="hover">
@@ -357,7 +365,8 @@ onMounted(() => {
               <el-button @click="copyLineBotUrl">複製連結</el-button>
             </div>
             <p v-else class="line-bot-url-missing">
-              ⚠ 尚未設定 Bot 加好友連結，請於後台「LINE 設定」填寫加好友連結
+              <el-icon aria-hidden="true"><WarningFilled /></el-icon>
+              尚未設定 Bot 加好友連結，請於後台「LINE 設定」填寫加好友連結
             </p>
           </div>
 
@@ -505,6 +514,9 @@ onMounted(() => {
 }
 
 .line-bot-url-missing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin: 8px 0 0;
   padding: 8px 10px;
   background: var(--color-warning-soft);

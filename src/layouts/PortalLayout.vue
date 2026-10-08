@@ -4,6 +4,7 @@ import { computed, ref, onMounted, onUnmounted, provide, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
+import { getAttendanceConfirmPendingCount } from '@/api/portalAttendanceConfirm'
 import { initPortalDismissalAlerts, teardownPortalDismissalAlerts, usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
 import { getTodayHub } from '@/api/portalClassHub'
 import { changePassword, endImpersonate } from '@/api/auth'
@@ -18,6 +19,7 @@ import { useIsMobile } from '@/composables/useIsMobile'
 import {
   Search,
   Fold,
+  Expand,
   UserFilled,
   HomeFilled,
   Calendar,
@@ -30,6 +32,9 @@ import {
   Brush,
   Bell,
   Plus,
+  Cellphone,
+  Close,
+  ArrowLeft,
 } from '@element-plus/icons-vue'
 // 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
@@ -55,11 +60,6 @@ const userInfo = computed<UserInfo>(() => (getUserInfo() || {}) as UserInfo)
 // 申請集中入口（底部「＋」FAB）
 const applySheetOpen = ref(false)
 
-// 班級 tab active：班級工作台 + 班級學生（含 /portal/student-detail 等單數路徑）
-const classTabActive = computed(
-  () => route.path.startsWith('/portal/class-hub') || route.path.startsWith('/portal/student'),
-)
-
 const showPasswordDialog = ref(false)
 const passwordForm = ref<{ old_password: string; new_password: string; confirm_password: string }>(
   { old_password: '', new_password: '', confirm_password: '' }
@@ -71,6 +71,8 @@ const { isMobile } = useIsMobile()
 // 娃娃車隨車操作為 per-user 顯式授權；沒有就不顯示入口（權限把關仍在 router guard）
 const canOperateBusTrips = computed(() => hasPortalPermission('BUS_TRIPS_OPERATE'))
 const sidebarOpen = ref(false)
+const sidebarCollapsed = ref(false)
+const isSidebarCollapsed = computed(() => sidebarCollapsed.value && !isMobile.value)
 
 watch(isMobile, (m) => {
   if (!m) sidebarOpen.value = false
@@ -82,6 +84,10 @@ const unreadCount = ref(0)
 // Swap pending count
 const swapPendingCount = ref(0)
 const substitutePendingCount = ref(0)
+const attendanceConfirmPendingCount = ref(0)
+// 月底出勤確認入口是否顯示（Q6：近 120 天內是適用者）。預設 false——取得資料前
+// 不誤顯示；只有側欄與首頁功能格受此把關，搜尋指令面板刻意維持原樣。
+const attendanceConfirmEligible = ref(false)
 
 // 接送待處理數：由 module-singleton composable 即時維護（WS 推播驅動），殼層不另外 fetch
 const { pendingCount: dismissalPendingCount } = usePortalDismissalAlerts()
@@ -125,6 +131,16 @@ const fetchSubstitutePendingCount = async () => {
   }
 }
 
+const fetchAttendanceConfirmPendingCount = async () => {
+  try {
+    const res = await getAttendanceConfirmPendingCount()
+    attendanceConfirmPendingCount.value = (res.data as Record<string, unknown>)?.pending_count as number || 0
+    attendanceConfirmEligible.value = (res.data as Record<string, unknown>)?.eligible === true
+  } catch {
+    // Silent fail
+  }
+}
+
 const fetchHubPendingCount = async () => {
   try {
     const data = await getTodayHub()
@@ -146,6 +162,7 @@ const refreshPortalCounts = ({ force = false }: { force?: boolean } = {}) => {
   fetchUnreadCount()
   fetchSwapPendingCount()
   fetchSubstitutePendingCount()
+  fetchAttendanceConfirmPendingCount()
   // dismissal count 由 composable 透過 WS 即時維護，不走輪詢
   fetchHubPendingCount()
 }
@@ -153,6 +170,11 @@ const refreshPortalCounts = ({ force = false }: { force?: boolean } = {}) => {
 // substitute 事件 listener wrapper：force 重抓單一欄位，不影響整體 TTL
 const onSubstituteChanged = () => {
   fetchSubstitutePendingCount()
+}
+
+// 月底出勤確認：回覆／簽認後由確認頁發事件，徽章立即重抓，不必等 TTL
+const onAttendanceConfirmChanged = () => {
+  fetchAttendanceConfirmPendingCount()
 }
 
 // tab 切回前景時，若距上次刷新超過 TTL 再抓一次（不切頁就不刷）
@@ -193,14 +215,17 @@ onMounted(() => {
   // 比照 AdminLayout 的 ivy-admin：掛在 <html> 讓 teleport 到 body 的 dialog/sheet 也吃到
   document.documentElement.classList.add('ivy-portal')
   window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  window.addEventListener('portal-attendance-confirm-count-changed', onAttendanceConfirmChanged)
   window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.addEventListener('visibilitychange', onVisibilityChange)
   refreshPortalCounts({ force: true })
   // 接送提醒提升到殼層：單一 WS、全 Portal 頁存活、AudioContext gesture unlock、visibilitychange 重連
   initPortalDismissalAlerts()
 
-  // 導航更新一次性提示（v=2: Phase 1 殼層改版；v=1: 2026-05 教師端 ACD 改造）
-  const PORTAL_LAYOUT_VERSION = '2'
+  // 導航更新一次性提示（v=3: 2026-09-14 班級功能併入首頁；v=2: Phase 1 殼層改版；
+  // v=1: 2026-05 教師端 ACD 改造）。舊版文案介紹的「班級」分頁已於 v=3 移除，
+  // 沿用舊號碼會讓看過 v=2 的老師永遠讀不到新說明，故必須跟著進版。
+  const PORTAL_LAYOUT_VERSION = '3'
   const stored = tenantGetItem('portal_layout_v')
   if (stored !== PORTAL_LAYOUT_VERSION) {
     setTimeout(() => {
@@ -208,13 +233,16 @@ onMounted(() => {
         title: '導航更新',
         message:
           '教師端介面已更新：\n\n' +
-          '• 底部導覽改版：「工作台」改名「今日」、新增「班級」分頁\n' +
-          '• 中央「＋」按鈕集中請假／加班／補打卡／異常確認申請\n' +
-          '• 「排班」入口移到出勤頁上方、「學生」入口移到班級工作台\n\n' +
-          '桌機側邊欄選單維持不變。',
+          '• 班級功能全部移到首頁「今日工作台」，分「教學／管理／我的」三組；每格一律顯示，有待辦才標數字\n' +
+          '• 首頁原本的「今日待辦」「快速進入」「我的班級」已併入上述功能格，同一個功能不再有兩個入口\n' +
+          '• 帶多個班的老師可在功能格上方切換班級\n' +
+          '• 底部導覽的「班級」分頁移除（內容已在「今日」）\n\n' +
+          '側邊欄的「班級總覽」同樣併入首頁，其餘選單不變。',
         type: 'info',
         confirmButtonText: '我知道了',
         showCancelButton: false,
+        // 訊息內含換行與條列，預設 white-space 會把它壓成一行（樣式見 soft-ui.css）
+        customClass: 'portal-onboarding-box',
       })
         .catch(() => {})
         .finally(() => {
@@ -227,6 +255,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.documentElement.classList.remove('ivy-portal')
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  window.removeEventListener('portal-attendance-confirm-count-changed', onAttendanceConfirmChanged)
   window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   teardownPortalDismissalAlerts()
@@ -318,14 +347,31 @@ const submitPassword = async () => {
     <!-- Mobile overlay -->
     <div class="sidebar-overlay" v-if="isMobile && sidebarOpen" @click="closeSidebar"></div>
 
-    <el-aside id="portal-sidebar" :width="isMobile ? '220px' : '200px'" :class="{ 'sidebar-open': sidebarOpen, 'sidebar-hidden': isMobile && !sidebarOpen }">
+    <el-aside
+      id="portal-sidebar"
+      :width="isMobile ? '220px' : (isSidebarCollapsed ? '64px' : '200px')"
+      :class="{ 'is-collapsed': isSidebarCollapsed, 'sidebar-open': sidebarOpen, 'sidebar-hidden': isMobile && !sidebarOpen }"
+    >
       <div class="portal-logo">
-        <span>教師專區</span>
+        <span v-if="!isSidebarCollapsed">教師專區</span>
+        <button
+          v-if="!isMobile"
+          type="button"
+          class="portal-collapse-toggle"
+          :aria-label="isSidebarCollapsed ? '展開側邊欄' : '收合側邊欄'"
+          :aria-expanded="!isSidebarCollapsed"
+          aria-controls="portal-sidebar"
+          @click="sidebarCollapsed = !sidebarCollapsed"
+        >
+          <el-icon v-if="isSidebarCollapsed"><Expand /></el-icon>
+          <el-icon v-else><Fold /></el-icon>
+        </button>
       </div>
       <el-menu
         :default-active="activeIndex"
         :router="true"
         class="portal-menu"
+        :collapse="isSidebarCollapsed"
         unique-opened
         text-color="#94a3b8"
         active-text-color="#ffffff"
@@ -381,6 +427,10 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/anomalies">
             <span>異常確認</span>
           </el-menu-item>
+          <el-menu-item v-if="attendanceConfirmEligible" index="/portal/attendance-confirm">
+            <span>月底出勤確認</span>
+            <el-badge v-if="attendanceConfirmPendingCount > 0" :value="attendanceConfirmPendingCount" :max="99" class="announcement-badge" />
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- ============ 班級 — 教學 ============ -->
@@ -389,17 +439,24 @@ const submitPassword = async () => {
             <el-icon><School /></el-icon>
             <span>班級 — 教學</span>
           </template>
+          <!-- 班級總覽 2026-09-14 併進首頁（我的 › 今日工作台），此處不再重複列出。 -->
           <el-menu-item index="/portal/students">
             <span>班級學生</span>
           </el-menu-item>
-          <el-menu-item index="/portal/class-hub">
-            <span>今日班級工作台</span>
+          <el-menu-item index="/portal/student-attendance">
+            <span>學生點名</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/contact-book">
+            <span>每日聯絡簿</span>
           </el-menu-item>
           <el-menu-item index="/portal/student-leaves">
             <span>學生請假</span>
           </el-menu-item>
           <el-menu-item index="/portal/observations">
             <span>課堂觀察</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/work-samples">
+            <span>作品上傳</span>
           </el-menu-item>
           <el-menu-item index="/portal/assessments">
             <span>學期評量</span>
@@ -422,6 +479,10 @@ const submitPassword = async () => {
             <span>接送通知</span>
             <el-badge v-if="dismissalPendingCount > 0" :value="dismissalPendingCount" :max="99" class="announcement-badge" />
           </el-menu-item>
+          <!-- 2026-09-02 對齊稽核：原本只掛在首頁「快速進入」網格，側欄缺項與接送通知／學生請假（雙入口）不一致 -->
+          <el-menu-item index="/portal/pickup-authorizations">
+            <span>臨時接送授權</span>
+          </el-menu-item>
           <el-menu-item index="/portal/medications">
             <span>用藥執行</span>
           </el-menu-item>
@@ -439,19 +500,26 @@ const submitPassword = async () => {
             <span>才藝</span>
           </template>
           <el-menu-item index="/portal/activity">
-            <span>才藝管理</span>
+            <span>才藝報名</span>
+          </el-menu-item>
+          <!-- 課程點名原本是 /portal/activity 的第二個 tab，老師得先進才藝管理再切 tab；
+               2026-09-14 拆成獨立頁，側欄直接進得去。 -->
+          <el-menu-item index="/portal/activity/attendance">
+            <span>課程點名</span>
           </el-menu-item>
         </el-sub-menu>
 
         <!-- ============ 其他 ============ -->
         <el-menu-item index="/portal/announcements">
           <el-icon><Bell /></el-icon>
-          <span>公告通知</span>
-          <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />
+          <template #title>
+            <span>公告通知</span>
+            <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />
+          </template>
         </el-menu-item>
         <el-menu-item index="/portal/calendar">
           <el-icon><Calendar /></el-icon>
-          <span>學校行事曆</span>
+          <template #title>學校行事曆</template>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -495,9 +563,10 @@ const submitPassword = async () => {
 
       <!-- PWA 安裝提示（手機首次訪問且瀏覽器支援時才顯示）-->
       <div v-if="showInstallBanner && isMobile" class="install-banner">
-        <span>📱 加到桌面，打卡更方便！</span>
+        <el-icon class="install-banner__icon" aria-hidden="true"><Cellphone /></el-icon>
+        <span class="install-banner__text">加到桌面，打卡更方便</span>
         <el-button size="small" type="success" @click="installPWA">加入桌面</el-button>
-        <el-button size="small" text @click="dismissInstallBanner">✕</el-button>
+        <el-button size="small" text :icon="Close" aria-label="關閉安裝提示" @click="dismissInstallBanner" />
       </div>
 
       <el-header height="60px">
@@ -516,7 +585,11 @@ const submitPassword = async () => {
             >
               <el-icon><Fold /></el-icon>
             </button>
-            <h3>{{ branding.org_name }} - 教職員考勤系統</h3>
+            <!-- 手機只留機構名（原本整串折成兩行擠壓頁首）；系統名稱桌機才顯示 -->
+            <h3 class="portal-header__title">
+              <span class="portal-header__org">{{ branding.org_name }}</span>
+              <span class="portal-header__system">教職員考勤系統</span>
+            </h3>
           </div>
           <button class="psp-trigger-portal" @click="openPalette" title="搜尋 (Cmd+K)">
             <el-icon><Search /></el-icon>
@@ -531,10 +604,11 @@ const submitPassword = async () => {
               type="primary"
               size="small"
               plain
+              :icon="ArrowLeft"
               @click="goBackToAdmin"
               style="margin-right: 8px"
             >
-              ← 返回後台
+              返回後台
             </el-button>
 
             <span class="user-name">{{ userInfo.name || '' }}</span>
@@ -555,8 +629,9 @@ const submitPassword = async () => {
         <RouterView />
       </el-main>
 
-      <!-- Bottom Navigation (mobile only)：Phase 1 殼層改版 —— 今日/班級/＋申請/出勤/我的。
-           排班入口移至出勤頁上方、學生入口移至班級工作台（桌機側欄不變）。 -->
+      <!-- Bottom Navigation (mobile only)：今日/＋申請/出勤/我的。
+           排班入口在出勤頁上方；班級功能 2026-09-14 併進首頁後，原本的第二個
+           tab 會與「今日」指向同一頁，已移除（桌機側欄不受影響）。 -->
       <nav v-if="isMobile" class="bottom-nav" aria-label="主要導覽">
         <button
           type="button"
@@ -570,16 +645,6 @@ const submitPassword = async () => {
             <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="tab-badge" />
           </div>
           <span>今日</span>
-        </button>
-        <button
-          type="button"
-          class="bottom-tab"
-          :class="{ active: classTabActive }"
-          :aria-current="classTabActive ? 'page' : undefined"
-          @click="router.push('/portal/class-hub')"
-        >
-          <el-icon><School /></el-icon>
-          <span>班級</span>
         </button>
         <div class="bottom-fab-slot">
           <button type="button" class="bottom-fab" aria-label="開啟申請選單" @click="applySheetOpen = true">
@@ -611,9 +676,6 @@ const submitPassword = async () => {
           <span>我的</span>
         </button>
       </nav>
-      <button v-if="isMobile" class="psp-fab" @click="openPalette" aria-label="搜尋">
-        <el-icon><Search /></el-icon>
-      </button>
     </el-container>
 
     <!-- 全域快速搜尋 Palette (Cmd+K) -->
@@ -650,16 +712,26 @@ const submitPassword = async () => {
   --bg-color-soft: #f3f4f6;
   --surface-color: var(--neutral-0);
   --pt-surface-app: #f8fafc;
-  --pt-surface-card: #ffffff;
-  --pt-surface-mute: #f3f4f6;
+  --color-portal-surface-card: #ffffff;
+  --pt-surface-card: var(--color-portal-surface-card);
+  --color-portal-surface-mute: #f3f4f6;
+  --pt-surface-mute: var(--color-portal-surface-mute);
   --pt-surface-mute-soft: #f9fafb;
-  --pt-text-strong: #0f172a;
-  --pt-text-body: #1e293b;
+  --color-portal-text-strong: #0f172a;
+  --pt-text-strong: var(--color-portal-text-strong);
+  --color-portal-text-body: #1e293b;
+  --pt-text-body: var(--color-portal-text-body);
   /* 次級文字 slate-700 (#334155, 10.4:1 AAA on #fff)：業主反映過淡，再往深調一階 */
-  --pt-text-muted: #334155;
-  --pt-text-soft: #334155;
-  --pt-text-faint: #475569;
+  --color-portal-text-muted: #334155;
+  --pt-text-muted: var(--color-portal-text-muted);
+  --color-portal-text-soft: #334155;
+  --pt-text-soft: var(--color-portal-text-soft);
+  --color-portal-text-faint: #475569;
+  --pt-text-faint: var(--color-portal-text-faint);
+  /* 手機網址列展開時 100vh 比可視區高，會多出一層 body 捲動、與 .el-main 內捲
+     互相搶手勢（滑起來一頓一頓）。改用 100dvh 對齊可視區；100vh 留作舊瀏覽器 fallback。 */
   height: 100vh;
+  height: 100dvh;
   background-color: var(--bg-color);
   color: var(--pt-text-body);
 }
@@ -672,14 +744,21 @@ html.dark .portal-layout {
   --bg-color-soft: #1e293b;
   --surface-color: #1e293b;
   --pt-surface-app: #0f172a;
-  --pt-surface-card: #1e293b;
-  --pt-surface-mute: #263449;
+  --color-portal-surface-card: #1e293b;
+  --pt-surface-card: var(--color-portal-surface-card);
+  --color-portal-surface-mute: #263449;
+  --pt-surface-mute: var(--color-portal-surface-mute);
   --pt-surface-mute-soft: #1e293b;
-  --pt-text-strong: #f1f5f9;
-  --pt-text-body: #e2e8f0;
-  --pt-text-muted: #cbd5e1;
-  --pt-text-soft: #cbd5e1;
-  --pt-text-faint: #94a3b8;
+  --color-portal-text-strong: #f1f5f9;
+  --pt-text-strong: var(--color-portal-text-strong);
+  --color-portal-text-body: #e2e8f0;
+  --pt-text-body: var(--color-portal-text-body);
+  --color-portal-text-muted: #cbd5e1;
+  --pt-text-muted: var(--color-portal-text-muted);
+  --color-portal-text-soft: #cbd5e1;
+  --pt-text-soft: var(--color-portal-text-soft);
+  --color-portal-text-faint: #94a3b8;
+  --pt-text-faint: var(--color-portal-text-faint);
 }
 
 /* Sidebar Styling */
@@ -689,12 +768,16 @@ html.dark .portal-layout {
   border-right: 1px solid var(--neutral-700);
   display: flex;
   flex-direction: column;
-  transition: transform var(--transition-slow);
+  transition: width var(--transition-slow), transform var(--transition-slow);
   z-index: 2000;
 }
 
 .portal-logo {
   height: 64px;
+  flex-shrink: 0;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -707,6 +790,47 @@ html.dark .portal-layout {
   font-weight: 700;
   color: #fff;
   letter-spacing: 0.5px;
+}
+
+.portal-collapse-toggle {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: #94a3b8;
+}
+
+.portal-collapse-toggle:hover {
+  background-color: var(--color-neutral-700);
+  color: #fff;
+}
+
+.portal-collapse-toggle:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+.is-collapsed .portal-logo {
+  padding: 0;
+}
+
+/* 收合時消除 Element Plus 預設內距，讓圖示在 64px 側欄內置中。 */
+.is-collapsed :deep(.el-menu--collapse > .el-menu-item),
+.is-collapsed :deep(.el-menu--collapse > .el-sub-menu > .el-sub-menu__title),
+.is-collapsed :deep(.el-menu--collapse > .el-menu-item > .el-menu-tooltip__trigger) {
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .portal-menu {
@@ -799,6 +923,28 @@ html.dark .portal-layout {
   color: var(--text-primary);
 }
 
+.portal-header__title {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.portal-header__system {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.portal-header__system::before {
+  content: '';
+  display: inline-block;
+  width: 1px;
+  height: 0.9em;
+  margin: 0 var(--space-3);
+  vertical-align: -0.1em;
+  background: var(--border-color);
+}
+
 .portal-user {
   display: flex;
   align-items: center;
@@ -875,7 +1021,7 @@ html.dark .portal-layout {
 .install-banner {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   /* token 化（原硬編 #f0fdf4 淺綠不翻色，dark 下成刺眼亮條——finding #2 既有債清償）：
      light=soft pastel、dark=alpha tint，文字 *-darker 兩模式各自對比達標 */
@@ -883,6 +1029,14 @@ html.dark .portal-layout {
   border-bottom: 1px solid var(--color-success);
   font-size: var(--text-base);
   color: var(--color-success-darker);
+}
+.install-banner__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.install-banner__text {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Misc */
@@ -1052,6 +1206,14 @@ html.dark .portal-layout {
   .portal-header h3 {
     font-size: var(--text-lg);
   }
+  .header-left {
+    flex: 1;
+    min-width: 0;
+    gap: var(--space-2);
+  }
+  .portal-header__system {
+    display: none;
+  }
 
   .el-header {
     padding: 0 var(--space-4);
@@ -1067,6 +1229,7 @@ html.dark .portal-layout {
     top: 0;
     left: 0;
     height: 100vh;
+    height: 100dvh;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
   }
 
@@ -1117,32 +1280,22 @@ html.dark .portal-layout {
   border-radius: 3px;
   font-size: 11px;
 }
+/* 手機：原本整個隱藏、改用右下角 FAB，但 FAB 會蓋住卡片右下角的「編輯」鈕，
+   且與底部導覽的「＋申請」形成雙 FAB（P2-10）。改成頁首圖示鈕。 */
 @media (--to-sm) {
   .psp-trigger-portal {
+    min-width: var(--touch-target-min, 44px);
+    min-height: var(--touch-target-min, 44px);
+    justify-content: center;
+    padding: 6px;
+    border-color: transparent;
+    background: transparent;
+  }
+  .psp-trigger-label,
+  .psp-trigger-kbd {
     display: none;
   }
 }
 
-/* ── 行動端搜尋 FAB（右下角圓鈕） ── */
-.psp-fab {
-  position: fixed;
-  bottom: calc(76px + env(safe-area-inset-bottom)); /* bottom-nav(60+inset)+16 gap */
-  right: 16px;
-  z-index: 50;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--el-color-primary);
-  color: white;
-  border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.psp-fab .el-icon {
-  font-size: 22px;
-}
 
 </style>

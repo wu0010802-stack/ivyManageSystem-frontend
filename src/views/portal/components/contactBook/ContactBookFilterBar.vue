@@ -53,18 +53,25 @@ defineEmits<{
     </div>
 
     <div v-if="classroomId" class="batch-bar pt-card">
-      <el-button :loading="batchBusy" @click="$emit('open-copy')">複製昨日</el-button>
-      <el-button :loading="batchBusy" @click="$emit('open-template')">套用範本到全班</el-button>
-      <el-button :loading="batchBusy" type="success" @click="$emit('open-batch')">
-        批次發布草稿
-      </el-button>
-      <el-divider direction="vertical" />
-      <el-checkbox
-        :model-value="showOnlyUnpublished"
-        @update:model-value="(v) => $emit('update:showOnlyUnpublished', !!v)"
-      >
-        只看未發布
-      </el-checkbox>
+      <!-- 三個按鈕其實是一條流程（P1-03）：老師原本不知道可以先套範本、
+           只改例外，於是 27 位逐一從空白填起。標上順序把用法講出來。 -->
+      <p class="batch-bar__flow">
+        建議流程：先<strong>套用範本</strong>或<strong>複製昨日</strong>建立草稿，只改例外，最後<strong>批次發布</strong>。
+      </p>
+      <div class="batch-bar__actions">
+        <el-button :loading="batchBusy" @click="$emit('open-copy')">複製昨日</el-button>
+        <el-button :loading="batchBusy" @click="$emit('open-template')">套用範本到全班</el-button>
+        <el-button :loading="batchBusy" type="success" @click="$emit('open-batch')">
+          批次發布草稿
+        </el-button>
+        <el-divider direction="vertical" />
+        <el-checkbox
+          :model-value="showOnlyUnpublished"
+          @update:model-value="(v) => $emit('update:showOnlyUnpublished', !!v)"
+        >
+          只看未發布
+        </el-checkbox>
+      </div>
     </div>
   </div>
 </template>
@@ -85,8 +92,39 @@ defineEmits<{
 
 .batch-bar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-2);
   padding: var(--space-3);
+}
+/* EP 相鄰按鈕預設 margin-left 與 gap 疊加，折行後首顆會縮排 */
+.batch-bar :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+@media (--to-sm) {
+  .batch-bar :deep(.el-divider--vertical) {
+    display: none;
+  }
+  .batch-bar :deep(.el-checkbox) {
+    width: 100%;
+  }
+}
+
+.batch-bar__flow {
+  margin: 0 0 var(--space-2, 8px);
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+}
+.batch-bar__flow strong {
+  color: var(--el-text-color-primary);
+  font-weight: 600;
+}
+.batch-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+  align-items: center;
 }
 </style>

@@ -2,7 +2,7 @@
   <el-dialog
     :model-value="modelValue"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
-    title="批次登記繳費"
+    title="批次收款"
     width="560"
     :close-on-click-modal="false"
     destroy-on-close
@@ -17,12 +17,16 @@
           style="width: 100%"
         />
       </el-form-item>
-      <el-form-item label="繳費方式" required>
-        <el-select v-model="form.payment_method" aria-label="繳費方式" style="width: 100%">
-          <el-option label="現金" value="現金" />
-          <el-option label="轉帳" value="轉帳" />
-          <el-option label="其他" value="其他" />
-        </el-select>
+      <!-- 帳單頁限現金（業主裁定 2026-09-01）：轉帳一律走對帳工作區
+           由網銀資料銷帳回寫，批次收款不再提供轉帳／其他選項 -->
+      <el-form-item label="繳費方式">
+        <div class="pay-method-fixed" data-test="pay-method-cash-only">
+          <el-tag size="small">現金</el-tag>
+          <span class="pay-method-fixed__hint">轉帳收款請至「對帳」工作區匯入網銀資料銷帳</span>
+        </div>
+        <p class="cash-handover-hint" data-test="cash-handover-hint">
+          現金會計入 {{ form.payment_date || '繳費日' }} 的現金交接批；該日交接送出後需先請老闆重新開啟才能再收款。
+        </p>
       </el-form-item>
       <el-form-item label="備註">
         <el-input v-model="form.notes" type="textarea" :rows="2" aria-label="備註" />
@@ -30,7 +34,7 @@
     </el-form>
 
     <div class="batch-pay-summary" data-test="batch-pay-summary">
-      共 {{ rows.length }} 筆，待送出 {{ pendingRows.length }} 筆，合計
+      共 {{ rows.length }} 筆，待送出 {{ pendingRows.length }} 筆，應收合計
       <strong class="batch-pay-summary__amount">{{ formatCurrency(totalDue) }}</strong>
     </div>
 
@@ -44,9 +48,15 @@
       >
         <div class="batch-pay-row__main">
           <span class="batch-pay-row__name">{{ row.student_name }}（{{ row.classroom_name }}）</span>
-          <span class="batch-pay-row__amount num-cell">{{ formatCurrency(row.amount_due) }}</span>
+          <span class="batch-pay-row__amount num-cell">{{ formatCurrency(row.amount_remaining) }}</span>
         </div>
-        <p class="batch-pay-row__meta">{{ row.period }}．{{ row.fee_item_name }}</p>
+        <p class="batch-pay-row__meta">
+          {{ row.period }}．{{ row.fee_item_name }}
+          <!-- 部分繳費：上方金額是本次要收的剩餘，單據原始金額另標，避免對不上收據 -->
+          <span v-if="row.amount_paid > 0" class="batch-pay-row__partial" data-test="batch-pay-row-partial">
+            應繳 {{ formatCurrency(row.amount_due) }}・已繳 {{ formatCurrency(row.amount_paid) }}
+          </span>
+        </p>
         <p v-if="row.status === 'success'" class="batch-pay-row__status batch-pay-row__status--success">已完成</p>
         <p v-else-if="row.status === 'error'" class="batch-pay-row__status batch-pay-row__status--error">{{ row.error }}</p>
       </li>
@@ -80,6 +90,8 @@ interface BatchPayRecord {
   fee_item_name: string
   period: string
   amount_due: number
+  /** 既有累計已繳；未給視為 0（未繳單） */
+  amount_paid?: number | null
 }
 
 interface BatchRow {
@@ -89,6 +101,9 @@ interface BatchRow {
   fee_item_name: string
   period: string
   amount_due: number
+  amount_paid: number
+  /** 本次實收＝應繳−已繳（批次端點語意固定「繳清餘額」） */
+  amount_remaining: number
   idempotency_key: string
   status: 'pending' | 'success' | 'error'
   error: string | null
@@ -130,24 +145,33 @@ watch(
     form.payment_date = todayISO()
     form.payment_method = '現金'
     form.notes = ''
-    rows.value = props.records.map((r) => ({
-      record_id: r.id,
-      student_name: r.student_name,
-      classroom_name: r.classroom_name,
-      fee_item_name: r.fee_item_name,
-      period: r.period,
-      amount_due: r.amount_due,
-      idempotency_key: genIdempotencyKey(),
-      status: 'pending',
-      error: null,
-    }))
+    rows.value = props.records.map((r) => {
+      const paid = r.amount_paid ?? 0
+      return {
+        record_id: r.id,
+        student_name: r.student_name,
+        classroom_name: r.classroom_name,
+        fee_item_name: r.fee_item_name,
+        period: r.period,
+        amount_due: r.amount_due,
+        amount_paid: paid,
+        amount_remaining: Math.max(r.amount_due - paid, 0),
+        idempotency_key: genIdempotencyKey(),
+        status: 'pending',
+        error: null,
+      }
+    })
   },
   { immediate: true },
 )
 
 // 待送出＝尚未成功的列（含尚未嘗試與上次失敗兩種）；重試只送這些，且沿用原 key。
 const pendingRows = computed(() => rows.value.filter((r) => r.status !== 'success'))
-const totalDue = computed(() => pendingRows.value.reduce((sum, r) => sum + r.amount_due, 0))
+// 合計＝待送出列的**剩餘**應繳。後端 batch-pay 一律把每筆補到 amount_due
+// （delta＝應繳−既有已繳），顯示整張應繳會讓出納照著合計向家長多收部分繳費的差額。
+const totalDue = computed(() =>
+  pendingRows.value.reduce((sum, r) => sum + r.amount_remaining, 0),
+)
 const hasResult = computed(() => rows.value.some((r) => r.status !== 'pending'))
 const submitLabel = computed(() =>
   hasResult.value ? `重試（${pendingRows.value.length}）` : `確認登記（${rows.value.length} 筆）`,
@@ -180,15 +204,15 @@ async function submit() {
     // 有成功筆就通知父層重新載入清單（即使還有失敗筆殘留在對話框內待重試）。
     emit('paid')
     if (resp.failed === 0) {
-      ElMessage.success(`批次登記繳費成功：${resp.succeeded} 筆`)
+      ElMessage.success(`批次收款成功：${resp.succeeded} 筆`)
       emit('update:modelValue', false)
     } else if (resp.succeeded > 0) {
       ElMessage.warning(`成功 ${resp.succeeded} 筆，失敗 ${resp.failed} 筆，請確認後重試`)
     } else {
-      ElMessage.error(`批次登記繳費失敗：${resp.failed} 筆`)
+      ElMessage.error(`批次收款失敗：${resp.failed} 筆`)
     }
   } catch (e: unknown) {
-    ElMessage.error(friendlyError('批次登記繳費失敗', e))
+    ElMessage.error(friendlyError('批次收款失敗', e))
   } finally {
     submitting.value = false
   }
@@ -198,6 +222,25 @@ defineExpose({ form, rows, pendingRows, totalDue, submit })
 </script>
 
 <style scoped>
+.cash-handover-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
+/* 限現金：固定顯示現金＋轉帳改道說明 */
+.pay-method-fixed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pay-method-fixed__hint {
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+}
+
 .batch-pay-summary {
   margin: 0 0 var(--space-3);
   padding: var(--space-2) var(--space-3);
@@ -259,6 +302,12 @@ defineExpose({ form, rows, pendingRows, totalDue, submit })
   margin: 2px 0 0;
   font-size: var(--text-xs);
   color: var(--text-secondary);
+}
+
+.batch-pay-row__partial {
+  margin-left: 6px;
+  color: var(--el-color-warning);
+  white-space: nowrap;
 }
 
 .batch-pay-row__status {

@@ -43,7 +43,7 @@ async function loadPeriods() {
   try {
     const data = await getFeePeriods()
     // /fees/periods 回的是純陣列 ['114-2', '114-1', ...]
-    periodOptions.value = Array.isArray(data) ? data : (data?.items || [])
+    periodOptions.value = data
     if (period.value === ALL_PERIODS && periodOptions.value.length) {
       const term = getCurrentAcademicTerm()
       const current = `${term.school_year}-${term.semester}`

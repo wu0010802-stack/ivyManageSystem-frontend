@@ -94,14 +94,20 @@ html.dark {
    * 寫死 hex，alias 在 main.css 才綁到 scale，所以翻 scale 一處同時帶動 alias
    * 與直接引用兩種寫法。 */
   --neutral-0: #0f172a;
-  --neutral-50: #1e293b;
-  --neutral-100: #334155;
-  --neutral-200: #475569;
-  --neutral-300: #64748b;
-  --neutral-400: #94a3b8;
+  --color-neutral-50: #1e293b;
+  --neutral-50: var(--color-neutral-50);
+  --color-neutral-100: #334155;
+  --neutral-100: var(--color-neutral-100);
+  --color-neutral-200: #475569;
+  --neutral-200: var(--color-neutral-200);
+  --color-neutral-300: #64748b;
+  --neutral-300: var(--color-neutral-300);
+  --color-neutral-400: #94a3b8;
+  --neutral-400: var(--color-neutral-400);
   --neutral-500: #cbd5e1;
   --neutral-600: #e2e8f0;
-  --neutral-700: #f1f5f9;
+  --color-neutral-700: #f1f5f9;
+  --neutral-700: var(--color-neutral-700);
   --neutral-800: #f8fafc;
   --neutral-900: #ffffff;
 
@@ -275,7 +281,8 @@ html.dark .portal-layout .el-aside {
   --text-primary: #1e293b;
   --text-secondary: #94a3b8;
   --text-tertiary: #94a3b8;
-  --neutral-700: #334155;
+  --color-neutral-700: #334155;
+  --neutral-700: var(--color-neutral-700);
   --neutral-800: #1e293b;
   --neutral-900: #0f172a;
 }
@@ -306,11 +313,16 @@ html[class*="ivy-size-"] {
 /* ===== Parent: 高對比（亮模式）===== */
 html.ivy-contrast-high {
   /* 文字加深到接近黑 */
-  --pt-text-strong: #000000;
-  --pt-text-body: #000000;
-  --pt-text-muted: #1a1d20;
-  --pt-text-soft: #2e3338;
-  --pt-text-faint: #424850;
+  --color-portal-text-strong: #000000;
+  --pt-text-strong: var(--color-portal-text-strong);
+  --color-portal-text-body: #000000;
+  --pt-text-body: var(--color-portal-text-body);
+  --color-portal-text-muted: #1a1d20;
+  --pt-text-muted: var(--color-portal-text-muted);
+  --color-portal-text-soft: #2e3338;
+  --pt-text-soft: var(--color-portal-text-soft);
+  --color-portal-text-faint: #424850;
+  --pt-text-faint: var(--color-portal-text-faint);
   --pt-text-placeholder: #424850;
   --pt-text-disabled: #6b7280;
   --pt-text-hint: #6b7280;
@@ -338,11 +350,16 @@ html.ivy-contrast-high {
 /* 高對比 dark 模式：useTheme 永遠顯式設 data-theme，所以僅需單一
    html.ivy-contrast-high[data-theme="dark"] 選擇器，不需 @media 區塊。 */
 html.ivy-contrast-high[data-theme="dark"] {
-  --pt-text-strong: #ffffff;
-  --pt-text-body: #ffffff;
-  --pt-text-muted: #f1f5f9;
-  --pt-text-soft: #cbd5e1;
-  --pt-text-faint: #cbd5e1;
+  --color-portal-text-strong: #ffffff;
+  --pt-text-strong: var(--color-portal-text-strong);
+  --color-portal-text-body: #ffffff;
+  --pt-text-body: var(--color-portal-text-body);
+  --color-portal-text-muted: #f1f5f9;
+  --pt-text-muted: var(--color-portal-text-muted);
+  --color-portal-text-soft: #cbd5e1;
+  --pt-text-soft: var(--color-portal-text-soft);
+  --color-portal-text-faint: #cbd5e1;
+  --pt-text-faint: var(--color-portal-text-faint);
   --pt-text-placeholder: #94a3b8;
   --pt-text-disabled: #94a3b8;
   --pt-text-hint: #94a3b8;

@@ -27,7 +27,7 @@
 
         <div class="sign-detail-view__signature">
           <p class="sign-detail-view__signature-label">請於下方簽名：</p>
-          <SignaturePad ref="padRef" :width="320" :height="160" @mouseup="checkSignature" @touchend="checkSignature" />
+          <SignaturePad ref="padRef" :width="320" :height="160" @mouseup="checkSignature" @touchend="checkSignature" @clear="hasSignature = false" />
         </div>
 
         <button

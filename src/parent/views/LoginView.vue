@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 import {
   clearLiffTokenRefreshMarker,
   forceLiffReloginOnce,
@@ -14,8 +15,8 @@ import {
   getMyConsents,
   type PolicyVersionOut,
 } from '../api/consent'
-import { useParentAuthStore } from '../stores/parentAuth'
-import { clearParentPersonalizedCaches } from '../composables/useParentLogout'
+import { clearParentLocalState, switchParentIdentity } from '../composables/useParentLogout'
+import { reportClientEvent } from '../utils/clientEvents'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import ConsentModal from '../components/ConsentModal.vue'
@@ -26,7 +27,6 @@ const { branding } = useTenantBranding()
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useParentAuthStore()
 const { getFriendly } = useFriendlyError()
 
 // 深連結保存：guard 導來 /login 時會帶 ?redirect=<原本要去的頁>；redirect
@@ -59,9 +59,8 @@ async function completeLogin(user: unknown) {
   // 若沒點登出就離開，today-status/useCachedAsync 快取與 children/messages
   // store 會原樣留在裝置上；在設定新使用者前先清掉，避免下一位家長在快取
   // TTL 內看到上一位家長的小孩資料。與登出流程共用同一份清單，見
-  // useParentLogout.ts::clearParentPersonalizedCaches。
-  clearParentPersonalizedCaches()
-  authStore.setUser(user)
+  // useParentLogout.ts::switchParentIdentity／clearParentPersonalizedCaches。
+  switchParentIdentity(user)
   const needsConsent = await checkConsentRequired()
   if (needsConsent) {
     status.value = 'consent'
@@ -123,6 +122,11 @@ async function startLogin({ forceFresh = false } = {}) {
       await completeLogin(data.user)
     } else if (data?.status === 'need_binding') {
       clearLiffTokenRefreshMarker()
+      // 此瀏覽器的身分已換成「尚未綁定的 LINE 使用者」：前一位家長若沒登出，其
+      // auth sessionStorage 與個人化快取要在導向 /bind 前清掉，否則公開頁 layout
+      // 與後續首頁會據此重新暖出前一位家長的孩子資料（2026-10-04 家長端深掃
+      // F02；後端 need_binding 同步清 access／refresh cookie）。
+      void clearParentLocalState()
       // 把 redirect 一併轉給 /bind，讓「深連結 → 過期 → 登入 → 發現未綁定 →
       // 綁定成功」這條完整鏈路最終仍能回到原本要去的頁（見 BindView.vue）。
       const bindQuery: Record<string, string> = { name_hint: data.name_hint || '' }
@@ -144,6 +148,18 @@ async function startLogin({ forceFresh = false } = {}) {
     // useFriendlyError 處理 LINE_BINDING_EXPIRED / LINE_BINDING_NOT_FOUND /
     // LINE_PROFILE_FETCH_FAILED 等 envelope code；未知 code fallback displayMessage
     errorState.value = getFriendly(err)
+    // 家長端監控（SPEC-023 批次 3，09-05 修正重複回報）：liffLogin() 走的是
+    // 家長端 axios instance，凡是 axios 發出的請求（不論有沒有拿到 HTTP 回應）
+    // 都交給 src/parent/api/index.ts 的攔截器回報——打到登入端點時攔截器會
+    // 自動報成 login_failed（見該檔 PARENT_LOGIN_PATHS），這裡再報會讓同一次
+    // 故障變兩筆事件。這裡只補「連 axios 都沒發出去」的失敗：LINE SDK 取
+    // id_token 就丟出的 `Error('無法取得 LINE id_token')`，那類攔截器完全看
+    // 不到、批次 1 的稽核也不會寫 LOGIN_FAILED。
+    if (!axios.isAxiosError(err)) {
+      reportClientEvent('login_failed', {
+        message: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 }
 
@@ -202,6 +218,20 @@ const showDeviceSetup = ref(isDeviceOnly.value)
 const deviceCode = ref('')
 const deviceSetupSubmitting = ref(false)
 const deviceSetupError = ref('')
+const deviceSetupProof = ref<{ code: string; nonce: string } | null>(null)
+
+function newDeviceSetupNonce(): string {
+  const bytes = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function retryNonceFor(code: string): string {
+  if (deviceSetupProof.value?.code === code) return deviceSetupProof.value.nonce
+  const nonce = newDeviceSetupNonce()
+  deviceSetupProof.value = { code, nonce }
+  return nonce
+}
 
 async function submitDeviceSetup() {
   const code = deviceCode.value.trim()
@@ -211,13 +241,16 @@ async function submitDeviceSetup() {
   }
   deviceSetupSubmitting.value = true
   deviceSetupError.value = ''
+  const clientNonce = retryNonceFor(code)
   try {
-    const { data } = await deviceSetup(code)
+    const { data } = await deviceSetup(code, clientNonce)
+    deviceSetupProof.value = null
     if (data?.status !== 'ok') throw new Error('伺服器回應未預期狀態')
     await completeLogin(data.user)
   } catch (err: unknown) {
     const e = err as { response?: { status?: number } }
     if (e?.response?.status === 429) {
+      deviceSetupProof.value = null
       deviceSetupError.value = '嘗試次數過多，請稍後再試'
     } else if (!e?.response) {
       // 傳輸層失敗（斷線／逾時／請求被中止／DNS 失敗）：後端根本沒回應，不帶任何
@@ -227,7 +260,20 @@ async function submitDeviceSetup() {
       // 伺服器，碼就已經用掉了，只有 _reclaim_recent_device_setup_code 的 120 秒
       // 窗口能救回來；拖過窗口就真的只能向園所重新索取。
       deviceSetupError.value = '連線中斷，請確認網路後立即再試一次；拖太久需向園所重新索取設定碼'
+      // 家長端監控（SPEC-023 批次 3，09-05 修正重複回報）：同 startLogin 的
+      // 判斷——deviceSetup() 走的也是家長端 axios instance，真正的網路層
+      // 失敗已被 src/parent/api/index.ts 的攔截器攔到並報成 login_failed
+      // （見該檔 PARENT_LOGIN_PATHS），這裡不能重報。只有「err 根本不是
+      // axios 丟出來的」才補這一筆——例如下面 catch 前 `throw new
+      // Error('伺服器回應未預期狀態')` 這種在拿到 HTTP 回應之後、於本函式
+      // 內才丟出的例外，攔截器完全看不到、批次 1 的稽核也不會寫。
+      if (!axios.isAxiosError(err)) {
+        reportClientEvent('login_failed', {
+          message: err instanceof Error ? err.message : String(err),
+        })
+      }
     } else {
+      deviceSetupProof.value = null
       // 後端對「碼不存在／已過期／已使用」一律回同一個 BusinessError code
       // 避免碼枚舉；前端也不採用後端實際訊息字串，固定顯示這句，避免後端
       // 訊息未來變得更具體時前端不小心變成枚舉 oracle。

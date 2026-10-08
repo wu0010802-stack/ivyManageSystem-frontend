@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassIncidents, createPortalIncident } from '@/api/studentIncidents'
 import { getMyStudents } from '@/api/portal'
 import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as _TYPE_TAG, SEVERITY_TAG as _SEVERITY_TAG } from '@/constants/studentRecords'
 import { useIsMobile } from '@/composables/useIsMobile'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import PortalFilterBar from '@/components/portal/PortalFilterBar.vue'
+import { Plus } from '@element-plus/icons-vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 const TYPE_TAG = _TYPE_TAG as Record<string, ElTagType>
 const SEVERITY_TAG = _SEVERITY_TAG as Record<string, ElTagType>
-import { usePortalFromHub } from '@/composables/usePortalFromHub'
 
-const { fromHub, backToHub } = usePortalFromHub()
 const { isMobile } = useIsMobile()
 
 // ── 班級/學生 ─────────────────────────────────────────
@@ -161,19 +162,24 @@ onMounted(async () => {
   await fetchMyStudents()
   fetchIncidents()
 })
+
+const activeFilterCount = computed(
+  () => (filterType.value ? 1 : 0) + (filterDateRange.value?.length ? 1 : 0),
+)
+function resetFilters() {
+  filterType.value = null
+  filterDateRange.value = []
+  fetchIncidents()
+}
 </script>
 
 <template>
   <div>
-    <div v-if="fromHub" class="from-hub-bar">
-      <el-button type="primary" link @click="backToHub">
-        ← 返回今日工作台
-      </el-button>
-    </div>
-    <div class="page-header">
-      <h3>事件紀錄</h3>
-      <el-button type="primary" size="small" @click="openCreate">＋ 新增事件</el-button>
-    </div>
+    <PortalPageHeader title="事件紀錄">
+      <template #actions>
+        <el-button type="primary" size="small" :icon="Plus" @click="openCreate">新增事件</el-button>
+      </template>
+    </PortalPageHeader>
 
     <el-tabs
       v-if="classrooms.length > 0"
@@ -189,14 +195,17 @@ onMounted(async () => {
       />
     </el-tabs>
 
-    <!-- 篩選列 -->
-    <el-row :gutter="12" style="margin-bottom: 16px">
-      <el-col :xs="12" :sm="6">
-        <el-select v-model="filterType" placeholder="事件類型" clearable size="small" style="width: 100%">
+    <!-- 篩選列：手機收進 sheet（P2-06） -->
+    <PortalFilterBar
+      :active-count="activeFilterCount"
+      title="事件篩選"
+      @apply="fetchIncidents"
+      @reset="resetFilters"
+    >
+      <template #controls>
+        <el-select v-model="filterType" placeholder="事件類型" clearable style="width: 180px">
           <el-option v-for="t in INCIDENT_TYPES" :key="t" :label="t" :value="t" />
         </el-select>
-      </el-col>
-      <el-col :xs="24" :sm="10">
         <el-date-picker
           v-model="filterDateRange"
           type="daterange"
@@ -204,15 +213,10 @@ onMounted(async () => {
           start-placeholder="開始"
           end-placeholder="結束"
           value-format="YYYY-MM-DD"
-          size="small"
-          style="width: 100%"
+          style="width: 260px"
         />
-      </el-col>
-      <el-col :xs="12" :sm="4">
-        <el-button size="small" @click="fetchIncidents">查詢</el-button>
-        <el-button size="small" @click="filterType = null; filterDateRange = []; fetchIncidents()">重置</el-button>
-      </el-col>
-    </el-row>
+      </template>
+    </PortalFilterBar>
 
     <!-- 事件表格（桌機）／卡片（手機） -->
     <el-table v-if="!isMobile" :data="incidents" v-loading="loading" stripe size="small">
@@ -273,7 +277,8 @@ onMounted(async () => {
       </template>
     </AdminListCards>
 
-    <div class="pt-list-footer">
+    <!-- 0 筆時不畫分頁：空清單配「共 0 筆・20項/頁・‹1›」只是噪音（P2-06） -->
+    <div v-if="total > 0" class="pt-list-footer">
       <span class="pt-list-total">共 {{ total }} 筆紀錄</span>
       <el-pagination
         v-model:current-page="currentPage"
@@ -356,20 +361,4 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
-.from-hub-bar {
-  margin: 0 0 12px;
-  padding: 4px 0;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h3 {
-  margin: 0;
-  font-size: 1.2rem;
-  font-weight: 600;
-}
 </style>

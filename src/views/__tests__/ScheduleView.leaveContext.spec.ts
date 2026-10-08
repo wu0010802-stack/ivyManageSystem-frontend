@@ -10,7 +10,7 @@
  * - 每日調整 dialog 逐日標出該員工的假別＋時段
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ref } from 'vue'
+import { type ComputedRef, computed, inject, provide, ref, watch } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const {
@@ -164,8 +164,35 @@ const globalConfig = {
       template: '<div class="upload"><slot /></div>',
     },
     'el-card': { template: '<div class="card"><slot /></div>' },
-    'el-tabs': { props: ['modelValue'], emits: ['update:modelValue', 'tab-change'], template: '<div><slot /></div>' },
-    'el-tab-pane': { props: ['label', 'name'], template: '<section><slot /></section>' },
+    'el-tabs': {
+      props: ['modelValue'],
+      emits: ['update:modelValue', 'tab-change'],
+      setup(props: { modelValue: string }) {
+        // 讓 lazy 的 el-tab-pane 能判斷自己是否已第一次進場，避免 stub 永遠
+        // 渲染 slot 造成 DutyRotationPanel（未 mock 的 store／API）被真的掛載。
+        provide('scheduleActiveTabName', computed(() => props.modelValue))
+      },
+      template: '<div><slot /></div>',
+    },
+    'el-tab-pane': {
+      props: { label: String, name: String, lazy: { type: Boolean, default: false } },
+      setup(props: { name?: string; lazy: boolean }) {
+        const activeTabName = inject<ComputedRef<unknown> | undefined>(
+          'scheduleActiveTabName',
+          undefined
+        )
+        const everActive = ref(!props.lazy)
+        watch(
+          () => activeTabName?.value,
+          (v) => {
+            if (v === props.name) everActive.value = true
+          },
+          { immediate: true }
+        )
+        return { everActive }
+      },
+      template: '<section v-if="everActive"><slot /></section>',
+    },
     'el-date-picker': { props: ['modelValue'], emits: ['update:modelValue', 'change'], template: '<input class="dp" />' },
     'el-tag': { props: ['type', 'size'], template: '<span class="tag"><slot /></span>' },
     'el-tooltip': { template: '<span><slot /></span>' },

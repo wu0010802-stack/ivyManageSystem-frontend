@@ -5,8 +5,8 @@
  * 事務頁、常用功能、路由標題各有一套叫法與圖示——費用有「繳費／學費／待繳學費／
  * 費用查詢／繳費中心」五種，/events 有「待簽紀錄／待簽文件／事件簽閱」且
  * 「待簽文件」又和 /sign 撞名，孩子檔案、健康紀錄、聯絡簿也各有兩個 icon。
- * 首頁常用功能（quickActionModules.ts）、待辦頁「所有服務」格、首頁「待你處理」
- * 一律從這裡取名稱與圖示，新增入口時先在這裡登記，不要再就地寫一份。
+ * 首頁常用功能（quickActionModules.ts）、待辦頁「所有服務」格、待辦清單
+ * （useParentTodos.ts）一律從這裡取名稱與圖示，新增入口時先在這裡登記，不要再就地寫一份。
  *
  * - label：短名稱（格子／按鈕用，≤5 字），即頁面標題的叫法
  * - sub：白話副標（動詞開頭，告訴家長「點了能做什麼」）
@@ -52,13 +52,11 @@ export const PARENT_SERVICES = {
     route: '/pickup',
     icon: 'hail',
   },
-  // 公告已併為聯絡簿 tab 的第二分頁；獨立的 /announcements 只為舊推播深連結保留，
-  // 新入口一律導到分頁，避免同一份公告有兩個頁面。
   announce: {
     label: '公告',
-    sub: '學校最新消息',
+    sub: '園所最新消息',
     tone: 'coral',
-    route: '/contact-book?tab=announcements',
+    route: '/announcements',
     icon: 'campaign',
   },
   bus: {
@@ -144,7 +142,8 @@ export const PARENT_SERVICES = {
     sub: '老師寫的紀錄',
     tone: 'brand',
     route: '/contact-book',
-    icon: 'auto_stories',
+    // 與底部導覽列中央的聯絡簿按鈕同一個圖示（ParentLayout TABS）
+    icon: 'menu_book',
   },
   childProfile: {
     label: '孩子檔案',
@@ -180,7 +179,7 @@ export type ParentServiceKey = keyof typeof PARENT_SERVICES
 
 /**
  * 待辦頁「所有服務」格的順序：先放每天/每週會用到的，再放偶爾查詢的。
- * 公告與聯絡簿不放——它們是底部聯絡簿 tab 的內容，不是要「辦」的事。
+ * 聯絡簿不放（底部導覽列中央已有固定按鈕）；常見問題在「我的」頁。
  */
 export const ALL_SERVICES_ORDER: readonly ParentServiceKey[] = [
   'leaves',
@@ -193,6 +192,6 @@ export const ALL_SERVICES_ORDER: readonly ParentServiceKey[] = [
   'surveys',
   'activity',
   'attendance',
+  'announce',
   'calendar',
-  'assistant',
 ]

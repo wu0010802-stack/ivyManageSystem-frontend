@@ -5,6 +5,8 @@ import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 import { PARENT_SERVICES } from '../utils/parentServices'
 
 const router = useRouter()
@@ -81,6 +83,15 @@ function go(item: HubItem) {
   if (item.path) router.push(item.path)
 }
 
+// S07：冷啟動子女 API 失敗時 store 只記 error、items 為空；若照常渲染會是「尚未綁定」
+// 狀態的五個 disabled 入口，與真的沒綁定無法區分。顯示可重試的錯誤態。
+const loadFailed = computed(() => !!childrenStore.error && children.value.length === 0)
+
+async function retryLoad() {
+  await childrenStore.load(true)
+  ensureSelected(children.value)
+}
+
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(children.value)
@@ -89,7 +100,9 @@ onMounted(async () => {
 
 <template>
   <div class="child-hub-view">
-    <M3List>
+    <ChildContextHeader />
+    <MobileErrorRetry v-if="loadFailed" :error="childrenStore.error" @retry="retryLoad" />
+    <M3List v-else>
       <M3ListItem
         v-for="item in items"
         :key="item.key"

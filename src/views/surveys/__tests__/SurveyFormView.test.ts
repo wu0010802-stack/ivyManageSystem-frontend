@@ -20,6 +20,7 @@ const { routeParams } = vi.hoisted(() => ({ routeParams: {} as Record<string, st
 const replaceMock = vi.fn()
 const pushMock = vi.fn()
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ params: routeParams }),
   useRouter: () => ({ replace: replaceMock, push: pushMock, back: vi.fn() }),
 }))

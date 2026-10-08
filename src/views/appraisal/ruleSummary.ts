@@ -73,6 +73,10 @@ export function summarizeRule(rule: ScoringRule | null | undefined | unknown) {
       break
     }
     case 'DISCIPLINARY_TIERED': {
+      lines.push(`嘉獎：${fmtSignedNumber(cfg.commend_delta ?? 0)} 分`)
+      lines.push(`小功：${fmtSignedNumber(cfg.minor_merit_delta ?? 0)} 分`)
+      lines.push(`大功：${fmtSignedNumber(cfg.major_merit_delta ?? 0)} 分`)
+
       lines.push(`警告：${fmtSignedNumber(cfg.warning_delta)} 分`)
       lines.push(`小過：${fmtSignedNumber(cfg.minor_delta)} 分`)
       lines.push(`大過：${fmtSignedNumber(cfg.major_delta)} 分`)

@@ -11,6 +11,7 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import ParentIcon from '../components/ParentIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -72,10 +73,18 @@ const calendarDays = computed(() => {
   return cells
 })
 
-const selected = ref<{ date: string; day: number; info: { status?: string; remark?: string } | null } | null>(null)
-function selectCell(cell: typeof selected.value) {
+type DayInfo = { status?: string; remark?: string }
+type DayCell = { date: string; day: number; info: DayInfo | null } | null
+
+// 只記所選「日期」，狀態／備註一律由目前的 dayMap 推導：存 cell 快照會讓下拉重整
+// 或資料更新後，詳情卡仍顯示點選當下的舊備註（深掃審查 FE-R2）。
+const selectedDate = ref<string | null>(null)
+const selectedInfo = computed<DayInfo | null>(() =>
+  selectedDate.value ? dayMap.value.get(selectedDate.value) || null : null,
+)
+function selectCell(cell: DayCell) {
   if (!cell) return
-  selected.value = cell
+  selectedDate.value = cell.date
 }
 
 async function fetchData() {
@@ -115,14 +124,14 @@ const STATUS_TONE: Record<string, { tone: string; label: string }> = {
   遲到:  { tone: 'warn',    label: '遲到' },
 }
 
-function cellClass(cell: typeof selected.value) {
+function cellClass(cell: DayCell) {
   if (!cell) return ''
   const status = cell.info?.status
   const tone = status ? STATUS_TONE[status]?.tone : undefined
   return [
     cell.info ? 'has' : '',
     tone ? `tone-${tone}` : '',
-    selected.value?.date === cell.date ? 'is-selected' : '',
+    selectedDate.value === cell.date ? 'is-selected' : '',
     cell.date === todayStr.value ? 'is-today' : '',
   ].filter(Boolean).join(' ')
 }
@@ -133,7 +142,13 @@ onMounted(async () => {
   fetchData()
 })
 
-watch([selectedId, year, month], fetchData)
+// F17：換孩子或換月份後，前一查詢所選的日期必須清除，月資料也一併丟掉——否則新月份
+// 載入中或失敗時，新標題下仍顯示前一個查詢的統計與日卡（深掃審查 FE-R2）。
+watch([selectedId, year, month], () => {
+  selectedDate.value = null
+  attRes.value = null
+  return fetchData()
+})
 
 async function pullRefresh() { await fetchData() }
 </script>
@@ -195,34 +210,39 @@ async function pullRefresh() { await fetchData() }
     </section>
 
     <!-- Detail -->
-    <section v-if="selected?.info" class="pt-card detail">
+    <section v-if="selectedDate && selectedInfo" class="pt-card detail">
       <div class="detail-row">
         <span class="material-symbols-rounded" aria-hidden="true">calendar_today</span>
         <span class="detail-label">日期</span>
-        <span class="detail-value">{{ selected.date }}</span>
+        <span class="detail-value">{{ selectedDate }}</span>
       </div>
       <div class="detail-row">
         <span class="material-symbols-rounded" aria-hidden="true">how_to_reg</span>
         <span class="detail-label">狀態</span>
-        <span class="pt-pill" :class="`pt-pill-${STATUS_TONE[selected.info.status ?? '']?.tone || 'info'}`">
-          {{ selected.info.status }}
+        <span class="pt-pill" :class="`pt-pill-${STATUS_TONE[selectedInfo.status ?? '']?.tone || 'info'}`">
+          {{ selectedInfo.status }}
         </span>
       </div>
-      <div v-if="selected.info.remark" class="detail-row">
+      <div v-if="selectedInfo.remark" class="detail-row">
         <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
         <span class="detail-label">備註</span>
-        <span class="detail-value">{{ selected.info.remark }}</span>
+        <span class="detail-value">{{ selectedInfo.remark }}</span>
       </div>
     </section>
     <EmptyState
-      v-else-if="selected"
+      v-else-if="selectedDate && data"
       variant="inline"
-      :title="`${selected.date} 尚無紀錄`"
+      :title="`${selectedDate} 尚無紀錄`"
     />
 
     <div v-if="loading && !data" class="skeleton-wrap">
       <SkeletonBlock variant="card" :count="2" />
     </div>
+    <MobileErrorRetry
+      v-else-if="attError && !data"
+      :error="attError as Error"
+      @retry="fetchData"
+    />
   </PullToRefresh>
 </template>
 

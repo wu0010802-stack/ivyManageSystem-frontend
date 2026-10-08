@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="保留座位（暫定編班）" width="420px">
+  <el-dialog v-model="visible" title="保留座位（暫定編班）" width="min(420px, 94vw)">
     <p class="child-info">幼生：{{ v.childName }}（visit #{{ v.id }}）</p>
     <el-form label-position="top">
       <el-form-item label="暫定年級" required>
@@ -123,8 +123,10 @@ async function confirm(): Promise<void> {
     ElMessage.success('已保留座位')
     emit('reserved')
     visible.value = false
-  } catch {
-    ElMessage.error('保留失敗（未預繳者不能保留）')
+  } catch (e) {
+    // 失敗原因可能是網路／驗證錯誤，不只是「未預繳者不能保留」的業務規則；
+    // 比照 release() 用 friendlyError 取真實錯誤原因，取不到才退回中性文案。
+    ElMessage.error(friendlyError('保留座位失敗', e))
   } finally {
     busy.value = false
   }

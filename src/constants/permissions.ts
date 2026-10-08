@@ -25,6 +25,11 @@ export const PERMISSION_NAMES = {
   SALARY_WRITE: 'SALARY_WRITE',
   ANNOUNCEMENTS_READ: 'ANNOUNCEMENTS_READ',
   ANNOUNCEMENTS_WRITE: 'ANNOUNCEMENTS_WRITE',
+  // 公告受眾範圍獨立權限碼（2026-09-08 anncat01，業主裁定互不隱含）：
+  // SCHOOL_WRITE 控 scope='all'（校園）、CLASS_WRITE 控 scope='classroom'（班級）。
+  // scope='student'/'guardian' 維持只需基礎 ANNOUNCEMENTS_WRITE，不額外要求新碼。
+  ANNOUNCEMENTS_SCHOOL_WRITE: 'ANNOUNCEMENTS_SCHOOL_WRITE',
+  ANNOUNCEMENTS_CLASS_WRITE: 'ANNOUNCEMENTS_CLASS_WRITE',
   SETTINGS_READ: 'SETTINGS_READ',
   SETTINGS_WRITE: 'SETTINGS_WRITE',
   USER_MANAGEMENT_READ: 'USER_MANAGEMENT_READ',
@@ -35,10 +40,12 @@ export const PERMISSION_NAMES = {
   DISMISSAL_CALLS_WRITE: 'DISMISSAL_CALLS_WRITE',
   // 娃娃車追蹤（後端 utils/permissions.py Permission）：BUS_TRIPS_OPERATE 為
   // per-user 顯式授權（無 role 預設），隨車老師 portal 頁專用；BUS_READ/BUS_WRITE
-  // 為管理端路線管理與監看。
+  // 為管理端路線管理與監看；BUS_IN_PROGRESS_WRITE 為發車後（in_progress）
+  // 當日計畫調整（2026-08-26 班次排程 spec，「娃娃車追蹤 (發車後調整)」）。
   BUS_READ: 'BUS_READ',
   BUS_WRITE: 'BUS_WRITE',
   BUS_TRIPS_OPERATE: 'BUS_TRIPS_OPERATE',
+  BUS_IN_PROGRESS_WRITE: 'BUS_IN_PROGRESS_WRITE',
   FEES_READ: 'FEES_READ',
   FEES_WRITE: 'FEES_WRITE',
   FEE_CLOSE_APPROVE: 'FEE_CLOSE_APPROVE',
@@ -136,8 +143,8 @@ export const PORTAL_ONLY_ROLES = ['teacher', 'parent']
 // 頁面時須同步本清單。
 export const TEACHER_PORTAL_ROUTES = [
   '/portal',
+  // /portal/class 於 2026-09-14 併進 /portal/home，成為純轉址，不再列入。
   '/portal/home',
-  '/portal/class-hub',
   '/portal/attendance',
   '/portal/leave',
   '/portal/leave-history',
@@ -145,6 +152,7 @@ export const TEACHER_PORTAL_ROUTES = [
   '/portal/punch-correction',
   '/portal/schedule',
   '/portal/anomalies',
+  '/portal/attendance-confirm',
   '/portal/students',
   '/portal/student-attendance',
   '/portal/student-leaves',
@@ -159,6 +167,7 @@ export const TEACHER_PORTAL_ROUTES = [
   '/portal/pickup-authorizations',
   '/portal/bus-trip',
   '/portal/activity',
+  '/portal/activity/attendance',
   '/portal/surveys',
   '/portal/growth',
   '/portal/calendar',

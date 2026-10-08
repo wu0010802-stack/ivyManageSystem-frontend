@@ -26,7 +26,6 @@ import { toast } from '../../utils/toast'
 import { QUICK_ACTION_CATALOG, useQuickActionSlots } from '../../composables/useQuickActionSlots'
 import { useChildSelection } from '../../composables/useChildSelection'
 
-
 const router = useRouter()
 const { slots, loading, isDefault, persisting, availableModules, swap, resetToDefault, load } =
   useQuickActionSlots()
@@ -99,7 +98,7 @@ const sheetCandidates = computed(() => availableModules())
 <template>
   <section class="qa">
     <div class="qa-head">
-      <h2 class="pt-section-title qa-title">常用</h2>
+      <h3 class="qa-title">常用功能</h3>
       <button
         type="button"
         class="qa-edit"
@@ -178,7 +177,7 @@ const sheetCandidates = computed(() => availableModules())
 <style scoped>
 .qa { padding: 4px var(--space-4, 16px) 0; display: flex; flex-direction: column; gap: 10px; }
 .qa-head { display: flex; align-items: center; justify-content: space-between; }
-.qa-title { margin: 0; }
+.qa-title { margin: 0; font-size: 13.5px; font-weight: 800; color: var(--pt-text-muted); letter-spacing: 0.01em; }
 
 .qa-edit {
   display: inline-flex; align-items: center; gap: 4px;
@@ -191,7 +190,7 @@ const sheetCandidates = computed(() => availableModules())
 }
 .qa-edit .material-symbols-rounded { font-size: 16px; }
 /* 小字綠底一律 --m3-primary（#006d3d，白字過 AA）；--brand-primary(#0d9053) 白字僅 4.1:1（aaContrast gate） */
-.qa-edit.is-active { background: var(--m3-primary, #006d3d); color: var(--pt-on-accent, #fff); }
+.qa-edit.is-active { background: var(--m3-primary, #006d3d); color: var(--color-primary-contrast, #fff); }
 
 
 .qa-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -230,7 +229,7 @@ const sheetCandidates = computed(() => availableModules())
 .qa-mod-badge {
   position: absolute; top: -6px; right: -6px;
   width: 20px; height: 20px; border-radius: 50%;
-  background: var(--m3-primary, #006d3d); color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, #006d3d); color: var(--color-primary-contrast, #fff);
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
@@ -271,4 +270,8 @@ const sheetCandidates = computed(() => availableModules())
 .qa-sheet-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .qa-sheet-label { font-size: 14px; font-weight: 700; color: var(--pt-text-strong); }
 .qa-sheet-desc { font-size: 11px; font-weight: 600; color: var(--pt-text-faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  .qa-mod, .qa-sheet-item { transition: none; }
+}
 </style>

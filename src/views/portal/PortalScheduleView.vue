@@ -9,6 +9,7 @@ import ScheduleMonthHeader from './components/schedule/ScheduleMonthHeader.vue'
 import ScheduleCalendarGrid from './components/schedule/ScheduleCalendarGrid.vue'
 import ScheduleSwapTable from './components/schedule/ScheduleSwapTable.vue'
 import ScheduleSwapDialog from './components/schedule/ScheduleSwapDialog.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 const loading = ref(false)
 
@@ -220,7 +221,7 @@ onMounted(() => {
 
 <template>
   <div class="schedule-page">
-    <h2>我的排班</h2>
+    <PortalPageHeader title="我的排班" />
 
     <!-- Month Navigation + CTA -->
     <el-card class="control-panel">
@@ -314,10 +315,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.schedule-page h2 {
-  margin-bottom: var(--space-4);
-}
-
 .control-panel {
   margin-bottom: var(--space-4);
 }

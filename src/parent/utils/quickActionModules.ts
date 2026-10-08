@@ -2,8 +2,8 @@
  * 首頁「常用功能」三格模組目錄與驗證。
  *
  * 背景：2026-08-16 首頁改版——常用功能三格預設「預告接送・臨時接送・公告」，
- * 家長各自在自己手機上編輯、存 DB（`/parent/quick-actions` GET/PUT，見 composables/useQuickActionSlots.ts；不是租戶層級統一配置，
- * 也不是 localStorage）。
+ * 家長各自在自己手機上編輯、存 DB（`/parent/quick-actions` GET/PUT，見
+ * composables/useQuickActionSlots.ts；不是租戶層級統一配置，也不是 localStorage）。
  *
  * 本檔只放純資料/驗證，不持有狀態：
  *  - QUICK_ACTION_CATALOG：模組目錄（哪些 key 對應什麼路由/圖示/色調）
@@ -28,6 +28,8 @@ export interface QuickActionModule extends ParentService {
  *
  * 名稱、副標、圖示、路由一律取自 parentServices.ts 的 PARENT_SERVICES（全家長端
  * 單一事實來源，2026-10-08 起）；這裡只決定「哪些服務可以放進常用三格」。
+ * 同一功能只有一個名字（例：/pickup-notice＝預告接送、/pickup＝臨時接送），
+ * 勿在這裡另取別名。
  *
  * 2026-08-17 補齊「事務」hub 與「孩子」hub 既有但先前漏收錄的模組
  * （leaves/medications/activity/surveys/child*）。**不收錄聯絡簿**：聯絡簿入口

@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { getLineConfig, updateLineConfig, testLineNotify } from '@/api/lineConfig'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
+
+const canWrite = computed(() => hasPermission('SETTINGS_WRITE'))
 
 const lineConfig = reactive({
   is_enabled: false,
@@ -34,6 +37,7 @@ const fetchLineConfig = async () => {
 }
 
 const saveLineConfig = async () => {
+  if (!canWrite.value) return
   loadingLine.value = true
   try {
     const payload: Record<string, unknown> = {
@@ -57,6 +61,7 @@ const saveLineConfig = async () => {
 }
 
 const handleTestLine = async () => {
+  if (!canWrite.value) return
   testingLine.value = true
   try {
     await testLineNotify()
@@ -73,7 +78,7 @@ onMounted(fetchLineConfig)
 
 <template>
   <div v-loading="loadingLine" style="max-width: 600px; margin-top: 16px;">
-    <el-form label-width="160px">
+    <el-form label-width="160px" :disabled="!canWrite">
       <el-form-item label="啟用 LINE 通知">
         <el-switch v-model="lineConfig.is_enabled" />
       </el-form-item>
@@ -105,7 +110,7 @@ onMounted(fetchLineConfig)
           狀態：{{ lineConfig.has_secret ? '已設定' : '尚未設定' }}
         </div>
       </el-form-item>
-      <el-form-item>
+      <el-form-item v-if="canWrite">
         <el-button type="primary" @click="saveLineConfig" :loading="loadingLine">儲存設定</el-button>
         <el-button @click="handleTestLine" :loading="testingLine" style="margin-left: 12px;">發送測試訊息</el-button>
       </el-form-item>

@@ -121,6 +121,35 @@
       <el-table-column prop="child_name" label="姓名" width="90" />
       <el-table-column prop="grade" label="班別" width="80" />
       <el-table-column label="入學學期" width="110" :formatter="(row: Record<string, unknown>) => enrollTermText(row)" />
+      <!-- 「預繳」含收款對帳標籤，是本頁最需要一眼看到的狀態；擺在地址等長欄位
+           之前，才不會被釘在右側的操作欄遮住（2026-09-06 staging 實跑確認）。 -->
+      <el-table-column label="預繳" align="center" width="118">
+        <template #default="{ row }">
+          <!-- 退出後 has_deposit 與 enrolled 都被清成 False，跟「從沒預繳」長得
+               一模一樣（2026-09-06）；退出狀態要獨立標出來。 -->
+          <el-tag v-if="row.withdrawn_at" type="danger" size="small" data-test="row-withdrawn">
+            {{ row.withdrawn_from === 'enrolled' ? '已退註冊' : '已退預繳' }}
+          </el-tag>
+          <el-tag v-else :type="row.has_deposit ? 'success' : 'danger'" size="small">
+            {{ row.has_deposit ? '是' : '否' }}
+          </el-tag>
+          <!-- 收款對帳（2026-09-06）：招生端旗標與學費模組的預繳金是兩個真相，
+               不連動。落差直接標在這一欄，不必兩個模組對開才看得出來。 -->
+          <el-tooltip
+            v-if="mismatchLabel(row.deposit_mismatch)"
+            :content="mismatchTitle(row.deposit_mismatch)"
+            placement="top"
+          >
+            <el-tag
+              type="warning"
+              size="small"
+              effect="plain"
+              class="mismatch-tag"
+              data-test="row-deposit-mismatch"
+            >{{ mismatchLabel(row.deposit_mismatch) }}</el-tag>
+          </el-tooltip>
+        </template>
+      </el-table-column>
       <el-table-column prop="address" label="地址" min-width="220" show-overflow-tooltip>
         <template #default="{ row }">
           {{ row.address || row.district || '—' }}
@@ -128,13 +157,6 @@
       </el-table-column>
       <el-table-column prop="source" label="來源" min-width="100" />
       <el-table-column prop="referrer" label="介紹者" width="90" />
-      <el-table-column label="預繳" align="center" width="70">
-        <template #default="{ row }">
-          <el-tag :type="row.has_deposit ? 'success' : 'danger'" size="small">
-            {{ row.has_deposit ? '是' : '否' }}
-          </el-tag>
-        </template>
-      </el-table-column>
       <el-table-column label="已註冊" align="center" width="70">
         <template #default="{ row }">
           <el-tag v-if="row.enrolled" type="success" size="small">是</el-tag>
@@ -156,26 +178,42 @@
       <el-table-column prop="no_deposit_reason" label="未預繳原因" min-width="120" show-overflow-tooltip />
       <el-table-column prop="notes" label="備註" min-width="120" show-overflow-tooltip />
       <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />
-      <el-table-column v-if="canWrite || canConvert" label="操作" width="290" fixed="right">
+      <!-- 操作欄（2026-09-06 重整）：一列六顆按鈕要 360px，釘在右側會蓋掉「預繳」
+           之後的所有欄位。常用的三顆留在外面，其餘收進「更多」，欄寬縮回 210px。
+           手機上不釘住——窄視窗裡釘住的操作欄會蓋掉整個表格，反而看不到是誰。 -->
+      <el-table-column
+        v-if="canWrite || canConvert"
+        label="操作"
+        width="248"
+        :fixed="isMobile ? false : 'right'"
+      >
         <template #default="{ row }">
+          <div class="row-actions">
           <el-button v-if="canWrite" size="small" @click="$emit('edit', row)">編輯</el-button>
           <el-button size="small" @click="$emit('journey', row)">歷程</el-button>
-          <el-button
-            v-if="canWrite && row.has_deposit"
-            size="small"
-            type="warning"
-            plain
-            @click="$emit('reserve', row)"
-          >{{ row.provisional_grade_id ? '變更座位' : '保留座位' }}</el-button>
           <el-button
             v-if="canConvert && row.has_deposit && !row.enrolled"
             size="small"
             type="success"
             @click="$emit('convert', row)"
           >轉為學生</el-button>
-          <!-- plain 而非實心：實心 danger 是這一列裡唯一有填色的按鈕，視覺重量高過「編輯」
-               與「轉為學生」，等於每列都在把眼睛引向不可逆的動作 -->
-          <el-button v-if="canWrite" size="small" type="danger" plain @click="$emit('delete', row.id)">刪除</el-button>
+          <el-dropdown v-if="canWrite" trigger="click" @command="(c: string) => onRowCommand(c, row)">
+            <el-button size="small" text data-test="row-more">更多<el-icon class="more-caret"><ArrowDown /></el-icon></el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-if="row.has_deposit" command="reserve">
+                  {{ row.provisional_grade_id ? '變更座位' : '保留座位' }}
+                </el-dropdown-item>
+                <el-dropdown-item
+                  v-if="!row.withdrawn_at && (row.has_deposit || row.enrolled)"
+                  command="withdraw"
+                  data-test="row-withdraw"
+                >{{ row.enrolled ? '退註冊' : '退預繳' }}</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -194,6 +232,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ArrowDown } from '@element-plus/icons-vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { currentRocYear } from '@/utils/academic'
 import { formatSemester } from '@/utils/classHistory'
 
@@ -244,8 +284,32 @@ const emit = defineEmits<{
   'convert': [row: Record<string, unknown>]
   'reserve': [row: Record<string, unknown>]
   'journey': [row: Record<string, unknown>]
+  'withdraw': [row: Record<string, unknown>]
   'delete': [id: unknown]
 }>()
+
+const { isMobile } = useIsMobile()
+
+/** 操作欄「更多」下拉：把次要與危險動作收進來，欄寬才不會蓋掉表格中段。 */
+function onRowCommand(command: string, row: Record<string, unknown>): void {
+  if (command === 'reserve') emit('reserve', row)
+  else if (command === 'withdraw') emit('withdraw', row)
+  else if (command === 'delete') emit('delete', row.id)
+}
+
+/** 招生旗標與學費模組收款紀錄的落差（後端 services/recruitment_prepayment_link 算好）。 */
+const MISMATCH_LABEL: Record<string, string> = {
+  flag_without_credit: '查無收款',
+  credit_without_flag: '未標記',
+}
+const MISMATCH_TITLE: Record<string, string> = {
+  flag_without_credit: '標記為已預繳，但學費管理查不到對應的預繳金，請確認收款是否漏登。',
+  credit_without_flag: '學費管理已有這筆的預繳金，但招生狀態還停在未預繳，請到漏斗看板推進到「已預繳」。',
+}
+const mismatchLabel = (key: unknown): string =>
+  MISMATCH_LABEL[typeof key === 'string' ? key : ''] ?? ''
+const mismatchTitle = (key: unknown): string =>
+  MISMATCH_TITLE[typeof key === 'string' ? key : ''] ?? ''
 
 const termYearOptions = computed(() => {
   const y = currentRocYear()
@@ -262,3 +326,23 @@ const updateFilter = (field: string, value: unknown) => {
   emit('update-filter', { [field]: value })
 }
 </script>
+
+<style scoped>
+/* 收款對帳標籤跟在「預繳」tag 後面，靠 margin 與它拉開，不另佔一欄 */
+.mismatch-tag {
+  margin-left: 4px;
+}
+.more-caret {
+  margin-left: 2px;
+}
+/* 四個元素（編輯／歷程／轉為學生／更多）維持單行，不因欄寬臨界值折行 */
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.row-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+</style>

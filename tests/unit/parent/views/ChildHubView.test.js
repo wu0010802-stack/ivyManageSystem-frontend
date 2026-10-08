@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import ChildHubView from '@/parent/views/ChildHubView.vue'
@@ -25,8 +26,10 @@ function setupStores({ children = [], selectedId = null } = {}) {
     items: children,
     load: vi.fn().mockResolvedValue(undefined),
   })
+  const selected = ref(selectedId)
   useChildSelection.mockReturnValue({
-    selectedId: { value: selectedId },
+    selectedId: selected,
+    setSelected: (id) => { selected.value = id },
     ensureSelected: vi.fn(),
   })
 }
@@ -86,3 +89,15 @@ describe('ChildHubView', () => {
     expect(w.text()).toContain('2 位 · 基本資料')
   })
 })
+
+ it('多寶家庭能看見並切換操作對象，照片入口同步切換', async () => {
+    setupStores({ children: [{ student_id: 11, name: '測試甲' }, { student_id: 12, name: '測試乙' }], selectedId: 11 })
+    const w = mount(ChildHubView, { global: { stubs: { ParentBottomSheet: { props: ['modelValue'], template: '<div v-if="modelValue"><slot /></div>' } } } })
+    expect(w.find('[aria-label="切換孩子"]').text()).toContain('測試甲')
+    await w.find('[aria-label="切換孩子"]').trigger('click')
+    await w.find('[data-child-option="12"]').trigger('click')
+    expect(w.find('[aria-label="切換孩子"]').text()).toContain('測試乙')
+    await w.findAll('.m3-list-item')[1].trigger('click')
+    expect(pushMock).toHaveBeenCalledWith('/children/12/photos')
+    w.unmount()
+ })

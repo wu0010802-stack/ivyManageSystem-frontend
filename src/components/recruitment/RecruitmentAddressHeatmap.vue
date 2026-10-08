@@ -435,6 +435,11 @@ const schoolTypeSignature = computed(() =>
 )
 
 const emptyDescription = computed(() => {
+  // F65：非預設租戶沒設座標時上游給非有限值（不再塞義華座標或 0,0）——
+  // 沒有「本園」就沒有圓心，先要求設定，不畫一張錯得很像真的地圖。
+  if (!Number.isFinite(campusLat.value) || !Number.isFinite(campusLng.value)) {
+    return '尚未設定本園座標，熱點圖無法定位。請先到「娃娃車設定」填入園所位置（或請總部在品牌設定填入園所座標），再重新整理頁面'
+  }
   if (!props.recordsWithAddress) return '目前沒有可用於熱點圖的地址資料'
   if (!props.providerAvailable) return '尚未設定 geocoding provider，暫時無法定位地址'
   if (needsIncrementalSync.value && props.canWrite) return '已有地址資料待同步座標，請先執行同步'
@@ -697,7 +702,7 @@ const renderLeafletMap = async () => {
     marker.bindPopup(
       `<div class="map-popup">` +
       `<strong>${escapeHtml(bucket.district)}</strong><br/>` +
-      `<span>本街區共 ${bucket.visit_count} 筆 visit / ${bucket.deposit_count} 筆 deposit</span>` +
+      `<span>本街區共 ${escapeHtml(bucket.visit_count)} 筆 visit / ${escapeHtml(bucket.deposit_count)} 筆 deposit</span>` +
       `</div>`
     )
     markerLayer.addLayer(marker)

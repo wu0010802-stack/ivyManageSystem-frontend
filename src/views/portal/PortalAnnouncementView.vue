@@ -5,6 +5,8 @@ import { ElMessage } from 'element-plus'
 import { Document, Top } from '@element-plus/icons-vue'
 import { getPortalAnnouncements, markAnnouncementRead } from '@/api/portal'
 import { apiError } from '@/utils/error'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 type AttachmentItem = {
   id: number
@@ -111,7 +113,7 @@ onMounted(async () => {
 
 <template>
   <div class="portal-announcements" v-loading="loading">
-    <h3 style="margin: 0 0 16px;">公告通知</h3>
+    <PortalPageHeader title="公告通知" />
 
     <el-alert
       v-if="unreadCount > 0"
@@ -195,7 +197,7 @@ onMounted(async () => {
       已顯示全部 {{ totalAnnouncements }} 則公告
     </div>
 
-    <el-empty v-else-if="!loading && !announcements.length" description="目前沒有公告" />
+    <EmptyState v-else-if="!loading && !announcements.length" variant="mobile" title="目前沒有公告" />
   </div>
 </template>
 

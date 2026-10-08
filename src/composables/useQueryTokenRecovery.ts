@@ -49,8 +49,11 @@ export function useQueryTokenRecovery() {
   /**
    * 送出三欄查詢。成功回 IdentityQueryOutcome（registration 供呼叫端以唯讀
    * 姿態 hydrate），失敗回 null（錯誤訊息寫入 recoveryError）。
+   * isStale：回應抵達時若已有較新的查詢請求（F20），丟棄結果（回 null、不寫錯誤）。
    */
-  async function submitIdentityQuery(): Promise<IdentityQueryOutcome | null> {
+  async function submitIdentityQuery(
+    isStale: () => boolean = () => false,
+  ): Promise<IdentityQueryOutcome | null> {
     recoveryTouched.value = true
     if (!recoveryFormValid.value) return null
     recoveryLoading.value = true
@@ -71,6 +74,7 @@ export function useQueryTokenRecovery() {
           masked_email?: string | null
         }
       }).data
+      if (isStale()) return null
       if (!data?.registration) {
         recoveryError.value = '查詢失敗，請稍後再試。'
         return null
@@ -81,6 +85,7 @@ export function useQueryTokenRecovery() {
         maskedEmail: data.masked_email || '',
       }
     } catch (err) {
+      if (isStale()) return null
       // 與查詢端一致的隱私口徑：不透露是哪一欄不符。
       recoveryError.value =
         (err as { response?: { data?: { detail?: string } } }).response?.data?.detail

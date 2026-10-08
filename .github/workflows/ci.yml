@@ -94,11 +94,12 @@ jobs:
         # 供 --merge-reports 重算整體覆蓋率（本地已實證兩端行為）。
         run: |
           npx vitest run --shard=${{ matrix.shard }}/2 \
-            --reporter=blob --coverage --coverage.reporter=text-summary \
+            --reporter=default --reporter=blob --coverage --coverage.reporter=text-summary \
             --coverage.thresholds.statements=0 --coverage.thresholds.branches=0 \
             --coverage.thresholds.functions=0 --coverage.thresholds.lines=0
 
       - name: Upload blob report（分片 ${{ matrix.shard }}）
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: vitest-blob-${{ matrix.shard }}
@@ -171,6 +172,11 @@ jobs:
       - name: 錯誤處理棘輪（直讀 response.data.detail 只准降不准升）
         run: npm run check:error-detail
 
+      # 表單 dialog 棘輪：裸 el-dialog 表單／label-width／硬寫 px 寬度／新增鈕誤用 success 或「＋」
+      # 只准降不准升；新表單一律 FormDialog（spec 2026-09-06-admin-form-dialog-defaults）。
+      - name: 表單 dialog 棘輪（FormDialog 採用、label-width、px 寬度、按鈕誤用）
+        run: npm run check:form-dialogs
+
       # 可點擊但 Tab 不到的元素（div/li @click 沒補 role/tabindex/keydown）。
       # 存量分三類、修法各不同，見腳本頂部註解。
       - name: a11y 棘輪（可點擊元素必須鍵盤可及）
@@ -206,6 +212,15 @@ jobs:
         with:
           path: ivy-frontend
 
+      - name: 檢查後端 repo 唯讀憑證
+        env:
+          BACKEND_REPO_TOKEN: ${{ secrets.BACKEND_REPO_TOKEN }}
+        run: |
+          if ! test -n "$BACKEND_REPO_TOKEN"; then
+            echo "::error::請設定 BACKEND_REPO_TOKEN：僅授予 ivyManageSystem-backend Contents: Read 的 fine-grained PAT，存入前端 repository Actions secret。"
+            exit 1
+          fi
+
       - name: Checkout ivy-backend (sibling)
         uses: actions/checkout@v7
         with:
@@ -215,8 +230,7 @@ jobs:
           # repo——這一步從設定之初就一直失敗，後面 8 個步驟全被 skip，等於這個
           # gate 從未真正跑過。需要一顆對 ivyManageSystem-backend 有 Contents:
           # Read 的 fine-grained PAT，存成本 repo 的 BACKEND_REPO_TOKEN secret。
-          # 尚未設定時回退到預設 token，行為與現況相同（不會更糟）。
-          token: ${{ secrets.BACKEND_REPO_TOKEN || github.token }}
+          token: ${{ secrets.BACKEND_REPO_TOKEN }}
 
       - name: Prefer companion backend ref when it exists
         working-directory: ivy-backend

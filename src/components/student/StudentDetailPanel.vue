@@ -18,8 +18,7 @@ import AttendanceTab from './tabs/AttendanceTab.vue'
 import RecordsTab from './tabs/RecordsTab.vue'
 import FeesTab from './tabs/FeesTab.vue'
 import ActivityTab from './tabs/ActivityTab.vue'
-import HealthGrowthTab from './tabs/HealthGrowthTab.vue'
-import GrowthProfileTab from './tabs/GrowthProfileTab.vue'
+import HealthAndGrowthTab from './tabs/HealthAndGrowthTab.vue'
 import CommunicationTab from './tabs/CommunicationTab.vue'
 import LifecycleTab from './tabs/LifecycleTab.vue'
 import JourneyTimeline from '@/components/recruitment/JourneyTimeline.vue'
@@ -70,12 +69,18 @@ const canFeesRead = computed(() => hasPermission('FEES_READ'))
 const canSpecialNeedsRead = computed(() => hasPermission('STUDENTS_SPECIAL_NEEDS_READ'))
 
 const defaultTabFor = (ctx: string) => (ctx === 'classroom' ? 'overview' : 'basic')
+// 2026-09-09（需求 2）：原本各自獨立的 health_growth／growth_profile 一級
+// tab 合併成同一個 health_growth_profile 父 tab（內部用 HealthAndGrowthTab
+// 分「健康類／成長類」兩組）。舊書籤（含更早期 4 個原獨立 tab 整併進
+// growth_profile 時留下的名稱）一律導向合併後的父 tab 名稱。
 const LEGACY_TAB_MAP = {
   guardians: 'basic',
-  milestones: 'growth_profile',
-  timeline: 'growth_profile',
-  photo_gallery: 'growth_profile',
-  growth_report: 'growth_profile',
+  health_growth: 'health_growth_profile',
+  growth_profile: 'health_growth_profile',
+  milestones: 'health_growth_profile',
+  timeline: 'health_growth_profile',
+  photo_gallery: 'health_growth_profile',
+  growth_report: 'health_growth_profile',
 }
 const mapLegacyTab = (name: string) => (LEGACY_TAB_MAP as Record<string, string>)[name] || name
 // 4 個原獨立 tab 整併成 growth_profile 的 sub-tab，書籤連結 ?tab=<舊名>
@@ -88,12 +93,24 @@ const GROWTH_SUB_FROM_LEGACY = new Set([
   'photo_gallery',
   'growth_report',
 ])
+// 上述 6 個舊 tab 名稱合併後該落在 HealthAndGrowthTab 的哪個分組（需求 2）。
+const GROUP_FROM_LEGACY: Record<string, 'health' | 'growth'> = {
+  health_growth: 'health',
+  growth_profile: 'growth',
+  milestones: 'growth',
+  timeline: 'growth',
+  photo_gallery: 'growth',
+  growth_report: 'growth',
+}
 const initialActive = mapLegacyTab(
   props.initialTab || props.defaultTab || defaultTabFor(props.context),
 )
 const initialGrowthSub = GROWTH_SUB_FROM_LEGACY.has(props.initialTab)
   ? props.initialTab
   : null
+const initialHealthGrowthGroup = ref<'health' | 'growth'>(
+  GROUP_FROM_LEGACY[props.initialTab] || 'health',
+)
 const activeTab = ref(initialActive)
 
 const editDialogVisible = ref(false)
@@ -110,8 +127,7 @@ const TAB_DEFS = computed(() => [
   { name: 'records', label: '教務紀錄', show: true },
   { name: 'fees', label: '學費', show: canFeesRead.value },
   { name: 'activity', label: '才藝報名', show: canActivityRead.value },
-  { name: 'health_growth', label: '健康／成長', show: canPortfolioRead.value || canHealthRead.value },
-  { name: 'growth_profile', label: '成長檔案', show: canPortfolioRead.value },
+  { name: 'health_growth_profile', label: '健康／成長檔案', show: canPortfolioRead.value || canHealthRead.value },
   { name: 'disability_docs', label: '鑑定文件', show: canSpecialNeedsRead.value },
   { name: 'lifecycle', label: '在校歷程', show: true },
   { name: 'communication', label: '家長溝通', show: true },
@@ -179,13 +195,21 @@ watch(activeTab, (val) => {
 // 預期 sub，並同步 ?tab=growth_profile 讓 URL 與顯示一致（否則 activeTab
 // 是 growth_profile 但 URL 仍掛舊名）。只在 page mode + syncUrl 時推 URL；
 // drawer/embedded mode 由父層控制 router。bug sweep round 4 (2026-05-14) F-FE-1。
-if (props.mode === 'page' && props.syncUrl && initialGrowthSub) {
+if (props.mode === 'page' && props.syncUrl && (initialGrowthSub || GROUP_FROM_LEGACY[props.initialTab])) {
   const q = router.currentRoute.value.query
   const needsTab = q.tab !== initialActive
-  const needsSub = q.sub !== initialGrowthSub
-  if (needsTab || needsSub) {
+  const needsSub = initialGrowthSub ? q.sub !== initialGrowthSub : false
+  const needsGroup = GROUP_FROM_LEGACY[props.initialTab]
+    ? q.group !== GROUP_FROM_LEGACY[props.initialTab]
+    : false
+  if (needsTab || needsSub || needsGroup) {
     router.replace({
-      query: { ...q, tab: initialActive, sub: initialGrowthSub },
+      query: {
+        ...q,
+        tab: initialActive,
+        ...(initialGrowthSub ? { sub: initialGrowthSub } : {}),
+        ...(GROUP_FROM_LEGACY[props.initialTab] ? { group: GROUP_FROM_LEGACY[props.initialTab] } : {}),
+      },
     })
   }
 }
@@ -195,7 +219,7 @@ watch(() => props.initialTab, (val) => {
   if (!val) return
   const mapped = mapLegacyTab(val)
   if (mapped !== activeTab.value) activeTab.value = mapped
-  // 後續切換時若帶舊名，同樣補 ?sub=
+  // 後續切換時若帶舊名，同樣補 ?sub= / ?group=
   if (
     props.mode === 'page' &&
     props.syncUrl &&
@@ -204,6 +228,16 @@ watch(() => props.initialTab, (val) => {
   ) {
     router.replace({
       query: { ...router.currentRoute.value.query, sub: val },
+    })
+  }
+  if (
+    props.mode === 'page' &&
+    props.syncUrl &&
+    GROUP_FROM_LEGACY[val] &&
+    router.currentRoute.value.query.group !== GROUP_FROM_LEGACY[val]
+  ) {
+    router.replace({
+      query: { ...router.currentRoute.value.query, group: GROUP_FROM_LEGACY[val] },
     })
   }
 })
@@ -368,14 +402,11 @@ const handleBackToClassroom = () => {
           :student-id="safeStudentId"
           :active="activeTab === 'activity'"
         />
-        <HealthGrowthTab
-          v-else-if="tab.name === 'health_growth'"
-          :student-id="safeStudentId"
-        />
-        <GrowthProfileTab
-          v-else-if="tab.name === 'growth_profile'"
+        <HealthAndGrowthTab
+          v-else-if="tab.name === 'health_growth_profile'"
           :student-id="safeStudentId"
           :sync-url="syncUrl"
+          :initial-group="initialHealthGrowthGroup"
         />
         <StudentDisabilityDocsPanel
           v-else-if="tab.name === 'disability_docs'"

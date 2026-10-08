@@ -8,13 +8,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 //（`let` 在 TDZ 會直接 ReferenceError）。
 const h = vi.hoisted(() => ({
   advanceAdminSession: vi.fn(),
+  resetAdminSessionLocally: vi.fn(),
   listeners: [] as (() => void)[],
 }))
 const advanceAdminSession = h.advanceAdminSession
+const resetAdminSessionLocally = h.resetAdminSessionLocally
 const fireReset = (): void => h.listeners.forEach((l) => l())
 
 vi.mock('@/utils/adminSession', () => ({
   advanceAdminSession: (...args: unknown[]) => h.advanceAdminSession(...args),
+  resetAdminSessionLocally: (...args: unknown[]) => h.resetAdminSessionLocally(...args),
   onAdminSessionReset: (listener: () => void) => {
     h.listeners.push(listener)
     return () => {
@@ -39,32 +42,35 @@ describe('useActingTenant', () => {
   beforeEach(() => {
     _resetActingTenantForTests()
     advanceAdminSession.mockClear()
+    resetAdminSessionLocally.mockClear()
   })
 
-  it('切換分校會呼叫 advanceAdminSession() 並記住新分校', () => {
+  it('切換分校只重設本分頁 runtime，不廣播身分變更到其他分頁', () => {
     setActingTenant(A)
-    expect(advanceAdminSession).toHaveBeenCalledTimes(1)
+    expect(resetAdminSessionLocally).toHaveBeenCalledTimes(1)
+    expect(advanceAdminSession).not.toHaveBeenCalled()
     expect(actingTenantId.value).toBe(2)
 
     setActingTenant(B)
-    expect(advanceAdminSession).toHaveBeenCalledTimes(2)
+    expect(resetAdminSessionLocally).toHaveBeenCalledTimes(2)
+    expect(advanceAdminSession).not.toHaveBeenCalled()
     expect(actingTenant.value?.slug).toBe('branch-b')
   })
 
   it('同一個 id 重設不推進世代（重掛載詳情頁不該把剛載好的快取清掉）', () => {
     setActingTenant(A)
-    advanceAdminSession.mockClear()
+    resetAdminSessionLocally.mockClear()
     setActingTenant({ ...A, name: 'A 校（改名）' })
-    expect(advanceAdminSession).not.toHaveBeenCalled()
+    expect(resetAdminSessionLocally).not.toHaveBeenCalled()
     // 但同 id 的欄位更新要套用（詳情頁載回完整資料）
     expect(actingTenant.value?.name).toBe('A 校（改名）')
   })
 
   it('清除 acting tenant 也是一次身分世代推進', () => {
     setActingTenant(A)
-    advanceAdminSession.mockClear()
+    resetAdminSessionLocally.mockClear()
     clearActingTenant()
-    expect(advanceAdminSession).toHaveBeenCalledTimes(1)
+    expect(resetAdminSessionLocally).toHaveBeenCalledTimes(1)
     expect(actingTenantId.value).toBeNull()
   })
 
@@ -75,12 +81,12 @@ describe('useActingTenant', () => {
     expect(actingTenantId.value).toBeNull()
   })
 
-  it('advance 後才賦值：reset listener 不會把剛選好的分校清掉', () => {
-    // 模擬真實的 advanceAdminSession（它會同步觸發 reset listeners）
-    advanceAdminSession.mockImplementation(() => fireReset())
+  it('本分頁 reset 後才賦值：listener 不會把剛選好的分校清掉', () => {
+    // 模擬真實的 resetAdminSessionLocally（它會同步觸發 reset listeners）
+    resetAdminSessionLocally.mockImplementation(() => fireReset())
     setActingTenant(B)
     expect(actingTenantId.value).toBe(3)
-    advanceAdminSession.mockReset()
+    resetAdminSessionLocally.mockReset()
   })
 
   it('platformCacheKey 帶 acting tenant；未選擇時為 all', () => {

@@ -92,6 +92,10 @@ const todoTiles = computed(() => {
     if (pendingOvertimes > 0) {
       tiles.push({ key: 'overtimes', label: '待審加班', count: pendingOvertimes, tone: 'warning', path: '/approvals' })
     }
+    const pendingCorrections = approvalSummary.value?.pending_punch_corrections ?? 0
+    if (pendingCorrections > 0) {
+      tiles.push({ key: 'corrections', label: '待審補打卡', count: pendingCorrections, tone: 'warning', path: '/workbench' })
+    }
   }
 
   if (showAttendance && attendanceAnomalies.value) {
@@ -214,7 +218,7 @@ const anomalyOverflow = computed(
       <!-- 全部清空 -->
       <div v-else-if="todoTiles.length === 0" class="todo-empty">
         <el-icon class="todo-empty__icon"><CircleCheckFilled /></el-icon>
-        <span>{{ isWeekend ? '週末愉快！目前沒有待處理的工作。' : '太好了！今天沒有待處理的工作。' }}</span>
+        <span>{{ isWeekend ? '週末愉快！目前出勤與簽核摘要沒有待辦。' : '目前出勤與簽核摘要沒有待辦。' }} 其他模組請查看下方待辦入口。</span>
       </div>
 
       <!-- 待辦磚 -->

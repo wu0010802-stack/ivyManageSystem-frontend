@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { listToday, administer, skipLog } from '@/api/portalMedications'
 import { broadcastDashboardInvalidate } from '@/composables/usePortalDashboard'
 
@@ -98,17 +101,18 @@ function statusLabel(s: string) {
 
 <template>
   <div class="med-view">
-    <header class="page-header">
-      <h2>今日用藥（{{ date || '—' }}）</h2>
-      <el-button :loading="loading" @click="load">重新整理</el-button>
-    </header>
+    <PortalPageHeader title="今日用藥" :subtitle="date || ''">
+      <template #actions>
+        <el-button :icon="Refresh" :loading="loading" @click="load">重新整理</el-button>
+      </template>
+    </PortalPageHeader>
 
     <div v-if="loading && !groups.length" class="loading">
       <div class="pt-shimmer skeleton-block"></div>
       <div class="pt-shimmer skeleton-block"></div>
     </div>
 
-    <p v-else-if="!groups.length" class="empty">今日無用藥單</p>
+    <EmptyState v-else-if="!groups.length" variant="mobile" title="今日無用藥單" />
 
     <div v-else class="groups">
       <section v-for="g in groups" :key="g.classroom_id" class="classroom-group">
@@ -121,7 +125,7 @@ function statusLabel(s: string) {
           </div>
         </div>
 
-        <p v-if="!g.items.length" class="empty">本班今日無用藥</p>
+        <EmptyState v-if="!g.items.length" variant="inline" title="本班今日無用藥" />
         <div v-else class="cards">
           <div
             v-for="item in g.items"
@@ -161,21 +165,9 @@ function statusLabel(s: string) {
 
 <style scoped>
 .med-view { max-width: 1000px; margin: 0 auto; }
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-3);
-}
 
 .loading { display: flex; flex-direction: column; gap: var(--space-3); }
 .skeleton-block { height: 100px; border-radius: var(--radius-md); }
-
-.empty {
-  text-align: center;
-  color: var(--pt-text-muted);
-  padding: var(--space-6);
-}
 
 .groups { display: flex; flex-direction: column; gap: var(--space-4); }
 

@@ -190,7 +190,7 @@ function toggleGroup(key: string): void {
 }
 
 .group-toggle:hover {
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
 }
 
 .group-arrow {

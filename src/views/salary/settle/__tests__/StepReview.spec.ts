@@ -22,7 +22,10 @@ vi.mock('element-plus', async (importOriginal) => {
     const actual = await importOriginal<typeof import('element-plus')>()
     return {
         ...actual,
-        ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
+        // info 不可漏：AdjustDrawer 在「沒有任何欄位變動」時走 ElMessage.info 提早返回，
+        // mock 缺這支會讓元件在 save() 內丟 TypeError、被 catch 吞成「網路連線異常」，
+        // 三條斷言連帶假紅（2026-09-21 發現時這三條已在 staging 紅著、守衛實際失效）。
+        ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn(), info: vi.fn() },
         ElMessageBox: { alert: vi.fn().mockResolvedValue('confirm') },
     }
 })
@@ -156,12 +159,19 @@ describe('AdjustDrawer', () => {
             props: { modelValue: true, row },
             global: { stubs: DRAWER_STUBS },
         })
-        const vm = wrapper.vm as unknown as { reason: string; save: () => Promise<void> }
+        const vm = wrapper.vm as unknown as {
+            reason: string
+            extraAllowanceLabel: string
+            save: () => Promise<void>
+        }
         vm.reason = '主管核准一次性獎勵'
+        // 新契約（見 AdjustDrawer.patch.spec.ts）：payload 只帶「相對 row 有變動」的欄位，
+        // 完全沒動金額或名目時直接提早返回不打 API。所以要送出必須真的改一個欄位。
+        vm.extraAllowanceLabel = '導師加給'
         await vm.save()
         expect(manualAdjustSalary).toHaveBeenCalledWith(
             77,
-            expect.objectContaining({ adjustment_reason: '主管核准一次性獎勵', extra_allowance_label: '值週' }),
+            expect.objectContaining({ adjustment_reason: '主管核准一次性獎勵', extra_allowance_label: '導師加給' }),
             5,
         )
         expect(wrapper.emitted('saved')).toBeTruthy()
@@ -185,8 +195,13 @@ describe('AdjustDrawer', () => {
             props: { modelValue: true, row: rec({ id: 77 }) },
             global: { stubs: DRAWER_STUBS },
         })
-        const vm = wrapper.vm as unknown as { reason: string; save: () => Promise<void> }
+        const vm = wrapper.vm as unknown as {
+            reason: string
+            extraAllowanceLabel: string
+            save: () => Promise<void>
+        }
         vm.reason = '誤算修正補登'
+        vm.extraAllowanceLabel = '導師加給'
         await vm.save()
         await flushPromises()
         expect(ElMessageBox.alert).toHaveBeenCalled()
@@ -195,20 +210,31 @@ describe('AdjustDrawer', () => {
 
     it('編輯其他欄位時不把已存的額外加給靜默歸零（回歸，原 SalaryView.test.js）', async () => {
         vi.mocked(manualAdjustSalary).mockResolvedValue({ data: { record: {} } } as never)
-        // row 來自 DB records，自帶 extra_allowance=500；只改 reason 直接存
+        // row 來自 DB records，自帶 extra_allowance=500；只改名目、不動金額。
+        // 舊契約是「整包送出」，所以守衛盯的是「500 有沒有被送成 0」；
+        // 新契約改成只送變動欄位（AdjustDrawer.patch.spec.ts），同一個危害要改盯
+        // 「extra_allowance 根本不該出現在 payload 裡」——出現就代表前端又在替
+        // 一個沒被編輯的金額欄位下值，後端會照單覆寫。
         const row = rec({ id: 88, extra_allowance: 500, extra_allowance_label: '值週' })
         const wrapper = mount(AdjustDrawer, {
             props: { modelValue: true, row },
             global: { stubs: DRAWER_STUBS },
         })
-        const vm = wrapper.vm as unknown as { reason: string; save: () => Promise<void> }
-        vm.reason = '只調整原因不動金額'
+        const vm = wrapper.vm as unknown as {
+            reason: string
+            extraAllowanceLabel: string
+            save: () => Promise<void>
+        }
+        vm.reason = '只調整加給名目不動金額'
+        vm.extraAllowanceLabel = '導師加給'
         await vm.save()
         expect(manualAdjustSalary).toHaveBeenCalledWith(
             88,
-            expect.objectContaining({ extra_allowance: 500, extra_allowance_label: '值週' }),
+            expect.objectContaining({ extra_allowance_label: '導師加給' }),
             expect.anything(),
         )
+        const payload = vi.mocked(manualAdjustSalary).mock.calls[0][1] as Record<string, unknown>
+        expect(payload).not.toHaveProperty('extra_allowance')
     })
 
     it('已封存列 → 儲存按鈕 disabled', () => {

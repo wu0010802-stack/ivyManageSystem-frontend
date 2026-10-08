@@ -161,7 +161,7 @@ function goMedications(): void {
       data-child-contact-book
       @click="emit('select', studentId)"
     >
-      <span class="material-symbols-rounded ctc-cb-icon" aria-hidden="true">auto_stories</span>
+      <span class="material-symbols-rounded ctc-cb-icon" aria-hidden="true">menu_book</span>
       <span class="ctc-cb-copy">
         <span class="ctc-cb-title">
           今日聯絡簿

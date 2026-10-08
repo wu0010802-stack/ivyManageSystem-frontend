@@ -18,6 +18,7 @@ vi.mock('@/utils/auth', () => ({
 }))
 
 import * as api from '@/api/appraisal'
+import { ElMessage } from 'element-plus'
 
 const stubs = {
   // 把 child components 換成簡單 stub 讓我們可以斷言 prop 與 event
@@ -223,5 +224,56 @@ describe('KanbanView', () => {
     await nextTick(); await nextTick()
     expect(api.getSignStatusSummary).toHaveBeenCalledTimes(2)
     expect(api.getSignStatusSummary).toHaveBeenLastCalledWith(99)
+  })
+})
+
+
+describe('看板重載回應順序', () => {
+  function response(status) {
+    return { data: { counts: { [status]: 1 }, buckets: [{ status, summaries: [{ id: 7, employee_name: '測試乙' }] }] } }
+  }
+
+  it('兩次重載反序完成時，只發布最新狀態且卡片不倒退', async () => {
+    api.getSignStatusSummary.mockResolvedValueOnce(response('DRAFT'))
+    const wrapper = mount(KanbanView, mountOpts())
+    await nextTick(); await nextTick()
+    const before = wrapper.emitted('loaded').length
+    let finishOld
+    let finishNew
+    api.getSignStatusSummary.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve }))
+    api.getSignStatusSummary.mockImplementationOnce(() => new Promise(resolve => { finishNew = resolve }))
+    const oldRequest = wrapper.vm.reload()
+    const newRequest = wrapper.vm.reload()
+    finishNew(response('SUPERVISOR_SIGNED'))
+    await newRequest
+    finishOld(response('DRAFT'))
+    await oldRequest
+    await nextTick()
+    expect(wrapper.emitted('loaded').length).toBe(before + 1)
+    expect(wrapper.emitted('loaded').at(-1)[0][0].status).toBe('SUPERVISOR_SIGNED')
+    expect(wrapper.find('[data-test="col-SUPERVISOR_SIGNED"]').attributes('data-count')).toBe('1')
+    expect(wrapper.find('[data-test="col-DRAFT"]').attributes('data-count')).toBe('0')
+    wrapper.unmount()
+  })
+
+  it('過期重載失敗不顯示錯誤，也不結束最新請求的載入狀態', async () => {
+    vi.mocked(ElMessage.error).mockClear()
+    api.getSignStatusSummary.mockResolvedValueOnce(response('DRAFT'))
+    const wrapper = mount(KanbanView, mountOpts())
+    await nextTick(); await nextTick()
+    let failOld
+    let finishNew
+    api.getSignStatusSummary.mockImplementationOnce(() => new Promise((_, reject) => { failOld = reject }))
+    api.getSignStatusSummary.mockImplementationOnce(() => new Promise(resolve => { finishNew = resolve }))
+    const oldRequest = wrapper.vm.reload()
+    const newRequest = wrapper.vm.reload()
+    failOld(new Error('舊請求失敗'))
+    await oldRequest
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    expect(wrapper.vm.loading).toBe(true)
+    finishNew(response('SUPERVISOR_SIGNED'))
+    await newRequest
+    expect(wrapper.vm.loading).toBe(false)
+    wrapper.unmount()
   })
 })

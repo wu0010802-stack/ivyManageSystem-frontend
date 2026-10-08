@@ -11,6 +11,7 @@ export const STUDENT_FIELD_SECTION: Record<string, StudentFormSection> = {
   birthday: 'core',
   classroom_id: 'core',
   enrollment_date: 'core',
+  collection_suffix: 'core',
   // 家長資訊
   parent_name: 'parent',
   parent_phone: 'parent',

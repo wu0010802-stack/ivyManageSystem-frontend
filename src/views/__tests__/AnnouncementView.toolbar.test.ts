@@ -13,9 +13,19 @@ vi.mock('@/api/announcements', () => ({
   uploadAnnouncementAttachment: vi.fn(),
   deleteAnnouncementAttachment: vi.fn(),
 }))
+vi.mock('@/api/announcementCategories', () => ({
+  getAnnouncementCategories: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  createAnnouncementCategory: vi.fn(),
+  updateAnnouncementCategory: vi.fn(),
+  deleteAnnouncementCategory: vi.fn(),
+}))
 vi.mock('element-plus', async (orig) => {
   const actual = (await orig()) as Record<string, unknown>
-  return { ...actual, ElMessage: { success: vi.fn(), error: vi.fn() }, ElMessageBox: { confirm: vi.fn() } }
+  return {
+    ...actual,
+    ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+    ElMessageBox: { confirm: vi.fn() },
+  }
 })
 vi.mock('@/stores/employee', () => ({
   useEmployeeStore: () => ({ employees: [], fetchEmployees: vi.fn() }),

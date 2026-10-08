@@ -7,6 +7,26 @@
       class="tenant-line__alert"
     />
 
+    <el-alert
+      type="warning"
+      :closable="false"
+      class="tenant-line__alert"
+      data-testid="line-miniapp-notice"
+      title="家長端載體為 LINE MINI App"
+    >
+      <p class="tenant-line__notice">
+        下方「MINI App 頻道 ID」與「LIFF ID」請填 <strong>LINE MINI App channel</strong> 的值，
+        不是舊的 LINE Login channel。填錯會讓全體家長登入失敗（id_token 的 aud 不符）。
+      </p>
+      <p class="tenant-line__notice">
+        MINI App channel 必須與該園所的 Messaging API channel 在<strong>同一個 Provider</strong> 底下，
+        否則 LINE 使用者 ID 會全部對不上，家長必須重新綁定。
+      </p>
+      <p class="tenant-line__notice">
+        LIFF ID 依環境填該內部 channel 的值：正式環境填 Published、測試環境填 Developing。
+      </p>
+    </el-alert>
+
     <el-descriptions v-loading="loading" :column="1" border class="tenant-line__current">
       <el-descriptions-item label="啟用狀態">
         <el-tag :type="current?.is_enabled ? 'success' : 'info'" data-testid="line-enabled">
@@ -19,13 +39,13 @@
       <el-descriptions-item label="頻道密鑰（Channel secret）">
         <code data-testid="line-secret-masked">{{ current?.channel_secret_masked || '未設定' }}</code>
       </el-descriptions-item>
-      <el-descriptions-item label="LINE Login 頻道 ID">
+      <el-descriptions-item label="MINI App 頻道 ID（Channel ID）">
         <code>{{ current?.line_login_channel_id || '未設定' }}</code>
       </el-descriptions-item>
-      <el-descriptions-item label="LINE Login 頻道密鑰">
+      <el-descriptions-item label="MINI App 頻道密鑰（Channel secret）">
         <code>{{ current?.line_login_channel_secret_masked || '未設定' }}</code>
       </el-descriptions-item>
-      <el-descriptions-item label="LIFF ID">
+      <el-descriptions-item label="LIFF ID（依環境選內部 channel）">
         <code>{{ current?.liff_id || '未設定' }}</code>
       </el-descriptions-item>
       <el-descriptions-item label="推播對象 target id">
@@ -36,7 +56,7 @@
 
     <template v-if="canManage">
       <h4>更新憑證</h4>
-      <el-form label-width="220px" @submit.prevent>
+      <el-form :disabled="loading || saving || loadedTenantId !== props.tenantId" label-width="220px" @submit.prevent>
         <el-form-item label="啟用">
           <el-switch v-model="form.is_enabled" data-testid="line-form-enabled" />
         </el-form-item>
@@ -46,14 +66,23 @@
         <el-form-item label="頻道密鑰（Channel secret）">
           <el-input v-model="form.channel_secret" type="password" show-password data-testid="line-form-secret" />
         </el-form-item>
-        <el-form-item label="LINE Login 頻道 ID">
-          <el-input v-model="form.line_login_channel_id" maxlength="50" />
+        <el-form-item label="MINI App 頻道 ID（Channel ID）">
+          <el-input
+            v-model="form.line_login_channel_id"
+            maxlength="50"
+            placeholder="MINI App channel 的 Channel ID，非 LINE Login channel"
+          />
         </el-form-item>
-        <el-form-item label="LINE Login 頻道密鑰">
+        <el-form-item label="MINI App 頻道密鑰（Channel secret）">
           <el-input v-model="form.line_login_channel_secret" type="password" show-password />
         </el-form-item>
-        <el-form-item label="LIFF ID">
-          <el-input v-model="form.liff_id" maxlength="50" data-testid="line-form-liff" />
+        <el-form-item label="LIFF ID（依環境選內部 channel）">
+          <el-input
+            v-model="form.liff_id"
+            maxlength="50"
+            data-testid="line-form-liff"
+            placeholder="正式環境填 Published、測試環境填 Developing 的 LIFF ID"
+          />
         </el-form-item>
         <el-form-item label="推播對象 target id">
           <el-input v-model="form.target_id" maxlength="100" />
@@ -61,14 +90,22 @@
       </el-form>
       <div class="tenant-line__actions">
         <el-button :loading="loading" data-testid="line-reload" @click="load">重新載入</el-button>
-        <el-button type="primary" :loading="saving" data-testid="line-save" @click="save">儲存</el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          :disabled="loading || saving || loadedTenantId !== props.tenantId"
+          data-testid="line-save"
+          @click="save"
+        >
+          儲存
+        </el-button>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 import { getErrorMessage } from '@/utils/errorHandler'
@@ -80,6 +117,8 @@ const canManage = computed(() => hasPermission('PLATFORM_TENANTS_MANAGE'))
 const loading = ref(false)
 const saving = ref(false)
 const current = ref<PlatformLineConfig | null>(null)
+const loadedTenantId = ref<number | null>(null)
+let requestGeneration = 0
 
 const form = ref({
   is_enabled: false,
@@ -105,19 +144,31 @@ function resetForm(cfg: PlatformLineConfig | null): void {
 }
 
 async function load(): Promise<void> {
+  const tenantId = props.tenantId
+  const generation = ++requestGeneration
   loading.value = true
+  saving.value = false
+  loadedTenantId.value = null
+  current.value = null
+  resetForm(null)
   try {
-    const res = await getTenantLineConfig(props.tenantId)
+    const res = await getTenantLineConfig(tenantId)
+    if (generation !== requestGeneration || tenantId !== props.tenantId) return
     current.value = res.data ?? null
     resetForm(current.value)
+    loadedTenantId.value = tenantId
   } catch (err) {
+    if (generation !== requestGeneration || tenantId !== props.tenantId) return
     ElMessage.error(getErrorMessage(err, 'LINE 設定載入失敗'))
   } finally {
-    loading.value = false
+    if (generation === requestGeneration) loading.value = false
   }
 }
 
 async function save(): Promise<void> {
+  const tenantId = props.tenantId
+  const generation = requestGeneration
+  if (loading.value || saving.value || loadedTenantId.value !== tenantId) return
   saving.value = true
   try {
     // 只送有填的欄位：空字串在此語意為「不變更」，一律不進 payload，
@@ -135,23 +186,38 @@ async function save(): Promise<void> {
       const value = form.value[key]
       if (typeof value === 'string' && value.trim() !== '') payload[key] = value.trim()
     }
-    const res = await updateTenantLineConfig(props.tenantId, payload)
+    const res = await updateTenantLineConfig(tenantId, payload)
+    if (generation !== requestGeneration || tenantId !== props.tenantId || loadedTenantId.value !== tenantId) return
     current.value = res.data ?? current.value
     resetForm(current.value)
     ElMessage.success('LINE 設定已更新')
   } catch (err) {
+    if (generation !== requestGeneration || tenantId !== props.tenantId) return
     ElMessage.error(getErrorMessage(err, 'LINE 設定儲存失敗'))
   } finally {
-    saving.value = false
+    if (generation === requestGeneration && tenantId === props.tenantId) saving.value = false
   }
 }
 
-watch(() => props.tenantId, load, { immediate: true })
+watch(() => props.tenantId, load, { immediate: true, flush: 'sync' })
+
+onUnmounted(() => {
+  requestGeneration += 1
+})
 </script>
 
 <style scoped>
 .tenant-line__alert {
   margin-bottom: var(--space-4);
+}
+
+.tenant-line__notice {
+  margin: 0 0 var(--space-1);
+  line-height: 1.6;
+}
+
+.tenant-line__notice:last-child {
+  margin-bottom: 0;
 }
 
 .tenant-line__current {

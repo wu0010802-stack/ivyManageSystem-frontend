@@ -62,11 +62,6 @@ const STUBS = {
     name: 'ElTag',
     props: ['type', 'effect'],
   },
-  ElEmpty: {
-    template: '<div class="el-empty">{{ description }}</div>',
-    name: 'ElEmpty',
-    props: ['description', 'imageSize'],
-  },
   ElTable: {
     template: '<table class="el-table"><slot /></table>',
     name: 'ElTable',
@@ -88,22 +83,16 @@ describe('StudentMonthlyStats', () => {
     expect(w.text()).toContain('尚未載入')
   })
 
-  it('renders 4 summary cards', () => {
+  // 2026-09-14：四張同尺寸大數字卡（hero-metric 模板）收成一句摘要；
+  // 窄幕版與「尚未點名不等於 0%」的守衛在
+  // src/views/portal/components/studentAttendance/__tests__/StudentMonthlyStats.responsive.test.ts。
+  it('把上課日、點名完成率與出席率收成一句摘要', () => {
     const w = mount(StudentMonthlyStats, {
       props: { data: DATA, monthPicker: '2026-05', loading: false },
       global: { stubs: STUBS },
     })
-    expect(w.findAll('.summary-card').length).toBe(4)
-  })
-
-  it('renders correct summary values', () => {
-    const w = mount(StudentMonthlyStats, {
-      props: { data: DATA, monthPicker: '2026-05', loading: false },
-      global: { stubs: STUBS },
-    })
-    expect(w.text()).toContain('92%')
-    expect(w.text()).toContain('85%')
-    expect(w.text()).toContain('22 天')
+    expect(w.findAll('.summary-card').length).toBe(0)
+    expect(w.find('.month-summary').text()).toBe('5 月共 22 個上課日・已點名 85%・出席率 92%')
   })
 
   it('renders bar chart', () => {
@@ -119,19 +108,19 @@ describe('StudentMonthlyStats', () => {
       props: { data: DATA, monthPicker: '2026-05', loading: false },
       global: { stubs: STUBS },
     })
-    expect(w.text()).toContain('異常告警')
+    expect(w.text()).toContain('連續缺席告警')
     expect(w.text()).toContain('小華')
     expect(w.text()).toContain('連缺')
     expect(w.text()).toContain('4 天')
   })
 
-  it('shows el-empty in alert section when no alerts', () => {
+  it('shows empty state in alert section when no alerts', () => {
     const dataNoAlerts = { ...DATA, alerts: [] }
     const w = mount(StudentMonthlyStats, {
       props: { data: dataNoAlerts, monthPicker: '2026-05', loading: false },
       global: { stubs: STUBS },
     })
-    expect(w.findComponent({ name: 'ElEmpty' }).exists()).toBe(true)
+    expect(w.text()).toContain('本月沒有連續缺席告警')
   })
 
   it('emits update:monthPicker', async () => {

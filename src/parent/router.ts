@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
-import { getBranding } from '@/composables/useTenantBranding'
+import { buildParentDocumentTitle } from './utils/parentPageTitle'
 
 const routes: RouteRecordRaw[] = [
     { path: '/', redirect: '/home' },
@@ -37,7 +37,7 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '出席紀錄', tab: 'admin', showBack: true },
     },
     {
-      // 娃娃車即時位置：從首頁入口卡進來，屬 home 分頁
+      // 娃娃車到站進度：從首頁入口卡進來，屬 home 分頁
       path: '/bus',
       name: 'parent-bus',
       component: () => import('./views/BusTrackingView.vue'),
@@ -70,7 +70,8 @@ const routes: RouteRecordRaw[] = [
       path: '/assistant',
       name: 'parent-assistant',
       component: () => import('./views/AssistantView.vue'),
-      meta: { title: '常見問題', showBack: true },
+      // tab: 'me' — 入口在「我的」偏好清單（2026-09-02 補），底部導覽維持在該分頁
+      meta: { title: '常見問題', tab: 'me', showBack: true },
     },
     {
       path: '/me',
@@ -264,8 +265,9 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta.title) {
-    // 多租戶（4d/fb）：尾綴改讀 titles.parent_short（預設 '常春藤家長'）。
-    document.title = `${to.meta.title} - ${getBranding().titles.parent_short}`
+    // 多租戶（4d/fb）：尾綴讀 titles.parent_short（預設 '常春藤家長'）。
+    // 在 LINE App 內不加後綴——MINI App 內建 header 會顯示這串（SPEC-020 CT-M-03）。
+    document.title = buildParentDocumentTitle(String(to.meta.title))
   }
 })
 

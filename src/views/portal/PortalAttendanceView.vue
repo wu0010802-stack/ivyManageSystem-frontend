@@ -12,6 +12,7 @@ import AttendanceMonthSticky from './components/attendance/AttendanceMonthSticky
 import AttendanceStatsRow from './components/attendance/AttendanceStatsRow.vue'
 import AttendanceCardsView from './components/attendance/AttendanceCardsView.vue'
 import AttendanceTableView from './components/attendance/AttendanceTableView.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 const loading = ref(false)
 const userInfo = getUserInfo()
@@ -69,10 +70,15 @@ watch(isMobile, (m) => {
   if (!m && viewMode.value === 'cards') viewMode.value = 'table'
 }, { immediate: true })
 
+// request-sequence guard（F7）：換月（含切回已快取月份）時，在途的舊月份請求不得蓋掉目前畫面；
+// 舊請求的結果仍以它自己的 key 寫入快取（唯讀資料，之後切回該月可直接用）。
+let fetchSeq = 0
 const fetchSheet = async (force = false) => {
+  const seq = ++fetchSeq
   const key = `${query.year}-${query.month}`
   if (!force && sheetCache.has(key)) {
     sheetData.value = sheetCache.get(key)
+    loading.value = false
     return
   }
   loading.value = true
@@ -80,12 +86,16 @@ const fetchSheet = async (force = false) => {
     const res = await getAttendanceSheet({ year: query.year, month: query.month })
     // 後端缺 response_model，res.data 為 unknown，narrow 成本元件的 SheetData。
     const sheet = res.data as SheetData
-    sheetData.value = sheet
     sheetCache.set(key, sheet)
+    if (seq !== fetchSeq) return
+    sheetData.value = sheet
   } catch (error) {
+    if (seq !== fetchSeq) return
+    // 新月份載入失敗不保留別月份的內容
+    sheetData.value = null
     ElMessage.error('載入失敗: ' + apiError(error, (error as Error)?.message ?? '錯誤'))
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
@@ -122,6 +132,8 @@ const isViewingCurrentMonth = computed(() => {
 
 // isCurrentMonth：供 AttendanceMonthSticky prop 使用（與 isViewingCurrentMonth 同義）
 const isCurrentMonth = computed(() => isViewingCurrentMonth.value)
+// 檢視當月時傳今天的日號，讓卡片清單折疊未來日並標記今天（P1-05）
+const todayDay = computed(() => (isViewingCurrentMonth.value ? new Date().getDate() : null))
 
 const printSheet = async () => {
   await openPdfInNewTab({
@@ -178,15 +190,16 @@ onUnmounted(() => {
     />
 
     <el-card class="header-card">
-      <div class="sheet-header">
-        <h2>我的出勤</h2>
-        <div class="month-nav">
-          <el-button :icon="ArrowLeft" circle class="month-nav__btn" aria-label="上個月" @click="prevMonth" />
-          <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
-          <el-button :icon="ArrowRight" circle class="month-nav__btn" aria-label="下個月" @click="nextMonth" />
-          <el-button v-if="sheetData" :icon="Printer" @click="printSheet">列印</el-button>
-        </div>
-      </div>
+      <PortalPageHeader title="我的出勤">
+        <template #actions>
+          <div class="month-nav">
+            <el-button :icon="ArrowLeft" circle class="month-nav__btn" aria-label="上個月" @click="prevMonth" />
+            <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
+            <el-button :icon="ArrowRight" circle class="month-nav__btn" aria-label="下個月" @click="nextMonth" />
+            <el-button v-if="sheetData" :icon="Printer" @click="printSheet">列印</el-button>
+          </div>
+        </template>
+      </PortalPageHeader>
       <div class="employee-info" v-if="sheetData">
         <span><strong>姓名：</strong>{{ sheetData.employee_name }}</span>
         <span><strong>職稱：</strong>{{ userInfo?.title || '-' }}</span>
@@ -233,6 +246,7 @@ onUnmounted(() => {
         v-if="sheetData"
         :days="sheetData.days || []"
         :month="query.month"
+        :today-day="todayDay"
       />
     </div>
   </div>
@@ -323,24 +337,11 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.sheet-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-4);
-}
-
-.sheet-header h2 {
-  margin: 0;
-  font-size: var(--text-3xl);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
 .month-nav {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
 }
 
 .month-nav__btn {
@@ -409,16 +410,6 @@ onUnmounted(() => {
 
 /* ===== Mobile responsive ===== */
 @media (--to-sm) {
-  .sheet-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-3);
-  }
-
-  .sheet-header h2 {
-    font-size: var(--text-2xl);
-  }
-
   .month-label {
     font-size: var(--text-lg);
     min-width: 120px;

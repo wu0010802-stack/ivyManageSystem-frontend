@@ -60,7 +60,7 @@ export const MSG = {
   comment_required: '留言不可空',
   comment_placeholder: '留言內容',
   load_failed: '載入失敗',
-  recompute_btn: '重算 Summary',
+  recompute_btn: '重新計算考核結果',
 }
 
 // 工具函式 — null/unknown key 回傳 raw code，UI 仍可顯示

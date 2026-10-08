@@ -17,19 +17,23 @@
         />
       </template>
       <div v-else class="detail-column__empty">
-        <span>異常已清空</span>
+        <p>目前沒有選取的異常紀錄；不代表整月打卡資料已齊全。</p>
+        <el-button v-if="hasPermission('ATTENDANCE_WRITE')" @click="emit('import')">匯入打卡紀錄</el-button>
       </div>
     </template>
 
     <!-- month mode -->
     <template v-else>
       <div class="detail-column__toolbar">
-        <el-button size="small" @click="emit('switchMode', 'resolve')">回佇列</el-button>
+        <el-button size="small" @click="emit('anomalies')">開啟異常清單</el-button>
       </div>
       <EmployeeMonthPanel
         :employee-id="employeeId"
+        :employee-name="employeeName"
         :year="year"
         :month="month"
+        :focus-date="focusDate"
+        :revision="revision"
         @updated="emit('resolved')"
       />
     </template>
@@ -38,6 +42,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { hasPermission } from '@/utils/auth'
 import { ElMessage } from 'element-plus'
 import ResolveCard from './ResolveCard.vue'
 import EmployeeMonthPanel from './EmployeeMonthPanel.vue'
@@ -58,11 +63,17 @@ const props = defineProps<{
     estimated_deduction: number
   }
   employeeId: number | null
+  employeeName?: string
   year: number
   month: number
+  focusDate?: string | null
+  /** 匯入／補卡等寫入後遞增，供整月明細重新載入（同員工同月時三個 key 都沒變） */
+  revision?: number
 }>()
 
 const emit = defineEmits<{
+  (e: 'anomalies'): void
+  (e: 'import'): void
   (e: 'resolved'): void
   (e: 'navigate', delta: number): void
   (e: 'switchMode', mode: 'resolve' | 'month'): void
@@ -128,6 +139,7 @@ async function onResolve(payload: {
 }
 
 .detail-column__empty {
+  flex-direction: column;
   display: flex;
   align-items: center;
   justify-content: center;
