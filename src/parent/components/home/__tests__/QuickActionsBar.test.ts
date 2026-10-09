@@ -1,5 +1,7 @@
 /**
- * 常用功能列（2026-08-16 改版，quickact01）：聯絡簿大按鈕 + 三個可替換模組。
+ * 常用功能列（2026-08-16 改版，quickact01）：三個可替換模組。
+ * 2026-10-08 起聯絡簿大按鈕移到首頁孩子狀態卡（ChildTodayCard），本元件不再有 props；
+ * 模組名稱改取自 parentServices.ts（預告接送／臨時接送／繳費／簽收通知…）。
  *
  * ParentBottomSheet 用簡化 stub 取代（它自己的拖曳／焦點鎖定行為已有專屬測試，
  * 這裡只驗證 QuickActionsBar 餵給它的內容與互動邏輯）。API 層 mock
@@ -38,15 +40,8 @@ const ParentBottomSheetStub = {
   template: '<div class="sheet-stub" v-if="modelValue"><p class="sheet-stub-title">{{ title }}</p><slot /></div>',
 }
 
-function mountBar(props: Record<string, unknown> = {}) {
+function mountBar() {
   return mount(QuickActionsBar, {
-    props: {
-      contactBookHref: '/contact-book/77',
-      contactBookSub: '查看今天的完整紀錄',
-      statusLabel: '在園中',
-      statusTone: 'ok',
-      ...props,
-    },
     global: {
       stubs: {
         ParentBottomSheet: ParentBottomSheetStub,
@@ -76,15 +71,9 @@ describe('QuickActionsBar — 掛載時載入設定', () => {
     const w = mountBar()
     await flushPromises()
     const labels = w.findAll('.qa-mod-label').map((n) => n.text())
-    expect(labels).toEqual(['娃娃車', '學費', '行事曆'])
+    expect(labels).toEqual(['娃娃車', '繳費', '行事曆'])
   })
 
-  it('聯絡簿大按鈕帶出席狀態 pill 與副標', async () => {
-    const w = mountBar()
-    await flushPromises()
-    expect(w.find('.qa-cb-pill').text()).toBe('在園中')
-    expect(w.find('.qa-cb-sub').text()).toBe('查看今天的完整紀錄')
-  })
 })
 
 describe('QuickActionsBar — 三格模組載入態（2026-08-16 使用者實測回報的 UX 問題）', () => {
@@ -107,7 +96,7 @@ describe('QuickActionsBar — 三格模組載入態（2026-08-16 使用者實測
     // 直接顯示家長存的設定，中間沒有出現過「預告接送・臨時接送・公告」
     expect(w.findAll('.sk-line').length).toBe(0)
     const labels = w.findAll('.qa-mod-label').map((n) => n.text())
-    expect(labels).toEqual(['娃娃車', '學費', '行事曆'])
+    expect(labels).toEqual(['娃娃車', '繳費', '行事曆'])
     expect(w.find('.qa-edit').attributes('disabled')).toBeUndefined()
   })
 
@@ -175,10 +164,10 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
     await w.findAll('.qa-mod')[0].trigger('click') // 點「接送」那格
     expect(pushMock).not.toHaveBeenCalled()
     expect(w.find('.sheet-stub').exists()).toBe(true)
-    expect(w.find('.sheet-stub-title').text()).toContain('接送')
+    expect(w.find('.sheet-stub-title').text()).toContain('預告接送')
     const candidateLabels = w.findAll('.qa-sheet-label').map((n) => n.text())
     expect(candidateLabels).toEqual([
-      '已抵達', '娃娃車', '學費', '待簽文件', '行事曆',
+      '我到了', '娃娃車', '繳費', '簽收通知', '行事曆',
       '請假', '用藥委託', '課後才藝', '活動調查',
       '孩子檔案', '成長報告', '照片牆', '健康紀錄',
     ])
@@ -194,7 +183,7 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
 
     expect(updateQuickActions).toHaveBeenCalledWith({ slots: ['arrived', 'proxy', 'announce'] })
     const labels = w.findAll('.qa-mod-label').map((n) => n.text())
-    expect(labels).toEqual(['已抵達', '臨時接送', '公告'])
+    expect(labels).toEqual(['我到了', '臨時接送', '公告'])
     expect(w.find('.sheet-stub').exists()).toBe(false)
   })
 
@@ -245,7 +234,7 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
     await flushPromises()
 
     expect(toastError).toHaveBeenCalled()
-    expect(w.findAll('.qa-mod-label').map((n) => n.text())).toEqual(['娃娃車', '學費', '行事曆'])
+    expect(w.findAll('.qa-mod-label').map((n) => n.text())).toEqual(['娃娃車', '繳費', '行事曆'])
   })
 
   it('替換 PUT 還在飛時連點兩個候選模組：只發一次 PUT（persisting 鎖）', async () => {

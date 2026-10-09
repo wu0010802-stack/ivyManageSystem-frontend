@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
- * 首頁「常用功能」：聯絡簿滿版大按鈕 ＋ 三個可替換模組按鈕。
+ * 首頁「常用功能」：三個可替換模組按鈕。
  *
  * 2026-08-16 首頁改版（quickact01），見該次對話 Artifact 預覽稿。三格內容
  * 家長各自在自己手機上編輯、存 DB（不是 localStorage，也不是租戶層級統一
  * 配置——設計討論中間繞了一圈，見 useQuickActionSlots.ts 檔頭）。點右上角
  * 「編輯」進入編輯態後，點任一格開底部選單換成其他模組。
  *
- * 聯絡簿大按鈕上疊一顆出席狀態小 pill（statusLabel/statusTone），延續
- * 「3 秒內看到孩子當日狀態」的既有產品決策。
+ * 2026-10-08 首頁改版（方向 A＋C）：原本上方的聯絡簿滿版大按鈕（含出席狀態
+ * pill）移到每張孩子狀態卡（ChildTodayCard）裡——多寶家庭每個孩子各有自己的
+ * 聯絡簿與出席狀態，「3 秒內看到孩子當日狀態」改由狀態卡承擔。
  *
  * 三格模組按鈕的載入態（2026-08-16 使用者實測回報）：composable 的 slots
  * 初值是 DEFAULT_SLOTS，掛載後才 fetch 家長實際存的設定，中間這段空窗如果
@@ -24,18 +25,6 @@ import SkeletonBlock from '../SkeletonBlock.vue'
 import { toast } from '../../utils/toast'
 import { QUICK_ACTION_CATALOG, useQuickActionSlots } from '../../composables/useQuickActionSlots'
 import { useChildSelection } from '../../composables/useChildSelection'
-
-type StatusTone = 'ok' | 'warn' | 'danger' | 'neutral' | 'info'
-
-withDefaults(defineProps<{
-  contactBookHref: string
-  contactBookSub: string
-  statusLabel?: string
-  statusTone?: StatusTone
-}>(), {
-  statusLabel: '',
-  statusTone: 'neutral',
-})
 
 const router = useRouter()
 const { slots, loading, isDefault, persisting, availableModules, swap, resetToDefault, load } =
@@ -122,19 +111,6 @@ const sheetCandidates = computed(() => availableModules())
       </button>
     </div>
 
-    <router-link :to="contactBookHref" class="qa-cb-bar">
-      <span class="qa-cb-icon">
-        <span class="material-symbols-rounded" aria-hidden="true">auto_stories</span>
-      </span>
-      <span class="qa-cb-text">
-        <span class="qa-cb-title">
-          聯絡簿
-          <span v-if="statusLabel" class="qa-cb-pill" :class="`tone-${statusTone}`">{{ statusLabel }}</span>
-        </span>
-        <span class="qa-cb-sub">{{ contactBookSub }}</span>
-      </span>
-      <span class="material-symbols-rounded qa-cb-chev" aria-hidden="true">chevron_right</span>
-    </router-link>
 
     <div class="qa-row" :class="{ 'is-editing': editing }" role="group" aria-label="常用功能模組（可替換）">
       <SkeletonBlock v-if="loading" variant="line" :count="3" height="88px" />
@@ -216,35 +192,6 @@ const sheetCandidates = computed(() => availableModules())
 /* 小字綠底一律 --m3-primary（#006d3d，白字過 AA）；--brand-primary(#0d9053) 白字僅 4.1:1（aaContrast gate） */
 .qa-edit.is-active { background: var(--m3-primary, #006d3d); color: var(--color-primary-contrast, #fff); }
 
-.qa-cb-bar {
-  display: flex; align-items: center; gap: 12px;
-  width: 100%;
-  padding: 15px 16px;
-  border-radius: var(--pt-hero-radius, 30px);
-  background: var(--m3-primary, #006d3d);
-  color: var(--color-primary-contrast, #fff);
-  text-decoration: none;
-  box-shadow: var(--pt-shadow-float);
-  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.qa-cb-bar:active { transform: scale(0.98); }
-.qa-cb-icon {
-  width: 42px; height: 42px; flex-shrink: 0;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.18);
-  display: flex; align-items: center; justify-content: center;
-}
-.qa-cb-icon .material-symbols-rounded { font-size: 23px; }
-.qa-cb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.qa-cb-title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 800; }
-.qa-cb-pill {
-  font-size: 10.5px; font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
-}
-.qa-cb-sub { font-size: 12px; font-weight: 600; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qa-cb-chev { font-size: 20px !important; opacity: 0.85; flex-shrink: 0; }
 
 .qa-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 
@@ -299,8 +246,7 @@ const sheetCandidates = computed(() => availableModules())
 }
 .qa-reset .material-symbols-rounded { font-size: 14px; }
 
-/* 色調沿用既有 StatTile 的 tonal 語意（tone-amber/coral/sky/leaf/brand 完全同義），
-   teal/grape 是本次新增（分別對齊既有 --pt-tint-pickup 與 --pt-accent-grape-*）。 */
+/* 色調語意對齊 parentServices.ts 的 ServiceTone（amber→sun、teal→pickup tint）。 */
 .tone-amber .qa-mod-icon, .tone-amber .qa-sheet-icon { background: var(--pt-accent-sun-container); color: var(--pt-accent-sun-on); }
 .tone-coral .qa-mod-icon, .tone-coral .qa-sheet-icon { background: var(--pt-accent-coral-container); color: var(--pt-accent-coral-on); }
 .tone-sky .qa-mod-icon, .tone-sky .qa-sheet-icon { background: var(--pt-accent-sky-container); color: var(--pt-accent-sky-on); }
@@ -325,11 +271,7 @@ const sheetCandidates = computed(() => availableModules())
 .qa-sheet-label { font-size: 14px; font-weight: 700; color: var(--pt-text-strong); }
 .qa-sheet-desc { font-size: 11px; font-weight: 600; color: var(--pt-text-faint); }
 
-/* 出席狀態 pill 色調對齊既有 status tone vocabulary（見 ContactBookDayCard 用法） */
-.qa-cb-pill.tone-ok { background: rgba(255, 255, 255, 0.28); }
-.qa-cb-pill.tone-warn, .qa-cb-pill.tone-danger { background: rgba(255, 235, 205, 0.35); }
-
 @media (prefers-reduced-motion: reduce) {
-  .qa-cb-bar, .qa-mod, .qa-sheet-item { transition: none; }
+  .qa-mod, .qa-sheet-item { transition: none; }
 }
 </style>

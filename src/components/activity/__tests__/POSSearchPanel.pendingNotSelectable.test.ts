@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 import POSSearchPanel from '../POSSearchPanel.vue'
+import { todayTaipeiISO } from '@/utils/format'
 
 // 月曆初始月以今日為準，固定到報名資料的月份，避免跨月後找不到測試列。
 beforeEach(() => {
@@ -192,7 +193,8 @@ describe('POSSearchPanel：待審核報名在收款模式不可勾選（STATE-04
           course_names: '陶土',
           total_amount: 0,
           paid_amount: 0,
-          created_at: '2026-08-01T02:00:00Z',
+          // 日曆預設顯示台北「本月」：寫死日期會在跨月後找不到那格（UTC 02:00 = 台北 10:00，同日）
+          created_at: `${todayTaipeiISO()}T02:00:00Z`,
         },
       ],
     })

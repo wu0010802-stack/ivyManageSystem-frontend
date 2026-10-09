@@ -3,14 +3,14 @@
  * 家長端 `GET /parent/home/summary` 的共用讀取層。
  *
  * summary 一支就帶齊多個計數（未讀公告 / 待繳 / 待簽 / 才藝候補待確認 /
- * 假單審核結果 / 今日用藥單），所以事務頁列徽章、底部 tab 徽章都從這裡拿，
+ * 假單審核結果 / 今日用藥單），所以待辦清單、底部 tab 徽章都從這裡拿，
  * 不再各自打 API。
  *
  * 後端仍回傳 unread_messages，但親師訊息已於 2026-08-28 自家長端下架，
  * 前端不再讀取該欄位。
  *
  * 快取鍵刻意與 TodayView 相同：useCachedAsync 對同 key 共用 cache 條目
- * 並 dedupe in-flight 請求，因此首頁與事務頁同時掛載也只會有一次網路請求。
+ * 並 dedupe in-flight 請求，因此首頁與待辦頁同時掛載也只會有一次網路請求。
  */
 import { computed } from 'vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
@@ -26,7 +26,7 @@ export interface HomeBadges {
   pendingEventAcks: number
   pendingActivityPromotions: number
   recentLeaveReviews: number
-  /** 待回覆的活動調查份數（2026-09-02 併入，原本事務頁自己 cast summary 讀） */
+  /** 待回覆的活動調查份數（2026-09-02 併入，原本事務頁（現待辦頁）自己 cast summary 讀） */
   pendingSurveyCount: number
   /** 今日生效的委託用藥單張數；資訊性，不計入 tab 徽章 */
   activeMedicationOrders: number
@@ -72,7 +72,7 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
   })
 
   /**
-   * 底部「事務」tab 的總數徽章。
+   * 底部「待辦」tab（2026-10-08 前叫「事務」）的總數徽章。
    *
    * 只加「需要家長動作」的四項，與首頁待辦標題的「N 件」（useParentTodos
    * actionCount）同一口徑。今日用藥單、近 7 天請假審核結果是資訊性的，

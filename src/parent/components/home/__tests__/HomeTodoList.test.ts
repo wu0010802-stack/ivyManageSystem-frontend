@@ -2,7 +2,7 @@
  * HomeTodoList — 首頁「待辦」區塊。
  *
  * 涵蓋：
- *  - 空清單整區不渲染（首頁不為「沒事」佔位）
+ *  - 空清單整區不渲染（首頁不為「沒事」佔位）；待辦頁帶 emptyText 時改顯示空狀態
  *  - 標題副標只算 action/alert 列
  *  - 每列 aria-label 含名稱與筆數
  *  - 三態：pending 且無資料→骨架；error 且無資料→可重試；部分失敗→仍渲染列
@@ -40,9 +40,9 @@ const stubs = {
 function makeTodo(over: Partial<ParentTodo> = {}): ParentTodo {
   return {
     key: 'fees',
-    label: '待繳學費',
+    label: '繳費',
     count: 2,
-    sub: '2 筆',
+    sub: '2 筆待繳',
     tone: 'action',
     icon: 'payments',
     to: '/fees',
@@ -64,12 +64,12 @@ describe('HomeTodoList', () => {
   })
 
   it('有待辦時渲染標題「待辦」與每列的名稱與副標', () => {
-    todosRef.value = [makeTodo(), makeTodo({ key: 'eventAcks', label: '待簽文件', count: 3, sub: '3 份待簽收', to: '/events' })]
+    todosRef.value = [makeTodo(), makeTodo({ key: 'eventAcks', label: '簽收通知', count: 3, sub: '3 份待簽收', to: '/events' })]
     const w = mount(HomeTodoList, { global: { stubs } })
     expect(w.find('[data-testid="home-todo-list"]').exists()).toBe(true)
     expect(w.text()).toContain('待辦')
-    expect(w.text()).toContain('待繳學費')
-    expect(w.text()).toContain('待簽文件')
+    expect(w.text()).toContain('繳費')
+    expect(w.text()).toContain('簽收通知')
     expect(w.text()).toContain('3 份待簽收')
   })
 
@@ -86,13 +86,13 @@ describe('HomeTodoList', () => {
   })
 
   it('每列連到對應路由，aria-label 含名稱與筆數', () => {
-    todosRef.value = [makeTodo({ label: '待繳學費', count: 2, to: '/fees' })]
+    todosRef.value = [makeTodo({ label: '繳費', count: 2, to: '/fees' })]
     const w = mount(HomeTodoList, { global: { stubs } })
     const row = w.find('[data-testid="home-todo-row-fees"]')
     expect(row.attributes('href')).toBe('/fees')
-    expect(row.text()).toContain('待繳學費')
+    expect(row.text()).toContain('繳費')
     expect(row.text()).toContain('2 筆')
-    expect(row.attributes('aria-label')).toContain('待繳學費')
+    expect(row.attributes('aria-label')).toContain('繳費')
     expect(row.attributes('aria-label')).toContain('2')
   })
 
@@ -124,5 +124,28 @@ describe('HomeTodoList', () => {
     const w = mount(HomeTodoList, { global: { stubs } })
     expect(w.findComponent({ name: 'MobileErrorRetry' }).exists()).toBe(false)
     expect(w.find('[data-testid="home-todo-list"]').exists()).toBe(true)
+  })
+
+  it('待辦頁用法：帶 title 與 emptyText，沒有待辦時顯示空狀態而非整區消失', () => {
+    const w = mount(HomeTodoList, {
+      props: { title: '待處理', emptyText: '目前沒有要處理的事' },
+      global: { stubs },
+    })
+    const empty = w.find('[data-testid="home-todo-empty"]')
+    expect(empty.exists()).toBe(true)
+    expect(empty.text()).toContain('待處理')
+    expect(empty.text()).toContain('目前沒有要處理的事')
+  })
+
+  it('帶 emptyText 但仍在載入或失敗：不顯示空狀態（不把失敗偽裝成「沒事」）', () => {
+    pendingRef.value = true
+    const loading = mount(HomeTodoList, { props: { emptyText: '目前沒有要處理的事' }, global: { stubs } })
+    expect(loading.find('[data-testid="home-todo-empty"]').exists()).toBe(false)
+
+    pendingRef.value = false
+    errorRef.value = new Error('boom')
+    const failed = mount(HomeTodoList, { props: { emptyText: '目前沒有要處理的事' }, global: { stubs } })
+    expect(failed.find('[data-testid="home-todo-empty"]').exists()).toBe(false)
+    expect(failed.findComponent({ name: 'MobileErrorRetry' }).exists()).toBe(true)
   })
 })

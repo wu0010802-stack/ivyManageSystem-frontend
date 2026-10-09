@@ -5,20 +5,26 @@
  * 重整前（2026-09-02 之前）同一筆待辦最多在首頁出現三次：頂部 sticky 橫幅、
  * bento 方格、今日動態的「晚一些」桶，三處各自從 summary 讀欄位、各自做
  * null guard 與型別斷言；事務頁與我的頁又各讀一次。這支把七種待辦收斂成
- * 一份固定順序的陣列，首頁 HomeTodoList 與事務頁 AdminListView 共用。
+ * 一份固定順序的陣列，首頁與待辦頁（AdminListView）共用同一支 HomeTodoList。
  *
  * 資料來源三支：
  *  1. GET /parent/home/summary（經 useHomeSummary，cache key parent/today/summary）
  *  2. GET /parent/sign-requests/mine（入學文件電子簽，summary 未聚合此欄位）
  *  3. GET /parent/pickup-authorizations?status=active（臨時接送，summary 亦無）
  *
- * 2、3 各自走 useCachedAsync 固定 key，首頁與事務頁同時掛載只會各打一次。
+ * 2、3 各自走 useCachedAsync 固定 key，首頁與待辦頁同時掛載只會各打一次。
  * key 以 `parent/` 開頭，登出時 invalidateCachedAsync('parent/') 才清得掉。
+ *
+ * 2026-10-08 白話命名：列名改成「動詞＋服務名」（繳費、簽收通知、填活動調查…），
+ * 圖示與路由一律取自 utils/parentServices.ts——同一功能在常用功能、待辦頁
+ * 「所有服務」、這份清單只有一個名字、一個圖示。資訊性兩列（臨時接送進行中、
+ * 請假已成立）描述的是狀態，維持原用詞。
  *
  * 2026-09-08 首頁改版：未讀公告已有專屬的 AnnouncementsHomeCard 首頁卡，
  * 原本的 `announcements` 待辦列（未讀公告）移除，避免同一件事在首頁重複
  * 曝光兩次；未讀數仍可從 `useHomeSummary` 的 `badges.unreadAnnouncements`
- * 或本檔 `summary.value.unread_announcements` 取得，事務頁公告入口即用此值。
+ * 或本檔 `summary.value.unread_announcements` 取得。待辦頁「所有服務」的公告格
+ * 不掛徽章，未讀由首頁鈴鐺呈現。
  */
 import { computed, type ComputedRef } from 'vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
@@ -26,6 +32,7 @@ import { formatCurrency } from '@/utils/currency'
 import { listMySignRequests } from '../api/signDocuments'
 import { listPickupAuthorizations } from '../api/pickup'
 import { useHomeSummary } from './useHomeSummary'
+import { PARENT_SERVICES } from '../utils/parentServices'
 
 export const SIGN_DOCS_CACHE_KEY = 'parent/sign-requests/mine'
 export const PICKUP_ACTIVE_CACHE_KEY = 'parent/pickup/active'
@@ -121,57 +128,57 @@ export function useParentTodos(options: { immediate?: boolean } = {}) {
     const rows: ParentTodo[] = [
       {
         key: 'fees',
-        label: '待繳學費',
+        label: PARENT_SERVICES.fees.label,
         count: feesCount,
-        sub: feesOverdue > 0 ? `逾期 ${formatCurrency(feesOverdue)}` : `${feesCount} 筆`,
+        sub: feesOverdue > 0 ? `${feesCount} 筆待繳 · 逾期 ${formatCurrency(feesOverdue)}` : `${feesCount} 筆待繳`,
         tone: feesOverdue > 0 ? 'alert' : 'action',
-        icon: 'payments',
-        to: '/fees',
+        icon: PARENT_SERVICES.fees.icon,
+        to: PARENT_SERVICES.fees.route,
       },
       {
         key: 'signDocs',
-        label: '入學文件簽署',
+        label: `簽署${PARENT_SERVICES.enrollDocs.label}`,
         count: signDocsCount.value,
         sub: `${signDocsCount.value} 份待簽`,
         tone: 'action',
-        icon: 'history_edu',
-        to: '/sign',
+        icon: PARENT_SERVICES.enrollDocs.icon,
+        to: PARENT_SERVICES.enrollDocs.route,
       },
       {
         key: 'eventAcks',
-        label: '待簽文件',
+        label: PARENT_SERVICES.sign.label,
         count: num(s.pending_event_acks),
         sub: `${num(s.pending_event_acks)} 份待簽收`,
         tone: 'action',
-        icon: 'mark_email_read',
-        to: '/events',
+        icon: PARENT_SERVICES.sign.icon,
+        to: PARENT_SERVICES.sign.route,
       },
       {
         key: 'surveys',
-        label: '活動調查',
+        label: `填${PARENT_SERVICES.surveys.label}`,
         count: num(s.pending_survey_count),
         sub: `${num(s.pending_survey_count)} 份待回覆`,
         tone: 'action',
-        icon: 'fact_check',
-        to: '/surveys',
+        icon: PARENT_SERVICES.surveys.icon,
+        to: PARENT_SERVICES.surveys.route,
       },
       {
         key: 'promotions',
-        label: '才藝候補確認',
+        label: '確認才藝候補',
         count: num(s.pending_activity_promotions),
         sub: `${num(s.pending_activity_promotions)} 筆待確認`,
         tone: 'action',
-        icon: 'palette',
-        to: '/activity',
+        icon: PARENT_SERVICES.activity.icon,
+        to: PARENT_SERVICES.activity.route,
       },
       {
         key: 'pickup',
-        label: '臨時接送進行中',
+        label: `${PARENT_SERVICES.proxy.label}進行中`,
         count: pickupActiveCount.value,
         sub: `${pickupActiveCount.value} 筆授權`,
         tone: 'info',
-        icon: 'hail',
-        to: '/pickup',
+        icon: PARENT_SERVICES.proxy.icon,
+        to: PARENT_SERVICES.proxy.route,
       },
       {
         key: 'leaveReviews',
@@ -182,8 +189,8 @@ export function useParentTodos(options: { immediate?: boolean } = {}) {
         count: num(s.recent_leave_reviews),
         sub: `近 7 天 ${num(s.recent_leave_reviews)} 筆`,
         tone: 'info',
-        icon: 'event_busy',
-        to: '/leaves',
+        icon: PARENT_SERVICES.leaves.icon,
+        to: PARENT_SERVICES.leaves.route,
       },
     ]
 

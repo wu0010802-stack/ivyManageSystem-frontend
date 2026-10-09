@@ -8,7 +8,10 @@
  *
  * 刻意不引入 @/components/common/EmptyState：那支落在 admin-core chunk，
  * 首頁是家長端 entry 首屏，靜態 import 會被 check-entry-chunks gate 擋下。
- * 本區塊在沒有待辦時直接不渲染，本來就不需要空狀態。
+ *
+ * 首頁與待辦頁（AdminListView，2026-10-08 起）共用本元件：
+ *  - 首頁：不帶 emptyText，沒有待辦時整區不渲染（首頁不為「沒事」佔位）
+ *  - 待辦頁：title="待處理"、帶 emptyText，沒有待辦時明確告訴家長「都處理完了」
  */
 import { useParentTodos } from '../../composables/useParentTodos'
 import SectionHeader from '../SectionHeader.vue'
@@ -16,6 +19,14 @@ import SkeletonBlock from '../SkeletonBlock.vue'
 import M3List from '../m3/M3List.vue'
 import M3Icon from '../m3/M3Icon.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+
+withDefaults(defineProps<{
+  title?: string
+  emptyText?: string
+}>(), {
+  title: '待辦',
+  emptyText: '',
+})
 
 const { todos, actionCount, pending, error, refresh } = useParentTodos()
 </script>
@@ -38,7 +49,7 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
     class="home-todo"
     data-testid="home-todo-list"
   >
-    <SectionHeader title="待辦">
+    <SectionHeader :title="title">
       <template #action>
         <span v-if="actionCount > 0" class="home-todo-count" data-testid="home-todo-count">
           {{ actionCount }} 件
@@ -65,6 +76,14 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
         </router-link>
       </li>
     </M3List>
+  </section>
+
+  <section v-else-if="emptyText" class="home-todo" data-testid="home-todo-empty">
+    <SectionHeader :title="title" />
+    <p class="home-todo-empty">
+      <span class="material-symbols-rounded" aria-hidden="true">task_alt</span>
+      {{ emptyText }}
+    </p>
   </section>
 </template>
 
@@ -107,7 +126,7 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
   color: var(--color-primary-contrast, #fff);
   background: var(--m3-primary, #006d3d);
 }
-/* 逾期款項：唯一該讓家長心跳快一下的情況（與事務頁 alert 徽章同色） */
+/* 逾期款項：唯一該讓家長心跳快一下的情況 */
 .tone-alert .home-todo-badge {
   background: var(--coral-700, #b14545);
 }
@@ -120,6 +139,21 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
   font-size: 20px;
   color: var(--pt-text-muted, #6b5e54);
   font-variation-settings: 'wght' 400;
+}
+
+.home-todo-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin: 0;
+  padding: var(--space-2, 8px) 0;
+  color: var(--pt-text-muted, #6b5e54);
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+}
+.home-todo-empty .material-symbols-rounded {
+  font-size: 20px;
+  color: var(--brand-primary, #0d9053);
 }
 
 .home-todo-copy { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow-wrap: anywhere; }

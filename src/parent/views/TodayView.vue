@@ -1,291 +1,187 @@
 <script setup lang="ts">
+/**
+ * 家長首頁。
+ *
+ * 2026-10-08 改版（方向 A＋C，三方向預覽稿見 docs/mockups/2026-10-08-parent-uiux-directions.html）：
+ * 每位孩子一張狀態卡（ChildTodayCard），多寶家庭直接並列，不必先切換才看得到
+ * 另一個孩子今天的狀態。原本分三處的孩子資訊——HomeHeroHeader 的照片＋姓名、
+ * ChildContextHeader 切換器、底部 ChildrenStrip（生日、在籍狀態、進孩子檔案）——
+ * 與 QuickActionsBar 的聯絡簿大按鈕＋出席 pill，全部收進狀態卡。
+ *
+ * 版面由上而下：問候列（含公告鈴鐺）→ 孩子狀態卡 → 常用功能 → 校園公告卡 →
+ * 待辦清單（HomeTodoList）→ 娃娃車列（HomeBusRow）→ 今日動態 → 行事曆。
+ * 後四者沿用 2026-09-02／09-08 首頁改版的元件，本次未改動。
+ */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getHomeSummary } from '../api/profile'
 import { getTodayContactBook, type ContactBookEntry } from '../api/contactBook'
-import { useCachedAsync } from '@/composables/useCachedAsync'
+import { useHomeSummary } from '../composables/useHomeSummary'
 import { useTodayStatusCache } from '../composables/useTodayStatusCache'
 import { useTodayTimeline } from '../composables/useTodayTimeline'
 import { useChildSelection } from '../composables/useChildSelection'
+import { childTodayStatus, type TodayChildLike } from '../utils/childTodayStatus'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import TodayTimeline from '../components/home-timeline/TodayTimeline.vue'
-import ChildrenStrip from '../components/home/ChildrenStrip.vue'
-import ChildContextHeader from '../components/ChildContextHeader.vue'
 import SectionHeader from '../components/SectionHeader.vue'
 import HomeHeroHeader from '../components/home/HomeHeroHeader.vue'
+import ChildTodayCard from '../components/home/ChildTodayCard.vue'
 import QuickActionsBar from '../components/home/QuickActionsBar.vue'
 import AnnouncementsHomeCard from '../components/home/AnnouncementsHomeCard.vue'
 import HomeTodoList from '../components/home/HomeTodoList.vue'
 import HomeBusRow from '../components/home/HomeBusRow.vue'
 
+interface HomeChild {
+  student_id: number
+  name?: string
+  classroom_name?: string | null
+  birthday?: string | null
+  lifecycle_status?: string | null
+}
+
+type TodayChild = TodayChildLike & {
+  student_id?: number
+  medication?: { has_order?: boolean; order_count?: number } | null
+}
+
 const router = useRouter()
-const { selectedId: selectedStudentId, ensureSelected, setSelected } = useChildSelection()
+const { ensureSelected, setSelected } = useChildSelection()
 
 const { status: todayStatus, refresh: refreshToday } = useTodayStatusCache()
-const todayStatusData = computed(() => todayStatus.value as { children?: Record<string, unknown>[] } | null)
-const todayChildren = computed(() => todayStatusData.value?.children || [])
+const todayChildren = computed(
+  () => ((todayStatus.value as { children?: Record<string, unknown>[] } | null)?.children || []),
+)
 
 const {
   data: summaryData,
   error: summaryError,
   pending: summaryPending,
   refresh: refreshSummary,
-} = useCachedAsync(
-  'parent/today/summary',
-  async () => {
-    const res = await getHomeSummary()
-    return res.data
-  },
-  { ttl: 60_000 },
+  summary,
+  badges,
+} = useHomeSummary()
+
+const children = computed<HomeChild[]>(
+  () => (summaryData.value as { children?: HomeChild[] } | null)?.children || [], // TODO(ts-strict): waiting on backend response_model
 )
-
-const children = computed(() => summaryData.value?.children || [])
-const summary = computed(() => summaryData.value?.summary || null)
-/** 首頁 hero 鈴鐺的紅點：沿用既有 home-summary 的 unread_announcements 欄位，不新打 API。 */
-const unreadAnnouncements = computed<number>(() => {
-  const n = summary.value?.unread_announcements
-  return typeof n === 'number' ? n : 0
-})
-const selectedChild = computed(() => {
-  const list: { student_id: number; name?: string; classroom_name?: string }[] = children.value || []
-  return list.find((c) => c.student_id === selectedStudentId.value) || list[0] || null
-})
-
-const contactBookEntry = ref<ContactBookEntry | null>(null)
-// request-sequence guard：切子女時，較舊 sid 的慢回應不得覆寫最新選中子女的
-// 聯絡簿。原本的 `if (contactBookLoading.value) return` 方向錯誤——A 的請求還在
-// 飛行中時切到 B，B 會被 loading-guard 丟棄且不重試，畫面卡在前一個孩子；A 慢
-// 回來又把 A 蓋上。改以 seq 比對只套用「最新」請求的回應（見
-// composables/useLatestSearch.ts、useAbortableFetch.ts 樣板），並以 in-flight sid
-// 去重，保留 mount 時 onMounted 直呼 + ensureSelected 觸發 watch 會以「同 sid」
-// 呼叫兩次卻只發一次請求的行為。
-let contactBookSeq = 0
-let contactBookInflightSid: number | null = null
-
-async function loadContactBook(force = false) {
-  const sid = selectedChild.value?.student_id
-  if (!sid) {
-    contactBookSeq++ // 使任何 in-flight 回應失效
-    contactBookInflightSid = null
-    contactBookEntry.value = null
-    return
-  }
-  // 同一 sid 已在請求中 → 去重（mount 雙呼）；切到「不同」子女時不去重，
-  // force（下拉刷新）一律重抓。
-  if (!force && contactBookInflightSid === sid) return
-  const mySeq = ++contactBookSeq
-  contactBookInflightSid = sid
-  try {
-    const res = await getTodayContactBook(sid)
-    if (mySeq !== contactBookSeq) return // 已有更新請求，丟棄此舊回應
-    contactBookEntry.value = res.data?.entry || null
-  } catch {
-    if (mySeq !== contactBookSeq) return // 較舊請求的錯誤靜默忽略
-    contactBookEntry.value = null
-  } finally {
-    if (mySeq === contactBookSeq) contactBookInflightSid = null
-  }
-}
-
-onMounted(() => {
-  refreshToday()
-  // useCachedAsync cache-hit 時 children 從一開始就有值，下方 watch（無
-  // immediate）不會 fire → 聯絡簿 hero card 永遠不會顯示。mount 時直接
-  // ensureSelected + loadContactBook 涵蓋此 case（P1-16）。
-  ensureSelected(children.value || [])
-  loadContactBook()
-})
-
-watch(
-  () => children.value?.length,
-  () => {
-    ensureSelected(children.value || [])
-    loadContactBook()
-  },
-)
-watch(selectedStudentId, () => loadContactBook())
-
-const { buckets } = useTodayTimeline({ summary, todayChildren })
-
-function isOffDay() {
-  const d = new Date().getDay()
-  return d === 0 || d === 6
-}
-
-function childStatusLabel(c: Record<string, unknown> | null | undefined) {
-  if (!c) return isOffDay() ? '今天放假' : '尚未到校'
-  const dismissal = c.dismissal as { status?: string } | null | undefined
-  if (dismissal?.status === 'completed') return '已離園'
-  const attendance = c.attendance as { status?: string } | null | undefined
-  if (c.attendance) return attendance?.status || '在園中'
-  if (c.leave) return '請假'
-  return isOffDay() ? '今天放假' : '尚未到校'
-}
-
-function childStatusTone(label: string): 'ok' | 'warn' | 'danger' | 'neutral' | 'info' {
-  if (label === '已入園' || label === '在園中' || label === '已離園') return 'ok'
-  if (label === '請假') return 'info'
-  if (label === '今天放假') return 'neutral'
-  return 'neutral'
-}
-
-const selectedTodayChild = computed(() => {
-  const tc = todayChildren.value || []
-  return tc.find((c) => (c as { student_id?: number }).student_id === selectedStudentId.value) || null
-})
 
 /**
  * 「尚未綁定子女」須依 home-summary 的權威子女清單判定，而非 today-status：
  * today-status 可能因放假或尚未載入而為空，若據此判空，有綁定子女的家長會
  * 被誤顯示「尚未綁定子女」。
  */
-const isUnbound = computed<boolean>(
-  () => !!summaryData.value && (children.value || []).length === 0,
-)
+const isUnbound = computed<boolean>(() => !!summaryData.value && children.value.length === 0)
 
-/** QuickActionsBar 聯絡簿大按鈕要顯示的出席狀態（單孩取唯一那位，多寶取選中那位）。 */
-const heroStatus = computed<{ label: string; tone: 'ok' | 'warn' | 'danger' | 'neutral' | 'info' }>(() => {
-  const tc = todayChildren.value || []
-  const target = tc.length === 1 ? tc[0] : selectedTodayChild.value
-  const label = childStatusLabel(target)
-  return { label, tone: childStatusTone(label) }
-})
+function todayOf(studentId: number): TodayChild | null {
+  return (todayChildren.value.find((c) => (c as TodayChild).student_id === studentId) as TodayChild) || null
+}
 
 /**
- * 聯絡簿三態，決定 contactBookSub 的文案該講什麼。原本另外驅動一張獨立
- * 的「今日聯絡簿」hero 卡（cb-hero），2026-08-16 業主裁定該卡與 QuickActionsBar
- * 的聯絡簿大按鈕（含出席狀態 pill）重複，整塊移除；三態判斷邏輯本身還在用
- * （見下方 contactBookSub），故保留。
+ * 每位孩子的今日聯絡簿。多寶家庭各打一支（N 通常 ≤3），以 generation 比對只套用
+ * 最新一輪的結果：下拉刷新與子女清單變動可能重疊觸發，較舊一輪的慢回應不得蓋掉
+ * 新的（沿用改版前單一孩子 seq guard 的做法，見 composables/useAbortableFetch.ts）。
  */
-const todayVariant = computed<'full' | 'awaiting' | 'offday'>(() => {
-  if (contactBookEntry.value) return 'full'
-  const label = heroStatus.value.label
-  if (label === '今天放假' || label === '請假') return 'offday'
-  return 'awaiting'
-})
+const contactBooks = ref<Record<number, ContactBookEntry | null>>({})
+let contactBookGeneration = 0
 
-/**
- * 常用功能列（quickact01，2026-08-16 改版）的聯絡簿大按鈕連結／副標。
- * 有今天的紀錄就直連該筆；沒有的話連去列表，副標依三態給對應文案，
- * 呼應 ContactBookDayCard 原本的 awaiting/offday 語意，不重造一套判斷。
- */
-const contactBookHref = computed<string>(() =>
-  contactBookEntry.value ? `/contact-book/${contactBookEntry.value.id}` : '/contact-book',
-)
-const contactBookSub = computed<string>(() => {
-  if (contactBookEntry.value) return '查看今天的完整紀錄'
-  if (todayVariant.value === 'offday') {
-    return heroStatus.value.label === '請假' ? '今天請假，暫無紀錄' : '今天放假，暫無紀錄'
+async function loadContactBooks(): Promise<void> {
+  const ids = children.value.map((c) => c.student_id).filter((id) => !!id)
+  const generation = ++contactBookGeneration
+  if (ids.length === 0) {
+    contactBooks.value = {}
+    return
   }
-  return '老師還沒有寫今天的紀錄'
-})
+  const results = await Promise.all(
+    ids.map(async (sid) => {
+      try {
+        const res = await getTodayContactBook(sid)
+        return [sid, res.data?.entry || null] as const
+      } catch {
+        return [sid, null] as const
+      }
+    }),
+  )
+  if (generation !== contactBookGeneration) return
+  contactBooks.value = Object.fromEntries(results)
+}
 
-// 娃娃車兩格已搬進 HomeBusRow（2026-09-02），它自己 onMounted 抓資料；
+// immediate：useCachedAsync cache-hit 時 children 從一開始就有值（P1-16）
+const childIdsKey = computed(() => children.value.map((c) => c.student_id).join(','))
+watch(
+  childIdsKey,
+  () => {
+    // 常用功能裡「孩子檔案／成長報告…」等模組仍依「目前選定的孩子」導覽
+    ensureSelected(children.value)
+    loadContactBooks()
+  },
+  { immediate: true },
+)
+
+function contactBookHref(sid: number): string {
+  const entry = contactBooks.value[sid]
+  return entry ? `/contact-book/${entry.id}` : '/contact-book'
+}
+
+/** 聯絡簿三態文案：有紀錄／請假或放假／老師還沒寫 */
+function contactBookSub(sid: number): string {
+  const entry = contactBooks.value[sid]
+  if (entry) return entry.isRead ? '查看今天的完整紀錄' : '老師寫好了，點開看看'
+  const reason = childTodayStatus(todayOf(sid)).noRecordReason
+  if (reason === '請假') return '今天請假，暫無紀錄'
+  if (reason === '放假') return '今天放假，暫無紀錄'
+  return '老師還沒有寫今天的紀錄'
+}
+
+function contactBookUnread(sid: number): boolean {
+  const entry = contactBooks.value[sid]
+  return !!entry && !entry.isRead
+}
+
+function openChild(sid: number): void {
+  setSelected(sid)
+  router.push(`/children/${sid}`)
+}
+
+const { buckets } = useTodayTimeline({ summary, todayChildren })
+
+// 娃娃車兩格在 HomeBusRow（2026-09-02），它自己 onMounted 抓資料；
 // 下拉刷新與錯誤重試要一併帶到它，故透過 defineExpose 的 reload 呼叫。
 const busRow = ref<{ reload: () => Promise<void> } | null>(null)
 
-async function pullRefresh() {
+onMounted(() => {
+  refreshToday()
+})
+
+async function pullRefresh(): Promise<void> {
   await Promise.all([
     refreshSummary(true),
     refreshToday(),
-    loadContactBook(true),
+    loadContactBooks(),
     busRow.value?.reload() ?? Promise.resolve(),
   ])
 }
 
-function refresh() {
-  refreshSummary(true)
-  refreshToday()
-  loadContactBook(true)
-  void busRow.value?.reload()
+function refresh(): void {
+  void pullRefresh()
 }
 
-function go(path: string) {
+function go(path: string): void {
   router.push(path)
 }
 </script>
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="today-view">
-    <!--
-      首頁頂部 hero（2026-08-16 改版）：問候語 chip（早中晚＋插畫）+ 孩子近期
-      照片輪播 + 姓名 + 日期/班級，取代原本的純問候語列。多寶切換沿用既有
-      ChildContextHeader，接在後面。右上角鈴鐺（2026-09-08）帶未讀公告紅點。
-    -->
     <HomeHeroHeader
-      v-if="selectedChild"
-      :student-id="selectedChild.student_id"
-      :name="selectedChild.name || ''"
-      :classroom-name="selectedChild.classroom_name"
-      :unread-announcements="unreadAnnouncements"
+      :unread-announcements="badges.unreadAnnouncements"
       @open-announcements="go('/announcements')"
     />
-    <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
 
-    <!--
-      常用功能列（quickact01，2026-08-16 改版）：聯絡簿大按鈕 + 三個模組
-      按鈕，家長各自在自己手機上編輯、存 DB（QuickActionsBar 內部自己
-      fetch /parent/quick-actions，不經 home-summary）。位在今日卡之上，
-      但聯絡簿大按鈕本身帶出席狀態 pill，「3 秒內看到孩子當日狀態」的
-      既有承諾不受影響。
-    -->
-    <QuickActionsBar
-      v-if="selectedChild"
-      :contact-book-href="contactBookHref"
-      :contact-book-sub="contactBookSub"
-      :status-label="heroStatus.label"
-      :status-tone="heroStatus.tone"
-    />
-
-    <!--
-      刻意不用共用的 @/components/common/EmptyState：那支沒被 pin 進 vite.config
-      的 shared-common，落在 admin-core chunk。首頁是家長端 entry 的首屏，靜態
-      import 它會把整包 admin-core 拖進首屏（實測 gz 227.9KB → 492.0KB，
-      check-entry-chunks gate 直接擋下 build）。lazy route（如 ContactBookView）
-      用它沒問題，首屏元件不行。
-    -->
-    <section v-if="isUnbound" class="cb-hero">
-      <div class="unbound">
-        <p class="unbound-title">尚未綁定子女</p>
-        <p class="unbound-desc">綁定孩子後即可查看在園紀錄，也可請園所協助。</p>
-        <router-link to="/bind-additional" class="pt-action-btn">綁定孩子</router-link>
-      </div>
-    </section>
-
-    <!--
-      2026-08-16 業主裁定移除：原本這裡有一張獨立的「今日聯絡簿」hero 卡
-      （ContactBookDayCard）＋下方「我要接小孩」CTA（pnotice01），與上面
-      QuickActionsBar 的聯絡簿大按鈕（本身已帶出席狀態 pill、連去聯絡簿）
-      及「接送」快捷模組重複，故整塊拿掉。contactBookEntry / todayVariant
-      等底層狀態邏輯仍保留，餵給 QuickActionsBar 的 contactBookHref /
-      contactBookSub props（見上方 script）。
-    -->
-
-    <!--
-      校園公告預覽卡（2026-09-08）：待辦清單原本把「未讀公告」包成一筆
-      todo（key=announcements），與這張卡重複曝光，已從 useParentTodos 移除，
-      公告的首頁入口統一收斂到這裡。位置刻意在 QuickActionsBar 之後、
-      待辦清單之前。
-    -->
-    <AnnouncementsHomeCard />
-
-    <!--
-      待辦清單（2026-09-02）：取代原本的兩張 sticky 橫幅與 bento 四格。
-      同一筆待辦在首頁只出現一次，資料來源為 useParentTodos。
-    -->
-    <HomeTodoList />
-
-    <HomeBusRow ref="busRow" />
-
-    <template v-if="summaryPending && !summaryData">
-      <div class="skeleton-wrap">
-        <SkeletonBlock variant="card" />
-        <SkeletonBlock variant="card" />
-        <SkeletonBlock variant="card" />
-      </div>
-    </template>
+    <div v-if="summaryPending && !summaryData" class="today-section skeleton-wrap">
+      <SkeletonBlock variant="card" />
+      <SkeletonBlock variant="card" />
+    </div>
 
     <MobileErrorRetry
       v-else-if="summaryError && !summaryData"
@@ -293,14 +189,58 @@ function go(path: string) {
       @retry="refresh"
     />
 
-    <section v-else class="today-stream">
+    <!--
+      刻意不用共用的 @/components/common/EmptyState：那支沒被 pin 進 vite.config
+      的 shared-common，落在 admin-core chunk。首頁是家長端 entry 的首屏，靜態
+      import 它會把整包 admin-core 拖進首屏（check-entry-chunks gate 會擋 build）。
+    -->
+    <section v-else-if="isUnbound" class="today-section">
+      <div class="unbound">
+        <p class="unbound-title">尚未綁定子女</p>
+        <p class="unbound-desc">綁定孩子後即可查看在園紀錄，也可請園所協助。</p>
+        <router-link to="/bind-additional" class="pt-action-btn">綁定孩子</router-link>
+      </div>
+    </section>
+
+    <section v-else class="today-section today-children" aria-label="孩子今天的狀態">
+      <ChildTodayCard
+        v-for="c in children"
+        :key="c.student_id"
+        :student-id="c.student_id"
+        :name="c.name || ''"
+        :classroom-name="c.classroom_name"
+        :birthday="c.birthday"
+        :lifecycle-status="c.lifecycle_status"
+        :today="todayOf(c.student_id)"
+        :contact-book-href="contactBookHref(c.student_id)"
+        :contact-book-sub="contactBookSub(c.student_id)"
+        :contact-book-unread="contactBookUnread(c.student_id)"
+        @open="openChild"
+        @select="setSelected"
+      />
+    </section>
+
+    <QuickActionsBar v-if="children.length > 0" />
+
+    <!--
+      校園公告預覽卡（2026-09-08）：公告的首頁入口統一收斂到這裡（待辦清單不再
+      重複列未讀公告）。
+    -->
+    <AnnouncementsHomeCard />
+
+    <!-- 待辦清單（2026-09-02）：同一筆待辦在首頁只出現一次，資料來源為 useParentTodos。 -->
+    <HomeTodoList />
+
+    <HomeBusRow ref="busRow" />
+
+    <section v-if="summaryData" class="today-section today-stream">
       <SectionHeader title="今日動態">
         <!--
-          今日動態只講「今天」。更長的歷史（跨 9 種來源的成長時間軸）在孩子檔案頁，
-          原本要從「事務 → 孩子檔案 → 往下滑」三層才找得到，這裡補一個直達出口。
+          今日動態只講「今天」，更長的歷史在孩子檔案頁。單一孩子才給直達出口；
+          多寶家庭由各自狀態卡進孩子檔案（避免連到「目前選定」的錯孩子）。
         -->
-        <template v-if="selectedChild" #action>
-          <router-link :to="`/children/${selectedChild.student_id}`" class="cb-open">
+        <template v-if="children.length === 1" #action>
+          <router-link :to="`/children/${children[0].student_id}`" class="cb-open">
             更多動態
             <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
           </router-link>
@@ -308,19 +248,6 @@ function go(path: string) {
       </SectionHeader>
       <TodayTimeline :buckets="buckets" @navigate="go" />
     </section>
-
-    <!--
-      多寶家庭的孩子總覽。切換子女的主要入口是上方 ChildContextHeader，
-      這條保留是因為它另外承載生日提示、在籍狀態與「進孩子檔案」入口，
-      移掉會少功能；但位置下移，不與 hero 搶同一個視覺區。
-    -->
-    <ChildrenStrip
-      v-if="children.length > 1"
-      :children="children"
-      :selected-id="selectedStudentId"
-      @select="setSelected"
-      @navigate="go"
-    />
 
     <footer class="today-footer">
       <router-link to="/calendar" class="today-footer-link">
@@ -339,13 +266,13 @@ function go(path: string) {
   gap: var(--space-4, 16px);
 }
 
-.today-cch {
-  margin-top: var(--space-1, 4px);
-  padding: 0 var(--space-4, 16px);
-}
+.today-section { padding: 0 var(--space-4, 16px); }
 
-/* 今日聯絡簿 hero 區 */
-.cb-hero { padding: 0 var(--space-4, 16px); }
+.today-children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
 
 /* 尚未綁定子女（首屏不引入共用 EmptyState，見 template 註解） */
 .unbound {
@@ -393,11 +320,10 @@ function go(path: string) {
   display: flex;
   flex-direction: column;
   gap: var(--space-3, 12px);
-  padding: 0 var(--space-4, 16px);
 }
 
 .today-stream {
-  padding: 0 var(--space-4, 16px) var(--space-3, 12px);
+  padding-bottom: var(--space-3, 12px);
   display: flex;
   flex-direction: column;
   gap: var(--space-2, 8px);

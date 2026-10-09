@@ -65,7 +65,8 @@ describe('ChildProfileView — 區塊標題', () => {
 
     const titles = w.findAll('.section-title')
     const texts = titles.map((t) => t.text())
-    expect(texts).toEqual(expect.arrayContaining(['成長里程碑', '最新動態', '成長量測', '歷次報告']))
+    // 2026-10-08 白話命名：與孩子 hub、頁面標題同名（parentServices 的 childMeasurements／childReports）
+    expect(texts).toEqual(expect.arrayContaining(['成長里程碑', '最新動態', '健康紀錄', '成長報告']))
     expect(w.findAll('.section-title parent-icon-stub')).toHaveLength(0)
     w.unmount()
   })

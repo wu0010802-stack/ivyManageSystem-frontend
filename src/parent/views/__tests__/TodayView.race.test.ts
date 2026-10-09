@@ -1,15 +1,13 @@
 /**
  * TodayView 聯絡簿請求競態（A10）回歸測試
  *
- * Bug：loadContactBook() 原本以 `if (contactBookLoading.value) return` 作守衛，
- * 方向錯誤——A 的請求還在飛行中時切到 B，B 會被丟棄且不重試，畫面卡在前一個
- * 孩子（A 慢回來還會覆蓋）。修法改用 request-sequence guard（只套用最新 sid 的
- * 回應）+ in-flight sid 去重（保留 mount 時同 sid 只發一次請求）。
- *
- * 涵蓋：
- *  - 快速切子女（A→B），A 較慢回應不得覆寫 B（RED：舊碼丟棄 B 的請求）
- *  - mount 時 onMounted 直呼 + watch 觸發同一 sid 只發一次請求（去重非回歸）
- *  - 正常情況聯絡簿正確載入（無競態行為不變）
+ * 2026-10-08 首頁改版後每位孩子各有一張狀態卡，聯絡簿改為「一輪」同時抓全部
+ * 孩子（Promise.all），以 generation 比對只套用最新一輪的結果。原 A10 的
+ * 風險型態（較舊的慢回應覆寫較新的結果）改出現在「掛載那輪還在飛行中時下拉
+ * 刷新」：
+ *  - 較舊一輪晚回來不得覆寫較新一輪（RED：沒有 generation guard 時會被蓋掉）
+ *  - cache-hit 掛載時每位孩子只發一次請求（不因 watch + 掛載重複觸發）
+ *  - 正常情況多寶聯絡簿各自正確載入
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount, flushPromises } from '@vue/test-utils'
@@ -45,13 +43,12 @@ const summaryErrorRef = ref<unknown>(null)
 const summaryPendingRef = ref(false)
 const refreshSummaryMock = vi.fn()
 vi.mock('@/composables/useCachedAsync', () => ({
-  useCachedAsync: () => ({
-    data: summaryDataRef,
-    error: summaryErrorRef,
-    pending: summaryPendingRef,
-    refresh: refreshSummaryMock,
-  }),
+  useCachedAsync: (key: string) => (key === 'parent/today/summary'
+    ? { data: summaryDataRef, error: summaryErrorRef, pending: summaryPendingRef, refresh: refreshSummaryMock }
+    : { data: ref(0), error: ref(null), pending: ref(false), refresh: vi.fn() }),
 }))
+vi.mock('@/parent/api/signDocuments', () => ({ listMySignRequests: vi.fn() }))
+vi.mock('@/parent/api/pickup', () => ({ listPickupAuthorizations: vi.fn() }))
 
 // ── 其餘 composable / API：靜態 stub（不影響競態邏輯） ────────────────────────
 // 娃娃車入口卡在 mount 時會抓一次今日快照；本檔測聯絡簿競態，回無班次即可。
@@ -83,8 +80,9 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
-import { useChildSelection, clearChildSelection } from '@/parent/composables/useChildSelection'
+import { clearChildSelection } from '@/parent/composables/useChildSelection'
 
+/** 依發出順序 resolve 某 sid 最早一筆尚未 settle 的請求 */
 function resolveCb(sid: number, entry: { id: number } | null): void {
   const call = cbCalls.find((c) => c.sid === sid && !c.settled)
   if (!call) throw new Error(`無 in-flight 的聯絡簿請求 sid=${sid}`)
@@ -111,61 +109,72 @@ beforeEach(() => {
   }
 })
 
-type Vm = { contactBookEntry: { id: number } | null }
+type Vm = {
+  contactBooks: Record<number, { id: number } | null>
+  pullRefresh: () => Promise<void>
+}
 
 describe('TodayView — 聯絡簿請求競態（A10）', () => {
-  it('快速切子女時，較舊 sid 的慢回應不得覆寫最新選中子女的聯絡簿', async () => {
+  it('掛載那輪還在飛行中時下拉刷新：較舊一輪晚回來不得覆寫較新一輪', async () => {
     const TodayView = (await import('@/parent/views/TodayView.vue')).default
     const wrapper = shallowMount(TodayView)
     await flushPromises()
 
-    // 掛載時已對 child A(1) 發出聯絡簿請求（in-flight，尚未 resolve）
-    expect(getTodayContactBookMock).toHaveBeenCalledWith(1)
-    expect(cbCalls.filter((c) => c.sid === 1).length).toBe(1)
+    // 第一輪：兩位孩子各一支，皆 in-flight
+    expect(cbCalls.map((c) => c.sid)).toEqual([1, 2])
 
-    // A 請求仍 in-flight 時快速切到 child B(2)
-    const { setSelected } = useChildSelection()
-    setSelected(2)
-    await flushPromises()
-
-    // 舊碼的 loading-guard 會把 B 的請求丟棄；修好後必須有對 sid=2 發出請求
-    expect(getTodayContactBookMock).toHaveBeenCalledWith(2)
-
-    // B（最新）較快回來
-    resolveCb(2, { id: 200 })
-    await flushPromises()
-
-    // A（較舊）較慢才回來，不得覆寫 B
-    resolveCb(1, { id: 100 })
-    await flushPromises()
-
+    // 第一輪未回來前下拉刷新 → 第二輪
     const vm = wrapper.vm as unknown as Vm
-    expect(vm.contactBookEntry?.id).toBe(200)
+    const refreshing = vm.pullRefresh()
+    await flushPromises()
+    expect(cbCalls.map((c) => c.sid)).toEqual([1, 2, 1, 2])
+
+    // 第二輪（較新）先回來——resolveCb 取最早未 settle 的，所以先把第一輪標成待會才 resolve
+    const [round1a, round1b, round2a, round2b] = cbCalls
+    round2a.settled = true
+    round2a.resolve({ data: { entry: { id: 101 } } })
+    round2b.settled = true
+    round2b.resolve({ data: { entry: { id: 201 } } })
+    await refreshing
+    await flushPromises()
+    expect(vm.contactBooks[1]?.id).toBe(101)
+
+    // 第一輪（較舊）才慢回來，不得覆寫
+    round1a.settled = true
+    round1a.resolve({ data: { entry: { id: 100 } } })
+    round1b.settled = true
+    round1b.resolve({ data: { entry: { id: 200 } } })
+    await flushPromises()
+
+    expect(vm.contactBooks[1]?.id).toBe(101)
+    expect(vm.contactBooks[2]?.id).toBe(201)
 
     wrapper.unmount()
   })
 
-  it('掛載時 onMounted 直呼 + watch 觸發同一 sid 只發一次請求（去重保留）', async () => {
+  it('cache-hit 掛載：每位孩子只發一次請求（watch 與掛載不重複觸發）', async () => {
     const TodayView = (await import('@/parent/views/TodayView.vue')).default
     const wrapper = shallowMount(TodayView)
     await flushPromises()
 
-    const callsForA = getTodayContactBookMock.mock.calls.filter((c) => c[0] === 1).length
-    expect(callsForA).toBe(1)
+    expect(getTodayContactBookMock.mock.calls.filter((c) => c[0] === 1).length).toBe(1)
+    expect(getTodayContactBookMock.mock.calls.filter((c) => c[0] === 2).length).toBe(1)
 
     wrapper.unmount()
   })
 
-  it('正常情況：選中子女的聯絡簿正確載入（行為不變）', async () => {
+  it('正常情況：多寶聯絡簿各自正確載入', async () => {
     const TodayView = (await import('@/parent/views/TodayView.vue')).default
     const wrapper = shallowMount(TodayView)
     await flushPromises()
 
     resolveCb(1, { id: 100 })
+    resolveCb(2, null)
     await flushPromises()
 
     const vm = wrapper.vm as unknown as Vm
-    expect(vm.contactBookEntry?.id).toBe(100)
+    expect(vm.contactBooks[1]?.id).toBe(100)
+    expect(vm.contactBooks[2]).toBeNull()
 
     wrapper.unmount()
   })

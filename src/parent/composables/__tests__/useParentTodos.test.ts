@@ -44,6 +44,7 @@ vi.mock('@/parent/api/pickup', () => ({
 }))
 
 import { useParentTodos } from '@/parent/composables/useParentTodos'
+import { PARENT_SERVICES } from '@/parent/utils/parentServices'
 import { _resetCacheForTesting } from '@/composables/useCachedAsync'
 
 function setSummary(overrides: Record<string, unknown> = {}) {
@@ -81,46 +82,47 @@ describe('useParentTodos 列的產生條件', () => {
     expect(todos.value).toEqual([])
   })
 
-  it('待繳學費未逾期：tone=action，sub 顯示筆數', async () => {
+  it('繳費未逾期：tone=action，sub 顯示筆數', async () => {
     setSummary({ fees: { outstanding_count: 2, outstanding: 3600, overdue: 0 } })
     const { todos } = useParentTodos()
     await flush()
     const fees = todos.value.find((t) => t.key === 'fees')
     expect(fees).toBeTruthy()
-    expect(fees!.label).toBe('待繳學費')
+    expect(fees!.label).toBe('繳費')
     expect(fees!.count).toBe(2)
     expect(fees!.tone).toBe('action')
-    expect(fees!.sub).toBe('2 筆')
+    expect(fees!.sub).toBe('2 筆待繳')
     expect(fees!.to).toBe('/fees')
   })
 
-  it('待繳學費有逾期：tone=alert，sub 顯示逾期金額', async () => {
+  it('繳費有逾期：tone=alert，sub 同時顯示筆數與逾期金額', async () => {
     setSummary({ fees: { outstanding_count: 2, outstanding: 3600, overdue: 1200 } })
     const { todos } = useParentTodos()
     await flush()
     const fees = todos.value.find((t) => t.key === 'fees')!
     expect(fees.tone).toBe('alert')
+    expect(fees.sub).toContain('2 筆待繳')
     expect(fees.sub).toContain('逾期')
     expect(fees.sub).toContain('1,200')
   })
 
-  it('入學文件簽署：讀 listMySignRequests().data.pending 的長度，導向 /sign', async () => {
+  it('簽署入學文件：讀 listMySignRequests().data.pending 的長度，導向 /sign', async () => {
     listMySignRequests.mockResolvedValue({ data: { pending: [{ id: 1 }, { id: 2 }], signed: [] } })
     const { todos, signDocsCount } = useParentTodos()
     await flush()
     expect(signDocsCount.value).toBe(2)
     const row = todos.value.find((t) => t.key === 'signDocs')!
-    expect(row.label).toBe('入學文件簽署')
+    expect(row.label).toBe('簽署入學文件')
     expect(row.count).toBe(2)
     expect(row.to).toBe('/sign')
   })
 
-  it('待簽文件：讀 pending_event_acks，導向 /events', async () => {
+  it('簽收通知：讀 pending_event_acks，導向 /events（與 /sign 入學文件分開命名）', async () => {
     setSummary({ pending_event_acks: 3 })
     const { todos } = useParentTodos()
     await flush()
     const row = todos.value.find((t) => t.key === 'eventAcks')!
-    expect(row.label).toBe('待簽文件')
+    expect(row.label).toBe('簽收通知')
     expect(row.count).toBe(3)
     expect(row.to).toBe('/events')
   })
@@ -152,6 +154,17 @@ describe('useParentTodos 列的產生條件', () => {
     expect(row.label).toBe('請假已成立')
     expect(row.label).not.toContain('審核')
     expect(row.sub).toBe('近 7 天 2 筆')
+  })
+
+  it('名稱與圖示取自 parentServices（同一功能只有一個名字、一個圖示）', async () => {
+    setSummary({ pending_survey_count: 1, pending_activity_promotions: 1, pending_event_acks: 1 })
+    const { todos } = useParentTodos()
+    await flush()
+    const byKey = Object.fromEntries(todos.value.map((t) => [t.key, t]))
+    expect(byKey.surveys.label).toBe('填活動調查')
+    expect(byKey.promotions.label).toBe('確認才藝候補')
+    expect(byKey.eventAcks.icon).toBe(PARENT_SERVICES.sign.icon)
+    expect(byKey.promotions.to).toBe(PARENT_SERVICES.activity.route)
   })
 
   it('不再產生 key=announcements 的待辦列（2026-09-08 首頁改版：改用專屬 AnnouncementsHomeCard）', async () => {

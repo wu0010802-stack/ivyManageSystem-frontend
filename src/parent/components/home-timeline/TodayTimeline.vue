@@ -46,7 +46,7 @@ const emit = defineEmits<{
       </ol>
     </section>
   </div>
-  <p v-else class="timeline-empty">今天目前沒有需要處理的事項</p>
+  <p v-else class="timeline-empty">今天還沒有新的動態</p>
 </template>
 
 <style scoped>

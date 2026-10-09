@@ -1,10 +1,10 @@
 <template>
   <div class="sign-list-view">
-    <SectionHeader title="待簽文件" />
+    <SectionHeader title="待簽的入學文件" />
     <EmptyState
       v-if="!loading && pending.length === 0"
       variant="mobile"
-      title="目前沒有待簽文件"
+      title="目前沒有待簽的入學文件"
       description="有新文件時會透過 LINE 通知您"
     />
     <div v-else class="sign-list-view__cards">
