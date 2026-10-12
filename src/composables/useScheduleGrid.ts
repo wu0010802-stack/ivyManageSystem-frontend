@@ -19,6 +19,7 @@ import {
   cellKey,
   confirmUnits,
   indexCells,
+  isRecordedConflict,
   planWeekChange,
   type BatchUnit,
   type GridCell,
@@ -44,12 +45,6 @@ export interface SaveOutcome {
 }
 
 const CANCELLED_BY_WEEK_CHANGE = '儲存途中切換了週次，尚未送出的變更已取消'
-
-const isRecordedConflict = (err: unknown): boolean => {
-  const status = (err as { response?: { status?: number } })?.response?.status
-  const message = (err as { displayMessage?: string })?.displayMessage ?? ''
-  return status === 409 && message.includes('出勤紀錄')
-}
 
 const errorMessage = (err: unknown, fallback: string): string =>
   (err as { displayMessage?: string })?.displayMessage ?? fallback

@@ -322,3 +322,10 @@ export function coverageInputs(
     leaves,
   }
 }
+
+/** 後端「已有出勤紀錄」409（週排班與每日調整兩支守衛的訊息都含「出勤紀錄」）。 */
+export function isRecordedConflict(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } })?.response?.status
+  const message = (err as { displayMessage?: string })?.displayMessage ?? ''
+  return status === 409 && message.includes('出勤紀錄')
+}

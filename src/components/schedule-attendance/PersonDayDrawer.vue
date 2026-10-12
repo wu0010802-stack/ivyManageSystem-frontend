@@ -53,7 +53,7 @@
           <el-option v-for="s in activeShifts" :key="s.shift_type_id" :value="s.shift_type_id" :label="`${s.name} ${s.work_start}–${s.work_end}`" />
           <el-option :value="DAY_OFF" label="排休（明確不上班）" />
         </el-select>
-        <el-button type="primary" :loading="savingDay" :disabled="dayChoice === initialDayChoice" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
+        <el-button type="primary" :loading="savingDay" :disabled="dayChoice === initialDayChoice || loadingDaily" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
       </section>
 
       <section v-if="cell.edit.confirm && cell.actual" class="pdd__section" data-test="pdd-confirm">
@@ -103,7 +103,9 @@ import {
   LOCKED_REASON_LABELS,
   RECON_STATUS_LABELS,
   SOURCE_TAGS,
+  cellDisplay,
   findPairCell,
+  isRecordedConflict,
   planText,
   type GridCell,
   type GridDay,
@@ -205,8 +207,12 @@ const chain = computed(() => {
 })
 
 const verdict = computed(() => {
-  const actual = props.cell?.actual
-  if (!actual) return ''
+  const cell = props.cell
+  const actual = cell?.actual
+  if (!cell || !actual) return ''
+  // R9：與格子同一套判定（今天的上班中／尚未打卡不能和格子不一致）
+  const shown = cellDisplay(cell, props.today)
+  if (shown.state === 'working' || shown.state === 'not_punched') return shown.verdict?.label ?? ''
   const parts = [RECON_STATUS_LABELS[actual.status]]
   if (actual.late_minutes) parts.push(`遲到 ${actual.late_minutes} 分`)
   if (actual.early_leave_minutes) parts.push(`早退 ${actual.early_leave_minutes} 分`)
@@ -232,6 +238,7 @@ const dayChoice = ref<number>(INHERIT)
 const initialDayChoice = ref<number>(INHERIT)
 const dailyRecordId = ref<number | null>(null)
 const savingDay = ref(false)
+const loadingDaily = ref(false)
 
 // ── 確認當日班別 ────────────────────────────────────────────────
 const confirmChoice = ref<number | null>(null)
@@ -261,16 +268,20 @@ watch(
     dayChoice.value = current
     initialDayChoice.value = current
     dailyRecordId.value = null
+    loadingDaily.value = false
     const candidates = cell.actual?.candidates ?? []
     confirmChoice.value = candidates.length === 1 ? candidates[0].shift_type_id : cell.actual?.original_shift_type_id ?? null
     confirmReason.value = ''
     includePair.value = false
     if (cell.edit.plan && current !== INHERIT) {
+      loadingDaily.value = true
       try {
         const rows = (await getDaily({ start_date: cell.date, end_date: cell.date, employee_id: cell.employee_id })).data
         if (seq === openSeq) dailyRecordId.value = rows[0]?.id ?? null
       } catch (err) {
         if (seq === openSeq) ElMessage.error(apiError(err, '讀取每日調整失敗'))
+      } finally {
+        if (seq === openSeq) loadingDaily.value = false
       }
     }
   },
@@ -283,7 +294,17 @@ async function applyDay(): Promise<void> {
   savingDay.value = true
   try {
     if (dayChoice.value === INHERIT) {
-      if (dailyRecordId.value !== null) await deleteDaily(dailyRecordId.value)
+      let id = dailyRecordId.value
+      if (id === null) {
+        const rows = (await getDaily({ start_date: cell.date, end_date: cell.date, employee_id: cell.employee_id })).data
+        id = rows[0]?.id ?? null
+      }
+      if (id === null) {
+        ElMessage.warning('這天已沒有每日調整，已重新整理')
+        emit('changed')
+        return
+      }
+      await deleteDaily(id)
     } else if (dayChoice.value === DAY_OFF) {
       await saveDaily({ employee_id: cell.employee_id, date: cell.date, day_off: true })
     } else {
@@ -292,7 +313,12 @@ async function applyDay(): Promise<void> {
     ElMessage.success('已更新這天的班別')
     emit('changed')
   } catch (err) {
-    ElMessage.error(apiError(err, '更新班別失敗'))
+    if (isRecordedConflict(err)) {
+      ElMessage.warning('這天已有打卡紀錄，已重新整理；請改用「確認當日班別」')
+      emit('changed')
+    } else {
+      ElMessage.error(apiError(err, '更新班別失敗'))
+    }
   } finally {
     savingDay.value = false
   }
@@ -324,7 +350,12 @@ async function submitConfirm(): Promise<void> {
     ElMessage.success('已更新當日班別並重新計算出勤')
     emit('changed')
   } catch (err) {
-    ElMessage.error(apiError(err, '確認失敗，請重新整理後再試'))
+    if ((err as { response?: { status?: number } })?.response?.status === 409) {
+      ElMessage.warning(apiError(err, '班表、打卡或請假已更新，請再確認一次'))
+      emit('changed')
+    } else {
+      ElMessage.error(apiError(err, '確認失敗，請重新整理後再試'))
+    }
   } finally {
     confirming.value = false
   }

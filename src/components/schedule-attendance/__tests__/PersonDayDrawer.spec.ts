@@ -6,7 +6,7 @@ import type { GridCell, GridEmployee } from '@/utils/scheduleAttendanceGrid'
 import { cell, day, employee, grid, SHIFTS, W1 } from './gridFixtures'
 
 const api = vi.hoisted(() => ({ confirm: vi.fn(), getDaily: vi.fn(), saveDaily: vi.fn(), deleteDaily: vi.fn() }))
-const message = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
+const message = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }))
 vi.mock('@/api/attendanceReconciliation', () => ({ confirmReconciliationShift: api.confirm }))
 vi.mock('@/api/shifts', () => ({ getDaily: api.getDaily, saveDaily: api.saveDaily, deleteDaily: api.deleteDaily }))
 vi.mock('element-plus', async (orig) => ({ ...(await orig<typeof import('element-plus')>()), ElMessage: message }))
@@ -145,5 +145,73 @@ describe('PersonDayDrawer', () => {
     expect(empty.emitted('import')).toEqual([[{ employee_id: 1, employee_name: '林班導', date: W1 }]])
     const punched = mountDrawer(cell(1, W1, { actual: { punch_in: `${W1}T08:00:00` } }))
     expect(punched.find('[data-test="pdd-import"]').exists()).toBe(false)
+  })
+})
+
+describe('PersonDayDrawer 審查修正', () => {
+  const DAY_OFF_CHOICE = -1
+  const INHERIT_CHOICE = -2
+
+  it('改回繼承：每日調整 id 讀取失敗時，套用會重查；查無就不報成功', async () => {
+    api.getDaily
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ data: [] })
+    const wrapper = mountDrawer(cell(1, W1, { plan: { source: 'daily', shift_type_id: 2, name: '晚車' } }))
+    await flushPromises()
+    wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', INHERIT_CHOICE)
+    await wrapper.vm.$nextTick()
+    await wrapper.find('[data-test="pdd-day-apply"]').trigger('click')
+    await flushPromises()
+    expect(api.getDaily).toHaveBeenCalledTimes(2)
+    expect(api.deleteDaily).not.toHaveBeenCalled()
+    expect(message.success).not.toHaveBeenCalled()
+    expect(message.warning).toHaveBeenCalledWith('這天已沒有每日調整，已重新整理')
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+  })
+
+  it('改這天：每日調整還在讀取時不能套用', async () => {
+    api.getDaily.mockReturnValueOnce(new Promise(() => {}))
+    const wrapper = mountDrawer(cell(1, W1, { plan: { source: 'daily', shift_type_id: 2, name: '晚車' } }))
+    await flushPromises()
+    wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', DAY_OFF_CHOICE)
+    await wrapper.vm.$nextTick()
+    const btn = wrapper.find('[data-test="pdd-day-apply"]')
+    expect(btn.attributes('disabled')).not.toBeUndefined()
+  })
+
+  it('今天的判定與格子一致：只有上班卡＝上班中、沒打卡＝尚未打卡', async () => {
+    const working = mountDrawer(cell(1, '2026-09-21', { actual: { punch_in: '2026-09-21T08:00:00' } }))
+    expect(working.find('[data-test="pdd-actual"]').text()).toContain('上班中')
+    expect(working.find('[data-test="pdd-actual"]').text()).not.toContain('尚未打卡')
+    const none = mountDrawer(cell(1, '2026-09-21', { actual: {} }))
+    expect(none.find('[data-test="pdd-actual"]').text()).toContain('尚未打卡')
+  })
+
+  it('改這天撞已打卡 409：友善提示並通知刷新', async () => {
+    api.saveDaily.mockRejectedValueOnce({ response: { status: 409 }, displayMessage: '該日已有出勤紀錄，請至「班表與打卡核對」確認當日班別' })
+    const wrapper = mountDrawer(cell(1, W1))
+    await flushPromises()
+    wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', DAY_OFF_CHOICE)
+    await wrapper.vm.$nextTick()
+    await wrapper.find('[data-test="pdd-day-apply"]').trigger('click')
+    await flushPromises()
+    expect(message.warning).toHaveBeenCalledWith(expect.stringContaining('請改用「確認當日班別」'))
+    expect(message.error).not.toHaveBeenCalled()
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+  })
+
+  it('確認當日班別撞版本不符 409：提示並通知刷新', async () => {
+    api.confirm.mockRejectedValueOnce({ response: { status: 409 }, displayMessage: '班表、打卡或請假已更新，請重新核對' })
+    const target = cell(1, W1, {
+      edit: { plan: false, confirm: true, recorded: true, locked_reason: 'recorded' },
+      actual: { status: 'possible_shift_change', original_shift_type_id: 1, version: 'm'.repeat(64), candidates: [] },
+    })
+    const wrapper = mountDrawer(target)
+    await flushPromises()
+    await wrapper.find('textarea[data-test="pdd-confirm-reason"]').setValue('核對')
+    await wrapper.find('[data-test="pdd-confirm-submit"]').trigger('click')
+    await flushPromises()
+    expect(message.warning).toHaveBeenCalled()
+    expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 })
