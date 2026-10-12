@@ -4056,6 +4056,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/reconciliation/confirm-shift-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Reconciliation Batch
+         * @description 多個人日一次確認（SPEC-027 §5.2）；每個 unit 各自交易，dry_run 零副作用。
+         */
+        post: operations["confirm_reconciliation_batch_api_attendance_reconciliation_confirm_shift_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/reconciliation/preview": {
         parameters: {
             query?: never;
@@ -18188,6 +18208,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schedule-attendance/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule Attendance Grid
+         * @description 排班與出勤格子。無 ATTENDANCE_READ 者 actual／confirmation／import_covered 一律為 null。
+         */
+        get: operations["get_schedule_attendance_grid_api_schedule_attendance_grid_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/search": {
         parameters: {
             query?: never;
@@ -27428,6 +27468,66 @@ export interface components {
             /** Course Id */
             course_id: number;
         };
+        /**
+         * ConfirmShiftBatchIn
+         * @description SPEC-027 §5.2：多個人日一次確認；預設 dry_run，先預覽前後差異再正式送出。
+         */
+        ConfirmShiftBatchIn: {
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+            /** Reason */
+            reason: string;
+            /** Units */
+            units: components["schemas"]["ConfirmShiftUnitIn"][];
+        };
+        /** ConfirmShiftBatchOut */
+        ConfirmShiftBatchOut: {
+            /** Applied Count */
+            applied_count: number;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Results */
+            results: components["schemas"]["ConfirmShiftBatchResultOut"][];
+        };
+        /** ConfirmShiftBatchResultOut */
+        ConfirmShiftBatchResultOut: {
+            /** After */
+            after: components["schemas"]["ConfirmShiftBatchStateOut"][];
+            /** Before */
+            before: components["schemas"]["ConfirmShiftBatchStateOut"][];
+            /** Code */
+            code?: ("VERSION_MISMATCH" | "FINALIZED" | "SELF" | "USE_PTO" | "LEAVE_CONFLICT" | "INVALID") | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Employee Ids */
+            employee_ids: number[];
+            /** Message */
+            message?: string | null;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "ok" | "conflict" | "skipped";
+            /** Unit Index */
+            unit_index: number;
+        };
+        /** ConfirmShiftBatchStateOut */
+        ConfirmShiftBatchStateOut: {
+            /** Early Leave Minutes */
+            early_leave_minutes: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Late Minutes */
+            late_minutes: number;
+            /** Status */
+            status?: ("matched" | "possible_shift_change" | "missing_punch" | "suspected_absence" | "data_incomplete" | "leave" | "off_day" | "unscheduled_attendance" | "anomaly") | null;
+        };
         /** ConfirmShiftItem */
         ConfirmShiftItem: {
             /**
@@ -27460,6 +27560,14 @@ export interface components {
             message: string;
             /** Updated Count */
             updated_count: number;
+        };
+        /**
+         * ConfirmShiftUnitIn
+         * @description 批次確認的一個單位＝一次既有 confirm_shifts 呼叫（單人或同日配對）。
+         */
+        ConfirmShiftUnitIn: {
+            /** Items */
+            items: components["schemas"]["ConfirmShiftItem"][];
         };
         /** ConsentEventIn */
         ConsentEventIn: {
@@ -32089,6 +32197,208 @@ export interface components {
             /** Is Graduation Grade */
             is_graduation_grade?: boolean | null;
         };
+        /** GridActualOut */
+        GridActualOut: {
+            /** Attendance Id */
+            attendance_id?: number | null;
+            /** Candidates */
+            candidates: components["schemas"]["ReconciliationShiftOut"][];
+            /** Confirmed Action */
+            confirmed_action?: string | null;
+            /** Early Leave Minutes */
+            early_leave_minutes: number;
+            /** Late Minutes */
+            late_minutes: number;
+            /** Original Shift Type Id */
+            original_shift_type_id?: number | null;
+            /** Punch In */
+            punch_in?: string | null;
+            /** Punch Out */
+            punch_out?: string | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "matched" | "possible_shift_change" | "missing_punch" | "suspected_absence" | "data_incomplete" | "leave" | "off_day" | "unscheduled_attendance" | "anomaly";
+            /** Version */
+            version: string;
+        };
+        /** GridCallerOut */
+        GridCallerOut: {
+            /** Can Confirm */
+            can_confirm: boolean;
+            /** Can Edit Attendance */
+            can_edit_attendance: boolean;
+            /** Can Edit Plan */
+            can_edit_plan: boolean;
+            /** Can View Attendance */
+            can_view_attendance: boolean;
+        };
+        /** GridCellOut */
+        GridCellOut: {
+            actual?: components["schemas"]["GridActualOut"] | null;
+            confirmation?: components["schemas"]["GridConfirmationOut"] | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            edit: components["schemas"]["GridEditOut"];
+            /** Employed */
+            employed: boolean;
+            /** Employee Id */
+            employee_id: number;
+            /** Leaves */
+            leaves: components["schemas"]["GridLeaveOut"][];
+            plan: components["schemas"]["GridPlanOut"];
+        };
+        /** GridConfirmationOut */
+        GridConfirmationOut: {
+            /** Item Id */
+            item_id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "swap" | "cover" | "shift_changed";
+            /**
+             * Partner Employee Id
+             * @description 配對確認中，相對於本格員工的另一方 employee_id；非配對項目為 null
+             */
+            partner_employee_id?: number | null;
+            /** Round Id */
+            round_id?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "agreed" | "disputed" | "applied" | "dismissed";
+        };
+        /** GridDayOut */
+        GridDayOut: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Import Covered */
+            import_covered?: boolean | null;
+            /** Is Holiday */
+            is_holiday: boolean;
+            /** Is Makeup Workday */
+            is_makeup_workday: boolean;
+            /** Is Workday */
+            is_workday: boolean;
+            /** Weekday */
+            weekday: number;
+        };
+        /** GridEditOut */
+        GridEditOut: {
+            /** Confirm */
+            confirm: boolean;
+            /** Locked Reason */
+            locked_reason?: ("recorded" | "finalized" | "self" | "not_employed" | "no_permission") | null;
+            /** Plan */
+            plan: boolean;
+            /** Recorded */
+            recorded: boolean;
+        };
+        /** GridEmployeeOut */
+        GridEmployeeOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Number */
+            employee_number?: string | null;
+            /** Group Key */
+            group_key: string;
+            /** Hire Date */
+            hire_date?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Other Classroom Labels
+             * @description 除主要班級外，該員工同時擔任班導／副班導／美語老師或 Employee.classroom_id 所指的在籍班級名稱，依班級排序
+             */
+            other_classroom_labels?: string[];
+            /** Resign Date */
+            resign_date?: string | null;
+            /** Role Label */
+            role_label?: string | null;
+        };
+        /** GridGroupOut */
+        GridGroupOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "classroom" | "other";
+            /** Label */
+            label: string;
+        };
+        /** GridLeaveOut */
+        GridLeaveOut: {
+            /** End Time */
+            end_time?: string | null;
+            /** Is Full Day */
+            is_full_day: boolean;
+            /** Leave Id */
+            leave_id: number;
+            /** Leave Type Label */
+            leave_type_label: string;
+            /** Start Time */
+            start_time?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "approved" | "pending";
+        };
+        /** GridPlanOut */
+        GridPlanOut: {
+            /** Daily Notes */
+            daily_notes?: string | null;
+            /** Day Off */
+            day_off: boolean;
+            /** Expected */
+            expected: boolean;
+            /** Name */
+            name?: string | null;
+            rotation?: components["schemas"]["GridRotationRefOut"] | null;
+            /** Shift Type Id */
+            shift_type_id?: number | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "rotation" | "weekly" | "daily" | "swap" | "daily_off" | "employee" | "default";
+            /** Swap Request Id */
+            swap_request_id?: number | null;
+            /** Work End */
+            work_end?: string | null;
+            /** Work Start */
+            work_start?: string | null;
+        };
+        /** GridRotationRefOut */
+        GridRotationRefOut: {
+            /** Rotation Id */
+            rotation_id: number;
+            /** Row Label */
+            row_label?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Week Label */
+            week_label?: string | null;
+        };
         /** GridRowOut */
         GridRowOut: {
             /** Deduction Disciplinary */
@@ -32125,6 +32435,19 @@ export interface components {
             status: string;
             /** Total Amount */
             total_amount: string;
+        };
+        /** GridShiftTypeOut */
+        GridShiftTypeOut: {
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Shift Type Id */
+            shift_type_id: number;
+            /** Work End */
+            work_end: string;
+            /** Work Start */
+            work_start: string;
         };
         /** GrowthBookBatchItemOut */
         GrowthBookBatchItemOut: {
@@ -45710,6 +46033,35 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** ScheduleAttendanceGridOut */
+        ScheduleAttendanceGridOut: {
+            caller: components["schemas"]["GridCallerOut"];
+            /** Cells */
+            cells: components["schemas"]["GridCellOut"][];
+            /** Days */
+            days: components["schemas"]["GridDayOut"][];
+            /** Employees */
+            employees: components["schemas"]["GridEmployeeOut"][];
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Groups */
+            groups: components["schemas"]["GridGroupOut"][];
+            /** Shift Types */
+            shift_types: components["schemas"]["GridShiftTypeOut"][];
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+        };
         /**
          * ScheduleDayItem
          * @description my-schedule 內某一日的排班資訊。
@@ -56609,6 +56961,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfirmShiftsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_reconciliation_batch_api_attendance_reconciliation_confirm_shift_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmShiftBatchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmShiftBatchOut"];
                 };
             };
             /** @description Validation Error */
@@ -80629,6 +81014,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SalarySnapshotDiffOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_attendance_grid_api_schedule_attendance_grid_get: {
+        parameters: {
+            query: {
+                end_date: string;
+                start_date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleAttendanceGridOut"];
                 };
             };
             /** @description Validation Error */
