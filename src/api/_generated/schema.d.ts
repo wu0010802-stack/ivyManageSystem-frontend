@@ -5320,6 +5320,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/classroom-year-plans/{plan_id}/carry-over-teachers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Carry Over Teachers
+         * @description 沿用原班老師：草稿班空著的班導／副班導／美語老師，依來源班現任老師帶入。
+         *
+         *     只填空格、不覆蓋已指派；來源老師已停用者略過；班導／副班導已在其他草稿班
+         *     擔任班導或副班導者略過（避免一鍵帶出 teacher_duplicate）。美語老師可跨班。
+         *     沒有任何可填的空格時不遞增 version。
+         */
+        post: operations["post_carry_over_teachers_api_classroom_year_plans__plan_id__carry_over_teachers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/classroom-year-plans/{plan_id}/classes": {
         parameters: {
             query?: never;
@@ -37786,6 +37810,26 @@ export interface components {
             /** Base Version */
             base_version: number;
         };
+        /** PlanCarryOverTeachersRequest */
+        PlanCarryOverTeachersRequest: {
+            /** Base Version */
+            base_version: number;
+        };
+        /**
+         * PlanCarryOverTeachersResultOut
+         * @description 沿用原班老師結果：filled＝實際填入的空格數；skipped_inactive＝來源老師已停用；
+         *     skipped_conflict＝來源班導／副班導已在其他草稿班擔任班導／副班導。
+         */
+        PlanCarryOverTeachersResultOut: {
+            /** Filled */
+            filled: number;
+            /** Skipped Conflict */
+            skipped_conflict: number;
+            /** Skipped Inactive */
+            skipped_inactive: number;
+            /** Version */
+            version: number;
+        };
         /**
          * PlanClassOut
          * @description 草稿內單一班級（尚未寫入 `classrooms`）。
@@ -47249,6 +47293,13 @@ export interface components {
         StatusOut: {
             /** Applied At */
             applied_at?: string | null;
+            /** Applies Immediately */
+            applies_immediately: boolean;
+            /**
+             * Apply Date
+             * Format: date
+             */
+            apply_date: string;
             /** Apply Overdue */
             apply_overdue: boolean;
             /** Blocking Count */
@@ -58598,6 +58649,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanStateResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_carry_over_teachers_api_classroom_year_plans__plan_id__carry_over_teachers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanCarryOverTeachersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanCarryOverTeachersResultOut"];
                 };
             };
             /** @description Validation Error */
