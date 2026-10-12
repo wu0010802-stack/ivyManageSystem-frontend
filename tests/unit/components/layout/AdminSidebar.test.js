@@ -121,12 +121,19 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(changesItem.text()).toContain('修改紀錄')
   })
 
-  it('「報表」含月度幼生在園統計 /admin/gov-reports/monthly', async () => {
+  it('政府報表五頁不在側欄（2026-10-12 業主指示暫時下架，路由保留）', async () => {
     const wrapper = await mountSidebar()
-    const item = wrapper.find('[data-index="/admin/gov-reports/monthly"]')
-    expect(item.exists()).toBe(true)
-    // 原「月度月報」疊詞且未說是什麼月報（實為教育部幼生通報），2026-07-28 命名稽核改名
-    expect(item.text()).toContain('月度幼生在園統計')
+    for (const path of [
+      '/admin/gov-reports/monthly',
+      '/admin/gov-reports/certificates',
+      '/admin/gov-reports/subsidies',
+      '/admin/gov-reports/iep',
+      '/gov-reports',
+    ]) {
+      expect(wrapper.find(`[data-index="${path}"]`).exists()).toBe(false)
+    }
+    expect(wrapper.text()).not.toContain('月度幼生在園統計')
+    expect(wrapper.text()).not.toContain('勞健保與稅務申報')
   })
 
   it('「系統設定」不再含考核管理（已整併至人事薪資「考核與年終」）', async () => {
