@@ -158,4 +158,66 @@ describe('useScheduleGrid', () => {
     expect(state.weeklyValue(1)).toBe(2)
     expect(api.saveAssignments).not.toHaveBeenCalled()
   })
+
+  it('週排班儲存失敗（非 409）：回傳錯誤訊息、保留已拆分的批次確認、該批員工留在緩衝', async () => {
+    const { state } = await loaded(recordedWeek())
+    state.setWeekly(2, 2) // 部分已打卡：產生 units、每日調整成功
+    state.setWeekly(1, 2) // 整週未打卡：走週排班
+    api.saveAssignments.mockRejectedValueOnce({ response: { status: 500 }, displayMessage: '伺服器錯誤' })
+
+    const outcome = await state.save()
+
+    expect(outcome.units.length).toBeGreaterThan(0)
+    expect(outcome.errors).toContain('伺服器錯誤')
+    expect(state.weeklyEdits.value).toHaveProperty('1')
+    expect(state.weeklyEdits.value).not.toHaveProperty('2')
+  })
+
+  it('儲存途中換週：停止送出寫入、不送 undefined 班別，並回報已取消', async () => {
+    const { state, weekStart } = await loaded(recordedWeek())
+    state.setWeekly(2, 2) // 每日調整：第一天 saveDaily 會被掛住
+    state.setWeekly(1, 2) // 週排班：換週後不得送出
+    let resolveDaily: (v: unknown) => void = () => {}
+    api.saveDaily.mockImplementationOnce(() => new Promise((r) => { resolveDaily = r }))
+
+    const pending = state.save()
+    await flushPromises()
+    weekStart.value = '2026-10-19'
+    await flushPromises()
+    resolveDaily({ data: {} })
+    const outcome = await pending
+
+    expect(api.saveAssignments).not.toHaveBeenCalled()
+    expect(outcome.errors).toContain('儲存途中切換了週次，尚未送出的變更已取消')
+  })
+
+  it('複製途中換週：回傳 0，不寫入新週緩衝', async () => {
+    const { state, weekStart } = await loaded()
+    let resolveCopy: (v: unknown) => void = () => {}
+    api.getAssignments.mockReturnValueOnce(new Promise((r) => { resolveCopy = r }))
+
+    const pending = state.copyFromWeek('2026-09-07')
+    weekStart.value = '2026-10-19'
+    await flushPromises()
+    resolveCopy({ data: [assignment(1, 2)] })
+    const copied = await pending
+
+    expect(copied).toBe(0)
+    expect(state.pendingCount.value).toBe(0)
+  })
+
+  it('409 後重新載入失敗：不重試，提示重新整理', async () => {
+    const { state } = await loaded()
+    state.setWeekly(1, 2)
+    api.saveAssignments.mockRejectedValueOnce({
+      response: { status: 409 },
+      displayMessage: '部分員工該週已有出勤紀錄，請至「班表與打卡核對」逐日確認班別',
+    })
+    api.grid.mockRejectedValueOnce(new Error('network'))
+
+    const outcome = await state.save()
+
+    expect(api.saveAssignments).toHaveBeenCalledTimes(1)
+    expect(outcome.errors.some((msg) => msg.includes('重新載入失敗'))).toBe(true)
+  })
 })
