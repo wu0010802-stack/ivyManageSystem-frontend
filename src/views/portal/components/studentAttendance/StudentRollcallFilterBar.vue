@@ -145,4 +145,11 @@ function pick(key: RollcallFilter | 'all') {
     min-height: var(--touch-target-min, 44px);
   }
 }
+
+/* 觸控裝置（含平板，2026-10-12 列為正式裝置）：篩選 chip 一律 44px，不只窄幕 */
+@media (pointer: coarse) {
+  .filter-chip {
+    min-height: var(--touch-target-min, 44px);
+  }
+}
 </style>

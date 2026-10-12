@@ -77,6 +77,19 @@ const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(false)
 const isSidebarCollapsed = computed(() => sidebarCollapsed.value && !isMobile.value)
 
+// 平板寬度（768–1023，2026-10-12 業主裁定列為正式裝置）側欄預設收成圖示列：
+// 直式 iPad（810px）常駐 200px 側欄會吃掉四分之一寬。使用者自己切換過就尊重他的選擇。
+const TABLET_QUERY = '(min-width: 768px) and (max-width: 1023.98px)'
+let userToggledSidebar = false
+let tabletMql: MediaQueryList | null = null
+function toggleSidebarCollapsed() {
+  userToggledSidebar = true
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
+function onTabletChange(e: { matches: boolean }) {
+  if (!userToggledSidebar) sidebarCollapsed.value = e.matches
+}
+
 watch(isMobile, (m) => {
   if (!m) sidebarOpen.value = false
 })
@@ -240,6 +253,11 @@ const dismissInstallBanner = () => {
 }
 
 onMounted(() => {
+  tabletMql = typeof window.matchMedia === 'function' ? window.matchMedia(TABLET_QUERY) : null
+  if (tabletMql) {
+    onTabletChange(tabletMql)
+    tabletMql.addEventListener?.('change', onTabletChange)
+  }
   // portal 品牌色 scope（soft-ui.css 的 html.ivy-portal 區塊，EP primary 收斂 indigo）；
   // 比照 AdminLayout 的 ivy-admin：掛在 <html> 讓 teleport 到 body 的 dialog/sheet 也吃到
   document.documentElement.classList.add('ivy-portal')
@@ -281,6 +299,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  tabletMql?.removeEventListener?.('change', onTabletChange)
   document.documentElement.classList.remove('ivy-portal')
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
   window.removeEventListener('portal-attendance-confirm-count-changed', onAttendanceConfirmChanged)
@@ -390,7 +409,7 @@ const submitPassword = async () => {
           :aria-label="isSidebarCollapsed ? '展開側邊欄' : '收合側邊欄'"
           :aria-expanded="!isSidebarCollapsed"
           aria-controls="portal-sidebar"
-          @click="sidebarCollapsed = !sidebarCollapsed"
+          @click="toggleSidebarCollapsed"
         >
           <el-icon v-if="isSidebarCollapsed"><Expand /></el-icon>
           <el-icon v-else><Fold /></el-icon>
@@ -1273,6 +1292,23 @@ html.dark .portal-layout {
 @media (min-width: 768px) {
   .bottom-nav {
     display: none;
+  }
+}
+
+/* 平板（768–1023）：直式 iPad 內容只剩約 600px，頁首收掉系統名稱、姓名文字與搜尋鈕文字，
+   原本搜尋鈕折成兩行、姓名直排（2026-10-12 實跑）。頭像選單與搜尋圖示仍在。 */
+@media (--bp-sm) and (--to-md) {
+  .portal-header__system,
+  .user-name,
+  .psp-trigger-label,
+  .psp-trigger-kbd {
+    display: none;
+  }
+  .psp-trigger-portal {
+    min-width: var(--touch-target-min, 44px);
+    min-height: var(--touch-target-min, 44px);
+    justify-content: center;
+    padding: 6px;
   }
 }
 

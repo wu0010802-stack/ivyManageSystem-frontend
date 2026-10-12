@@ -127,4 +127,11 @@ defineEmits<{
   gap: var(--space-2, 8px);
   align-items: center;
 }
+
+/* 觸控裝置（含平板）：批次流程三顆按鈕拉到 44px（原本 32px，iPad 上容易點偏） */
+@media (pointer: coarse) {
+  .batch-bar__actions :deep(.el-button) {
+    min-height: var(--touch-target-min, 44px);
+  }
+}
 </style>

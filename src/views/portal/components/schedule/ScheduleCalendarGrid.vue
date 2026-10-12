@@ -171,18 +171,12 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
   outline-offset: -2px;
 }
 
-@media (--to-sm) {
-  .calendar-cell {
-    min-height: 65px;
-    /* 390px 寬一格約 45px：左右只留 2px，三字班別（無值週）才放得下不被截斷 */
-    padding: 4px 2px;
-    font-size: 12px;
-  }
-
+/* 1024 以下（平板直式一格約 80px、手機約 45px）：「08:30~18:00」單行放不下，
+   起訖拆兩行、隱藏「~」，班別過長省略（2026-10-12 平板驗收：原本被截成「16:3」） */
+@media (--to-md) {
   .cell-time {
     display: flex;
     flex-direction: column;
-    font-size: 11px;
     line-height: 1.3;
     font-variant-numeric: tabular-nums;
   }
@@ -192,10 +186,26 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
   }
 
   .cell-shift {
-    font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+}
+
+@media (--to-sm) {
+  .calendar-cell {
+    min-height: 65px;
+    /* 390px 寬一格約 45px：左右只留 2px，三字班別（無值週）才放得下不被截斷 */
+    padding: 4px 2px;
+    font-size: 12px;
+  }
+
+  .cell-shift {
+    font-size: 12px;
+  }
+
+  .cell-time {
+    font-size: 11px;
   }
 
   .cell-swap-btn-wrap {

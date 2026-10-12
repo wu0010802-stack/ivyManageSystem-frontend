@@ -293,6 +293,11 @@ function onRemarkChange(student: RollcallStudent, value: string) {
     min-height: var(--touch-target-min, 44px);
     min-width: var(--touch-target-min, 44px);
   }
+
+  .rollcall-actions :deep(.el-button),
+  .remark-toggle {
+    min-height: var(--touch-target-min, 44px);
+  }
 }
 
 .empty-state {
