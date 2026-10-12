@@ -285,6 +285,44 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.find('.remedial-banner').exists()).toBe(false)
   })
 
+  it('大班留級：側欄勾選畢業生 → 批次列拿到該生資訊，標記留級帶正確 payload', async () => {
+    const detail = detailDraftWithClasses({
+      classes: [
+        {
+          id: 10, source_name: '大班舊', target_name: '玫瑰', target_grade_id: 1, grade_name: '大班',
+          capacity: 30, class_code: '大1', head_teacher_id: null, head_teacher_name: null,
+          assistant_teacher_id: null, assistant_teacher_name: null, art_teacher_id: null, art_teacher_name: null,
+          assigned_count: 0,
+        },
+      ],
+      students: [
+        { id: 7, student_id: 'S007', name: '大寶', source_classroom_name: '天堂鳥', plan_class_id: null, disposition: 'graduate', exclude_reason: null, manually_adjusted: false, current_grade_name: '大班' },
+      ],
+    })
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detail)
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+
+    const w = mountView()
+    await flushPromises()
+    w.findComponent(PlanSidePanel).vm.$emit('set-selected', [7], true)
+    await flushPromises()
+
+    const toolbar = w.findComponent(PlanBatchToolbar)
+    expect(toolbar.props('selectedStudents')).toEqual([
+      expect.objectContaining({ id: 7, disposition: 'graduate', current_grade_name: '大班' }),
+    ])
+    expect(toolbar.props('planClasses')).toEqual([{ id: 10, label: '大班 玫瑰', gradeName: '大班' }])
+
+    const vm = toolbar.vm as unknown as { retainTargetId: number | null; applyRetain: () => void }
+    vm.retainTargetId = 10
+    vm.applyRetain()
+    await flushPromises()
+    expect(mockBulkStudents).toHaveBeenCalledWith(5, {
+      base_version: 1, op: 'retain', student_ids: [7], plan_class_id: 10, exclude_reason: null,
+    })
+  })
+
   it('初次載入失敗（沒有 plan）才顯示錯誤畫面與重新載入鈕', async () => {
     mockStatus.mockRejectedValueOnce({ response: { status: 500 }, displayMessage: '伺服器錯誤' })
     const w = mountView()

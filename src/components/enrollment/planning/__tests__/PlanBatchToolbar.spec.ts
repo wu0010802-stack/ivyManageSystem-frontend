@@ -6,21 +6,27 @@ import PlanBatchToolbar from '../PlanBatchToolbar.vue'
 interface ToolbarVm {
   assignTargetId: number | null
   retainTargetId: number | null
+  retainOptions: Array<{ id: number; label: string }>
+  assignGroups: Array<{ gradeName: string; options: Array<{ id: number; label: string }> }>
   applyAssign: () => void
   applyRetain: () => void
   applyExclude: () => Promise<void>
   applyReset: () => Promise<void>
 }
 
-function mountToolbar(props: Partial<{ selectedCount: number; disabled: boolean }> = {}) {
+interface SelectedStudent { id: number; disposition: string; current_grade_name: string | null }
+
+function mountToolbar(props: Partial<{ selectedCount: number; disabled: boolean; selectedStudents: SelectedStudent[] }> = {}) {
   return mount(PlanBatchToolbar, {
     attachTo: document.body,
     global: { plugins: [ElementPlus] },
     props: {
       selectedCount: 2,
       planClasses: [
-        { id: 10, label: '小班A' },
-        { id: 11, label: '中班A' },
+        { id: 10, label: '小班A', gradeName: '小班' },
+        { id: 11, label: '中班A', gradeName: '中班' },
+        { id: 12, label: '大班A', gradeName: '大班' },
+        { id: 13, label: '大班B', gradeName: '大班' },
       ],
       ...props,
     },
@@ -112,6 +118,54 @@ describe('PlanBatchToolbar', () => {
     const w = mountToolbar({ selectedCount: 5, disabled: true })
     const selects = w.findAllComponents({ name: 'ElSelect' })
     expect(selects[0].props('disabled')).toBe(true)
+  })
+
+  it('「移至班級」選項依年級分組', () => {
+    const w = mountToolbar()
+    expect(vmOf(w).assignGroups.map(g => [g.gradeName, g.options.map(o => o.id)])).toEqual([
+      ['小班', [10]], ['中班', [11]], ['大班', [12, 13]],
+    ])
+  })
+
+  it('所選含畢業生：「移至班級」停用並提示改用「標記留級」（一般分派會被 7/31 畢業掉）', () => {
+    const w = mountToolbar({
+      selectedCount: 1,
+      selectedStudents: [{ id: 3, disposition: 'graduate', current_grade_name: '大班' }],
+    })
+    const assignSelect = w.findAllComponents({ name: 'ElSelect' })[0]
+    expect(assignSelect.props('disabled')).toBe(true)
+    expect(w.find('.toolbar-hint').text()).toContain('標記留級')
+  })
+
+  it('「標記留級」只列與所選學生現況年級相同的班', () => {
+    const w = mountToolbar({
+      selectedCount: 2,
+      selectedStudents: [
+        { id: 3, disposition: 'graduate', current_grade_name: '大班' },
+        { id: 4, disposition: 'graduate', current_grade_name: '大班' },
+      ],
+    })
+    expect(vmOf(w).retainOptions.map(o => o.id)).toEqual([12, 13])
+    expect(w.findAllComponents({ name: 'ElSelect' })[1].props('disabled')).toBe(false)
+  })
+
+  it('所選學生現況年級不同：「標記留級」停用並說明原因', () => {
+    const w = mountToolbar({
+      selectedCount: 2,
+      selectedStudents: [
+        { id: 3, disposition: 'graduate', current_grade_name: '大班' },
+        { id: 5, disposition: 'promote', current_grade_name: '中班' },
+      ],
+    })
+    expect(w.findAllComponents({ name: 'ElSelect' })[1].props('disabled')).toBe(true)
+    expect(w.find('.toolbar-hint').text()).toContain('年級不同')
+  })
+
+  it('排除的說明講清楚：不參與編班、不會辦理離園', async () => {
+    const promptSpy = vi.spyOn(ElMessageBox, 'prompt').mockRejectedValue('cancel')
+    const w = mountToolbar()
+    await vmOf(w).applyExclude()
+    expect(String(promptSpy.mock.calls[0][0])).toContain('不會辦理離園')
   })
 
   it('點「清除選取」emit clear-selection', async () => {

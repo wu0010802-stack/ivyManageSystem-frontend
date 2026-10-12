@@ -75,6 +75,7 @@
           class="batch-toolbar"
           :selected-count="selectedStudentIds.length"
           :plan-classes="planClassOptions"
+          :selected-students="selectedStudents"
           :disabled="loading"
           @bulk-op="onBulkOp"
           @clear-selection="clearSelection"
@@ -401,7 +402,13 @@ const planClassOptions = computed(() =>
   (plan.value?.classes ?? []).map(c => ({
     id: c.id,
     label: `${c.grade_name ?? ''} ${c.target_name}`.trim(),
+    gradeName: c.grade_name ?? null,
   })),
+)
+
+// 批次列依所選學生（含畢業／排除名單勾選）判斷可用的操作
+const selectedStudents = computed(() =>
+  (plan.value?.students ?? []).filter(s => selectedSet.value.has(s.id)),
 )
 
 async function onBulkOp(payload: {

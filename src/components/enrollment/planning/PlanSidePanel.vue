@@ -45,23 +45,42 @@
       </ul>
     </section>
 
+    <!-- 畢業／排除名單可勾選：大班留級（勾畢業生→標記留級）與取消排除（勾排除生→
+         還原建議／移至班級）唯一的入口；預設收合避免長名單撐高側欄 -->
     <el-collapse v-model="openSections" class="buckets-collapse">
-      <el-collapse-item name="graduate" class="graduate-bucket" :title="`畢業名單（${graduateStudents.length}）`">
+      <el-collapse-item
+        v-for="bucket in buckets"
+        :key="bucket.key"
+        :name="bucket.key"
+        :class="`${bucket.key}-bucket`"
+      >
+        <template #title>
+          <span class="bucket-title">
+            <el-checkbox
+              v-if="editable && bucket.students.length"
+              class="bucket-select-all"
+              :aria-label="`全選${bucket.label}`"
+              :model-value="bucketAllSelected(bucket.students)"
+              :indeterminate="bucketSomeSelected(bucket.students) && !bucketAllSelected(bucket.students)"
+              @click.stop
+              @change="(val: string | number | boolean) => emit('set-selected', bucket.students.map(s => s.id), Boolean(val))"
+            />
+            <span>{{ bucket.label }}（{{ bucket.students.length }}）</span>
+          </span>
+        </template>
         <ul class="bucket-list">
-          <li v-for="s in graduateStudents" :key="s.id">
-            <span class="student-name">{{ s.name }}</span>
-            <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
-          </li>
-        </ul>
-      </el-collapse-item>
-      <el-collapse-item name="exclude" class="exclude-bucket" :title="`排除名單（${excludeStudents.length}）`">
-        <ul class="bucket-list">
-          <li v-for="s in excludeStudents" :key="s.id">
+          <li v-for="s in bucket.students" :key="s.id" class="bucket-row" :data-student-id="s.id">
+            <el-checkbox
+              v-if="editable"
+              :model-value="selectedIds.has(s.id)"
+              @change="(val: string | number | boolean) => emit('set-selected', [s.id], Boolean(val))"
+            />
             <span class="student-name">{{ s.name }}</span>
             <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
             <span v-if="s.exclude_reason" class="exclude-reason">（{{ s.exclude_reason }}）</span>
           </li>
         </ul>
+        <p v-if="editable && bucket.students.length" class="bucket-hint">{{ bucket.hint }}</p>
       </el-collapse-item>
     </el-collapse>
   </aside>
@@ -98,6 +117,29 @@ const unassignedStudents = computed(() =>
 )
 const graduateStudents = computed(() => props.plan.students.filter(s => s.disposition === 'graduate'))
 const excludeStudents = computed(() => props.plan.students.filter(s => s.disposition === 'exclude'))
+
+const buckets = computed(() => [
+  {
+    key: 'graduate',
+    label: '畢業名單',
+    students: graduateStudents.value,
+    hint: '要續讀的大班生：勾選後用「標記留級」放進大班。',
+  },
+  {
+    key: 'exclude',
+    label: '排除名單',
+    students: excludeStudents.value,
+    hint: '勾選後用「還原建議」或「移至班級」放回編班。',
+  },
+])
+
+function bucketAllSelected(students: PlanStudent[]): boolean {
+  return students.length > 0 && students.every(s => props.selectedIds.has(s.id))
+}
+
+function bucketSomeSelected(students: PlanStudent[]): boolean {
+  return students.some(s => props.selectedIds.has(s.id))
+}
 
 // ── 搜尋 + 全選（全選只作用於 filter 後可見集合，避免誤選看不到的人）──
 const searchQuery = ref('')
@@ -247,10 +289,23 @@ const openSections = ref<string[]>([])
   overflow-y: auto;
 }
 
-.bucket-list li {
+.bucket-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
+}
+
+.bucket-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+.bucket-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 @keyframes flash-highlight {
