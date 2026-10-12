@@ -40,7 +40,7 @@ const BASELINE = {
   brand: 196,
   ivy: 29,
   m3: 385,
-  neutral: 283,
+  neutral: 281,
   pt: 867,
 };
 

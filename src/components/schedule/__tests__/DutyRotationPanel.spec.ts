@@ -33,7 +33,7 @@ vi.mock('@/stores/academicTerm', () => ({
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DutyRotationPanel from '../DutyRotationPanel.vue'
 
-// 比照 src/views/__tests__/ScheduleView.test.ts 的 stub 慣例
+// 比照原排班頁測試的 stub 慣例
 const globalConfig = {
   stubs: {
     'el-button': {

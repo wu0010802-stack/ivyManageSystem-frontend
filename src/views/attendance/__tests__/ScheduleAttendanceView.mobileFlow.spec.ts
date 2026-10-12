@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }), useRoute: () => ({ query: {} }) }))
 
 const getSummaryMock = vi.fn()
 const getAnomalyListMock = vi.fn()
@@ -29,7 +29,7 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 
-import AttendanceWorkspaceView from '../AttendanceWorkspaceView.vue'
+import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
 
 // el-tabs stub：保留 v-model 契約（modelValue + update:modelValue），
 // 這正是本次要驗的東西——原本的 el-tabs 沒有接 v-model，選取後不會換頁。
@@ -64,10 +64,22 @@ const DetailColumnStub = {
   template: '<div class="detail-column-stub" />',
 }
 
-const ReconciliationPanelStub = { name: 'ReconciliationPanel', props: ['revision'], template: '<div />' }
+const ScheduleGridPanelStub = {
+  name: 'ScheduleGridPanel',
+  props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
+  emits: ['records', 'import', 'changed', 'update:date', 'update:filter'],
+  template: '<div class="grid-panel-stub" />',
+}
+const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['date', 'revision', 'mobile'], emits: ['show-issues'], template: '<div class="month-progress-stub" />' }
+const SHELL_STUBS = {
+  ScheduleGridPanel: ScheduleGridPanelStub,
+  MonthProgressBar: MonthProgressBarStub,
+  DutyRotationPanel: { name: 'DutyRotationPanel', template: '<div class="rotation-stub" />' },
+  SwapHistoryPanel: { name: 'SwapHistoryPanel', template: '<div class="swaps-stub" />' },
+}
 const STUBS = {
   ElDrawer: { props: ['modelValue'], template: '<section data-test="anomaly-drawer" :data-open="String(modelValue)"><slot /></section>' },
-  ReconciliationPanel: ReconciliationPanelStub,
+  ...SHELL_STUBS,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,
   DetailColumn: DetailColumnStub,
@@ -87,9 +99,9 @@ const sampleAnomalies = [
   { id: 11, employee_name: '李小花', employee_number: 'E002', date: '2026-06-10', weekday: '三', type: 'missing_punch', type_label: '未打卡', detail: '缺出勤打卡', estimated_deduction: 0, confirmed_action: null },
 ]
 
-const mountView = () => mount(AttendanceWorkspaceView, { global: { stubs: STUBS } })
+const mountView = () => mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
 
-describe('AttendanceWorkspaceView 手機三段流程', () => {
+describe('ScheduleAttendanceView 手機三段流程', () => {
   beforeEach(() => {
     mockIsMobile.value = true
     getSummaryMock.mockReset().mockResolvedValue({ data: sampleRoster })
@@ -99,14 +111,15 @@ describe('AttendanceWorkspaceView 手機三段流程', () => {
     getRecordsMock.mockReset().mockResolvedValue({ data: [] })
   })
 
-  it.each([true, false])('批次處理成功會使核對版本失效（手機=%s）', async (mobile) => {
+  it.each([true, false])('批次處理成功會讓格子與本月進度重算（手機=%s）', async (mobile) => {
     mockIsMobile.value = mobile
-    const wrapper = mount(AttendanceWorkspaceView, { props: { defaultReconcile: true }, global: { stubs: STUBS } })
+    const wrapper = mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
     await flushPromises()
-    expect(wrapper.findComponent(ReconciliationPanelStub).props('revision')).toBe(0)
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(0)
     await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('resolved')
     await flushPromises()
-    expect(wrapper.findComponent(ReconciliationPanelStub).props('revision')).toBe(1)
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(1)
+    expect(wrapper.findComponent(MonthProgressBarStub).props('revision')).toBe(1)
     wrapper.unmount()
   })
 

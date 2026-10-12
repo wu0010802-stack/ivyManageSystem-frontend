@@ -1,7 +1,7 @@
 vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }) }))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import AttendanceWorkspaceView from '../AttendanceWorkspaceView.vue'
+import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
 
 // ── deferred helper：手動控制回應時序（模擬慢請求）─────────────────────────
 function deferred<T>() {
@@ -18,7 +18,8 @@ interface RecordRow {
 }
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRoute: () => ({ query: {} }),
 }))
 
 const getSummaryMock = vi.fn()
@@ -37,9 +38,10 @@ vi.mock('@/utils/auth', () => ({
   hasFullSalaryView: () => false, hasPermission: () => true,
 }))
 
-vi.mock('@/composables/useIsMobile', () => ({
-  useIsMobile: () => ({ isMobile: { value: false }, cleanup: () => {} }),
-}))
+vi.mock('@/composables/useIsMobile', async () => {
+  const { ref } = await import('vue')
+  return { useIsMobile: () => ({ isMobile: ref(false), cleanup: () => {} }) }
+})
 
 vi.mock('@/composables/useErrorNotify', () => ({
   useErrorNotify: () => ({ notify: vi.fn() }),
@@ -87,6 +89,8 @@ const WorkspaceHeaderStub = {
 }
 
 const STUBS = {
+  ScheduleGridPanel: true,
+  MonthProgressBar: true,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,
   DetailColumn: DetailColumnStub,
@@ -108,7 +112,7 @@ const sampleAnomalies = [
 // 下渲染；整月明細由 EmployeeMonthPanel 自己抓同一支 API（2026-09-11 起不再兩邊都抓）。
 // 因此本檔的快取競態驗證一律先切到 resolve 模式再進行。
 const mountView = async () => {
-  const wrapper = mount(AttendanceWorkspaceView, {
+  const wrapper = mount(ScheduleAttendanceView, {
     global: { stubs: STUBS },
     attachTo: document.body,
   })
@@ -118,7 +122,7 @@ const mountView = async () => {
   return wrapper
 }
 
-describe('AttendanceWorkspaceView 員工月記錄快取請求競態', () => {
+describe('ScheduleAttendanceView 員工月記錄快取請求競態', () => {
   beforeEach(() => {
     getSummaryMock.mockReset()
     getAnomalyListMock.mockReset()

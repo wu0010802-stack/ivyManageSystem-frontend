@@ -5,11 +5,8 @@ import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo,
 import { captureException } from '@/utils/sentry'
 import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
+import { attendanceRouteProps, isValidDateQuery } from './attendanceRouteProps'
 
-// /attendance、/schedule 深連結的 date query 驗證（2026-09-10 hub 拆分後兩路由各自使用）。
-function isValidDateQuery(value: unknown): value is string {
-    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00`))
-}
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
 function resolveLegacySectionQuery(to: RouteLocation): RouteLocationRaw | null {
@@ -234,19 +231,11 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/attendance',
             name: 'attendance',
-            component: () => import('../views/attendance/AttendanceWorkspaceView.vue'),
-            // 2026-09-10 拆分：/attendance、/schedule 各自獨立側欄項目，不再共用 hub 頁。
-            // initialDate 只承接舊連結／班表頁「前往班表與打卡核對」帶來的深連結；
-            // tab=reconcile|records 由該按鈕明確指定要開哪一分頁，未帶則依權限預設。
-            props: (route) => ({
-                initialDate: isValidDateQuery(route.query.date) ? route.query.date : undefined,
-                defaultReconcile: route.query.tab === 'reconcile'
-                    ? true
-                    : route.query.tab === 'records'
-                        ? false
-                        : hasPermission('SCHEDULE') && hasPermission('ATTENDANCE_READ'),
-            }),
-            meta: { title: '出勤管理' }
+            component: () => import('../views/attendance/ScheduleAttendanceView.vue'),
+            // 2026-10 SPEC-027：排班與出勤合併成單一頁（推翻 2026-09-10 拆成兩個側欄項目）。
+            // query：tab=grid|records|rotation|swaps、date、emp、filter；舊 tab=reconcile 相容。
+            props: (route) => attendanceRouteProps(route.query),
+            meta: { title: '排班與出勤' }
         },
         {
             path: '/leaves',
@@ -261,13 +250,13 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: PAGE_TERMS.overtime }
         },
         {
+            // 舊「排班管理」入口（書籤／外部連結相容）：併入排班與出勤的班表核對，保留 date。
+            // 刻意不掛 name 與 meta.title：全域搜尋掃 meta.title，同名會讓結果重複。
             path: '/schedule',
-            name: 'schedule',
-            component: () => import('../views/ScheduleView.vue'),
-            props: (route) => ({
-                initialDate: isValidDateQuery(route.query.date) ? route.query.date : undefined,
+            redirect: (to) => ({
+                path: '/attendance',
+                query: { ...(isValidDateQuery(to.query.date) ? { date: to.query.date } : {}), tab: 'grid' },
             }),
-            meta: { title: '排班管理' }
         },
         {
             path: '/salary',

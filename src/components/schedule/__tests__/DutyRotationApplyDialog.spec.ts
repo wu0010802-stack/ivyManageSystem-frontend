@@ -51,7 +51,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-// 比照 src/views/__tests__/ScheduleView.test.ts 的 stub 慣例（EP 元件在測試不註冊）
+// 比照原排班頁測試的 stub 慣例（EP 元件在測試不註冊）
 const globalConfig = {
   stubs: {
     'el-dialog': {

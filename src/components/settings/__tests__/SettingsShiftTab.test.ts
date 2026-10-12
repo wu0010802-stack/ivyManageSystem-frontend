@@ -235,9 +235,9 @@ describe('SettingsShiftTab', () => {
     expect(mockUpdate).toHaveBeenCalledWith(1, { is_active: false })
   })
 
-  it('前往排班管理', async () => {
+  it('前往排班與出勤（班表核對頁籤）', async () => {
     const wrapper = await mountTab()
     await wrapper.find('[data-test="go-schedule"]').trigger('click')
-    expect(routerPush).toHaveBeenCalledWith('/schedule')
+    expect(routerPush).toHaveBeenCalledWith({ path: '/attendance', query: { tab: 'grid' } })
   })
 })

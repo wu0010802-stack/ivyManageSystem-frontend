@@ -208,14 +208,14 @@ const handleDeleteShift = async (row: ShiftTypeRow) => {
   }
 }
 
-const goSchedule = () => router.push('/schedule')
+const goSchedule = () => router.push({ path: '/attendance', query: { tab: 'grid' } })
 </script>
 
 <template>
   <div>
     <div class="tab-header">
       <el-button v-if="canWrite" type="primary" @click="handleAddShift">新增班別</el-button>
-      <el-button data-test="go-schedule" @click="goSchedule">前往排班管理</el-button>
+      <el-button data-test="go-schedule" @click="goSchedule">前往排班與出勤</el-button>
     </div>
     <el-table :data="rows" v-loading="loading" style="width: 100%; margin-top: 20px;">
       <el-table-column prop="sort_order" label="排序" width="72" sortable />

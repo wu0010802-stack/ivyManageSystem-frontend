@@ -265,16 +265,13 @@ export const NAVIGATION_MANIFEST = {
           ],
         },
         {
-          // 2026-09-10 拆回獨立側欄項目（原 2026-09-06 共用入口決定反轉，見 UI/UX 審查）：
-          // 出勤管理只剩「打卡核對」「出勤明細」兩頁籤，班表獨立見下方 schedule。
-          key: 'attendance', title: '出勤管理', routePath: '/attendance',
-          views: [{ code: 'ATTENDANCE_READ' }],
+          // 2026-10 SPEC-027：排班與出勤合併成單一側欄項目（推翻 2026-09-10 拆分）。
+          // SCHEDULE 或 ATTENDANCE_READ 任一即可開頁；頁籤與動作再依權限顯示。
+          // SCHEDULE 原屬已退場的 /schedule 頁，改由本頁主屬（views），不用 sharedViews
+          //（sharedViews 只能借道「別處已主屬」的碼，否則 M3 不變式紅）。
+          key: 'attendance', title: '排班與出勤', routePath: '/attendance',
+          views: [{ code: 'ATTENDANCE_READ' }, { code: 'SCHEDULE' }],
           actions: [{ code: 'ATTENDANCE_WRITE' }],
-          menu: { icon: icon('Clock') },
-        },
-        {
-          key: 'schedule', title: MODULE_TERMS.schedule, routePath: '/schedule',
-          views: [{ code: 'SCHEDULE' }],
           menu: { icon: icon('Calendar') },
         },
         {

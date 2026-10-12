@@ -221,7 +221,12 @@ const tripleKey = (r: { path: string; permission: string; prefix?: boolean }) =>
 const INTENTIONAL_DIVERGENCE = {
   // 2026-08-03 審核工作台權限細分：高風險事件分頁自 AUDIT_LOGS 拆出 HIGH_RISK_READ，
   // 否則「授高風險事件」等於連「報表 › 操作紀錄」一起授出去。
-  removedFromLegacy: ['/workbench/high-risk × AUDIT_LOGS'],
+  removedFromLegacy: [
+    '/workbench/high-risk × AUDIT_LOGS',
+    // 2026-10 SPEC-027：排班管理併入「排班與出勤」（/attendance 主屬 SCHEDULE），
+    // /schedule 改為 redirect，不再是 manifest 頁面。
+    '/schedule × SCHEDULE',
+  ],
   addedByManifest: [
     // 2026-08-20 稽核與資料品質整併：高風險事件（原 /workbench/high-risk）、操作紀錄
     //（原 /audit-logs）、資料異常待辦（原 /data-quality）合為 /governance 一頁三分頁。
@@ -246,8 +251,9 @@ const INTENTIONAL_DIVERGENCE = {
     '/platform/audit × PLATFORM_AUDIT_VIEW',
     // 2026-08-10 娃娃車乘車歷史頁新增（fixture 凍結於 2026-07-31，此路由更晚才有）。
     '/bus-history × BUS_READ',
-    // 2026-09-06 排班與出勤共用入口曾借道 SCHEDULE；2026-09-10 拆回獨立側欄項目後
-    // 移除 sharedViews，此條差異隨之消失（見 manifest.ts attendance 頁註解）。
+    // 2026-10 SPEC-027：排班與出勤合併成單一頁，/attendance 改由本頁主屬 SCHEDULE
+    //（2026-09-06 曾借道同一條、09-10 拆分時移除，本次反轉回來）。
+    '/attendance × SCHEDULE',
     // 2026-08-10 活動參加調查表（Task 13）新增（fixture 凍結於 2026-07-31，此模組更晚才有）。
     '/surveys × SURVEYS_READ × prefix',
     '/surveys/new × SURVEYS_WRITE',
