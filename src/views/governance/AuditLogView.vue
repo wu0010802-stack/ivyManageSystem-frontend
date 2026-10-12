@@ -794,6 +794,27 @@ defineExpose({ formatOperator })
   font-size: var(--text-sm);
   margin-left: var(--space-2);
 }
+
+/* 手機：快捷列不換行時「快捷時段：」被擠成逐字直排、高風險快篩鈕溢出右緣。
+   標籤與提示各占一列，鈕自動換行；link 鈕撐出觸控高度。 */
+@media (--to-sm) {
+  .quick-ranges {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+  .quick-label,
+  .risk-hint {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .quick-ranges .el-button {
+    margin-left: 0;
+  }
+  .quick-ranges .el-button.is-link {
+    min-height: 36px;
+    padding: 0 var(--space-2);
+  }
+}
 .pagination-wrapper {
   margin-top: var(--space-4);
   display: flex;

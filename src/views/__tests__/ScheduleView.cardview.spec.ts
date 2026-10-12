@@ -17,7 +17,11 @@ const fakeSwap = {
   target_responded_at: '2026-08-03 12:00',
   created_at: '2026-08-02 09:00',
 }
+const mockRoster = ref<Record<string, unknown>[]>([
+  { id: 1, name: '甲老師', is_active: true, classroom_id: 3, classroom_name: '向日葵班' },
+])
 vi.mock('@/api/shifts', () => ({
+  getScheduleRoster: vi.fn(() => Promise.resolve({ data: mockRoster.value })),
   getAssignments: vi.fn(() => Promise.resolve({ data: [] })),
   saveAssignments: vi.fn(),
   getDaily: vi.fn(() => Promise.resolve({ data: [] })),
@@ -74,5 +78,22 @@ describe('ScheduleView 手機卡片切換', () => {
     await nextTick()
     expect(w.findAllComponents({ name: 'AdminListCards' }).length).toBeGreaterThanOrEqual(2)
     expect(w.find('.el-table').exists()).toBe(false)
+  })
+
+  it('手機無可排班員工時只顯示一則 el-empty，不再與卡片空狀態重複同一句', async () => {
+    mockRoster.value = []
+    mockIsMobile.value = true
+    try {
+      const w = shallowMount(ScheduleView, { global: globalStubs })
+      await flushPromises()
+      await nextTick()
+      const cards = w.findAllComponents({ name: 'AdminListCards' })
+      // 只剩換班紀錄那組卡片；班別指派卡片不渲染（空狀態交給 el-empty）
+      expect(cards.length).toBe(1)
+      expect(cards[0].props('emptyText')).not.toContain('尚無在職員工可排班')
+      expect(w.html().split('尚無在職員工可排班').length - 1).toBe(1)
+    } finally {
+      mockRoster.value = [{ id: 1, name: '甲老師', is_active: true, classroom_id: 3, classroom_name: '向日葵班' }]
+    }
   })
 })

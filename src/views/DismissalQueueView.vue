@@ -807,6 +807,10 @@ onUnmounted(() => {
 /* 手機歷史卡片（AdminListCards，由 useIsMobile 於 --to-sm 區間接手表格）之樣式。
    刻意與上方 560px 分開：那段是 POS 三欄版的頁面 padding，斷點理由不同。 */
 @media (--to-sm) {
+  /* 桌機的 height:100% 鏈是為了三欄各自捲動；手機 POS 改單欄堆疊後交回整頁捲動 */
+  .dismissal-queue-view {
+    height: auto;
+  }
   .card-title {
     display: flex;
     align-items: center;
