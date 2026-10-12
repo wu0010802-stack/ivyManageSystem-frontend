@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Warning, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -17,7 +17,7 @@ import {
   type ClassFeatureGroup,
   type PortalPendingActions,
 } from '@/constants/portalClassFeatures'
-import type { PortalHubCounts } from '@/utils/portalHubCounts'
+import { hubPendingChips, type PortalHubCounts } from '@/utils/portalHubCounts'
 
 const { summary, loading, error, refresh } = usePortalDashboard()
 const router = useRouter()
@@ -91,9 +91,36 @@ function onFocusJump(deepLink?: string) {
   scrollToFeatures()
 }
 
+// 點「現在該做」的晶片：捲到功能格，並把有待辦數字的格子短暫標示、聚焦第一格。
+// 原本只捲動；桌機上格子就在正下方，點了像沒反應（2026-10-12 審查）。
+const spotlightKeys = ref<ReadonlySet<string>>(new Set())
+let spotlightTimer: ReturnType<typeof setTimeout> | null = null
+const SPOTLIGHT_MS = 2400
+
 function openHub() {
   scrollToFeatures()
+  const pending = new Set(
+    hubPendingChips((hubData.value?.counts ?? null) as PortalHubCounts | null).map((c) => c.key),
+  )
+  const keys = GROUPS.map((g) => g.id)
+    .flatMap((g) => featuresOf(g))
+    .filter((f) => f.badgeKey && pending.has(f.badgeKey))
+    .map((f) => f.key)
+  spotlightKeys.value = new Set(keys)
+  if (spotlightTimer) clearTimeout(spotlightTimer)
+  spotlightTimer = setTimeout(() => { spotlightKeys.value = new Set() }, SPOTLIGHT_MS)
+  if (keys.length) {
+    void nextTick(() => {
+      featuresEl.value
+        ?.querySelector<HTMLElement>(`[data-test="feature-${keys[0]}"]`)
+        ?.focus({ preventScroll: true })
+    })
+  }
 }
+
+onBeforeUnmount(() => {
+  if (spotlightTimer) clearTimeout(spotlightTimer)
+})
 
 const featuresEl = ref<HTMLElement | null>(null)
 
@@ -392,6 +419,7 @@ watch(
             :key="f.key"
             type="button"
             class="feature-tile press-scale"
+            :class="{ 'is-spotlight': spotlightKeys.has(f.key) }"
             :data-test="`feature-${f.key}`"
             @click="onFeatureClick(f)"
           >
@@ -663,6 +691,12 @@ watch(
 }
 .feature-tile:hover {
   background: var(--el-fill-color-light);
+}
+/* 「現在該做」點過來時標示對應的格子（狀態變化，不是裝飾；reduced-motion 下仍是靜態框線） */
+.feature-tile.is-spotlight {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 3px var(--el-color-primary-light-8);
+  transition: box-shadow var(--transition-base), border-color var(--transition-base);
 }
 
 .feature-label {

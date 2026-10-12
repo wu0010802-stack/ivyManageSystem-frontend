@@ -27,6 +27,9 @@ const props = defineProps<{
 const consecutiveAbsences = computed(() => props.card.consecutive_absences || [])
 const upcomingBirthdays = computed(() => props.card.upcoming_birthdays_7d || [])
 const allergyAlerts = computed(() => props.card.allergy_alerts || [])
+const hasAlerts = computed(
+  () => consecutiveAbsences.value.length + upcomingBirthdays.value.length + allergyAlerts.value.length > 0,
+)
 </script>
 
 <template>
@@ -54,6 +57,11 @@ const allergyAlerts = computed(() => props.card.allergy_alerts || [])
       </span>
     </div>
 
+    <!-- 沒有提醒也要講出來：只剩班名時看不出是載入中還是今天沒事（2026-10-12） -->
+    <p v-if="!hasAlerts" class="ops-empty" data-test="ops-empty">
+      今天沒有過敏注意、連續缺席或近期生日的提醒
+    </p>
+
     <div v-if="allergyAlerts.length" class="alert-row">
       <span class="alert-label alert-label--danger"><el-icon aria-hidden="true"><WarningFilled /></el-icon>過敏注意</span>
       <span class="alert-content">
@@ -75,6 +83,7 @@ const allergyAlerts = computed(() => props.card.allergy_alerts || [])
 .header { display: flex; justify-content: space-between; align-items: baseline; }
 .title { font-size: var(--text-lg); font-weight: 600; color: var(--pt-text-strong); }
 .meta { font-size: var(--text-sm); color: var(--pt-text-muted); }
+.ops-empty { margin: 0; font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 
 .alert-row {
   display: flex; gap: var(--space-2); align-items: flex-start;

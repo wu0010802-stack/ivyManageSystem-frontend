@@ -120,3 +120,26 @@ describe('ClassroomOpsCard', () => {
     expect(w.text()).not.toMatch(/66\.7/)
   })
 })
+
+// 2026-10-12：沒有任何提醒時卡片只剩「班名＋人數」，看不出是載入中還是今天沒事。
+describe('ClassroomOpsCard 沒有提醒時', () => {
+  it('明講今天沒有提醒，且三類都列出來讓老師知道查過哪些', () => {
+    const w = mount(ClassroomOpsCard, {
+      props: { card: { classroom_id: 9, classroom_name: '小熊班', student_count: 20 } },
+      global: { plugins: [router] },
+    })
+    const empty = w.get('[data-test="ops-empty"]')
+    expect(empty.text()).toContain('今天沒有')
+    expect(empty.text()).toContain('過敏')
+    expect(empty.text()).toContain('連續缺席')
+    expect(empty.text()).toContain('生日')
+  })
+
+  it('有任一提醒時不顯示空狀態', () => {
+    const w = mount(ClassroomOpsCard, {
+      props: { card: { classroom_id: 9, classroom_name: '小熊班', student_count: 20, upcoming_birthdays_7d: [{ student_id: 1, student_name: '小美', days_until: 1 }] } },
+      global: { plugins: [router] },
+    })
+    expect(w.find('[data-test="ops-empty"]').exists()).toBe(false)
+  })
+})
