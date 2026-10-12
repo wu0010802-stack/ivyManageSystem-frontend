@@ -148,7 +148,7 @@
 
     </div>
 
-    <DutyRotationPanel v-if="canSchedule && activeTab === 'rotation'" @applied="onRotationApplied" />
+    <DutyRotationPanel v-if="canSchedule && rotationVisited" v-show="activeTab === 'rotation'" @applied="onRotationApplied" />
     <SwapHistoryPanel v-if="canSchedule && activeTab === 'swaps'" />
 
     <el-drawer v-if="canViewAttendance && ws.hasCurrentData.value" v-model="anomalyDrawerOpen" title="全月出勤異常（全體人員）" :size="isMobile ? '100%' : '480px'" append-to-body>
@@ -225,8 +225,12 @@ const normalizeTab = (tab: WorkspaceTab | undefined): WorkspaceTab =>
 
 const activeTab = ref<WorkspaceTab>(normalizeTab(props.tab))
 const gridVisited = ref(activeTab.value === 'grid')
+const rotationVisited = ref(activeTab.value === 'rotation')
 const gridFilter = ref<GridFilter>(props.filter ?? 'all')
-watch(activeTab, (tab) => { if (tab === 'grid') gridVisited.value = true })
+watch(activeTab, (tab) => {
+  if (tab === 'grid') gridVisited.value = true
+  if (tab === 'rotation') rotationVisited.value = true
+})
 // ?tab= 深連結在「已經停在本頁」時也要生效；值沒變時 watch 不觸發，不會蓋掉使用者自己按的頁籤。
 watch(() => props.tab, (tab) => { if (tab !== undefined) activeTab.value = normalizeTab(tab) })
 watch(() => props.filter, (f) => { if (f !== undefined) gridFilter.value = f })
@@ -262,6 +266,8 @@ type RecordRow = ApiResponse<'/attendance/records', 'get'>[number]
 const anchorDate = ref(props.date ?? todayTaipeiISO())
 const query = reactive({ year: Number(anchorDate.value.slice(0, 4)), month: Number(anchorDate.value.slice(5, 7)) })
 watch(anchorDate, (d) => {
+  // 只有排班權限（無 ATTENDANCE_READ）時不更新出勤查詢月份，避免換週跨月觸發出勤 API。
+  if (!canViewAttendance) return
   query.year = Number(d.slice(0, 4))
   query.month = Number(d.slice(5, 7))
 })

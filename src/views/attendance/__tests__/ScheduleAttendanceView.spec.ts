@@ -89,11 +89,12 @@ const ScheduleGridPanelStub = {
   emits: ['records', 'import', 'changed', 'update:date', 'update:filter'],
   template: '<div class="grid-panel-stub" />',
 }
+const rotationMounts = { count: 0 }
 const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['date', 'revision', 'mobile'], emits: ['show-issues', 'changed'], template: '<div class="month-progress-stub" />' }
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
   MonthProgressBar: MonthProgressBarStub,
-  DutyRotationPanel: { name: 'DutyRotationPanel', template: '<div class="rotation-stub" />' },
+  DutyRotationPanel: { name: 'DutyRotationPanel', mounted() { rotationMounts.count++ }, template: '<div class="rotation-stub" />' },
   SwapHistoryPanel: { name: 'SwapHistoryPanel', template: '<div class="swaps-stub" />' },
 }
 const STUBS = {
@@ -547,6 +548,38 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     expect(tabs(wrapper)).toEqual(['班表核對', '學期輪值表', '換班紀錄'])
     expect(wrapper.findComponent(WorkspaceHeaderStub).exists()).toBe(false)
     expect(getSummaryMock).not.toHaveBeenCalled()
+    mockHasPermission.mockReturnValue(true)
+    wrapper.unmount()
+  })
+
+  it('只有排班權限：換週跨月也不打出勤 API', async () => {
+    mockHasPermission.mockImplementation((code: unknown) => code === 'SCHEDULE')
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-26' }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(ScheduleGridPanelStub).vm.$emit('update:date', '2026-11-02')
+    await flushPromises()
+    expect(getSummaryMock).not.toHaveBeenCalled()
+    expect(getAnomalyListMock).not.toHaveBeenCalled()
+    mockHasPermission.mockReturnValue(true)
+    wrapper.unmount()
+  })
+
+  it('學期輪值表切走再切回不會卸載（保留未儲存編輯）', async () => {
+    mockHasPermission.mockImplementation((code: unknown) => code === 'SCHEDULE' || code === 'ATTENDANCE_READ')
+    rotationMounts.count = 0
+    const wrapper = mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await wrapper.find('[data-test="tab-rotation"]').trigger('click')
+    await flushPromises()
+    expect(rotationMounts.count).toBe(1)
+    await wrapper.find('[data-test="tab-grid"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.rotation-stub').exists()).toBe(true)
+    expect(wrapper.find('.rotation-stub').attributes('style')).toContain('display: none')
+    await wrapper.find('[data-test="tab-rotation"]').trigger('click')
+    await flushPromises()
+    expect(rotationMounts.count).toBe(1)
+    expect(wrapper.find('.rotation-stub').attributes('style') ?? '').not.toContain('display: none')
     mockHasPermission.mockReturnValue(true)
     wrapper.unmount()
   })
