@@ -86,6 +86,18 @@
           @click="mobileDay = d.date"
         >{{ dayLabel(d) }}</button>
       </div>
+      <div v-if="mobileDayInfo" class="shift-grid__day-marks" data-test="mobile-day-marks">
+        <el-tag v-if="mobileDayInfo.is_holiday" size="small" type="info">{{ mobileDayInfo.holiday_name || '假日' }}</el-tag>
+        <el-tag v-else-if="mobileDayInfo.is_makeup_workday" size="small" type="warning">補班</el-tag>
+        <el-tag v-if="mobileDayInfo.import_covered === false && mobileDayInfo.date < today" size="small" type="info" :data-test="`mobile-not-imported-${mobileDayInfo.date}`">未匯入</el-tag>
+        <span
+          v-for="gap in gapsOf(mobileDayInfo.date)"
+          :key="gap.shiftTypeId"
+          class="shift-grid__gap"
+          :class="`shift-grid__gap--${gap.severity}`"
+          :data-test="`mobile-gap-${mobileDayInfo.date}`"
+        >{{ gap.shiftTypeName }}{{ gap.severity === 'empty' ? '無人上班' : '待審通過將無人' }}</span>
+      </div>
       <section v-for="section in sections" :key="section.group.key" class="shift-grid__mobile-group">
         <h3>{{ section.group.label }}</h3>
         <div v-for="emp in section.employees" :key="emp.employee_id" class="shift-grid__card">
@@ -103,6 +115,7 @@
             <span class="shift-grid__plan">{{ display(emp.employee_id, mobileDay).source.short }}・{{ display(emp.employee_id, mobileDay).plan }}</span>
             <span v-if="display(emp.employee_id, mobileDay).actual" class="shift-grid__actual">{{ display(emp.employee_id, mobileDay).actual }}</span>
             <span v-if="display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict">{{ display(emp.employee_id, mobileDay).verdict!.label }}</span>
+            <span v-for="tag in display(emp.employee_id, mobileDay).leaveTags" :key="tag" class="shift-grid__leave">{{ tag }}</span>
             <span v-if="display(emp.employee_id, mobileDay).confirmation" class="shift-grid__confirm">{{ display(emp.employee_id, mobileDay).confirmation }}</span>
           </button>
           <el-select
@@ -159,15 +172,20 @@ const emit = defineEmits<{
   'weekly-change': [employeeId: number, shiftTypeId: number | null]
 }>()
 
-const mobileDay = ref(props.days[0]?.date ?? '')
+function pickDay(): string {
+  return props.days.find((d) => d.date === props.today)?.date ?? props.days[0]?.date ?? ''
+}
+
+const mobileDay = ref(pickDay())
 watch(
   () => props.days.map((d) => d.date).join(','),
   () => {
     if (!props.days.some((d) => d.date === mobileDay.value)) {
-      mobileDay.value = props.days.find((d) => d.date === props.today)?.date ?? props.days[0]?.date ?? ''
+      mobileDay.value = pickDay()
     }
   },
 )
+const mobileDayInfo = computed(() => props.days.find((d) => d.date === mobileDay.value))
 
 const cellOf = (employeeId: number, date: string) => props.cells.get(cellKey(employeeId, date))
 
@@ -219,7 +237,10 @@ function cellClasses(employeeId: number, date: string): Record<string, boolean> 
 
 function cellAria(emp: GridEmployee, d: GridDay): string {
   const info = display(emp.employee_id, d.date)
-  return [emp.name, dayLabel(d), info.plan, info.actual, info.verdict?.label].filter(Boolean).join('，')
+  return [
+    emp.name, dayLabel(d), info.source.label, info.plan, info.actual, info.verdict?.label,
+    ...info.leaveTags, info.confirmation, info.locked ? '已封存' : null,
+  ].filter(Boolean).join('，')
 }
 </script>
 
@@ -263,6 +284,10 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__day-tab { min-height: var(--touch-target-min); padding: 0 var(--space-2); border: 1px solid var(--el-border-color); border-radius: var(--radius-md); background: var(--el-bg-color); font: inherit; white-space: nowrap; }
 .shift-grid__day-tab--active { border-color: var(--el-color-primary); color: var(--el-color-primary); font-weight: 600; }
 .shift-grid__mobile-group h3 { margin: var(--space-3) 0 var(--space-2); font-size: var(--text-sm); }
+.shift-grid__day-marks { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; margin-bottom: var(--space-2); }
+.shift-grid__cell--full_leave .shift-grid__plan { font-size: var(--text-xs); color: var(--el-text-color-secondary); }
+.shift-grid__cell--full_leave .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--el-text-color-primary); }
+.shift-grid__cell.shift-grid__cell--full_leave .shift-grid__verdict { order: -1; }
 .shift-grid__card { display: grid; gap: var(--space-1); margin-bottom: var(--space-2); }
 .shift-grid__card-main { display: grid; gap: 2px; padding: var(--space-2); border: 1px solid var(--el-border-color-lighter); border-radius: var(--radius-md); background: var(--el-bg-color); text-align: left; font: inherit; color: inherit; min-height: var(--touch-target-min); }
 </style>

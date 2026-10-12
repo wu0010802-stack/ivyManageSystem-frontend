@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import ShiftGrid from '../ShiftGrid.vue'
-import { indexCells, visibleDays, type GridCell, type GridFilter } from '@/utils/scheduleAttendanceGrid'
+import { addDaysISO, indexCells, SOURCE_TAGS, visibleDays, type GridCell, type GridFilter } from '@/utils/scheduleAttendanceGrid'
 import { cell, day, employee, grid, SHIFTS, WEEK } from './gridFixtures'
 
 const TODAY = '2026-09-17'
@@ -141,5 +141,107 @@ describe('ShiftGrid 手機', () => {
     await wrapper.find(`[data-test="mobile-day-${WEEK[2]}"]`).trigger('click')
     await wrapper.find('[data-test="card-2"]').trigger('click')
     expect(wrapper.emitted('select')).toEqual([[2, WEEK[2]]])
+  })
+})
+
+const LEAVE_PARTIAL = { leave_id: 5, leave_type_label: '事假', status: 'approved' as const, is_full_day: false, start_time: '13:00', end_time: '17:00' }
+
+describe('ShiftGrid 手機預設日與當日標記', () => {
+  it('手機：今天在本週時預設選今天；換週後落在新週', async () => {
+    const g = grid({ cells: cellsFor() })
+    const wrapper = mount(ShiftGrid, {
+      props: {
+        groups: g.groups,
+        employees: g.employees,
+        days: visibleDays(g.days, g.cells),
+        cells: indexCells(g.cells),
+        today: WEEK[3],
+        filter: 'all',
+        canEditPlan: true,
+        shiftOptions: SHIFTS,
+        weeklyValue: () => null,
+        mobile: true,
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    expect(wrapper.find(`[data-test="mobile-day-${WEEK[3]}"]`).attributes('aria-selected')).toBe('true')
+
+    const nextWeek = [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysISO(WEEK[0], 7 + i))
+    const g2 = grid({
+      days: nextWeek.map((d) => day(d)),
+      cells: [1, 2, 3].flatMap((id) => nextWeek.map((d) => cell(id, d))),
+    })
+    await wrapper.setProps({
+      days: visibleDays(g2.days, g2.cells),
+      cells: indexCells(g2.cells),
+    })
+    expect(wrapper.find(`[data-test="mobile-day-${nextWeek[0]}"]`).attributes('aria-selected')).toBe('true')
+  })
+
+  it('手機：卡片顯示請假標籤，選定日標出假日、未匯入與空班', async () => {
+    const coverage = [{
+      date: WEEK[3],
+      leaves: [],
+      gaps: [{ shiftTypeId: 1, shiftTypeName: '早車', workStart: '07:00', workEnd: '16:30', scheduledCount: 1, absentNames: ['林班導'], severity: 'empty' }],
+    }]
+    // WEEK[3] 設為假日且未匯入（早於 today），選取該日後檢查標記區
+    const g = grid({ cells: cellsFor({ [`2|${WEEK[3]}`]: { leaves: [LEAVE_PARTIAL] } }) })
+    const days = g.days.map((d) => (d.date === WEEK[3] ? day(WEEK[3], { is_holiday: true, holiday_name: '補假示例', import_covered: false }) : d))
+    const w2 = mount(ShiftGrid, {
+      props: {
+        groups: g.groups,
+        employees: g.employees,
+        days,
+        cells: indexCells(g.cells),
+        today: WEEK[4],
+        filter: 'all',
+        canEditPlan: false,
+        shiftOptions: SHIFTS,
+        weeklyValue: () => null,
+        coverage: coverage as never,
+        mobile: true,
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    await w2.find(`[data-test="mobile-day-${WEEK[3]}"]`).trigger('click')
+    expect(w2.find('[data-test="card-2"]').text()).toContain('事假')
+    const marks = w2.find('[data-test="mobile-day-marks"]')
+    expect(marks.exists()).toBe(true)
+    expect(marks.text()).toContain('補假示例')
+    expect(marks.find(`[data-test="mobile-not-imported-${WEEK[3]}"]`).exists()).toBe(true)
+    expect(marks.find(`[data-test="mobile-gap-${WEEK[3]}"]`).text()).toBe('早車無人上班')
+  })
+})
+
+describe('ShiftGrid 全天假與無障礙標籤', () => {
+  it('全天已核准假：格子帶 full_leave 樣式，判定文字是假別', () => {
+    const wrapper = mountGrid({
+      cells: cellsFor({
+        [`1|${WEEK[1]}`]: {
+          actual: {},
+          leaves: [{ leave_id: 7, leave_type_label: '病假', status: 'approved', is_full_day: true, start_time: '07:00', end_time: '16:30' }],
+        },
+      }),
+    })
+    const el = wrapper.find(`[data-test="cell-1-${WEEK[1]}"]`)
+    expect(el.classes()).toContain('shift-grid__cell--full_leave')
+    expect(el.find('.shift-grid__verdict').text()).toBe('病假')
+  })
+
+  it('格子 aria-label 含來源、請假、老師確認與已封存', () => {
+    const wrapper = mountGrid({
+      cells: cellsFor({
+        [`1|${WEEK[1]}`]: {
+          leaves: [LEAVE_PARTIAL],
+          confirmation: { item_id: 9, round_id: 2, kind: 'swap', status: 'pending', partner_employee_id: 2 },
+          edit: { locked_reason: 'finalized' },
+        },
+      }),
+    })
+    const label = wrapper.find(`[data-test="cell-1-${WEEK[1]}"]`).attributes('aria-label') ?? ''
+    expect(label).toContain(SOURCE_TAGS.weekly.label)
+    expect(label).toContain('事假')
+    expect(label).toContain('老師確認：待回覆')
+    expect(label).toContain('已封存')
   })
 })
