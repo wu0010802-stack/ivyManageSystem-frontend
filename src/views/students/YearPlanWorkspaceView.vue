@@ -73,6 +73,7 @@
     <PlanNextSteps
       v-if="state === 'draft'"
       :unassigned-count="unassignedCount"
+      :class-count="plan.classes.length"
       :empty-teacher-slots="emptyTeacherSlots"
       :carry-over-slots="carryOverSlots"
       :blocking-count="plan.issues.blocking.length"

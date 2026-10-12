@@ -61,6 +61,8 @@ type StepState = 'done' | 'blocking' | 'pending'
 
 const props = withDefaults(defineProps<{
   unassignedCount: number
+  /** 草稿班級數；0 班時老師步驟是「還沒有班級」而非空集合的「都已指派」 */
+  classCount: number
   emptyTeacherSlots: { head: number; assistant: number; art: number }
   /** 原班有老師、目前空著的格子數（可一鍵沿用） */
   carryOverSlots: number
@@ -87,6 +89,7 @@ const assignStatus = computed(() =>
 
 const teacherStep = computed<StepState>(() => {
   const { head, assistant, art } = props.emptyTeacherSlots
+  if (props.classCount === 0) return 'pending'
   if (head > 0) return 'blocking'
   return assistant + art > 0 ? 'pending' : 'done'
 })
@@ -100,6 +103,7 @@ const otherMissing = computed(() => {
 })
 const teacherStatus = computed(() => {
   const { head } = props.emptyTeacherSlots
+  if (props.classCount === 0) return '還沒有班級'
   if (head > 0) return `${head} 班未指派班導`
   return otherMissing.value ? `${otherMissing.value}未指派` : '三位老師都已指派'
 })

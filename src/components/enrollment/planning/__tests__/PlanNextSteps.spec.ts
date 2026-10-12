@@ -8,6 +8,7 @@ function mountSteps(props: Record<string, unknown> = {}) {
     global: { plugins: [ElementPlus] },
     props: {
       unassignedCount: 2,
+      classCount: 8,
       emptyTeacherSlots: { head: 8, assistant: 8, art: 8 },
       carryOverSlots: 20,
       blockingCount: 10,
@@ -35,6 +36,13 @@ describe('PlanNextSteps', () => {
     const teacherStep = w.findAll('.next-step')[1]
     expect(teacherStep.find('.step-status').text()).toBe('8 班未指派班導')
     expect(teacherStep.find('.step-sub').text()).toBe('副班導 8 班、美語老師 8 班也還沒指派')
+  })
+
+  it('草稿 0 個班：老師步驟不可顯示「都已指派」（空集合不是完成）', () => {
+    const w = mountSteps({ classCount: 0, emptyTeacherSlots: { head: 0, assistant: 0, art: 0 }, carryOverSlots: 0 })
+    const teacherStep = w.findAll('.next-step')[1]
+    expect(teacherStep.classes()).not.toContain('is-done')
+    expect(teacherStep.find('.step-status').text()).toBe('還沒有班級')
   })
 
   it('完成的步驟標記 is-done', () => {
