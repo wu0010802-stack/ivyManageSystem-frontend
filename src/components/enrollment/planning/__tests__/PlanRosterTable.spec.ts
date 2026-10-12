@@ -145,14 +145,46 @@ describe('PlanRosterTable', () => {
     ])
   })
 
+  it('學生格單行：原班名只在「從別班搬進來」時顯示', () => {
+    const w = mountTable()
+    const entry = (id: number) => w.find(`.student-entry[data-student-id="${id}"]`)
+    // 小班A 的來源班是 幼幼A：同班升上來的不重複顯示原班
+    expect(entry(1).find('.student-moved').exists()).toBe(false)
+    // 小華來自 幼幼B → 標出來源
+    expect(entry(2).find('.student-moved').text()).toContain('幼幼B')
+  })
+
+  it('手動調整過的學生有標記（重新產生時會被保留的就是這些）', () => {
+    const w = mountTable()
+    expect(w.find('.student-entry[data-student-id="2"] .manual-mark').attributes('title')).toBe('手動調整過')
+    expect(w.find('.student-entry[data-student-id="1"] .manual-mark').exists()).toBe(false)
+  })
+
+  it('整班勾選：班名格 checkbox emit 該班全部學生', async () => {
+    const w = mountTable()
+    await w.find('.class-name-cell[data-plan-class-id="10"] .class-select-all input[type="checkbox"]').setValue(true)
+    expect(w.emitted('set-selected')!.at(-1)).toEqual([[1, 2, 3], true])
+  })
+
+  it('總計列：分班人數、待分班、畢業、排除一次講清楚', () => {
+    const plan = buildPlan()
+    plan.students.push({ id: 6, student_id: 'S006', name: '小新', source_classroom_name: '幼幼C', plan_class_id: null, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' })
+    const w = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    const text = w.find('.grand-total-row').text()
+    expect(text).toContain('已分班 4 人')
+    expect(text).toContain('待分班 1 人')
+    expect(text).toContain('畢業 1')
+    expect(text).toContain('排除 1')
+  })
+
   it('勾選學生 checkbox emit set-selected([id], checked)；勾選狀態由 selectedIds prop 決定', async () => {
     const w = mountTable({}, true, new Set([2]))
     const checkboxes = w.findAllComponents({ name: 'ElCheckbox' })
     // 學生 2（小華，selectedIds 內）應為勾選狀態
     const checkedBox = checkboxes.find(c => (c.props('modelValue') as boolean) === true)
     expect(checkedBox).toBeTruthy()
-    // 勾學生 1 → emit set-selected([1], true)
-    await checkboxes[0].find('input[type="checkbox"]').setValue(true)
+    // 勾學生 1 → emit set-selected([1], true)（班名格另有整班勾選，這裡明確指定學生格）
+    await w.find('.student-entry[data-student-id="1"] .student-checkbox input[type="checkbox"]').setValue(true)
     expect(w.emitted('set-selected')![0]).toEqual([[1], true])
   })
 

@@ -64,7 +64,8 @@
     </div>
 
     <div v-else-if="state === 'none'" class="empty-state">
-      <p>尚未產生新學年編班草稿</p>
+      <p class="empty-title">還沒有 {{ status?.target_school_year }} 學年的編班草稿</p>
+      <p class="empty-desc">{{ noneDescription }}</p>
       <el-button v-if="canWrite" type="primary" class="btn-generate" @click="onGenerateClick">產生草稿</el-button>
     </div>
 
@@ -84,17 +85,31 @@
     />
     <div class="workspace-body">
       <div class="main-column">
-        <PlanBatchToolbar
-          v-if="editable && canWrite && selectedStudentIds.length > 0"
-          class="batch-toolbar"
-          :selected-count="selectedStudentIds.length"
-          :plan-classes="planClassOptions"
-          :selected-students="selectedStudents"
-          :disabled="loading"
-          @bulk-op="onBulkOp"
-          @clear-selection="clearSelection"
-        />
+        <!-- 固定高度的批次列位置：未勾選時是操作提示，勾選後換成批次列，表格不會被往下推 -->
+        <div v-if="editable && canWrite && plan.classes.length" class="batch-slot">
+          <PlanBatchToolbar
+            v-if="selectedStudentIds.length > 0"
+            class="batch-toolbar"
+            :selected-count="selectedStudentIds.length"
+            :plan-classes="planClassOptions"
+            :selected-students="selectedStudents"
+            :disabled="loading"
+            @bulk-op="onBulkOp"
+            @clear-selection="clearSelection"
+          />
+          <p v-else class="batch-hint">
+            勾選學生（或勾班名旁的方框選整班）後，可以批次移班、標記留級或排除；也可以直接把學生拖到其他班。
+          </p>
+        </div>
+        <div v-if="!plan.classes.length" class="zero-class-state">
+          <p class="empty-title">草稿裡還沒有任何班級</p>
+          <p class="empty-desc">
+            {{ plan.source_school_year }} 學年下學期沒有可以升班的班級（或年級設定無法判斷要升到哪個年級）。
+            可以先「新增班級」，或到班級管理確認 {{ plan.source_school_year }} 學年下學期的班級與年級設定後，再「重新產生建議」。
+          </p>
+        </div>
         <PlanRosterTable
+          v-else
           ref="rosterRef"
           :plan="plan"
           :editable="editable && canWrite"
@@ -132,12 +147,22 @@
       />
     </el-drawer>
 
-    <el-dialog v-model="regenerateDialogVisible" title="重新產生建議" width="440px">
-      <p>將保留 {{ manualAdjustedCount }} 筆手動調整。</p>
-      <el-checkbox v-model="overwriteManual">放棄我的手動調整（依系統規則全部重新分派）</el-checkbox>
+    <el-dialog v-model="regenerateDialogVisible" title="重新產生建議" :width="FORM_DIALOG_WIDTH.compact">
+      <div class="regenerate-body">
+        <p>依最新的在籍資料重算分班建議：新入園的學生會加入、已離園的會移除、換過班的會更新。班級與老師指派不受影響。</p>
+        <p>目前有 {{ manualAdjustedCount }} 位學生手動調整過（表格中姓名旁有圓點），預設會保留。</p>
+        <el-checkbox v-model="overwriteManual" class="regenerate-overwrite">
+          連手動調整也放棄，全部依系統規則重新分派
+        </el-checkbox>
+      </div>
       <template #footer>
         <el-button :disabled="loading" @click="regenerateDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="loading" @click="onRegenerateConfirm">執行</el-button>
+        <el-button
+          class="btn-regenerate-confirm"
+          :type="overwriteManual ? 'danger' : 'primary'"
+          :loading="loading"
+          @click="onRegenerateConfirm"
+        >重新產生</el-button>
       </template>
     </el-dialog>
 
@@ -183,6 +208,8 @@ import {
   type TeacherField,
 } from '@/components/enrollment/planning/planHelpers'
 import { getTeacherOptions } from '@/api/classrooms'
+import { FORM_DIALOG_WIDTH } from '@/constants/formDialog'
+import { formatPlanDate } from '@/components/enrollment/planning/planHelpers'
 import type { TeacherOptionLike } from '@/utils/teacherOption'
 import type { Schema } from '@/api/_generated/typed'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -226,6 +253,17 @@ const STATE_LABELS: Record<PlanState, string> = {
   applied: '已套用',
 }
 const stateLabel = computed(() => STATE_LABELS[state.value])
+
+// 尚無草稿：講清楚系統何時會自動產生、現在產生會依據什麼
+const noneDescription = computed(() => {
+  const st = status.value
+  if (!st) return ''
+  if (appliesImmediately.value) {
+    return `現在已是 ${st.target_school_year} 學年上學期：現在產生的草稿一經發布，約一小時內就會套用到現行班級。`
+  }
+  const prep = formatPlanDate(st.prep_start_date)
+  return `系統會在 ${prep} 自動產生草稿；也可以現在先產生，依 ${st.source_school_year} 學年下學期的班級與在籍學生建立分班建議。`
+})
 
 // ── 補救模式（status.applies_immediately）：上學期才產生／發布的計畫，排程下一輪就套用
 const appliesImmediately = computed(() => status.value?.applies_immediately === true)
@@ -708,14 +746,63 @@ async function onStudentMove(payload: {
   overflow-y: auto;
 }
 
-.batch-toolbar {
+.batch-slot {
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  min-height: 52px;
   border: 1px solid var(--color-neutral-200);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
   background: var(--surface-color);
-  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+}
+
+.batch-toolbar {
+  flex: 1 1 auto;
+  padding: 0;
+}
+
+.batch-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.empty-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.empty-desc {
+  max-width: 60ch;
+  margin: 0;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.zero-class-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-4);
+  border: 1px dashed var(--neutral-300);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+.regenerate-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  line-height: 1.7;
+}
+
+.regenerate-body p {
+  margin: 0;
 }
 </style>

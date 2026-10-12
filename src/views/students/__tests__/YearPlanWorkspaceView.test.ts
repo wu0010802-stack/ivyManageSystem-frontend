@@ -391,6 +391,43 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.find('.btn-carry-over').exists()).toBe(false)
   })
 
+  it('尚無草稿：說明系統會在準備期自動產生，並寫出日期', async () => {
+    const none = statusNone()
+    Object.assign(none.data, { prep_start_date: '2027-06-01', apply_date: '2027-08-01', applies_immediately: false })
+    mockStatus.mockResolvedValue(none)
+    const w = mountView()
+    await flushPromises()
+    const text = w.find('.empty-state').text()
+    expect(text).toContain('2027/06/01')
+    expect(text).toContain('自動產生')
+  })
+
+  it('草稿沒有任何班級：說明原因並指出下一步，不顯示空骨架表', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraft())
+    const w = mountView()
+    await flushPromises()
+    const zero = w.find('.zero-class-state')
+    expect(zero.exists()).toBe(true)
+    expect(zero.text()).toContain('114 學年下學期')
+    expect(zero.text()).toContain('新增班級')
+    expect(w.find('.plan-roster-table').exists()).toBe(false)
+  })
+
+  it('重新產生建議：勾選放棄手動調整時確認鈕轉為危險樣式', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    await w.find('.btn-regenerate').trigger('click')
+    await flushPromises()
+    const confirmBtn = () => w.findAllComponents({ name: 'ElButton' }).find(b => b.classes().includes('btn-regenerate-confirm'))!
+    expect(confirmBtn().props('type')).toBe('primary')
+    expect(confirmBtn().text()).toBe('重新產生')
+    await w.find('.regenerate-overwrite input[type="checkbox"]').setValue(true)
+    expect(confirmBtn().props('type')).toBe('danger')
+  })
+
   it('初次載入失敗（沒有 plan）才顯示錯誤畫面與重新載入鈕', async () => {
     mockStatus.mockRejectedValueOnce({ response: { status: 500 }, displayMessage: '伺服器錯誤' })
     const w = mountView()
@@ -656,6 +693,8 @@ describe('YearPlanWorkspaceView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.findComponent(PlanBatchToolbar).exists()).toBe(false)
+    // 未勾選時同一位置顯示操作提示（含可拖曳），勾選後換成批次列，表格不會被推動
+    expect(w.find('.batch-hint').text()).toContain('拖')
 
     const checkbox = w.findComponent({ name: 'ElCheckbox' })
     await checkbox.find('input[type="checkbox"]').setValue(true)

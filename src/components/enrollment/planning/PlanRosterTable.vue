@@ -23,7 +23,16 @@
               @dragleave="onDragLeave(cls.id)"
               @drop="onDrop(cls.id, $event)"
             >
+              <el-checkbox
+                v-if="editable && classStudents(cls.id).length"
+                class="class-select-all"
+                :aria-label="`勾選${cls.target_name}全班`"
+                :model-value="classAllSelected(cls.id)"
+                :indeterminate="classSomeSelected(cls.id) && !classAllSelected(cls.id)"
+                @change="(val: string | number | boolean) => emit('set-selected', classStudents(cls.id).map(st => st.id), Boolean(val))"
+              />
               <span class="class-name-text">{{ cls.target_name }}</span>
+              <span v-if="cls.class_code" class="class-code">{{ cls.class_code }}</span>
               <el-button
                 v-if="editable"
                 :icon="Edit"
@@ -109,8 +118,16 @@
                       class="disposition-tag"
                       :class="`disposition-tag-${student.disposition}`"
                     >{{ dispositionTag(student) }}</span>
+                    <span
+                      v-if="student.manually_adjusted"
+                      class="manual-mark"
+                      role="img"
+                      title="手動調整過"
+                      aria-label="手動調整過"
+                    />
                   </label>
-                  <div class="student-source">{{ student.source_classroom_name ?? '' }}</div>
+                  <!-- 同班升上來的不重複寫原班；只標出從別班搬進來的 -->
+                  <div v-if="isMovedIn(student, cls)" class="student-moved">← {{ student.source_classroom_name }}</div>
                 </div>
               </template>
             </td>
@@ -128,7 +145,8 @@
           </tr>
           <tr class="grand-total-row">
             <td class="row-label grand-total-label" :colspan="flatClasses.length + 1">
-              總計：{{ grandTotal }} 人（不含畢業／排除）
+              已分班 {{ grandTotal }} 人・待分班 {{ unassignedCount }} 人
+              <span class="grand-total-note">（另有畢業 {{ graduateCount }}、排除 {{ excludeCount }}，不在表內）</span>
             </td>
           </tr>
         </tfoot>
@@ -257,6 +275,31 @@ const studentsByClass = computed(() => {
   }
   return map
 })
+
+function classStudents(classId: number): PlanStudent[] {
+  return studentsByClass.value.get(classId) ?? []
+}
+
+function classAllSelected(classId: number): boolean {
+  const list = classStudents(classId)
+  return list.length > 0 && list.every(st => props.selectedIds.has(st.id))
+}
+
+function classSomeSelected(classId: number): boolean {
+  return classStudents(classId).some(st => props.selectedIds.has(st.id))
+}
+
+function isMovedIn(student: PlanStudent, cls: PlanClass): boolean {
+  return !!student.source_classroom_name && student.source_classroom_name !== cls.source_name
+}
+
+const unassignedCount = computed(() =>
+  props.plan.students.filter(
+    st => (st.disposition === 'promote' || st.disposition === 'retain') && st.plan_class_id == null,
+  ).length,
+)
+const graduateCount = computed(() => props.plan.students.filter(st => st.disposition === 'graduate').length)
+const excludeCount = computed(() => props.plan.students.filter(st => st.disposition === 'exclude').length)
 
 const maxRowCount = computed(() => {
   let max = 0
@@ -391,7 +434,7 @@ defineExpose({ locateStudent, locateClass })
 .plan-roster-table td {
   border-right: 1px solid var(--neutral-300);
   border-bottom: 1px solid var(--neutral-300);
-  padding: 5px 8px;
+  padding: var(--space-1) 6px;
   text-align: center;
   vertical-align: top;
   background: var(--surface-color);
@@ -497,8 +540,9 @@ defineExpose({ locateStudent, locateClass })
   border-right: 2px solid var(--neutral-600) !important;
 }
 
+/* 欄寬收斂：1440 寬桌機在側欄 320px 旁仍能一次看到 8 個班 */
 .student-cell {
-  min-width: 96px;
+  min-width: 84px;
   text-align: left;
 }
 
@@ -528,8 +572,34 @@ defineExpose({ locateStudent, locateClass })
   cursor: default;
 }
 
-.student-source {
-  font-size: 11px;
+.student-moved {
+  font-size: var(--text-xs);
+  color: var(--color-info-hover);
+}
+
+.manual-mark {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-info);
+}
+
+.class-select-all {
+  height: auto;
+  margin-right: var(--space-1);
+  vertical-align: middle;
+}
+
+.class-code {
+  margin-left: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-secondary);
+}
+
+.grand-total-note {
+  font-weight: var(--font-weight-regular);
   color: var(--text-secondary);
 }
 

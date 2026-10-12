@@ -289,6 +289,19 @@ const openSections = ref<string[]>([])
   overflow-y: auto;
 }
 
+/* 畢業／排除名單與上方兩段同樣是有框的區塊（原本貼邊無框，看起來像另一種元件） */
+.buckets-collapse {
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  background: var(--surface-color);
+}
+
+.buckets-collapse :deep(.el-collapse-item:last-child .el-collapse-item__header),
+.buckets-collapse :deep(.el-collapse-item:last-child .el-collapse-item__wrap) {
+  border-bottom: none;
+}
+
 .bucket-row {
   display: flex;
   align-items: center;
