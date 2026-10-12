@@ -282,6 +282,18 @@ describe('YearPlanWorkspaceView', () => {
     expect(dialog.props('applyDate')).toBe('2026-08-01')
   })
 
+  it('補救模式但還沒有草稿：警示條不說「這份計畫」', async () => {
+    const none = statusNone()
+    Object.assign(none.data, { applies_immediately: true, apply_date: '2026-08-01' })
+    mockStatus.mockResolvedValue(none)
+    const w = mountView()
+    await flushPromises()
+    const banner = w.find('.remedial-banner')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).not.toContain('這份計畫')
+    expect(banner.text()).toContain('約一小時內')
+  })
+
   it('一般模式不顯示補救警示條', async () => {
     const normal = statusDraft()
     Object.assign(normal.data, { applies_immediately: false, apply_date: '2026-08-01' })

@@ -56,7 +56,8 @@ export interface SelectedPlanStudent {
 // 批次工具列（勾選集合由父層 YearPlanWorkspaceView 持有，本元件只負責「派發 op」——
 // 父層合併 selectedIds + base_version 呼叫 useYearPlanWorkspace.bulkUpdateStudents()）。
 // 依所選學生預先擋掉後端會拒絕或會出事的組合：
-// - 含畢業生時停用「移至班級」：一般分派的畢業生仍會被 7/31 自動畢業（只豁免 retain）。
+// - 含畢業生或留級生時停用「移至班級」：一般分派會把留級改回 promote，畢業生仍會被
+//   7/31 自動畢業（只豁免 retain）。
 // - 「標記留級」只列與所選學生現況年級相同的班（後端 retain 年級不符回 422）。
 
 const props = withDefaults(defineProps<{
@@ -80,7 +81,9 @@ const retainTargetId = ref<number | null>(null)
 const isDisabled = computed(() => !!props.disabled || props.selectedCount === 0)
 
 const hasGraduate = computed(() => props.selectedStudents.some(s => s.disposition === 'graduate'))
-const assignDisabled = computed(() => isDisabled.value || hasGraduate.value)
+// 留級生用「移至班級」會被改回一般分派、丟掉留級標記；換班要走「標記留級」
+const hasRetain = computed(() => props.selectedStudents.some(s => s.disposition === 'retain'))
+const assignDisabled = computed(() => isDisabled.value || hasGraduate.value || hasRetain.value)
 
 const assignGroups = computed(() => {
   const groups: Array<{ gradeName: string; options: PlanClassOption[] }> = []
@@ -115,6 +118,7 @@ const hint = computed(() => {
   if (props.selectedCount === 0) return ''
   const hints: string[] = []
   if (hasGraduate.value) hints.push('所選含畢業生：要續讀請用「標記留級」，否則仍會被自動畢業')
+  if (hasRetain.value) hints.push('所選含留級生：要換班請用「標記留級」選同年級的班')
   if (mixedGrades.value) hints.push('所選學生年級不同，請分年級標記留級')
   else if (props.selectedStudents.length > 0 && retainOptions.value.length === 0) {
     hints.push(`沒有${commonGrade.value ?? ''}的班級可以留級`)

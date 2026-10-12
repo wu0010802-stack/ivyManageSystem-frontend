@@ -137,6 +137,15 @@ describe('PlanBatchToolbar', () => {
     expect(w.find('.toolbar-hint').text()).toContain('標記留級')
   })
 
+  it('所選含留級生：「移至班級」停用並提示改用「標記留級」（一般分派會丟掉留級標記）', () => {
+    const w = mountToolbar({
+      selectedCount: 1,
+      selectedStudents: [{ id: 2, disposition: 'retain', current_grade_name: '中班' }],
+    })
+    expect(w.findAllComponents({ name: 'ElSelect' })[0].props('disabled')).toBe(true)
+    expect(w.find('.toolbar-hint').text()).toContain('留級生')
+  })
+
   it('「標記留級」只列與所選學生現況年級相同的班', () => {
     const w = mountToolbar({
       selectedCount: 2,

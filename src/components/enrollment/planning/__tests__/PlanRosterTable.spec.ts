@@ -258,6 +258,22 @@ describe('PlanRosterTable', () => {
   })
 
   // ── 外部拖入（側欄待分班學生拖入，無內部 dragstart）──
+  it('拖曳留級生到別班 → op=retain（不可靜默變回一般分派、丟掉留級標記）', async () => {
+    const w = mountTable()
+    // 小華（id=2）是 class 10 的留級生
+    await w.find('.student-entry[data-student-id="2"]').trigger('dragstart')
+    await w.findAll('.student-cell')[1].trigger('drop')
+    expect(w.emitted('student-move')![0][0]).toEqual({ studentIds: [2], op: 'retain', planClassId: 11 })
+  })
+
+  it('外部拖入的待分班留級生 → op=retain', async () => {
+    const plan = buildPlan()
+    plan.students.push({ id: 7, student_id: 'S007', name: '小留', source_classroom_name: '中班B', plan_class_id: null, disposition: 'retain', exclude_reason: null, manually_adjusted: true, current_grade_name: '中班' })
+    const w = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    await w.findAll('.student-cell')[1].trigger('drop', { dataTransfer: { getData: () => '7' } })
+    expect(w.emitted('student-move')![0][0]).toEqual({ studentIds: [7], op: 'retain', planClassId: 11 })
+  })
+
   it('外部拖入（無內部 dragstart）：drop 帶 dataTransfer student id → emit student-move', async () => {
     const w = mountTable()
     await w.findAll('.student-cell')[1].trigger('drop', {

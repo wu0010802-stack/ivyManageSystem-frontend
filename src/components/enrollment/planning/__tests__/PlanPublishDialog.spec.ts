@@ -143,6 +143,20 @@ describe('PlanPublishDialog', () => {
     expect(w.find('.apply-notice .confirm-year-input').exists()).toBe(true)
   })
 
+  it('補救模式確認：全形數字（注音輸入法）也算；打錯時有提示', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2026-08-01', appliesImmediately: true, targetSchoolYear: 115 })
+    await flushPromises()
+    const confirmBtn = () => w.findAllComponents({ name: 'ElButton' }).find(b => b.text().includes('確認發布'))
+    const input = w.find('.confirm-year-input input')
+
+    await input.setValue('114')
+    expect(w.find('.confirm-year-error').text()).toContain('115')
+    await input.setValue('１１５')
+    expect(confirmBtn()?.props('disabled')).toBe(false)
+    expect(w.find('.confirm-year-error').exists()).toBe(false)
+  })
+
   it('預覽載入失敗：顯示錯誤訊息，不顯示「尚無預覽資料」', async () => {
     mockGetPreview.mockRejectedValue({ displayMessage: '伺服器忙碌，請稍後再試' })
     const w = mountDialog()

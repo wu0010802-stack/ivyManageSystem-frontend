@@ -270,9 +270,9 @@ const appliesImmediately = computed(() => status.value?.applies_immediately === 
 const showRemedialBanner = computed(() => appliesImmediately.value && state.value !== 'applied')
 const remedialTitle = computed(() => {
   const year = status.value?.target_school_year
-  return state.value === 'published'
-    ? `已發布，${year} 學年上學期已開始：排程會在約一小時內套用到現行班級`
-    : `現在已是 ${year} 學年上學期：這份計畫發布後約一小時內就會套用到現行班級`
+  if (state.value === 'published') return `已發布，${year} 學年上學期已開始：排程會在約一小時內套用到現行班級`
+  if (state.value === 'none') return `現在已是 ${year} 學年上學期：草稿產生並發布後，約一小時內就會套用到現行班級`
+  return `現在已是 ${year} 學年上學期：這份計畫發布後約一小時內就會套用到現行班級`
 })
 const remedialDescription = computed(() =>
   state.value === 'published'
@@ -616,8 +616,8 @@ const totalIssueCount = computed(
   () => (plan.value?.issues.blocking.length ?? 0) + (plan.value?.issues.warnings.length ?? 0),
 )
 
-// student-move：拖曳搬班尚未接線（brief：checkbox 批次優先），保留與 PlanBatchToolbar
-// 相同的派發路徑供未來串接。
+// student-move：編班表拖曳搬班（留級生由 PlanRosterTable 送 op=retain），與批次列共用
+// bulkUpdateStudents 派發路徑。
 async function onStudentMove(payload: {
   studentIds: number[]
   op: BulkOp

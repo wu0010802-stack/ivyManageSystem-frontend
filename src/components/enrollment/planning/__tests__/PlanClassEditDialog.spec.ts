@@ -158,6 +158,15 @@ describe('PlanClassEditDialog', () => {
     expect(events![0][0]).toBe(10)
   })
 
+  it('刪除確認文案用「待分班」（與工作台用詞一致）', async () => {
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    const w = mountDialog({ mode: 'edit', planClass })
+    await flushPromises()
+    await vmOf(w).onDelete()
+    expect(String(confirmSpy.mock.calls[0][0])).toContain('待分班')
+    expect(String(confirmSpy.mock.calls[0][0])).not.toContain('未分班')
+  })
+
   it('edit 模式：取消刪除確認時不 emit delete', async () => {
     vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
     const w = mountDialog({ mode: 'edit', planClass })

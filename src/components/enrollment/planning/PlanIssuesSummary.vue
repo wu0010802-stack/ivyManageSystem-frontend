@@ -57,7 +57,7 @@ const emit = defineEmits<{ 'locate-issue': [issue: IssueOut] }>()
 // 與後端 services/classroom_year_plan/issues.py 的 code 對齊；未知 code fallback
 // 用該組首筆 message 當標題（後端新增 code 時前端不壞版）。
 const GROUP_TITLES: Record<string, string> = {
-  student_unassigned: '學生尚未分派班級',
+  student_unassigned: '待分班學生',
   retain_wrong_grade: '留級學生年級不符',
   graduate_needs_retain: '畢業生要續讀須標記留級',
   cross_grade_assignment: '學生分到不同年級的班',

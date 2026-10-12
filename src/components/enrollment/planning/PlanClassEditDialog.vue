@@ -223,7 +223,7 @@ async function onDelete(): Promise<void> {
   if (!props.planClass || props.submitting) return
   try {
     await ElMessageBox.confirm(
-      `確定要刪除班級「${props.planClass.target_name}」嗎？班內學生會被設回未分班。`,
+      `確定要刪除班級「${props.planClass.target_name}」嗎？班內學生會改列為待分班。`,
       '刪除草稿班級',
       { type: 'warning', confirmButtonText: '確定刪除', cancelButtonText: '取消' },
     )

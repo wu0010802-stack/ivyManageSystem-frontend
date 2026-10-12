@@ -33,6 +33,9 @@
               inputmode="numeric"
               autocomplete="off"
             />
+            <span v-if="confirmYearMismatch" class="confirm-year-error" role="alert">
+              請輸入 {{ targetSchoolYear }}
+            </span>
           </div>
         </section>
 
@@ -158,8 +161,13 @@ const confirmYear = ref('')
 const confirmInputId = `plan-publish-confirm-${Math.random().toString(36).slice(2, 8)}`
 
 const blockingCount = computed(() => preview.value?.issues.blocking.length ?? 0)
+// NFKC：注音輸入法全形狀態打出的「１１５」也要算（否則按鈕永遠停用又沒提示）
+const normalizedConfirmYear = computed(() => confirmYear.value.normalize('NFKC').trim())
 const yearConfirmed = computed(
-  () => !props.appliesImmediately || confirmYear.value.trim() === String(props.targetSchoolYear ?? ''),
+  () => !props.appliesImmediately || normalizedConfirmYear.value === String(props.targetSchoolYear ?? ''),
+)
+const confirmYearMismatch = computed(
+  () => props.appliesImmediately && normalizedConfirmYear.value !== '' && !yearConfirmed.value,
 )
 const canPublish = computed(
   () => preview.value != null && blockingCount.value === 0 && !loading.value && yearConfirmed.value,
@@ -259,6 +267,12 @@ defineExpose({ reload, preview, blockingCount, canPublish })
 
 .confirm-year-input {
   max-width: 200px;
+}
+
+.confirm-year-error {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-danger-hover);
 }
 
 .totals-row {

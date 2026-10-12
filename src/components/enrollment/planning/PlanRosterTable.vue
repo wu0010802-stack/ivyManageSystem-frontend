@@ -370,7 +370,13 @@ function onDrop(targetClassId: number, event: DragEvent): void {
     dragged = { id, planClassId: null }
   }
   if (dragged.planClassId === targetClassId) return // 同班放回 no-op，免無意義 version bump
-  emit('student-move', { studentIds: [dragged.id], op: 'assign', planClassId: targetClassId })
+  emit('student-move', { studentIds: [dragged.id], op: moveOpFor(dragged.id), planClassId: targetClassId })
+}
+
+// 留級生換班要維持 retain（assign 會把 disposition 改回 promote、丟掉留級標記；
+// 大班留級生還會因此被 7/31 自動畢業）。年級不符時後端回 422，由父層 toast。
+function moveOpFor(studentId: number): BulkOp {
+  return props.plan.students.find(st => st.id === studentId)?.disposition === 'retain' ? 'retain' : 'assign'
 }
 
 function onDragEnd(): void {

@@ -32,7 +32,7 @@ describe('PlanIssuesSummary', () => {
     expect(blockingSection.find('.severity-count').text()).toBe('3')
     const groups = blockingSection.findAll('.group-toggle')
     expect(groups.length).toBe(2)
-    expect(groups[0].text()).toContain('學生尚未分派班級')
+    expect(groups[0].text()).toContain('待分班學生')
     expect(groups[0].find('.group-count').text()).toBe('2')
     expect(groups[1].text()).toContain('班級尚未指派班導')
     // warnings：1 組
