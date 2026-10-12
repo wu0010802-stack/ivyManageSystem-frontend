@@ -465,4 +465,23 @@ onMounted(() => {
   background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
 }
+
+/* 手機：chip 只有 28px、原生日期框 13px 字（iOS 聚焦會整頁放大）且 25px 高 */
+@media (--to-sm) {
+  .chip {
+    min-height: 36px;
+    padding: 6px 14px;
+  }
+
+  .filters__custom {
+    flex: 1 1 100%;
+  }
+
+  .filters__custom input {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: var(--touch-target-min);
+    font-size: 16px;
+  }
+}
 </style>

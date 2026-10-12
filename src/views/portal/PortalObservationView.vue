@@ -256,6 +256,13 @@ async function submit() {
   color: white;
   border-color: var(--color-primary);
 }
+/* 手機：chip 只有 28px 高，老師在課堂上單手點選學生／領域常點錯 */
+@media (--to-sm) {
+  .chip-btn {
+    min-height: 36px;
+    padding: 6px var(--space-3);
+  }
+}
 
 .hint, .lock-hint {
   margin-left: var(--space-2);

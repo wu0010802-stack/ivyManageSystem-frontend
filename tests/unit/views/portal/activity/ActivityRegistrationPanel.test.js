@@ -163,4 +163,39 @@ describe('ActivityRegistrationPanel', () => {
 
     expect(w.vm.courseStatusLabel(status)).toBe(label)
   })
+
+  it('手機改渲染卡片：課程標籤與繳費狀態完整可見，多班時不重複列班級', () => {
+    const original = window.matchMedia
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true, media: '(max-width: 767.98px)', onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })
+    try {
+      const w = mount(ActivityRegistrationPanel, {
+        props: { data: DATA, activeClass: '小綠葉' },
+        global: {
+          ...GLOBAL,
+          stubs: {
+            ...STUBS,
+            ElSkeleton: true,
+            ElCard: { template: '<div class="el-card"><slot /></div>', props: ['shadow'] },
+          },
+        },
+      })
+      expect(w.findComponent({ name: 'ElTable' }).exists()).toBe(false)
+      const cards = w.findComponent({ name: 'AdminListCards' })
+      expect(cards.exists()).toBe(true)
+      expect(cards.props('items')).toHaveLength(1)
+      const labels = cards.props('columns').map(c => c.label)
+      expect(labels).not.toContain('班級') // 已有班級分頁
+      expect(labels).toEqual(expect.arrayContaining(['繳費', '課程']))
+      const text = cards.text()
+      expect(text).toContain('小華')
+      expect(text).toContain('音樂（候補 #1）')
+      expect(text).toContain('未繳費')
+    } finally {
+      window.matchMedia = original
+    }
+  })
 })

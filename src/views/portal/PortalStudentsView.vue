@@ -240,7 +240,7 @@ onMounted(fetchStudents)
               trigger="click"
               @command="(cmd) => onCardCommand(cmd, s)"
             >
-              <button class="card-more-btn" @click.stop>
+              <button class="card-more-btn" type="button" :aria-label="`${s.name ?? ''} 更多動作`" @click.stop>
                 <el-icon><MoreFilled /></el-icon>
               </button>
               <template #dropdown>
@@ -284,6 +284,8 @@ onMounted(fetchStudents)
               <button
                 v-if="!revealedParentPhones.has(s.id)"
                 class="reveal-btn"
+                type="button"
+                aria-label="顯示完整電話"
                 :disabled="revealingId === s.id"
                 @click="revealParentPhone(s, $event)"
               >
@@ -495,5 +497,24 @@ onMounted(fetchStudents)
 }
 .card-more-btn:hover {
   color: var(--el-color-primary);
+}
+
+/* 手機：「⋯」只有 21×24、眼睛鈕 27×19。撐到 44px 觸控區，負 margin 抵銷，
+   卡片排版不變。 */
+@media (--to-sm) {
+  .card-more-btn,
+  .reveal-btn {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+    justify-content: center;
+  }
+  .card-more-btn {
+    display: inline-flex;
+    align-items: center;
+    margin: -10px -10px -10px 0;
+  }
+  .reveal-btn {
+    margin-block: -12px;
+  }
 }
 </style>

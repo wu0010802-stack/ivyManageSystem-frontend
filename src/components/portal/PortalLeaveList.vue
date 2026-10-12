@@ -424,6 +424,13 @@ defineExpose({ fetchLeaves })
   margin-top: 8px;
   flex-wrap: wrap;
 }
+/* 卡片只在手機渲染：link 鈕原本 18px 高，「撤回」這種破壞性動作也點不準。
+   撐出觸控高度；gap 已控間距，去掉 EP 的相鄰 margin-left。 */
+.leave-card__actions .el-button {
+  min-height: var(--touch-target-min);
+  margin-left: 0;
+  padding: 0 var(--space-2);
+}
 
 .attach-loading {
   display: flex;
