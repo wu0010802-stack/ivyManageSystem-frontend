@@ -50,7 +50,7 @@
         <h3>改這天</h3>
         <el-select v-model="dayChoice" :aria-label="'改這天的班別'" class="pdd__select" data-test="pdd-day-select">
           <el-option :value="INHERIT" label="繼承週排班" />
-          <el-option v-for="s in activeShifts" :key="s.shift_type_id" :value="s.shift_type_id" :label="`${s.name} ${s.work_start}–${s.work_end}`" />
+          <el-option v-for="s in optionsWith(initialDayChoice)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
           <el-option :value="DAY_OFF" label="排休（明確不上班）" />
         </el-select>
         <el-button type="primary" :loading="savingDay" :disabled="dayChoice === initialDayChoice || loadingDaily" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
@@ -61,7 +61,7 @@
         <el-form label-position="top" @submit.prevent>
           <el-form-item label="實際班別" required>
             <el-select v-model="confirmChoice" class="pdd__select" data-test="pdd-confirm-select">
-              <el-option v-for="s in activeShifts" :key="s.shift_type_id" :value="s.shift_type_id" :label="`${s.name} ${s.work_start}–${s.work_end}`" />
+              <el-option v-for="s in optionsWith(confirmInitial)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
               <el-option :value="0" label="當日排休" />
             </el-select>
           </el-form-item>
@@ -141,7 +141,10 @@ const emit = defineEmits<{
   import: [context: { employee_id: number; employee_name: string; date: string }]
 }>()
 
-const activeShifts = computed(() => props.shiftTypes.filter((s) => s.is_active))
+// 下拉：在用班別＋目前已選的那個（即使已停用，才能顯示其名稱；但它不可再被選）
+function optionsWith(current: number | null) {
+  return props.shiftTypes.filter((s) => s.is_active || s.shift_type_id === current)
+}
 const shiftName = (id: number | null | undefined) =>
   props.shiftTypes.find((s) => s.shift_type_id === id)?.name ?? '無'
 const hhmm = (iso: string | null | undefined) => (iso ? iso.slice(11, 16) : '無紀錄')
@@ -242,6 +245,7 @@ const loadingDaily = ref(false)
 
 // ── 確認當日班別 ────────────────────────────────────────────────
 const confirmChoice = ref<number | null>(null)
+const confirmInitial = ref<number | null>(null)
 const confirmReason = ref('')
 const includePair = ref(false)
 const confirming = ref(false)
@@ -271,6 +275,7 @@ watch(
     loadingDaily.value = false
     const candidates = cell.actual?.candidates ?? []
     confirmChoice.value = candidates.length === 1 ? candidates[0].shift_type_id : cell.actual?.original_shift_type_id ?? null
+    confirmInitial.value = confirmChoice.value
     confirmReason.value = ''
     includePair.value = false
     if (cell.edit.plan && current !== INHERIT) {

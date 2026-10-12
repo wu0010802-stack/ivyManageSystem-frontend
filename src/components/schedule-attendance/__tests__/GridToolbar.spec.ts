@@ -48,4 +48,14 @@ describe('GridToolbar', () => {
     expect(wrapper.emitted('copy-prev-week')).toHaveLength(1)
     expect(wrapper.emitted('command')).toEqual([['copy-prev-month'], ['export']])
   })
+
+  it('儲存中不能換週（上週、日期、下週三者皆停用）', () => {
+    const saving = mountToolbar({ pendingCount: 2, saving: true })
+    expect(saving.find('[data-test="toolbar-prev"]').attributes('disabled')).toBeDefined()
+    expect(saving.find('[data-test="toolbar-next"]').attributes('disabled')).toBeDefined()
+    expect(saving.findComponent({ name: 'ElDatePicker' }).props('disabled')).toBe(true)
+    const idle = mountToolbar({ pendingCount: 2, saving: false })
+    expect(idle.find('[data-test="toolbar-prev"]').attributes('disabled')).toBeUndefined()
+    expect(idle.findComponent({ name: 'ElDatePicker' }).props('disabled')).toBe(false)
+  })
 })

@@ -244,4 +244,31 @@ describe('ShiftGrid 全天假與無障礙標籤', () => {
     expect(label).toContain('老師確認：待回覆')
     expect(label).toContain('已封存')
   })
+
+  it('停用班別：格子標已停用；下拉只列在用班別與目前已選的停用班別（停用者不可選）', () => {
+    const cells = cellsFor({ [`1|${WEEK[0]}`]: { plan: { source: 'daily', shift_type_id: 3, name: '舊班別', work_start: '07:30', work_end: '16:00' } } })
+    const g = grid({ employees: [employee(1, '林班導'), employee(2, '王副導', { role_label: '副班導' })], cells })
+    const wrapper = mount(ShiftGrid, {
+      props: {
+        groups: g.groups,
+        employees: g.employees,
+        days: visibleDays(g.days, g.cells),
+        cells: indexCells(g.cells),
+        today: TODAY,
+        filter: 'all',
+        canEditPlan: true,
+        shiftOptions: SHIFTS,
+        weeklyValue: (id: number) => (id === 1 ? 3 : null),
+        mobile: false,
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    expect(wrapper.find(`[data-test="cell-1-${WEEK[0]}"]`).text()).toContain('已停用')
+    expect(wrapper.find(`[data-test="cell-2-${WEEK[0]}"]`).text()).not.toContain('已停用')
+    const options = wrapper.findAllComponents({ name: 'ElOption' }).map((o) => [o.props('label'), o.props('disabled')])
+    expect(options).toContainEqual(['舊班別 07:30–16:00（已停用）', true])
+    // 停用班別只出現在目前已選它的那位員工下拉（王副導不列）
+    expect(options.filter(([label]) => String(label).startsWith('舊班別'))).toHaveLength(1)
+    expect(options.filter(([label]) => String(label).startsWith('早車'))).toHaveLength(2)
+  })
 })

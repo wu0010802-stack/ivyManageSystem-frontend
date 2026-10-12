@@ -42,7 +42,7 @@
                 :data-test="`weekly-${emp.employee_id}`"
                 @update:model-value="(v: number | undefined) => emit('weekly-change', emp.employee_id, v ?? null)"
               >
-                <el-option v-for="s in shiftOptions" :key="s.shift_type_id" :value="s.shift_type_id" :label="`${s.name} ${s.work_start}–${s.work_end}`" />
+                <el-option v-for="s in optionsFor(emp.employee_id)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
               </el-select>
             </th>
             <td v-for="d in days" :key="d.date" class="shift-grid__cell-wrap">
@@ -60,6 +60,7 @@
                   <span class="shift-grid__source" :title="display(emp.employee_id, d.date).source.label">{{ display(emp.employee_id, d.date).source.short }}</span>
                   {{ display(emp.employee_id, d.date).plan }}
                 </span>
+                <span v-if="isInactivePlan(emp.employee_id, d.date)" class="shift-grid__inactive">已停用</span>
                 <span v-if="display(emp.employee_id, d.date).actual" class="shift-grid__actual">{{ display(emp.employee_id, d.date).actual }}</span>
                 <span v-if="display(emp.employee_id, d.date).verdict" class="shift-grid__verdict">{{ display(emp.employee_id, d.date).verdict!.label }}</span>
                 <span v-for="tag in display(emp.employee_id, d.date).leaveTags" :key="tag" class="shift-grid__leave">{{ tag }}</span>
@@ -113,6 +114,7 @@
             <strong>{{ emp.name }}</strong>
             <span v-if="emp.role_label" class="shift-grid__role">{{ emp.role_label }}</span>
             <span class="shift-grid__plan">{{ display(emp.employee_id, mobileDay).source.short }}・{{ display(emp.employee_id, mobileDay).plan }}</span>
+            <span v-if="isInactivePlan(emp.employee_id, mobileDay)" class="shift-grid__inactive">已停用</span>
             <span v-if="display(emp.employee_id, mobileDay).actual" class="shift-grid__actual">{{ display(emp.employee_id, mobileDay).actual }}</span>
             <span v-if="display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict">{{ display(emp.employee_id, mobileDay).verdict!.label }}</span>
             <span v-for="tag in display(emp.employee_id, mobileDay).leaveTags" :key="tag" class="shift-grid__leave">{{ tag }}</span>
@@ -128,7 +130,7 @@
             :data-test="`weekly-${emp.employee_id}`"
             @update:model-value="(v: number | undefined) => emit('weekly-change', emp.employee_id, v ?? null)"
           >
-            <el-option v-for="s in shiftOptions" :key="s.shift_type_id" :value="s.shift_type_id" :label="`${s.name} ${s.work_start}–${s.work_end}`" />
+            <el-option v-for="s in optionsFor(emp.employee_id)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
           </el-select>
         </div>
       </section>
@@ -188,6 +190,17 @@ watch(
 const mobileDayInfo = computed(() => props.days.find((d) => d.date === mobileDay.value))
 
 const cellOf = (employeeId: number, date: string) => props.cells.get(cellKey(employeeId, date))
+
+// 下拉：現行班別＋所有在用班別；已停用的只留目前正在用的那個（標「已停用」且不可再選）
+function optionsFor(employeeId: number): GridShiftType[] {
+  const current = props.weeklyValue(employeeId)
+  return props.shiftOptions.filter((s) => s.is_active || s.shift_type_id === current)
+}
+const inactiveIds = computed(() => new Set(props.shiftOptions.filter((s) => !s.is_active).map((s) => s.shift_type_id)))
+function isInactivePlan(employeeId: number, date: string): boolean {
+  const id = cellOf(employeeId, date)?.plan.shift_type_id
+  return id != null && inactiveIds.value.has(id)
+}
 
 const displays = computed(() => {
   const map = new Map<string, CellDisplay>()
@@ -284,6 +297,7 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__day-tab { min-height: var(--touch-target-min); padding: 0 var(--space-2); border: 1px solid var(--el-border-color); border-radius: var(--radius-md); background: var(--el-bg-color); font: inherit; white-space: nowrap; }
 .shift-grid__day-tab--active { border-color: var(--el-color-primary); color: var(--el-color-primary); font-weight: 600; }
 .shift-grid__mobile-group h3 { margin: var(--space-3) 0 var(--space-2); font-size: var(--text-sm); }
+.shift-grid__inactive { margin-left: var(--space-1); font-size: var(--text-xs); color: var(--el-color-warning); }
 .shift-grid__day-marks { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; margin-bottom: var(--space-2); }
 .shift-grid__cell--full_leave .shift-grid__plan { font-size: var(--text-xs); color: var(--el-text-color-secondary); }
 .shift-grid__cell--full_leave .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--el-text-color-primary); }

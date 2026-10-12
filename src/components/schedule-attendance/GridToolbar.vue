@@ -1,19 +1,20 @@
 <template>
   <section class="grid-toolbar" aria-label="班表核對工具列">
     <div class="grid-toolbar__nav" role="group" aria-label="選擇週次">
-      <el-button :icon="ArrowLeft" data-test="toolbar-prev" @click="go(-7)">上週</el-button>
+      <el-button :icon="ArrowLeft" data-test="toolbar-prev" :disabled="saving" @click="go(-7)">上週</el-button>
       <el-date-picker
         :model-value="weekStart"
         type="date"
         format="YYYY-MM-DD"
         value-format="YYYY-MM-DD"
         :clearable="false"
+        :disabled="saving"
         aria-label="週次日期"
         class="grid-toolbar__picker"
         data-test="toolbar-date"
         @update:model-value="(v: string | null) => v && emit('update:weekStart', mondayOf(v))"
       />
-      <el-button data-test="toolbar-next" @click="go(7)">下週 <el-icon><ArrowRight /></el-icon></el-button>
+      <el-button data-test="toolbar-next" :disabled="saving" @click="go(7)">下週 <el-icon><ArrowRight /></el-icon></el-button>
       <span class="grid-toolbar__label">{{ weekLabel }}</span>
     </div>
 

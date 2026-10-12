@@ -41,7 +41,7 @@
       :today="gridData.today"
       :filter="filter"
       :can-edit-plan="caller.can_edit_plan"
-      :shift-options="activeShifts"
+      :shift-options="gridData?.shift_types ?? []"
       :weekly-value="state.weeklyValue"
       :coverage="coverage"
       :mobile="isMobile"
@@ -171,7 +171,6 @@ const NO_CALLER: GridOut['caller'] = { can_view_attendance: false, can_edit_plan
 const gridData = computed(() => state.grid.value)
 const caller = computed(() => gridData.value?.caller ?? NO_CALLER)
 const days = computed(() => (gridData.value ? visibleDays(gridData.value.days, gridData.value.cells) : []))
-const activeShifts = computed(() => gridData.value?.shift_types.filter((s) => s.is_active) ?? [])
 const employeeNames = computed<Record<number, string>>(() =>
   Object.fromEntries((gridData.value?.employees ?? []).map((e) => [e.employee_id, e.name])),
 )
@@ -325,7 +324,14 @@ const batchUnits = ref<BatchUnit[]>([])
 
 async function save(): Promise<void> {
   try {
+    const startWeek = weekStartRef.value
     const outcome = await state.save()
+    if (weekStartRef.value !== startWeek) {
+      // 儲存途中換了週：舊週的結果不得顯示在新週（批次確認會開到錯的週）
+      if (outcome.errors.length) ElMessage.error(outcome.errors.join('；'))
+      emit('changed')
+      return
+    }
     const notes: string[] = []
     if (outcome.weeklySaved) notes.push(`已儲存 ${outcome.weeklySaved} 人的週排班`)
     if (outcome.dailySaved) notes.push(`未打卡的 ${outcome.dailySaved} 天改為每日調整`)

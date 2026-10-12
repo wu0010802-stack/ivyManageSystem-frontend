@@ -214,4 +214,14 @@ describe('PersonDayDrawer 審查修正', () => {
     expect(message.warning).toHaveBeenCalled()
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
+
+  it('停用班別：改這天的選中項顯示「舊班別…（已停用）」而非裸 id', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { plan: { source: 'daily', shift_type_id: 3, name: '舊班別', work_start: '07:30', work_end: '16:00' } }))
+    await flushPromises()
+    const daySelect = wrapper.findAllComponents({ name: 'ElSelect' })[0]
+    expect(daySelect.props('modelValue')).toBe(3)
+    const current = wrapper.findAllComponents({ name: 'ElOption' }).find((o) => o.props('value') === 3)
+    expect(current?.props('label')).toBe('舊班別 07:30–16:00（已停用）')
+    expect(current?.props('disabled')).toBe(true)
+  })
 })

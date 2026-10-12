@@ -172,4 +172,41 @@ describe('ScheduleGridPanel', () => {
     expect(api.download).toHaveBeenCalledWith('/exports/shifts', `排班表_${W1}.xlsx`, { week_start: W1 })
     expect(api.download).toHaveBeenCalledWith('/shifts/import-template', '排班匯入範本.xlsx')
   })
+
+  it('儲存途中換週：不開批次確認（舊週的結果不顯示在新週）', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findAllComponents({ name: 'ElSelect' })[1].vm.$emit('update:modelValue', 2)
+    await flushPromises()
+    // 每日調整都已送出、units 已組好，卡在儲存收尾的重新載入；換週發生在這段 await 期間
+    // （若換週發生在寫入途中，composable 會回 cancelled 且不帶 units，測不到此守衛）
+    let release: () => void = () => {}
+    api.grid.mockReturnValueOnce(new Promise((resolve) => { release = () => resolve({ data: recordedGrid() }) }))
+    await wrapper.find('[data-test="toolbar-save"]').trigger('click')
+    await flushPromises()
+    expect(api.saveDaily).toHaveBeenCalledTimes(4)
+    await wrapper.setProps({ date: '2026-09-21' })
+    await flushPromises()
+    release()
+    await flushPromises()
+    expect(wrapper.findComponent(BatchStub).props('modelValue')).toBe(false)
+  })
+
+  it('複製指定週：未選來源週時送出鈕停用；選 2026-09-02 後以 8/31 那週為來源', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    api.getAssignments.mockResolvedValueOnce({ data: [assignment(1, 2)] })
+    wrapper.findAllComponents({ name: 'ElDropdown' })[0].vm.$emit('command', 'copy-week')
+    await flushPromises()
+    const submit = () => wrapper.findAll('button').find((b) => b.text() === '複製到本週')!
+    expect(submit().attributes('disabled')).toBeDefined()
+    const pickers = wrapper.findAllComponents({ name: 'ElDatePicker' })
+    pickers[pickers.length - 1].vm.$emit('update:modelValue', '2026-09-02')
+    await flushPromises()
+    expect(submit().attributes('disabled')).toBeUndefined()
+    await submit().trigger('click')
+    await flushPromises()
+    expect(api.getAssignments).toHaveBeenLastCalledWith({ week_start: '2026-08-31' })
+    expect(wrapper.find('[data-test="toolbar-save"]').text()).toBe('儲存排班（1 處變更）')
+  })
 })
