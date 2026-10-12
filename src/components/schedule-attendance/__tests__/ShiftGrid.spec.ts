@@ -16,6 +16,7 @@ function cellsFor(overrides: Record<string, Parameters<typeof cell>[2]> = {}): G
 function mountGrid(opts: {
   cells?: GridCell[]
   filter?: GridFilter
+  keyword?: string
   canEditPlan?: boolean
   mobile?: boolean
   today?: string
@@ -39,6 +40,7 @@ function mountGrid(opts: {
       cells: indexCells(g.cells),
       today: opts.today ?? TODAY,
       filter: opts.filter ?? 'all',
+      keyword: opts.keyword,
       canEditPlan: opts.canEditPlan ?? true,
       shiftOptions: SHIFTS.filter((s) => s.is_active),
       weeklyValue: (id: number) => (id === 1 ? 1 : null),
@@ -84,6 +86,38 @@ describe('ShiftGrid 桌機', () => {
     expect(wrapper.find('[data-test="row-1"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="row-2"]').exists()).toBe(true)
     expect(wrapper.find(`[data-test="cell-2-${WEEK[0]}"]`).classes()).toContain('shift-grid__cell--danger')
+  })
+
+  it('關鍵字搜尋：姓名包含（不分大小寫、前後空白忽略）', () => {
+    const wrapper = mountGrid({ keyword: ' 王副 ' })
+    expect(wrapper.find('[data-test="row-2"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="row-1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="row-3"]').exists()).toBe(false)
+    // 沒有人員的班級分組標題也不留
+    expect(wrapper.findAll('.shift-grid__group').map((w) => w.text())).toEqual(['滿天星'])
+  })
+
+  it('關鍵字搜尋：工號包含（不分大小寫）', () => {
+    const wrapper = mountGrid({ keyword: 'e003' })
+    expect(wrapper.find('[data-test="row-3"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="row-1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="row-2"]').exists()).toBe(false)
+  })
+
+  it('關鍵字沒有符合者：顯示「找不到符合的人員」；清空關鍵字恢復全部', async () => {
+    const wrapper = mountGrid({ keyword: '不存在的人' })
+    expect(wrapper.find('[data-test="shift-grid-table"]').exists()).toBe(false)
+    expect(wrapper.find('.shift-grid__empty').text()).toBe('找不到符合的人員')
+    await wrapper.setProps({ keyword: '' })
+    expect(wrapper.findAll('tbody tr[data-test^="row-"]')).toHaveLength(3)
+  })
+
+  it('關鍵字與「只看有問題」並用：兩個條件都要符合', () => {
+    const issueCells = cellsFor({ [`2|${WEEK[0]}`]: { actual: { status: 'anomaly', punch_in: `${WEEK[0]}T08:30:00`, punch_out: `${WEEK[0]}T18:00:00` } } })
+    expect(mountGrid({ filter: 'issues', keyword: '王', cells: issueCells }).find('[data-test="row-2"]').exists()).toBe(true)
+    const none = mountGrid({ filter: 'issues', keyword: '林', cells: issueCells })
+    expect(none.find('[data-test="row-1"]').exists()).toBe(false)
+    expect(none.find('.shift-grid__empty').text()).toBe('找不到符合的人員')
   })
 
   it('點格子送出 select；不在職的格子不可點', async () => {
@@ -152,6 +186,14 @@ describe('ShiftGrid 手機', () => {
     await wrapper.find(`[data-test="mobile-day-${WEEK[2]}"]`).trigger('click')
     await wrapper.find('[data-test="card-2"]').trigger('click')
     expect(wrapper.emitted('select')).toEqual([[2, WEEK[2]]])
+  })
+
+  it('手機卡片與桌機共用同一份關鍵字篩選', () => {
+    const wrapper = mountGrid({ mobile: true, keyword: '李' })
+    expect(wrapper.find('[data-test="card-3"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="card-1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="card-2"]').exists()).toBe(false)
+    expect(mountGrid({ mobile: true, keyword: 'zzz' }).find('.shift-grid__empty').text()).toBe('找不到符合的人員')
   })
 
   it('可排班者的日期頁籤也是 7 天，點週六可選到週六的人員卡片', async () => {

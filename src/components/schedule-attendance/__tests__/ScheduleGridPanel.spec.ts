@@ -179,6 +179,20 @@ describe('ScheduleGridPanel', () => {
     expect(missed.find(`[data-test="gap-${wed}"]`).text()).toContain('早車無人上班')
   })
 
+  it('工具列搜尋框的關鍵字會過濾格子（姓名或工號）', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find('[data-test="row-1"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="row-2"]').exists()).toBe(true)
+    await wrapper.find('[data-test="toolbar-keyword"]').setValue('E002')
+    await flushPromises()
+    expect(wrapper.find('[data-test="row-1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="row-2"]').exists()).toBe(true)
+    await wrapper.find('[data-test="toolbar-keyword"]').setValue('沒有這個人')
+    await flushPromises()
+    expect(wrapper.text()).toContain('找不到符合的人員')
+  })
+
   it('換週後載入失敗：顯示載入失敗與重新載入，不再畫上一週的格子（審查 P3）', async () => {
     const wrapper = mountPanel()
     await flushPromises()

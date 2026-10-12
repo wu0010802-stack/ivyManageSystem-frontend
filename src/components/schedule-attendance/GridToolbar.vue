@@ -30,6 +30,16 @@
       <el-radio-button value="future">只看未來可排</el-radio-button>
     </el-radio-group>
 
+    <el-input
+      :model-value="keyword"
+      clearable
+      placeholder="搜尋姓名或工號"
+      aria-label="搜尋人員"
+      class="grid-toolbar__keyword"
+      data-test="toolbar-keyword"
+      @update:model-value="(v: string) => emit('update:keyword', v)"
+    />
+
     <div v-if="canEditPlan" class="grid-toolbar__tools" role="group" aria-label="排班工具">
       <el-dropdown split-button :disabled="busy" data-test="toolbar-copy" @click="emit('copy-prev-week')" @command="onCommand">
         複製上週排班
@@ -71,6 +81,7 @@ export type ToolbarCommand = 'copy-week' | 'copy-prev-month' | 'import' | 'templ
 const props = defineProps<{
   weekStart: string
   filter: GridFilter
+  keyword: string
   canEditPlan: boolean
   pendingCount: number
   saving?: boolean
@@ -80,6 +91,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:weekStart': [value: string]
   'update:filter': [value: GridFilter]
+  'update:keyword': [value: string]
   'copy-prev-week': []
   command: [command: ToolbarCommand]
   save: []
@@ -108,6 +120,7 @@ function onCommand(command: string | number | object): void {
 .grid-toolbar__nav, .grid-toolbar__tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .grid-toolbar__tools { margin-left: auto; }
 .grid-toolbar__picker { width: 150px; }
+.grid-toolbar__keyword { width: 200px; }
 .grid-toolbar__label { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 @media (--to-sm) {
   .grid-toolbar__tools { margin-left: 0; }

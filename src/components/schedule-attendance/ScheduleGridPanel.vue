@@ -3,6 +3,7 @@
     <GridToolbar
       :week-start="weekStart"
       :filter="filter"
+      :keyword="keyword"
       :can-edit-plan="caller.can_edit_plan"
       :pending-count="state.pendingCount.value"
       :saving="state.saving.value"
@@ -10,6 +11,7 @@
       :issue-count="issueCount"
       @update:week-start="(v: string) => emit('update:date', v)"
       @update:filter="(v: GridFilter) => emit('update:filter', v)"
+      @update:keyword="(v: string) => (keyword = v)"
       @copy-prev-week="copyPrevWeek"
       @command="onCommand"
       @save="save"
@@ -40,6 +42,7 @@
       :cells="state.cells.value"
       :today="gridData.today"
       :filter="filter"
+      :keyword="keyword"
       :can-edit-plan="caller.can_edit_plan"
       :shift-options="gridData?.shift_types ?? []"
       :weekly-value="state.weeklyValue"
@@ -160,6 +163,8 @@ const emit = defineEmits<{
 }>()
 
 const { isMobile } = useIsMobile()
+/** 人員搜尋（姓名或工號）：只在本面板內，不進網址 */
+const keyword = ref('')
 const weekStartRef = ref(mondayOf(props.date))
 watch(() => props.date, (d) => { weekStartRef.value = mondayOf(d) })
 const weekStart = computed(() => weekStartRef.value)

@@ -163,6 +163,8 @@ const props = defineProps<{
   cells: Map<string, GridCell>
   today: string
   filter: GridFilter
+  /** 人員搜尋（姓名或工號，不分大小寫）；空字串＝不過濾 */
+  keyword?: string
   canEditPlan: boolean
   shiftOptions: GridShiftType[]
   weeklyValue: (employeeId: number) => number | null
@@ -209,14 +211,23 @@ const displays = computed(() => {
 })
 const display = (employeeId: number, date: string): CellDisplay => displays.value.get(cellKey(employeeId, date))!
 
+const needle = computed(() => (props.keyword ?? '').trim().toLowerCase())
+function matchesKeyword(emp: GridEmployee): boolean {
+  if (!needle.value) return true
+  return emp.name.toLowerCase().includes(needle.value) || (emp.employee_number ?? '').toLowerCase().includes(needle.value)
+}
+
+// 桌機表格與手機卡片共用同一份列
 const visibleRows = computed(() =>
-  props.employees.filter((emp) =>
-    rowMatchesFilter(
-      props.days.map((d) => cellOf(emp.employee_id, d.date)).filter((c): c is GridCell => c !== undefined),
-      props.filter,
-      props.today,
-    ),
-  ),
+  props.employees
+    .filter((emp) =>
+      rowMatchesFilter(
+        props.days.map((d) => cellOf(emp.employee_id, d.date)).filter((c): c is GridCell => c !== undefined),
+        props.filter,
+        props.today,
+      ),
+    )
+    .filter(matchesKeyword),
 )
 
 const sections = computed(() =>
@@ -225,9 +236,10 @@ const sections = computed(() =>
     .filter((section) => section.employees.length > 0),
 )
 
-const emptyText = computed(() =>
-  props.filter === 'issues' ? '這段期間沒有待處理的格子' : props.filter === 'future' ? '這段期間沒有可排的未來日' : '這段期間沒有在職人員',
-)
+const emptyText = computed(() => {
+  if (needle.value) return '找不到符合的人員'
+  return props.filter === 'issues' ? '這段期間沒有待處理的格子' : props.filter === 'future' ? '這段期間沒有可排的未來日' : '這段期間沒有在職人員'
+})
 
 function dayLabel(d: GridDay): string {
   const [, m, dd] = d.date.split('-').map(Number)

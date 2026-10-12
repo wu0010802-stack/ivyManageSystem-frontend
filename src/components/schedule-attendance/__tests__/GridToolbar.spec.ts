@@ -6,7 +6,7 @@ import { W1 } from './gridFixtures'
 
 function mountToolbar(props: Partial<InstanceType<typeof GridToolbar>['$props']> = {}) {
   return mount(GridToolbar, {
-    props: { weekStart: W1, filter: 'all', canEditPlan: true, pendingCount: 0, ...props },
+    props: { weekStart: W1, filter: 'all', keyword: '', canEditPlan: true, pendingCount: 0, ...props },
     global: { plugins: [ElementPlus] },
   })
 }
@@ -26,6 +26,23 @@ describe('GridToolbar', () => {
     expect(wrapper.text()).toContain('只看有問題（3）')
     wrapper.findComponent({ name: 'ElRadioGroup' }).vm.$emit('update:modelValue', 'issues')
     expect(wrapper.emitted('update:filter')).toEqual([['issues']])
+  })
+
+  it('人員搜尋框（姓名或工號）：輸入與清除都送出 update:keyword', async () => {
+    const wrapper = mountToolbar()
+    const input = wrapper.find('[data-test="toolbar-keyword"]')
+    expect(input.exists()).toBe(true)
+    expect(input.attributes('placeholder')).toBe('搜尋姓名或工號')
+    expect(input.attributes('aria-label')).toBe('搜尋人員')
+    await input.setValue('E003')
+    // 日期選擇器內部也有 ElInput：以 placeholder 找出搜尋框那個（模擬 clearable 的清除）
+    wrapper.findAllComponents({ name: 'ElInput' }).find((c) => c.props('placeholder') === '搜尋姓名或工號')!.vm.$emit('update:modelValue', '')
+    expect(wrapper.emitted('update:keyword')).toEqual([['E003'], ['']])
+  })
+
+  it('人員搜尋框顯示傳入的關鍵字，沒有排班權限的人也看得到', () => {
+    const wrapper = mountToolbar({ keyword: '王副', canEditPlan: false })
+    expect((wrapper.find('[data-test="toolbar-keyword"]').element as HTMLInputElement).value).toBe('王副')
   })
 
   it('儲存鈕顯示變更數、沒有變更時停用；沒有排班權限就不顯示排班工具', async () => {
