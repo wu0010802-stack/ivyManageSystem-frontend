@@ -466,13 +466,19 @@ onMounted(() => {
   color: var(--el-color-primary);
 }
 
-/* 手機：chip 只有 28px、原生日期框 13px 字（iOS 聚焦會整頁放大）且 25px 高 */
-@media (--to-sm) {
+/* 觸控裝置（含平板，DESIGN.md 教師端規則）：篩選 chip 原本只有 28px */
+@media (pointer: coarse) {
+  .chip,
+  .filters__custom input {
+    min-height: var(--touch-target-min);
+  }
   .chip {
-    min-height: 36px;
     padding: 6px 14px;
   }
+}
 
+/* 手機：原生日期框 13px 字（iOS 聚焦會整頁放大）且 25px 高 */
+@media (--to-sm) {
   .filters__custom {
     flex: 1 1 100%;
   }

@@ -249,4 +249,8 @@ function statusLabel(s: string) {
   gap: var(--space-1);
   align-self: center;
 }
+/* 直向堆疊時 EP 的 .el-button + .el-button margin-left 會讓「略過」往右縮 12px */
+.actions .el-button + .el-button {
+  margin-left: 0;
+}
 </style>

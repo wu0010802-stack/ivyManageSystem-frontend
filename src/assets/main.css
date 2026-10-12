@@ -561,6 +561,61 @@ html.ivy-admin .el-table .el-table__cell {
   }
 }
 
+/* 教師端平板：DESIGN.md「教師端版面規則」（2026-10-12 業主裁定）把平板列為正式
+   裝置，觸控目標不能只寫在窄幕斷點——768–1023px 的觸控平板吃的是桌機排版。
+   同一套基準只對教師端（html.ivy-portal）延伸到 pointer: coarse；管理端平板維持
+   桌機密度（行政在辦公室電腦操作為主）。豁免區與上段相同。 */
+@media (pointer: coarse) and (min-width: 768px) {
+  html.ivy-portal .el-button:not(.is-link):not(.is-text):not(.el-button--small):not(.el-table *):not(.el-pagination *) {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+  }
+  html.ivy-portal .el-button.el-button--small:not(.is-link):not(.is-text):not(.el-table *):not(.el-pagination *) {
+    min-height: 36px;
+    min-width: 36px;
+  }
+  html.ivy-portal .el-input:not(.el-table *):not(.el-pagination *),
+  html.ivy-portal .el-date-editor.el-range-editor:not(.el-table *) {
+    --el-input-height: var(--touch-target-min);
+  }
+  html.ivy-portal .el-input.el-input--small:not(.el-table *):not(.el-pagination *),
+  html.ivy-portal .el-date-editor.el-range-editor.el-range-editor--small:not(.el-table *) {
+    --el-input-height: 36px;
+  }
+  html.ivy-portal .el-date-editor.el-range-editor:not(.el-table *) .el-range-input,
+  html.ivy-portal .el-date-editor.el-range-editor:not(.el-table *) .el-range-separator {
+    height: calc(var(--el-input-height) - 2px);
+    line-height: calc(var(--el-input-height) - 2px);
+  }
+  html.ivy-portal .el-select:not(.el-table *):not(.el-pagination *) .el-select__wrapper {
+    min-height: var(--touch-target-min);
+  }
+  html.ivy-portal .el-select.el-select--small:not(.el-table *):not(.el-pagination *) .el-select__wrapper {
+    min-height: 36px;
+  }
+  /* 平板是桌機排版、表格照常顯示：列內動作（補件／撤回／接受等）只有 18–24px，
+     手指點不準。只撐高到 36px、link 鈕補左右內距，列高小幅增加可接受。 */
+  html.ivy-portal .el-table .el-button.el-button {
+    min-height: 36px;
+  }
+  html.ivy-portal .el-table .el-button.is-link {
+    padding-inline: var(--space-2);
+  }
+  /* 窄欄內兩顆 link 鈕會換行；已有內距隔開，去掉 EP 相鄰 margin 免得第二顆內縮 */
+  html.ivy-portal .el-table .el-button.is-link + .el-button.is-link {
+    margin-left: 0;
+  }
+  html.ivy-portal .el-pagination.el-pagination {
+    --el-pagination-button-width: 36px;
+    --el-pagination-button-height: 36px;
+    --el-pagination-button-width-small: 36px;
+    --el-pagination-button-height-small: 36px;
+  }
+  html.ivy-portal .el-pagination.el-pagination .el-select__wrapper {
+    min-height: 36px;
+  }
+}
+
 /* WCAG AA：Element Plus 預設 light-effect 狀態徽章文字色（*-base on *-soft）對比僅 1.9–3.1:1。
    改用 design-tokens 的 *-darker（為 text-on-light 設計），躍升至 ≥4.5:1。
    只覆寫 light effect 預設；effect="dark"（白字飽和底）已達標、不在此選擇器內。 */

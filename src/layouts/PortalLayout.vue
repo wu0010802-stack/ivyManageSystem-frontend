@@ -901,6 +901,14 @@ html.dark .portal-layout {
   color: #94a3b8;
 }
 
+/* 觸控平板：收合鈕 32px 低於觸控下限（DESIGN.md 教師端規則） */
+@media (pointer: coarse) {
+  .portal-collapse-toggle {
+    width: var(--touch-target-min);
+    height: var(--touch-target-min);
+  }
+}
+
 .portal-collapse-toggle:hover {
   background-color: var(--color-neutral-700);
   color: #fff;

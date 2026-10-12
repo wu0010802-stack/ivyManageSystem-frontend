@@ -499,9 +499,9 @@ onMounted(fetchStudents)
   color: var(--el-color-primary);
 }
 
-/* 手機：「⋯」只有 21×24、眼睛鈕 27×19。撐到 44px 觸控區，負 margin 抵銷，
-   卡片排版不變。 */
-@media (--to-sm) {
+/* 觸控裝置（含平板）：「⋯」只有 21×24、眼睛鈕 27×19。撐到 44px 觸控區，
+   負 margin 抵銷，卡片排版不變。 */
+@media (pointer: coarse) {
   .card-more-btn,
   .reveal-btn {
     min-width: var(--touch-target-min);

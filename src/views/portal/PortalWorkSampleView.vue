@@ -422,10 +422,11 @@ async function confirmDelete(item: WorkSampleItem) {
   color: white;
   border-color: var(--color-primary);
 }
-/* 手機：chip 只有 28px 高，老師在課堂上單手點選學生／領域常點錯 */
-@media (--to-sm) {
+/* 觸控裝置（含平板，DESIGN.md 教師端規則）：chip 只有 28px 高，
+   老師在課堂上單手點選學生／領域常點錯 */
+@media (pointer: coarse) {
   .chip-btn {
-    min-height: 36px;
+    min-height: var(--touch-target-min);
     padding: 6px var(--space-3);
   }
 }
