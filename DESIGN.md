@@ -68,6 +68,18 @@
 
 出處 spec：`docs/superpowers/specs/2026-07-30-admin-form-dialog-shell-design.md`。
 
+## 教師端（Portal）版面規則（2026-10-12 業主裁定）
+
+新增或改版教師端頁面前先對照這一節；出處是 2026-10-12 第三輪 UI/UX 審查（記錄在 workspace 記憶 `project_teacher_portal_uiux_round3_2026_10_12`）。
+
+- **三種裝置都要驗收**：手機 `< 768px`（底部導覽＋漢堡側欄）、平板 `768–1023px` 且為觸控（側欄預設收成 64px 圖示列，頁首收掉系統名稱、姓名文字與搜尋鈕文字）、桌機 `≥ 1024px`。審查與實跑截圖固定三個視口：390、810（iPad 直式）、1440。學生點名與每日聯絡簿是平板必驗頁。
+- **觸控目標**：`@media (pointer: coarse)` 下，點名狀態鈕、篩選 chip、批次動作鈕一律 `--touch-target-min`（44px）。不要只寫在 `(max-width: 600px)` 裡，平板吃的是桌機排版。
+- **頁面寬度兩種**：表單、時間軸、個人資料這類由上往下讀的頁，根容器加 `.portal-page--reading`（`soft-ui.css`，800px 置中）；列表、表格、名冊、月曆、首頁一律滿版靠左。滿版的卡片清單用 `repeat(auto-fill, minmax(min(100%, 340px), 1fr))` 排成多欄，不要拉成一整條。根容器不要再加自己的 padding，殼層 `el-main` 已提供留白（桌機 24px、手機 16px）。
+- **底部導覽兩種配置**：有班級（today-hub `classroom_id > 0`）且同時有 `STUDENTS_READ`、`PORTFOLIO_READ` 的帶班老師為「今日／點名／＋申請／聯絡簿／我的」；其餘同仁為「今日／＋申請／出勤／我的」。帶班版的「我的出勤」由首頁功能格「我的」組進入。改導覽結構必 bump `PortalLayout` 的 `PORTAL_LAYOUT_VERSION` 並改寫一次性說明。
+- **覆蓋層層級**：底部導覽是 `--z-tab-bar`；底部 sheet、搜尋面板、側欄遮罩一律高於它。守衛：`src/layouts/__tests__/portalOverlayStacking.test.ts`，新增手機覆蓋層要補進它的 `OVERLAYS`。
+- **同一功能同一名字**：側欄、首頁功能格、⌘K 捷徑的名稱一律等於目的頁的 `meta.title`；首頁功能格的每個目的頁在側欄都要有同名入口。守衛：`src/layouts/__tests__/portalNavParity.test.ts`。
+- **首頁「現在該做」**：待辦晶片是捷徑，點了直接進該頁（與功能格同一套導向，多班老師帶 `classroom_id`）；班上有過敏注意或連續缺席時多一行安全摘要，點了捲到班級提醒。生日不是安全事項，不放進來。
+
 ## 相關 spec 索引（改動前先查）
 
 - 表單 UX：`2026-06-02-form-ux-single-column-collapsible-design.md`
