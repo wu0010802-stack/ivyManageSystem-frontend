@@ -23,25 +23,29 @@
               @dragleave="onDragLeave(cls.id)"
               @drop="onDrop(cls.id, $event)"
             >
-              <el-checkbox
-                v-if="editable && classStudents(cls.id).length"
-                class="class-select-all"
-                :aria-label="`勾選${cls.target_name}全班`"
-                :model-value="classAllSelected(cls.id)"
-                :indeterminate="classSomeSelected(cls.id) && !classAllSelected(cls.id)"
-                @change="(val: string | number | boolean) => emit('set-selected', classStudents(cls.id).map(st => st.id), Boolean(val))"
-              />
-              <span class="class-name-text">{{ cls.target_name }}</span>
-              <span v-if="cls.class_code" class="class-code">{{ cls.class_code }}</span>
-              <el-button
-                v-if="editable"
-                :icon="Edit"
-                circle
-                size="small"
-                class="class-edit-btn"
-                title="編輯班級"
-                @click="emit('class-edit', cls.id)"
-              />
+              <div class="class-name-line">
+                <el-checkbox
+                  v-if="editable && classStudents(cls.id).length"
+                  class="class-select-all"
+                  :aria-label="`勾選${cls.target_name}全班`"
+                  :model-value="classAllSelected(cls.id)"
+                  :indeterminate="classSomeSelected(cls.id) && !classAllSelected(cls.id)"
+                  @change="(val: string | number | boolean) => emit('set-selected', classStudents(cls.id).map(st => st.id), Boolean(val))"
+                />
+                <span class="class-name-text">{{ cls.target_name }}</span>
+              </div>
+              <div class="class-meta-line">
+                <span v-if="cls.class_code" class="class-code">{{ cls.class_code }}</span>
+                <el-button
+                  v-if="editable"
+                  :icon="Edit"
+                  link
+                  class="class-edit-btn"
+                  title="編輯班級"
+                  :aria-label="`編輯${cls.target_name}`"
+                  @click="emit('class-edit', cls.id)"
+                />
+              </div>
             </td>
           </tr>
           <!-- 容量 badge -->
@@ -412,7 +416,7 @@ defineExpose({ locateStudent, locateClass })
 <style scoped>
 .plan-roster-wrapper {
   --yp-h-grade: 34px;
-  --yp-h-name: 40px;
+  --yp-h-name: 50px;
   font-size: 14px;
   color: var(--text-primary);
 }
@@ -421,7 +425,8 @@ defineExpose({ locateStudent, locateClass })
   overflow: auto;
   /* 垂直捲動收在表格容器內，sticky 表頭對此容器生效（el-main 為外層捲動根，
      對 window/el-main sticky 需算 header 高度，內部容器最穩） */
-  max-height: calc(100vh - 230px);
+  /* 上方還有頁首、進度列與批次列；扣掉它們讓頁面本身不再出現第二條捲軸 */
+  max-height: max(320px, calc(100vh - 330px));
 }
 
 .plan-roster-table {
@@ -504,12 +509,24 @@ defineExpose({ locateStudent, locateClass })
 }
 
 .class-name-cell {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
+}
+
+.class-name-line,
+.class-meta-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.class-meta-line {
+  min-height: 18px;
 }
 
 .class-edit-btn {
-  margin-left: 4px;
-  vertical-align: middle;
+  height: auto;
+  padding: 0;
 }
 
 .capacity-badge {
@@ -527,7 +544,7 @@ defineExpose({ locateStudent, locateClass })
 
 .plan-roster-table .teacher-cell {
   font-size: var(--text-sm);
-  padding: 2px var(--space-1);
+  padding: 2px;
 }
 
 .plan-roster-table .seq-cell {
@@ -587,12 +604,9 @@ defineExpose({ locateStudent, locateClass })
 
 .class-select-all {
   height: auto;
-  margin-right: var(--space-1);
-  vertical-align: middle;
 }
 
 .class-code {
-  margin-left: var(--space-1);
   font-size: var(--text-xs);
   font-weight: var(--font-weight-regular);
   color: var(--text-secondary);

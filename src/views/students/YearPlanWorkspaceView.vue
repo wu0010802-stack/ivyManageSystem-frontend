@@ -752,10 +752,10 @@ async function onStudentMove(payload: {
   z-index: var(--z-sticky);
   display: flex;
   align-items: center;
-  min-height: 52px;
+  min-height: 44px;
   border: 1px solid var(--color-neutral-200);
   border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   background: var(--surface-color);
 }
 

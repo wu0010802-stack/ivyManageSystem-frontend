@@ -139,7 +139,7 @@ function stepClass(state: StepState): Record<string, boolean> {
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-4);
 }
 
 .next-step + .next-step {
@@ -202,7 +202,7 @@ function stepClass(state: StepState): Record<string, boolean> {
   color: var(--text-secondary);
 }
 
-@media (--to-lg) {
+@media (--to-md) {
   .plan-next-steps {
     flex-direction: column;
   }

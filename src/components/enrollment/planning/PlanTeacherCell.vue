@@ -109,7 +109,7 @@ function onVisibleChange(visible: boolean): void {
   align-items: center;
   width: 100%;
   min-height: 28px;
-  padding: 2px var(--space-1);
+  padding: 2px 0;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
