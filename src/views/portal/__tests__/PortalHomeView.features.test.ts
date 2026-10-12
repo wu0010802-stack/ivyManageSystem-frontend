@@ -346,9 +346,9 @@ it('未綁班行政身分預期403不顯示班級錯誤', async () => {
   w.unmount()
 })
 
-// 2026-10-12：「現在該做」的晶片點了只捲到功能格；桌機上格子本來就在正下方，
-// 看起來像沒反應。改成把有待辦數字的格子標示出來並聚焦第一格。
-describe('PortalHomeView「現在該做」→ 標示對應的功能格', () => {
+// 2026-10-12 業主裁定：「現在該做」的晶片是捷徑，點了直接進該頁（與功能格同一套導向，
+// 多班老師會帶上當前班級）；有過敏或連續缺席時多一行摘要，點了捲到班級提醒。
+describe('PortalHomeView「現在該做」→ 直接進頁、安全摘要', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     hubData.value = {
@@ -356,26 +356,30 @@ describe('PortalHomeView「現在該做」→ 標示對應的功能格', () => {
       classroom_name: '向日葵班',
       counts: { attendance_pending: 3, contact_books_pending: 1, observations_pending: 0, medications_pending: 0 },
     }
-    mockHomeSummary.mockResolvedValue({ data: SUMMARY })
+    mockHomeSummary.mockResolvedValue({
+      data: {
+        ...SUMMARY,
+        classrooms: [
+          { classroom_id: 3, classroom_name: '向日葵班', allergy_alerts: [{ student_id: 1 }, { student_id: 2 }], consecutive_absences: [{ student_id: 5 }] },
+          { classroom_id: 4, classroom_name: '小熊班', allergy_alerts: [{ student_id: 9 }], consecutive_absences: [] },
+        ],
+      },
+    })
   })
 
-  it('點晶片後，有待辦的格子被標示、沒有待辦的不標示，焦點落在第一格', async () => {
-    const wrapper = mount(PortalHomeView, {
-      global: { plugins: [ElementPlus, createPinia(), router], stubs: STUBS },
-      attachTo: document.body,
-    })
+  it('點聯絡簿晶片：直接進聯絡簿並帶上當前班級', async () => {
+    const push = vi.spyOn(router, 'push')
+    const wrapper = await mountView()
+    wrapper.findComponent({ name: 'TodayFocusCard' }).vm.$emit('open-task', 'contact_books_pending')
     await flushPromises()
-    try {
-      wrapper.findComponent({ name: 'TodayFocusCard' }).vm.$emit('open-hub')
-      await flushPromises()
+    expect(push).toHaveBeenCalledWith({ path: '/portal/contact-book', query: { classroom_id: 3 } })
+    push.mockRestore()
+    wrapper.unmount()
+  })
 
-      const tile = (key: string) => wrapper.get(`[data-test="feature-${key}"]`)
-      expect(tile('student-attendance').classes()).toContain('is-spotlight')
-      expect(tile('contact-book').classes()).toContain('is-spotlight')
-      expect(tile('observations').classes()).not.toContain('is-spotlight')
-      expect(document.activeElement).toBe(tile('student-attendance').element)
-    } finally {
-      wrapper.unmount()
-    }
+  it('把全部班級的過敏、連續缺席人數加總後交給「現在該做」', async () => {
+    const wrapper = await mountView()
+    expect(wrapper.findComponent({ name: 'TodayFocusCard' }).props('safety')).toEqual({ allergies: 3, absences: 1 })
+    wrapper.unmount()
   })
 })

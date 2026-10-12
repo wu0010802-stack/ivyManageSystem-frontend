@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Warning, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -17,7 +17,7 @@ import {
   type ClassFeatureGroup,
   type PortalPendingActions,
 } from '@/constants/portalClassFeatures'
-import { hubPendingChips, type PortalHubCounts } from '@/utils/portalHubCounts'
+import type { PortalHubCounts } from '@/utils/portalHubCounts'
 
 const { summary, loading, error, refresh } = usePortalDashboard()
 const router = useRouter()
@@ -91,36 +91,34 @@ function onFocusJump(deepLink?: string) {
   scrollToFeatures()
 }
 
-// 點「現在該做」的晶片：捲到功能格，並把有待辦數字的格子短暫標示、聚焦第一格。
-// 原本只捲動；桌機上格子就在正下方，點了像沒反應（2026-10-12 審查）。
-const spotlightKeys = ref<ReadonlySet<string>>(new Set())
-let spotlightTimer: ReturnType<typeof setTimeout> | null = null
-const SPOTLIGHT_MS = 2400
-
-function openHub() {
-  scrollToFeatures()
-  const pending = new Set(
-    hubPendingChips((hubData.value?.counts ?? null) as PortalHubCounts | null).map((c) => c.key),
-  )
-  const keys = GROUPS.map((g) => g.id)
-    .flatMap((g) => featuresOf(g))
-    .filter((f) => f.badgeKey && pending.has(f.badgeKey))
-    .map((f) => f.key)
-  spotlightKeys.value = new Set(keys)
-  if (spotlightTimer) clearTimeout(spotlightTimer)
-  spotlightTimer = setTimeout(() => { spotlightKeys.value = new Set() }, SPOTLIGHT_MS)
-  if (keys.length) {
-    void nextTick(() => {
-      featuresEl.value
-        ?.querySelector<HTMLElement>(`[data-test="feature-${keys[0]}"]`)
-        ?.focus({ preventScroll: true })
-    })
+// 「現在該做」的晶片是捷徑：點了直接進該類待辦的頁面，與功能格走同一套導向
+// （多班老師會帶上當前班級）。找不到對應格子（例如沒有該權限）才退回捲到功能格。
+// 2026-10-12 業主裁定；原本只捲動，桌機上格子就在正下方，點了像沒反應。
+function openTask(countKey: string) {
+  const feature = GROUPS.flatMap((g) => featuresOf(g.id)).find((f) => f.badgeKey === countKey)
+  if (feature) {
+    onFeatureClick(feature)
+    return
   }
+  scrollToFeatures()
 }
 
-onBeforeUnmount(() => {
-  if (spotlightTimer) clearTimeout(spotlightTimer)
+// 過敏與連續缺席提前到「現在該做」：全部班級加總（班級提醒卡本來就逐班全列、
+// 不隨功能格切班過濾），點了捲到班級提醒。
+interface SafetyCard { allergy_alerts?: unknown[]; consecutive_absences?: unknown[] }
+const safetySummary = computed(() => {
+  let allergies = 0
+  let absences = 0
+  for (const c of classrooms.value as SafetyCard[]) {
+    allergies += c.allergy_alerts?.length ?? 0
+    absences += c.consecutive_absences?.length ?? 0
+  }
+  return { allergies, absences }
 })
+const opsSectionEl = ref<HTMLElement | null>(null)
+function openSafety() {
+  opsSectionEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 const featuresEl = ref<HTMLElement | null>(null)
 
@@ -378,8 +376,10 @@ watch(
       :next="hub.sticky_next"
       :counts="hub.counts"
       :classroom-name="hub.classroom_name"
+      :safety="safetySummary"
       @jump="onFocusJump"
-      @open-hub="openHub"
+      @open-task="openTask"
+      @open-safety="openSafety"
     />
 
     <!-- 功能格：原 /portal/class 整頁（教學／管理）＋承接首頁三張卡的「我的」組。
@@ -419,7 +419,6 @@ watch(
             :key="f.key"
             type="button"
             class="feature-tile press-scale"
-            :class="{ 'is-spotlight': spotlightKeys.has(f.key) }"
             :data-test="`feature-${f.key}`"
             @click="onFeatureClick(f)"
           >
@@ -469,7 +468,7 @@ watch(
            已被上方功能格取代，但這三條提醒全系統只有這裡看得到，不能跟著刪。
            逐班各一張（標了班名），不隨上方的班級切換過濾——漏看過敏或連續缺席
            的代價比多看一張卡高。 -->
-      <div class="classroom-section pt-stagger">
+      <div ref="opsSectionEl" class="classroom-section pt-stagger">
         <h3 class="pt-section-title">班級提醒</h3>
         <div v-if="!classrooms.length" class="empty">
           <p>您目前未綁定任何班級</p>
@@ -691,12 +690,6 @@ watch(
 }
 .feature-tile:hover {
   background: var(--el-fill-color-light);
-}
-/* 「現在該做」點過來時標示對應的格子（狀態變化，不是裝飾；reduced-motion 下仍是靜態框線） */
-.feature-tile.is-spotlight {
-  border-color: var(--el-color-primary);
-  box-shadow: 0 0 0 3px var(--el-color-primary-light-8);
-  transition: box-shadow var(--transition-base), border-color var(--transition-base);
 }
 
 .feature-label {

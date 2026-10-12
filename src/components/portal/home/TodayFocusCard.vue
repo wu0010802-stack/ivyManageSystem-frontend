@@ -9,6 +9,7 @@
  * 完成狀態＝sticky_next 為空 **且** counts 四類皆 0（見 pendingTotal 註解）。
  */
 import { computed } from 'vue'
+import { WarningFilled } from '@element-plus/icons-vue'
 import {
   hubPendingChips,
   hubPendingTotal,
@@ -28,13 +29,23 @@ const props = withDefaults(defineProps<{
   next?: NextTask | null
   counts?: PortalHubCounts
   classroomName?: string
+  /**
+   * 班級提醒裡的安全事項人數（全部班級加總）。過敏與連續缺席原本只在首頁最下方的
+   * 班級提醒卡，手機第一屏看不到；有就在這裡多一行摘要（2026-10-12 業主裁定）。
+   * 生日不是安全事項，不放進來。
+   */
+  safety?: { allergies: number; absences: number }
 }>(), {
   next: null,
   counts: () => ({}),
   classroomName: '',
+  safety: () => ({ allergies: 0, absences: 0 }),
 })
 
-defineEmits<{ 'jump': [deepLink: string | undefined]; 'open-hub': [] }>()
+// open-task：晶片是捷徑，點了由首頁直接帶進該類待辦的頁面（2026-10-12 業主裁定）
+defineEmits<{ 'jump': [deepLink: string | undefined]; 'open-task': [countKey: string]; 'open-safety': [] }>()
+
+const hasSafety = computed(() => props.safety.allergies > 0 || props.safety.absences > 0)
 
 const dueLabel = computed(() => {
   const iso = props.next?.due_at
@@ -99,18 +110,35 @@ const pendingTotal = computed(() => hubPendingTotal(props.counts))
     </div>
 
     <button
-      v-if="chips.length"
+      v-if="hasSafety"
       type="button"
-      class="today-focus__strip"
-      @click="$emit('open-hub')"
+      class="today-focus__safety"
+      data-test="focus-safety"
+      @click="$emit('open-safety')"
     >
-      <span v-for="chip in chips" :key="chip.key" class="today-focus__chip">
-        {{ chip.label }} <strong>{{ chip.count }}</strong>
-      </span>
+      <el-icon class="today-focus__safety-icon" aria-hidden="true"><WarningFilled /></el-icon>
+      <span v-if="safety.allergies > 0">過敏注意 {{ safety.allergies }} 位</span>
+      <span v-if="safety.absences > 0">連續缺席 {{ safety.absences }} 位</span>
       <svg class="today-focus__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M9.5 6.5 15 12l-5.5 5.5" />
       </svg>
     </button>
+
+    <div v-if="chips.length" class="today-focus__strip" role="group" aria-label="待辦，點一下直接前往">
+      <button
+        v-for="chip in chips"
+        :key="chip.key"
+        type="button"
+        class="today-focus__chip"
+        :data-test="`focus-chip-${chip.key}`"
+        @click="$emit('open-task', chip.key)"
+      >
+        {{ chip.label }} <strong>{{ chip.count }}</strong>
+        <svg class="today-focus__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9.5 6.5 15 12l-5.5 5.5" />
+        </svg>
+      </button>
+    </div>
   </div>
 </template>
 
@@ -248,31 +276,65 @@ const pendingTotal = computed(() => hubPendingTotal(props.counts))
 
 .today-focus__strip {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
   flex-wrap: wrap;
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+}
+
+.today-focus__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--touch-target-min, 44px);
+  padding: 0 var(--space-3);
   background: var(--bg-color-soft);
   border: 1px solid var(--border-color-light);
   border-radius: var(--radius-md);
   font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
-.today-focus__strip:focus-visible {
+.today-focus__chip:hover {
+  border-color: var(--color-primary);
+}
+
+.today-focus__chip:focus-visible,
+.today-focus__safety:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-.today-focus__chip {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
 .today-focus__chip strong {
   color: var(--text-primary);
+}
+
+.today-focus__safety {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-2) var(--space-3);
+  background: var(--el-color-danger-light-9);
+  border: 1px solid var(--el-color-danger-light-7);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-danger-darker);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.today-focus__safety-icon {
+  font-size: 16px;
+}
+
+.today-focus__safety .today-focus__chev {
+  margin-left: auto;
 }
 
 .today-focus__chev {
