@@ -11,7 +11,7 @@ function buildIssues(overrides: Partial<IssuesOut> = {}): IssuesOut {
     blocking: [
       { code: 'student_unassigned', message: '學生「小明」尚未分派草稿班級', plan_class_id: null, student_id: 1 },
       { code: 'student_unassigned', message: '學生「小華」尚未分派草稿班級', plan_class_id: null, student_id: 2 },
-      { code: 'head_teacher_missing', message: '班級「小班A」尚未指派導師', plan_class_id: 10, student_id: null },
+      { code: 'head_teacher_missing', message: '班級「小班A」尚未指派班導', plan_class_id: 10, student_id: null },
     ],
     warnings: [
       { code: 'assistant_teacher_missing', message: '班級「小班A」尚未指派副班導', plan_class_id: 10, student_id: null },
@@ -34,7 +34,7 @@ describe('PlanIssuesSummary', () => {
     expect(groups.length).toBe(2)
     expect(groups[0].text()).toContain('學生尚未分派班級')
     expect(groups[0].find('.group-count').text()).toBe('2')
-    expect(groups[1].text()).toContain('班級尚未指派導師')
+    expect(groups[1].text()).toContain('班級尚未指派班導')
     // warnings：1 組
     const warningSection = w.find('.severity-warning')
     expect(warningSection.find('.severity-count').text()).toBe('1')
@@ -69,6 +69,28 @@ describe('PlanIssuesSummary', () => {
       ],
     }))
     expect(w.find('.severity-blocking .group-title').text()).toBe('某種新問題描述')
+  })
+
+  it('後端所有 issue code 都有固定標題（含 2026-10 新增的代號重複、畢業生需標留級、跨年級）', () => {
+    const codes = [
+      'class_code_duplicate', 'graduate_needs_retain', 'cross_grade_assignment',
+      'student_source_classroom_changed', 'graduate_grade_unresolved',
+      'plan_student_invalid', 'target_grade_invalid', 'teacher_invalid',
+    ]
+    const w = mount(PlanIssuesSummary, {
+      global: { plugins: [ElementPlus] },
+      props: {
+        issues: {
+          blocking: codes.map(code => ({ code, message: `原始訊息-${code}`, plan_class_id: null, student_id: null })),
+          warnings: [],
+        },
+      },
+    })
+    const titles = w.findAll('.group-title').map(t => t.text())
+    expect(titles.some(t => t.startsWith('原始訊息-'))).toBe(false)
+    expect(titles).toContain('班級代號重複')
+    expect(titles).toContain('畢業生要續讀須標記留級')
+    expect(w.text()).not.toContain('導師')
   })
 
   it('全空顯示無問題訊息，且不渲染嚴重度區塊', () => {

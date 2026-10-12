@@ -30,6 +30,13 @@ describe('PlanNextSteps', () => {
     expect(steps[2].text()).toContain('2027/08/01')
   })
 
+  it('老師步驟：主句只講阻擋發布的班導，副班導／美語放副句（窄欄不折成三行）', () => {
+    const w = mountSteps()
+    const teacherStep = w.findAll('.next-step')[1]
+    expect(teacherStep.find('.step-status').text()).toBe('8 班未指派班導')
+    expect(teacherStep.find('.step-sub').text()).toBe('副班導 8 班、美語老師 8 班也還沒指派')
+  })
+
   it('完成的步驟標記 is-done', () => {
     const w = mountSteps({ unassignedCount: 0, emptyTeacherSlots: { head: 0, assistant: 0, art: 0 }, blockingCount: 0 })
     const steps = w.findAll('.next-step')

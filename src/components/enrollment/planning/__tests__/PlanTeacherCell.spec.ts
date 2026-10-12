@@ -67,6 +67,12 @@ describe('PlanTeacherCell', () => {
     expect(w.emitted('change')).toBeFalsy()
   })
 
+  it('只有班導未指派用警示色（擋發布）；副班導／美語未指派用次要色', () => {
+    expect(mountCell({ role: 'head' }).find('.teacher-trigger').classes()).toContain('is-blocking')
+    expect(mountCell({ role: 'assistant' }).find('.teacher-trigger').classes()).not.toContain('is-blocking')
+    expect(mountCell({ role: 'head', teacherId: 100, teacherName: '林佳蓉' }).find('.teacher-trigger').classes()).not.toContain('is-blocking')
+  })
+
   it('唯讀：沒有可點的按鈕', () => {
     const w = mountCell({ editable: false })
     expect(w.find('.teacher-trigger').exists()).toBe(false)

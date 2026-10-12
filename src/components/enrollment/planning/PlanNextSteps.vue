@@ -27,6 +27,7 @@
       <div class="step-body">
         <span class="step-title">指派老師</span>
         <span class="step-status">{{ teacherStatus }}</span>
+        <span v-if="teacherSub" class="step-sub">{{ teacherSub }}</span>
       </div>
       <el-button
         v-if="canEdit && carryOverSlots > 0"
@@ -89,15 +90,22 @@ const teacherStep = computed<StepState>(() => {
   if (head > 0) return 'blocking'
   return assistant + art > 0 ? 'pending' : 'done'
 })
-const teacherStatus = computed(() => {
-  const { head, assistant, art } = props.emptyTeacherSlots
-  const others: string[] = []
-  if (assistant > 0) others.push(`副班導 ${assistant} 班`)
-  if (art > 0) others.push(`美語老師 ${art} 班`)
-  const othersText = others.length ? `${others.join('、')}未指派` : ''
-  if (head > 0) return othersText ? `${head} 班未指派班導；${othersText}` : `${head} 班未指派班導`
-  return othersText || '三位老師都已指派'
+// 主句只講會擋發布的班導；副班導／美語（只是提醒）放副句，窄欄不折成三行
+const otherMissing = computed(() => {
+  const { assistant, art } = props.emptyTeacherSlots
+  const parts: string[] = []
+  if (assistant > 0) parts.push(`副班導 ${assistant} 班`)
+  if (art > 0) parts.push(`美語老師 ${art} 班`)
+  return parts.join('、')
 })
+const teacherStatus = computed(() => {
+  const { head } = props.emptyTeacherSlots
+  if (head > 0) return `${head} 班未指派班導`
+  return otherMissing.value ? `${otherMissing.value}未指派` : '三位老師都已指派'
+})
+const teacherSub = computed(() =>
+  props.emptyTeacherSlots.head > 0 && otherMissing.value ? `${otherMissing.value}也還沒指派` : '',
+)
 
 const publishStep = computed<StepState>(() => (props.blockingCount > 0 ? 'blocking' : 'done'))
 const publishStatus = computed(() =>

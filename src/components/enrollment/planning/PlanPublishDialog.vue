@@ -20,6 +20,20 @@
             <li>各班老師的帶班資料同步更新，相關薪資需重新計算</li>
           </ul>
           <p class="apply-undo">{{ undoText }}</p>
+          <!-- 補救模式：發布＝一小時內不可逆套用到現行班級，要求輸入學年確認意圖 -->
+          <div v-if="appliesImmediately" class="confirm-year">
+            <label class="confirm-year-label" :for="confirmInputId">
+              請輸入學年「{{ targetSchoolYear }}」，確認要立即套用到現行班級
+            </label>
+            <el-input
+              :id="confirmInputId"
+              v-model="confirmYear"
+              class="confirm-year-input"
+              :placeholder="String(targetSchoolYear ?? '')"
+              inputmode="numeric"
+              autocomplete="off"
+            />
+          </div>
         </section>
 
         <div class="totals-row">
@@ -72,20 +86,6 @@
           </div>
         </div>
 
-        <!-- 補救模式：發布＝一小時內不可逆套用到現行班級，要求輸入學年確認意圖 -->
-        <div v-if="appliesImmediately" class="confirm-year">
-          <label class="confirm-year-label" :for="confirmInputId">
-            請輸入學年「{{ targetSchoolYear }}」，確認要立即套用到現行班級
-          </label>
-          <el-input
-            :id="confirmInputId"
-            v-model="confirmYear"
-            class="confirm-year-input"
-            :placeholder="String(targetSchoolYear ?? '')"
-            inputmode="numeric"
-            autocomplete="off"
-          />
-        </div>
       </template>
       <el-empty v-else-if="!loading" description="尚無預覽資料" />
     </div>
@@ -253,10 +253,8 @@ defineExpose({ reload, preview, blockingCount, canPublish })
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  margin-top: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--neutral-200);
-  font-size: var(--text-sm);
+  margin-top: var(--space-3);
+  font-weight: var(--font-weight-semibold);
 }
 
 .confirm-year-input {

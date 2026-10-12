@@ -29,7 +29,7 @@
       v-else-if="editable"
       type="button"
       class="teacher-trigger"
-      :class="{ 'is-empty': !teacherName }"
+      :class="{ 'is-empty': !teacherName, 'is-blocking': !teacherName && role === 'head' }"
       :disabled="disabled"
       :aria-label="`${className} ${roleLabel}：${teacherName ?? '未指派'}，點擊選擇老師`"
       @click="startEdit"
@@ -38,7 +38,7 @@
       <span v-if="!teacherName && sourceTeacherName" class="teacher-source">原班：{{ sourceTeacherName }}</span>
     </button>
     <template v-else>
-      <span class="teacher-name" :class="{ 'is-empty': !teacherName }">{{ teacherName ?? '未指派' }}</span>
+      <span class="teacher-name" :class="{ 'is-empty': !teacherName, 'is-blocking': !teacherName && role === 'head' }">{{ teacherName ?? '未指派' }}</span>
       <span v-if="!teacherName && sourceTeacherName" class="teacher-source">原班：{{ sourceTeacherName }}</span>
     </template>
   </div>
@@ -130,9 +130,16 @@ function onVisibleChange(visible: boolean): void {
   opacity: 0.6;
 }
 
+/* 班導未指派會擋發布 → 警示色；副班導／美語只是提醒 → 次要色 */
 .teacher-name.is-empty,
 .teacher-trigger.is-empty .teacher-name {
+  color: var(--text-secondary);
+}
+
+.teacher-name.is-blocking,
+.teacher-trigger.is-blocking .teacher-name {
   color: var(--color-warning-hover);
+  font-weight: var(--font-weight-semibold);
 }
 
 .teacher-source {
@@ -142,7 +149,6 @@ function onVisibleChange(visible: boolean): void {
 
 .teacher-select {
   width: 100%;
-  min-width: 120px;
 }
 
 .opt-note {

@@ -136,6 +136,13 @@ describe('PlanPublishDialog', () => {
     expect(w.emitted('confirm')).toBeTruthy()
   })
 
+  it('補救模式的學年確認欄位放在頂端說明區內（開啟即可見，不必捲到底）', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2026-08-01', appliesImmediately: true, targetSchoolYear: 115 })
+    await flushPromises()
+    expect(w.find('.apply-notice .confirm-year-input').exists()).toBe(true)
+  })
+
   it('預覽載入失敗：顯示錯誤訊息，不顯示「尚無預覽資料」', async () => {
     mockGetPreview.mockRejectedValue({ displayMessage: '伺服器忙碌，請稍後再試' })
     const w = mountDialog()
