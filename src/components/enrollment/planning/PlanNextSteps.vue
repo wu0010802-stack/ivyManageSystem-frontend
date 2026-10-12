@@ -128,7 +128,7 @@ function stepClass(state: StepState): Record<string, boolean> {
   margin: 0 0 var(--space-4);
   padding: 0;
   list-style: none;
-  border: 1px solid var(--neutral-200);
+  border: 1px solid var(--color-neutral-200);
   border-radius: var(--radius-md);
   background: var(--surface-color);
 }
@@ -143,7 +143,7 @@ function stepClass(state: StepState): Record<string, boolean> {
 }
 
 .next-step + .next-step {
-  border-left: 1px solid var(--neutral-200);
+  border-left: 1px solid var(--color-neutral-200);
 }
 
 .step-marker {
@@ -208,7 +208,7 @@ function stepClass(state: StepState): Record<string, boolean> {
   }
 
   .next-step + .next-step {
-    border-top: 1px solid var(--neutral-200);
+    border-top: 1px solid var(--color-neutral-200);
     border-left: none;
   }
 }

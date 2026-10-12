@@ -790,7 +790,7 @@ async function onStudentMove(payload: {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-10) var(--space-4);
-  border: 1px dashed var(--neutral-300);
+  border: 1px dashed var(--color-neutral-300);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
 }

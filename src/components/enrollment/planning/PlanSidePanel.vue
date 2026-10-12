@@ -291,7 +291,7 @@ const openSections = ref<string[]>([])
 
 /* 畢業／排除名單與上方兩段同樣是有框的區塊（原本貼邊無框，看起來像另一種元件） */
 .buckets-collapse {
-  border: 1px solid var(--neutral-200);
+  border: 1px solid var(--color-neutral-200);
   border-radius: var(--radius-md);
   padding: 0 var(--space-3);
   background: var(--surface-color);
