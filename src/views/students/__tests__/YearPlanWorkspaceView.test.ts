@@ -258,6 +258,33 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.find('.plan-roster-table').exists()).toBe(true)
   })
 
+  it('補救模式（applies_immediately）：常駐警示條並把套用資訊傳給發布對話框', async () => {
+    const remedial = statusDraft()
+    Object.assign(remedial.data, { applies_immediately: true, apply_date: '2026-08-01' })
+    mockStatus.mockResolvedValue(remedial)
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    const banner = w.find('.remedial-banner')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('115 學年上學期')
+    expect(banner.text()).toContain('約一小時內')
+    const dialog = w.findComponent({ name: 'PlanPublishDialog' })
+    expect(dialog.props('appliesImmediately')).toBe(true)
+    expect(dialog.props('targetSchoolYear')).toBe(115)
+    expect(dialog.props('applyDate')).toBe('2026-08-01')
+  })
+
+  it('一般模式不顯示補救警示條', async () => {
+    const normal = statusDraft()
+    Object.assign(normal.data, { applies_immediately: false, apply_date: '2026-08-01' })
+    mockStatus.mockResolvedValue(normal)
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.remedial-banner').exists()).toBe(false)
+  })
+
   it('初次載入失敗（沒有 plan）才顯示錯誤畫面與重新載入鈕', async () => {
     mockStatus.mockRejectedValueOnce({ response: { status: 500 }, displayMessage: '伺服器錯誤' })
     const w = mountView()

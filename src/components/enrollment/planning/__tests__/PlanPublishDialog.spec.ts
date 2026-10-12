@@ -105,6 +105,45 @@ describe('PlanPublishDialog', () => {
     expect(w.emitted('confirm')).toBeFalsy()
   })
 
+  it('一般模式：寫明自動套用日與套用後會發生的事', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2027-08-01', appliesImmediately: false, targetSchoolYear: 116 })
+    await flushPromises()
+    const text = w.text()
+    expect(text).toContain('2027/08/01')
+    expect(text).toContain('自動套用')
+    expect(text).toContain('3 位學生搬到新班級')
+    expect(text).toContain('1 位大班生轉為畢業')
+    expect(text).toContain('1 位排除的學生不會被搬動')
+    expect(text).toContain('撤回發布')
+    expect(w.find('.confirm-year-input').exists()).toBe(false)
+  })
+
+  it('補救模式：說明約一小時內套用，須輸入目標學年才可確認', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2026-08-01', appliesImmediately: true, targetSchoolYear: 115 })
+    await flushPromises()
+    expect(w.text()).toContain('約一小時內')
+    const confirmBtn = () => w.findAllComponents({ name: 'ElButton' }).find(b => b.text().includes('確認發布'))
+    expect(confirmBtn()?.props('disabled')).toBe(true)
+
+    const input = w.find('.confirm-year-input input')
+    await input.setValue('114')
+    expect(confirmBtn()?.props('disabled')).toBe(true)
+    await input.setValue(' 115 ')
+    expect(confirmBtn()?.props('disabled')).toBe(false)
+    await confirmBtn()?.trigger('click')
+    expect(w.emitted('confirm')).toBeTruthy()
+  })
+
+  it('預覽載入失敗：顯示錯誤訊息，不顯示「尚無預覽資料」', async () => {
+    mockGetPreview.mockRejectedValue({ displayMessage: '伺服器忙碌，請稍後再試' })
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.text()).toContain('伺服器忙碌，請稍後再試')
+    expect(w.text()).not.toContain('尚無預覽資料')
+  })
+
   it('reload() 可由父層呼叫重新整理 preview', async () => {
     mockGetPreview.mockResolvedValueOnce({ data: previewFixture() })
     const w = mountDialog()

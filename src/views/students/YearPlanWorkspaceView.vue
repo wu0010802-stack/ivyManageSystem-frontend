@@ -41,6 +41,17 @@
       </template>
     </PageHeader>
 
+    <!-- 補救模式：已是目標學年上學期，發布＝排程下一輪（約一小時內）不可逆套用到現行班級 -->
+    <el-alert
+      v-if="showRemedialBanner"
+      class="remedial-banner"
+      type="error"
+      show-icon
+      :closable="false"
+      :title="remedialTitle"
+      :description="remedialDescription"
+    />
+
     <div v-if="loading && !plan" class="loading-skeleton">
       <div class="skeleton-row" v-for="i in 4" :key="i"></div>
     </div>
@@ -116,6 +127,9 @@
       v-model="publishDialogVisible"
       :plan-id="plan?.id ?? null"
       :submitting="loading"
+      :apply-date="status?.apply_date ?? null"
+      :applies-immediately="appliesImmediately"
+      :target-school-year="status?.target_school_year ?? null"
       @confirm="onPublishConfirm"
     />
 
@@ -184,6 +198,21 @@ const STATE_LABELS: Record<PlanState, string> = {
   applied: '已套用',
 }
 const stateLabel = computed(() => STATE_LABELS[state.value])
+
+// ── 補救模式（status.applies_immediately）：上學期才產生／發布的計畫，排程下一輪就套用
+const appliesImmediately = computed(() => status.value?.applies_immediately === true)
+const showRemedialBanner = computed(() => appliesImmediately.value && state.value !== 'applied')
+const remedialTitle = computed(() => {
+  const year = status.value?.target_school_year
+  return state.value === 'published'
+    ? `已發布，${year} 學年上學期已開始：排程會在約一小時內套用到現行班級`
+    : `現在已是 ${year} 學年上學期：這份計畫發布後約一小時內就會套用到現行班級`
+})
+const remedialDescription = computed(() =>
+  state.value === 'published'
+    ? '要停止請立即「撤回發布」。套用後會搬動全園學生的班級、讓大班生轉為畢業、更新老師帶班資料，且無法復原。'
+    : '套用會搬動全園學生的班級、讓大班生轉為畢業、更新老師帶班資料，且無法復原。只想調整個別學生，請到「班級管理」或學生資料處理。',
+)
 
 // 權限鎖：對齊 ClassroomView.vue 慣例，寫入動作鈕（新增班/重生成/發布/撤回/產生草稿
 // CTA）與 PlanRosterTable 的可編輯性一律疊加此權限；僅 READ 者連勾選/編輯鈕都不出現。
@@ -494,6 +523,10 @@ async function onStudentMove(payload: {
 
 .dropdown-item-danger {
   color: var(--color-danger);
+}
+
+.remedial-banner {
+  margin-bottom: var(--space-4);
 }
 
 .loading-skeleton {
