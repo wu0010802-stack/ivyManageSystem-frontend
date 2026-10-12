@@ -207,7 +207,15 @@ export const CLASS_FEATURES: readonly ClassFeatureDef[] = [
     to: '/portal/surveys',
     group: 'manage',
   },
-  // ── 我的（原首頁「今日待辦」卡；這四項是個人事項，不隨班級切換而變） ──
+  // ── 我的（原首頁「今日待辦」卡；這些是個人事項，不隨班級切換而變） ──
+  {
+    // 帶班老師的底部導覽（2026-10-12）把「出勤」tab 讓給點名／聯絡簿，
+    // 我的出勤改由這一格進入（排班入口在出勤頁上方）。
+    key: 'attendance',
+    label: '我的出勤',
+    group: 'mine',
+    to: '/portal/attendance',
+  },
   {
     key: 'pending-substitute',
     label: '待回應代理',

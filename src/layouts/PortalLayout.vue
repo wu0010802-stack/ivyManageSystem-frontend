@@ -30,6 +30,8 @@ import {
   School,
   Tickets,
   TrendCharts,
+  Finished,
+  Notebook,
   Brush,
   Bell,
   Plus,
@@ -95,6 +97,26 @@ const { pendingCount: dismissalPendingCount } = usePortalDismissalAlerts()
 
 // 今日工作台待辦數
 const hubPendingCount = ref(0)
+// 帶班判斷與點名／聯絡簿 tab 的提示點都吃同一支 today-hub（無班級時後端回 classroom_id=0）
+const hubClassroomId = ref(0)
+const hubAttendancePending = ref(0)
+const hubContactBooksPending = ref(0)
+
+// 帶班老師的底部導覽改「今日／點名／申請／聯絡簿／我的」（2026-10-12 業主裁定）：
+// 每天要做的點名、聯絡簿直接放進拇指區。沒有班級、或缺任一權限（點進去會被擋）
+// 的同仁維持「今日／申請／出勤／我的」。
+const isHomeroomNav = computed(
+  () =>
+    hubClassroomId.value > 0 &&
+    hasPortalPermission('STUDENTS_READ') &&
+    hasPortalPermission('PORTFOLIO_READ'),
+)
+const MY_TAB_PATHS = computed(() =>
+  isHomeroomNav.value
+    ? ['/portal/profile', '/portal/attendance', '/portal/schedule', '/portal/salary']
+    : ['/portal/profile'],
+)
+const isMyTabActive = computed(() => MY_TAB_PATHS.value.some((p) => route.path.startsWith(p)))
 
 // 「今日工作台」menu badge。親師訊息已於 2026-08-28 下架，這裡只剩 hub 待辦；
 // 不含公告（unreadCount），因為「公告通知」已是獨立頂層 menu item 自帶 badge。
@@ -146,6 +168,9 @@ const fetchHubPendingCount = async () => {
   try {
     const data = await getTodayHub()
     const c = (data as Record<string, unknown>)?.counts as Record<string, number> | undefined || {}
+    hubClassroomId.value = Number((data as Record<string, unknown>)?.classroom_id) || 0
+    hubAttendancePending.value = c.attendance_pending || 0
+    hubContactBooksPending.value = c.contact_books_pending || 0
     hubPendingCount.value =
       (c.attendance_pending || 0) +
       (c.medications_pending || 0) +
@@ -154,6 +179,9 @@ const fetchHubPendingCount = async () => {
     // incidents_today 不算「待辦」(它是已建立的事件數)，不納入 badge
   } catch {
     hubPendingCount.value = 0
+    hubClassroomId.value = 0
+    hubAttendancePending.value = 0
+    hubContactBooksPending.value = 0
   }
 }
 
@@ -223,10 +251,10 @@ onMounted(() => {
   // 接送提醒提升到殼層：單一 WS、全 Portal 頁存活、AudioContext gesture unlock、visibilitychange 重連
   initPortalDismissalAlerts()
 
-  // 導航更新一次性提示（v=3: 2026-09-14 班級功能併入首頁；v=2: Phase 1 殼層改版；
-  // v=1: 2026-05 教師端 ACD 改造）。舊版文案介紹的「班級」分頁已於 v=3 移除，
-  // 沿用舊號碼會讓看過 v=2 的老師永遠讀不到新說明，故必須跟著進版。
-  const PORTAL_LAYOUT_VERSION = '3'
+  // 導航更新一次性提示（v=4: 2026-10-12 帶班老師底部導覽改點名／聯絡簿、側欄首項今日工作台；
+  // v=3: 2026-09-14 班級功能併入首頁；v=2: Phase 1 殼層改版；v=1: 2026-05 教師端 ACD 改造）。
+  // 每次導覽結構改變都要進版，沿用舊號碼的老師讀不到新說明。
+  const PORTAL_LAYOUT_VERSION = '4'
   const stored = tenantGetItem('portal_layout_v')
   if (stored !== PORTAL_LAYOUT_VERSION) {
     setTimeout(() => {
@@ -234,11 +262,10 @@ onMounted(() => {
         title: '導航更新',
         message:
           '教師端介面已更新：\n\n' +
-          '• 班級功能全部移到首頁「今日工作台」，分「教學／管理／我的」三組；每格一律顯示，有待辦才標數字\n' +
-          '• 首頁原本的「今日待辦」「快速進入」「我的班級」已併入上述功能格，同一個功能不再有兩個入口\n' +
-          '• 帶多個班的老師可在功能格上方切換班級\n' +
-          '• 底部導覽的「班級」分頁移除（內容已在「今日」）\n\n' +
-          '側邊欄的「班級總覽」同樣併入首頁，其餘選單不變。',
+          '• 帶班老師的底部導覽改為「今日／點名／申請／聯絡簿／我的」，每天要做的點名與聯絡簿一點就到；「我的出勤」移到首頁「我的」組\n' +
+          '• 首頁「現在該做」的待辦可以直接點進該頁；班上有過敏或連續缺席時會多一行提醒\n' +
+          '• 側邊欄第一項改為「今日工作台」，並補上「活動調查」與「我的成長軌跡」\n' +
+          '• 搜尋（⌘K）不用輸入就會列出常用功能',
         type: 'info',
         confirmButtonText: '我知道了',
         showCancelButton: false,
@@ -644,9 +671,10 @@ const submitPassword = async () => {
         <RouterView />
       </el-main>
 
-      <!-- Bottom Navigation (mobile only)：今日/＋申請/出勤/我的。
-           排班入口在出勤頁上方；班級功能 2026-09-14 併進首頁後，原本的第二個
-           tab 會與「今日」指向同一頁，已移除（桌機側欄不受影響）。 -->
+      <!-- Bottom Navigation (mobile only)。
+           帶班老師：今日／點名／＋申請／聯絡簿／我的（2026-10-12 業主裁定，申請 FAB 置中）；
+           其他同仁：今日／＋申請／出勤／我的。排班入口在出勤頁上方；帶班版的「我的出勤」
+           改由首頁功能格「我的」組與側欄進入，「我的」tab 在出勤／排班／薪資頁也亮起。 -->
       <nav v-if="isMobile" class="bottom-nav" aria-label="主要導覽">
         <button
           type="button"
@@ -661,6 +689,21 @@ const submitPassword = async () => {
           </div>
           <span>今日</span>
         </button>
+        <button
+          v-if="isHomeroomNav"
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/student-attendance') }"
+          :aria-current="route.path.startsWith('/portal/student-attendance') ? 'page' : undefined"
+          @click="router.push('/portal/student-attendance')"
+        >
+          <div class="tab-icon-wrapper">
+            <el-icon><Finished /></el-icon>
+            <!-- 數字已在「今日」，這裡只用提示點標「還有沒點的」，避免同一個數字出現兩次 -->
+            <el-badge v-if="hubAttendancePending > 0" is-dot class="tab-badge" />
+          </div>
+          <span>點名</span>
+        </button>
         <div class="bottom-fab-slot">
           <button type="button" class="bottom-fab" aria-label="開啟申請選單" @click="applySheetOpen = true">
             <el-icon><Plus /></el-icon>
@@ -668,6 +711,21 @@ const submitPassword = async () => {
           <span class="bottom-fab-label" aria-hidden="true">申請</span>
         </div>
         <button
+          v-if="isHomeroomNav"
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/contact-book') }"
+          :aria-current="route.path.startsWith('/portal/contact-book') ? 'page' : undefined"
+          @click="router.push('/portal/contact-book')"
+        >
+          <div class="tab-icon-wrapper">
+            <el-icon><Notebook /></el-icon>
+            <el-badge v-if="hubContactBooksPending > 0" is-dot class="tab-badge" />
+          </div>
+          <span>聯絡簿</span>
+        </button>
+        <button
+          v-else
           type="button"
           class="bottom-tab"
           :class="{ active: route.path.startsWith('/portal/attendance') || route.path.startsWith('/portal/schedule') }"
@@ -683,8 +741,8 @@ const submitPassword = async () => {
         <button
           type="button"
           class="bottom-tab"
-          :class="{ active: route.path.startsWith('/portal/profile') }"
-          :aria-current="route.path.startsWith('/portal/profile') ? 'page' : undefined"
+          :class="{ active: isMyTabActive }"
+          :aria-current="isMyTabActive ? 'page' : undefined"
           @click="router.push('/portal/profile')"
         >
           <el-icon><UserFilled /></el-icon>

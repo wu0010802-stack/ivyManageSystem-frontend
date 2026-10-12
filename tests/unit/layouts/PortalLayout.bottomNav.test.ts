@@ -10,7 +10,7 @@
  * (d) 出勤 tab 承接 swapPendingCount badge（排班 tab 退場後的可見性補償）
  * (e) mount 時 html 掛 ivy-portal class、unmount 移除（EP primary 收斂 indigo 的 scope）
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 import ElementPlus from 'element-plus'
@@ -106,7 +106,7 @@ describe('PortalLayout — 底部導覽 Phase 1 殼層', () => {
   beforeEach(() => {
     routerPush.mockClear()
     mockIsMobile.value = false
-    localStorage.setItem('portal_layout_v', '3')
+    localStorage.setItem('portal_layout_v', '4')
   })
 
   it('(a) 手機模式 tab 為 今日/出勤/我的 + 申請 FAB；工作台/班級/排班/學生退場', async () => {
@@ -162,5 +162,67 @@ describe('PortalLayout — 底部導覽 Phase 1 殼層', () => {
     expect(document.documentElement.classList.contains('ivy-portal')).toBe(true)
     wrapper.unmount()
     expect(document.documentElement.classList.contains('ivy-portal')).toBe(false)
+  })
+})
+
+// 2026-10-12 業主裁定：帶班老師的底部導覽改「今日／點名／申請／聯絡簿／我的」——
+// 原本最大的拇指位置給了一個月用幾次的「申請」，每天要做的點名、聯絡簿反而不在導覽列。
+// 司機、行政等沒有班級的同仁維持「今日／申請／出勤／我的」。
+describe('PortalLayout — 帶班老師的底部導覽', () => {
+  const authMod = () => import('@/utils/auth')
+  const hubMod = () => import('@/api/portalClassHub')
+
+  beforeEach(async () => {
+    routerPush.mockClear()
+    localStorage.setItem('portal_layout_v', '4')
+    vi.mocked((await authMod()).hasPortalPermission).mockImplementation(() => true)
+    vi.mocked((await hubMod()).getTodayHub).mockResolvedValue({
+      classroom_id: 7,
+      counts: { attendance_pending: 3, contact_books_pending: 0 },
+    } as never)
+  })
+
+  afterEach(async () => {
+    vi.mocked((await authMod()).hasPortalPermission).mockImplementation(() => false)
+    vi.mocked((await hubMod()).getTodayHub).mockResolvedValue({ counts: {} } as never)
+  })
+
+  it('有班級且有點名、聯絡簿權限：今日／點名／申請／聯絡簿／我的，申請在正中間', async () => {
+    const wrapper = await mountMobile()
+    const items = wrapper.find('.bottom-nav').element.children
+    const labels = [...items].map((el) => el.textContent?.replace(/\s+/g, '').replace(/\d+/g, ''))
+    expect(labels).toEqual(['今日', '點名', '申請', '聯絡簿', '我的'])
+    expect(wrapper.find('.bottom-nav').text()).not.toContain('出勤')
+    wrapper.unmount()
+  })
+
+  it('點名、聯絡簿 tab 直接進頁；有未點名時點名 tab 掛提示點', async () => {
+    const wrapper = await mountMobile()
+    const tab = (label: string) => wrapper.findAll('.bottom-tab').find((t) => t.text().includes(label))!
+    expect(tab('點名').find('.el-badge__content.is-dot').exists()).toBe(true)
+    expect(tab('聯絡簿').find('.el-badge__content.is-dot').exists()).toBe(false)
+    await tab('點名').trigger('click')
+    expect(routerPush).toHaveBeenCalledWith('/portal/student-attendance')
+    await tab('聯絡簿').trigger('click')
+    expect(routerPush).toHaveBeenCalledWith('/portal/contact-book')
+    wrapper.unmount()
+  })
+
+  it('沒有班級（hub classroom_id=0）維持原本的四格', async () => {
+    vi.mocked((await hubMod()).getTodayHub).mockResolvedValue({ classroom_id: 0, counts: {} } as never)
+    const wrapper = await mountMobile()
+    const text = wrapper.find('.bottom-nav').text()
+    expect(text).toContain('出勤')
+    expect(text).not.toContain('點名')
+    wrapper.unmount()
+  })
+
+  it('有班級但沒有聯絡簿權限，也維持原本的四格（不放點不進去的 tab）', async () => {
+    vi.mocked((await authMod()).hasPortalPermission).mockImplementation((p: string) => p !== 'PORTFOLIO_READ')
+    const wrapper = await mountMobile()
+    const text = wrapper.find('.bottom-nav').text()
+    expect(text).toContain('出勤')
+    expect(text).not.toContain('聯絡簿')
+    wrapper.unmount()
   })
 })

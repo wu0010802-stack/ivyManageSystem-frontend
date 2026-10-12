@@ -101,15 +101,26 @@ describe('portalClassFeatures', () => {
 
   // ===== 首頁整併（/portal/class 併入 /portal/home）新增的「我的」組 =====
 
-  it('「我的」組六格都不需權限，空權限帳號一樣看得到（月底出勤確認格另受 visibleWhenAction 把關，見下方專屬測試）', () => {
+  it('「我的」組七格都不需權限，空權限帳號一樣看得到（月底出勤確認格另受 visibleWhenAction 把關，見下方專屬測試）', () => {
     setUserInfo({ role: 'teacher', permission_names: [] })
     expect(visibleClassFeatures('mine').map((f) => f.key)).toEqual([
+      'attendance',
       'pending-substitute',
       'pending-swap',
       'anomalies',
       'announcements',
       'growth',
     ])
+  })
+
+  // 2026-10-12：帶班老師的底部導覽改成「今日／點名／申請／聯絡簿／我的」，
+  // 原本的「出勤」tab 讓位，我的出勤改由首頁「我的」組第一格進入。
+  it('「我的」組第一格是我的出勤（帶班版底部導覽不再有出勤 tab）', () => {
+    setUserInfo({ role: 'teacher', permission_names: [] })
+    const first = visibleClassFeatures('mine')[0]
+    expect(first.key).toBe('attendance')
+    expect(first.label).toBe('我的出勤')
+    expect(first.to).toBe('/portal/attendance')
   })
 
   it('成長軌跡屬「我的」組：它是教師自己的考核歷程，不是學生的成長紀錄', () => {
@@ -198,6 +209,7 @@ describe('portalClassFeatures', () => {
     const rest = (keys: string[]) => keys.filter((k) => k !== 'attendance-confirm')
     expect(rest(withoutActions)).toEqual(rest(withActions))
     expect(rest(withoutActions)).toEqual([
+      'attendance',
       'pending-substitute',
       'pending-swap',
       'anomalies',
