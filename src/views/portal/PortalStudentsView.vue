@@ -330,9 +330,6 @@ onMounted(fetchStudents)
 </template>
 
 <style scoped>
-.portal-students {
-  padding: 10px;
-}
 .classroom-tabs {
   margin-bottom: var(--space-4);
 }

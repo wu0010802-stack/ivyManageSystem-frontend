@@ -224,9 +224,6 @@ defineExpose({ items, pendingCount, fetchData })
 </template>
 
 <style scoped>
-.portal-pickup-view {
-  padding: 16px;
-}
 .auth-cards {
   display: flex;
   flex-direction: column;

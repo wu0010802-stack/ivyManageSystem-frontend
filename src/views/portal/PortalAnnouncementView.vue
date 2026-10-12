@@ -92,6 +92,13 @@ const formatDate = (isoStr: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+// 後端對沒有作者的公告回傳「未知」佔位字串（api/portal/announcements.py），
+// 前端視為無作者，整段不畫，避免卡片上印出一個沒有意義的「未知」
+const authorName = (ann: Announcement) => {
+  const name = (ann.created_by_name ?? '').trim()
+  return name && name !== '未知' ? name : ''
+}
+
 const unreadCount = computed(() => announcements.value.filter(a => !a.is_read).length)
 
 const openAttachment = (att: AttachmentItem) => {
@@ -144,7 +151,10 @@ onMounted(async () => {
       >
         <div class="ann-header">
           <div class="ann-title-row">
-            <span v-if="!ann.is_read" class="unread-dot"></span>
+            <!-- 未讀：圓點加文字，不只靠顏色（取代原本 4px 彩色左側色條） -->
+            <span v-if="!ann.is_read" class="unread-tag" data-test="unread-tag">
+              <span class="unread-dot" aria-hidden="true"></span>未讀
+            </span>
             <el-icon v-if="ann.is_pinned" style="color: #e6a23c; margin-right: 4px;"><Top /></el-icon>
             <el-tag
               :type="priorityConfig[ann.priority]?.type || 'info'"
@@ -156,8 +166,8 @@ onMounted(async () => {
             <span class="ann-title">{{ ann.title }}</span>
           </div>
           <div class="ann-meta">
-            <span>{{ ann.created_by_name }}</span>
-            <span style="margin-left: 12px; color: var(--neutral-300);">{{ formatDate(ann.created_at) }}</span>
+            <span v-if="authorName(ann)" class="ann-author" data-test="ann-author">{{ authorName(ann) }}</span>
+            <span class="ann-date" data-test="ann-date">{{ formatDate(ann.created_at) }}</span>
           </div>
         </div>
 
@@ -202,10 +212,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.portal-announcements {
-  padding: 10px;
-}
-
 .announcement-list {
   display: flex;
   flex-direction: column;
@@ -225,17 +231,18 @@ onMounted(async () => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+/* 未讀：淡底色 + 完整 1px 邊框（不用側邊色條），並搭配標題前的「未讀」文字標籤 */
 .ann-unread {
-  border-left: 4px solid var(--color-info);
-  background: #f0f7ff;
+  border-color: var(--color-info);
+  background: var(--color-info-soft);
 }
 
 .ann-urgent {
-  border-left-color: var(--color-danger);
+  border-color: var(--color-danger);
 }
 
 .ann-urgent.ann-unread {
-  background: #fef0f0;
+  background: var(--color-danger-soft);
 }
 
 .ann-pinned {
@@ -255,12 +262,22 @@ onMounted(async () => {
   align-items: center;
 }
 
+.unread-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-right: var(--space-2);
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-info-darker);
+}
+
 .unread-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-info);
-  margin-right: 8px;
+  background: var(--color-info-darker);
   flex-shrink: 0;
 }
 
@@ -271,9 +288,16 @@ onMounted(async () => {
 }
 
 .ann-meta {
+  display: flex;
+  gap: var(--space-3);
   font-size: var(--text-xs);
   color: var(--pt-text-muted);
   white-space: nowrap;
+}
+
+/* 日期原本內嵌寫死極淺灰（約 #ccc，對比不足 AA），改用 EP 次要文字色 */
+.ann-date {
+  color: var(--el-text-color-secondary);
 }
 
 .ann-preview {

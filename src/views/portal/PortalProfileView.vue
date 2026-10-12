@@ -420,10 +420,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.portal-profile {
-  padding: 10px;
-}
-
 .profile-card {
   margin-bottom: var(--space-4);
 }

@@ -580,7 +580,7 @@ const submitPassword = async () => {
       <div v-if="showInstallBanner && isMobile" class="install-banner">
         <el-icon class="install-banner__icon" aria-hidden="true"><Cellphone /></el-icon>
         <span class="install-banner__text">加到桌面，打卡更方便</span>
-        <el-button size="small" type="success" @click="installPWA">加入桌面</el-button>
+        <el-button size="small" type="primary" @click="installPWA">加入桌面</el-button>
         <el-button size="small" text :icon="Close" aria-label="關閉安裝提示" @click="dismissInstallBanner" />
       </div>
 

@@ -143,6 +143,28 @@ describe('PortalBusTripView', () => {
     expect(wrapper.find('[data-testid="bus-no-routes"]').exists()).toBe(true)
   })
 
+  it('頁首用共用的 PortalPageHeader，標題為 h1「娃娃車班次」（開班前）', async () => {
+    s.routes.value = [routeItem()]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const h1 = wrapper.findAll('h1')
+    expect(h1).toHaveLength(1)
+    expect(h1[0].text()).toBe('娃娃車班次')
+    expect(h1[0].classes()).toContain('portal-page-header__title')
+  })
+
+  it('班次進行中同樣有 h1 頁首，且班次摘要 h2 與日期列仍在', async () => {
+    s.trip.value = { id: 7 }
+    s.tripSummary.value = 'A 線・早上接學生'
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.get('h1').text()).toBe('娃娃車班次')
+    expect(wrapper.find('[data-testid="bus-trip-date"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="bus-trip-summary"]').text()).toBe('A 線・早上接學生')
+  })
+
   it('有班次時顯示開班卡，選一班後按下開始班次會呼叫 start', async () => {
     s.routes.value = [routeItem()]
     const wrapper = mount(PortalBusTripView)

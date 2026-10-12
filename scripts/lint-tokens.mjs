@@ -41,7 +41,7 @@ const BASELINE = {
   ivy: 29,
   m3: 385,
   neutral: 284,
-  pt: 868,
+  pt: 867,
 };
 
 /**

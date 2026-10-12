@@ -54,5 +54,4 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.portal-activity { padding: 16px; }
 </style>

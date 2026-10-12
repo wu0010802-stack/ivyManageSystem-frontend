@@ -119,9 +119,9 @@ function statusLabel(s: string) {
         <div class="group-header">
           <h3>{{ g.classroom_name }}</h3>
           <div class="stats">
-            <span class="stat pending">待 {{ g.stats.pending }}</span>
-            <span class="stat done">已 {{ g.stats.administered }}</span>
-            <span class="stat skip">略 {{ g.stats.skipped }}</span>
+            <span class="stat pending">待給藥 {{ g.stats.pending }}</span>
+            <span class="stat done">已給藥 {{ g.stats.administered }}</span>
+            <span class="stat skip">略過 {{ g.stats.skipped }}</span>
           </div>
         </div>
 
@@ -183,21 +183,36 @@ function statusLabel(s: string) {
   margin: 0;
   color: var(--pt-text-strong);
 }
-.stats { display: flex; gap: var(--space-2); font-size: var(--text-sm); }
-.stat.pending { color: var(--color-warning); }
+.stats { display: flex; font-size: var(--text-sm); }
+/* 三項統計之間用「・」分隔 */
+.stat + .stat::before {
+  content: '・';
+  margin: 0 var(--space-1);
+  color: var(--el-text-color-placeholder);
+}
+.stat.pending { color: var(--color-warning-darker); }
 .stat.done { color: var(--color-success); }
 .stat.skip { color: var(--pt-text-muted); }
 
 .cards { display: flex; flex-direction: column; gap: var(--space-2); }
 
+/* 用藥狀態：淡底色 + 完整 1px 邊框（不用側邊色條）；狀態另有文字標籤（待執行／已執行／已略過），不只靠顏色 */
 .med-card {
   display: flex;
   gap: var(--space-3);
   padding: var(--space-3);
-  border-left: 4px solid var(--color-warning);
+  border: 1px solid var(--color-warning);
+  background: var(--el-color-warning-light-9);
 }
-.med-card.status-administered { border-left-color: var(--color-success); }
-.med-card.status-skipped { border-left-color: var(--pt-text-muted); opacity: 0.7; }
+.med-card.status-administered {
+  border-color: var(--color-success);
+  background: var(--el-color-success-light-9);
+}
+.med-card.status-skipped {
+  border-color: var(--el-border-color);
+  background: var(--el-fill-color-light);
+  opacity: 0.7;
+}
 
 .time {
   font-size: var(--text-xl);
@@ -223,7 +238,7 @@ function statusLabel(s: string) {
   border-radius: 999px;
   font-size: var(--text-xs);
 }
-.status-tag.pending { background: var(--color-warning-lighter); color: var(--color-warning); }
+.status-tag.pending { background: var(--color-warning-lighter); color: var(--color-warning-darker); }
 .status-tag.administered { background: var(--color-success-lighter); color: var(--color-success); }
 .status-tag.skipped { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
 .source-tag { background: var(--pt-tint-message); color: var(--pt-tint-message-fg); }

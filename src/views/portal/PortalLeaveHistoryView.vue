@@ -201,9 +201,6 @@ const logCardColumns = [
 </template>
 
 <style scoped>
-.portal-leave-history {
-  padding: 16px;
-}
 .hint {
   color: var(--el-text-color-secondary);
   font-size: 12px;

@@ -1,5 +1,9 @@
 <template>
   <div class="portal-bus" role="region" aria-label="娃娃車班次">
+    <!-- 與其他 Portal 頁一致的頁首（h1）。日期已由開班卡 bus-today／進行中 trip-date 各自呈現，
+         不在這裡重複放 subtitle，避免同一個畫面出現兩個日期。 -->
+    <PortalPageHeader title="娃娃車班次" class="bus-page-header" />
+
     <div v-if="loading" class="bus-state" data-testid="bus-loading">
       <el-skeleton :rows="3" animated />
     </div>
@@ -373,6 +377,7 @@
  * 操作進行中鎖住整列避免重複送出、結束班次為 danger 並帶二次確認。
  */
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted } from 'vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import {
   DIRECTION_LABELS,
   usePortalBusTrip,
@@ -502,11 +507,12 @@ onBeforeUnmount(teardown)
 
 <style scoped>
 .portal-bus {
-  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+/* 頁首自帶 margin-bottom，與外層 flex gap 疊加會過鬆，收掉一部分 */
+.portal-bus > .bus-page-header { margin-bottom: 0; }
 .bus-card { border-radius: 10px; }
 .bus-title { margin: 0 0 8px; font-size: 18px; }
 .bus-hint { margin: 0 0 16px; color: var(--el-text-color-regular); line-height: 1.6; }

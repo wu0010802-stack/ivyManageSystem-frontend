@@ -133,10 +133,6 @@ function onEventClick(arg: EventClickArg): void {
 </template>
 
 <style scoped>
-.portal-calendar {
-  padding: 10px;
-}
-
 .sync-alert {
   margin-bottom: var(--space-4);
 }

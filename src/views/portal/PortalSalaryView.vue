@@ -100,6 +100,10 @@ const nextMonth = () => {
 }
 
 const attendanceStats = computed(() => salaryData.value?.attendance_stats)
+
+// 出勤統計值為 0（或缺值）時不套語意色：遲到 0 次用橘色大字會像在警告，
+// 只有 > 0 才保留橘／紅等語意色（CSS 的 .is-zero 蓋掉 blue/orange/red/gray）
+const isZeroStat = (v: unknown) => !(Number(v) > 0)
 const salary = computed<SalaryDetail | null>(() => salaryData.value?.salary ?? null)
 
 // 0 元列不顯示（build_history_breakdown 會回所有已知欄位含 0），
@@ -224,27 +228,27 @@ onMounted(initialLoad)
         <h3>出勤統計</h3>
         <div class="stats-row">
           <div class="stat-item">
-            <div class="stat-value blue">{{ attendanceStats?.work_days }}</div>
+            <div class="stat-value blue" :class="{ 'is-zero': isZeroStat(attendanceStats?.work_days) }">{{ attendanceStats?.work_days }}</div>
             <div class="stat-label">出勤天數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value orange">{{ attendanceStats?.late_count }}</div>
+            <div class="stat-value orange" :class="{ 'is-zero': isZeroStat(attendanceStats?.late_count) }">{{ attendanceStats?.late_count }}</div>
             <div class="stat-label">遲到次數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value orange">{{ attendanceStats?.early_leave_count }}</div>
+            <div class="stat-value orange" :class="{ 'is-zero': isZeroStat(attendanceStats?.early_leave_count) }">{{ attendanceStats?.early_leave_count }}</div>
             <div class="stat-label">早退次數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value red">{{ attendanceStats?.missing_punch_count }}</div>
+            <div class="stat-value red" :class="{ 'is-zero': isZeroStat(attendanceStats?.missing_punch_count) }">{{ attendanceStats?.missing_punch_count }}</div>
             <div class="stat-label">缺卡次數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value gray">{{ attendanceStats?.leave_days }}</div>
+            <div class="stat-value gray" :class="{ 'is-zero': isZeroStat(attendanceStats?.leave_days) }">{{ attendanceStats?.leave_days }}</div>
             <div class="stat-label">請假天數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value gray">{{ attendanceStats?.leave_hours }}h</div>
+            <div class="stat-value gray" :class="{ 'is-zero': isZeroStat(attendanceStats?.leave_hours) }">{{ attendanceStats?.leave_hours }}h</div>
             <div class="stat-label">請假時數</div>
           </div>
         </div>
@@ -320,6 +324,8 @@ onMounted(initialLoad)
 .stat-value.orange { color: var(--color-warning); }
 .stat-value.red { color: var(--color-danger); }
 .stat-value.gray { color: var(--text-secondary); }
+/* 值為 0：一律中性色（須排在語意色之後才能蓋掉） */
+.stat-value.is-zero { color: var(--el-text-color-secondary); }
 
 .stat-label {
   font-size: var(--text-sm);
