@@ -29,7 +29,7 @@ onMounted(fetchAll)
 </script>
 
 <template>
-  <div class="portal-growth">
+  <div class="portal-growth portal-page--reading">
     <PortalPageHeader title="我的成長軌跡">
       <template #actions>
         <el-button :icon="Refresh" :loading="loading" plain size="small" @click="fetchAll">
@@ -83,8 +83,6 @@ onMounted(fetchAll)
 
 <style scoped>
 .portal-growth {
-  max-width: 800px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-4, 16px);

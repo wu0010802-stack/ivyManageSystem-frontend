@@ -240,7 +240,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="portal-profile" v-loading="loading">
+  <div class="portal-profile portal-page--reading" v-loading="loading">
     <PortalPageHeader title="個人資料" />
 
     <!-- Read-only: Basic Info -->

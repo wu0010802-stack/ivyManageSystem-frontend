@@ -164,7 +164,6 @@ function statusLabel(s: string) {
 </template>
 
 <style scoped>
-.med-view { max-width: 1000px; margin: 0 auto; }
 
 .loading { display: flex; flex-direction: column; gap: var(--space-3); }
 .skeleton-block { height: 100px; border-radius: var(--radius-md); }
@@ -194,7 +193,8 @@ function statusLabel(s: string) {
 .stat.done { color: var(--color-success); }
 .stat.skip { color: var(--pt-text-muted); }
 
-.cards { display: flex; flex-direction: column; gap: var(--space-2); }
+/* 滿版後卡片不拉成一整條：桌機多欄、手機單欄 */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); align-items: start; gap: var(--space-2); }
 
 /* 用藥狀態：淡底色 + 完整 1px 邊框（不用側邊色條）；狀態另有文字標籤（待執行／已執行／已略過），不只靠顏色 */
 .med-card {

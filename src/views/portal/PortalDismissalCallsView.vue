@@ -256,11 +256,6 @@ function dismissNotifyHint() {
 </template>
 
 <style scoped>
-.portal-dismissal-calls {
-  max-width: 600px;
-  margin: 0 auto;
-}
-
 /* 螢幕報讀專用，視覺隱藏（portal app 無全域 sr-only，自帶 scoped 版） */
 .sr-only {
   position: absolute;
@@ -472,8 +467,10 @@ function dismissNotifyHint() {
 
 /* ─── 列表 ─── */
 .call-list {
-  display: flex;
-  flex-direction: column;
+  /* 滿版後卡片不拉成一整條：桌機多欄、手機自然單欄 */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  align-items: start;
   gap: var(--space-3);
 }
 

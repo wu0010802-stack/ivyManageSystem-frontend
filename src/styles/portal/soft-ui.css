@@ -68,6 +68,14 @@
 }
 
 /* ========== Card utility ========== */
+/* 教師端頁面寬度規則（2026-10-12 業主裁定，見 DESIGN.md「教師端版面規則」）：
+   表單、時間軸、個人資料這類「由上往下讀」的頁用 800px 置中閱讀寬；
+   列表、表格、名冊、月曆、首頁一律滿版靠左（殼層 el-main 已提供左右留白）。 */
+.portal-page--reading {
+  max-width: 800px;
+  margin-inline: auto;
+}
+
 .pt-card {
   background: var(--pt-surface-card);
   border-radius: var(--radius-lg, 12px);

@@ -130,7 +130,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="obs-view">
+  <div class="obs-view portal-page--reading">
     <PortalPageHeader title="課堂觀察 / 成長紀錄" />
 
     <!-- 快速記錄表單 -->
@@ -229,7 +229,6 @@ async function submit() {
 </template>
 
 <style scoped>
-.obs-view { max-width: 800px; margin: 0 auto; }
 
 .form-card, .timeline-card {
   padding: var(--space-4);
