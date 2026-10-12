@@ -29,6 +29,7 @@ vi.mock('@/api/classroomYearPlan', () => ({
   publishClassroomYearPlan: vi.fn(),
   unpublishClassroomYearPlan: vi.fn(),
   cancelClassroomYearPlan: vi.fn(),
+  carryOverClassroomYearPlanTeachers: vi.fn(),
 }))
 vi.mock('@/api/classrooms', () => ({
   getGrades: vi.fn().mockResolvedValue({ data: [] }),
@@ -50,7 +51,10 @@ import {
   getClassroomYearPlanPreview,
   publishClassroomYearPlan,
   cancelClassroomYearPlan,
+  updateClassroomYearPlanClass,
+  carryOverClassroomYearPlanTeachers,
 } from '@/api/classroomYearPlan'
+import { getTeacherOptions } from '@/api/classrooms'
 import YearPlanWorkspaceView from '../YearPlanWorkspaceView.vue'
 import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.vue'
 import PlanRosterTable from '@/components/enrollment/planning/PlanRosterTable.vue'
@@ -67,6 +71,9 @@ const mockBulkStudents = bulkUpdateClassroomYearPlanStudents as ReturnType<typeo
 const mockPreview = getClassroomYearPlanPreview as ReturnType<typeof vi.fn>
 const mockPublish = publishClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockCancel = cancelClassroomYearPlan as ReturnType<typeof vi.fn>
+const mockUpdateClass = updateClassroomYearPlanClass as ReturnType<typeof vi.fn>
+const mockCarryOver = carryOverClassroomYearPlanTeachers as ReturnType<typeof vi.fn>
+const mockTeacherOptions = getTeacherOptions as ReturnType<typeof vi.fn>
 
 function statusNone() {
   return {
@@ -321,6 +328,67 @@ describe('YearPlanWorkspaceView', () => {
     expect(mockBulkStudents).toHaveBeenCalledWith(5, {
       base_version: 1, op: 'retain', student_ids: [7], plan_class_id: 10, exclude_reason: null,
     })
+  })
+
+  it('老師格：編班表 emit teacher-change → PATCH 該班該欄位（帶 base_version）', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    mockUpdateClass.mockResolvedValue({ data: { id: 10, version: 2 } })
+    const w = mountView()
+    await flushPromises()
+
+    w.findComponent(PlanRosterTable).vm.$emit('teacher-change', 10, 'head_teacher_id', 100)
+    await flushPromises()
+
+    expect(mockUpdateClass).toHaveBeenCalledWith(5, 10, { head_teacher_id: 100, base_version: 1 })
+  })
+
+  it('可寫入的草稿：載入老師名單並傳給編班表', async () => {
+    mockTeacherOptions.mockResolvedValueOnce({ data: [{ id: 100, name: '林佳蓉' }] })
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent(PlanRosterTable).props('teacherOptions')).toEqual([{ id: 100, name: '林佳蓉' }])
+  })
+
+  it('沿用原班老師：有可沿用的空格才顯示；確認後呼叫 API 並提示結果', async () => {
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    const detail = detailDraftWithClasses()
+    Object.assign(detail.data.classes[0], { source_head_teacher_name: '林佳蓉', source_art_teacher_name: '黃雅婷' })
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detail)
+    mockCarryOver.mockResolvedValue({ data: { filled: 2, skipped_inactive: 0, skipped_conflict: 0, version: 2 } })
+    const w = mountView()
+    await flushPromises()
+
+    await w.find('.btn-carry-over').trigger('click')
+    await flushPromises()
+
+    expect(String(confirmSpy.mock.calls[0][0])).toContain('2 個')
+    expect(mockCarryOver).toHaveBeenCalledWith(5, { base_version: 1 })
+  })
+
+  it('進度列「查看」待分班 → 側欄第一位待分班學生閃爍定位', async () => {
+    const detail = detailDraftWithClasses()
+    detail.data.students.push({ id: 2, student_id: 'S002', name: '小華', source_classroom_name: '幼幼B', plan_class_id: null, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' })
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detail)
+    const w = mountView()
+    await flushPromises()
+
+    await w.find('.btn-show-unassigned').trigger('click')
+    await flushPromises()
+
+    expect(w.find('.unassigned-row[data-student-id="2"]').classes()).toContain('flash-highlight')
+  })
+
+  it('沒有可沿用的空格時不顯示「沿用原班老師」', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.btn-carry-over').exists()).toBe(false)
   })
 
   it('初次載入失敗（沒有 plan）才顯示錯誤畫面與重新載入鈕', async () => {

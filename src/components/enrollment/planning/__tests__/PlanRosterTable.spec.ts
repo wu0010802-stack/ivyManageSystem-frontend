@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import ElementPlus from 'element-plus'
 import PlanRosterTable from '../PlanRosterTable.vue'
+import PlanTeacherCell from '../PlanTeacherCell.vue'
 import type { Schema } from '@/api/_generated/typed'
 
 type PlanDetail = Schema<'PlanDetailOut'>
@@ -105,16 +106,43 @@ describe('PlanRosterTable', () => {
     expect(w.find('.side-collapse').exists()).toBe(false)
   })
 
-  it('教師未指派顯示「待確認」tag，hover 顯示原班三師姓名（None 顯「—」）', () => {
+  it('三師格改用 PlanTeacherCell：未指派顯示「未指派」與原班老師（不再藏在 hover）', () => {
     const w = mountTable()
-    const unassignedTags = w.findAll('.teacher-unassigned')
-    // 小班A：副班導、美語老師未指派 → 2 個「待確認」；中班A 三教師皆已指派 → 0
-    expect(unassignedTags.length).toBe(2)
-    expect(unassignedTags[0].text()).toBe('待確認')
-    // 副班導未指派：source_assistant_teacher_name 為 null → 顯示「—」
-    expect(unassignedTags[0].attributes('title')).toBe('原班副班導：—')
-    // 美語老師未指派：source_art_teacher_name 有值 → 顯示原班美語老師姓名
-    expect(unassignedTags[1].attributes('title')).toBe('原班美語老師：舊美語老師')
+    const cells = w.findAllComponents(PlanTeacherCell)
+    expect(cells.length).toBe(6) // 2 班 × 3 職務
+    const smallA = cells.filter(c => c.props('className') === '小班A')
+    expect(smallA.map(c => [c.props('role'), c.props('teacherName'), c.props('sourceTeacherName')])).toEqual([
+      ['head', '王老師', '舊班導'],
+      ['assistant', null, null],
+      ['art', null, '舊美語老師'],
+    ])
+    expect(w.text()).not.toContain('待確認')
+  })
+
+  it('老師格 change → emit teacher-change(班 id, 欄位, 老師 id)', () => {
+    const w = mountTable()
+    const cell = w.findAllComponents(PlanTeacherCell)
+      .find(c => c.props('className') === '中班A' && c.props('role') === 'assistant')!
+    cell.vm.$emit('change', null)
+    expect(w.emitted('teacher-change')![0]).toEqual([11, 'assistant_teacher_id', null])
+  })
+
+  it('老師格的選項依班級與職務產生（他班班導停用並註明）', () => {
+    const w = mount(PlanRosterTable, {
+      global: { plugins: [ElementPlus] },
+      props: {
+        plan: buildPlan(),
+        editable: true,
+        selectedIds: new Set<number>(),
+        teacherOptions: [{ id: 200, name: '李老師' }, { id: 300, name: '新老師' }],
+      },
+    })
+    const cell = w.findAllComponents(PlanTeacherCell)
+      .find(c => c.props('className') === '小班A' && c.props('role') === 'head')!
+    expect(cell.props('options')).toEqual([
+      { id: 200, label: '李老師', disabled: true, note: '中班A班導' },
+      { id: 300, label: '新老師', disabled: false, note: '' },
+    ])
   })
 
   it('勾選學生 checkbox emit set-selected([id], checked)；勾選狀態由 selectedIds prop 決定', async () => {

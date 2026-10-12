@@ -68,7 +68,21 @@
       <el-button v-if="canWrite" type="primary" class="btn-generate" @click="onGenerateClick">產生草稿</el-button>
     </div>
 
-    <div v-else-if="plan" class="workspace-body">
+    <template v-else-if="plan">
+    <PlanNextSteps
+      v-if="state === 'draft'"
+      :unassigned-count="unassignedCount"
+      :empty-teacher-slots="emptyTeacherSlots"
+      :carry-over-slots="carryOverSlots"
+      :blocking-count="plan.issues.blocking.length"
+      :can-edit="editable && canWrite"
+      :apply-date="status?.apply_date ?? null"
+      :applies-immediately="appliesImmediately"
+      :busy="loading"
+      @show-unassigned="onShowUnassigned"
+      @carry-over="onCarryOverClick"
+    />
+    <div class="workspace-body">
       <div class="main-column">
         <PlanBatchToolbar
           v-if="editable && canWrite && selectedStudentIds.length > 0"
@@ -85,9 +99,12 @@
           :plan="plan"
           :editable="editable && canWrite"
           :selected-ids="selectedSet"
+          :teacher-options="teacherOptions"
+          :busy="loading"
           @set-selected="onSetSelected"
           @class-edit="onClassEdit"
           @student-move="onStudentMove"
+          @teacher-change="onTeacherChange"
         />
       </div>
       <PlanSidePanel
@@ -101,6 +118,7 @@
         @locate-issue="onLocateIssue"
       />
     </div>
+    </template>
 
     <el-drawer v-model="drawerVisible" size="360px" :with-header="false">
       <PlanSidePanel
@@ -147,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
@@ -158,6 +176,14 @@ import PlanSidePanel from '@/components/enrollment/planning/PlanSidePanel.vue'
 import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.vue'
 import PlanClassEditDialog from '@/components/enrollment/planning/PlanClassEditDialog.vue'
 import PlanPublishDialog from '@/components/enrollment/planning/PlanPublishDialog.vue'
+import PlanNextSteps from '@/components/enrollment/planning/PlanNextSteps.vue'
+import {
+  TEACHER_FIELD_BY_ROLE,
+  countCarryOverSlots,
+  type TeacherField,
+} from '@/components/enrollment/planning/planHelpers'
+import { getTeacherOptions } from '@/api/classrooms'
+import type { TeacherOptionLike } from '@/utils/teacherOption'
 import type { Schema } from '@/api/_generated/typed'
 import PageHeader from '@/components/common/PageHeader.vue'
 
@@ -185,6 +211,7 @@ const {
   updateClass,
   deleteClass,
   bulkUpdateStudents,
+  carryOverTeachers,
   publish,
   unpublish,
   cancelPlan,
@@ -369,6 +396,84 @@ async function onClassDelete(classId: number): Promise<void> {
     ElMessage.success('已刪除班級')
     classEditDialogVisible.value = false
   }
+}
+
+// ── 三師指派：格內直接改（PATCH 單一欄位）＋沿用原班老師（只填空格）──
+const teacherOptions = ref<TeacherOptionLike[]>([])
+let teacherOptionsRequested = false
+
+async function loadTeacherOptions(): Promise<void> {
+  if (teacherOptionsRequested) return
+  teacherOptionsRequested = true
+  try {
+    const res = await getTeacherOptions()
+    teacherOptions.value = (res.data ?? []) as TeacherOptionLike[]
+  } catch {
+    teacherOptionsRequested = false // 下次進入可編輯狀態再試；格子仍可顯示現值
+  }
+}
+
+watch(
+  () => editable.value && canWrite.value,
+  (canEditPlan) => {
+    if (canEditPlan) void loadTeacherOptions()
+  },
+  { immediate: true },
+)
+
+async function onTeacherChange(planClassId: number, field: TeacherField, teacherId: number | null): Promise<void> {
+  const ok = await updateClass(planClassId, { [field]: teacherId } as ClassUpdatePayload)
+  if (ok) ElMessage.success(teacherId == null ? '已清除老師' : '已更新老師')
+}
+
+const carryOverSlots = computed(() => (plan.value ? countCarryOverSlots(plan.value.classes) : 0))
+
+const emptyTeacherSlots = computed(() => {
+  const classes = plan.value?.classes ?? []
+  const empty = (field: TeacherField) => classes.filter(c => c[field] == null).length
+  return {
+    head: empty(TEACHER_FIELD_BY_ROLE.head),
+    assistant: empty(TEACHER_FIELD_BY_ROLE.assistant),
+    art: empty(TEACHER_FIELD_BY_ROLE.art),
+  }
+})
+
+async function onCarryOverClick(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      `將依原班老師帶入 ${carryOverSlots.value} 個空著的老師欄位（班導、副班導、美語老師）。已指派的不會被覆蓋；已停用、或已在其他班擔任班導／副班導的老師會略過。`,
+      '沿用原班老師',
+      { type: 'info', confirmButtonText: '帶入', cancelButtonText: '取消' },
+    )
+  } catch {
+    return // 使用者取消
+  }
+  const result = await carryOverTeachers()
+  if (!result) return
+  const skipped: string[] = []
+  if (result.skipped_inactive) skipped.push(`${result.skipped_inactive} 位已停用`)
+  if (result.skipped_conflict) skipped.push(`${result.skipped_conflict} 位已在其他班帶班`)
+  const skippedText = skipped.length ? `；略過 ${skipped.join('、')}` : ''
+  if (result.filled > 0) ElMessage.success(`已帶入 ${result.filled} 位老師${skippedText}`)
+  else ElMessage.info(`沒有可帶入的老師${skippedText}`)
+}
+
+// ── 待分班：進度列「查看」→ 捲到側欄第一位待分班學生（窄幕先開抽屜）──
+const unassignedStudents = computed(() =>
+  (plan.value?.students ?? []).filter(
+    s => (s.disposition === 'promote' || s.disposition === 'retain') && s.plan_class_id == null,
+  ),
+)
+const unassignedCount = computed(() => unassignedStudents.value.length)
+
+async function onShowUnassigned(): Promise<void> {
+  const first = unassignedStudents.value[0]
+  if (!first) return
+  if (isNarrow.value) {
+    drawerVisible.value = true
+    await nextTick()
+  }
+  await sidePanelRef.value?.locateStudent(first.id)
 }
 
 // ── 學生批次操作：selection 單一事實來源（表格 + 側欄待分班共用；批次工具列據此
