@@ -1,0 +1,229 @@
+/**
+ * 排班與出勤格子的資料與計畫編輯（SPEC-027 §4、§6.2）。
+ *
+ * - 載入：GET /schedule-attendance/grid（一週）＋有 SCHEDULE 時另取該週週排班（列首下拉的現值）。
+ * - 編輯：列首「本週班別」下拉只改本地緩衝（weeklyEdits），按「儲存排班（N 處變更）」才送。
+ * - 儲存：每位有變更的員工依 planWeekChange 拆分——整週未打卡送週排班（只送有變更的人，
+ *   POST /shifts/assignments 是逐人 upsert、不影響清單外員工）；部分已打卡則未打卡工作日改送
+ *   每日調整、已打卡日彙整成批次確認單位交給呼叫端開 BatchConfirmDialog。
+ * - 後端「已打卡」409：重新載入格子後以最新 recorded 狀態重算一次拆分，不顯示原始錯誤。
+ */
+import { computed, ref, watch, type Ref } from 'vue'
+import { getScheduleAttendanceGrid } from '@/api/scheduleAttendance'
+import { getAssignments, saveAssignments, saveDaily } from '@/api/shifts'
+import type { ApiResponse } from '@/api/_generated/typed'
+import {
+  addDaysISO,
+  cellKey,
+  confirmUnits,
+  indexCells,
+  planWeekChange,
+  type BatchUnit,
+  type GridCell,
+  type GridOut,
+} from '@/utils/scheduleAttendanceGrid'
+
+type AssignmentRow = ApiResponse<'/shifts/assignments', 'get'>[number]
+export type WeeklyWarning = NonNullable<ApiResponse<'/shifts/assignments', 'post'>['warnings']>[number]
+
+export interface SaveOutcome {
+  /** 已直接寫入週排班的員工數 */
+  weeklySaved: number
+  /** 已寫入的每日調整筆數 */
+  dailySaved: number
+  /** 已打卡、要使用者在批次確認對話框確認的單位 */
+  units: BatchUnit[]
+  /** 已打卡但無法確認的人日（本人、封存、無權限、看不到版本、或要清除週排班） */
+  blocked: Array<{ employeeId: number; dates: string[] }>
+  /** 失敗訊息（每日調整個別失敗時收集，不中斷其他人） */
+  errors: string[]
+}
+
+const isRecordedConflict = (err: unknown): boolean => {
+  const status = (err as { response?: { status?: number } })?.response?.status
+  const message = (err as { displayMessage?: string })?.displayMessage ?? ''
+  return status === 409 && message.includes('出勤紀錄')
+}
+
+export function useScheduleGrid(weekStart: Ref<string>) {
+  const grid = ref<GridOut | null>(null)
+  const loading = ref(false)
+  const loadError = ref<unknown>(null)
+  const assignments = ref<Record<number, AssignmentRow>>({})
+  const weeklyEdits = ref<Record<number, number | null>>({})
+  const warnings = ref<WeeklyWarning[]>([])
+  const saving = ref(false)
+  let epoch = 0
+
+  const cells = computed(() => indexCells(grid.value?.cells ?? []))
+  const weekDates = computed(() => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart.value, i)))
+
+  function currentWeekly(employeeId: number): number | null {
+    return assignments.value[employeeId]?.shift_type_id ?? null
+  }
+
+  function weeklyValue(employeeId: number): number | null {
+    return employeeId in weeklyEdits.value ? weeklyEdits.value[employeeId] : currentWeekly(employeeId)
+  }
+
+  const changedEmployeeIds = computed(() =>
+    Object.keys(weeklyEdits.value)
+      .map(Number)
+      .filter((id) => weeklyEdits.value[id] !== currentWeekly(id)),
+  )
+  const pendingCount = computed(() => changedEmployeeIds.value.length)
+
+  function setWeekly(employeeId: number, shiftTypeId: number | null): void {
+    weeklyEdits.value = { ...weeklyEdits.value, [employeeId]: shiftTypeId }
+  }
+
+  function discardEdits(): void {
+    weeklyEdits.value = {}
+  }
+
+  async function reload(): Promise<void> {
+    const seq = ++epoch
+    const start = weekStart.value
+    loading.value = true
+    loadError.value = null
+    try {
+      const res = await getScheduleAttendanceGrid({ start_date: start, end_date: addDaysISO(start, 6) })
+      if (seq !== epoch) return
+      grid.value = res.data
+      if (res.data.caller.can_edit_plan) {
+        const rows = (await getAssignments({ week_start: start })).data
+        if (seq !== epoch) return
+        assignments.value = Object.fromEntries(rows.map((row) => [row.employee_id, row]))
+      } else {
+        assignments.value = {}
+      }
+    } catch (err) {
+      if (seq === epoch) loadError.value = err
+    } finally {
+      if (seq === epoch) loading.value = false
+    }
+  }
+
+  watch(weekStart, () => {
+    discardEdits()
+    warnings.value = []
+    void reload()
+  })
+
+  /** 把來源週的週排班帶進本地緩衝（不寫後端，與原「複製上週」行為相同）。 */
+  async function copyFromWeek(sourceWeekStart: string): Promise<number> {
+    const rows = (await getAssignments({ week_start: sourceWeekStart })).data
+    const known = new Set((grid.value?.employees ?? []).map((e) => e.employee_id))
+    const next = { ...weeklyEdits.value }
+    let copied = 0
+    for (const row of rows) {
+      if (!known.has(row.employee_id)) continue
+      next[row.employee_id] = row.shift_type_id ?? null
+      copied += 1
+    }
+    weeklyEdits.value = next
+    return copied
+  }
+
+  function weekCellsOf(employeeId: number): GridCell[] {
+    return weekDates.value
+      .map((date) => cells.value.get(cellKey(employeeId, date)))
+      .filter((cell): cell is GridCell => cell !== undefined)
+  }
+
+  async function save(retried = false): Promise<SaveOutcome> {
+    const outcome: SaveOutcome = { weeklySaved: 0, dailySaved: 0, units: [], blocked: [], errors: [] }
+    if (!grid.value || saving.value) return outcome
+    saving.value = true
+    const start = weekStart.value
+    try {
+      const weeklyItems: Array<{ employee_id: number; shift_type_id: number | null; notes: string | null }> = []
+      const handled: number[] = []
+      for (const employeeId of changedEmployeeIds.value) {
+        const value = weeklyEdits.value[employeeId]
+        const plan = planWeekChange(weekCellsOf(employeeId), grid.value.days)
+        if (plan.weekly) {
+          weeklyItems.push({
+            employee_id: employeeId,
+            shift_type_id: value,
+            notes: assignments.value[employeeId]?.notes ?? null,
+          })
+          continue
+        }
+        handled.push(employeeId)
+        if (value === null) {
+          // 「清除週排班＝回到預設工時」無法用每日調整表達（每日調整的空值是排休）。
+          outcome.blocked.push({
+            employeeId,
+            dates: [...plan.dailyDates, ...plan.confirmDates, ...plan.blockedDates],
+          })
+          continue
+        }
+        for (const date of plan.dailyDates) {
+          try {
+            await saveDaily({ employee_id: employeeId, date, shift_type_id: value, day_off: false })
+            outcome.dailySaved += 1
+          } catch (err) {
+            outcome.errors.push(`${date}：${(err as { displayMessage?: string }).displayMessage ?? '每日調整失敗'}`)
+          }
+        }
+        outcome.units.push(...confirmUnits(cells.value, employeeId, plan.confirmDates, value))
+        if (plan.blockedDates.length) outcome.blocked.push({ employeeId, dates: plan.blockedDates })
+      }
+      if (weeklyItems.length) {
+        try {
+          const res = await saveAssignments({ week_start_date: start, assignments: weeklyItems })
+          warnings.value = res.data.warnings ?? []
+          outcome.weeklySaved = weeklyItems.length
+          handled.push(...weeklyItems.map((item) => item.employee_id))
+        } catch (err) {
+          if (!retried && isRecordedConflict(err)) {
+            // 開頁後有人匯入打卡：以最新狀態重算拆分，改走每日調整＋批次確認。
+            // 已拆分處理過的人先移出緩衝，第二輪只重算這批週排班。
+            const remaining = Object.fromEntries(weeklyItems.map((i) => [i.employee_id, i.shift_type_id]))
+            await reload()
+            weeklyEdits.value = remaining
+            saving.value = false
+            const second = await save(true)
+            return {
+              weeklySaved: second.weeklySaved,
+              dailySaved: outcome.dailySaved + second.dailySaved,
+              units: [...outcome.units, ...second.units],
+              blocked: [...outcome.blocked, ...second.blocked],
+              errors: [...outcome.errors, ...second.errors],
+            }
+          }
+          throw err
+        }
+      }
+      const next = { ...weeklyEdits.value }
+      for (const id of handled) delete next[id]
+      weeklyEdits.value = next
+      await reload()
+      return outcome
+    } finally {
+      saving.value = false
+    }
+  }
+
+  return {
+    grid,
+    loading,
+    loadError,
+    cells,
+    weekDates,
+    assignments,
+    weeklyEdits,
+    pendingCount,
+    warnings,
+    saving,
+    weeklyValue,
+    setWeekly,
+    discardEdits,
+    reload,
+    copyFromWeek,
+    save,
+  }
+}
+
+export type ScheduleGridState = ReturnType<typeof useScheduleGrid>
