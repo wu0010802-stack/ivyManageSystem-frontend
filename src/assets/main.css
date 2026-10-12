@@ -377,6 +377,32 @@ html.ivy-admin .el-table .el-table__cell {
     margin-left: 0 !important;
   }
 
+  /* 行內表單（el-form inline，頁面上的篩選／基本資料列）：標籤＋寫死寬度的
+     輸入框並排在 375px 會超出卡片右緣（勞健保申報的雇主資料等）。每欄改整列、
+     標籤在上、控制項滿寬。EP 的 .el-form--inline .el-form-item 隨元件注入排在
+     本檔之後，故多疊一層 .el-form。 */
+  .el-form.el-form--inline .el-form-item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    margin-right: 0;
+  }
+  .el-form.el-form--inline .el-form-item__label {
+    width: auto !important;
+    justify-content: flex-start;
+    text-align: left;
+    padding-bottom: 4px;
+  }
+  .el-form.el-form--inline .el-form-item__content {
+    margin-left: 0 !important;
+  }
+  .el-form.el-form--inline .el-form-item__content > .el-input,
+  .el-form.el-form--inline .el-form-item__content > .el-select,
+  .el-form.el-form--inline .el-form-item__content > .el-date-editor {
+    width: 100% !important;
+  }
+
   /* Two-column rows collapse to single column */
   .el-dialog .el-col-12,
   .el-dialog .el-col-8 {
@@ -392,6 +418,11 @@ html.ivy-admin .el-table .el-table__cell {
   .controls > * {
     min-width: 0;
   }
+  /* .controls 已用 gap 控間距；EP 的 .el-button + .el-button 再加 12px margin-left，
+     換行後每列行首按鈕都內縮 12px，排成參差的鋸齒（請假／加班／排班工具列） */
+  .controls .el-button + .el-button {
+    margin-left: 0;
+  }
 
   /* Tables scroll horizontally */
   .el-table {
@@ -404,6 +435,18 @@ html.ivy-admin .el-table .el-table__cell {
     flex-wrap: wrap;
     row-gap: var(--space-2);
     justify-content: center;
+  }
+  /* 分頁鈕觸控尺寸：small 只有 24px（教師端列表多用 small）。36px 是上限——
+     預設 pager-count 7 共 9 顆鈕，36px 剛好塞進 375px 一列，再大就被拆成兩列。
+     EP 在 .el-pagination 上宣告這些變數且排在本檔之後，故疊一層 class。 */
+  .el-pagination.el-pagination {
+    --el-pagination-button-width: 36px;
+    --el-pagination-button-height: 36px;
+    --el-pagination-button-width-small: 36px;
+    --el-pagination-button-height-small: 36px;
+  }
+  .el-pagination.el-pagination .el-select__wrapper {
+    min-height: 36px;
   }
 
   /* 側向抽屜手機一律滿版：15+ 個 admin drawer 寫死 px 寬（420–1100px），
@@ -471,8 +514,107 @@ html.ivy-admin .el-table .el-table__cell {
 @media (max-width: 767.98px) {
   .el-input__inner,
   .el-textarea__inner,
-  .el-select__wrapper input {
+  .el-select__wrapper input,
+  /* 日期區間（daterange/monthrange）的兩格輸入是 .el-range-input，不吃上面的
+     .el-input__inner；EP 預設 12–14px，實測點開即整頁放大。EP 的 date-picker
+     樣式隨元件按需注入、排在本檔之後，故選擇器要比 EP 的
+     .el-date-editor .el-range-input 多一層權重。 */
+  .el-date-editor.el-range-editor .el-range-input {
     font-size: 16px;
+  }
+}
+
+/* 手機觸控尺寸基準（DESIGN.md：行動端可互動元素對齊 --touch-target-min 44px）。
+   EP 預設按鈕／輸入／下拉只有 32px、small 24px，手機實測遍地都點不準；過去逐頁
+   補，這裡一次給表單控制項一個基準：預設與 large 撐到 44px，small 撐到 36px
+   （small 是頁面刻意選的密度，折衷不硬拉到 44）。
+   不套用：表格內（列高會被撐爆，手機表格多已改卡片）、分頁器（另有
+   換行規則）；文字／連結型按鈕（行內排版用，視覺上不是按鈕）。
+   權重：EP 元件樣式隨元件按需注入、排在本檔之後，每條都至少比 EP 原規則多一層。 */
+@media (--to-sm) {
+  .el-button:not(.is-link):not(.is-text):not(.el-table *):not(.el-pagination *) {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+  }
+  .el-button.el-button--small:not(.is-link):not(.is-text):not(.el-table *):not(.el-pagination *) {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  .el-input:not(.el-table *):not(.el-pagination *),
+  .el-date-editor.el-range-editor:not(.el-table *) {
+    --el-input-height: var(--touch-target-min);
+  }
+  .el-input.el-input--small:not(.el-table *):not(.el-pagination *),
+  .el-date-editor.el-range-editor.el-range-editor--small:not(.el-table *) {
+    --el-input-height: 36px;
+  }
+  .el-date-editor.el-range-editor:not(.el-table *) .el-range-input,
+  .el-date-editor.el-range-editor:not(.el-table *) .el-range-separator {
+    height: calc(var(--el-input-height) - 2px);
+    line-height: calc(var(--el-input-height) - 2px);
+  }
+
+  .el-select:not(.el-table *):not(.el-pagination *) .el-select__wrapper {
+    min-height: var(--touch-target-min);
+  }
+  .el-select.el-select--small:not(.el-table *):not(.el-pagination *) .el-select__wrapper {
+    min-height: 36px;
+  }
+}
+
+/* 教師端平板：DESIGN.md「教師端版面規則」（2026-10-12 業主裁定）把平板列為正式
+   裝置，觸控目標不能只寫在窄幕斷點——768–1023px 的觸控平板吃的是桌機排版。
+   同一套基準只對教師端（html.ivy-portal）延伸到 pointer: coarse；管理端平板維持
+   桌機密度（行政在辦公室電腦操作為主）。豁免區與上段相同。 */
+@media (pointer: coarse) and (min-width: 768px) {
+  html.ivy-portal .el-button:not(.is-link):not(.is-text):not(.el-button--small):not(.el-table *):not(.el-pagination *) {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+  }
+  html.ivy-portal .el-button.el-button--small:not(.is-link):not(.is-text):not(.el-table *):not(.el-pagination *) {
+    min-height: 36px;
+    min-width: 36px;
+  }
+  html.ivy-portal .el-input:not(.el-table *):not(.el-pagination *),
+  html.ivy-portal .el-date-editor.el-range-editor:not(.el-table *) {
+    --el-input-height: var(--touch-target-min);
+  }
+  html.ivy-portal .el-input.el-input--small:not(.el-table *):not(.el-pagination *),
+  html.ivy-portal .el-date-editor.el-range-editor.el-range-editor--small:not(.el-table *) {
+    --el-input-height: 36px;
+  }
+  html.ivy-portal .el-date-editor.el-range-editor:not(.el-table *) .el-range-input,
+  html.ivy-portal .el-date-editor.el-range-editor:not(.el-table *) .el-range-separator {
+    height: calc(var(--el-input-height) - 2px);
+    line-height: calc(var(--el-input-height) - 2px);
+  }
+  html.ivy-portal .el-select:not(.el-table *):not(.el-pagination *) .el-select__wrapper {
+    min-height: var(--touch-target-min);
+  }
+  html.ivy-portal .el-select.el-select--small:not(.el-table *):not(.el-pagination *) .el-select__wrapper {
+    min-height: 36px;
+  }
+  /* 平板是桌機排版、表格照常顯示：列內動作（補件／撤回／接受等）只有 18–24px，
+     手指點不準。只撐高到 36px、link 鈕補左右內距，列高小幅增加可接受。 */
+  html.ivy-portal .el-table .el-button.el-button {
+    min-height: 36px;
+  }
+  html.ivy-portal .el-table .el-button.is-link {
+    padding-inline: var(--space-2);
+  }
+  /* 窄欄內兩顆 link 鈕會換行；已有內距隔開，去掉 EP 相鄰 margin 免得第二顆內縮 */
+  html.ivy-portal .el-table .el-button.is-link + .el-button.is-link {
+    margin-left: 0;
+  }
+  html.ivy-portal .el-pagination.el-pagination {
+    --el-pagination-button-width: 36px;
+    --el-pagination-button-height: 36px;
+    --el-pagination-button-width-small: 36px;
+    --el-pagination-button-height-small: 36px;
+  }
+  html.ivy-portal .el-pagination.el-pagination .el-select__wrapper {
+    min-height: 36px;
   }
 }
 

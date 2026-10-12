@@ -161,6 +161,14 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
   padding: 0 !important;
 }
 
+/* 觸控平板（≥768px 仍顯示格內「換班」鈕）：原本 26×14，撐出觸控高度 */
+@media (pointer: coarse) {
+  .cell-swap-btn {
+    min-height: 32px;
+    padding: 0 var(--space-2) !important;
+  }
+}
+
 .calendar-cell.is-tappable {
   cursor: pointer;
   -webkit-tap-highlight-color: rgba(64, 158, 255, 0.15);

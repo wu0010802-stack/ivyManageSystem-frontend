@@ -205,4 +205,48 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
     grid-template-columns: 160px 1fr 240px;
   }
 }
+
+/* 手機：三欄（160＋1fr＋240）塞不進 375px，右側被裁、整頁可橫捲。改單欄堆疊：
+   班級列變橫向捲動的 chip 列；接送佇列提到學生卡片之上——點學生後有 5 秒撤銷
+   倒數，佇列若排在一長串學生卡片後面就看不到也來不及按。 */
+@media (--to-sm) {
+  .pos-board {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .pos-board > .pos-board__rail {
+    order: 0;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 0 var(--space-2);
+    border-right: none;
+    background: transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pos-board__rail :deep(.pos-classroom-rail__item) {
+    flex: 0 0 auto;
+    width: auto;
+    white-space: nowrap;
+    font-size: var(--text-base);
+  }
+
+  .pos-board > .pos-board__queue {
+    order: 1;
+    max-height: 45vh;
+    max-height: 45dvh;
+    border-left: none;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+  }
+
+  .pos-board > .pos-board__grid {
+    order: 2;
+    overflow: visible;
+    padding: 0;
+  }
+}
 </style>

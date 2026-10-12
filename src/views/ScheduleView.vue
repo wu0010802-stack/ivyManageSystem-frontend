@@ -5,7 +5,7 @@ import { computeWeekCoverage, leaveWindowForDate, type LeaveContextItem, type Da
 import type { ApiResponse } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { ArrowRight, Loading, UploadFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Loading, UploadFilled } from '@element-plus/icons-vue'
 import { useShiftStore } from '@/stores/shift'
 import { storeToRefs } from 'pinia'
 import { apiError } from '@/utils/error'
@@ -35,7 +35,8 @@ const { isMobile } = useIsMobile()
 // 班別指派卡片欄位：班別下拉與起訖時間為 slot（沿用表格內同一套 getter）
 const assignmentCardColumns = [
   { label: '班級', prop: '__classroom', formatter: (r: Record<string, unknown>) => (r.classroom_name as string) || (r.classroom_id ? '-' : '未指派班級') },
-  { label: '班別', prop: '__shift' },
+  // block：班別下拉在右對齊窄欄只剩 116px，「晚班（延托） (09:30~18:30)」被截斷；改整寬
+  { label: '班別', prop: '__shift', block: true },
   { label: '上班時間', prop: '__start' },
   { label: '下班時間', prop: '__end' },
 ]
@@ -634,7 +635,7 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
         <section class="control-panel" aria-label="每週排班工具列">
           <div class="controls">
             <div class="week-navigation" role="group" aria-label="選擇排班週期">
-            <el-button @click="changeWeek(-1)" :icon="'ArrowLeft'">上週</el-button>
+            <el-button @click="changeWeek(-1)" :icon="ArrowLeft">上週</el-button>
             <el-date-picker
               v-model="weekStart"
               type="date"
@@ -777,13 +778,13 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
             </template>
           </el-table-column>
         </el-table>
+        <!-- 空資料交給下方 el-empty；卡片再顯示 empty-text 會在手機上重複出現同一句 -->
         <AdminListCards
-          v-else
+          v-else-if="roster.length || loading"
           :items="(roster as unknown as Record<string, unknown>[])"
           :columns="assignmentCardColumns"
           row-key="id"
           :loading="loading"
-          empty-text="尚無在職員工可排班"
         >
           <template #title="{ item }">
             {{ item.name }}

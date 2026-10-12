@@ -142,4 +142,42 @@ function nextMonth() {
   gap: var(--space-2);
   margin-left: auto;
 }
+
+/* 手機：四個 KPI 擠一列時標題被切成「已有紀錄且無異 / 常」「遲到人 / 次」，
+   改 2×2；月份切換鈕（24px 圓鈕）與動作鈕撐到觸控高度，動作列等寬鋪滿。 */
+@media (--to-sm) {
+  .workspace-header__nav {
+    width: 100%;
+  }
+
+  .workspace-header__nav .el-select {
+    flex: 1 1 0;
+    width: auto !important;
+  }
+
+  .workspace-header__nav .el-button {
+    width: var(--touch-target-min);
+    height: var(--touch-target-min);
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+
+  .workspace-header__kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3) var(--space-4);
+    width: 100%;
+  }
+
+  .workspace-header__actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .workspace-header__actions .el-button {
+    flex: 1 1 0;
+    min-height: var(--touch-target-min);
+    margin-left: 0;
+  }
+}
 </style>
