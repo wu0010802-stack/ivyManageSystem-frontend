@@ -6,11 +6,15 @@ export const ensureChartReady = (): Promise<void> => {
     _chartReady = import('chart.js').then(({
       Chart, CategoryScale, LinearScale, RadialLinearScale,
       PointElement, LineElement, BarElement, ArcElement,
+      BarController, LineController,
       Title, Tooltip, Legend, Filler,
     }) => {
+      // Bar／Line controller 顯式註冊：vue-chartjs 的 <Bar> 只註冊自己的 controller，
+      // 長條＋折線混合圖（報表每月收支）裡的 type:'line' dataset 需要 LineController。
       Chart.register(
         CategoryScale, LinearScale, RadialLinearScale,
         PointElement, LineElement, BarElement, ArcElement,
+        BarController, LineController,
         Title, Tooltip, Legend, Filler,
       )
     })

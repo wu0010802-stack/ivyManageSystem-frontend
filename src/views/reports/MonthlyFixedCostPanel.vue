@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, reactive } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import {
   getMonthlyFixedCosts,
   batchUpsertMonthlyFixedCosts,
@@ -10,6 +11,7 @@ import { hasPermission } from '@/utils/auth'
 import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import { invalidateCachedAsync } from '@/composables/useCachedAsync'
+import { formatAmount, monthRangeText } from './reportFormat'
 import { computeReportPeriod } from './useReportPeriod'
 
 const props = defineProps<{
@@ -17,12 +19,20 @@ const props = defineProps<{
   highlightMonth?: number
 }>()
 
-const emit = defineEmits<{ 'update:dirty': [boolean] }>()
+// saved：儲存成功並重新載入後 emit，殼層用來重算「未登錄月數」
+const emit = defineEmits<{ 'update:dirty': [boolean]; saved: [] }>()
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
-// 8 個 category（次序即顯示順序）；defaultAmount 只做 placeholder 提示，不自動帶入
-const CATEGORIES = [
+interface FixedCostCategory {
+  key: string
+  label: string
+  defaultAmount: number | null
+}
+
+// 8 個 category（次序即顯示順序）；defaultAmount 是「參考金額」：以 placeholder 呈現、
+// 只能透過每列「帶入」填入空格，不會自動帶入
+const CATEGORIES: FixedCostCategory[] = [
   { key: 'rent', label: '租金支出', defaultAmount: 500000 },
   { key: 'office_petty_cash', label: '辦公室零用金', defaultAmount: null },
   { key: 'kitchen_petty_cash', label: '廚房零用金', defaultAmount: null },
@@ -35,17 +45,27 @@ const CATEGORIES = [
 
 const canWrite = computed(() => hasPermission('VENDOR_PAYMENT_WRITE'))
 
-// 當月高亮（spec §9）：cutoff 僅依年度與今天，不需 trend
+// 資料截止月（今年＝當月、過去年＝12、未來年度＝0），僅依年度與今天，不需 trend
 const period = computed(() => computeReportPeriod(props.year))
+// 高亮欄：深連結指定的月份優先，否則今年標當月
+const focusMonth = computed(
+  () => props.highlightMonth ?? (period.value.isCurrentYear ? period.value.cutoffMonth : null),
+)
 
 const loading = ref(false)
 const saving = ref(false)
 const errorMsg = ref('')
+// 最近一次成功載入的年度；用來決定副標要不要顯示「已登錄 X / Y 個月」（載入前或失敗時不顯示假的 0）
+const loadedYear = ref<number | null>(null)
 
 // cellState：key = `${month}-${category}`，value = { original, current }
 // original: 載入時 server 上的金額（null = 沒這筆 row）；current: 編輯中值（null 或 number）
 // isDirty = original !== current（嚴格不等）；空字串、null 視為「未登錄」用 null 統一表示
-const cellState = reactive(new Map())
+interface CellEntry {
+  original: number | null
+  current: number | null
+}
+const cellState = reactive(new Map<string, CellEntry>())
 
 function cellKey(month: number, category: string) {
   return `${month}-${category}`
@@ -74,14 +94,15 @@ async function load() {
         cellState.set(k, { original: amount, current: amount })
       }
     }
+    loadedYear.value = props.year
   } catch (e) {
     // 403：分頁掛在 REPORTS 權限下，但底層 GET 端點要求獨立的 VENDOR_PAYMENT_READ，
     // 持有 REPORTS 但無該權限的角色會看到通用「載入失敗」誤導成頁面壞了
-    // （2026-07-05 稽核 §0 / P3-11），改顯示明確的權限提示。
+    // （2026-07-05 稽核 §0 / P3-11），改顯示明確的權限提示（文案不露出權限代碼）。
     if ((e as { response?: { status?: number } })?.response?.status === 403) {
-      errorMsg.value = '需要廠商付款讀取權限（VENDOR_PAYMENT_READ）才能查看固定費用登錄'
+      errorMsg.value = '需要廠商付款的讀取權限，請洽管理員開通。'
     } else {
-      errorMsg.value = apiError(e, '載入月度固定費用失敗')
+      errorMsg.value = apiError(e, '載入固定支出失敗')
     }
     ElMessage.error(errorMsg.value)
     buildEmptyState()
@@ -92,17 +113,19 @@ async function load() {
 
 watch(() => props.year, load, { immediate: true })
 
-// 取得 cell 當下值（用於 input v-model）。注意：reactive Map 需透過 method 取，
-// 直接 cellState.get() 在 template 不會自動追蹤；改用 computed wrapper。
-function getCurrent(month: number, category: string) {
+function getCurrent(month: number, category: string): number | null {
   return cellState.get(cellKey(month, category))?.current ?? null
+}
+
+function getOriginal(month: number, category: string): number | null {
+  return cellState.get(cellKey(month, category))?.original ?? null
 }
 
 function setCurrent(month: number, category: string, raw: string | number | null) {
   const key = cellKey(month, category)
   const entry = cellState.get(key)
   if (!entry) return
-  let next = null
+  let next: number | null = null
   // 千分位輸入（spec §9）：input 為 text，使用者可能貼入含逗號字串（如 "500,000"）
   const cleaned = raw == null ? raw : String(raw).replace(/,/g, '')
   if (cleaned !== '' && cleaned != null) {
@@ -125,8 +148,11 @@ function rawText(month: number, category: string): string {
   return v == null ? '' : String(v)
 }
 function displayText(month: number, category: string): string {
-  const v = getCurrent(month, category)
-  return v == null ? '' : amountFormatter.format(v)
+  return formatAmount(getCurrent(month, category))
+}
+function originalText(month: number, category: string): string {
+  const v = getOriginal(month, category)
+  return v == null ? '未登錄' : formatAmount(v)
 }
 
 function isDirty(month: number, category: string) {
@@ -135,9 +161,15 @@ function isDirty(month: number, category: string) {
   return e.current !== e.original
 }
 
+// 空格＝沒有已存值、也沒有編輯中的值（使用者清掉已存值的格子算「已編輯」，不算空格）
+function isBlank(month: number, category: string) {
+  const e = cellState.get(cellKey(month, category))
+  return !!e && e.current == null && e.original == null
+}
+
 // 派生：所有 dirty entries（送 batch endpoint 用）
 const dirtyEntries = computed(() => {
-  const out = []
+  const out: Array<{ month: number; category: string; amount: number }> = []
   for (const m of MONTHS) {
     for (const c of CATEGORIES) {
       const e = cellState.get(cellKey(m, c.key))
@@ -158,95 +190,68 @@ const dirtyEntries = computed(() => {
 
 const dirtyCount = computed(() => dirtyEntries.value.length)
 
-// emit dirty 狀態給父層（Task 6 ReportsView 用）
+// emit dirty 狀態給父層（ReportsView／FinanceSignoffView 離開前攔截用）
 watch(dirtyCount, (n) => emit('update:dirty', n > 0), { immediate: true })
-
-// 原值 getter
-function getOriginal(month: number, category: string): number | null {
-  return cellState.get(cellKey(month, category))?.original ?? null
-}
 
 // 容器 ref 供鍵盤導航使用
 const gridRef = ref<HTMLElement | null>(null)
 useGridKeyboardNav(gridRef)
 useUnsavedChangesGuard(() => dirtyCount.value > 0)
 
-// 原值格式化
-const amountFmt = new Intl.NumberFormat('zh-TW')
-function originalText(month: number, category: string): string {
-  const v = getOriginal(month, category)
-  return v == null ? '—' : amountFmt.format(v)
+// ── 合計：已儲存值＋編輯中的值（＝ current）──────────────────────
+function sumValues(values: Array<number | null>): number {
+  return values.reduce<number>((acc, v) => (v != null && Number.isFinite(v) ? acc + v : acc), 0)
 }
 
-// 套用到全年：輸入一個金額套用到該類別所有 12 個月
-async function applyToYear(category: string, label: string) {
-  if (!canWrite.value) return
-  try {
-    const result = await ElMessageBox.prompt(
-      `輸入要套用到「${label}」全年 12 個月的金額`,
-      '套用到全年',
-      {
-        inputPattern: /^\d+$/,
-        inputErrorMessage: '請輸入非負整數',
-        confirmButtonText: '套用',
-        cancelButtonText: '取消',
-      },
-    )
-    // prompt 確認時回傳 { value, action }；取消時 reject，不會到此行
-    const inputValue = typeof result === 'object' && 'value' in result ? result.value : ''
-    const amount = Math.trunc(Number(inputValue))
-    for (const m of MONTHS) setCurrent(m, category, amount)
-  } catch { /* 使用者取消 */ }
-}
+const monthTotals = computed(() =>
+  MONTHS.map((m) => sumValues(CATEGORIES.map((c) => getCurrent(m, c.key)))),
+)
+const categoryTotals = computed(() => {
+  const out: Record<string, number> = {}
+  for (const c of CATEGORIES) out[c.key] = sumValues(MONTHS.map((m) => getCurrent(m, c.key)))
+  return out
+})
+const grandTotal = computed(() => sumValues(monthTotals.value))
 
-// 月度合計（read-only 顯示用，跨 8 category 加總）
-function monthTotal(month: number) {
-  let sum = 0
-  let any = false
-  for (const c of CATEGORIES) {
-    const e = cellState.get(cellKey(month, c.key))
-    const v = e?.current
-    if (v != null && Number.isFinite(v)) {
-      sum += v
-      any = true
-    }
-  }
-  return any ? sum : null
-}
-
-// category 合計（read-only 顯示用，跨 12 月加總）
-function categoryTotal(category: string) {
-  let sum = 0
-  let any = false
-  for (const m of MONTHS) {
-    const e = cellState.get(cellKey(m, category))
-    const v = e?.current
-    if (v != null && Number.isFinite(v)) {
-      sum += v
-      any = true
-    }
-  }
-  return any ? sum : null
-}
-
-const grandTotal = computed(() => {
-  let sum = 0
-  let any = false
-  for (const c of CATEGORIES) {
-    const v = categoryTotal(c.key)
-    if (v != null) {
-      sum += v
-      any = true
-    }
-  }
-  return any ? sum : null
+// 含編輯中值的合計要標「未儲存」
+const monthDirty = computed(() =>
+  MONTHS.map((m) => CATEGORIES.some((c) => isDirty(m, c.key))),
+)
+const categoryDirty = computed(() => {
+  const out: Record<string, boolean> = {}
+  for (const c of CATEGORIES) out[c.key] = MONTHS.some((m) => isDirty(m, c.key))
+  return out
 })
 
-const amountFormatter = new Intl.NumberFormat('zh-TW')
-function formatTotal(v: number | null | undefined) {
-  if (v == null || !Number.isFinite(Number(v))) return '—'
-  return amountFormatter.format(Number(v))
+// ── 登錄進度：只看「已儲存」的金額 ─────────────────────────────
+const savedMonthTotals = computed(() =>
+  MONTHS.map((m) => sumValues(CATEGORIES.map((c) => getOriginal(m, c.key)))),
+)
+
+type MonthStatus = 'registered' | 'missing' | 'planned'
+const STATUS_TEXT: Record<MonthStatus, string> = {
+  registered: '已登錄',
+  missing: '未登錄',
+  planned: '預登錄',
 }
+function monthStatus(month: number): MonthStatus {
+  if (savedMonthTotals.value[month - 1] > 0) return 'registered'
+  return month <= period.value.cutoffMonth ? 'missing' : 'planned'
+}
+
+const registeredCount = computed(
+  () => MONTHS.filter((m) => m <= period.value.cutoffMonth && savedMonthTotals.value[m - 1] > 0).length,
+)
+
+const ready = computed(() => loadedYear.value === props.year && !errorMsg.value)
+const subtitle = computed(() => {
+  const cutoff = period.value.cutoffMonth
+  if (cutoff < 1) return `${props.year} 年 · 尚未開始，可先預登錄`
+  const progress = ready.value
+    ? ` · 已登錄 ${registeredCount.value} / ${cutoff} 個月${period.value.isCurrentYear ? '（含本月）' : ''}`
+    : ''
+  return `${props.year} 年${progress} · 每格填當月實際支出；虛線斜體是參考金額，不會自動帶入`
+})
 
 const hasAnyEntry = computed(() => {
   for (const v of cellState.values()) {
@@ -255,12 +260,52 @@ const hasAnyEntry = computed(() => {
   return false
 })
 
+// ── 每列「帶入」參考金額：只填空格 ──────────────────────────────
+const fillUnfilledLabel = computed(() => {
+  const cutoff = period.value.cutoffMonth
+  if (cutoff < 1) return '帶入未登錄的月份'
+  return `帶入未登錄的月份（${monthRangeText(MONTHS.filter((m) => m <= cutoff))}）`
+})
+
+function fillFromReference(category: string, scope: 'unfilled' | 'all') {
+  const cat = CATEGORIES.find((c) => c.key === category)
+  if (!cat || cat.defaultAmount == null || !canWrite.value || saving.value) return
+  const lastMonth = scope === 'all' ? 12 : period.value.cutoffMonth
+  for (let m = 1; m <= lastMonth; m++) {
+    if (isBlank(m, category)) setCurrent(m, category, cat.defaultAmount)
+  }
+}
+
+function onFillCommand(category: string, command: unknown) {
+  if (command === 'unfilled' || command === 'all') fillFromReference(category, command)
+}
+
+// ── 底部儲存列 ────────────────────────────────────────────────
+// 「租金支出 7–9 月、餐點採購 9 月」：讓使用者儲存前知道動了哪些格
+const dirtySummary = computed(() => {
+  const parts: string[] = []
+  for (const c of CATEGORIES) {
+    const months = MONTHS.filter((m) => isDirty(m, c.key))
+    if (months.length) parts.push(`${c.label} ${monthRangeText(months)}`)
+  }
+  return parts.join('、')
+})
+
+function discardChanges() {
+  if (saving.value) return
+  for (const key of Array.from(cellState.keys())) {
+    const e = cellState.get(key)
+    if (e) cellState.set(key, { original: e.original, current: e.original })
+  }
+}
+
 async function saveAll() {
   if (saving.value || dirtyCount.value === 0) return
   saving.value = true
   try {
+    const count = dirtyCount.value
     await batchUpsertMonthlyFixedCosts(props.year, dirtyEntries.value)
-    ElMessage.success(`已儲存 ${dirtyEntries.value.length} 筆`)
+    ElMessage.success(`已儲存 ${count} 格`)
     // 固定支出會併入收支彙總/概況/薪資頁的總支出（2026-07-05 後端修正），但那三頁
     // 走 useCachedAsync 的模組級全域 cache（TTL 5 分鐘），存檔前已開過的分頁在
     // TTL 內切回去會看到舊值。存檔成功後失效這兩個前綴，讓下次切頁強制重抓
@@ -269,8 +314,9 @@ async function saveAll() {
     invalidateCachedAsync('reports/dashboard:')
     // 成功後重抓 → rebuild map → dirty 自動清零
     await load()
+    emit('saved')
   } catch (e) {
-    const msg = apiError(e, '儲存固定費用失敗')
+    const msg = apiError(e, '儲存固定支出失敗')
     ElMessage.error(msg)
   } finally {
     saving.value = false
@@ -280,34 +326,20 @@ async function saveAll() {
 
 <template>
   <div class="monthly-fixed-cost">
-    <div class="panel-toolbar">
-      <div class="toolbar-left">
-        <h3 class="panel-title">固定費用登錄</h3>
-        <p v-if="highlightMonth" role="status">目前核對 {{ year }} 年 {{ highlightMonth }} 月，對應月份已標示。</p>
-        <span class="panel-hint">
-          每格金額為當月實際支出；預設金額提示僅供參考，不會自動帶入。
-        </span>
+    <div class="panel-header">
+      <div class="header-text">
+        <h3 class="panel-title">固定支出登錄</h3>
+        <p class="panel-subtitle" data-test="subtitle">{{ subtitle }}</p>
+        <p v-if="highlightMonth" class="panel-subtitle" role="status">目前核對 {{ year }} 年 {{ highlightMonth }} 月，對應月份已標示。</p>
       </div>
-      <div class="toolbar-right">
-        <el-alert
-          v-if="!canWrite"
-          type="warning"
-          :closable="false"
-          show-icon
-          title="您只有查看權限，無法修改固定費用"
-          class="readonly-alert"
-        />
-        <el-button
-          v-if="canWrite"
-          type="primary"
-          :disabled="dirtyCount === 0 || saving"
-          :loading="saving"
-          data-test="save-all-btn"
-          @click="saveAll"
-        >
-          儲存全部<span v-if="dirtyCount > 0"> ({{ dirtyCount }})</span>
-        </el-button>
-      </div>
+      <el-alert
+        v-if="!canWrite"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="您只有查看權限，無法修改固定支出"
+        class="readonly-alert"
+      />
     </div>
 
     <el-skeleton v-if="loading && !hasAnyEntry" :rows="8" animated />
@@ -320,7 +352,7 @@ async function saveAll() {
           type="info"
           :closable="false"
           show-icon
-          title="此年度尚未登錄任何固定費用，直接點選儲存格即可輸入。"
+          title="此年度尚未登錄任何固定支出，直接點選儲存格即可輸入，或用各列的「帶入」填入參考金額。"
         />
       </div>
       <table class="fc-table">
@@ -331,22 +363,53 @@ async function saveAll() {
               v-for="m in MONTHS"
               :key="m"
               class="col-month"
-              :class="{ 'col-current': m === (highlightMonth ?? (period.isCurrentYear ? period.cutoffMonth : null)) }"
-            >{{ m }} 月</th>
+              :class="{ 'col-current': m === focusMonth }"
+            >
+              <span class="month-name">{{ m }} 月</span>
+              <span
+                class="month-status"
+                :class="`month-status--${monthStatus(m)}`"
+                :data-test="`month-status-${m}`"
+              >{{ STATUS_TEXT[monthStatus(m)] }}</span>
+            </th>
             <th class="col-total">合計</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="(c, ci) in CATEGORIES" :key="c.key" :data-category="c.key">
             <th class="sticky-col row-label">
-              {{ c.label }}
-              <el-button
-                v-if="canWrite"
-                link
-                size="small"
-                :data-test="`apply-year-${c.key}`"
-                @click="applyToYear(c.key, c.label)"
-              >套用全年</el-button>
+              <span class="row-label__name">{{ c.label }}</span>
+              <span v-if="c.defaultAmount != null" class="row-label__ref">
+                <span class="ref-text">參考 {{ formatAmount(c.defaultAmount) }}</span>
+                <el-dropdown
+                  v-if="canWrite"
+                  trigger="click"
+                  :disabled="saving"
+                  @command="onFillCommand(c.key, $event)"
+                >
+                  <el-button
+                    link
+                    type="primary"
+                    size="small"
+                    :disabled="saving"
+                    :aria-label="`${c.label}：帶入參考金額`"
+                    :data-test="`fill-${c.key}`"
+                  >帶入<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item
+                        command="unfilled"
+                        :disabled="period.cutoffMonth < 1"
+                        :data-test="`fill-unfilled-${c.key}`"
+                      >{{ fillUnfilledLabel }}</el-dropdown-item>
+                      <el-dropdown-item
+                        command="all"
+                        :data-test="`fill-all-${c.key}`"
+                      >帶入全年（含預登錄）</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </span>
             </th>
             <td
               v-for="(m, mi) in MONTHS"
@@ -354,7 +417,8 @@ async function saveAll() {
               class="cell-edit"
               :class="{
                 'cell-dirty': isDirty(m, c.key),
-                'col-current': m === (highlightMonth ?? (period.isCurrentYear ? period.cutoffMonth : null)),
+                'cell-empty': getCurrent(m, c.key) == null,
+                'col-current': m === focusMonth,
               }"
               :data-cell-key="`${m}-${c.key}`"
             >
@@ -367,7 +431,7 @@ async function saveAll() {
                 :aria-label="`${m}月 ${c.label}`"
                 :value="focusedKey === cellKey(m, c.key) ? rawText(m, c.key) : displayText(m, c.key)"
                 :disabled="!canWrite || saving"
-                :placeholder="c.defaultAmount != null ? amountFormatter.format(c.defaultAmount) : ''"
+                :placeholder="c.defaultAmount != null ? formatAmount(c.defaultAmount) : ''"
                 @input="setCurrent(m, c.key, ($event.target as HTMLInputElement).value)"
                 @focus="focusedKey = cellKey(m, c.key)"
                 @blur="focusedKey = null"
@@ -379,7 +443,9 @@ async function saveAll() {
               >原 {{ originalText(m, c.key) }}</span>
             </td>
             <td class="cell-num col-total" :data-row-total="c.key">
-              {{ formatTotal(categoryTotal(c.key)) }}
+              <span v-if="categoryTotals[c.key] > 0">{{ formatAmount(categoryTotals[c.key]) }}</span>
+              <span v-else-if="period.cutoffMonth >= 1" class="total-missing">未登錄</span>
+              <span v-if="categoryDirty[c.key]" class="total-unsaved">未儲存</span>
             </td>
           </tr>
           <!-- 月度合計列 -->
@@ -389,17 +455,45 @@ async function saveAll() {
               v-for="m in MONTHS"
               :key="m"
               class="cell-num"
-              :class="{ 'col-current': m === (highlightMonth ?? (period.isCurrentYear ? period.cutoffMonth : null)) }"
+              :class="{ 'col-current': m === focusMonth }"
               :data-month-total="m"
             >
-              {{ formatTotal(monthTotal(m)) }}
+              <span v-if="monthTotals[m - 1] > 0">{{ formatAmount(monthTotals[m - 1]) }}</span>
+              <span v-else-if="m <= period.cutoffMonth" class="total-missing">未登錄</span>
+              <span v-if="monthDirty[m - 1]" class="total-unsaved" :data-test="`month-unsaved-${m}`">未儲存</span>
             </td>
             <td class="cell-num col-total" data-grand-total>
-              {{ formatTotal(grandTotal) }}
+              <span v-if="grandTotal > 0">{{ formatAmount(grandTotal) }}</span>
+              <span v-else-if="period.cutoffMonth >= 1" class="total-missing">未登錄</span>
+              <span v-if="dirtyCount > 0" class="total-unsaved">未儲存</span>
             </td>
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- 有修改才出現的底部儲存列 -->
+    <div
+      v-if="canWrite && dirtyCount > 0"
+      class="save-bar"
+      role="region"
+      aria-label="未儲存的變更"
+      data-test="save-bar"
+    >
+      <p class="save-bar__text" :title="dirtySummary">
+        <span class="save-bar__count" data-test="dirty-count">{{ dirtyCount }} 格未儲存</span>
+        <span class="save-bar__detail"> · {{ dirtySummary }}</span>
+      </p>
+      <div class="save-bar__actions">
+        <el-button :disabled="saving" data-test="discard-btn" @click="discardChanges">放棄變更</el-button>
+        <el-button
+          type="primary"
+          :disabled="saving"
+          :loading="saving"
+          data-test="save-all-btn"
+          @click="saveAll"
+        >儲存 {{ dirtyCount }} 格</el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -411,28 +505,23 @@ async function saveAll() {
   gap: var(--space-4, 16px);
 }
 
-.panel-toolbar {
+.panel-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
+  gap: var(--space-4, 16px);
   flex-wrap: wrap;
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  background: var(--el-bg-color);
-  padding: 8px 0;
 }
-.toolbar-left { display: flex; flex-direction: column; gap: 4px; }
-.panel-title { margin: 0; font-size: 16px; font-weight: 600; }
-.panel-hint { font-size: 12px; color: var(--el-text-color-secondary); }
-.toolbar-right { display: flex; align-items: center; gap: 12px; }
+.header-text { display: flex; flex-direction: column; gap: var(--space-1, 4px); min-width: 0; }
+.panel-title { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+.panel-subtitle { margin: 0; font-size: var(--text-xs); color: var(--el-text-color-secondary); }
+.readonly-alert { width: auto; }
 .readonly-alert :deep(.el-alert) { padding: 6px 12px; }
 
 .fc-scroll {
   overflow-x: auto;
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--el-bg-color);
 }
 .empty-hint { padding: 12px 12px 0 12px; }
@@ -441,7 +530,7 @@ async function saveAll() {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   color: var(--el-text-color-primary);
 }
@@ -466,6 +555,18 @@ async function saveAll() {
   min-width: 96px;
   border-left: 1px solid var(--el-border-color-lighter);
 }
+
+/* 月份表頭下方的登錄狀態：未登錄用琥珀色拉注意力，預登錄（未來月）淡灰 */
+.month-name { display: block; }
+.month-status {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  line-height: 1.3;
+}
+.month-status--registered { color: var(--color-success-darker); }
+.month-status--missing { color: var(--color-warning-darker); font-weight: 600; }
+.month-status--planned { color: var(--el-text-color-placeholder); }
 
 /* 當月高亮（spec §9） */
 .fc-table .col-current {
@@ -506,17 +607,29 @@ html.dark .fc-table thead th.col-current {
   text-align: left;
   white-space: nowrap;
   padding: 4px 10px;
+  min-width: 132px;
 }
+.row-label__name { display: block; }
+.row-label__ref {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+}
+.ref-text { font-style: italic; }
+.row-label__ref :deep(.el-button) { padding: 0; height: auto; font-size: var(--text-xs); }
 
-.cell-edit { padding: 2px 4px; }
+/* 儲存格：已存值＝實字；空格＝虛線框；編輯中＝琥珀底＋左上圓點 */
+.cell-edit { padding: 2px 4px; position: relative; }
 .cell-input {
   width: 100%;
   min-width: 80px;
   padding: 4px 6px;
   border: 1px solid transparent;
   background: transparent;
-  border-radius: 3px;
-  font-size: 13px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   text-align: right;
   color: var(--el-text-color-primary);
@@ -543,15 +656,47 @@ html.dark .fc-table thead th.col-current {
   color: var(--el-text-color-secondary);
   cursor: not-allowed;
 }
-.cell-input::placeholder { color: var(--el-text-color-placeholder); }
+/* 參考金額（placeholder）：斜體＋淡色，一眼分得出「還沒填」 */
+.cell-input::placeholder {
+  color: var(--el-text-color-placeholder);
+  font-style: italic;
+}
+.cell-edit.cell-empty .cell-input {
+  border-style: dashed;
+  border-color: var(--el-border-color-lighter);
+}
+.cell-edit.cell-empty .cell-input:hover:not(:disabled) {
+  border-color: var(--el-border-color);
+}
+.cell-edit.cell-empty .cell-input:focus {
+  border-style: solid;
+  border-color: var(--el-color-primary);
+}
 
-/* dirty 視覺：細邊框 + 背景輕染 */
+/* dirty 視覺：琥珀淡底＋細邊框；td 左上角一顆小圓點，掃表時一眼看到改了哪些格 */
 .cell-edit.cell-dirty .cell-input {
   border-color: var(--el-color-warning);
   background: var(--el-color-warning-light-9);
 }
+.cell-edit.cell-dirty::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--el-color-warning);
+  pointer-events: none;
+}
 
-.cell-orig { display: block; font-size: 10px; color: var(--el-text-color-secondary); text-align: right; line-height: 1.2; }
+.cell-orig {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+  text-align: right;
+  line-height: 1.2;
+}
 
 .cell-num {
   text-align: right;
@@ -561,6 +706,14 @@ html.dark .fc-table thead th.col-current {
 .fc-table tbody td.col-total {
   border-left: 1px solid var(--el-border-color-lighter);
   font-weight: 600;
+}
+.total-missing { font-weight: 400; color: var(--el-text-color-placeholder); }
+.total-unsaved {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--color-warning-darker);
 }
 
 .row-grand-total td,
@@ -574,4 +727,37 @@ html.dark .fc-table thead th.col-current {
 }
 
 .fixed-cost-error { padding: 32px 0; }
+
+/* 底部儲存列：有修改才出現，貼在可視區底部 */
+.save-bar {
+  position: sticky;
+  bottom: var(--space-2, 8px);
+  z-index: var(--z-sticky, 10);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px) var(--space-4, 16px)
+    calc(var(--space-3, 12px) + env(safe-area-inset-bottom, 0px));
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-color-warning-light-5);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+.save-bar__text {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.save-bar__count { font-weight: 600; }
+.save-bar__detail { color: var(--el-text-color-secondary); }
+.save-bar__actions { display: flex; gap: var(--space-2, 8px); flex-shrink: 0; }
+
+@media (--to-sm) {
+  .fc-table { font-size: var(--text-xs); }
+  .save-bar { flex-direction: column; align-items: stretch; }
+  .save-bar__actions { justify-content: flex-end; }
+  .save-bar__actions :deep(.el-button) { min-height: var(--touch-target-min, 44px); }
+}
 </style>
