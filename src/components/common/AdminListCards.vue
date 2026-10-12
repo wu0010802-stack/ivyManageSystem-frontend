@@ -152,6 +152,10 @@ function titleFallback(item: Record<string, unknown>): unknown {
 .alc-card__actions :deep(.el-button) {
   min-height: 44px;
 }
+/* 已用 gap 控間距；EP 的相鄰 margin-left 會讓換行後的第一顆內縮 12px */
+.alc-card__actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
 .alc-empty {
   text-align: center;
   color: var(--text-secondary);

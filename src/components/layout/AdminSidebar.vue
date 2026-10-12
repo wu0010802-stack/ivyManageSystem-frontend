@@ -463,6 +463,9 @@ const onMenuSelect = () => {
 
 .sidebar-mobile-hidden {
   transform: translateX(-100%);
+  /* 收起時拿掉陰影：translateX(-100%) 只移走本體，24px 模糊的陰影仍會滲進視窗
+     左緣，手機每頁都看得到一條灰帶。 */
+  box-shadow: none;
 }
 
 .sidebar-mobile-open {

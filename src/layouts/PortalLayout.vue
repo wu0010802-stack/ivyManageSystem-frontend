@@ -1326,6 +1326,11 @@ html.dark .portal-layout {
     display: none;
   }
 
+  /* 頁名變長時漢堡鍵不得被壓縮（同 AdminHeader） */
+  .portal-sidebar-toggle {
+    flex: 0 0 auto;
+  }
+
   .el-header {
     padding: 0 var(--space-4);
   }
@@ -1346,6 +1351,8 @@ html.dark .portal-layout {
 
   .sidebar-hidden {
     transform: translateX(-100%);
+    /* 收起時拿掉陰影，否則模糊陰影滲進視窗左緣成一條灰帶（同 AdminSidebar） */
+    box-shadow: none;
   }
 
   .sidebar-open {

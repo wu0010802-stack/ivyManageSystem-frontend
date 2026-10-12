@@ -464,6 +464,8 @@ const handleCommand = (command: string) => {
   gap: 5px;
   width: var(--touch-target-min);
   height: var(--touch-target-min);
+  /* 長頁名會把 header-left 擠滿，不鎖住會被壓到 21–34px 寬 */
+  flex: 0 0 auto;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -557,6 +559,16 @@ const handleCommand = (command: string) => {
   .page-title {
     font-size: var(--text-lg);
     padding: 2px 4px;
+  }
+
+  /* 漢堡鍵本身已有留白，間距收窄把寬度還給頁名 */
+  .header-left {
+    gap: var(--space-1);
+  }
+
+  /* 返回上層連結：文字只有 24px 高，撐滿觸控高度（header 64px 容得下） */
+  .page-title__parent {
+    min-height: var(--touch-target-min);
   }
 
   .page-title__parent-text {
