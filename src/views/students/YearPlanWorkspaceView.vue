@@ -45,7 +45,9 @@
       <div class="skeleton-row" v-for="i in 4" :key="i"></div>
     </div>
 
-    <div v-else-if="error" class="workspace-error">
+    <!-- 只有「還沒有 plan 可顯示」的載入失敗才換成錯誤畫面；寫入失敗已由 composable
+         toast，工作台必須留著讓使用者修正後重試 -->
+    <div v-else-if="error && !plan" class="workspace-error">
       <p>{{ error }}</p>
       <el-button class="btn-reload" @click="load">重新載入</el-button>
     </div>

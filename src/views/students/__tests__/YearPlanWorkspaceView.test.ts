@@ -234,6 +234,38 @@ describe('YearPlanWorkspaceView', () => {
     })
   })
 
+  it('寫入失敗（例如 422）時工作台不被錯誤畫面取代，表格仍在', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    mockBulkStudents.mockRejectedValueOnce({
+      response: { status: 422 },
+      errorDetail: { code: 'retain_grade_mismatch', message: '年級不符' },
+      displayMessage: '留級學生現況年級與指定班級年級不符',
+    })
+
+    const w = mountView()
+    await flushPromises()
+    const checkbox = w.findComponent({ name: 'ElCheckbox' })
+    await checkbox.find('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+    const vm = w.findComponent(PlanBatchToolbar).vm as unknown as { assignTargetId: number | null; applyAssign: () => void }
+    vm.assignTargetId = 10
+    vm.applyAssign()
+    await flushPromises()
+
+    expect(mockBulkStudents).toHaveBeenCalledOnce()
+    expect(w.find('.workspace-error').exists()).toBe(false)
+    expect(w.find('.plan-roster-table').exists()).toBe(true)
+  })
+
+  it('初次載入失敗（沒有 plan）才顯示錯誤畫面與重新載入鈕', async () => {
+    mockStatus.mockRejectedValueOnce({ response: { status: 500 }, displayMessage: '伺服器錯誤' })
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.workspace-error').exists()).toBe(true)
+    expect(w.find('.btn-reload').exists()).toBe(true)
+  })
+
   it('發布流程：點擊發布開啟 dialog，確認後呼叫 publish、顯示成功並關閉 dialog', async () => {
     mockStatus.mockResolvedValue(statusDraft())
     mockDetail.mockResolvedValue(detailDraftWithClasses())
