@@ -17339,7 +17339,7 @@ export interface paths {
         };
         /**
          * Get Finance Summary Detail
-         * @description 單月收支明細：學費 / 才藝 / 薪資等八來源原始交易列表（下鑽用）。
+         * @description 單月收支明細：學費 / 才藝 / 薪資 / 代收手續費等九來源原始交易列表（下鑽用）。
          *
          *     F-031：薪資逐員金額（gross/net/festival/overtime/employer_benefit/real_cost）
          *     屬 SALARY_READ 範疇；REPORTS 持有者若非 admin/hr 不可下鑽到逐員實發/獎金，
@@ -17367,8 +17367,8 @@ export interface paths {
          * Export Finance Summary
          * @description 匯出收支彙總為 Excel。
          *
-         *     指定 month 時，額外附八張明細分頁（學費、才藝、薪資、廠商付款、雜項收款、固定支出、
-         *     年終撥款、表外獎金）；未指定 month 時只輸出月度彙總與分類統計兩張分頁。
+         *     指定 month 時，額外附九張明細分頁（學費、才藝、薪資、廠商付款、雜項收款、固定支出、
+         *     年終撥款、表外獎金、代收手續費）；未指定 month 時只輸出月度彙總與分類統計兩張分頁。
          *
          *     F-031：薪資明細 Sheet 5 在非 admin/hr 角色下需以「—」遮罩金額欄位，
          *     避免 supervisor / 自訂 REPORTS 角色透過匯出取得逐員實發名冊。年終撥款明細
@@ -43525,6 +43525,20 @@ export interface components {
             student_name?: string | null;
         };
         /**
+         * ReportsFinanceDetailCollectionFeeItemOut
+         * @description `get_collection_fee_detail` 單筆：永豐代收手續費（銷帳編號屬金融資訊，不回傳）。
+         */
+        ReportsFinanceDetailCollectionFeeItemOut: {
+            /** Amount */
+            amount: number;
+            /** Channel */
+            channel: string;
+            /** Date */
+            date?: string | null;
+            /** Gross Amount */
+            gross_amount: number;
+        };
+        /**
          * ReportsFinanceDetailExtraBonusItemOut
          * @description `get_extra_bonus_payout_detail` 單筆；金額遮罩語意同年終撥款。
          */
@@ -43687,11 +43701,13 @@ export interface components {
         };
         /**
          * ReportsFinanceSummaryDetailOut
-         * @description GET /reports/finance-summary/detail 回應（下鑽八來源明細）。
+         * @description GET /reports/finance-summary/detail 回應（下鑽九來源明細）。
          */
         ReportsFinanceSummaryDetailOut: {
             /** Activity */
             activity: components["schemas"]["ReportsFinanceDetailActivityItemOut"][];
+            /** Collection Fee */
+            collection_fee: components["schemas"]["ReportsFinanceDetailCollectionFeeItemOut"][];
             /** Extra Bonus */
             extra_bonus: components["schemas"]["ReportsFinanceDetailExtraBonusItemOut"][];
             /** Fixed Cost */
