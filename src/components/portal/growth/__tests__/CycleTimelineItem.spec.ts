@@ -19,3 +19,22 @@ describe('考核明細重新載入', () => {
     expect(wrapper.findComponent({ name: 'ScoreItemsTable' }).exists()).toBe(true)
   })
 })
+
+describe('未公布的學期', () => {
+  const mountItem = (item: Record<string, unknown>) => mount(CycleTimelineItem, {
+    props: { item: { cycle_id: 2, ...item }, fetchDetail: vi.fn() },
+    global: { stubs: { ItemRadarChart: true, ScoreItemsTable: true } },
+  })
+
+  it('不畫展開箭頭（列本身 disabled，箭頭只會誤導成點得開）', () => {
+    const w = mountItem({ is_visible: false, summary_status: 'in_progress' })
+    expect(w.get('button.row').attributes('disabled')).toBeDefined()
+    expect(w.find('.chevron').exists()).toBe(false)
+    expect(w.get('.status-chip').text()).toBe('考核進行中')
+  })
+
+  it('已公布的學期仍有展開箭頭', () => {
+    const w = mountItem({ is_visible: true, total_score: 88, grade: 'A' })
+    expect(w.find('.chevron').exists()).toBe(true)
+  })
+})

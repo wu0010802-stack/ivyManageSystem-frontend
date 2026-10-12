@@ -85,7 +85,8 @@ const statusLabel = (item: AppraisalCycle) => {
         :style="{ background: gradeStyle(item.grade ?? '').color }"
       >{{ gradeStyle(item.grade ?? '').label }}</span>
       <span v-else class="status-chip">{{ statusLabel(item) }}</span>
-      <el-icon class="chevron" :class="{ open: expanded }" aria-hidden="true"><CaretRight /></el-icon>
+      <!-- 未公布的學期不能展開，箭頭只會誤導成「點得開」 -->
+      <el-icon v-if="item.is_visible" class="chevron" :class="{ open: expanded }" aria-hidden="true"><CaretRight /></el-icon>
     </button>
     <div v-if="expanded && item.is_visible" :id="detailId" class="detail">
       <div v-if="loading" class="loading">載入中…</div>
@@ -129,6 +130,10 @@ const statusLabel = (item: AppraisalCycle) => {
   font-size: 0.85rem;
 }
 .status-chip {
+  /* 未公布時沒有分數與等第，狀態字要橫跨那兩欄；否則塞進 60px 的分數欄會直排成四行 */
+  grid-column: 2 / 5;
+  justify-self: start;
+  white-space: nowrap;
   padding: 2px 10px;
   border-radius: 999px;
   background: var(--neutral-100, #f1f5f9);

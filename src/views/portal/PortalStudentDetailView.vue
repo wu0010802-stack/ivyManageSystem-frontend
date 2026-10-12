@@ -122,7 +122,7 @@ function back() {
       <!-- Header -->
       <div class="header pt-card-elevated">
         <div class="title-row">
-          <h2>{{ (studentInfo as Record<string, unknown>)?.name }}</h2>
+          <h1>{{ (studentInfo as Record<string, unknown>)?.name }}</h1>
           <span class="age">{{ ageLabel }}</span>
           <el-tag v-if="(studentInfo as Record<string, unknown>)?.lifecycle_status" size="small">
             {{ lifecycleLabel((studentInfo as Record<string, unknown>)?.lifecycle_status as string) }}
@@ -311,7 +311,7 @@ function back() {
   align-items: center;
   gap: var(--space-3);
 }
-.title-row h2 {
+.title-row h1 {
   margin: 0;
   font-size: var(--text-2xl);
   font-weight: 700;
@@ -353,7 +353,14 @@ function back() {
   font-size: var(--text-xs);
 }
 
-.actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+/* 動作鈕可換行：手機 390px 寬時三顆排不下，原本第三顆會超出卡片右緣 */
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+/* el-button 相鄰預設有 margin-left，換行後會讓第二列縮排，改由 gap 統一控制間距 */
+.actions .el-button + .el-button { margin-left: 0; }
+@media (--to-sm) {
+  /* 手機：按鈕依內容寬度撐滿整列；放不下就換行，不橫向溢出 */
+  .actions .el-button { flex: 1 1 auto; min-width: 0; }
+}
 
 .detail-tabs { margin-top: var(--space-2); }
 

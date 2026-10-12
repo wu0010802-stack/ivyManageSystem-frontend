@@ -71,18 +71,44 @@ const calendarOptions = computed<CalendarOptions>(() => ({
 </script>
 
 <template>
-  <FullCalendar ref="calendarRef" :options="calendarOptions" />
+  <!-- 外包一層：FullCalendar 的根節點就是 .fc，scoped 的 `:deep(.fc)` 只匹配「後代」，
+       直接當根節點時選擇器永遠對不上，客製色全部失效（2026-10-12 實測退回 FC 預設深灰鈕） -->
+  <div class="calendar-board">
+    <FullCalendar ref="calendarRef" :options="calendarOptions" />
+  </div>
 </template>
 
 <style scoped>
-/* FullCalendar 自帶 CSS variables，在此客製按鈕色（從後台 CalendarView 搬入） */
-:deep(.fc) {
-  --fc-button-bg-color: var(--el-color-primary, #409eff);
-  --fc-button-border-color: var(--el-color-primary, #409eff);
-  --fc-button-hover-bg-color: var(--el-color-primary-light-3, #66b1ff);
-  --fc-button-hover-border-color: var(--el-color-primary-light-3, #66b1ff);
-  --fc-button-active-bg-color: var(--el-color-primary-dark-2, #337ecc);
-  --fc-button-active-border-color: var(--el-color-primary-dark-2, #337ecc);
-  --fc-today-bg-color: rgba(64, 158, 255, 0.06);
+/* FullCalendar 自帶 CSS variables。工具列按鈕走 EP plain 按鈕語彙（白底、細框），
+   只有「目前檢視」用主色淡底標示，避免整排實心主色鈕搶走事件本身的注意力。 */
+.calendar-board :deep(.fc) {
+  --fc-button-text-color: var(--el-text-color-regular);
+  --fc-button-bg-color: var(--el-bg-color);
+  --fc-button-border-color: var(--el-border-color);
+  --fc-button-hover-bg-color: var(--el-fill-color-light);
+  --fc-button-hover-border-color: var(--el-border-color-hover);
+  --fc-button-active-bg-color: var(--el-color-primary-light-9);
+  --fc-button-active-border-color: var(--el-color-primary-light-5);
+  --fc-today-bg-color: var(--el-color-primary-light-9);
+}
+
+.calendar-board :deep(.fc .fc-button-primary:not(:disabled).fc-button-active) {
+  color: var(--el-color-primary);
+}
+
+.calendar-board :deep(.fc .fc-button) {
+  white-space: nowrap;
+}
+
+/* 與 isMobile 的 matchMedia 同一門檻：手機工具列標題縮成一行能讀的大小 */
+@media (max-width: 640px) {
+  .calendar-board :deep(.fc .fc-toolbar) {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .calendar-board :deep(.fc .fc-toolbar-title) {
+    font-size: var(--text-lg);
+  }
 }
 </style>

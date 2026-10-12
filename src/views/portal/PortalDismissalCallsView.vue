@@ -170,11 +170,14 @@ function dismissNotifyHint() {
       class="degrade-hint degrade-hint--audio"
       role="status"
     >
-      <el-icon aria-hidden="true"><Pointer /></el-icon>
-      <span v-if="!audioUnlocked">點一下畫面以啟用接送提醒音</span>
-      <span v-if="!notificationPermitted && !notifyHintDismissed" class="degrade-hint__sub">
-        此裝置無法背景推播，請保持 App 開啟並開啟聲音
-      </span>
+      <el-icon class="degrade-hint__icon" aria-hidden="true"><Pointer /></el-icon>
+      <!-- 兩段提示上下各一行、左對齊（手機版並排會各擠成三行） -->
+      <div class="degrade-hint__lines">
+        <span v-if="!audioUnlocked" class="degrade-hint__main">點一下畫面以啟用接送提醒音</span>
+        <span v-if="!notificationPermitted && !notifyHintDismissed" class="degrade-hint__sub">
+          此裝置無法背景推播，請保持 App 開啟並開啟聲音
+        </span>
+      </div>
       <button
         v-if="!notificationPermitted && !notifyHintDismissed"
         type="button"
@@ -256,7 +259,6 @@ function dismissNotifyHint() {
 .portal-dismissal-calls {
   max-width: 600px;
   margin: 0 auto;
-  padding: var(--space-4);
 }
 
 /* 螢幕報讀專用，視覺隱藏（portal app 無全域 sr-only，自帶 scoped 版） */
@@ -351,23 +353,36 @@ function dismissNotifyHint() {
 /* ─── 降級提示（音效 / 推播不可用）─── */
 .degrade-hint {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
   font-size: var(--text-sm);
 }
+.degrade-hint__icon {
+  /* 與第一行文字（line-height 約 1.5em）垂直對齊 */
+  flex-shrink: 0;
+  margin-top: var(--space-1);
+}
+/* 兩段提示上下堆疊、左對齊；關閉鈕用 margin-left:auto 固定在右上 */
+.degrade-hint__lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+  padding-top: var(--space-1);
+}
 .degrade-hint__sub {
   color: var(--text-secondary, var(--el-text-color-secondary));
 }
-.degrade-hint__sub::before {
-  content: '・';
-  margin: 0 4px;
-  color: var(--el-text-color-placeholder);
-}
 .degrade-hint__close {
   margin-left: auto;
+  flex-shrink: 0;
+  /* 觸控區 44px 但不撐高提示列：負 margin 抵銷上下多出的空間 */
+  margin-top: calc(var(--space-2) * -1);
+  margin-bottom: calc(var(--space-2) * -1);
   min-width: var(--touch-target-min, 44px);
   min-height: var(--touch-target-min, 44px);
   display: inline-flex;

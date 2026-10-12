@@ -46,8 +46,9 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
         <template v-if="day">
           <div class="cell-day">{{ day.day }}</div>
           <div v-if="day.shift_name" class="cell-shift">{{ day.shift_name }}</div>
+          <!-- 手機一格只剩約 45px：起訖拆兩行、隱藏「~」，避免撐破七欄（10-12 實測週六整欄被裁） -->
           <div v-if="day.work_start" class="cell-time">
-            {{ day.work_start }}~{{ day.work_end }}
+            <span>{{ day.work_start }}</span><span class="cell-time-sep">~</span><span>{{ day.work_end }}</span>
           </div>
           <div v-if="day.is_override" class="cell-override">
             <el-tag size="small" type="warning" effect="plain">調班</el-tag>
@@ -80,7 +81,8 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
 .calendar-header {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  /* minmax(0,1fr)：1fr 的最小值是內容寬，長時間字串會把欄撐開造成橫捲 */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
   margin-bottom: 1px;
 }
@@ -96,7 +98,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
 .calendar-row {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
 }
 
@@ -172,12 +174,28 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 @media (--to-sm) {
   .calendar-cell {
     min-height: 65px;
-    padding: 4px;
+    /* 390px 寬一格約 45px：左右只留 2px，三字班別（無值週）才放得下不被截斷 */
+    padding: 4px 2px;
     font-size: 12px;
   }
 
   .cell-time {
-    font-size: 10px;
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cell-time-sep {
+    display: none;
+  }
+
+  .cell-shift {
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .cell-swap-btn-wrap {
