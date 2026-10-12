@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElDrawer } from 'element-plus'
 import MonthProgressBar from '../MonthProgressBar.vue'
 import { cell, day, grid, WEEK } from './gridFixtures'
 
@@ -65,5 +65,49 @@ describe('MonthProgressBar', () => {
     await wrapper.setProps({ revision: 1 })
     await flushPromises()
     expect(api.grid).toHaveBeenCalledTimes(2)
+  })
+
+  it('同月換日期不重抓，換月才重抓', async () => {
+    const wrapper = mountBar()
+    await flushPromises()
+    expect(api.grid).toHaveBeenCalledTimes(1)
+    await wrapper.setProps({ date: '2026-09-20' })
+    await flushPromises()
+    expect(api.grid).toHaveBeenCalledTimes(1)
+    await wrapper.setProps({ date: '2026-10-05' })
+    await flushPromises()
+    expect(api.grid).toHaveBeenCalledTimes(2)
+    expect(api.grid).toHaveBeenLastCalledWith({ start_date: '2026-10-01', end_date: '2026-10-31' })
+  })
+
+  it('載入失敗：不顯示已排滿或 0 格待處理，提供重試', async () => {
+    api.grid.mockRejectedValueOnce({ displayMessage: '伺服器錯誤' })
+    const wrapper = mountBar()
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).not.toContain('已排滿')
+    expect(text).not.toContain('0 格待處理')
+    expect(text).not.toContain('人日未排班')
+    expect(wrapper.find('[data-test="progress-error"]').text()).toContain('伺服器錯誤')
+    expect(wrapper.find('[data-test="progress-issues"]').text()).toContain('—')
+    await wrapper.find('[data-test="progress-retry"]').trigger('click')
+    await flushPromises()
+    expect(api.grid).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="progress-error"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="progress-schedule"]').text()).toContain('2 人日未排班')
+  })
+
+  it('關閉老師確認抽屜時通知頁殼 changed', async () => {
+    // 抽屜 teleport 到 body；不用 teleport stub，否則 VTU 找不到 ElDrawer 元件
+    const wrapper = mount(MonthProgressBar, {
+      props: { date: '2026-09-16', revision: 0 },
+      global: { plugins: [ElementPlus], stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+    await wrapper.find('[data-test="progress-rounds"]').trigger('click')
+    await flushPromises()
+    wrapper.findComponent(ElDrawer).vm.$emit('closed')
+    await flushPromises()
+    expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 })
