@@ -290,7 +290,6 @@ declare module 'vue' {
     QuickStudentDialog: typeof import('./src/components/dashboard/quick-add/QuickStudentDialog.vue')['default']
     RawPunchDetails: typeof import('./src/components/attendance/RawPunchDetails.vue')['default']
     ReadonlyBadge: typeof import('./src/components/common/ReadonlyBadge.vue')['default']
-    ReconciliationPanel: typeof import('./src/components/attendance/ReconciliationPanel.vue')['default']
     RecordsTab: typeof import('./src/components/student/tabs/RecordsTab.vue')['default']
     RecruitmentActionQueue: typeof import('./src/components/recruitment/RecruitmentActionQueue.vue')['default']
     RecruitmentAddressHeatmap: typeof import('./src/components/recruitment/RecruitmentAddressHeatmap.vue')['default']

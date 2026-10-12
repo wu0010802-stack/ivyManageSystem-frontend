@@ -24,7 +24,7 @@ function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]
       shiftTypes: SHIFTS,
       sameDayCells: extra.sameDayCells ?? [target],
       employeeNames: { 1: '林班導', 2: '王副導' },
-      weeklyShiftId: extra.weeklyShiftId ?? 1,
+      weeklyShiftId: 'weeklyShiftId' in extra ? extra.weeklyShiftId! : 1,
       today: '2026-09-21',
       caller: extra.caller ?? CALLER,
     },
@@ -56,6 +56,34 @@ describe('PersonDayDrawer', () => {
     expect(items[0].classes()).toContain('pdd__chain-item--active')
     expect(items[1].text()).toContain('早車')
     expect(items.at(-1)!.text()).toContain('事假（13:00–17:00）・待審')
+  })
+
+  it('沒有 SCHEDULE（週排班取不到，weeklyShiftId 為 null）：來源為週排班／輪值表時，週排班層用格子計畫的班別名，不寫「無」', () => {
+    const weekly = mountDrawer(
+      cell(1, W1, { plan: { source: 'weekly' }, actual: {}, edit: { plan: false, locked_reason: 'no_permission' } }),
+      { weeklyShiftId: null, caller: { ...CALLER, can_edit_plan: false } },
+    )
+    const weeklyItem = weekly.findAll('[data-test="pdd-chain"] li')[1]
+    expect(weeklyItem.classes()).toContain('pdd__chain-item--active')
+    expect(weeklyItem.text()).toBe('週排班早車')
+
+    const rotation = mountDrawer(
+      cell(1, W1, {
+        plan: { source: 'rotation', rotation: { rotation_id: 3, school_year: 115, semester: 1, week_label: '05', row_label: '早車' } },
+        actual: {},
+        edit: { plan: false, locked_reason: 'no_permission' },
+      }),
+      { weeklyShiftId: null, caller: { ...CALLER, can_edit_plan: false } },
+    )
+    expect(rotation.findAll('[data-test="pdd-chain"] li')[1].text()).toBe('週排班早車')
+  })
+
+  it('週排班層：來源不是週排班／輪值表且 weeklyShiftId 為 null 時仍寫「無」', () => {
+    const wrapper = mountDrawer(
+      cell(1, W1, { plan: { source: 'daily', shift_type_id: 2, name: '晚車' }, actual: {} }),
+      { weeklyShiftId: null },
+    )
+    expect(wrapper.findAll('[data-test="pdd-chain"] li')[1].text()).toBe('週排班無')
   })
 
   it('兼兩班：註明另一班；只帶一班不顯示（spec §7）', () => {

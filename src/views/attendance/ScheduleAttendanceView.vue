@@ -505,6 +505,7 @@ function onGridImport(row: { employee_id: number; employee_name: string; date: s
 
 async function onGridChanged(): Promise<void> {
   dataRevision.value += 1
+  importRevision.value += 1 // 出勤明細頁籤常駐，格子確認／改班後它的整月表也要刷新
   if (canViewAttendance) await onResolved()
 }
 

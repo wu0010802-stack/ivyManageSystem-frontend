@@ -64,7 +64,7 @@ const AnomalyQueueColumnStub = {
 
 const DetailColumnStub = {
   name: 'DetailColumn',
-  props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month', 'focusDate'],
+  props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month', 'focusDate', 'revision'],
   emits: ['resolved', 'navigate', 'switchMode'],
   template: `<div class="detail-column-stub"><slot /></div>`,
 }
@@ -503,6 +503,19 @@ describe('班表核對與明細互通', () => {
     await flushPromises()
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(1)
     expect(wrapper.findComponent(MonthProgressBarStub).props('revision')).toBe(1)
+    wrapper.unmount()
+  })
+
+  it('格子異動（確認／改班）後，出勤明細的整月表也要刷新（importRevision 遞增）', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-06' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('revision')).toBe(0)
+    wrapper.findComponent(ScheduleGridPanelStub).vm.$emit('changed')
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('revision')).toBe(1)
+    // 格子自己的編輯：本月進度重算，格子不重複載入（格子已自行 reload）
+    expect(wrapper.findComponent(MonthProgressBarStub).props('revision')).toBe(1)
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(0)
     wrapper.unmount()
   })
 

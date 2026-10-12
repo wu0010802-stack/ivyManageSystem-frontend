@@ -24,7 +24,8 @@
       </li>
       <li class="month-progress__step">
         <span class="month-progress__index">⑤</span>
-        <router-link to="/salary/settle" class="month-progress__link" data-test="progress-salary">交薪資</router-link>
+        <router-link v-if="canViewSalary" to="/salary/settle" class="month-progress__link" data-test="progress-salary">交薪資</router-link>
+        <span v-else data-test="progress-salary-text">交薪資</span>
       </li>
     </ol>
     <p v-if="loadError" class="month-progress__error" role="alert" data-test="progress-error">
@@ -61,6 +62,8 @@ const monthLabel = computed(() => {
   return `${y} 年 ${m} 月`
 })
 const canViewAttendance = hasPermission('ATTENDANCE_READ')
+// 薪資結算頁需要 SALARY_READ，沒有就只顯示步驟名稱（連過去會被路由守衛擋下）
+const canViewSalary = hasPermission('SALARY_READ')
 // 確認輪次端點掛在 SCHEDULE 路由下，讀取還要 ATTENDANCE_READ（同原打卡核對頁籤條件）
 const canConfirmRounds = hasPermission('SCHEDULE') && canViewAttendance
 

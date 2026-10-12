@@ -5,7 +5,7 @@ import MonthProgressBar from '../MonthProgressBar.vue'
 import { cell, day, grid, WEEK } from './gridFixtures'
 
 const api = vi.hoisted(() => ({ grid: vi.fn() }))
-const perms = vi.hoisted(() => ({ set: new Set(['SCHEDULE', 'ATTENDANCE_READ']) }))
+const perms = vi.hoisted(() => ({ set: new Set(['SCHEDULE', 'ATTENDANCE_READ', 'SALARY_READ']) }))
 vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: api.grid }))
 vi.mock('@/utils/auth', () => ({ hasPermission: (code: string) => perms.set.has(code) }))
 
@@ -32,7 +32,7 @@ function mountBar(revision = 0) {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  perms.set = new Set(['SCHEDULE', 'ATTENDANCE_READ'])
+  perms.set = new Set(['SCHEDULE', 'ATTENDANCE_READ', 'SALARY_READ'])
   api.grid.mockResolvedValue({ data: monthGrid() })
 })
 
@@ -49,14 +49,24 @@ describe('MonthProgressBar', () => {
     expect(wrapper.findComponent(RouterLinkStub).props('to')).toBe('/salary/settle')
   })
 
-  it('只有排班權限：只看得到排班與交薪資兩步', async () => {
-    perms.set = new Set(['SCHEDULE'])
+  it('只有排班與薪資讀取權限：只看得到排班與交薪資兩步', async () => {
+    perms.set = new Set(['SCHEDULE', 'SALARY_READ'])
     const wrapper = mountBar()
     await flushPromises()
     expect(wrapper.find('[data-test="progress-import"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="progress-issues"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="progress-rounds"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="progress-schedule"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="progress-salary"]').exists()).toBe(true)
+  })
+
+  it('沒有 SALARY_READ：交薪資只顯示純文字，不是連結（點了會被路由守衛擋下）', async () => {
+    perms.set = new Set(['SCHEDULE', 'ATTENDANCE_READ'])
+    const wrapper = mountBar()
+    await flushPromises()
+    expect(wrapper.find('[data-test="progress-salary"]').exists()).toBe(false)
+    expect(wrapper.findComponent(RouterLinkStub).exists()).toBe(false)
+    expect(wrapper.find('[data-test="progress-salary-text"]').text()).toBe('交薪資')
   })
 
   it('資料異動（revision）時重新統計', async () => {

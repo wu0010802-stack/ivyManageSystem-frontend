@@ -164,6 +164,17 @@ const planLine = computed(() => {
   return `${planText(props.cell)}（${SOURCE_TAGS[props.cell.plan.source].label}）`
 })
 
+/**
+ * 週排班層的值。沒有 SCHEDULE 的人不會載入週排班（weeklyShiftId 為 null），但來源是週排班或輪值表
+ * （輪值表套用後寫成週排班，帶 rotation_id）時，生效的週排班班別就是格子計畫的班別，不能寫「無」。
+ */
+function weeklyValue(cell: GridCell): string {
+  if (props.weeklyShiftId) return shiftName(props.weeklyShiftId)
+  const plan = cell.plan
+  if ((plan.source === 'weekly' || plan.source === 'rotation') && plan.name) return plan.name
+  return '無'
+}
+
 const chain = computed(() => {
   const cell = props.cell
   if (!cell) return []
@@ -179,7 +190,7 @@ const chain = computed(() => {
         : '無',
       active: plan.source === 'rotation',
     },
-    { key: 'weekly', label: '週排班', value: props.weeklyShiftId ? shiftName(props.weeklyShiftId) : '無', active: plan.source === 'weekly' },
+    { key: 'weekly', label: '週排班', value: weeklyValue(cell), active: plan.source === 'weekly' },
     {
       key: 'daily',
       label: '每日調整',
