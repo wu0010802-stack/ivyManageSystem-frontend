@@ -292,3 +292,29 @@ describe('聯絡簿未儲存保護', () => {
     w.unmount()
   })
 })
+
+// 2026-10-12：底部按鈕強度原本倒置——「儲存草稿」實心主色、逐位填寫的主流程
+// 「儲存並填下一位」只是 plain，單筆「發布給家長」又是第二顆實心綠鈕。
+describe('ContactBookEntryDrawer 底部按鈕強度', () => {
+  const typeOf = (w, label) => {
+    const btn = w.findAllComponents(STUBS.ElButton).find((b) => b.text().includes(label))
+    expect(btn, `找不到「${label}」`).toBeTruthy()
+    return btn?.props('type')
+  }
+
+  it('有下一位時，主按鈕是「儲存並填下一位」，儲存草稿降為次級', () => {
+    const w = mountIt(ENTRY_DRAFT, { hasNext: true })
+    expect(typeOf(w, '儲存並填下一位')).toBe('primary')
+    expect(typeOf(w, '儲存草稿')).toBeUndefined()
+  })
+
+  it('最後一位（沒有下一位）時，儲存草稿是主按鈕', () => {
+    const w = mountIt(ENTRY_DRAFT, { hasNext: false })
+    expect(typeOf(w, '儲存草稿')).toBe('primary')
+  })
+
+  it('單筆發布不搶主按鈕、也不用 success 色', () => {
+    const w = mountIt(ENTRY_DRAFT, { hasNext: true })
+    expect(typeOf(w, '發布給家長')).toBeUndefined()
+  })
+})

@@ -142,12 +142,27 @@ describe('ContactBookEntryCard', () => {
     expect(w.text()).toContain('今日表現很好')
   })
 
-  it('shows 尚未填寫 when no teacher_note', () => {
+  it('shows 尚未填寫 when entry exists but has no teacher_note', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_NO_ENTRY },
+      props: { item: ITEM_NO_MOOD },
       global: globalConfig,
     })
     expect(w.text()).toContain('尚未填寫')
+  })
+
+  // 2026-10-12：沒有紀錄時原本同時畫「未記錄」心情＋「尚未填寫」＋「未填」標籤，
+  // 三個元素講同一件事，27 列一路重複；只留狀態標籤，卡片內改放開始填寫的提示。
+  it('no entry: only the 未填 tag carries the status (no mood chip, no 尚未填寫)', () => {
+    for (const compact of [false, true]) {
+      const w = mount(ContactBookEntryCard, {
+        props: { item: ITEM_NO_ENTRY, compact },
+        global: globalConfig,
+      })
+      expect(w.find('[data-test="mood-chip"]').exists()).toBe(false)
+      expect(w.text()).not.toContain('尚未填寫')
+      expect(w.text()).not.toContain('未記錄')
+      expect(w.text().match(/未填/g)?.length).toBe(1)
+    }
   })
 
   it('shows photo count when entry has photos', () => {

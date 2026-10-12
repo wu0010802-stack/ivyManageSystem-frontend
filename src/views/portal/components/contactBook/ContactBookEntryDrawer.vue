@@ -270,7 +270,7 @@ defineExpose({ requestLeave })
           <el-radio-button v-for="o in MOOD_OPTIONS" :key="o.value" :value="o.value">
             {{ o.label }}
           </el-radio-button>
-          <el-radio-button :value="undefined">未記錄</el-radio-button>
+          <el-radio-button class="chip-unset" :value="undefined">未記錄</el-radio-button>
         </el-radio-group>
       </el-form-item>
 
@@ -279,7 +279,7 @@ defineExpose({ requestLeave })
           <el-radio-button v-for="o in MEAL_OPTIONS" :key="o.value" :value="o.value">
             {{ o.label }}
           </el-radio-button>
-          <el-radio-button :value="undefined">未記錄</el-radio-button>
+          <el-radio-button class="chip-unset" :value="undefined">未記錄</el-radio-button>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="點心">
@@ -287,7 +287,7 @@ defineExpose({ requestLeave })
           <el-radio-button v-for="o in MEAL_OPTIONS" :key="o.value" :value="o.value">
             {{ o.label }}
           </el-radio-button>
-          <el-radio-button :value="undefined">未記錄</el-radio-button>
+          <el-radio-button class="chip-unset" :value="undefined">未記錄</el-radio-button>
         </el-radio-group>
       </el-form-item>
 
@@ -324,7 +324,7 @@ defineExpose({ requestLeave })
           <el-radio-button v-for="o in BOWEL_OPTIONS" :key="o.value" :value="o.value">
             {{ o.label }}
           </el-radio-button>
-          <el-radio-button :value="undefined">未記錄</el-radio-button>
+          <el-radio-button class="chip-unset" :value="undefined">未記錄</el-radio-button>
         </el-radio-group>
       </el-form-item>
 
@@ -391,39 +391,46 @@ defineExpose({ requestLeave })
     </el-form>
 
     <template #footer>
+      <!-- 520px 寬時原本六個元素擠一行，「存為範本」被裁、狀態字被擠出左緣（10-12 實跑）。
+           改兩層：狀態一列；按鈕分左右兩組、可換行。主按鈕給逐位填寫的主流程「儲存並填下一位」，
+           單筆發布降為次級（建議流程是最後在列表批次發布）。 -->
       <div class="drawer-footer">
-        <span role="status">{{ busy ? '儲存處理中…' : isDirty ? '有未儲存的變更' : '尚無未儲存的變更' }}</span>
-        <el-button :disabled="busy" @click="handleClose">關閉</el-button>
-        <el-button :icon="Collection" @click="handleSaveAsTemplate">
-          存為範本
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="saving"
-          :disabled="publishing"
-          @click="handleSaveDraft"
-        >
-          儲存草稿
-        </el-button>
-        <el-button
-          v-if="hasNext"
-          type="primary"
-          plain
-          :loading="saving"
-          :disabled="publishing"
-          @click="handleSaveAndNext"
-        >
-          儲存並填下一位
-        </el-button>
-        <el-button
-          type="success"
-          :icon="Bell"
-          :loading="publishing"
-          :disabled="!entry?.id || saving"
-          @click="handlePublish"
-        >
-          {{ isPublished ? '再次發布' : '發布給家長' }}
-        </el-button>
+        <span role="status" class="drawer-footer__status">{{ busy ? '儲存處理中…' : isDirty ? '有未儲存的變更' : '尚無未儲存的變更' }}</span>
+        <div class="drawer-footer__actions">
+          <div class="drawer-footer__group">
+            <el-button :disabled="busy" @click="handleClose">關閉</el-button>
+            <el-button :icon="Collection" @click="handleSaveAsTemplate">
+              存為範本
+            </el-button>
+          </div>
+          <div class="drawer-footer__group">
+            <el-button
+              :icon="Bell"
+              :loading="publishing"
+              :disabled="!entry?.id || saving"
+              @click="handlePublish"
+            >
+              {{ isPublished ? '再次發布' : '發布給家長' }}
+            </el-button>
+            <el-button
+              :type="hasNext ? undefined : 'primary'"
+              :loading="saving"
+              :disabled="publishing"
+              @click="handleSaveDraft"
+            >
+              儲存草稿
+            </el-button>
+            <el-button
+              v-if="hasNext"
+              type="primary"
+              :loading="saving"
+              :disabled="publishing"
+              @click="handleSaveAndNext"
+            >
+              儲存並填下一位
+            </el-button>
+          </div>
+        </div>
       </div>
     </template>
   </el-drawer>
@@ -493,8 +500,39 @@ defineExpose({ requestLeave })
 
 .drawer-footer {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: var(--space-2);
+}
+
+.drawer-footer__status {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.drawer-footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.drawer-footer__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* el-button 相鄰時 EP 會補 margin-left，換行後第二列會內縮；統一交給 gap */
+.drawer-footer__group :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+/* 「未記錄」被選中時用中性底：它是空值，不該是整個表單最搶眼的實心主色 */
+.chip-group :deep(.el-radio-button.chip-unset.is-active .el-radio-button__inner) {
+  background: var(--el-fill-color);
+  border-color: var(--el-border-color);
+  color: var(--el-text-color-secondary);
+  box-shadow: none;
 }
 
 .muted {

@@ -38,10 +38,11 @@ function statusOf(entry: EntryRecord | null | undefined): { label: string; type:
     class="entry-row"
     @click="$emit('click', item)"
   >
-    <MoodChip :mood="item.entry?.mood ?? null" size="sm" />
+    <!-- 沒有紀錄時狀態只由右側「未填」標籤表達，不再疊「未記錄」心情與「尚未填寫」 -->
+    <MoodChip v-if="item.entry" :mood="item.entry.mood ?? null" size="sm" />
     <span class="entry-row__name">{{ item.student_name }}</span>
     <span class="entry-row__note" :class="{ muted: !item.entry?.teacher_note }">
-      {{ item.entry?.teacher_note || '尚未填寫' }}
+      <template v-if="item.entry">{{ item.entry.teacher_note || '尚未填寫' }}</template>
     </span>
     <span v-if="item.entry?.photos?.length" class="entry-row__photos">
       <el-icon aria-hidden="true"><Camera /></el-icon>{{ item.entry.photos.length }}
@@ -64,12 +65,15 @@ function statusOf(entry: EntryRecord | null | undefined): { label: string; type:
         {{ statusOf(item.entry).label }}
       </el-tag>
     </div>
-    <div class="card-body">
+    <div v-if="!item.entry" class="card-body card-body--empty">
+      <span class="card-start">點一下開始填寫</span>
+    </div>
+    <div v-else class="card-body">
       <div class="card-mood">
-        <MoodChip :mood="item.entry?.mood ?? null" size="md" />
+        <MoodChip :mood="item.entry.mood ?? null" size="md" />
       </div>
       <div class="card-meta">
-        <div v-if="item.entry?.teacher_note" class="card-note">{{ item.entry.teacher_note }}</div>
+        <div v-if="item.entry.teacher_note" class="card-note">{{ item.entry.teacher_note }}</div>
         <div v-else class="card-note muted">尚未填寫</div>
         <div v-if="item.entry?.photos?.length" class="card-photos">
           <el-icon><Camera /></el-icon>
@@ -160,6 +164,15 @@ function statusOf(entry: EntryRecord | null | undefined): { label: string; type:
   align-items: flex-start;
   gap: var(--space-3);
   min-height: 56px;
+}
+
+.card-body--empty {
+  align-items: center;
+}
+
+.card-start {
+  font-size: var(--text-sm);
+  color: var(--el-color-primary);
 }
 
 .card-mood {

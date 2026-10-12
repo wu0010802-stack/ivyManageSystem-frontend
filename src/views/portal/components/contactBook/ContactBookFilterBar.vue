@@ -61,7 +61,7 @@ defineEmits<{
       <div class="batch-bar__actions">
         <el-button :loading="batchBusy" @click="$emit('open-copy')">複製昨日</el-button>
         <el-button :loading="batchBusy" @click="$emit('open-template')">套用範本到全班</el-button>
-        <el-button :loading="batchBusy" type="success" @click="$emit('open-batch')">
+        <el-button :loading="batchBusy" type="primary" @click="$emit('open-batch')">
           批次發布草稿
         </el-button>
         <el-divider direction="vertical" />
