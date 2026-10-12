@@ -69,7 +69,8 @@ function dialogWidth(): string {
   return dialog!.style.getPropertyValue('--el-dialog-width')
 }
 
-describe('教師端新增 dialog：送出鈕文案與手機寬度', () => {
+// 整頁掛載真 Element Plus（首條要現編 view），全套並跑時單條會超過預設 5 秒
+describe('教師端新增 dialog：送出鈕文案與手機寬度', { timeout: 20_000 }, () => {
   beforeEach(() => setMobile(false))
 
   afterEach(() => {
