@@ -1,46 +1,71 @@
 <template>
-  <el-dialog v-model="visible" :title="mode === 'create' ? '新增班級' : '編輯班級'" width="480px" @closed="onClosed">
-    <el-form label-width="90px">
-      <el-form-item label="班名" required>
-        <el-input v-model="form.target_name" placeholder="例如：小班A" />
+  <FormDialog
+    ref="formDialogRef"
+    v-model="visible"
+    :title="mode === 'create' ? '新增班級' : '編輯班級'"
+    :size="mode === 'edit' ? 'standardNarrow' : 'compact'"
+    :dirty="isDirty"
+    :loading="submitting"
+    :disabled="!canSubmit"
+    :submit-text="submitText"
+    @submit="onSubmit"
+    @closed="onClosed"
+  >
+    <el-form label-position="top" class="form-grid" @submit.prevent>
+      <el-form-item label="班名" required class="fg-6">
+        <el-input v-model="form.target_name" placeholder="例如：玫瑰" />
       </el-form-item>
-      <el-form-item label="年級" required>
+      <el-form-item label="年級" required class="fg-6">
         <el-select v-model="form.target_grade_id" placeholder="選擇年級" style="width: 100%">
           <el-option v-for="g in grades" :key="g.id" :label="g.name" :value="g.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="容量">
-        <el-input-number v-model="form.capacity" :min="1" :max="200" style="width: 100%" />
+      <el-form-item label="班級代號" class="fg-6 field-class-code">
+        <el-input v-model="form.class_code" placeholder="例如：大1" maxlength="20" />
+        <div class="form-hint">在籍記錄表與班級排序會用到，同一學年不可重複</div>
+      </el-form-item>
+      <el-form-item label="容量" class="fg-6">
+        <el-input-number v-model="form.capacity" :min="1" :max="200" controls-position="right" style="width: 100%" />
       </el-form-item>
 
       <template v-if="mode === 'edit'">
-        <el-form-item label="班導師">
-          <el-select v-model="form.head_teacher_id" placeholder="選擇教師" clearable style="width: 100%">
+        <el-form-item label="班導" class="fg-4">
+          <el-select v-model="form.head_teacher_id" placeholder="選擇老師" clearable filterable style="width: 100%">
             <el-option v-for="t in teachers" :key="t.id" :label="formatTeacherOptionLabel(t)" :value="t.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="副班導">
-          <el-select v-model="form.assistant_teacher_id" placeholder="選擇教師" clearable style="width: 100%">
+        <el-form-item label="副班導" class="fg-4">
+          <el-select v-model="form.assistant_teacher_id" placeholder="選擇老師" clearable filterable style="width: 100%">
             <el-option v-for="t in teachers" :key="t.id" :label="formatTeacherOptionLabel(t)" :value="t.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="美語老師">
-          <el-select v-model="form.art_teacher_id" placeholder="選擇教師" clearable style="width: 100%">
+        <el-form-item label="美語老師" class="fg-4">
+          <el-select v-model="form.art_teacher_id" placeholder="選擇老師" clearable filterable style="width: 100%">
             <el-option v-for="t in teachers" :key="t.id" :label="formatTeacherOptionLabel(t)" :value="t.id" />
           </el-select>
         </el-form-item>
       </template>
     </el-form>
 
-    <!-- submitting（父層 mutation in-flight）期間鎖住刪除/取消/儲存，防雙擊以同一
-         base_version 送第二發撞 409 偽版本衝突 -->
+    <!-- 自訂 footer：刪除放最左、與取消／儲存拉開距離；取消必須走 requestClose 才有 dirty 保護。
+         submitting（父層 mutation in-flight）期間鎖住三鈕，防雙擊以同一 base_version 送第二發 -->
     <template #footer>
-      <el-button v-if="mode === 'edit'" type="danger" plain class="delete-btn" :disabled="submitting" @click="onDelete">刪除班級</el-button>
-      <span class="footer-spacer" />
-      <el-button :disabled="submitting" @click="visible = false">取消</el-button>
-      <el-button type="primary" :disabled="!canSubmit || submitting" :loading="submitting" @click="onSubmit">儲存</el-button>
+      <div class="class-dialog-footer">
+        <el-button
+          v-if="mode === 'edit'"
+          type="danger"
+          plain
+          class="delete-btn"
+          :disabled="submitting"
+          @click="onDelete"
+        >刪除班級</el-button>
+        <el-button :disabled="submitting" @click="formDialogRef?.requestClose()">取消</el-button>
+        <el-button type="primary" :disabled="!canSubmit || submitting" :loading="submitting" @click="onSubmit">
+          {{ submitText }}
+        </el-button>
+      </div>
     </template>
-  </el-dialog>
+  </FormDialog>
 </template>
 
 <script setup lang="ts">
@@ -48,6 +73,7 @@ import { ref, computed, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { getGrades, getTeacherOptions } from '@/api/classrooms'
 import { formatTeacherOptionLabel } from '@/utils/teacherOption'
+import FormDialog from '@/components/common/FormDialog.vue'
 import type { Schema } from '@/api/_generated/typed'
 
 type PlanClass = Schema<'PlanClassOut'>
@@ -107,6 +133,17 @@ function emptyForm(): FormState {
 }
 
 const form = ref<FormState>(emptyForm())
+const formDialogRef = ref<InstanceType<typeof FormDialog> | null>(null)
+// 開啟時的快照；dirty＝目前表單與快照不同（關閉前走未儲存確認）
+let snapshot = JSON.stringify(emptyForm())
+const isDirty = (): boolean => JSON.stringify(form.value) !== snapshot
+
+const submitText = computed(() => (props.mode === 'create' ? '建立班級' : '儲存'))
+
+/** 代號去頭尾空白，空白視為未設定（送 null 才會清空）。 */
+function normalizedClassCode(): string | null {
+  return form.value.class_code?.trim() || null
+}
 
 function resetForm(): void {
   if (props.mode === 'edit' && props.planClass) {
@@ -122,6 +159,7 @@ function resetForm(): void {
   } else {
     form.value = emptyForm()
   }
+  snapshot = JSON.stringify(form.value)
 }
 
 async function ensureOptionsLoaded(): Promise<void> {
@@ -164,14 +202,14 @@ function onSubmit(): void {
       target_name: form.value.target_name,
       target_grade_id: form.value.target_grade_id as number,
       capacity: form.value.capacity,
-      class_code: form.value.class_code,
+      class_code: normalizedClassCode(),
     })
   } else if (props.planClass) {
     emit('update', props.planClass.id, {
       target_name: form.value.target_name,
       target_grade_id: form.value.target_grade_id,
       capacity: form.value.capacity,
-      class_code: form.value.class_code,
+      class_code: normalizedClassCode(),
       // el-select clearable 的 × 會把 model 設成 undefined；undefined 會被 JSON
       // 序列化整欄丟棄 → 後端 exclude_unset 視為未變更，清空會靜默失敗，故正規化為 null
       head_teacher_id: form.value.head_teacher_id ?? null,
@@ -203,13 +241,11 @@ defineExpose({ form, onSubmit, onDelete, canSubmit })
 </script>
 
 <style scoped>
-.footer-spacer {
-  flex: 1 1 auto;
-}
-
-:deep(.el-dialog__footer) {
+.class-dialog-footer {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 .delete-btn {

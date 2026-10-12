@@ -532,6 +532,20 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.findComponent({ name: 'ElDropdown' }).exists()).toBe(false)
   })
 
+  it('作廢確認文案講清楚：手動調整與老師指派會一起消失', async () => {
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    w.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'cancel-plan')
+    await flushPromises()
+    const message = String(confirmSpy.mock.calls[0][0])
+    expect(message).toContain('手動調整')
+    expect(message).toContain('老師指派')
+    expect(mockCancel).not.toHaveBeenCalled()
+  })
+
   it('作廢草稿流程：使用者取消 ElMessageBox.confirm 時不呼叫 cancel API', async () => {
     vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
     mockStatus.mockResolvedValue(statusDraft())

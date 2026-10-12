@@ -308,9 +308,10 @@ async function onUnpublishClick(): Promise<void> {
 // 草稿將移除、可重新產生。作廢後 plan 從系統消失，cancelPlan() 內建 reload() 會讓
 // state 回到 none，本層不需要額外處理空狀態渲染。
 async function onCancelPlanClick(): Promise<void> {
+  const lost = '所有手動調整（搬班、留級、排除）與老師指派都會一起消失'
   const message = state.value === 'published'
-    ? '此計畫已發布，作廢將同時取消先前的發布確認，這份新學年草稿會被移除，之後可重新產生。此操作無法復原，確定要作廢嗎？'
-    : '作廢後這份新學年草稿將被移除，之後可重新產生。確定要作廢嗎？'
+    ? `此計畫已發布，作廢會同時取消發布。這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。此操作無法復原，確定要作廢嗎？`
+    : `作廢後這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。確定要作廢嗎？`
   try {
     await ElMessageBox.confirm(message, '作廢草稿', {
       type: 'warning',
