@@ -48,6 +48,16 @@ describe('cellDisplay（§2.2）', () => {
     expect(notYet.verdict?.label).toBe('尚未打卡')
   })
 
+  it('今天全天已核准假且沒打卡：顯示假別而非尚未打卡；待審假仍是尚未打卡', () => {
+    const fullLeave = { leave_id: 9, leave_type_label: '特休', is_full_day: true, start_time: null, end_time: null }
+    const onLeave = cellDisplay(cell(1, TODAY, { actual: { status: 'leave' }, leaves: [{ ...fullLeave, status: 'approved' }] }), TODAY)
+    expect(onLeave.state).toBe('full_leave')
+    expect(onLeave.verdict?.label).toBe('特休')
+    const pending = cellDisplay(cell(1, TODAY, { actual: { status: 'data_incomplete' }, leaves: [{ ...fullLeave, status: 'pending' }] }), TODAY)
+    expect(pending.state).toBe('not_punched')
+    expect(pending.verdict?.label).toBe('尚未打卡')
+  })
+
   it('全天已核准假：主文字為假別；判定依狀態著色', () => {
     const leave = cellDisplay(
       cell(1, W1, {

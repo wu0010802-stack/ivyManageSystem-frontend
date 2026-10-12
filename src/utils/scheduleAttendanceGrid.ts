@@ -165,14 +165,6 @@ export function cellDisplay(cell: GridCell, today: string): CellDisplay {
   const actual = cell.actual
   if (!actual) return { ...base, state: 'masked', actual: null, verdict: null }
   const punches = actual.punch_in || actual.punch_out ? `${hhmm(actual.punch_in)}–${hhmm(actual.punch_out)}` : null
-  if (cell.date === today) {
-    if (actual.punch_in && !actual.punch_out) {
-      return { ...base, state: 'working', actual: punches, verdict: { label: '上班中', tone: 'info' } }
-    }
-    if (!actual.punch_in && !actual.punch_out) {
-      return { ...base, state: 'not_punched', actual: null, verdict: { label: '尚未打卡', tone: 'info' } }
-    }
-  }
   const fullLeave = cell.leaves.find((leave) => leave.status === 'approved' && leave.is_full_day)
   if (fullLeave && !punches) {
     return {
@@ -180,6 +172,14 @@ export function cellDisplay(cell: GridCell, today: string): CellDisplay {
       state: 'full_leave',
       actual: null,
       verdict: { label: fullLeave.leave_type_label, tone: 'info' },
+    }
+  }
+  if (cell.date === today) {
+    if (actual.punch_in && !actual.punch_out) {
+      return { ...base, state: 'working', actual: punches, verdict: { label: '上班中', tone: 'info' } }
+    }
+    if (!actual.punch_in && !actual.punch_out) {
+      return { ...base, state: 'not_punched', actual: null, verdict: { label: '尚未打卡', tone: 'info' } }
     }
   }
   return {
