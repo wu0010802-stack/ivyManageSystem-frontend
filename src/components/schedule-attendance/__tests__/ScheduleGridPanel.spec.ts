@@ -179,6 +179,20 @@ describe('ScheduleGridPanel', () => {
     expect(missed.find(`[data-test="gap-${wed}"]`).text()).toContain('早車無人上班')
   })
 
+  it('換週後載入失敗：顯示載入失敗與重新載入，不再畫上一週的格子（審查 P3）', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find(`[data-test="cell-1-${WEEK[0]}"]`).exists()).toBe(true)
+    api.grid.mockRejectedValue(new Error('500'))
+    await wrapper.setProps({ date: '2026-09-23' })
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').text()).toContain('載入失敗')
+    expect(wrapper.find('[role="alert"] button').text()).toContain('重新載入')
+    expect(wrapper.text()).toContain('9/21～9/27') // 工具列顯示新週
+    expect(wrapper.find('[data-test="shift-grid-table"]').exists()).toBe(false)
+    expect(wrapper.find(`[data-test="cell-1-${WEEK[0]}"]`).exists()).toBe(false)
+  })
+
   it('複製上週只改緩衝；上月整月先試算再確認才寫入', async () => {
     const wrapper = mountPanel()
     await flushPromises()

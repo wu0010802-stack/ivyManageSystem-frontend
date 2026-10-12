@@ -45,6 +45,7 @@ export interface SaveOutcome {
 }
 
 const CANCELLED_BY_WEEK_CHANGE = '儲存途中切換了週次，尚未送出的變更已取消'
+const WEEK_NOT_LOADED = '本週資料尚未載入完成，請稍後再儲存'
 
 const errorMessage = (err: unknown, fallback: string): string =>
   (err as { displayMessage?: string })?.displayMessage ?? fallback
@@ -96,17 +97,24 @@ export function useScheduleGrid(weekStart: Ref<string>) {
     const start = weekStart.value
     loading.value = true
     loadError.value = null
+    // 換週：先清掉上一週的格子與週排班，載入中或載入失敗時都不顯示、也不能操作舊週格子。
+    // 同一週的重新載入（儲存後、revision 變動）不清，避免畫面閃空。
+    if (grid.value && grid.value.start_date !== start) {
+      grid.value = null
+      assignments.value = {}
+    }
     try {
       const res = await getScheduleAttendanceGrid({ start_date: start, end_date: addDaysISO(start, 6) })
       if (seq !== epoch) return
-      grid.value = res.data
+      // 格子與週排班兩支都回來才一起寫入；任一支失敗＝整次失敗，不留新週 grid 搭配舊週 assignments。
+      let nextAssignments: Record<number, AssignmentRow> = {}
       if (res.data.caller.can_edit_plan) {
         const rows = (await getAssignments({ week_start: start })).data
         if (seq !== epoch) return
-        assignments.value = Object.fromEntries(rows.map((row) => [row.employee_id, row]))
-      } else {
-        assignments.value = {}
+        nextAssignments = Object.fromEntries(rows.map((row) => [row.employee_id, row]))
       }
+      grid.value = res.data
+      assignments.value = nextAssignments
     } catch (err) {
       if (seq === epoch) loadError.value = err
     } finally {
@@ -120,7 +128,10 @@ export function useScheduleGrid(weekStart: Ref<string>) {
     void reload()
   })
 
-  /** 把來源週的週排班帶進本地緩衝（不寫後端，與原「複製上週」行為相同）。換週途中則不寫入。 */
+  /**
+   * 把來源週有週排班的人帶進本地緩衝（不寫後端）。只覆蓋來源週有列的人；來源週沒有排班的人
+   * 保留本週原值，與舊頁「整份取代」不同（較安全，不會把沒列的人清空）。換週途中則不寫入。
+   */
   async function copyFromWeek(sourceWeekStart: string): Promise<number> {
     const start = weekStart.value
     const rows = (await getAssignments({ week_start: sourceWeekStart })).data
@@ -140,6 +151,11 @@ export function useScheduleGrid(weekStart: Ref<string>) {
   async function run(retried: boolean): Promise<SaveOutcome> {
     const outcome: SaveOutcome = { weeklySaved: 0, dailySaved: 0, units: [], blocked: [], errors: [] }
     if (!grid.value || saving.value) return outcome
+    if (grid.value.start_date !== weekStart.value) {
+      // 換週後新週格子還沒載入完成：用舊週格子判斷拆分會誤判成「整週未打卡」並帶入舊週備註。
+      outcome.errors.push(WEEK_NOT_LOADED)
+      return outcome
+    }
     saving.value = true
     // 快照：之後的 await 期間若換週或使用者再改，本次儲存只處理開始時的內容。
     const start = weekStart.value
@@ -188,7 +204,12 @@ export function useScheduleGrid(weekStart: Ref<string>) {
               outcome.dailySaved += 1
             } catch (err) {
               allSaved = false
-              outcome.errors.push(`${date}：${errorMessage(err, '每日調整失敗')}`)
+              // 開頁後有人匯入打卡：後端原文指向已退場的「班表與打卡核對」，改顯示友善訊息；員工留在緩衝，重按儲存會重新拆分
+              outcome.errors.push(
+                isRecordedConflict(err)
+                  ? `${date}：這天已有打卡紀錄，請重新整理後再儲存`
+                  : `${date}：${errorMessage(err, '每日調整失敗')}`,
+              )
             }
             if (weekChanged()) return cancelled()
           }

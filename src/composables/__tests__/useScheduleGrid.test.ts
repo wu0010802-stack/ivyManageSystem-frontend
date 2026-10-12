@@ -206,6 +206,85 @@ describe('useScheduleGrid', () => {
     expect(state.pendingCount.value).toBe(0)
   })
 
+  it('換週後 grid 載入失敗：不留上一週的格子（grid 為 null、有 loadError），也不留舊週的週排班', async () => {
+    const { state, weekStart } = await loaded()
+    expect(state.grid.value?.start_date).toBe(W1)
+    expect(state.weeklyValue(1)).toBe(1)
+    api.grid.mockRejectedValue(new Error('500'))
+    weekStart.value = '2026-09-21'
+    await flushPromises()
+    expect(state.loadError.value).toBeTruthy()
+    expect(state.grid.value).toBeNull()
+    expect(state.assignments.value).toEqual({})
+    expect(state.loading.value).toBe(false)
+  })
+
+  it('換週後 getAssignments 失敗：整次視為失敗，不留新週 grid 搭配舊週 assignments', async () => {
+    const { state, weekStart } = await loaded()
+    api.grid.mockResolvedValue({ data: grid({ start_date: '2026-09-21' }) })
+    api.getAssignments.mockRejectedValue(new Error('500'))
+    weekStart.value = '2026-09-21'
+    await flushPromises()
+    expect(state.loadError.value).toBeTruthy()
+    expect(state.grid.value).toBeNull()
+    expect(state.assignments.value).toEqual({})
+  })
+
+  it('第一次載入就 getAssignments 失敗：grid 維持 null', async () => {
+    api.grid.mockResolvedValue({ data: grid() })
+    api.getAssignments.mockRejectedValue(new Error('500'))
+    const state = useScheduleGrid(ref(W1))
+    await state.reload()
+    expect(state.loadError.value).toBeTruthy()
+    expect(state.grid.value).toBeNull()
+  })
+
+  it('同一週重新載入失敗：保留該週既有格子（只換週才清空）', async () => {
+    const { state } = await loaded()
+    api.grid.mockRejectedValue(new Error('500'))
+    await state.reload()
+    expect(state.loadError.value).toBeTruthy()
+    expect(state.grid.value?.start_date).toBe(W1)
+  })
+
+  it('格子週次與目前週次不符（換週後載入尚未開始）：儲存回錯誤且不送出任何寫入', async () => {
+    const { state, weekStart } = await loaded(recordedWeek())
+    state.setWeekly(1, 2)
+    state.setWeekly(2, 2)
+    weekStart.value = '2026-09-21' // watch 尚未執行 reload，grid 仍是上一週
+    const outcome = await state.save()
+    expect(outcome.errors).toEqual(['本週資料尚未載入完成，請稍後再儲存'])
+    expect(outcome.units).toEqual([])
+    expect(api.saveAssignments).not.toHaveBeenCalled()
+    expect(api.saveDaily).not.toHaveBeenCalled()
+    await flushPromises()
+  })
+
+  it('拆分路徑的每日調整撞「已打卡」409：顯示友善訊息（不指向已退場頁名），該員工留在緩衝', async () => {
+    const { state } = await loaded(recordedWeek())
+    const raw = '該日已有出勤紀錄，請至「班表與打卡核對」確認當日班別；恢復繼承時請確認原週班別'
+    api.saveDaily.mockImplementation(async ({ date }: { date: string }) => {
+      if (date === WEEK[2]) throw Object.assign(new Error('409'), { response: { status: 409 }, displayMessage: raw })
+      return { data: {} }
+    })
+    state.setWeekly(2, 2)
+    const outcome = await state.save()
+    expect(outcome.errors).toEqual([`${WEEK[2]}：這天已有打卡紀錄，請重新整理後再儲存`])
+    expect(outcome.errors.join('')).not.toContain('班表與打卡核對')
+    expect(state.weeklyEdits.value).toHaveProperty('2')
+  })
+
+  it('每日調整的非打卡類失敗仍顯示後端訊息', async () => {
+    const { state } = await loaded(recordedWeek())
+    api.saveDaily.mockImplementation(async ({ date }: { date: string }) => {
+      if (date === WEEK[2]) throw Object.assign(new Error('500'), { response: { status: 500 }, displayMessage: '伺服器忙碌' })
+      return { data: {} }
+    })
+    state.setWeekly(2, 2)
+    const outcome = await state.save()
+    expect(outcome.errors).toEqual([`${WEEK[2]}：伺服器忙碌`])
+  })
+
   it('409 後重新載入失敗：不重試，提示重新整理', async () => {
     const { state } = await loaded()
     state.setWeekly(1, 2)
