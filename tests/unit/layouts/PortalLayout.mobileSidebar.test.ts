@@ -91,6 +91,25 @@ describe('PortalLayout — 手機漢堡鍵恢復側欄可達（P0）', () => {
     wrapper.unmount()
   })
 
+  // 2026-10-12：收起的側欄只是 translateX 推出畫面，鍵盤 Tab 與讀屏仍會走進 23 個看不見的項目
+  it('手機側欄收起時為 inert，打開後解除', async () => {
+    setMobileViewport(true)
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    expect(wrapper.find('#portal-sidebar').attributes('inert')).toBeDefined()
+    await wrapper.find(SEL).trigger('click')
+    expect(wrapper.find('#portal-sidebar').attributes('inert')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('桌機側欄永遠不是 inert', async () => {
+    setMobileViewport(false)
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    expect(wrapper.find('#portal-sidebar').attributes('inert')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('桌機寬度不顯示漢堡鍵', async () => {
     setMobileViewport(false)
     const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })

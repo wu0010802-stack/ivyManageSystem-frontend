@@ -118,7 +118,7 @@ describe('portalClassFeatures', () => {
     expect(f.to).toBe('/portal/growth')
   })
 
-  it('才藝點名指向 2026-09-14 拆出的獨立頁，不是舊的 ?tab=attendance', () => {
+  it('課程點名指向 2026-09-14 拆出的獨立頁，不是舊的 ?tab=attendance', () => {
     const f = CLASS_FEATURES.find((x) => x.key === 'activity-attendance')!
     expect(f.to).toBe('/portal/activity/attendance')
   })

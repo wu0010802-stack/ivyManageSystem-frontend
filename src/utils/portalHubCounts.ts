@@ -26,7 +26,7 @@ export interface PortalHubCounts {
 
 /** 待辦類別與顯示標籤。順序即畫面上 chip 的順序（依一天的時序）。 */
 export const HUB_COUNT_DEFS: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'attendance_pending', label: '到園點名' },
+  { key: 'attendance_pending', label: '學生點名' },
   { key: 'medications_pending', label: '用藥' },
   { key: 'observations_pending', label: '課堂觀察' },
   { key: 'contact_books_pending', label: '聯絡簿' },

@@ -77,7 +77,7 @@ describe('TodayFocusCard — 現在該做', () => {
     const strip = wrapper.find('.today-focus__strip')
     expect(strip.exists()).toBe(true)
     const stripText = strip.text()
-    expect(stripText).toContain('到園點名')
+    expect(stripText).toContain('學生點名')
     expect(stripText).toContain('4')
     expect(stripText).toContain('用藥')
     expect(stripText).toContain('聯絡簿')

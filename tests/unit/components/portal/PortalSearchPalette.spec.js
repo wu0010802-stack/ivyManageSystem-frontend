@@ -51,6 +51,30 @@ describe('PortalSearchPalette', () => {
     wrapper.unmount()
   })
 
+  // 2026-10-12：空白輸入時清單一片空白（手機滿版時整個畫面只剩輸入框），
+  // 老師不知道能搜什麼、也沒有捷徑可點。
+  it('還沒輸入時列出常用捷徑，可直接點選', async () => {
+    const wrapper = mount(PortalSearchPalette, mountOpts())
+    await nextTick()
+    expect(wrapper.text()).toContain('常用')
+    const contactBook = wrapper.find('[data-test="command-contact-book"]')
+    expect(contactBook.exists()).toBe(true)
+    await contactBook.trigger('click')
+    expect(pushMock).toHaveBeenCalledWith('/portal/contact-book')
+    expect(apiSearch.searchPortal).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('捷徑名稱與頁面標題一致，舊叫法仍搜得到', async () => {
+    const wrapper = mount(PortalSearchPalette, mountOpts())
+    await wrapper.find('[data-test="search-input"]').setValue('薪資預覽')
+    await nextTick()
+    const salary = wrapper.find('[data-test="command-salary"]')
+    expect(salary.exists()).toBe(true)
+    expect(salary.text()).toContain('薪資查詢')
+    wrapper.unmount()
+  })
+
   it('Esc closes palette', async () => {
     const wrapper = mount(PortalSearchPalette, mountOpts())
     await wrapper.find('[data-test="search-input"]').trigger('keydown', { key: 'Escape' })

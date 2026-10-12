@@ -28,7 +28,8 @@ import {
   User,
   Document,
   School,
-  Warning,
+  Tickets,
+  TrendCharts,
   Brush,
   Bell,
   Plus,
@@ -351,6 +352,7 @@ const submitPassword = async () => {
       id="portal-sidebar"
       :width="isMobile ? '220px' : (isSidebarCollapsed ? '64px' : '200px')"
       :class="{ 'is-collapsed': isSidebarCollapsed, 'sidebar-open': sidebarOpen, 'sidebar-hidden': isMobile && !sidebarOpen }"
+      :inert="(isMobile && !sidebarOpen) || undefined"
     >
       <div class="portal-logo">
         <span v-if="!isSidebarCollapsed">教師專區</span>
@@ -378,17 +380,22 @@ const submitPassword = async () => {
         background-color="#1e293b"
         @select="closeSidebar"
       >
+        <!-- 首頁放頂層第一項：原本藏在「我的」子選單，unique-opened 一展開別組就被收起，
+             桌機回首頁要先展開「我的」再點（2026-10-12 審查） -->
+        <el-menu-item index="/portal/home">
+          <el-icon><HomeFilled /></el-icon>
+          <template #title>
+            <span>今日工作台</span>
+            <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="announcement-badge" />
+          </template>
+        </el-menu-item>
+
         <!-- ============ 我的 ============ -->
         <el-sub-menu index="group-mine">
           <template #title>
             <el-icon><UserFilled /></el-icon>
             <span>我的</span>
           </template>
-          <el-menu-item index="/portal/home">
-            <el-icon><HomeFilled /></el-icon>
-            <span>今日工作台</span>
-            <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="announcement-badge" />
-          </el-menu-item>
           <el-menu-item index="/portal/attendance">
             <el-icon><Calendar /></el-icon>
             <span>我的出勤</span>
@@ -401,6 +408,10 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/salary">
             <el-icon><Money /></el-icon>
             <span>薪資查詢</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/growth">
+            <el-icon><TrendCharts /></el-icon>
+            <span>我的成長軌跡</span>
           </el-menu-item>
           <el-menu-item index="/portal/profile">
             <el-icon><User /></el-icon>
@@ -433,11 +444,11 @@ const submitPassword = async () => {
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- ============ 班級 — 教學 ============ -->
+        <!-- ============ 班級教學 ============ -->
         <el-sub-menu index="group-class-teach">
           <template #title>
             <el-icon><School /></el-icon>
-            <span>班級 — 教學</span>
+            <span>班級教學</span>
           </template>
           <!-- 班級總覽 2026-09-14 併進首頁（我的 › 今日工作台），此處不再重複列出。 -->
           <el-menu-item index="/portal/students">
@@ -466,11 +477,11 @@ const submitPassword = async () => {
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- ============ 班級 — 管理 ============ -->
+        <!-- ============ 班級管理 ============ -->
         <el-sub-menu index="group-class-admin">
           <template #title>
-            <el-icon><Warning /></el-icon>
-            <span>班級 — 管理</span>
+            <el-icon><Tickets /></el-icon>
+            <span>班級管理</span>
           </template>
           <el-menu-item index="/portal/incidents">
             <span>事件紀錄</span>
@@ -481,7 +492,7 @@ const submitPassword = async () => {
           </el-menu-item>
           <!-- 2026-09-02 對齊稽核：原本只掛在首頁「快速進入」網格，側欄缺項與接送通知／學生請假（雙入口）不一致 -->
           <el-menu-item index="/portal/pickup-authorizations">
-            <span>臨時接送授權</span>
+            <span>接送授權</span>
           </el-menu-item>
           <el-menu-item index="/portal/medications">
             <span>用藥執行</span>
@@ -490,6 +501,10 @@ const submitPassword = async () => {
                不過濾的話所有人都會看到入口、點進去再被 router guard 踢回首頁。 -->
           <el-menu-item v-if="canOperateBusTrips" index="/portal/bus-trip">
             <span>娃娃車班次</span>
+          </el-menu-item>
+          <!-- 原本只有首頁格子有，桌機側欄找不到（2026-10-12） -->
+          <el-menu-item index="/portal/surveys">
+            <span>活動調查</span>
           </el-menu-item>
         </el-sub-menu>
 

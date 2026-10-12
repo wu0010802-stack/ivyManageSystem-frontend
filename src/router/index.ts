@@ -812,7 +812,7 @@ export const routes: RouteRecordRaw[] = [
                     path: 'home',
                     name: 'portal-home',
                     component: () => import('../views/portal/PortalHomeView.vue'),
-                    meta: { title: '今日待辦' },
+                    meta: { title: '今日工作台' },
                 },
                 {
                     // /portal/class-hub 已於 SPEC-024 移除；班級功能又於 2026-09-14

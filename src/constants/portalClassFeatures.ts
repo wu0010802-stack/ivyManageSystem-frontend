@@ -154,7 +154,7 @@ export const CLASS_FEATURES: readonly ClassFeatureDef[] = [
     // 原本掛在首頁「快速進入」卡。課程點名 2026-09-14 拆成獨立頁，
     // 不再走 /portal/activity?tab=attendance（該網址現為永久轉址）。
     key: 'activity-attendance',
-    label: '才藝點名',
+    label: '課程點名',
     to: '/portal/activity/attendance',
     group: 'teach',
   },
@@ -227,7 +227,7 @@ export const CLASS_FEATURES: readonly ClassFeatureDef[] = [
     // badge 統計全期間、異常頁一次只看一個月，不帶 query 就固定看當月，
     // 舊的異常永遠找不到、badge 也消不掉。
     key: 'anomalies',
-    label: '異常待確認',
+    label: '異常確認',
     group: 'mine',
     to: '/portal/anomalies',
     actionsKey: 'pending_anomaly_confirms',
@@ -244,7 +244,7 @@ export const CLASS_FEATURES: readonly ClassFeatureDef[] = [
   },
   {
     key: 'announcements',
-    label: '未讀公告',
+    label: '公告通知',
     group: 'mine',
     to: '/portal/announcements',
     actionsKey: 'unread_announcements',
