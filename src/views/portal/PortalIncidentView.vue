@@ -292,8 +292,8 @@ function resetFilters() {
     </div>
 
     <!-- 新增 Dialog -->
-    <el-dialog v-model="dialogVisible" title="新增事件紀錄" width="500px">
-      <el-form label-width="90px">
+    <el-dialog v-model="dialogVisible" title="新增事件紀錄" :width="isMobile ? '92%' : '500px'">
+      <el-form label-width="90px" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item label="學生 *">
           <el-select v-model="form.student_id" placeholder="選擇學生" style="width: 100%">
             <el-option v-for="s in currentStudents" :key="s.id" :label="s.name" :value="s.id" />
@@ -340,7 +340,7 @@ function resetFilters() {
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="formLoading" @click="submitForm">確認</el-button>
+        <el-button type="primary" :loading="formLoading" @click="submitForm">新增事件紀錄</el-button>
       </template>
     </el-dialog>
   </div>

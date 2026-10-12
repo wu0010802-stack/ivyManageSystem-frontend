@@ -112,7 +112,6 @@ function onRemarkChange(student: RollcallStudent, value: string) {
     <template v-else>
       <div class="rollcall-actions">
         <el-button
-          size="small"
           type="success"
           plain
           :disabled="disabled || pending === 0"
@@ -285,6 +284,15 @@ function onRemarkChange(student: RollcallStudent, value: string) {
 .status-btn {
   min-height: 30px;
   padding: 4px 10px;
+}
+
+/* 觸控裝置一律 44px：iPad（768–1023px）吃的是桌機排版，30px 且相黏的五顆鈕
+ * 很容易點錯格（2026-10-12 審查）。用 pointer 判斷而不是寬度，桌機滑鼠維持緊湊。 */
+@media (pointer: coarse) {
+  .status-btn {
+    min-height: var(--touch-target-min, 44px);
+    min-width: var(--touch-target-min, 44px);
+  }
 }
 
 .empty-state {

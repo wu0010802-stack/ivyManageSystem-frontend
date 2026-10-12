@@ -379,7 +379,8 @@ const { isMobile } = useIsMobile()
 
       <el-form-item label="請假時數" prop="leave_hours">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <el-input-number v-model="form.leave_hours" :min="0.5" :max="240" :step="0.5" disabled />
+          <!-- 時數一律由排班自動計算、從不開放編輯；原本畫成停用的步進器，看起來像可以按 +/- -->
+          <span class="leave-hours-readout" data-test="leave-hours">{{ form.leave_hours }} 小時</span>
           <el-tooltip v-if="calcTooltipHtml" placement="right" :content="calcTooltipHtml" raw-content>
             <el-icon style="cursor: help; color: var(--el-color-info); font-size: 16px;"><InfoFilled /></el-icon>
           </el-tooltip>
@@ -455,7 +456,7 @@ const { isMobile } = useIsMobile()
             </el-button>
           </el-upload>
           <div class="upload-tip">
-            請假超過 2 天時必填；其餘情況可選。支援圖片或 PDF，最多 5 個，單檔 5 MB
+            支援圖片或 PDF，最多 5 個，單檔 5 MB
           </div>
         </div>
       </el-form-item>
@@ -519,4 +520,10 @@ const { isMobile } = useIsMobile()
 .pb-tag { flex: 1; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pb-hours { min-width: 32px; text-align: right; font-weight: 600; color: var(--el-color-primary); }
 .pb-row.weekend .pb-hours, .pb-row.holiday .pb-hours { color: var(--el-text-color-secondary); font-weight: 400; }
+.leave-hours-readout {
+  font-size: var(--text-base);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-text-color-primary);
+}
 </style>

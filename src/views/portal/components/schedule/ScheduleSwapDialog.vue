@@ -96,10 +96,12 @@ const canSubmit = computed(() => !!form.value.date && !!form.value.target_id)
     default-snap="mid"
   >
     <div class="swap-form">
-      <el-form label-width="80px">
-        <el-form-item label="換班日期">
+      <!-- 手機與其他申請表單一致：標籤在上、日期面板貼齊畫面底部（09-03 漏套這張） -->
+      <el-form label-position="top">
+        <el-form-item label="換班日期" required>
           <el-date-picker
             v-model="form.date"
+            popper-class="portal-sheet-picker"
             type="date"
             placeholder="選擇日期"
             value-format="YYYY-MM-DD"
@@ -108,7 +110,7 @@ const canSubmit = computed(() => !!form.value.date && !!form.value.target_id)
             @change="onDateChange"
           />
         </el-form-item>
-        <el-form-item label="換班對象">
+        <el-form-item label="換班對象" required>
           <el-select
             v-model="form.target_id"
             placeholder="選擇老師"

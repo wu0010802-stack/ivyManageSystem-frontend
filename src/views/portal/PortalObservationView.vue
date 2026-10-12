@@ -8,7 +8,9 @@ import { todayISO, dateToLocalISO } from '@/utils/format'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import { StarFilled } from '@element-plus/icons-vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
+const { isMobile } = useIsMobile()
 const route = useRoute()
 
 // 7 領域對齊台灣課綱（後端 StudentObservation.domain）
@@ -134,14 +136,19 @@ async function submit() {
     <!-- 快速記錄表單 -->
     <div class="pt-card form-card">
       <h3>記錄新觀察</h3>
-      <el-form label-width="80px" :inline="false">
-        <el-form-item label="學生">
+      <!-- 手機與申請表單一致改標籤在上；必填三欄補星號（原本只靠送出後的 toast 才知道） -->
+      <el-form
+        :label-position="isMobile ? 'top' : 'right'"
+        :label-width="isMobile ? undefined : '80px'"
+        :inline="false"
+      >
+        <el-form-item label="學生" required>
           <el-select
             v-model="studentId"
             filterable
             placeholder="選擇學生"
             :disabled="lockedStudent"
-            style="width: 320px"
+            style="width: 100%; max-width: 320px"
           >
             <el-option
               v-for="s in allStudents"
@@ -157,7 +164,7 @@ async function submit() {
           <el-date-picker v-model="formDate" type="date" value-format="YYYY-MM-DD" />
         </el-form-item>
 
-        <el-form-item label="領域">
+        <el-form-item label="領域" required>
           <div class="domain-chips">
             <button
               v-for="d in DOMAINS"
@@ -179,7 +186,7 @@ async function submit() {
           <span class="hint">（選填）</span>
         </el-form-item>
 
-        <el-form-item label="觀察內容">
+        <el-form-item label="觀察內容" required>
           <el-input
             v-model="formNarrative"
             type="textarea"
