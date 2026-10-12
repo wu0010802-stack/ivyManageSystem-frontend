@@ -1081,7 +1081,9 @@ html.dark .portal-layout {
   background-color: var(--surface-color);
   border-top: 1px solid var(--border-color);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
-  z-index: 1000;
+  /* 分頁列層級：所有覆蓋層（底部 sheet、搜尋面板、側欄遮罩）都要蓋在它之上，
+     否則 sheet 的「送出申請」列會被它擋住（守衛：portalOverlayStacking.test.ts） */
+  z-index: var(--z-tab-bar);
 }
 
 .bottom-tab {
