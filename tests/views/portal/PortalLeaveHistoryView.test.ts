@@ -60,4 +60,30 @@ describe('PortalLeaveHistoryView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('補休歷史明細')
   })
+
+  it('手機改渲染卡片：不再出現被擠窄的表格，狀態與來源標籤可見', async () => {
+    const original = window.matchMedia
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true, media: '(max-width: 767.98px)', onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })
+    try {
+      const wrapper = mount(PortalLeaveHistoryView, {
+        global: { plugins: [ElementPlus] },
+      })
+      await flushPromises()
+      expect(wrapper.find('.el-table').exists()).toBe(false)
+      expect(wrapper.findAll('.admin-list-cards').length).toBe(2)
+      const text = wrapper.text()
+      expect(text).toContain('2026-04-01 發放')
+      expect(text).toContain('8h（已用 2h，剩 6h）')
+      expect(text).toContain('有效')
+      expect(text).toContain('補休到期')
+      expect(text).toContain('$800')
+      wrapper.unmount()
+    } finally {
+      window.matchMedia = original
+    }
+  })
 })

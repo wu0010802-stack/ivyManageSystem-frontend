@@ -334,6 +334,26 @@ onMounted(async () => {
   .secondary-records-entries {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  /* 篩選列：標籤在上、控制項滿寬。原本標籤與寫死 200–280px 的控制項並排，
+     375px 下日期區間超出卡片右緣被裁掉。 */
+  .filter-row {
+    gap: var(--space-3);
+  }
+
+  .filter-item {
+    flex: 1 1 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  /* el-date-picker 根節點不帶本元件的 scoped 屬性，需 :deep */
+  .filter-item :deep(.el-select),
+  .filter-item :deep(.el-date-editor) {
+    width: 100% !important;
+  }
 }
 
 .filter-item :deep(.el-select),

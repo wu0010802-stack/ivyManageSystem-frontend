@@ -1485,6 +1485,8 @@ onMounted(async () => {
 @media (--to-sm) {
   .toolbar-row { flex-direction: column; align-items: stretch; }
   .toolbar-row > * { width: 100% !important; }
+  /* 直向堆疊時 EP 的 .el-button + .el-button margin-left 讓每顆滿版鈕右移 12px、超出右緣 */
+  .toolbar-row > .el-button + .el-button { margin-left: 0; }
 }
 .detail-body { padding: 0 4px; }
 .section-title { font-weight: 600; margin: 16px 0 8px; font-size: 14px; color: var(--neutral-700); }

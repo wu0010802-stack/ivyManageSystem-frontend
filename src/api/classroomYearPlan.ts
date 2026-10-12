@@ -88,3 +88,13 @@ export const cancelClassroomYearPlan = (
     payload: ApiBody<'/classroom-year-plans/{plan_id}/cancel', 'post'>,
 ): AxiosResp<'/classroom-year-plans/{plan_id}/cancel', 'post'> =>
     api.post(`/classroom-year-plans/${planId}/cancel`, payload)
+
+/**
+ * POST /classroom-year-plans/{plan_id}/carry-over-teachers — 沿用原班老師：只填空格、
+ * 不覆蓋已指派；停用老師與已在他班當班導／副班導者略過（回傳筆數）。
+ */
+export const carryOverClassroomYearPlanTeachers = (
+    planId: number,
+    payload: ApiBody<'/classroom-year-plans/{plan_id}/carry-over-teachers', 'post'>,
+): AxiosResp<'/classroom-year-plans/{plan_id}/carry-over-teachers', 'post'> =>
+    api.post(`/classroom-year-plans/${planId}/carry-over-teachers`, payload)

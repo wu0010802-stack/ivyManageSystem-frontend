@@ -13,6 +13,7 @@ vi.mock('@/api/classroomYearPlan', () => ({
   publishClassroomYearPlan: vi.fn(),
   unpublishClassroomYearPlan: vi.fn(),
   cancelClassroomYearPlan: vi.fn(),
+  carryOverClassroomYearPlanTeachers: vi.fn(),
 }))
 vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: vi.fn() }) }))
 
@@ -29,6 +30,7 @@ import {
   publishClassroomYearPlan,
   unpublishClassroomYearPlan,
   cancelClassroomYearPlan,
+  carryOverClassroomYearPlanTeachers,
 } from '@/api/classroomYearPlan'
 import { useYearPlanWorkspace } from '@/composables/useYearPlanWorkspace'
 
@@ -44,6 +46,7 @@ const mockPreview = getClassroomYearPlanPreview as ReturnType<typeof vi.fn>
 const mockPublish = publishClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockUnpublish = unpublishClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockCancel = cancelClassroomYearPlan as ReturnType<typeof vi.fn>
+const mockCarryOver = carryOverClassroomYearPlanTeachers as ReturnType<typeof vi.fn>
 
 function statusNone() {
   return {
@@ -351,6 +354,20 @@ describe('useYearPlanWorkspace', () => {
     expect(ws.plan.value).toBeNull()
     // reload 讀到 state=none（plan_id=null）→ 不再呼叫 detail（呼叫次數維持在 cancel 前的水位）
     expect(mockDetail).toHaveBeenCalledTimes(detailCallsBeforeCancel)
+  })
+
+  it('carryOverTeachers(): 帶 base_version，成功後 reload 並回傳後端結果', async () => {
+    const ws = await loadedWorkspace()
+    const result = { filled: 5, skipped_inactive: 1, skipped_conflict: 0, version: 2 }
+    mockCarryOver.mockResolvedValue({ data: result })
+    mockStatus.mockResolvedValue(statusDraft(5, 2))
+    mockDetail.mockResolvedValue(detailDraft(5, 2))
+
+    const out = await ws.carryOverTeachers()
+
+    expect(mockCarryOver).toHaveBeenCalledWith(5, { base_version: 1 })
+    expect(out).toEqual(result)
+    expect(ws.plan.value?.version).toBe(2)
   })
 
   it('互動 mutation 在 plan 為 null 時直接短路回 falsy，不呼叫 API', async () => {

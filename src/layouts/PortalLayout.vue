@@ -901,6 +901,14 @@ html.dark .portal-layout {
   color: #94a3b8;
 }
 
+/* 觸控平板：收合鈕 32px 低於觸控下限（DESIGN.md 教師端規則） */
+@media (pointer: coarse) {
+  .portal-collapse-toggle {
+    width: var(--touch-target-min);
+    height: var(--touch-target-min);
+  }
+}
+
 .portal-collapse-toggle:hover {
   background-color: var(--color-neutral-700);
   color: #fff;
@@ -1326,6 +1334,11 @@ html.dark .portal-layout {
     display: none;
   }
 
+  /* 頁名變長時漢堡鍵不得被壓縮（同 AdminHeader） */
+  .portal-sidebar-toggle {
+    flex: 0 0 auto;
+  }
+
   .el-header {
     padding: 0 var(--space-4);
   }
@@ -1346,6 +1359,8 @@ html.dark .portal-layout {
 
   .sidebar-hidden {
     transform: translateX(-100%);
+    /* 收起時拿掉陰影，否則模糊陰影滲進視窗左緣成一條灰帶（同 AdminSidebar） */
+    box-shadow: none;
   }
 
   .sidebar-open {

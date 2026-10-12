@@ -103,6 +103,11 @@ withDefaults(defineProps<{
     flex: 1 1 calc(50% - var(--space-2));
     min-width: 0;
   }
+  /* 下拉顯示的是「目前選了什麼」（如學期「115學年度 上學期（本學期）」），
+     切半寬會被截成「115學年度 上學期…」，獨占一列 */
+  :deep(.header-actions > .el-select) {
+    flex-basis: 100%;
+  }
   :deep(.header-actions .el-button) {
     min-height: var(--touch-target-min);
     margin-left: 0;
