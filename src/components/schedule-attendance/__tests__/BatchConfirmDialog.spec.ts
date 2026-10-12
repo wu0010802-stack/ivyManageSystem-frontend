@@ -104,4 +104,40 @@ describe('BatchConfirmDialog', () => {
     const outcomes = wrapper.findAll('[data-test="batch-confirm-outcome"]').map((w) => w.text())
     expect(outcomes).toEqual(['已套用', '資料已更新，請重新整理'])
   })
+
+  it('送出時第 2 批失敗：保留第 1 批結果、通知父層', async () => {
+    const units = Array.from({ length: 101 }, (_, i) => unit(1, `2026-03-${String(1 + (i % 28)).padStart(2, '0')}`))
+    api.batch.mockImplementation(async (body: { units: BatchUnit[]; dry_run: boolean }) => {
+      if (body.dry_run) return respond(body.units, true)
+      if (body.units.length === 100) {
+        return { data: { dry_run: false, applied_count: 100, results: respond(body.units, false).data.results } }
+      }
+      throw { response: { status: 500 }, displayMessage: '伺服器錯誤' }
+    })
+    const wrapper = mountDialog(units)
+    await flushPromises()
+    await wrapper.find('textarea[data-test="batch-confirm-reason"]').setValue('確認')
+    await wrapper.find('[data-test="form-dialog-submit"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('done')).toEqual([[100]])
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    const outcomes = wrapper.findAll('[data-test="batch-confirm-outcome"]').map((w) => w.text())
+    expect(outcomes[0]).toBe('已套用')
+    expect(message.warning).toHaveBeenCalledWith(expect.stringContaining('之後的批次因錯誤未送出'))
+  })
+
+  it('送出時第 1 批就失敗：不通知父層，可重試', async () => {
+    api.batch.mockImplementation(async (body: { units: BatchUnit[]; dry_run: boolean }) => {
+      if (body.dry_run) return respond(body.units, true)
+      throw { response: { status: 500 }, displayMessage: '伺服器錯誤' }
+    })
+    const wrapper = mountDialog([unit(1, WEEK[0])])
+    await flushPromises()
+    await wrapper.find('textarea[data-test="batch-confirm-reason"]').setValue('確認')
+    await wrapper.find('[data-test="form-dialog-submit"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('done')).toBeUndefined()
+    expect(message.error).toHaveBeenCalled()
+    expect(wrapper.find('[data-test="form-dialog-submit"]').attributes('disabled')).toBeUndefined()
+  })
 })

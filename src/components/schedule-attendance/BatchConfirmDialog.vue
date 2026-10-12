@@ -89,17 +89,26 @@ const phase = ref<'preview' | 'done'>('preview')
 const results = ref<Map<number, BatchResult>>(new Map())
 let previewSeq = 0
 
-async function runBatches(dryRun: boolean, text: string): Promise<{ applied: number; results: Map<number, BatchResult> }> {
-  const out = new Map<number, BatchResult>()
-  let applied = 0
+interface BatchAccumulator {
+  applied: number
+  results: Map<number, BatchResult>
+  completedBatches: number
+}
+
+/** 每批回來即寫入累加器，中途失敗時呼叫端仍拿得到已完成批次的結果。 */
+async function runBatches(dryRun: boolean, text: string, acc: BatchAccumulator): Promise<void> {
   let offset = 0
   for (const part of chunk(props.units, BATCH_SIZE)) {
     const res = await confirmReconciliationShiftBatch({ units: part, reason: text, dry_run: dryRun })
-    applied += res.data.applied_count
-    for (const result of res.data.results) out.set(offset + result.unit_index, result)
+    acc.applied += res.data.applied_count
+    for (const result of res.data.results) acc.results.set(offset + result.unit_index, result)
+    acc.completedBatches += 1
     offset += part.length
   }
-  return { applied, results: out }
+}
+
+function newAccumulator(): BatchAccumulator {
+  return { applied: 0, results: new Map<number, BatchResult>(), completedBatches: 0 }
 }
 
 async function runPreview(): Promise<void> {
@@ -108,8 +117,9 @@ async function runPreview(): Promise<void> {
   previewError.value = ''
   results.value = new Map()
   try {
-    const out = await runBatches(true, PREVIEW_REASON)
-    if (seq === previewSeq) results.value = out.results
+    const acc = newAccumulator()
+    await runBatches(true, PREVIEW_REASON, acc)
+    if (seq === previewSeq) results.value = acc.results
   } catch (err) {
     if (seq === previewSeq) previewError.value = apiError(err, '試算失敗，請稍後再試')
   } finally {
@@ -175,20 +185,31 @@ const rows = computed(() =>
 async function submit(): Promise<void> {
   if (!canSubmit.value) return
   submitting.value = true
+  const acc = newAccumulator()
   try {
-    const out = await runBatches(false, reason.value.trim())
-    results.value = out.results
+    await runBatches(false, reason.value.trim(), acc)
+    results.value = acc.results
     phase.value = 'done'
-    emit('done', out.applied)
-    const failed = props.units.length - out.applied
+    emit('done', acc.applied)
+    const failed = props.units.length - acc.applied
     if (failed === 0) {
-      ElMessage.success(`已確認 ${out.applied} 個人日並重算出勤`)
+      ElMessage.success(`已確認 ${acc.applied} 個人日並重算出勤`)
       emit('update:modelValue', false)
     } else {
-      ElMessage.warning(`已確認 ${out.applied} 個人日，${failed} 個未套用，請看結果欄`)
+      ElMessage.warning(`已確認 ${acc.applied} 個人日，${failed} 個未套用，請看結果欄`)
     }
   } catch (err) {
-    ElMessage.error(apiError(err, '確認失敗，請稍後再試'))
+    if (acc.completedBatches > 0) {
+      // 已有批次寫入資料庫：保留結果、通知父層刷新，對話框保持開啟，避免重試撞 VERSION_MISMATCH。
+      results.value = acc.results
+      phase.value = 'done'
+      emit('done', acc.applied)
+      ElMessage.warning(
+        `已確認 ${acc.applied} 個人日；之後的批次因錯誤未送出（${apiError(err, '確認失敗')}），請重新整理後再確認其餘人日`,
+      )
+    } else {
+      ElMessage.error(apiError(err, '確認失敗，請稍後再試'))
+    }
   } finally {
     submitting.value = false
   }
