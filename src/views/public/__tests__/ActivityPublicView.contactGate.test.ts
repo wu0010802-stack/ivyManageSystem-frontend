@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 
 // ── 模擬 vue-router（view 用 useRouter 導頁至查詢頁）──────────────────────
@@ -52,39 +52,35 @@ const setHost = (hostname: string) => {
   })
 }
 
-// 仁武暫不開放線上留言（2026-08-07 業主指示）：桌機按鈕列與手機選單的
-// 「與承辦人員聯繫」入口都要隱藏；其他租戶不受影響。
-//
-// prod 是單租戶 build（tenantSlug() 回 null），故 hostname 分支才是實際生效的
-// 那條——2026-08-07 只靠 slug 的版本上 prod 後按鈕依然顯示，這組測試守住回歸。
-describe('ActivityPublicView — 與承辦人員聯繫的租戶閘', () => {
+const queryButtons = (wrapper: VueWrapper) =>
+  wrapper.findAll('button').filter((b) => b.text().includes('查詢 / 修改報名'))
+
+// 「與承辦人員聯繫」2026-10-12 全租戶關閉（後台「家長提問」收件匣整個功能下架，
+// 留言不再有人看）。在此之前只有仁武關閉（2026-08-07），義華與其他網域都開著——
+// 下面逐一列出原本開著的租戶形態，確認全部都不再出現入口。
+describe('ActivityPublicView — 與承辦人員聯繫入口全租戶關閉', () => {
+  // 首次動態 import 這支大型 SFC 的轉譯成本會吃掉第一個案例的 5 秒預設 timeout
+  beforeAll(async () => {
+    await import('../ActivityPublicView.vue')
+  }, 30_000)
+
   beforeEach(() => {
     vi.clearAllMocks()
     setHost('activity.example.com')
   })
 
-  it('slug=renwu 隱藏所有聯繫入口', async () => {
-    mockSlug = 'renwu'
+  it.each([
+    ['slug=yihua', 'yihua', 'activity.example.com'],
+    ['單租戶 build（slug=null）的義華網域', null, 'yihua.ivypreschool.tw'],
+    ['單租戶 build（slug=null）的其他網域', null, 'activity.example.com'],
+    ['slug=renwu', 'renwu', 'activity.example.com'],
+    ['單租戶 build（slug=null）的仁武網域', null, 'renwu.ivypreschool.tw'],
+  ])('%s：不顯示聯繫入口', async (_label, slug, host) => {
+    mockSlug = slug
+    setHost(host)
     const wrapper = await mountView()
+    // 同一列的「查詢 / 修改報名」仍在（防整頁沒渲染的假綠）
+    expect(queryButtons(wrapper).length).toBeGreaterThan(0)
     expect(contactButtons(wrapper)).toHaveLength(0)
-  })
-
-  it('單租戶 build（slug=null）下，仁武網域仍隱藏聯繫入口', async () => {
-    mockSlug = null
-    setHost('renwu.ivypreschool.tw')
-    const wrapper = await mountView()
-    expect(contactButtons(wrapper)).toHaveLength(0)
-  })
-
-  it('slug=yihua 保留聯繫入口（桌機按鈕列）', async () => {
-    mockSlug = 'yihua'
-    const wrapper = await mountView()
-    expect(contactButtons(wrapper).length).toBeGreaterThan(0)
-  })
-
-  it('單租戶模式的其他網域保留聯繫入口', async () => {
-    mockSlug = null
-    const wrapper = await mountView()
-    expect(contactButtons(wrapper).length).toBeGreaterThan(0)
   })
 })

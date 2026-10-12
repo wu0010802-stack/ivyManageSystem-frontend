@@ -12,7 +12,7 @@
           <span class="nf-hero__num">{{ badgeCount }}</span>
           <span class="nf-hero__unit">項待處理</span>
         </div>
-        <div class="nf-hero__hint">審核、家長提問與提醒都會集中在這裡。</div>
+        <div class="nf-hero__hint">審核、待辦與提醒都會集中在這裡。</div>
       </div>
 
       <div v-if="actionItems.length" class="nf-section">

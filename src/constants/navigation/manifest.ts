@@ -616,9 +616,12 @@ export const NAVIGATION_MANIFEST = {
           extraRoutes: [{ path: '/activity/audit/pos-unlock', permission: 'ACTIVITY_PAYMENT_APPROVE' }],
         },
         {
+          // 2026-10-12 業主指示整個功能下架：拿掉 menu（連同未讀 badge）；公開報名頁的
+          // 「與承辦人員聯繫」入口、通知鈴項目（後端）與儀表板「未讀提問」卡一併拿掉。
+          // 路由、權限規則與後端 API／資料全數保留；恢復時 menu 加回
+          // { icon: icon('ChatDotRound'), badgeKey: 'activityInquiries' }（見 activityInquiriesNav.test.ts）。
           key: 'activityInquiries', title: '家長提問', routePath: '/activity/inquiries',
           views: [], sharedViews: ['ACTIVITY_READ'],
-          menu: { icon: icon('ChatDotRound'), badgeKey: 'activityInquiries' },
         },
         {
           key: 'activityAttendance', title: '點名管理', routePath: '/activity/attendance', routePrefix: true,
