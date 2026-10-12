@@ -17,6 +17,7 @@ import {
   visibleDays,
 } from '../scheduleAttendanceGrid'
 import { cell, day, employee, grid, W1, WEEK } from '@/components/schedule-attendance/__tests__/gridFixtures'
+import { computeWeekCoverage } from '@/utils/scheduleCoverage'
 
 const TODAY = '2026-09-17' // 週四
 
@@ -115,6 +116,14 @@ describe('篩選', () => {
     ])
     expect(saturdayPunch.map((d) => d.date)).toContain('2026-09-19')
   })
+
+  it('showAll 為真（可排班者）時一律回傳全部 7 天，週末沒人排班也要有入口', () => {
+    const days = WEEK.map((d) => day(d))
+    const quiet = WEEK.map((d) => cell(1, d, { plan: { expected: day(d).is_workday } }))
+    expect(visibleDays(days, quiet, true).map((d) => d.date)).toEqual(WEEK)
+    expect(visibleDays(days, quiet, false).map((d) => d.date)).toEqual(WEEK.slice(0, 5))
+    expect(visibleDays(days, quiet).map((d) => d.date)).toEqual(WEEK.slice(0, 5))
+  })
 })
 
 describe('planWeekChange（§4 整週拆分）', () => {
@@ -199,5 +208,51 @@ describe('coverageInputs', () => {
       expect.objectContaining({ id: 5, employee_name: '王副導', start_date: W1, end_date: W1, start_time: '13:00', end_time: null, status: 'pending' }),
     ])
     expect(inputs.shiftTypes[0]).toEqual({ id: 1, name: '早車', work_start: '07:00', work_end: '16:30' })
+  })
+
+  it('fromPlan：週排班／輪值來源的格子也計入 dailyOverrides（沒有 SCHEDULE 取不到週排班時）', () => {
+    const g = grid({
+      employees: [employee(1, '林班導'), employee(2, '王副導'), employee(3, '陳老師')],
+      cells: [
+        cell(1, W1, { plan: { source: 'weekly', shift_type_id: 1 } }),
+        cell(2, W1, { plan: { source: 'rotation', shift_type_id: 2 } }),
+        cell(3, W1, { plan: { source: 'employee', shift_type_id: 1 } }),
+        cell(3, WEEK[1], { plan: { source: 'weekly', shift_type_id: null } }),
+      ],
+    })
+    const none = { 1: null, 2: null, 3: null }
+    expect(coverageInputs(g, none).dailyOverrides).toEqual([])
+    expect(coverageInputs(g, none, { fromPlan: false }).dailyOverrides).toEqual([])
+    expect(coverageInputs(g, none, { fromPlan: true }).dailyOverrides).toEqual([
+      { employee_id: 1, date: W1, shift_type_id: 1 },
+      { employee_id: 2, date: W1, shift_type_id: 2 },
+      { employee_id: 3, date: WEEK[1], shift_type_id: null },
+    ])
+  })
+
+  it('fromPlan 的空班結果等於有週排班時的結果（審查 P4：早車 1 人週排班、1 人每日調整且全天請假）', () => {
+    const wed = WEEK[2]
+    const g = grid({
+      employees: [employee(1, '林班導'), employee(2, '王副導')],
+      cells: [
+        ...WEEK.map((d) => cell(1, d, { plan: { expected: day(d).is_workday, source: 'weekly', shift_type_id: 1 } })),
+        ...WEEK.map((d) =>
+          d === wed
+            ? cell(2, d, {
+                plan: { expected: true, source: 'daily', shift_type_id: 1 },
+                leaves: [{ leave_id: 9, leave_type_label: '特休', status: 'approved', is_full_day: true, start_time: null, end_time: null }],
+              })
+            : cell(2, d, { plan: { expected: day(d).is_workday, source: 'weekly', shift_type_id: 1 } }),
+        ),
+      ],
+    })
+    const gapsOn = (weekly: Record<number, number | null>, fromPlan: boolean) =>
+      computeWeekCoverage({ dates: WEEK, ...coverageInputs(g, weekly, { fromPlan }) }).find((c) => c.date === wed)!.gaps
+    // 有 SCHEDULE：週排班取自 assignments，早車仍有林班導 → 不報
+    expect(gapsOn({ 1: 1, 2: 1 }, false)).toEqual([])
+    // 沒有 SCHEDULE、不用 fromPlan：週排班全 null，只剩請假的那一位 → 誤報空班
+    expect(gapsOn({ 1: null, 2: null }, false)).toHaveLength(1)
+    // 沒有 SCHEDULE、fromPlan：改由每格計畫推算 → 與有週排班時相同
+    expect(gapsOn({ 1: null, 2: null }, true)).toEqual([])
   })
 })

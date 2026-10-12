@@ -19,6 +19,8 @@ function mountGrid(opts: {
   canEditPlan?: boolean
   mobile?: boolean
   today?: string
+  /** 可排班者：週末沒人排班也顯示 7 欄 */
+  showAllDays?: boolean
   coverage?: Array<{ date: string; leaves: never[]; gaps: Array<Record<string, unknown>> }>
 } = {}) {
   const g = grid({
@@ -33,7 +35,7 @@ function mountGrid(opts: {
     props: {
       groups: g.groups,
       employees: g.employees,
-      days: visibleDays(g.days, g.cells),
+      days: visibleDays(g.days, g.cells, opts.showAllDays),
       cells: indexCells(g.cells),
       today: opts.today ?? TODAY,
       filter: opts.filter ?? 'all',
@@ -54,6 +56,15 @@ describe('ShiftGrid 桌機', () => {
     expect(groups).toEqual(['滿天星', '行政／後勤'])
     expect(wrapper.findAll('thead th.shift-grid__day')).toHaveLength(5)
     expect(wrapper.find(`[data-test="cell-1-${WEEK[0]}"]`).text()).toContain('週 早車 07:00–16:30')
+  })
+
+  it('七欄時非工作日（週末）的欄頭與格子加淡色 class，工作日不加', () => {
+    const wrapper = mountGrid({ showAllDays: true })
+    expect(wrapper.findAll('thead th.shift-grid__day')).toHaveLength(7)
+    expect(wrapper.find(`[data-test="day-${WEEK[5]}"]`).classes()).toContain('shift-grid__day--off')
+    expect(wrapper.find(`[data-test="day-${WEEK[0]}"]`).classes()).not.toContain('shift-grid__day--off')
+    expect(wrapper.find(`[data-test="cell-1-${WEEK[6]}"]`).element.parentElement!.classList).toContain('shift-grid__cell-wrap--off')
+    expect(wrapper.find(`[data-test="cell-1-${WEEK[0]}"]`).element.parentElement!.classList).not.toContain('shift-grid__cell-wrap--off')
   })
 
   it('週末有人打卡就出現該欄', () => {
@@ -141,6 +152,14 @@ describe('ShiftGrid 手機', () => {
     await wrapper.find(`[data-test="mobile-day-${WEEK[2]}"]`).trigger('click')
     await wrapper.find('[data-test="card-2"]').trigger('click')
     expect(wrapper.emitted('select')).toEqual([[2, WEEK[2]]])
+  })
+
+  it('可排班者的日期頁籤也是 7 天，點週六可選到週六的人員卡片', async () => {
+    const wrapper = mountGrid({ mobile: true, showAllDays: true })
+    expect(wrapper.findAll('[role="tab"]')).toHaveLength(7)
+    await wrapper.find(`[data-test="mobile-day-${WEEK[5]}"]`).trigger('click')
+    await wrapper.find('[data-test="card-1"]').trigger('click')
+    expect(wrapper.emitted('select')).toEqual([[1, WEEK[5]]])
   })
 })
 

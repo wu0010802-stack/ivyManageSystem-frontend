@@ -64,7 +64,7 @@
       :caller="caller"
       :mobile="isMobile"
       @changed="onChanged"
-      @records="(id: number, d: string) => emit('records', id, d)"
+      @records="onRecords"
       @import="(ctx: ImportContext) => emit('import', ctx)"
     />
 
@@ -170,7 +170,7 @@ watch(() => props.revision, () => { void state.reload() })
 const NO_CALLER: GridOut['caller'] = { can_view_attendance: false, can_edit_plan: false, can_confirm: false, can_edit_attendance: false }
 const gridData = computed(() => state.grid.value)
 const caller = computed(() => gridData.value?.caller ?? NO_CALLER)
-const days = computed(() => (gridData.value ? visibleDays(gridData.value.days, gridData.value.cells) : []))
+const days = computed(() => (gridData.value ? visibleDays(gridData.value.days, gridData.value.cells, gridData.value.caller.can_edit_plan) : []))
 const employeeNames = computed<Record<number, string>>(() =>
   Object.fromEntries((gridData.value?.employees ?? []).map((e) => [e.employee_id, e.name])),
 )
@@ -185,7 +185,8 @@ const coverage = computed(() => {
   const g = gridData.value
   if (!g) return []
   const weekly = Object.fromEntries(g.employees.map((e) => [e.employee_id, state.weeklyValue(e.employee_id)]))
-  return computeWeekCoverage({ dates: state.weekDates.value, ...coverageInputs(g, weekly) })
+  // 沒有 SCHEDULE 就不會載入週排班：改由每格計畫推算（來源為週排班／輪值表的格子）
+  return computeWeekCoverage({ dates: state.weekDates.value, ...coverageInputs(g, weekly, { fromPlan: !g.caller.can_edit_plan }) })
 })
 
 // ── 抽屜 ───────────────────────────────────────────────────────
@@ -210,6 +211,12 @@ watch(gridData, (g) => {
     openCell(props.focusEmployeeId, props.focusDate)
   }
 })
+
+/** 「看他整月」：抽屜是 append-to-body，不先關會蓋住切換後的出勤明細頁籤。匯入則不關（對話框疊在抽屜上）。 */
+function onRecords(employeeId: number, date: string): void {
+  drawerOpen.value = false
+  emit('records', employeeId, date)
+}
 
 async function onChanged(): Promise<void> {
   await state.reload()

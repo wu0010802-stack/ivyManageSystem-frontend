@@ -114,8 +114,13 @@ export function rowMatchesFilter(cells: readonly GridCell[], filter: GridFilter,
   return true
 }
 
-/** 週模式要顯示的欄：平日一律；週末只有在任何人有應出勤或有打卡時才出現（§2.1）。 */
-export function visibleDays(days: readonly GridDay[], cells: readonly GridCell[]): GridDay[] {
+/**
+ * 週模式要顯示的欄：平日一律；週末只有在任何人有應出勤或有打卡時才出現（§2.1）。
+ * `showAll`（可排班者）一律回傳全部：週排班的週末後端回 expected=false，否則週六活動／
+ * 臨時加班要排人時沒有任何入口（舊每日調整對話框就是為此做成 7 天）。
+ */
+export function visibleDays(days: readonly GridDay[], cells: readonly GridCell[], showAll = false): GridDay[] {
+  if (showAll) return [...days]
   const busyWeekend = new Set(
     cells
       .filter((cell) => cell.plan.expected || cell.actual?.punch_in || cell.actual?.punch_out)
@@ -276,10 +281,16 @@ export function findPairCell(
   return matches.length === 1 ? matches[0] : null
 }
 
-/** 把格子資料轉成 utils/scheduleCoverage.computeWeekCoverage 的輸入（欄頭空班警示）。 */
+/**
+ * 把格子資料轉成 utils/scheduleCoverage.computeWeekCoverage 的輸入（欄頭空班警示）。
+ *
+ * `fromPlan`：沒有 SCHEDULE 權限的人不會載入週排班（weeklyShiftByEmp 全是 null），
+ * 此時把來源為週排班／輪值表的格子也當成每日調整計入，結果等同有週排班時的算法。
+ */
 export function coverageInputs(
   grid: Pick<GridOut, 'cells' | 'employees' | 'shift_types'>,
   weeklyShiftByEmp: Record<number, number | null>,
+  opts: { fromPlan?: boolean } = {},
 ): {
   employeeIds: number[]
   weeklyShiftByEmp: Record<number, number | null>
@@ -295,6 +306,12 @@ export function coverageInputs(
       date: cell.date,
       shift_type_id: cell.plan.day_off ? null : cell.plan.shift_type_id ?? null,
     }))
+  if (opts.fromPlan) {
+    for (const cell of grid.cells) {
+      if (cell.plan.source !== 'weekly' && cell.plan.source !== 'rotation') continue
+      dailyOverrides.push({ employee_id: cell.employee_id, date: cell.date, shift_type_id: cell.plan.shift_type_id ?? null })
+    }
+  }
   const leaves: LeaveContextItem[] = grid.cells.flatMap((cell) =>
     cell.leaves.map((leave) => ({
       id: leave.leave_id,

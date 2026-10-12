@@ -7,7 +7,7 @@
       <thead>
         <tr>
           <th scope="col" class="shift-grid__corner">人員</th>
-          <th v-for="d in days" :key="d.date" scope="col" class="shift-grid__day" :data-test="`day-${d.date}`">
+          <th v-for="d in days" :key="d.date" scope="col" class="shift-grid__day" :class="{ 'shift-grid__day--off': !d.is_workday }" :data-test="`day-${d.date}`">
             <span class="shift-grid__date">{{ dayLabel(d) }}</span>
             <el-tag v-if="d.is_holiday" size="small" type="info">{{ d.holiday_name || '假日' }}</el-tag>
             <el-tag v-else-if="d.is_makeup_workday" size="small" type="warning">補班</el-tag>
@@ -45,7 +45,7 @@
                 <el-option v-for="s in optionsFor(emp.employee_id)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
               </el-select>
             </th>
-            <td v-for="d in days" :key="d.date" class="shift-grid__cell-wrap">
+            <td v-for="d in days" :key="d.date" class="shift-grid__cell-wrap" :class="{ 'shift-grid__cell-wrap--off': !d.is_workday }">
               <button
                 v-if="cellOf(emp.employee_id, d.date)"
                 type="button"
@@ -264,6 +264,7 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__table th, .shift-grid__table td { border-bottom: 1px solid var(--el-border-color-lighter); padding: var(--space-1); vertical-align: top; }
 .shift-grid__corner, .shift-grid__person { position: sticky; left: 0; z-index: 1; background: var(--el-bg-color); text-align: left; min-width: 150px; }
 .shift-grid__day { min-width: 132px; text-align: left; font-weight: 600; }
+.shift-grid__day--off, .shift-grid__cell-wrap--off { background: var(--el-fill-color-lighter); }
 .shift-grid__date { display: block; }
 .shift-grid__gap { display: block; font-size: var(--text-xs); font-weight: 400; }
 .shift-grid__gap--empty { color: var(--el-color-danger); }

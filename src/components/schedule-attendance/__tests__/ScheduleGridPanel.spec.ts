@@ -110,6 +110,75 @@ describe('ScheduleGridPanel', () => {
     expect(wrapper.emitted('records')).toEqual([[2, WEEK[0]]])
   })
 
+  it('抽屜「看他整月」先關抽屜再往上轉（append-to-body 抽屜不關會蓋住切換後的明細頁籤）', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find(`[data-test="cell-1-${WEEK[1]}"]`).trigger('click')
+    await flushPromises()
+    const drawer = wrapper.findComponent(DrawerStub)
+    expect(drawer.props('modelValue')).toBe(true)
+    drawer.vm.$emit('records', 1, WEEK[1])
+    await flushPromises()
+    expect(drawer.props('modelValue')).toBe(false)
+    expect(wrapper.emitted('records')).toEqual([[1, WEEK[1]]])
+  })
+
+  it('可排班者週末沒人排班也顯示 7 欄，且點週六的格子會開抽屜', async () => {
+    const wrapper = mountPanel() // 預設 caller.can_edit_plan 為真、週末無人 expected
+    await flushPromises()
+    expect(wrapper.find(`[data-test="day-${WEEK[5]}"]`).exists()).toBe(true)
+    expect(wrapper.find(`[data-test="day-${WEEK[6]}"]`).exists()).toBe(true)
+    await wrapper.find(`[data-test="cell-1-${WEEK[5]}"]`).trigger('click')
+    await flushPromises()
+    const drawer = wrapper.findComponent(DrawerStub)
+    expect(drawer.props('modelValue')).toBe(true)
+    expect(drawer.props('cell')).toMatchObject({ employee_id: 1, date: WEEK[5] })
+  })
+
+  it('不能排班的人（只有出勤權限）週末沒人排班時仍只顯示平日', async () => {
+    api.grid.mockResolvedValue({
+      data: grid({ caller: { can_view_attendance: true, can_edit_plan: false, can_confirm: false, can_edit_attendance: true } }),
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find(`[data-test="day-${WEEK[4]}"]`).exists()).toBe(true)
+    expect(wrapper.find(`[data-test="day-${WEEK[5]}"]`).exists()).toBe(false)
+  })
+
+  it('只有出勤權限（取不到週排班）：空班警示由每格計畫推算，不因週排班全空而誤報（審查 P4）', async () => {
+    const wed = WEEK[2]
+    const cells = [
+      ...WEEK.map((d) => cell(1, d, { plan: { expected: day(d).is_workday, source: 'weekly', shift_type_id: 1 } })),
+      ...WEEK.map((d) =>
+        d === wed
+          ? cell(2, d, {
+              plan: { expected: true, source: 'daily', shift_type_id: 1 },
+              leaves: [{ leave_id: 9, leave_type_label: '特休', status: 'approved', is_full_day: true, start_time: null, end_time: null }],
+            })
+          : cell(2, d, { plan: { expected: day(d).is_workday, source: 'weekly', shift_type_id: 1 } }),
+      ),
+    ]
+    const reader = { can_view_attendance: true, can_edit_plan: false, can_confirm: false, can_edit_attendance: true }
+    api.grid.mockResolvedValue({ data: grid({ cells, caller: reader }) })
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(api.getAssignments).not.toHaveBeenCalled()
+    expect(wrapper.find(`[data-test="gap-${wed}"]`).exists()).toBe(false)
+
+    // 反向：靠週排班的早車人員全請假，沒有週排班資料時也要報得出來（不漏報）
+    const allOut = [
+      cell(1, wed, {
+        plan: { expected: true, source: 'weekly', shift_type_id: 1 },
+        leaves: [{ leave_id: 8, leave_type_label: '特休', status: 'approved', is_full_day: true, start_time: null, end_time: null }],
+      }),
+      cell(2, wed, { plan: { expected: true, source: 'weekly', shift_type_id: 1 }, leaves: [{ leave_id: 9, leave_type_label: '特休', status: 'approved', is_full_day: true, start_time: null, end_time: null }] }),
+    ]
+    api.grid.mockResolvedValue({ data: grid({ cells: allOut, caller: reader }) })
+    const missed = mountPanel()
+    await flushPromises()
+    expect(missed.find(`[data-test="gap-${wed}"]`).text()).toContain('早車無人上班')
+  })
+
   it('複製上週只改緩衝；上月整月先試算再確認才寫入', async () => {
     const wrapper = mountPanel()
     await flushPromises()
