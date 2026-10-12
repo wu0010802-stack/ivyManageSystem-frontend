@@ -5,7 +5,7 @@ import { computeWeekCoverage, leaveWindowForDate, type LeaveContextItem, type Da
 import type { ApiResponse } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { ArrowRight, Loading, UploadFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Loading, UploadFilled } from '@element-plus/icons-vue'
 import { useShiftStore } from '@/stores/shift'
 import { storeToRefs } from 'pinia'
 import { apiError } from '@/utils/error'
@@ -634,7 +634,7 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
         <section class="control-panel" aria-label="每週排班工具列">
           <div class="controls">
             <div class="week-navigation" role="group" aria-label="選擇排班週期">
-            <el-button @click="changeWeek(-1)" :icon="'ArrowLeft'">上週</el-button>
+            <el-button @click="changeWeek(-1)" :icon="ArrowLeft">上週</el-button>
             <el-date-picker
               v-model="weekStart"
               type="date"

@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { Search } from '@element-plus/icons-vue'
 import type {
   DatesSetArg,
   EventClickArg,
@@ -483,7 +484,7 @@ const onEventDrop = async (info: EventDropArg) => {
     <el-card style="margin-top: 20px">
       <div class="list-header">
         <h3>事件列表</h3>
-        <el-input v-model="searchText" placeholder="搜尋事件" clearable style="width: 220px" prefix-icon="Search" />
+        <el-input v-model="searchText" placeholder="搜尋事件" clearable style="width: 220px" :prefix-icon="Search" />
       </div>
       <el-table :data="filteredEvents" stripe style="width: 100%" max-height="600" empty-text="本月無事件">
         <el-table-column label="日期" width="120">

@@ -79,7 +79,7 @@
 
         <el-dropdown trigger="click" @command="handleCommand">
           <button type="button" class="user-profile" aria-label="開啟帳號選單">
-            <el-avatar :size="36" class="user-avatar" icon="UserFilled" />
+            <el-avatar :size="36" class="user-avatar" :icon="UserFilled" />
             <div class="user-info">
               <span class="user-name">{{ displayName }}</span>
               <span class="user-role">
@@ -168,7 +168,7 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Monitor, Search, Setting, SwitchButton, User, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
+import { Monitor, Search, Setting, SwitchButton, User, UserFilled, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo, hasPermission } from '@/utils/auth'
