@@ -29,7 +29,7 @@
               :id="confirmInputId"
               v-model="confirmYear"
               class="confirm-year-input"
-              :placeholder="String(targetSchoolYear ?? '')"
+              placeholder="輸入學年數字"
               inputmode="numeric"
               autocomplete="off"
             />

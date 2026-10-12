@@ -141,6 +141,8 @@ describe('PlanPublishDialog', () => {
     const w = mountDialog(5, { applyDate: '2026-08-01', appliesImmediately: true, targetSchoolYear: 115 })
     await flushPromises()
     expect(w.find('.apply-notice .confirm-year-input').exists()).toBe(true)
+    // placeholder 不可等於答案本身，否則看起來像已經填好
+    expect(w.find('.confirm-year-input input').attributes('placeholder')).not.toBe('115')
   })
 
   it('補救模式確認：全形數字（注音輸入法）也算；打錯時有提示', async () => {
