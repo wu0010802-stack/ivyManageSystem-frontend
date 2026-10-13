@@ -19318,8 +19318,9 @@ export interface paths {
          * Delete Student Attachment
          * @description 從該生照片牆刪除一張照片。
          *
-         *     - 一般來源（觀察 / 聯絡簿 / 用藥單 / 報告 / 作品集）：軟刪 Attachment 本體，
-         *       原始紀錄上的這張照片也會一併消失（同 DELETE /api/attachments/{id}）。
+         *     - 觀察 / 聯絡簿 / 作品集：軟刪 Attachment 本體，原始紀錄上的這張照片也會
+         *       一併消失（同 DELETE /api/attachments/{id}；作品另受作者限制）。
+         *     - 用藥單 / 報告：403，不可從照片牆刪除（用藥單照片是給藥依據）。
          *     - 班級相簿：一張照片標記整班多位幼兒，軟刪本體會連帶從其他幼兒的照片牆
          *       消失；故只解除「該生」的標記，照片本身與其他幼兒的標記保留。
          *       要整張刪除請走班級相簿管理（DELETE /api/portal/class-albums/.../photos/...）。
