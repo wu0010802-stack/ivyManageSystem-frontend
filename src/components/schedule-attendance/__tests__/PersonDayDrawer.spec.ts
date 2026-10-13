@@ -391,6 +391,7 @@ describe('PersonDayDrawer 審查修正', () => {
     })
     const anomalyRow = { id: 55, employee_name: '林班導', employee_number: 'E001', date: W1, weekday: '一', confirmed_action: null, confirmed_by: null, confirmed_at: null, type: 'missing_punch', type_label: '未打卡(下班)', detail: '缺下班卡', estimated_deduction: null }
     const buttons = (w: ReturnType<typeof mountDrawer>) => w.find('[data-test="pdd-resolve"]').findAll('button').map((b) => b.text())
+    const solidPrimaries = (w: ReturnType<typeof mountDrawer>) => w.findAll('.el-button--primary:not(.is-plain):not(.is-text):not(.is-link)').length
 
     it('缺卡：抓該人該天的異常卡；補卡排在確認當日班別前面、是唯一主要動作，確認當日班別收起', async () => {
       att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
@@ -477,6 +478,14 @@ describe('PersonDayDrawer 審查修正', () => {
       expect(att.upsertRecord).toHaveBeenCalledWith({ employee_id: 1, date: W1, punch_in: '08:00', punch_out: '17:00' })
     })
 
+    it('疑似缺勤但有出勤紀錄列（沒打卡）：並列的是補登與確認當日班別，兩者都不是主要按鈕', async () => {
+      const w = mountDrawer(cell(1, W1, { edit: RECORDED, actual: { status: 'suspected_absence', attendance_id: 77, punch_in: null, punch_out: null } }))
+      await flushPromises()
+      expect(w.find('[data-test="pdd-resolve"]').exists()).toBe(true)
+      expect(w.find('[data-test="pdd-confirm-submit"]').classes()).not.toContain('el-button--primary')
+      expect(solidPrimaries(w)).toBe(0)
+    })
+
     it('不顯示補卡：沒有出勤寫入權限、已封存、資料待補（等匯入）；沒有查看權限也不抓', async () => {
       const noWrite = mountDrawer(missing(), { caller: { ...CALLER, can_edit_attendance: false } })
       await flushPromises()
@@ -492,8 +501,6 @@ describe('PersonDayDrawer 審查修正', () => {
       expect(incomplete.find('[data-test="pdd-resolve"]').exists()).toBe(false)
       expect(att.getAnomalyList).not.toHaveBeenCalled() // 不顯示就不抓（也不讓只有排班權限的人打到 403）
     })
-
-    const solidPrimaries = (w: ReturnType<typeof mountDrawer>) => w.findAll('.el-button--primary:not(.is-plain):not(.is-text):not(.is-link)').length
 
     it('每種判定的抽屜最多一顆實心主要按鈕（審查 F6）', async () => {
       att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })

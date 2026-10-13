@@ -96,7 +96,7 @@
             <el-input v-model="confirmReason" type="textarea" :rows="2" :maxlength="500" data-test="pdd-confirm-reason" />
           </el-form-item>
         </el-form>
-        <el-button v-if="confirmExpanded" :type="resolveMode === 'resolve-first' ? 'default' : 'primary'" :loading="confirming" :disabled="confirmChoice === null || !confirmReason.trim()" data-test="pdd-confirm-submit" @click="submitConfirm">確認並重算</el-button>
+        <el-button v-if="confirmExpanded" :type="resolveMode === 'resolve-first' || resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="confirming" :disabled="confirmChoice === null || !confirmReason.trim()" data-test="pdd-confirm-submit" @click="submitConfirm">確認並重算</el-button>
       </section>
 
       <DayResolveSection
