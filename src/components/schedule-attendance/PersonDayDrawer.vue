@@ -47,6 +47,16 @@
         </template>
       </section>
 
+      <DayResolveSection
+        v-if="resolveMode !== 'none' && resolveMode !== 'confirm-first'"
+        :cell="cell"
+        :mode="resolveMode"
+        :employee-name="employee.name"
+        :employee-number="employee.employee_number ?? ''"
+        :weekday="weekdayLabel"
+        @changed="emit('changed')"
+      />
+
       <section v-if="cell.edit.plan" class="pdd__section" data-test="pdd-edit-day">
         <h3>改這天</h3>
         <el-select v-model="dayChoice" :aria-label="'改這天的班別'" class="pdd__select" data-test="pdd-day-select">
@@ -54,12 +64,25 @@
           <el-option v-for="s in optionsWith(initialDayChoice)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
           <el-option :value="DAY_OFF" label="排休（明確不上班）" />
         </el-select>
-        <el-button type="primary" :loading="savingDay" :disabled="dayChoice === initialDayChoice || loadingDaily" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
+        <el-button :type="resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="savingDay" :disabled="dayChoice === initialDayChoice || loadingDaily" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
       </section>
 
       <section v-if="cell.edit.confirm && cell.actual" class="pdd__section" data-test="pdd-confirm">
         <h3>確認當日班別</h3>
-        <el-form label-position="top" @submit.prevent>
+        <el-button v-if="!confirmExpanded" text type="primary" data-test="pdd-confirm-toggle" @click="confirmExpanded = true">改確認當日班別</el-button>
+        <el-form v-if="confirmExpanded" label-position="top" @submit.prevent>
+          <div v-if="cell.actual.candidates.length" class="pdd__candidates" role="group" aria-label="系統推測的班別">
+            <span class="pdd__candidates-label">系統推測</span>
+            <el-button
+              v-for="c in cell.actual.candidates"
+              :key="c.shift_type_id"
+              size="small"
+              :type="confirmChoice === c.shift_type_id ? 'primary' : 'default'"
+              :plain="confirmChoice === c.shift_type_id"
+              :data-test="`pdd-candidate-${c.shift_type_id}`"
+              @click="confirmChoice = c.shift_type_id"
+            >{{ c.name }} {{ c.work_start }}–{{ c.work_end }}</el-button>
+          </div>
           <el-form-item label="實際班別" required>
             <el-select v-model="confirmChoice" class="pdd__select" data-test="pdd-confirm-select">
               <el-option v-for="s in optionsWith(confirmInitial)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
@@ -73,8 +96,18 @@
             <el-input v-model="confirmReason" type="textarea" :rows="2" :maxlength="500" data-test="pdd-confirm-reason" />
           </el-form-item>
         </el-form>
-        <el-button type="primary" :loading="confirming" :disabled="confirmChoice === null || !confirmReason.trim()" data-test="pdd-confirm-submit" @click="submitConfirm">確認並重算</el-button>
+        <el-button v-if="confirmExpanded" :type="resolveMode === 'resolve-first' ? 'default' : 'primary'" :loading="confirming" :disabled="confirmChoice === null || !confirmReason.trim()" data-test="pdd-confirm-submit" @click="submitConfirm">確認並重算</el-button>
       </section>
+
+      <DayResolveSection
+        v-if="resolveMode === 'confirm-first'"
+        :cell="cell"
+        mode="confirm-first"
+        :employee-name="employee.name"
+        :employee-number="employee.employee_number ?? ''"
+        :weekday="weekdayLabel"
+        @changed="emit('changed')"
+      />
 
       <p v-if="!cell.edit.plan && !cell.edit.confirm && cell.edit.locked_reason" class="pdd__note" data-test="pdd-locked">
         {{ LOCKED_REASON_LABELS[cell.edit.locked_reason] }}
@@ -87,7 +120,7 @@
           data-test="pdd-import"
           @click="emit('import', { employee_id: cell.employee_id, employee_name: employee.name, date: cell.date })"
         >匯入這天打卡</el-button>
-        <el-button v-if="caller.can_view_attendance" data-test="pdd-records" @click="emit('records', cell.employee_id, cell.date)">看他整月（補卡、豁免）</el-button>
+        <el-button v-if="caller.can_view_attendance" data-test="pdd-records" @click="emit('records', cell.employee_id, cell.date)">看他整月</el-button>
       </footer>
     </div>
   </el-drawer>
@@ -97,6 +130,7 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { confirmReconciliationShift } from '@/api/attendanceReconciliation'
+import DayResolveSection, { type DayResolveMode } from './DayResolveSection.vue'
 import { deleteDaily, getDaily, saveDaily } from '@/api/shifts'
 import { apiError } from '@/utils/error'
 import { confirmDiscardChanges } from '@/composables/useUnsavedChangesGuard'
@@ -157,6 +191,28 @@ const title = computed(() => {
   const parts = [props.employee.name, props.groupLabel, props.employee.role_label].filter(Boolean)
   return `${parts.join('・')}　${m}/${d}（${WEEKDAY[props.day.weekday]}）`
 })
+
+const weekdayLabel = computed(() => (props.day ? WEEKDAY[props.day.weekday] : ''))
+
+/**
+ * 就地處理打卡依判定給一個主要動作（SPEC-027 §3 第 8 點；R3 於 2026-10-13 推翻）：
+ * 缺卡／出勤異常＝補卡在前；疑似換班＝確認當日班別在前；疑似缺勤＝補登上下班與改這天並列。
+ * 需要能看打卡（抓異常卡）也能寫出勤；已封存、本人、今天以後不處理。
+ */
+const resolveMode = computed<DayResolveMode | 'none'>(() => {
+  const cell = props.cell
+  const actual = cell?.actual
+  if (!cell || !actual || !props.caller.can_view_attendance || !props.caller.can_edit_attendance) return 'none'
+  if (cell.date >= props.today) return 'none'
+  const lock = cell.edit.locked_reason
+  if (lock === 'finalized' || lock === 'self' || lock === 'not_employed') return 'none'
+  if (actual.status === 'possible_shift_change') return 'confirm-first'
+  if (actual.status === 'missing_punch' || actual.status === 'anomaly') return 'resolve-first'
+  if (actual.status === 'suspected_absence') return 'side-by-side'
+  return 'none'
+})
+/** 補卡是主要動作時，確認當日班別先收起（需要時再展開） */
+const confirmExpanded = ref(true)
 
 /** spec §7：兼兩班時歸主要班級組，抽屜註明另一班 */
 const otherClasses = computed(() => (props.employee?.other_classroom_labels ?? []).join('、'))
@@ -322,6 +378,7 @@ watch(
     confirmInitial.value = confirmChoice.value
     confirmReason.value = ''
     includePair.value = false
+    confirmExpanded.value = resolveMode.value !== 'resolve-first'
     if (cell.edit.plan && current !== INHERIT) {
       loadingDaily.value = true
       try {
@@ -429,5 +486,8 @@ async function submitConfirm(): Promise<void> {
 .pdd__facts dd { margin: 0; }
 .pdd__reason { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--el-text-color-regular); }
 .pdd__select { width: 100%; margin-bottom: var(--space-2); }
+.pdd__candidates { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.pdd__candidates .el-button { margin-left: 0; }
+.pdd__candidates-label { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .pdd__footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
 </style>

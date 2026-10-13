@@ -3676,7 +3676,7 @@ export interface paths {
         };
         /**
          * Get Attendance Anomalies
-         * @description 查詢月份異常清單（所有員工）
+         * @description 查詢月份異常清單（所有員工）；可選填 employee_id（員工主鍵）、on_date 只取某人某天。
          */
         get: operations["get_attendance_anomalies_api_attendance_anomalies_get"];
         put?: never;
@@ -56354,7 +56354,9 @@ export interface operations {
     get_attendance_anomalies_api_attendance_anomalies_get: {
         parameters: {
             query: {
+                employee_id?: number | null;
                 month: number;
+                on_date?: string | null;
                 status?: string;
                 year: number;
             };

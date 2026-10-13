@@ -16,7 +16,7 @@
           {{ entry.type_label }}
         </el-tag>
       </div>
-      <div class="resolve-card__nav">
+      <div v-if="showNav" class="resolve-card__nav">
         <span class="resolve-card__counter">第 {{ index + 1 }} / {{ total }} 筆</span>
         <el-button
           size="small"
@@ -83,22 +83,25 @@
 
     <!-- 動作列 -->
     <div v-if="canWrite" class="resolve-card__actions-block">
-      <p class="resolve-card__whole-day-hint">
+      <p v-if="allows('admin_accept') || allows('admin_waive')" class="resolve-card__whole-day-hint">
         接受扣款／豁免會套用到<strong>整天</strong>的所有異常項目
       </p>
       <div class="resolve-card__actions">
         <el-button
-          type="primary"
+          v-if="allows('punch')"
+          :type="primaryAction ? 'primary' : 'default'"
           :loading="busy"
           :disabled="busy || !canPunch"
           @click="handlePunch"
         >補打卡並重算</el-button>
         <el-button
+          v-if="allows('admin_accept')"
           :loading="busy"
           :disabled="busy"
           @click="emit('resolve', { action: 'admin_accept' })"
         >接受扣款</el-button>
         <el-button
+          v-if="allows('admin_waive')"
           :loading="busy"
           :disabled="busy"
           @click="emit('resolve', { action: 'admin_waive' })"
@@ -117,7 +120,9 @@ import { hasPermission } from '@/utils/auth'
 import type { AnomalyDayCard, AnomalyEntry } from '@/composables/useAttendanceWorkspace'
 
 // ── props & emits ──────────────────────────────────────────────────────────────
-const props = defineProps<{
+type ResolveAction = 'punch' | 'admin_accept' | 'admin_waive'
+
+const props = withDefaults(defineProps<{
   item: AnomalyDayCard
   index: number
   total: number
@@ -129,7 +134,20 @@ const props = defineProps<{
   }
   /** mutation in-flight：防重複送出 */
   busy?: boolean
-}>()
+  /** 「第 N / M 筆」與上下筆；嵌在排班與出勤抽屜（只有一天）時關掉 */
+  showNav?: boolean
+  /** 允許的動作；沒有出勤紀錄列（疑似缺勤）只能補卡，疑似換班兩側都有打卡不必補卡 */
+  actions?: readonly ResolveAction[]
+  /** 補打卡是否為主要按鈕；同一畫面另有主要動作時傳 false */
+  primaryAction?: boolean
+}>(), {
+  busy: false,
+  showNav: true,
+  actions: () => ['punch', 'admin_accept', 'admin_waive'],
+  primaryAction: true,
+})
+
+const allows = (action: ResolveAction) => props.actions.includes(action)
 
 const emit = defineEmits<{
   (e: 'resolve', payload: { action: 'punch' | 'admin_accept' | 'admin_waive'; punch_in?: string; punch_out?: string }): void

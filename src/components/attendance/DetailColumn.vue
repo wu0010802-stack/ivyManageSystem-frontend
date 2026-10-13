@@ -41,13 +41,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { hasPermission } from '@/utils/auth'
-import { ElMessage } from 'element-plus'
 import ResolveCard from './ResolveCard.vue'
 import EmployeeMonthPanel from './EmployeeMonthPanel.vue'
-import { upsertRecord, batchConfirmAnomalies } from '@/api/attendance'
-import { useErrorNotify } from '@/composables/useErrorNotify'
+import { useResolveAnomaly, type ResolvePayload } from '@/composables/useResolveAnomaly'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 // ── props & emits ──────────────────────────────────────────────────────────────
@@ -79,47 +76,13 @@ const emit = defineEmits<{
   (e: 'switchMode', mode: 'resolve' | 'month'): void
 }>()
 
-// ── error notify ───────────────────────────────────────────────────────────────
-const { notify } = useErrorNotify()
+// ── 處理動作（與排班與出勤抽屜共用 useResolveAnomaly）──────────────────────────
+// 成功後不在此 emit navigate：容器 refresh 後同 index 自然顯示下一筆；navigate 只保留給 ResolveCard 的 ◀▶
+const { resolving, resolve } = useResolveAnomaly(() => emit('resolved'), 'DetailColumn.resolve')
 
-// ── mutation in-flight（P1-4：防重複送出）───────────────────────────────────────
-const resolving = ref(false)
-
-// ── action handler ─────────────────────────────────────────────────────────────
-async function onResolve(payload: {
-  action: 'punch' | 'admin_accept' | 'admin_waive'
-  punch_in?: string
-  punch_out?: string
-}): Promise<void> {
-  if (resolving.value) return
-  resolving.value = true
-  try {
-    if (payload.action === 'punch') {
-      if (props.employeeId == null) {
-        ElMessage.warning('找不到對應員工，無法補打卡')
-        return
-      }
-      await upsertRecord({
-        employee_id: props.employeeId,
-        date: props.anomaly!.date,
-        ...(payload.punch_in !== undefined ? { punch_in: payload.punch_in } : {}),
-        ...(payload.punch_out !== undefined ? { punch_out: payload.punch_out } : {}),
-      })
-    } else {
-      await batchConfirmAnomalies({
-        attendance_ids: [props.anomaly!.id],
-        action: payload.action,
-      })
-    }
-    ElMessage.success('已處理')
-    emit('resolved')
-    // 不在此 emit navigate：容器 refresh 後同 index 自然顯示下一筆；
-    // navigate 只保留給 ResolveCard 的 ◀▶ 手動瀏覽
-  } catch (err) {
-    notify(err, 'DetailColumn.resolve', null, { prefix: '處理失敗' })
-  } finally {
-    resolving.value = false
-  }
+function onResolve(payload: ResolvePayload): void {
+  if (!props.anomaly) return
+  void resolve({ employeeId: props.employeeId, date: props.anomaly.date, attendanceId: props.anomaly.id }, payload)
 }
 </script>
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import PersonDayDrawer from '../PersonDayDrawer.vue'
+import ResolveCard from '@/components/attendance/ResolveCard.vue'
 import type { GridCell, GridEmployee } from '@/utils/scheduleAttendanceGrid'
 import { cell, day, employee, grid, SHIFTS, W1 } from './gridFixtures'
 
@@ -9,6 +10,10 @@ const api = vi.hoisted(() => ({ confirm: vi.fn(), getDaily: vi.fn(), saveDaily: 
 const message = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }))
 vi.mock('@/api/attendanceReconciliation', () => ({ confirmReconciliationShift: api.confirm }))
 vi.mock('@/api/shifts', () => ({ getDaily: api.getDaily, saveDaily: api.saveDaily, deleteDaily: api.deleteDaily }))
+const att = vi.hoisted(() => ({ getAnomalyList: vi.fn(), upsertRecord: vi.fn(), batchConfirmAnomalies: vi.fn() }))
+vi.mock('@/api/attendance', () => ({ getAnomalyList: att.getAnomalyList, upsertRecord: att.upsertRecord, batchConfirmAnomalies: att.batchConfirmAnomalies }))
+vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
+vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: vi.fn() }) }))
 const box = vi.hoisted(() => ({ confirm: vi.fn() }))
 vi.mock('element-plus', async (orig) => ({ ...(await orig<typeof import('element-plus')>()), ElMessage: message, ElMessageBox: box }))
 
@@ -57,6 +62,9 @@ beforeEach(() => {
   api.saveDaily.mockResolvedValue({ data: {} })
   api.deleteDaily.mockResolvedValue({ data: {} })
   api.confirm.mockResolvedValue({ data: { message: 'ok', updated_count: 1 } })
+  att.getAnomalyList.mockResolvedValue({ data: { total: 0, pending: 0, confirmed: 0, items: [] } })
+  att.upsertRecord.mockResolvedValue({ data: {} })
+  att.batchConfirmAnomalies.mockResolvedValue({ data: {} })
 })
 
 describe('PersonDayDrawer', () => {
@@ -174,7 +182,8 @@ describe('PersonDayDrawer', () => {
   describe('打到一半的確認原因不會無聲消失', () => {
     const confirmable = () => cell(1, W1, {
       edit: { plan: false, confirm: true, recorded: true, locked_reason: 'recorded' },
-      actual: { status: 'missing_punch', version: 'v'.repeat(64), punch_in: `${W1}T07:52:00`, punch_out: null },
+      // 疑似換班：確認當日班別展開在前（缺卡時補卡在前、確認表單預設收起）
+      actual: { status: 'possible_shift_change', version: 'v'.repeat(64), punch_in: `${W1}T07:52:00`, punch_out: `${W1}T17:10:00` },
     })
 
     it('原因有字時關抽屜要先確認；取消就留著，確認才關', async () => {
@@ -372,5 +381,125 @@ describe('PersonDayDrawer 審查修正', () => {
     const current = wrapper.findAllComponents({ name: 'ElOption' }).find((o) => o.props('value') === 3)
     expect(current?.props('label')).toBe('舊班別 07:30–16:00（已停用）')
     expect(current?.props('disabled')).toBe(true)
+  })
+
+  describe('就地處理打卡（抽屜內嵌補卡，推翻 B 期 R3）', () => {
+    const RECORDED = { plan: false, confirm: true, recorded: true, locked_reason: 'recorded' as const }
+    const missing = (extra: Record<string, unknown> = {}) => cell(1, W1, {
+      edit: RECORDED,
+      actual: { status: 'missing_punch', punch_in: `${W1}T07:52:00`, punch_out: null, attendance_id: 55, version: 'v'.repeat(64), ...extra },
+    })
+    const anomalyRow = { id: 55, employee_name: '林班導', employee_number: 'E001', date: W1, weekday: '一', confirmed_action: null, confirmed_by: null, confirmed_at: null, type: 'missing_punch', type_label: '未打卡(下班)', detail: '缺下班卡', estimated_deduction: null }
+    const buttons = (w: ReturnType<typeof mountDrawer>) => w.find('[data-test="pdd-resolve"]').findAll('button').map((b) => b.text())
+
+    it('缺卡：抓該人該天的異常卡；補卡排在確認當日班別前面、是唯一主要動作，確認當日班別收起', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      const w = mountDrawer(missing())
+      await flushPromises()
+      expect(att.getAnomalyList).toHaveBeenCalledWith({ year: 2026, month: 9, employee_id: 1, on_date: W1, status: 'all' })
+      const resolve = w.find('[data-test="pdd-resolve"]')
+      expect(resolve.text()).toContain('缺下班卡')
+      expect(resolve.text()).not.toContain('第 1 / 1 筆')
+      expect(w.findComponent(ResolveCard).props('context')).toMatchObject({ punch_in: '07:52', punch_out: null })
+      expect(w.find('[data-test="pdd-confirm-submit"]').exists()).toBe(false)
+      await w.find('[data-test="pdd-confirm-toggle"]').trigger('click')
+      expect(w.find('[data-test="pdd-confirm-submit"]').classes()).not.toContain('el-button--primary')
+      const html = w.html()
+      expect(html.indexOf('data-test="pdd-resolve"')).toBeLessThan(html.indexOf('data-test="pdd-confirm"'))
+      expect(w.find('[data-test="pdd-records"]').text()).toBe('看他整月')
+    })
+
+    it('補卡送出帶既有上班＋補填下班；接受扣款以出勤紀錄 id 送出；成功後通知格子重抓', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      const w = mountDrawer(missing())
+      await flushPromises()
+      w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'punch', punch_in: '07:52', punch_out: '17:00' })
+      await flushPromises()
+      expect(att.upsertRecord).toHaveBeenCalledWith({ employee_id: 1, date: W1, punch_in: '07:52', punch_out: '17:00' })
+      w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'admin_accept' })
+      await flushPromises()
+      expect(att.batchConfirmAnomalies).toHaveBeenCalledWith({ attendance_ids: [55], action: 'admin_accept' })
+      expect(w.emitted('changed')).toHaveLength(2)
+    })
+
+    it('後端還沒支援人／日篩選（回傳整月）時，只取該人該天的卡，不會顯示別人的異常', async () => {
+      const others = { ...anomalyRow, id: 99, employee_number: 'E002', detail: '別人的遲到' }
+      const otherDay = { ...anomalyRow, id: 98, date: '2026-09-15', detail: '別天的缺卡' }
+      att.getAnomalyList.mockResolvedValue({ data: { total: 3, pending: 3, confirmed: 0, items: [others, otherDay, anomalyRow] } })
+      const w = mountDrawer(missing())
+      await flushPromises()
+      const text = w.find('[data-test="pdd-resolve"]').text()
+      expect(text).toContain('缺下班卡')
+      expect(text).not.toContain('別人的遲到')
+      expect(text).not.toContain('別天的缺卡')
+    })
+
+    it('格子重抓後（版本變了）重新抓異常卡', async () => {
+      const w = mountDrawer(missing())
+      await flushPromises()
+      expect(att.getAnomalyList).toHaveBeenCalledTimes(1)
+      await w.setProps({ cell: missing({ version: 'w'.repeat(64), confirmed_action: 'admin_waive' }) })
+      await flushPromises()
+      expect(att.getAnomalyList).toHaveBeenCalledTimes(2)
+      expect(w.find('[data-test="pdd-resolve"]').text()).toContain('已豁免')
+    })
+
+    it('疑似換班：確認當日班別在前且是主要動作、候選可點選帶入；補卡只給接受扣款／豁免', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [{ ...anomalyRow, type: 'late', type_label: '遲到', detail: '遲到 91 分' }] } })
+      const swap = cell(1, W1, {
+        edit: RECORDED,
+        actual: {
+          status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00`, attendance_id: 55, original_shift_type_id: 1,
+          candidates: [{ shift_type_id: 2, name: '晚車', work_start: '08:30', work_end: '18:00' }, { shift_type_id: 3, name: '舊班別', work_start: '07:30', work_end: '16:00' }],
+        },
+      })
+      const w = mountDrawer(swap)
+      await flushPromises()
+      const html = w.html()
+      expect(html.indexOf('data-test="pdd-confirm"')).toBeLessThan(html.indexOf('data-test="pdd-resolve"'))
+      expect(w.find('[data-test="pdd-confirm-submit"]').classes()).toContain('el-button--primary')
+      await w.find('[data-test="pdd-candidate-2"]').trigger('click')
+      expect(w.findAllComponents({ name: 'ElSelect' })[0].props('modelValue')).toBe(2)
+      expect(buttons(w)).not.toContain('補打卡並重算')
+      expect(buttons(w)).toEqual(expect.arrayContaining(['接受扣款', '豁免']))
+    })
+
+    it('疑似缺勤（沒有出勤紀錄列）：補登上下班與改這天並列、都不是主要按鈕；不抓異常清單', async () => {
+      const absent = cell(1, W1, { edit: { plan: true, confirm: false, recorded: false, locked_reason: null }, actual: { status: 'suspected_absence', attendance_id: null, punch_in: null, punch_out: null } })
+      const w = mountDrawer(absent)
+      await flushPromises()
+      expect(att.getAnomalyList).not.toHaveBeenCalled()
+      expect(buttons(w)).toEqual(['補打卡並重算'])
+      expect(w.find('[data-test="pdd-resolve"]').find('button').classes()).not.toContain('el-button--primary')
+      expect(w.find('[data-test="pdd-day-apply"]').classes()).not.toContain('el-button--primary')
+      w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'punch', punch_in: '08:00', punch_out: '17:00' })
+      await flushPromises()
+      expect(att.upsertRecord).toHaveBeenCalledWith({ employee_id: 1, date: W1, punch_in: '08:00', punch_out: '17:00' })
+    })
+
+    it('不顯示補卡：沒有出勤寫入權限、已封存、資料待補（等匯入）；沒有查看權限也不抓', async () => {
+      const noWrite = mountDrawer(missing(), { caller: { ...CALLER, can_edit_attendance: false } })
+      await flushPromises()
+      expect(noWrite.find('[data-test="pdd-resolve"]').exists()).toBe(false)
+      const noRead = mountDrawer(missing(), { caller: { ...CALLER, can_view_attendance: false } })
+      await flushPromises()
+      expect(noRead.find('[data-test="pdd-resolve"]').exists()).toBe(false)
+      const finalized = mountDrawer(cell(1, W1, { edit: { plan: false, confirm: false, recorded: true, locked_reason: 'finalized' }, actual: { status: 'missing_punch', attendance_id: 55 } }))
+      await flushPromises()
+      expect(finalized.find('[data-test="pdd-resolve"]').exists()).toBe(false)
+      const incomplete = mountDrawer(cell(1, W1, { actual: { status: 'data_incomplete', attendance_id: null } }))
+      await flushPromises()
+      expect(incomplete.find('[data-test="pdd-resolve"]').exists()).toBe(false)
+      expect(att.getAnomalyList).not.toHaveBeenCalled() // 不顯示就不抓（也不讓只有排班權限的人打到 403）
+    })
+
+    it('讀取異常卡失敗：說明並保留「看他整月」退路，不顯示補卡按鈕', async () => {
+      att.getAnomalyList.mockRejectedValue(new Error('boom'))
+      const w = mountDrawer(missing())
+      await flushPromises()
+      expect(w.find('[data-test="pdd-resolve"]').text()).toContain('讀取異常資料失敗')
+      expect(w.findComponent(ResolveCard).exists()).toBe(false)
+      expect(w.find('[data-test="pdd-records"]').exists()).toBe(true)
+    })
   })
 })

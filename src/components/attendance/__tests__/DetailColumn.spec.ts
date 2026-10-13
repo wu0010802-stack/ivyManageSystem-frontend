@@ -1,6 +1,6 @@
 // src/components/attendance/__tests__/DetailColumn.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
@@ -378,8 +378,7 @@ describe('DetailColumn — mutation in-flight（P1-4）', () => {
     expect(probe.attributes('data-busy')).toBe('true')
 
     release({ data: {} })
-    await nextTick()
-    await nextTick()
+    await flushPromises() // 送出完成後還要等呼叫端的刷新（useResolveAnomaly 的 onDone）
     expect(probe.attributes('data-busy')).toBe('false')
   })
 })
