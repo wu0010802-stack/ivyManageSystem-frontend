@@ -5,7 +5,7 @@ import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo,
 import { captureException } from '@/utils/sentry'
 import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
-import { attendanceRouteProps, isValidDateQuery } from './attendanceRouteProps'
+import { attendanceRouteProps, isValidDateQuery, legacySettingsShiftsRedirect } from './attendanceRouteProps'
 
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
@@ -233,7 +233,8 @@ export const routes: RouteRecordRaw[] = [
             name: 'attendance',
             component: () => import('../views/attendance/ScheduleAttendanceView.vue'),
             // 2026-10 SPEC-027：排班與出勤合併成單一頁（推翻 2026-09-10 拆成兩個側欄項目）。
-            // query：tab=grid|records|rotation|swaps、date、emp、filter；舊 tab=reconcile 相容。
+            // query：tab=grid|records|rotation|swaps|shifts、date、emp、filter；舊 tab=reconcile 相容。
+            // shifts＝班別設定（2026-10 自 /settings 搬入；舊 /settings?tab=shifts 由 authGuard 轉來）。
             props: (route) => attendanceRouteProps(route.query),
             meta: { title: '排班與出勤' }
         },
@@ -1117,6 +1118,10 @@ async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
 // 抽成具名匯出供單元測試（src/router/__tests__/authGuardErrorRedirects.spec.ts）；
 // startRouteLoading 留在 beforeEach wrapper，authGuard 本身不碰載入狀態。
 export async function authGuard(to: RouteLocationNormalized) {
+    // 舊書籤先轉址再做任何檢查（見 legacySettingsShiftsRedirect：否則只有 SCHEDULE 的人會被 /settings 擋成 403）
+    const legacy = legacySettingsShiftsRedirect(to)
+    if (legacy) return legacy
+
     const { loggedIn, userInfo } = await restoreSessionIfNeeded(to)
 
     // 強制改密碼攔截：已登入且旗標為 true，且目標路由不是改密碼頁也不是登入頁

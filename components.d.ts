@@ -340,7 +340,6 @@ declare module 'vue' {
     SettingsAccountsTab: typeof import('./src/components/settings/SettingsAccountsTab.vue')['default']
     SettingsLineTab: typeof import('./src/components/settings/SettingsLineTab.vue')['default']
     SettingsObservabilityTab: typeof import('./src/components/settings/SettingsObservabilityTab.vue')['default']
-    SettingsShiftTab: typeof import('./src/components/settings/SettingsShiftTab.vue')['default']
     SettingsTenantConfigTab: typeof import('./src/components/settings/SettingsTenantConfigTab.vue')['default']
     SignoffFlowSummary: typeof import('./src/components/signoff/SignoffFlowSummary.vue')['default']
     SignoffPanel: typeof import('./src/components/signoff/SignoffPanel.vue')['default']

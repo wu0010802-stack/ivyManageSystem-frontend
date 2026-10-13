@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   createShiftType,
   deleteShiftType,
@@ -15,10 +14,12 @@ import type { ApiResponse } from '@/api/_generated/typed'
 
 type ShiftTypeRow = ApiResponse<'/shifts/types', 'get'>[number]
 
-const router = useRouter()
-// 其他頁（排班管理等）共用 shiftStore；本 tab 需要 usage 計數所以自抓，
+// 排班與出勤「班別設定」頁籤（2026-10 自「設定 › 輪班別管理」搬入）。
+// 學期輪值表等共用 shiftStore；本面板需要 usage 計數所以自抓，
 // 但每次異動後仍 refresh store，讓共用快取不過期。
 const shiftStore = useShiftStore()
+// 同頁的班表核對 v-show 常駐、班別選單來自 grid 回應：異動成功後通知頁面讓它重抓
+const emit = defineEmits<{ changed: [] }>()
 const canWrite = computed(() => hasPermission('SCHEDULE'))
 
 const rows = ref<ShiftTypeRow[]>([])
@@ -158,6 +159,7 @@ const saveShift = async () => {
     shiftDialogVisible.value = false
     fetchRows()
     shiftStore.refresh()
+    emit('changed')
   } catch (error) {
     ElMessage.error(apiError(error, '儲存失敗'))
   }
@@ -171,6 +173,7 @@ const toggleActive = async (row: ShiftTypeRow) => {
     ElMessage.success(row.is_active ? '已停用（不再出現在新排班選單）' : '已重新啟用')
     fetchRows()
     shiftStore.refresh()
+    emit('changed')
   } catch (error) {
     ElMessage.error(apiError(error, '狀態切換失敗'))
   }
@@ -203,19 +206,17 @@ const handleDeleteShift = async (row: ShiftTypeRow) => {
     ElMessage.success('已刪除')
     fetchRows()
     shiftStore.refresh()
+    emit('changed')
   } catch (error) {
     ElMessage.error(apiError(error, '刪除失敗'))
   }
 }
-
-const goSchedule = () => router.push({ path: '/attendance', query: { tab: 'grid' } })
 </script>
 
 <template>
   <div>
     <div class="tab-header">
       <el-button v-if="canWrite" type="primary" @click="handleAddShift">新增班別</el-button>
-      <el-button data-test="go-schedule" @click="goSchedule">前往排班與出勤</el-button>
     </div>
     <el-table :data="rows" v-loading="loading" style="width: 100%; margin-top: 20px;">
       <el-table-column prop="sort_order" label="排序" width="72" sortable />

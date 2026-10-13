@@ -29,7 +29,7 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
-import SettingsShiftTab from '../SettingsShiftTab.vue'
+import ShiftTypesPanel from '@/components/schedule-attendance/ShiftTypesPanel.vue'
 import SettingsLineTab from '../SettingsLineTab.vue'
 
 describe('Settings mutation controls 權限分界', () => {
@@ -48,7 +48,7 @@ describe('Settings mutation controls 權限分界', () => {
   })
 
   it('沒有 SCHEDULE 時不顯示班別新增與寫入操作', async () => {
-    const wrapper = mount(SettingsShiftTab, { global: { plugins: [ElementPlus] } })
+    const wrapper = mount(ShiftTypesPanel, { global: { plugins: [ElementPlus] } })
     await flushPromises()
 
     expect(hasPermissionMock).toHaveBeenCalledWith('SCHEDULE')

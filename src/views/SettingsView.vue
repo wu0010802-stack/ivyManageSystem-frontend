@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
-import { useShiftStore } from '@/stores/shift'
-import SettingsShiftTab from '@/components/settings/SettingsShiftTab.vue'
 import SettingsLineTab from '@/components/settings/SettingsLineTab.vue'
 import SettingsTenantConfigTab from '@/components/settings/SettingsTenantConfigTab.vue'
 import DsrRequestsView from '@/views/DsrRequestsView.vue'
@@ -14,9 +12,9 @@ import { PAGE_TERMS } from '@/constants/moduleTerms'
 const route = useRoute()
 const router = useRouter()
 
+// 班別設定已搬到「排班與出勤 › 班別設定」（2026-10）；舊 ?tab=shifts 由 authGuard 轉址，到不了這裡。
 const availableTabs = (): string[] => {
   const tabs: string[] = []
-  if (hasPermission('SCHEDULE')) tabs.unshift('shifts')
   if (hasPermission('SETTINGS_READ')) tabs.push('line', 'tenant-config')
   if (hasPermission('DSR_MANAGE')) tabs.push('dsr-requests', 'policy-versions')
   return tabs
@@ -52,21 +50,12 @@ watch(
 const onTabChange = (name: string | number) => {
   router.replace({ query: { ...route.query, tab: String(name) } })
 }
-
-const shiftStore = useShiftStore()
-
-onMounted(() => {
-  if (hasPermission('SCHEDULE')) shiftStore.fetchShiftTypes()
-})
 </script>
 
 <template>
   <div class="settings-page">
-    <PageHeader :title="PAGE_TERMS.settingsGeneral" subtitle="輪班別、通知、分校設定與個資治理設定" />
+    <PageHeader :title="PAGE_TERMS.settingsGeneral" subtitle="通知、分校設定與個資治理設定" />
     <el-tabs v-model="activeTab" type="card" @tab-change="onTabChange">
-      <el-tab-pane v-if="hasPermission('SCHEDULE')" label="輪班別管理" name="shifts">
-        <SettingsShiftTab v-if="activeTab === 'shifts'" />
-      </el-tab-pane>
       <el-tab-pane v-if="hasPermission('SETTINGS_READ')" name="line">
         <template #label>LINE 通知設定 <el-tag type="warning" size="small" style="margin-left:4px;">Beta</el-tag></template>
         <SettingsLineTab v-if="activeTab === 'line'" />

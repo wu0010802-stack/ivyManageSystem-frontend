@@ -1,5 +1,5 @@
 /**
- * SettingsShiftTab 回歸（排班重設計 P0）。
+ * ShiftTypesPanel 回歸（排班重設計 P0；2026-10 自「設定 › 輪班別管理」搬進排班與出勤「班別設定」頁籤）。
  *
  * 鎖定：
  * - 列表以 include_usage 取得使用數；跨日 tag 與預估工時（跨度−休息）正確
@@ -7,6 +7,7 @@
  * - 空名稱擋下、不打 API
  * - 使用中班別刪除 → 引導改停用（updateShiftType is_active=false），絕不 hard delete
  * - 未使用班別可刪除
+ * - 班別異動成功才 emit changed（同頁常駐的班表核對靠它重抓班別選單）
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -40,16 +41,11 @@ vi.mock('@/stores/shift', () => ({
   useShiftStore: () => ({ refresh: storeRefresh }),
 }))
 
-const routerPush = vi.fn()
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: routerPush }),
-}))
-
 vi.mock('@/utils/auth', () => ({
   hasPermission: (permission: string) => permission === 'SCHEDULE',
 }))
 
-import SettingsShiftTab from '../SettingsShiftTab.vue'
+import ShiftTypesPanel from '../ShiftTypesPanel.vue'
 
 // ── el-table / el-table-column scoped-slot stub：讓 cell 模板真的渲染 ──
 const ElTableStub = {
@@ -142,12 +138,12 @@ const ROWS = [
 ]
 
 const mountTab = async () => {
-  const wrapper = mount(SettingsShiftTab, { global: globalConfig })
+  const wrapper = mount(ShiftTypesPanel, { global: globalConfig })
   await flushPromises()
   return wrapper
 }
 
-describe('SettingsShiftTab', () => {
+describe('ShiftTypesPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetShiftTypes.mockResolvedValue({ data: ROWS })
@@ -235,9 +231,41 @@ describe('SettingsShiftTab', () => {
     expect(mockUpdate).toHaveBeenCalledWith(1, { is_active: false })
   })
 
-  it('前往排班與出勤（班表核對頁籤）', async () => {
+  it('已在排班與出勤頁內：不再有「前往排班與出勤」按鈕', async () => {
     const wrapper = await mountTab()
-    await wrapper.find('[data-test="go-schedule"]').trigger('click')
-    expect(routerPush).toHaveBeenCalledWith({ path: '/attendance', query: { tab: 'grid' } })
+    expect(wrapper.find('[data-test="go-schedule"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('前往排班與出勤')
+  })
+
+  it('新增、停用、刪除成功後各 emit 一次 changed', async () => {
+    mockConfirm.mockResolvedValue('confirm')
+    const wrapper = await mountTab()
+    await wrapper.find('button').trigger('click')
+    await wrapper.find('.dlg input.inp').setValue('新班別')
+    await wrapper.find('.dlg').findAll('button').find((b) => b.text() === '儲存')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+
+    await wrapper.findAll('[data-test="toggle-active"]')[0].trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('changed')).toHaveLength(2)
+
+    await wrapper.findAll('button').filter((b) => b.text() === '刪除')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('changed')).toHaveLength(3)
+  })
+
+  it('驗證擋下或 API 失敗時不 emit changed', async () => {
+    const wrapper = await mountTab()
+    await wrapper.find('button').trigger('click')
+    const save = () => wrapper.find('.dlg').findAll('button').find((b) => b.text() === '儲存')!.trigger('click')
+    await save() // 空名稱
+    await flushPromises()
+    mockCreate.mockRejectedValueOnce(new Error('boom'))
+    await wrapper.find('.dlg input.inp').setValue('新班別')
+    await save()
+    await flushPromises()
+    expect(mockMessage.error).toHaveBeenCalled()
+    expect(wrapper.emitted('changed')).toBeUndefined()
   })
 })
