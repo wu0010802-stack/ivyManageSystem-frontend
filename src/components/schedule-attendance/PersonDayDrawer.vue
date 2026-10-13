@@ -47,6 +47,8 @@
         </template>
       </section>
 
+      <p v-if="selfBlocked" class="pdd__note" data-test="pdd-self-note">本人出勤需由其他行政人員補登</p>
+
       <DayResolveSection
         v-if="resolveMode !== 'none' && resolveMode !== 'confirm-first'"
         :cell="cell"
@@ -199,7 +201,7 @@ const weekdayLabel = computed(() => (props.day ? WEEKDAY[props.day.weekday] : ''
  * 缺卡／出勤異常＝補卡在前；疑似換班＝確認當日班別在前；疑似缺勤＝補登上下班與改這天並列。
  * 需要能看打卡（抓異常卡）也能寫出勤；已封存、本人、今天以後不處理。
  */
-const resolveMode = computed<DayResolveMode | 'none'>(() => {
+const actionableMode = computed<DayResolveMode | 'none'>(() => {
   const cell = props.cell
   const actual = cell?.actual
   if (!cell || !actual || !props.caller.can_view_attendance || !props.caller.can_edit_attendance) return 'none'
@@ -211,6 +213,13 @@ const resolveMode = computed<DayResolveMode | 'none'>(() => {
   if (actual.status === 'suspected_absence') return 'side-by-side'
   return 'none'
 })
+/**
+ * 本人出勤一律不能自己補（後端 require_not_self_attendance 回 403）。已打卡的本人格後端給 locked_reason
+ * 'self'；沒有出勤紀錄列的（疑似缺勤）沒有鎖定原因，只能靠 caller.employee_id 認出本人（F2）。
+ */
+const isOwnCell = computed(() => props.caller.employee_id != null && props.cell?.employee_id === props.caller.employee_id)
+const selfBlocked = computed(() => isOwnCell.value && actionableMode.value !== 'none')
+const resolveMode = computed<DayResolveMode | 'none'>(() => (isOwnCell.value ? 'none' : actionableMode.value))
 /** 補卡是主要動作時，確認當日班別先收起（需要時再展開）；重抓後判定改變（例如補卡後變疑似換班）要跟著重設 */
 const confirmExpanded = ref(true)
 watch(resolveMode, (mode) => { confirmExpanded.value = mode !== 'resolve-first' })

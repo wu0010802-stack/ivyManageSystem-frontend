@@ -528,6 +528,19 @@ describe('PersonDayDrawer 審查修正', () => {
       expect(att.getAnomalyList).not.toHaveBeenCalled()
     })
 
+    it('本人未打卡日（疑似缺勤、沒有出勤紀錄列）：不提供補登並說明原因；他人同樣的格子照舊（F2）', async () => {
+      const absent = cell(1, W1, { edit: { plan: true, confirm: false, recorded: false, locked_reason: null }, actual: { status: 'suspected_absence', attendance_id: null, punch_in: null, punch_out: null } })
+      const own = mountDrawer(absent, { caller: { ...CALLER, employee_id: 1 } })
+      await flushPromises()
+      expect(own.find('[data-test="pdd-resolve"]').exists()).toBe(false)
+      expect(own.find('[data-test="pdd-self-note"]').text()).toBe('本人出勤需由其他行政人員補登')
+      expect(own.find('[data-test="pdd-edit-day"]').exists()).toBe(true)
+      const others = mountDrawer(absent, { caller: { ...CALLER, employee_id: 2 } })
+      await flushPromises()
+      expect(others.find('[data-test="pdd-resolve"]').exists()).toBe(true)
+      expect(others.find('[data-test="pdd-self-note"]').exists()).toBe(false)
+    })
+
     it('換格時舊請求晚回來不會蓋掉新格的卡（審查 F6）', async () => {
       let releaseFirst: (v: unknown) => void = () => {}
       att.getAnomalyList

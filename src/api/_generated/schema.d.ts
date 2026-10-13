@@ -32259,6 +32259,8 @@ export interface components {
             can_edit_plan: boolean;
             /** Can View Attendance */
             can_view_attendance: boolean;
+            /** Employee Id */
+            employee_id?: number | null;
         };
         /** GridCellOut */
         GridCellOut: {
