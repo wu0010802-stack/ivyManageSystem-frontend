@@ -102,7 +102,9 @@ const substituteText = computed(() => {
   if (!name) return '不需代理人'
   const s = row.substitute_status as string | undefined
   const label = ({ pending: '待回應', accepted: '已接受', rejected: '已拒絕', waived: '主管略過', not_required: '不需代理' } as Record<string, string>)[s || ''] || s
-  return `代理人 ${name}（${label}）`
+  // SPEC-026：請假人請代理人接手職務班別——核准時會改動代理人的班表，審核人要先知道
+  const duty = row.substitute_takes_duty ? '・接手請假人的職務班別' : ''
+  return `代理人 ${name}（${label}）${duty}`
 })
 
 // ── 配額（開啟時才查，避免每列都打 API）──

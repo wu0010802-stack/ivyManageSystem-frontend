@@ -92,6 +92,22 @@ describe('LeaveReviewDrawer', () => {
       await flushPromises()
       expect(w.vm.$.setupState.substituteClass).toBe('ok')
     })
+
+    it('要求代理人接手職務時，文字加註「接手請假人的職務班別」', async () => {
+      const w = mountDrawer({
+        ...baseRow, substitute_employee_name: '劉美玲', substitute_status: 'accepted', substitute_takes_duty: true,
+      })
+      await flushPromises()
+      expect(w.vm.$.setupState.substituteText).toBe('代理人 劉美玲（已接受）・接手請假人的職務班別')
+    })
+
+    it('沒要求接手職務時文字不變', async () => {
+      const w = mountDrawer({
+        ...baseRow, substitute_employee_name: '劉美玲', substitute_status: 'accepted', substitute_takes_duty: false,
+      })
+      await flushPromises()
+      expect(w.vm.$.setupState.substituteText).toBe('代理人 劉美玲（已接受）')
+    })
   })
 
   describe('配額查詢與超額判斷', () => {
