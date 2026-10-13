@@ -45,8 +45,12 @@ const props = defineProps<{
   employeeNumber: string
   /** 「一」…「日」 */
   weekday: string
+  /**
+   * 處理成功（父層以 @changed 綁定）。刻意用函式 prop 而不是 emit：送出途中抽屜換到另一格、本元件換位置被卸載時，
+   * Vue 會丟掉已卸載元件的 emit，格子就不會重抓；函式 prop 仍會被呼叫。
+   */
+  onChanged?: () => void
 }>()
-const emit = defineEmits<{ changed: [] }>()
 
 const HANDLED_LABELS: Record<string, string> = { admin_accept: '已接受扣款', admin_waive: '已豁免' }
 
@@ -119,7 +123,7 @@ const handledNote = computed(() => {
   return action ? `${HANDLED_LABELS[action] ?? '已處理'}，需要的話可以改成另一個動作。` : ''
 })
 
-const { resolving, resolve } = useResolveAnomaly(() => emit('changed'), 'DayResolveSection.resolve')
+const { resolving, resolve } = useResolveAnomaly(() => props.onChanged?.(), 'DayResolveSection.resolve')
 function onResolve(payload: ResolvePayload): void {
   const id = props.cell.actual?.attendance_id ?? null
   void resolve({ employeeId: props.cell.employee_id, date: props.cell.date, attendanceId: id }, payload)

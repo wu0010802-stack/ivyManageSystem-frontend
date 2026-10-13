@@ -493,6 +493,65 @@ describe('PersonDayDrawer 審查修正', () => {
       expect(att.getAnomalyList).not.toHaveBeenCalled() // 不顯示就不抓（也不讓只有排班權限的人打到 403）
     })
 
+    const solidPrimaries = (w: ReturnType<typeof mountDrawer>) => w.findAll('.el-button--primary:not(.is-plain):not(.is-text):not(.is-link)').length
+
+    it('每種判定的抽屜最多一顆實心主要按鈕（審查 F6）', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      const modes = [
+        missing(),
+        cell(1, W1, { edit: RECORDED, actual: { status: 'anomaly', punch_in: `${W1}T08:12:00`, punch_out: `${W1}T17:00:00`, attendance_id: 55 } }),
+        cell(1, W1, { edit: RECORDED, actual: { status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00`, attendance_id: 55, candidates: [{ shift_type_id: 2, name: '晚車', work_start: '08:30', work_end: '18:00' }] } }),
+        cell(1, W1, { edit: { plan: true, confirm: false, recorded: false, locked_reason: null }, actual: { status: 'suspected_absence', attendance_id: null } }),
+      ]
+      for (const target of modes) {
+        const w = mountDrawer(target)
+        await flushPromises()
+        const toggle = w.find('[data-test="pdd-confirm-toggle"]')
+        if (toggle.exists()) await toggle.trigger('click')
+        expect(solidPrimaries(w), target.actual!.status).toBeLessThanOrEqual(1)
+      }
+    })
+
+    it('本人、不在職、今天以後的格子不顯示補卡（審查 F6）', async () => {
+      const self = mountDrawer(cell(1, W1, { edit: { plan: false, confirm: false, recorded: true, locked_reason: 'self' }, actual: { status: 'missing_punch', attendance_id: 55 } }))
+      const left = mountDrawer(cell(1, W1, { employed: false, edit: { plan: false, confirm: false, recorded: true, locked_reason: 'not_employed' }, actual: { status: 'missing_punch', attendance_id: 55 } }))
+      const today = mountDrawer(cell(1, '2026-09-21', { edit: RECORDED, actual: { status: 'missing_punch', attendance_id: 55 } }))
+      await flushPromises()
+      for (const w of [self, left, today]) expect(w.find('[data-test="pdd-resolve"]').exists()).toBe(false)
+      expect(att.getAnomalyList).not.toHaveBeenCalled()
+    })
+
+    it('換格時舊請求晚回來不會蓋掉新格的卡（審查 F6）', async () => {
+      let releaseFirst: (v: unknown) => void = () => {}
+      att.getAnomalyList
+        .mockReturnValueOnce(new Promise((r) => { releaseFirst = r }))
+        .mockResolvedValueOnce({ data: { total: 1, pending: 1, confirmed: 0, items: [{ ...anomalyRow, id: 66, employee_number: 'E002', detail: '王副導的缺卡' }] } })
+      const w = mountDrawer(missing())
+      await flushPromises()
+      await w.setProps({ cell: cell(2, W1, { edit: RECORDED, actual: { status: 'missing_punch', punch_in: `${W1}T07:40:00`, attendance_id: 66 } }), employee: employee(2, '王副導') })
+      await flushPromises()
+      releaseFirst({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      await flushPromises()
+      expect(w.find('[data-test="pdd-resolve"]').text()).toContain('王副導的缺卡')
+      expect(w.find('[data-test="pdd-resolve"]').text()).not.toContain('缺下班卡')
+    })
+
+    it('重抓後判定從缺卡變疑似換班：確認當日班別重新展開、成為主要動作（審查 F1）', async () => {
+      const w = mountDrawer(missing())
+      await flushPromises()
+      expect(w.find('[data-test="pdd-confirm-submit"]').exists()).toBe(false)
+      await w.setProps({ cell: missing({ status: 'possible_shift_change', punch_out: `${W1}T18:02:00`, version: 'x'.repeat(64) }) })
+      await flushPromises()
+      expect(w.find('[data-test="pdd-confirm-submit"]').classes()).toContain('el-button--primary')
+    })
+
+    it('有出勤權限但沒有排班權限：不說「沒有修改權限」（與補卡區矛盾），改說沒有改班權限（審查 F3）', async () => {
+      const w = mountDrawer(cell(1, W1, { edit: { plan: false, confirm: false, recorded: true, locked_reason: 'no_permission' }, actual: { status: 'missing_punch', punch_in: `${W1}T07:52:00`, attendance_id: 55 } }))
+      await flushPromises()
+      expect(w.find('[data-test="pdd-resolve"]').exists()).toBe(true)
+      expect(w.find('[data-test="pdd-locked"]').text()).toBe('沒有改班權限；打卡仍可在下方處理')
+    })
+
     it('讀取異常卡失敗：說明並保留「看他整月」退路，不顯示補卡按鈕', async () => {
       att.getAnomalyList.mockRejectedValue(new Error('boom'))
       const w = mountDrawer(missing())

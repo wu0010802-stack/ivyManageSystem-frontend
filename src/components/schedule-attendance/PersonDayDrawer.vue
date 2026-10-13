@@ -110,7 +110,7 @@
       />
 
       <p v-if="!cell.edit.plan && !cell.edit.confirm && cell.edit.locked_reason" class="pdd__note" data-test="pdd-locked">
-        {{ LOCKED_REASON_LABELS[cell.edit.locked_reason] }}
+        {{ lockedNote }}
       </p>
 
       <footer class="pdd__footer">
@@ -211,8 +211,17 @@ const resolveMode = computed<DayResolveMode | 'none'>(() => {
   if (actual.status === 'suspected_absence') return 'side-by-side'
   return 'none'
 })
-/** 補卡是主要動作時，確認當日班別先收起（需要時再展開） */
+/** 補卡是主要動作時，確認當日班別先收起（需要時再展開）；重抓後判定改變（例如補卡後變疑似換班）要跟著重設 */
 const confirmExpanded = ref(true)
+watch(resolveMode, (mode) => { confirmExpanded.value = mode !== 'resolve-first' })
+
+/** 沒有排班權限但能處理打卡時，「沒有修改權限」會和下方補卡區矛盾，改說清楚是不能改班 */
+const lockedNote = computed(() => {
+  const reason = props.cell?.edit.locked_reason
+  if (!reason) return ''
+  if (reason === 'no_permission' && resolveMode.value !== 'none') return '沒有改班權限；打卡仍可在下方處理'
+  return LOCKED_REASON_LABELS[reason]
+})
 
 /** spec §7：兼兩班時歸主要班級組，抽屜註明另一班 */
 const otherClasses = computed(() => (props.employee?.other_classroom_labels ?? []).join('、'))
