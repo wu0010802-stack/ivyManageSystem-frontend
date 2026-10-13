@@ -331,7 +331,7 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__date { display: block; }
 .shift-grid__gap { display: block; font-size: var(--text-xs); font-weight: 400; }
 .shift-grid__gap--empty { color: var(--el-color-danger); }
-.shift-grid__gap--risk { color: var(--el-color-warning); }
+.shift-grid__gap--risk { color: var(--color-warning-darker); }
 .shift-grid__group th { background: var(--el-fill-color-light); text-align: left; font-weight: 600; }
 .shift-grid__who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
 .shift-grid__name { font-weight: 600; }
@@ -346,12 +346,14 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__cell:hover:not(:disabled) { border-color: var(--el-color-primary); }
 .shift-grid__cell:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 1px; }
 .shift-grid__cell:disabled { cursor: not-allowed; background: var(--el-fill-color-lighter); color: var(--el-text-color-placeholder); }
-.shift-grid__cell--future { background: var(--el-fill-color-blank); color: var(--el-text-color-secondary); }
+/* 未來日＝還在計畫中、可以改：虛線框，文字維持正常色（淡色會像停用） */
+.shift-grid__cell--future { border-style: dashed; }
 /* 整天未匯入：還不能核對，整格退到背景，不跟待處理搶注意力 */
-.shift-grid__cell--awaiting_import { border-style: dashed; color: var(--el-text-color-secondary); }
+.shift-grid__cell--awaiting_import { background: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); }
 .shift-grid__cell--today { border-color: var(--el-color-primary-light-5); }
-.shift-grid__cell--danger { border-left: 3px solid var(--el-color-danger); }
-.shift-grid__cell--warning { border-left: 3px solid var(--el-color-warning); }
+/* 待處理格：判定文字前的狀態點＋加粗深色字，不用側邊色條或整格染色（一週全紅時會變成警報牆） */
+.shift-grid__cell--danger .shift-grid__verdict::before,
+.shift-grid__cell--warning .shift-grid__verdict::before { content: ''; display: inline-block; width: 0.5em; height: 0.5em; margin-right: var(--space-1); border-radius: 50%; background: currentColor; vertical-align: 0.1em; }
 .shift-grid__cell--locked { background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--el-fill-color-light) 6px 8px); }
 .shift-grid__source { display: inline-block; min-width: 1.4em; margin-right: var(--space-1); padding: 0 2px; border-radius: var(--radius-sm); background: var(--el-fill-color); text-align: center; font-size: var(--text-xs); }
 .shift-grid__result { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
@@ -359,16 +361,18 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 /* 只在班別名與時段之間、打卡與判定之間換行，時段本身不拆成「08:00–」／「17:30」 */
 .shift-grid__plan-time, .shift-grid__verdict { white-space: nowrap; }
 .shift-grid__verdict { font-size: var(--text-xs); color: var(--el-text-color-secondary); }
-.shift-grid__cell--danger .shift-grid__verdict { color: var(--el-color-danger); }
-.shift-grid__cell--warning .shift-grid__verdict { color: var(--el-color-warning); }
-.shift-grid__leave { font-size: var(--text-xs); color: var(--el-color-info); }
-.shift-grid__confirm { font-size: var(--text-xs); color: var(--el-color-warning); }
+.shift-grid__cell--danger .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--color-danger-darker); }
+.shift-grid__cell--warning .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--color-warning-darker); }
+/* 已判定的過去日：重點是打卡與判定，計畫退為次要 */
+.shift-grid__cell--judged .shift-grid__plan { font-size: var(--text-xs); color: var(--el-text-color-secondary); }
+.shift-grid__leave { font-size: var(--text-xs); color: var(--el-text-color-regular); }
+.shift-grid__confirm { font-size: var(--text-xs); color: var(--color-warning-darker); }
 .shift-grid__confirm::before { content: '●'; margin-right: 2px; }
 .shift-grid__day-picker { display: flex; gap: var(--space-1); overflow-x: auto; margin-bottom: var(--space-3); }
 .shift-grid__day-tab { min-height: var(--touch-target-min); padding: 0 var(--space-2); border: 1px solid var(--el-border-color); border-radius: var(--radius-md); background: var(--el-bg-color); font: inherit; white-space: nowrap; }
 .shift-grid__day-tab--active { border-color: var(--el-color-primary); color: var(--el-color-primary); font-weight: 600; }
 .shift-grid__mobile-group h3 { margin: var(--space-3) 0 var(--space-2); font-size: var(--text-sm); }
-.shift-grid__inactive { margin-left: var(--space-1); font-size: var(--text-xs); color: var(--el-color-warning); }
+.shift-grid__inactive { margin-left: var(--space-1); font-size: var(--text-xs); color: var(--color-warning-darker); }
 .shift-grid__day-marks { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; margin-bottom: var(--space-2); }
 .shift-grid__cell--full_leave .shift-grid__plan { font-size: var(--text-xs); color: var(--el-text-color-secondary); }
 .shift-grid__cell--full_leave .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--el-text-color-primary); }

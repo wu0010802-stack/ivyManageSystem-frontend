@@ -78,6 +78,13 @@ describe('GridToolbar', () => {
     expect(idle.findComponent({ name: 'ElDatePicker' }).props('disabled')).toBe(false)
   })
 
+  it('儲存排班只有在有變更時才是主要按鈕（停用的主色鈕會變成整排最搶眼的東西）', () => {
+    const idle = mountToolbar({ pendingCount: 0 })
+    expect(idle.find('[data-test="toolbar-save"]').classes()).not.toContain('el-button--primary')
+    const dirty = mountToolbar({ pendingCount: 2 })
+    expect(dirty.find('[data-test="toolbar-save"]').classes()).toContain('el-button--primary')
+  })
+
   it('桌機捲動時工具列（含儲存排班）固定在頂端', () => {
     const css = readFileSync(resolve(__dirname, '../GridToolbar.vue'), 'utf8')
     expect(css).toMatch(/@media \(--bp-sm\)[^@]*\.grid-toolbar[^{]*\{[^}]*position: sticky[^}]*top: 0/)

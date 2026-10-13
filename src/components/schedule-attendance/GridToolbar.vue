@@ -60,8 +60,9 @@
           </el-dropdown-menu>
         </template>
       </el-dropdown>
+      <!-- 沒有變更時退成一般按鈕：停用的主色鈕仍是整排最飽和的元素，會把視線拉走 -->
       <el-button
-        type="primary"
+        :type="pendingCount > 0 ? 'primary' : 'default'"
         :loading="saving"
         :disabled="pendingCount === 0 || busy"
         data-test="toolbar-save"

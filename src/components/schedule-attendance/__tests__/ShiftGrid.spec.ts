@@ -118,6 +118,15 @@ describe('ShiftGrid 桌機', () => {
     expect((mountGrid().find('.shift-grid__scroller').element as HTMLElement).style.maxHeight).toBe('')
   })
 
+  it('狀態色：不用側邊色條；判定文字用達 AA 的深色 token；未來格不像停用', () => {
+    const css = readFileSync(resolve(__dirname, '../ShiftGrid.vue'), 'utf8')
+    expect(css).not.toMatch(/border-left:\s*[2-9]px/)
+    expect(css).toMatch(/\.shift-grid__cell--danger \.shift-grid__verdict \{[^}]*color: var\(--color-danger-darker\)/)
+    expect(css).toMatch(/\.shift-grid__cell--warning \.shift-grid__verdict \{[^}]*color: var\(--color-warning-darker\)/)
+    expect(css).not.toMatch(/color: var\(--el-color-warning\)/)
+    expect(css).not.toMatch(/\.shift-grid__cell--future \{[^}]*color: var\(--el-text-color-secondary\)/)
+  })
+
   it('今天那一欄的欄頭標「今天」', () => {
     const wrapper = mountGrid()
     expect(wrapper.find(`[data-test="day-${TODAY}"]`).text()).toContain('今天')

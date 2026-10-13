@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import ElementPlus, { ElDrawer } from 'element-plus'
 import MonthProgressBar from '../MonthProgressBar.vue'
@@ -64,6 +66,11 @@ describe('MonthProgressBar', () => {
     await flushPromises()
     expect(wrapper.find('[data-test="progress-import"]').text()).toContain('已匯入至 9/20，缺 9/15')
     expect(wrapper.find('[data-test="progress-issues"]').text()).toContain('本月 1 格待處理') // 只算 9/14 那格
+  })
+
+  it('提醒文字用達 AA 的深色警示色（原本 #e6a23c 在淺底只有 2.1:1）', () => {
+    const css = readFileSync(resolve(__dirname, '../MonthProgressBar.vue'), 'utf8')
+    expect(css).toMatch(/\.month-progress__warn \{[^}]*color: var\(--color-warning-darker\)/)
   })
 
   it('只有排班與薪資讀取權限：只看得到排班與交薪資兩步', async () => {

@@ -139,7 +139,7 @@ watch(data, (g) => {
 .month-progress__steps { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
 .month-progress__step { display: flex; align-items: center; gap: var(--space-1); }
 .month-progress__index { color: var(--el-text-color-secondary); }
-.month-progress__warn { color: var(--el-color-warning); }
+.month-progress__warn { color: var(--color-warning-darker); }
 .month-progress__link { min-height: var(--touch-target-min); padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-1); }
 .month-progress__error { margin: 0; color: var(--el-color-danger); font-size: var(--text-sm); }
 .month-progress__link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
