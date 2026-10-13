@@ -8,9 +8,12 @@ withDefaults(defineProps<{
   items?: Record<string, unknown>[]
   /** 顯示每張縮圖右上角的刪除鈕（呼叫端依 PORTFOLIO_WRITE 決定） */
   deletable?: boolean
+  /** deletable 時再逐張判斷；回 false 的照片不顯示刪除鈕（未給＝全部可刪） */
+  isDeletable?: (item: Record<string, unknown>) => boolean
 }>(), {
   items: () => [],
   deletable: false,
+  isDeletable: () => true,
 })
 
 const emit = defineEmits<{
@@ -51,7 +54,7 @@ defineExpose({ previewVisible, openPreview })
         </span>
       </button>
       <button
-        v-if="deletable"
+        v-if="deletable && isDeletable(item)"
         type="button"
         class="thumb-delete"
         :aria-label="`刪除第 ${idx + 1} 張照片`"

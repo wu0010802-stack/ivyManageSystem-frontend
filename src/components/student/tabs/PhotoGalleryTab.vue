@@ -5,6 +5,7 @@ import { friendlyError } from '@/utils/errorMessages'
 import { hasPermission } from '@/utils/auth'
 import {
   deleteStudentAttachment,
+  isWallDeletable,
   listStudentAttachments,
   OWNER_TYPE_LABELS,
 } from '@/api/studentAttachments'
@@ -87,7 +88,13 @@ watch(filterType, reload)
     </div>
 
     <el-empty v-if="!loading && items.length === 0" description="尚無照片" />
-    <AttachmentGallery v-else :items="items" :deletable="canWrite" @delete="onDelete" />
+    <AttachmentGallery
+      v-else
+      :items="items"
+      :deletable="canWrite"
+      :is-deletable="(item) => isWallDeletable(item.owner_type)"
+      @delete="onDelete"
+    />
   </div>
 </template>
 
