@@ -8,6 +8,8 @@ interface SubstituteRequest {
   end_date?: string
   leave_hours?: number | string
   reason?: string | null
+  /** 請假人要求代理人接手職務班別（SPEC-026 §4.2；接受前就要看得到） */
+  substitute_takes_duty?: boolean
   [key: string]: unknown
 }
 
@@ -46,12 +48,22 @@ const statusTagType = (s: string | undefined | null): 'primary' | 'success' | 'w
                 <div class="card-meta">
                     <span class="requester">{{ req.requester_name }}</span>
                     <el-tag size="small">{{ req.leave_type_label }}</el-tag>
+                    <el-tag
+                        v-if="req.substitute_takes_duty"
+                        type="warning"
+                        size="small"
+                        data-test="takes-duty-tag"
+                    >接手職務</el-tag>
                 </div>
                 <el-tag :type="statusTagType(req.substitute_status)" size="small">
                     {{ statusLabel(req.substitute_status) }}
                 </el-tag>
             </div>
             <div class="card-body">
+                <div v-if="req.substitute_takes_duty" class="info-line">
+                    <span class="label">交接</span>
+                    <span>請你接手 {{ req.requester_name }} 這幾天的職務班別；假單核准後，你的上下班時間會跟著調整</span>
+                </div>
                 <div class="info-line">
                     <span class="label">區間</span>
                     <span>{{ req.start_date }} ~ {{ req.end_date }}</span>
