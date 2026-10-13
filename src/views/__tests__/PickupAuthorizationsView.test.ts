@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 
 const { mockList, mockVerify, mockOverride, mockHasPermission } = vi.hoisted(() => ({
   mockList: vi.fn(),
@@ -220,5 +220,119 @@ describe('PickupAuthorizationsView (admin)', () => {
     })
     const wrapper = await mountView()
     expect(wrapper.text()).toContain('王行政')
+  })
+
+  describe('第二批：三端語彙、日期箭頭、人工核對說明 chip、歷史區間上限', () => {
+    const COMPLETED_ITEM = {
+      ...SAMPLE_ITEM, id: 3, student_name: '小華', status: 'completed', effective_status: 'completed',
+      completed_via: 'code', completed_at: '2026-08-11T16:12:00',
+    }
+
+    beforeEach(() => {
+      // 2026-08-11 11:00（台北）；只假 Date，不動計時器（flushPromises 要真的 setTimeout）
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-08-11T03:00:00Z'))
+      vi.mocked(ElMessageBox.confirm).mockClear()
+      vi.mocked(ElMessage.warning).mockClear()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    async function openOverride() {
+      await body().findAll('button').find((b) => b.text() === '確認交接')!.trigger('click')
+      await flushPromises()
+      await body().findAll('.link-btn').find((b) => b.text().includes('改用人工核對證件'))!.trigger('click')
+      await flushPromises()
+    }
+
+    it('狀態語彙「待交接／已交接」，範圍列寫「筆待交接」，篩選段落同名', async () => {
+      mockList.mockResolvedValue({ data: { items: [SAMPLE_ITEM, COMPLETED_ITEM] } })
+      const wrapper = await mountView()
+      expect(wrapper.text()).toContain('待交接')
+      expect(wrapper.text()).toContain('已交接')
+      expect(wrapper.text()).not.toContain('待確認')
+      expect(wrapper.find('[data-test="scope-count"]').text()).toContain('1 筆待交接')
+    })
+
+    it('人工核對二次確認用交接語彙，不再出現「核銷」', async () => {
+      mockOverride.mockResolvedValue({ data: { ...SAMPLE_ITEM, status: 'completed', completed_via: 'override' } })
+      await mountView()
+      await openOverride()
+      await body().find('.override-note textarea').setValue('已核對身分證')
+      await body().findAll('.el-dialog__footer button').find((b) => b.text().includes('人工核對後交接'))!.trigger('click')
+      await flushPromises()
+
+      expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+        expect.any(String), '人工核對後交接', expect.objectContaining({ confirmButtonText: '確認交接' }),
+      )
+      expect(JSON.stringify(vi.mocked(ElMessageBox.confirm).mock.calls)).not.toContain('核銷')
+    })
+
+    it('今天範圍可前後切日：前一天帶當日起訖並出現「回到今天」，回到今天恢復不帶參數', async () => {
+      const wrapper = await mountView()
+      expect(wrapper.find('[data-test="day-label"]').text()).toBe('今天')
+      expect(wrapper.find('[data-test="day-reset"]').exists()).toBe(false)
+
+      await wrapper.find('[data-test="day-prev"]').trigger('click')
+      await flushPromises()
+      expect(mockList).toHaveBeenLastCalledWith({ date_from: '2026-08-10', date_to: '2026-08-10' })
+      expect(wrapper.find('[data-test="day-label"]').text()).toContain('8/10')
+      expect(wrapper.find('[data-test="scope-count"]').text()).toContain('8/10')
+
+      await wrapper.find('[data-test="day-reset"]').trigger('click')
+      await flushPromises()
+      expect(mockList).toHaveBeenLastCalledWith({})
+      expect(wrapper.find('[data-test="day-reset"]').exists()).toBe(false)
+    })
+
+    it('後一天切到明天；切到別的範圍再切回「今天」會重設為今天', async () => {
+      const wrapper = await mountView()
+      await wrapper.find('[data-test="day-next"]').trigger('click')
+      await flushPromises()
+      expect(mockList).toHaveBeenLastCalledWith({ date_from: '2026-08-12', date_to: '2026-08-12' })
+      expect(wrapper.find('[data-test="day-label"]').text()).toBe('明天')
+
+      const radios = wrapper.findAll('.el-radio-button__inner')
+      await radios.find((b) => b.text() === '即將到來')!.trigger('click')
+      await flushPromises()
+      await radios.find((b) => b.text() === '今天')!.trigger('click')
+      await flushPromises()
+      expect(mockList).toHaveBeenLastCalledWith({})
+      expect(wrapper.find('[data-test="day-label"]').text()).toBe('今天')
+    })
+
+    it('人工核對說明 chip：點了附加到說明欄，重複點同一個不重複附加', async () => {
+      await mountView()
+      await openOverride()
+      const chip = (label: string) => body().findAll('[data-test="note-chip"]').find((c) => c.text() === label)!
+      const textarea = () => body().find('.override-note textarea').element as HTMLTextAreaElement
+
+      expect(body().findAll('[data-test="note-chip"]').length).toBeGreaterThanOrEqual(3)
+      await chip('已電話確認家長').trigger('click')
+      expect(textarea().value).toBe('已電話確認家長')
+      await chip('證件相符').trigger('click')
+      expect(textarea().value).toBe('已電話確認家長；證件相符')
+      await chip('證件相符').trigger('click')
+      expect(textarea().value).toBe('已電話確認家長；證件相符')
+    })
+
+    it('歷史範圍說明最多 92 天；選超過 92 天不送出查詢並提示', async () => {
+      const wrapper = await mountView()
+      await wrapper.findAll('.el-radio-button__inner').find((b) => b.text() === '歷史')!.trigger('click')
+      await flushPromises()
+      expect(wrapper.find('[data-test="range-hint"]').text()).toContain('92 天')
+      const callsBefore = mockList.mock.calls.length
+
+      wrapper.findComponent({ name: 'ElDatePicker' }).vm.$emit('update:modelValue', ['2026-01-01', '2026-04-04'])
+      await flushPromises()
+      expect(mockList.mock.calls.length).toBe(callsBefore)
+      expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('92 天'))
+
+      wrapper.findComponent({ name: 'ElDatePicker' }).vm.$emit('update:modelValue', ['2026-01-01', '2026-04-03'])
+      await flushPromises()
+      expect(mockList).toHaveBeenLastCalledWith({ date_from: '2026-01-01', date_to: '2026-04-03' })
+    })
   })
 })

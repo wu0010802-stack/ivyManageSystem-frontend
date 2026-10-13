@@ -8,6 +8,10 @@
  * 到來／歷史）取代空白日期框、搜尋＋帶計數狀態篩選、待確認排最前、接送人合併欄、
  * 「交接紀錄」取代「核銷方式」、彈窗常駐「改用人工核對」＋剩餘次數＋彈窗內成功態。
  * 「核銷」→「確認交接」僅動管理端（Q1 裁定：教師端／POS 語彙本次不動）。
+ *
+ * 2026-10-13 第二批：三端語彙統一（D-17，教師端／POS 同步改「確認交接」、狀態
+ * 「待交接／已交接」）、「今天」可前後切日、人工核對常用說明 chip、歷史區間上限
+ * 92 天（對齊後端 400）。
  */
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -23,6 +27,11 @@ import {
   overridePickupAuthorization,
   verifyPickupAuthorization,
 } from '@/api/pickupAuthorizations'
+import {
+  MAX_HISTORY_RANGE_DAYS,
+  exceedsHistoryRange,
+  isBeyondHistoryRange,
+} from './pickupAuthorizationRange'
 
 interface PickupAuth {
   id: number
@@ -63,7 +72,7 @@ const CARD_COLUMNS = [
 
 // 待確認排最前、已處理降灰（不改變後端排序，只影響畫面呈現順序）。
 const STATUS_LABEL: Record<string, string> = {
-  active: '待確認', completed: '已交接', cancelled: '已取消', expired: '已過期',
+  active: '待交接', completed: '已交接', cancelled: '已取消', expired: '已過期',
 }
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const STATUS_TAG: Record<string, ElTagType> = {
@@ -85,9 +94,11 @@ function formatPickupDate(dateStr: string): string {
   const tomorrow = taipeiToday(1)
   if (dateStr === today) return '今天'
   if (dateStr === tomorrow) return '明天'
-  const d = new Date(`${dateStr}T00:00:00+08:00`)
-  const weekday = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
-  return `${d.getMonth() + 1}/${d.getDate()}（${weekday}）`
+  // 直接拆 YYYY-MM-DD 算月日與星期：原本 new Date(...+08:00).getDate() 依裝置時區
+  // 取值，非台北時區會差一天（切日箭頭的日期標籤就靠這支）。
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const weekday = ['日', '一', '二', '三', '四', '五', '六'][new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+  return `${m}/${d}（${weekday}）`
 }
 
 function formatDateTime(iso: string | null): string {
@@ -103,6 +114,17 @@ function formatDateTime(iso: string | null): string {
 type Scope = 'today' | 'upcoming' | 'history'
 const scope = ref<Scope>('today')
 const historyRange = ref<[string, string]>([taipeiToday(-30), taipeiToday(-1)])
+// 「今天」範圍可前後切日；0＝今天（不帶日期參數，沿用後端預設）。
+const dayOffset = ref(0)
+const selectedDay = computed(() => taipeiToday(dayOffset.value))
+const dayLabel = computed(() => formatPickupDate(selectedDay.value))
+const scopeLabel = computed(() => {
+  if (scope.value === 'today') return dayLabel.value
+  return scope.value === 'upcoming' ? '即將到來' : '這段期間'
+})
+const emptyText = computed(() =>
+  scope.value === 'today' ? `${dayLabel.value}沒有臨時接送授權` : '這段期間沒有資料',
+)
 
 const items = ref<PickupAuth[]>([])
 const loading = ref(false)
@@ -117,8 +139,11 @@ async function fetchData() {
     } else if (scope.value === 'history') {
       params.date_from = historyRange.value[0]
       params.date_to = historyRange.value[1]
+    } else if (dayOffset.value !== 0) {
+      params.date_from = selectedDay.value
+      params.date_to = selectedDay.value
     }
-    // scope === 'today'：不帶日期參數，沿用後端「無日期參數即今日」的預設。
+    // 今天：不帶日期參數，沿用後端「無日期參數即今日」的預設。
     const { data } = await listPickupAuthorizations(params)
     items.value = (data as { items?: PickupAuth[] })?.items || []
   } catch {
@@ -131,11 +156,47 @@ async function fetchData() {
 function onScopeChange(next: string | number | boolean | undefined) {
   scope.value = next as Scope
   statusFilter.value = ''
+  dayOffset.value = 0
   fetchData()
 }
 
-watch(historyRange, () => {
-  if (scope.value === 'history') fetchData()
+function shiftDay(delta: number) {
+  dayOffset.value += delta
+  fetchData()
+}
+
+function resetDay() {
+  dayOffset.value = 0
+  fetchData()
+}
+
+// daterange 點了起日後，離起日超過上限的日期鎖住；選完或關閉就解除。
+const pickedRangeStart = ref<Date | null>(null)
+function onRangeCalendarChange(dates: [Date, Date | null] | null) {
+  pickedRangeStart.value = dates && !dates[1] ? dates[0] : null
+}
+function onRangePickerVisible(open: boolean) {
+  if (!open) pickedRangeStart.value = null
+}
+function isRangeDateDisabled(date: Date): boolean {
+  return isBeyondHistoryRange(date, pickedRangeStart.value)
+}
+
+// 手動輸入仍可能繞過 disabled-date：超過上限就提示並退回上一個區間，不打 API。
+let revertingRange = false
+watch(historyRange, (range, prev) => {
+  if (revertingRange) {
+    revertingRange = false
+    return
+  }
+  if (scope.value !== 'history') return
+  if (range && exceedsHistoryRange(range)) {
+    ElMessage.warning(`查詢區間最多 ${MAX_HISTORY_RANGE_DAYS} 天，請縮短日期範圍`)
+    revertingRange = true
+    historyRange.value = prev
+    return
+  }
+  fetchData()
 })
 
 // ── 搜尋 + 狀態篩選（前端過濾，不重打 API） ───────────────────────────────
@@ -155,7 +216,7 @@ const filterGroups = computed<FilterGroup[]>(() => [
     key: 'status',
     label: '狀態',
     options: [
-      { value: 'active', label: `待確認（${statusCounts.value.active}）` },
+      { value: 'active', label: `待交接（${statusCounts.value.active}）` },
       { value: 'completed', label: `已交接（${statusCounts.value.completed}）` },
       { value: 'cancelled', label: `已取消（${statusCounts.value.cancelled}）` },
       { value: 'expired', label: `已過期（${statusCounts.value.expired}）` },
@@ -214,6 +275,14 @@ const overrideNote = ref('')
 const verifying = ref(false)
 const codeInputRef = ref<{ focus: () => void } | null>(null)
 const successResult = reactive<{ show: boolean; via: string }>({ show: false, via: '' })
+
+// 人工核對常用說明：點了附加到說明欄（以「；」串接，同一句不重複）。
+const OVERRIDE_NOTE_CHIPS = ['已電話確認家長', '證件相符', '熟識代理人', '與照片相符']
+function appendNoteChip(text: string) {
+  const current = overrideNote.value.trim()
+  if (current.split('；').map((p) => p.trim()).includes(text)) return
+  overrideNote.value = current ? `${current}；${text}` : text
+}
 
 const remainingAttempts = computed(() => {
   if (!verifyTarget.value) return MAX_CODE_ATTEMPTS
@@ -280,8 +349,8 @@ async function submitOverride() {
   try {
     await ElMessageBox.confirm(
       `確定人工核對 ${target.person_name}（${target.person_relation}）的證件後放行接送？`,
-      '確認人工核銷',
-      { confirmButtonText: '確定核銷', cancelButtonText: '返回', type: 'warning' },
+      '人工核對後交接',
+      { confirmButtonText: '確認交接', cancelButtonText: '返回', type: 'warning' },
     )
   } catch {
     return
@@ -315,20 +384,31 @@ onMounted(fetchData)
         <el-radio-button value="upcoming">即將到來</el-radio-button>
         <el-radio-button value="history">歷史</el-radio-button>
       </el-radio-group>
-      <el-date-picker
-        v-if="scope === 'history'"
-        v-model="historyRange"
-        type="daterange"
-        value-format="YYYY-MM-DD"
-        start-placeholder="起日"
-        end-placeholder="迄日"
-        class="history-range"
-      />
+      <template v-if="scope === 'history'">
+        <el-date-picker
+          v-model="historyRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          start-placeholder="起日"
+          end-placeholder="迄日"
+          :disabled-date="isRangeDateDisabled"
+          class="history-range"
+          @calendar-change="onRangeCalendarChange"
+          @visible-change="onRangePickerVisible"
+        />
+        <span class="range-hint" data-test="range-hint">一次最多查 {{ MAX_HISTORY_RANGE_DAYS }} 天</span>
+      </template>
+      <div v-else-if="scope === 'today'" class="day-nav">
+        <el-button text size="small" aria-label="前一天" data-test="day-prev" @click="shiftDay(-1)">‹</el-button>
+        <span class="scope-day" data-test="day-label">{{ dayLabel }}</span>
+        <el-button text size="small" aria-label="後一天" data-test="day-next" @click="shiftDay(1)">›</el-button>
+        <el-button v-if="dayOffset !== 0" link type="primary" size="small" data-test="day-reset" @click="resetDay">回到今天</el-button>
+      </div>
       <span v-else class="scope-day">{{ formatPickupDate(taipeiToday()) }}</span>
       <span class="scope-count" data-test="scope-count">
-        {{ scope === 'today' ? '今天' : scope === 'upcoming' ? '即將到來' : '這段期間' }}
+        {{ scopeLabel }}
         <strong>{{ items.length }}</strong> 筆
-        <template v-if="todoCount">· <strong>{{ todoCount }}</strong> 筆待確認</template>
+        <template v-if="todoCount">· <strong>{{ todoCount }}</strong> 筆待交接</template>
       </span>
     </div>
 
@@ -349,7 +429,7 @@ onMounted(fetchData)
       :columns="CARD_COLUMNS"
       row-key="id"
       :loading="loading"
-      empty-text="今天沒有臨時接送授權；家長在 LINE 家長端建立後會立刻出現在這裡"
+      :empty-text="`${emptyText}；家長在 LINE 家長端建立後會立刻出現在這裡`"
     >
       <template #title="{ item }">
         <div class="card-title">
@@ -458,7 +538,7 @@ onMounted(fetchData)
         </template>
       </el-table-column>
       <template #empty>
-        <span>{{ scope === 'today' ? '今天沒有臨時接送授權' : '這段期間沒有資料' }}</span>
+        <span>{{ emptyText }}</span>
       </template>
     </el-table>
 
@@ -522,6 +602,16 @@ onMounted(fetchData)
             <template v-else>
               <div class="lbl">人工核對證件</div>
               <p class="hint">請核對接送人證件與家長授權資料一致。說明會寫入稽核紀錄，交接完成後不可撤銷。</p>
+              <div class="note-chips" role="group" aria-label="常用說明">
+                <el-button
+                  v-for="chip in OVERRIDE_NOTE_CHIPS"
+                  :key="chip"
+                  size="small"
+                  round
+                  data-test="note-chip"
+                  @click="appendNoteChip(chip)"
+                >{{ chip }}</el-button>
+              </div>
               <el-input
                 v-model="overrideNote"
                 type="textarea"
@@ -594,6 +684,24 @@ onMounted(fetchData)
 }
 .history-range {
   max-width: 280px;
+}
+.range-hint {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+.day-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.note-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.note-chips .el-button + .el-button {
+  margin-left: 0;
 }
 
 .card-title {

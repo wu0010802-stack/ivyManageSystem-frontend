@@ -117,7 +117,7 @@ describe('PickupAuthorizationsView 手機任務卡片', () => {
     expect(wrapper2.findAll('[data-test="pickup-card-verify"]')).toHaveLength(0)
   })
 
-  it('卡片確認交接鈕開啟與桌機同一個核銷對話框', async () => {
+  it('卡片確認交接鈕開啟與桌機同一個確認交接對話框', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -126,7 +126,7 @@ describe('PickupAuthorizationsView 手機任務卡片', () => {
     expect(wrapper.findComponent({ name: 'ElDialog' }).props('modelValue')).toBe(true)
   })
 
-  it('手機：核銷對話框改滿版，鍵盤彈出不會擠掉動作列', async () => {
+  it('手機：確認交接對話框改滿版，鍵盤彈出不會擠掉動作列', async () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.findComponent({ name: 'ElDialog' }).props('fullscreen')).toBe(true)
