@@ -35,6 +35,62 @@ export function emptyDraft(): SurveyDraft {
   }
 }
 
+/** 後端 `GET /surveys/{id}` 中表單用得到的欄位（題目另帶原題 id，表單不需要）。 */
+export interface SurveySource {
+  title: string
+  description: string | null
+  event_date: string | null
+  location: string | null
+  fee_note: string | null
+  audience_type: 'all' | 'classrooms'
+  classroom_ids: number[] | null
+  reply_deadline: string
+  questions: (QuestionDraft & { id?: number })[] | null
+}
+
+/** 後端調查詳情 → 表單草稿（題目只取表單欄位，不帶原題 id）。 */
+export function draftFromSurvey(src: SurveySource): SurveyDraft {
+  return {
+    title: src.title,
+    description: src.description ?? '',
+    event_date: src.event_date ?? null,
+    location: src.location ?? '',
+    fee_note: src.fee_note ?? '',
+    audience_type: src.audience_type,
+    classroom_ids: src.classroom_ids ?? [],
+    reply_deadline: src.reply_deadline,
+    questions: (src.questions ?? []).map(q => ({
+      question_text: q.question_text,
+      question_type: q.question_type,
+      options: q.options ?? null,
+      is_required: q.is_required,
+      sort_order: q.sort_order,
+    })),
+  }
+}
+
+const SURVEY_TITLE_MAX = 100
+const COPY_TITLE_SUFFIX = '（複本）'
+
+/**
+ * 複製調查：沿用說明、地點、對象與題目，標題加「（複本）」，活動日期與回覆截止日
+ * 清空要重填（複製的多半是明年同一場活動，沿用舊日期只會存出已過期的截止日）。
+ * 原班級已不在目前班級清單（如去年的班）就不帶入，否則畫面勾不到卻仍算「已選」；
+ * 清單載入失敗（null）時無從比對，照原樣保留交給後端驗證。
+ */
+export function copyDraftFrom(src: SurveySource, availableClassroomIds: number[] | null): SurveyDraft {
+  const base = draftFromSurvey(src)
+  return {
+    ...base,
+    title: base.title.slice(0, SURVEY_TITLE_MAX - COPY_TITLE_SUFFIX.length) + COPY_TITLE_SUFFIX,
+    event_date: null,
+    reply_deadline: '',
+    classroom_ids: availableClassroomIds === null
+      ? base.classroom_ids
+      : base.classroom_ids.filter(id => availableClassroomIds.includes(id)),
+  }
+}
+
 /**
  * 草稿是否有未儲存變更。題目為巢狀結構，用序列化整體比對而非淺比較——
  * 淺比較會漏掉「只改了某題標題」這種最常見的編輯。

@@ -65,6 +65,10 @@ function surveyFixture(overrides: Record<string, unknown> = {}) {
     reply_deadline: '2026-09-20',
     status: 'published',
     published_at: '2026-09-10T09:00:00',
+    created_by_name: '林園長',
+    created_at: '2026-09-09T16:20:00',
+    last_reminded_at: null,
+    reminded_parent_count: 0,
     questions: [
       { id: 101, question_text: '搭乘遊覽車', question_type: 'single_choice', options: ['是', '否'], is_required: true, sort_order: 0 },
       { id: 102, question_text: '隨行家長人數', question_type: 'number', options: null, is_required: false, sort_order: 1 },
@@ -123,7 +127,7 @@ describe('SurveyDetailView', () => {
     await flushPromises()
 
     expect(w.find('[data-test="survey-status"]').text()).toBe('進行中')
-    expect(headerButtons(w)).toEqual(['編輯', '一鍵催覆', '結束調查', '匯出 Excel'])
+    expect(headerButtons(w)).toEqual(['編輯', '一鍵催覆', '結束調查', '複製', '匯出 Excel'])
     expect(w.find('[data-test="action-remind"]').attributes('disabled')).toBeUndefined()
     expect(w.text()).toContain('剩 5 天')
     expect(w.find('[data-test="survey-meta"]').text()).toContain('2 個班級：櫻花、天堂鳥')
@@ -196,7 +200,7 @@ describe('SurveyDetailView', () => {
     await flushPromises()
 
     expect(w.find('[data-test="survey-status"]').text()).toBe('草稿')
-    expect(headerButtons(w)).toEqual(['刪除草稿', '編輯', '發布並推播'])
+    expect(headerButtons(w)).toEqual(['刪除草稿', '複製', '編輯', '發布並推播'])
     expect(w.find('[data-test="action-remind"]').exists()).toBe(false)
     expect(w.find('[data-test="action-export"]').exists()).toBe(false)
     expect(w.find('.el-tabs__item.is-active').text()).toContain('題目')
@@ -252,7 +256,7 @@ describe('SurveyDetailView', () => {
     await flushPromises()
 
     expect(w.find('[data-test="survey-status"]').text()).toBe('已結束')
-    expect(headerButtons(w)).toEqual(['匯出 Excel'])
+    expect(headerButtons(w)).toEqual(['複製', '匯出 Excel'])
 
     await w.find('[data-test="action-export"]').trigger('click')
     await flushPromises()
@@ -298,5 +302,97 @@ describe('SurveyDetailView', () => {
     expect(table.findAll('.el-table__body tr')).toHaveLength(1)
     expect(table.findAll('.el-table__body tr')[0].text()).toContain('乙')
     w.unmount()
+  })
+
+  describe('第二批：建立者、催覆紀錄、單班催覆、複製', () => {
+    it('資訊列顯示建立者與建立時間；沒催過顯示「尚未催覆」', async () => {
+      setup()
+      const w = mountView()
+      await flushPromises()
+
+      const meta = w.find('[data-test="survey-meta"]').text()
+      expect(meta).toContain('林園長')
+      expect(meta).toContain('2026-09-09 16:20')
+      expect(meta).toContain('尚未催覆')
+      w.unmount()
+    })
+
+    it('催過的調查顯示上次催覆時間與累計推播人次；建立者查無顯示「—」', async () => {
+      setup(surveyFixture({
+        created_by_name: null, last_reminded_at: '2026-09-12T14:30:00', reminded_parent_count: 23,
+      }))
+      const w = mountView()
+      await flushPromises()
+
+      const meta = w.find('[data-test="survey-meta"]')
+      expect(meta.text()).toContain('2026-09-12 14:30・累計推播 23 人次')
+      expect(meta.find('[data-test="meta-creator"]').text()).toBe('—')
+      w.unmount()
+    })
+
+    it('各班列「催覆此班」：確認後只催該班，並重新載入調查以更新上次催覆', async () => {
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+      remindSurveyMock.mockResolvedValue({ data: { sent: 2 } })
+      setup()
+      const w = mountView()
+      await flushPromises()
+
+      const rows = w.findAll('[data-test="classroom-progress"] .el-table__body tr')
+      // 天堂鳥（12）未回覆 8 排第一、櫻花（11）未回覆 2 排第二
+      await rows[0].find('[data-test="remind-classroom"]').trigger('click')
+      await flushPromises()
+
+      expect(confirmSpy.mock.calls[0][0]).toContain('天堂鳥')
+      expect(remindSurveyMock).toHaveBeenCalledWith(7, [12])
+      expect(getSurveyMock).toHaveBeenCalledTimes(2)
+      confirmSpy.mockRestore()
+      w.unmount()
+    })
+
+    it('「催覆此班」只在進行中出現；全班已回覆的列停用', async () => {
+      setup(surveyFixture(), statsFixture({
+        by_classroom: [
+          { classroom_id: 11, classroom_name: '櫻花', replied: 20, total: 20, attending: 15 },
+          { classroom_id: 12, classroom_name: '天堂鳥', replied: 12, total: 20, attending: 9 },
+        ],
+      }))
+      const w = mountView()
+      await flushPromises()
+      const buttons = w.findAll('[data-test="remind-classroom"]')
+      expect(buttons).toHaveLength(2)
+      expect(buttons[0].attributes('disabled')).toBeUndefined() // 天堂鳥
+      expect(buttons[1].attributes('disabled')).toBeDefined() // 櫻花全回覆
+      w.unmount()
+
+      setup(surveyFixture({ reply_deadline: '2026-09-10' }))
+      const expired = mountView()
+      await flushPromises()
+      expect(expired.findAll('[data-test="remind-classroom"]')).toHaveLength(0)
+      expired.unmount()
+    })
+
+    it('一鍵催覆成功後同樣重新載入調查', async () => {
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+      remindSurveyMock.mockResolvedValue({ data: { sent: 3 } })
+      setup()
+      const w = mountView()
+      await flushPromises()
+
+      await w.find('[data-test="action-remind"]').trigger('click')
+      await flushPromises()
+      expect(remindSurveyMock).toHaveBeenCalledWith(7)
+      expect(getSurveyMock).toHaveBeenCalledTimes(2)
+      confirmSpy.mockRestore()
+      w.unmount()
+    })
+
+    it('複製：進建立頁並帶 copy 參數', async () => {
+      setup()
+      const w = mountView()
+      await flushPromises()
+      await w.find('[data-test="action-copy"]').trigger('click')
+      expect(pushMock).toHaveBeenCalledWith({ name: 'survey-new', query: { copy: '7' } })
+      w.unmount()
+    })
   })
 })

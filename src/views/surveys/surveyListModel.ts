@@ -16,6 +16,8 @@ export interface SurveyListRow {
   status: string
   replied_count: number
   denominator: number
+  /** 指定班級名稱（全園為空陣列；舊回應可能缺欄位）。 */
+  classroom_names?: string[]
 }
 
 /** 顯示用狀態：草稿／進行中／已截止（published 但過了截止日）／已結束 */
@@ -69,6 +71,18 @@ export function deadlineHint(row: Pick<SurveyListRow, 'status' | 'reply_deadline
   if (days === 0) return '今天截止'
   if (days > 0) return `剩 ${days} 天`
   return `已過 ${-days} 天`
+}
+
+/** 副標最多直接列出幾個班名，其餘以「等 N 班」帶過。 */
+const AUDIENCE_NAME_LIMIT = 2
+
+/** 列表「調查」欄副標：全園／班名（超過兩班只列前兩班並帶總班數）。 */
+export function audienceSummary(row: Pick<SurveyListRow, 'audience_type' | 'classroom_names'>): string {
+  if (row.audience_type === 'all') return '全園'
+  const names = row.classroom_names ?? []
+  if (!names.length) return '指定班級'
+  if (names.length <= AUDIENCE_NAME_LIMIT) return names.join('、')
+  return `${names.slice(0, AUDIENCE_NAME_LIMIT).join('、')} 等 ${names.length} 班`
 }
 
 /** 回覆率整數百分比；分母為 0 時回 0（避免 NaN 進畫面）。 */

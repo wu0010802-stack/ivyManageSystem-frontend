@@ -25,6 +25,7 @@ import {
   SURVEY_STATUS_LABELS,
   SURVEY_STATUS_ORDER,
   SURVEY_STATUS_TAG,
+  audienceSummary,
   countByStatus,
   deadlineHint,
   deriveSurveyStatus,
@@ -115,6 +116,9 @@ function goEdit(row: SurveyListRow) {
 }
 function goCreate() {
   router.push({ name: 'survey-new' })
+}
+function goCopy(row: SurveyListRow) {
+  router.push({ name: 'survey-new', query: { copy: String(row.id) } })
 }
 
 async function onPublish(row: SurveyListRow) {
@@ -241,6 +245,7 @@ onMounted(fetchData)
           v-else-if="statusOf(asRow(item)) !== 'closed'"
           @click.stop="onClose(asRow(item))"
         >結束調查</el-button>
+        <el-button @click.stop="goCopy(asRow(item))">複製</el-button>
       </template>
     </AdminListCards>
 
@@ -274,7 +279,7 @@ onMounted(fetchData)
       <el-table-column label="調查" min-width="240">
         <template #default="{ row }">
           <div class="cell-title">{{ row.title }}</div>
-          <div class="cell-sub">{{ audienceLabel(row) }}</div>
+          <div class="cell-sub">{{ audienceSummary(row) }}</div>
         </template>
       </el-table-column>
       <el-table-column label="活動日" width="120">
@@ -318,12 +323,13 @@ onMounted(fetchData)
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column v-if="canWrite" label="" width="230" align="right">
+      <el-table-column v-if="canWrite" label="" width="280" align="right">
         <template #default="{ row }">
           <div class="row-actions" @click.stop>
             <template v-if="statusOf(row) === 'draft'">
               <el-button size="small" @click="goEdit(row)">編輯</el-button>
               <el-button size="small" type="primary" @click="onPublish(row)">發布</el-button>
+              <el-button size="small" link type="primary" @click="goCopy(row)">複製</el-button>
               <el-button size="small" link type="danger" @click="onDelete(row)">刪除</el-button>
             </template>
             <template v-else-if="statusOf(row) === 'open'">
@@ -333,6 +339,7 @@ onMounted(fetchData)
             <template v-else-if="statusOf(row) === 'expired'">
               <el-button size="small" type="primary" plain @click="onClose(row)">結束調查</el-button>
             </template>
+            <el-button v-if="statusOf(row) !== 'draft'" size="small" link type="primary" @click="goCopy(row)">複製</el-button>
           </div>
         </template>
       </el-table-column>

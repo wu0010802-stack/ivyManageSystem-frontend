@@ -51,6 +51,9 @@ function row(overrides: Record<string, unknown> = {}) {
     status: 'published',
     replied_count: 10,
     denominator: 40,
+    classroom_names: [],
+    last_reminded_at: null,
+    reminded_parent_count: 0,
     ...overrides,
   }
 }
@@ -112,16 +115,16 @@ describe('SurveyListView', () => {
     w.unmount()
   })
 
-  it('操作依狀態出現：草稿＝編輯／發布／刪除、進行中＝編輯／結束、已截止＝結束、已結束無動作', async () => {
+  it('操作依狀態出現：草稿＝編輯／發布／刪除、進行中＝編輯／結束、已截止＝結束，各狀態都可複製', async () => {
     const w = mountView()
     await flushPromises()
 
     const rows = w.findAll('.el-table__body .survey-row')
     const buttonsOf = (i: number) => rows[i].findAll('button').map((b) => b.text())
-    expect(buttonsOf(0)).toEqual(['編輯', '結束調查'])
-    expect(buttonsOf(1)).toEqual(['結束調查'])
-    expect(buttonsOf(2)).toEqual(['編輯', '發布', '刪除'])
-    expect(buttonsOf(3)).toEqual([])
+    expect(buttonsOf(0)).toEqual(['編輯', '結束調查', '複製'])
+    expect(buttonsOf(1)).toEqual(['結束調查', '複製'])
+    expect(buttonsOf(2)).toEqual(['編輯', '發布', '複製', '刪除'])
+    expect(buttonsOf(3)).toEqual(['複製'])
     w.unmount()
   })
 
@@ -207,10 +210,35 @@ describe('SurveyListView', () => {
     expect(cards).toHaveLength(4)
     expect(cards[0].text()).toContain('秋季戶外教學')
     expect(cards[0].text()).toContain('進行中')
-    expect(cards[2].findAll('button').map((b) => b.text())).toEqual(['編輯', '發布'])
+    expect(cards[2].findAll('button').map((b) => b.text())).toEqual(['編輯', '發布', '複製'])
 
     await cards[0].trigger('click')
     expect(pushMock).toHaveBeenCalledWith({ name: 'survey-detail', params: { id: 4 } })
+    w.unmount()
+  })
+
+  it('「調查」欄副標顯示指定班級名稱，超過兩班帶總班數；全園顯示「全園」', async () => {
+    listSurveysMock.mockResolvedValue({ data: { items: [
+      row({ id: 4, title: '秋季戶外教學', audience_type: 'classrooms', classroom_names: ['大班', '中一班', '中二班', '小班'] }),
+      row({ id: 3, title: '親子運動會', reply_deadline: '2026-09-25', audience_type: 'all' }),
+    ] } })
+    const w = mountView()
+    await flushPromises()
+
+    const texts = rowTexts(w)
+    expect(texts[0]).toContain('大班、中一班 等 4 班')
+    expect(texts[1]).toContain('全園')
+    w.unmount()
+  })
+
+  it('複製：進建立頁並帶 copy 參數，不觸發點列進詳情', async () => {
+    const w = mountView()
+    await flushPromises()
+
+    const closedRow = w.findAll('.el-table__body .survey-row')[3]
+    await closedRow.findAll('button').find((b) => b.text() === '複製')!.trigger('click')
+    expect(pushMock).toHaveBeenCalledTimes(1)
+    expect(pushMock).toHaveBeenCalledWith({ name: 'survey-new', query: { copy: '1' } })
     w.unmount()
   })
 })
