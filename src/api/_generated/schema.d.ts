@@ -25120,6 +25120,10 @@ export interface components {
              * @default false
              */
             address_stale: boolean;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Contacts */
+            contacts?: components["schemas"]["BusStopContactOut"][];
             /** Eta Planned */
             eta_planned?: string | null;
             /** Lat */
@@ -29063,6 +29067,8 @@ export interface components {
             depart_time_planned?: string | null;
             /** Direction */
             direction: string;
+            /** End Time Estimated */
+            end_time_estimated?: string | null;
             /** Id */
             id: number;
             /** Last Lat */
