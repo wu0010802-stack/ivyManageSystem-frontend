@@ -129,7 +129,11 @@ const emptyText = computed(() =>
 const items = ref<PickupAuth[]>([])
 const loading = ref(false)
 
+// 連點切日／切範圍時只採用最後一次請求的結果，避免較慢的舊回應蓋掉新的一天。
+let fetchSeq = 0
+
 async function fetchData() {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const params: Record<string, string> = {}
@@ -145,11 +149,12 @@ async function fetchData() {
     }
     // 今天：不帶日期參數，沿用後端「無日期參數即今日」的預設。
     const { data } = await listPickupAuthorizations(params)
+    if (seq !== fetchSeq) return
     items.value = (data as { items?: PickupAuth[] })?.items || []
   } catch {
-    ElMessage.error('載入失敗')
+    if (seq === fetchSeq) ElMessage.error('載入失敗')
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 

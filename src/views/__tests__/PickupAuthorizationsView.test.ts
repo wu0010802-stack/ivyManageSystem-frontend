@@ -303,6 +303,26 @@ describe('PickupAuthorizationsView (admin)', () => {
       expect(wrapper.find('[data-test="day-label"]').text()).toBe('今天')
     })
 
+    it('連點切日時只採用最後一次查詢的結果，較慢的舊回應不會蓋掉新的一天', async () => {
+      const wrapper = await mountView()
+      let resolveFirst: (v: unknown) => void = () => {}
+      let resolveSecond: (v: unknown) => void = () => {}
+      mockList
+        .mockImplementationOnce(() => new Promise((r) => { resolveFirst = r }))
+        .mockImplementationOnce(() => new Promise((r) => { resolveSecond = r }))
+
+      await wrapper.find('[data-test="day-prev"]').trigger('click') // 8/10（慢）
+      await wrapper.find('[data-test="day-prev"]').trigger('click') // 8/9（快）
+      resolveSecond({ data: { items: [{ ...SAMPLE_ITEM, id: 9, student_name: '前天的學生' }] } })
+      await flushPromises()
+      resolveFirst({ data: { items: [{ ...SAMPLE_ITEM, id: 8, student_name: '昨天的學生' }] } })
+      await flushPromises()
+
+      expect(wrapper.find('[data-test="day-label"]').text()).toContain('8/9')
+      expect(wrapper.text()).toContain('前天的學生')
+      expect(wrapper.text()).not.toContain('昨天的學生')
+    })
+
     it('人工核對說明 chip：點了附加到說明欄，重複點同一個不重複附加', async () => {
       await mountView()
       await openOverride()
