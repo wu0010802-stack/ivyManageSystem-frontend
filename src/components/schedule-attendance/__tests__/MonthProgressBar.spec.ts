@@ -41,12 +41,29 @@ describe('MonthProgressBar', () => {
     const wrapper = mountBar()
     await flushPromises()
     expect(api.grid).toHaveBeenCalledWith({ start_date: '2026-09-01', end_date: '2026-09-30' })
-    expect(wrapper.find('[data-test="progress-schedule"]').text()).toContain('2 人日未排班')
+    expect(wrapper.find('[data-test="progress-schedule"]').text()).toContain('2 人日用預設工時')
     expect(wrapper.find('[data-test="progress-import"]').text()).toContain('已匯入至 9/16')
-    expect(wrapper.find('[data-test="progress-issues"]').text()).toContain('1 格待處理')
+    expect(wrapper.find('[data-test="progress-issues"]').text()).toContain('本月 1 格待處理')
+    // 匯出月報前的提醒要用同一份數字（9/17、9/18 是到昨天為止沒匯入的工作日）
+    expect(wrapper.emitted('summary')!.at(-1)).toEqual([{ month: '2026-09-01', issues: 1, missingImportDays: 2 }])
     await wrapper.find('[data-test="progress-issues"]').trigger('click')
     expect(wrapper.emitted('show-issues')).toHaveLength(1)
     expect(wrapper.findComponent(RouterLinkStub).props('to')).toBe('/salary/settle')
+  })
+
+  it('整天未匯入的「資料待補」不算待處理；「已匯入至」之前的缺口要寫出來', async () => {
+    const NONE = { status: 'data_incomplete' as const, punch_in: null, punch_out: null }
+    api.grid.mockResolvedValue({
+      data: grid({
+        today: '2026-09-21',
+        days: WEEK.map((d, i) => day(d, { import_covered: i !== 1 })), // 9/15 整天沒匯入
+        cells: [cell(1, WEEK[1], { actual: NONE }), cell(2, WEEK[0], { actual: NONE })],
+      }),
+    })
+    const wrapper = mountBar()
+    await flushPromises()
+    expect(wrapper.find('[data-test="progress-import"]').text()).toContain('已匯入至 9/20，缺 9/15')
+    expect(wrapper.find('[data-test="progress-issues"]').text()).toContain('本月 1 格待處理') // 只算 9/14 那格
   })
 
   it('只有排班與薪資讀取權限：只看得到排班與交薪資兩步', async () => {
@@ -97,14 +114,14 @@ describe('MonthProgressBar', () => {
     const text = wrapper.text()
     expect(text).not.toContain('已排滿')
     expect(text).not.toContain('0 格待處理')
-    expect(text).not.toContain('人日未排班')
+    expect(text).not.toContain('人日用預設工時')
     expect(wrapper.find('[data-test="progress-error"]').text()).toContain('伺服器錯誤')
     expect(wrapper.find('[data-test="progress-issues"]').text()).toContain('—')
     await wrapper.find('[data-test="progress-retry"]').trigger('click')
     await flushPromises()
     expect(api.grid).toHaveBeenCalledTimes(2)
     expect(wrapper.find('[data-test="progress-error"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="progress-schedule"]').text()).toContain('2 人日未排班')
+    expect(wrapper.find('[data-test="progress-schedule"]').text()).toContain('2 人日用預設工時')
   })
 
   it('關閉老師確認抽屜時通知頁殼 changed', async () => {

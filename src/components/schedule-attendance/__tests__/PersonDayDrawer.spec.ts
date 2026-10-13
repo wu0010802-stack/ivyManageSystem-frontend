@@ -14,13 +14,13 @@ vi.mock('element-plus', async (orig) => ({ ...(await orig<typeof import('element
 
 const CALLER = grid().caller
 
-function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]; caller: typeof CALLER; weeklyShiftId: number | null; employee: GridEmployee }> = {}) {
+function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]; caller: typeof CALLER; weeklyShiftId: number | null; employee: GridEmployee; importCovered: boolean }> = {}) {
   return mount(PersonDayDrawer, {
     props: {
       modelValue: true,
       cell: target,
       employee: extra.employee ?? employee(target.employee_id, target.employee_id === 1 ? '林班導' : '王副導'),
-      day: day(target.date),
+      day: day(target.date, { import_covered: extra.importCovered ?? true }),
       groupLabel: '滿天星',
       shiftTypes: SHIFTS,
       sameDayCells: extra.sameDayCells ?? [target],
@@ -225,6 +225,16 @@ describe('PersonDayDrawer', () => {
       await flushPromises()
       expect(box.confirm).not.toHaveBeenCalled()
     })
+  })
+
+  it('整天未匯入的日子：判定寫「未匯入」（與格子一致），匯入這天打卡是主要動作', async () => {
+    const wrapper = mountDrawer(
+      cell(1, W1, { actual: { status: 'data_incomplete', punch_in: null, punch_out: null } }),
+      { importCovered: false },
+    )
+    await flushPromises()
+    expect(wrapper.find('[data-test="pdd-actual"]').text()).toContain('未匯入')
+    expect(wrapper.find('[data-test="pdd-import"]').classes()).toContain('el-button--primary')
   })
 
   it('本人的已打卡格子：沒有可用動作並說明原因；「看他整月」帶出人與日', async () => {

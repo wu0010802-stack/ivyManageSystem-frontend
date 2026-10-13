@@ -49,8 +49,10 @@
       :changed-ids="changedIds"
       :coverage="coverage"
       :mobile="isMobile"
+      :can-import="caller.can_edit_attendance"
       @select="openCell"
       @weekly-change="state.setWeekly"
+      @import-punches="emit('import-punches')"
     />
 
     <PersonDayDrawer
@@ -138,6 +140,7 @@ import {
   coverageInputs,
   isIssue,
   mondayOf,
+  uncoveredDates,
   visibleDays,
   type BatchUnit,
   type GridFilter,
@@ -162,6 +165,8 @@ const emit = defineEmits<{
   'update:filter': [value: GridFilter]
   records: [employeeId: number, date: string]
   import: [context: ImportContext]
+  /** 整週都還沒匯入時的空狀態入口：開整月匯入（不帶人員） */
+  'import-punches': []
   changed: []
 }>()
 
@@ -213,7 +218,9 @@ const shiftNames = computed<Record<number, string>>(() =>
 )
 const issueCount = computed(() => {
   const g = gridData.value
-  return g ? g.cells.filter((c) => isIssue(c, g.today)).length : 0
+  if (!g) return 0
+  const uncovered = uncoveredDates(g.days)
+  return g.cells.filter((c) => isIssue(c, g.today, uncovered)).length
 })
 const coverage = computed(() => {
   const g = gridData.value

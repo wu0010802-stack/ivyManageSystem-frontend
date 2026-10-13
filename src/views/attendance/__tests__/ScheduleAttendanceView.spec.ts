@@ -2,6 +2,7 @@ vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: vi.f
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
+import { downloadFile } from '@/utils/download'
 
 const routerReplace = vi.hoisted(() => vi.fn())
 vi.mock('vue-router', () => ({
@@ -41,8 +42,10 @@ vi.mock('@/utils/download', () => ({
   downloadFile: vi.fn().mockResolvedValue(undefined),
 }))
 
+const msgBoxConfirm = vi.hoisted(() => vi.fn())
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessageBox: { confirm: msgBoxConfirm },
   ElTabs: { template: '<div class="el-tabs"><slot /></div>' },
   ElTabPane: { template: '<div class="el-tab-pane"><slot /></div>', props: ['label', 'name'] },
 }))
@@ -93,7 +96,7 @@ const ScheduleGridPanelStub = {
   template: '<div class="grid-panel-stub" />',
 }
 const rotationMounts = { count: 0 }
-const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['date', 'revision', 'mobile'], emits: ['show-issues', 'changed'], template: '<div class="month-progress-stub" />' }
+const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['date', 'revision', 'mobile'], emits: ['show-issues', 'changed', 'summary'], template: '<div class="month-progress-stub" />' }
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
   MonthProgressBar: MonthProgressBarStub,
@@ -599,6 +602,39 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     await flushPromises()
     expect(panel().props('date')).toBe('2026-10-12')
     expect(routerReplace).toHaveBeenLastCalledWith({ query: { date: '2026-10-12' } })
+    wrapper.unmount()
+  })
+
+  it('匯出月報：本月還有待處理或未匯入時先提醒；選「先去處理」就切到只看待處理，不匯出', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+    await flushPromises()
+    const bar = wrapper.findComponent(MonthProgressBarStub)
+    const header = wrapper.findComponent(WorkspaceHeaderStub)
+    vi.mocked(downloadFile).mockClear()
+
+    bar.vm.$emit('summary', { month: '2026-10-01', issues: 3, missingImportDays: 2 })
+    msgBoxConfirm.mockRejectedValueOnce('cancel')
+    header.vm.$emit('export')
+    await flushPromises()
+    expect(msgBoxConfirm).toHaveBeenCalledWith(expect.stringMatching(/3 格待處理.*2 天打卡還沒匯入/), '匯出 10 月月報', expect.objectContaining({ confirmButtonText: '仍要匯出', cancelButtonText: '先去處理' }))
+    expect(downloadFile).not.toHaveBeenCalled()
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('issues')
+
+    msgBoxConfirm.mockResolvedValueOnce('confirm')
+    header.vm.$emit('export')
+    await flushPromises()
+    expect(downloadFile).toHaveBeenCalledTimes(1)
+
+    // 都處理完：直接匯出不提醒；別月的統計不拿來當這個月的
+    msgBoxConfirm.mockClear()
+    bar.vm.$emit('summary', { month: '2026-10-01', issues: 0, missingImportDays: 0 })
+    header.vm.$emit('export')
+    await flushPromises()
+    bar.vm.$emit('summary', { month: '2026-09-01', issues: 9, missingImportDays: 0 })
+    header.vm.$emit('export')
+    await flushPromises()
+    expect(msgBoxConfirm).not.toHaveBeenCalled()
+    expect(downloadFile).toHaveBeenCalledTimes(3)
     wrapper.unmount()
   })
 

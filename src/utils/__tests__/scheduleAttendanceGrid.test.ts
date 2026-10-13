@@ -8,12 +8,14 @@ import {
   coverageInputs,
   findPairCell,
   indexCells,
+  importProgress,
   isIssue,
   mondayOf,
   monthRange,
   planText,
   planWeekChange,
   rowMatchesFilter,
+  uncoveredDates,
   visibleDays,
 } from '../scheduleAttendanceGrid'
 import { cell, day, employee, grid, W1, WEEK } from '@/components/schedule-attendance/__tests__/gridFixtures'
@@ -123,6 +125,47 @@ describe('篩選', () => {
     expect(visibleDays(days, quiet, true).map((d) => d.date)).toEqual(WEEK)
     expect(visibleDays(days, quiet, false).map((d) => d.date)).toEqual(WEEK.slice(0, 5))
     expect(visibleDays(days, quiet).map((d) => d.date)).toEqual(WEEK.slice(0, 5))
+  })
+})
+
+describe('整天未匯入打卡（不算待處理）', () => {
+  const NONE = { status: 'data_incomplete' as const, punch_in: null, punch_out: null }
+  const uncovered = uncoveredDates([day(WEEK[0], { import_covered: false }), day(WEEK[1]), day(WEEK[2], { import_covered: null })])
+
+  it('uncoveredDates 只收 import_covered 明確為 false 的日子（null＝沒有打卡權限，不算）', () => {
+    expect([...uncovered]).toEqual([WEEK[0]])
+  })
+
+  it('整天都沒匯入的「資料待補」不是待處理；當天有人被匯入就仍是（這個人不在匯入檔裡要人看）', () => {
+    expect(isIssue(cell(1, WEEK[0], { actual: NONE }), TODAY, uncovered)).toBe(false)
+    expect(isIssue(cell(1, WEEK[1], { actual: NONE }), TODAY, uncovered)).toBe(true)
+    expect(isIssue(cell(1, WEEK[0], { actual: { status: 'missing_punch', punch_in: `${WEEK[0]}T07:52:00` } }), TODAY, uncovered)).toBe(true)
+    expect(isIssue(cell(1, WEEK[0], { actual: NONE }), TODAY)).toBe(true) // 不給未匯入日＝舊行為
+    expect(rowMatchesFilter([cell(1, WEEK[0], { actual: NONE })], 'issues', TODAY, uncovered)).toBe(false)
+  })
+
+  it('格子顯示「未匯入」而不是「資料待補」', () => {
+    const shown = cellDisplay(cell(1, WEEK[0], { actual: NONE }), TODAY, uncovered)
+    expect(shown.state).toBe('awaiting_import')
+    expect(shown.verdict).toEqual({ label: '未匯入', tone: 'info' })
+    expect(cellDisplay(cell(1, WEEK[1], { actual: NONE }), TODAY, uncovered).verdict?.label).toBe('資料待補')
+    // 今天還沒過完：仍是「尚未打卡」，不因為今天還沒匯入就說未匯入
+    expect(cellDisplay(cell(1, TODAY, { actual: NONE }), TODAY, new Set([TODAY])).state).toBe('not_punched')
+  })
+
+  it('importProgress：最後匯入日、它之前的缺口、本月到昨天為止還沒匯入的工作日', () => {
+    const days = [
+      day('2026-09-21'), day('2026-09-22', { import_covered: false }), day('2026-09-23'),
+      day('2026-09-24', { import_covered: false }), day('2026-09-25', { import_covered: false }),
+      day('2026-09-26', { import_covered: false }), // 週六：不是工作日，不算缺
+      day('2026-09-28', { import_covered: false }), // 今天：還沒過完，不算缺
+    ]
+    expect(importProgress(days, '2026-09-28')).toEqual({
+      lastCovered: '2026-09-23',
+      gaps: ['2026-09-22'],
+      missingWorkdays: ['2026-09-22', '2026-09-24', '2026-09-25'],
+    })
+    expect(importProgress([day('2026-10-01', { import_covered: false })], '2026-10-13')).toEqual({ lastCovered: null, gaps: [], missingWorkdays: ['2026-10-01'] })
   })
 })
 

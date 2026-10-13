@@ -227,8 +227,8 @@ const verdict = computed(() => {
   const actual = cell?.actual
   if (!cell || !actual) return ''
   // R9：與格子同一套判定（今天的上班中／尚未打卡不能和格子不一致）
-  const shown = cellDisplay(cell, props.today)
-  if (shown.state === 'working' || shown.state === 'not_punched') return shown.verdict?.label ?? ''
+  const shown = cellDisplay(cell, props.today, props.day?.import_covered === false ? new Set([props.day.date]) : undefined)
+  if (shown.state === 'working' || shown.state === 'not_punched' || shown.state === 'awaiting_import') return shown.verdict?.label ?? ''
   const parts = [RECON_STATUS_LABELS[actual.status]]
   if (actual.late_minutes) parts.push(`遲到 ${actual.late_minutes} 分`)
   if (actual.early_leave_minutes) parts.push(`早退 ${actual.early_leave_minutes} 分`)

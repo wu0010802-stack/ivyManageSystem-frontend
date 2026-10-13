@@ -5,17 +5,17 @@
       <li class="month-progress__step" data-test="progress-schedule">
         <span class="month-progress__index">①</span>
         <span>排班</span>
-        <strong :class="{ 'month-progress__warn': unscheduled > 0 }">{{ loading ? '…' : loadError ? '—' : unscheduled > 0 ? `${unscheduled} 人日未排班` : '已排滿' }}</strong>
+        <strong :class="{ 'month-progress__warn': unscheduled > 0 }">{{ loading ? '…' : loadError ? '—' : unscheduled > 0 ? `${unscheduled} 人日用預設工時` : '已排滿' }}</strong>
       </li>
       <li v-if="canViewAttendance" class="month-progress__step" data-test="progress-import">
         <span class="month-progress__index">②</span>
         <span>匯入打卡</span>
-        <strong>{{ loading ? '…' : loadError ? '—' : coveredUntil ? `已匯入至 ${coveredUntil}` : '尚未匯入' }}</strong>
+        <strong :class="{ 'month-progress__warn': imports.gaps.length > 0 }">{{ loading ? '…' : loadError ? '—' : importText }}</strong>
       </li>
       <li v-if="canViewAttendance" class="month-progress__step">
         <span class="month-progress__index">③</span>
         <button type="button" class="month-progress__link" data-test="progress-issues" @click="emit('show-issues')">
-          核對 <strong :class="{ 'month-progress__warn': issues > 0 && !loadError }">{{ loading ? '…' : loadError ? '—' : `${issues} 格待處理` }}</strong>
+          核對 <strong :class="{ 'month-progress__warn': issues > 0 && !loadError }">{{ loading ? '…' : loadError ? '—' : `本月 ${issues} 格待處理` }}</strong>
         </button>
       </li>
       <li v-if="canConfirmRounds" class="month-progress__step">
@@ -43,7 +43,7 @@ import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { getScheduleAttendanceGrid } from '@/api/scheduleAttendance'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
-import { isIssue, monthRange, type GridOut } from '@/utils/scheduleAttendanceGrid'
+import { importProgress, isIssue, monthRange, uncoveredDates, type GridOut } from '@/utils/scheduleAttendanceGrid'
 
 const ConfirmationRoundBar = defineAsyncComponent(() => import('@/components/attendance/ConfirmationRoundBar.vue'))
 
@@ -54,7 +54,15 @@ const props = defineProps<{
   revision: number
   mobile?: boolean
 }>()
-const emit = defineEmits<{ 'show-issues': []; changed: [] }>()
+export interface MonthSummary {
+  /** 統計的是哪個月（月初 YYYY-MM-01）；頁面拿它比對，別月的統計不能拿來擋這個月 */
+  month: string
+  /** 本月待處理格數（與「只看待處理」同一個定義） */
+  issues: number
+  /** 到昨天為止還沒匯入打卡的工作日數 */
+  missingImportDays: number
+}
+const emit = defineEmits<{ 'show-issues': []; changed: []; summary: [value: MonthSummary] }>()
 
 const range = computed(() => monthRange(props.date))
 const monthLabel = computed(() => {
@@ -101,16 +109,29 @@ const unscheduled = computed(() => {
   ).length
 })
 
-const coveredUntil = computed(() => {
-  const covered = (data.value?.days ?? []).filter((d) => d.import_covered).map((d) => d.date)
-  if (!covered.length) return ''
-  const [, m, d] = covered[covered.length - 1].split('-').map(Number)
+const md = (iso: string) => {
+  const [, m, d] = iso.split('-').map(Number)
   return `${m}/${d}`
+}
+const imports = computed(() => (data.value ? importProgress(data.value.days, data.value.today) : { lastCovered: null, gaps: [], missingWorkdays: [] }))
+/** 「已匯入至 X」只看最後一天會掩蓋中間漏匯的日子，缺口要寫出來 */
+const importText = computed(() => {
+  const { lastCovered, gaps } = imports.value
+  if (!lastCovered) return '尚未匯入'
+  if (!gaps.length) return `已匯入至 ${md(lastCovered)}`
+  return `已匯入至 ${md(lastCovered)}，缺 ${gaps.length > 2 ? `${gaps.length} 天` : gaps.map(md).join('、')}`
 })
 
 const issues = computed(() => {
   const g = data.value
-  return g ? g.cells.filter((c) => isIssue(c, g.today)).length : 0
+  if (!g) return 0
+  const uncovered = uncoveredDates(g.days)
+  return g.cells.filter((c) => isIssue(c, g.today, uncovered)).length
+})
+
+// 匯出月報前的提醒用同一份數字；載入失敗不送（避免拿 0 當「都處理完了」）
+watch(data, (g) => {
+  if (g) emit('summary', { month: range.value.start, issues: issues.value, missingImportDays: imports.value.missingWorkdays.length })
 })
 </script>
 

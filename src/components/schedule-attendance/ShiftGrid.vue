@@ -1,6 +1,9 @@
 <template>
   <div class="shift-grid" :class="{ 'shift-grid--mobile': mobile }">
-    <p v-if="!visibleRows.length" class="shift-grid__empty" role="status">{{ emptyText }}</p>
+    <div v-if="!visibleRows.length" class="shift-grid__empty" role="status">
+      <p>{{ emptyText }}</p>
+      <el-button v-if="showImportHint && canImport" type="primary" data-test="grid-empty-import" @click="emit('import-punches')">匯入打卡紀錄</el-button>
+    </div>
 
     <!-- 桌機：列＝人（依班級分組），欄＝日；每格三行：計畫／實際／判定 -->
     <table v-else-if="!mobile" class="shift-grid__table" data-test="shift-grid-table">
@@ -154,6 +157,7 @@ import {
   type GridFilter,
   type GridGroup,
   type GridShiftType,
+  uncoveredDates,
 } from '@/utils/scheduleAttendanceGrid'
 
 const WEEKDAY = ['一', '二', '三', '四', '五', '六', '日']
@@ -174,10 +178,13 @@ const props = defineProps<{
   changedIds?: ReadonlySet<number>
   coverage?: DayCoverage[]
   mobile?: boolean
+  /** 可匯入打卡（ATTENDANCE_WRITE）：整週都還沒匯入時，空狀態給匯入入口 */
+  canImport?: boolean
 }>()
 const emit = defineEmits<{
   select: [employeeId: number, date: string]
   'weekly-change': [employeeId: number, shiftTypeId: number | null]
+  'import-punches': []
 }>()
 
 function pickDay(): string {
@@ -208,9 +215,14 @@ function isInactivePlan(employeeId: number, date: string): boolean {
   return id != null && inactiveIds.value.has(id)
 }
 
+/** 整天未匯入打卡的日子：格子寫「未匯入」、不算待處理 */
+const uncovered = computed(() => uncoveredDates(props.days))
+/** 本週到昨天為止還沒匯入的工作日數（空狀態說明用） */
+const missingImportDays = computed(() => props.days.filter((d) => d.is_workday && uncovered.value.has(d.date) && d.date < props.today).length)
+
 const displays = computed(() => {
   const map = new Map<string, CellDisplay>()
-  for (const [key, cell] of props.cells) map.set(key, cellDisplay(cell, props.today))
+  for (const [key, cell] of props.cells) map.set(key, cellDisplay(cell, props.today, uncovered.value))
   return map
 })
 const display = (employeeId: number, date: string): CellDisplay => displays.value.get(cellKey(employeeId, date))!
@@ -229,6 +241,7 @@ const visibleRows = computed(() =>
         props.days.map((d) => cellOf(emp.employee_id, d.date)).filter((c): c is GridCell => c !== undefined),
         props.filter,
         props.today,
+        uncovered.value,
       ),
     )
     .filter(matchesKeyword),
@@ -240,8 +253,10 @@ const sections = computed(() =>
     .filter((section) => section.employees.length > 0),
 )
 
+const showImportHint = computed(() => !needle.value && props.filter === 'issues' && missingImportDays.value > 0)
 const emptyText = computed(() => {
   if (needle.value) return '找不到符合的人員'
+  if (showImportHint.value) return `這週沒有待處理的格子，但有 ${missingImportDays.value} 天打卡還沒匯入，匯入後才能核對這幾天。`
   return props.filter === 'issues' ? '這段期間沒有待處理的格子' : props.filter === 'future' ? '這段期間沒有可排的未來日' : '這段期間沒有在職人員'
 })
 
@@ -275,7 +290,8 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 
 <style scoped>
 .shift-grid { overflow-x: auto; }
-.shift-grid__empty { padding: var(--space-6); text-align: center; color: var(--el-text-color-secondary); }
+.shift-grid__empty { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-6); text-align: center; color: var(--el-text-color-secondary); }
+.shift-grid__empty p { margin: 0; }
 .shift-grid__table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-sm); }
 .shift-grid__table th, .shift-grid__table td { border-bottom: 1px solid var(--el-border-color-lighter); padding: var(--space-1); vertical-align: top; }
 .shift-grid__corner, .shift-grid__person { position: sticky; left: 0; z-index: 1; background: var(--el-bg-color); text-align: left; min-width: 150px; }
@@ -299,6 +315,8 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__cell:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 1px; }
 .shift-grid__cell:disabled { cursor: not-allowed; background: var(--el-fill-color-lighter); color: var(--el-text-color-placeholder); }
 .shift-grid__cell--future { background: var(--el-fill-color-blank); color: var(--el-text-color-secondary); }
+/* 整天未匯入：還不能核對，整格退到背景，不跟待處理搶注意力 */
+.shift-grid__cell--awaiting_import { border-style: dashed; color: var(--el-text-color-secondary); }
 .shift-grid__cell--today { border-color: var(--el-color-primary-light-5); }
 .shift-grid__cell--danger { border-left: 3px solid var(--el-color-danger); }
 .shift-grid__cell--warning { border-left: 3px solid var(--el-color-warning); }

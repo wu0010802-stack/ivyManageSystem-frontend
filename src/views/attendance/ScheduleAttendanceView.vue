@@ -18,7 +18,7 @@
       <template #month-tools><el-button v-if="canPayrollCompare" @click="payrollOpen = true">薪資扣項核對</el-button></template>
     </WorkspaceHeader>
 
-    <MonthProgressBar :date="anchorDate" :revision="dataRevision" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" />
+    <MonthProgressBar :date="anchorDate" :revision="dataRevision" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" />
 
     <div class="workspace-mode" role="tablist" aria-label="排班與出勤檢視">
       <button
@@ -49,6 +49,7 @@
       @update:filter="setFilter"
       @records="openRecords"
       @import="onGridImport"
+      @import-punches="openImport"
       @changed="onGridChanged"
     />
 
@@ -171,7 +172,7 @@
 <script setup lang="ts">
 import { reactive, toRef, onMounted, computed, ref, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useAttendanceWorkspace } from '@/composables/useAttendanceWorkspace'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
@@ -187,7 +188,7 @@ import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
 import DetailColumn from '@/components/attendance/DetailColumn.vue'
 import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue'
-import MonthProgressBar from '@/components/schedule-attendance/MonthProgressBar.vue'
+import MonthProgressBar, { type MonthSummary } from '@/components/schedule-attendance/MonthProgressBar.vue'
 import ScheduleGridPanel from '@/components/schedule-attendance/ScheduleGridPanel.vue'
 import type { GridFilter } from '@/utils/scheduleAttendanceGrid'
 import { hasPermission, hasFullSalaryView } from '@/utils/auth'
@@ -531,7 +532,28 @@ async function onImported(): Promise<void> {
   ElMessage.success('匯入完成')
 }
 
+// 月報匯出前的提醒：用本月進度那份統計（同一個「待處理」定義）；別月或還沒載到就不擋
+const monthSummary = ref<MonthSummary | null>(null)
+
 async function onExport(): Promise<void> {
+  const monthStart = `${query.year}-${String(query.month).padStart(2, '0')}-01`
+  const s = monthSummary.value
+  if (s && s.month === monthStart && (s.issues > 0 || s.missingImportDays > 0)) {
+    const parts = [
+      s.issues > 0 ? `${s.issues} 格待處理` : '',
+      s.missingImportDays > 0 ? `${s.missingImportDays} 天打卡還沒匯入` : '',
+    ].filter(Boolean)
+    try {
+      await ElMessageBox.confirm(
+        `${query.month} 月還有 ${parts.join('、')}。月報會照目前的資料產出，之後處理完要重新匯出。`,
+        `匯出 ${query.month} 月月報`,
+        { type: 'warning', confirmButtonText: '仍要匯出', cancelButtonText: '先去處理', distinguishCancelAndClose: true },
+      )
+    } catch (action) {
+      if (action === 'cancel') showIssues()
+      return
+    }
+  }
   await downloadFile(
     `/exports/attendance?year=${query.year}&month=${query.month}`,
     `考勤月報_${query.year}_${String(query.month).padStart(2, '0')}.xlsx`,

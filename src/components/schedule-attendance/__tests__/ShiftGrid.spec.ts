@@ -23,8 +23,11 @@ function mountGrid(opts: {
   /** 可排班者：週末沒人排班也顯示 7 欄 */
   showAllDays?: boolean
   coverage?: Array<{ date: string; leaves: never[]; gaps: Array<Record<string, unknown>> }>
+  days?: ReturnType<typeof day>[]
+  canImport?: boolean
 } = {}) {
   const g = grid({
+    ...(opts.days ? { days: opts.days } : {}),
     employees: [
       employee(1, '林班導'),
       employee(2, '王副導', { role_label: '副班導' }),
@@ -46,6 +49,7 @@ function mountGrid(opts: {
       weeklyValue: (id: number) => (id === 1 ? 1 : null),
       coverage: opts.coverage as never,
       mobile: opts.mobile ?? false,
+      canImport: opts.canImport ?? false,
     },
     global: { plugins: [ElementPlus] },
   })
@@ -86,6 +90,22 @@ describe('ShiftGrid 桌機', () => {
     expect(wrapper.find('[data-test="row-1"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="row-2"]').exists()).toBe(true)
     expect(wrapper.find(`[data-test="cell-2-${WEEK[0]}"]`).classes()).toContain('shift-grid__cell--danger')
+  })
+
+  it('整天未匯入的日子：格子寫「未匯入」、不算待處理；整週都被篩掉時說明要先匯入並給入口', async () => {
+    const NONE = { status: 'data_incomplete' as const, punch_in: null, punch_out: null }
+    const days = WEEK.map((d, i) => day(d, { import_covered: i === 0 }))
+    const cells = cellsFor({ [`1|${WEEK[1]}`]: { actual: NONE } })
+    const all = mountGrid({ cells, days })
+    expect(all.find(`[data-test="cell-1-${WEEK[1]}"]`).text()).toContain('未匯入')
+    expect(all.find(`[data-test="cell-1-${WEEK[1]}"]`).classes()).toContain('shift-grid__cell--awaiting_import')
+
+    const issues = mountGrid({ cells, days, filter: 'issues', canImport: true })
+    expect(issues.find('[data-test="row-1"]').exists()).toBe(false)
+    expect(issues.text()).toContain('有 2 天打卡還沒匯入') // 9/15、9/16（今天 9/17 不算）
+    await issues.find('[data-test="grid-empty-import"]').trigger('click')
+    expect(issues.emitted('import-punches')).toHaveLength(1)
+    expect(mountGrid({ cells, days, filter: 'issues' }).find('[data-test="grid-empty-import"]').exists()).toBe(false)
   })
 
   it('關鍵字搜尋：姓名包含（不分大小寫、前後空白忽略）', () => {

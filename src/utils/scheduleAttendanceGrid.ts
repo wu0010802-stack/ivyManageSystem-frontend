@@ -97,19 +97,64 @@ export function monthRange(dateISO: string): { start: string; end: string } {
   return { start: `${y}-${mm}-01`, end: `${y}-${mm}-${String(last).padStart(2, '0')}` }
 }
 
-export function isIssue(cell: GridCell, today: string): boolean {
+const NO_DATES: ReadonlySet<string> = new Set()
+
+/**
+ * 整天都還沒匯入打卡的日子（`import_covered === false`；null＝沒有打卡權限，不算）。
+ * 後端欄層級的 import_covered 是「這天至少一位員工被匯入涵蓋」。
+ */
+export function uncoveredDates(days: readonly GridDay[]): Set<string> {
+  return new Set(days.filter((day) => day.import_covered === false).map((day) => day.date))
+}
+
+/**
+ * 整天未匯入的「資料待補」：還不能核對，等匯入就好，不是要人決定的事。
+ * 同一天只要有人被匯入，「資料待補」就仍算待處理——可能是這個人不在匯入檔裡、沒有有效班別、
+ * 或假單組合無法自動判定（後端 attendance_reconciliation._row 的其他成因），都要人看。
+ */
+function isAwaitingImport(cell: GridCell, uncovered: ReadonlySet<string>): boolean {
+  const actual = cell.actual
+  return !!actual && actual.status === 'data_incomplete' && !actual.punch_in && !actual.punch_out && uncovered.has(cell.date)
+}
+
+export function isIssue(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): boolean {
   if (cell.confirmation && ACTIVE_CONFIRMATION_STATUSES.has(cell.confirmation.status)) return true
   // 當日尚未結束不判（09-11 規則）；未來日沒有 actual
   if (!cell.actual || cell.date >= today) return false
+  if (isAwaitingImport(cell, uncovered)) return false
   return !NON_ISSUE_STATUSES.has(cell.actual.status)
+}
+
+export interface ImportProgress {
+  /** 最後一個有匯入的日子；一天都沒有＝null */
+  lastCovered: string | null
+  /** lastCovered 之前漏掉的工作日（「已匯入至 X」會掩蓋的缺口） */
+  gaps: string[]
+  /** 到昨天為止還沒匯入的工作日（含 lastCovered 之後） */
+  missingWorkdays: string[]
+}
+
+export function importProgress(days: readonly GridDay[], today: string): ImportProgress {
+  const covered = days.filter((day) => day.import_covered === true).map((day) => day.date)
+  const lastCovered = covered.length ? covered[covered.length - 1] : null
+  const missingWorkdays = days
+    .filter((day) => day.is_workday && day.import_covered === false && day.date < today)
+    .map((day) => day.date)
+  const gaps = lastCovered ? missingWorkdays.filter((date) => date < lastCovered) : []
+  return { lastCovered, gaps, missingWorkdays }
 }
 
 export function isFutureEditable(cell: GridCell, today: string): boolean {
   return cell.date > today && cell.edit.plan
 }
 
-export function rowMatchesFilter(cells: readonly GridCell[], filter: GridFilter, today: string): boolean {
-  if (filter === 'issues') return cells.some((cell) => isIssue(cell, today))
+export function rowMatchesFilter(
+  cells: readonly GridCell[],
+  filter: GridFilter,
+  today: string,
+  uncovered: ReadonlySet<string> = NO_DATES,
+): boolean {
+  if (filter === 'issues') return cells.some((cell) => isIssue(cell, today, uncovered))
   if (filter === 'future') return cells.some((cell) => isFutureEditable(cell, today))
   return true
 }
@@ -139,7 +184,7 @@ export function planText(cell: GridCell): string {
 const hhmm = (iso: string | null | undefined): string => (iso ? iso.slice(11, 16) : '—')
 
 export interface CellDisplay {
-  state: 'not_employed' | 'future' | 'working' | 'not_punched' | 'full_leave' | 'judged' | 'masked'
+  state: 'not_employed' | 'future' | 'working' | 'not_punched' | 'full_leave' | 'awaiting_import' | 'judged' | 'masked'
   plan: string
   source: { short: string; label: string }
   actual: string | null
@@ -157,7 +202,7 @@ const CONFIRMATION_HINTS: Record<string, string> = {
 }
 
 /** §2.2 格子狀態與顯示。 */
-export function cellDisplay(cell: GridCell, today: string): CellDisplay {
+export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): CellDisplay {
   const base = {
     plan: planText(cell),
     source: SOURCE_TAGS[cell.plan.source],
@@ -178,6 +223,9 @@ export function cellDisplay(cell: GridCell, today: string): CellDisplay {
       actual: null,
       verdict: { label: fullLeave.leave_type_label, tone: 'info' },
     }
+  }
+  if (cell.date < today && isAwaitingImport(cell, uncovered)) {
+    return { ...base, state: 'awaiting_import', actual: null, verdict: { label: '未匯入', tone: 'info' } }
   }
   if (cell.date === today) {
     if (actual.punch_in && !actual.punch_out) {
