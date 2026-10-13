@@ -108,7 +108,8 @@ describe('ShiftGrid 桌機', () => {
     expect(issues.find('[data-test="row-1"]').exists()).toBe(false)
     expect(issues.text()).toContain('有 2 天打卡還沒匯入') // 9/15、9/16（今天 9/17 不算）
     await issues.find('[data-test="grid-empty-import"]').trigger('click')
-    expect(issues.emitted('import-punches')).toHaveLength(1)
+    // 帶第一個缺的日子：跨月週時頁面才知道要開哪個月的匯入（審查 F3）
+    expect(issues.emitted('import-punches')).toEqual([[WEEK[1]]])
     expect(mountGrid({ cells, days, filter: 'issues' }).find('[data-test="grid-empty-import"]').exists()).toBe(false)
   })
 
@@ -131,6 +132,14 @@ describe('ShiftGrid 桌機', () => {
     const wrapper = mountGrid({ filter: 'future', cells: cellsFor(Object.fromEntries(WEEK.map((d) => [`1|${d}`, { plan: { expected: day(d).is_workday }, edit: { plan: d > TODAY } }]))) })
     const heads = wrapper.findAll('thead th.shift-grid__day').map((th) => th.attributes('data-test'))
     expect(heads).toEqual(['day-2026-09-18'])
+  })
+
+  it('手機「只看未來可排」：日期頁籤也只列今天以後（審查 F10）', () => {
+    const wrapper = mountGrid({ mobile: true, filter: 'future', cells: cellsFor(Object.fromEntries(WEEK.map((d) => [`1|${d}`, { plan: { expected: day(d).is_workday }, edit: { plan: d > TODAY } }]))) })
+    const tabs = wrapper.findAll('[role="tab"]').map((t) => t.attributes('data-test'))
+    expect(tabs[0]).toBe('mobile-day-2026-09-18')
+    expect(tabs.every((t) => t! > 'mobile-day-2026-09-17')).toBe(true)
+    expect(wrapper.find('[data-test="mobile-day-2026-09-18"]').attributes('aria-selected')).toBe('true')
   })
 
   it('表格有說明用的 caption（螢幕閱讀器先知道列與欄是什麼）', () => {
@@ -159,6 +168,8 @@ describe('ShiftGrid 桌機', () => {
     expect(rule('.shift-grid__scroller')).toMatch(/overflow: auto/)
     expect(rule('.shift-grid__table thead th')).toMatch(/position: sticky/)
     expect(rule('.shift-grid__table thead th')).toMatch(/top: 0/)
+    // 不擋捲動傳遞：表格捲到底要能接著捲外層，否則容器下緣與水平捲軸要把游標移出表格才捲得到（審查 F9）
+    expect(rule('.shift-grid__scroller')).not.toMatch(/overscroll-behavior/)
     expect(css).toMatch(/\.shift-grid__person[^{]*\{[^}]*position: sticky[^}]*left: 0/)
   })
 

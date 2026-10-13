@@ -44,7 +44,14 @@ const assignment = (employeeId: number, shiftTypeId: number) => ({
   notes: '', week_start_date: W1, work_start: '07:00', work_end: '16:30',
 })
 
-const DrawerStub = { name: 'PersonDayDrawer', props: ['modelValue', 'cell'], emits: ['records', 'changed', 'update:modelValue'], template: '<div data-test="drawer-stub" />' }
+const drawerRequestClose = vi.hoisted(() => vi.fn(async () => true))
+const DrawerStub = {
+  name: 'PersonDayDrawer',
+  props: ['modelValue', 'cell'],
+  emits: ['records', 'changed', 'update:modelValue'],
+  methods: { requestClose: () => drawerRequestClose() },
+  template: '<div data-test="drawer-stub" />',
+}
 const BatchStub = { name: 'BatchConfirmDialog', props: ['modelValue', 'units'], template: '<div data-test="batch-stub" />' }
 
 function mountPanel(props: Record<string, unknown> = {}) {
@@ -80,6 +87,7 @@ beforeEach(() => {
   api.saveAssignments.mockResolvedValue({ data: { message: 'ok', week_start_date: W1, warnings: [] } })
   api.saveDaily.mockResolvedValue({ data: {} })
   ui.confirm.mockResolvedValue('confirm')
+  drawerRequestClose.mockResolvedValue(true)
 })
 
 describe('ScheduleGridPanel', () => {
@@ -113,6 +121,7 @@ describe('ScheduleGridPanel', () => {
     expect(drawer.props('modelValue')).toBe(true)
     expect(drawer.props('cell')).toMatchObject({ employee_id: 2, date: WEEK[0] })
     drawer.vm.$emit('records', 2, WEEK[0])
+    await flushPromises() // 先問抽屜有沒有未送出的原因
     expect(wrapper.emitted('records')).toEqual([[2, WEEK[0]]])
   })
 
@@ -295,6 +304,18 @@ describe('ScheduleGridPanel', () => {
     expect(wrapper.findComponent(BatchStub).props('modelValue')).toBe(false)
   })
 
+  it('「看他整月」先問抽屜（打了一半的原因要確認）；抽屜不放行就留在原地（審查 F5）', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find(`[data-test="cell-1-${WEEK[1]}"]`).trigger('click')
+    await flushPromises()
+    drawerRequestClose.mockResolvedValueOnce(false)
+    wrapper.findComponent(DrawerStub).vm.$emit('records', 1, WEEK[1])
+    await flushPromises()
+    expect(wrapper.emitted('records')).toBeUndefined()
+    expect(wrapper.findComponent(DrawerStub).props('modelValue')).toBe(true)
+  })
+
   it('複製指定週：未選來源週時送出鈕停用；選 2026-09-02 後以 8/31 那週為來源', async () => {
     const wrapper = mountPanel()
     await flushPromises()
@@ -354,6 +375,34 @@ describe('ScheduleGridPanel', () => {
       expect(await routeGuards.update!({ query: { date: '2026-09-25' } })).toBe(false)
       expect(await routeGuards.update!({ query: { date: '2026-09-15', tab: 'records' } })).toBe(true) // 同週（切頁籤）不問
       expect(saveText(wrapper)).toBe('儲存排班（1 處變更）')
+    })
+
+    it('網址的 date 與頁面同一套解析：重複參數取第一個、格式不對＝沒換週不問（審查 F7）', async () => {
+      await mountWithPendingEdit()
+      ui.confirm.mockRejectedValue('cancel')
+      expect(await routeGuards.update!({ query: { date: ['2026-09-25', 'x'] } })).toBe(false)
+      ui.confirm.mockClear()
+      expect(await routeGuards.update!({ query: { date: 'garbage' } })).toBe(true)
+      expect(ui.confirm).not.toHaveBeenCalled()
+    })
+
+    it('路由守衛的確認框不因 hashchange 關閉；頁內換週的確認框維持預設（返回鍵時跟著關）（審查 F6）', async () => {
+      const wrapper = await mountWithPendingEdit()
+      ui.confirm.mockRejectedValue('cancel')
+      await routeGuards.update!({ query: { date: '2026-09-25' } })
+      expect(ui.confirm).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), expect.objectContaining({ closeOnHashChange: false }))
+      await (wrapper.vm as unknown as PanelApi).confirmWeekChange('2026-09-25')
+      expect(ui.confirm).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), expect.objectContaining({ closeOnHashChange: true }))
+    })
+
+    it('儲存進行中不能換週：直接擋下並提示，不問「要不要捨棄」（審查 F8）', async () => {
+      const wrapper = await mountWithPendingEdit()
+      api.saveDaily.mockReturnValue(new Promise(() => {}))
+      await wrapper.find('[data-test="toolbar-save"]').trigger('click')
+      await flushPromises()
+      expect(await (wrapper.vm as unknown as PanelApi).confirmWeekChange('2026-09-23')).toBe(false)
+      expect(ui.confirm).not.toHaveBeenCalled()
+      expect(ui.warning).toHaveBeenCalledWith(expect.stringContaining('儲存中'))
     })
 
     it('改過的人在列首標「未儲存」，其他人不標', async () => {

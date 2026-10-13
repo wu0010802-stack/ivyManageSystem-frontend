@@ -199,6 +199,30 @@ describe('PersonDayDrawer', () => {
       expect(typed.emitted('update:modelValue')).toEqual([[false]])
     })
 
+    it('只算看得到的區塊：改這天的選擇在區塊消失後（例如 409 重載後已有打卡）不算未送出（審查 F4）', async () => {
+      const wrapper = mountDrawer(cell(1, W1))
+      await flushPromises()
+      wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', -1)
+      await wrapper.vm.$nextTick()
+      await wrapper.setProps({ cell: cell(1, W1, { edit: { plan: false, confirm: false, locked_reason: 'recorded' }, actual: {} }) })
+      await wrapper.find('[data-test="stub-drawer-close"]').trigger('click')
+      await flushPromises()
+      expect(box.confirm).not.toHaveBeenCalled()
+      expect(wrapper.emitted('update:modelValue')).toEqual([[false]])
+    })
+
+    it('requestClose：頁面要程式關閉（看他整月）前先問；取消回 false', async () => {
+      const wrapper = mountDrawer(confirmable())
+      await flushPromises()
+      type DrawerApi = { requestClose: () => Promise<boolean> }
+      expect(await (wrapper.vm as unknown as DrawerApi).requestClose()).toBe(true)
+      await wrapper.find('textarea[data-test="pdd-confirm-reason"]').setValue('補登下班')
+      box.confirm.mockRejectedValueOnce('cancel')
+      expect(await (wrapper.vm as unknown as DrawerApi).requestClose()).toBe(false)
+      box.confirm.mockResolvedValueOnce('confirm')
+      expect(await (wrapper.vm as unknown as DrawerApi).requestClose()).toBe(true)
+    })
+
     it('送出成功後清掉原因，之後關閉不再詢問', async () => {
       const wrapper = mountDrawer(confirmable())
       await flushPromises()

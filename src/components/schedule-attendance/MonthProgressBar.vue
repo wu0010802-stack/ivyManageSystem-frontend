@@ -74,6 +74,8 @@ const canViewSalary = hasPermission('SALARY_READ')
 const canConfirmRounds = hasPermission('SCHEDULE') && canViewAttendance
 
 const data = ref<GridOut | null>(null)
+/** data 是哪個月的（請求當下的月初）；換月載入中不能把舊月數字標成新月 */
+const loadedMonth = ref('')
 const loading = ref(false)
 const loadError = ref('')
 const roundsOpen = ref(false)
@@ -84,8 +86,12 @@ async function load(): Promise<void> {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await getScheduleAttendanceGrid({ start_date: range.value.start, end_date: range.value.end })
-    if (current === seq) data.value = res.data
+    const start = range.value.start
+    const res = await getScheduleAttendanceGrid({ start_date: start, end_date: range.value.end })
+    if (current === seq) {
+      loadedMonth.value = start
+      data.value = res.data
+    }
   } catch (err) {
     if (current === seq) {
       data.value = null
@@ -129,7 +135,7 @@ const issues = computed(() => {
 
 // 匯出月報前的提醒用同一份數字；載入失敗不送（避免拿 0 當「都處理完了」）
 watch(data, (g) => {
-  if (g) emit('summary', { month: range.value.start, issues: issues.value, missingImportDays: imports.value.missingWorkdays.length })
+  if (g) emit('summary', { month: loadedMonth.value, issues: issues.value, missingImportDays: imports.value.missingWorkdays.length })
 })
 </script>
 

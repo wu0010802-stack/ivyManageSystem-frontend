@@ -277,17 +277,28 @@ const pair = computed(() => {
 })
 watch(confirmChoice, () => { includePair.value = false })
 
-// X、Esc、點遮罩關閉前：打了一半的確認原因或選了沒套用的「改這天」不能無聲丟掉
-const isDirty = () => confirmReason.value.trim() !== '' || dayChoice.value !== initialDayChoice.value
-async function beforeClose(done: () => void): Promise<void> {
-  if (!isDirty()) return done()
-  const ok = await confirmDiscardChanges({
+// X、Esc、點遮罩關閉前：打了一半的確認原因或選了沒套用的「改這天」不能無聲丟掉。
+// 只算畫面上看得到的區塊：重載後區塊消失（例如改這天撞到已打卡）殘留的選擇不算。
+const isDirty = (): boolean => {
+  const cell = props.cell
+  if (!cell) return false
+  const dayDirty = cell.edit.plan && dayChoice.value !== initialDayChoice.value
+  const reasonDirty = cell.edit.confirm && !!cell.actual && confirmReason.value.trim() !== ''
+  return dayDirty || reasonDirty
+}
+/** 頁面要程式關閉（看他整月）前呼叫；回 true＝可以關 */
+async function requestClose(): Promise<boolean> {
+  if (!isDirty()) return true
+  return confirmDiscardChanges({
     title: '尚未送出',
     message: '確認原因或班別選擇還沒送出，關閉會捨棄。',
     cancelText: '繼續編輯',
   })
-  if (ok) done()
 }
+async function beforeClose(done: () => void): Promise<void> {
+  if (await requestClose()) done()
+}
+defineExpose({ requestClose })
 
 let openSeq = 0
 watch(

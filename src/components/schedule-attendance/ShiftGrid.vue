@@ -2,7 +2,7 @@
   <div class="shift-grid" :class="{ 'shift-grid--mobile': mobile }">
     <div v-if="!visibleRows.length" class="shift-grid__empty" role="status">
       <p>{{ emptyText }}</p>
-      <el-button v-if="showImportHint && canImport" type="primary" data-test="grid-empty-import" @click="emit('import-punches')">匯入打卡紀錄</el-button>
+      <el-button v-if="showImportHint && canImport" type="primary" data-test="grid-empty-import" @click="emit('import-punches', missingImportDates[0])">匯入打卡紀錄</el-button>
     </div>
 
     <!-- 桌機：列＝人（依班級分組），欄＝日；每格兩行：計畫／打卡＋判定。
@@ -87,7 +87,7 @@
     <template v-else>
       <div class="shift-grid__day-picker" role="tablist" aria-label="選擇日期">
         <button
-          v-for="d in days"
+          v-for="d in shownDays"
           :key="d.date"
           type="button"
           role="tab"
@@ -193,25 +193,27 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [employeeId: number, date: string]
   'weekly-change': [employeeId: number, shiftTypeId: number | null]
-  'import-punches': []
+  /** 帶第一個缺的日子：跨月週時頁面才知道要開哪個月的匯入 */
+  'import-punches': [date: string]
 }>()
 
+/** 桌機欄與手機日期頁籤：「只看未來可排」只留今天以後（過去的格子不能排） */
+const shownDays = computed(() => (props.filter === 'future' ? props.days.filter((d) => d.date > props.today) : props.days))
+
 function pickDay(): string {
-  return props.days.find((d) => d.date === props.today)?.date ?? props.days[0]?.date ?? ''
+  return shownDays.value.find((d) => d.date === props.today)?.date ?? shownDays.value[0]?.date ?? ''
 }
 
 const mobileDay = ref(pickDay())
 watch(
-  () => props.days.map((d) => d.date).join(','),
+  () => shownDays.value.map((d) => d.date).join(','),
   () => {
-    if (!props.days.some((d) => d.date === mobileDay.value)) {
+    if (!shownDays.value.some((d) => d.date === mobileDay.value)) {
       mobileDay.value = pickDay()
     }
   },
 )
-const mobileDayInfo = computed(() => props.days.find((d) => d.date === mobileDay.value))
-/** 桌機表格的欄：「只看未來可排」只留今天以後（過去的格子不能排） */
-const shownDays = computed(() => (props.filter === 'future' ? props.days.filter((d) => d.date > props.today) : props.days))
+const mobileDayInfo = computed(() => shownDays.value.find((d) => d.date === mobileDay.value))
 
 const cellOf = (employeeId: number, date: string) => props.cells.get(cellKey(employeeId, date))
 
@@ -229,7 +231,8 @@ function isInactivePlan(employeeId: number, date: string): boolean {
 /** 整天未匯入打卡的日子：格子寫「未匯入」、不算待處理 */
 const uncovered = computed(() => uncoveredDates(props.days))
 /** 本週到昨天為止還沒匯入的工作日數（空狀態說明用） */
-const missingImportDays = computed(() => props.days.filter((d) => d.is_workday && uncovered.value.has(d.date) && d.date < props.today).length)
+const missingImportDates = computed(() => props.days.filter((d) => d.is_workday && uncovered.value.has(d.date) && d.date < props.today).map((d) => d.date))
+const missingImportDays = computed(() => missingImportDates.value.length)
 
 const displays = computed(() => {
   const map = new Map<string, CellDisplay>()
@@ -314,7 +317,6 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
   max-height: max(320px, calc(100vh - 170px));
   max-height: max(320px, calc(100dvh - 170px));
   overflow: auto;
-  overscroll-behavior: contain;
   border-top: 1px solid var(--el-border-color-lighter);
 }
 .shift-grid__caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

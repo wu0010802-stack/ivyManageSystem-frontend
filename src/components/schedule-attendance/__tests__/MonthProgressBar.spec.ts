@@ -124,6 +124,8 @@ describe('MonthProgressBar', () => {
     expect(text).not.toContain('人日用預設工時')
     expect(wrapper.find('[data-test="progress-error"]').text()).toContain('伺服器錯誤')
     expect(wrapper.find('[data-test="progress-issues"]').text()).toContain('—')
+    // 載入失敗不送統計：頁面不能把「沒資料」當成「都處理完」而放行匯出月報
+    expect(wrapper.emitted('summary')).toBeUndefined()
     await wrapper.find('[data-test="progress-retry"]').trigger('click')
     await flushPromises()
     expect(api.grid).toHaveBeenCalledTimes(2)

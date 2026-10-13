@@ -51,7 +51,7 @@
       @update:filter="setFilter"
       @records="openRecords"
       @import="onGridImport"
-      @import-punches="openImport"
+      @import-punches="onGridImportMonth"
       @changed="onGridChanged"
     />
 
@@ -516,6 +516,13 @@ function openRecords(employeeId: number, date: string): void {
 function onGridImport(row: { employee_id: number; employee_name: string; date: string }): void {
   importContext.value = { employee_id: row.employee_id, employee_name: row.employee_name, date: row.date }
   anchorDate.value = row.date
+  importOpen.value = true
+}
+
+/** 格子空狀態「匯入打卡紀錄」：帶的是第一個缺的日子，跨月週時匯入要開那天所在的月 */
+function onGridImportMonth(date: string): void {
+  importContext.value = null
+  anchorDate.value = date
   importOpen.value = true
 }
 

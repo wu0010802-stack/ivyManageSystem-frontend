@@ -97,7 +97,7 @@ const AttendanceMonthStatsStub = {
 const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
   props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
-  emits: ['records', 'import', 'changed', 'update:date', 'update:filter'],
+  emits: ['records', 'import', 'import-punches', 'changed', 'update:date', 'update:filter'],
   methods: { confirmWeekChange: (date: string) => panelConfirmWeekChange(date) },
   template: '<div class="grid-panel-stub" />',
 }
@@ -685,6 +685,18 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     await flushPromises()
     expect(wrapper.findComponent({ name: 'PayrollComparisonDialog' }).exists()).toBe(true)
     mockHasFullSalaryView.mockReturnValue(false)
+    wrapper.unmount()
+  })
+
+  it('格子空狀態「匯入打卡紀錄」帶日期：跨月週開的是缺的那天所在的月（審查 F3）', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-29' }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(ScheduleGridPanelStub).vm.$emit('import-punches', '2026-10-01')
+    await flushPromises()
+    const dialog = wrapper.findComponent(ImportPreviewDialogStub)
+    expect(dialog.props('modelValue')).toBe(true)
+    expect(dialog.props('month')).toBe(10)
+    expect(dialog.props('sourceContext')).toBeNull()
     wrapper.unmount()
   })
 

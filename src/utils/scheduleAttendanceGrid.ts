@@ -60,6 +60,15 @@ const STATUS_TONES: Record<ReconStatus, Tone> = {
 /** 出勤明細已處理（ResolveCard／批次）的結果；處理後核對狀態不會變，要靠 confirmed_action 判斷 */
 const CONFIRMED_ACTION_LABELS: Record<string, string> = { admin_accept: '已接受扣款', admin_waive: '已豁免' }
 
+/**
+ * 出勤明細已處理完。例外：疑似換班只「接受扣款」不算——異常清單只問遲到／缺卡，接受扣款沒有回答
+ * 「是不是換了班」，仍要在格子確認當日班別；豁免＝不扣款，才算處理完。
+ */
+function isHandled(actual: NonNullable<GridCell['actual']>): boolean {
+  if (!actual.confirmed_action) return false
+  return !(actual.status === 'possible_shift_change' && actual.confirmed_action === 'admin_accept')
+}
+
 /** 「只看待處理」排除的判定（§2.1）。 */
 const NON_ISSUE_STATUSES: ReadonlySet<ReconStatus> = new Set(['matched', 'off_day', 'leave'])
 /** 仍在處理中的老師確認項目（SPEC-026 ACTIVE_ITEM_STATUSES）。 */
@@ -107,7 +116,9 @@ const NO_DATES: ReadonlySet<string> = new Set()
  * 後端欄層級的 import_covered 是「這天至少一位員工被匯入涵蓋」。
  */
 export function uncoveredDates(days: readonly GridDay[]): Set<string> {
-  return new Set(days.filter((day) => day.import_covered === false).map((day) => day.date))
+  // 只算工作日：非工作日用每日調整排了人、當天卻沒人打卡時，這天永遠不會被匯入涵蓋，
+  // 若也當成「等匯入」，那格就永遠不會出現在待處理
+  return new Set(days.filter((day) => day.is_workday && day.import_covered === false).map((day) => day.date))
 }
 
 /**
@@ -126,7 +137,7 @@ export function isIssue(cell: GridCell, today: string, uncovered: ReadonlySet<st
   if (!cell.actual || cell.date >= today) return false
   if (isAwaitingImport(cell, uncovered)) return false
   // 已在出勤明細接受扣款或豁免：後端核對是即時重算、不讀 confirmed_action，狀態仍是異常，但事情已處理完
-  if (cell.actual.confirmed_action) return false
+  if (isHandled(cell.actual)) return false
   return !NON_ISSUE_STATUSES.has(cell.actual.status)
 }
 
@@ -266,7 +277,7 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
     verdict: actual.status === 'off_day'
       ? null
       : handled
-        ? { label: `${RECON_STATUS_LABELS[actual.status]}・${handled}`, tone: 'info' }
+        ? { label: `${RECON_STATUS_LABELS[actual.status]}・${handled}`, tone: isHandled(actual) ? 'info' : STATUS_TONES[actual.status] }
         : { label: RECON_STATUS_LABELS[actual.status], tone: STATUS_TONES[actual.status] },
   }
 }

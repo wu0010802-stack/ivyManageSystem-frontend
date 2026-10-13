@@ -15,7 +15,17 @@ import { ElMessageBox } from 'element-plus'
  * 按鈕維持一致。
  */
 export async function confirmDiscardChanges(
-  copy: { title?: string; message?: string; cancelText?: string } = {},
+  copy: {
+    title?: string
+    message?: string
+    cancelText?: string
+    /**
+     * 由路由守衛開的框：hash 路由下返回鍵／改網址是 popstate（觸發 guard、開這個框）緊接 hashchange，
+     * EP 預設 hashchange 就關框＝當成取消，使用者什麼都沒看到導覽就被擋掉，所以這種框不跟著 hashchange 關。
+     * 頁內的確認（關對話框、換週）維持預設：使用者按返回鍵時框跟著關，不會遺留在下一頁。
+     */
+    routeGuard?: boolean
+  } = {},
 ): Promise<boolean> {
   try {
     // 「捨棄變更」是破壞性動作（改動無法復原），故標成 danger 而非預設 primary——
@@ -25,9 +35,7 @@ export async function confirmDiscardChanges(
       confirmButtonText: '捨棄變更',
       confirmButtonClass: 'el-button--danger',
       cancelButtonText: copy.cancelText ?? '留在此頁',
-      // hash 路由下返回鍵／改網址是 popstate（觸發 guard、開這個框）緊接 hashchange；
-      // EP 預設 hashchange 就關框＝當成取消，使用者什麼都沒看到導覽就被擋掉。
-      closeOnHashChange: false,
+      closeOnHashChange: !copy.routeGuard,
     })
     return true
   } catch {
@@ -43,7 +51,7 @@ export function useUnsavedChangesGuard(isDirty: () => boolean): {
     return confirmDiscardChanges()
   }
 
-  onBeforeRouteLeave(async () => confirmDiscard())
+  onBeforeRouteLeave(async () => (isDirty() ? confirmDiscardChanges({ routeGuard: true }) : true))
 
   function onBeforeUnload(e: BeforeUnloadEvent): void {
     if (isDirty()) {

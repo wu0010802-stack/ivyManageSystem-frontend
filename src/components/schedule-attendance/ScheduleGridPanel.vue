@@ -54,11 +54,12 @@
       :max-height="gridMaxHeight"
       @select="openCell"
       @weekly-change="state.setWeekly"
-      @import-punches="emit('import-punches')"
+      @import-punches="(date: string) => emit('import-punches', date)"
     />
 
     <PersonDayDrawer
       v-if="gridData"
+      ref="drawerRef"
       v-model="drawerOpen"
       :cell="selectedCell"
       :employee="selectedEmployee"
@@ -130,6 +131,7 @@ import ShiftGrid from './ShiftGrid.vue'
 import PersonDayDrawer from './PersonDayDrawer.vue'
 import BatchConfirmDialog from './BatchConfirmDialog.vue'
 import { useScheduleGrid } from '@/composables/useScheduleGrid'
+import { attendanceRouteProps } from '@/router/attendanceRouteProps'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { copyMonthAssignments, importShifts } from '@/api/shifts'
 import type { ApiResponse } from '@/api/_generated/typed'
@@ -168,7 +170,7 @@ const emit = defineEmits<{
   records: [employeeId: number, date: string]
   import: [context: ImportContext]
   /** 整週都還沒匯入時的空狀態入口：開整月匯入（不帶人員） */
-  'import-punches': []
+  'import-punches': [date: string]
   changed: []
 }>()
 
@@ -190,20 +192,28 @@ const changedIds = computed(() => new Set(state.changedEmployeeIds.value))
 const hasPendingEdits = () => state.pendingCount.value > 0
 useUnsavedChangesGuard(hasPendingEdits)
 
-async function confirmWeekChange(date: string): Promise<boolean> {
-  if (!hasPendingEdits() || mondayOf(date) === weekStartRef.value) return true
+async function confirmWeekChange(date: string, opts: { routeGuard?: boolean } = {}): Promise<boolean> {
+  if (mondayOf(date) === weekStartRef.value) return true
+  if (state.saving.value) {
+    // 儲存途中換週會讓儲存半途取消（部分送出），不能用「捨棄變更」帶過
+    ElMessage.warning('排班儲存中，請等儲存完成再換週')
+    return false
+  }
+  if (!hasPendingEdits()) return true
   const ok = await confirmDiscardChanges({
     title: '未儲存的排班',
     message: `這週有 ${state.pendingCount.value} 處排班變更還沒儲存，切換週次會捨棄這些變更。`,
     cancelText: '留在這週',
+    routeGuard: opts.routeGuard,
   })
   if (ok) state.discardEdits()
   return ok
 }
 
+// 與頁面 props 同一套解析（重複參數取第一個、格式不對＝undefined），否則守衛與實際換不換週會不一致
 onBeforeRouteUpdate((to) => {
-  const date = typeof to.query.date === 'string' ? to.query.date : null
-  return date ? confirmWeekChange(date) : true
+  const date = attendanceRouteProps(to.query).date
+  return date ? confirmWeekChange(date, { routeGuard: true }) : true
 })
 
 defineExpose({ confirmWeekChange })
@@ -279,8 +289,13 @@ watch(gridData, (g) => {
   }
 })
 
-/** 「看他整月」：抽屜是 append-to-body，不先關會蓋住切換後的出勤明細頁籤。匯入則不關（對話框疊在抽屜上）。 */
-function onRecords(employeeId: number, date: string): void {
+/**
+ * 「看他整月」：抽屜是 append-to-body，不先關會蓋住切換後的出勤明細頁籤。匯入則不關（對話框疊在抽屜上）。
+ * 程式關閉不經 el-drawer 的 before-close，先問抽屜有沒有打到一半的原因。
+ */
+const drawerRef = ref<InstanceType<typeof PersonDayDrawer> | null>(null)
+async function onRecords(employeeId: number, date: string): Promise<void> {
+  if (drawerRef.value && !(await drawerRef.value.requestClose())) return
   drawerOpen.value = false
   emit('records', employeeId, date)
 }

@@ -156,6 +156,11 @@ describe('已在出勤明細處理過的異常（接受扣款／豁免）', () =
     const accepted = cell(1, W1, { actual: { status: 'missing_punch', confirmed_action: 'admin_accept', punch_in: `${W1}T07:52:00`, punch_out: null } })
     expect(isIssue(accepted, TODAY)).toBe(false)
     expect(cellDisplay(accepted, TODAY).verdict?.label).toBe('缺卡待確認・已接受扣款')
+    // 疑似換班只「接受扣款」沒回答是不是換班：仍待處理（豁免＝不扣款，才算處理完）（審查 F2）
+    const swapAccepted = cell(1, W1, { actual: { status: 'possible_shift_change', confirmed_action: 'admin_accept' } })
+    expect(isIssue(swapAccepted, TODAY)).toBe(true)
+    expect(cellDisplay(swapAccepted, TODAY).verdict).toEqual({ label: '疑似換班・已接受扣款', tone: 'warning' })
+    expect(isIssue(cell(1, W1, { actual: { status: 'possible_shift_change', confirmed_action: 'admin_waive' } }), TODAY)).toBe(false)
     // 老師確認還在進行中：仍算待處理
     expect(isIssue(cell(1, W1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive' }, confirmation: { item_id: 1, round_id: 1, kind: 'swap', status: 'pending', partner_employee_id: 2 } }), TODAY)).toBe(true)
   })
@@ -184,6 +189,17 @@ describe('整天未匯入打卡（不算待處理）', () => {
     expect(cellDisplay(cell(1, WEEK[1], { actual: NONE }), TODAY, uncovered).verdict?.label).toBe('資料待補')
     // 今天還沒過完：仍是「尚未打卡」，不因為今天還沒匯入就說未匯入
     expect(cellDisplay(cell(1, TODAY, { actual: NONE }), TODAY, new Set([TODAY])).state).toBe('not_punched')
+  })
+
+  it('非工作日不套「未匯入」：週末／假日用每日調整排了人卻沒人打卡，這天永遠不會被匯入涵蓋，要留在待處理（審查 F1）', () => {
+    const SAT = '2026-09-12' // 上週六（今天 9/17 之前）
+    const weekend = uncoveredDates([day(SAT, { import_covered: false })])
+    expect(weekend.size).toBe(0)
+    expect(isIssue(cell(1, SAT, { plan: { source: 'daily', expected: true }, actual: NONE }), TODAY, weekend)).toBe(true)
+  })
+
+  it('整天未匯入但這格有打卡（例如打卡台）：不是「等匯入」，照狀態判定', () => {
+    expect(isIssue(cell(1, WEEK[0], { actual: { status: 'data_incomplete', punch_in: `${WEEK[0]}T07:50:00`, punch_out: null } }), TODAY, uncovered)).toBe(true)
   })
 
   it('importProgress：最後匯入日、它之前的缺口、本月到昨天為止還沒匯入的工作日', () => {
