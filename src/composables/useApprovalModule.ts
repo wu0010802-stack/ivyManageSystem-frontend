@@ -4,6 +4,7 @@ import { friendlyError } from '@/utils/errorMessages'
 import { getApprovalLogs } from '@/api/approvalSettings'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { getUserInfo } from '@/utils/auth'
+import { extractSubstituteDutyWarnings } from '@/utils/substituteDuty'
 
 /**
  * 統一封裝批次核准/駁回、簽核記錄 Drawer 與審核資格判斷邏輯。
@@ -51,6 +52,10 @@ export function useApprovalModule({ docType, batchApproveFn, fetchFn, recordLabe
         ElMessage.warning(
           `核准完成：成功 ${succeeded.length} 筆，失敗 ${failed.length} 筆（${failed.map((f: { id: unknown; reason: string }) => `#${f.id}: ${f.reason}`).join('；')}）`
         )
+      }
+      // 批次核准回傳的代理接手職務警示（只含成功核准的假單）
+      for (const text of extractSubstituteDutyWarnings(res)) {
+        ElMessage.warning({ message: text, duration: 8000, showClose: true })
       }
       fetchFn()
     } catch (err) {

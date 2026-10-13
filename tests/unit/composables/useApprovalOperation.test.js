@@ -4,7 +4,7 @@ import { useApprovalOperation } from '@/composables/useApprovalOperation'
 const mockFetchSummary = vi.fn()
 
 vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn() },
+  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 
 vi.mock('@/utils/error', () => ({
@@ -119,6 +119,36 @@ describe('useApprovalOperation', () => {
       await execute(1, false, '已駁回')
 
       expect(isLoading.value).toBe(false)
+    })
+  })
+
+  describe('代理接手職務警示（SPEC-026）', () => {
+    it('回應帶 substitute_duty_warnings 時，成功訊息之後逐筆以 ElMessage.warning 顯示', async () => {
+      const apiFn = vi.fn().mockResolvedValue({
+        data: {
+          substitute_duty_warnings: [
+            { code: 'existing_shift', leave_id: 5, date: '2026-09-16', message: '9/16 代理人已有調班' },
+          ],
+        },
+      })
+      const { execute } = useApprovalOperation({ apiFn, onSuccess: vi.fn() })
+
+      await execute(5, { approved: true }, '已核准')
+
+      expect(ElMessage.success).toHaveBeenCalledWith('已核准')
+      expect(ElMessage.warning).toHaveBeenCalledTimes(1)
+      expect(ElMessage.warning).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('9/16 代理人已有調班') }),
+      )
+    })
+
+    it('沒有警示（含加班／補卡等沒有這個欄位的回應）時不呼叫 warning', async () => {
+      const apiFn = vi.fn().mockResolvedValue({ data: { message: '已核准' } })
+      const { execute } = useApprovalOperation({ apiFn, onSuccess: vi.fn() })
+
+      await execute(1, { approved: true }, '已核准')
+
+      expect(ElMessage.warning).not.toHaveBeenCalled()
     })
   })
 })
