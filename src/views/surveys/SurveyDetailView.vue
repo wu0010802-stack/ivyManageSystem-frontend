@@ -31,7 +31,7 @@ import {
 import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
 import { friendlyError } from '@/utils/errorMessages'
-import { formatTaipeiDateTimeMinute, todayTaipeiISO } from '@/utils/format'
+import { formatTaipeiDateTimeMinute, nowTaipeiNaiveISO, todayTaipeiISO } from '@/utils/format'
 import { SURVEY_QUESTION_TYPES, firstUnansweredRequiredQuestion, type SurveyQuestionType } from '@/constants/surveyQuestionTypes'
 import { SURVEY_STATUS_LABELS, SURVEY_STATUS_TAG, deadlineHint, deriveSurveyStatus } from './surveyListModel'
 import {
@@ -176,16 +176,6 @@ async function loadClassroomNames() {
   }
 }
 
-/** 只重抓調查本體（催覆後更新「上次催覆」，不必連統計與明細一起重載）。 */
-async function reloadSurvey() {
-  try {
-    const res = await getSurvey(surveyId)
-    survey.value = res.data as unknown as SurveyDetail
-  } catch {
-    // 只是更新輔助資訊，失敗不打擾使用者，下次進頁就會是新的。
-  }
-}
-
 async function fetchAll() {
   loading.value = true
   try {
@@ -306,15 +296,25 @@ async function onRemind() {
   }
   try {
     const res = await remindSurvey(surveyId)
-    showRemindResult(res.data as unknown as { sent: number })
-    await reloadSurvey()
+    applyRemindResult(res.data as unknown as { sent: number })
   } catch (e) {
     ElMessage.error(friendlyError('催覆失敗', e))
   }
 }
 
-function showRemindResult(data: { sent: number }) {
+/**
+ * 催覆結果：提示推播人數，並就地更新「上次催覆」。推播紀錄是在 response 送出後
+ * 才於背景寫入（dispatch.deferred_drain），馬上重抓調查多半還是舊值，所以用回傳的
+ * `sent` 樂觀更新；下次進頁會以後端紀錄為準。
+ */
+function applyRemindResult(data: { sent: number }) {
   ElMessage.success(data.sent ? `已推播 ${data.sent} 位家長` : '沒有需要推播的家長（24 小時內已提醒過）')
+  if (!data.sent || !survey.value) return
+  survey.value = {
+    ...survey.value,
+    last_reminded_at: nowTaipeiNaiveISO(),
+    reminded_parent_count: (survey.value.reminded_parent_count ?? 0) + data.sent,
+  }
 }
 
 async function onRemindClassroom(row: ClassroomRow) {
@@ -330,8 +330,7 @@ async function onRemindClassroom(row: ClassroomRow) {
   }
   try {
     const res = await remindSurvey(surveyId, [row.classroom_id])
-    showRemindResult(res.data as unknown as { sent: number })
-    await reloadSurvey()
+    applyRemindResult(res.data as unknown as { sent: number })
   } catch (e) {
     ElMessage.error(friendlyError('催覆失敗', e))
   }

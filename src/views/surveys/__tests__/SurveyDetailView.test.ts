@@ -48,6 +48,7 @@ vi.mock('@/api/classrooms', () => ({
 vi.mock('@/utils/format', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/utils/format')>()),
   todayTaipeiISO: () => '2026-09-15',
+  nowTaipeiNaiveISO: () => '2026-09-15T10:05:00',
 }))
 
 import View from '../SurveyDetailView.vue'
@@ -330,7 +331,7 @@ describe('SurveyDetailView', () => {
       w.unmount()
     })
 
-    it('各班列「催覆此班」：確認後只催該班，並重新載入調查以更新上次催覆', async () => {
+    it('各班列「催覆此班」：確認後只催該班，上次催覆即時更新（推播紀錄在背景寫入，不靠重抓）', async () => {
       const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
       remindSurveyMock.mockResolvedValue({ data: { sent: 2 } })
       setup()
@@ -344,7 +345,8 @@ describe('SurveyDetailView', () => {
 
       expect(confirmSpy.mock.calls[0][0]).toContain('天堂鳥')
       expect(remindSurveyMock).toHaveBeenCalledWith(7, [12])
-      expect(getSurveyMock).toHaveBeenCalledTimes(2)
+      expect(w.find('[data-test="survey-meta"]').text()).toContain('2026-09-15 10:05・累計推播 2 人次')
+      expect(getSurveyMock).toHaveBeenCalledTimes(1)
       confirmSpy.mockRestore()
       w.unmount()
     })
@@ -371,17 +373,31 @@ describe('SurveyDetailView', () => {
       expired.unmount()
     })
 
-    it('一鍵催覆成功後同樣重新載入調查', async () => {
+    it('一鍵催覆成功後上次催覆即時更新，人次累加在既有數字上', async () => {
       const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
       remindSurveyMock.mockResolvedValue({ data: { sent: 3 } })
-      setup()
+      setup(surveyFixture({ last_reminded_at: '2026-09-12T14:30:00', reminded_parent_count: 23 }))
       const w = mountView()
       await flushPromises()
 
       await w.find('[data-test="action-remind"]').trigger('click')
       await flushPromises()
       expect(remindSurveyMock).toHaveBeenCalledWith(7)
-      expect(getSurveyMock).toHaveBeenCalledTimes(2)
+      expect(w.find('[data-test="survey-meta"]').text()).toContain('2026-09-15 10:05・累計推播 26 人次')
+      confirmSpy.mockRestore()
+      w.unmount()
+    })
+
+    it('24 小時內都提醒過（sent=0）時上次催覆不變', async () => {
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+      remindSurveyMock.mockResolvedValue({ data: { sent: 0 } })
+      setup()
+      const w = mountView()
+      await flushPromises()
+
+      await w.find('[data-test="action-remind"]').trigger('click')
+      await flushPromises()
+      expect(w.find('[data-test="survey-meta"]').text()).toContain('尚未催覆')
       confirmSpy.mockRestore()
       w.unmount()
     })
