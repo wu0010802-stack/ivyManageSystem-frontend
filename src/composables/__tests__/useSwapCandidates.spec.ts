@@ -44,6 +44,34 @@ describe('useSwapCandidates', () => {
     expect(state.candidates.value).toEqual([cand(1), cand(2)])
   })
 
+  it('roster 還沒回：候選一回就先顯示（不加註、loading 關閉），roster 回來再補註記並重排', async () => {
+    const roster = deferred<{ data: unknown[] }>()
+    getSwapCandidates.mockResolvedValue({ data: [cand(1), cand(2)] })
+    getDayRoster.mockReturnValue(roster.promise)
+    const state = useSwapCandidates()
+    const p = state.load('2026-10-20')
+    await new Promise((r) => setTimeout(r, 0)) // 讓候選請求先 resolve；roster 仍卡住
+    expect(state.candidates.value).toEqual([cand(1), cand(2)])
+    expect(state.loading.value).toBe(false)
+    roster.resolve({ data: [rosterRow(1, true), rosterRow(2, false)] })
+    await expect(p).resolves.toBe(true)
+    expect(state.candidates.value.map((c) => c.employee_id)).toEqual([2, 1])
+    expect(state.candidates.value[1]).toMatchObject({ same_time: true, duty_label: '早車 07:00~16:30' })
+  })
+
+  it('roster 回來前使用者已換日期：舊 roster 不得補註到新名單', async () => {
+    const firstRoster = deferred<{ data: unknown[] }>()
+    getSwapCandidates.mockResolvedValue({ data: [cand(1)] })
+    getDayRoster.mockReturnValueOnce(firstRoster.promise).mockResolvedValueOnce({ data: [] })
+    const state = useSwapCandidates()
+    const p1 = state.load('2026-10-20')
+    await new Promise((r) => setTimeout(r, 0))
+    await state.load('2026-10-21')
+    firstRoster.resolve({ data: [rosterRow(1, true)] })
+    await expect(p1).resolves.toBe(true)
+    expect(state.candidates.value).toEqual([cand(1)]) // 沒被舊 roster 加上 duty_label
+  })
+
   it('候選請求失敗：回 false 並清空名單', async () => {
     getSwapCandidates.mockRejectedValue(new Error('boom'))
     getDayRoster.mockResolvedValue({ data: [rosterRow(1, false)] })
