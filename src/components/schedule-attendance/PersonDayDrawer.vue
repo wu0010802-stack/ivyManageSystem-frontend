@@ -50,7 +50,7 @@
       <section v-if="cell.edit.plan" class="pdd__section" data-test="pdd-edit-day">
         <h3>改這天</h3>
         <el-select v-model="dayChoice" :aria-label="'改這天的班別'" class="pdd__select" data-test="pdd-day-select">
-          <el-option :value="INHERIT" label="繼承週排班" />
+          <el-option :value="INHERIT" :label="inheritLabel" />
           <el-option v-for="s in optionsWith(initialDayChoice)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
           <el-option :value="DAY_OFF" label="排休（明確不上班）" />
         </el-select>
@@ -177,6 +177,13 @@ function weeklyValue(cell: GridCell): string {
   return '無'
 }
 
+/** 「改這天」刪掉每日調整後會落回哪一層：有週排班（含輪值表寫入的）寫班別名，否則是預設工時 */
+const inheritLabel = computed(() => {
+  const cell = props.cell
+  const weekly = cell ? weeklyValue(cell) : '無'
+  return weekly === '無' ? '不另外調整（沿用預設工時）' : `不另外調整（沿用週排班：${weekly}）`
+})
+
 const chain = computed(() => {
   const cell = props.cell
   if (!cell) return []
@@ -229,7 +236,8 @@ const verdict = computed(() => {
   // R9：與格子同一套判定（今天的上班中／尚未打卡不能和格子不一致）
   const shown = cellDisplay(cell, props.today, props.day?.import_covered === false ? new Set([props.day.date]) : undefined)
   if (shown.state === 'working' || shown.state === 'not_punched' || shown.state === 'awaiting_import') return shown.verdict?.label ?? ''
-  const parts = [RECON_STATUS_LABELS[actual.status]]
+  // 與格子同一個判定文字（含「・已豁免／已接受扣款」）；非應出勤日格子不寫判定，這裡仍寫狀態名
+  const parts = [shown.verdict?.label ?? RECON_STATUS_LABELS[actual.status]]
   if (actual.late_minutes) parts.push(`遲到 ${actual.late_minutes} 分`)
   if (actual.early_leave_minutes) parts.push(`早退 ${actual.early_leave_minutes} 分`)
   return parts.join('・')

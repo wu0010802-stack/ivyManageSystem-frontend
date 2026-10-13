@@ -127,6 +127,16 @@ describe('ShiftGrid 桌機', () => {
     expect(css).not.toMatch(/\.shift-grid__cell--future \{[^}]*color: var\(--el-text-color-secondary\)/)
   })
 
+  it('只看未來可排：只留今天以後的欄（過去的格子不能排，留著只是干擾）', () => {
+    const wrapper = mountGrid({ filter: 'future', cells: cellsFor(Object.fromEntries(WEEK.map((d) => [`1|${d}`, { plan: { expected: day(d).is_workday }, edit: { plan: d > TODAY } }]))) })
+    const heads = wrapper.findAll('thead th.shift-grid__day').map((th) => th.attributes('data-test'))
+    expect(heads).toEqual(['day-2026-09-18'])
+  })
+
+  it('表格有說明用的 caption（螢幕閱讀器先知道列與欄是什麼）', () => {
+    expect(mountGrid().find('caption').text()).toContain('列為人員')
+  })
+
   it('今天那一欄的欄頭標「今天」', () => {
     const wrapper = mountGrid()
     expect(wrapper.find(`[data-test="day-${TODAY}"]`).text()).toContain('今天')

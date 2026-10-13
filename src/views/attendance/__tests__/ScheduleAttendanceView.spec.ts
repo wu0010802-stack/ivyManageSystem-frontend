@@ -504,6 +504,25 @@ describe('班表核對與明細互通', () => {
     wrapper.unmount()
   })
 
+  it('網址拿掉 filter（站內導航到不帶篩選的連結）時，畫面回到全部，與網址一致', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'grid', filter: 'issues' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('issues')
+    await wrapper.setProps({ filter: undefined })
+    await flushPromises()
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('all')
+    wrapper.unmount()
+  })
+
+  it('學期輪值表與換班紀錄不顯示本月進度（那兩頁不是以月為範圍）', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'rotation' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.find('.month-progress-stub').attributes('style') ?? '').toContain('display: none')
+    await wrapper.find('[data-test="tab-grid"]').trigger('click')
+    expect(wrapper.find('.month-progress-stub').attributes('style') ?? '').not.toContain('display: none')
+    wrapper.unmount()
+  })
+
   it('?tab= 深連結在已停留於本頁時仍切換頁籤，格子面板保留不卸載', async () => {
     const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'grid' }, global: { stubs: STUBS } })
     await flushPromises()

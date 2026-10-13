@@ -9,10 +9,11 @@
          限高的捲動容器讓日期表頭與人員欄在捲動時固定（外層 el-main 捲動時 sticky 不會作用在表格上） -->
     <div v-else-if="!mobile" class="shift-grid__scroller" :style="maxHeight ? { maxHeight: `${maxHeight}px` } : undefined">
     <table class="shift-grid__table" data-test="shift-grid-table">
+      <caption class="shift-grid__caption">班表核對：列為人員（依班級分組），欄為日期；每格是應上班與實際打卡，按下可看來源與處理</caption>
       <thead>
         <tr>
           <th scope="col" class="shift-grid__corner">人員</th>
-          <th v-for="d in days" :key="d.date" scope="col" class="shift-grid__day" :class="{ 'shift-grid__day--off': !d.is_workday, 'shift-grid__day--today': d.date === today }" :data-test="`day-${d.date}`">
+          <th v-for="d in shownDays" :key="d.date" scope="col" class="shift-grid__day" :class="{ 'shift-grid__day--off': !d.is_workday, 'shift-grid__day--today': d.date === today }" :data-test="`day-${d.date}`">
             <span class="shift-grid__date">{{ dayLabel(d) }}<span v-if="d.date === today" class="shift-grid__today">今天</span></span>
             <el-tag v-if="d.is_holiday" size="small" type="info">{{ d.holiday_name || '假日' }}</el-tag>
             <el-tag v-else-if="d.is_makeup_workday" size="small" type="warning">補班</el-tag>
@@ -30,7 +31,7 @@
       <tbody>
         <template v-for="section in sections" :key="section.group.key">
           <tr class="shift-grid__group">
-            <th :colspan="days.length + 1" scope="colgroup"><span class="shift-grid__group-label">{{ section.group.label }}</span></th>
+            <th :colspan="shownDays.length + 1" scope="colgroup"><span class="shift-grid__group-label">{{ section.group.label }}</span></th>
           </tr>
           <tr v-for="emp in section.employees" :key="emp.employee_id" :data-test="`row-${emp.employee_id}`">
             <th scope="row" class="shift-grid__person">
@@ -53,7 +54,7 @@
               </el-select>
               <span v-if="changedIds?.has(emp.employee_id)" class="shift-grid__unsaved" :data-test="`unsaved-${emp.employee_id}`">未儲存</span>
             </th>
-            <td v-for="d in days" :key="d.date" class="shift-grid__cell-wrap" :class="{ 'shift-grid__cell-wrap--off': !d.is_workday }">
+            <td v-for="d in shownDays" :key="d.date" class="shift-grid__cell-wrap" :class="{ 'shift-grid__cell-wrap--off': !d.is_workday }">
               <button
                 v-if="cellOf(emp.employee_id, d.date)"
                 type="button"
@@ -209,6 +210,8 @@ watch(
   },
 )
 const mobileDayInfo = computed(() => props.days.find((d) => d.date === mobileDay.value))
+/** 桌機表格的欄：「只看未來可排」只留今天以後（過去的格子不能排） */
+const shownDays = computed(() => (props.filter === 'future' ? props.days.filter((d) => d.date > props.today) : props.days))
 
 const cellOf = (employeeId: number, date: string) => props.cells.get(cellKey(employeeId, date))
 
@@ -314,6 +317,7 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
   overscroll-behavior: contain;
   border-top: 1px solid var(--el-border-color-lighter);
 }
+.shift-grid__caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .shift-grid__empty { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-6); text-align: center; color: var(--el-text-color-secondary); }
 .shift-grid__empty p { margin: 0; }
 .shift-grid__table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-sm); }
@@ -355,7 +359,7 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__cell--danger .shift-grid__verdict::before,
 .shift-grid__cell--warning .shift-grid__verdict::before { content: ''; display: inline-block; width: 0.5em; height: 0.5em; margin-right: var(--space-1); border-radius: 50%; background: currentColor; vertical-align: 0.1em; }
 .shift-grid__cell--locked { background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--el-fill-color-light) 6px 8px); }
-.shift-grid__source { display: inline-block; min-width: 1.4em; margin-right: var(--space-1); padding: 0 2px; border-radius: var(--radius-sm); background: var(--el-fill-color); text-align: center; font-size: var(--text-xs); }
+.shift-grid__source { display: inline-block; min-width: 1.4em; margin-right: var(--space-1); padding: 0 calc(var(--space-1) / 2); border-radius: var(--radius-sm); background: var(--el-fill-color); text-align: center; font-size: var(--text-xs); }
 .shift-grid__result { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
 .shift-grid__actual { color: var(--el-text-color-regular); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* 只在班別名與時段之間、打卡與判定之間換行，時段本身不拆成「08:00–」／「17:30」 */
@@ -367,7 +371,7 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__cell--judged .shift-grid__plan { font-size: var(--text-xs); color: var(--el-text-color-secondary); }
 .shift-grid__leave { font-size: var(--text-xs); color: var(--el-text-color-regular); }
 .shift-grid__confirm { font-size: var(--text-xs); color: var(--color-warning-darker); }
-.shift-grid__confirm::before { content: '●'; margin-right: 2px; }
+.shift-grid__confirm::before { content: '●'; margin-right: calc(var(--space-1) / 2); }
 .shift-grid__day-picker { display: flex; gap: var(--space-1); overflow-x: auto; margin-bottom: var(--space-3); }
 .shift-grid__day-tab { min-height: var(--touch-target-min); padding: 0 var(--space-2); border: 1px solid var(--el-border-color); border-radius: var(--radius-md); background: var(--el-bg-color); font: inherit; white-space: nowrap; }
 .shift-grid__day-tab--active { border-color: var(--el-color-primary); color: var(--el-color-primary); font-weight: 600; }
@@ -378,5 +382,5 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__cell--full_leave .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--el-text-color-primary); }
 .shift-grid__cell.shift-grid__cell--full_leave .shift-grid__result { order: -1; }
 .shift-grid__card { display: grid; gap: var(--space-1); margin-bottom: var(--space-2); }
-.shift-grid__card-main { display: grid; gap: 2px; padding: var(--space-2); border: 1px solid var(--el-border-color-lighter); border-radius: var(--radius-md); background: var(--el-bg-color); text-align: left; font: inherit; color: inherit; min-height: var(--touch-target-min); }
+.shift-grid__card-main { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--el-border-color-lighter); border-radius: var(--radius-md); background: var(--el-bg-color); text-align: left; font: inherit; color: inherit; min-height: var(--touch-target-min); }
 </style>

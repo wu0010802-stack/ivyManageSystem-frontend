@@ -148,6 +148,19 @@ describe('篩選', () => {
   })
 })
 
+describe('已在出勤明細處理過的異常（接受扣款／豁免）', () => {
+  it('不再算待處理；格子寫出處理結果、不掛警示', () => {
+    const waived = cell(1, W1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive', punch_in: `${W1}T08:30:00`, punch_out: `${W1}T17:00:00` } })
+    expect(isIssue(waived, TODAY)).toBe(false)
+    expect(cellDisplay(waived, TODAY).verdict).toEqual({ label: '出勤異常・已豁免', tone: 'info' })
+    const accepted = cell(1, W1, { actual: { status: 'missing_punch', confirmed_action: 'admin_accept', punch_in: `${W1}T07:52:00`, punch_out: null } })
+    expect(isIssue(accepted, TODAY)).toBe(false)
+    expect(cellDisplay(accepted, TODAY).verdict?.label).toBe('缺卡待確認・已接受扣款')
+    // 老師確認還在進行中：仍算待處理
+    expect(isIssue(cell(1, W1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive' }, confirmation: { item_id: 1, round_id: 1, kind: 'swap', status: 'pending', partner_employee_id: 2 } }), TODAY)).toBe(true)
+  })
+})
+
 describe('整天未匯入打卡（不算待處理）', () => {
   const NONE = { status: 'data_incomplete' as const, punch_in: null, punch_out: null }
   const uncovered = uncoveredDates([day(WEEK[0], { import_covered: false }), day(WEEK[1]), day(WEEK[2], { import_covered: null })])

@@ -20,7 +20,7 @@
       </template>
     </PageHeader>
 
-    <MonthProgressBar :date="anchorDate" :revision="dataRevision" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" />
+    <MonthProgressBar v-show="activeTab === 'grid' || activeTab === 'records'" :date="anchorDate" :revision="dataRevision" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" />
 
     <div class="workspace-mode" role="tablist" aria-label="排班與出勤檢視">
       <button
@@ -240,7 +240,8 @@ watch(activeTab, (tab) => {
 })
 // ?tab= 深連結在「已經停在本頁」時也要生效；值沒變時 watch 不觸發，不會蓋掉使用者自己按的頁籤。
 watch(() => props.tab, (tab) => { if (tab !== undefined) activeTab.value = normalizeTab(tab) })
-watch(() => props.filter, (f) => { if (f !== undefined) gridFilter.value = f })
+// 網址是篩選的唯一來源：拿掉 filter（例如站內連到不帶篩選的網址）就回到全部
+watch(() => props.filter, (f) => { gridFilter.value = f ?? 'all' })
 
 function syncQuery(patch: Record<string, string | undefined>): void {
   const next: Record<string, string> = {}

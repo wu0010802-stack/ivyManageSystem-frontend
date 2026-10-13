@@ -57,7 +57,10 @@ const STATUS_TONES: Record<ReconStatus, Tone> = {
   anomaly: 'danger',
 }
 
-/** 「只看有問題」排除的判定（§2.1）。 */
+/** 出勤明細已處理（ResolveCard／批次）的結果；處理後核對狀態不會變，要靠 confirmed_action 判斷 */
+const CONFIRMED_ACTION_LABELS: Record<string, string> = { admin_accept: '已接受扣款', admin_waive: '已豁免' }
+
+/** 「只看待處理」排除的判定（§2.1）。 */
 const NON_ISSUE_STATUSES: ReadonlySet<ReconStatus> = new Set(['matched', 'off_day', 'leave'])
 /** 仍在處理中的老師確認項目（SPEC-026 ACTIVE_ITEM_STATUSES）。 */
 const ACTIVE_CONFIRMATION_STATUSES: ReadonlySet<string> = new Set(['pending', 'agreed', 'disputed'])
@@ -122,6 +125,8 @@ export function isIssue(cell: GridCell, today: string, uncovered: ReadonlySet<st
   // 當日尚未結束不判（09-11 規則）；未來日沒有 actual
   if (!cell.actual || cell.date >= today) return false
   if (isAwaitingImport(cell, uncovered)) return false
+  // 已在出勤明細接受扣款或豁免：後端核對是即時重算、不讀 confirmed_action，狀態仍是異常，但事情已處理完
+  if (cell.actual.confirmed_action) return false
   return !NON_ISSUE_STATUSES.has(cell.actual.status)
 }
 
@@ -250,12 +255,19 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
       return { ...base, state: 'not_punched', actual: null, verdict: { label: '尚未打卡', tone: 'info' } }
     }
   }
+  const handled = actual.confirmed_action && !NON_ISSUE_STATUSES.has(actual.status)
+    ? CONFIRMED_ACTION_LABELS[actual.confirmed_action] ?? '已處理'
+    : null
   return {
     ...base,
     state: 'judged',
     actual: punches,
     // 非應出勤日沒打卡：計畫行已寫「非應出勤日／排休」，判定再寫一次只是噪音
-    verdict: actual.status === 'off_day' ? null : { label: RECON_STATUS_LABELS[actual.status], tone: STATUS_TONES[actual.status] },
+    verdict: actual.status === 'off_day'
+      ? null
+      : handled
+        ? { label: `${RECON_STATUS_LABELS[actual.status]}・${handled}`, tone: 'info' }
+        : { label: RECON_STATUS_LABELS[actual.status], tone: STATUS_TONES[actual.status] },
   }
 }
 

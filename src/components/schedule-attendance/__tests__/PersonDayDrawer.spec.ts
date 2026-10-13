@@ -237,6 +237,21 @@ describe('PersonDayDrawer', () => {
     expect(wrapper.find('[data-test="pdd-import"]').classes()).toContain('el-button--primary')
   })
 
+  it('改這天的「不另外調整」選項寫出會沿用什麼（沒有週排班時是預設工時，不是週排班）', async () => {
+    const withWeekly = mountDrawer(cell(1, W1))
+    await flushPromises()
+    expect(withWeekly.findAllComponents({ name: 'ElOption' })[0].props('label')).toBe('不另外調整（沿用週排班：早車）')
+    const noWeekly = mountDrawer(cell(1, W1, { plan: { source: 'employee' } }), { weeklyShiftId: null })
+    await flushPromises()
+    expect(noWeekly.findAllComponents({ name: 'ElOption' })[0].props('label')).toBe('不另外調整（沿用預設工時）')
+  })
+
+  it('已在出勤明細豁免的異常：判定寫出處理結果（與格子一致）', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive', late_minutes: 12, punch_in: `${W1}T08:12:00`, punch_out: `${W1}T17:00:00` } }))
+    await flushPromises()
+    expect(wrapper.find('[data-test="pdd-actual"]').text()).toContain('出勤異常・已豁免・遲到 12 分')
+  })
+
   it('本人的已打卡格子：沒有可用動作並說明原因；「看他整月」帶出人與日', async () => {
     const wrapper = mountDrawer(cell(1, W1, {
       actual: {},
