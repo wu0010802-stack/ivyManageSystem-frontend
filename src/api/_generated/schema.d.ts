@@ -20217,7 +20217,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Remind Survey */
+        /**
+         * Remind Survey
+         * @description 催覆未回覆家長；body 帶 `classroom_ids` 時只催這些班（不帶＝全部未回覆）。
+         */
         post: operations["remind_survey_api_surveys__survey_id__remind_post"];
         delete?: never;
         options?: never;
@@ -43691,6 +43694,14 @@ export interface components {
             /** Remark */
             remark: string;
         };
+        /** RemindIn */
+        RemindIn: {
+            /**
+             * Classroom Ids
+             * @description 只催這些班級的未回覆家長；不帶＝全部未回覆
+             */
+            classroom_ids?: number[] | null;
+        };
         /** RemindOut */
         RemindOut: {
             /** Sent */
@@ -49072,6 +49083,13 @@ export interface components {
             audience_type: string;
             /** Classroom Ids */
             classroom_ids: number[];
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Created By Name
+             * @description 建立者員工姓名；帳號未綁員工時為帳號名，帳號已刪除為 null
+             */
+            created_by_name?: string | null;
             /** Description */
             description?: string | null;
             /** Event Date */
@@ -49080,12 +49098,23 @@ export interface components {
             fee_note?: string | null;
             /** Id */
             id: number;
+            /**
+             * Last Reminded At
+             * @description 最後一次催覆推播時間（沒催過為 null）
+             */
+            last_reminded_at?: string | null;
             /** Location */
             location?: string | null;
             /** Published At */
             published_at?: string | null;
             /** Questions */
             questions: components["schemas"]["QuestionOut"][];
+            /**
+             * Reminded Parent Count
+             * @description 累計催覆推播人次（一位家長一次算一）
+             * @default 0
+             */
+            reminded_parent_count: number;
             /**
              * Reply Deadline
              * Format: date
@@ -49134,12 +49163,24 @@ export interface components {
         SurveyListItemOut: {
             /** Audience Type */
             audience_type: string;
+            /**
+             * Classroom Names
+             * @description 指定班級名稱（全園調查為空陣列）
+             */
+            classroom_names?: string[];
             /** Denominator */
             denominator: number;
             /** Event Date */
             event_date?: string | null;
             /** Id */
             id: number;
+            /** Last Reminded At */
+            last_reminded_at?: string | null;
+            /**
+             * Reminded Parent Count
+             * @default 0
+             */
+            reminded_parent_count: number;
             /** Replied Count */
             replied_count: number;
             /**
@@ -85316,7 +85357,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RemindIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
