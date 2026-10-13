@@ -46,7 +46,7 @@ describe('cellDisplay（§2.2）', () => {
     const working = cellDisplay(cell(1, TODAY, { actual: { punch_in: `${TODAY}T07:01:00`, status: 'missing_punch' } }), TODAY)
     expect(working.state).toBe('working')
     expect(working.verdict).toEqual({ label: '上班中', tone: 'info' })
-    expect(working.actual).toBe('07:01–—')
+    expect(working.actual).toBe('07:01 起')
     const notYet = cellDisplay(cell(1, TODAY, { actual: { status: 'data_incomplete' } }), TODAY)
     expect(notYet.verdict?.label).toBe('尚未打卡')
   })
@@ -85,6 +85,26 @@ describe('cellDisplay（§2.2）', () => {
     const swap = cellDisplay(cell(1, W1, { plan: { source: 'swap' }, edit: { locked_reason: 'finalized', plan: false } }), TODAY)
     expect(swap.source).toEqual({ short: '換', label: '換班' })
     expect(swap.locked).toBe(true)
+  })
+
+  it('格子文字精簡：預設工時只寫時段（「預」標籤已說明來源），非應出勤日不重複寫、也不掛來源', () => {
+    const byDefault = cellDisplay(cell(1, W1, { plan: { name: null, shift_type_id: null, source: 'default', work_start: '08:00', work_end: '17:00' } }), TODAY)
+    expect(byDefault.plan).toBe('08:00–17:00')
+    expect(byDefault.source?.short).toBe('預')
+    expect(cellDisplay(cell(1, W1, { plan: { source: 'weekly', name: '早值', work_start: '08:00', work_end: '17:00' } }), TODAY).plan).toBe('早值 08:00–17:00')
+    const off = cellDisplay(cell(1, '2026-09-19', { plan: { expected: false, source: 'employee' }, actual: { status: 'off_day' } }), TODAY)
+    expect(off.plan).toBe('非應出勤日')
+    expect(off.source).toBeNull()
+    expect(off.verdict).toBeNull()
+    const dayOff = cellDisplay(cell(1, W1, { plan: { expected: false, day_off: true, source: 'daily_off' }, actual: { status: 'off_day' } }), TODAY)
+    expect(dayOff.source?.short).toBe('休')
+    expect(dayOff.verdict).toBeNull()
+  })
+
+  it('單邊打卡寫「缺」而不是破折號接破折號；今天上班中寫「起」', () => {
+    expect(cellDisplay(cell(1, W1, { actual: { status: 'missing_punch', punch_in: `${W1}T07:52:00`, punch_out: null } }), TODAY).actual).toBe('07:52–缺')
+    expect(cellDisplay(cell(1, W1, { actual: { status: 'missing_punch', punch_in: null, punch_out: `${W1}T17:33:00` } }), TODAY).actual).toBe('缺–17:33')
+    expect(cellDisplay(cell(1, TODAY, { actual: { punch_in: `${TODAY}T07:01:00`, status: 'missing_punch' } }), TODAY).actual).toBe('07:01 起')
   })
 })
 

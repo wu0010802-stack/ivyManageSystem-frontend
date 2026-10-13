@@ -122,6 +122,10 @@ function onCommand(command: string | number | object): void {
 .grid-toolbar__picker { width: 150px; }
 .grid-toolbar__keyword { width: 200px; }
 .grid-toolbar__label { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
+/* 桌機：捲動時工具列（週次、篩選、儲存排班）固定在捲動區頂端，改到第 60 列也按得到儲存 */
+@media (--bp-sm) {
+  .grid-toolbar { position: sticky; top: 0; z-index: var(--z-sticky); margin-bottom: 0; padding: var(--space-2) 0 var(--space-3); background: var(--bg-color); }
+}
 @media (--to-sm) {
   .grid-toolbar__tools { margin-left: 0; }
 }

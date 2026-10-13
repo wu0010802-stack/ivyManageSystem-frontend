@@ -1,6 +1,6 @@
 <template>
   <nav class="month-progress" aria-label="本月進度" data-test="month-progress">
-    <span class="month-progress__title">{{ monthLabel }} 進度</span>
+    <span class="month-progress__title">{{ monthLabel }}進度</span>
     <ol class="month-progress__steps">
       <li class="month-progress__step" data-test="progress-schedule">
         <span class="month-progress__index">①</span>
@@ -65,10 +65,8 @@ export interface MonthSummary {
 const emit = defineEmits<{ 'show-issues': []; changed: []; summary: [value: MonthSummary] }>()
 
 const range = computed(() => monthRange(props.date))
-const monthLabel = computed(() => {
-  const [y, m] = props.date.split('-').map(Number)
-  return `${y} 年 ${m} 月`
-})
+// 年份已在頁首月份選單上，這裡只寫月份
+const monthLabel = computed(() => `${Number(props.date.slice(5, 7))} 月`)
 const canViewAttendance = hasPermission('ATTENDANCE_READ')
 // 薪資結算頁需要 SALARY_READ，沒有就只顯示步驟名稱（連過去會被路由守衛擋下）
 const canViewSalary = hasPermission('SALARY_READ')
@@ -136,8 +134,8 @@ watch(data, (g) => {
 </script>
 
 <style scoped>
-.month-progress { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--el-border-color-lighter); border-radius: var(--radius-md); font-size: var(--text-sm); }
-.month-progress__title { font-weight: 600; }
+.month-progress { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); margin-bottom: var(--space-2); font-size: var(--text-sm); }
+.month-progress__title { color: var(--el-text-color-secondary); }
 .month-progress__steps { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
 .month-progress__step { display: flex; align-items: center; gap: var(--space-1); }
 .month-progress__index { color: var(--el-text-color-secondary); }
@@ -145,4 +143,8 @@ watch(data, (g) => {
 .month-progress__link { min-height: var(--touch-target-min); padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-1); }
 .month-progress__error { margin: 0; color: var(--el-color-danger); font-size: var(--text-sm); }
 .month-progress__link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+/* 手機：步驟換行時連結已有 44px 觸控高度，不再額外加列距 */
+@media (--to-sm) {
+  .month-progress__steps { row-gap: 0; }
+}
 </style>

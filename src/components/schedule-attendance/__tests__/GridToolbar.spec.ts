@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
@@ -74,5 +76,10 @@ describe('GridToolbar', () => {
     const idle = mountToolbar({ pendingCount: 2, saving: false })
     expect(idle.find('[data-test="toolbar-prev"]').attributes('disabled')).toBeUndefined()
     expect(idle.findComponent({ name: 'ElDatePicker' }).props('disabled')).toBe(false)
+  })
+
+  it('桌機捲動時工具列（含儲存排班）固定在頂端', () => {
+    const css = readFileSync(resolve(__dirname, '../GridToolbar.vue'), 'utf8')
+    expect(css).toMatch(/@media \(--bp-sm\)[^@]*\.grid-toolbar[^{]*\{[^}]*position: sticky[^}]*top: 0/)
   })
 })

@@ -76,6 +76,12 @@ describe('useUnsavedChangesGuard', () => {
     expect(confirmMock).toHaveBeenLastCalledWith('尚有未儲存的變更，確定離開並捨棄？', '未儲存變更', expect.anything())
   })
 
+  it('確認框不因 hashchange 自動關閉（hash 路由的返回鍵／改網址會先觸發 guard 再觸發 hashchange，關掉＝無聲取消導覽）', async () => {
+    confirmMock.mockResolvedValue('confirm')
+    await confirmDiscardChanges()
+    expect(confirmMock).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), expect.objectContaining({ closeOnHashChange: false }))
+  })
+
   it('beforeunload：dirty 時 preventDefault', () => {
     mountWith(() => true)
     const ev = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent

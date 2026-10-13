@@ -181,12 +181,25 @@ export function planText(cell: GridCell): string {
   return `${plan.name ?? '預設工時'} ${plan.work_start}–${plan.work_end}`
 }
 
-const hhmm = (iso: string | null | undefined): string => (iso ? iso.slice(11, 16) : '—')
+/**
+ * 格子裡的計畫文字（比 planText 精簡，抽屜仍用 planText 全名）：
+ * 員工／系統預設工時只寫時段——旁邊的「預」標籤已說明來源，兩邊都寫會讓格子在窄欄折成兩行。
+ */
+function cellPlanText(cell: GridCell): string {
+  const plan = cell.plan
+  if (plan.expected && !plan.day_off && (plan.source === 'employee' || plan.source === 'default')) {
+    return `${plan.work_start}–${plan.work_end}`
+  }
+  return planText(cell)
+}
+
+const hhmm = (iso: string | null | undefined): string => (iso ? iso.slice(11, 16) : '缺')
 
 export interface CellDisplay {
   state: 'not_employed' | 'future' | 'working' | 'not_punched' | 'full_leave' | 'awaiting_import' | 'judged' | 'masked'
   plan: string
-  source: { short: string; label: string }
+  /** 非應出勤日（且不是排休）不掛來源標籤：哪一層決定「不用上班」對格子沒有意義 */
+  source: { short: string; label: string } | null
   actual: string | null
   verdict: { label: string; tone: Tone } | null
   leaveTags: string[]
@@ -204,8 +217,8 @@ const CONFIRMATION_HINTS: Record<string, string> = {
 /** §2.2 格子狀態與顯示。 */
 export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): CellDisplay {
   const base = {
-    plan: planText(cell),
-    source: SOURCE_TAGS[cell.plan.source],
+    plan: cellPlanText(cell),
+    source: !cell.plan.expected && !cell.plan.day_off ? null : SOURCE_TAGS[cell.plan.source],
     leaveTags: cell.leaves.map((leave) => `${leave.leave_type_label}${leave.status === 'pending' ? '（待審）' : ''}`),
     locked: cell.edit.locked_reason === 'finalized',
     confirmation: cell.confirmation ? CONFIRMATION_HINTS[cell.confirmation.status] ?? null : null,
@@ -215,6 +228,8 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
   const actual = cell.actual
   if (!actual) return { ...base, state: 'masked', actual: null, verdict: null }
   const punches = actual.punch_in || actual.punch_out ? `${hhmm(actual.punch_in)}–${hhmm(actual.punch_out)}` : null
+  // 今天只有上班卡＝還在上班，不是缺下班卡
+  const openShift = actual.punch_in ? `${hhmm(actual.punch_in)} 起` : null
   const fullLeave = cell.leaves.find((leave) => leave.status === 'approved' && leave.is_full_day)
   if (fullLeave && !punches) {
     return {
@@ -229,7 +244,7 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
   }
   if (cell.date === today) {
     if (actual.punch_in && !actual.punch_out) {
-      return { ...base, state: 'working', actual: punches, verdict: { label: '上班中', tone: 'info' } }
+      return { ...base, state: 'working', actual: openShift, verdict: { label: '上班中', tone: 'info' } }
     }
     if (!actual.punch_in && !actual.punch_out) {
       return { ...base, state: 'not_punched', actual: null, verdict: { label: '尚未打卡', tone: 'info' } }
@@ -239,7 +254,8 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
     ...base,
     state: 'judged',
     actual: punches,
-    verdict: { label: RECON_STATUS_LABELS[actual.status], tone: STATUS_TONES[actual.status] },
+    // 非應出勤日沒打卡：計畫行已寫「非應出勤日／排休」，判定再寫一次只是噪音
+    verdict: actual.status === 'off_day' ? null : { label: RECON_STATUS_LABELS[actual.status], tone: STATUS_TONES[actual.status] },
   }
 }
 

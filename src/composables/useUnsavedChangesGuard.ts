@@ -25,6 +25,9 @@ export async function confirmDiscardChanges(
       confirmButtonText: '捨棄變更',
       confirmButtonClass: 'el-button--danger',
       cancelButtonText: copy.cancelText ?? '留在此頁',
+      // hash 路由下返回鍵／改網址是 popstate（觸發 guard、開這個框）緊接 hashchange；
+      // EP 預設 hashchange 就關框＝當成取消，使用者什麼都沒看到導覽就被擋掉。
+      closeOnHashChange: false,
     })
     return true
   } catch {

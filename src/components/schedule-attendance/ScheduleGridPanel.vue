@@ -1,6 +1,7 @@
 <template>
   <div class="schedule-grid-panel">
     <GridToolbar
+      ref="toolbarRef"
       :week-start="weekStart"
       :filter="filter"
       :keyword="keyword"
@@ -50,6 +51,7 @@
       :coverage="coverage"
       :mobile="isMobile"
       :can-import="caller.can_edit_attendance"
+      :max-height="gridMaxHeight"
       @select="openCell"
       @weekly-change="state.setWeekly"
       @import-punches="emit('import-punches')"
@@ -118,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteUpdate } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { confirmDiscardChanges, useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
@@ -205,6 +207,30 @@ onBeforeRouteUpdate((to) => {
 })
 
 defineExpose({ confirmWeekChange })
+
+// ── 表格捲動容器高度 ─────────────────────────────────────────────
+// 工具列在桌機固定於捲動區頂端；它會依寬度換成 1–3 行。表格高度＝捲動區可視高度－工具列實際高度，
+// 寫死估算值時工具列一換行，表格固定的日期表頭就會疊到工具列上、蓋住「儲存排班」。
+const toolbarRef = ref<InstanceType<typeof GridToolbar> | null>(null)
+const gridMaxHeight = ref<number | null>(null)
+const GRID_BOTTOM_GAP = 8
+const GRID_MIN_HEIGHT = 320
+let resizeObserver: ResizeObserver | null = null
+function measureGrid(): void {
+  const toolbar = toolbarRef.value?.$el as HTMLElement | undefined
+  const main = toolbar?.closest('.el-main') as HTMLElement | null | undefined
+  if (!toolbar || !main || !main.clientHeight) return
+  gridMaxHeight.value = Math.max(GRID_MIN_HEIGHT, main.clientHeight - toolbar.offsetHeight - GRID_BOTTOM_GAP)
+}
+onMounted(() => {
+  const toolbar = toolbarRef.value?.$el as HTMLElement | undefined
+  const main = toolbar?.closest('.el-main')
+  if (!toolbar || !main || typeof ResizeObserver === 'undefined') return
+  resizeObserver = new ResizeObserver(measureGrid)
+  resizeObserver.observe(toolbar)
+  resizeObserver.observe(main)
+})
+onBeforeUnmount(() => resizeObserver?.disconnect())
 
 const NO_CALLER: GridOut['caller'] = { can_view_attendance: false, can_edit_plan: false, can_confirm: false, can_edit_attendance: false }
 const gridData = computed(() => state.grid.value)

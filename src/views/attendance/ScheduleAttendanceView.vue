@@ -1,22 +1,24 @@
 <template>
   <div class="attendance-workspace">
-    <PageHeader title="排班與出勤" subtitle="計畫班別與實際打卡在同一張表；每月結算前處理完待確認的格子再匯出月報" />
     <!-- 無獨立頁面層級權限閘（本站慣例＝側欄隱藏＋後端 403）；SCHEDULE 或 ATTENDANCE_READ 任一可進頁，
-         各頁籤與動作再依權限顯示（SPEC-027 §8）。 -->
-    <WorkspaceHeader
-      v-if="canViewAttendance"
-      :year="query.year"
-      :month="query.month"
-      :kpis="kpis"
-      :display-state="statsDisplayState"
-      @update:year="(v) => setMonth(v, query.month)"
-      @update:month="(v) => setMonth(query.year, v)"
-      @update:period="setMonth"
-      @import="openImport"
-      @export="onExport"
-    >
-      <template #month-tools><el-button v-if="canPayrollCompare" @click="payrollOpen = true">薪資扣項核對</el-button></template>
-    </WorkspaceHeader>
+         各頁籤與動作再依權限顯示（SPEC-027 §8）。頁首只放月份與動作，出勤統計在出勤明細頁籤，
+         讓班表核對的格子盡量進首屏。 -->
+    <PageHeader title="排班與出勤">
+      <template #actions>
+        <WorkspaceHeader
+          v-if="canViewAttendance"
+          :year="query.year"
+          :month="query.month"
+          :can-payroll-compare="canPayrollCompare"
+          @update:year="(v) => setMonth(v, query.month)"
+          @update:month="(v) => setMonth(query.year, v)"
+          @update:period="setMonth"
+          @import="openImport"
+          @export="onExport"
+          @payroll="payrollOpen = true"
+        />
+      </template>
+    </PageHeader>
 
     <MonthProgressBar :date="anchorDate" :revision="dataRevision" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" />
 
@@ -53,7 +55,8 @@
       @changed="onGridChanged"
     />
 
-    <div v-if="canViewAttendance" v-show="activeTab === 'records'">
+    <div v-if="canViewAttendance" v-show="activeTab === 'records'" data-test="records-panel">
+    <AttendanceMonthStats :kpis="kpis" :display-state="statsDisplayState" />
     <p v-if="ws.loading.value" role="status">正在載入 {{ query.year }} 年 {{ query.month }} 月出勤紀錄…</p>
     <div v-if="ws.loadState.value === 'error'" class="workspace-status" role="alert">
       <p>{{ query.year }} 年 {{ query.month }} 月出勤資料載入失敗。{{ ws.hasCurrentData.value ? '目前顯示此月份上次成功載入的資料。' : '目前尚無此月份可顯示的資料。' }}</p>
@@ -184,6 +187,7 @@ import { getRecords } from '@/api/attendance'
 import type { ApiResponse } from '@/api/_generated/typed'
 import PageHeader from '@/components/common/PageHeader.vue'
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
+import AttendanceMonthStats from '@/components/attendance/AttendanceMonthStats.vue'
 import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
 import DetailColumn from '@/components/attendance/DetailColumn.vue'
@@ -568,12 +572,18 @@ onMounted(() => { if (canViewAttendance) void ws.refresh() })
 .attendance-workspace {
   padding: var(--space-4);
 }
+/* 頁首放了月份切換與動作：中等寬度先換行，不擠扁標題 */
+.attendance-workspace :deep(.page-header) {
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin-bottom: var(--space-3);
+}
 
 .workspace-status { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-6); text-align: center; border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); }
 .workspace-status h2, .workspace-status p { margin: 0; }
 .workspace-status h2 { font-size: var(--text-lg); }
 .workspace-status p { color: var(--el-text-color-secondary); }
-.workspace-mode { display: flex; flex-wrap: wrap; gap: var(--space-5); border-bottom: 1px solid var(--el-border-color-light); margin-bottom: var(--space-4); }
+.workspace-mode { display: flex; flex-wrap: wrap; gap: var(--space-5); border-bottom: 1px solid var(--el-border-color-light); margin-bottom: var(--space-3); }
 .workspace-mode__tab {
   min-height: var(--touch-target-min);
   border: 0;

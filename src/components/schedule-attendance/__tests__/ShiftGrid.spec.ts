@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import ShiftGrid from '../ShiftGrid.vue'
@@ -25,6 +27,7 @@ function mountGrid(opts: {
   coverage?: Array<{ date: string; leaves: never[]; gaps: Array<Record<string, unknown>> }>
   days?: ReturnType<typeof day>[]
   canImport?: boolean
+  maxHeight?: number
 } = {}) {
   const g = grid({
     ...(opts.days ? { days: opts.days } : {}),
@@ -50,6 +53,7 @@ function mountGrid(opts: {
       coverage: opts.coverage as never,
       mobile: opts.mobile ?? false,
       canImport: opts.canImport ?? false,
+      maxHeight: opts.maxHeight,
     },
     global: { plugins: [ElementPlus] },
   })
@@ -106,6 +110,37 @@ describe('ShiftGrid 桌機', () => {
     await issues.find('[data-test="grid-empty-import"]').trigger('click')
     expect(issues.emitted('import-punches')).toHaveLength(1)
     expect(mountGrid({ cells, days, filter: 'issues' }).find('[data-test="grid-empty-import"]').exists()).toBe(false)
+  })
+
+  it('捲動容器高度由面板量測後帶入（工具列換行時表頭不蓋住儲存鈕）', () => {
+    const wrapper = mountGrid({ maxHeight: 512 })
+    expect((wrapper.find('.shift-grid__scroller').element as HTMLElement).style.maxHeight).toBe('512px')
+    expect((mountGrid().find('.shift-grid__scroller').element as HTMLElement).style.maxHeight).toBe('')
+  })
+
+  it('今天那一欄的欄頭標「今天」', () => {
+    const wrapper = mountGrid()
+    expect(wrapper.find(`[data-test="day-${TODAY}"]`).text()).toContain('今天')
+    expect(wrapper.find(`[data-test="day-${WEEK[0]}"]`).text()).not.toContain('今天')
+  })
+
+  it('格子兩行：第一行計畫，第二行打卡與判定並排（列高不被三行撐高）', () => {
+    const wrapper = mountGrid({
+      cells: cellsFor({ [`1|${WEEK[0]}`]: { actual: { status: 'anomaly', punch_in: `${WEEK[0]}T08:30:00`, punch_out: `${WEEK[0]}T18:00:00` } } }),
+    })
+    const result = wrapper.find(`[data-test="cell-1-${WEEK[0]}"] .shift-grid__result`)
+    expect(result.find('.shift-grid__actual').text()).toBe('08:30–18:00')
+    expect(result.find('.shift-grid__verdict').text()).toBe('出勤異常')
+  })
+
+  it('捲動時日期表頭與人員欄固定：表格在限高的捲動容器內，表頭 sticky top、人員欄 sticky left', () => {
+    const css = readFileSync(resolve(__dirname, '../ShiftGrid.vue'), 'utf8')
+    const rule = (selector: string) => css.match(new RegExp(`${selector.replace(/[.]/g, '\\.')}[^{]*\\{([^}]*)\\}`))?.[1] ?? ''
+    expect(rule('.shift-grid__scroller')).toMatch(/max-height:/)
+    expect(rule('.shift-grid__scroller')).toMatch(/overflow: auto/)
+    expect(rule('.shift-grid__table thead th')).toMatch(/position: sticky/)
+    expect(rule('.shift-grid__table thead th')).toMatch(/top: 0/)
+    expect(css).toMatch(/\.shift-grid__person[^{]*\{[^}]*position: sticky[^}]*left: 0/)
   })
 
   it('關鍵字搜尋：姓名包含（不分大小寫、前後空白忽略）', () => {

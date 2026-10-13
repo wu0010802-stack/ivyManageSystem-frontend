@@ -81,13 +81,19 @@ const ImportPreviewDialogStub = {
 
 const WorkspaceHeaderStub = {
   name: 'WorkspaceHeader',
-  props: ['year', 'month', 'kpis', 'displayState'],
-  emits: ['update:year', 'update:month', 'update:period', 'import', 'export'],
+  props: ['year', 'month', 'canPayrollCompare'],
+  emits: ['update:year', 'update:month', 'update:period', 'import', 'export', 'payroll'],
   template: `<div class="workspace-header-stub"><slot /><slot name="month-tools" /></div>`,
 }
 
 /** 格子面板的「換週前確認未儲存變更」；預設放行 */
 const panelConfirmWeekChange = vi.fn(async (_date: string) => true)
+const AttendanceMonthStatsStub = {
+  name: 'AttendanceMonthStats',
+  props: ['kpis', 'displayState'],
+  template: '<div class="month-stats-stub" />',
+}
+
 const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
   props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
@@ -105,13 +111,14 @@ const SHELL_STUBS = {
 }
 const STUBS = {
   ElDrawer: { props: ['modelValue'], template: '<section data-test="anomaly-drawer" :data-open="String(modelValue)"><slot /></section>' },
-  PayrollComparisonDialog: { props: ['modelValue'], template: '<div />' },
+  PayrollComparisonDialog: { name: 'PayrollComparisonDialog', props: ['modelValue'], template: '<div />' },
   ...SHELL_STUBS,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,
   DetailColumn: DetailColumnStub,
   ImportPreviewDialog: ImportPreviewDialogStub,
   WorkspaceHeader: WorkspaceHeaderStub,
+  AttendanceMonthStats: AttendanceMonthStatsStub,
   'el-tabs': { template: '<div class="el-tabs"><slot /></div>' },
   'el-tab-pane': { template: '<div class="el-tab-pane"><slot /></div>', props: ['label'] },
   'el-select': { template: '<select @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>' },
@@ -401,6 +408,7 @@ describe('ScheduleAttendanceView', () => {
 // WorkspaceHeader 單元測試
 // ──────────────────────────────────────────────────────────────────────────────
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
+import AttendanceMonthStats from '@/components/attendance/AttendanceMonthStats.vue'
 
 const WH_STUBS = {
   'el-select': {
@@ -415,56 +423,63 @@ const WH_STUBS = {
   'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
 }
 
-describe('WorkspaceHeader', () => {
-  const defaultProps = {
-    year: 2026,
-    month: 6,
-    kpis: { fullAttendance: 5, lateCount: 3, missingCount: 1, pendingAnomalies: 2 },
-  }
+const WH_DROPDOWN = {
+  name: 'ElDropdown',
+  emits: ['command'],
+  template: '<div class="el-dropdown-stub"><slot /><slot name="dropdown" /></div>',
+}
+const WH_ITEM = { props: ['command'], template: '<div class="el-dropdown-item-stub" :data-command="command"><slot /></div>' }
 
-  it('點「匯入」按鈕 emit import 事件', async () => {
-    const wrapper = mount(WorkspaceHeader, {
-      props: defaultProps,
-      global: { stubs: WH_STUBS },
+describe('WorkspaceHeader', () => {
+  const defaultProps = { year: 2026, month: 6 }
+  const mountHeader = (props: Record<string, unknown> = {}) =>
+    mount(WorkspaceHeader, {
+      props: { ...defaultProps, ...props },
+      global: { stubs: { ...WH_STUBS, 'el-dropdown': WH_DROPDOWN, 'el-dropdown-menu': { template: '<div><slot /></div>' }, 'el-dropdown-item': WH_ITEM, 'el-icon': true } },
     })
-    const importBtn = wrapper.findAll('button').find(b => b.text().includes('匯入'))
+
+  it('點「匯入打卡紀錄」emit import 事件', async () => {
+    const wrapper = mountHeader()
+    const importBtn = wrapper.findAll('button').find(b => b.text() === '匯入打卡紀錄')
     expect(importBtn).toBeDefined()
     await importBtn!.trigger('click')
     expect(wrapper.emitted('import')).toBeTruthy()
   })
 
-  it('點「匯出月報」按鈕 emit export 事件', async () => {
-    const wrapper = mount(WorkspaceHeader, {
-      props: defaultProps,
-      global: { stubs: WH_STUBS },
-    })
-    const exportBtn = wrapper.findAll('button').find(b => b.text().includes('匯出'))
-    expect(exportBtn).toBeDefined()
-    await exportBtn!.trigger('click')
+  it('月結選單：匯出月報 emit export；有薪資檢視權限才有薪資扣項核對', async () => {
+    const wrapper = mountHeader()
+    expect(wrapper.find('[aria-label="月結工具"]').text()).toContain('匯出月報')
+    expect(wrapper.find('[data-command="payroll"]').exists()).toBe(false)
+    wrapper.findComponent(WH_DROPDOWN).vm.$emit('command', 'export')
     expect(wrapper.emitted('export')).toBeTruthy()
+
+    const withPayroll = mountHeader({ canPayrollCompare: true })
+    expect(withPayroll.find('[data-command="payroll"]').text()).toBe('薪資扣項核對')
+    withPayroll.findComponent(WH_DROPDOWN).vm.$emit('command', 'payroll')
+    expect(withPayroll.emitted('payroll')).toBeTruthy()
   })
 
-  it('渲染 pendingAnomalies KPI', () => {
-    const wrapper = mount(WorkspaceHeader, {
-      props: defaultProps,
+  it('不再顯示出勤統計（統計移到出勤明細頁籤）', () => {
+    expect(mountHeader().text()).not.toContain('待處理異常')
+  })
+
+  it('權限 gate：hasPermission 回 false 時「匯入打卡紀錄」不顯示，月結選單仍在', () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mountHeader()
+    expect(wrapper.findAll('button').find((b) => b.text().includes('匯入'))).toBeUndefined()
+    expect(wrapper.find('[aria-label="月結工具"]').exists()).toBe(true)
+    mockHasPermission.mockReturnValue(true)
+  })
+})
+
+describe('AttendanceMonthStats', () => {
+  it('渲染四個統計與範圍說明', () => {
+    const wrapper = mount(AttendanceMonthStats, {
+      props: { displayState: 'ready', kpis: { fullAttendance: 5, lateCount: 3, missingCount: 1, pendingAnomalies: 2 } },
       global: { stubs: WH_STUBS },
     })
     expect(wrapper.text()).toContain('待處理異常')
-  })
-
-  it('權限 gate：hasPermission 回 false 時「匯入」按鈕不顯示（canWrite=false）', () => {
-    mockHasPermission.mockReturnValue(false)
-    const wrapper = mount(WorkspaceHeader, {
-      props: defaultProps,
-      global: { stubs: WH_STUBS },
-    })
-    const importBtn = wrapper.findAll('button').find((b) => b.text().includes('匯入'))
-    expect(importBtn).toBeUndefined()
-    // 匯出按鈕不受權限限制，應仍可見
-    const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('匯出'))
-    expect(exportBtn).toBeDefined()
-    // 重設，避免污染後續 test
-    mockHasPermission.mockReturnValue(true)
+    expect(wrapper.text()).toContain('0 筆異常不代表打卡資料已齊全')
   })
 })
 
@@ -566,6 +581,7 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     await flushPromises()
     expect(tabs(wrapper)).toEqual(['班表核對', '學期輪值表', '換班紀錄'])
     expect(wrapper.findComponent(WorkspaceHeaderStub).exists()).toBe(false)
+    expect(wrapper.findComponent(AttendanceMonthStatsStub).exists()).toBe(false)
     expect(getSummaryMock).not.toHaveBeenCalled()
     mockHasPermission.mockReturnValue(true)
     wrapper.unmount()
@@ -635,6 +651,21 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     await flushPromises()
     expect(msgBoxConfirm).not.toHaveBeenCalled()
     expect(downloadFile).toHaveBeenCalledTimes(3)
+    wrapper.unmount()
+  })
+
+  it('版面：月份與動作在頁首列，出勤統計只在出勤明細頁籤（不壓在格子上方）', async () => {
+    mockHasFullSalaryView.mockReturnValue(true)
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.find('.page-header .header-actions').findComponent(WorkspaceHeaderStub).exists()).toBe(true)
+    expect(wrapper.findComponent(WorkspaceHeaderStub).props('canPayrollCompare')).toBe(true)
+    expect(wrapper.find('[data-test="records-panel"]').findComponent(AttendanceMonthStatsStub).exists()).toBe(true)
+    expect(wrapper.find('.page-header__subtitle').exists()).toBe(false)
+    wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('payroll')
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'PayrollComparisonDialog' }).exists()).toBe(true)
+    mockHasFullSalaryView.mockReturnValue(false)
     wrapper.unmount()
   })
 
@@ -714,14 +745,14 @@ describe('薪資核對入口權限', () => {
     mockHasPermission.mockImplementation((code: unknown) => code === 'SALARY_READ' || code === 'ATTENDANCE_READ')
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('薪資扣項核對')
+    expect(wrapper.findComponent(WorkspaceHeaderStub).props('canPayrollCompare')).toBe(true)
   })
   it('沒有全員薪資視野則隱藏入口', async () => {
     mockHasFullSalaryView.mockReturnValue(false)
     mockHasPermission.mockReturnValue(true)
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).not.toContain('薪資扣項核對')
+    expect(wrapper.findComponent(WorkspaceHeaderStub).props('canPayrollCompare')).toBe(false)
   })
 })
 
@@ -757,27 +788,27 @@ it('跨月失敗隱藏前月三欄與統計，重試成功後恢復', async () =
   const wrapper = mountView()
   await flushPromises()
   const header = wrapper.findComponent(WorkspaceHeaderStub)
-  expect(header.props('displayState')).toBe('ready')
+  const stats = () => wrapper.findComponent(AttendanceMonthStatsStub)
+  expect(stats().props('displayState')).toBe('ready')
   getSummaryMock.mockRejectedValueOnce(new Error('測試失敗'))
   await header.vm.$emit('update:month', header.props('month') === 9 ? 8 : 9)
   await flushPromises()
   expect(wrapper.find('.workspace-cols').exists()).toBe(false)
-  expect(header.props('displayState')).toBe('unavailable')
+  expect(stats().props('displayState')).toBe('unavailable')
   await wrapper.findAll('button').find(button => button.text() === '重新載入')!.trigger('click')
   await flushPromises()
   expect(wrapper.find('.workspace-cols').exists()).toBe(true)
-  expect(header.props('displayState')).toBe('ready')
+  expect(stats().props('displayState')).toBe('ready')
   wrapper.unmount()
 })
 
 it('沒有當月資料時統計不顯示舊月數字', () => {
-  const wrapper = mount(WorkspaceHeader, {
-    props: { year: 2026, month: 9, displayState: 'unavailable', kpis: { fullAttendance: 9876, lateCount: 0, missingCount: 0, pendingAnomalies: 0 } },
+  const wrapper = mount(AttendanceMonthStats, {
+    props: { displayState: 'unavailable', kpis: { fullAttendance: 9876, lateCount: 0, missingCount: 0, pendingAnomalies: 0 } },
     global: { stubs: WH_STUBS },
   })
   expect(wrapper.text()).toContain('出勤統計尚未載入成功')
   expect(wrapper.text()).not.toContain('9876')
-  expect(wrapper.find('[aria-label="月結工具"]').text()).toContain('匯出月報')
   wrapper.unmount()
 })
 
