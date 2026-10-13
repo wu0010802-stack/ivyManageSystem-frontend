@@ -13190,7 +13190,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Authorizations */
+        /**
+         * List Authorizations
+         * @description 無日期參數＝今日；否則起訖必須成對，且區間最多 92 天（`MAX_RANGE_DAYS`），違反回 400。
+         */
         get: operations["list_authorizations_api_pickup_authorizations_get"];
         put?: never;
         post?: never;
