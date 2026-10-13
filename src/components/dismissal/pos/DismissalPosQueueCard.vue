@@ -194,7 +194,7 @@ const bodyStyle = computed(() => ({
         :tabindex="isOpen ? 0 : -1"
         @click="handleConfirmClick"
       >
-        {{ confirming ? '確認中…' : '確認接送' }}
+        {{ confirming ? '確認中…' : '確認交接' }}
       </button>
       <button
         type="button"

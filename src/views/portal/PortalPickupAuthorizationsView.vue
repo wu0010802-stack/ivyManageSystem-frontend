@@ -38,8 +38,9 @@ const items = ref<PortalPickupAuth[]>([])
 const loading = ref(false)
 const pendingCount = ref(0)
 
+// 語彙與管理端、POS 一致（D-17）：動作「確認交接」、狀態「待交接／已交接」。
 const STATUS_LABEL: Record<string, string> = {
-  active: '進行中', completed: '已完成', cancelled: '已取消', expired: '已過期',
+  active: '待交接', completed: '已交接', cancelled: '已取消', expired: '已過期',
 }
 
 async function fetchData() {
@@ -85,7 +86,7 @@ async function submitVerify() {
   verifying.value = true
   try {
     await verifyPickupAuthorization(target.id, { code: codeInput.value })
-    ElMessage.success('已完成核銷')
+    ElMessage.success('已完成交接')
     closeVerify()
     fetchData()
   } catch (err) {
@@ -107,8 +108,8 @@ async function submitOverride() {
   try {
     await ElMessageBox.confirm(
       `確定人工核對 ${target.person_name}（${target.person_relation}）的證件後放行接送？`,
-      '確認人工核銷',
-      { confirmButtonText: '確定核銷', cancelButtonText: '返回', type: 'warning' },
+      '人工核對後交接',
+      { confirmButtonText: '確認交接', cancelButtonText: '返回', type: 'warning' },
     )
   } catch {
     return
@@ -116,7 +117,7 @@ async function submitOverride() {
   verifying.value = true
   try {
     await overridePickupAuthorization(target.id, { note: overrideNote.value.trim() })
-    ElMessage.success('已完成人工核銷')
+    ElMessage.success('已完成交接')
     closeVerify()
     fetchData()
   } catch (err) {
@@ -133,7 +134,7 @@ defineExpose({ items, pendingCount, fetchData })
 
 <template>
   <div class="portal-pickup-view" v-loading="loading">
-    <PortalPageHeader title="今日接送授權" :subtitle="`${pendingCount} 筆進行中`" />
+    <PortalPageHeader title="今日接送授權" :subtitle="`${pendingCount} 筆待交接`" />
 
     <EmptyState v-if="!loading && items.length === 0" variant="mobile" title="今日無接送授權" />
 
@@ -162,12 +163,12 @@ defineExpose({ items, pendingCount, fetchData })
           </div>
         </div>
         <div v-if="item.effective_status === 'active'" class="auth-actions">
-          <el-button type="primary" size="small" @click="openVerify(item)">核銷</el-button>
+          <el-button type="primary" size="small" @click="openVerify(item)">確認交接</el-button>
         </div>
       </el-card>
     </div>
 
-    <el-dialog v-model="verifyDialogOpen" title="接送核銷" width="90%" class="verify-dialog">
+    <el-dialog v-model="verifyDialogOpen" title="確認交接" width="90%" class="verify-dialog">
       <template v-if="verifyTarget">
         <p class="verify-target-name">
           {{ verifyTarget.student_name }} · {{ verifyTarget.person_name }}（{{ verifyTarget.person_relation }}）
@@ -193,7 +194,7 @@ defineExpose({ items, pendingCount, fetchData })
               :disabled="codeInput.length !== 6"
               :loading="verifying"
               @click="submitVerify"
-            >驗證核銷</el-button>
+            >確認交接</el-button>
           </div>
           <button type="button" class="switch-override-link" @click="overrideMode = true">
             改用人工核對證件
@@ -215,7 +216,7 @@ defineExpose({ items, pendingCount, fetchData })
               :disabled="overrideNote.trim().length < 2"
               :loading="verifying"
               @click="submitOverride"
-            >人工核銷</el-button>
+            >人工核對後交接</el-button>
           </div>
         </template>
       </template>
