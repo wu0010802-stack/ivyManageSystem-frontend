@@ -594,11 +594,11 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
 
   const tabs = (wrapper: ReturnType<typeof mount>) => wrapper.findAll('[role="tab"]').map((t) => t.text())
 
-  it('只有排班權限：班表核對＋輪值表＋換班紀錄，沒有出勤統計也不載入出勤資料', async () => {
+  it('只有排班權限：班表核對＋輪值表＋換班紀錄＋班別設定，沒有出勤統計也不載入出勤資料', async () => {
     mockHasPermission.mockImplementation((code: unknown) => code === 'SCHEDULE')
     const wrapper = mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
     await flushPromises()
-    expect(tabs(wrapper)).toEqual(['班表核對', '學期輪值表', '換班紀錄'])
+    expect(tabs(wrapper)).toEqual(['班表核對', '學期輪值表', '換班紀錄', '班別設定'])
     expect(wrapper.findComponent(WorkspaceHeaderStub).exists()).toBe(false)
     expect(wrapper.findComponent(AttendanceMonthStatsStub).exists()).toBe(false)
     expect(getSummaryMock).not.toHaveBeenCalled()

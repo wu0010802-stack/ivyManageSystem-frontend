@@ -156,6 +156,7 @@
 
     <DutyRotationPanel v-if="canSchedule && rotationVisited" v-show="activeTab === 'rotation'" @applied="onRotationApplied" />
     <SwapHistoryPanel v-if="canSchedule && activeTab === 'swaps'" />
+    <ShiftTypesPanel v-if="canSchedule && activeTab === 'shifts'" @changed="onShiftTypesChanged" />
 
     <el-drawer v-if="canViewAttendance && ws.hasCurrentData.value" v-model="anomalyDrawerOpen" title="全月出勤異常（全體人員）" :size="isMobile ? '100%' : '480px'" append-to-body>
       <AnomalyQueueColumn :items="ws.anomalyQueue.value" :selected-index="selectedAnomalyIndex" :loading="ws.loading.value" @select="onAnomalySelect" @filter-change="onFilterChange" @resolved="onDetailResolved" />
@@ -199,8 +200,9 @@ import { hasPermission, hasFullSalaryView } from '@/utils/auth'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
 const DutyRotationPanel = defineAsyncComponent(() => import('@/components/schedule/DutyRotationPanel.vue'))
 const SwapHistoryPanel = defineAsyncComponent(() => import('@/components/schedule-attendance/SwapHistoryPanel.vue'))
+const ShiftTypesPanel = defineAsyncComponent(() => import('@/components/schedule-attendance/ShiftTypesPanel.vue'))
 
-export type WorkspaceTab = 'grid' | 'records' | 'rotation' | 'swaps'
+export type WorkspaceTab = 'grid' | 'records' | 'rotation' | 'swaps' | 'shifts'
 
 const props = defineProps<{
   tab?: WorkspaceTab
@@ -225,6 +227,8 @@ const TABS: Array<{ key: WorkspaceTab; label: string; visible: boolean }> = [
   { key: 'records', label: '出勤明細', visible: canViewAttendance },
   { key: 'rotation', label: '學期輪值表', visible: canSchedule },
   { key: 'swaps', label: '換班紀錄', visible: canSchedule },
+  // 2026-10 自「設定 › 輪班別管理」搬入：班別是排班的字典，與班表放同頁
+  { key: 'shifts', label: '班別設定', visible: canSchedule },
 ]
 const visibleTabs = TABS.filter((t) => t.visible)
 const normalizeTab = (tab: WorkspaceTab | undefined): WorkspaceTab =>
@@ -522,6 +526,12 @@ async function onGridChanged(): Promise<void> {
 }
 
 function onRotationApplied(): void {
+  dataRevision.value += 1
+  externalRevision.value += 1
+}
+
+// 班別的時段、名稱、啟用狀態變了：格子的班別選單與應上班時段判定都要重抓（格子 v-show 常駐，不會自己重載）
+function onShiftTypesChanged(): void {
   dataRevision.value += 1
   externalRevision.value += 1
 }
