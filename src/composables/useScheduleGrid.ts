@@ -268,6 +268,7 @@ export function useScheduleGrid(weekStart: Ref<string>) {
     weekDates,
     assignments,
     weeklyEdits,
+    changedEmployeeIds,
     pendingCount,
     warnings,
     saving,

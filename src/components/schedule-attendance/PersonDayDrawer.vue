@@ -5,6 +5,7 @@
     :size="mobile ? '100%' : '460px'"
     append-to-body
     data-test="person-day-drawer"
+    :before-close="beforeClose"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
     <div v-if="cell && employee" class="pdd">
@@ -98,6 +99,7 @@ import { ElMessage } from 'element-plus'
 import { confirmReconciliationShift } from '@/api/attendanceReconciliation'
 import { deleteDaily, getDaily, saveDaily } from '@/api/shifts'
 import { apiError } from '@/utils/error'
+import { confirmDiscardChanges } from '@/composables/useUnsavedChangesGuard'
 import { KIND_LABELS, STATUS_LABELS } from '@/utils/attendanceConfirm'
 import {
   LOCKED_REASON_LABELS,
@@ -267,6 +269,18 @@ const pair = computed(() => {
 })
 watch(confirmChoice, () => { includePair.value = false })
 
+// X、Esc、點遮罩關閉前：打了一半的確認原因或選了沒套用的「改這天」不能無聲丟掉
+const isDirty = () => confirmReason.value.trim() !== '' || dayChoice.value !== initialDayChoice.value
+async function beforeClose(done: () => void): Promise<void> {
+  if (!isDirty()) return done()
+  const ok = await confirmDiscardChanges({
+    title: '尚未送出',
+    message: '確認原因或班別選擇還沒送出，關閉會捨棄。',
+    cancelText: '繼續編輯',
+  })
+  if (ok) done()
+}
+
 let openSeq = 0
 watch(
   () => [props.modelValue, props.cell?.employee_id, props.cell?.date] as const,
@@ -327,6 +341,9 @@ async function applyDay(): Promise<void> {
       await saveDaily({ employee_id: cell.employee_id, date: cell.date, shift_type_id: dayChoice.value, day_off: false })
     }
     ElMessage.success('已更新這天的班別')
+    // 抽屜不關（同一格的 watch 不會重跑），套用後的選擇就是新的現值
+    initialDayChoice.value = dayChoice.value
+    if (dayChoice.value === INHERIT) dailyRecordId.value = null
     emit('changed')
   } catch (err) {
     if (isRecordedConflict(err)) {
@@ -364,6 +381,8 @@ async function submitConfirm(): Promise<void> {
   try {
     await confirmReconciliationShift({ items, reason: confirmReason.value.trim() })
     ElMessage.success('已更新當日班別並重新計算出勤')
+    confirmReason.value = ''
+    includePair.value = false
     emit('changed')
   } catch (err) {
     if ((err as { response?: { status?: number } })?.response?.status === 409) {

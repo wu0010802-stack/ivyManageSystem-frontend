@@ -46,6 +46,7 @@
       :can-edit-plan="caller.can_edit_plan"
       :shift-options="gridData?.shift_types ?? []"
       :weekly-value="state.weeklyValue"
+      :changed-ids="changedIds"
       :coverage="coverage"
       :mobile="isMobile"
       @select="openCell"
@@ -116,7 +117,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteUpdate } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { confirmDiscardChanges, useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import FormDialog from '@/components/common/FormDialog.vue'
 import GridToolbar, { type ToolbarCommand } from './GridToolbar.vue'
 import ShiftGrid from './ShiftGrid.vue'
@@ -171,6 +174,32 @@ const weekStart = computed(() => weekStartRef.value)
 const state = useScheduleGrid(weekStartRef)
 onMounted(() => { void state.reload() })
 watch(() => props.revision, () => { void state.reload() })
+
+// ── 未儲存的週班別 ───────────────────────────────────────────────
+// 換週會清掉緩衝（useScheduleGrid），所以任何換週的入口都要先問：頁內入口（上週／下週／日期／換月）
+// 由頁面在改錨點前呼叫 confirmWeekChange；網址被外部改到別週走 onBeforeRouteUpdate；
+// 離開頁面與關分頁走 useUnsavedChangesGuard。頁籤切換不換週（v-show 保留緩衝），不必問。
+const changedIds = computed(() => new Set(state.changedEmployeeIds.value))
+const hasPendingEdits = () => state.pendingCount.value > 0
+useUnsavedChangesGuard(hasPendingEdits)
+
+async function confirmWeekChange(date: string): Promise<boolean> {
+  if (!hasPendingEdits() || mondayOf(date) === weekStartRef.value) return true
+  const ok = await confirmDiscardChanges({
+    title: '未儲存的排班',
+    message: `這週有 ${state.pendingCount.value} 處排班變更還沒儲存，切換週次會捨棄這些變更。`,
+    cancelText: '留在這週',
+  })
+  if (ok) state.discardEdits()
+  return ok
+}
+
+onBeforeRouteUpdate((to) => {
+  const date = typeof to.query.date === 'string' ? to.query.date : null
+  return date ? confirmWeekChange(date) : true
+})
+
+defineExpose({ confirmWeekChange })
 
 const NO_CALLER: GridOut['caller'] = { can_view_attendance: false, can_edit_plan: false, can_confirm: false, can_edit_attendance: false }
 const gridData = computed(() => state.grid.value)

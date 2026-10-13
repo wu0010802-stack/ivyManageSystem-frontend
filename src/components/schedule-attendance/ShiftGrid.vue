@@ -44,6 +44,7 @@
               >
                 <el-option v-for="s in optionsFor(emp.employee_id)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
               </el-select>
+              <span v-if="changedIds?.has(emp.employee_id)" class="shift-grid__unsaved" :data-test="`unsaved-${emp.employee_id}`">未儲存</span>
             </th>
             <td v-for="d in days" :key="d.date" class="shift-grid__cell-wrap" :class="{ 'shift-grid__cell-wrap--off': !d.is_workday }">
               <button
@@ -132,6 +133,7 @@
           >
             <el-option v-for="s in optionsFor(emp.employee_id)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
           </el-select>
+          <span v-if="changedIds?.has(emp.employee_id)" class="shift-grid__unsaved" :data-test="`unsaved-${emp.employee_id}`">未儲存</span>
         </div>
       </section>
     </template>
@@ -168,6 +170,8 @@ const props = defineProps<{
   canEditPlan: boolean
   shiftOptions: GridShiftType[]
   weeklyValue: (employeeId: number) => number | null
+  /** 週班別改了但還沒儲存的人（列首標「未儲存」） */
+  changedIds?: ReadonlySet<number>
   coverage?: DayCoverage[]
   mobile?: boolean
 }>()
@@ -285,6 +289,7 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__name { display: block; font-weight: 600; }
 .shift-grid__role { display: block; color: var(--el-text-color-secondary); font-size: var(--text-xs); }
 .shift-grid__weekly { margin-top: var(--space-1); width: 100%; }
+.shift-grid__unsaved { display: inline-block; margin-top: var(--space-1); padding: 0 var(--space-1); border: 1px dashed var(--el-color-primary); border-radius: var(--radius-sm); color: var(--el-color-primary); font-size: var(--text-xs); font-weight: 600; }
 .shift-grid__cell {
   display: grid; gap: 2px; width: 100%; min-height: var(--touch-target-min); padding: var(--space-1) var(--space-2);
   border: 1px solid var(--el-border-color-lighter); border-radius: var(--radius-md); background: var(--el-bg-color);

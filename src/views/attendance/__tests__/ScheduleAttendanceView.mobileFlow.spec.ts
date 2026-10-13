@@ -68,6 +68,7 @@ const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
   props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
   emits: ['records', 'import', 'changed', 'update:date', 'update:filter'],
+  methods: { confirmWeekChange: async () => true },
   template: '<div class="grid-panel-stub" />',
 }
 const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['date', 'revision', 'mobile'], emits: ['show-issues'], template: '<div class="month-progress-stub" />' }

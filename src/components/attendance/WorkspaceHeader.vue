@@ -71,6 +71,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:year', v: number): void
   (e: 'update:month', v: number): void
+  /** 上／下個月：年月一起送，跨年時才不會先換年、再用舊年份換月 */
+  (e: 'update:period', year: number, month: number): void
   (e: 'import'): void
   (e: 'export'): void
 }>()
@@ -91,21 +93,13 @@ const yearOptions = computed(() => {
 })
 
 function prevMonth() {
-  if (props.month === 1) {
-    emit('update:year', props.year - 1)
-    emit('update:month', 12)
-  } else {
-    emit('update:month', props.month - 1)
-  }
+  if (props.month === 1) emit('update:period', props.year - 1, 12)
+  else emit('update:period', props.year, props.month - 1)
 }
 
 function nextMonth() {
-  if (props.month === 12) {
-    emit('update:year', props.year + 1)
-    emit('update:month', 1)
-  } else {
-    emit('update:month', props.month + 1)
-  }
+  if (props.month === 12) emit('update:period', props.year + 1, 1)
+  else emit('update:period', props.year, props.month + 1)
 }
 </script>
 

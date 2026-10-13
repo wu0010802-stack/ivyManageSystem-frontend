@@ -79,14 +79,17 @@ const ImportPreviewDialogStub = {
 const WorkspaceHeaderStub = {
   name: 'WorkspaceHeader',
   props: ['year', 'month', 'kpis', 'displayState'],
-  emits: ['update:year', 'update:month', 'import', 'export'],
+  emits: ['update:year', 'update:month', 'update:period', 'import', 'export'],
   template: `<div class="workspace-header-stub"><slot /><slot name="month-tools" /></div>`,
 }
 
+/** 格子面板的「換週前確認未儲存變更」；預設放行 */
+const panelConfirmWeekChange = vi.fn(async (_date: string) => true)
 const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
   props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
   emits: ['records', 'import', 'changed', 'update:date', 'update:filter'],
+  methods: { confirmWeekChange: (date: string) => panelConfirmWeekChange(date) },
   template: '<div class="grid-panel-stub" />',
 }
 const rotationMounts = { count: 0 }
@@ -574,6 +577,39 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     expect(getSummaryMock).not.toHaveBeenCalled()
     expect(getAnomalyListMock).not.toHaveBeenCalled()
     mockHasPermission.mockReturnValue(true)
+    wrapper.unmount()
+  })
+
+  it('換週、換月前先問格子面板（未儲存排班）；面板不放行就停在原週', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+    await flushPromises()
+    const panel = () => wrapper.findComponent(ScheduleGridPanelStub)
+    panelConfirmWeekChange.mockResolvedValueOnce(false)
+    panel().vm.$emit('update:date', '2026-10-12')
+    await flushPromises()
+    expect(panelConfirmWeekChange).toHaveBeenLastCalledWith('2026-10-12')
+    expect(panel().props('date')).toBe('2026-10-07')
+    expect(routerReplace).not.toHaveBeenCalled()
+    panelConfirmWeekChange.mockResolvedValueOnce(false)
+    wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:month', 11)
+    await flushPromises()
+    expect(panelConfirmWeekChange).toHaveBeenLastCalledWith('2026-11-01')
+    expect(panel().props('date')).toBe('2026-10-07')
+    panel().vm.$emit('update:date', '2026-10-12')
+    await flushPromises()
+    expect(panel().props('date')).toBe('2026-10-12')
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: { date: '2026-10-12' } })
+    wrapper.unmount()
+  })
+
+  it('上／下個月跨年：一次換到正確的年月', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-01-14' }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:period', 2025, 12)
+    await flushPromises()
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('date')).toBe('2025-12-01')
+    expect(wrapper.findComponent(WorkspaceHeaderStub).props('year')).toBe(2025)
+    expect(wrapper.findComponent(WorkspaceHeaderStub).props('month')).toBe(12)
     wrapper.unmount()
   })
 

@@ -89,7 +89,8 @@ const WorkspaceHeaderStub = {
 }
 
 const STUBS = {
-  ScheduleGridPanel: true,
+  // 換週／換月前頁面會問格子面板有沒有未儲存變更；本檔不測那條路徑，一律放行
+  ScheduleGridPanel: { name: 'ScheduleGridPanel', methods: { confirmWeekChange: async () => true }, template: '<div />' },
   MonthProgressBar: true,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,

@@ -15,7 +15,7 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: (...a: unknown[]) => confirmMock(...a) },
 }))
 
-import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
+import { confirmDiscardChanges, useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 
 function mountWith(isDirty: () => boolean) {
   const Host = defineComponent({
@@ -66,6 +66,14 @@ describe('useUnsavedChangesGuard', () => {
     mount(Host, { attachTo: document.body })
     expect(await confirmDiscard()).toBe(true)
     expect(confirmMock).not.toHaveBeenCalled()
+  })
+
+  it('confirmDiscardChanges：呼叫端可換成情境文案（如切換週次），預設文案不變', async () => {
+    confirmMock.mockResolvedValue('confirm')
+    expect(await confirmDiscardChanges({ title: '未儲存的排班', message: '切換週次會捨棄 2 處變更。' })).toBe(true)
+    expect(confirmMock).toHaveBeenLastCalledWith('切換週次會捨棄 2 處變更。', '未儲存的排班', expect.objectContaining({ confirmButtonText: '捨棄變更' }))
+    await confirmDiscardChanges()
+    expect(confirmMock).toHaveBeenLastCalledWith('尚有未儲存的變更，確定離開並捨棄？', '未儲存變更', expect.anything())
   })
 
   it('beforeunload：dirty 時 preventDefault', () => {

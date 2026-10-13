@@ -14,6 +14,12 @@ const api = vi.hoisted(() => ({
   download: vi.fn(),
 }))
 const ui = vi.hoisted(() => ({ success: vi.fn(), warning: vi.fn(), error: vi.fn(), confirm: vi.fn() }))
+// 抓出面板註冊的路由守衛（面板是頁面的子元件，onBeforeRouteLeave/Update 掛在同一筆路由紀錄上）
+const routeGuards = vi.hoisted(() => ({ leave: null as null | (() => unknown), update: null as null | ((to: { query: Record<string, unknown> }) => unknown) }))
+vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: (cb: () => unknown) => { routeGuards.leave = cb },
+  onBeforeRouteUpdate: (cb: (to: { query: Record<string, unknown> }) => unknown) => { routeGuards.update = cb },
+}))
 vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: api.grid }))
 vi.mock('@/api/shifts', () => ({
   getAssignments: api.getAssignments,
@@ -305,5 +311,55 @@ describe('ScheduleGridPanel', () => {
     await flushPromises()
     expect(api.getAssignments).toHaveBeenLastCalledWith({ week_start: '2026-08-31' })
     expect(wrapper.find('[data-test="toolbar-save"]').text()).toBe('儲存排班（1 處變更）')
+  })
+
+  describe('未儲存的週班別不會無聲消失', () => {
+    type PanelApi = { confirmWeekChange: (date: string) => Promise<boolean> }
+    const saveText = (w: ReturnType<typeof mountPanel>) => w.find('[data-test="toolbar-save"]').text()
+
+    async function mountWithPendingEdit() {
+      const wrapper = mountPanel()
+      await flushPromises()
+      wrapper.findAllComponents({ name: 'ElSelect' })[1].vm.$emit('update:modelValue', 2) // 王副導
+      await flushPromises()
+      expect(saveText(wrapper)).toBe('儲存排班（1 處變更）')
+      return wrapper
+    }
+
+    it('換到別週前先確認；取消就回 false 並保留變更', async () => {
+      const wrapper = await mountWithPendingEdit()
+      ui.confirm.mockRejectedValueOnce('cancel')
+      expect(await (wrapper.vm as unknown as PanelApi).confirmWeekChange('2026-09-23')).toBe(false)
+      expect(ui.confirm).toHaveBeenCalledWith(expect.stringContaining('1 處'), '未儲存的排班', expect.anything())
+      expect(saveText(wrapper)).toBe('儲存排班（1 處變更）')
+    })
+
+    it('確認捨棄才清掉緩衝；同一週或沒有變更都不詢問', async () => {
+      const wrapper = await mountWithPendingEdit()
+      const panel = wrapper.vm as unknown as PanelApi
+      expect(await panel.confirmWeekChange('2026-09-18')).toBe(true) // 同一週（9/14–9/20）
+      expect(ui.confirm).not.toHaveBeenCalled()
+      expect(await panel.confirmWeekChange('2026-09-23')).toBe(true)
+      expect(ui.confirm).toHaveBeenCalledTimes(1)
+      await flushPromises()
+      expect(saveText(wrapper)).toBe('儲存排班（0 處變更）')
+      expect(await panel.confirmWeekChange('2026-09-30')).toBe(true)
+      expect(ui.confirm).toHaveBeenCalledTimes(1)
+    })
+
+    it('離開頁面或網址換到別週：有未儲存變更要確認，取消就擋下', async () => {
+      const wrapper = await mountWithPendingEdit()
+      ui.confirm.mockRejectedValue('cancel')
+      expect(await routeGuards.leave!()).toBe(false)
+      expect(await routeGuards.update!({ query: { date: '2026-09-25' } })).toBe(false)
+      expect(await routeGuards.update!({ query: { date: '2026-09-15', tab: 'records' } })).toBe(true) // 同週（切頁籤）不問
+      expect(saveText(wrapper)).toBe('儲存排班（1 處變更）')
+    })
+
+    it('改過的人在列首標「未儲存」，其他人不標', async () => {
+      const wrapper = await mountWithPendingEdit()
+      expect(wrapper.find('[data-test="unsaved-2"]').exists()).toBe(true)
+      expect(wrapper.find('[data-test="unsaved-1"]').exists()).toBe(false)
+    })
   })
 })

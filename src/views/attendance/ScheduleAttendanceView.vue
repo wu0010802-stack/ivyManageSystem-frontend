@@ -11,6 +11,7 @@
       :display-state="statsDisplayState"
       @update:year="(v) => setMonth(v, query.month)"
       @update:month="(v) => setMonth(query.year, v)"
+      @update:period="setMonth"
       @import="openImport"
       @export="onExport"
     >
@@ -38,6 +39,7 @@
     <ScheduleGridPanel
       v-if="gridVisited"
       v-show="activeTab === 'grid'"
+      ref="gridPanel"
       :date="anchorDate"
       :filter="gridFilter"
       :focus-employee-id="props.emp ?? null"
@@ -273,13 +275,17 @@ watch(anchorDate, (d) => {
 })
 watch(() => props.date, (d) => { if (d) anchorDate.value = d })
 
-function setAnchorDate(date: string): void {
+// 換週會清掉格子面板未儲存的週班別：頁內換週／換月一律先問面板（它決定要不要詢問使用者）
+const gridPanel = ref<InstanceType<typeof ScheduleGridPanel> | null>(null)
+
+async function setAnchorDate(date: string): Promise<void> {
+  if (gridPanel.value && !(await gridPanel.value.confirmWeekChange(date))) return
   anchorDate.value = date
   syncQuery({ date })
 }
 
 function setMonth(year: number, month: number): void {
-  setAnchorDate(`${year}-${String(month).padStart(2, '0')}-01`)
+  void setAnchorDate(`${year}-${String(month).padStart(2, '0')}-01`)
 }
 
 // 資料異動計數：格子編輯、匯入、明細處理後遞增，本月進度據此重算

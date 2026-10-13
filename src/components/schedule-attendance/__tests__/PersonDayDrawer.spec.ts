@@ -9,7 +9,8 @@ const api = vi.hoisted(() => ({ confirm: vi.fn(), getDaily: vi.fn(), saveDaily: 
 const message = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }))
 vi.mock('@/api/attendanceReconciliation', () => ({ confirmReconciliationShift: api.confirm }))
 vi.mock('@/api/shifts', () => ({ getDaily: api.getDaily, saveDaily: api.saveDaily, deleteDaily: api.deleteDaily }))
-vi.mock('element-plus', async (orig) => ({ ...(await orig<typeof import('element-plus')>()), ElMessage: message }))
+const box = vi.hoisted(() => ({ confirm: vi.fn() }))
+vi.mock('element-plus', async (orig) => ({ ...(await orig<typeof import('element-plus')>()), ElMessage: message, ElMessageBox: box }))
 
 const CALLER = grid().caller
 
@@ -30,7 +31,22 @@ function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]
     },
     global: {
       plugins: [ElementPlus],
-      stubs: { ElDrawer: { name: 'ElDrawer', props: ['modelValue', 'title'], template: '<section v-if="modelValue"><h2>{{ title }}</h2><slot /></section>' } },
+      stubs: {
+        // 「關閉」鈕模擬 X／Esc／點遮罩：有 before-close 就交給它決定要不要關
+        ElDrawer: {
+          name: 'ElDrawer',
+          props: ['modelValue', 'title', 'beforeClose'],
+          emits: ['update:modelValue'],
+          template: '<section v-if="modelValue"><h2>{{ title }}</h2><button type="button" data-test="stub-drawer-close" @click="close" /><slot /></section>',
+          methods: {
+            close(this: { beforeClose?: (done: () => void) => void; $emit: (e: string, v: boolean) => void }) {
+              const done = () => this.$emit('update:modelValue', false)
+              if (this.beforeClose) this.beforeClose(done)
+              else done()
+            },
+          },
+        },
+      },
     },
   })
 }
@@ -153,6 +169,62 @@ describe('PersonDayDrawer', () => {
       ],
     })
     expect(wrapper.emitted('changed')).toHaveLength(1)
+  })
+
+  describe('打到一半的確認原因不會無聲消失', () => {
+    const confirmable = () => cell(1, W1, {
+      edit: { plan: false, confirm: true, recorded: true, locked_reason: 'recorded' },
+      actual: { status: 'missing_punch', version: 'v'.repeat(64), punch_in: `${W1}T07:52:00`, punch_out: null },
+    })
+
+    it('原因有字時關抽屜要先確認；取消就留著，確認才關', async () => {
+      const wrapper = mountDrawer(confirmable())
+      await flushPromises()
+      await wrapper.find('[data-test="stub-drawer-close"]').trigger('click')
+      await flushPromises()
+      expect(box.confirm).not.toHaveBeenCalled()
+      expect(wrapper.emitted('update:modelValue')).toEqual([[false]])
+
+      const typed = mountDrawer(confirmable())
+      await flushPromises()
+      await typed.find('textarea[data-test="pdd-confirm-reason"]').setValue('補登下班')
+      box.confirm.mockRejectedValueOnce('cancel')
+      await typed.find('[data-test="stub-drawer-close"]').trigger('click')
+      await flushPromises()
+      expect(box.confirm).toHaveBeenCalledTimes(1)
+      expect(typed.emitted('update:modelValue')).toBeUndefined()
+      box.confirm.mockResolvedValueOnce('confirm')
+      await typed.find('[data-test="stub-drawer-close"]').trigger('click')
+      await flushPromises()
+      expect(typed.emitted('update:modelValue')).toEqual([[false]])
+    })
+
+    it('送出成功後清掉原因，之後關閉不再詢問', async () => {
+      const wrapper = mountDrawer(confirmable())
+      await flushPromises()
+      wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', 1)
+      await wrapper.find('textarea[data-test="pdd-confirm-reason"]').setValue('確認早車')
+      await wrapper.find('[data-test="pdd-confirm-submit"]').trigger('click')
+      await flushPromises()
+      expect(api.confirm).toHaveBeenCalledTimes(1)
+      expect((wrapper.find('textarea[data-test="pdd-confirm-reason"]').element as HTMLTextAreaElement).value).toBe('')
+      await wrapper.find('[data-test="stub-drawer-close"]').trigger('click')
+      await flushPromises()
+      expect(box.confirm).not.toHaveBeenCalled()
+    })
+
+    it('改這天套用成功後，選擇就是新的現值（套用鈕停用、關閉不詢問）', async () => {
+      const wrapper = mountDrawer(cell(1, W1))
+      await flushPromises()
+      wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', -1)
+      await wrapper.vm.$nextTick()
+      await wrapper.find('[data-test="pdd-day-apply"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('[data-test="pdd-day-apply"]').attributes('disabled')).toBeDefined()
+      await wrapper.find('[data-test="stub-drawer-close"]').trigger('click')
+      await flushPromises()
+      expect(box.confirm).not.toHaveBeenCalled()
+    })
   })
 
   it('本人的已打卡格子：沒有可用動作並說明原因；「看他整月」帶出人與日', async () => {
