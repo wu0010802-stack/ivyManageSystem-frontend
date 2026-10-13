@@ -144,7 +144,7 @@ function plan(overrides: Record<string, unknown> = {}, tripOverrides: Record<str
     trip: {
       id: 7, route_id: 3, direction: 'morning', trip_date: '2026-08-26', status: 'planned',
       auto_closed: false, created_at: '2026-08-26T06:00:00', depart_time_planned: '07:00:00',
-      started_at: null, operator_employee_id: null,
+      end_time_estimated: null, started_at: null, operator_employee_id: null,
       last_ping_at: null, last_lat: null, last_lng: null,
       ...tripOverrides,
     },
@@ -245,6 +245,23 @@ describe('班次卡片', () => {
     const card = w.findComponent({ name: 'BusDispatchRouteCard' }).props('plan') as Record<string, number>
     expect(card.departed_count).toBe(1)
     expect(card.pending_count).toBe(2)
+  })
+
+  it('預估結束時間取自 trip.end_time_estimated，轉成台北牆鐘 HH:mm 交給卡片', async () => {
+    // 後端回 naive 台北牆鐘 ISO；卡片直接把字串插進「預計 … 結束」
+    s.plans.value = [plan({}, { status: 'in_progress', end_time_estimated: '2026-08-26T08:15:30' })]
+    const w = mountView()
+    await flushPromises()
+    const card = w.findComponent({ name: 'BusDispatchRouteCard' })
+    expect((card.props('plan') as { end_time_estimated: string | null }).end_time_estimated).toBe('08:15')
+  })
+
+  it('trip 尚無預估結束時間時傳 null（卡片不顯示「預計 … 結束」）', async () => {
+    s.plans.value = [plan({}, { status: 'in_progress', end_time_estimated: null })]
+    const w = mountView()
+    await flushPromises()
+    const card = w.findComponent({ name: 'BusDispatchRouteCard' })
+    expect((card.props('plan') as { end_time_estimated: string | null }).end_time_estimated).toBeNull()
   })
 
   it('未知的 trip.status 退成 none，不讓卡片的狀態查表撈到 undefined 而整頁崩', async () => {

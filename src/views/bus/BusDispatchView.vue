@@ -40,6 +40,7 @@ import BusStopMapTuner from '@/components/bus/BusStopMapTuner.vue'
 import { useBusDailyDispatch } from '@/composables/useBusDailyDispatch'
 import { DIRECTION_LABELS } from '@/composables/useBusRouteEditor'
 import { busInProgressWriteLabel } from '@/constants/bus'
+import { formatTaipeiClock } from '@/utils/taipeiTime'
 
 const route = useRoute()
 const router = useRouter()
@@ -83,11 +84,8 @@ function toCardStatus(status: string): CardStatus {
 }
 
 /**
- * `end_time_estimated` 固定為 null：後端 `DailyPlanTripOut`（`api/bus/daily_plans.py::
- * _trip_out`）**沒有帶這個欄位**，只有 `BusTripAdminOut` 有。與其自己拿別的數字充數，
- * 不如照實留空——卡片對 null 已經是「不顯示」。
- * TODO(backend): `DailyPlanTripOut` 補 `end_time_estimated` 後改成
- * `p.trip.end_time_estimated ?? null`；在那之前卡片的「預計 … 結束」永遠不會渲染。
+ * `end_time_estimated`：後端只在自動排序套用或行進間重算後回寫（其餘為 null，卡片
+ * 對 null 即不顯示）。後端回 naive 台北牆鐘 ISO，卡片直接插字串，故先轉 `HH:mm`。
  */
 const cards = computed(() => plans.value.map((p) => ({
   route_id: p.trip.route_id,
@@ -98,7 +96,7 @@ const cards = computed(() => plans.value.map((p) => ({
   departed_count: p.stops.filter((s) => s.status === 'departed').length,
   pending_count: p.stops.filter((s) => s.status === 'pending').length,
   capacity: p.capacity,
-  end_time_estimated: null,
+  end_time_estimated: formatTaipeiClock(p.trip.end_time_estimated),
   trip_id: p.trip.id,
 })))
 

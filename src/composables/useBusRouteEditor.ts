@@ -94,11 +94,8 @@ export interface BusStopDraft {
   student_id: number
   student_name: string
   /**
-   * 學生班級名。
-   *
-   * ⚠ 與 `contacts` 同一個缺口：後端 `BusRouteStopOut` 目前不回這個欄位
-   * （spec 名單表格列了「學生＋班級」）。缺值時為 null，表格只顯示姓名，
-   * 後端補上同名欄位後自動帶入。
+   * 學生目前所在班級名（後端 `BusRouteStopOut.classroom_name`）。未分班或舊回應
+   * 缺欄位時為 null，表格只顯示姓名。
    */
   classroom_name: string | null
   seq: number
@@ -123,12 +120,8 @@ export interface BusStopDraft {
   /** 最佳化結果的預計抵達（顯示用快取，`HH:MM:SS`）。 */
   eta_planned: string | null
   /**
-   * 監護人聯絡資訊（`is_primary`＋`is_emergency`，fallback 由後端算好）。
-   *
-   * ⚠ 後端 `GET /api/bus/routes` 的 `BusRouteStopOut` **目前不回這個欄位**
-   * （spec「前端（admin）模組拆分」列了聯絡人欄，但 admin_routes.py 的 schema
-   * 未實作）。這裡保留欄位並在缺值時給空陣列，讓表格顯示「—」而不是假資料；
-   * 後端補上同名欄位後本檔的 normalize 會自動帶入，不需再改。
+   * 監護人聯絡資訊（`is_primary`＋`is_emergency`，fallback 由後端算好，規則同
+   * 調度頁）。舊回應缺欄位時給空陣列，讓表格顯示「—」而不是假資料。
    */
   contacts: BusStopContact[]
 }

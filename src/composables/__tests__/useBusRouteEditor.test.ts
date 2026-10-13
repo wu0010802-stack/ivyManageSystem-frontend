@@ -184,9 +184,22 @@ describe('載入與塌平回應', () => {
     })
   })
 
-  it('後端尚未回聯絡人欄位時給空陣列，不是 undefined（表格顯示「—」而非炸掉）', async () => {
+  it('缺聯絡人欄位的舊回應給空陣列，不是 undefined（表格顯示「—」而非炸掉）', async () => {
     const editor = await boot()
     expect(editor.stops.value[0].contacts).toEqual([])
+  })
+
+  it('後端回的聯絡人與班級名照實帶入站點', async () => {
+    const editor = await boot([routeA({
+      stops: [stop({
+        classroom_name: '太陽班',
+        contacts: [{ name: '王媽媽', phone: '0912345678' }, { name: '王外婆', phone: null }],
+      })],
+    })])
+    expect(editor.stops.value[0].classroom_name).toBe('太陽班')
+    expect(editor.stops.value[0].contacts).toEqual([
+      { name: '王媽媽', phone: '0912345678' }, { name: '王外婆', phone: null },
+    ])
   })
 
   it('學生清單只留 id/name，家長姓名／電話／住址一律不進狀態', async () => {
