@@ -250,4 +250,52 @@ describe('ScheduleSwapDialog', () => {
     const labels = w.findAll('option').map((o) => o.text())
     expect(labels).toEqual(['王老師 (早班 08:00~16:00)', '李老師 (正班)'])
   })
+
+  it('對方當天沒有排定班別（unavailable_reason）→ 選項停用並顯示原因', () => {
+    const w = mount(ScheduleSwapDialog, {
+      props: {
+        modelValue: true,
+        isMobile: false,
+        initialDate: '2026-05-10',
+        loading: false,
+        candidates: [
+          { employee_id: 7, name: '陳老師', shift_name: '未排班', duty_label: '個人工時 09:00~18:00', unavailable_reason: '對方當天沒有排定班別，無法換班', has_pending_swap: false },
+          { employee_id: 8, name: '林老師', shift_name: '次值', duty_label: '次值 08:30~18:00', has_pending_swap: false },
+        ],
+      },
+      global: { stubs: STUBS },
+    })
+    const options = w.findAll('option')
+    expect(options.map((o) => o.text())).toEqual([
+      '陳老師 (個人工時 09:00~18:00)（對方當天沒有排定班別，無法換班）',
+      '林老師 (次值 08:30~18:00)',
+    ])
+    expect(options[0].attributes('disabled')).toBeDefined()
+    expect(options[1].attributes('disabled')).toBeUndefined()
+  })
+
+  it('已選的對象事後才被標為不可選（day-roster 較晚回來）→ 送出鈕停用且不 emit', async () => {
+    const w = mount(ScheduleSwapDialog, {
+      props: {
+        modelValue: true,
+        isMobile: false,
+        initialDate: '2026-05-10',
+        loading: false,
+        candidates: [{ employee_id: 7, name: '陳老師', shift_name: '未排班', has_pending_swap: false }],
+      },
+      global: { stubs: STUBS },
+    })
+    await w.vm.$nextTick()
+    w.vm.form.target_id = 7
+    await w.vm.$nextTick()
+    const submitBtn = () => w.findAll('button').find((b) => b.text().includes('送出'))
+    expect(submitBtn().attributes('disabled')).toBeUndefined()
+
+    await w.setProps({
+      candidates: [{ employee_id: 7, name: '陳老師', shift_name: '未排班', duty_label: '個人工時 09:00~18:00', unavailable_reason: '對方當天沒有排定班別，無法換班', has_pending_swap: false }],
+    })
+    expect(submitBtn().attributes('disabled')).toBeDefined()
+    w.vm.submit()
+    expect(w.emitted('submit')).toBeUndefined()
+  })
 })

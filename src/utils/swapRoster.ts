@@ -13,6 +13,8 @@ export type DayRosterEntry = ApiResponse<'/portal/schedule/day-roster', 'get'>[n
 export interface RosterAnnotation {
   duty_label?: string
   same_time?: boolean
+  /** 有值＝此同事當天不可選（原因文字即顯示用提示）。 */
+  unavailable_reason?: string
 }
 
 /** /swap-candidates 單筆的寬鬆型別（codegen 的 work_start 為 string | null，這裡 narrow 成 string）。 */
@@ -29,6 +31,16 @@ export interface SwapCandidateBase {
 export type SwapCandidateView = SwapCandidateBase & RosterAnnotation
 
 export const SAME_TIME_HINT = '時段相同，不用登記'
+export const NO_SHIFT_HINT = '對方當天沒有排定班別，無法換班'
+
+/**
+ * 對方當天沒有排定班別（無 ShiftType）且不是明確排休＝實際走個人工時／預設時段在上班。
+ * 換班接受時「對方原本沒有班別」會被寫成發起人排休（DailyShift.shift_type_id=None），
+ * 對方卻照常上班，所以這類同事不可選。明確排休（daily_off）是合法的「換休」，仍可選。
+ */
+function hasNoScheduledShift(entry: DayRosterEntry): boolean {
+  return entry.shift_name == null && entry.source !== 'daily_off'
+}
 
 /** 同事當日職務的顯示文字：排休／班別名稱＋時段／個人工時＋時段／未排班（預設）。 */
 export function formatRosterDuty(entry: DayRosterEntry): string {
@@ -51,7 +63,12 @@ export function mergeRosterIntoCandidates<T extends { employee_id?: number }>(
   const annotated = candidates.map((c): T & RosterAnnotation => {
     const hit = c.employee_id === undefined ? undefined : byId.get(c.employee_id)
     return hit
-      ? { ...c, duty_label: formatRosterDuty(hit), same_time: hit.same_time_as_me }
+      ? {
+          ...c,
+          duty_label: formatRosterDuty(hit),
+          same_time: hit.same_time_as_me,
+          ...(hasNoScheduledShift(hit) ? { unavailable_reason: NO_SHIFT_HINT } : {}),
+        }
       : { ...c }
   })
   return [...annotated.filter((c) => !c.same_time), ...annotated.filter((c) => c.same_time)]

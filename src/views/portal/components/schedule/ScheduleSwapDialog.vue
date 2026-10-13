@@ -24,7 +24,7 @@ import { computed, ref, watch } from 'vue'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 import { SAME_TIME_HINT } from '@/utils/swapRoster'
 
-interface SwapCandidate { employee_id?: number; name?: string; shift_name?: string; work_start?: string; work_end?: string; has_pending_swap?: boolean; duty_label?: string; same_time?: boolean; [key: string]: unknown }
+interface SwapCandidate { employee_id?: number; name?: string; shift_name?: string; work_start?: string; work_end?: string; has_pending_swap?: boolean; duty_label?: string; same_time?: boolean; unavailable_reason?: string; [key: string]: unknown }
 
 const props = defineProps<{
   modelValue: boolean
@@ -78,7 +78,7 @@ todayMidnight.setHours(0, 0, 0, 0)
 const disabledDate = (d: Date) => d < todayMidnight
 
 function submit() {
-  if (!form.value.date || !form.value.target_id) return
+  if (!canSubmit.value) return
   emit('submit', {
     swap_date: form.value.date,
     target_id: form.value.target_id,
@@ -86,13 +86,20 @@ function submit() {
   })
 }
 
-const canSubmit = computed(() => !!form.value.date && !!form.value.target_id)
+// 候選會先顯示、day-roster 較晚才補註：使用者可能已選了某位，事後才被標為不可選 → 不可送出。
+const targetUnavailable = computed(
+  () => !!props.candidates?.find((c) => c.employee_id === form.value.target_id)?.unavailable_reason,
+)
+const canSubmit = computed(
+  () => !!form.value.date && !!form.value.target_id && !targetUnavailable.value,
+)
 
 // 選項文字：有 duty_label（day-roster 的有效班別）就用它，否則維持原本的 shift_name＋時段格式；
-// 時段與自己相同者加註「不用登記」（換了也沒差）。
+// 對方當天沒有排定班別（unavailable_reason）→ 停用並顯示原因；時段與自己相同者加註「不用登記」（換了也沒差）。
 function optionLabel(c: SwapCandidate): string {
   const duty = c.duty_label ?? `${c.shift_name}${c.work_start ? ' ' + c.work_start + '~' + c.work_end : ''}`
-  return `${c.name} (${duty})${c.same_time ? `（${SAME_TIME_HINT}）` : ''}`
+  const note = c.unavailable_reason ?? (c.same_time ? SAME_TIME_HINT : '')
+  return `${c.name} (${duty})${note ? `（${note}）` : ''}`
 }
 </script>
 
@@ -133,12 +140,12 @@ function optionLabel(c: SwapCandidate): string {
               :key="c.employee_id as number"
               :label="optionLabel(c)"
               :value="c.employee_id as number"
-              :disabled="c.has_pending_swap"
+              :disabled="c.has_pending_swap || !!c.unavailable_reason"
             >
               <span>{{ c.name }}</span>
               <span style="float: right; color: var(--text-secondary); font-size: 12px">
                 {{ c.duty_label ?? c.shift_name }}
-                <span v-if="c.has_pending_swap" style="color: var(--el-color-danger)">(已有換班)</span><span v-if="c.same_time" style="color: var(--text-secondary)">・{{ SAME_TIME_HINT }}</span>
+                <span v-if="c.has_pending_swap" style="color: var(--el-color-danger)">(已有換班)</span><span v-if="c.unavailable_reason" style="color: var(--el-color-danger)">・{{ c.unavailable_reason }}</span><span v-else-if="c.same_time" style="color: var(--text-secondary)">・{{ SAME_TIME_HINT }}</span>
               </span>
             </el-option>
           </el-select>
@@ -191,12 +198,12 @@ function optionLabel(c: SwapCandidate): string {
             :key="c.employee_id as number"
             :label="optionLabel(c)"
             :value="c.employee_id as number"
-            :disabled="c.has_pending_swap"
+            :disabled="c.has_pending_swap || !!c.unavailable_reason"
           >
             <span>{{ c.name }}</span>
             <span style="float: right; color: var(--text-secondary); font-size: 12px">
               {{ c.duty_label ?? c.shift_name }}
-              <span v-if="c.has_pending_swap" style="color: var(--el-color-danger)">(已有換班)</span><span v-if="c.same_time" style="color: var(--text-secondary)">・{{ SAME_TIME_HINT }}</span>
+              <span v-if="c.has_pending_swap" style="color: var(--el-color-danger)">(已有換班)</span><span v-if="c.unavailable_reason" style="color: var(--el-color-danger)">・{{ c.unavailable_reason }}</span><span v-else-if="c.same_time" style="color: var(--text-secondary)">・{{ SAME_TIME_HINT }}</span>
             </span>
           </el-option>
         </el-select>

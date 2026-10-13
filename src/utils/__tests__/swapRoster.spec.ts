@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  NO_SHIFT_HINT,
   SAME_TIME_HINT,
   formatRosterDuty,
   mergeRosterIntoCandidates,
@@ -82,5 +83,34 @@ describe('mergeRosterIntoCandidates', () => {
 
   it('提示文案常數', () => {
     expect(SAME_TIME_HINT).toBe('時段相同，不用登記')
+    expect(NO_SHIFT_HINT).toBe('對方當天沒有排定班別，無法換班')
+  })
+
+  // 換班接受時會把「對方原本沒有班別」寫成發起人排休；對方其實走個人工時／預設時段在上班，
+  // 卻被當成沒班 → 發起人莫名排休。所以沒有排定班別（且不是明確排休）的同事不可選。
+  describe('對方當天沒有排定班別 → 不可選', () => {
+    const merged = (over: Partial<DayRosterEntry>) =>
+      mergeRosterIntoCandidates([cand(1, '甲')], [entry({ employee_id: 1, ...over })])[0]!
+
+    it('個人工時（source=employee、無班別）→ unavailable_reason', () => {
+      expect(merged({ shift_name: null, source: 'employee', work_start: '09:00', work_end: '18:00' }).unavailable_reason).toBe(NO_SHIFT_HINT)
+    })
+
+    it('預設時段（source=default、無班別）→ unavailable_reason', () => {
+      expect(merged({ shift_name: null, source: 'default', work_start: '08:00', work_end: '17:00' }).unavailable_reason).toBe(NO_SHIFT_HINT)
+    })
+
+    it('明確排休（source=daily_off）仍可選：換休是合法換班', () => {
+      expect(merged({ shift_name: null, source: 'daily_off', work_start: null, work_end: null }).unavailable_reason).toBeUndefined()
+    })
+
+    it('有班別名稱 → 可選', () => {
+      expect(merged({}).unavailable_reason).toBeUndefined()
+    })
+
+    it('roster 沒有該候選 → 不加註也不擋（降級行為）', () => {
+      const out = mergeRosterIntoCandidates([cand(9, '外人')], [entry({ employee_id: 1, shift_name: null, source: 'employee' })])
+      expect('unavailable_reason' in out[0]!).toBe(false)
+    })
   })
 })
