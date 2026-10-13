@@ -592,9 +592,18 @@ export default defineConfig({
         }),
     ],
     resolve: {
-        alias: {
-            '@': fileURLToPath(new URL('./src', import.meta.url))
-        }
+        alias: [
+            { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+            // 裸 'vue' 一律指向 ESM runtime 版。ESM import 本來就解析到這個檔（vue 的
+            // exports.import.default），此 alias 對它們是恆等；真正改變的是 CJS require：
+            // vuedraggable 4.1.0 只出 UMD，其 require('vue') 走 require 條件 → vue/index.js
+            // → vue.cjs.prod.js（完整版：第二份 runtime + 模板編譯器），又因路徑在
+            // /node_modules/vue/、@vue/ 被 manualChunks 併進三端共用的 vue-core。
+            // 實測 vue-core 86.6→54.1KB gz、三端首屏各 −32.5KB，且 vuedraggable 改與 App
+            // 共用同一份 Vue（之前跑在另一份 runtime 上）。守衛：check-entry-chunks 的
+            // 「首屏不得含 Vue 模板編譯器」。
+            { find: /^vue$/, replacement: 'vue/dist/vue.runtime.esm-bundler.js' },
+        ]
     },
     build: {
         chunkSizeWarningLimit: 500,

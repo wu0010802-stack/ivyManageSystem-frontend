@@ -320,6 +320,23 @@ for (const entry of ENTRIES) {
     )
   }
 
+  // 首屏不得含 Vue 模板編譯器：App 全是 SFC 預編譯，執行期用不到編譯器。它會出現代表某個
+  // CJS／UMD 套件 require('vue') 拉進了 vue.cjs 完整版（第二份 runtime＋編譯器，曾讓三端首屏
+  // 各多 32.5KB gz，且該套件跑在另一份 Vue 上）。特徵字串取自 @vue/compiler-core 的錯誤訊息表。
+  const VUE_COMPILER_MARKERS = ['Unexpected EOF in tag', 'Error parsing JavaScript expression']
+  const compilerChunks = [...visited].filter((f) => {
+    const code = readFileSync(join(ASSETS, f), 'utf8')
+    return VUE_COMPILER_MARKERS.some((m) => code.includes(m))
+  })
+  if (compilerChunks.length > 0) {
+    failed = true
+    console.error(`\n[check-entry-chunks] ✗ ${entry.name}：首屏含 Vue 模板編譯器（${compilerChunks.join(', ')}）`)
+    console.error(
+      '  修法：找出 require(\'vue\') 的 CJS／UMD 套件（grep node_modules/.vite/deps），' +
+        '確認 vite.config.js resolve.alias 的 /^vue$/ → vue.runtime.esm-bundler.js 仍在。'
+    )
+  }
+
   const violations = [...visited].filter((f) => entry.forbidden.some((re) => re.test(f)))
   if (violations.length > 0) {
     failed = true
