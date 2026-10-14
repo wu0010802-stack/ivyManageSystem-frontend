@@ -94,7 +94,15 @@ async function loadRoundStatus(): Promise<void> {
     if (current === roundSeq) roundStatus.value = ''
   }
 }
-watch(data, (g) => { if (g) void loadRoundStatus() }, { immediate: true })
+// data 變 null＝換月載入中或整月請求失敗：先作廢在飛的舊請求並清掉狀態，不殘留上個月的文字
+watch(data, (g) => {
+  if (g) {
+    void loadRoundStatus()
+  } else {
+    roundSeq += 1
+    roundStatus.value = ''
+  }
+}, { immediate: true })
 
 /** ①：在職、應出勤的工作日中，班別只靠員工預設或系統預設（沒有任何排班資料）的人日數 */
 const unscheduled = computed(() => {

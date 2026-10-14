@@ -212,4 +212,62 @@ describe('MonthProgressBar ④老師確認狀態（D-07）', () => {
     expect(api.rounds).not.toHaveBeenCalled()
     expect(wrapper.find('[data-test="progress-rounds-status"]').exists()).toBe(false)
   })
+
+  describe('換月或載入失敗：不殘留上個月的狀態', () => {
+    const STATUS = '[data-test="progress-rounds-status"]'
+    // 9 月有進行中輪次（已回覆 2/3）
+    function open9() {
+      api.rounds.mockResolvedValue({ data: [ROUND] })
+      api.round.mockResolvedValue({ data: { round: ROUND, items: [], employees: [progressEmp(1, 0), progressEmp(2, 1), progressEmp(3, 0)] } })
+    }
+
+    it('換月且新月整月請求還沒回來：舊月狀態立即消失', async () => {
+      open9()
+      const wrapper = mountBar()
+      await flushPromises()
+      expect(wrapper.find(STATUS).text()).toBe('確認中・已回覆 2/3')
+      api.grid.mockImplementationOnce(() => new Promise(() => {})) // 10 月整月請求懸住
+      anchor.value = '2026-10-05'
+      await flushPromises()
+      expect(wrapper.find(STATUS).exists()).toBe(false)
+    })
+
+    it('新月整月請求失敗：不顯示任何輪次狀態', async () => {
+      open9()
+      const wrapper = mountBar()
+      await flushPromises()
+      expect(wrapper.find(STATUS).text()).toBe('確認中・已回覆 2/3')
+      api.grid.mockRejectedValueOnce({ displayMessage: '伺服器錯誤' })
+      anchor.value = '2026-10-05'
+      await flushPromises()
+      expect(wrapper.find(STATUS).exists()).toBe(false)
+      expect(wrapper.find('[data-test="progress-error"]').exists()).toBe(true)
+    })
+
+    it('同月 revision 重抓失敗：不留著重抓前的狀態', async () => {
+      open9()
+      const wrapper = mountBar()
+      await flushPromises()
+      expect(wrapper.find(STATUS).text()).toBe('確認中・已回覆 2/3')
+      api.grid.mockRejectedValueOnce({ displayMessage: '伺服器錯誤' })
+      revision.value += 1
+      await flushPromises()
+      expect(wrapper.find(STATUS).exists()).toBe(false)
+    })
+
+    it('亂序：舊月的輪次請求換月後才回來，不得寫回舊月狀態', async () => {
+      let resolveOld!: (v: { data: (typeof ROUND)[] }) => void
+      api.rounds.mockImplementationOnce(() => new Promise((r) => { resolveOld = r })) // 9 月輪次請求懸住
+      api.round.mockResolvedValue({ data: { round: ROUND, items: [], employees: [progressEmp(1, 0), progressEmp(2, 1), progressEmp(3, 0)] } })
+      const wrapper = mountBar()
+      await flushPromises()
+      expect(api.rounds).toHaveBeenCalledTimes(1)
+      api.grid.mockImplementationOnce(() => new Promise(() => {})) // 10 月整月請求也懸住，狀態不會被新月請求覆寫
+      anchor.value = '2026-10-05'
+      await flushPromises()
+      resolveOld({ data: [ROUND] })
+      await flushPromises()
+      expect(wrapper.find(STATUS).exists()).toBe(false)
+    })
+  })
 })
