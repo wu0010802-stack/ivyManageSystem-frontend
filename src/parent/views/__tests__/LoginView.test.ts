@@ -102,13 +102,19 @@ describe('LoginView — friendly error', () => {
     expect(w.find('[data-testid="login-error-next-step"]').exists()).toBe(false)
   })
 
-  it('LIFF 初始化失敗 → 顯示自製 nextStep（重新開啟 LIFF）', async () => {
-    mockInitLiff.mockRejectedValueOnce(new Error('liff sdk init failed'))
+  it('LIFF 初始化失敗 → 家長看得懂的文案與下一步；SDK 原始錯誤只留在 console', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sdkError = new Error('liff sdk init failed')
+    mockInitLiff.mockRejectedValueOnce(sdkError)
     const w = mountLoginView()
     await flushPromises()
     const errorBox = w.find('[data-testid="login-error"]')
     expect(errorBox.exists()).toBe(true)
-    expect(errorBox.text()).toContain('liff sdk init failed')
-    expect(w.find('[data-testid="login-error-next-step"]').text()).toMatch(/重新開啟 LIFF/)
+    expect(errorBox.text()).toContain('LINE 登入暫時無法啟動')
+    expect(errorBox.text()).not.toContain('liff sdk init failed')
+    expect(errorBox.text()).not.toMatch(/LIFF/)
+    expect(w.find('[data-testid="login-error-next-step"]').text()).toMatch(/回到 LINE 重新點開連結/)
+    expect(warn).toHaveBeenCalledWith(expect.any(String), sdkError)
+    warn.mockRestore()
   })
 })

@@ -82,9 +82,9 @@ function resetForRetry() {
       height="512"
     >
     <div class="card pt-card">
-      <h2 class="title">加綁第二個小孩</h2>
+      <h2 class="title">加綁子女</h2>
       <p class="desc">
-        請輸入由園所提供的另一張綁定碼。完成後，新的小孩將會出現在您的子女清單中。
+        請輸入園所提供給這位孩子的綁定碼。完成後，孩子會出現在您的子女清單中。
       </p>
       <div class="input-group">
         <label for="bind-add-code" class="sr-only">加綁綁定碼</label>

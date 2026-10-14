@@ -83,10 +83,12 @@ async function startLogin({ forceFresh = false } = {}) {
     await initLiff()
   } catch (err: unknown) {
     status.value = 'error'
+    // SDK 原始錯誤（英文、含 LIFF ID 等工程字眼）不給家長看：initLiff() 已把它回報到
+    // 家長端監控（liff_init_failed），這裡只留 console 供現場除錯。
+    console.warn('[parent-login] LIFF 初始化失敗', err)
     _setLocalError(
-      // 文案不再指向工程 env：LIFF ID 已改由園所的 LINE 設定提供（多租戶 4d/fb）。
-      (err instanceof Error ? err.message : String(err)) || 'LINE 登入初始化失敗，請聯絡園所確認 LINE 設定',
-      '請重新開啟 LIFF 頁面；持續發生請聯絡園所',
+      'LINE 登入暫時無法啟動',
+      '請關閉這個頁面，回到 LINE 重新點開連結；一直出現請聯絡園所確認 LINE 設定',
     )
     return
   }
