@@ -26,10 +26,20 @@ import {
   type ScopeStatusOut,
 } from '../api/consent'
 import { useChildrenStore } from '../stores/children'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 const childrenStore = useChildrenStore()
 
-const tab = ref<'consents' | 'delete' | 'correct' | 'opt_out' | 'history'>('consents')
+type RightsTab = 'consents' | 'delete' | 'correct' | 'opt_out' | 'history'
+const tab = ref<RightsTab>('consents')
+
+/** 換分頁時清掉上一頁的錯誤／成功訊息，免得「刪除申請已送出」掛在停止處理頁上 */
+function selectTab(next: RightsTab) {
+  if (tab.value === next) return
+  tab.value = next
+  errorMessage.value = ''
+  successMessage.value = ''
+}
 
 const consentStatus = ref<ScopeStatusOut[]>([])
 const dsrHistory = ref<DsrRequestOut[]>([])
@@ -61,9 +71,30 @@ onMounted(async () => {
 })
 
 // ── Consent 撤回 ──
+// 原生 confirm() 在 LINE WebView 會在標題露出網域，改用家長端 ConfirmDialog。
+const revokeTarget = ref<{ scope: ConsentScope; policyVersionId: number } | null>(null)
+const revokeOpen = computed({
+  get: () => revokeTarget.value !== null,
+  set: (v: boolean) => {
+    if (!v) revokeTarget.value = null
+  },
+})
+
+function askRevoke(scope: ConsentScope, policyVersionId: number) {
+  revokeTarget.value = { scope, policyVersionId }
+}
+
+async function confirmRevoke() {
+  const target = revokeTarget.value
+  revokeTarget.value = null
+  if (!target) return
+  await revokeScope(target.scope, target.policyVersionId)
+}
+
 async function revokeScope(scope: ConsentScope, policyVersionId: number) {
-  if (!confirm(`確定要撤回「${SCOPE_LABELS[scope]}」的同意？`)) return
   loading.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
   try {
     await writeConsent({
       policy_version_id: policyVersionId,
@@ -88,8 +119,8 @@ const deleteForm = ref({
 })
 
 async function submitDelete() {
-  if (deleteForm.value.reason.length < 5) {
-    errorMessage.value = '刪除理由需 ≥5 字'
+  if (deleteForm.value.reason.trim().length < 5) {
+    errorMessage.value = '刪除理由請至少寫 5 個字'
     return
   }
   if (!deleteForm.value.subject_entity_id) {
@@ -137,8 +168,8 @@ const CORRECT_FIELDS = [
 ] as const
 
 async function submitCorrect() {
-  if (correctForm.value.reason.length < 5) {
-    errorMessage.value = '更正理由需 ≥5 字'
+  if (correctForm.value.reason.trim().length < 5) {
+    errorMessage.value = '更正理由請至少寫 5 個字'
     return
   }
   if (!correctForm.value.subject_entity_id || !correctForm.value.new_value) {
@@ -183,6 +214,12 @@ const GRANULAR_CONSENT_SCOPES = CONSENT_SCOPES.filter(
 
 const optOutScope = ref<ConsentScope>('photo_publish')
 const optOutReason = ref('')
+// 停止處理即時生效（後端立即撤回 consent），按下去前先確認
+const optOutConfirmOpen = ref(false)
+
+function askOptOut() {
+  optOutConfirmOpen.value = true
+}
 
 async function submitOptOut() {
   loading.value = true
@@ -225,8 +262,8 @@ const children = computed(
     </header>
 
     <p class="intro">
-      依個人資料保護法 §3，您可隨時查詢、要求更正、停止處理或刪除您及子女的個人資料。
-      所有申請進入園所處理 queue，30 天內回覆。
+      依個人資料保護法，您可隨時查詢、要求更正、停止處理或刪除您及子女的個人資料。
+      送出的申請由園所審核，30 天內回覆。
     </p>
 
     <nav class="tab-bar" role="tablist">
@@ -243,7 +280,7 @@ const children = computed(
         type="button"
         role="tab"
         :aria-selected="tab === t.v"
-        @click="tab = t.v as typeof tab"
+        @click="selectTab(t.v as RightsTab)"
       >
         {{ t.label }}
       </button>
@@ -269,7 +306,7 @@ const children = computed(
             v-if="row.consented === true && row.policy_version_id"
             type="button"
             class="revoke-btn"
-            @click="revokeScope(row.scope as ConsentScope, row.policy_version_id!)"
+            @click="askRevoke(row.scope as ConsentScope, row.policy_version_id!)"
           >
             撤回
           </button>
@@ -295,7 +332,8 @@ const children = computed(
     <!-- Delete -->
     <section v-if="tab === 'delete'" class="panel">
       <p class="panel-hint">
-        申請刪除子女資料。基於合班/出席稽核與稅務 7 年保留義務，實際刪除由園所決定。
+        申請刪除子女資料。依法令規定，出缺勤與收費等紀錄須保存一定年限（例如稅務資料 7 年），
+        實際可刪除的範圍由園所確認後回覆。
       </p>
       <label class="field">
         <span>選擇子女</span>
@@ -307,7 +345,7 @@ const children = computed(
         </select>
       </label>
       <label class="field">
-        <span>刪除理由（≥5 字）</span>
+        <span>刪除理由（至少 5 個字）</span>
         <textarea v-model="deleteForm.reason" rows="3" />
       </label>
       <button class="submit-btn" type="button" :disabled="loading" @click="submitDelete">
@@ -318,7 +356,7 @@ const children = computed(
     <!-- Correct -->
     <section v-if="tab === 'correct'" class="panel">
       <p class="panel-hint">
-        申請更正子女資料欄位。為防 IDOR，更正由園所審核後實際套用。
+        申請更正子女資料。為確保資料正確，更正內容會由園所確認後才套用。
       </p>
       <label class="field">
         <span>選擇子女</span>
@@ -338,11 +376,11 @@ const children = computed(
         </select>
       </label>
       <label class="field">
-        <span>新值</span>
+        <span>正確的內容</span>
         <input v-model="correctForm.new_value" type="text" />
       </label>
       <label class="field">
-        <span>更正理由（≥5 字）</span>
+        <span>更正理由（至少 5 個字）</span>
         <textarea v-model="correctForm.reason" rows="3" />
       </label>
       <button class="submit-btn" type="button" :disabled="loading" @click="submitCorrect">
@@ -353,13 +391,13 @@ const children = computed(
     <!-- Opt-out -->
     <section v-if="tab === 'opt_out'" class="panel">
       <p class="panel-hint">
-        申請停止特定資料處理範疇。停止後<strong>即時生效</strong>，園所同步停止對應處理。
+        停止園所使用某一類資料。送出後<strong>立即生效</strong>，園所會同步停止對應的處理。
       </p>
       <p class="panel-hint service-essential-hint">
-        ⓘ 基礎服務同意（service_essential）不可停止；如需終止，請改走「申請刪除」。
+        ⓘ 基礎服務同意（出缺勤、聯絡簿等基本功能所需的資料）不可停止；若不再使用本服務，請改提出刪除申請。
       </p>
       <label class="field">
-        <span>停止範疇</span>
+        <span>要停止的項目</span>
         <select v-model="optOutScope">
           <option v-for="s in GRANULAR_CONSENT_SCOPES" :key="s" :value="s">
             {{ SCOPE_LABELS[s] }}
@@ -370,10 +408,29 @@ const children = computed(
         <span>原因（選填）</span>
         <textarea v-model="optOutReason" rows="3" />
       </label>
-      <button class="submit-btn" type="button" :disabled="loading" @click="submitOptOut">
+      <button class="submit-btn" type="button" :disabled="loading" @click="askOptOut">
         確認停止處理
       </button>
     </section>
+
+    <ConfirmDialog
+      v-model:open="revokeOpen"
+      :title="revokeTarget ? `確定撤回「${SCOPE_LABELS[revokeTarget.scope]}」？` : ''"
+      message="撤回後立即生效，園所會停止這項資料使用；之後若要恢復，需要重新同意。"
+      confirm-label="撤回同意"
+      cancel-label="不撤回"
+      destructive
+      @confirm="confirmRevoke"
+    />
+    <ConfirmDialog
+      v-model:open="optOutConfirmOpen"
+      :title="`確定停止「${SCOPE_LABELS[optOutScope]}」？`"
+      message="送出後立即生效，園所會同步停止這項資料處理；之後若要恢復，需要重新同意。"
+      confirm-label="確定停止"
+      cancel-label="先不要"
+      destructive
+      @confirm="submitOptOut"
+    />
   </div>
 </template>
 
@@ -501,7 +558,8 @@ const children = computed(
   border: 1px solid var(--coral-300, #f4b8b3);
   color: var(--coral-700, #b14545);
   font-size: 12px;
-  padding: 4px 10px;
+  min-height: var(--touch-target-min, 44px);
+  padding: 4px 12px;
   border-radius: 6px;
   cursor: pointer;
 }
