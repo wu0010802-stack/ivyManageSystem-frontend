@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractSubstituteDutyWarnings, formatSubstituteDutyWarning } from '@/utils/substituteDuty'
+import { extractSubstituteDutyWarnings, formatSubstituteDutyWarning, takesDutyHandoverText } from '@/utils/substituteDuty'
 
 describe('formatSubstituteDutyWarning', () => {
   it('帶假單編號與日期', () => {
@@ -48,5 +48,17 @@ describe('extractSubstituteDutyWarnings', () => {
   it('略過格式不對的項目，不拋錯', () => {
     const res = { data: { substitute_duty_warnings: [null, { leave_id: 1 }, { leave_id: 2, message: 'ok' }] } }
     expect(extractSubstituteDutyWarnings(res)).toEqual(['【代理接手職務】假單 #2：ok'])
+  })
+})
+
+describe('takesDutyHandoverText', () => {
+  it('帶請假人姓名', () => {
+    expect(takesDutyHandoverText('王老師')).toBe('請你接手 王老師 這幾天的職務班別；假單核准後，你的上下班時間會跟著調整')
+  })
+
+  it('沒有姓名時退回「請假人」，不會印出 undefined', () => {
+    expect(takesDutyHandoverText(undefined)).toContain('請你接手 請假人 ')
+    expect(takesDutyHandoverText('')).toContain('請假人')
+    expect(takesDutyHandoverText(null)).not.toContain('null')
   })
 })

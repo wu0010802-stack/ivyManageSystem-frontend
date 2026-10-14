@@ -13,6 +13,8 @@ import PortalLeaveForm from '@/components/portal/PortalLeaveForm.vue'
 import PortalLeaveList from '@/components/portal/PortalLeaveList.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import PortalSubstituteCardList from '@/components/portal/PortalSubstituteCardList.vue'
+import TakesDutyTag from '@/components/portal/TakesDutyTag.vue'
+import { takesDutyHandoverText } from '@/utils/substituteDuty'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -32,7 +34,7 @@ const loadColleagues = async () => {
     allEmployees.value = []
   }
 }
-interface SubstituteRequest { id: number | string; requester_name?: string; leave_type_label?: string; substitute_status?: string; start_date?: string; end_date?: string; leave_hours?: number | string; reason?: string | null; created_at?: string; [key: string]: unknown }
+interface SubstituteRequest { id: number | string; requester_name?: string; leave_type_label?: string; substitute_status?: string; start_date?: string; end_date?: string; leave_hours?: number | string; reason?: string | null; created_at?: string; substitute_takes_duty?: boolean; [key: string]: unknown }
 const mySubstituteRequests = ref<SubstituteRequest[]>([])
 const substituteLoading = ref(false)
 const respondLoading = ref(false)
@@ -259,6 +261,15 @@ onMounted(() => {
           </el-table-column>
           <el-table-column prop="leave_hours" label="時數" width="70" />
           <el-table-column prop="reason" label="原因" show-overflow-tooltip />
+          <!-- SPEC-026 T13：請假人要求接手職務班別時，接受前就要看得到（D4 不推播，只能靠這份清單） -->
+          <el-table-column label="接手職務" width="110">
+            <template #default="{ row }">
+              <el-tooltip v-if="row.substitute_takes_duty" :content="takesDutyHandoverText(row.requester_name)" placement="top">
+                <span><TakesDutyTag /></span>
+              </el-tooltip>
+              <span v-else class="text-secondary" style="font-size: 12px;">—</span>
+            </template>
+          </el-table-column>
           <el-table-column label="代理狀態" width="100">
             <template #default="{ row }">
               <el-tag :type="substituteStatusType(row.substitute_status)" size="small">

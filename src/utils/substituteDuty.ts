@@ -23,3 +23,12 @@ export function extractSubstituteDutyWarnings(res: unknown): string[] {
   if (!Array.isArray(list)) return []
   return list.map(formatSubstituteDutyWarning).filter((text) => text.length > 0)
 }
+
+/**
+ * 代理人清單上「這張假單要我接手職務」的說明文字（手機卡片與桌機表格共用，文案不漂移）。
+ * D4 不推播，代理人只能靠清單得知接受後自己的班會被改。
+ */
+export function takesDutyHandoverText(requesterName?: string | null): string {
+  const name = requesterName && requesterName.length > 0 ? requesterName : '請假人'
+  return `請你接手 ${name} 這幾天的職務班別；假單核准後，你的上下班時間會跟著調整`
+}

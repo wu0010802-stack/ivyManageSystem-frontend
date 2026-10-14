@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import TakesDutyTag from './TakesDutyTag.vue'
+import { takesDutyHandoverText } from '@/utils/substituteDuty'
+
 interface SubstituteRequest {
   id: number | string
   requester_name?: string
@@ -48,12 +51,7 @@ const statusTagType = (s: string | undefined | null): 'primary' | 'success' | 'w
                 <div class="card-meta">
                     <span class="requester">{{ req.requester_name }}</span>
                     <el-tag size="small">{{ req.leave_type_label }}</el-tag>
-                    <el-tag
-                        v-if="req.substitute_takes_duty"
-                        type="warning"
-                        size="small"
-                        data-test="takes-duty-tag"
-                    >接手職務</el-tag>
+                    <TakesDutyTag v-if="req.substitute_takes_duty" />
                 </div>
                 <el-tag :type="statusTagType(req.substitute_status)" size="small">
                     {{ statusLabel(req.substitute_status) }}
@@ -62,7 +60,7 @@ const statusTagType = (s: string | undefined | null): 'primary' | 'success' | 'w
             <div class="card-body">
                 <div v-if="req.substitute_takes_duty" class="info-line">
                     <span class="label">交接</span>
-                    <span>請你接手 {{ req.requester_name }} 這幾天的職務班別；假單核准後，你的上下班時間會跟著調整</span>
+                    <span>{{ takesDutyHandoverText(req.requester_name) }}</span>
                 </div>
                 <div class="info-line">
                     <span class="label">區間</span>
