@@ -35,7 +35,7 @@ import {
 
 type ShiftTypeLite = { id: number; name: string; work_start: string; work_end: string }
 
-const emit = defineEmits<{ applied: [result: ApplyResult] }>()
+const emit = defineEmits<{ applied: [result: ApplyResult]; changed: [] }>()
 
 const termStore = useAcademicTermStore()
 const shiftStore = useShiftStore()
@@ -395,13 +395,6 @@ onMounted(async () => {
         </table>
       </section>
 
-      <DutyRotationApplyDialog
-        v-model="applyVisible"
-        :rotation-id="rotation.id"
-        :from-week-start="applyFrom"
-        :weeks="state.weeks"
-        @applied="onApplied"
-      />
       <el-dialog
         :model-value="importPreview != null"
         title="匯入 Excel 預覽"
@@ -427,6 +420,17 @@ onMounted(async () => {
         </div>
       </el-dialog>
     </template>
+    <!-- 放在 loading／v-else 鏈之外：套用後 onApplied 會重讀（loading=true），掛在鏈內會把仍開著的
+         對話框連同「後續處理」清單一起卸載（D-08）。重讀期間 rotation／state 不會被清空，只有讀取失敗才卸載 -->
+    <DutyRotationApplyDialog
+      v-if="rotation && state"
+      v-model="applyVisible"
+      :rotation-id="rotation.id"
+      :from-week-start="applyFrom"
+      :weeks="state.weeks"
+      @applied="onApplied"
+      @changed="emit('changed')"
+    />
   </div>
 </template>
 

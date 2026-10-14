@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { applyDutyRotation } from '@/api/dutyRotations'
 import { useShiftStore } from '@/stores/shift'
+import { formatMonthDay } from '@/utils/attendanceConfirm'
 import { friendlyError } from '@/utils/errorMessages'
 import {
   ACTION_LABELS,
@@ -18,6 +19,7 @@ import {
   type ApplyResult,
   type EditableWeek,
 } from '@/utils/dutyRotationGrid'
+import RecordedFollowUpDialog from './RecordedFollowUpDialog.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -25,13 +27,14 @@ const props = defineProps<{
   fromWeekStart: string | null
   weeks: EditableWeek[]
 }>()
-const emit = defineEmits<{ 'update:modelValue': [value: boolean]; applied: [result: ApplyResult] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: boolean]; applied: [result: ApplyResult]; changed: [] }>()
 
 const shiftStore = useShiftStore()
 // 完整班別清單（含停用）：手動列可能是很久以前指到一個已停用的班別，用
 // activeShiftTypes 會查不到（Final fix FE-1）。
 const shiftTypes = computed(() => shiftStore.shiftTypes as unknown as { id: number; name: string }[])
 const shiftTypeName = (id: number | null | undefined) => shiftTypeLabel(shiftTypes.value, id ?? null)
+const shiftNameMap = computed<Record<number, string>>(() => Object.fromEntries(shiftTypes.value.map((s) => [s.id, s.name])))
 
 const loading = ref(false)
 const applying = ref(false)
@@ -46,6 +49,15 @@ const selectedFromWeekStart = ref<string>(props.fromWeekStart ?? ALL_WEEKS)
 const previewedFrom = ref<string | null>(null)
 const showCollapsedSkips = ref(false)
 const toApiFromWeekStart = (v: string): string | null => (v === ALL_WEEKS ? null : v)
+
+/** 實際套用後，「該週已有打卡」而略過的員工週；有值時對話框改顯示後續處理清單（D-08） */
+const appliedRecorded = ref<ApplyChange[]>([])
+const followTarget = ref<ApplyChange | null>(null)
+const followOpen = ref(false)
+const openFollowUp = (c: ApplyChange): void => {
+  followTarget.value = c
+  followOpen.value = true
+}
 
 const keyOf = (c: ApplyChange) => `${c.employee_id}|${c.week_start_date}`
 const summary = computed(() => summarizeChanges(changes.value))
@@ -99,6 +111,7 @@ watch(
       selectedFromWeekStart.value = props.fromWeekStart ?? ALL_WEEKS
       previewedFrom.value = null
       showCollapsedSkips.value = false
+      appliedRecorded.value = []
     }
   },
   { immediate: true }
@@ -144,6 +157,11 @@ const confirm = async () => {
     })
     ElMessage.success('已套用到週班表')
     emit('applied', res.data)
+    const recorded = res.data.changes.filter((c) => c.action === 'skip' && c.skip_reason === 'recorded')
+    if (recorded.length) {
+      appliedRecorded.value = recorded // 留在對話框，列出待後續處理的員工週（D-08）
+      return
+    }
     emit('update:modelValue', false)
   } catch (e) {
     ElMessage.error(friendlyError('套用輪值表失敗', e))
@@ -161,6 +179,28 @@ const confirm = async () => {
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
     <div class="drad-body">
+      <template v-if="appliedRecorded.length">
+        <p class="drad-summary" data-test="followup-intro">
+          已套用到週班表。以下 {{ appliedRecorded.length }} 個員工週已有打卡，週班表沒有改動，可逐日補做：
+        </p>
+        <ul class="drad-followups" data-test="followup-list">
+          <li v-for="c in appliedRecorded" :key="keyOf(c)">
+            <span class="drad-name">{{ c.employee_name }}</span>
+            <span>{{ c.week_start_date }} 週 → {{ shiftTypeName(c.to_shift_type_id) }}（已打卡 {{ (c.recorded_dates ?? []).map(formatMonthDay).join('、') || '—' }}）</span>
+            <el-button
+              v-if="c.to_shift_type_id != null"
+              size="small"
+              :data-test="`followup-${c.employee_id}-${c.week_start_date}`"
+              @click="openFollowUp(c)"
+            >後續處理</el-button>
+            <span v-else class="drad-reason">輪值表這週沒有指定班別，請到班表核對調整</span>
+          </li>
+        </ul>
+        <div class="drad-actions">
+          <el-button type="primary" data-test="followup-done" @click="emit('update:modelValue', false)">完成</el-button>
+        </div>
+      </template>
+      <template v-else>
       <label class="drad-from-week">
         從哪一週開始
         <el-select
@@ -281,7 +321,9 @@ const confirm = async () => {
           確認套用
         </el-button>
       </div>
+      </template>
     </div>
+    <RecordedFollowUpDialog v-model="followOpen" :change="followTarget" :shift-names="shiftNameMap" @changed="emit('changed')" />
   </el-dialog>
 </template>
 
@@ -300,5 +342,7 @@ const confirm = async () => {
 .drad-name { min-width: 72px; }
 .drad-reason { color: var(--el-text-color-secondary); }
 .drad-overwrite { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.drad-followups { margin: 0; padding-left: 16px; }
+.drad-followups li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 2px 0; }
 .drad-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 </style>

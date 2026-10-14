@@ -112,7 +112,7 @@ const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobil
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
   MonthProgressBar: MonthProgressBarStub,
-  DutyRotationPanel: { name: 'DutyRotationPanel', mounted() { rotationMounts.count++ }, template: '<div class="rotation-stub" />' },
+  DutyRotationPanel: { name: 'DutyRotationPanel', emits: ['applied', 'changed'], mounted() { rotationMounts.count++ }, template: '<div class="rotation-stub" />' },
   SwapHistoryPanel: { name: 'SwapHistoryPanel', template: '<div class="swaps-stub" />' },
 }
 const STUBS = {
@@ -781,6 +781,20 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     await flushPromises()
     expect(rotationMounts.count).toBe(1)
     expect(wrapper.find('.rotation-stub').attributes('style') ?? '').not.toContain('display: none')
+    mockHasPermission.mockReturnValue(true)
+    wrapper.unmount()
+  })
+
+  it('輪值表套用後的後續處理（每日調整／逐日確認）改了資料：班表核對的格子與進度重算（D-08）', async () => {
+    mockHasPermission.mockImplementation((code: unknown) => code === 'SCHEDULE' || code === 'ATTENDANCE_READ')
+    const wrapper = mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await wrapper.find('[data-test="tab-rotation"]').trigger('click')
+    await flushPromises()
+    const before = wrapper.findComponent(ScheduleGridPanelStub).props('revision') as number
+    wrapper.findComponent({ name: 'DutyRotationPanel' }).vm.$emit('changed')
+    await flushPromises()
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(before + 1)
     mockHasPermission.mockReturnValue(true)
     wrapper.unmount()
   })

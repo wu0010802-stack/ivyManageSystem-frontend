@@ -2,7 +2,7 @@
  * 學期輪值表頁籤：無輪值表 → 建立；有 → 儲存送整份覆寫；未儲存時不可套用。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ref } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const { mockGet, mockCreate, mockReplace, mockImport, mockExport } = vi.hoisted(() => ({
@@ -176,5 +176,43 @@ describe('DutyRotationPanel', () => {
     )
     expect(mockGet).not.toHaveBeenCalled() // 取消則不載入
     expect(semesterSelect.props('modelValue')).toBe(1) // 值還原
+  })
+
+  it('套用後面板重讀輪值表期間，套用對話框不得被卸載（D-08：後續處理清單要留著）；changed 往上轉發', async () => {
+    mockGet.mockResolvedValueOnce({ data: rotation })
+    const unmounted = vi.fn()
+    const wrapper = mount(DutyRotationPanel, {
+      global: {
+        stubs: {
+          ...globalConfig.stubs,
+          DutyRotationApplyDialog: {
+            name: 'DutyRotationApplyDialog',
+            props: ['modelValue', 'rotationId', 'fromWeekStart', 'weeks'],
+            emits: ['applied', 'changed', 'update:modelValue'],
+            setup() {
+              onUnmounted(unmounted)
+              return {}
+            },
+            template: '<div class="apply-dlg" />',
+          },
+        },
+      },
+    })
+    await flushPromises()
+    let finishReload!: (v: unknown) => void
+    mockGet.mockReturnValueOnce(new Promise((resolve) => { finishReload = resolve }))
+    const dlg = wrapper.findComponent({ name: 'DutyRotationApplyDialog' })
+    dlg.vm.$emit('applied', { applied: true, counts: {}, changes: [] })
+    await flushPromises()
+    expect(wrapper.find('.drp-muted').exists()).toBe(true) // 重讀中
+    expect(unmounted).not.toHaveBeenCalled()
+    expect(wrapper.find('.apply-dlg').exists()).toBe(true)
+    finishReload({ data: rotation })
+    await flushPromises()
+    expect(unmounted).not.toHaveBeenCalled()
+    expect(wrapper.emitted('applied')).toHaveLength(1)
+
+    dlg.vm.$emit('changed')
+    expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 })

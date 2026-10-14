@@ -157,7 +157,7 @@
 
     </div>
 
-    <DutyRotationPanel v-if="canSchedule && rotationVisited" v-show="activeTab === 'rotation'" @applied="onRotationApplied" />
+    <DutyRotationPanel v-if="canSchedule && rotationVisited" v-show="activeTab === 'rotation'" @applied="onRotationApplied" @changed="onRotationApplied" />
     <SwapHistoryPanel v-if="canSchedule && activeTab === 'swaps'" />
     <ShiftTypesPanel v-if="canSchedule && activeTab === 'shifts'" @changed="onShiftTypesChanged" />
 

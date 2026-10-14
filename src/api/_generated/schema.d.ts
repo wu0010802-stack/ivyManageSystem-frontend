@@ -22918,6 +22918,8 @@ export interface components {
             from_shift_type_id?: number | null;
             /** Label */
             label?: string | null;
+            /** Recorded Dates */
+            recorded_dates?: string[];
             /** Skip Reason */
             skip_reason?: ("manual" | "finalized" | "recorded") | null;
             /** To Shift Type Id */

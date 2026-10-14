@@ -72,6 +72,12 @@ const globalConfig = {
       props: ['label', 'value'],
       template: '<div class="opt" :data-value="String(value)">{{ label }}</div>',
     },
+    RecordedFollowUpDialog: {
+      name: 'RecordedFollowUpDialog',
+      props: ['modelValue', 'change', 'shiftNames'],
+      emits: ['changed', 'update:modelValue'],
+      template: '<div data-test="rfu-stub" />',
+    },
   },
 }
 
@@ -136,6 +142,38 @@ describe('DutyRotationApplyDialog', () => {
       overwrite_manual: [{ employee_id: 3, week_start_date: '2026-09-21' }],
     })
     expect(wrapper.emitted('applied')).toHaveLength(1)
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
+  })
+
+  it('套用後有已打卡略過的員工週：留在對話框列出，可逐筆後續處理；完成才關閉', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    mockApply.mockResolvedValueOnce({
+      data: {
+        applied: true,
+        counts: { create: 1, skip: 2 },
+        changes: [
+          change({}),
+          change({ employee_id: 3, employee_name: '陳老師', action: 'skip', skip_reason: 'recorded', recorded_dates: ['2026-09-15', '2026-09-16'] }),
+          change({ employee_id: 4, employee_name: '林老師', action: 'skip', skip_reason: 'recorded', to_shift_type_id: null, recorded_dates: ['2026-09-15'] }),
+        ],
+      },
+    })
+    await wrapper.find('[data-test="confirm-apply"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('applied')).toHaveLength(1)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    const list = wrapper.find('[data-test="followup-list"]')
+    expect(list.text()).toContain('陳老師')
+    expect(list.text()).toContain('已打卡 9/15、9/16')
+    expect(wrapper.find('[data-test="followup-4-2026-09-14"]').exists()).toBe(false) // 輪值表沒指定班別的週不給後續處理
+    await wrapper.find('[data-test="followup-3-2026-09-14"]').trigger('click')
+    const rfu = wrapper.findComponent({ name: 'RecordedFollowUpDialog' })
+    expect(rfu.props('modelValue')).toBe(true)
+    expect(rfu.props('change')).toMatchObject({ employee_id: 3 })
+    rfu.vm.$emit('changed')
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+    await wrapper.find('[data-test="followup-done"]').trigger('click')
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
   })
 
