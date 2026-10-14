@@ -148,7 +148,7 @@ onMounted(fetchOrder)
 
       <section v-if="order.note" class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">sticky_note_2</span>
+          <span class="material-symbols-rounded" aria-hidden="true">sticky_note_2</span>
           備註
         </h2>
         <p class="note">{{ order.note }}</p>
@@ -156,7 +156,7 @@ onMounted(fetchOrder)
 
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">schedule</span>
+          <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
           餵藥時段
           <span class="pt-card-title-count">{{ order.logs?.length || 0 }}</span>
         </h2>
@@ -182,7 +182,7 @@ onMounted(fetchOrder)
 
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">photo_library</span>
+          <span class="material-symbols-rounded" aria-hidden="true">photo_library</span>
           藥袋／處方照
           <span class="pt-card-title-count">{{ order.photos.length }} / {{ MEDICATION_PHOTO_MAX }}</span>
         </h2>
@@ -200,7 +200,7 @@ onMounted(fetchOrder)
         </div>
         <label v-if="order.photos.length < MEDICATION_PHOTO_MAX" class="pt-action-btn upload-btn">
           <input type="file" accept="image/*,application/pdf" @change="onPhotoPick" hidden :disabled="uploading" />
-          <span class="material-symbols-rounded">add_photo_alternate</span>
+          <span class="material-symbols-rounded" aria-hidden="true">add_photo_alternate</span>
           {{ uploading ? '上傳中…' : '加照片' }}
         </label>
       </section>

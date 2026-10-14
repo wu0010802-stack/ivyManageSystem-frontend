@@ -74,7 +74,7 @@ onMounted(load)
     <div v-else class="pt-stack-12 pt-section-pad-x">
       <article v-for="r in items" :key="r.id" class="report-card">
         <div class="report-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">menu_book</span>
+          <span class="material-symbols-rounded" aria-hidden="true">menu_book</span>
         </div>
         <div class="report-info">
           <div class="report-title-row">

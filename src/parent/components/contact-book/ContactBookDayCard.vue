@@ -146,7 +146,7 @@ const stats = computed(() => {
     <div v-if="isFull && stats.length" class="stats">
       <div v-for="s in stats" :key="s.key" class="stat" :class="`stat-${s.tone}`">
         <span class="stat-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">{{ s.icon }}</span>
+          <span class="material-symbols-rounded" aria-hidden="true">{{ s.icon }}</span>
         </span>
         <span class="stat-value">{{ s.value }}</span>
         <span class="stat-label">{{ s.label }}</span>

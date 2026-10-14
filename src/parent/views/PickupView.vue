@@ -340,7 +340,7 @@ onMounted(async () => {
     <M3Card class="create-cta">
       <p class="create-cta-text">臨時有事無法接送？授權親友代為到園接送。</p>
       <M3Button variant="filled" @click="goCreate">
-        <template #icon><span class="material-symbols-rounded">add</span></template>
+        <template #icon><span class="material-symbols-rounded" aria-hidden="true">add</span></template>
         建立臨時接送授權
       </M3Button>
     </M3Card>

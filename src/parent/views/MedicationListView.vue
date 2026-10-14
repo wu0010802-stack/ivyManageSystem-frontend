@@ -151,7 +151,7 @@ const today = todayISO()
         @click="goDetail(o.id)"
       >
         <div class="card-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">medication</span>
+          <span class="material-symbols-rounded" aria-hidden="true">medication</span>
         </div>
         <div class="card-main">
           <div class="card-head">

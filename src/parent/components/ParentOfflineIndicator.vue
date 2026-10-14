@@ -205,7 +205,7 @@ onUnmounted(() => {
       class="indicator-btn pending"
       @click="manualFlush"
     >
-      <span class="material-symbols-rounded">sync</span>
+      <span class="material-symbols-rounded" aria-hidden="true">sync</span>
       {{ pendingCount }} 筆等待同步
     </button>
     <button
@@ -214,7 +214,7 @@ onUnmounted(() => {
       class="indicator-btn review"
       @click="openReviewDialog"
     >
-      <span class="material-symbols-rounded">error</span>
+      <span class="material-symbols-rounded" aria-hidden="true">error</span>
       {{ reviewCount }} 筆無法同步
     </button>
   </div>

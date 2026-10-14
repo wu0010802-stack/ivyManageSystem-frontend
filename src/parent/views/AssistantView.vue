@@ -107,7 +107,7 @@ onMounted(load)
           @click="toggleQuestion(item)"
         >
           <span>{{ item.question }}</span>
-          <span class="material-symbols-rounded chev">expand_more</span>
+          <span class="material-symbols-rounded chev" aria-hidden="true">expand_more</span>
         </button>
         <div v-if="expandedKey === itemKey(item)" class="faq-body">
           <FaqAnswer :item="item" />

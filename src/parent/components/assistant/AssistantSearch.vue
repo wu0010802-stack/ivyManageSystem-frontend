@@ -21,10 +21,10 @@ watch(() => props.modelValue, v => { local.value = v })
 
 <template>
   <div class="search">
-    <span class="material-symbols-rounded">search</span>
-    <input v-model="local" type="text" placeholder="搜尋常見問題…" enterkeyhint="search" />
-    <button v-if="local" class="clear" @click="local = ''">
-      <span class="material-symbols-rounded">close</span>
+    <span class="material-symbols-rounded" aria-hidden="true">search</span>
+    <input v-model="local" type="text" placeholder="搜尋常見問題…" aria-label="搜尋常見問題" enterkeyhint="search" />
+    <button v-if="local" type="button" class="clear" aria-label="清除搜尋" @click="local = ''">
+      <span class="material-symbols-rounded" aria-hidden="true">close</span>
     </button>
   </div>
 </template>

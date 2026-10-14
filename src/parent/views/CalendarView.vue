@@ -214,7 +214,7 @@ function dayLabel(iso: string) {
             @click="gotoItem(it)"
           >
             <span class="cat-dot" :class="`tone-${CATEGORY_META[it.category || '']?.tone || 'leaf'}`" aria-hidden="true">
-              <span class="material-symbols-rounded">{{ CATEGORY_META[it.category || '']?.icon || 'info' }}</span>
+              <span class="material-symbols-rounded" aria-hidden="true">{{ CATEGORY_META[it.category || '']?.icon || 'info' }}</span>
             </span>
             <span class="content">
               <span class="cat-label">{{ CATEGORY_META[it.category || '']?.label || it.category }}</span>

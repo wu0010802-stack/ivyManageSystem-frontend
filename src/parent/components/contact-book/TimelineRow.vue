@@ -20,7 +20,7 @@ withDefaults(defineProps<{
   <div class="row">
     <div class="rail" :class="`tone-${iconTone}`">
       <span class="dot">
-        <span class="material-symbols-rounded">{{ icon }}</span>
+        <span class="material-symbols-rounded" aria-hidden="true">{{ icon }}</span>
       </span>
       <span v-if="!hideConnector" class="line" aria-hidden="true" />
     </div>

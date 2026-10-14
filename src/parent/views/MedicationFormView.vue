@@ -198,7 +198,7 @@ function cancelAllergy() {
     <fieldset class="med-fields" :disabled="submitting || createdOrderId !== null">
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">child_care</span>
+          <span class="material-symbols-rounded" aria-hidden="true">child_care</span>
           基本資料
         </h2>
 
@@ -231,7 +231,7 @@ function cancelAllergy() {
 
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">schedule</span>
+          <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
           用藥時段
           <span class="pt-card-title-count">{{ form.time_slots.length }} / 10</span>
         </h2>
@@ -262,7 +262,7 @@ function cancelAllergy() {
 
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">attach_file</span>
+          <span class="material-symbols-rounded" aria-hidden="true">attach_file</span>
           備註與照片
         </h2>
 

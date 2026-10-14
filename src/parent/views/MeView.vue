@@ -129,7 +129,7 @@ const PREFS = [
         class="pt-list-row pref-link"
       >
         <span class="pref-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">{{ p.icon }}</span>
+          <span class="material-symbols-rounded" aria-hidden="true">{{ p.icon }}</span>
         </span>
         <span class="pt-list-row-body">
           <span class="pref-label">{{ p.label }}</span>
@@ -145,7 +145,7 @@ const PREFS = [
         @click="showExportDialog = true"
       >
         <span class="pref-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">download</span>
+          <span class="material-symbols-rounded" aria-hidden="true">download</span>
         </span>
         <span class="pt-list-row-body">
           <span class="pref-label">下載我的個人資料</span>

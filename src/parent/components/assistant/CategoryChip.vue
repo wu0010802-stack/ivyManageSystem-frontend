@@ -20,7 +20,7 @@ defineEmits<{
     :style="{ '--chip-color': category.color }"
     @click="$emit('click', category)"
   >
-    <span class="material-symbols-rounded">{{ category.icon }}</span>
+    <span class="material-symbols-rounded" aria-hidden="true">{{ category.icon }}</span>
     <span>{{ category.label }}</span>
   </button>
 </template>

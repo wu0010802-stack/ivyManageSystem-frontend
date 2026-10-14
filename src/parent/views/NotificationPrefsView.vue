@@ -103,7 +103,7 @@ onMounted(load)
         class="pt-list-row row"
       >
         <span class="cat-icon" :class="`tone-${EVENT_META[ev]?.tone || 'leaf'}`" aria-hidden="true">
-          <span class="material-symbols-rounded">{{ EVENT_META[ev]?.icon || 'notifications' }}</span>
+          <span class="material-symbols-rounded" aria-hidden="true">{{ EVENT_META[ev]?.icon || 'notifications' }}</span>
         </span>
         <div class="pt-list-row-body">
           <strong class="row-label">{{ label }}</strong>

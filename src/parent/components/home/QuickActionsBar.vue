@@ -125,7 +125,7 @@ const sheetCandidates = computed(() => availableModules())
           @click="onModuleClick(idx)"
         >
           <span v-if="editing" class="qa-mod-badge" aria-hidden="true">
-            <span class="material-symbols-rounded">edit_note</span>
+            <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
           </span>
           <span class="qa-mod-icon">
             <span class="material-symbols-rounded" aria-hidden="true">{{ QUICK_ACTION_CATALOG[key].icon }}</span>

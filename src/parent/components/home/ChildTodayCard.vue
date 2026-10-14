@@ -137,7 +137,7 @@ function goMedications(): void {
         :data-state="s.state"
       >
         <span class="ctc-dot" aria-hidden="true">
-          <span v-if="s.state === 'done'" class="material-symbols-rounded">check</span>
+          <span v-if="s.state === 'done'" class="material-symbols-rounded" aria-hidden="true">check</span>
         </span>
         <span class="ctc-step-label">{{ s.label }}</span>
         <span class="ctc-step-caption">{{ s.caption }}</span>
