@@ -13,6 +13,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import AppModal from '../components/AppModal.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import {
   createDismissalNotice,
   listDismissalNotices,
@@ -52,6 +53,10 @@ const selectedChild = computed(
 
 const notices = ref<ParentDismissalCall[]>([])
 const loading = ref(false)
+// 第一次載入完成前不畫建立表單：先前首屏會先閃「我多久後會抵達？」再跳成追蹤卡
+const loaded = ref(false)
+// 預告狀態載入失敗（與送出失敗分開）：此頁沒有下拉重新整理，要給一顆「重試」
+const loadFailed = ref(false)
 const submitting = ref(false)
 const actioning = ref(false)
 const errorText = ref('')
@@ -165,6 +170,11 @@ const steps = computed(() => {
   ]
 })
 
+/** 選分鐘時同步顯示絕對時間（以台北時區格式化，不受裝置時區影響）。 */
+const etaClock = computed(() =>
+  formatTaipeiClock(new Date(now.value + etaMinutes.value * 60000).toISOString()),
+)
+
 const etaLine = computed(() => {
   const n = trackedNotice.value
   if (!n || !isPreArrivalNotice(n)) return ''
@@ -188,9 +198,15 @@ async function refresh(): Promise<void> {
     const res = await listDismissalNotices()
     if (mySeq !== listSeq) return
     notices.value = res.data?.items || []
+    loaded.value = true
+    if (loadFailed.value) {
+      loadFailed.value = false
+      errorText.value = ''
+    }
   } catch (e) {
     if (mySeq !== listSeq) return
-    errorText.value = errMessage(e, '載入預告狀態失敗，請下拉重試')
+    loadFailed.value = true
+    errorText.value = errMessage(e, '載入預告狀態失敗，請確認網路後按「重試」')
   } finally {
     if (mySeq === listSeq) loading.value = false
   }
@@ -386,11 +402,26 @@ watch(selectedId, () => {
         </button>
       </div>
 
-      <!-- 錯誤誠實呈現 -->
-      <p v-if="errorText" class="pn-error" role="alert">{{ errorText }}</p>
+      <!-- 錯誤誠實呈現；載入失敗時附「重試」（此頁沒有下拉重新整理） -->
+      <div v-if="errorText" class="pn-error" role="alert">
+        <p class="pn-error__text">{{ errorText }}</p>
+        <button
+          v-if="loadFailed"
+          type="button"
+          class="pn-btn pn-btn--ghost pn-error__retry"
+          :disabled="loading"
+          data-testid="pn-retry-btn"
+          @click="refresh"
+        >{{ loading ? '載入中…' : '重試' }}</button>
+      </div>
+
+      <!-- 第一次載入中：先畫骨架，不閃建立表單 -->
+      <div v-if="!loaded && !loadFailed" class="pn-card pn-loading" aria-busy="true" data-testid="pn-loading">
+        <SkeletonBlock variant="card" :count="1" />
+      </div>
 
       <!-- 追蹤卡：有進行中（或今天已完成）的預告 -->
-      <section v-if="trackedNotice" class="pn-card pn-track" data-testid="pn-tracking-card">
+      <section v-if="loaded && trackedNotice" class="pn-card pn-track" data-testid="pn-tracking-card">
         <header class="pn-track__head">
           <h2 class="pn-card__title">預告接送</h2>
           <span v-if="etaLine" class="pn-track__eta" data-testid="pn-eta-line">{{ etaLine }}</span>
@@ -443,7 +474,7 @@ watch(selectedId, () => {
       </section>
 
       <!-- 建立表單：沒有進行中的預告時 -->
-      <section v-if="!activeNotice" class="pn-card" data-testid="pn-create-form">
+      <section v-if="loaded && !activeNotice" class="pn-card" data-testid="pn-create-form">
         <h2 class="pn-card__title">{{ doneNotice ? '再建立一筆預告' : '我多久後會抵達？' }}</h2>
 
         <div class="pn-chips" role="radiogroup" aria-label="常用時間">
@@ -487,7 +518,9 @@ watch(selectedId, () => {
           </div>
           <div class="pn-wheel__fade pn-wheel__fade--bottom" aria-hidden="true"></div>
         </div>
-        <p class="pn-wheel-hint" data-testid="pn-eta-wheel-hint">預計 {{ etaMinutes }} 分鐘後抵達</p>
+        <p class="pn-wheel-hint" data-testid="pn-eta-wheel-hint">
+          預計 {{ etaMinutes }} 分鐘後抵達<template v-if="etaClock">（約 {{ etaClock }}）</template>
+        </p>
 
         <label class="pn-note">
           <span class="pn-note__label">備註（選填）</span>
@@ -666,7 +699,13 @@ watch(selectedId, () => {
   background: var(--pn-error-container);
   color: var(--pn-on-error-container);
   font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+.pn-error__text { margin: 0; flex: 1; }
+.pn-error__retry { flex-shrink: 0; min-height: var(--touch-target-min, 44px); }
+.pn-loading { min-height: 120px; }
 
 /* ─── 已抵達校門口：與學生資訊同一排（永遠顯示） ─── */
 .pn-arrive-now-btn {

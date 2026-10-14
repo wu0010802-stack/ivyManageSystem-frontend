@@ -282,3 +282,49 @@ describe('追蹤卡', () => {
     expect(w.find('[data-testid="pn-create-form"]').exists()).toBe(true)
   })
 })
+
+describe('載入狀態與重試', () => {
+  it('首屏載入中先畫骨架，不閃建立表單；載到進行中預告直接顯示追蹤卡', async () => {
+    let resolveList!: (v: unknown) => void
+    listMock.mockReturnValueOnce(new Promise((r) => { resolveList = r }))
+    const w = await mountView()
+    expect(w.find('[data-testid="pn-loading"]').exists()).toBe(true)
+    expect(w.find('[data-testid="pn-create-form"]').exists()).toBe(false)
+    expect(w.find('[data-testid="pn-tracking-card"]').exists()).toBe(false)
+
+    resolveList({ data: { items: [ACTIVE_NOTICE], total: 1 } })
+    await flushPromises()
+    expect(w.find('[data-testid="pn-loading"]').exists()).toBe(false)
+    expect(w.find('[data-testid="pn-tracking-card"]').exists()).toBe(true)
+    expect(w.find('[data-testid="pn-create-form"]').exists()).toBe(false)
+  })
+
+  it('載入失敗：不叫家長「下拉重試」，給「重試」按鈕；重試成功後回到建立表單', async () => {
+    listMock.mockRejectedValueOnce({ displayMessage: '' })
+    const w = await mountView()
+    const alert = w.find('[role="alert"]')
+    expect(alert.text()).toContain('載入預告狀態失敗')
+    expect(alert.text()).not.toContain('下拉')
+    expect(w.find('[data-testid="pn-create-form"]').exists()).toBe(false)
+
+    listMock.mockResolvedValueOnce({ data: { items: [], total: 0 } })
+    await w.find('[data-testid="pn-retry-btn"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[role="alert"]').exists()).toBe(false)
+    expect(w.find('[data-testid="pn-create-form"]').exists()).toBe(true)
+  })
+})
+
+describe('預計抵達的絕對時間', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('選分鐘時同時顯示「約 HH:MM」（台北時間）', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    // 2026-10-14 09:00Z = 台北 17:00
+    vi.setSystemTime(new Date('2026-10-14T09:00:00Z'))
+    const w = await mountView()
+    expect(w.find('[data-testid="pn-eta-wheel-hint"]').text()).toContain('預計 10 分鐘後抵達（約 17:10）')
+    await w.find('[data-testid="pn-eta-chip-20"]').trigger('click')
+    expect(w.find('[data-testid="pn-eta-wheel-hint"]').text()).toContain('（約 17:20）')
+  })
+})
