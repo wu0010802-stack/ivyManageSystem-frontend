@@ -9,6 +9,7 @@ import { computed, ref, toValue, type ComputedRef, type MaybeRefOrGetter } from 
  * - 與 `useFormDraft` 不同：這裡只判斷，不持久化；與 `useEmployeeFormDirty` 不同：不分欄位群、不回傳 diff。
  *
  * 首次呼叫即拍一次快照，讓「開啟後沒動」為 clean。
+ * 序列化時 `undefined` 一律視同 `null`，「清空」不會因為值型別在兩者間切換而變 dirty。
  */
 export function useFormDirty<T extends object>(
   state: MaybeRefOrGetter<T>,
@@ -22,7 +23,9 @@ export function useFormDirty<T extends object>(
     for (const [k, v] of Object.entries(src)) {
       if (!exclude.has(k)) picked[k] = v
     }
-    return JSON.stringify(picked)
+    // undefined 與 null 都是「空值」：JSON.stringify 預設會丟掉 undefined 的 key 卻保留 null，
+    // 欄位被清空時（el-input-number 等元件在 null／undefined 間切換）會被誤判為 dirty。
+    return JSON.stringify(picked, (_k, v) => (v === undefined ? null : v))
   }
 
   const baseline = ref(serialize())
