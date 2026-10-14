@@ -21,6 +21,7 @@
  */
 import { computed } from 'vue'
 import { todayISO, dateToLocalISO } from '@/utils/format'
+import M3SegmentedButton from '../m3/M3SegmentedButton.vue'
 
 interface Child {
   student_id: number
@@ -85,6 +86,12 @@ function isPicked(date: string): boolean {
   return props.modelValue.start_date === date && props.modelValue.end_date === date
 }
 
+// 假別值是送後端的原值（病假／事假），label 與 value 相同，不另做翻譯。
+const LEAVE_TYPES = [
+  { value: '病假', label: '病假' },
+  { value: '事假', label: '事假' },
+]
+
 const singleChild = computed<Child | null>(() => (props.children.length === 1 ? props.children[0] : null))
 </script>
 
@@ -109,26 +116,13 @@ const singleChild = computed<Child | null>(() => (props.children.length === 1 ? 
     </div>
     <fieldset class="field radio-fieldset">
       <legend>假別</legend>
-      <div class="radio-row">
-        <label class="radio">
-          <input
-            type="radio"
-            name="leave_type"
-            value="病假"
-            :checked="modelValue.leave_type === '病假'"
-            @change="update('leave_type', '病假')"
-          />病假
-        </label>
-        <label class="radio">
-          <input
-            type="radio"
-            name="leave_type"
-            value="事假"
-            :checked="modelValue.leave_type === '事假'"
-            @change="update('leave_type', '事假')"
-          />事假
-        </label>
-      </div>
+      <M3SegmentedButton
+        class="leave-type-segmented"
+        aria-label="假別"
+        :items="LEAVE_TYPES"
+        :model-value="modelValue.leave_type ?? ''"
+        @update:model-value="update('leave_type', $event)"
+      />
     </fieldset>
     <div class="quick-days" role="group" aria-label="快速選日期">
       <button
@@ -238,17 +232,7 @@ const singleChild = computed<Child | null>(() => (props.children.length === 1 ? 
   margin: 0;
 }
 
-.radio-row {
-  display: flex;
-  gap: 16px;
-}
-
-.radio {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.875rem;
-}
+.leave-type-segmented { width: 100%; }
 
 .form-footer {
   display: flex;
@@ -260,6 +244,7 @@ const singleChild = computed<Child | null>(() => (props.children.length === 1 ? 
 }
 
 .primary-btn {
+  min-height: var(--touch-target-min, 44px);
   padding: 8px 16px;
   background: var(--m3-primary, var(--brand-primary));
   color: var(--neutral-0);
@@ -273,6 +258,7 @@ const singleChild = computed<Child | null>(() => (props.children.length === 1 ? 
 }
 
 .secondary-btn {
+  min-height: var(--touch-target-min, 44px);
   padding: 8px 16px;
   background: var(--neutral-0);
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
