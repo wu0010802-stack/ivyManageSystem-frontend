@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
-import { extractSubstituteDutyWarnings } from '@/utils/substituteDuty'
+import { notifySubstituteDutyWarnings } from './substituteDutyNotice'
 import { useNotificationStore } from '@/stores/notification'
 
 /**
@@ -26,9 +26,7 @@ export function useApprovalOperation({ apiFn, onSuccess, errorMsg = '操作失�
       const res = await apiFn(id, payload)
       ElMessage.success(successMsg)
       // 請假核准／改判回傳的代理接手職務警示（其他單據沒有這個欄位，回空陣列）
-      for (const text of extractSubstituteDutyWarnings(res)) {
-        ElMessage.warning({ message: text, duration: 8000, showClose: true })
-      }
+      notifySubstituteDutyWarnings(res)
       onSuccess()
       notificationStore.fetchSummary({ force: true })
     } catch (error) {

@@ -4,7 +4,7 @@ import { friendlyError } from '@/utils/errorMessages'
 import { getApprovalLogs } from '@/api/approvalSettings'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { getUserInfo } from '@/utils/auth'
-import { extractSubstituteDutyWarnings } from '@/utils/substituteDuty'
+import { notifySubstituteDutyWarnings } from './substituteDutyNotice'
 
 /**
  * 統一封裝批次核准/駁回、簽核記錄 Drawer 與審核資格判斷邏輯。
@@ -54,9 +54,7 @@ export function useApprovalModule({ docType, batchApproveFn, fetchFn, recordLabe
         )
       }
       // 批次核准回傳的代理接手職務警示（只含成功核准的假單）
-      for (const text of extractSubstituteDutyWarnings(res)) {
-        ElMessage.warning({ message: text, duration: 8000, showClose: true })
-      }
+      notifySubstituteDutyWarnings(res)
       fetchFn()
     } catch (err) {
       // ElMessageBox 取消鈕 reject 'cancel'、X/ESC reject 'close'，皆為使用者關閉非錯誤

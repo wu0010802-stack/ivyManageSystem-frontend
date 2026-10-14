@@ -5,6 +5,7 @@ import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, b
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
+import { notifySubstituteDutyWarnings } from '@/composables/substituteDutyNotice'
 import { List, Plus, Paperclip, InfoFilled, Calendar, Loading, ArrowLeft, ArrowRight, Wallet } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
@@ -518,7 +519,7 @@ const saveLeave = async () => {
     // 病假時帶 is_hospitalized 區分雙桶（未住院 240h / 住院 2080h）；其他假別後端忽略
     const isSick = form.leave_type === 'sick'
     if (isEdit.value) {
-      await updateLeave(form.id!, {
+      const updated = await updateLeave(form.id!, {
         leave_type: form.leave_type,
         start_date: sd,
         start_time: st || null,
@@ -529,6 +530,9 @@ const saveLeave = async () => {
         is_hospitalized: isSick ? form.is_hospitalized : false,
       })
       ElMessage.success('請假記錄已更新')
+      // SPEC-026：改日期／時段後，後端會把要求接手職務的代理人退回「待回應」（substitute_reconfirm），
+      // 已核准假單被改時也可能附帶代理班回收的警示；與核准流程共用同一套 toast
+      notifySubstituteDutyWarnings(updated)
     } else {
       await createLeave({
         employee_id: form.employee_id,

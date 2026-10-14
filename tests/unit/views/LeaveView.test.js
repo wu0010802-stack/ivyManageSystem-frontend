@@ -486,6 +486,48 @@ describe('LeaveView', () => {
       expect(ElMessage.success).toHaveBeenCalledWith('請假記錄已更新')
     })
 
+    // SPEC-026 3-2 追補（F5）：管理端改日期／時段後，後端把要求接手職務的代理人退回待回應，
+    // 並在回應的 substitute_duty_warnings 附 substitute_reconfirm。儲存後要用核准流程同一套 toast 顯示，
+    // 否則管理員不知道代理人需要重新同意（也就是核准會被擋）。
+    it('編輯模式：回應帶 substitute_duty_warnings 時，成功訊息之後逐筆以 warning toast 顯示', async () => {
+      const wrapper = await mountAndSetForm({ id: 1 })
+      wrapper.vm.$.setupState.isEdit = true
+      updateLeave.mockResolvedValue({
+        data: {
+          message: '請假記錄已更新',
+          substitute_duty_warnings: [
+            {
+              code: 'substitute_reconfirm',
+              leave_id: 1,
+              date: null,
+              message: '請假日期或時段已修改，代理人原本的同意已失效並退回「待回應」，需代理人重新接受後才能核准',
+            },
+          ],
+        },
+      })
+
+      await wrapper.vm.$.setupState.saveLeave()
+      await flushPromises()
+
+      expect(ElMessage.success).toHaveBeenCalledWith('請假記錄已更新')
+      expect(ElMessage.warning).toHaveBeenCalledTimes(1)
+      expect(ElMessage.warning).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('代理人原本的同意已失效') }),
+      )
+    })
+
+    it('編輯模式：回應沒有警示時不顯示 warning toast', async () => {
+      const wrapper = await mountAndSetForm({ id: 1 })
+      wrapper.vm.$.setupState.isEdit = true
+      updateLeave.mockResolvedValue({ data: { message: '請假記錄已更新', substitute_duty_warnings: [] } })
+
+      await wrapper.vm.$.setupState.saveLeave()
+      await flushPromises()
+
+      expect(ElMessage.success).toHaveBeenCalledWith('請假記錄已更新')
+      expect(ElMessage.warning).not.toHaveBeenCalled()
+    })
+
     it('表單驗證失敗時不呼叫 API', async () => {
       const wrapper = await mountAndSetForm()
       wrapper.vm.$.setupState.formRef = { validate: vi.fn().mockResolvedValue(false) }
