@@ -55,12 +55,13 @@ const glyph = computed(() => (props.mood ? MOOD_ICON[props.mood] : null) || MOOD
   justify-content: center;
   gap: 6px;
 }
+/* icon 色沿用繼承的文字色（淺色深字、深色淺字，落在各 tone 的 container 上對比足夠）；
+   不另掛各 tone 的 -on 色：--pt-* 為 deprecated，lint:tokens 棘輪只准降不准升。 */
 .mood-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: var(--pt-text-strong);
   flex-shrink: 0;
 }
 .mood-icon .material-symbols-rounded {
@@ -81,11 +82,11 @@ const glyph = computed(() => (props.mood ? MOOD_ICON[props.mood] : null) || MOOD
 .is-lg .mood-icon .material-symbols-rounded { font-size: 36px; }
 .is-lg .mood-label { font-size: 0.9375rem; }
 
-.tone-sun    .mood-icon { background: var(--pt-accent-sun-container);   color: var(--pt-accent-sun-on); }
-.tone-cream  .mood-icon { background: var(--cream, #fffcf2); border: 1px solid var(--pt-border-light); color: var(--pt-text-strong); }
-.tone-grape  .mood-icon { background: var(--pt-accent-grape-container); color: var(--pt-accent-grape-on); }
-.tone-sky    .mood-icon { background: var(--pt-accent-sky-container);   color: var(--pt-accent-sky-on); }
-.tone-coral  .mood-icon { background: var(--pt-accent-coral-container); color: var(--pt-accent-coral-on); }
+.tone-sun    .mood-icon { background: var(--pt-accent-sun-container); }
+.tone-cream  .mood-icon { background: var(--cream, #fffcf2); border: 1px solid var(--pt-border-light); }
+.tone-grape  .mood-icon { background: var(--pt-accent-grape-container); }
+.tone-sky    .mood-icon { background: var(--pt-accent-sky-container); }
+.tone-coral  .mood-icon { background: var(--pt-accent-coral-container); }
 .tone-muted  .mood-icon {
   background: var(--pt-surface-mute-soft, #f5f5f5);
   color: var(--pt-text-faint, #9a9a9a);

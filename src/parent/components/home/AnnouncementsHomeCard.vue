@@ -76,7 +76,7 @@ defineExpose({ refresh: load })
     class="ann-home-collapsed"
     data-testid="ann-home-collapsed"
   >
-    <span class="material-symbols-rounded ann-home-collapsed-icon" aria-hidden="true">campaign</span>
+    <span class="material-symbols-rounded" aria-hidden="true">campaign</span>
     <span class="ann-home-collapsed-text">{{ PARENT_SERVICES.announce.label }}（全部已讀）</span>
     <span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
   </router-link>
@@ -124,7 +124,21 @@ defineExpose({ refresh: load })
 </template>
 
 <style scoped>
-/* 全部已讀的一行入口：與完整卡同樣的左右邊界與 token，深色模式自動跟著換 */
+/* 完整卡與「全部已讀」一行入口共用同一組外框（背景／邊框／圓角），深色模式自動跟著換 */
+.ann-home-card,
+.ann-home-collapsed {
+  background: var(--pt-surface-card, #fff);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 16px;
+}
+
+.ann-home-card {
+  margin: 0 var(--space-4, 16px);
+  padding: var(--space-3, 12px) var(--space-4, 16px) var(--space-2, 8px);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+}
+
+/* 全部已讀的一行入口：文字沿用繼承色、圖示降不透明度，比完整卡安靜 */
 .ann-home-collapsed {
   display: flex;
   align-items: center;
@@ -133,10 +147,7 @@ defineExpose({ refresh: load })
   margin: 0 var(--space-4, 16px);
   padding: 0 var(--space-4, 16px);
   box-sizing: border-box;
-  background: var(--pt-surface-card, #fff);
-  border: 1px solid var(--pt-border-light, #ecf5f9);
-  border-radius: 16px;
-  color: var(--pt-text-muted);
+  color: inherit;
   text-decoration: none;
   font-size: 0.875rem;
   font-weight: 600;
@@ -144,18 +155,9 @@ defineExpose({ refresh: load })
 .ann-home-collapsed .material-symbols-rounded {
   font-size: 20px;
   font-variation-settings: 'wght' 500;
+  opacity: 0.6;
 }
-.ann-home-collapsed-icon { color: var(--pt-text-faint, #6b7280); }
 .ann-home-collapsed-text { flex: 1; min-width: 0; }
-
-.ann-home-card {
-  margin: 0 var(--space-4, 16px);
-  padding: var(--space-3, 12px) var(--space-4, 16px) var(--space-2, 8px);
-  background: var(--pt-surface-card, #fff);
-  border: 1px solid var(--pt-border-light, #ecf5f9);
-  border-radius: 16px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
-}
 
 .ann-home-more {
   display: inline-flex;

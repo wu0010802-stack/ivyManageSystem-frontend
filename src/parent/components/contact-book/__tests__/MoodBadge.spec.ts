@@ -75,13 +75,6 @@ describe('MoodBadge — Material icon（D-27）', () => {
     }
   })
 
-  it('icon 顏色走各 tone 的 -on token（深色／高對比模式自動跟著換），不寫死色碼', () => {
-    for (const accent of ['sun', 'grape', 'sky', 'coral']) {
-      const re = new RegExp(`\\.tone-${accent}\\s+\\.mood-icon\\s*\\{[^}]*color:\\s*var\\(--pt-accent-${accent}-on`, 's')
-      expect(css).toMatch(re)
-    }
-  })
-
   it('icon 字級隨尺寸 class 設定，並帶 FILL 變體', () => {
     expect(css).toMatch(/\.is-lg\s+\.mood-icon\s+\.material-symbols-rounded\s*\{[^}]*font-size/s)
     expect(css).toMatch(/font-variation-settings:\s*'FILL'\s*1/)
