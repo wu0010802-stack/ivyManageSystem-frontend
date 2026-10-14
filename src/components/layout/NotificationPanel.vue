@@ -80,7 +80,7 @@
 import { computed, markRaw } from 'vue'
 import {
   ArrowRight, Bell,
-  Document, Message, Calendar, User,
+  Document, Message, Calendar, User, Switch,
 } from '@element-plus/icons-vue'
 
 export interface NotificationItem {
@@ -121,6 +121,7 @@ const itemMeta: Record<string, { icon: object; tone: string }> = {
   activity_inquiry: { icon: markRaw(Message), tone: 'warning' },
   calendar: { icon: markRaw(Calendar), tone: 'primary' },
   probation: { icon: markRaw(User), tone: 'success' },
+  swap_recent: { icon: markRaw(Switch), tone: 'primary' },
 }
 
 const priorityLabel: Record<string, string> = {

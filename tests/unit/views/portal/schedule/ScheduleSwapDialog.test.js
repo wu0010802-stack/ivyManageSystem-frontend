@@ -213,4 +213,89 @@ describe('ScheduleSwapDialog', () => {
     // disabled because date is empty
     expect(submitBtn.attributes('disabled')).toBeDefined()
   })
+
+  it('候選有 duty_label 時選項文字改用它，時段相同者加註提示（SPEC-026 T5）', () => {
+    const w = mount(ScheduleSwapDialog, {
+      props: {
+        modelValue: true,
+        isMobile: false,
+        initialDate: '2026-05-10',
+        loading: false,
+        candidates: [
+          { employee_id: 7, name: '陳老師', shift_name: '早車', work_start: '07:00', work_end: '16:30', duty_label: '早車 07:00~16:30', same_time: true, has_pending_swap: false },
+          { employee_id: 8, name: '林老師', shift_name: '次值', work_start: '08:30', work_end: '18:00', duty_label: '次值 08:30~18:00', same_time: false, has_pending_swap: false },
+        ],
+      },
+      global: { stubs: STUBS },
+    })
+    const labels = w.findAll('option').map((o) => o.text())
+    // 順序由 mergeRosterIntoCandidates 決定，對話框照給的順序畫
+    expect(labels).toEqual([
+      '陳老師 (早車 07:00~16:30)（時段相同，不用登記）',
+      '林老師 (次值 08:30~18:00)',
+    ])
+  })
+
+  it('沒有 duty_label 時維持原本的選項文字（day-roster 載入失敗的降級）', () => {
+    const w = mount(ScheduleSwapDialog, {
+      props: {
+        modelValue: true,
+        isMobile: false,
+        initialDate: '2026-05-10',
+        candidates: CANDIDATES,
+        loading: false,
+      },
+      global: { stubs: STUBS },
+    })
+    const labels = w.findAll('option').map((o) => o.text())
+    expect(labels).toEqual(['王老師 (早班 08:00~16:00)', '李老師 (正班)'])
+  })
+
+  it('對方當天沒有排定班別（unavailable_reason）→ 選項停用並顯示原因', () => {
+    const w = mount(ScheduleSwapDialog, {
+      props: {
+        modelValue: true,
+        isMobile: false,
+        initialDate: '2026-05-10',
+        loading: false,
+        candidates: [
+          { employee_id: 7, name: '陳老師', shift_name: '未排班', duty_label: '個人工時 09:00~18:00', unavailable_reason: '對方當天沒有排定班別，無法換班', has_pending_swap: false },
+          { employee_id: 8, name: '林老師', shift_name: '次值', duty_label: '次值 08:30~18:00', has_pending_swap: false },
+        ],
+      },
+      global: { stubs: STUBS },
+    })
+    const options = w.findAll('option')
+    expect(options.map((o) => o.text())).toEqual([
+      '陳老師 (個人工時 09:00~18:00)（對方當天沒有排定班別，無法換班）',
+      '林老師 (次值 08:30~18:00)',
+    ])
+    expect(options[0].attributes('disabled')).toBeDefined()
+    expect(options[1].attributes('disabled')).toBeUndefined()
+  })
+
+  it('已選的對象事後才被標為不可選（day-roster 較晚回來）→ 送出鈕停用且不 emit', async () => {
+    const w = mount(ScheduleSwapDialog, {
+      props: {
+        modelValue: true,
+        isMobile: false,
+        initialDate: '2026-05-10',
+        loading: false,
+        candidates: [{ employee_id: 7, name: '陳老師', shift_name: '未排班', has_pending_swap: false }],
+      },
+      global: { stubs: STUBS },
+    })
+    await w.vm.$nextTick()
+    w.vm.form.target_id = 7
+    await w.vm.$nextTick()
+    const submitBtn = () => w.findAll('button').find((b) => b.text().includes('送出'))
+    expect(submitBtn().attributes('disabled')).toBeUndefined()
+
+    await w.setProps({
+      candidates: [{ employee_id: 7, name: '陳老師', shift_name: '未排班', duty_label: '個人工時 09:00~18:00', unavailable_reason: '對方當天沒有排定班別，無法換班', has_pending_swap: false }],
+    })
+    expect(submitBtn().attributes('disabled')).toBeDefined()
+    w.vm.submit()
+    expect(w.emitted('submit')).toBeUndefined()
+  })
 })

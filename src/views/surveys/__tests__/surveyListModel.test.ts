@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  audienceSummary,
   countByStatus,
   daysBetween,
   deadlineHint,
@@ -118,5 +119,28 @@ describe('countByStatus / filterSurveyRows', () => {
     expect(filterSurveyRows(rows, { search: ' 秋季 ' }, TODAY).map((r) => r.id)).toEqual([2, 5])
     expect(filterSurveyRows(rows, { search: '秋季', status: 'open' }, TODAY).map((r) => r.id)).toEqual([2, 5])
     expect(filterSurveyRows(rows, { search: '不存在' }, TODAY)).toEqual([])
+  })
+})
+
+describe('audienceSummary（列表「調查」欄副標）', () => {
+  it('全園調查顯示「全園」', () => {
+    expect(audienceSummary(row({ audience_type: 'all', classroom_names: [] }))).toBe('全園')
+  })
+
+  it('一到兩班直接列出班名', () => {
+    expect(audienceSummary(row({ audience_type: 'classrooms', classroom_names: ['大班'] }))).toBe('大班')
+    expect(audienceSummary(row({ audience_type: 'classrooms', classroom_names: ['大班', '中一班'] })))
+      .toBe('大班、中一班')
+  })
+
+  it('超過兩班只列前兩班並帶總班數', () => {
+    expect(audienceSummary(row({
+      audience_type: 'classrooms', classroom_names: ['大班', '中一班', '中二班', '小班'],
+    }))).toBe('大班、中一班 等 4 班')
+  })
+
+  it('指定班級但還沒選班（或舊回應缺欄位）退回「指定班級」', () => {
+    expect(audienceSummary(row({ audience_type: 'classrooms', classroom_names: [] }))).toBe('指定班級')
+    expect(audienceSummary(row({ audience_type: 'classrooms' }))).toBe('指定班級')
   })
 })

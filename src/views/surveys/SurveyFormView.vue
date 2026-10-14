@@ -2,7 +2,7 @@
   <div v-if="authorized" class="survey-form">
     <PageHeader
       :title="isEdit ? '編輯調查' : '建立調查'"
-      :subtitle="isEdit ? draft.title : '建立後先存成草稿，到詳情頁確認題目再發布推播給家長。'"
+      :subtitle="headerSubtitle"
     />
 
     <el-alert
@@ -168,13 +168,16 @@ import { todayTaipeiISO } from '@/utils/format'
 import { SURVEY_QUESTION_TYPES, isSurveyChoiceType } from '@/constants/surveyQuestionTypes'
 import {
   addQuestion,
+  copyDraftFrom,
   deadlineHints,
+  draftFromSurvey,
   emptyDraft,
   isDraftDirty,
   moveQuestion,
   removeQuestion,
   validateDraft,
   type SurveyDraft,
+  type SurveySource,
 } from './surveyFormModel'
 
 const route = useRoute()
@@ -197,6 +200,15 @@ const surveyId = computed(() => {
   return idStr ? Number(idStr) : null
 })
 const isEdit = computed(() => surveyId.value !== null)
+// 「複製」入口：/surveys/new?copy=<來源 id>，只在建立模式生效。
+const copyFromId = computed(() => {
+  if (isEdit.value) return null
+  const raw = route.query?.copy
+  const idStr = Array.isArray(raw) ? raw[0] : raw
+  const id = idStr ? Number(idStr) : NaN
+  return Number.isInteger(id) && id > 0 ? id : null
+})
+const copySourceTitle = ref('')
 
 const draft = ref<SurveyDraft>(emptyDraft())
 // 取消時比對用的基準快照：新建模式即空草稿，編輯模式於 loadSurvey() 載入後覆寫。
@@ -211,6 +223,13 @@ const today = todayTaipeiISO()
 const locked = computed(() => status.value === 'closed')
 const lockStructure = computed(() => status.value === 'published' || status.value === 'closed')
 const deadlineWarnings = computed(() => deadlineHints(draft.value, today))
+const headerSubtitle = computed(() => {
+  if (isEdit.value) return draft.value.title
+  if (copySourceTitle.value) {
+    return `複製自「${copySourceTitle.value}」；活動日期與回覆截止日已清空，請重新設定後建立草稿。`
+  }
+  return '建立後先存成草稿，到詳情頁確認題目再發布推播給家長。'
+})
 
 interface ClassroomOption { id: number; name: string }
 const classroomOptions = ref<ClassroomOption[]>([])
@@ -222,13 +241,16 @@ function questionPlaceholder(type: string): string {
   return '題目文字，例如：是否搭乘遊覽車'
 }
 
-async function loadClassrooms() {
+/** 回傳是否載入成功（複製時要靠它判斷能不能剔除已不存在的班級）。 */
+async function loadClassrooms(): Promise<boolean> {
   try {
     const res = await getClassrooms({ current_only: true })
     const list = (res.data ?? []) as ClassroomOption[]
     classroomOptions.value = list.map(c => ({ id: c.id, name: c.name }))
+    return true
   } catch (e) {
     ElMessage.error(friendlyError('載入班級清單失敗', e))
+    return false
   }
 }
 
@@ -236,30 +258,34 @@ async function loadSurvey() {
   if (!surveyId.value) return
   try {
     const res = await getSurvey(surveyId.value)
-    const data = res.data as unknown as SurveyDraft & { status: string }
+    const data = res.data as unknown as SurveySource & { status: string }
     status.value = data.status
-    draft.value = {
-      title: data.title,
-      description: data.description ?? '',
-      event_date: data.event_date ?? null,
-      location: data.location ?? '',
-      fee_note: data.fee_note ?? '',
-      audience_type: data.audience_type,
-      classroom_ids: data.classroom_ids ?? [],
-      reply_deadline: data.reply_deadline,
-      questions: (data.questions ?? []).map(q => ({
-        question_text: q.question_text,
-        question_type: q.question_type,
-        options: q.options ?? null,
-        is_required: q.is_required,
-        sort_order: q.sort_order,
-      })),
-    }
+    draft.value = draftFromSurvey(data)
     baseline.value = JSON.parse(JSON.stringify(draft.value)) as SurveyDraft
   } catch (e) {
     ElMessage.error(friendlyError('載入調查資料失敗', e))
     router.replace({ name: 'surveys' })
   }
+}
+
+/**
+ * 複製：讀來源調查預填成新草稿（狀態維持 draft、仍走建立）。讀不到就留在空白建立
+ * 表單——使用者本來就是要「建立」，不必把他踢回列表。
+ */
+async function loadCopySource(copyId: number) {
+  const [classroomsOk, source] = await Promise.all([
+    loadClassrooms(),
+    getSurvey(copyId)
+      .then(res => res.data as unknown as SurveySource)
+      .catch((e: unknown) => {
+        ElMessage.error(friendlyError('載入要複製的調查失敗', e))
+        return null
+      }),
+  ])
+  if (!source) return
+  draft.value = copyDraftFrom(source, classroomsOk ? classroomOptions.value.map(c => c.id) : null)
+  baseline.value = JSON.parse(JSON.stringify(draft.value)) as SurveyDraft
+  copySourceTitle.value = source.title
 }
 
 function onTypeChange(i: number) {
@@ -336,6 +362,8 @@ onMounted(async () => {
   // isEdit 時改平行發送；非 isEdit（新建）路徑行為不變，仍只呼叫 loadClassrooms。
   if (isEdit.value) {
     await Promise.all([loadClassrooms(), loadSurvey()])
+  } else if (copyFromId.value) {
+    await loadCopySource(copyFromId.value)
   } else {
     await loadClassrooms()
   }
