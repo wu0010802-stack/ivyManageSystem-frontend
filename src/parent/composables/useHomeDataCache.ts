@@ -27,14 +27,19 @@ type Refresh = (force?: boolean) => Promise<unknown>
 
 const trackedKeys = new Set<string>()
 const liveRefreshers = new Map<string, Set<Refresh>>()
-/** 每個 key 最近一次真正發出請求時的失效世代 */
+/** 每個 key 最近一次真正發出請求時的失效世代（判斷強制重抓是否只併入了失效前的舊請求） */
 const lastStartedEpoch = new Map<string, number>()
+/**
+ * 每個 key 目前快取內容是哪個失效世代「成功」取回的。失效後的強制重抓若失敗
+ * （斷線），快取仍是舊資料，這個世代不能前進，否則 TTL 內會被當成新資料沿用。
+ */
+const lastFreshEpoch = new Map<string, number>()
 let invalidationEpoch = 0
 
-/** 這個 key 的快取是在最近一次失效之前抓的 */
+/** 這個 key 的快取是在最近一次失效之前取回的 */
 function isOutdated(key: string): boolean {
-  const started = lastStartedEpoch.get(key)
-  return started !== undefined && started < invalidationEpoch
+  const fresh = lastFreshEpoch.get(key)
+  return fresh !== undefined && fresh < invalidationEpoch
 }
 
 export function useHomeDataCache<T>(
@@ -49,8 +54,12 @@ export function useHomeDataCache<T>(
     key,
     async () => {
       // useCachedAsync 同步呼叫 fetcher，這裡記下的就是請求發出當下的世代
-      lastStartedEpoch.set(key, invalidationEpoch)
-      return fetcher()
+      const epoch = invalidationEpoch
+      lastStartedEpoch.set(key, epoch)
+      const result = await fetcher()
+      // 只有成功取回才算這個世代的資料；失敗時保留「過期」狀態，下次刷新或掛載會再抓
+      if ((lastFreshEpoch.get(key) ?? -1) < epoch) lastFreshEpoch.set(key, epoch)
+      return result
     },
     { ttl: HOME_DATA_TTL_MS, immediate },
   )
@@ -105,5 +114,6 @@ export function _resetHomeDataCacheForTesting(): void {
   trackedKeys.clear()
   liveRefreshers.clear()
   lastStartedEpoch.clear()
+  lastFreshEpoch.clear()
   invalidationEpoch = 0
 }

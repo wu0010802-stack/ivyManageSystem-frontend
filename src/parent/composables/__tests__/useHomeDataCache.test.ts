@@ -110,6 +110,41 @@ describe('invalidateHomeSummary', () => {
     expect(vmOf(again).badge).toBe(0)
   })
 
+  it('失效後的強制重抓失敗（斷線）：舊快取仍算過期，之後換頁的刷新與重新掛載都會再抓', async () => {
+    getHomeSummary.mockResolvedValueOnce(summaryResponse(2))
+    const layout = track(mountBadgeConsumer())
+    await flushPromises()
+
+    getHomeSummary.mockRejectedValueOnce(new Error('network'))
+    await invalidateHomeSummary()
+    await flushPromises()
+    expect(getHomeSummary).toHaveBeenCalledTimes(2)
+    expect(vmOf(layout).badge).toBe(2) // 失敗時保留舊數字，不清成 0
+
+    // ParentLayout 換頁時的一般 refresh：不能在 TTL 內沿用失效前的舊資料
+    getHomeSummary.mockResolvedValueOnce(summaryResponse(1))
+    await vmOf(layout).refresh()
+    await flushPromises()
+    expect(getHomeSummary).toHaveBeenCalledTimes(3)
+    expect(vmOf(layout).badge).toBe(1)
+  })
+
+  it('失效後的強制重抓失敗、且當時沒人再刷新：下一次掛載強制重抓', async () => {
+    getHomeSummary.mockResolvedValueOnce(summaryResponse(2))
+    const first = mountBadgeConsumer()
+    await flushPromises()
+    getHomeSummary.mockRejectedValueOnce(new Error('network'))
+    await invalidateHomeSummary()
+    await flushPromises()
+    first.unmount()
+
+    getHomeSummary.mockResolvedValueOnce(summaryResponse(0))
+    const again = track(mountBadgeConsumer())
+    await flushPromises()
+    expect(getHomeSummary).toHaveBeenCalledTimes(3)
+    expect(vmOf(again).badge).toBe(0)
+  })
+
   it('沒有失效時，TTL 內重新掛載照舊吃快取（不增加請求）', async () => {
     getHomeSummary.mockResolvedValueOnce(summaryResponse(3))
     const first = mountBadgeConsumer()
