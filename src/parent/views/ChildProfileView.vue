@@ -13,6 +13,7 @@ import CrownIcon from '@/components/brand/CrownIcon.vue'
 import MilestoneCarousel from '../components/MilestoneCarousel.vue'
 import TimelineItem from '../components/TimelineItem.vue'
 import { useChildTimeline } from '../composables/useChildTimeline'
+import { useChildSelection } from '../composables/useChildSelection'
 
 function isBirthdayToday(child: { birthday?: string | null } | null | undefined) {
   if (!child?.birthday) return false
@@ -26,6 +27,7 @@ function isBirthdayToday(child: { birthday?: string | null } | null | undefined)
 const route = useRoute()
 const router = useRouter()
 const studentId = computed(() => Number(route.params.studentId))
+const { setSelected } = useChildSelection()
 
 const data = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
@@ -40,6 +42,11 @@ async function fetchData() {
   try {
     const { data: d } = await getChildProfile(studentId.value)
     data.value = d
+    // 頁內「前往聯絡簿留言」與孩子／聯絡簿分頁都依全域「目前選定的孩子」顯示。
+    // 從我的頁子女清單、推播深連結進來時，選定的可能還是另一個孩子——家長在乙的
+    // 檔案頁按「前往聯絡簿」卻打開甲的聯絡簿。後端確認這個孩子屬於本家長（載入
+    // 成功）後才切換，避免用網址上的任意 id 改掉選擇。
+    setSelected(studentId.value)
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
