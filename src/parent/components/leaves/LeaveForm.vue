@@ -15,7 +15,13 @@
  *  - cancel — 取消按鈕點擊
  *
  * 注意：本元件純 presentational，不接 store 也不打 API。
+ *
+ * 單手快填：「今天／明天」一鍵帶入起訖日；起始日改到晚於結束日時，結束日自動對齊，
+ * 不等送出才跳「結束日不可早於起始日」；只有一個孩子時不顯示學生下拉。
  */
+import { computed } from 'vue'
+import { todayISO, dateToLocalISO } from '@/utils/format'
+
 interface Child {
   student_id: number
   name?: string
@@ -50,11 +56,44 @@ function update(field: string, value: unknown): void {
   // 重新發射整個物件，避免父層遺漏其他欄位
   emit('update:modelValue', { ...props.modelValue, [field]: value })
 }
+
+/** 起始日改到結束日之後：結束日跟著對齊（同一次 emit，避免中間態被送出）。 */
+function updateStart(value: string): void {
+  const end = props.modelValue.end_date || ''
+  const next: LeaveFormData = { ...props.modelValue, start_date: value }
+  if (value && (!end || end < value)) next.end_date = value
+  emit('update:modelValue', next)
+}
+
+const todayStr = todayISO()
+const tomorrowStr = (() => {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return dateToLocalISO(d)
+})()
+
+const QUICK_DAYS = [
+  { label: '今天', date: todayStr },
+  { label: '明天', date: tomorrowStr },
+] as const
+
+function pickDay(date: string): void {
+  emit('update:modelValue', { ...props.modelValue, start_date: date, end_date: date })
+}
+
+function isPicked(date: string): boolean {
+  return props.modelValue.start_date === date && props.modelValue.end_date === date
+}
+
+const singleChild = computed<Child | null>(() => (props.children.length === 1 ? props.children[0] : null))
 </script>
 
 <template>
   <div class="leave-form">
-    <div class="field">
+    <p v-if="singleChild" class="single-child" data-testid="leave-single-child">
+      請假的孩子：<strong>{{ singleChild.name }}</strong>
+    </p>
+    <div v-else class="field">
       <label for="leave-student">學生</label>
       <select
         id="leave-student"
@@ -91,6 +130,17 @@ function update(field: string, value: unknown): void {
         </label>
       </div>
     </fieldset>
+    <div class="quick-days" role="group" aria-label="快速選日期">
+      <button
+        v-for="q in QUICK_DAYS"
+        :key="q.label"
+        type="button"
+        class="quick-day"
+        :class="{ active: isPicked(q.date) }"
+        :aria-pressed="isPicked(q.date)"
+        @click="pickDay(q.date)"
+      >{{ q.label }}</button>
+    </div>
     <div class="field">
       <label for="leave-start">起始日</label>
       <input
@@ -99,7 +149,7 @@ function update(field: string, value: unknown): void {
         :value="modelValue.start_date"
         :min="pastLimit"
         :max="futureLimit"
-        @input="update('start_date', ($event.target as HTMLInputElement).value)"
+        @input="updateStart(($event.target as HTMLInputElement).value)"
       />
     </div>
     <div class="field">
@@ -160,6 +210,26 @@ function update(field: string, value: unknown): void {
   font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   font-family: inherit;
   box-sizing: border-box;
+}
+
+.single-child { margin: 0; }
+
+.quick-days {
+  display: flex;
+  gap: var(--space-2, 8px);
+}
+.quick-day {
+  flex: 1;
+  min-height: var(--touch-target-min, 44px);
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+}
+.quick-day.active {
+  background: var(--color-success-soft);
+  border-width: 2px;
 }
 
 .radio-fieldset {

@@ -39,6 +39,7 @@ withDefaults(defineProps<{
   timelineSteps?: TimelineStep[]
   attUploading?: boolean
   attEditable?: boolean
+  attLockedReason?: string
   urlResolver: (attachment: Attachment) => string
 }>(), {
   leave: null,
@@ -46,6 +47,7 @@ withDefaults(defineProps<{
   timelineSteps: () => [],
   attUploading: false,
   attEditable: false,
+  attLockedReason: undefined,
 })
 
 const emit = defineEmits<{
@@ -101,6 +103,7 @@ const emit = defineEmits<{
       <LeaveAttachments
         :attachments="leave.attachments || []"
         :editable="attEditable"
+        :locked-reason="attLockedReason"
         :uploading="attUploading"
         :url-resolver="urlResolver"
         @upload="(f) => emit('att-upload', f)"

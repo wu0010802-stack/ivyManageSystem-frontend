@@ -5,6 +5,7 @@
  * Props:
  *  - attachments: Array — 附件清單（含 id / original_filename）
  *  - editable: Boolean — 是否可上傳/刪除（呼叫端決定，例如「approved 且尚未開始」）
+ *  - lockedReason: String — 不可編輯時給家長看的原因；未給時用通用說明
  *  - uploading: Boolean — 上傳進行中（鎖按鈕）
  *  - urlResolver: Function — 接 attachment 物件回傳 URL
  *
@@ -24,11 +25,14 @@ withDefaults(defineProps<{
   attachments?: Attachment[]
   editable?: boolean
   uploading?: boolean
+  lockedReason?: string
   urlResolver: (attachment: Attachment) => string
 }>(), {
   attachments: () => [],
   editable: false,
   uploading: false,
+  // 與後端規則一致：只有已成立且尚未開始（起始日在明天以後）的請假可增刪附件
+  lockedReason: '請假開始後（含當天）或取消後，就不能再新增或刪除附件。',
 })
 
 const emit = defineEmits<{
@@ -48,9 +52,7 @@ function onFileChange(e: Event): void {
 
 <template>
   <div class="leave-att">
-    <p v-if="!editable" class="detail-hint">
-      請假已成立或已開始，無法新增/刪除附件。
-    </p>
+    <p v-if="!editable" class="detail-hint">{{ lockedReason }}</p>
     <div v-if="attachments.length" class="att-list">
       <div v-for="a in attachments" :key="a.id" class="att-row">
         <a :href="urlResolver(a)" target="_blank" rel="noopener" class="att-link">

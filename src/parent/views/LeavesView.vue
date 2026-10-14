@@ -257,6 +257,21 @@ const detailOpen = computed({
   },
 })
 
+/**
+ * 附件不可編輯時給家長的具體原因。規則與後端一致（POST／DELETE attachments 只受理
+ * status='approved' 且 start_date > 今天），前端不放寬；當天病假要補診斷書只能
+ * 交給老師，所以要明講去哪裡補，而不是只說「無法新增」。
+ */
+const attLockedReason = computed(() => {
+  const d = detail.value
+  if (!d) return undefined
+  if (d.status === 'cancelled') return '這筆請假已取消，無法再新增或刪除附件。'
+  if ((d.start_date || '') <= todayStr.value) {
+    return '請假開始後（含當天）就不能再上傳附件；需要補交證明（例如病假的診斷書）時，請直接交給老師或聯絡園所。'
+  }
+  return undefined
+})
+
 async function openDetail(item: LeaveItem) {
   try {
     const { data } = await getLeave(item.id)
@@ -555,6 +570,7 @@ async function pullRefresh() {
       :timeline-steps="detail ? timelineSteps(detail) : []"
       :att-uploading="detailUploading"
       :att-editable="!!detail && detail.status === 'approved' && (detail.start_date || '') > todayStr"
+      :att-locked-reason="attLockedReason"
       :url-resolver="attUrl"
       @att-upload="onAttUpload"
       @att-remove="askRemoveAttachment"
