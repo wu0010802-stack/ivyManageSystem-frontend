@@ -208,6 +208,8 @@
   --ivy-green-bright:  #0caf76;  /* hover state */
   --ivy-green-laurel:  #5aa842;  /* 月桂葉、accent bar */
   --color-green-mid: #41a074;
+  /* 月桂綠當「文字」用時的 AA 版本（--ivy-green-laurel #5aa842 白底僅 2.95:1，只適合裝飾） */
+  --color-laurel-text: #2f6f22;
   --ivy-green-mid: var(--color-green-mid);  /* 中綠 icon bg */
   --ivy-teal-primary:  #33aaaa;  /* secondary primary button */
   --ivy-teal-soft:     #d3ecec;  /* teal soft tint */
@@ -383,6 +385,7 @@
   --ivy-green-bright:  #6dc068;
   --ivy-green-laurel:  #8bc34a;
   --color-green-mid: #6dc068;
+  --color-laurel-text: #a5d86e;
   --ivy-green-mid: var(--color-green-mid);
   --ivy-teal-primary:  #4dc4c4;
   --ivy-teal-soft:     rgba(77, 196, 196, 0.18);
