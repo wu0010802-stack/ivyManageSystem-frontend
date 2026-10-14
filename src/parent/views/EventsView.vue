@@ -6,8 +6,11 @@ import { listEvents, acknowledgeEvent } from '../api/events'
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { invalidateHomeSummary } from '../composables/useHomeSummary'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import { loadErrorMessage } from '../utils/loadError'
 
 interface EventItem {
   id: number
@@ -37,7 +40,10 @@ const router = useRouter()
 
 const childrenStore = useChildrenStore()
 const items = ref<EventItem[]>([])
-const loading = ref(false)
+// 初值 true：onMounted 先等子女清單才發請求，這段空檔不得先寫「目前沒有事件」
+const loading = ref(true)
+// 載入失敗且沒有任何事件時進持久錯誤態，不得與「尚無事件」同形
+const loadError = ref<unknown>(null)
 const ackTarget = ref<AckTarget | null>(null)
 
 const ackModalOpen = computed({
@@ -66,12 +72,14 @@ const needsAckCount = computed(() =>
 
 async function fetchData() {
   loading.value = true
+  loadError.value = null
   try {
     const { data } = await listEvents()
     items.value = (data as { items?: EventItem[] })?.items || []
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    loadError.value = err
+    // 已有事件（簽閱後重新整理失敗）時保留舊清單，只用 toast 告知
+    if (items.value.length > 0) toast.error(loadErrorMessage(err, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -118,12 +126,23 @@ onMounted(async () => {
       <p class="pt-page-hero-note">
         <template v-if="needsAckCount > 0">{{ needsAckCount }} 筆待簽閱</template>
         <template v-else-if="items.length > 0">全數簽閱完成</template>
+        <template v-else-if="loading">載入中…</template>
+        <template v-else-if="loadError">暫時無法載入</template>
         <template v-else>目前沒有事件</template>
       </p>
     </header>
 
+    <!-- 三態：載入中 → 載入失敗（可重試）→ 空狀態 -->
+    <div v-if="loading && items.length === 0" class="events-skeleton">
+      <SkeletonBlock variant="card" :count="2" />
+    </div>
+    <MobileErrorRetry
+      v-else-if="loadError && items.length === 0"
+      :error="loadErrorMessage(loadError, '事件載入失敗，請檢查網路後重試')"
+      @retry="fetchData"
+    />
     <EmptyState
-      v-if="!loading && items.length === 0"
+      v-else-if="items.length === 0"
       variant="mobile"
       title="尚無事件"
     />
@@ -225,6 +244,7 @@ onMounted(async () => {
 
 <style scoped>
 .events-view { padding-bottom: 24px; }
+.events-skeleton { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .events-view > .pt-card + .pt-card { margin-top: 12px; }
 .events-view > .pt-page-hero + .pt-card,
 .events-view > .pt-page-hero + .empty-state + .pt-card { margin-top: 12px; }

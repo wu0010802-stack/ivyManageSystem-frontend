@@ -1,6 +1,15 @@
 <template>
   <div class="sign-detail-view">
-    <div v-if="loading" class="sign-detail-view__loading">載入中…</div>
+    <div v-if="loading" class="sign-detail-view__loading" aria-busy="true">
+      <SkeletonBlock variant="card" :count="2" />
+    </div>
+
+    <!-- 連線／伺服器失敗 ≠ 找不到文件：失敗給可重試錯誤態，只有 404 才說找不到 -->
+    <MobileErrorRetry
+      v-else-if="loadError"
+      :error="loadErrorMessage(loadError, '文件載入失敗，請檢查網路後重試')"
+      @retry="load"
+    />
 
     <template v-else-if="doc">
       <h2 class="sign-detail-view__title">{{ doc.title }}</h2>
@@ -41,7 +50,12 @@
       </template>
     </template>
 
-    <EmptyState v-else variant="mobile" title="找不到文件" />
+    <EmptyState
+      v-else
+      variant="mobile"
+      title="找不到這份文件"
+      description="文件可能已撤回或連結已失效，請回到待簽文件列表確認。"
+    />
   </div>
 </template>
 
@@ -49,7 +63,10 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import SignaturePad from '../components/SignaturePad.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import { isNotFoundError, loadErrorMessage } from '../utils/loadError'
 import { getMySignRequest, signMyRequest, mySignPdfUrl, type SignRequestDetailOut } from '../api/signDocuments'
 import { renderMd, blobToDataUrl, canSubmit } from '../utils/mdRender'
 import { toast } from '../utils/toast'
@@ -64,7 +81,9 @@ const route = useRoute()
 const router = useRouter()
 
 const doc = ref<SignRequestDetailOut | null>(null)
-const loading = ref(false)
+// 初值 true：首屏就是骨架，不先閃「找不到這份文件」
+const loading = ref(true)
+const loadError = ref<unknown>(null)
 const submitting = ref(false)
 
 const scrolledToBottom = ref(false)
@@ -94,12 +113,15 @@ function checkSignature() {
 
 async function load() {
   loading.value = true
+  loadError.value = null
   try {
     const id = Number(route.params.id)
     const { data } = await getMySignRequest(id)
     doc.value = data
-  } catch {
+  } catch (err) {
     doc.value = null
+    // 404 落到下方「找不到」分支；其餘（斷線、5xx）進可重試錯誤態
+    if (!isNotFoundError(err)) loadError.value = err
   } finally {
     // loading 必須先變 false 讓模板切換到內容分支、contentRef 才會綁到真實
     // DOM 元素；先前 nextTick 檢查放在 finally 之前，loading 仍是 true、
@@ -219,8 +241,8 @@ onMounted(load)
 }
 
 .sign-detail-view__loading {
-  padding: 40px;
-  text-align: center;
-  color: var(--pt-text-secondary, #6b7280);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 </style>

@@ -58,7 +58,7 @@ describe('EventAckView — 找不到事件時顯示 not-found（P1-18）', () =>
     expect(wrapper.text()).toMatch(/找不到此事件|事件不存在|連結.*失效/)
   })
 
-  it('listEvents 失敗 → 顯示 not-found（避免永久 skeleton）', async () => {
+  it('listEvents 失敗 → 顯示可重試錯誤態，不得誤報「找不到此事件」（避免永久 skeleton）', async () => {
     mockEventsApi.listEvents.mockRejectedValue(new Error('boom'))
 
     const wrapper = mount(EventAckView, {
@@ -72,7 +72,16 @@ describe('EventAckView — 找不到事件時顯示 not-found（P1-18）', () =>
     await flushPromises()
 
     expect(wrapper.find('.skeleton-stub').exists()).toBe(false)
-    expect(wrapper.text()).toMatch(/找不到此事件|事件不存在|連結.*失效|載入失敗/)
+    expect(wrapper.text()).not.toContain('找不到此事件')
+    expect(wrapper.find('[role="alert"]').text()).toContain('載入失敗')
+
+    // 重試成功 → 回到簽收表單
+    mockEventsApi.listEvents.mockResolvedValue({
+      data: { items: [{ id: 999, title: '親師座談', event_date: '2026-10-20' }] },
+    })
+    await wrapper.find('.mobile-error-retry__btn').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.form-card').exists()).toBe(true)
   })
 
   it('listEvents 找到對應事件 → render 簽收表單，無 not-found', async () => {

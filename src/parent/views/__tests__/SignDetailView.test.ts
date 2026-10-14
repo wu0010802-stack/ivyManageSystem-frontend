@@ -80,6 +80,28 @@ const pendingDoc = {
 describe('SignDetailView', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('載入失敗（非 404）顯示可重試錯誤態，不得說「找不到」；重試成功後顯示文件', async () => {
+    mockGet.mockRejectedValueOnce({ displayMessage: '網路連線異常' })
+    const w = await mountAt('7')
+    await flushPromises()
+    expect(w.text()).not.toContain('找不到')
+    expect(w.find('[role="alert"]').text()).toContain('網路連線異常')
+
+    mockGet.mockResolvedValueOnce({ data: pendingDoc })
+    await w.find('.mobile-error-retry__btn').trigger('click')
+    await flushPromises()
+    expect(w.find('[role="alert"]').exists()).toBe(false)
+    expect(w.text()).toContain('入學契約')
+  })
+
+  it('後端 404 才顯示「找不到這份文件」', async () => {
+    mockGet.mockRejectedValueOnce({ response: { status: 404 }, displayMessage: 'Not Found' })
+    const w = await mountAt('7')
+    await flushPromises()
+    expect(w.text()).toContain('找不到這份文件')
+    expect(w.find('[role="alert"]').exists()).toBe(false)
+  })
+
   it('已簽署文件顯示完成狀態，不顯示簽名區', async () => {
     mockGet.mockResolvedValue({
       data: { ...pendingDoc, status: 'signed', signed_at: '2026-08-11T12:00:00' },

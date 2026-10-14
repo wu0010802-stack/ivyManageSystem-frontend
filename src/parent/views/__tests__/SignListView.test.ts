@@ -33,6 +33,38 @@ describe('SignListView', () => {
     expect(w.text()).toContain('目前沒有待簽的入學文件')
   })
 
+  it('載入失敗顯示可重試錯誤態，不得畫成「目前沒有待簽文件」；重試成功後顯示清單', async () => {
+    mockList.mockRejectedValueOnce({ displayMessage: '網路連線異常' })
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).not.toContain('目前沒有待簽的入學文件')
+    expect(w.find('[role="alert"]').text()).toContain('網路連線異常')
+
+    mockList.mockResolvedValueOnce({
+      data: {
+        pending: [
+          { id: 1, student_id: 10, student_name: '王小明', title: '入學契約', doc_type: 'contract', status: 'pending', sent_at: '2026-08-11T10:00:00', signed_at: null, has_pdf: false },
+        ],
+        signed: [],
+      },
+    })
+    await w.find('.mobile-error-retry__btn').trigger('click')
+    await flushPromises()
+    expect(w.find('[role="alert"]').exists()).toBe(false)
+    expect(w.text()).toContain('入學契約')
+  })
+
+  it('載入中先畫骨架，不閃空狀態', async () => {
+    let resolve!: (v: unknown) => void
+    mockList.mockReturnValueOnce(new Promise((r) => { resolve = r }))
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).not.toContain('目前沒有待簽的入學文件')
+    resolve({ data: { pending: [], signed: [] } })
+    await flushPromises()
+    expect(w.text()).toContain('目前沒有待簽的入學文件')
+  })
+
   it('顯示待簽與已簽文件卡片', async () => {
     mockList.mockResolvedValue({
       data: {

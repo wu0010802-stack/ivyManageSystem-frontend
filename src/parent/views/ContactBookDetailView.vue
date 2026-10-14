@@ -9,6 +9,9 @@ import type { ContactBookEntry as CbEntry } from '../api/contactBook'
 import { useChildrenStore } from '../stores/children'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { isNotFoundError, loadErrorMessage } from '../utils/loadError'
 import MoodBadge from '../components/contact-book/MoodBadge.vue'
 import TimelineRow from '../components/contact-book/TimelineRow.vue'
 import PhotoGrid from '../components/contact-book/PhotoGrid.vue'
@@ -29,7 +32,10 @@ try {
 
 const entryId = computed(() => Number(route.params.entryId))
 const entry = ref<CbEntry | null>(null)
-const loading = ref(false)
+// 初值 true：首屏就是骨架，不先閃「找不到聯絡簿」
+const loading = ref(true)
+// 連線／伺服器失敗 ≠ 找不到：失敗給可重試錯誤態，只有 404 才說找不到
+const loadError = ref<unknown>(null)
 const acking = ref(false)
 
 const MOOD_LABEL: Record<string, string> = {
@@ -127,14 +133,14 @@ async function fetchData() {
   // 樣板同 FeesView.vue 的 reqId pattern。
   const reqId = entryId.value
   loading.value = true
+  loadError.value = null
   try {
     const { data } = await getContactBookDetail(reqId)
     if (entryId.value !== reqId) return
     entry.value = data as CbEntry
   } catch (err) {
     if (entryId.value !== reqId) return
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    if (!isNotFoundError(err)) loadError.value = err
   } finally {
     if (entryId.value === reqId) loading.value = false
   }
@@ -316,7 +322,18 @@ function formatTime(iso: string | null): string {
       </section>
     </template>
 
-    <p v-else class="hint">找不到聯絡簿。</p>
+    <MobileErrorRetry
+      v-else-if="loadError"
+      :error="loadErrorMessage(loadError, '聯絡簿載入失敗，請檢查網路後重試')"
+      @retry="fetchData"
+    />
+
+    <EmptyState
+      v-else
+      variant="mobile"
+      title="找不到這篇聯絡簿"
+      description="可能已被老師撤回，請回到聯絡簿列表確認。"
+    />
   </div>
 </template>
 
@@ -328,7 +345,6 @@ function formatTime(iso: string | null): string {
   padding: 0 0 32px;
 }
 .skeleton-wrap { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.hint { color: var(--pt-text-faint); text-align: center; padding: 32px 0; }
 
 /* Hero */
 .hero {

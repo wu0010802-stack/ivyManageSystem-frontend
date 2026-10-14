@@ -7,6 +7,8 @@ import { uploadAckSignature } from '../api/medications'
 import SignaturePad from '../components/SignaturePad.vue'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import { loadErrorMessage } from '../utils/loadError'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
 import { isNetworkError } from '@/composables/useOnlineStatus'
@@ -40,10 +42,13 @@ const submitting = ref(false)
 // 避免事件已刪除 / route param 對不上時頁面永久卡 skeleton。
 const loading = ref(true)
 const notFound = ref(false)
+// 連線／伺服器失敗 ≠ 找不到事件：失敗給可重試錯誤態，只有清單裡真的沒有才算找不到
+const loadError = ref<unknown>(null)
 
 async function init() {
   loading.value = true
   notFound.value = false
+  loadError.value = null
   await childrenStore.load()
   const firstChild = (childrenStore.items as { student_id: number }[])[0]
   studentId.value =
@@ -56,10 +61,8 @@ async function init() {
     event.value = found || null
     notFound.value = !found
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入事件失敗'))
     event.value = null
-    notFound.value = true
+    loadError.value = err
   } finally {
     loading.value = false
   }
@@ -236,6 +239,11 @@ onMounted(async () => {
         <SkeletonBlock variant="card" :count="2" />
       </div>
     </template>
+    <MobileErrorRetry
+      v-else-if="loadError"
+      :error="loadErrorMessage(loadError, '事件載入失敗，請檢查網路後重試')"
+      @retry="init"
+    />
     <template v-else>
       <div class="empty-state not-found">
         <span class="material-symbols-rounded" aria-hidden="true">event_busy</span>

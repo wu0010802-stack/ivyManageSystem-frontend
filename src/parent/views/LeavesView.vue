@@ -27,6 +27,9 @@ import PullToRefresh from '../components/PullToRefresh.vue'
 import LeaveHero from '../components/leaves/LeaveHero.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import { loadErrorMessage } from '../utils/loadError'
 
 interface LeaveItem {
   id: number
@@ -66,7 +69,10 @@ function _toastFriendly(err: unknown, fallback: string) {
   else toast.error(text)
 }
 const items = ref<LeaveItem[]>([])
-const loading = ref(false)
+// 初值 true：onMounted 要先等子女清單才發請求，這段空檔不得先畫「尚無請假紀錄」
+const loading = ref(true)
+// 載入失敗且沒有任何紀錄時進持久錯誤態，不得與「尚無請假紀錄」同形
+const loadError = ref<unknown>(null)
 const showForm = ref(false)
 const submitting = ref(false)
 
@@ -296,11 +302,14 @@ function timelineSteps(item: LeaveItem | null) {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = null
   try {
     const { data } = await listLeaves()
     items.value = (data as { items?: LeaveItem[] })?.items || []
   } catch (err) {
-    _toastFriendly(err, '載入失敗')
+    loadError.value = err
+    // 已有紀錄（下拉重新整理失敗）時保留舊清單，只用 toast 告知
+    if (items.value.length > 0) _toastFriendly(err, '載入失敗')
   } finally {
     loading.value = false
   }
@@ -439,8 +448,17 @@ async function pullRefresh() {
       </template>
     </LeaveHero>
 
+    <!-- 三態：載入中 → 載入失敗（可重試）→ 空狀態 -->
+    <div v-if="loading && items.length === 0" class="leaves-skeleton">
+      <SkeletonBlock variant="card" :count="2" />
+    </div>
+    <MobileErrorRetry
+      v-else-if="loadError && items.length === 0"
+      :error="loadErrorMessage(loadError, '請假紀錄載入失敗，請檢查網路後重試')"
+      @retry="fetchData"
+    />
     <EmptyState
-      v-if="!loading && filteredItems.length === 0"
+      v-else-if="filteredItems.length === 0"
       variant="mobile"
       title="尚無請假紀錄"
     />
@@ -521,6 +539,7 @@ async function pullRefresh() {
 }
 
 .render-sentinel { height: 1px; }
+.leaves-skeleton { display: flex; flex-direction: column; gap: 10px; }
 
 .hero-cta {
   background: var(--pt-surface-card, rgba(255, 255, 255, 0.95));

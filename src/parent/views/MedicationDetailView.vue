@@ -9,6 +9,9 @@ import {
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { isNotFoundError, loadErrorMessage } from '../utils/loadError'
 
 interface MedPhoto {
   id: number
@@ -37,7 +40,11 @@ interface MedOrder {
 
 const route = useRoute()
 const order = ref<MedOrder | null>(null)
-const loading = ref(false)
+// 初值 true：首屏就是骨架；先前失敗時整頁空白，家長不知道該等還是該重試
+const loading = ref(true)
+// 連線／伺服器失敗 ≠ 找不到：失敗給可重試錯誤態，只有 404 才說找不到
+const loadError = ref<unknown>(null)
+const notFound = ref(false)
 const uploading = ref(false)
 const removeTarget = ref<MedPhoto | null>(null)
 
@@ -57,12 +64,20 @@ const STATUS_LABEL: Record<string, string> = {
 
 async function fetchOrder() {
   loading.value = true
+  loadError.value = null
+  notFound.value = false
   try {
     const { data } = await getMedicationOrder(Number(route.params.id))
     order.value = data as MedOrder
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    if (order.value) {
+      // 上傳／刪除照片後重新整理失敗：保留畫面上的用藥單，只用 toast 告知
+      toast.error(loadErrorMessage(err, '重新整理失敗'))
+    } else if (isNotFoundError(err)) {
+      notFound.value = true
+    } else {
+      loadError.value = err
+    }
   } finally {
     loading.value = false
   }
@@ -109,9 +124,20 @@ onMounted(fetchOrder)
 
 <template>
   <div class="med-detail">
-    <template v-if="loading">
+    <template v-if="loading && !order">
       <SkeletonBlock variant="card" :count="2" />
     </template>
+    <MobileErrorRetry
+      v-else-if="loadError"
+      :error="loadErrorMessage(loadError, '用藥單載入失敗，請檢查網路後重試')"
+      @retry="fetchOrder"
+    />
+    <EmptyState
+      v-else-if="notFound"
+      variant="mobile"
+      title="找不到這張用藥單"
+      description="可能已被刪除，請回到用藥紀錄確認。"
+    />
     <template v-else-if="order">
       <header class="pt-page-hero">
         <p class="pt-page-hero-eyebrow">用藥單</p>
