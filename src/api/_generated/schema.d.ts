@@ -15969,6 +15969,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/substitute-duty-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Substitute Duty Preview
+         * @description 請假表單用唯讀預覽（SPEC-026 T13／T16）：選了代理人與日期後，「代理人接手我的職務」
+         *     會是哪幾天、什麼班別、代理人那幾天有沒有衝突。與 create_my_leave 的送出檢查共用 plan_handover。
+         *
+         *     只看「本人」的班與「被指定代理人」在這段期間的調班有無——與 day-roster（3-1）同級的同事班表
+         *     可見度；區間最長 62 天，避免被當成逐日探測代理人行事曆的工具。
+         */
+        get: operations["get_substitute_duty_preview_api_portal_substitute_duty_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/substitute-pending-count": {
         parameters: {
             query?: never;
@@ -33945,6 +33969,11 @@ export interface components {
             stage_approved?: number | null;
             /** Status */
             status?: string | null;
+            /**
+             * Substitute Duty Warnings
+             * @default []
+             */
+            substitute_duty_warnings: components["schemas"]["SubstituteDutyWarningOut"][];
             /** Warning */
             warning?: string | null;
         };
@@ -33956,6 +33985,30 @@ export interface components {
             ids: number[];
             /** Rejection Reason */
             rejection_reason?: string | null;
+        };
+        /**
+         * LeaveBatchApproveResultOut
+         * @description POST /leaves/batch-approve 回傳：共用的 {succeeded, failed, succeeded_details} 加上
+         *     請假專屬的 substitute_duty_warnings（只含 succeeded 內假單的警示）。
+         *
+         *     刻意另開子類別而不是改共用的 BatchApproveResultOut：overtimes／punch_corrections 兩個
+         *     批次端點共用同一個 schema，不該多出請假專屬欄位。
+         */
+        LeaveBatchApproveResultOut: {
+            /** Failed */
+            failed: components["schemas"]["BatchApproveFailItem"][];
+            /**
+             * Substitute Duty Warnings
+             * @default []
+             */
+            substitute_duty_warnings: components["schemas"]["SubstituteDutyWarningOut"][];
+            /** Succeeded */
+            succeeded: number[];
+            /**
+             * Succeeded Details
+             * @default []
+             */
+            succeeded_details: components["schemas"]["BatchApproveSucceededDetail"][];
         };
         /**
          * LeaveCancelResultOut
@@ -34040,6 +34093,11 @@ export interface components {
             start_time?: string | null;
             /** Substitute Employee Id */
             substitute_employee_id?: number | null;
+            /**
+             * Substitute Takes Duty
+             * @default false
+             */
+            substitute_takes_duty: boolean;
         };
         /**
          * LeaveDeleteResultOut
@@ -34055,6 +34113,11 @@ export interface components {
             salary_recalculated?: boolean | null;
             /** Salary Warning */
             salary_warning?: string | null;
+            /**
+             * Substitute Duty Warnings
+             * @default []
+             */
+            substitute_duty_warnings: components["schemas"]["SubstituteDutyWarningOut"][];
         };
         /**
          * LeaveImportResultOut
@@ -34134,6 +34197,11 @@ export interface components {
             substitute_responded_at?: string | null;
             /** Substitute Status */
             substitute_status: string;
+            /**
+             * Substitute Takes Duty
+             * @default false
+             */
+            substitute_takes_duty: boolean;
         };
         /**
          * LeavePageOut
@@ -34211,6 +34279,11 @@ export interface components {
             salary_recalculated?: boolean | null;
             /** Salary Warning */
             salary_warning?: string | null;
+            /**
+             * Substitute Duty Warnings
+             * @default []
+             */
+            substitute_duty_warnings: components["schemas"]["SubstituteDutyWarningOut"][];
         };
         /** LedgerListResponse */
         LedgerListResponse: {
@@ -35449,6 +35522,11 @@ export interface components {
             substitute_remark?: string | null;
             /** Substitute Status */
             substitute_status: string;
+            /**
+             * Substitute Takes Duty
+             * @default false
+             */
+            substitute_takes_duty: boolean;
         };
         /**
          * MyLeaveStatsOut
@@ -35623,6 +35701,11 @@ export interface components {
             substitute_responded_at?: string | null;
             /** Substitute Status */
             substitute_status: string;
+            /**
+             * Substitute Takes Duty
+             * @default false
+             */
+            substitute_takes_duty: boolean;
         };
         /** MyTrendOut */
         MyTrendOut: {
@@ -48950,6 +49033,49 @@ export interface components {
             period_start?: string | null;
             /** Related Student Ids */
             related_student_ids?: number[] | null;
+        };
+        /**
+         * SubstituteDutyPreviewOut
+         * @description GET /portal/substitute-duty-preview：請假表單「代理人接手我的職務」的預覽（SPEC-026 T13／T16）。
+         *
+         *     eligible：請假區間內有可交接的職務日（工作日且請假人當日有班別）；dates 為這些日子（ISO）；
+         *     shift_*／work_* 取首個接手日（文案「早車 07:00–16:30」）；conflict_dates 為其中代理人已有調班或
+         *     排休的日子（非空時前端禁用勾選）；default_checked＝任一接手日代理人時段與請假人不同且無衝突。
+         */
+        SubstituteDutyPreviewOut: {
+            /** Conflict Dates */
+            conflict_dates: string[];
+            /** Dates */
+            dates: string[];
+            /** Default Checked */
+            default_checked: boolean;
+            /** Eligible */
+            eligible: boolean;
+            /** Shift Name */
+            shift_name?: string | null;
+            /** Shift Type Id */
+            shift_type_id?: number | null;
+            /** Work End */
+            work_end?: string | null;
+            /** Work Start */
+            work_start?: string | null;
+        };
+        /**
+         * SubstituteDutyWarningOut
+         * @description 代理接手職務的略過／保留警示（SPEC-026 T14／T15）。
+         *
+         *     核准、駁回或刪除本身已完成；這些是需要人看一眼的例外（代理人該日已有調班、已有出勤、
+         *     薪資封存月……）。code 是前後端共用字串，見 services/leave_substitute_duty.py。
+         */
+        SubstituteDutyWarningOut: {
+            /** Code */
+            code: string;
+            /** Date */
+            date?: string | null;
+            /** Leave Id */
+            leave_id: number;
+            /** Message */
+            message: string;
         };
         /**
          * SubstitutePendingCountOut
@@ -67758,7 +67884,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BatchApproveResultOut"];
+                    "application/json": components["schemas"]["LeaveBatchApproveResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -77515,6 +77641,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StudentMeasurementSnapshotItem"][];
+                };
+            };
+        };
+    };
+    get_substitute_duty_preview_api_portal_substitute_duty_preview_get: {
+        parameters: {
+            query: {
+                end_date: string;
+                start_date: string;
+                substitute_employee_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubstituteDutyPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
