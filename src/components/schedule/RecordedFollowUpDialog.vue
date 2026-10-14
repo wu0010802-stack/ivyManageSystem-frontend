@@ -139,7 +139,7 @@ async function submitDaily(): Promise<void> {
   try {
     for (const date of split.value.daily) {
       try {
-        await saveDaily({ employee_id: c.employee_id, date, shift_type_id: shiftTypeId })
+        await saveDaily({ employee_id: c.employee_id, date, shift_type_id: shiftTypeId, day_off: false })
         saved += 1
       } catch (err) {
         if (isRecordedConflict(err)) nowRecorded.push(date)

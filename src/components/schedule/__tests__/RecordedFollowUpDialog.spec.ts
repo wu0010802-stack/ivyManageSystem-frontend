@@ -76,8 +76,8 @@ describe('RecordedFollowUpDialog（D-08）', () => {
     await wrapper.find('[data-test="rfu-daily-submit"]').trigger('click')
     await flushPromises()
     expect(api.saveDaily.mock.calls.map((c) => c[0])).toEqual([
-      { employee_id: 1, date: '2026-09-14', shift_type_id: 2 },
-      { employee_id: 1, date: '2026-09-18', shift_type_id: 2 },
+      { employee_id: 1, date: '2026-09-14', shift_type_id: 2, day_off: false },
+      { employee_id: 1, date: '2026-09-18', shift_type_id: 2, day_off: false },
     ])
     expect(wrapper.emitted('changed')).toHaveLength(1)
     expect(api.grid).toHaveBeenCalledTimes(2)
@@ -166,7 +166,7 @@ describe('RecordedFollowUpDialog（D-08）', () => {
 
     await wrapper.find('[data-test="rfu-daily-submit"]').trigger('click')
     await flushPromises()
-    expect(api.saveDaily.mock.calls.map((c) => c[0])).toEqual([{ employee_id: 1, date: '2026-09-17', shift_type_id: 2 }])
+    expect(api.saveDaily.mock.calls.map((c) => c[0])).toEqual([{ employee_id: 1, date: '2026-09-17', shift_type_id: 2, day_off: false }])
 
     await wrapper.find('[data-test="rfu-confirm-open"]').trigger('click')
     expect(wrapper.findComponent(BatchStub).props('units')).toEqual([
