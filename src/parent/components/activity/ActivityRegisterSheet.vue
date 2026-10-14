@@ -205,7 +205,7 @@ function toggleCourse(id: number): void {
 }
 
 .pick-meta {
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: 12px;
 }
 
@@ -215,7 +215,7 @@ function toggleCourse(id: number): void {
 }
 
 .text-muted {
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: 13px;
   text-align: center;
   padding: 12px;

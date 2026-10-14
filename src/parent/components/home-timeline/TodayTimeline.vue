@@ -85,7 +85,7 @@ const emit = defineEmits<{
 .timeline-empty {
   padding: var(--space-12, 48px) var(--space-4, 16px);
   text-align: center;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: var(--text-sm, 13px);
   font-weight: 500;
   margin: 0;

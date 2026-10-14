@@ -207,7 +207,7 @@ onMounted(fetchOrder)
 .pt-list-row .time { font-weight: 700; min-width: 56px; color: var(--pt-text-strong); }
 .pt-list-row .sub-meta { color: var(--pt-text-faint); font-size: 12px; }
 
-.hint { color: var(--pt-text-placeholder); padding: 4px 0; font-size: 13px; }
+.hint { color: var(--pt-text-muted); padding: 4px 0; font-size: 13px; }
 .photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .photo { position: relative; }
 .photo img { width: 80px; height: 80px; object-fit: cover; border-radius: 10px; }

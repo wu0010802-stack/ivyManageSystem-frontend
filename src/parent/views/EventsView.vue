@@ -274,7 +274,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: 12px;
 }
 
@@ -309,7 +309,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
 }
 
 .form {
@@ -331,7 +331,7 @@ onMounted(async () => {
 }
 
 .event-summary-date {
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: 12px;
   margin-top: 2px;
 }

@@ -447,7 +447,7 @@ function cancelAllergy() {
 }
 
 .allergy-modal .hint {
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: var(--text-sm, 13px);
 }
 

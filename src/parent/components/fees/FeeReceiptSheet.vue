@@ -136,7 +136,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 }
 
 .detail-period {
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: 13px;
   margin-top: 2px;
 }
@@ -145,14 +145,14 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 .section-empty {
   text-align: center;
   padding: 12px;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: 13px;
 }
 
 .section-h {
   margin: 16px 0 6px;
   font-size: 13px;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
 }
 
 .pay-row {
@@ -210,7 +210,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 .receipt-hint {
   margin: 10px 0 0;
   font-size: 12px;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   text-align: center;
 }
 </style>

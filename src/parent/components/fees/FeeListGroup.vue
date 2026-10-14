@@ -127,7 +127,7 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
 
 .record-row3 {
   margin-top: 4px;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: 12px;
   display: flex;
   gap: 12px;

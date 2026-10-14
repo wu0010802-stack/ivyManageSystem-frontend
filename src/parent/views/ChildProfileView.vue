@@ -407,7 +407,7 @@ onMounted(() => {
 /* ── info card：吃 .pt-card 不再自家 background/border/radius ───── */
 .sub-info {
   font-size: 13px;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   margin-bottom: 10px;
 }
 .row {
@@ -419,7 +419,7 @@ onMounted(() => {
 }
 .row .label {
   width: 56px;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   flex-shrink: 0;
 }
 .teachers {
@@ -442,7 +442,7 @@ onMounted(() => {
   letter-spacing: 0.02em;
 }
 .empty {
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: 13px;
   padding: 6px 0;
 }
@@ -461,7 +461,7 @@ onMounted(() => {
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .guardian-rel {
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: 13px;
 }
 .guardian-tags {
