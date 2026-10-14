@@ -16,7 +16,7 @@
         <p v-if="!canConfirm && split.confirm.length" class="rfu__hint" data-test="rfu-confirm-denied">
           確認已打卡的日子需要出勤寫入權限，請交給有權限的行政人員處理。
         </p>
-        <el-button :disabled="!canConfirm || !units.length" data-test="rfu-confirm-open" @click="batchOpen = true">開啟批次確認</el-button>
+        <el-button :disabled="!canConfirm || !units.length" data-test="rfu-confirm-open" @click="openBatch">開啟批次確認</el-button>
       </section>
       <p v-if="split.kept.length" class="rfu__hint" data-test="rfu-kept">
         已有個別調整，不更動：{{ split.kept.map((k) => `${formatMonthDay(k.date)}（${k.label}）`).join('、') }}。
@@ -31,7 +31,7 @@
     </template>
   </el-dialog>
   <!-- append-to-body：本元件巢狀在套用對話框的 overlay（自成 stacking context）裡，批次確認不 teleport 會被蓋住 -->
-  <BatchConfirmDialog v-model="batchOpen" :append-to-body="true" :units="units" :employee-names="employeeNames" :shift-names="shiftNames" @done="onBatchDone" />
+  <BatchConfirmDialog v-model="batchOpen" :append-to-body="true" :units="batchUnits" :employee-names="employeeNames" :shift-names="shiftNames" @done="onBatchDone" />
 </template>
 
 <script setup lang="ts">
@@ -48,7 +48,7 @@ import { saveDaily } from '@/api/shifts'
 import { formatMonthDay } from '@/utils/attendanceConfirm'
 import { apiError } from '@/utils/error'
 import type { ApplyChange } from '@/utils/dutyRotationGrid'
-import { SOURCE_TAGS, addDaysISO, cellKey, confirmUnits, indexCells, isRecordedConflict, type GridOut, type PlanSource } from '@/utils/scheduleAttendanceGrid'
+import { SOURCE_TAGS, addDaysISO, cellKey, confirmUnits, indexCells, isRecordedConflict, type BatchUnit, type GridOut, type PlanSource } from '@/utils/scheduleAttendanceGrid'
 
 const props = defineProps<{
   modelValue: boolean
@@ -62,6 +62,8 @@ const loading = ref(false)
 const loadError = ref('')
 const savingDaily = ref(false)
 const batchOpen = ref(false)
+/** 開啟批次確認當下的 units 快照（與 ScheduleGridPanel 同模式）：部分失敗時對話框保持開啟、我們隨即重讀格子，live 的 units 會縮短，結果列以索引對 results 會錯位 */
+const batchUnits = ref<BatchUnit[]>([])
 const BLOCKING_LOCKS: ReadonlySet<string> = new Set(['self', 'finalized', 'not_employed'])
 /** 日層級的個別調整：週排班層（含輪值表套用）本來就不會蓋過它們，後續處理也不更動（裁定：補做輪值表本來會做的事） */
 const KEPT_SOURCES: ReadonlySet<PlanSource> = new Set<PlanSource>(['daily', 'swap', 'daily_off'])
@@ -152,6 +154,11 @@ async function submitDaily(): Promise<void> {
   if (errors.length) ElMessage.error(errors.join('；'))
   if (saved) emit('changed')
   await load()
+}
+
+function openBatch(): void {
+  batchUnits.value = units.value
+  batchOpen.value = true
 }
 
 async function onBatchDone(): Promise<void> {

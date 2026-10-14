@@ -110,6 +110,34 @@ describe('RecordedFollowUpDialog（D-08）', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
+  it('批次確認部分失敗（對話框保持開啟）後 RFU 重讀格子：傳給批次確認的 units 仍是開啟當下的快照，結果列不錯位', async () => {
+    const OPENED = [{ items: [{ employee_id: 1, date: '2026-09-15', shift_type_id: 2, day_off: false, version: 'v'.repeat(64) }] }]
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('[data-test="rfu-confirm-open"]').trigger('click')
+    expect(wrapper.findComponent(BatchStub).props('units')).toEqual(OPENED)
+    // 9/15 已確認成功：重讀後來源變每日調整，移到「已有個別調整」，live 的 units 縮成空
+    api.grid.mockResolvedValue({
+      data: grid({
+        cells: [
+          cell(1, WEEK[0]),
+          cell(1, WEEK[1], { plan: { source: 'daily' }, edit: RECORDED, actual: { version: 'v'.repeat(64) } }),
+          cell(1, WEEK[2], { edit: { plan: false, confirm: false, recorded: true, locked_reason: 'self' }, actual: {} }),
+          cell(1, WEEK[3], { edit: { plan: false, confirm: false, recorded: false, locked_reason: 'finalized' } }),
+          cell(1, WEEK[4]),
+          cell(1, WEEK[5], { plan: { expected: false } }),
+        ],
+      }),
+    })
+    wrapper.findComponent(BatchStub).vm.$emit('done', 1)
+    await flushPromises()
+    expect(wrapper.find('[data-test="rfu-kept"]').text()).toContain('9/15（每日調整）') // 畫面已是重讀後的結果
+    expect(wrapper.find('[data-test="rfu-confirm-open"]').attributes('disabled')).toBeDefined() // 開啟鈕仍看 live units
+    const batch = wrapper.findComponent(BatchStub)
+    expect(batch.props('modelValue')).toBe(true)
+    expect(batch.props('units')).toEqual(OPENED)
+  })
+
   it('已有個別調整（換班／排休／每日調整）的日子不更動：兩桶都排除，另列「已有個別調整」，送出每日調整與批次確認都不含它們', async () => {
     api.grid.mockResolvedValue({
       data: grid({
