@@ -95,8 +95,14 @@ describe('parent router IA (2026-05-22 restructure)', () => {
   })
 
   describe('Me tab（Phase D 將移至 drawer）', () => {
-    it.each(['/me', '/notifications/preferences', '/bind-additional'])('%s 應有 tab=me', (path) => {
+    it.each(['/me', '/notifications/preferences', '/bind-additional', '/me/privacy-rights'])('%s 應有 tab=me', (path) => {
       expect(tabOf(path)).toBe('me')
+    })
+
+    // 2026-10-14：原本沒有 showBack，頁內自帶一顆 router.back()——深連結進來會退出
+    // App，在 LINE 內又沒有頂欄返回鍵可用。改由 ParentLayout 統一處理。
+    it('/me/privacy-rights 有 showBack（深層頁）', () => {
+      expect(findRoute('/me/privacy-rights')?.meta?.showBack).toBe(true)
     })
   })
 

@@ -86,7 +86,9 @@ const routes: RouteRecordRaw[] = [
       path: '/me/privacy-rights',
       name: 'parent-privacy-rights',
       component: () => import('./views/PrivacyRightsView.vue'),
-      meta: { title: '個人資料權利', tab: 'me' },
+      // showBack：入口在「我的」，返回鍵由 ParentLayout 統一處理（2026-10-14 前頁內自帶
+      // 一顆 router.back()，深連結進來會退出 App，且在 LINE 內與頂欄返回鍵重複）
+      meta: { title: '個人資料權利', tab: 'me', showBack: true },
     },
     {
       path: '/more',

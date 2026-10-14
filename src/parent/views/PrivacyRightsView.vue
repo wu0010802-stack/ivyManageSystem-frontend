@@ -11,7 +11,6 @@
  * Refs: ivy-backend docs/superpowers/specs/2026-05-28-consent-dsr-rights-design.md
  */
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   CONSENT_SCOPES,
   CONSENT_SCOPE_SERVICE_ESSENTIAL,
@@ -28,7 +27,6 @@ import {
 } from '../api/consent'
 import { useChildrenStore } from '../stores/children'
 
-const router = useRouter()
 const childrenStore = useChildrenStore()
 
 const tab = ref<'consents' | 'delete' | 'correct' | 'opt_out' | 'history'>('consents')
@@ -223,9 +221,6 @@ const children = computed(
 <template>
   <div class="rights-view">
     <header class="rights-header">
-      <button class="back-btn" type="button" @click="router.back()" aria-label="返回">
-        <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
-      </button>
       <h1 class="title">個人資料權利</h1>
     </header>
 
@@ -394,14 +389,6 @@ const children = computed(
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
-}
-
-.back-btn {
-  background: none;
-  border: none;
-  padding: 8px;
-  cursor: pointer;
-  color: var(--pt-text);
 }
 
 .title {
