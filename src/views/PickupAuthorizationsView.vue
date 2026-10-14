@@ -113,7 +113,13 @@ function formatDateTime(iso: string | null): string {
 // ── 範圍：今天／即將到來／歷史 ──────────────────────────────────────────
 type Scope = 'today' | 'upcoming' | 'history'
 const scope = ref<Scope>('today')
-const historyRange = ref<[string, string]>([taipeiToday(-30), taipeiToday(-1)])
+// 「即將到來」＝明天起 UPCOMING_DAYS 天
+const UPCOMING_DAYS = 14
+const upcomingRangeLabel = computed(
+  () => `${formatPickupDate(taipeiToday(1))}～${formatPickupDate(taipeiToday(UPCOMING_DAYS))}`,
+)
+const defaultHistoryRange = (): [string, string] => [taipeiToday(-30), taipeiToday(-1)]
+const historyRange = ref<[string, string]>(defaultHistoryRange())
 // 「今天」範圍可前後切日；0＝今天（不帶日期參數，沿用後端預設）。
 const dayOffset = ref(0)
 const selectedDay = computed(() => taipeiToday(dayOffset.value))
@@ -139,7 +145,7 @@ async function fetchData() {
     const params: Record<string, string> = {}
     if (scope.value === 'upcoming') {
       params.date_from = taipeiToday(1)
-      params.date_to = taipeiToday(14)
+      params.date_to = taipeiToday(UPCOMING_DAYS)
     } else if (scope.value === 'history') {
       params.date_from = historyRange.value[0]
       params.date_to = historyRange.value[1]
@@ -195,7 +201,13 @@ watch(historyRange, (range, prev) => {
     return
   }
   if (scope.value !== 'history') return
-  if (range && exceedsHistoryRange(range)) {
+  // 起訖必須成對（後端只帶單邊或不帶都不是歷史查詢）：被清空就留在上一個區間。
+  if (!range) {
+    revertingRange = true
+    historyRange.value = prev ?? defaultHistoryRange()
+    return
+  }
+  if (exceedsHistoryRange(range)) {
     ElMessage.warning(`查詢區間最多 ${MAX_HISTORY_RANGE_DAYS} 天，請縮短日期範圍`)
     revertingRange = true
     historyRange.value = prev
@@ -397,6 +409,7 @@ onMounted(fetchData)
           start-placeholder="起日"
           end-placeholder="迄日"
           :disabled-date="isRangeDateDisabled"
+          :clearable="false"
           class="history-range"
           @calendar-change="onRangeCalendarChange"
           @visible-change="onRangePickerVisible"
@@ -409,7 +422,7 @@ onMounted(fetchData)
         <el-button text size="small" aria-label="後一天" data-test="day-next" @click="shiftDay(1)">›</el-button>
         <el-button v-if="dayOffset !== 0" link type="primary" size="small" data-test="day-reset" @click="resetDay">回到今天</el-button>
       </div>
-      <span v-else class="scope-day">{{ formatPickupDate(taipeiToday()) }}</span>
+      <span v-else class="scope-day" data-test="upcoming-range">{{ upcomingRangeLabel }}</span>
       <span class="scope-count" data-test="scope-count">
         {{ scopeLabel }}
         <strong>{{ items.length }}</strong> 筆

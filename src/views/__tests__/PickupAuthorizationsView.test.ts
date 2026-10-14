@@ -354,5 +354,30 @@ describe('PickupAuthorizationsView (admin)', () => {
       await flushPromises()
       expect(mockList).toHaveBeenLastCalledWith({ date_from: '2026-01-01', date_to: '2026-04-03' })
     })
+
+    it('即將到來範圍標示查詢的日期區間（明天～兩週後），不再寫「今天」', async () => {
+      const wrapper = await mountView()
+      await wrapper.findAll('.el-radio-button__inner').find((b) => b.text() === '即將到來')!.trigger('click')
+      await flushPromises()
+      // 2026-08-11（二）＋14 天＝8/25（二）
+      const label = wrapper.find('[data-test="upcoming-range"]')
+      expect(label.text()).toBe('明天～8/25（二）')
+    })
+
+    it('歷史區間被清空時不送出查詢、不報載入失敗，並保留上一個區間', async () => {
+      vi.mocked(ElMessage.error).mockClear()
+      const wrapper = await mountView()
+      await wrapper.findAll('.el-radio-button__inner').find((b) => b.text() === '歷史')!.trigger('click')
+      await flushPromises()
+      const picker = () => wrapper.findComponent({ name: 'ElDatePicker' })
+      const before = picker().props('modelValue')
+      const callsBefore = mockList.mock.calls.length
+
+      picker().vm.$emit('update:modelValue', null)
+      await flushPromises()
+      expect(mockList.mock.calls.length).toBe(callsBefore)
+      expect(ElMessage.error).not.toHaveBeenCalled()
+      expect(picker().props('modelValue')).toEqual(before)
+    })
   })
 })
