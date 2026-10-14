@@ -388,6 +388,9 @@ export async function listParentQueued(kind: ParentOpKind): Promise<ParentQueued
 /** 把一筆「無法同步」的 op 放回待送出並立即重送該 kind。 */
 export async function retryParentOp(op: { id: string; kind: ParentOpKind }): Promise<FlushResult> {
   await updateOp(op.id, { status: OP_STATUS.PENDING, attempts: 0, last_error: null })
+  // 狀態已從「無法同步」變回「待送出」：這次重送若只是又被保留（kept），reportFlush
+  // 不會通知，只靠訂閱更新的畫面（請假列表佔位卡）會一直掛著「無法送出」
+  notifyQueueChange({ succeededByKind: {} })
   return flushParentQueue(op.kind)
 }
 

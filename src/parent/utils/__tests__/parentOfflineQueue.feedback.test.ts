@@ -9,6 +9,8 @@ import 'fake-indexeddb/auto'
 vi.mock('@/parent/stores/parentAuth', () => ({
   useParentAuthStore: vi.fn(),
 }))
+const createLeave = vi.fn()
+vi.mock('@/parent/api/leaves', () => ({ createLeave: (...a: unknown[]) => createLeave(...a) }))
 const toastSuccess = vi.fn()
 vi.mock('@/parent/utils/toast', () => ({
   toast: { success: (...a: unknown[]) => toastSuccess(...a), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
@@ -25,6 +27,7 @@ import {
   onParentQueueChange,
   PARENT_KIND_LABEL,
   PARENT_KINDS,
+  retryParentOp,
   syncedMessage,
 } from '../parentOfflineQueue'
 import { OP_KINDS, OP_STATUS, clearAll, updateOp } from '@/utils/offlineQueue'
@@ -125,6 +128,25 @@ describe('逐筆處理', () => {
     loginAs(7)
     const ops = await listParentQueued(OP_KINDS.PARENT_LEAVE_REQUEST)
     expect(ops.map((o) => o.id).sort()).toEqual([a.id, b.id].sort())
+  })
+
+  it('retryParentOp：放回待送出就通知訂閱者，這次又遇到可重試錯誤也不會留著「無法送出」', async () => {
+    loginAs(7)
+    const op = await enqueueParent({ kind: OP_KINDS.PARENT_LEAVE_REQUEST, payload: leavePayload() })
+    await updateOp(op.id, { status: OP_STATUS.NEEDS_REVIEW })
+    createLeave.mockRejectedValue(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))
+    const listener = vi.fn()
+    const off = onParentQueueChange(listener)
+
+    const result = await retryParentOp({ id: op.id, kind: OP_KINDS.PARENT_LEAVE_REQUEST })
+    off()
+
+    expect(result.succeeded).toBe(0)
+    expect(result.needs_review).toBe(0)
+    // 請假列表的佔位卡只靠這個通知更新：狀態已從「無法同步」變回「待送出」
+    expect(listener).toHaveBeenCalledWith({ succeededByKind: {} })
+    const ops = await listParentQueued(OP_KINDS.PARENT_LEAVE_REQUEST)
+    expect(ops.map((o) => o.status)).toEqual([OP_STATUS.PENDING])
   })
 
   it('discardParentOp 刪除該筆並通知訂閱者', async () => {
