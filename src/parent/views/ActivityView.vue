@@ -37,6 +37,7 @@ import { buildPublicEditUrl } from '@/utils/publicLinks'
 import ParentIcon from '../components/ParentIcon.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import M3SegmentedButton from '../components/m3/M3SegmentedButton.vue'
+import { invalidateHomeSummary } from '../composables/useHomeSummary'
 
 interface RegCourse { course_id: number; course_name: string; status: string; price?: number; price_snapshot?: unknown; meeting_weekdays?: number[] | null; meeting_start_time?: string | null; meeting_end_time?: string | null }
 interface Registration { id: number; student_id: number; student_name?: string; school_year: number; semester: number; is_paid: boolean; total_amount?: number; outstanding_amount?: number; payment_status?: string; refunded_amount?: number; courses: RegCourse[] }
@@ -438,6 +439,8 @@ async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
   try {
     await confirmPromotion(reg.id, rc.course_id)
     toast.success('已確認轉正式')
+    // 首頁待辦「確認才藝候補」與 tab 徽章立即更新
+    void invalidateHomeSummary()
     // 轉正會佔用容量 + 影響 hero 即將開課 → 並行重抓課程清單與 upcoming sessions。
     // 稽核 finding 4：await 刷新後才在 finally 解鎖，避免慢網路下舊「確認」按鈕在
     // 列表尚未更新前提早恢復、二次點擊命中已轉正課程得到 409。
@@ -475,6 +478,7 @@ async function onDeclineConfirmed() {
   try {
     await declinePromotion(target.reg.id, target.rc.course_id)
     toast.success('已放棄，名額將由下一位候補遞補')
+    void invalidateHomeSummary()
     // 放棄釋出名額（is_full / 候補順位 / hero 皆受影響），與確認同套刷新。
     await refreshActivitySnapshot()
   } catch (err: unknown) {

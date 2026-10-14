@@ -22,6 +22,7 @@ import M3Checkbox from '../components/m3/M3Checkbox.vue'
 import M3Button from '../components/m3/M3Button.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useLeaveConfirm } from '../composables/useUnsavedGuard'
+import { invalidateHomeSummary } from '../composables/useHomeSummary'
 
 interface Child {
   student_id: number
@@ -186,6 +187,8 @@ async function submit() {
     resultCode.value = body.code
     resultPersonName.value = body.items[0]?.person_name || ''
     toast.success('授權已成立')
+    // 首頁「臨時接送」進行中筆數與待辦立即更新
+    void invalidateHomeSummary()
   } catch (err) {
     _toastFriendly(err, '建立授權失敗')
   } finally {
