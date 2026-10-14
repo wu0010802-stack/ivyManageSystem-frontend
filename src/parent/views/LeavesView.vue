@@ -428,7 +428,7 @@ async function pullRefresh() {
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="leaves-view">
-    <ChildContextHeader variant="page" />
+    <ChildContextHeader variant="page" :inset="false" />
 
     <LeaveHero :summary="heroSummary">
       <template #action>

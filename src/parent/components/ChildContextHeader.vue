@@ -7,6 +7,12 @@
  *
  * state 全部從 useChildSelection + useChildrenStore 自取，
  * 不從 props 傳 child id，確保 7 view 一致性。
+ *
+ * 版面：單一根節點（父層 class／attrs 可 fallthrough；舊版 button/div + sheet 多根節點會
+ * 吃掉父層 class 並噴 Vue warn），預設自帶與頁面一致的 16px 水平留白——多數家長頁容器
+ * 本身不給左右 padding、由各區塊自帶（.pt-card 的 margin 0 16px 等），舊版 padding:0
+ * 讓頭像貼齊螢幕左緣。容器已給 padding-inline 的頁（繳費／請假／接送／才藝）傳
+ * `:inset="false"` 避免雙重留白。
  */
 import { computed, ref } from 'vue'
 import { useChildrenStore } from '../stores/children'
@@ -21,8 +27,11 @@ interface Child {
 
 withDefaults(defineProps<{
   variant?: 'page' | 'hero'
+  /** 自帶 16px 水平留白；父容器已有 padding-inline 時傳 false */
+  inset?: boolean
 }>(), {
   variant: 'page',
+  inset: true,
 })
 
 const childrenStore = useChildrenStore()
@@ -44,72 +53,79 @@ function pick(id: number) {
 </script>
 
 <template>
-  <button
-    v-if="isMulti && current"
-    type="button"
-    class="child-context-header"
-    :class="`child-context-header--${variant}`"
-    aria-haspopup="dialog"
-    aria-label="切換孩子"
-    @click="sheetOpen = true"
-  >
-    <span class="cch-avatar">{{ initial }}</span>
-    <span class="cch-copy">
-      <span class="cch-name">{{ current.name }}</span>
-      <span v-if="current.classroom_name" class="cch-sub">{{ current.classroom_name }}</span>
-    </span>
-    <span class="cch-chevron material-symbols-rounded" aria-hidden="true">expand_more</span>
-  </button>
+  <div v-if="current" class="cch-root" :class="{ 'cch-root--inset': inset }">
+    <button
+      v-if="isMulti"
+      type="button"
+      class="child-context-header"
+      :class="`child-context-header--${variant}`"
+      aria-haspopup="dialog"
+      aria-label="切換孩子"
+      @click="sheetOpen = true"
+    >
+      <span class="cch-avatar">{{ initial }}</span>
+      <span class="cch-copy">
+        <span class="cch-name">{{ current.name }}</span>
+        <span v-if="current.classroom_name" class="cch-sub">{{ current.classroom_name }}</span>
+      </span>
+      <span class="cch-chevron material-symbols-rounded" aria-hidden="true">expand_more</span>
+    </button>
 
-  <div
-    v-else-if="!isMulti && current"
-    class="child-context-header"
-    :class="`child-context-header--${variant}`"
-  >
-    <span class="cch-avatar">{{ initial }}</span>
-    <span class="cch-copy">
-      <span class="cch-name">{{ current.name }}</span>
-      <span v-if="current.classroom_name" class="cch-sub">{{ current.classroom_name }}</span>
-    </span>
+    <div
+      v-else
+      class="child-context-header"
+      :class="`child-context-header--${variant}`"
+    >
+      <span class="cch-avatar">{{ initial }}</span>
+      <span class="cch-copy">
+        <span class="cch-name">{{ current.name }}</span>
+        <span v-if="current.classroom_name" class="cch-sub">{{ current.classroom_name }}</span>
+      </span>
+    </div>
+
+    <ParentBottomSheet
+      v-if="isMulti"
+      v-model="sheetOpen"
+      title="切換孩子"
+      :snap-points="['mid']"
+      default-snap="mid"
+    >
+      <ul class="cch-list" role="listbox" aria-label="孩子清單">
+        <li
+          v-for="c in items"
+          :key="c.student_id"
+          :data-child-option="c.student_id"
+          :data-active="c.student_id === selectedId ? 'true' : 'false'"
+          role="option"
+          :aria-selected="c.student_id === selectedId"
+          tabindex="0"
+          class="cch-item"
+          :class="{ 'cch-item--active': c.student_id === selectedId }"
+          @click="pick(c.student_id)"
+          @keydown.enter="pick(c.student_id)"
+          @keydown.space.prevent="pick(c.student_id)"
+        >
+          <span class="cch-item-avatar">{{ String(c.name || '孩').slice(0, 1) }}</span>
+          <span class="cch-item-copy">
+            <span class="cch-item-name">{{ c.name }}</span>
+            <span v-if="c.classroom_name" class="cch-item-sub">{{ c.classroom_name }}</span>
+          </span>
+          <span
+            v-if="c.student_id === selectedId"
+            class="cch-item-check material-symbols-rounded"
+            aria-hidden="true"
+          >check</span>
+        </li>
+      </ul>
+    </ParentBottomSheet>
   </div>
-
-  <ParentBottomSheet
-    v-model="sheetOpen"
-    title="切換孩子"
-    :snap-points="['mid']"
-    default-snap="mid"
-  >
-    <ul class="cch-list" role="listbox" aria-label="孩子清單">
-      <li
-        v-for="c in items"
-        :key="c.student_id"
-        :data-child-option="c.student_id"
-        :data-active="c.student_id === selectedId ? 'true' : 'false'"
-        role="option"
-        :aria-selected="c.student_id === selectedId"
-        tabindex="0"
-        class="cch-item"
-        :class="{ 'cch-item--active': c.student_id === selectedId }"
-        @click="pick(c.student_id)"
-        @keydown.enter="pick(c.student_id)"
-        @keydown.space.prevent="pick(c.student_id)"
-      >
-        <span class="cch-item-avatar">{{ String(c.name || '孩').slice(0, 1) }}</span>
-        <span class="cch-item-copy">
-          <span class="cch-item-name">{{ c.name }}</span>
-          <span v-if="c.classroom_name" class="cch-item-sub">{{ c.classroom_name }}</span>
-        </span>
-        <span
-          v-if="c.student_id === selectedId"
-          class="cch-item-check material-symbols-rounded"
-          aria-hidden="true"
-        >check</span>
-      </li>
-    </ul>
-  </ParentBottomSheet>
 </template>
 
 <style scoped>
+.cch-root--inset {
+  padding-inline: var(--space-4, 16px);
+}
+
 .child-context-header {
   display: flex;
   align-items: center;
@@ -121,7 +137,11 @@ function pick(id: number) {
   text-align: left;
   cursor: default;
 }
-button.child-context-header { cursor: pointer; }
+button.child-context-header {
+  cursor: pointer;
+  border-radius: var(--pt-control-radius, 14px);
+  min-height: var(--touch-target-min, 44px);
+}
 button.child-context-header:active { background: var(--pt-surface-mute-soft); }
 
 .cch-avatar {

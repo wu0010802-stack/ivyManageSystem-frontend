@@ -292,7 +292,7 @@ async function pullRefresh() {
       :status-label="heroStatusLabel"
       :status-tone="heroStatusTone"
     />
-    <ChildContextHeader variant="page" />
+    <ChildContextHeader variant="page" :inset="false" />
 
     <div v-if="myTotals" class="single-totals">
       <span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>

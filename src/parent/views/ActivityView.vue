@@ -530,7 +530,7 @@ async function pullRefresh() {
       @scroll-section="onScrollSection"
     />
 
-    <ChildContextHeader v-if="tab === 'my'" variant="page" />
+    <ChildContextHeader v-if="tab === 'my'" variant="page" :inset="false" />
     <M3SegmentedButton
       :model-value="tab"
       :items="[

@@ -291,7 +291,7 @@ onMounted(async () => {
 
 <template>
   <div class="pickup-view">
-    <ChildContextHeader variant="page" />
+    <ChildContextHeader variant="page" :inset="false" />
 
     <M3Card class="create-cta">
       <p class="create-cta-text">臨時有事無法接送？授權親友代為到園接送。</p>
