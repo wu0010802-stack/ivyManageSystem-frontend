@@ -34,48 +34,70 @@
       <div v-for="w in state.warnings.value" :key="w.employee_id">{{ w.message }}</div>
     </el-alert>
 
-    <div v-if="state.loadError.value" class="schedule-grid-panel__status" role="alert">
-      <p>這一週的班表與打卡載入失敗。</p>
-      <el-button @click="state.reload()">重新載入</el-button>
-    </div>
-    <p v-else-if="state.loading.value && !gridData" role="status">正在載入班表與打卡…</p>
+    <template v-if="isMonth">
+      <div v-if="monthError" class="schedule-grid-panel__status" role="alert" data-test="month-load-error">
+        <p>這個月的班表與打卡載入失敗。</p>
+        <el-button @click="reloadMonth">重新載入</el-button>
+      </div>
+      <p v-else-if="monthLoading && !monthData" role="status">正在載入整月班表與打卡…</p>
+      <MonthGrid
+        v-if="monthData"
+        :groups="monthData.groups"
+        :employees="monthData.employees"
+        :days="monthDays"
+        :cells="monthCells"
+        :today="monthData.today"
+        :filter="filter"
+        :keyword="keyword"
+        :max-height="gridMaxHeight"
+        @select="openMonthCell"
+        @open-week="(monday: string) => emit('update:view', 'week', monday)"
+      />
+    </template>
+    <template v-else>
+      <div v-if="state.loadError.value" class="schedule-grid-panel__status" role="alert">
+        <p>這一週的班表與打卡載入失敗。</p>
+        <el-button @click="state.reload()">重新載入</el-button>
+      </div>
+      <p v-else-if="state.loading.value && !gridData" role="status">正在載入班表與打卡…</p>
 
-    <ShiftGrid
-      v-if="gridData"
-      :groups="gridData.groups"
-      :employees="gridData.employees"
-      :days="days"
-      :cells="state.cells.value"
-      :today="gridData.today"
-      :filter="filter"
-      :keyword="keyword"
-      :can-edit-plan="caller.can_edit_plan"
-      :shift-options="gridData?.shift_types ?? []"
-      :weekly-value="state.weeklyValue"
-      :changed-ids="changedIds"
-      :coverage="coverage"
-      :mobile="isMobile"
-      :can-import="caller.can_edit_attendance"
-      :max-height="gridMaxHeight"
-      @select="openCell"
-      @weekly-change="state.setWeekly"
-      @import-punches="(date: string) => emit('import-punches', date)"
-    />
+      <ShiftGrid
+        v-if="gridData"
+        :groups="gridData.groups"
+        :employees="gridData.employees"
+        :days="days"
+        :cells="state.cells.value"
+        :today="gridData.today"
+        :filter="filter"
+        :keyword="keyword"
+        :can-edit-plan="caller.can_edit_plan"
+        :shift-options="gridData?.shift_types ?? []"
+        :weekly-value="state.weeklyValue"
+        :changed-ids="changedIds"
+        :coverage="coverage"
+        :mobile="isMobile"
+        :can-import="caller.can_edit_attendance"
+        :max-height="gridMaxHeight"
+        @select="openCell"
+        @weekly-change="state.setWeekly"
+        @import-punches="(date: string) => emit('import-punches', date)"
+      />
+    </template>
 
     <PersonDayDrawer
-      v-if="gridData"
+      v-if="drawerGrid"
       ref="drawerRef"
       v-model="drawerOpen"
       :cell="selectedCell"
       :employee="selectedEmployee"
       :day="selectedDay"
       :group-label="selectedGroupLabel"
-      :shift-types="gridData.shift_types"
+      :shift-types="drawerGrid.shift_types"
       :same-day-cells="sameDayCells"
       :employee-names="employeeNames"
-      :weekly-shift-id="selected ? state.assignments.value[selected.employeeId]?.shift_type_id ?? null : null"
-      :today="gridData.today"
-      :caller="caller"
+      :weekly-shift-id="drawerWeeklyShiftId"
+      :today="drawerGrid.today"
+      :caller="drawerGrid.caller"
       :mobile="isMobile"
       @changed="onChanged"
       @records="onRecords"
@@ -133,13 +155,14 @@ import { confirmDiscardChanges, useUnsavedChangesGuard } from '@/composables/use
 import FormDialog from '@/components/common/FormDialog.vue'
 import GridToolbar, { type ToolbarCommand } from './GridToolbar.vue'
 import ShiftGrid from './ShiftGrid.vue'
+import MonthGrid from './MonthGrid.vue'
 import PersonDayDrawer from './PersonDayDrawer.vue'
 import BatchConfirmDialog from './BatchConfirmDialog.vue'
 import { useScheduleGrid } from '@/composables/useScheduleGrid'
 import { attendanceRouteProps } from '@/router/attendanceRouteProps'
 import { useIsMobile } from '@/composables/useIsMobile'
 import type { MonthGridState } from '@/composables/useMonthGrid'
-import { copyMonthAssignments, importShifts } from '@/api/shifts'
+import { copyMonthAssignments, getAssignments, importShifts } from '@/api/shifts'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
@@ -153,6 +176,7 @@ import {
   uncoveredDates,
   visibleDays,
   type BatchUnit,
+  type GridCell,
   type GridFilter,
   type GridOut,
   type GridView,
@@ -259,8 +283,9 @@ const NO_CALLER: GridOut['caller'] = { can_view_attendance: false, can_edit_plan
 const gridData = computed(() => state.grid.value)
 const caller = computed(() => gridData.value?.caller ?? NO_CALLER)
 const days = computed(() => (gridData.value ? visibleDays(gridData.value.days, gridData.value.cells, gridData.value.caller.can_edit_plan) : []))
+// 月模式的抽屜（疑似換班對象的姓名）取整月人員；週資料的人員一併保留（儲存結果的提示仍是週資料）
 const employeeNames = computed<Record<number, string>>(() =>
-  Object.fromEntries((gridData.value?.employees ?? []).map((e) => [e.employee_id, e.name])),
+  Object.fromEntries([...(gridData.value?.employees ?? []), ...(monthData.value?.employees ?? [])].map((e) => [e.employee_id, e.name])),
 )
 const shiftNames = computed<Record<number, string>>(() =>
   Object.fromEntries((gridData.value?.shift_types ?? []).map((s) => [s.shift_type_id, s.name])),
@@ -273,6 +298,15 @@ const issueCount = computed(() => {
   const uncovered = uncoveredDates(g.days)
   return g.cells.filter((c) => isIssue(c, g.today, uncovered)).length
 })
+const EMPTY_CELLS: Map<string, GridCell> = new Map()
+const monthLoading = computed(() => (isMonth.value ? props.month!.loading.value : false))
+const monthError = computed(() => (isMonth.value ? props.month!.loadError.value : ''))
+const monthCells = computed(() => (isMonth.value ? props.month!.cells.value : EMPTY_CELLS))
+/** 月格子欄：平日＋有人上班的週末（SPEC-027 §2「當月平日欄」） */
+const monthDays = computed(() => (monthData.value ? visibleDays(monthData.value.days, monthData.value.cells) : []))
+function reloadMonth(): void {
+  void props.month?.reload()
+}
 const coverage = computed(() => {
   const g = gridData.value
   if (!g) return []
@@ -284,16 +318,42 @@ const coverage = computed(() => {
 // ── 抽屜 ───────────────────────────────────────────────────────
 const drawerOpen = ref(false)
 const selected = ref<{ employeeId: number; date: string } | null>(null)
-const selectedCell = computed(() => (selected.value ? state.cells.value.get(cellKey(selected.value.employeeId, selected.value.date)) ?? null : null))
-const selectedEmployee = computed(() => gridData.value?.employees.find((e) => e.employee_id === selected.value?.employeeId) ?? null)
-const selectedDay = computed(() => gridData.value?.days.find((d) => d.date === selected.value?.date) ?? null)
-const selectedGroupLabel = computed(() => gridData.value?.groups.find((g) => g.key === selectedEmployee.value?.group_key)?.label ?? '')
-const sameDayCells = computed(() => (gridData.value?.cells ?? []).filter((c) => c.date === selected.value?.date))
+// 月模式點格用整月資料（D-06：唯讀總覽，抽屜內動作照舊）；週模式用該週資料
+const drawerGrid = computed(() => (isMonth.value ? monthData.value : gridData.value))
+const drawerCells = computed(() => (isMonth.value ? monthCells.value : state.cells.value))
+const selectedCell = computed(() => (selected.value ? drawerCells.value.get(cellKey(selected.value.employeeId, selected.value.date)) ?? null : null))
+const selectedEmployee = computed(() => drawerGrid.value?.employees.find((e) => e.employee_id === selected.value?.employeeId) ?? null)
+const selectedDay = computed(() => drawerGrid.value?.days.find((d) => d.date === selected.value?.date) ?? null)
+const selectedGroupLabel = computed(() => drawerGrid.value?.groups.find((g) => g.key === selectedEmployee.value?.group_key)?.label ?? '')
+const sameDayCells = computed(() => (drawerGrid.value?.cells ?? []).filter((c) => c.date === selected.value?.date))
 
 function openCell(employeeId: number, date: string): void {
   selected.value = { employeeId, date }
   drawerOpen.value = true
 }
+
+/**
+ * 月模式點的格子多半不在目前這週：抽屜「來源」的週排班層與「不另外調整」的說明要用該格那週的週排班，
+ * 所以點格時補抓那一週（沒有排班權限就不抓，抽屜會以格子計畫推算）。
+ */
+const monthWeekly = ref<number | null>(null)
+let monthWeeklySeq = 0
+async function openMonthCell(employeeId: number, date: string): Promise<void> {
+  openCell(employeeId, date)
+  monthWeekly.value = null
+  if (!monthData.value?.caller.can_edit_plan) return
+  const current = ++monthWeeklySeq
+  try {
+    const rows = (await getAssignments({ week_start: mondayOf(date) })).data
+    if (current === monthWeeklySeq) monthWeekly.value = rows.find((r) => r.employee_id === employeeId)?.shift_type_id ?? null
+  } catch {
+    // 讀不到週排班：抽屜退回以格子計畫推算週排班層
+  }
+}
+const drawerWeeklyShiftId = computed(() => {
+  if (!selected.value) return null
+  return isMonth.value ? monthWeekly.value : state.assignments.value[selected.value.employeeId]?.shift_type_id ?? null
+})
 
 let focusHandled = false
 watch(gridData, (g) => {

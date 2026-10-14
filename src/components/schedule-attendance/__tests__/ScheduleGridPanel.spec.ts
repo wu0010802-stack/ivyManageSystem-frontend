@@ -4,7 +4,8 @@ import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import ScheduleGridPanel from '../ScheduleGridPanel.vue'
 import { useMonthGrid } from '@/composables/useMonthGrid'
-import { cell, day, grid, W1, WEEK } from './gridFixtures'
+import { monthRange } from '@/utils/scheduleAttendanceGrid'
+import { cell, day, employee, grid, W1, WEEK } from './gridFixtures'
 
 const api = vi.hoisted(() => ({
   grid: vi.fn(),
@@ -51,7 +52,7 @@ const assignment = (employeeId: number, shiftTypeId: number) => ({
 const drawerRequestClose = vi.hoisted(() => vi.fn(async () => true))
 const DrawerStub = {
   name: 'PersonDayDrawer',
-  props: ['modelValue', 'cell'],
+  props: ['modelValue', 'cell', 'weeklyShiftId', 'day', 'employeeNames'],
   emits: ['records', 'changed', 'update:modelValue'],
   methods: { requestClose: () => drawerRequestClose() },
   template: '<div data-test="drawer-stub" />',
@@ -444,5 +445,85 @@ describe('ScheduleGridPanel', () => {
       expect(wrapper.find('[data-test="unsaved-2"]').exists()).toBe(true)
       expect(wrapper.find('[data-test="unsaved-1"]').exists()).toBe(false)
     })
+  })
+})
+
+describe('ScheduleGridPanel 月模式（SPEC-027 C 期）', () => {
+  const OCT = ['2026-10-01', '2026-10-02', '2026-10-05'].map((d) => day(d))
+  function monthState() {
+    const month = effectScope().run(() => useMonthGrid(ref('2026-10-05'), ref(0)))!
+    return month
+  }
+  beforeEach(() => {
+    api.grid.mockImplementation(async ({ start_date }: { start_date: string }) =>
+      start_date === monthRange('2026-10-05').start
+        ? { data: grid({ start_date, days: OCT, cells: [cell(1, '2026-10-01', { actual: { status: 'anomaly' } }), cell(2, '2026-10-02', { actual: {} })] }) }
+        : { data: grid() },
+    )
+    api.getAssignments.mockResolvedValue({ data: [] })
+  })
+
+  it('月模式畫月格子不畫週格子；點格用整月資料開抽屜並補抓該週週排班', async () => {
+    api.getAssignments.mockImplementation(async ({ week_start }: { week_start: string }) => ({
+      data: week_start === '2026-09-28' ? [assignment(1, 2)] : [],
+    }))
+    const wrapper = mountPanel({ date: '2026-10-05', view: 'month', month: monthState() })
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'MonthGrid' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'ShiftGrid' }).exists()).toBe(false)
+    await wrapper.find('[data-test="mcell-1-2026-10-01"]').trigger('click')
+    await flushPromises()
+    const drawer = wrapper.findComponent(DrawerStub)
+    expect(drawer.props('modelValue')).toBe(true)
+    expect(drawer.props('cell')).toMatchObject({ employee_id: 1, date: '2026-10-01' })
+    expect(drawer.props('day')).toMatchObject({ date: '2026-10-01' })
+    expect(api.getAssignments).toHaveBeenLastCalledWith({ week_start: '2026-09-28' })
+    expect(drawer.props('weeklyShiftId')).toBe(2)
+  })
+
+  it('沒有排班權限：點格不補抓週排班；抽屜姓名表含整月才有的人員', async () => {
+    const reader = { can_view_attendance: true, can_edit_plan: false, can_confirm: false, can_edit_attendance: true }
+    const employees = [employee(1, '林班導'), employee(2, '王副導'), employee(3, '月中到職')]
+    api.grid.mockImplementation(async ({ start_date }: { start_date: string }) => ({
+      data: start_date === '2026-10-01'
+        ? grid({ start_date, days: OCT, employees, caller: reader, cells: [cell(1, '2026-10-01', { actual: {} })] })
+        : grid({ caller: reader }),
+    }))
+    const wrapper = mountPanel({ date: '2026-10-05', view: 'month', month: monthState() })
+    await flushPromises()
+    await wrapper.find('[data-test="mcell-1-2026-10-01"]').trigger('click')
+    await flushPromises()
+    expect(api.getAssignments).not.toHaveBeenCalled()
+    const drawer = wrapper.findComponent(DrawerStub)
+    expect(drawer.props('weeklyShiftId')).toBeNull()
+    expect(drawer.props('employeeNames')).toMatchObject({ 3: '月中到職' })
+  })
+
+  it('抽屜處理完：通知頁面 changed（頁面遞增 revision，整月資料重抓；Review Focus #2）', async () => {
+    const wrapper = mountPanel({ date: '2026-10-05', view: 'month', month: monthState() })
+    await flushPromises()
+    await wrapper.find('[data-test="mcell-1-2026-10-01"]').trigger('click')
+    wrapper.findComponent(DrawerStub).vm.$emit('changed')
+    await flushPromises()
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+  })
+
+  it('週次欄頭：切回週模式並帶該週週一', async () => {
+    const wrapper = mountPanel({ date: '2026-10-05', view: 'month', month: monthState() })
+    await flushPromises()
+    await wrapper.find('[data-test="month-week-2026-09-28"]').trigger('click')
+    expect(wrapper.emitted('update:view')).toEqual([['week', '2026-09-28']])
+  })
+
+  it('整月載入失敗：給重新載入，不顯示空白格子', async () => {
+    api.grid.mockRejectedValue({ displayMessage: '伺服器錯誤' })
+    const month = monthState()
+    const wrapper = mountPanel({ date: '2026-10-05', view: 'month', month })
+    await flushPromises()
+    expect(wrapper.find('[data-test="month-load-error"]').exists()).toBe(true)
+    api.grid.mockResolvedValue({ data: grid({ start_date: '2026-10-01', days: OCT }) })
+    await wrapper.find('[data-test="month-load-error"] button').trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'MonthGrid' }).exists()).toBe(true)
   })
 })
