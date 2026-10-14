@@ -29,8 +29,24 @@
           v-html="renderedHtml"
         />
 
+        <!-- 勾選框要等內部捲動區讀到底才可用；先前沒有任何提示，家長以為壞了 -->
+        <div v-if="!scrolledToBottom" class="sign-detail-view__read-hint" data-testid="read-hint">
+          <p id="sign-read-hint">請先把上方文件捲動閱讀到最底，才能勾選「我已閱讀」。</p>
+          <button
+            type="button"
+            class="sign-detail-view__to-bottom"
+            data-testid="scroll-to-bottom"
+            @click="scrollContentToBottom"
+          >捲到文件底部</button>
+        </div>
+
         <label class="sign-detail-view__checkbox">
-          <input v-model="confirmedRead" type="checkbox" :disabled="!scrolledToBottom" />
+          <input
+            v-model="confirmedRead"
+            type="checkbox"
+            :disabled="!scrolledToBottom"
+            :aria-describedby="scrolledToBottom ? undefined : 'sign-read-hint'"
+          />
           我已閱讀並瞭解上述文件內容
         </label>
 
@@ -105,6 +121,14 @@ function onScroll() {
   if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) {
     scrolledToBottom.value = true
   }
+}
+
+/** 「捲到文件底部」：直接跳到捲動區底端（與家長自己捲到底等效）。 */
+function scrollContentToBottom() {
+  const el = contentRef.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+  onScroll()
 }
 
 function checkSignature() {
@@ -196,6 +220,25 @@ onMounted(load)
   border-radius: 8px;
   padding: 16px;
   line-height: 1.7;
+}
+
+.sign-detail-view__read-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-3, 12px);
+}
+.sign-detail-view__read-hint p { margin: 0; flex: 1 1 200px; }
+.sign-detail-view__to-bottom {
+  min-height: var(--touch-target-min, 44px);
+  padding: 0 var(--space-4, 16px);
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
 }
 
 .sign-detail-view__checkbox {

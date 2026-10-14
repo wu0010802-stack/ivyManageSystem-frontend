@@ -133,6 +133,29 @@ describe('SignDetailView', () => {
     clientHeightSpy.mockRestore()
   })
 
+  it('內容超出一屏時提示「請先閱讀至底」，按「捲到文件底部」後勾選框可用、提示消失', async () => {
+    let top = 0
+    const spies = [
+      vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(2000),
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400),
+      vi.spyOn(HTMLElement.prototype, 'scrollTop', 'get').mockImplementation(() => top),
+      vi.spyOn(HTMLElement.prototype, 'scrollTop', 'set').mockImplementation((v: number) => { top = v }),
+    ]
+    mockGet.mockResolvedValue({ data: pendingDoc })
+    const w = await mountAt('7')
+    await flushPromises()
+
+    expect(w.find('[data-testid="read-hint"]').text()).toContain('請先把上方文件捲動閱讀到最底')
+    const checkbox = () => w.find('input[type="checkbox"]').element as HTMLInputElement
+    expect(checkbox().disabled).toBe(true)
+    expect(checkbox().getAttribute('aria-describedby')).toBe('sign-read-hint')
+
+    await w.find('[data-testid="scroll-to-bottom"]').trigger('click')
+    expect(checkbox().disabled).toBe(false)
+    expect(w.find('[data-testid="read-hint"]').exists()).toBe(false)
+    spies.forEach((sp) => sp.mockRestore())
+  })
+
   it('確認簽署按鈕在未滿足三條件前 disabled', async () => {
     mockGet.mockResolvedValue({ data: pendingDoc })
     const w = await mountAt('7')
