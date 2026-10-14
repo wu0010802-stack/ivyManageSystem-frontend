@@ -120,6 +120,12 @@ describe('parent router IA (2026-05-22 restructure)', () => {
       expect(r?.meta?.tab).toBe('me')
       expect(r?.meta?.showBack).toBe(true)
     })
+
+    // 2026-10-14：頁底 position:fixed 的「找不到答案？聯絡老師」列會被 sticky
+    // 底部導覽列（z-index 10）整條蓋住，家長點不到。
+    it('/assistant 隱藏底部導覽列，頁底的聯絡老師按鈕才不會被蓋住', () => {
+      expect(findRoute('/assistant')?.meta?.hideTabBar).toBe(true)
+    })
   })
 
   describe('健康紀錄 title', () => {

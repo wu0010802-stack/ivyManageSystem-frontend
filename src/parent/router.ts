@@ -71,8 +71,9 @@ const routes: RouteRecordRaw[] = [
       path: '/assistant',
       name: 'parent-assistant',
       component: () => import('./views/AssistantView.vue'),
-      // tab: 'me' — 入口在「我的」偏好清單（2026-09-02 補），底部導覽維持在該分頁
-      meta: { title: '常見問題', tab: 'me', showBack: true },
+      // tab: 'me' — 入口在「我的」偏好清單（2026-09-02 補），返回鍵回該分頁。
+      // hideTabBar：頁底固定的「找不到答案？聯絡老師」列會被 sticky 導覽列蓋住（2026-10-14）
+      meta: { title: '常見問題', tab: 'me', showBack: true, hideTabBar: true },
     },
     {
       path: '/me',
