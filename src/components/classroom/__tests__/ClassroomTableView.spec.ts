@@ -130,6 +130,18 @@ describe('ClassroomTableView 分組與排序', () => {
 
     expect(rowTexts(wrapper)).toEqual(['甲', '乙', '丙', '無碼A', '無碼B'])
   })
+
+  it('同年級無代號班的班名 tie-break 用 code point，與後端名冊同序（M-6）', () => {
+    // 丙 U+4E19 < 乙 U+4E59 < 甲 U+7532。zh-Hant locale 排序會得到另一種順序
+    // （拼音 丙、甲、乙；筆畫 乙、丙／甲），班級頁與名冊 xlsx／PDF 的班序就對不上。
+    const wrapper = mountTable([
+      mk({ name: '甲班', class_code: null }),
+      mk({ name: '乙班', class_code: null }),
+      mk({ name: '丙班', class_code: null }),
+    ])
+
+    expect(rowTexts(wrapper)).toEqual(['丙班', '乙班', '甲班'])
+  })
 })
 
 describe('ClassroomTableView 組標頭與表尾彙總', () => {

@@ -75,7 +75,9 @@ const compareRows = (a: ClassroomRow, b: ClassroomRow): number => {
     const byCode = ca.localeCompare(cb, COLLATOR_LOCALE, { numeric: true })
     if (byCode !== 0) return byCode
   }
-  return a.name.localeCompare(b.name, COLLATOR_LOCALE, { numeric: true })
+  // 班名 tie-break 用 code point，對齊後端名冊排序（Python 字串比較）；
+  // 改回 locale 會讓班級頁與名冊 xlsx／PDF 的同年級無代號班班序對不上（M-6）。
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
 }
 
 const groups = computed<RowGroup[]>(() => {
