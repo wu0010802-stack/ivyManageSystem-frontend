@@ -13190,7 +13190,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Authorizations */
+        /**
+         * List Authorizations
+         * @description 無日期參數＝今日；否則起訖必須成對，且區間最多 92 天（`MAX_RANGE_DAYS`），違反回 400。
+         */
         get: operations["list_authorizations_api_pickup_authorizations_get"];
         put?: never;
         post?: never;
@@ -15809,6 +15812,30 @@ export interface paths {
          * @description 取得個人薪資預覽
          */
         get: operations["get_salary_preview_api_portal_salary_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/schedule/day-roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Day Roster
+         * @description 候選同事的當日職務名單（SPEC-026 §4.4 T4）。
+         *
+         *     人員範圍與換班候選同一群：今天與未來＝本租戶 active 班級的班導／副班導（即
+         *     /swap-candidates 的母體）；過去日期＝該日輪值名單（D5）。皆排除本人與離職者。班別判定走
+         *     單一 resolver（DailyShift → 週班表 → 員工工時 → 預設），只回姓名與時段、不回個資。
+         */
+        get: operations["get_day_roster_api_portal_schedule_day_roster_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -20217,7 +20244,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Remind Survey */
+        /**
+         * Remind Survey
+         * @description 催覆未回覆家長；body 帶 `classroom_ids` 時只催這些班（不帶＝全部未回覆）。
+         */
         post: operations["remind_survey_api_surveys__survey_id__remind_post"];
         delete?: never;
         options?: never;
@@ -43691,6 +43721,14 @@ export interface components {
             /** Remark */
             remark: string;
         };
+        /** RemindIn */
+        RemindIn: {
+            /**
+             * Classroom Ids
+             * @description 只催這些班級的未回覆家長；不帶＝全部未回覆
+             */
+            classroom_ids?: number[] | null;
+        };
         /** RemindOut */
         RemindOut: {
             /** Sent */
@@ -46136,6 +46174,32 @@ export interface components {
             shift_type_id?: number | null;
             /** Weekday */
             weekday: string;
+            /** Work End */
+            work_end?: string | null;
+            /** Work Start */
+            work_start?: string | null;
+        };
+        /**
+         * ScheduleDayRosterEntryOut
+         * @description GET /portal/schedule/day-roster list 單筆（候選同事當日有效班別）。
+         *
+         *     只含姓名與時段，不含電話等個資（SPEC-026 §4.4 T4）。work_start／work_end 為正規化後的
+         *     HH:MM（排休為 null）；source 為 resolver 判定來源。
+         */
+        ScheduleDayRosterEntryOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Name */
+            name: string;
+            /** Same Time As Me */
+            same_time_as_me: boolean;
+            /** Shift Name */
+            shift_name?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "daily" | "daily_off" | "weekly" | "employee" | "default";
             /** Work End */
             work_end?: string | null;
             /** Work Start */
@@ -49072,6 +49136,13 @@ export interface components {
             audience_type: string;
             /** Classroom Ids */
             classroom_ids: number[];
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Created By Name
+             * @description 建立者員工姓名；帳號未綁員工時為帳號名，帳號已刪除為 null
+             */
+            created_by_name?: string | null;
             /** Description */
             description?: string | null;
             /** Event Date */
@@ -49080,12 +49151,23 @@ export interface components {
             fee_note?: string | null;
             /** Id */
             id: number;
+            /**
+             * Last Reminded At
+             * @description 最後一次催覆推播時間（沒催過為 null）
+             */
+            last_reminded_at?: string | null;
             /** Location */
             location?: string | null;
             /** Published At */
             published_at?: string | null;
             /** Questions */
             questions: components["schemas"]["QuestionOut"][];
+            /**
+             * Reminded Parent Count
+             * @description 累計催覆推播人次（一位家長一次算一）
+             * @default 0
+             */
+            reminded_parent_count: number;
             /**
              * Reply Deadline
              * Format: date
@@ -49134,12 +49216,24 @@ export interface components {
         SurveyListItemOut: {
             /** Audience Type */
             audience_type: string;
+            /**
+             * Classroom Names
+             * @description 指定班級名稱（全園調查為空陣列）
+             */
+            classroom_names?: string[];
             /** Denominator */
             denominator: number;
             /** Event Date */
             event_date?: string | null;
             /** Id */
             id: number;
+            /** Last Reminded At */
+            last_reminded_at?: string | null;
+            /**
+             * Reminded Parent Count
+             * @default 0
+             */
+            reminded_parent_count: number;
             /** Replied Count */
             replied_count: number;
             /**
@@ -77244,6 +77338,37 @@ export interface operations {
             };
         };
     };
+    get_day_roster_api_portal_schedule_day_roster_get: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleDayRosterEntryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     portal_search_api_portal_search_get: {
         parameters: {
             query: {
@@ -85316,7 +85441,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RemindIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
