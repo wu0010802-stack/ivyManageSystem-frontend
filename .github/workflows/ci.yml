@@ -232,19 +232,27 @@ jobs:
           # Read 的 fine-grained PAT，存成本 repo 的 BACKEND_REPO_TOKEN secret。
           token: ${{ secrets.BACKEND_REPO_TOKEN }}
 
+      # 後端版本選擇順序：同名分支 → PR 的 base 分支 → 後端 main。
+      # 前端 feature 分支打進 staging 時，後端通常沒有同名分支；若直接退回後端 main，
+      # 會拿 main 的 API 去比對依後端 staging 產生的 schema.d.ts，必定漂移
+      # （2026-10 feat/mobile-ux-phase3、feat/parent-uiux-optimization 皆因此紅燈）。
+      # push 事件沒有 base_ref，行為與改動前相同。
       - name: Prefer companion backend ref when it exists
         working-directory: ivy-backend
         env:
           CANDIDATE_REF: ${{ github.head_ref || github.ref_name }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          if [ -n "${CANDIDATE_REF:-}" ] && \
-             git fetch --no-tags origin "refs/heads/${CANDIDATE_REF}:refs/remotes/origin/companion"; then
-            git checkout --detach refs/remotes/origin/companion
-            echo "Using companion backend ref: ${CANDIDATE_REF}"
-          else
-            echo "Companion backend ref unavailable; using backend main"
-          fi
+          for ref in "${CANDIDATE_REF:-}" "${BASE_REF:-}"; do
+            if [ -n "$ref" ] && \
+               git fetch --no-tags origin "refs/heads/${ref}:refs/remotes/origin/companion"; then
+              git checkout --detach refs/remotes/origin/companion
+              echo "Using companion backend ref: ${ref}"
+              exit 0
+            fi
+          done
+          echo "Companion backend ref unavailable; using backend main"
 
       - name: Set up Python
         uses: actions/setup-python@v6
