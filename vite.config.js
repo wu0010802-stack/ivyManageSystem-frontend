@@ -500,7 +500,7 @@ export default defineConfig({
                     {
                         urlPattern: ({ url, request }) =>
                             url.origin === self.location.origin &&
-                            /^\/(LOGO\.png|logo\.svg|favicon\.ico|apple-touch-icon-180x180\.png|pwa-|maskable-icon-|parent-(pwa-|maskable-)|images\/(activity-poster\.jpg|login-logo\.png|ivy-kids-loading\.png))/.test(url.pathname) &&
+                            /^\/(LOGO\.png|logo\.svg|favicon\.ico|apple-touch-icon-180x180\.png|pwa-|maskable-icon-|parent-(pwa-|maskable-)|images\/(activity-poster\.jpg|login-logo(?:-512)?\.png|ivy-kids-loading\.png))/.test(url.pathname) &&
                             ['image', ''].includes(request.destination),
                         handler: 'StaleWhileRevalidate',
                         options: {
