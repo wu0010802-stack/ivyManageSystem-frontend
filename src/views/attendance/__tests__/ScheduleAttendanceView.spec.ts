@@ -591,6 +591,77 @@ describe('班表核對與明細互通', () => {
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('date')).toBe('2026-09-01')
     wrapper.unmount()
   })
+
+  // 月模式點的格子可在任一週：抽屜的「看他整月」與「匯入這天打卡」要把錨點移到別週時，
+  // 一樣要先問面板未儲存的週排班（Review Focus #4），否則錨點跨週會讓格子無聲捨棄緩衝。
+  describe('抽屜動作把錨點移到別週（月模式）', () => {
+    const OTHER_WEEK_DATE = '2026-09-29' // 錨點 10/07 那週的週一是 10/05，這天在前一週
+    // 不放行的 mockResolvedValueOnce 若沒被消費，不可漏到後面的案例
+    afterEach(() => { panelConfirmWeekChange.mockReset(); panelConfirmWeekChange.mockImplementation(async () => true) })
+
+    it('看他整月：日期在別週時先問面板；放行才切頁籤、改錨點、寫網址', async () => {
+      const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+      await flushPromises()
+      panelConfirmWeekChange.mockClear()
+      routerReplace.mockClear()
+      wrapper.findComponent(ScheduleGridPanelStub).vm.$emit('records', 2, OTHER_WEEK_DATE)
+      await flushPromises()
+      expect(panelConfirmWeekChange).toHaveBeenCalledWith(OTHER_WEEK_DATE)
+      expect(wrapper.find('[data-test="tab-records"]').attributes('aria-selected')).toBe('true')
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'records', date: OTHER_WEEK_DATE } })
+      expect(wrapper.findComponent(ScheduleGridPanelStub).props('date')).toBe(OTHER_WEEK_DATE)
+      wrapper.unmount()
+    })
+
+    it('看他整月：面板不放行（使用者選留在這週）就不切頁籤、不改錨點、不寫網址、不聚焦', async () => {
+      const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+      await flushPromises()
+      routerReplace.mockClear()
+      panelConfirmWeekChange.mockResolvedValueOnce(false)
+      wrapper.findComponent(ScheduleGridPanelStub).vm.$emit('records', 2, OTHER_WEEK_DATE)
+      await flushPromises()
+      expect(panelConfirmWeekChange).toHaveBeenLastCalledWith(OTHER_WEEK_DATE)
+      expect(wrapper.find('[data-test="tab-grid"]').attributes('aria-selected')).toBe('true')
+      expect(wrapper.find('[data-test="tab-records"]').attributes('aria-selected')).toBe('false')
+      expect(wrapper.findComponent(ScheduleGridPanelStub).props('date')).toBe('2026-10-07')
+      expect(routerReplace).not.toHaveBeenCalled()
+      expect(wrapper.findComponent(DetailColumnStub).props('focusDate')).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('匯入這天打卡：日期在別週時先問面板；放行才開匯入、改錨點並把 date 寫回網址', async () => {
+      const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+      await flushPromises()
+      panelConfirmWeekChange.mockClear()
+      routerReplace.mockClear()
+      wrapper.findComponent(ScheduleGridPanelStub).vm.$emit('import', { employee_id: 2, employee_name: '測試員工', date: OTHER_WEEK_DATE })
+      await flushPromises()
+      expect(panelConfirmWeekChange).toHaveBeenCalledWith(OTHER_WEEK_DATE)
+      const dialog = wrapper.findComponent(ImportPreviewDialogStub)
+      expect(dialog.props('modelValue')).toBe(true)
+      expect(dialog.props('month')).toBe(9)
+      expect(wrapper.findComponent(ScheduleGridPanelStub).props('date')).toBe(OTHER_WEEK_DATE)
+      // 錨點與網址一致（原本只改錨點不寫網址）
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: { date: OTHER_WEEK_DATE } })
+      wrapper.unmount()
+    })
+
+    it('匯入這天打卡：面板不放行就不開匯入、不改錨點、不寫網址', async () => {
+      const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+      await flushPromises()
+      routerReplace.mockClear()
+      panelConfirmWeekChange.mockResolvedValueOnce(false)
+      wrapper.findComponent(ScheduleGridPanelStub).vm.$emit('import', { employee_id: 2, employee_name: '測試員工', date: OTHER_WEEK_DATE })
+      await flushPromises()
+      expect(panelConfirmWeekChange).toHaveBeenLastCalledWith(OTHER_WEEK_DATE)
+      const dialog = wrapper.findComponent(ImportPreviewDialogStub)
+      expect(dialog.props('modelValue')).toBe(false)
+      expect(dialog.props('sourceContext')).toBeNull()
+      expect(wrapper.findComponent(ScheduleGridPanelStub).props('date')).toBe('2026-10-07')
+      expect(routerReplace).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+  })
 })
 
 describe('頁籤與權限（SPEC-027 §8）', () => {

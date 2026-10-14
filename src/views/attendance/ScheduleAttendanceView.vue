@@ -519,8 +519,12 @@ function onNavigate(delta: number): void {
   selectedAnomalyIndex.value = Math.min(Math.max(0, selectedAnomalyIndex.value + delta), max)
 }
 
-/** 格子抽屜「看他整月」：切到出勤明細並聚焦該人該日（原打卡核對「查看出勤明細」）。 */
-function openRecords(employeeId: number, date: string): void {
+/**
+ * 格子抽屜「看他整月」：切到出勤明細並聚焦該人該日（原打卡核對「查看出勤明細」）。
+ * 月模式點的格子可在任一週，錨點跨週會讓格子捨棄未儲存的週排班，所以先問面板；不放行就整個不動。
+ */
+async function openRecords(employeeId: number, date: string): Promise<void> {
+  if (gridPanel.value && !(await gridPanel.value.confirmWeekChange(date))) return
   anchorDate.value = date
   activeTab.value = 'records'
   syncQuery({ tab: 'records', date })
@@ -530,9 +534,12 @@ function openRecords(employeeId: number, date: string): void {
   if (!isDesktop.value) mobileTab.value = 'detail'
 }
 
-function onGridImport(row: { employee_id: number; employee_name: string; date: string }): void {
+/** 抽屜「匯入這天打卡」：同上先問未儲存的週排班；錨點與網址同步移到該日（與 setAnchorDate 一致）。 */
+async function onGridImport(row: { employee_id: number; employee_name: string; date: string }): Promise<void> {
+  if (gridPanel.value && !(await gridPanel.value.confirmWeekChange(row.date))) return
   importContext.value = { employee_id: row.employee_id, employee_name: row.employee_name, date: row.date }
   anchorDate.value = row.date
+  syncQuery({ date: row.date })
   importOpen.value = true
 }
 
