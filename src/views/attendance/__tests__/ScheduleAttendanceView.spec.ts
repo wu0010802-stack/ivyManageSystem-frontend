@@ -50,6 +50,10 @@ vi.mock('element-plus', () => ({
   ElTabPane: { template: '<div class="el-tab-pane"><slot /></div>', props: ['label', 'name'] },
 }))
 
+// 頁面建立的整月格子（useMonthGrid）走這支 API；用呼叫次數斷言「資料異動後整月資料重抓」
+const monthApi = vi.hoisted(() => ({ grid: vi.fn(async () => ({ data: null })) }))
+vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: monthApi.grid }))
+
 // ── stub component factories ────────────────────────────────────────────────────
 const RosterColumnStub = {
   name: 'RosterColumn',
@@ -102,7 +106,7 @@ const ScheduleGridPanelStub = {
   template: '<div class="grid-panel-stub" />',
 }
 const rotationMounts = { count: 0 }
-const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['date', 'revision', 'mobile'], emits: ['show-issues', 'changed', 'summary'], template: '<div class="month-progress-stub" />' }
+const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary'], template: '<div class="month-progress-stub" />' }
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
   MonthProgressBar: MonthProgressBarStub,
@@ -539,10 +543,11 @@ describe('班表核對與明細互通', () => {
   it('本月進度關閉老師確認後，格子與本月進度重算', async () => {
     const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-06' }, global: { stubs: STUBS } })
     await flushPromises()
+    const monthCallsBefore = monthApi.grid.mock.calls.length
     wrapper.findComponent(MonthProgressBarStub).vm.$emit('changed')
     await flushPromises()
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(1)
-    expect(wrapper.findComponent(MonthProgressBarStub).props('revision')).toBe(1)
+    expect(monthApi.grid.mock.calls.length).toBe(monthCallsBefore + 1)
     wrapper.unmount()
   })
 
@@ -550,11 +555,12 @@ describe('班表核對與明細互通', () => {
     const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-06' }, global: { stubs: STUBS } })
     await flushPromises()
     expect(wrapper.findComponent(DetailColumnStub).props('revision')).toBe(0)
+    const monthCallsBefore = monthApi.grid.mock.calls.length
     wrapper.findComponent(ScheduleGridPanelStub).vm.$emit('changed')
     await flushPromises()
     expect(wrapper.findComponent(DetailColumnStub).props('revision')).toBe(1)
     // 格子自己的編輯：本月進度重算，格子不重複載入（格子已自行 reload）
-    expect(wrapper.findComponent(MonthProgressBarStub).props('revision')).toBe(1)
+    expect(monthApi.grid.mock.calls.length).toBe(monthCallsBefore + 1)
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(0)
     wrapper.unmount()
   })
@@ -572,10 +578,11 @@ describe('班表核對與明細互通', () => {
     expect(detail.props('year')).toBe(2026)
     expect(detail.props('month')).toBe(8)
     expect(detail.props('focusDate')).toBe('2026-08-31')
+    const monthCallsBefore = monthApi.grid.mock.calls.length
     await wrapper.findComponent(DetailColumnStub).vm.$emit('resolved')
     await flushPromises()
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(1)
-    expect(wrapper.findComponent(MonthProgressBarStub).props('revision')).toBe(1)
+    expect(monthApi.grid.mock.calls.length).toBe(monthCallsBefore + 1)
     await wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:month', 9)
     await flushPromises()
     expect(wrapper.findComponent(DetailColumnStub).props('focusDate')).toBeNull()

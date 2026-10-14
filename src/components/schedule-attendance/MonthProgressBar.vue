@@ -21,6 +21,7 @@
       <li v-if="canConfirmRounds" class="month-progress__step">
         <span class="month-progress__index">④</span>
         <button type="button" class="month-progress__link" data-test="progress-rounds" @click="roundsOpen = true">老師確認</button>
+        <span v-if="roundStatus" class="month-progress__status" data-test="progress-rounds-status">{{ roundStatus }}</span>
       </li>
       <li class="month-progress__step">
         <span class="month-progress__index">⑤</span>
@@ -30,7 +31,7 @@
     </ol>
     <p v-if="loadError" class="month-progress__error" role="alert" data-test="progress-error">
       {{ loadError }}
-      <button type="button" class="month-progress__link" data-test="progress-retry" @click="load">重試</button>
+      <button type="button" class="month-progress__link" data-test="progress-retry" @click="month.reload()">重試</button>
     </p>
     <el-drawer v-if="canConfirmRounds" v-model="roundsOpen" title="月底出勤確認（老師確認）" :size="mobile ? '100%' : '640px'" append-to-body @closed="emit('changed')">
       <ConfirmationRoundBar v-if="roundsOpen" :start="range.start" :end="range.end" />
@@ -40,18 +41,17 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
-import { getScheduleAttendanceGrid } from '@/api/scheduleAttendance'
+import { getConfirmationRound, listConfirmationRounds } from '@/api/attendanceConfirmation'
+import type { MonthGridState } from '@/composables/useMonthGrid'
+import { pickDisplayRound, roundStatusText } from '@/utils/attendanceConfirm'
 import { hasPermission } from '@/utils/auth'
-import { apiError } from '@/utils/error'
-import { importProgress, isIssue, monthRange, uncoveredDates, type GridOut } from '@/utils/scheduleAttendanceGrid'
+import { importProgress, isIssue, uncoveredDates } from '@/utils/scheduleAttendanceGrid'
 
 const ConfirmationRoundBar = defineAsyncComponent(() => import('@/components/attendance/ConfirmationRoundBar.vue'))
 
 const props = defineProps<{
-  /** 月份內任一天（YYYY-MM-DD） */
-  date: string
-  /** 資料異動計數；變動即重新統計 */
-  revision: number
+  /** 頁面建立的整月格子資料（與月格子共用同一份，D-06） */
+  month: MonthGridState
   mobile?: boolean
 }>()
 export interface MonthSummary {
@@ -64,44 +64,37 @@ export interface MonthSummary {
 }
 const emit = defineEmits<{ 'show-issues': []; changed: []; summary: [value: MonthSummary] }>()
 
-const range = computed(() => monthRange(props.date))
+const range = computed(() => props.month.range.value)
+const data = computed(() => props.month.data.value)
+const loading = computed(() => props.month.loading.value)
+const loadError = computed(() => props.month.loadError.value)
 // 年份已在頁首月份選單上，這裡只寫月份
-const monthLabel = computed(() => `${Number(props.date.slice(5, 7))} 月`)
+const monthLabel = computed(() => `${Number(range.value.start.slice(5, 7))} 月`)
 const canViewAttendance = hasPermission('ATTENDANCE_READ')
 // 薪資結算頁需要 SALARY_READ，沒有就只顯示步驟名稱（連過去會被路由守衛擋下）
 const canViewSalary = hasPermission('SALARY_READ')
 // 確認輪次端點掛在 SCHEDULE 路由下，讀取還要 ATTENDANCE_READ（同原打卡核對頁籤條件）
 const canConfirmRounds = hasPermission('SCHEDULE') && canViewAttendance
 
-const data = ref<GridOut | null>(null)
-/** data 是哪個月的（請求當下的月初）；換月載入中不能把舊月數字標成新月 */
-const loadedMonth = ref('')
-const loading = ref(false)
-const loadError = ref('')
 const roundsOpen = ref(false)
-let seq = 0
 
-async function load(): Promise<void> {
-  const current = ++seq
-  loading.value = true
-  loadError.value = ''
+// ④：最新輪次狀態（D-07）。狀態只是輔助，讀不到就不顯示，按鈕照常可開抽屜。
+// 跟著整月資料重讀：換月、明細處理、關閉確認抽屜（頁面遞增 revision）後都會更新。
+const roundStatus = ref('')
+let roundSeq = 0
+async function loadRoundStatus(): Promise<void> {
+  if (!canConfirmRounds) return
+  const current = ++roundSeq
+  const { start, end } = range.value
   try {
-    const start = range.value.start
-    const res = await getScheduleAttendanceGrid({ start_date: start, end_date: range.value.end })
-    if (current === seq) {
-      loadedMonth.value = start
-      data.value = res.data
-    }
-  } catch (err) {
-    if (current === seq) {
-      data.value = null
-      loadError.value = apiError(err, '載入本月進度失敗')
-    }
-  } finally {
-    if (current === seq) loading.value = false
+    const round = pickDisplayRound((await listConfirmationRounds({ start_date: start, end_date: end })).data)
+    const employees = round?.status === 'open' ? (await getConfirmationRound(round.id)).data.employees : null
+    if (current === roundSeq) roundStatus.value = roundStatusText(round, employees)
+  } catch {
+    if (current === roundSeq) roundStatus.value = ''
   }
 }
-watch([() => range.value.start, () => props.revision], load, { immediate: true })
+watch(data, (g) => { if (g) void loadRoundStatus() }, { immediate: true })
 
 /** ①：在職、應出勤的工作日中，班別只靠員工預設或系統預設（沒有任何排班資料）的人日數 */
 const unscheduled = computed(() => {
@@ -135,7 +128,7 @@ const issues = computed(() => {
 
 // 匯出月報前的提醒用同一份數字；載入失敗不送（避免拿 0 當「都處理完了」）
 watch(data, (g) => {
-  if (g) emit('summary', { month: loadedMonth.value, issues: issues.value, missingImportDays: imports.value.missingWorkdays.length })
+  if (g) emit('summary', { month: range.value.start, issues: issues.value, missingImportDays: imports.value.missingWorkdays.length })
 })
 </script>
 
@@ -145,6 +138,7 @@ watch(data, (g) => {
 .month-progress__steps { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
 .month-progress__step { display: flex; align-items: center; gap: var(--space-1); }
 .month-progress__index { color: var(--el-text-color-secondary); }
+.month-progress__status { color: var(--el-text-color-secondary); }
 .month-progress__warn { color: var(--color-warning-darker); }
 .month-progress__link { min-height: var(--touch-target-min); padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-1); }
 .month-progress__error { margin: 0; color: var(--el-color-danger); font-size: var(--text-sm); }

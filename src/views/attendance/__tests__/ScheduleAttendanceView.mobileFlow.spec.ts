@@ -29,6 +29,10 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 
+// 頁面建立的整月格子（useMonthGrid）走這支 API；用呼叫次數斷言「資料異動後整月資料重抓」
+const monthApi = vi.hoisted(() => ({ grid: vi.fn(async () => ({ data: null })) }))
+vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: monthApi.grid }))
+
 import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
 
 // el-tabs stub：保留 v-model 契約（modelValue + update:modelValue），
@@ -71,7 +75,7 @@ const ScheduleGridPanelStub = {
   methods: { confirmWeekChange: async () => true },
   template: '<div class="grid-panel-stub" />',
 }
-const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['date', 'revision', 'mobile'], emits: ['show-issues'], template: '<div class="month-progress-stub" />' }
+const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues'], template: '<div class="month-progress-stub" />' }
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
   MonthProgressBar: MonthProgressBarStub,
@@ -117,10 +121,11 @@ describe('ScheduleAttendanceView 手機三段流程', () => {
     const wrapper = mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
     await flushPromises()
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(0)
+    const monthCallsBefore = monthApi.grid.mock.calls.length
     await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('resolved')
     await flushPromises()
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(1)
-    expect(wrapper.findComponent(MonthProgressBarStub).props('revision')).toBe(1)
+    expect(monthApi.grid.mock.calls.length).toBe(monthCallsBefore + 1)
     wrapper.unmount()
   })
 

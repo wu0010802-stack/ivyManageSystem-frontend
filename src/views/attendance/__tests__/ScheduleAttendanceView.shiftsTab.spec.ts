@@ -45,6 +45,10 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+// 頁面建立的整月格子（useMonthGrid）走這支 API；用呼叫次數斷言「資料異動後整月資料重抓」
+const monthApi = vi.hoisted(() => ({ grid: vi.fn(async () => ({ data: null })) }))
+vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: monthApi.grid }))
+
 import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
 
 const ScheduleGridPanelStub = {
@@ -54,7 +58,7 @@ const ScheduleGridPanelStub = {
 }
 const MonthProgressBarStub = {
   name: 'MonthProgressBar',
-  props: ['date', 'revision', 'mobile'],
+  props: ['month', 'mobile'],
   template: '<div class="month-progress-stub" />',
 }
 const ShiftTypesPanelStub = {
@@ -130,10 +134,11 @@ describe('排班與出勤：班別設定頁籤', () => {
     await flushPromises()
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(0)
 
+    const monthCallsBefore = monthApi.grid.mock.calls.length
     wrapper.findComponent(ShiftTypesPanelStub).vm.$emit('changed')
     await flushPromises()
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(1)
-    expect(wrapper.findComponent(MonthProgressBarStub).props('revision')).toBe(1)
+    expect(monthApi.grid.mock.calls.length).toBe(monthCallsBefore + 1)
     wrapper.unmount()
   })
 })

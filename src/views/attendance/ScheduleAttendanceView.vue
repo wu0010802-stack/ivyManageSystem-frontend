@@ -20,7 +20,7 @@
       </template>
     </PageHeader>
 
-    <MonthProgressBar v-show="activeTab === 'grid' || activeTab === 'records'" :date="anchorDate" :revision="dataRevision" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" />
+    <MonthProgressBar v-show="activeTab === 'grid' || activeTab === 'records'" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" />
 
     <div class="workspace-mode" role="tablist" aria-label="排班與出勤檢視">
       <button
@@ -179,6 +179,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useAttendanceWorkspace } from '@/composables/useAttendanceWorkspace'
+import { useMonthGrid } from '@/composables/useMonthGrid'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -302,6 +303,8 @@ function setMonth(year: number, month: number): void {
 const dataRevision = ref(0)
 // 格子以外的異動（明細處理、匯入、輪值表套用）：格子據此重新載入；格子自己的編輯不經這裡，避免重複載入
 const externalRevision = ref(0)
+// 本月整月格子：進度條與月格子共用同一份（D-06）；換月或資料異動（dataRevision）時重抓
+const monthGrid = useMonthGrid(anchorDate, dataRevision)
 
 // ── workspace composable ───────────────────────────────────────────────────
 const ws = useAttendanceWorkspace(toRef(query, 'year'), toRef(query, 'month'))

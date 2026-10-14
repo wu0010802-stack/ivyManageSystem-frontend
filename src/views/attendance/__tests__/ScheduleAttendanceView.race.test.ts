@@ -57,6 +57,10 @@ vi.mock('element-plus', () => ({
   ElTabPane: { template: '<div class="el-tab-pane"><slot /></div>', props: ['label', 'name'] },
 }))
 
+// 頁面建立的整月格子（useMonthGrid）走這支 API；用呼叫次數斷言「資料異動後整月資料重抓」
+const monthApi = vi.hoisted(() => ({ grid: vi.fn(async () => ({ data: null })) }))
+vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: monthApi.grid }))
+
 const RosterColumnStub = {
   name: 'RosterColumn',
   props: ['roster', 'selectedEmployeeId', 'loading'],
