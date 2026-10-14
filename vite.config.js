@@ -108,6 +108,12 @@ function manualChunks(id) {
         id.includes('/src/utils/errorCodeRegistry.ts') ||
         id.includes('/src/composables/useOnlineStatus.ts') ||
         id.includes('/src/composables/useBodyLock.ts') ||
+        // useAccessibleDialog（public 對話框與家長端首屏 ConsentModal 共用）與
+        // calendarEventTypes（admin 行事曆與家長端簽收頁的類型中文對照）皆 EP-free。
+        // 2026-10 家長端 UI/UX 改版讓 ConsentModal 改用 useAccessibleDialog 後，未 pin 時
+        // Rollup 把它吸進 parent-app → index / public 靜態可達 parent-app（第七次同型回歸）。
+        id.includes('/src/composables/useAccessibleDialog.ts') ||
+        id.includes('/src/constants/calendarEventTypes.ts') ||
         id.includes('/src/components/brand/') ||
         // ErrorBoundary.vue（admin App.vue + parent App.vue 共用）與 chunkSelfHeal.ts
         // （admin / public / parent 三端 main.ts 各呼叫一次）皆三端共用且皆 EP-free。
