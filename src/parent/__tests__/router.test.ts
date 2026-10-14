@@ -52,8 +52,14 @@ describe('parent router IA (2026-05-22 restructure)', () => {
     it.each([
       '/home',
       '/calendar',
+      '/announcements',
     ])('%s 應有 tab=home', (path) => {
       expect(tabOf(path)).toBe('home')
+    })
+
+    // 2026-10-14：公告是從首頁鈴鐺／公告卡進入的深層頁，必須有返回鍵
+    it('/announcements 有 showBack', () => {
+      expect(findRoute('/announcements')?.meta?.showBack).toBe(true)
     })
   })
 
@@ -78,7 +84,6 @@ describe('parent router IA (2026-05-22 restructure)', () => {
     it.each([
       '/contact-book',
       '/contact-book/:entryId',
-      '/announcements',
     ])('%s 應有 tab=contact-book', (path) => {
       expect(tabOf(path)).toBe('contact-book')
     })

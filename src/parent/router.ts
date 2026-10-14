@@ -45,10 +45,15 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '娃娃車', tab: 'home', showBack: true },
     },
     {
+      // 2026-10-14：tab 由 contact-book 改 home、補 showBack。聯絡簿頁的公告分頁按鈕
+      // 已於 2026-09-08 移除，站內入口全在首頁（鈴鐺、公告卡）、首頁的行事曆與待辦
+      // 「所有服務」——歸聯絡簿會讓家長從首頁點進來卻亮著聯絡簿分頁、又沒有返回鍵，
+      // 點聯絡簿分頁也回不到公告。舊推播的 /contact-book?tab=announcements 仍由
+      // ContactBookView 承接，不受影響。
       path: '/announcements',
       name: 'parent-announcements',
       component: () => import('./views/AnnouncementsView.vue'),
-      meta: { title: '公告', tab: 'contact-book' },
+      meta: { title: '公告', tab: 'home', showBack: true },
     },
     {
       path: '/leaves',

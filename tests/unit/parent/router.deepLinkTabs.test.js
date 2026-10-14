@@ -10,7 +10,9 @@ async function buildRouter() {
 // IA v3（2026-05-22）：4 tab = home / messages / admin / me（family 砍掉）
 // P2（2026-08-14）：擴充為 5 tab，新增 child——聯絡簿改歸屬孩子 hub。
 // 2026-08-28：訊息功能下架，第三個 tab 換成聯絡簿；公告併入聯絡簿頁的第二分頁，
-// 故 /contact-book 與 /announcements 一律歸 tab='contact-book'。
+// 故 /contact-book 歸 tab='contact-book'。
+// 2026-10-14：/announcements 改歸 home——聯絡簿頁已無公告分頁按鈕，站內入口全在
+// 首頁（鈴鐺、公告卡）與待辦「所有服務」，歸聯絡簿會亮錯分頁。
 // 對映規則見 docs/superpowers/specs/2026-08-14-parent-liff-m3-expressive-redesign-design.md §7
 describe('parent router IA v3+P2 — deep-link tab association', () => {
   it.each([
@@ -18,7 +20,7 @@ describe('parent router IA v3+P2 — deep-link tab association', () => {
     ['/contact-book', 'contact-book'],
     ['/contact-book/1', 'contact-book'],
     ['/calendar', 'home'],
-    ['/announcements', 'contact-book'],
+    ['/announcements', 'home'],
     ['/admin', 'admin'],
     ['/leaves', 'admin'],
     ['/fees', 'admin'],
