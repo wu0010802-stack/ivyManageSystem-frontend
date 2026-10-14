@@ -89,7 +89,7 @@ function onFileChange(e: Event): void {
 
 <style scoped>
 .detail-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
   margin: 0 0 6px;
 }
@@ -110,7 +110,7 @@ function onFileChange(e: Event): void {
 }
 .att-link {
   flex: 1;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-info-text);
   text-decoration: underline;
   word-break: break-all;
@@ -124,11 +124,11 @@ function onFileChange(e: Event): void {
   color: var(--m3-error, var(--color-danger));
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 .att-empty {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
   padding: 8px 0;
 }
@@ -141,7 +141,7 @@ function onFileChange(e: Event): void {
   border: 1px dashed var(--m3-outline-variant, var(--pt-text-disabled));
   border-radius: 8px;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 .upload-btn input {

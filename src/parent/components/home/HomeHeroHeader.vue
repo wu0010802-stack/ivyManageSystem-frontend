@@ -91,13 +91,13 @@ const dateMeta = computed(() => {
 .hh-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .hh-meta {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   opacity: 0.72;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
-.hh-greet { margin: 0; font-size: 24px; font-weight: 900; line-height: 1.15; }
+.hh-greet { margin: 0; font-size: 1.5rem; font-weight: 900; line-height: 1.15; }
 .hh-art { width: 52px; height: auto; flex-shrink: 0; }
 
 .hh-bell {

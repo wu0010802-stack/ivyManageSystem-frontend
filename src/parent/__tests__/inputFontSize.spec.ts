@@ -22,7 +22,18 @@ import { describe, expect, it } from 'vitest'
 const ROOT = process.cwd()
 const PARENT_DIR = join(ROOT, 'src/parent')
 const MIN_PX = 16
-const ROOT_FONT_PX = 16
+/**
+ * 家長端根字級 = 16px × --ivy-font-scale（字級設定，見 globals.css 的 html 規則）。
+ * rem 要用「最小」倍率換算：家長把字級調小時 1rem 會低於 16px，照樣觸發 iOS 聚焦放大，
+ * 所以輸入欄位要寫 max(16px, Nrem)。
+ */
+const ROOT_FONT_PX = 16 * minFontScale()
+
+function minFontScale(): number {
+  const css = readFileSync(join(ROOT, 'src/assets/a11y.css'), 'utf-8')
+  const scales = [...css.matchAll(/html\.ivy-size-[\w-]+\s*\{\s*--ivy-font-scale:\s*([\d.]+)/g)].map((m) => Number(m[1]))
+  return scales.length ? Math.min(1, ...scales) : 1
+}
 const TOKEN_FILES = [
   'src/assets/design-tokens.css',
   'src/parent/styles/m3-tokens.css',
@@ -68,8 +79,17 @@ function toPx(raw: string, depth = 0): number | null {
   const varMatch = /^var\(\s*(--[\w-]+)\s*(?:,\s*(.+))?\)$/.exec(value)
   if (varMatch) {
     const token = TOKENS.get(varMatch[1])
-    if (token !== undefined) return toPx(token, depth + 1)
+    if (token !== undefined) {
+      const resolved = toPx(token, depth + 1)
+      // --text-* 在 a11y.css 會乘上 --ivy-font-scale，調小字級時一樣會低於 16px
+      return resolved !== null && varMatch[1].startsWith('--text-') ? resolved * minFontScale() : resolved
+    }
     return varMatch[2] ? toPx(varMatch[2], depth + 1) : null
+  }
+  const maxMatch = /^max\((.+)\)$/.exec(value)
+  if (maxMatch) {
+    const parts = maxMatch[1].split(',').map((part) => toPx(part, depth + 1))
+    return parts.some((n) => n !== null) ? Math.max(...parts.map((n) => n ?? 0)) : null
   }
   const px = /^(\d+(?:\.\d+)?)px$/.exec(value)
   if (px) return Number(px[1])
@@ -153,9 +173,14 @@ function collectViolations(): Violation[] {
 
 describe('家長端輸入欄位字級 ≥ 16px（防 iOS / LIFF 聚焦放大）', () => {
   it('token 解析可用（--text-lg = 16px、--text-base = 14px）', () => {
-    expect(toPx('var(--text-lg)')).toBe(16)
-    expect(toPx('var(--text-base, 99px)')).toBe(14)
-    expect(toPx('1rem')).toBe(16)
+    // rem 與 --text-* 都會跟字級設定縮放，以最小倍率（sm）換算
+    const minScale = minFontScale()
+    expect(minScale).toBeLessThan(1)
+    expect(toPx('var(--text-lg)')).toBeCloseTo(16 * minScale)
+    expect(toPx('var(--text-base, 99px)')).toBeCloseTo(14 * minScale)
+    expect(toPx('1rem')).toBeCloseTo(16 * minScale)
+    expect(toPx('max(16px, 1rem)')).toBe(16)
+    expect(toPx('max(16px, var(--text-lg))')).toBe(16)
     expect(toPx('inherit')).toBeNull()
   })
 

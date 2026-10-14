@@ -362,7 +362,7 @@ onMounted(async () => {
   gap: 8px;
 }
 .step-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   margin: 0;
 }
@@ -373,10 +373,10 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .empty-hint {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
 }
 .mode-toggle {
@@ -391,7 +391,7 @@ onMounted(async () => {
   border-radius: 8px;
   background: var(--neutral-0);
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .mode-btn.active {
   background: var(--m3-primary, var(--brand-primary));
@@ -402,7 +402,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   padding: 0 16px;
 }
@@ -410,7 +410,7 @@ onMounted(async () => {
   padding: 8px 10px;
   border: 1px solid var(--m3-outline-variant, var(--pt-border-strong));
   border-radius: 6px;
-  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
 }
 .inline-retry { min-height: var(--touch-target-min, 44px); }
 .missing-hint {

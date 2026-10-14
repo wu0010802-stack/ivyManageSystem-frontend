@@ -120,7 +120,7 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
   height: 22px;
   padding: 0 7px;
   border-radius: 11px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1;
   color: var(--m3-on-primary, #fff); /* 成對 on-primary：dark 的 m3-primary／coral-700／sky-700 皆翻淺色，恆白字掉到 2:1 以下 */
@@ -136,7 +136,7 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
 }
 
 .home-todo-chevron {
-  font-size: 20px;
+  font-size: 1.25rem;
   color: var(--pt-text-muted, #6b5e54);
   font-variation-settings: 'wght' 400;
 }

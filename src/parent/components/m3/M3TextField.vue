@@ -105,7 +105,7 @@ function onInput(e: Event): void {
   top: 16px;
   left: 16px;
   color: var(--m3-on-surface-variant, #424941);
-  font-size: 16px;
+  font-size: 1rem;
   pointer-events: none;
   transition: transform var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
     font-size var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
@@ -126,7 +126,7 @@ function onInput(e: Event): void {
   background: transparent;
   color: var(--m3-on-surface, #181d18);
   font-family: inherit;
-  font-size: 16px;
+  font-size: max(16px, 1rem);
 }
 
 .m3-text-field-filled .m3-text-field-control {

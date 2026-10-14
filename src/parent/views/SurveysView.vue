@@ -267,14 +267,14 @@ defineExpose({ pullRefresh })
 }
 
 .surveys-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   margin: 0;
 }
 
 .surveys-empty {
   color: var(--pt-text-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   text-align: center;
   padding: 24px 12px;
   margin: 0;
@@ -306,12 +306,12 @@ defineExpose({ pullRefresh })
 }
 
 .survey-card-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 
 .survey-card-child {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
 }
 
@@ -319,7 +319,7 @@ defineExpose({ pullRefresh })
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
 }
 </style>

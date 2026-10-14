@@ -270,19 +270,19 @@ onMounted(async () => {
   flex: 1;
   font-weight: 700;
   color: var(--pt-text-strong);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .event-row2 {
   margin-top: 6px;
   color: var(--pt-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .event-loc {
   margin-top: 4px;
   color: var(--pt-text-faint);
-  font-size: 13px;
+  font-size: 0.8125rem;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -291,7 +291,7 @@ onMounted(async () => {
 .event-desc {
   margin-top: 6px;
   color: var(--pt-text-soft);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
@@ -301,7 +301,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 2px;
   color: var(--pt-text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .ack-actions {
@@ -353,18 +353,18 @@ onMounted(async () => {
 
 .event-summary-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .event-summary-date {
   color: var(--pt-text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-top: 2px;
 }
 
 .field label {
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
   margin-bottom: 4px;
 }
@@ -375,7 +375,7 @@ onMounted(async () => {
   padding: 8px 10px;
   border: 1px solid var(--pt-border-strong);
   border-radius: var(--pt-control-radius, 12px);
-  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
 }
 
 .ack-footer {

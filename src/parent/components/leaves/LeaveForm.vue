@@ -194,7 +194,7 @@ const singleChild = computed<Child | null>(() => (props.children.length === 1 ? 
 .field label,
 .radio-fieldset > legend {
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-bottom: 4px;
   padding: 0;
@@ -207,7 +207,7 @@ const singleChild = computed<Child | null>(() => (props.children.length === 1 ? 
   padding: 8px 10px;
   border: 1px solid var(--m3-outline-variant, var(--pt-border-strong));
   border-radius: 6px;
-  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   font-family: inherit;
   box-sizing: border-box;
 }
@@ -247,7 +247,7 @@ const singleChild = computed<Child | null>(() => (props.children.length === 1 ? 
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .form-footer {
@@ -265,7 +265,7 @@ const singleChild = computed<Child | null>(() => (props.children.length === 1 ? 
   color: var(--neutral-0);
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .primary-btn:disabled {
@@ -278,6 +278,6 @@ const singleChild = computed<Child | null>(() => (props.children.length === 1 ? 
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   border: 1px solid var(--m3-outline-variant, var(--pt-border-strong));
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 </style>

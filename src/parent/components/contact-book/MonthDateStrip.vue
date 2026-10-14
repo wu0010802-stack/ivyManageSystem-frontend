@@ -190,12 +190,12 @@ function onPick(d: DateChip): void {
 .chip:disabled { cursor: not-allowed; }
 
 .weekday {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
 .day {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   line-height: 1;
   color: var(--pt-text-muted);

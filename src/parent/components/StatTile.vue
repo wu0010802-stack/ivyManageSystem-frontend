@@ -50,7 +50,7 @@ const ariaLabel = computed(() => `${props.label} ${props.value}`)
   background: var(--pt-icon-chip-bg, rgba(255, 255, 255, 0.55));
 }
 .stat-tile-icon { font-size: 17px; color: var(--pt-text-faint, #94a3b8); }
-.stat-tile-value { font-size: 19px; font-weight: 800; color: var(--pt-text-strong, #0f172a); margin-top: 4px; line-height: 1.2; }
+.stat-tile-value { font-size: 1.1875rem; font-weight: 800; color: var(--pt-text-strong, #0f172a); margin-top: 4px; line-height: 1.2; }
 .stat-tile-sub { font-size: var(--text-xs, 11px); color: var(--pt-text-faint, #94a3b8); margin-top: 3px; }
 
 /* 童彩 tonal 配對：透過覆寫 M3Card 消費的 --m3-surface-container-low 換底色，

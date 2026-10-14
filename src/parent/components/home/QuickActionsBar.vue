@@ -177,13 +177,13 @@ const sheetCandidates = computed(() => availableModules())
 <style scoped>
 .qa { padding: 4px var(--space-4, 16px) 0; display: flex; flex-direction: column; gap: 10px; }
 .qa-head { display: flex; align-items: center; justify-content: space-between; }
-.qa-title { margin: 0; font-size: 13.5px; font-weight: 800; color: var(--pt-text-muted); letter-spacing: 0.01em; }
+.qa-title { margin: 0; font-size: 0.8438rem; font-weight: 800; color: var(--pt-text-muted); letter-spacing: 0.01em; }
 
 .qa-edit {
   display: inline-flex; align-items: center; gap: 4px;
   border: none; background: transparent;
   color: var(--m3-primary, #006d3d);
-  font-size: 12.5px; font-weight: 700;
+  font-size: 0.7813rem; font-weight: 700;
   padding: 5px 8px; margin: -5px -8px;
   border-radius: 10px;
   cursor: pointer;
@@ -223,8 +223,8 @@ const sheetCandidates = computed(() => availableModules())
   display: flex; align-items: center; justify-content: center;
 }
 .qa-mod-icon .material-symbols-rounded { font-size: 19px; }
-.qa-mod-label { font-size: 12.5px; font-weight: 700; color: var(--pt-text-strong); }
-.qa-mod-sub { font-size: 10px; font-weight: 600; color: var(--pt-text-faint); }
+.qa-mod-label { font-size: 0.7813rem; font-weight: 700; color: var(--pt-text-strong); }
+.qa-mod-sub { font-size: 0.625rem; font-weight: 600; color: var(--pt-text-faint); }
 
 .qa-row.is-editing .qa-mod { border-color: color-mix(in srgb, var(--brand-primary, #0d9053) 45%, transparent); border-style: dashed; }
 .qa-mod-badge {
@@ -238,12 +238,12 @@ const sheetCandidates = computed(() => availableModules())
 
 .qa-edit-hint {
   margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  font-size: 11.5px; font-weight: 600; color: var(--pt-text-faint);
+  font-size: 0.7188rem; font-weight: 600; color: var(--pt-text-faint);
 }
 .qa-reset {
   display: inline-flex; align-items: center; gap: 3px;
   border: none; background: transparent; color: var(--m3-primary, #006d3d);
-  font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 2px;
+  font-size: 0.7188rem; font-weight: 700; cursor: pointer; padding: 2px;
 }
 .qa-reset .material-symbols-rounded { font-size: 14px; }
 
@@ -256,7 +256,7 @@ const sheetCandidates = computed(() => availableModules())
 .tone-brand .qa-mod-icon, .tone-brand .qa-sheet-icon { background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
 .tone-teal .qa-mod-icon, .tone-teal .qa-sheet-icon { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
 
-.qa-sheet-sub { margin: 0 0 12px; font-size: 12.5px; color: var(--pt-text-faint); font-weight: 600; }
+.qa-sheet-sub { margin: 0 0 12px; font-size: 0.7813rem; color: var(--pt-text-faint); font-weight: 600; }
 .qa-sheet-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .qa-sheet-item {
   display: flex; align-items: center; gap: 12px; width: 100%;
@@ -269,8 +269,8 @@ const sheetCandidates = computed(() => availableModules())
 .qa-sheet-icon { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .qa-sheet-icon .material-symbols-rounded { font-size: 19px; }
 .qa-sheet-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.qa-sheet-label { font-size: 14px; font-weight: 700; color: var(--pt-text-strong); }
-.qa-sheet-desc { font-size: 11px; font-weight: 600; color: var(--pt-text-faint); }
+.qa-sheet-label { font-size: 0.875rem; font-weight: 700; color: var(--pt-text-strong); }
+.qa-sheet-desc { font-size: 0.6875rem; font-weight: 600; color: var(--pt-text-faint); }
 
 @media (prefers-reduced-motion: reduce) {
   .qa-mod, .qa-sheet-item { transition: none; }

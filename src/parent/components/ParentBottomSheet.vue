@@ -444,7 +444,7 @@ const hasFooterSlot = computed<boolean>(() => !!slots.footer)
 }
 
 .pt-bsheet-header { padding: 8px 16px 4px; }
-.pt-bsheet-title { font-size: 17px; font-weight: 600; margin: 0; }
+.pt-bsheet-title { font-size: 1.0625rem; font-weight: 600; margin: 0; }
 .pt-bsheet-body { padding: 12px 16px; overflow-y: auto; flex: 1; }
 .pt-bsheet-footer { padding: 12px 16px; border-top: var(--pt-hairline); }
 

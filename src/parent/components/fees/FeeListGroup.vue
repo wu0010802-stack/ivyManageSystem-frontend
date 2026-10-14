@@ -102,13 +102,13 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
 .record-name {
   font-weight: 800;
   color: var(--m3-on-surface, var(--pt-text-strong));
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .record-row2 {
   margin-top: 6px;
   color: var(--pt-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -117,18 +117,18 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
 
 .record-outstanding {
   color: var(--coral-700, #b14545);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 800;
 }
 
 .record-row2-detail {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .record-row3 {
   margin-top: 4px;
   color: var(--pt-text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   display: flex;
   gap: 12px;
 }

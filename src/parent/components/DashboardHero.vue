@@ -40,8 +40,8 @@ defineProps<{
 .dash-hero-laurel { position: absolute; right: -16px; top: -12px; pointer-events: none; }
 .dash-hero-body { position: relative; }
 .dash-hero-eyebrow { margin: 0; font-size: var(--text-xs, 11px); font-weight: 600; opacity: 0.92; }
-.dash-hero-title { margin: 2px 0 0; font-size: 17px; font-weight: 800; }
-.dash-hero-value { margin: 8px 0 0; font-size: 28px; font-weight: 900; letter-spacing: 0.5px; }
+.dash-hero-title { margin: 2px 0 0; font-size: 1.0625rem; font-weight: 800; }
+.dash-hero-value { margin: 8px 0 0; font-size: 1.75rem; font-weight: 900; letter-spacing: 0.5px; }
 .dash-hero-sub { margin: 3px 0 0; font-size: var(--text-xs, 11px); opacity: 0.95; }
 .dash-hero-pill { margin-top: 10px; }
 /* ok/warn/neutral 在綠漸層上走白玻璃融入 hero；danger（逾期）刻意不蓋——

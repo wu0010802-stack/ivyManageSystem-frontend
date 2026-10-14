@@ -642,7 +642,7 @@ watch(selectedId, () => {
   border: 1px solid var(--pn-outline-variant);
   background: var(--pn-surface-card);
   color: var(--pn-on-surface);
-  font-size: 15px;
+  font-size: 0.9375rem;
   cursor: pointer;
 }
 .pn-child.is-active {
@@ -667,7 +667,7 @@ watch(selectedId, () => {
   flex-shrink: 1;
 }
 .pn-student__ico {
-  font-size: 32px;
+  font-size: 2rem;
   color: var(--pn-primary);
   flex-shrink: 0;
 }
@@ -676,7 +676,7 @@ watch(selectedId, () => {
 }
 .pn-student__name {
   margin: 0;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: var(--pn-on-surface);
   overflow: hidden;
@@ -685,7 +685,7 @@ watch(selectedId, () => {
 }
 .pn-student__room {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pn-on-surface-variant);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -698,7 +698,7 @@ watch(selectedId, () => {
   border-radius: 12px;
   background: var(--pn-error-container);
   color: var(--pn-on-error-container);
-  font-size: 14px;
+  font-size: 0.875rem;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -715,7 +715,7 @@ watch(selectedId, () => {
   border-radius: 20px;
   background: var(--pn-error);
   color: var(--pn-on-error);
-  font-size: 13px;
+  font-size: 0.8125rem;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -734,7 +734,7 @@ watch(selectedId, () => {
 }
 .pn-card__title {
   margin: 0 0 12px;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--pn-on-surface);
 }
@@ -754,7 +754,7 @@ watch(selectedId, () => {
   border: 1px solid var(--pn-outline-variant);
   background: var(--pn-surface);
   color: var(--pn-on-surface);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
@@ -817,7 +817,7 @@ watch(selectedId, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 1rem;
   font-variant-numeric: tabular-nums;
   color: var(--pn-on-surface-variant);
   opacity: .45;
@@ -825,13 +825,13 @@ watch(selectedId, () => {
 }
 .pn-wheel__item.is-center {
   opacity: 1;
-  font-size: 19px;
+  font-size: 1.1875rem;
   font-weight: 800;
   color: var(--pn-on-surface);
 }
 .pn-wheel-hint {
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pn-on-surface-variant);
   margin: 0 0 14px;
   font-variant-numeric: tabular-nums;
@@ -845,7 +845,7 @@ watch(selectedId, () => {
 }
 .pn-note__label {
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pn-on-surface-variant);
   margin-bottom: 4px;
 }
@@ -854,7 +854,7 @@ watch(selectedId, () => {
   border: 1px solid var(--pn-outline-variant);
   border-radius: 12px;
   padding: 10px 12px;
-  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   background: var(--pn-surface-card);
   color: var(--pn-on-surface);
   resize: vertical;
@@ -864,7 +864,7 @@ watch(selectedId, () => {
   position: absolute;
   right: 4px;
   bottom: -18px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pn-on-surface-variant);
 }
 
@@ -874,7 +874,7 @@ watch(selectedId, () => {
   border-radius: 12px;
   background: var(--pn-secondary-container);
   color: var(--pn-on-secondary-container);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
 }
 .pn-hint__link {
@@ -889,7 +889,7 @@ watch(selectedId, () => {
   padding: 0 18px;
   border-radius: 22px;
   border: none;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   cursor: pointer;
 }
@@ -923,7 +923,7 @@ watch(selectedId, () => {
   flex-wrap: wrap;
 }
 .pn-track__eta {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--pn-primary);
   font-variant-numeric: tabular-nums;
@@ -939,7 +939,7 @@ watch(selectedId, () => {
   gap: 10px;
   padding: 8px 0;
   color: var(--pn-on-surface-variant);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .pn-step__dot {
   width: 12px;
@@ -959,13 +959,13 @@ watch(selectedId, () => {
 }
 .pn-step__time {
   margin-left: auto;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pn-on-surface-variant);
   font-variant-numeric: tabular-nums;
 }
 .pn-track__note {
   margin: 0 0 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pn-on-surface-variant);
 }
 .pn-track__actions {
@@ -975,12 +975,12 @@ watch(selectedId, () => {
   flex-wrap: wrap;
 }
 .pn-confirm-text {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pn-on-surface);
 }
 .pn-track__doneline {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pn-primary);
   font-weight: 600;
 }
@@ -989,7 +989,7 @@ watch(selectedId, () => {
   padding: 24px 16px;
   text-align: center;
   color: var(--pn-on-surface-variant);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* ─── 已抵達校門口：二次確認 dialog ─── */
@@ -1001,13 +1001,13 @@ watch(selectedId, () => {
 }
 .pn-arrive-dialog__title {
   margin: 0;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: var(--pn-on-surface);
 }
 .pn-arrive-dialog__msg {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pn-on-surface-variant);
   line-height: 1.6;
 }
@@ -1015,7 +1015,7 @@ watch(selectedId, () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   color: var(--pn-on-surface);
 }
 .pn-arrive-dialog__actions {

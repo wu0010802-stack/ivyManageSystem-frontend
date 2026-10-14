@@ -186,7 +186,7 @@ function enrollLabel(c: Course): string {
 .course-card-row2 {
   margin-top: var(--space-1, 4px);
   color: var(--pt-text-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
   display: flex;
   gap: var(--space-2, 6px);
   flex-wrap: wrap;
@@ -211,7 +211,7 @@ function enrollLabel(c: Course): string {
   gap: 3px;
   padding: 2px 8px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   background: var(--pt-surface-subtle, var(--m3-surface-container-high));
   color: var(--pt-text-soft);
@@ -226,7 +226,7 @@ function enrollLabel(c: Course): string {
 .course-card-desc {
   margin-top: var(--space-2, 6px);
   color: var(--pt-text-soft);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 </style>

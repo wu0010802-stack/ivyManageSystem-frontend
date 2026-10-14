@@ -97,7 +97,7 @@ const emit = defineEmits<{
   color: var(--pt-info-text);
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -105,7 +105,7 @@ const emit = defineEmits<{
   margin-left: auto;
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 800;
 }
 
@@ -118,14 +118,14 @@ const emit = defineEmits<{
 .leave-row2 {
   margin-top: 6px;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .leave-reason,
 .leave-review {
   margin-top: 4px;
   color: var(--m3-on-surface-variant, var(--pt-text-faint));
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .leave-actions {
@@ -138,7 +138,7 @@ const emit = defineEmits<{
   color: var(--m3-error, var(--color-danger));
   border: 1px solid var(--pt-tint-announcement);
   border-radius: var(--pt-control-radius, 12px);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 800;
 }
 </style>

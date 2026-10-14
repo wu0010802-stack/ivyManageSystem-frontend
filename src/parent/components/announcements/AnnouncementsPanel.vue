@@ -239,7 +239,7 @@ defineExpose({ refresh: fetchData })
   margin: 4px 0 0;
   padding: 12px 0 20px;
   text-align: center;
-  font-size: 12.5px;
+  font-size: 0.7813rem;
   color: var(--pt-text-faint, #9b8d83);
 }
 
@@ -275,7 +275,7 @@ defineExpose({ refresh: fetchData })
   gap: 3px;
   padding: 1px 8px 1px 6px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 0.7188rem;
   font-weight: 600;
   color: var(--cat-color);
   background: color-mix(in srgb, var(--cat-color) 14%, transparent);
@@ -283,7 +283,7 @@ defineExpose({ refresh: fetchData })
 .ann-cat .material-symbols-rounded { font-size: 14px; }
 .time {
   flex: 1;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint, #6b7280);
 }
 .unread-dot {
@@ -295,7 +295,7 @@ defineExpose({ refresh: fetchData })
 
 .title {
   margin: 8px 0 0;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   line-height: 1.35;
@@ -306,7 +306,7 @@ defineExpose({ refresh: fetchData })
 .preview {
   margin: 4px 0 0;
   color: var(--pt-text-body, #4b5563);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.55;
   display: -webkit-box;
   -webkit-line-clamp: 2;

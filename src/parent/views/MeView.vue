@@ -255,20 +255,20 @@ const PREFS = [
 }
 .pref-label {
   display: block;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--pt-text-strong);
   line-height: 1.3;
 }
 .pref-hint {
   display: block;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
   margin-top: 2px;
 }
 .chev {
   color: var(--pt-text-faint);
-  font-size: 20px;
+  font-size: 1.25rem;
   flex-shrink: 0;
 }
 
@@ -285,7 +285,7 @@ const PREFS = [
   border: 1px solid var(--coral-300, #ffb5ad);
   border-radius: 14px;
   color: var(--coral-700, #b14545);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 160ms ease, transform 120ms ease;
@@ -320,25 +320,25 @@ const PREFS = [
   padding: 24px 20px 20px;
 }
 .export-dialog-title {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   margin: 0 0 10px;
 }
 .export-dialog-body {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pt-text-body, var(--pt-text-strong));
   margin: 0 0 8px;
 }
 .export-dialog-list {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
   padding-left: 18px;
   margin: 0 0 12px;
   line-height: 1.7;
 }
 .export-dialog-error {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--coral-700, #b14545);
   background: var(--coral-50, #fff5f5);
   border-radius: 8px;
@@ -356,7 +356,7 @@ const PREFS = [
   border-radius: 10px;
   border: 1px solid var(--pt-hairline-color, #e5e7eb);
   background: none;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   color: var(--pt-text-muted);
@@ -368,7 +368,7 @@ const PREFS = [
   border: none;
   background: var(--m3-primary, var(--brand-primary, #0d9053));
   color: var(--m3-on-primary, #fff);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 160ms ease;

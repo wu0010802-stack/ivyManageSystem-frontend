@@ -274,7 +274,7 @@ onBeforeUnmount(() => {
 .stamp-outline-text {
   position: relative;
   z-index: 1;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   color: var(--pt-text-faint, #9aa5ab);

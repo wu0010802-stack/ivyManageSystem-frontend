@@ -151,14 +151,14 @@ onMounted(load)
 
 .row-label {
   display: block;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--pt-text-strong);
   line-height: 1.3;
 }
 .row-sub {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
   line-height: 1.45;
 }

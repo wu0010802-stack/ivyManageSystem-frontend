@@ -157,13 +157,13 @@ button.child-context-header:active { background: var(--pt-surface-mute-soft); }
   width: 48px;
   height: 48px;
   border-radius: 16px;
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 .child-context-header--hero .cch-avatar {
   width: 62px;
   height: 62px;
   border-radius: 20px;
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .cch-copy {
@@ -183,7 +183,7 @@ button.child-context-header:active { background: var(--pt-surface-mute-soft); }
   font-size: var(--text-lg, 16px);
 }
 .child-context-header--hero .cch-name {
-  font-size: 24px;
+  font-size: 1.5rem;
   letter-spacing: -0.01em;
 }
 .cch-sub {
@@ -193,7 +193,7 @@ button.child-context-header:active { background: var(--pt-surface-mute-soft); }
 }
 
 .cch-chevron {
-  font-size: 22px;
+  font-size: 1.375rem;
   color: var(--pt-text-soft);
   flex-shrink: 0;
 }
@@ -239,9 +239,9 @@ button.child-context-header:active { background: var(--pt-surface-mute-soft); }
 }
 .cch-item-copy { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .cch-item-name { font-weight: 700; color: var(--pt-text-strong); }
-.cch-item-sub { font-size: 12px; color: var(--pt-text-muted); }
+.cch-item-sub { font-size: 0.75rem; color: var(--pt-text-muted); }
 .cch-item-check {
   color: var(--brand-primary);
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 </style>

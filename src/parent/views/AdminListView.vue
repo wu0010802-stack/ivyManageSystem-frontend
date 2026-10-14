@@ -122,6 +122,6 @@ function pullRefresh(): Promise<void> {
 .svc-icon.tone-grape { background: var(--pt-accent-grape-container); color: var(--pt-accent-grape-on); }
 .svc-icon.tone-brand { background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
 .svc-icon.tone-teal { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
-.svc-label { font-size: 14px; font-weight: 800; }
-.svc-sub { font-size: 11px; font-weight: 600; opacity: 0.72; line-height: 1.3; }
+.svc-label { font-size: 0.875rem; font-weight: 800; }
+.svc-sub { font-size: 0.6875rem; font-weight: 600; opacity: 0.72; line-height: 1.3; }
 </style>

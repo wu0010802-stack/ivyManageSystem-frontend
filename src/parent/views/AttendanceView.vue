@@ -292,7 +292,7 @@ async function pullRefresh() { await fetchData() }
 }
 .month-eyebrow {
   margin: 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -300,7 +300,7 @@ async function pullRefresh() { await fetchData() }
 }
 .month-title {
   margin: 2px 0 0;
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 800;
   color: var(--pt-text-strong);
   letter-spacing: -0.01em;
@@ -313,12 +313,12 @@ async function pullRefresh() { await fetchData() }
   align-items: center;
 }
 .summary-total {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
   font-weight: 500;
 }
 .summary-total strong { color: var(--pt-text-strong); }
-.today-btn { margin-left: auto; font-size: 12px; }
+.today-btn { margin-left: auto; font-size: 0.75rem; }
 
 /* Calendar */
 .calendar-wrap {
@@ -333,7 +333,7 @@ async function pullRefresh() { await fetchData() }
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
   text-align: center;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;
@@ -352,7 +352,7 @@ async function pullRefresh() { await fetchData() }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 0.8125rem;
   background: transparent;
   position: relative;
   cursor: default;
@@ -437,7 +437,7 @@ async function pullRefresh() { await fetchData() }
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .detail-row .material-symbols-rounded {
   font-size: 20px;
@@ -446,7 +446,7 @@ async function pullRefresh() { await fetchData() }
 }
 .detail-label {
   width: 48px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;

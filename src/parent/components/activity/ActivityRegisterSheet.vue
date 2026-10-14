@@ -156,7 +156,7 @@ function toggleCourse(id: number): void {
 .field label,
 .field legend {
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-bottom: 4px;
   padding: 0;
@@ -173,7 +173,7 @@ function toggleCourse(id: number): void {
   padding: 8px 10px;
   border: 1px solid var(--pt-border-strong);
   border-radius: 6px;
-  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   box-sizing: border-box;
 }
 
@@ -186,7 +186,7 @@ function toggleCourse(id: number): void {
   border-radius: 8px;
   margin-bottom: 6px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .pick-name {
@@ -198,7 +198,7 @@ function toggleCourse(id: number): void {
 
 .pick-conflict {
   margin-left: 6px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--pt-warning-text-soft, var(--color-warning, #b45309));
   white-space: nowrap;
@@ -206,7 +206,7 @@ function toggleCourse(id: number): void {
 
 .pick-meta {
   color: var(--pt-text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .pick-full-locked {
@@ -216,7 +216,7 @@ function toggleCourse(id: number): void {
 
 .text-muted {
   color: var(--pt-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: center;
   padding: 12px;
 }
@@ -233,7 +233,7 @@ function toggleCourse(id: number): void {
   color: var(--neutral-0);
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 .primary-btn:disabled { opacity: 0.5; }
@@ -244,7 +244,7 @@ function toggleCourse(id: number): void {
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 </style>

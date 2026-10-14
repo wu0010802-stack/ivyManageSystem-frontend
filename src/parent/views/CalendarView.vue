@@ -248,7 +248,7 @@ function dayLabel(iso: string) {
   background: color-mix(in srgb, var(--pt-surface-card, #fff) 70%, transparent);
   border: 1px solid rgba(13, 144, 83, 0.12);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--pt-text-body);
   cursor: pointer;
@@ -278,18 +278,18 @@ function dayLabel(iso: string) {
 }
 .day-label { display: flex; flex-direction: column; gap: 2px; }
 .day-primary {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--pt-text-strong);
 }
 .day-primary.is-today { color: var(--brand-primary, #0d9053); }
 .day-secondary {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;
 }
 .day-count {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;
@@ -344,14 +344,14 @@ function dayLabel(iso: string) {
   min-width: 0;
 }
 .cat-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--pt-text-muted);
 }
 .title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--pt-text-strong);
   overflow: hidden;
@@ -359,7 +359,7 @@ function dayLabel(iso: string) {
   white-space: nowrap;
 }
 .subtitle {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint);
   overflow: hidden;
   text-overflow: ellipsis;

@@ -185,7 +185,7 @@ onMounted(load)
   border: none;
   cursor: pointer;
   text-align: left;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 500;
   color: var(--pt-text, #1f2937);
 }
@@ -202,7 +202,7 @@ onMounted(load)
 }
 .faq-meta {
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint, #6b7280);
   margin: 8px 0 80px;
 }

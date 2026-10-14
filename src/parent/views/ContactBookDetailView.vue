@@ -355,7 +355,7 @@ function formatTime(iso: string | null): string {
 }
 .hero-date {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--pt-text-muted);
   letter-spacing: 0.02em;
@@ -387,7 +387,7 @@ function formatTime(iso: string | null): string {
   color: var(--pt-accent-sun-on);
   border-radius: 999px;
   padding: 4px 12px 4px 8px;
-  font-size: 12.5px;
+  font-size: 0.7813rem;
   font-weight: 800;
 }
 .mood-tag .material-symbols-rounded {
@@ -395,7 +395,7 @@ function formatTime(iso: string | null): string {
 }
 .hero-name {
   margin: 0;
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--pt-text-strong);
@@ -403,7 +403,7 @@ function formatTime(iso: string | null): string {
 }
 .hero-class {
   margin: 4px 0 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--pt-text-muted);
 }
@@ -421,7 +421,7 @@ function formatTime(iso: string | null): string {
 }
 .stamp-time,
 .stamp-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint);
 }
 
@@ -438,7 +438,7 @@ function formatTime(iso: string | null): string {
   align-items: center;
   gap: 8px;
   margin: 0 0 14px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   letter-spacing: 0.01em;
@@ -450,7 +450,7 @@ function formatTime(iso: string | null): string {
 }
 .title-count {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--pt-text-faint);
   letter-spacing: 0.04em;
@@ -472,7 +472,7 @@ function formatTime(iso: string | null): string {
 .note-card .card-title .material-symbols-rounded { color: var(--sun-700, #c99500); }
 .note-body {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.75;
   color: var(--pt-text-body);
   white-space: pre-wrap;

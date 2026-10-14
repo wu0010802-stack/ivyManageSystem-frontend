@@ -178,14 +178,14 @@ async function handleSubmit() {
 
 .title {
   margin: 0 0 4px;
-  font-size: 20px;
+  font-size: 1.25rem;
   color: var(--brand-primary, #0d9053);
   letter-spacing: -0.01em;
 }
 
 .version {
   margin: 0 0 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
 }
 
@@ -193,13 +193,13 @@ async function handleSubmit() {
   background: rgba(13, 144, 83, 0.06);
   border-radius: 12px;
   padding: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
   margin-bottom: 12px;
   line-height: 1.6;
 }
 
 .intro {
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.7;
   color: var(--pt-text-body);
   margin: 12px 0 8px;
@@ -235,13 +235,13 @@ async function handleSubmit() {
 
 .scope-text strong {
   display: block;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--pt-text-strong);
   margin-bottom: 2px;
 }
 
 .scope-text small {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
   display: block;
 }
@@ -251,7 +251,7 @@ async function handleSubmit() {
   color: var(--coral-700, #b14545);
   padding: 10px 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 8px 0 12px;
 }
 
@@ -260,7 +260,7 @@ async function handleSubmit() {
   color: var(--coral-700, #b14545);
   padding: 10px 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 8px 0 12px;
 }
 
@@ -271,7 +271,7 @@ async function handleSubmit() {
   color: var(--m3-on-primary, #fff);
   border: none;
   border-radius: 12px;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -283,7 +283,7 @@ async function handleSubmit() {
 
 .legal-note {
   margin: 12px 0 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--pt-text-faint);
   line-height: 1.6;
 }

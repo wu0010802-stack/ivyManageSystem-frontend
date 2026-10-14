@@ -395,7 +395,7 @@ async function pullRefresh() {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-body);
   background: var(--cream, #fffcf2);
   border: 1px solid var(--brand-primary-border, color-mix(in srgb, var(--brand-primary, #0d9053) 12%, transparent));

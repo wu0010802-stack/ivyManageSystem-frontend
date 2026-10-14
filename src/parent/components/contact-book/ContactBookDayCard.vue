@@ -222,7 +222,7 @@ const stats = computed(() => {
 
 .hint {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.65;
   color: var(--pt-text-muted);
 }
@@ -231,7 +231,7 @@ const stats = computed(() => {
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--pt-text-strong);
@@ -262,7 +262,7 @@ const stats = computed(() => {
 }
 .meta {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--pt-text-muted);
 }
@@ -308,13 +308,13 @@ const stats = computed(() => {
 .stat-coral .stat-icon, .stat-coral .stat-value { color: var(--pt-accent-coral-on); }
 
 .stat-value {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   line-height: 1.1;
 }
 .stat-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;
@@ -322,7 +322,7 @@ const stats = computed(() => {
 
 .note {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.7;
   color: var(--pt-text-body);
   font-style: italic;
@@ -354,7 +354,7 @@ const stats = computed(() => {
   background: color-mix(in srgb, var(--m3-primary, #006d3d) 88%, transparent);
   color: var(--m3-on-primary, #fff);
   font-weight: 700;
-  font-size: 17px;
+  font-size: 1.0625rem;
   border-radius: 12px;
 }
 </style>

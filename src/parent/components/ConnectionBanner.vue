@@ -78,7 +78,7 @@ function retry(): void {
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   border-bottom: var(--pt-hairline);
 }
@@ -97,7 +97,7 @@ function retry(): void {
   border-radius: 6px;
   padding: 4px 10px;
   color: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 

@@ -117,7 +117,7 @@ function tileLabel(i: number): string {
   justify-content: center;
   background: rgba(27, 68, 89, 0.55);
   color: var(--color-primary-contrast, #fff);
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
 }
 

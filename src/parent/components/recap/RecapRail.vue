@@ -103,7 +103,7 @@ function cardLabel(recap: PhotoRecap): string {
   margin: 0;
 }
 .recap-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--pt-text-faint);
 }
@@ -202,7 +202,7 @@ function cardLabel(recap: PhotoRecap): string {
 }
 .when {
   display: block;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -211,7 +211,7 @@ function cardLabel(recap: PhotoRecap): string {
 .sub {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   opacity: 0.9;
   font-variant-numeric: tabular-nums;
@@ -227,7 +227,7 @@ function cardLabel(recap: PhotoRecap): string {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   color: var(--color-primary-contrast);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }

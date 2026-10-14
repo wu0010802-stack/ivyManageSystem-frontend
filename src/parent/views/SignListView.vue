@@ -136,11 +136,11 @@ onMounted(load)
 
 .sign-card__title {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .sign-card__meta {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-secondary, #6b7280);
   margin-top: 4px;
 }
@@ -149,7 +149,7 @@ onMounted(load)
   position: absolute;
   top: 12px;
   right: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-warning, #f59e0b);
   font-weight: 600;
 }

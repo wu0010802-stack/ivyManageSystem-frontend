@@ -293,13 +293,13 @@ function go(path: string): void {
 }
 .unbound-title {
   margin: 0;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   color: var(--pt-text-strong);
 }
 .unbound-desc {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.65;
   color: var(--pt-text-muted);
 }
@@ -361,7 +361,7 @@ function go(path: string): void {
 }
 .today-footer-chevron {
   margin-left: auto;
-  font-size: 20px !important;
+  font-size: 1.25rem !important;
   color: var(--pt-text-muted, #6b5e54) !important;
 }
 </style>

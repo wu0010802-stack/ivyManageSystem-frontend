@@ -180,7 +180,7 @@ defineExpose({ refresh: load })
   gap: 3px;
   padding: 1px 8px 1px 6px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 0.7188rem;
   font-weight: 600;
   color: var(--cat-color);
   background: color-mix(in srgb, var(--cat-color) 14%, transparent);
@@ -190,7 +190,7 @@ defineExpose({ refresh: load })
 }
 
 .ann-home-time {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint, #6b7280);
 }
 </style>

@@ -469,6 +469,9 @@ button:focus-visible,
  * webview 的預設行為調整：避免 iOS 點擊高光、tap 延遲。
  */
 html {
+  /* 字級設定（useA11y → html.ivy-size-*）經由根字級生效：家長端 font-size / line-height
+     一律用 rem（守衛：src/parent/__tests__/parentFontSizeRem.spec.ts）。 */
+  font-size: calc(16px * var(--ivy-font-scale, 1));
   -webkit-tap-highlight-color: transparent;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
@@ -501,7 +504,8 @@ button {
 input,
 textarea,
 select {
-  font-size: 16px;
+  /* 字級設定縮小（sm）時 1rem < 16px 仍會觸發 iOS 聚焦放大，所以保底 16px、只放大不縮小 */
+  font-size: max(16px, 1rem);
 }
 
 /* ========== Touch Target Helper ==========
@@ -561,7 +565,7 @@ select {
 
 /* ========== Section title（首頁/More 統一，M3 Expressive 大字階）========== */
 .pt-section-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 900;
   color: var(--pt-text-strong);
   margin: 0 0 10px;
@@ -588,7 +592,7 @@ select {
 
 .pt-muted-note {
   color: var(--pt-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 

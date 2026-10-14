@@ -450,13 +450,13 @@ const children = computed(
 
 .title {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--brand-primary, #0d9053);
 }
 
 .intro {
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.7;
   color: var(--pt-text-muted);
   background: rgba(13, 144, 83, 0.06);
@@ -479,7 +479,7 @@ const children = computed(
   border: none;
   padding: 10px 12px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
   white-space: nowrap;
   border-bottom: 2px solid transparent;
@@ -494,7 +494,7 @@ const children = computed(
 .msg {
   padding: 10px 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin-bottom: 12px;
 }
 
@@ -502,7 +502,7 @@ const children = computed(
 .msg-success { background: rgba(13, 144, 83, 0.08); color: var(--brand-primary, #0d9053); }
 
 .panel { padding: 0; }
-.panel-hint { font-size: 13px; color: var(--pt-text-muted); margin-bottom: 16px; line-height: 1.7; }
+.panel-hint { font-size: 0.8125rem; color: var(--pt-text-muted); margin-bottom: 16px; line-height: 1.7; }
 .service-essential-hint {
   background: rgba(0, 0, 0, 0.04);
   border-radius: 8px;
@@ -525,25 +525,25 @@ const children = computed(
 
 .consent-row-main strong, .dsr-meta strong {
   display: block;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pt-text);
 }
 .consent-row-main small, .dsr-meta small {
   display: block;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--pt-text-muted);
   margin-top: 2px;
 }
 
 .dsr-reason {
   grid-column: 1 / -1;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
   margin: 4px 0 0;
 }
 
 .badge {
-  font-size: 11px;
+  font-size: 0.6875rem;
   padding: 3px 8px;
   border-radius: 999px;
   white-space: nowrap;
@@ -557,7 +557,7 @@ const children = computed(
   background: none;
   border: 1px solid var(--coral-300, #f4b8b3);
   color: var(--coral-700, #b14545);
-  font-size: 12px;
+  font-size: 0.75rem;
   min-height: var(--touch-target-min, 44px);
   padding: 4px 12px;
   border-radius: 6px;
@@ -570,7 +570,7 @@ const children = computed(
 }
 .field > span {
   display: block;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
   margin-bottom: 4px;
 }
@@ -579,7 +579,7 @@ const children = computed(
   padding: 10px 12px;
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 8px;
-  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   box-sizing: border-box;
 }
 
@@ -589,7 +589,7 @@ const children = computed(
   color: var(--m3-on-primary, #fff);
   border: none;
   padding: 12px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   border-radius: 10px;
   cursor: pointer;
@@ -601,7 +601,7 @@ const children = computed(
 .empty {
   text-align: center;
   color: var(--pt-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 32px 0;
 }
 </style>

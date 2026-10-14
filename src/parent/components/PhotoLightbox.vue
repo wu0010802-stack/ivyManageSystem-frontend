@@ -182,7 +182,7 @@ onBeforeUnmount(unlock)
   color: var(--color-primary-contrast, #fff);
   background: rgba(0, 0, 0, 0.4);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   padding: 6px 14px;
   font-variant-numeric: tabular-nums;

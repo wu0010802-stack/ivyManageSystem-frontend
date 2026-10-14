@@ -227,14 +227,14 @@ onMounted(fetchOrder)
   background: var(--pt-surface-note);
   padding: 10px 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-strong);
 }
 
 .pt-list-row .time { font-weight: 700; min-width: 56px; color: var(--pt-text-strong); }
-.pt-list-row .sub-meta { color: var(--pt-text-faint); font-size: 12px; }
+.pt-list-row .sub-meta { color: var(--pt-text-faint); font-size: 0.75rem; }
 
-.hint { color: var(--pt-text-muted); padding: 4px 0; font-size: 13px; }
+.hint { color: var(--pt-text-muted); padding: 4px 0; font-size: 0.8125rem; }
 .photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .photo { position: relative; }
 .photo img { width: 80px; height: 80px; object-fit: cover; border-radius: 10px; }
@@ -248,7 +248,7 @@ onMounted(fetchOrder)
   width: 24px;
   height: 24px;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1;
   cursor: pointer;
 }

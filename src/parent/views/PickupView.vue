@@ -522,7 +522,7 @@ onMounted(async () => {
 }
 .create-cta-text {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
@@ -545,12 +545,12 @@ onMounted(async () => {
   justify-content: space-between;
 }
 .section-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   margin: 0;
 }
 .empty-hint {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
   padding: 8px 0;
 }
@@ -570,7 +570,7 @@ onMounted(async () => {
   gap: 2px;
 }
 .auth-meta {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .auth-code-row {
@@ -581,7 +581,7 @@ onMounted(async () => {
   gap: var(--space-2, 8px);
 }
 .auth-code {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .auth-code-value {
@@ -605,7 +605,7 @@ onMounted(async () => {
   background: transparent;
   border: none;
   color: var(--m3-primary, var(--brand-primary));
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 4px 0;
   cursor: pointer;
 }
@@ -619,7 +619,7 @@ onMounted(async () => {
   background: transparent;
   border: none;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 8px 0;
   text-align: left;
   cursor: pointer;

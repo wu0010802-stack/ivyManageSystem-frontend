@@ -208,7 +208,7 @@ function onSubmit(): void {
 
 .survey-fill-student {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
   margin: 0;
 }
 
@@ -216,7 +216,7 @@ function onSubmit(): void {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
 }
 .survey-fill-meta p { margin: 0; }
@@ -233,7 +233,7 @@ function onSubmit(): void {
 .field legend,
 .field > label {
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-bottom: 6px;
@@ -255,7 +255,7 @@ function onSubmit(): void {
   border: 1px solid var(--pt-border-strong);
   border-radius: 10px;
   background: var(--neutral-0);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   cursor: pointer;
@@ -275,7 +275,7 @@ function onSubmit(): void {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   padding: 6px 0;
 }
 
@@ -284,7 +284,7 @@ function onSubmit(): void {
   padding: 8px 10px;
   border: 1px solid var(--pt-border-strong);
   border-radius: 6px;
-  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   box-sizing: border-box;
   font-family: inherit;
   resize: vertical;
@@ -302,7 +302,7 @@ function onSubmit(): void {
   color: var(--neutral-0);
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 .primary-btn:disabled { opacity: 0.5; }
@@ -313,7 +313,7 @@ function onSubmit(): void {
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 </style>

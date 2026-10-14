@@ -208,7 +208,7 @@ onMounted(load)
 }
 
 .sign-detail-view__title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   margin-bottom: 12px;
 }
@@ -254,7 +254,7 @@ onMounted(load)
 }
 
 .sign-detail-view__signature-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   margin-bottom: 8px;
 }
 
@@ -266,7 +266,7 @@ onMounted(load)
   background: var(--pt-primary, #4eb87a);
   color: var(--color-primary-contrast, #fff);
   font-weight: 600;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .sign-detail-view__submit:disabled {

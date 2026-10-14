@@ -372,7 +372,7 @@ onMounted(async () => {
 .desc-card .pt-card-title .material-symbols-rounded { color: var(--sun-700, #c99500); }
 .desc-text {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.7;
   color: var(--pt-text-body);
   white-space: pre-wrap;
@@ -381,7 +381,7 @@ onMounted(async () => {
 .form-card { display: flex; flex-direction: column; gap: 14px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--pt-text-muted);
@@ -390,7 +390,7 @@ onMounted(async () => {
 .field select {
   width: 100%;
   padding: 10px 12px;
-  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   border: 1px solid var(--pt-border-light, #ecf5f9);
   border-radius: 12px;
   background: var(--pt-surface-mute-soft, #fefcf3);
@@ -431,7 +431,7 @@ onMounted(async () => {
 .submit-btn {
   width: 100%;
   min-height: 52px;
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .empty-state.not-found {
@@ -450,13 +450,13 @@ onMounted(async () => {
 }
 .not-found-title {
   margin: 0;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   color: var(--pt-text-strong);
 }
 .not-found-note {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   max-width: 280px;
   line-height: 1.5;
 }

@@ -50,7 +50,7 @@ async function copyCode() {
   text-align: center;
 }
 .code-hint {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin: 0;
 }
@@ -58,7 +58,7 @@ async function copyCode() {
   /* 長按即整組選取，複製失敗時家長仍能手動複製 */
   user-select: all;
   -webkit-user-select: all;
-  font-size: 40px;
+  font-size: 2.5rem;
   font-weight: 700;
   letter-spacing: 6px;
   color: var(--m3-primary, var(--brand-primary));
@@ -68,7 +68,7 @@ async function copyCode() {
   font-variant-numeric: tabular-nums;
 }
 .code-meta {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin: 0;
 }
@@ -80,7 +80,7 @@ async function copyCode() {
   color: var(--neutral-0);
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .code-note { margin: 8px 0 0; }
 </style>

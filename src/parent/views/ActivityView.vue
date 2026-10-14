@@ -694,7 +694,7 @@ async function pullRefresh() {
   border-radius: 8px;
   background: var(--color-warning-soft, #fff8e1);
   color: var(--pt-warning-text-soft, #92400e);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
   cursor: pointer;
 }
@@ -730,11 +730,11 @@ async function pullRefresh() {
 }
 .reg-notice-title {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 0.875rem;
   margin-bottom: 2px;
 }
 .reg-notice-msg {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-soft);
 }
 .reg-notice.is-warning {
@@ -764,17 +764,17 @@ async function pullRefresh() {
 .manage-link-title {
   padding-right: var(--touch-target-min, 44px);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 0.875rem;
   margin-bottom: 4px;
   color: var(--brand-primary);
 }
 .manage-link-desc {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-soft);
   margin-bottom: 8px;
 }
 .manage-link-url {
-  font-size: 12px;
+  font-size: 0.75rem;
   word-break: break-all;
   background: var(--pt-surface-raised, var(--neutral-0));
   border: 1px solid var(--pt-border-light, #ecf5f9);
@@ -793,7 +793,7 @@ async function pullRefresh() {
   min-height: var(--touch-target-min, 44px);
   border: none;
   background: transparent;
-  font-size: 20px;
+  font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
   color: var(--pt-text-soft);
