@@ -279,7 +279,7 @@ onMounted(async () => {
 .field select {
   width: 100%;
   padding: 10px 12px;
-  font-size: 15px;
+  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   border: 1px solid var(--pt-border-light, #ecf5f9);
   border-radius: 12px;
   background: var(--pt-surface-mute-soft, #fefcf3);

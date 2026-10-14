@@ -338,7 +338,7 @@ function cancelAllergy() {
   min-height: var(--touch-target-min, 44px);
   border: 1px solid var(--pt-border-strong);
   border-radius: var(--radius-md, 8px);
-  font-size: var(--text-base, 14px);
+  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   font-family: inherit;
   background: var(--pt-surface-card, #fff);
 }

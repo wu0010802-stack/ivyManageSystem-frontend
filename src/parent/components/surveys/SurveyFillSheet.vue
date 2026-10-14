@@ -284,7 +284,7 @@ function onSubmit(): void {
   padding: 8px 10px;
   border: 1px solid var(--pt-border-strong);
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   box-sizing: border-box;
   font-family: inherit;
   resize: vertical;

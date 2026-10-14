@@ -349,7 +349,7 @@ onMounted(async () => {
   padding: 8px 10px;
   border: 1px solid var(--pt-border-strong);
   border-radius: var(--pt-control-radius, 12px);
-  font-size: 14px;
+  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
 }
 
 .ack-footer {

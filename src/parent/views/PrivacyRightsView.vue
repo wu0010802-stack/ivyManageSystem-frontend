@@ -521,7 +521,7 @@ const children = computed(
   padding: 10px 12px;
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px; /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   box-sizing: border-box;
 }
 

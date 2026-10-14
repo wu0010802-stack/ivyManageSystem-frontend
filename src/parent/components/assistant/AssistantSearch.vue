@@ -40,7 +40,7 @@ watch(() => props.modelValue, v => { local.value = v })
 .material-symbols-rounded { color: var(--pt-text-muted, #6b7280); font-size: 20px; }
 input {
   flex: 1; border: none; outline: none;
-  font-size: 15px; background: transparent;
+  font-size: 16px; background: transparent;
 }
 .clear {
   background: none; border: none; cursor: pointer;
