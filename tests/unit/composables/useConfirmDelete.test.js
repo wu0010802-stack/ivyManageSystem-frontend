@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn() },
+  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn() },
 }))
 
@@ -174,6 +174,52 @@ describe('useConfirmDelete', () => {
       await confirmDelete({ id: 1 })
 
       expect(onSuccess).not.toHaveBeenCalled()
+    })
+  })
+
+  // SPEC-026：刪除已核准假單會回收代理人的代理班，回應的 substitute_duty_warnings 要顯示出來
+  // （保留的列：代理人當天已有出勤或薪資封存）。其他資源的刪除回應沒有這個欄位，不受影響。
+  describe('刪除回應帶 substitute_duty_warnings（假單）', () => {
+    it('成功訊息之後逐筆以 warning toast 顯示', async () => {
+      ElMessageBox.confirm.mockResolvedValue('confirm')
+      api.delete.mockResolvedValue({
+        data: {
+          message: '請假記錄已刪除',
+          substitute_duty_warnings: [
+            { code: 'kept_recorded_attendance', leave_id: 9, date: '2026-09-15', message: '9/15 代理人已有出勤紀錄，班表保留不刪' },
+          ],
+        },
+      })
+
+      const { confirmDelete } = useConfirmDelete({ endpoint: '/leaves', onSuccess: vi.fn(), successMsg: '已刪除' })
+      await confirmDelete({ id: 9 })
+
+      expect(ElMessage.success).toHaveBeenCalledWith('已刪除')
+      expect(ElMessage.warning).toHaveBeenCalledTimes(1)
+      expect(ElMessage.warning).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('9/15 代理人已有出勤紀錄') }),
+      )
+    })
+
+    it('沒有警示（員工、加班、學生等其他資源）時不顯示 warning toast', async () => {
+      ElMessageBox.confirm.mockResolvedValue('confirm')
+      api.delete.mockResolvedValue({ data: { message: '已刪除' } })
+
+      const { confirmDelete } = useConfirmDelete({ endpoint: '/employees', onSuccess: vi.fn() })
+      await confirmDelete({ id: 1, name: '王小明' })
+
+      expect(ElMessage.success).toHaveBeenCalled()
+      expect(ElMessage.warning).not.toHaveBeenCalled()
+    })
+
+    it('刪除失敗時不顯示警示', async () => {
+      ElMessageBox.confirm.mockResolvedValue('confirm')
+      api.delete.mockRejectedValue(new Error('500'))
+
+      const { confirmDelete } = useConfirmDelete({ endpoint: '/leaves', onSuccess: vi.fn() })
+      await confirmDelete({ id: 9 })
+
+      expect(ElMessage.warning).not.toHaveBeenCalled()
     })
   })
 })
