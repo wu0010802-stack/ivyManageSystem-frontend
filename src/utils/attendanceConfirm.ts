@@ -8,6 +8,8 @@ import { LEAVE_TYPE_MAP } from '@/utils/leaves'
 
 export type ConfirmationItem = ApiResponse<'/attendance/confirmation-rounds/{round_id}', 'get'>['items'][number]
 export type PortalConfirmationItem = ApiResponse<'/portal/attendance-confirmations', 'get'>['items'][number]
+export type ConfirmationRoundSummary = ApiResponse<'/attendance/confirmation-rounds', 'get'>[number]
+export type RoundEmployeeProgress = ApiResponse<'/attendance/confirmation-rounds/{round_id}', 'get'>['employees'][number]
 type Suggestion = ConfirmationItem['suggestion']
 type Party = Suggestion['parties'][string]
 type Shift = NonNullable<Party['original']>
@@ -227,4 +229,26 @@ export function itemsByPersonDay(items: ConfirmationItem[]): Map<string, Confirm
     }
   }
   return map
+}
+
+/** 期間內要顯示的輪次：進行中優先，否則最新一輪（後端依 period_start、id 遞減排序；同 ConfirmationRoundBar） */
+export function pickDisplayRound(rounds: readonly ConfirmationRoundSummary[]): ConfirmationRoundSummary | null {
+  return rounds.find((r) => r.status === 'open') ?? rounds[0] ?? null
+}
+
+/**
+ * 進度條④的輪次狀態（D-07）：沒有輪次＝尚未發送；已關閉＝已結束；
+ * 進行中＝「確認中・已回覆 已回覆人數/應確認人數」。已回覆＝沒有待回覆項目的人
+ * （與 ConfirmationRoundBar「待回覆 N 人」同一口徑）。
+ */
+export function roundStatusText(
+  round: ConfirmationRoundSummary | null,
+  employees: readonly RoundEmployeeProgress[] | null,
+): string {
+  if (!round) return '尚未發送'
+  if (round.status === 'closed') return '已結束'
+  const list = employees ?? []
+  if (!list.length) return '確認中'
+  const replied = list.filter((e) => e.awaiting_response === 0).length
+  return `確認中・已回覆 ${replied}/${list.length}`
 }

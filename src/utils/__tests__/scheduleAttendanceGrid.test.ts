@@ -7,14 +7,19 @@ import {
   confirmUnits,
   coverageInputs,
   findPairCell,
+  gridSections,
+  groupDaysByWeek,
   indexCells,
   importProgress,
   isIssue,
   mondayOf,
+  monthCellText,
+  monthDot,
   monthRange,
   planText,
   planWeekChange,
   rowMatchesFilter,
+  shiftMonthISO,
   uncoveredDates,
   visibleDays,
 } from '../scheduleAttendanceGrid'
@@ -346,5 +351,66 @@ describe('coverageInputs', () => {
     expect(gapsOn({ 1: null, 2: null }, false)).toHaveLength(1)
     // 沒有 SCHEDULE、fromPlan：改由每格計畫推算 → 與有週排班時相同
     expect(gapsOn({ 1: null, 2: null }, true)).toEqual([])
+  })
+})
+
+describe('月格子（SPEC-027 C 期）', () => {
+  const LEAVE = { leave_id: 1, leave_type_label: '事假', is_full_day: true, status: 'approved' as const, start_time: null, end_time: null }
+
+  it('shiftMonthISO：跨年前後月一律回月初', () => {
+    expect(shiftMonthISO('2026-01-31', -1)).toBe('2025-12-01')
+    expect(shiftMonthISO('2026-12-15', 1)).toBe('2027-01-01')
+    expect(shiftMonthISO('2026-10-13', 0)).toBe('2026-10-01')
+  })
+
+  it('groupDaysByWeek：依週一分組；跨月週只含傳入的日子但 monday 是真正的週一', () => {
+    const days = ['2026-10-01', '2026-10-02', '2026-10-05', '2026-10-06'].map((d) => day(d))
+    const weeks = groupDaysByWeek(days)
+    expect(weeks.map((w) => w.monday)).toEqual(['2026-09-28', '2026-10-05'])
+    expect(weeks[0].days.map((d) => d.date)).toEqual(['2026-10-01', '2026-10-02'])
+  })
+
+  it('monthCellText：班別名前兩字；預設工時＝預；排休＝休；全天已核准假＝假；非應出勤日與不在職空白', () => {
+    expect(monthCellText(cell(1, W1))).toBe('早車')
+    expect(monthCellText(cell(1, W1, { plan: { name: '行政全日班' } }))).toBe('行政')
+    expect(monthCellText(cell(1, W1, { plan: { source: 'default', name: null } }))).toBe('預')
+    expect(monthCellText(cell(1, W1, { plan: { day_off: true } }))).toBe('休')
+    expect(monthCellText(cell(1, W1, { leaves: [LEAVE] }))).toBe('假')
+    expect(monthCellText(cell(1, W1, { plan: { expected: false } }))).toBe('')
+    expect(monthCellText(cell(1, W1, { employed: false }))).toBe('')
+  })
+
+  it('monthDot：待處理才給紅／橘（與只看待處理同一定義）；非待處理有假＝藍', () => {
+    const today = '2026-09-21'
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' } }), today)).toBe('red')
+    expect(monthDot(cell(1, W1, { actual: { status: 'missing_punch' } }), today)).toBe('red')
+    expect(monthDot(cell(1, W1, { actual: { status: 'suspected_absence' } }), today)).toBe('red')
+    expect(monthDot(cell(1, W1, { actual: { status: 'possible_shift_change' } }), today)).toBe('orange')
+    expect(monthDot(cell(1, W1, { actual: {}, confirmation: { item_id: 1, kind: 'swap', status: 'pending' } }), today)).toBe('orange')
+    // 已豁免＝已處理，不再是紅點
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive' } }), today)).toBeNull()
+    expect(monthDot(cell(1, W1, { actual: { status: 'leave' }, leaves: [LEAVE] }), today)).toBe('blue')
+    // 未來日的已排假也標藍
+    expect(monthDot(cell(1, '2026-09-25', { leaves: [{ ...LEAVE, status: 'pending' }] }), today)).toBe('blue')
+    expect(monthDot(cell(1, W1, { actual: {} }), today)).toBeNull()
+    expect(monthDot(cell(1, W1, { employed: false, leaves: [LEAVE] }), today)).toBeNull()
+  })
+
+  it('gridSections：依篩選與關鍵字留列、依組分段、空組不出現', () => {
+    const g = grid({
+      employees: [employee(1, '林班導'), employee(2, '王副導'), employee(3, '陳行政', { group_key: 'other' })],
+      cells: [
+        cell(1, W1, { actual: { status: 'anomaly' } }),
+        cell(2, W1, { actual: {} }),
+        cell(3, W1, { actual: {} }),
+      ],
+    })
+    const base = { groups: g.groups, employees: g.employees, days: g.days, cells: indexCells(g.cells), today: g.today }
+    expect(gridSections({ ...base, filter: 'all' }).map((s) => [s.group.key, s.employees.map((e) => e.employee_id)])).toEqual([
+      ['classroom:1', [1, 2]],
+      ['other', [3]],
+    ])
+    expect(gridSections({ ...base, filter: 'issues' }).map((s) => s.employees.map((e) => e.employee_id))).toEqual([[1]])
+    expect(gridSections({ ...base, filter: 'all', keyword: 'e003' }).map((s) => s.group.key)).toEqual(['other'])
   })
 })

@@ -18,6 +18,7 @@ export type GridShiftType = GridOut['shift_types'][number]
 export type PlanSource = GridCell['plan']['source']
 export type ReconStatus = NonNullable<GridCell['actual']>['status']
 export type GridFilter = 'all' | 'issues' | 'future'
+export type GridView = 'week' | 'month'
 
 /** 來源標籤（§2.2）：格子上顯示單字，抽屜顯示全名。 */
 export const SOURCE_TAGS: Record<PlanSource, { short: string; label: string }> = {
@@ -188,6 +189,93 @@ export function visibleDays(days: readonly GridDay[], cells: readonly GridCell[]
       .map((cell) => cell.date),
   )
   return days.filter((day) => day.weekday < 5 || busyWeekend.has(day.date))
+}
+
+/** 該日期所在月份往前／後 months 個月的月初（YYYY-MM-01） */
+export function shiftMonthISO(dateISO: string, months: number): string {
+  const [y, m] = dateISO.split('-').map(Number)
+  const index = y * 12 + (m - 1) + months
+  const year = Math.floor(index / 12)
+  const month = index - year * 12 + 1
+  return `${year}-${String(month).padStart(2, '0')}-01`
+}
+
+export interface MonthWeek {
+  /** 該週真正的週一（跨月週可能落在上個月）：點週次欄頭切週模式用它 */
+  monday: string
+  days: GridDay[]
+}
+
+/** 月格子週次欄頭：依週一分組，保留傳入順序（跨月週只含當月的日子） */
+export function groupDaysByWeek(days: readonly GridDay[]): MonthWeek[] {
+  const weeks: MonthWeek[] = []
+  for (const day of days) {
+    const monday = mondayOf(day.date)
+    const last = weeks.length ? weeks[weeks.length - 1] : null
+    if (last && last.monday === monday) last.days.push(day)
+    else weeks.push({ monday, days: [day] })
+  }
+  return weeks
+}
+
+export type MonthDot = 'red' | 'orange' | 'blue'
+const OPEN_CONFIRMATIONS: ReadonlySet<string> = new Set(['pending', 'agreed', 'disputed'])
+
+/**
+ * 月格子狀態點（SPEC-027 §2 月模式）。紅／橘只給「待處理」（與 isIssue、只看待處理同一定義，D14）：
+ * 判定為 danger（遲到／早退／缺卡／疑似缺勤）＝紅；老師確認處理中、疑似換班、非原排班出勤、資料待補＝橘。
+ * 不是待處理但當天有假（含待審、含未來日）＝藍；其餘不畫點。
+ */
+export function monthDot(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): MonthDot | null {
+  if (!cell.employed) return null
+  if (isIssue(cell, today, uncovered)) {
+    if (cell.confirmation && OPEN_CONFIRMATIONS.has(cell.confirmation.status)) return 'orange'
+    return cell.actual && STATUS_TONES[cell.actual.status] === 'danger' ? 'red' : 'orange'
+  }
+  return cell.leaves.length > 0 ? 'blue' : null
+}
+
+/**
+ * 月格子班別縮寫：全天已核准假＝「假」、排休＝「休」、非應出勤日空白、員工／系統預設工時＝「預」，
+ * 其餘取班別名前兩個字（Array.from 以字為單位，不切壞中文）。
+ */
+export function monthCellText(cell: GridCell): string {
+  if (!cell.employed) return ''
+  if (cell.leaves.some((leave) => leave.status === 'approved' && leave.is_full_day)) return '假'
+  const plan = cell.plan
+  if (plan.day_off) return '休'
+  if (!plan.expected) return ''
+  if (plan.source === 'employee' || plan.source === 'default' || !plan.name) return '預'
+  return Array.from(plan.name).slice(0, 2).join('')
+}
+
+export interface GridSection {
+  group: GridGroup
+  employees: GridEmployee[]
+}
+
+/** 列篩選（rowMatchesFilter）＋人員搜尋（姓名或工號，不分大小寫）＋依組分段；空組不出現。月格子用。 */
+export function gridSections(input: {
+  groups: readonly GridGroup[]
+  employees: readonly GridEmployee[]
+  days: readonly GridDay[]
+  cells: ReadonlyMap<string, GridCell>
+  filter: GridFilter
+  today: string
+  keyword?: string
+  uncovered?: ReadonlySet<string>
+}): GridSection[] {
+  const needle = (input.keyword ?? '').trim().toLowerCase()
+  const rows = input.employees.filter((emp) => {
+    const cells = input.days
+      .map((d) => input.cells.get(cellKey(emp.employee_id, d.date)))
+      .filter((c): c is GridCell => c !== undefined)
+    if (!rowMatchesFilter(cells, input.filter, input.today, input.uncovered ?? NO_DATES)) return false
+    return !needle || emp.name.toLowerCase().includes(needle) || (emp.employee_number ?? '').toLowerCase().includes(needle)
+  })
+  return input.groups
+    .map((group) => ({ group, employees: rows.filter((emp) => emp.group_key === group.key) }))
+    .filter((section) => section.employees.length > 0)
 }
 
 export function planText(cell: GridCell): string {

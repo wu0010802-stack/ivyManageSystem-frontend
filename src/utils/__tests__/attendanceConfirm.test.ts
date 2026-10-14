@@ -11,12 +11,16 @@ import {
   formatMonthDay,
   itemsByPersonDay,
   partnerChoices,
+  pickDisplayRound,
   resolutionTooltip,
+  roundStatusText,
   STATUS_LABELS,
   yesterdayISO,
   type ConfirmationAbsenceDay,
   type ConfirmationItem,
+  type ConfirmationRoundSummary,
   type PortalConfirmationItem,
+  type RoundEmployeeProgress,
 } from '@/utils/attendanceConfirm'
 
 const BUS = { shift_type_id: 1, name: '早車', work_start: '07:00', work_end: '16:30' }
@@ -200,5 +204,29 @@ describe('attendanceConfirm', () => {
       pending_leave_id: null, pending_punch_correction_id: null,
     }
     expect(absenceDayText(noShift)).toBe('9/3')
+  })
+})
+
+const round = (id: number, status: 'open' | 'closed'): ConfirmationRoundSummary => ({
+  id, status, period_start: '2026-09-01', period_end: '2026-09-30', deadline_date: '2026-10-05',
+  eligible_count: 3, released_by: 'admin', released_at: '2026-10-01T09:00:00',
+})
+const emp = (id: number, awaiting: number): RoundEmployeeProgress => ({
+  employee_id: id, employee_name: `員工${id}`, item_count: 2, awaiting_response: awaiting,
+  agreed: 0, disputed: 0, applied: 0, escalated: false, signed: awaiting === 0,
+})
+
+describe('進度條④輪次狀態（D-07）', () => {
+  it('進行中優先，否則取第一筆（後端已依期間起日、id 遞減排序）', () => {
+    expect(pickDisplayRound([round(5, 'closed'), round(4, 'open')])?.id).toBe(4)
+    expect(pickDisplayRound([round(5, 'closed'), round(3, 'closed')])?.id).toBe(5)
+    expect(pickDisplayRound([])).toBeNull()
+  })
+
+  it('沒有輪次＝尚未發送；已關閉＝已結束；進行中＝已回覆人數／應確認人數', () => {
+    expect(roundStatusText(null, null)).toBe('尚未發送')
+    expect(roundStatusText(round(1, 'closed'), null)).toBe('已結束')
+    expect(roundStatusText(round(1, 'open'), [emp(1, 0), emp(2, 2), emp(3, 0)])).toBe('確認中・已回覆 2/3')
+    expect(roundStatusText(round(1, 'open'), [])).toBe('確認中')
   })
 })
