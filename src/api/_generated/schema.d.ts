@@ -15820,6 +15820,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/schedule/day-roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Day Roster
+         * @description 候選同事的當日職務名單（SPEC-026 §4.4 T4）。
+         *
+         *     人員範圍與換班候選同一群：今天與未來＝本租戶 active 班級的班導／副班導（即
+         *     /swap-candidates 的母體）；過去日期＝該日輪值名單（D5）。皆排除本人與離職者。班別判定走
+         *     單一 resolver（DailyShift → 週班表 → 員工工時 → 預設），只回姓名與時段、不回個資。
+         */
+        get: operations["get_day_roster_api_portal_schedule_day_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/search": {
         parameters: {
             query?: never;
@@ -46150,6 +46174,32 @@ export interface components {
             shift_type_id?: number | null;
             /** Weekday */
             weekday: string;
+            /** Work End */
+            work_end?: string | null;
+            /** Work Start */
+            work_start?: string | null;
+        };
+        /**
+         * ScheduleDayRosterEntryOut
+         * @description GET /portal/schedule/day-roster list 單筆（候選同事當日有效班別）。
+         *
+         *     只含姓名與時段，不含電話等個資（SPEC-026 §4.4 T4）。work_start／work_end 為正規化後的
+         *     HH:MM（排休為 null）；source 為 resolver 判定來源。
+         */
+        ScheduleDayRosterEntryOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Name */
+            name: string;
+            /** Same Time As Me */
+            same_time_as_me: boolean;
+            /** Shift Name */
+            shift_name?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "daily" | "daily_off" | "weekly" | "employee" | "default";
             /** Work End */
             work_end?: string | null;
             /** Work Start */
@@ -77275,6 +77325,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PortalSalaryPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_day_roster_api_portal_schedule_day_roster_get: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleDayRosterEntryOut"][];
                 };
             };
             /** @description Validation Error */
