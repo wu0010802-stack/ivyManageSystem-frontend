@@ -15,6 +15,7 @@ import {
 import { toast } from '../utils/toast'
 import { copyText as copyToClipboard } from '../utils/clipboard'
 import { formatSemesterLabel } from '../utils/semesterLabel'
+import { todayISO } from '@/utils/format'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
@@ -91,13 +92,61 @@ const childTotals = computed(() => {
 
 const myTotals = computed(() => (childTotals.value.get(selectedId.value!) as Record<string, unknown> | undefined) || null)
 
-// hero 用：以 summary.totals 與本學生未繳紀錄拼出 hero props
-const unpaidTotal = computed(() => Number((summary.value?.totals as Record<string, unknown>)?.outstanding ?? 0))
-const overdueAmount = computed(() => Number((summary.value?.totals as Record<string, unknown>)?.overdue ?? 0))
-const unpaidRecords = computed(() =>
-  records.value.filter((r) => r.status === 'unpaid' || r.status === 'partial'),
-)
+/** 還沒繳清的狀態（overdue 若出現也算待繳，不能被分到「已結清」） */
+const PENDING_STATUSES = new Set(['unpaid', 'partial', 'overdue'])
+const unpaidRecords = computed(() => records.value.filter((r) => PENDING_STATUSES.has(r.status)))
 const unpaidCount = computed(() => unpaidRecords.value.length)
+
+function finiteOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+const familyOutstanding = computed(() => Number((summary.value?.totals as Record<string, unknown>)?.outstanding ?? 0))
+const familyOverdue = computed(() => Number((summary.value?.totals as Record<string, unknown>)?.overdue ?? 0))
+
+/**
+ * 摘要口徑：頁面是「目前孩子」的帳單，hero 的金額／標題／狀態一律用同一位孩子的數字
+ * （先前金額是全家合計、標題卻看目前孩子，會同時出現「繳費無欠款」與「NT$5,000」）。
+ * 拿不到這位孩子的資料時才退回全家合計，並明確標「全家」。
+ */
+const heroScope = computed<'child' | 'family'>(() =>
+  myTotals.value || records.value.length > 0 ? 'child' : 'family',
+)
+const childOutstanding = computed(() =>
+  finiteOrNull(myTotals.value?.outstanding)
+    ?? unpaidRecords.value.reduce((sum, r) => sum + Number(r.outstanding || 0), 0),
+)
+const childOverdue = computed(() => {
+  const fromSummary = finiteOrNull(myTotals.value?.overdue)
+  if (fromSummary !== null) return fromSummary
+  const today = todayISO()
+  return unpaidRecords.value
+    .filter((r) => r.status === 'overdue' || (!!r.due_date && r.due_date < today))
+    .reduce((sum, r) => sum + Number(r.outstanding || 0), 0)
+})
+const unpaidTotal = computed(() => (heroScope.value === 'child' ? childOutstanding.value : familyOutstanding.value))
+const overdueAmount = computed(() => (heroScope.value === 'child' ? childOverdue.value : familyOverdue.value))
+const hasUnpaid = computed(() => unpaidTotal.value > 0)
+
+const childName = computed(() => {
+  const c = ((childrenStore.items || []) as { student_id: number; name?: string }[]).find(
+    (x) => x.student_id === selectedId.value,
+  )
+  return c?.name || ''
+})
+const heroEyebrow = computed(() => {
+  if (heroScope.value === 'family') return '全家未繳合計'
+  return childName.value ? `${childName.value}・未繳合計` : '未繳合計'
+})
+/** 多孩家庭且其他孩子也有欠款時，另外提一句全家合計，免得家長以為只剩這筆 */
+const familyNote = computed(() => {
+  if (heroScope.value !== 'child') return ''
+  const children = (summary.value?.by_student as unknown[] | undefined)?.length ?? 0
+  if (children < 2 || familyOutstanding.value <= childOutstanding.value) return ''
+  return `全家未繳合計 $${formatNum(familyOutstanding.value)}`
+})
 
 // 列表分組：原本按 API 時間序混排、未繳散落中段要靠跳轉尋找；改為「待繳」
 // （到期日近→遠）置頂、「已結清」隨後（維持原序），家長打開即見要處理的項目。
@@ -106,9 +155,7 @@ const pendingRecords = computed(() =>
     .slice()
     .sort((a, b) => String(a.due_date ?? '9999').localeCompare(String(b.due_date ?? '9999'))),
 )
-const settledRecords = computed(() =>
-  records.value.filter((r) => r.status !== 'unpaid' && r.status !== 'partial'),
-)
+const settledRecords = computed(() => records.value.filter((r) => !PENDING_STATUSES.has(r.status)))
 const nearestDueDate = computed(() => {
   const sorted = unpaidRecords.value
     .filter((r) => r.due_date)
@@ -126,12 +173,12 @@ const heroSub = computed(() => {
 })
 const heroStatusTone = computed<'danger' | 'warn' | 'ok'>(() => {
   if (overdueAmount.value > 0) return 'danger'
-  if (unpaidCount.value > 0) return 'warn'
+  if (hasUnpaid.value) return 'warn'
   return 'ok'
 })
 const heroStatusLabel = computed(() => {
   if (overdueAmount.value > 0) return '有逾期款項'
-  if (unpaidCount.value > 0) return '有待繳費用'
+  if (hasUnpaid.value) return '有待繳費用'
   return '繳費無欠款'
 })
 
@@ -264,11 +311,11 @@ async function pullRefresh() {
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="fees-view">
-    <!-- Hero：以 DashboardHero 取代 FeeHero，呈現本月應繳金額 + 到期/逾期資訊 -->
+    <!-- Hero：目前孩子的未繳合計（全部未繳，不只本月）+ 到期/逾期；金額、標題、狀態同一口徑 -->
     <DashboardHero
-      v-if="summary"
-      eyebrow="本月應繳"
-      :title="unpaidCount > 0 ? '有待繳費用' : '繳費無欠款'"
+      v-if="summary || records.length > 0"
+      :eyebrow="heroEyebrow"
+      :title="hasUnpaid ? '有待繳費用' : '繳費無欠款'"
       :value="heroValue"
       :sub="heroSub"
       :status-label="heroStatusLabel"
@@ -276,11 +323,11 @@ async function pullRefresh() {
     />
     <ChildContextHeader variant="page" :inset="false" />
 
-    <div v-if="myTotals" class="single-totals">
+    <div v-if="myTotals" class="single-totals" data-testid="fees-single-totals">
       <span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
       <span class="totals-text">
-        此學生：未繳 <strong>${{ formatNum(myTotals.outstanding as number) }}</strong>
-        ・已繳 ${{ formatNum(myTotals.amount_paid as number) }}
+        {{ childName || '此學生' }}已繳 ${{ formatNum(myTotals.amount_paid as number) }}
+        <template v-if="familyNote">・{{ familyNote }}</template>
       </span>
     </div>
 
