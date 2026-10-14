@@ -131,7 +131,7 @@ function formatSize(bytes: number) {
   gap: 3px;
   padding: 1px 8px 1px 6px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 0.7188rem;
   font-weight: 600;
   color: var(--cat-color);
   background: color-mix(in srgb, var(--cat-color) 14%, transparent);
@@ -140,7 +140,7 @@ function formatSize(bytes: number) {
 .detail-title {
   margin: 0 18px;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 1.125rem;
   color: var(--pt-text-strong);
   line-height: 1.4;
 }
@@ -169,14 +169,14 @@ function formatSize(bytes: number) {
 .detail-time {
   margin: 4px 18px 14px;
   color: var(--pt-text-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .detail-content {
   padding: 0 18px 20px;
   white-space: pre-wrap;
   line-height: 1.7;
   color: var(--pt-text-body);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .parent-att-list {
@@ -231,13 +231,13 @@ function formatSize(bytes: number) {
 }
 
 .parent-att-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pt-text-strong);
   word-break: break-word;
 }
 
 .parent-att-size {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint, #6b7280);
 }
 </style>

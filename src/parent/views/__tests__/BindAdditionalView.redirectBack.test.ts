@@ -69,3 +69,11 @@ describe('BindAdditionalView — 加綁成功後導回原頁', () => {
     expect(router.currentRoute.value.path).toBe('/home')
   })
 })
+
+describe('BindAdditionalView 文案', () => {
+  it('標題不寫死「第二個小孩」（第三、第四個孩子也走這頁）', async () => {
+    const { wrapper } = await mountViewAt('/bind-additional')
+    expect(wrapper.find('.title').text()).toBe('加綁子女')
+    expect(wrapper.text()).not.toContain('第二個')
+  })
+})

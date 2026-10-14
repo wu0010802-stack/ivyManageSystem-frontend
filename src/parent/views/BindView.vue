@@ -207,7 +207,7 @@ function resetForRetry() {
 .welcome-eyebrow {
   margin: 0;
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--pt-text-muted);
@@ -217,7 +217,7 @@ function resetForRetry() {
 .title {
   margin: 4px 0 8px;
   text-align: center;
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 800;
   color: var(--pt-text-strong);
   letter-spacing: -0.01em;
@@ -226,14 +226,14 @@ function resetForRetry() {
 .hint-name {
   margin: 0 0 12px;
   text-align: center;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--brand-primary, #0d9053);
   font-weight: 600;
 }
 
 .desc {
   color: var(--pt-text-body);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.65;
   margin: 8px 0 18px;
   text-align: center;
@@ -243,7 +243,7 @@ function resetForRetry() {
   width: 100%;
   min-height: 56px;
   padding: 12px 14px;
-  font-size: 22px;
+  font-size: max(16px, 1.375rem);
   letter-spacing: 6px;
   text-align: center;
   border: 2px solid var(--pt-border-light, #ecf5f9);
@@ -268,7 +268,7 @@ function resetForRetry() {
   flex-direction: column;
   gap: 6px;
   color: var(--coral-700, #b14545);
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 12px 0 0;
   padding: 10px 12px;
   background: var(--coral-100, #ffe3e0);
@@ -307,7 +307,7 @@ function resetForRetry() {
 .recovery-retry {
   width: 100%;
   min-height: 44px;
-  font-size: 14px;
+  font-size: 0.875rem;
   background: rgba(13, 144, 83, 0.08);
   color: var(--brand-primary, #0d9053);
   border: 1px solid rgba(13, 144, 83, 0.2);
@@ -326,12 +326,12 @@ function resetForRetry() {
   margin-top: 16px;
   width: 100%;
   min-height: 52px;
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .legal {
   margin: 24px 0 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--pt-text-faint);
   text-align: center;
 }

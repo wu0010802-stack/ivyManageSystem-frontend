@@ -13,6 +13,7 @@ import CrownIcon from '@/components/brand/CrownIcon.vue'
 import MilestoneCarousel from '../components/MilestoneCarousel.vue'
 import TimelineItem from '../components/TimelineItem.vue'
 import { useChildTimeline } from '../composables/useChildTimeline'
+import { useChildSelection } from '../composables/useChildSelection'
 
 function isBirthdayToday(child: { birthday?: string | null } | null | undefined) {
   if (!child?.birthday) return false
@@ -26,6 +27,7 @@ function isBirthdayToday(child: { birthday?: string | null } | null | undefined)
 const route = useRoute()
 const router = useRouter()
 const studentId = computed(() => Number(route.params.studentId))
+const { setSelected } = useChildSelection()
 
 const data = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
@@ -40,6 +42,11 @@ async function fetchData() {
   try {
     const { data: d } = await getChildProfile(studentId.value)
     data.value = d
+    // 頁內「前往聯絡簿留言」與孩子／聯絡簿分頁都依全域「目前選定的孩子」顯示。
+    // 從我的頁子女清單、推播深連結進來時，選定的可能還是另一個孩子——家長在乙的
+    // 檔案頁按「前往聯絡簿」卻打開甲的聯絡簿。後端確認這個孩子屬於本家長（載入
+    // 成功）後才切換，避免用網址上的任意 id 改掉選擇。
+    setSelected(studentId.value)
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
@@ -383,36 +390,36 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-weight: 900;
-  font-size: 22px;
+  font-size: 1.375rem;
   box-shadow: var(--pt-elev-1);
 }
 .child-name {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 900;
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .child-meta {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-top: 2px;
 }
 
 /* ── info card：吃 .pt-card 不再自家 background/border/radius ───── */
 .sub-info {
-  font-size: 13px;
-  color: var(--pt-text-placeholder);
+  font-size: 0.8125rem;
+  color: var(--pt-text-muted);
   margin-bottom: 10px;
 }
 .row {
   display: flex;
   gap: 10px;
   margin-bottom: 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .row .label {
   width: 56px;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   flex-shrink: 0;
 }
 .teachers {
@@ -421,22 +428,22 @@ onMounted(() => {
   gap: 2px;
 }
 .teacher-tag {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .section-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 800;
   color: var(--pt-text-strong);
   margin: 0 0 10px;
   letter-spacing: 0.02em;
 }
 .empty {
-  color: var(--pt-text-placeholder);
-  font-size: 13px;
+  color: var(--pt-text-muted);
+  font-size: 0.8125rem;
   padding: 6px 0;
 }
 .guardian-row {
@@ -454,8 +461,8 @@ onMounted(() => {
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .guardian-rel {
-  color: var(--pt-text-placeholder);
-  font-size: 13px;
+  color: var(--pt-text-muted);
+  font-size: 0.8125rem;
 }
 .guardian-tags {
   display: flex;
@@ -480,7 +487,7 @@ onMounted(() => {
 }
 .allergy-text {
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .pt-card.change-card {
@@ -488,14 +495,14 @@ onMounted(() => {
   border-color: color-mix(in srgb, var(--pt-warning-text) 28%, transparent);
 }
 .change-text {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-warning-text-soft);
   margin: 0 0 10px;
   line-height: 1.5;
 }
 .change-btn { width: 100%; }
 .growth-section .section-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0;
   color: var(--pt-text-strong);
@@ -512,7 +519,7 @@ onMounted(() => {
   background: var(--pt-surface-mute);
   border: none;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
@@ -523,7 +530,7 @@ onMounted(() => {
 .link-btn {
   background: var(--pt-surface-mute);
   padding: 10px 16px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .link-btn:hover { background: var(--leaf-100, #dcf4e6); }
 .more-link {
@@ -536,7 +543,7 @@ onMounted(() => {
   background: transparent;
   border: none;
   color: var(--pt-text-strong);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   border-radius: 8px;
@@ -593,5 +600,5 @@ onMounted(() => {
   box-shadow: var(--pt-elev-1);
 }
 .strip-thumb > img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.placeholder.small { padding: 12px; font-size: 13px; }
+.placeholder.small { padding: 12px; font-size: 0.8125rem; }
 </style>

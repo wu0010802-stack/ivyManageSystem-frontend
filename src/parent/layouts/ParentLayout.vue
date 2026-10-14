@@ -11,6 +11,7 @@ import BrandMark from '@/components/brand/BrandMark.vue'
 import ParentOfflineIndicator from '../components/ParentOfflineIndicator.vue'
 import { useTenantBranding } from '@/composables/useTenantBranding'
 import { isInLineClient } from '../utils/lineClient'
+import { resolveBackAction } from '../utils/backNavigation'
 
 interface TabItem {
   key: string
@@ -159,12 +160,26 @@ const headerTitle = computed(() =>
   showOwnTitle.value ? (route.meta?.title as string) || branding.value.titles.parent_short : '',
 )
 
+/**
+ * 返回鍵：有站內上一頁才 router.back()，否則回到同分頁的上一層／分頁根頁
+ * （或 meta.backTo）。不看 window.history.length——它會把 LIFF／LINE OAuth 的
+ * 站外紀錄算進去，從推播深連結進來的詳情頁按返回會退出 App 或循環。
+ * 判斷細節見 utils/backNavigation.ts。
+ */
+function lookupRoute(path: string) {
+  const resolved = router.resolve(path)
+  // catch-all 與 redirect 記錄沒有 name：視為「沒有這一頁」
+  return resolved.name == null ? null : resolved.meta
+}
+
 function onBack() {
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    router.replace('/home')
-  }
+  const action = resolveBackAction(
+    router.options.history.state,
+    { path: route.path, meta: route.meta },
+    lookupRoute,
+  )
+  if (action.type === 'back') router.back()
+  else router.replace(action.path)
 }
 </script>
 

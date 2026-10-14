@@ -9,6 +9,9 @@ import type { ContactBookEntry as CbEntry } from '../api/contactBook'
 import { useChildrenStore } from '../stores/children'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { isNotFoundError, loadErrorMessage } from '../utils/loadError'
 import MoodBadge from '../components/contact-book/MoodBadge.vue'
 import TimelineRow from '../components/contact-book/TimelineRow.vue'
 import PhotoGrid from '../components/contact-book/PhotoGrid.vue'
@@ -29,7 +32,10 @@ try {
 
 const entryId = computed(() => Number(route.params.entryId))
 const entry = ref<CbEntry | null>(null)
-const loading = ref(false)
+// 初值 true：首屏就是骨架，不先閃「找不到聯絡簿」
+const loading = ref(true)
+// 連線／伺服器失敗 ≠ 找不到：失敗給可重試錯誤態，只有 404 才說找不到
+const loadError = ref<unknown>(null)
 const acking = ref(false)
 
 const MOOD_LABEL: Record<string, string> = {
@@ -57,15 +63,7 @@ const timelineItems = computed(() => {
   const e = entry.value
   if (!e) return []
   const out: { type: string; icon: string; tone: string; label: string; value?: string; detail?: string }[] = []
-  if (e.mood) {
-    out.push({
-      type: 'mood',
-      icon: 'sentiment_satisfied',
-      tone: 'sun',
-      label: '今日心情',
-      value: MOOD_LABEL[e.mood] || e.mood,
-    })
-  }
+  // 心情已在 hero（大表情＋「今天心情」標籤）呈現，故事列表不再重複第三次
   if (e.meal_lunch != null || e.meal_snack != null) {
     const parts: string[] = []
     if (e.meal_lunch != null) parts.push(`午餐 ${e.meal_lunch} / 3 份`)
@@ -127,14 +125,14 @@ async function fetchData() {
   // 樣板同 FeesView.vue 的 reqId pattern。
   const reqId = entryId.value
   loading.value = true
+  loadError.value = null
   try {
     const { data } = await getContactBookDetail(reqId)
     if (entryId.value !== reqId) return
     entry.value = data as CbEntry
   } catch (err) {
     if (entryId.value !== reqId) return
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    if (!isNotFoundError(err)) loadError.value = err
   } finally {
     if (entryId.value === reqId) loading.value = false
   }
@@ -149,7 +147,8 @@ async function queueAck() {
   await enqueueParent({
     kind: OP_KINDS.CONTACT_BOOK_ACK,
     payload: { entry_id: entryId.value },
-    meta: { entry_id: entryId.value },
+    // log_date 給「無法同步」對話框辨認是哪一天的聯絡簿
+    meta: { entry_id: entryId.value, log_date: entry.value?.log_date ?? '' },
   })
   // 樂觀 UI
   if (entry.value) {
@@ -276,6 +275,15 @@ function formatTime(iso: string | null): string {
         <span v-else class="stamp-hint">點一下蓋章確認已讀</span>
       </section>
 
+      <!-- 老師留言：家長最想看的一段，放在飲食／午睡等數據之前 -->
+      <section v-if="entry.teacher_note" class="card note-card">
+        <h2 class="card-title">
+          <span class="material-symbols-rounded" aria-hidden="true">format_quote</span>
+          老師留言
+        </h2>
+        <p class="note-body">{{ entry.teacher_note }}</p>
+      </section>
+
       <!-- 時間軸：一天的故事 -->
       <section v-if="timelineItems.length" class="card timeline-card">
         <h2 class="card-title">
@@ -291,18 +299,9 @@ function formatTime(iso: string | null): string {
             :label="item.label"
             :value="item.value"
             :detail="item.detail"
-            :hide-connector="i === timelineItems.length - 1 && !entry.teacher_note"
+            :hide-connector="i === timelineItems.length - 1"
           />
         </div>
-      </section>
-
-      <!-- 老師留言：cream highlight 卡 -->
-      <section v-if="entry.teacher_note" class="card note-card">
-        <h2 class="card-title">
-          <span class="material-symbols-rounded" aria-hidden="true">format_quote</span>
-          老師留言
-        </h2>
-        <p class="note-body">{{ entry.teacher_note }}</p>
       </section>
 
       <!-- 照片牆 -->
@@ -316,7 +315,18 @@ function formatTime(iso: string | null): string {
       </section>
     </template>
 
-    <p v-else class="hint">找不到聯絡簿。</p>
+    <MobileErrorRetry
+      v-else-if="loadError"
+      :error="loadErrorMessage(loadError, '聯絡簿載入失敗，請檢查網路後重試')"
+      @retry="fetchData"
+    />
+
+    <EmptyState
+      v-else
+      variant="mobile"
+      title="找不到這篇聯絡簿"
+      description="可能已被老師撤回，請回到聯絡簿列表確認。"
+    />
   </div>
 </template>
 
@@ -328,7 +338,6 @@ function formatTime(iso: string | null): string {
   padding: 0 0 32px;
 }
 .skeleton-wrap { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.hint { color: var(--pt-text-faint); text-align: center; padding: 32px 0; }
 
 /* Hero */
 .hero {
@@ -346,7 +355,7 @@ function formatTime(iso: string | null): string {
 }
 .hero-date {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--pt-text-muted);
   letter-spacing: 0.02em;
@@ -378,7 +387,7 @@ function formatTime(iso: string | null): string {
   color: var(--pt-accent-sun-on);
   border-radius: 999px;
   padding: 4px 12px 4px 8px;
-  font-size: 12.5px;
+  font-size: 0.7813rem;
   font-weight: 800;
 }
 .mood-tag .material-symbols-rounded {
@@ -386,7 +395,7 @@ function formatTime(iso: string | null): string {
 }
 .hero-name {
   margin: 0;
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--pt-text-strong);
@@ -394,7 +403,7 @@ function formatTime(iso: string | null): string {
 }
 .hero-class {
   margin: 4px 0 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--pt-text-muted);
 }
@@ -412,7 +421,7 @@ function formatTime(iso: string | null): string {
 }
 .stamp-time,
 .stamp-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint);
 }
 
@@ -429,7 +438,7 @@ function formatTime(iso: string | null): string {
   align-items: center;
   gap: 8px;
   margin: 0 0 14px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   letter-spacing: 0.01em;
@@ -441,7 +450,7 @@ function formatTime(iso: string | null): string {
 }
 .title-count {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--pt-text-faint);
   letter-spacing: 0.04em;
@@ -463,7 +472,7 @@ function formatTime(iso: string | null): string {
 .note-card .card-title .material-symbols-rounded { color: var(--sun-700, #c99500); }
 .note-body {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.75;
   color: var(--pt-text-body);
   white-space: pre-wrap;

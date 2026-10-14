@@ -10,6 +10,7 @@ import { useConsentGate } from './composables/useConsentGate'
 import { getCurrentPolicy, type PolicyVersionOut } from './api/consent'
 import { reportClientEvent } from './utils/clientEvents'
 import { sanitizeUrl } from '@/utils/sentry'
+import { notifyPageEntered } from './utils/scrollRestoration'
 
 const gate = useConsentGate()
 const consentPolicy = ref<PolicyVersionOut | null>(null)
@@ -91,7 +92,9 @@ function onBoundaryError(payload: { error: unknown; variant: string }) {
          而非白屏整個家長端 App（parent entry 無 app.config.errorHandler）。 -->
     <ErrorBoundary variant="parent" @error-captured="onBoundaryError">
       <router-view v-slot="{ Component, route }">
-        <transition :name="transitionName" mode="out-in">
+        <!-- @enter：新頁已插入，router scrollBehavior 等這個訊號才捲動（還原列表位置／捲到頂），
+             否則 out-in 期間會捲到正在淡出的舊頁。見 utils/scrollRestoration.ts -->
+        <transition :name="transitionName" mode="out-in" @enter="notifyPageEntered">
           <component :is="Component" :key="route.fullPath" />
         </transition>
       </router-view>

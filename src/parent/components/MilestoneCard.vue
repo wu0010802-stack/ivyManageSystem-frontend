@@ -123,9 +123,9 @@ const dateLabel = computed<string>(() => {
   font-size: 26px;
   font-variation-settings: 'FILL' 1, 'wght' 500;
 }
-.title { font-weight: 700; font-size: 15px; color: var(--m3-primary, #0d9053); }
-.date { font-size: 12px; color: var(--m3-on-surface-variant, #6b7280); }
-.desc { font-size: 13px; color: var(--m3-on-surface, #374151); }
+.title { font-weight: 700; font-size: 0.9375rem; color: var(--m3-primary, #0d9053); }
+.date { font-size: 0.75rem; color: var(--m3-on-surface-variant, #6b7280); }
+.desc { font-size: 0.8125rem; color: var(--m3-on-surface, #374151); }
 
 .ack-btn {
   margin-top: 2px;
@@ -135,7 +135,7 @@ const dateLabel = computed<string>(() => {
   background: transparent;
   color: var(--m3-primary, #006d3d);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   transition: background-color 140ms ease;
@@ -148,7 +148,7 @@ const dateLabel = computed<string>(() => {
   align-items: center;
   gap: 4px;
   margin: 2px 0 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--pt-text-muted, #6b5e54);
 }

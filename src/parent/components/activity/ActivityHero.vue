@@ -78,7 +78,7 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 }
 
 .act-hero-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--ivy-tile-teal-fg);
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -107,13 +107,13 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 }
 
 .act-hero-stat .num {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 900;
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .act-hero-stat .lbl {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 </style>

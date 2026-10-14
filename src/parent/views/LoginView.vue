@@ -83,10 +83,12 @@ async function startLogin({ forceFresh = false } = {}) {
     await initLiff()
   } catch (err: unknown) {
     status.value = 'error'
+    // SDK 原始錯誤（英文、含 LIFF ID 等工程字眼）不給家長看：initLiff() 已把它回報到
+    // 家長端監控（liff_init_failed），這裡只留 console 供現場除錯。
+    console.warn('[parent-login] LIFF 初始化失敗', err)
     _setLocalError(
-      // 文案不再指向工程 env：LIFF ID 已改由園所的 LINE 設定提供（多租戶 4d/fb）。
-      (err instanceof Error ? err.message : String(err)) || 'LINE 登入初始化失敗，請聯絡園所確認 LINE 設定',
-      '請重新開啟 LIFF 頁面；持續發生請聯絡園所',
+      'LINE 登入暫時無法啟動',
+      '請關閉這個頁面，回到 LINE 重新點開連結；一直出現請聯絡園所確認 LINE 設定',
     )
     return
   }
@@ -481,7 +483,7 @@ onMounted(() => {
 
 .welcome-eyebrow {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--pt-text-muted);
@@ -490,7 +492,7 @@ onMounted(() => {
 
 .title {
   margin: 4px 0 20px;
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 800;
   color: var(--brand-primary, #0d9053);
   letter-spacing: -0.01em;
@@ -518,13 +520,13 @@ onMounted(() => {
 
 .hint {
   color: var(--pt-text-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   margin: 4px 0 0;
 }
 
 .error {
   color: var(--coral-700, #b14545);
-  font-size: 14px;
+  font-size: 0.875rem;
   margin: 8px 0 16px;
   word-break: break-word;
   background: var(--coral-100, #ffe3e0);
@@ -542,7 +544,7 @@ onMounted(() => {
   border-top: 1px dashed var(--coral-300, #ffb5ad);
   color: var(--pt-text-body, #5a4a4a);
   font-weight: 400;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
@@ -584,7 +586,7 @@ onMounted(() => {
   background: none;
   border: none;
   color: var(--pt-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-decoration: underline;
   cursor: pointer;
 }
@@ -603,7 +605,7 @@ onMounted(() => {
 
 .device-setup-hint {
   margin: 0 0 12px;
-  font-size: 12.5px;
+  font-size: 0.7813rem;
   line-height: 1.6;
   color: var(--pt-text-muted);
   text-align: left;
@@ -613,7 +615,7 @@ onMounted(() => {
   width: 100%;
   min-height: 48px;
   padding: 10px 12px;
-  font-size: 18px;
+  font-size: max(16px, 1.125rem);
   letter-spacing: 4px;
   text-align: center;
   border: 2px solid var(--pt-border-light, #ecf5f9);
@@ -643,13 +645,13 @@ onMounted(() => {
   background: var(--coral-100, #ffe3e0);
   color: var(--coral-700, #b14545);
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: left;
 }
 
 .legal {
   margin: 24px 0 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--pt-text-faint);
   letter-spacing: 0.02em;
 }

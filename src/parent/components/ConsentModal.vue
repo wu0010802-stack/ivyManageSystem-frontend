@@ -11,9 +11,14 @@
  * - 其他 3 scope 可選（家長自行 opt-in）
  * - submit 後 fan-out 寫 4 個 consent 事件，全部成功才 close
  *
+ * a11y：由 caller 以 v-if 掛載，掛上即是開啟。共用 useAccessibleDialog 做 focus trap
+ * （Tab 不會跑到遮罩後面的登入頁／App）、初始焦點移到第一個勾選框、ref-count 捲動鎖
+ * （背景不跟著捲）；強制關卡不提供 Esc 關閉。卸載時焦點還給開啟前的元素。
+ *
  * Refs: docs/superpowers/specs/2026-05-28-consent-dsr-rights-design.md §3.3 + §3.4
  */
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import {
   CONSENT_SCOPES,
   CONSENT_SCOPE_SERVICE_ESSENTIAL,
@@ -37,6 +42,19 @@ const checked = ref<Record<ConsentScope, boolean>>({
   photo_publish: false,
   line_push: false,
   cross_border_transfer: false,
+})
+
+const dialogRef = ref<HTMLElement | null>(null)
+// 必須在 useAccessibleDialog 移動焦點前先記下開啟者
+const openerEl = typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null
+const { onDialogKeydown } = useAccessibleDialog({
+  open: () => true,
+  dialogRef,
+  // 強制同意關卡：Esc 不關閉（useAccessibleDialog 仍會 stopPropagation，避免底下的 sheet 被 Esc 關掉）
+  close: () => {},
+})
+onBeforeUnmount(() => {
+  if (openerEl?.isConnected) openerEl.focus()
 })
 
 const status = ref<'init' | 'submitting' | 'error'>('init')
@@ -73,7 +91,15 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="consent-overlay" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+  <div
+    ref="dialogRef"
+    class="consent-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="consent-title"
+    tabindex="-1"
+    @keydown="onDialogKeydown"
+  >
     <div class="consent-card">
       <h2 id="consent-title" class="title">隱私權與個資告知</h2>
       <p class="version">版本：{{ policy.version }}（{{ policy.effective_at.slice(0, 10) }} 生效）</p>
@@ -129,6 +155,7 @@ async function handleSubmit() {
 .consent-overlay {
   position: fixed;
   inset: 0;
+  outline: none;
   background: rgba(0, 0, 0, 0.56);
   display: flex;
   align-items: center;
@@ -151,14 +178,14 @@ async function handleSubmit() {
 
 .title {
   margin: 0 0 4px;
-  font-size: 20px;
+  font-size: 1.25rem;
   color: var(--brand-primary, #0d9053);
   letter-spacing: -0.01em;
 }
 
 .version {
   margin: 0 0 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
 }
 
@@ -166,15 +193,15 @@ async function handleSubmit() {
   background: rgba(13, 144, 83, 0.06);
   border-radius: 12px;
   padding: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
   margin-bottom: 12px;
   line-height: 1.6;
 }
 
 .intro {
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.7;
-  color: var(--pt-text);
+  color: var(--pt-text-body);
   margin: 12px 0 8px;
 }
 
@@ -208,13 +235,13 @@ async function handleSubmit() {
 
 .scope-text strong {
   display: block;
-  font-size: 15px;
-  color: var(--pt-text);
+  font-size: 0.9375rem;
+  color: var(--pt-text-strong);
   margin-bottom: 2px;
 }
 
 .scope-text small {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
   display: block;
 }
@@ -224,7 +251,7 @@ async function handleSubmit() {
   color: var(--coral-700, #b14545);
   padding: 10px 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 8px 0 12px;
 }
 
@@ -233,18 +260,18 @@ async function handleSubmit() {
   color: var(--coral-700, #b14545);
   padding: 10px 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 8px 0 12px;
 }
 
 .submit-btn {
   width: 100%;
   min-height: 48px;
-  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  background: var(--m3-primary, #006d3d);
   color: var(--m3-on-primary, #fff);
   border: none;
   border-radius: 12px;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -256,7 +283,7 @@ async function handleSubmit() {
 
 .legal-note {
   margin: 12px 0 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--pt-text-faint);
   line-height: 1.6;
 }

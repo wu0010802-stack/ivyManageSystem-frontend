@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import MedicationFormView from '../MedicationFormView.vue'
 const mocks = vi.hoisted(() => ({ create: vi.fn(), upload: vi.fn(), replace: vi.fn(), success: vi.fn() }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: mocks.replace, back: vi.fn() }) }))
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: mocks.replace, back: vi.fn() }), onBeforeRouteLeave: vi.fn() }))
 vi.mock('@/parent/stores/children', () => ({ useChildrenStore: () => ({ items: [{ student_id: 1, name: '測試孩子' }], load: vi.fn() }) }))
 vi.mock('@/parent/api/medications', () => ({ createMedicationOrder: mocks.create, uploadMedicationPhoto: mocks.upload }))
 vi.mock('@/parent/utils/toast', () => ({ toast: { success: mocks.success, warn: vi.fn(), error: vi.fn() } }))

@@ -101,6 +101,30 @@ describe('家長端 dark mode legacy 色階覆寫（2026-08-13 文字/背景對�
     }
     expect(offenders, `違規檔案：${offenders.join(', ')}`).toEqual([])
   })
+
+  it('--m3-primary 底不得配恆白文字（dark 的 --m3-primary 是淺綠 #6ddc97，白字僅 1.7:1）', () => {
+    // 文字一律配成對的 --m3-on-primary（light #fff／dark #00391d）。
+    // --color-primary-contrast／--pt-on-accent 是「light/dark 皆白」的語意，只能配 dark 不變淺的有色底。
+    const { readdirSync } = require('node:fs') as typeof import('node:fs')
+    const root = resolve(process.cwd(), 'src/parent')
+    const CONSTANT_WHITE = /^\s*(var\(--(color-primary-contrast|pt-on-accent)\b|#fff\b|#ffffff\b|white\b)/i
+    const offenders: string[] = []
+    for (const entry of readdirSync(root, { recursive: true }) as string[]) {
+      const file = String(entry)
+      if (!file.endsWith('.vue') && !file.endsWith('.css')) continue
+      const content = read(`src/parent/${file}`)
+      const styleStart = file.endsWith('.vue') ? content.indexOf('<style') : 0
+      if (styleStart < 0) continue
+      for (const m of content.slice(styleStart).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const body = m[2]
+        const bg = body.match(/background(?:-color)?\s*:\s*([^;]+)/)
+        if (!bg || !/^\s*var\(--m3-primary[,)]/.test(bg[1])) continue
+        const color = body.match(/(?:^|[;\s])color\s*:\s*([^;]+)/)
+        if (color && CONSTANT_WHITE.test(color[1])) offenders.push(`${file} ${m[1].trim().split('\n').pop()}`)
+      }
+    }
+    expect(offenders, `違規規則：${offenders.join(', ')}`).toEqual([])
+  })
 })
 
 describe('家長端狀態語意色（2026-09-01 UI/UX 打磨）', () => {

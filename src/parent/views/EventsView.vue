@@ -4,9 +4,14 @@ import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { listEvents, acknowledgeEvent } from '../api/events'
 import { toast } from '../utils/toast'
+import { eventTypeLabel } from '@/constants/calendarEventTypes'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { invalidateHomeSummary } from '../composables/useHomeSummary'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import { loadErrorMessage } from '../utils/loadError'
 
 interface EventItem {
   id: number
@@ -36,8 +41,13 @@ const router = useRouter()
 
 const childrenStore = useChildrenStore()
 const items = ref<EventItem[]>([])
-const loading = ref(false)
+// 初值 true：onMounted 先等子女清單才發請求，這段空檔不得先寫「目前沒有事件」
+const loading = ref(true)
+// 載入失敗且沒有任何事件時進持久錯誤態，不得與「尚無事件」同形
+const loadError = ref<unknown>(null)
 const ackTarget = ref<AckTarget | null>(null)
+// 送出中鎖住「確認簽閱」：弱網下家長常連點，會重複送出同一筆簽閱
+const acking = ref(false)
 
 const ackModalOpen = computed({
   get: () => ackTarget.value !== null,
@@ -45,13 +55,6 @@ const ackModalOpen = computed({
     if (!v) ackTarget.value = null
   },
 })
-
-const TYPE_LABEL: Record<string, string> = {
-  meeting: '會議',
-  activity: '活動',
-  holiday: '假日',
-  general: '一般',
-}
 
 const studentNameMap = computed(() => {
   const m = new Map<number | string, string>()
@@ -65,12 +68,14 @@ const needsAckCount = computed(() =>
 
 async function fetchData() {
   loading.value = true
+  loadError.value = null
   try {
     const { data } = await listEvents()
     items.value = (data as { items?: EventItem[] })?.items || []
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    loadError.value = err
+    // 已有事件（簽閱後重新整理失敗）時保留舊清單，只用 toast 告知
+    if (items.value.length > 0) toast.error(loadErrorMessage(err, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -87,18 +92,22 @@ function openAck(event: EventItem) {
 
 async function submitAck() {
   const t = ackTarget.value
-  if (!t) return
+  if (!t || acking.value) return
+  acking.value = true
   try {
     await acknowledgeEvent(t.event.id, {
       student_id: Number(t.student_id),
       signature_name: t.signature_name.trim() || null,
     })
     toast.success('已簽閱')
+    void invalidateHomeSummary()
     ackTarget.value = null
     fetchData()
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '簽閱失敗'))
+  } finally {
+    acking.value = false
   }
 }
 
@@ -111,17 +120,28 @@ onMounted(async () => {
 <template>
   <div class="events-view">
     <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">家長簽閱</p>
-      <h1 class="pt-page-hero-title">事件公告</h1>
+      <p class="pt-page-hero-eyebrow">家長簽收</p>
+      <h1 class="pt-page-hero-title">簽收通知</h1>
       <p class="pt-page-hero-note">
         <template v-if="needsAckCount > 0">{{ needsAckCount }} 筆待簽閱</template>
         <template v-else-if="items.length > 0">全數簽閱完成</template>
+        <template v-else-if="loading">載入中…</template>
+        <template v-else-if="loadError">暫時無法載入</template>
         <template v-else>目前沒有事件</template>
       </p>
     </header>
 
+    <!-- 三態：載入中 → 載入失敗（可重試）→ 空狀態 -->
+    <div v-if="loading && items.length === 0" class="events-skeleton">
+      <SkeletonBlock variant="card" :count="2" />
+    </div>
+    <MobileErrorRetry
+      v-else-if="loadError && items.length === 0"
+      :error="loadErrorMessage(loadError, '事件載入失敗，請檢查網路後重試')"
+      @retry="fetchData"
+    />
     <EmptyState
-      v-if="!loading && items.length === 0"
+      v-else-if="items.length === 0"
       variant="mobile"
       title="尚無事件"
     />
@@ -133,7 +153,7 @@ onMounted(async () => {
       :class="{ require: ev.requires_acknowledgment }"
     >
       <div class="event-row1">
-        <span class="pt-pill pt-pill-info">{{ TYPE_LABEL[ev.event_type] || ev.event_type }}</span>
+        <span class="pt-pill pt-pill-info">{{ eventTypeLabel(ev.event_type) }}</span>
         <span class="event-title">{{ ev.title }}</span>
       </div>
       <div class="event-row2">
@@ -213,8 +233,15 @@ onMounted(async () => {
           </div>
         </div>
         <div class="ack-footer">
-          <button type="button" class="pt-ghost-btn" @click="ackTarget = null">取消</button>
-          <button type="button" class="pt-action-btn" @click="submitAck">確認簽閱</button>
+          <button type="button" class="pt-ghost-btn" :disabled="acking" @click="ackTarget = null">取消</button>
+          <button
+            type="button"
+            class="pt-action-btn"
+            data-testid="confirm-ack"
+            :disabled="acking"
+            :aria-busy="acking"
+            @click="submitAck"
+          >{{ acking ? '送出中…' : '確認簽閱' }}</button>
         </div>
       </template>
     </AppModal>
@@ -223,6 +250,7 @@ onMounted(async () => {
 
 <style scoped>
 .events-view { padding-bottom: 24px; }
+.events-skeleton { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .events-view > .pt-card + .pt-card { margin-top: 12px; }
 .events-view > .pt-page-hero + .pt-card,
 .events-view > .pt-page-hero + .empty-state + .pt-card { margin-top: 12px; }
@@ -242,19 +270,19 @@ onMounted(async () => {
   flex: 1;
   font-weight: 700;
   color: var(--pt-text-strong);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .event-row2 {
   margin-top: 6px;
   color: var(--pt-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .event-loc {
   margin-top: 4px;
   color: var(--pt-text-faint);
-  font-size: 13px;
+  font-size: 0.8125rem;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -263,7 +291,7 @@ onMounted(async () => {
 .event-desc {
   margin-top: 6px;
   color: var(--pt-text-soft);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
@@ -272,8 +300,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  color: var(--pt-text-placeholder);
-  font-size: 12px;
+  color: var(--pt-text-muted);
+  font-size: 0.75rem;
 }
 
 .ack-actions {
@@ -307,7 +335,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
 }
 
 .form {
@@ -325,18 +353,18 @@ onMounted(async () => {
 
 .event-summary-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .event-summary-date {
-  color: var(--pt-text-placeholder);
-  font-size: 12px;
+  color: var(--pt-text-muted);
+  font-size: 0.75rem;
   margin-top: 2px;
 }
 
 .field label {
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
   margin-bottom: 4px;
 }
@@ -347,7 +375,7 @@ onMounted(async () => {
   padding: 8px 10px;
   border: 1px solid var(--pt-border-strong);
   border-radius: var(--pt-control-radius, 12px);
-  font-size: 14px;
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
 }
 
 .ack-footer {

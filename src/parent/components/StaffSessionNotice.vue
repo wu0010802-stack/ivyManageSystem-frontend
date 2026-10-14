@@ -147,19 +147,19 @@ async function doLogout(): Promise<void> {
 
 .ssn-card h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 600;
 }
 
 .ssn-body {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.6;
 }
 
 .ssn-hint {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--m3-on-surface-variant, #424940);
 }
@@ -177,7 +177,7 @@ async function doLogout(): Promise<void> {
   border: none;
   border-radius: 20px;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -185,7 +185,7 @@ async function doLogout(): Promise<void> {
 .ssn-btn small {
   display: block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
   opacity: 0.85;
 }

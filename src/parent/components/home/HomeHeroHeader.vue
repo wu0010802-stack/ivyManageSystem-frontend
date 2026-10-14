@@ -18,7 +18,7 @@ import GreetingSunIllustration from '../illustrations/GreetingSunIllustration.vu
 import GreetingMoonIllustration from '../illustrations/GreetingMoonIllustration.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   unreadAnnouncements?: number
 }>(), {
   unreadAnnouncements: 0,
@@ -42,6 +42,14 @@ const period = ref<GreetingPeriod>(greetingPeriod())
 const greetingText = computed(() => GREETING_TEXT[period.value])
 const isEvening = computed(() => period.value === 'evening')
 
+/**
+ * 名稱對齊服務目錄的「公告」（原「校園公告通知」，2026-10-14）；紅點是
+ * aria-hidden 的純視覺，未讀數要寫進名稱，讀螢幕的家長才知道有新公告。
+ */
+const bellLabel = computed(() =>
+  props.unreadAnnouncements > 0 ? `公告，${props.unreadAnnouncements} 則未讀` : '公告',
+)
+
 /** 「M/D 星期X」；星期一律用中文全形字，不用英文縮寫（沿用既有決策）。 */
 const dateMeta = computed(() => {
   const d = new Date()
@@ -63,7 +71,7 @@ const dateMeta = computed(() => {
       type="button"
       class="hh-bell"
       data-testid="hh-bell"
-      aria-label="校園公告通知"
+      :aria-label="bellLabel"
       @click="emit('open-announcements')"
     >
       <span class="material-symbols-rounded" aria-hidden="true">notifications</span>
@@ -83,13 +91,13 @@ const dateMeta = computed(() => {
 .hh-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .hh-meta {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   opacity: 0.72;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
-.hh-greet { margin: 0; font-size: 24px; font-weight: 900; line-height: 1.15; }
+.hh-greet { margin: 0; font-size: 1.5rem; font-weight: 900; line-height: 1.15; }
 .hh-art { width: 52px; height: auto; flex-shrink: 0; }
 
 .hh-bell {

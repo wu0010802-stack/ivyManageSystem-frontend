@@ -1,5 +1,5 @@
 /**
- * AnnouncementsHomeCard — 首頁「校園公告」預覽卡（2026-09-08 首頁改版）。
+ * AnnouncementsHomeCard — 首頁「公告」預覽卡（2026-09-08 首頁改版）。
  *
  * 涵蓋：
  *  - 只抓最新 3 則（limit:3）
@@ -118,11 +118,11 @@ describe('AnnouncementsHomeCard', () => {
     expect(w.find('[data-testid="ann-home-card"]').exists()).toBe(false)
   })
 
-  it('標題含「校園公告」與「更多」連到 /announcements', async () => {
+  it('標題為服務名稱「公告」（與待辦「所有服務」、路由標題一致），「更多」連到 /announcements', async () => {
     mockListAnnouncements.mockResolvedValue({ data: { items: [makeItem()], total: 1 } })
     const w = mount(AnnouncementsHomeCard, { global: { stubs } })
     await flushPromises()
-    expect(w.text()).toContain('校園公告')
+    expect(w.find('.pt-section-title').text()).toBe('公告')
     const more = w.find('.ann-home-more')
     expect(more.exists()).toBe(true)
     expect(more.attributes('href')).toBe('/announcements')

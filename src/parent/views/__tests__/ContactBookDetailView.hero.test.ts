@@ -64,4 +64,19 @@ describe('ContactBookDetailView — hero 重排（P3）', () => {
     expect(tag.exists()).toBe(true)
     expect(tag.text()).toContain('開心')
   })
+
+  it('心情只在 hero 出現，故事列表不再重複「今日心情」', async () => {
+    const w = await mountDetail()
+    expect(w.find('.timeline-card').text()).not.toContain('今日心情')
+    expect(w.find('.timeline-card').text()).toContain('午餐')
+  })
+
+  it('老師留言排在飲食／午睡等數據之前', async () => {
+    const w = await mountDetail()
+    const cards = w.findAll('section.card').map((c) => c.classes())
+    const noteIdx = cards.findIndex((c) => c.includes('note-card'))
+    const timelineIdx = cards.findIndex((c) => c.includes('timeline-card'))
+    expect(noteIdx).toBeGreaterThanOrEqual(0)
+    expect(noteIdx).toBeLessThan(timelineIdx)
+  })
 })

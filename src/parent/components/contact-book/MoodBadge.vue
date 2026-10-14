@@ -50,7 +50,7 @@ const info = computed(() => (props.mood ? MOOD_MAP[props.mood] : null) || FALLBA
   flex-shrink: 0;
 }
 .mood-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--pt-text-strong);
   letter-spacing: 0.02em;
@@ -59,7 +59,7 @@ const info = computed(() => (props.mood ? MOOD_MAP[props.mood] : null) || FALLBA
 .is-sm .mood-emoji { width: 28px; height: 28px; font-size: 18px; }
 .is-md .mood-emoji { width: 40px; height: 40px; font-size: 24px; }
 .is-lg .mood-emoji { width: 64px; height: 64px; font-size: 36px; }
-.is-lg .mood-label { font-size: 15px; }
+.is-lg .mood-label { font-size: 0.9375rem; }
 
 .tone-sun    .mood-emoji { background: var(--pt-accent-sun-container); }
 .tone-cream  .mood-emoji { background: var(--cream, #fffcf2); border: 1px solid var(--pt-border-light); }

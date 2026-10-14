@@ -130,14 +130,14 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 
 <style scoped>
 .detail-name {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .detail-period {
-  color: var(--pt-text-placeholder);
-  font-size: 13px;
+  color: var(--pt-text-muted);
+  font-size: 0.8125rem;
   margin-top: 2px;
 }
 
@@ -145,14 +145,14 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 .section-empty {
   text-align: center;
   padding: 12px;
-  color: var(--pt-text-placeholder);
-  font-size: 13px;
+  color: var(--pt-text-muted);
+  font-size: 0.8125rem;
 }
 
 .section-h {
   margin: 16px 0 6px;
-  font-size: 13px;
-  color: var(--pt-text-placeholder);
+  font-size: 0.8125rem;
+  color: var(--pt-text-muted);
 }
 
 .pay-row {
@@ -163,7 +163,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .pay-row.refund .pay-amount {
@@ -178,7 +178,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 .pay-receipt {
   grid-column: 1 / -1;
   color: var(--pt-text-disabled);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: ui-monospace, monospace;
 }
 
@@ -194,7 +194,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
   background: var(--neutral-0);
   border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface, var(--pt-text-strong));
   cursor: pointer;
   display: inline-flex;
@@ -209,8 +209,8 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 
 .receipt-hint {
   margin: 10px 0 0;
-  font-size: 12px;
-  color: var(--pt-text-placeholder);
+  font-size: 0.75rem;
+  color: var(--pt-text-muted);
   text-align: center;
 }
 </style>

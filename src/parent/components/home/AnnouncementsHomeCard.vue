@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 首頁「校園公告」預覽卡（2026-09-08 首頁改版）。
+ * 首頁「公告」預覽卡（2026-09-08 首頁改版；2026-10-14 標題由「校園公告」對齊
+ * parentServices 的服務名稱「公告」）。
  *
  * 只抓最新 3 則公告做預覽，完整清單／已讀操作仍在 /announcements
  * （AnnouncementsPanel 負責，避免兩處各自實作一份已讀邏輯漂移）。
@@ -16,6 +17,7 @@ import { listAnnouncements, type AnnouncementCategoryBrief } from '../../api/ann
 import { formatAnnouncementRelativeTime } from '../../utils/announcementRelativeTime'
 import SectionHeader from '../SectionHeader.vue'
 import SkeletonBlock from '../SkeletonBlock.vue'
+import { PARENT_SERVICES } from '../../utils/parentServices'
 
 const LIMIT = 3
 
@@ -50,7 +52,7 @@ defineExpose({ refresh: load })
 
 <template>
   <section v-if="loading || items.length > 0" class="ann-home-card" data-testid="ann-home-card">
-    <SectionHeader title="校園公告">
+    <SectionHeader :title="PARENT_SERVICES.announce.label">
       <template #action>
         <router-link to="/announcements" class="ann-home-more">
           更多
@@ -178,7 +180,7 @@ defineExpose({ refresh: load })
   gap: 3px;
   padding: 1px 8px 1px 6px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 0.7188rem;
   font-weight: 600;
   color: var(--cat-color);
   background: color-mix(in srgb, var(--cat-color) 14%, transparent);
@@ -188,7 +190,7 @@ defineExpose({ refresh: load })
 }
 
 .ann-home-time {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint, #6b7280);
 }
 </style>

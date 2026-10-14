@@ -22,6 +22,7 @@ vi.mock('@/parent/composables/useChildSelection', () => ({
 vi.mock('@/parent/utils/toast', () => ({ toast: { error: vi.fn(), success: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
 vi.mock('@/parent/utils/parentOfflineQueue', () => ({
   enqueueParent: vi.fn(), flushParentQueue: vi.fn().mockResolvedValue({}),
+  listParentQueued: vi.fn().mockResolvedValue([]), onParentQueueChange: vi.fn(() => () => {}),
 }))
 vi.mock('@/parent/api/leaves', () => ({
   listLeaves: h.leaves, createLeave: vi.fn(), cancelLeave: vi.fn(),

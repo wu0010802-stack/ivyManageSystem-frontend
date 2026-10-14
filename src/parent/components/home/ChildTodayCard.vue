@@ -137,7 +137,7 @@ function goMedications(): void {
         :data-state="s.state"
       >
         <span class="ctc-dot" aria-hidden="true">
-          <span v-if="s.state === 'done'" class="material-symbols-rounded">check</span>
+          <span v-if="s.state === 'done'" class="material-symbols-rounded" aria-hidden="true">check</span>
         </span>
         <span class="ctc-step-label">{{ s.label }}</span>
         <span class="ctc-step-caption">{{ s.caption }}</span>
@@ -216,24 +216,24 @@ function goMedications(): void {
   align-items: center;
   justify-content: center;
   object-fit: cover;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 900;
   background: var(--pt-accent-leaf-container);
   color: var(--pt-accent-leaf-on);
 }
 .ctc-crown { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); }
 .ctc-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ctc-name { font-size: 18px; font-weight: 900; line-height: 1.2; }
-.ctc-class { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; opacity: 0.78; }
+.ctc-name { font-size: 1.125rem; font-weight: 900; line-height: 1.2; }
+.ctc-class { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.8125rem; font-weight: 600; opacity: 0.78; }
 .ctc-tag {
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   background: var(--pt-accent-sun-container);
   color: var(--pt-accent-sun-on);
 }
-.ctc-chev { font-size: 22px; opacity: 0.6; flex-shrink: 0; }
+.ctc-chev { font-size: 1.375rem; opacity: 0.6; flex-shrink: 0; }
 
 /* 大字狀態：色調只是輔助，文字本身就說明狀態（不以純色作唯一指示） */
 .ctc-status {
@@ -251,8 +251,8 @@ function goMedications(): void {
   font-variation-settings: 'FILL' 1, 'wght' 500;
 }
 .ctc-status-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ctc-status-label { font-size: 20px; font-weight: 900; line-height: 1.2; }
-.ctc-status-detail { font-size: 13px; font-weight: 600; }
+.ctc-status-label { font-size: 1.25rem; font-weight: 900; line-height: 1.2; }
+.ctc-status-detail { font-size: 0.8125rem; font-weight: 600; }
 
 /* 三步驟進度：連接線畫在 li 之間 */
 .ctc-steps {
@@ -296,10 +296,10 @@ function goMedications(): void {
 .ctc-step.is-done .ctc-dot,
 .ctc-step.is-current .ctc-dot { opacity: 1; border-style: solid; color: var(--ctc-accent); }
 .ctc-step.is-done .ctc-dot { background: var(--ctc-accent); }
-.ctc-step.is-done .ctc-dot .material-symbols-rounded { color: var(--pt-on-accent); }
+.ctc-step.is-done .ctc-dot .material-symbols-rounded { color: var(--m3-on-primary); }
 .ctc-step.is-current .ctc-dot { border-width: 3px; }
-.ctc-step-label { font-size: 13px; font-weight: 800; }
-.ctc-step-caption { font-size: 12px; font-weight: 600; opacity: 0.72; font-variant-numeric: tabular-nums; }
+.ctc-step-label { font-size: 0.8125rem; font-weight: 800; }
+.ctc-step-caption { font-size: 0.75rem; font-weight: 600; opacity: 0.72; font-variant-numeric: tabular-nums; }
 
 .ctc-med {
   align-self: flex-start;
@@ -311,7 +311,7 @@ function goMedications(): void {
   border: none;
   border-radius: 999px;
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   background: var(--pt-accent-grape-container);
   color: var(--pt-accent-grape-on);
@@ -331,14 +331,14 @@ function goMedications(): void {
 }
 .ctc-cb-icon { font-size: 22px; color: var(--ctc-accent); }
 .ctc-cb-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ctc-cb-title { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 800; }
-.ctc-cb-sub { font-size: 13px; font-weight: 600; opacity: 0.72; }
+.ctc-cb-title { display: flex; align-items: center; gap: 6px; font-size: 0.9375rem; font-weight: 800; }
+.ctc-cb-sub { font-size: 0.8125rem; font-weight: 600; opacity: 0.72; }
 .ctc-new {
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   background: var(--ctc-accent);
-  color: var(--pt-on-accent);
+  color: var(--m3-on-primary); /* --ctc-accent 即 --m3-primary，dark 為淺綠，須配成對 on-primary */
 }
 </style>

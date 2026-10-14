@@ -57,7 +57,7 @@ const rootAttrs = computed(() =>
 }
 .m3-card-elevated {
   background: var(--m3-surface-container-low, #f1f5ee);
-  box-shadow: var(--pt-shadow-card, var(--m3-elev-1, 0 1px 2px rgba(0, 0, 0, 0.3)));
+  box-shadow: var(--pt-shadow-card, 0 1px 2px rgba(0, 0, 0, 0.3));
 }
 .m3-card-filled {
   background: var(--m3-surface-container-highest, #e0e4dc);

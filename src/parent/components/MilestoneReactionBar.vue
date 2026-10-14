@@ -47,7 +47,7 @@ const REACTION_LABEL: Record<string, string> = {
   padding: 4px 10px;
   border-radius: 16px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 1rem;
   transition: transform 0.15s;
 }
 .reaction.active {

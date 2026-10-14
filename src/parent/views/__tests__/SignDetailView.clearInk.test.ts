@@ -22,6 +22,7 @@ describe('SignDetailView 清除簽名後不可送出（F06）', () => {
   it('mouseup 先於 click 的真實事件順序下，清除後送出鈕 disabled', async () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
       beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(), clearRect: vi.fn(),
+      setTransform: vi.fn(), // SignaturePad 依 devicePixelRatio 縮放座標
     } as unknown as CanvasRenderingContext2D)
     h.get.mockResolvedValue({ data: {
       id: 7, student_id: 1, student_name: '合成孩子甲', title: '合成測試文件',

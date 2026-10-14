@@ -72,7 +72,11 @@ function collectFromSource(src, names, opts = {}) {
     names.add(m[1])
   }
   // 4) raw ligature span：<span class="material-symbols-rounded">home</span>
-  for (const m of src.matchAll(/class="material-symbols-rounded[^"]*"[^>]*>\s*([a-z][a-z0-9_]*)\s*</g)) {
+  //    class 清單任何位置都算（`class="foo material-symbols-rounded"`）——舊規則只認
+  //    class 值開頭，前面多一個 class 就漏收，main 上曾因此出現破字圖示。
+  for (const m of src.matchAll(
+    /class="(?:[^"]*\s)?material-symbols-rounded(?:\s[^"]*)?"[^>]*>\s*([a-z][a-z0-9_]*)\s*</g,
+  )) {
     names.add(m[1])
   }
   // 5) 行內含 icon 字樣的字串字面值（涵蓋 icon: 'x'、icon: cond ? 'a' : 'b'、

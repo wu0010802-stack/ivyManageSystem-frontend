@@ -52,8 +52,14 @@ describe('parent router IA (2026-05-22 restructure)', () => {
     it.each([
       '/home',
       '/calendar',
+      '/announcements',
     ])('%s 應有 tab=home', (path) => {
       expect(tabOf(path)).toBe('home')
+    })
+
+    // 2026-10-14：公告是從首頁鈴鐺／公告卡進入的深層頁，必須有返回鍵
+    it('/announcements 有 showBack', () => {
+      expect(findRoute('/announcements')?.meta?.showBack).toBe(true)
     })
   })
 
@@ -78,7 +84,6 @@ describe('parent router IA (2026-05-22 restructure)', () => {
     it.each([
       '/contact-book',
       '/contact-book/:entryId',
-      '/announcements',
     ])('%s 應有 tab=contact-book', (path) => {
       expect(tabOf(path)).toBe('contact-book')
     })
@@ -95,8 +100,14 @@ describe('parent router IA (2026-05-22 restructure)', () => {
   })
 
   describe('Me tab（Phase D 將移至 drawer）', () => {
-    it.each(['/me', '/notifications/preferences', '/bind-additional'])('%s 應有 tab=me', (path) => {
+    it.each(['/me', '/notifications/preferences', '/bind-additional', '/me/privacy-rights'])('%s 應有 tab=me', (path) => {
       expect(tabOf(path)).toBe('me')
+    })
+
+    // 2026-10-14：原本沒有 showBack，頁內自帶一顆 router.back()——深連結進來會退出
+    // App，在 LINE 內又沒有頂欄返回鍵可用。改由 ParentLayout 統一處理。
+    it('/me/privacy-rights 有 showBack（深層頁）', () => {
+      expect(findRoute('/me/privacy-rights')?.meta?.showBack).toBe(true)
     })
   })
 
@@ -120,12 +131,29 @@ describe('parent router IA (2026-05-22 restructure)', () => {
       expect(r?.meta?.tab).toBe('me')
       expect(r?.meta?.showBack).toBe(true)
     })
+
+    // 2026-10-14：頁底 position:fixed 的「找不到答案？聯絡老師」列會被 sticky
+    // 底部導覽列（z-index 10）整條蓋住，家長點不到。
+    it('/assistant 隱藏底部導覽列，頁底的聯絡老師按鈕才不會被蓋住', () => {
+      expect(findRoute('/assistant')?.meta?.hideTabBar).toBe(true)
+    })
   })
 
   describe('健康紀錄 title', () => {
     it('/children/:studentId/measurements 有 title', () => {
       expect(findRoute('/children/:studentId/measurements')?.meta?.title).toBe('健康紀錄')
     })
+  })
+
+  describe('全頁表單隱藏底部 tab、保留返回鍵', () => {
+    it.each(['/medications/new', '/pickup/new', '/events/:eventId/ack', '/sign/:id'])(
+      '%s 應 hideTabBar=true 且 showBack=true',
+      (path) => {
+        const r = findRoute(path)
+        expect(r?.meta?.hideTabBar).toBe(true)
+        expect(r?.meta?.showBack).toBe(true)
+      },
+    )
   })
 
   describe('Public routes 不變', () => {

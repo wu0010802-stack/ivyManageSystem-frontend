@@ -151,7 +151,7 @@ const today = todayISO()
         @click="goDetail(o.id)"
       >
         <div class="card-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">medication</span>
+          <span class="material-symbols-rounded" aria-hidden="true">medication</span>
         </div>
         <div class="card-main">
           <div class="card-head">
@@ -192,7 +192,7 @@ const today = todayISO()
 .new-btn {
   margin-left: auto;
   padding: 7px 14px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .cards {
@@ -244,7 +244,7 @@ const today = todayISO()
   gap: 8px;
 }
 .med-name {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   overflow: hidden;
@@ -252,7 +252,7 @@ const today = todayISO()
   white-space: nowrap;
 }
 .date {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint);
   font-weight: 500;
   flex-shrink: 0;
@@ -264,7 +264,7 @@ const today = todayISO()
   align-items: center;
   gap: 4px;
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
 }
 .dot-sep { color: var(--pt-text-faint); }

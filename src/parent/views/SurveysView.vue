@@ -17,6 +17,7 @@ import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import SurveyFillSheet from '../components/surveys/SurveyFillSheet.vue'
+import { invalidateHomeSummary } from '../composables/useHomeSummary'
 
 interface Question {
   id: number
@@ -138,6 +139,7 @@ async function submit() {
   submitting.value = true
   try {
     await submitSurveyResponse(card.survey_id, card.student_id, payload)
+    void invalidateHomeSummary()
     if (disposed || requestId !== fillRequestId) return
     toast.success('已送出回覆')
     showSheet.value = false
@@ -203,7 +205,7 @@ defineExpose({ pullRefresh })
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="surveys-view">
-    <h1 class="surveys-title">活動參加調查</h1>
+    <h1 class="surveys-title">活動調查</h1>
 
     <M3SegmentedButton
       :model-value="tab"
@@ -265,14 +267,14 @@ defineExpose({ pullRefresh })
 }
 
 .surveys-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   margin: 0;
 }
 
 .surveys-empty {
   color: var(--pt-text-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   text-align: center;
   padding: 24px 12px;
   margin: 0;
@@ -304,12 +306,12 @@ defineExpose({ pullRefresh })
 }
 
 .survey-card-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 
 .survey-card-child {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
 }
 
@@ -317,7 +319,7 @@ defineExpose({ pullRefresh })
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
 }
 </style>

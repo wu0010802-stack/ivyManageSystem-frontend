@@ -556,7 +556,7 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: var(--pt-accent-leaf-container);
   color: var(--pt-accent-leaf-on);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 800;
   letter-spacing: -0.01em;
 }
@@ -569,7 +569,7 @@ onBeforeUnmount(() => {
 }
 .v-range {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--color-primary-contrast);
   opacity: 0.68;
@@ -655,7 +655,7 @@ onBeforeUnmount(() => {
   inset: auto 0 0 0;
   padding: 22px 14px 12px;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-primary-contrast);
   font-variant-numeric: tabular-nums;

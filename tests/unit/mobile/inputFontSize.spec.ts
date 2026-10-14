@@ -7,7 +7,8 @@ const read = (f: string) => readFileSync(resolve(process.cwd(), f), 'utf-8')
 describe('iOS 輸入 16px 保底（消除聚焦放大）', () => {
   it('家長端 globals.css 有全域 input/textarea/select 16px 保底', () => {
     const css = read('src/parent/styles/globals.css').replace(/\s+/g, ' ')
-    expect(css).toMatch(/input,\s*textarea,\s*select\s*\{[^}]*font-size:\s*16px/)
+    // 家長端字級跟著「字級設定」走 rem，保底寫成 max(16px, 1rem)：縮小時不低於 16px、放大時跟著放大
+    expect(css).toMatch(/input,\s*textarea,\s*select\s*\{[^}]*font-size:\s*max\(16px,\s*1rem\)/)
   })
 
   it('portal/admin main.css 在手機斷點放大 el-input 至 16px', () => {

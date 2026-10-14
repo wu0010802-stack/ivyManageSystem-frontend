@@ -92,6 +92,32 @@ describe('ParentBottomSheet — dismiss', () => {
   })
 })
 
+describe('ParentBottomSheet — beforeClose', () => {
+  it('beforeClose 回傳 false 時，點背景／ESC 都不關閉', async () => {
+    const beforeClose = vi.fn(() => false)
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, beforeClose },
+    })
+    await wrapper.find('.pt-bsheet-overlay').trigger('click')
+    await wrapper.find('[role="dialog"]').trigger('keydown', { key: 'Escape' })
+    expect(beforeClose).toHaveBeenCalledTimes(2)
+    expect(wrapper.emitted('update:modelValue')).toBeFalsy()
+    expect(wrapper.emitted('close')).toBeFalsy()
+    wrapper.unmount()
+  })
+
+  it('beforeClose 回傳 true 時照常關閉', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, beforeClose: () => true },
+    })
+    await wrapper.find('.pt-bsheet-overlay').trigger('click')
+    expect(wrapper.emitted('update:modelValue')[0]).toEqual([false])
+    wrapper.unmount()
+  })
+})
+
 describe('ParentBottomSheet — a11y', () => {
   it('開啟時鎖 body overflow，關閉時還原', async () => {
     document.body.style.overflow = ''

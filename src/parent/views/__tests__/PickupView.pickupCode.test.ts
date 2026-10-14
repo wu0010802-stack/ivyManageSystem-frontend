@@ -86,6 +86,28 @@ describe('PickupView 明碼持續顯示（T-024）', () => {
     expect(codeEl.text()).toContain('482913')
   })
 
+  it('進行中授權卡可一鍵複製取件碼', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    listAuthMock.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 1, student_id: 1, student_name: '小明', person_name: '王阿嬤',
+            person_relation: '祖母', person_phone: '0912', pickup_date: '2026-08-23',
+            status: 'active', effective_status: 'active', batch_key: null,
+            pickup_code: '482913',
+          },
+        ],
+      },
+    })
+    const w = await mountView()
+    await w.find('[data-testid="copy-pickup-code"]').trigger('click')
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith('482913')
+    Reflect.deleteProperty(navigator, 'clipboard')
+  })
+
   it('重新整理（重新掛載）後只要授權仍是 active，明碼依然存在——不依賴建立當下的一次性 response', async () => {
     listAuthMock.mockResolvedValue({
       data: {

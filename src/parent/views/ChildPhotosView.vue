@@ -164,7 +164,7 @@ onMounted(() => {
 <template>
   <div class="photos-view">
     <header v-if="total > 0" class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">成長相簿</p>
+      <p class="pt-page-hero-eyebrow">照片牆</p>
       <h1 class="pt-page-hero-title">{{ total }} 張珍藏</h1>
       <p class="pt-page-hero-note">老師為您拍下的學校點滴</p>
     </header>
@@ -288,7 +288,7 @@ onMounted(() => {
   border-radius: 999px;
   background: var(--color-warning-soft, #fff3e0);
   color: var(--pt-warning-text, #8a5d00);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   line-height: 1.6;
   pointer-events: none;
@@ -370,7 +370,7 @@ onMounted(() => {
   color: var(--color-primary-contrast, #fff);
   background: rgba(0, 0, 0, 0.4);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   padding: 6px 14px;
   font-variant-numeric: tabular-nums;

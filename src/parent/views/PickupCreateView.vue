@@ -6,6 +6,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
+import { useChildSelection } from '../composables/useChildSelection'
 import {
   createPickupAuthorizations,
   listPickupPersons,
@@ -19,6 +20,9 @@ import PickupCodeCard from '../components/pickup/PickupCodeCard.vue'
 import M3Card from '../components/m3/M3Card.vue'
 import M3Checkbox from '../components/m3/M3Checkbox.vue'
 import M3Button from '../components/m3/M3Button.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useLeaveConfirm } from '../composables/useUnsavedGuard'
+import { invalidateHomeSummary } from '../composables/useHomeSummary'
 
 interface Child {
   student_id: number
@@ -35,6 +39,7 @@ interface PickupPerson {
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
+const { ensureSelected } = useChildSelection()
 const { getFriendly } = useFriendlyError()
 
 function _toastFriendly(err: unknown, fallback: string) {
@@ -60,20 +65,37 @@ function toggleStudent(id: number) {
 // F1：改走 useAbortableFetch——快速切換勾選孩子時，較舊孩子的回應若晚於
 // 新孩子的回應抵達，refresh() 會用 AbortController 判斷該次已過期而不覆寫，
 // 避免「常用接送人」清單掛在錯的孩子底下。
-const { data: personsResp, error: personsError, refresh: refreshPersons } = useAbortableFetch((config) =>
-  listPickupPersons(selectedStudentIds.value[0], config),
-)
+const {
+  data: personsResp,
+  error: personsError,
+  pending: personsLoading,
+  refresh: refreshPersons,
+} = useAbortableFetch((config) => listPickupPersons(selectedStudentIds.value[0], config))
 const persons = computed(
   () => ((personsResp.value as { data?: { items?: PickupPerson[] } })?.data?.items) || [],
 )
+/** 已成功載入常用接送人的孩子；「尚無常用接送人」只在確定載完且真的是空的時候才說。 */
+const personsLoadedFor = ref<number | null>(null)
+const firstChildName = computed(() => {
+  const sid = selectedStudentIds.value[0]
+  return children.value.find((c) => c.student_id === sid)?.name || '這位孩子'
+})
+
 async function loadPersonsForFirstSelected() {
   const sid = selectedStudentIds.value[0]
+  personsLoadedFor.value = null
   if (!sid) {
     personsResp.value = null
+    personsError.value = null
     return
   }
   try {
     await refreshPersons()
+    if (selectedStudentIds.value[0] !== sid) return
+    personsLoadedFor.value = sid
+    // 家長還沒自己切過模式時，依名單決定預設：沒有常用接送人就直接給「臨時填寫」，
+    // 不讓他停在一個空清單前面找不到下一步。
+    if (!modeTouched.value) personMode.value = persons.value.length > 0 ? 'saved' : 'manual'
   } catch {
     // P1-1：refresh() 對「真的失敗」（非 abort）才會 throw；useAbortableFetch
     // 不會自動清空 data，若不在這裡清空，畫面會靜默沿用上一個孩子的常用接送
@@ -99,6 +121,12 @@ watch(personsError, (err) => {
 
 type PersonMode = 'saved' | 'manual'
 const personMode = ref<PersonMode>('saved')
+/** 家長親手點過模式切換後，就不再依名單自動切換。 */
+const modeTouched = ref(false)
+function chooseMode(mode: PersonMode) {
+  modeTouched.value = true
+  personMode.value = mode
+}
 const selectedPersonId = ref<number | null>(null)
 const manualForm = ref({
   personName: '', personRelation: '', personPhone: '', note: '',
@@ -121,16 +149,21 @@ const submitting = ref(false)
 const resultCode = ref<string | null>(null)
 const resultPersonName = ref('')
 
-const canSubmit = computed(() => {
-  if (selectedStudentIds.value.length === 0) return false
-  if (!pickupDate.value) return false
-  if (personMode.value === 'saved') return !!selectedPersonId.value
-  return (
-    !!manualForm.value.personName.trim() &&
-    !!manualForm.value.personRelation.trim() &&
-    !!manualForm.value.personPhone.trim()
-  )
+/** 送出鈕停用時列在按鈕上方，讓家長知道還差哪幾項，而不是對著灰色按鈕猜。 */
+const missingFields = computed<string[]>(() => {
+  const out: string[] = []
+  if (selectedStudentIds.value.length === 0) out.push('選擇孩子')
+  if (personMode.value === 'saved') {
+    if (!selectedPersonId.value) out.push('選擇接送人')
+  } else {
+    if (!manualForm.value.personName.trim()) out.push('接送人姓名')
+    if (!manualForm.value.personRelation.trim()) out.push('與孩子關係')
+    if (!manualForm.value.personPhone.trim()) out.push('聯絡電話')
+  }
+  if (!pickupDate.value) out.push('接送日期')
+  return out
 })
+const canSubmit = computed(() => missingFields.value.length === 0)
 
 async function submit() {
   if (!canSubmit.value) return
@@ -154,6 +187,8 @@ async function submit() {
     resultCode.value = body.code
     resultPersonName.value = body.items[0]?.person_name || ''
     toast.success('授權已成立')
+    // 首頁「臨時接送」進行中筆數與待辦立即更新
+    void invalidateHomeSummary()
   } catch (err) {
     _toastFriendly(err, '建立授權失敗')
   } finally {
@@ -161,12 +196,33 @@ async function submit() {
   }
 }
 
+/** 已選／已填接送資訊但還沒建立授權：離開前要確認 */
+function isFormDirty(): boolean {
+  if (resultCode.value) return false
+  const m = manualForm.value
+  return (
+    selectedPersonId.value !== null
+    || !!m.personName.trim()
+    || !!m.personRelation.trim()
+    || !!m.personPhone.trim()
+    || !!m.note.trim()
+    || m.photoFile !== null
+    || saveToList.value
+    || pickupDate.value !== todayStr
+  )
+}
+const { dialogOpen: leaveConfirmOpen, confirmLeave } = useLeaveConfirm(isFormDirty)
+
 function backToList() {
   router.push('/pickup')
 }
 
 onMounted(async () => {
   await childrenStore.load()
+  // 預設帶入目前選中的孩子（單孩家庭就是唯一那位），家長不必再勾一次；
+  // 多孩要一起授權時再自行勾選其他孩子。
+  const current = ensureSelected(children.value)
+  if (current && selectedStudentIds.value.length === 0) selectedStudentIds.value = [current]
 })
 </script>
 
@@ -206,18 +262,31 @@ onMounted(async () => {
           <button
             type="button"
             :class="['mode-btn', { active: personMode === 'saved' }]"
-            @click="personMode = 'saved'"
+            :aria-pressed="personMode === 'saved'"
+            @click="chooseMode('saved')"
           >常用接送人</button>
           <button
             type="button"
             :class="['mode-btn', { active: personMode === 'manual' }]"
-            @click="personMode = 'manual'"
+            :aria-pressed="personMode === 'manual'"
+            @click="chooseMode('manual')"
           >臨時填寫</button>
         </div>
 
         <template v-if="personMode === 'saved'">
-          <p v-if="persons.length === 0" class="empty-hint">
-            尚無常用接送人，請選擇「臨時填寫」或先到「臨時接送」頁新增。
+          <p v-if="selectedStudentIds.length === 0" class="empty-hint">
+            先在上方選擇孩子，就會列出他的常用接送人。
+          </p>
+          <p v-else-if="personsLoading && personsLoadedFor === null" class="empty-hint">
+            正在載入常用接送人…
+          </p>
+          <div v-else-if="personsError" class="empty-hint" role="alert">
+            常用接送人載入失敗。
+            <button type="button" class="pt-ghost-btn inline-retry" @click="loadPersonsForFirstSelected">重試</button>
+            或改用「臨時填寫」。
+          </div>
+          <p v-else-if="persons.length === 0" class="empty-hint">
+            {{ firstChildName }}還沒有常用接送人，請改用「臨時填寫」。
           </p>
           <M3Card
             v-for="p in persons"
@@ -253,12 +322,31 @@ onMounted(async () => {
         />
       </section>
 
+      <p
+        v-if="missingFields.length > 0"
+        class="missing-hint pt-muted-note"
+        data-testid="missing-fields"
+        aria-live="polite"
+      >
+        還差：{{ missingFields.join('、') }}
+      </p>
       <div class="wizard-footer">
         <M3Button variant="filled" :disabled="!canSubmit || submitting" @click="submit">
           {{ submitting ? '送出中...' : '確認建立授權' }}
         </M3Button>
       </div>
     </template>
+
+    <!-- 有未送出的修改時離開前確認（返回鍵／LINE 返回／底部導覽） -->
+    <ConfirmDialog
+      v-model:open="leaveConfirmOpen"
+      title="要放棄這筆接送授權嗎？"
+      message="剛剛選擇或填寫的接送資訊還沒送出，離開後不會保留。"
+      confirm-label="離開"
+      cancel-label="繼續填寫"
+      destructive
+      @confirm="confirmLeave"
+    />
   </div>
 </template>
 
@@ -277,7 +365,7 @@ onMounted(async () => {
   gap: 8px;
 }
 .step-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   margin: 0;
 }
@@ -288,10 +376,10 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .empty-hint {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
 }
 .mode-toggle {
@@ -306,7 +394,7 @@ onMounted(async () => {
   border-radius: 8px;
   background: var(--neutral-0);
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .mode-btn.active {
   background: var(--m3-primary, var(--brand-primary));
@@ -317,7 +405,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   padding: 0 16px;
 }
@@ -325,7 +413,12 @@ onMounted(async () => {
   padding: 8px 10px;
   border: 1px solid var(--m3-outline-variant, var(--pt-border-strong));
   border-radius: 6px;
-  font-size: 14px;
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
+}
+.inline-retry { min-height: var(--touch-target-min, 44px); }
+.missing-hint {
+  margin: 0;
+  text-align: center;
 }
 .wizard-footer, .result-footer {
   display: flex;

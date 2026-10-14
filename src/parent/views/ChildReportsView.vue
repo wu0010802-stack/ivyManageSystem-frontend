@@ -74,7 +74,7 @@ onMounted(load)
     <div v-else class="pt-stack-12 pt-section-pad-x">
       <article v-for="r in items" :key="r.id" class="report-card">
         <div class="report-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">menu_book</span>
+          <span class="material-symbols-rounded" aria-hidden="true">menu_book</span>
         </div>
         <div class="report-info">
           <div class="report-title-row">
@@ -137,7 +137,7 @@ onMounted(load)
 }
 .report-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   line-height: 1.3;
@@ -148,7 +148,7 @@ onMounted(load)
   border-radius: 999px;
   background: var(--pt-border-light, #ecf5f9);
   color: var(--pt-text-muted, #5a6b6f);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   line-height: 1.6;
 }
@@ -158,19 +158,19 @@ onMounted(load)
 }
 .report-period {
   margin: 2px 0 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
   letter-spacing: 0.02em;
 }
 .report-meta {
   margin: 2px 0 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--pt-text-faint);
 }
 
 .download-btn {
   flex-shrink: 0;
   padding: 8px 14px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 </style>

@@ -99,8 +99,8 @@ const TYPE_LABEL: Record<string, string> = {
 
 .leave-hero-label {
   display: block;
-  font-size: 12px;
-  color: var(--ivy-green-laurel);
+  font-size: 0.75rem;
+  color: var(--color-laurel-text);
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -114,20 +114,20 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 .leave-hero-num-val {
-  font-size: 36px;
+  font-size: 2.25rem;
   font-weight: 900;
   line-height: 1;
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .leave-hero-num-unit {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
 .leave-hero-sub {
   display: block;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-top: 2px;
 }
@@ -141,10 +141,10 @@ const TYPE_LABEL: Record<string, string> = {
 
 .leave-hero-chip {
   background: var(--m3-primary-container, var(--pt-tint-brand, rgba(90, 168, 66, 0.12)));
-  color: var(--ivy-green-laurel);
+  color: var(--color-laurel-text);
   padding: 3px 10px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 

@@ -16,6 +16,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import UserHeroCard from '../components/more/UserHeroCard.vue'
 import AppearanceSettings from '../components/more/AppearanceSettings.vue'
 import ChildrenList from '../components/me/ChildrenList.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
@@ -65,6 +66,14 @@ onMounted(async () => {
   await childrenStore.load()
 })
 
+/**
+ * 下拉刷新（2026-10-14）：這頁會變的資料是子女清單（加綁、班級異動）。
+ * 家長身分（authStore.user）只能經 switchParentIdentity 寫入，這裡不重抓。
+ */
+async function pullRefresh(): Promise<void> {
+  await childrenStore.load(true)
+}
+
 const PREFS = [
   { key: 'notifications', label: '通知偏好', icon: 'notifications', path: '/notifications/preferences', hint: '推播 / 公告 / 聯絡簿' },
   // P0c-3 法規/個資權利 (個資法 §3 五權)
@@ -97,7 +106,7 @@ const PREFS = [
 </script>
 
 <template>
-  <div class="me-view" data-testid="me-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="me-view" data-testid="me-view">
     <UserHeroCard
       :user-name="userName"
       :avatar-initial="avatarInitial"
@@ -120,7 +129,7 @@ const PREFS = [
         class="pt-list-row pref-link"
       >
         <span class="pref-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">{{ p.icon }}</span>
+          <span class="material-symbols-rounded" aria-hidden="true">{{ p.icon }}</span>
         </span>
         <span class="pt-list-row-body">
           <span class="pref-label">{{ p.label }}</span>
@@ -136,7 +145,7 @@ const PREFS = [
         @click="showExportDialog = true"
       >
         <span class="pref-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">download</span>
+          <span class="material-symbols-rounded" aria-hidden="true">download</span>
         </span>
         <span class="pt-list-row-body">
           <span class="pref-label">下載我的個人資料</span>
@@ -174,7 +183,7 @@ const PREFS = [
           將下載您與孩子在園所的所有紀錄（JSON 格式）。
         </p>
         <ul class="export-dialog-list">
-          <li>包含聯絡簿、出席、請假、繳費、投藥、相片連結、訊息、成長報告</li>
+          <li>包含聯絡簿、出席、請假、繳費、用藥委託、相片連結、訊息、成長報告</li>
           <li>每小時限下載 1 次</li>
           <li>檔案上限 50MB</li>
         </ul>
@@ -204,17 +213,20 @@ const PREFS = [
         </div>
       </div>
     </AppModal>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
 .me-view {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
   padding-bottom: 16px;
   /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
   padding-inline: var(--space-4, 16px);
+}
+/* 版面排在 PullToRefresh 的內容層（.ptr-content），下拉時整段一起位移 */
+.me-view :deep(.ptr-content) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* 全域 .pt-list-group 自帶左右 16px，容器已給留白，這裡歸零避免疊成 32px */
@@ -243,20 +255,20 @@ const PREFS = [
 }
 .pref-label {
   display: block;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--pt-text-strong);
   line-height: 1.3;
 }
 .pref-hint {
   display: block;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
   margin-top: 2px;
 }
 .chev {
   color: var(--pt-text-faint);
-  font-size: 20px;
+  font-size: 1.25rem;
   flex-shrink: 0;
 }
 
@@ -273,7 +285,7 @@ const PREFS = [
   border: 1px solid var(--coral-300, #ffb5ad);
   border-radius: 14px;
   color: var(--coral-700, #b14545);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 160ms ease, transform 120ms ease;
@@ -308,25 +320,25 @@ const PREFS = [
   padding: 24px 20px 20px;
 }
 .export-dialog-title {
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   margin: 0 0 10px;
 }
 .export-dialog-body {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pt-text-body, var(--pt-text-strong));
   margin: 0 0 8px;
 }
 .export-dialog-list {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
   padding-left: 18px;
   margin: 0 0 12px;
   line-height: 1.7;
 }
 .export-dialog-error {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--coral-700, #b14545);
   background: var(--coral-50, #fff5f5);
   border-radius: 8px;
@@ -344,7 +356,7 @@ const PREFS = [
   border-radius: 10px;
   border: 1px solid var(--pt-hairline-color, #e5e7eb);
   background: none;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   color: var(--pt-text-muted);
@@ -356,7 +368,7 @@ const PREFS = [
   border: none;
   background: var(--m3-primary, var(--brand-primary, #0d9053));
   color: var(--m3-on-primary, #fff);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 160ms ease;

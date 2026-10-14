@@ -69,7 +69,6 @@ const classes = computed<Record<string, boolean>>(() => ({
     background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
     box-shadow var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
     transform var(--motion-base, 260ms) var(--motion-spring, ease);
-  font-family: var(--m3-font-body, 'Roboto', sans-serif);
 }
 .m3-button:active:not(.is-disabled) { transform: scale(0.96); }
 @media (prefers-reduced-motion: reduce) {
@@ -85,6 +84,17 @@ const classes = computed<Record<string, boolean>>(() => ({
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--m3-dur-short-2, 100ms) var(--m3-easing-standard, ease);
+}
+.m3-button::after {
+  /* 命中區擴張：視覺尺寸維持 M3 規格，透明 ::after 以本體為中心撐到 ≥48px 觸控熱區
+   * （::before 已是 state layer）。本體不設 overflow，偽元素可超出邊界；點到它即點到本體。 */
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--touch-target-m3, 48px));
+  height: max(100%, var(--touch-target-m3, 48px));
+  transform: translate(-50%, -50%);
 }
 .m3-button:hover:not(.is-disabled)::before { opacity: var(--m3-state-hover, 0.08); }
 .m3-button:focus-visible:not(.is-disabled)::before { opacity: var(--m3-state-focus, 0.12); }

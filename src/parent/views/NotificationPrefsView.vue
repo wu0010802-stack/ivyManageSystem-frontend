@@ -13,8 +13,8 @@ import M3Switch from '../components/m3/M3Switch.vue'
 const EVENT_LABELS: Record<string, string> = {
   'parent.message_received': '老師訊息',
   'parent.announcement': '園所公告',
-  'parent.event_ack_required': '事件待簽',
-  'parent.fee_due': '學費到期',
+  'parent.event_ack_required': '簽收通知',
+  'parent.fee_due': '繳費到期',
   'parent.leave_result': '請假審核結果',
   'parent.attendance_alert': '出席異常',
   'parent.contact_book_published': '每日聯絡簿',
@@ -36,7 +36,7 @@ const EVENT_HINTS: Record<string, string> = {
   'parent.message_received': '老師主動傳訊或回覆時通知',
   'parent.announcement': '園所發布新公告時通知',
   'parent.event_ack_required': '有事件需要您簽收時通知',
-  'parent.fee_due': '學費到期前提醒',
+  'parent.fee_due': '繳費截止前提醒',
   'parent.leave_result': '學生請假審核結果',
   'parent.attendance_alert': '孩子出席異常時提醒',
   'parent.contact_book_published': '老師發布當日聯絡簿時通知',
@@ -103,7 +103,7 @@ onMounted(load)
         class="pt-list-row row"
       >
         <span class="cat-icon" :class="`tone-${EVENT_META[ev]?.tone || 'leaf'}`" aria-hidden="true">
-          <span class="material-symbols-rounded">{{ EVENT_META[ev]?.icon || 'notifications' }}</span>
+          <span class="material-symbols-rounded" aria-hidden="true">{{ EVENT_META[ev]?.icon || 'notifications' }}</span>
         </span>
         <div class="pt-list-row-body">
           <strong class="row-label">{{ label }}</strong>
@@ -151,14 +151,14 @@ onMounted(load)
 
 .row-label {
   display: block;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--pt-text-strong);
   line-height: 1.3;
 }
 .row-sub {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-muted);
   line-height: 1.45;
 }

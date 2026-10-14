@@ -24,7 +24,7 @@
 }
 .pt-eyebrow {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -48,7 +48,7 @@
   align-items: center;
   gap: 8px;
   margin: 0 0 14px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   letter-spacing: 0.01em;
@@ -60,7 +60,7 @@
 }
 .pt-card-title-count {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--pt-text-faint);
   letter-spacing: 0.04em;
@@ -74,7 +74,7 @@
 }
 .pt-page-hero-eyebrow {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -82,7 +82,7 @@
 }
 .pt-page-hero-title {
   margin: 4px 0 0;
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--pt-text-strong);
@@ -90,7 +90,7 @@
 }
 .pt-page-hero-note {
   margin: 6px 0 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--pt-text-muted);
 }
@@ -129,7 +129,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 3px 10px;
@@ -152,16 +152,17 @@
   background: var(--m3-primary, #006d3d);
   color: var(--m3-on-primary, #fff); /* 寫死 #fff 在 dark 的 mint 底上隱形 */
   border: none;
+  min-height: var(--touch-target-min, 44px);
   padding: 10px 18px;
   border-radius: 999px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 800;
   cursor: pointer;
   transition: background var(--motion-quick, 160ms) ease, transform var(--motion-base, 260ms) var(--motion-spring, ease);
   text-decoration: none;
   font-family: inherit;
 }
-.pt-action-btn:active { transform: scale(0.96); background: var(--m3-primary, #006d3d); }
+.pt-action-btn:active { transform: scale(0.96); }
 .pt-action-btn:disabled,
 .pt-action-btn[aria-disabled='true'] {
   background: var(--brand-primary-soft, #f5fbe6);
@@ -181,9 +182,10 @@
   background: transparent;
   border: none;
   color: var(--brand-primary, #0d9053);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
+  min-height: var(--touch-target-min, 44px);
   padding: 6px 10px;
   border-radius: 8px;
   font-family: inherit;
@@ -198,6 +200,7 @@
 }
 
 .pt-icon-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -210,6 +213,16 @@
   cursor: pointer;
   transition: background var(--motion-quick, 160ms) ease, transform var(--motion-base, 260ms) var(--motion-spring, ease);
   font-family: inherit;
+}
+/* 視覺 40px 圓鈕不變，透明 ::after 把命中區撐到 --touch-target-min */
+.pt-icon-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--touch-target-min, 44px));
+  height: max(100%, var(--touch-target-min, 44px));
+  transform: translate(-50%, -50%);
 }
 .pt-icon-btn:active { transform: scale(0.95); background: var(--leaf-100, #dcf4e6); }
 .pt-icon-btn .material-symbols-rounded {
@@ -239,8 +252,8 @@
   background: var(--cream, #fffcf2);
   color: var(--brand-primary, #0d9053);
 }
-.pt-empty-title { font-size: 15px; font-weight: 900; color: var(--pt-text-muted); }
-.pt-empty-note { margin-top: 6px; font-size: 13px; }
+.pt-empty-title { font-size: 0.9375rem; font-weight: 900; color: var(--pt-text-muted); }
+.pt-empty-note { margin-top: 6px; font-size: 0.8125rem; }
 
 /* Motion safety */
 @media (prefers-reduced-motion: reduce) {

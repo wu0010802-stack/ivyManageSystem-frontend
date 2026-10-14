@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 
 const h = vi.hoisted(() => ({ persons: vi.fn(), create: vi.fn() }))
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }), onBeforeRouteLeave: vi.fn() }))
 vi.mock('@/parent/stores/children', () => ({
   useChildrenStore: () => ({
     items: [{ student_id: 1, name: '合成孩子甲' }, { student_id: 2, name: '合成孩子乙' }],
@@ -31,10 +31,8 @@ describe('PickupCreateView 換孩子清除已選接送人（F05）', () => {
   it('首位孩子改變後，舊接送人選擇被清除，送出鈕需重新選擇才啟用', async () => {
     const w = mount(PickupCreateView, { global: { stubs: { PickupPersonForm: true, PickupCodeCard: true } } })
     wrappers.push(w)
-    await flushPromises()
+    await flushPromises() // 預設選中目前孩子（合成孩子甲），常用接送人已載入
     const children = w.findAll('.child-row')
-    await children[0].trigger('click')
-    await flushPromises()
     await w.find('.person-option').trigger('click')
     const submit = () => w.findAll('button').find((b) => b.text().includes('確認建立授權'))!
     expect((submit().element as HTMLButtonElement).disabled).toBe(false)

@@ -8,8 +8,11 @@ import {
 } from '../api/medications'
 import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
+import { MEDICATION_PHOTO_MAX, MEDICATION_PHOTO_MAX_BYTES, nextMedicationSlot } from '../utils/medicationForm'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useLeaveConfirm } from '../composables/useUnsavedGuard'
 
 interface AllergyWarning {
   code?: string
@@ -44,6 +47,24 @@ const form = ref<{
   note: '',
 })
 
+const INITIAL_ORDER_DATE = form.value.order_date
+const INITIAL_SLOTS = form.value.time_slots.join(',')
+
+/** 還沒送出、且家長已經填了東西：離開前要確認 */
+function isFormDirty(): boolean {
+  if (createdOrderId.value !== null) return false
+  const f = form.value
+  return (
+    !!f.medication_name.trim()
+    || !!f.dose.trim()
+    || !!f.note.trim()
+    || photoFiles.value.length > 0
+    || f.order_date !== INITIAL_ORDER_DATE
+    || f.time_slots.join(',') !== INITIAL_SLOTS
+  )
+}
+const { dialogOpen: leaveConfirmOpen, confirmLeave } = useLeaveConfirm(isFormDirty)
+
 const studentOptions = computed(() => (childrenStore.items || []) as { student_id: number; name?: string }[])
 
 const allergyModalOpen = computed({
@@ -62,7 +83,8 @@ onMounted(async () => {
 
 function addSlot() {
   if (form.value.time_slots.length >= 10) return
-  form.value.time_slots.push('12:00')
+  // 依上一個時段推算（08:00 → 12:00 → 16:00），不再每次都塞 12:00 讓家長逐一改
+  form.value.time_slots.push(nextMedicationSlot(form.value.time_slots))
 }
 
 function removeSlot(i: number) {
@@ -73,16 +95,21 @@ function removeSlot(i: number) {
 function onPick(e: Event) {
   const input = e.target as HTMLInputElement
   const incoming = Array.from(input.files || [])
-  // 簡單前置檢查：max 3、size < 10MB
+  // 簡單前置檢查：張數上限與詳情頁共用 MEDICATION_PHOTO_MAX、單檔 < 10MB
   const valid: File[] = []
+  let overflow = 0
   for (const f of incoming) {
-    if (valid.length + photoFiles.value.length >= 3) break
-    if (f.size > 10 * 1024 * 1024) {
+    if (valid.length + photoFiles.value.length >= MEDICATION_PHOTO_MAX) {
+      overflow += 1
+      continue
+    }
+    if (f.size > MEDICATION_PHOTO_MAX_BYTES) {
       toast.warn(`${f.name} 超過 10MB，已略過`)
       continue
     }
     valid.push(f)
   }
+  if (overflow > 0) toast.warn(`最多 ${MEDICATION_PHOTO_MAX} 張，已略過 ${overflow} 張`)
   photoFiles.value = [...photoFiles.value, ...valid]
   input.value = ''
 }
@@ -171,7 +198,7 @@ function cancelAllergy() {
     <fieldset class="med-fields" :disabled="submitting || createdOrderId !== null">
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">child_care</span>
+          <span class="material-symbols-rounded" aria-hidden="true">child_care</span>
           基本資料
         </h2>
 
@@ -204,7 +231,7 @@ function cancelAllergy() {
 
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">schedule</span>
+          <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
           用藥時段
           <span class="pt-card-title-count">{{ form.time_slots.length }} / 10</span>
         </h2>
@@ -235,7 +262,7 @@ function cancelAllergy() {
 
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">attach_file</span>
+          <span class="material-symbols-rounded" aria-hidden="true">attach_file</span>
           備註與照片
         </h2>
 
@@ -248,7 +275,7 @@ function cancelAllergy() {
           maxlength="500"
         />
 
-        <label for="med-files">藥袋／處方照（最多 3 張）</label>
+        <label for="med-files">藥袋／處方照（最多 {{ MEDICATION_PHOTO_MAX }} 張，已選 {{ photoFiles.length }} 張）</label>
         <input id="med-files" type="file" accept="image/*,application/pdf" multiple @change="onPick" />
         <ul class="files">
           <li v-for="(f, i) in photoFiles" :key="i">
@@ -285,6 +312,17 @@ function cancelAllergy() {
         {{ submitting ? '送出中…' : '送出' }}
       </button>
     </div>
+
+    <!-- 有未送出的修改時離開前確認（返回鍵／LINE 返回／底部導覽） -->
+    <ConfirmDialog
+      v-model:open="leaveConfirmOpen"
+      title="要放棄這張用藥單嗎？"
+      message="剛剛填寫的內容還沒送出，離開後不會保留。"
+      confirm-label="離開"
+      cancel-label="繼續填寫"
+      destructive
+      @confirm="confirmLeave"
+    />
 
     <!-- 過敏軟警告彈框（已套 AppModal：focus trap + esc + a11y） -->
     <AppModal
@@ -338,7 +376,7 @@ function cancelAllergy() {
   min-height: var(--touch-target-min, 44px);
   border: 1px solid var(--pt-border-strong);
   border-radius: var(--radius-md, 8px);
-  font-size: var(--text-base, 14px);
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   font-family: inherit;
   background: var(--pt-surface-card, #fff);
 }
@@ -447,7 +485,7 @@ function cancelAllergy() {
 }
 
 .allergy-modal .hint {
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: var(--text-sm, 13px);
 }
 

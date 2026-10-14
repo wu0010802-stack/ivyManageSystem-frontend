@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 import { buildParentDocumentTitle } from './utils/parentPageTitle'
+import { createParentScrollBehavior } from './utils/scrollRestoration'
 
 const routes: RouteRecordRaw[] = [
     { path: '/', redirect: '/home' },
@@ -44,10 +45,15 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '娃娃車', tab: 'home', showBack: true },
     },
     {
+      // 2026-10-14：tab 由 contact-book 改 home、補 showBack。聯絡簿頁的公告分頁按鈕
+      // 已於 2026-09-08 移除，站內入口全在首頁（鈴鐺、公告卡）、首頁的行事曆與待辦
+      // 「所有服務」——歸聯絡簿會讓家長從首頁點進來卻亮著聯絡簿分頁、又沒有返回鍵，
+      // 點聯絡簿分頁也回不到公告。舊推播的 /contact-book?tab=announcements 仍由
+      // ContactBookView 承接，不受影響。
       path: '/announcements',
       name: 'parent-announcements',
       component: () => import('./views/AnnouncementsView.vue'),
-      meta: { title: '公告', tab: 'contact-book' },
+      meta: { title: '公告', tab: 'home', showBack: true },
     },
     {
       path: '/leaves',
@@ -70,8 +76,9 @@ const routes: RouteRecordRaw[] = [
       path: '/assistant',
       name: 'parent-assistant',
       component: () => import('./views/AssistantView.vue'),
-      // tab: 'me' — 入口在「我的」偏好清單（2026-09-02 補），底部導覽維持在該分頁
-      meta: { title: '常見問題', tab: 'me', showBack: true },
+      // tab: 'me' — 入口在「我的」偏好清單（2026-09-02 補），返回鍵回該分頁。
+      // hideTabBar：頁底固定的「找不到答案？聯絡老師」列會被 sticky 導覽列蓋住（2026-10-14）
+      meta: { title: '常見問題', tab: 'me', showBack: true, hideTabBar: true },
     },
     {
       path: '/me',
@@ -84,7 +91,9 @@ const routes: RouteRecordRaw[] = [
       path: '/me/privacy-rights',
       name: 'parent-privacy-rights',
       component: () => import('./views/PrivacyRightsView.vue'),
-      meta: { title: '個人資料權利', tab: 'me' },
+      // showBack：入口在「我的」，返回鍵由 ParentLayout 統一處理（2026-10-14 前頁內自帶
+      // 一顆 router.back()，深連結進來會退出 App，且在 LINE 內與頂欄返回鍵重複）
+      meta: { title: '個人資料權利', tab: 'me', showBack: true },
     },
     {
       path: '/more',
@@ -112,13 +121,14 @@ const routes: RouteRecordRaw[] = [
       path: '/sign/:id',
       name: 'parent-sign-detail',
       component: () => import('./views/SignDetailView.vue'),
-      meta: { title: '入學文件', tab: 'admin', showBack: true },
+      // 全頁表單（hideTabBar）：底部 tab 收起讓出單手操作空間；返回鍵由 showBack 保留
+      meta: { title: '入學文件', tab: 'admin', showBack: true, hideTabBar: true },
     },
     {
       path: '/events/:eventId/ack',
       name: 'parent-event-ack',
       component: () => import('./views/EventAckView.vue'),
-      meta: { title: '簽收', tab: 'admin', showBack: true },
+      meta: { title: '簽收', tab: 'admin', showBack: true, hideTabBar: true },
     },
     {
       path: '/medications',
@@ -130,7 +140,7 @@ const routes: RouteRecordRaw[] = [
       path: '/medications/new',
       name: 'parent-medication-new',
       component: () => import('./views/MedicationFormView.vue'),
-      meta: { title: '新增用藥單', tab: 'admin', showBack: true },
+      meta: { title: '新增用藥單', tab: 'admin', showBack: true, hideTabBar: true },
     },
     {
       path: '/medications/:id',
@@ -168,7 +178,7 @@ const routes: RouteRecordRaw[] = [
       path: '/pickup/new',
       name: 'parent-pickup-new',
       component: () => import('./views/PickupCreateView.vue'),
-      meta: { title: '建立臨時接送授權', tab: 'admin', showBack: true },
+      meta: { title: '建立臨時接送授權', tab: 'admin', showBack: true, hideTabBar: true },
     },
     {
       path: '/bind-additional',
@@ -261,6 +271,11 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes,
+  // 返回時還原列表捲動位置、進新頁捲到頂；等 out-in 轉場與非同步資料的細節見
+  // utils/scrollRestoration.ts（App.vue 的 <transition @enter> 負責通知新頁已插入）
+  scrollBehavior: createParentScrollBehavior(
+    (fullPath) => router.currentRoute.value.fullPath === fullPath,
+  ),
 })
 
 router.beforeEach((to) => {

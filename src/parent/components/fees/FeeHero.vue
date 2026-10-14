@@ -91,7 +91,7 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 
 .fee-hero-label {
   display: block;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--ivy-tile-yellow-fg);
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -106,13 +106,13 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 }
 
 .fee-hero-currency {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
   font-weight: 600;
 }
 
 .fee-hero-num {
-  font-size: 32px;
+  font-size: 2rem;
   font-weight: 900;
   color: var(--m3-on-surface, var(--pt-text-strong));
   font-variant-numeric: tabular-nums;
@@ -120,14 +120,14 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 }
 
 .fee-hero-overdue {
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-top: 4px;
   color: var(--ivy-tile-pink-fg);
   font-weight: 700;
 }
 
 .fee-hero-due {
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-top: 4px;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
@@ -141,7 +141,7 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
   padding: 8px 14px;
   border-radius: 999px;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;

@@ -95,7 +95,7 @@ onBeforeUnmount(clearTimer)
   border-radius: var(--pt-control-radius, 14px);
   background: var(--m3-inverse-surface, #2d3230);
   color: var(--m3-inverse-on-surface, #eef2eb);
-  box-shadow: var(--pt-shadow-float, var(--m3-elev-3, 0 4px 8px rgba(0, 0, 0, 0.3)));
+  box-shadow: var(--pt-shadow-float, 0 4px 8px rgba(0, 0, 0, 0.3));
   font-family: var(--m3-font-body, 'Roboto', sans-serif);
 }
 

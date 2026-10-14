@@ -27,6 +27,7 @@ vi.mock('@/parent/composables/useChildSelection', () => ({
 
 import { registerCourses } from '@/parent/api/activity'
 import ActivityView from '@/parent/views/ActivityView.vue'
+import ConfirmDialog from '@/parent/components/ConfirmDialog.vue'
 
 function mountView() {
   return mount(ActivityView, {
@@ -94,6 +95,58 @@ describe('ActivityView 管理連結 (#2)', () => {
 
     expect(w.text()).not.toContain('管理連結')
     expect(w.vm.manageUrl).toBe('')
+    w.unmount()
+  })
+
+  it('按 × 不會直接消失：先確認並提醒保存，確認後才關閉', async () => {
+    registerCourses.mockResolvedValueOnce({
+      data: { id: 4, query_token: 'tok-close-1', courses: [] },
+    })
+    const w = mountView()
+    await flushPromises()
+    w.vm.form.student_id = 1
+    w.vm.form.course_ids = [10]
+    await w.vm.submitRegister()
+    await flushPromises()
+
+    await w.find('[data-testid="manage-link-close"]').trigger('click')
+    const dialog = w.findAllComponents(ConfirmDialog).find((d) => d.props('title') === '確定已保存管理連結？')
+    expect(dialog.props('open')).toBe(true)
+    expect(dialog.props('message')).toContain('還沒複製')
+    // 確認前連結仍在
+    expect(w.text()).toContain('tok-close-1')
+
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(w.text()).not.toContain('tok-close-1')
+    w.unmount()
+  })
+
+  it('複製：clipboard 被拒時退回 execCommand，成功後關閉提醒改為「已複製」版本', async () => {
+    registerCourses.mockResolvedValueOnce({
+      data: { id: 5, query_token: 'tok-copy-1', courses: [] },
+    })
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockRejectedValue(new Error('NotAllowedError')) },
+      configurable: true,
+    })
+    const exec = vi.fn().mockReturnValue(true)
+    Object.defineProperty(document, 'execCommand', { value: exec, configurable: true })
+    const w = mountView()
+    await flushPromises()
+    w.vm.form.student_id = 1
+    w.vm.form.course_ids = [10]
+    await w.vm.submitRegister()
+    await flushPromises()
+
+    await w.find('.manage-link-copy').trigger('click')
+    await flushPromises()
+    expect(exec).toHaveBeenCalledWith('copy')
+
+    await w.find('[data-testid="manage-link-close"]').trigger('click')
+    const dialog = w.findAllComponents(ConfirmDialog).find((d) => d.props('title') === '確定已保存管理連結？')
+    expect(dialog.props('message')).toContain('連結已複製')
+    Reflect.deleteProperty(navigator, 'clipboard')
     w.unmount()
   })
 })

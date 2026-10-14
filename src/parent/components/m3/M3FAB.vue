@@ -73,7 +73,7 @@ function onClick(e: MouseEvent): void {
   gap: 12px;
   border: none;
   cursor: pointer;
-  box-shadow: var(--pt-shadow-float, var(--m3-elev-3, 0 4px 8px rgba(0, 0, 0, 0.2)));
+  box-shadow: var(--pt-shadow-float, 0 4px 8px rgba(0, 0, 0, 0.2));
   transition:
     background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
     box-shadow var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),

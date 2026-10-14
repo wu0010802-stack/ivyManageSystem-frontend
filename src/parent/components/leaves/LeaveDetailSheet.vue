@@ -39,6 +39,7 @@ withDefaults(defineProps<{
   timelineSteps?: TimelineStep[]
   attUploading?: boolean
   attEditable?: boolean
+  attLockedReason?: string
   urlResolver: (attachment: Attachment) => string
 }>(), {
   leave: null,
@@ -46,6 +47,7 @@ withDefaults(defineProps<{
   timelineSteps: () => [],
   attUploading: false,
   attEditable: false,
+  attLockedReason: undefined,
 })
 
 const emit = defineEmits<{
@@ -101,6 +103,7 @@ const emit = defineEmits<{
       <LeaveAttachments
         :attachments="leave.attachments || []"
         :editable="attEditable"
+        :locked-reason="attLockedReason"
         :uploading="attUploading"
         :url-resolver="urlResolver"
         @upload="(f) => emit('att-upload', f)"
@@ -115,7 +118,7 @@ const emit = defineEmits<{
   display: flex;
   gap: 8px;
   margin-bottom: 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .detail-label {
@@ -126,7 +129,7 @@ const emit = defineEmits<{
 
 .section-h {
   margin: 16px 0 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
@@ -142,7 +145,7 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-faint));
 }
 .step.done {
@@ -163,7 +166,7 @@ const emit = defineEmits<{
   flex: 1;
 }
 .step-time {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
 }
 </style>
