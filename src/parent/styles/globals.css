@@ -263,6 +263,12 @@
      共用會讓日後想調文字白階時連帶改掉所有 state layer。 */
   --color-state-layer-light: #ffffff;
   --color-state-layer-dark: #000000;
+
+  /* 手寫簽名板（SignaturePad）的紙與筆：紙本語意，light/dark **皆同值、刻意不覆寫**。
+     簽名區要像一張白紙，深色主題下也維持白底深色筆，才看得清筆跡、與匯出的 PNG 一致。
+     ink 由元件以 getComputedStyle 讀取（canvas 不認 CSS 變數）。 */
+  --color-signature-paper: #ffffff;
+  --color-signature-ink: #191c19;
 }
 
 /* ============================================================
