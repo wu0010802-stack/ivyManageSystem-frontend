@@ -226,7 +226,7 @@ const activeTab = computed<CbTab>(() =>
         </section>
 
         <section v-if="hasAnyHistory" class="history-section">
-          <SectionHeader title="之前的紀錄" />
+          <SectionHeader title="之前的紀錄" class="history-head" />
 
           <div v-if="groupedHistory.thisWeek.length" class="group">
             <p class="group-title">本週</p>
@@ -316,6 +316,8 @@ const activeTab = computed<CbTab>(() =>
 }
 
 .history-section { margin-top: var(--space-2); }
+/* 與「今日聯絡簿」（.today-section）及下方 .group-list 對齊同一條 16px 左緣 */
+.history-head { padding: 0 var(--space-4); }
 .group { margin-top: var(--space-2); }
 .group-title {
   margin: 0 var(--space-4) var(--space-1);
