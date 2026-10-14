@@ -51,7 +51,7 @@
         :keyword="keyword"
         :max-height="gridMaxHeight"
         @select="openMonthCell"
-        @open-week="(monday: string) => emit('update:view', 'week', monday)"
+        @open-week="openWeek"
       />
     </template>
     <template v-else>
@@ -306,6 +306,15 @@ const monthCells = computed(() => (isMonth.value ? props.month!.cells.value : EM
 const monthDays = computed(() => (monthData.value ? visibleDays(monthData.value.days, monthData.value.cells) : []))
 function reloadMonth(): void {
   void props.month?.reload()
+}
+/**
+ * 週次欄頭切回週模式：跨月週的週一在上個月（10 月第一週的週一是 9/28），錨點若設成週一，
+ * 頁首年月、本月進度、出勤明細與匯出都會跳到上個月。錨點改用該週在本月的第一天；
+ * 週模式以 mondayOf(錨點) 顯示，仍是整個 9/28–10/4 那週。
+ */
+function openWeek(monday: string): void {
+  const monthStart = props.month?.range.value.start
+  emit('update:view', 'week', monthStart && monday < monthStart ? monthStart : monday)
 }
 const coverage = computed(() => {
   const g = gridData.value

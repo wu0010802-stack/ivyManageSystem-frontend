@@ -508,11 +508,19 @@ describe('ScheduleGridPanel 月模式（SPEC-027 C 期）', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
-  it('週次欄頭：切回週模式並帶該週週一', async () => {
+  it('週次欄頭：切回週模式；跨月週的錨點用該週在本月的第一天（10/1），週模式仍顯示 9/28 那週', async () => {
     const wrapper = mountPanel({ date: '2026-10-05', view: 'month', month: monthState() })
     await flushPromises()
     await wrapper.find('[data-test="month-week-2026-09-28"]').trigger('click')
-    expect(wrapper.emitted('update:view')).toEqual([['week', '2026-09-28']])
+    // 錨點若是週一 9/28，頁首年月、本月進度、出勤明細與匯出都會跳到 9 月
+    expect(wrapper.emitted('update:view')).toEqual([['week', '2026-10-01']])
+  })
+
+  it('週次欄頭：沒跨月的週（10/5 那週）仍帶該週週一', async () => {
+    const wrapper = mountPanel({ date: '2026-10-05', view: 'month', month: monthState() })
+    await flushPromises()
+    await wrapper.find('[data-test="month-week-2026-10-05"]').trigger('click')
+    expect(wrapper.emitted('update:view')).toEqual([['week', '2026-10-05']])
   })
 
   it('整月載入失敗：給重新載入，不顯示空白格子', async () => {
