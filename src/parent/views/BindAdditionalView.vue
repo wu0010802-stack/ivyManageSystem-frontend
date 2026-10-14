@@ -114,7 +114,7 @@ function resetForRetry() {
           class="error-next-step"
           data-testid="bind-add-error-next-step"
         >
-          💡 {{ errorState.nextStep }}
+          {{ errorState.nextStep }}
         </p>
       </div>
 
