@@ -32,4 +32,9 @@ describe('TodayView 原始碼守衛', () => {
     expect(source).toContain('HomeTodoList')
     expect(source).toContain('HomeBusRow')
   })
+
+  // D-26：公告卡只看最新 3 則會把較舊的未讀誤判成「全部已讀」，必須餵 summary 的權威未讀數。
+  it('公告卡必須接上 summary 的權威未讀數（unread-total）', () => {
+    expect(source).toMatch(/<AnnouncementsHomeCard[^>]*:unread-total="badges\.unreadAnnouncements"/s)
+  })
 })

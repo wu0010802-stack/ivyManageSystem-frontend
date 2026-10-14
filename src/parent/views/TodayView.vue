@@ -232,7 +232,7 @@ function go(path: string): void {
       公告預覽卡（2026-09-08）：公告的首頁入口統一收斂到這裡（待辦清單不再
       重複列未讀公告）。
     -->
-    <AnnouncementsHomeCard ref="announcementsCard" />
+    <AnnouncementsHomeCard ref="announcementsCard" :unread-total="badges.unreadAnnouncements" />
 
     <!-- 待辦清單（2026-09-02）：同一筆待辦在首頁只出現一次，資料來源為 useParentTodos。 -->
     <HomeTodoList />

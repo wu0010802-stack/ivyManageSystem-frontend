@@ -11,8 +11,13 @@
  * 純預覽卡：整卡／每一列點擊都導去 /announcements 列表頁，不在首頁另開
  * 詳情彈窗（詳情彈窗邏輯留在 AnnouncementsPanel + AnnouncementDetailModal，
  * 首頁沒有必要重複一份已讀狀態管理）。
+ *
+ * 2026-10-14（D-26）：有未讀才顯示完整卡；全部已讀時縮成一行入口「公告（全部已讀）›」，
+ * 把首屏讓給待辦與今日動態。「全部已讀」不能只看最新 3 則——較舊的未讀會被誤判成
+ * 已讀——所以父層可傳 `unreadTotal`（home summary 的 unread_announcements 權威值），
+ * 兩者任一有未讀就維持完整卡。
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { listAnnouncements, type AnnouncementCategoryBrief } from '../../api/announcements'
 import { formatAnnouncementRelativeTime } from '../../utils/announcementRelativeTime'
 import SectionHeader from '../SectionHeader.vue'
@@ -29,8 +34,22 @@ interface HomeAnnouncementItem {
   category?: AnnouncementCategoryBrief | null
 }
 
+const props = withDefaults(defineProps<{
+  /** home summary 的全部未讀公告數；未提供時只依最新 3 則的 is_read 判斷。 */
+  unreadTotal?: number
+}>(), {
+  unreadTotal: 0,
+})
+
 const items = ref<HomeAnnouncementItem[]>([])
 const loading = ref(false)
+
+// 已有資料時（下拉刷新）保留現有畫面，不閃回骨架；骨架只給首次載入。
+const showSkeleton = computed(() => loading.value && items.value.length === 0)
+const hasUnread = computed(
+  () => props.unreadTotal > 0 || items.value.some((item) => !item.is_read),
+)
+const collapsed = computed(() => !showSkeleton.value && items.value.length > 0 && !hasUnread.value)
 
 async function load(): Promise<void> {
   loading.value = true
@@ -51,7 +70,22 @@ defineExpose({ refresh: load })
 </script>
 
 <template>
-  <section v-if="loading || items.length > 0" class="ann-home-card" data-testid="ann-home-card">
+  <router-link
+    v-if="collapsed"
+    to="/announcements"
+    class="ann-home-collapsed"
+    data-testid="ann-home-collapsed"
+  >
+    <span class="material-symbols-rounded ann-home-collapsed-icon" aria-hidden="true">campaign</span>
+    <span class="ann-home-collapsed-text">{{ PARENT_SERVICES.announce.label }}（全部已讀）</span>
+    <span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
+  </router-link>
+
+  <section
+    v-else-if="showSkeleton || items.length > 0"
+    class="ann-home-card"
+    data-testid="ann-home-card"
+  >
     <SectionHeader :title="PARENT_SERVICES.announce.label">
       <template #action>
         <router-link to="/announcements" class="ann-home-more">
@@ -61,7 +95,7 @@ defineExpose({ refresh: load })
       </template>
     </SectionHeader>
 
-    <div v-if="loading" class="ann-home-skeleton">
+    <div v-if="showSkeleton" class="ann-home-skeleton">
       <SkeletonBlock variant="row" :count="3" />
     </div>
 
@@ -90,6 +124,30 @@ defineExpose({ refresh: load })
 </template>
 
 <style scoped>
+/* 全部已讀的一行入口：與完整卡同樣的左右邊界與 token，深色模式自動跟著換 */
+.ann-home-collapsed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  min-height: var(--touch-target-min, 44px);
+  margin: 0 var(--space-4, 16px);
+  padding: 0 var(--space-4, 16px);
+  box-sizing: border-box;
+  background: var(--pt-surface-card, #fff);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 16px;
+  color: var(--pt-text-muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.ann-home-collapsed .material-symbols-rounded {
+  font-size: 20px;
+  font-variation-settings: 'wght' 500;
+}
+.ann-home-collapsed-icon { color: var(--pt-text-faint, #6b7280); }
+.ann-home-collapsed-text { flex: 1; min-width: 0; }
+
 .ann-home-card {
   margin: 0 var(--space-4, 16px);
   padding: var(--space-3, 12px) var(--space-4, 16px) var(--space-2, 8px);

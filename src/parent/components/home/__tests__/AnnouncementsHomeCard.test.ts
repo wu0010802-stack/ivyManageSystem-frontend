@@ -8,6 +8,7 @@
  *  - meta 列相對時間帶「更新」字樣
  *  - 沒有公告／載入失敗：整卡不渲染
  *  - 「更多」連到 /announcements
+ *  - D-26（2026-10-14）：有未讀才顯示完整卡；全部已讀縮成一行入口「公告（全部已讀）›」
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -55,13 +56,16 @@ describe('AnnouncementsHomeCard', () => {
     expect(w.find('.ann-home-dot').exists()).toBe(true)
   })
 
-  it('已讀公告不畫圓點（不是留白佔位）', async () => {
+  it('已讀公告不畫圓點（不是留白佔位）：同卡內一讀一未讀，只有未讀那列有圓點', async () => {
     mockListAnnouncements.mockResolvedValue({
-      data: { items: [makeItem({ is_read: true })], total: 1 },
+      data: { items: [makeItem({ id: 1, is_read: true }), makeItem({ id: 2, is_read: false })], total: 2 },
     })
     const w = mount(AnnouncementsHomeCard, { global: { stubs } })
     await flushPromises()
-    expect(w.find('.ann-home-dot').exists()).toBe(false)
+    const rows = w.findAll('.ann-home-row')
+    expect(rows.length).toBe(2)
+    expect(rows[0].find('.ann-home-dot').exists()).toBe(false)
+    expect(rows[1].find('.ann-home-dot').exists()).toBe(true)
   })
 
   it('顯示分類徽章的 icon 與名稱', async () => {
@@ -135,5 +139,84 @@ describe('AnnouncementsHomeCard', () => {
     const w = mount(AnnouncementsHomeCard, { global: { stubs } })
     await flushPromises()
     expect(w.findAll('.ann-home-row').length).toBe(3)
+  })
+})
+
+describe('AnnouncementsHomeCard — 全部已讀縮成一行（D-26）', () => {
+  const allRead = () => ({
+    data: { items: [makeItem({ id: 1, is_read: true }), makeItem({ id: 2, is_read: true })], total: 2 },
+  })
+
+  it('最新幾則全部已讀：不渲染完整卡，改顯示一行入口「公告（全部已讀）」連到 /announcements', async () => {
+    mockListAnnouncements.mockResolvedValue(allRead())
+    const w = mount(AnnouncementsHomeCard, { global: { stubs } })
+    await flushPromises()
+    expect(w.find('[data-testid="ann-home-card"]').exists()).toBe(false)
+    expect(w.findAll('.ann-home-row').length).toBe(0)
+    const line = w.find('[data-testid="ann-home-collapsed"]')
+    expect(line.exists()).toBe(true)
+    expect(line.text()).toContain('公告（全部已讀）')
+    expect(line.attributes('href')).toBe('/announcements')
+  })
+
+  it('有任何一則未讀：維持完整卡，不出現縮合入口', async () => {
+    mockListAnnouncements.mockResolvedValue({
+      data: { items: [makeItem({ id: 1, is_read: true }), makeItem({ id: 2, is_read: false })], total: 2 },
+    })
+    const w = mount(AnnouncementsHomeCard, { global: { stubs } })
+    await flushPromises()
+    expect(w.find('[data-testid="ann-home-card"]').exists()).toBe(true)
+    expect(w.find('[data-testid="ann-home-collapsed"]').exists()).toBe(false)
+  })
+
+  it('最新幾則都已讀、但 summary 權威未讀數 > 0（較舊的未讀）：不可誤報「全部已讀」，維持完整卡', async () => {
+    mockListAnnouncements.mockResolvedValue(allRead())
+    const w = mount(AnnouncementsHomeCard, { global: { stubs }, props: { unreadTotal: 2 } })
+    await flushPromises()
+    expect(w.find('[data-testid="ann-home-card"]').exists()).toBe(true)
+    expect(w.find('[data-testid="ann-home-collapsed"]').exists()).toBe(false)
+  })
+
+  it('權威未讀數為 0 且最新幾則全已讀：縮成一行', async () => {
+    mockListAnnouncements.mockResolvedValue(allRead())
+    const w = mount(AnnouncementsHomeCard, { global: { stubs }, props: { unreadTotal: 0 } })
+    await flushPromises()
+    expect(w.find('[data-testid="ann-home-collapsed"]').exists()).toBe(true)
+  })
+
+  it('下拉刷新期間（已有資料）不閃回骨架：縮合入口維持，refresh 完成後仍是縮合', async () => {
+    mockListAnnouncements.mockResolvedValue(allRead())
+    const w = mount(AnnouncementsHomeCard, { global: { stubs } })
+    await flushPromises()
+    let release: (v: unknown) => void = () => {}
+    mockListAnnouncements.mockReturnValueOnce(new Promise((r) => { release = r }))
+    const pending = (w.vm as unknown as { refresh: () => Promise<void> }).refresh()
+    await w.vm.$nextTick()
+    expect(w.find('[data-testid="ann-home-collapsed"]').exists()).toBe(true)
+    expect(w.find('.ann-home-skeleton').exists()).toBe(false)
+    release(allRead())
+    await pending
+    await flushPromises()
+    expect(w.find('[data-testid="ann-home-collapsed"]').exists()).toBe(true)
+  })
+
+  it('首次載入中仍顯示骨架卡（沒有資料可判斷已讀與否）', async () => {
+    let release: (v: unknown) => void = () => {}
+    mockListAnnouncements.mockReturnValue(new Promise((r) => { release = r }))
+    const w = mount(AnnouncementsHomeCard, { global: { stubs } })
+    await w.vm.$nextTick()
+    expect(w.find('[data-testid="ann-home-card"]').exists()).toBe(true)
+    expect(w.find('.ann-home-skeleton').exists()).toBe(true)
+    release(allRead())
+    await flushPromises()
+    expect(w.find('[data-testid="ann-home-collapsed"]').exists()).toBe(true)
+  })
+
+  it('載入失敗或沒有任何公告：既不顯示完整卡也不顯示縮合入口', async () => {
+    mockListAnnouncements.mockResolvedValue({ data: { items: [], total: 0 } })
+    const w = mount(AnnouncementsHomeCard, { global: { stubs } })
+    await flushPromises()
+    expect(w.find('[data-testid="ann-home-collapsed"]').exists()).toBe(false)
+    expect(w.find('[data-testid="ann-home-card"]').exists()).toBe(false)
   })
 })
