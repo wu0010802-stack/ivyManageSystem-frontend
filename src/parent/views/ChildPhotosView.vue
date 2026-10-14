@@ -164,7 +164,7 @@ onMounted(() => {
 <template>
   <div class="photos-view">
     <header v-if="total > 0" class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">成長相簿</p>
+      <p class="pt-page-hero-eyebrow">照片牆</p>
       <h1 class="pt-page-hero-title">{{ total }} 張珍藏</h1>
       <p class="pt-page-hero-note">老師為您拍下的學校點滴</p>
     </header>

@@ -71,6 +71,13 @@ describe('HomeHeroHeader — 通知鈴鐺（2026-09-08）', () => {
     expect(w.find('[data-testid="hh-bell-dot"]').exists()).toBe(true)
   })
 
+  it('鈴鐺名稱用服務名「公告」，有未讀時把數字寫進名稱（紅點是 aria-hidden）', () => {
+    expect(mountAt(MORNING).find('[data-testid="hh-bell"]').attributes('aria-label')).toBe('公告')
+    expect(
+      mountAt(MORNING, { unreadAnnouncements: 3 }).find('[data-testid="hh-bell"]').attributes('aria-label'),
+    ).toBe('公告，3 則未讀')
+  })
+
   it('點擊鈴鐺 emit open-announcements（不直接依賴 vue-router）', async () => {
     const w = mountAt(MORNING, { unreadAnnouncements: 1 })
     await w.find('[data-testid="hh-bell"]').trigger('click')

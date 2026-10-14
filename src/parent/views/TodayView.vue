@@ -8,7 +8,7 @@
  * ChildContextHeader 切換器、底部 ChildrenStrip（生日、在籍狀態、進孩子檔案）——
  * 與 QuickActionsBar 的聯絡簿大按鈕＋出席 pill，全部收進狀態卡。
  *
- * 版面由上而下：問候列（含公告鈴鐺）→ 孩子狀態卡 → 常用功能 → 校園公告卡 →
+ * 版面由上而下：問候列（含公告鈴鐺）→ 孩子狀態卡 → 常用功能 → 公告卡 →
  * 待辦清單（HomeTodoList）→ 娃娃車列（HomeBusRow）→ 今日動態 → 行事曆。
  * 後四者沿用 2026-09-02／09-08 首頁改版的元件，本次未改動。
  */
@@ -229,7 +229,7 @@ function go(path: string): void {
     <QuickActionsBar v-if="children.length > 0" />
 
     <!--
-      校園公告預覽卡（2026-09-08）：公告的首頁入口統一收斂到這裡（待辦清單不再
+      公告預覽卡（2026-09-08）：公告的首頁入口統一收斂到這裡（待辦清單不再
       重複列未讀公告）。
     -->
     <AnnouncementsHomeCard ref="announcementsCard" />

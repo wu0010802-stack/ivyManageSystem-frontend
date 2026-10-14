@@ -171,7 +171,7 @@ onMounted(async () => {
   <div class="event-ack">
     <template v-if="event">
       <header class="pt-page-hero">
-        <p class="pt-page-hero-eyebrow">事件簽收</p>
+        <p class="pt-page-hero-eyebrow">簽收通知</p>
         <h1 class="pt-page-hero-title">{{ event.title }}</h1>
         <p class="pt-page-hero-note">
           {{ event.event_date }}

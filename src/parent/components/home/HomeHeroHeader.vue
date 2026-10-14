@@ -18,7 +18,7 @@ import GreetingSunIllustration from '../illustrations/GreetingSunIllustration.vu
 import GreetingMoonIllustration from '../illustrations/GreetingMoonIllustration.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   unreadAnnouncements?: number
 }>(), {
   unreadAnnouncements: 0,
@@ -42,6 +42,14 @@ const period = ref<GreetingPeriod>(greetingPeriod())
 const greetingText = computed(() => GREETING_TEXT[period.value])
 const isEvening = computed(() => period.value === 'evening')
 
+/**
+ * 名稱對齊服務目錄的「公告」（原「校園公告通知」，2026-10-14）；紅點是
+ * aria-hidden 的純視覺，未讀數要寫進名稱，讀螢幕的家長才知道有新公告。
+ */
+const bellLabel = computed(() =>
+  props.unreadAnnouncements > 0 ? `公告，${props.unreadAnnouncements} 則未讀` : '公告',
+)
+
 /** 「M/D 星期X」；星期一律用中文全形字，不用英文縮寫（沿用既有決策）。 */
 const dateMeta = computed(() => {
   const d = new Date()
@@ -63,7 +71,7 @@ const dateMeta = computed(() => {
       type="button"
       class="hh-bell"
       data-testid="hh-bell"
-      aria-label="校園公告通知"
+      :aria-label="bellLabel"
       @click="emit('open-announcements')"
     >
       <span class="material-symbols-rounded" aria-hidden="true">notifications</span>

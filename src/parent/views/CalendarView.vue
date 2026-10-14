@@ -52,7 +52,7 @@ const CATEGORY_META: Record<string, { icon: string; tone: string; label: string 
   holiday:       { icon: 'celebration',    tone: 'sky',   label: '假日' },
   contact_book:  { icon: 'menu_book',      tone: 'leaf',  label: '聯絡簿' },
   leave:         { icon: 'event_busy',     tone: 'sky',   label: '請假' },
-  medication:    { icon: 'medication',     tone: 'grape', label: '用藥' },
+  medication:    { icon: 'medication',     tone: 'grape', label: '用藥委託' },
 }
 
 const groupedByDate = computed(() => {
@@ -221,7 +221,7 @@ function dayLabel(iso: string) {
               <span class="title">{{ it.title }}</span>
               <span v-if="it.subtitle" class="subtitle">{{ it.subtitle }}</span>
             </span>
-            <span v-if="it.requires_acknowledgment" class="pt-pill pt-pill-danger">需簽閱</span>
+            <span v-if="it.requires_acknowledgment" class="pt-pill pt-pill-danger">需簽收</span>
           </button>
         </div>
       </section>

@@ -205,7 +205,7 @@ defineExpose({ pullRefresh })
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="surveys-view">
-    <h1 class="surveys-title">活動參加調查</h1>
+    <h1 class="surveys-title">活動調查</h1>
 
     <M3SegmentedButton
       :model-value="tab"

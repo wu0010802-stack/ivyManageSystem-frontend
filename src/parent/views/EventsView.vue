@@ -113,8 +113,8 @@ onMounted(async () => {
 <template>
   <div class="events-view">
     <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">家長簽閱</p>
-      <h1 class="pt-page-hero-title">事件公告</h1>
+      <p class="pt-page-hero-eyebrow">家長簽收</p>
+      <h1 class="pt-page-hero-title">簽收通知</h1>
       <p class="pt-page-hero-note">
         <template v-if="needsAckCount > 0">{{ needsAckCount }} 筆待簽閱</template>
         <template v-else-if="items.length > 0">全數簽閱完成</template>
