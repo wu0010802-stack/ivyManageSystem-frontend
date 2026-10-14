@@ -11,10 +11,14 @@
  *
  * 快取鍵刻意與 TodayView 相同：useCachedAsync 對同 key 共用 cache 條目
  * 並 dedupe in-flight 請求，因此首頁與待辦頁同時掛載也只會有一次網路請求。
+ *
+ * 2026-10-14：快取改經 useHomeDataCache 登記，家長完成動作（簽收、填調查、簽
+ * 入學文件）後呼叫 invalidateHomeSummary()，待辦清單與 tab 徽章立刻重抓，不必
+ * 等 60 秒 TTL。
  */
 import { computed } from 'vue'
-import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getHomeSummary } from '../api/profile'
+import { invalidateHomeData, useHomeDataCache } from './useHomeDataCache'
 
 export const HOME_SUMMARY_CACHE_KEY = 'parent/today/summary'
 
@@ -42,13 +46,13 @@ function num(v: unknown): number {
  */
 export function useHomeSummary(options: { immediate?: boolean } = {}) {
   const { immediate = true } = options
-  const { data, error, pending, refresh } = useCachedAsync(
+  const { data, error, pending, refresh } = useHomeDataCache(
     HOME_SUMMARY_CACHE_KEY,
     async () => {
       const res = await getHomeSummary()
       return res.data
     },
-    { ttl: 60_000, immediate },
+    { immediate },
   )
 
   const summary = computed<Record<string, unknown> | null>(() => {
@@ -101,4 +105,14 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
     badges,
     adminTabBadge,
   }
+}
+
+/**
+ * 家長完成一個待辦動作後呼叫（簽收通知、填活動調查、簽署入學文件…）：
+ * summary 與待辦清單另外兩支來源（入學文件、臨時接送）一起失效並重抓——
+ * 掛載中的 tab 徽章、首頁／待辦頁清單立即更新，沒掛載的下次進來強制重抓。
+ * 只在 API 成功分支呼叫；不會 reject，呼叫端用 `void invalidateHomeSummary()` 即可。
+ */
+export function invalidateHomeSummary(): Promise<void> {
+  return invalidateHomeData()
 }

@@ -17,6 +17,7 @@ import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import SurveyFillSheet from '../components/surveys/SurveyFillSheet.vue'
+import { invalidateHomeSummary } from '../composables/useHomeSummary'
 
 interface Question {
   id: number
@@ -138,6 +139,7 @@ async function submit() {
   submitting.value = true
   try {
     await submitSurveyResponse(card.survey_id, card.student_id, payload)
+    void invalidateHomeSummary()
     if (disposed || requestId !== fillRequestId) return
     toast.success('已送出回覆')
     showSheet.value = false

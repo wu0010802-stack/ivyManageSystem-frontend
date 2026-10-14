@@ -53,6 +53,7 @@ import SignaturePad from '../components/SignaturePad.vue'
 import { getMySignRequest, signMyRequest, mySignPdfUrl, type SignRequestDetailOut } from '../api/signDocuments'
 import { renderMd, blobToDataUrl, canSubmit } from '../utils/mdRender'
 import { toast } from '../utils/toast'
+import { invalidateHomeSummary } from '../composables/useHomeSummary'
 
 interface SignaturePadRef {
   isEmpty(): boolean
@@ -132,6 +133,7 @@ async function submit() {
       confirmed_read: true,
     })
     toast.success('簽署完成')
+    void invalidateHomeSummary()
     await load()
   } catch (err) {
     const e = err as { response?: { status?: number }; displayMessage?: string }

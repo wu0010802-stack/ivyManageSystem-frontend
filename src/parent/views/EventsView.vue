@@ -7,6 +7,7 @@ import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { invalidateHomeSummary } from '../composables/useHomeSummary'
 
 interface EventItem {
   id: number
@@ -94,6 +95,7 @@ async function submitAck() {
       signature_name: t.signature_name.trim() || null,
     })
     toast.success('已簽閱')
+    void invalidateHomeSummary()
     ackTarget.value = null
     fetchData()
   } catch (err) {

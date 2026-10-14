@@ -14,6 +14,8 @@
  *
  * 2、3 各自走 useCachedAsync 固定 key，首頁與待辦頁同時掛載只會各打一次。
  * key 以 `parent/` 開頭，登出時 invalidateCachedAsync('parent/') 才清得掉。
+ * 三支都經 useHomeDataCache 登記，invalidateHomeSummary() 會一起失效重抓
+ * （例：簽完入學文件，「簽署入學文件」列立刻消失，不等 60 秒 TTL）。
  *
  * 2026-10-08 白話命名：列名改成「動詞＋服務名」（繳費、簽收通知、填活動調查…），
  * 圖示與路由一律取自 utils/parentServices.ts——同一功能在常用功能、待辦頁
@@ -27,11 +29,11 @@
  * 不掛徽章，未讀由首頁鈴鐺呈現。
  */
 import { computed, type ComputedRef } from 'vue'
-import { useCachedAsync } from '@/composables/useCachedAsync'
 import { formatCurrency } from '@/utils/currency'
 import { listMySignRequests } from '../api/signDocuments'
 import { listPickupAuthorizations } from '../api/pickup'
 import { useHomeSummary } from './useHomeSummary'
+import { useHomeDataCache } from './useHomeDataCache'
 import { PARENT_SERVICES } from '../utils/parentServices'
 
 export const SIGN_DOCS_CACHE_KEY = 'parent/sign-requests/mine'
@@ -78,13 +80,13 @@ export function useParentTodos(options: { immediate?: boolean } = {}) {
     error: signDocsError,
     pending: signDocsPending,
     refresh: refreshSignDocs,
-  } = useCachedAsync(
+  } = useHomeDataCache(
     SIGN_DOCS_CACHE_KEY,
     async () => {
       const res = await listMySignRequests()
       return res.data
     },
-    { ttl: 60_000, immediate },
+    { immediate },
   )
 
   const {
@@ -92,13 +94,13 @@ export function useParentTodos(options: { immediate?: boolean } = {}) {
     error: pickupError,
     pending: pickupPending,
     refresh: refreshPickup,
-  } = useCachedAsync(
+  } = useHomeDataCache(
     PICKUP_ACTIVE_CACHE_KEY,
     async () => {
       const res = await listPickupAuthorizations({ status: 'active' })
       return res.data
     },
-    { ttl: 60_000, immediate },
+    { immediate },
   )
 
   const signDocsCount = computed<number>(() => {

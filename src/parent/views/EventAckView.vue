@@ -10,6 +10,7 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
 import { isNetworkError } from '@/composables/useOnlineStatus'
+import { invalidateHomeSummary } from '../composables/useHomeSummary'
 
 interface EventItem {
   id: number
@@ -119,6 +120,7 @@ async function submit() {
       signature_name: signatureName.value || null,
     })
     ackOk = true
+    void invalidateHomeSummary()
   } catch (err) {
     // navigator.onLine 會說謊（弱訊號、行動網路連著但打不到 server）：網路層失敗
     // 一律 fallback 進佇列。手寫簽名無法入列（同離線分流的限制），維持原錯誤提示。
