@@ -74,3 +74,33 @@ describe('EventsView 三態', () => {
     expect(w.text()).toContain('親師座談')
   })
 })
+
+describe('EventsView 快速簽閱', () => {
+  it('事件類型顯示中文，不露內部代碼', async () => {
+    listEvents.mockResolvedValue({ data: { items: [ackEvent] } })
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('會議')
+    expect(w.text()).not.toContain('meeting')
+  })
+
+  it('送出中停用「確認簽閱」，連點只送一次', async () => {
+    listEvents.mockResolvedValue({ data: { items: [ackEvent] } })
+    let resolveAck!: (v: unknown) => void
+    acknowledgeEvent.mockReturnValue(new Promise((r) => { resolveAck = r }))
+    const w = mountView()
+    await flushPromises()
+    await w.findAll('button').find((b) => b.text().includes('快速簽閱'))!.trigger('click')
+
+    const confirm = w.find('[data-testid="confirm-ack"]')
+    await confirm.trigger('click')
+    await confirm.trigger('click')
+    expect(acknowledgeEvent).toHaveBeenCalledTimes(1)
+    expect((w.find('[data-testid="confirm-ack"]').element as HTMLButtonElement).disabled).toBe(true)
+    expect(w.find('[data-testid="confirm-ack"]').text()).toContain('送出中')
+
+    resolveAck({})
+    await flushPromises()
+    expect(acknowledgeEvent).toHaveBeenCalledTimes(1)
+  })
+})

@@ -13,6 +13,7 @@ import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQue
 import { OP_KINDS } from '@/utils/offlineQueue'
 import { isNetworkError } from '@/composables/useOnlineStatus'
 import { invalidateHomeSummary } from '../composables/useHomeSummary'
+import { eventTypeLabel } from '@/constants/calendarEventTypes'
 
 interface EventItem {
   id: number
@@ -20,6 +21,8 @@ interface EventItem {
   event_type?: string
   event_date?: string
   description?: string
+  requires_acknowledgment?: boolean
+  need_ack_student_ids?: (number | string)[]
   [key: string]: unknown
 }
 
@@ -35,6 +38,21 @@ const childrenStore = useChildrenStore()
 const event = ref<EventItem | null>(null)
 const studentId = ref<number | null>(null)
 const childrenItems = computed(() => (childrenStore.items || []) as { student_id: number; name?: string }[])
+/**
+ * 只列還沒簽的孩子：已簽過的孩子再送一次只會被後端擋下或重複簽。
+ * 舊資料沒有 need_ack_student_ids 時退回全部子女。
+ */
+const pendingChildren = computed(() => {
+  const need = event.value?.need_ack_student_ids
+  if (!Array.isArray(need)) return childrenItems.value
+  const ids = new Set(need.map(Number))
+  return childrenItems.value.filter((c) => ids.has(c.student_id))
+})
+/** 事件有待簽清單但已經空了＝全部孩子都簽過 */
+const allSigned = computed(() => {
+  const need = event.value?.need_ack_student_ids
+  return Array.isArray(need) && need.length === 0
+})
 const signatureName = ref('')
 const padRef = ref<SignaturePadRef | null>(null)
 const submitting = ref(false)
@@ -50,9 +68,6 @@ async function init() {
   notFound.value = false
   loadError.value = null
   await childrenStore.load()
-  const firstChild = (childrenStore.items as { student_id: number }[])[0]
-  studentId.value =
-    Number(route.query.student_id) || firstChild?.student_id || null
   try {
     const { data } = await listEvents()
     const found = ((data as { items?: EventItem[] })?.items || []).find(
@@ -60,6 +75,10 @@ async function init() {
     )
     event.value = found || null
     notFound.value = !found
+    // 預設：網址指定的孩子（若仍待簽）→ 第一位待簽的孩子
+    const queried = Number(route.query.student_id)
+    const pendingIds = pendingChildren.value.map((c) => c.student_id)
+    studentId.value = pendingIds.includes(queried) ? queried : (pendingIds[0] ?? null)
   } catch (err) {
     event.value = null
     loadError.value = err
@@ -94,6 +113,7 @@ async function submit() {
     return
   }
   if (!event.value) return
+  const sid = studentId.value
   submitting.value = true
 
   // 離線分流
@@ -117,13 +137,12 @@ async function submit() {
   }
 
   // 線上路徑
-  let ackOk = false
   try {
     await acknowledgeEvent(event.value.id, {
-      student_id: studentId.value,
+      student_id: sid,
       signature_name: signatureName.value || null,
     })
-    ackOk = true
+    // 簽收已成立（簽名上傳成敗另計）：首頁待辦與 tab 徽章立即失效
     void invalidateHomeSummary()
   } catch (err) {
     // navigator.onLine 會說謊（弱訊號、行動網路連著但打不到 server）：網路層失敗
@@ -143,26 +162,51 @@ async function submit() {
     return
   }
 
-  if (padRef.value && !padRef.value.isEmpty()) {
-    try {
-      const blob = await padRef.value.toBlob()
-      if (blob && event.value) {
-        await uploadAckSignature(event.value.id, studentId.value!, blob)
-      }
-    } catch (err) {
-      const e = err as Record<string, unknown>
-      toast.warn(String(e?.displayMessage || '已簽收，但簽名上傳失敗，請於事件詳情頁補上'))
-      submitting.value = false
-      router.replace({ path: '/events' })
-      return
-    }
+  // 簽收已成立；手寫簽名上傳失敗時留在原頁讓家長直接重傳——簽收後事件列表不再
+  // 提供這位孩子的簽名入口，也沒有「事件詳情頁」可以事後補上。
+  if (!(await uploadSignature(sid))) {
+    signatureRetryFor.value = sid
+    submitting.value = false
+    toast.warn('已完成簽收，但手寫簽名沒有上傳成功，請按「重新上傳簽名」再試一次')
+    return
   }
-
-  if (ackOk) {
-    toast.success('已簽收')
-    router.replace({ path: '/events' })
-  }
+  toast.success('已簽收')
   submitting.value = false
+  router.replace({ path: '/events' })
+}
+
+/** 簽收已成功、只差手寫簽名沒傳上去的孩子；有值時主按鈕改為「重新上傳簽名」。 */
+const signatureRetryFor = ref<number | null>(null)
+
+/** 有手寫簽名就上傳；沒有簽名視為成功。 */
+async function uploadSignature(sid: number): Promise<boolean> {
+  if (!padRef.value || padRef.value.isEmpty() || !event.value) return true
+  try {
+    const blob = await padRef.value.toBlob()
+    if (blob) await uploadAckSignature(event.value.id, sid, blob)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function retrySignatureUpload() {
+  const sid = signatureRetryFor.value
+  if (sid === null || submitting.value) return
+  submitting.value = true
+  const ok = await uploadSignature(sid)
+  submitting.value = false
+  if (ok) {
+    signatureRetryFor.value = null
+    toast.success('手寫簽名已上傳')
+    router.replace({ path: '/events' })
+  } else {
+    toast.warn('簽名仍上傳失敗，請確認網路後再試；簽收本身已經完成')
+  }
+}
+
+function backToEvents() {
+  router.replace({ path: '/events' })
 }
 
 onMounted(async () => {
@@ -179,7 +223,7 @@ onMounted(async () => {
         <h1 class="pt-page-hero-title">{{ event.title }}</h1>
         <p class="pt-page-hero-note">
           {{ event.event_date }}
-          <span v-if="event.event_type" class="event-type">· {{ event.event_type }}</span>
+          <span v-if="event.event_type" class="event-type">· {{ eventTypeLabel(event.event_type) }}</span>
         </p>
       </header>
 
@@ -191,16 +235,32 @@ onMounted(async () => {
         <p class="desc-text">{{ event.description }}</p>
       </section>
 
-      <section class="pt-card form-card">
+      <section v-if="allSigned" class="pt-card done-card" data-testid="ack-all-signed">
+        <h2 class="pt-card-title">
+          <span class="material-symbols-rounded" aria-hidden="true">task_alt</span>
+          已全部簽收
+        </h2>
+        <p class="pt-muted-note">這個事件您的孩子都已經簽收過了，不需要再簽一次。</p>
+        <button type="button" class="pt-ghost-btn back-btn" @click="backToEvents">回事件列表</button>
+      </section>
+
+      <section v-else class="pt-card form-card">
         <h2 class="pt-card-title">
           <span class="material-symbols-rounded" aria-hidden="true">draw</span>
           簽收資訊
         </h2>
 
-        <div class="field">
+        <p v-if="pendingChildren.length === 1" class="single-child" data-testid="ack-single-child">
+          簽收的孩子：<strong>{{ pendingChildren[0].name }}</strong>
+        </p>
+        <div v-else class="field">
           <label for="ack-student">由哪一位子女簽收</label>
-          <select id="ack-student" v-model.number="studentId">
-            <option v-for="c in childrenItems" :key="c.student_id" :value="c.student_id">{{ c.name }}</option>
+          <select
+            id="ack-student"
+            v-model.number="studentId"
+            :disabled="signatureRetryFor !== null"
+          >
+            <option v-for="c in pendingChildren" :key="c.student_id" :value="c.student_id">{{ c.name }}</option>
           </select>
         </div>
 
@@ -223,8 +283,25 @@ onMounted(async () => {
         </div>
       </section>
 
-      <div class="actions">
+      <div v-if="!allSigned" class="actions">
+        <template v-if="signatureRetryFor !== null">
+          <p class="pt-muted-note retry-note" role="status">
+            簽收已經完成，只差手寫簽名沒有上傳成功。
+          </p>
+          <button
+            type="button"
+            class="pt-action-btn submit-btn"
+            data-testid="retry-signature"
+            :disabled="submitting"
+            @click="retrySignatureUpload"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+            {{ submitting ? '上傳中…' : '重新上傳簽名' }}
+          </button>
+          <button type="button" class="pt-ghost-btn back-btn" @click="backToEvents">先回事件列表</button>
+        </template>
         <button
+          v-else
           type="button"
           class="pt-action-btn submit-btn"
           :disabled="submitting"
@@ -314,7 +391,18 @@ onMounted(async () => {
 
 .actions {
   padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
 }
+.single-child { margin: 0; }
+.retry-note { margin: 0; text-align: center; }
+.back-btn {
+  align-self: center;
+  min-height: var(--touch-target-min, 44px);
+}
+.done-card { display: flex; flex-direction: column; gap: var(--space-2, 8px); }
+.done-card .pt-muted-note { margin: 0; }
 .submit-btn {
   width: 100%;
   min-height: 52px;

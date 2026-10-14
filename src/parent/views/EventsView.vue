@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { listEvents, acknowledgeEvent } from '../api/events'
 import { toast } from '../utils/toast'
+import { eventTypeLabel } from '@/constants/calendarEventTypes'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -45,6 +46,8 @@ const loading = ref(true)
 // 載入失敗且沒有任何事件時進持久錯誤態，不得與「尚無事件」同形
 const loadError = ref<unknown>(null)
 const ackTarget = ref<AckTarget | null>(null)
+// 送出中鎖住「確認簽閱」：弱網下家長常連點，會重複送出同一筆簽閱
+const acking = ref(false)
 
 const ackModalOpen = computed({
   get: () => ackTarget.value !== null,
@@ -52,13 +55,6 @@ const ackModalOpen = computed({
     if (!v) ackTarget.value = null
   },
 })
-
-const TYPE_LABEL: Record<string, string> = {
-  meeting: '會議',
-  activity: '活動',
-  holiday: '假日',
-  general: '一般',
-}
 
 const studentNameMap = computed(() => {
   const m = new Map<number | string, string>()
@@ -96,7 +92,8 @@ function openAck(event: EventItem) {
 
 async function submitAck() {
   const t = ackTarget.value
-  if (!t) return
+  if (!t || acking.value) return
+  acking.value = true
   try {
     await acknowledgeEvent(t.event.id, {
       student_id: Number(t.student_id),
@@ -109,6 +106,8 @@ async function submitAck() {
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '簽閱失敗'))
+  } finally {
+    acking.value = false
   }
 }
 
@@ -154,7 +153,7 @@ onMounted(async () => {
       :class="{ require: ev.requires_acknowledgment }"
     >
       <div class="event-row1">
-        <span class="pt-pill pt-pill-info">{{ TYPE_LABEL[ev.event_type] || ev.event_type }}</span>
+        <span class="pt-pill pt-pill-info">{{ eventTypeLabel(ev.event_type) }}</span>
         <span class="event-title">{{ ev.title }}</span>
       </div>
       <div class="event-row2">
@@ -234,8 +233,15 @@ onMounted(async () => {
           </div>
         </div>
         <div class="ack-footer">
-          <button type="button" class="pt-ghost-btn" @click="ackTarget = null">取消</button>
-          <button type="button" class="pt-action-btn" @click="submitAck">確認簽閱</button>
+          <button type="button" class="pt-ghost-btn" :disabled="acking" @click="ackTarget = null">取消</button>
+          <button
+            type="button"
+            class="pt-action-btn"
+            data-testid="confirm-ack"
+            :disabled="acking"
+            :aria-busy="acking"
+            @click="submitAck"
+          >{{ acking ? '送出中…' : '確認簽閱' }}</button>
         </div>
       </template>
     </AppModal>
