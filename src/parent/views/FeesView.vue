@@ -13,6 +13,7 @@ import {
   getFeePayments,
 } from '../api/fees'
 import { toast } from '../utils/toast'
+import { copyText as copyToClipboard } from '../utils/clipboard'
 import { formatSemesterLabel } from '../utils/semesterLabel'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -205,27 +206,8 @@ const formatNum = (n: number | null | undefined) => (n ?? 0).toLocaleString()
 
 async function copyText(text: string | null | undefined) {
   if (!text) return
-  try {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text)
-      toast.success('已複製')
-      return
-    }
-  } catch {
-    /* ignore */
-  }
-  // fallback：建立暫時 textarea
-  try {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    document.body.removeChild(ta)
-    toast.success('已複製')
-  } catch {
-    toast.warn('無法複製，請長按手動複製')
-  }
+  if (await copyToClipboard(text)) toast.success('已複製')
+  else toast.warn('無法複製，請長按手動複製')
 }
 
 function buildReceiptText(record: FeeRecord, payments: Payment[]) {

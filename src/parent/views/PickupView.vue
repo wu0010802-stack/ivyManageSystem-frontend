@@ -18,6 +18,7 @@ import {
   regeneratePickupCode,
 } from '../api/pickup'
 import { toast } from '../utils/toast'
+import { copyText } from '../utils/clipboard'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import ParentBottomSheet from '../components/ParentBottomSheet.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -153,7 +154,33 @@ async function refreshAuthorizations() {
   }
 }
 
-async function askRegenerate(auth: PickupAuth) {
+// 重發會讓舊碼立即失效（同批授權一起換），家長若已把舊碼傳給接送人，對方到園會
+// 被擋下——所以先確認並說清楚後果，不再一按就換。
+const regenTarget = ref<PickupAuth | null>(null)
+const regenOpen = computed({
+  get: () => regenTarget.value !== null,
+  set: (v: boolean) => {
+    if (!v) regenTarget.value = null
+  },
+})
+const regenMessage = computed(() => {
+  const auth = regenTarget.value
+  if (!auth) return ''
+  const sameBatch = auth.batch_key
+    ? authorizations.value.filter((a) => a.batch_key === auth.batch_key && a.effective_status === 'active').length
+    : 1
+  const batchNote = sameBatch > 1 ? `同一批的 ${sameBatch} 筆授權會一起換成新碼。` : ''
+  return `重發後，原本的取件碼${auth.pickup_code ? `「${auth.pickup_code}」` : ''}會立即失效，${batchNote}請記得把新碼再傳給${auth.person_name}。`
+})
+
+function askRegenerate(auth: PickupAuth) {
+  regenTarget.value = auth
+}
+
+async function doRegenerate() {
+  const auth = regenTarget.value
+  regenTarget.value = null
+  if (!auth) return
   try {
     const { data } = await regeneratePickupCode(auth.id)
     const code = (data as { code: string }).code
@@ -170,6 +197,11 @@ async function askRegenerate(auth: PickupAuth) {
   } catch (err) {
     _toastFriendly(err, '重發取件碼失敗')
   }
+}
+
+async function copyAuthCode(code: string) {
+  if (await copyText(code)) toast.success('已複製取件碼')
+  else toast.warn('無法自動複製，請長按取件碼手動複製')
 }
 
 // ── 取消授權 ──────────────────────────────────────────────────────────
@@ -324,16 +356,25 @@ onMounted(async () => {
             </div>
             <M3Chip>{{ STATUS_LABEL[a.effective_status] || a.effective_status }}</M3Chip>
           </div>
-          <div
-            v-if="a.pickup_code && a.effective_status === 'active'"
-            class="auth-code"
-            data-testid="active-pickup-code"
-          >
-            取件碼：<span class="auth-code-value">{{ a.pickup_code }}</span>
+          <div v-if="a.pickup_code && a.effective_status === 'active'" class="auth-code-row">
+            <div class="auth-code" data-testid="active-pickup-code">
+              取件碼：<span class="auth-code-value">{{ a.pickup_code }}</span>
+            </div>
+            <M3Button
+              variant="text"
+              class="auth-action"
+              :aria-label="`複製取件碼 ${a.pickup_code}`"
+              data-testid="copy-pickup-code"
+              @click="copyAuthCode(a.pickup_code)"
+            >
+              <template #icon><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></template>
+              複製
+            </M3Button>
           </div>
+          <!-- 兩顆動作拉開放在兩端、各至少 44px 高，避免單手時誤按到「取消授權」 -->
           <div class="auth-actions">
-            <button type="button" class="link-btn" @click="askRegenerate(a)">重發取件碼</button>
-            <button type="button" class="link-btn danger" @click="askCancel(a)">取消授權</button>
+            <M3Button variant="tonal" class="auth-action" @click="askRegenerate(a)">重發取件碼</M3Button>
+            <M3Button variant="outlined" class="auth-action is-danger" @click="askCancel(a)">取消授權</M3Button>
           </div>
         </M3Card>
       </section>
@@ -414,6 +455,15 @@ onMounted(async () => {
       />
     </ParentBottomSheet>
 
+    <ConfirmDialog
+      v-model:open="regenOpen"
+      data-testid="regen-confirm"
+      title="重發新的取件碼？"
+      :message="regenMessage"
+      confirm-label="重發"
+      cancel-label="不重發"
+      @confirm="doRegenerate"
+    />
     <ConfirmDialog
       v-model:open="cancelOpen"
       title="確定取消此授權？"
@@ -504,8 +554,14 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
-.auth-code {
+.auth-code-row {
   margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+}
+.auth-code {
   font-size: 13px;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
@@ -517,8 +573,14 @@ onMounted(async () => {
 }
 .auth-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 8px;
+  justify-content: space-between;
+  gap: var(--space-4, 16px);
+  margin-top: var(--space-3, 12px);
+}
+.auth-action { min-height: var(--touch-target-min, 44px); }
+.auth-action.is-danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
 }
 .link-btn {
   background: transparent;

@@ -78,6 +78,37 @@ describe('PickupView 換孩子重載常用接送人（F09）', () => {
   })
 })
 
+/** 點「重發取件碼」後在確認對話框按「重發」。 */
+async function regenerateFirst(w: VueWrapper) {
+  await w.findAll('button').find((b) => b.text().includes('重發取件碼'))!.trigger('click')
+  const confirm = w.findComponent('[data-testid="regen-confirm"]')
+  expect(confirm.props('open')).toBe(true)
+  confirm.vm.$emit('confirm')
+  await flushPromises()
+}
+
+describe('PickupView 重發取件碼需先確認', () => {
+  it('按「重發取件碼」只開確認框並說明舊碼會失效，確認前不重發', async () => {
+    h.auths.mockResolvedValue({ data: { items: [auth(31, '123456'), auth(32, '123456')] } })
+    const w = await render()
+    await w.findAll('button').find((b) => b.text().includes('重發取件碼'))!.trigger('click')
+    await flushPromises()
+    const confirm = w.findComponent('[data-testid="regen-confirm"]')
+    expect(confirm.props('open')).toBe(true)
+    expect(confirm.props('message')).toContain('「123456」會立即失效')
+    expect(confirm.props('message')).toContain('同一批的 2 筆授權會一起換成新碼')
+    expect(h.regenerate).not.toHaveBeenCalled()
+  })
+
+  it('取消授權是危險樣式、與重發分開且各自是獨立按鈕', async () => {
+    h.auths.mockResolvedValue({ data: { items: [auth(31, '123456')] } })
+    const w = await render()
+    const cancelBtn = w.findAll('button').find((b) => b.text().includes('取消授權'))!
+    expect(cancelBtn.classes()).toContain('is-danger')
+    expect(cancelBtn.classes()).toContain('auth-action')
+  })
+})
+
 describe('PickupView 重發取件碼更新授權卡（F10）', () => {
   it('重發成功後同批授權卡顯示新碼', async () => {
     h.auths.mockResolvedValueOnce({ data: { items: [auth(31, '123456'), auth(32, '123456')] } })
@@ -86,8 +117,7 @@ describe('PickupView 重發取件碼更新授權卡（F10）', () => {
     const w = await render()
     const codes = () => w.findAll('[data-testid="active-pickup-code"]').map((c) => c.text())
     expect(codes()).toEqual(['取件碼：123456', '取件碼：123456'])
-    await w.findAll('button').find((b) => b.text().includes('重發取件碼'))!.trigger('click')
-    await flushPromises()
+    await regenerateFirst(w)
     expect(h.regenerate).toHaveBeenCalledWith(31)
     expect(codes()).toEqual(['取件碼：654321', '取件碼：654321'])
   })
@@ -97,8 +127,7 @@ describe('PickupView 重發取件碼更新授權卡（F10）', () => {
     h.auths.mockRejectedValue(new Error('synthetic'))
     h.regenerate.mockResolvedValue({ data: { code: '654321' } })
     const w = await render()
-    await w.findAll('button').find((b) => b.text().includes('重發取件碼'))!.trigger('click')
-    await flushPromises()
+    await regenerateFirst(w)
     expect(w.findAll('[data-testid="active-pickup-code"]').map((c) => c.text())).toEqual(['取件碼：654321', '取件碼：654321'])
   })
 })

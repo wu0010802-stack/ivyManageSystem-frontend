@@ -2,11 +2,12 @@
 /**
  * 取件碼大字卡：接送人到園出示、家長 LINE 轉傳用。
  *
- * 明碼只在建立/重發當下短暫顯示（不落 localStorage），離開頁面即遺失——
- * 遺失時請家長回「臨時接送」頁對該筆授權按「重發取件碼」。
+ * T-024 起進行中授權的明碼會常駐在「臨時接送」頁的授權卡上（後端只對 active 回傳），
+ * 所以這裡不再警告「只顯示一次」；授權結束（完成／取消／過期）後才看不到。
  */
 import { ref } from 'vue'
 import { toast } from '../../utils/toast'
+import { copyText } from '../../utils/clipboard'
 
 const props = defineProps<{
   code: string
@@ -17,17 +18,12 @@ const props = defineProps<{
 const copied = ref(false)
 
 async function copyCode() {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(props.code)
-      copied.value = true
-      toast.success('已複製取件碼')
-      setTimeout(() => { copied.value = false }, 2000)
-    } else {
-      toast.warn('此裝置不支援自動複製，請手動輸入')
-    }
-  } catch {
-    toast.warn('複製失敗，請手動輸入')
+  if (await copyText(props.code)) {
+    copied.value = true
+    toast.success('已複製取件碼')
+    setTimeout(() => { copied.value = false }, 2000)
+  } else {
+    toast.warn('無法自動複製，請長按取件碼手動複製')
   }
 }
 </script>
@@ -40,7 +36,7 @@ async function copyCode() {
     <button type="button" class="copy-btn" @click="copyCode">
       {{ copied ? '已複製' : '複製取件碼' }}
     </button>
-    <p class="code-warning">此碼只顯示一次，離開後遺失請回「臨時接送」頁重發</p>
+    <p class="code-note pt-muted-note">授權有效期間，隨時可到「臨時接送」頁的授權卡查看或複製這組碼</p>
   </div>
 </template>
 
@@ -59,6 +55,9 @@ async function copyCode() {
   margin: 0;
 }
 .code-display {
+  /* 長按即整組選取，複製失敗時家長仍能手動複製 */
+  user-select: all;
+  -webkit-user-select: all;
   font-size: 40px;
   font-weight: 700;
   letter-spacing: 6px;
@@ -74,6 +73,7 @@ async function copyCode() {
   margin: 0;
 }
 .copy-btn {
+  min-height: var(--touch-target-min, 44px);
   margin-top: 8px;
   padding: 10px 24px;
   background: var(--m3-primary, var(--brand-primary));
@@ -82,9 +82,5 @@ async function copyCode() {
   border-radius: 8px;
   font-size: 14px;
 }
-.code-warning {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--m3-error, var(--color-danger));
-}
+.code-note { margin: 8px 0 0; }
 </style>
