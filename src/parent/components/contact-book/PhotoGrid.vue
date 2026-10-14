@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+/**
+ * 聯絡簿照片牆：最多排出 6 格（第 6 格疊「+N」），點任一格開共用 PhotoLightbox，
+ * 可左右瀏覽**全部**照片。先前是 `<a target=_blank>` 開新分頁（LINE 內會跳出 App 內
+ * 瀏覽器、回不來），而且 slice(0, 6) 之後第 7 張以後根本看不到。
+ */
+import { computed, ref } from 'vue'
+import PhotoLightbox, { type LightboxPhoto } from '../PhotoLightbox.vue'
 
 interface Photo {
   id?: number
@@ -27,18 +33,31 @@ const displayed = computed<Photo[]>(() => {
   return props.photos.slice(0, 6)
 })
 const overflow = computed<number>(() => Math.max(0, props.photos.length - 6))
+
+const previewIdx = ref<number | null>(null)
+const lightboxPhotos = computed<LightboxPhoto[]>(() =>
+  props.photos.map((p, i) => ({ src: p.display_url, alt: `聯絡簿照片 ${i + 1} / ${props.photos.length}` })),
+)
+
+function tileLabel(i: number): string {
+  const total = props.photos.length
+  if (overflow.value > 0 && i === displayed.value.length - 1) {
+    return `查看第 ${i + 1} 張照片，還有 ${overflow.value} 張，共 ${total} 張`
+  }
+  return `查看第 ${i + 1} 張照片，共 ${total} 張`
+}
 </script>
 
 <template>
   <div v-if="layout !== 'empty'" class="grid" :class="`layout-${layout}`">
-    <a
+    <button
       v-for="(p, i) in displayed"
       :key="p.id || i"
-      :href="p.display_url"
-      target="_blank"
-      rel="noopener"
+      type="button"
       class="tile"
       :class="{ 'has-overflow': overflow > 0 && i === displayed.length - 1 }"
+      :aria-label="tileLabel(i)"
+      @click="previewIdx = i"
     >
       <!--
         P2-FE-Parent-3：alt 加序號 + 總數，screen reader 可知第幾張；分母用
@@ -51,9 +70,10 @@ const overflow = computed<number>(() => Math.max(0, props.photos.length - 6))
         loading="lazy"
         decoding="async"
       />
-      <span v-if="overflow > 0 && i === displayed.length - 1" class="overflow">+{{ overflow }}</span>
-    </a>
+      <span v-if="overflow > 0 && i === displayed.length - 1" class="overflow" aria-hidden="true">+{{ overflow }}</span>
+    </button>
   </div>
+  <PhotoLightbox v-model:index="previewIdx" :photos="lightboxPhotos" />
 </template>
 
 <style scoped>
@@ -69,6 +89,10 @@ const overflow = computed<number>(() => Math.max(0, props.photos.length - 6))
 .tile {
   position: relative;
   display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  cursor: pointer;
   aspect-ratio: 1;
   border-radius: 12px;
   overflow: hidden;

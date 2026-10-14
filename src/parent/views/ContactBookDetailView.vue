@@ -63,15 +63,7 @@ const timelineItems = computed(() => {
   const e = entry.value
   if (!e) return []
   const out: { type: string; icon: string; tone: string; label: string; value?: string; detail?: string }[] = []
-  if (e.mood) {
-    out.push({
-      type: 'mood',
-      icon: 'sentiment_satisfied',
-      tone: 'sun',
-      label: '今日心情',
-      value: MOOD_LABEL[e.mood] || e.mood,
-    })
-  }
+  // 心情已在 hero（大表情＋「今天心情」標籤）呈現，故事列表不再重複第三次
   if (e.meal_lunch != null || e.meal_snack != null) {
     const parts: string[] = []
     if (e.meal_lunch != null) parts.push(`午餐 ${e.meal_lunch} / 3 份`)
@@ -283,6 +275,15 @@ function formatTime(iso: string | null): string {
         <span v-else class="stamp-hint">點一下蓋章確認已讀</span>
       </section>
 
+      <!-- 老師留言：家長最想看的一段，放在飲食／午睡等數據之前 -->
+      <section v-if="entry.teacher_note" class="card note-card">
+        <h2 class="card-title">
+          <span class="material-symbols-rounded" aria-hidden="true">format_quote</span>
+          老師留言
+        </h2>
+        <p class="note-body">{{ entry.teacher_note }}</p>
+      </section>
+
       <!-- 時間軸：一天的故事 -->
       <section v-if="timelineItems.length" class="card timeline-card">
         <h2 class="card-title">
@@ -298,18 +299,9 @@ function formatTime(iso: string | null): string {
             :label="item.label"
             :value="item.value"
             :detail="item.detail"
-            :hide-connector="i === timelineItems.length - 1 && !entry.teacher_note"
+            :hide-connector="i === timelineItems.length - 1"
           />
         </div>
-      </section>
-
-      <!-- 老師留言：cream highlight 卡 -->
-      <section v-if="entry.teacher_note" class="card note-card">
-        <h2 class="card-title">
-          <span class="material-symbols-rounded" aria-hidden="true">format_quote</span>
-          老師留言
-        </h2>
-        <p class="note-body">{{ entry.teacher_note }}</p>
       </section>
 
       <!-- 照片牆 -->
