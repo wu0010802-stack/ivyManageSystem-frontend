@@ -38,6 +38,16 @@ function badgeLabel(badge: number | undefined): string | null {
   return badge > 99 ? '99+' : String(badge)
 }
 
+/**
+ * 按鈕的 aria-label 會蓋掉子節點文字，徽章數字因此念不到；數量併進按鈕名稱，
+ * 徽章本身 aria-hidden（例：「待辦，5 項待處理」）。
+ */
+function tabAriaLabel(item: NavItem): string {
+  const badge = badgeLabel(item.badge)
+  if (!badge) return item.label
+  return badge === '99+' ? `${item.label}，超過 99 項待處理` : `${item.label}，${badge} 項待處理`
+}
+
 function iconName(item: NavItem, isActive: boolean): string {
   if (isActive && item.activeIcon) return item.activeIcon
   return item.icon
@@ -61,7 +71,7 @@ function onTabClick(item: NavItem): void {
       class="m3-nav-tab"
       :class="{ 'is-active': item.key === currentKey, 'is-prominent': item.prominent }"
       :aria-current="item.key === currentKey ? 'page' : undefined"
-      :aria-label="item.label"
+      :aria-label="tabAriaLabel(item)"
       @click="onTabClick(item)"
     >
       <span :class="item.prominent ? 'm3-nav-fab' : 'm3-nav-tab-icon-wrap'">
@@ -76,7 +86,7 @@ function onTabClick(item: NavItem): void {
         <span
           v-if="badgeLabel(item.badge)"
           class="m3-nav-tab-badge"
-          :aria-label="`${badgeLabel(item.badge)} 件待處理`"
+          aria-hidden="true"
         >{{ badgeLabel(item.badge) }}</span>
       </span>
       <span class="m3-nav-tab-label m3-label-medium">{{ item.label }}</span>
@@ -90,9 +100,12 @@ function onTabClick(item: NavItem): void {
   --nav-bg: var(--m3-surface-container, #ebefe8);
   position: relative;
   display: flex;
+  box-sizing: border-box;
   width: 100%;
-  height: 80px;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  /* 80px 內容區＋home indicator 安全區。舊版固定 height:80px 又加 padding-bottom，
+     border-box 下有 home indicator 的機型內容區被壓到 46px 左右，標籤擠出列外。 */
+  height: calc(80px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   /* 平整實色列底；prominent FAB 直接疊在列上（不挖凹槽），所以列本身不需要 overflow 裁切 */
   background: var(--nav-bg);
   color: var(--m3-on-surface-variant, #424941);

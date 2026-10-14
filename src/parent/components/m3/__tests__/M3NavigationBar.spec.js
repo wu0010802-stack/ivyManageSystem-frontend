@@ -81,6 +81,36 @@ describe('M3NavigationBar', () => {
     expect(messagesTab.find('.m3-nav-tab-badge').text()).toBe('99+')
   })
 
+  it('badge 數量併入按鈕 aria-label，徽章本身對 AT 隱藏', () => {
+    const w = mount(M3NavigationBar, {
+      props: { items: ITEMS, currentKey: 'home' },
+    })
+    const tabs = w.findAll('.m3-nav-tab')
+    expect(tabs[1].attributes('aria-label')).toBe('訊息，3 項待處理')
+    expect(tabs[1].find('.m3-nav-tab-badge').attributes('aria-hidden')).toBe('true')
+    expect(tabs[1].find('.m3-nav-tab-badge').attributes('aria-label')).toBeUndefined()
+    // 沒有徽章的 tab 維持純標籤
+    expect(tabs[0].attributes('aria-label')).toBe('首頁')
+  })
+
+  it('badge > 99 時 aria-label 念「超過 99 項」而非「99+」', () => {
+    const items = [...ITEMS]
+    items[1] = { ...items[1], badge: 120 }
+    const w = mount(M3NavigationBar, { props: { items, currentKey: 'home' } })
+    expect(w.findAll('.m3-nav-tab')[1].attributes('aria-label')).toBe('訊息，超過 99 項待處理')
+  })
+
+  it('列高 = 80px 內容區＋safe-area（不再固定 80px 被 padding 壓縮）', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const sfc = readFileSync(resolve(__dirname, '../M3NavigationBar.vue'), 'utf-8')
+    const css = sfc.slice(sfc.indexOf('<style')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ')
+    const bar = css.match(/\.m3-navigation-bar \{([^}]*)\}/)[1]
+    expect(bar).toContain('height: calc(80px + env(safe-area-inset-bottom, 0px))')
+    expect(bar).toContain('padding-bottom: env(safe-area-inset-bottom, 0px)')
+    expect(bar).not.toMatch(/height: 80px;/)
+  })
+
   it('badge 為 0 或 undefined 不顯示', () => {
     const w = mount(M3NavigationBar, {
       props: { items: ITEMS, currentKey: 'home' },
@@ -139,7 +169,8 @@ describe('M3NavigationBar', () => {
     it('prominent tab 不論是否 active 都保留 aria-label / 標籤 / badge', () => {
       const w = mount(M3NavigationBar, { props: { items: PROMINENT_ITEMS, currentKey: 'home' } })
       const tab = w.findAll('.m3-nav-tab')[2]
-      expect(tab.attributes('aria-label')).toBe('聯絡簿')
+      // 徽章數量併入按鈕名稱（按鈕 aria-label 會蓋掉子節點文字）
+      expect(tab.attributes('aria-label')).toBe('聯絡簿，2 項待處理')
       expect(tab.attributes('aria-current')).toBeUndefined()
       expect(tab.find('.m3-nav-tab-label').text()).toBe('聯絡簿')
       expect(tab.find('.m3-nav-fab .m3-nav-tab-badge').text()).toBe('2')
