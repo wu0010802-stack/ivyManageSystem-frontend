@@ -214,9 +214,6 @@ onMounted(load)
   right: 0;
   /* 路由 hideTabBar 後這裡就是頁底唯一的固定列；仍給層級，避免被頁內 sticky 元素蓋過 */
   z-index: var(--z-sticky, 10);
-  /* 與 ParentLayout 同寬置中（桌機／平板不拉滿整個視窗） */
-  max-width: var(--pt-app-max-width, 560px);
-  margin: 0 auto;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background: var(--pt-surface-card, #fff);
   border-top: 1px solid var(--pt-border-light, #ecf5f9);
