@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, reactive, computed, toRef, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getMySchedule, getSwapRequests, getSwapCandidates, createSwapRequest, respondToSwap, cancelSwapRequest } from '@/api/portal'
+import { getMySchedule, getSwapRequests, createSwapRequest, respondToSwap, cancelSwapRequest } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import { useScheduleCalendar } from '@/composables/useScheduleCalendar'
+import { useSwapCandidates } from '@/composables/useSwapCandidates'
 import { useIsMobile } from '@/composables/useIsMobile'
 import ScheduleMonthHeader from './components/schedule/ScheduleMonthHeader.vue'
 import ScheduleCalendarGrid from './components/schedule/ScheduleCalendarGrid.vue'
@@ -21,7 +22,6 @@ const query = reactive({
 
 interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; [key: string]: unknown }
 interface SwapRequest { is_mine?: boolean; id?: number; [key: string]: unknown }
-interface SwapCandidate { employee_id?: number; name?: string; shift_name?: string; work_start?: string; work_end?: string; has_pending_swap?: boolean; [key: string]: unknown }
 
 // Schedule data
 const scheduleData = ref<{ days: { date: string; day: number; weekday?: string }[] } | null>(null)
@@ -34,8 +34,7 @@ const swapLoading = ref(false)
 const showSwapDialog = ref(false)
 const swapInitialDate = ref('')
 const swapSubmitLoading = ref(false)
-const candidates = ref<SwapCandidate[]>([])
-const candidatesLoading = ref(false)
+const { candidates, loading: candidatesLoading, load: loadCandidates, clear: clearCandidates } = useSwapCandidates()
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -128,7 +127,7 @@ const sentRequests = computed(() =>
 // ============ Create Swap ============
 const openSwapDialog = (dateStr: string) => {
   swapInitialDate.value = dateStr || ''
-  candidates.value = []
+  clearCandidates()
   showSwapDialog.value = true
   if (dateStr) {
     fetchCandidates(dateStr)
@@ -136,16 +135,9 @@ const openSwapDialog = (dateStr: string) => {
 }
 
 const fetchCandidates = async (dateStr: string) => {
-  candidatesLoading.value = true
-  try {
-    const res = await getSwapCandidates({ date: dateStr })
-    // codegen 型別 work_start/work_end 為 string | null，本元件 SwapCandidate 用 ?: string；narrow 對齊。
-    candidates.value = res.data as SwapCandidate[]
-  } catch {
-    ElMessage.error('載入候選老師失敗')
-  } finally {
-    candidatesLoading.value = false
-  }
+  // 候選與同事當日職務一起抓（SPEC-026 T5）；職務名單失敗只是少了加註，候選失敗才提示。
+  const ok = await loadCandidates(dateStr)
+  if (!ok) ElMessage.error('載入候選老師失敗')
 }
 
 const submitSwap = async (payload: { swap_date: string; target_id: number | null; reason: string }) => {

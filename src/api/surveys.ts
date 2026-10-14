@@ -1,5 +1,5 @@
 import api from './index'
-import type { ApiBody, AxiosResp } from './_generated/typed'
+import type { ApiBody, AxiosResp, Schema } from './_generated/typed'
 
 // ---- 管理端 ----
 export const listSurveys = (params?: { status?: string }) => api.get('/surveys', { params })
@@ -18,7 +18,11 @@ export const adminFillResponse = (
   id: number, studentId: number,
   payload: ApiBody<'/surveys/{survey_id}/responses/{student_id}', 'post'>,
 ) => api.post(`/surveys/${id}/responses/${studentId}`, payload)
-export const remindSurvey = (id: number) => api.post(`/surveys/${id}/remind`)
+/** 不帶 `classroomIds`＝催全部未回覆；帶了只催這些班（後端擋不在調查對象內的班）。 */
+export const remindSurvey = (id: number, classroomIds?: number[]) => {
+  const body: Schema<'RemindIn'> | undefined = classroomIds ? { classroom_ids: classroomIds } : undefined
+  return api.post(`/surveys/${id}/remind`, body)
+}
 export const exportSurvey = (id: number) =>
   api.get(`/surveys/${id}/export`, { responseType: 'blob' })
 

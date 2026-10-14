@@ -31,7 +31,7 @@ import {
 import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
 import { friendlyError } from '@/utils/errorMessages'
-import { formatTaipeiDateTimeMinute, todayTaipeiISO } from '@/utils/format'
+import { formatTaipeiDateTimeMinute, nowTaipeiNaiveISO, todayTaipeiISO } from '@/utils/format'
 import { SURVEY_QUESTION_TYPES, firstUnansweredRequiredQuestion, type SurveyQuestionType } from '@/constants/surveyQuestionTypes'
 import { SURVEY_STATUS_LABELS, SURVEY_STATUS_TAG, deadlineHint, deriveSurveyStatus } from './surveyListModel'
 import {
@@ -39,6 +39,7 @@ import {
   buildOptionRows,
   buildOverview,
   buildTextRows,
+  type ClassroomRow,
   type StatsQuestion,
   type SurveyStats,
 } from './surveyStatsModel'
@@ -64,6 +65,10 @@ interface SurveyDetail {
   reply_deadline: string
   published_at: string | null
   questions: QuestionOut[]
+  created_by_name?: string | null
+  created_at?: string | null
+  last_reminded_at?: string | null
+  reminded_parent_count?: number
 }
 interface StatsNotReplied { classroom_id: number | null; classroom_name: string; name: string; student_id: number }
 interface Stats extends SurveyStats {
@@ -127,6 +132,12 @@ const subtitle = computed(() => {
   return parts.join(' · ')
 })
 
+const reminderText = computed(() => {
+  const last = survey.value?.last_reminded_at
+  if (!last) return '尚未催覆'
+  return `${formatTaipeiDateTimeMinute(last)}・累計推播 ${survey.value?.reminded_parent_count ?? 0} 人次`
+})
+
 const overview = computed(() => (stats.value ? buildOverview(stats.value) : null))
 const classroomRows = computed(() => (stats.value ? buildClassroomRows(stats.value.by_classroom) : []))
 const notReplied = computed(() => stats.value?.not_replied ?? [])
@@ -139,6 +150,8 @@ const remindDisabledReason = computed(() => {
   return ''
 })
 const canRemind = computed(() => canWrite && !remindDisabledReason.value)
+// 單班催覆只在進行中提供（草稿家長看不到、截止後家長無法填）。
+const canRemindByClassroom = computed(() => canWrite && status.value === 'open')
 
 // 回覆明細的純前端篩選
 const responseClassroom = ref('')
@@ -205,6 +218,9 @@ function formatUpdatedAt(iso: string | null): string {
 
 function goEdit() {
   router.push({ name: 'survey-edit', params: { id: surveyId } })
+}
+function goCopy() {
+  router.push({ name: 'survey-new', query: { copy: String(surveyId) } })
 }
 
 async function onPublish() {
@@ -280,8 +296,41 @@ async function onRemind() {
   }
   try {
     const res = await remindSurvey(surveyId)
-    const data = res.data as unknown as { sent: number }
-    ElMessage.success(data.sent ? `已推播 ${data.sent} 位家長` : '沒有需要推播的家長（24 小時內已提醒過）')
+    applyRemindResult(res.data as unknown as { sent: number })
+  } catch (e) {
+    ElMessage.error(friendlyError('催覆失敗', e))
+  }
+}
+
+/**
+ * 催覆結果：提示推播人數，並就地更新「上次催覆」。推播紀錄是在 response 送出後
+ * 才於背景寫入（dispatch.deferred_drain），馬上重抓調查多半還是舊值，所以用回傳的
+ * `sent` 樂觀更新；下次進頁會以後端紀錄為準。
+ */
+function applyRemindResult(data: { sent: number }) {
+  ElMessage.success(data.sent ? `已推播 ${data.sent} 位家長` : '沒有需要推播的家長（24 小時內已提醒過）')
+  if (!data.sent || !survey.value) return
+  survey.value = {
+    ...survey.value,
+    last_reminded_at: nowTaipeiNaiveISO(),
+    reminded_parent_count: (survey.value.reminded_parent_count ?? 0) + data.sent,
+  }
+}
+
+async function onRemindClassroom(row: ClassroomRow) {
+  if (row.classroom_id === null) return
+  try {
+    await ElMessageBox.confirm(
+      `會推播提醒給「${row.classroom_name}」${row.notReplied} 位未回覆學生的家長；同一位家長 24 小時內不會重複收到。`,
+      '催覆此班',
+      { confirmButtonText: '推播提醒', cancelButtonText: '取消' },
+    )
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    const res = await remindSurvey(surveyId, [row.classroom_id])
+    applyRemindResult(res.data as unknown as { sent: number })
   } catch (e) {
     ElMessage.error(friendlyError('催覆失敗', e))
   }
@@ -392,6 +441,7 @@ onMounted(async () => {
       <template #actions>
         <template v-if="canWrite && status === 'draft'">
           <el-button link type="danger" data-test="action-delete" @click="onDelete">刪除草稿</el-button>
+          <el-button data-test="action-copy" @click="goCopy">複製</el-button>
           <el-button data-test="action-edit" @click="goEdit">編輯</el-button>
           <el-button type="primary" data-test="action-publish" @click="onPublish">發布並推播</el-button>
         </template>
@@ -404,6 +454,7 @@ onMounted(async () => {
           </el-tooltip>
           <el-button :type="status === 'expired' ? 'primary' : 'default'" :plain="status === 'expired'" data-test="action-close" @click="onClose">結束調查</el-button>
         </template>
+        <el-button v-if="canWrite && !isDraft" data-test="action-copy" @click="goCopy">複製</el-button>
         <el-button v-if="!isDraft" :icon="Download" data-test="action-export" @click="onExport">匯出 Excel</el-button>
       </template>
     </PageHeader>
@@ -415,6 +466,9 @@ onMounted(async () => {
       <el-descriptions-item label="地點">{{ survey.location || '—' }}</el-descriptions-item>
       <el-descriptions-item label="費用">{{ survey.fee_note || '—' }}</el-descriptions-item>
       <el-descriptions-item label="發布時間">{{ survey.published_at ? formatTaipeiDateTimeMinute(survey.published_at) : '尚未發布' }}</el-descriptions-item>
+      <el-descriptions-item label="建立者"><span data-test="meta-creator">{{ survey.created_by_name || '—' }}</span></el-descriptions-item>
+      <el-descriptions-item label="建立時間">{{ survey.created_at ? formatTaipeiDateTimeMinute(survey.created_at) : '—' }}</el-descriptions-item>
+      <el-descriptions-item label="上次催覆">{{ reminderText }}</el-descriptions-item>
     </el-descriptions>
 
     <el-tabs v-model="activeTab">
@@ -473,6 +527,17 @@ onMounted(async () => {
               </template>
             </el-table-column>
             <el-table-column label="參加" prop="attending" :width="isMobile ? 60 : 80" align="right" />
+            <el-table-column v-if="canRemindByClassroom" label="" :width="isMobile ? 90 : 110" align="right">
+              <template #default="{ row }">
+                <el-button
+                  v-if="row.classroom_id !== null"
+                  size="small"
+                  :disabled="row.notReplied === 0"
+                  data-test="remind-classroom"
+                  @click="onRemindClassroom(row)"
+                >催覆此班</el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </section>
 

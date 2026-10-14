@@ -179,6 +179,12 @@ export const getSwapCandidates = (
 ): AxiosResp<'/portal/swap-candidates', 'get'> =>
   api.get('/portal/swap-candidates', { params })
 
+/** 候選同事的當日職務名單（SPEC-026 §4.4 T4）：換班對象選單加註用。 */
+export const getDayRoster = (
+  params: ApiQuery<'/portal/schedule/day-roster', 'get'>,
+): AxiosResp<'/portal/schedule/day-roster', 'get'> =>
+  api.get('/portal/schedule/day-roster', { params })
+
 export const createSwapRequest = (
   data: ApiBody<'/portal/swap-requests', 'post'>,
 ): AxiosResp<'/portal/swap-requests', 'post'> => api.post('/portal/swap-requests', data)
