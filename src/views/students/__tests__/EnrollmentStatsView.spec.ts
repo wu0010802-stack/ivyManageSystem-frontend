@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import EnrollmentStatsView from '../EnrollmentStatsView.vue'
@@ -30,7 +30,9 @@ const statsResponse = {
       total: 27,
       male: 14,
       female: 13,
-      classes: [{ class_name: '天堂鳥', total: 27, male: 14, female: 13 }],
+      classes: [
+        { classroom_id: 10, class_name: '天堂鳥', capacity: 30, total: 27, male: 14, female: 13 },
+      ],
     },
   ],
 }
@@ -139,7 +141,9 @@ vi.mock('@/components/common/PageHeader.vue', () => ({
 }))
 
 const mountView = () =>
-  mount(EnrollmentStatsView, { global: { plugins: [ElementPlus] } })
+  mount(EnrollmentStatsView, {
+    global: { plugins: [ElementPlus], stubs: { RouterLink: RouterLinkStub } },
+  })
 
 describe('EnrollmentStatsView（現值與異動帳整合）', () => {
   beforeEach(() => {
@@ -308,7 +312,9 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
             total: 190,
             male: 100,
             female: 90,
-            classes: [{ class_name: '天堂鳥', total: 190, male: 100, female: 90 }],
+            classes: [
+              { classroom_id: 10, class_name: '天堂鳥', capacity: 200, total: 190, male: 100, female: 90 },
+            ],
           },
         ],
       },
@@ -335,7 +341,9 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
             total: 27,
             male: 0,
             female: 0,
-            classes: [{ class_name: '天堂鳥', total: 27, male: 0, female: 0 }],
+            classes: [
+              { classroom_id: 10, class_name: '天堂鳥', capacity: 30, total: 27, male: 0, female: 0 },
+            ],
           },
         ],
       },
@@ -361,7 +369,9 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
             male: 10,
             female: 10,
             // 5 人未填：分母若誤用 total(25) 會算成 40%/40%；改用已填(20) 應是 50%/50%
-            classes: [{ class_name: '天堂鳥', total: 25, male: 10, female: 10 }],
+            classes: [
+              { classroom_id: 10, class_name: '天堂鳥', capacity: 30, total: 25, male: 10, female: 10 },
+            ],
           },
         ],
       },
@@ -447,5 +457,144 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
     expect(wrapper.find('.ratio-bar').exists()).toBe(false)
     // 未填欄等其餘欄位仍在，不是整張表消失
     expect(wrapper.text()).toContain('各班在籍人數表')
+  })
+
+  // ---------------------------------------------------------------------
+  // L5（D-20）：容量／缺額欄、班名連到班級頁
+  // ---------------------------------------------------------------------
+
+  /** 兩個年級、三個班：滿班、有缺額、超額各一。 */
+  const capacityStats = (overrides: { cap?: number | null } = {}) => ({
+    data: {
+      school_year: 115,
+      semester: 1,
+      semester_label: '上學期',
+      summary: { total: 74, male: 40, female: 30, class_count: 3 },
+      by_grade: [
+        {
+          grade_name: '大班',
+          total: 52,
+          male: 28,
+          female: 20,
+          classes: [
+            { classroom_id: 10, class_name: '天堂鳥', capacity: 30, total: 27, male: 14, female: 13 },
+            { classroom_id: 11, class_name: '向日葵', capacity: 25, total: 25, male: 14, female: 7 },
+          ],
+        },
+        {
+          grade_name: '中班',
+          total: 22,
+          male: 12,
+          female: 10,
+          classes: [
+            {
+              classroom_id: 12,
+              class_name: '蒲公英',
+              capacity: overrides.cap === undefined ? 20 : overrides.cap,
+              total: 22,
+              male: 12,
+              female: 10,
+            },
+          ],
+        },
+      ],
+    },
+  })
+
+  /** 取某個 class-name 欄的所有 td 文字（依表格列順序）。 */
+  const colTexts = (wrapper: ReturnType<typeof mountView>, cls: string) =>
+    wrapper.findAll(`td.${cls}`).map((td) => td.text())
+
+  it('表格多出「容量」「缺額」兩欄，表頭看得到', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const heads = wrapper.findAll('th').map((th) => th.text())
+    expect(heads).toContain('容量')
+    expect(heads).toContain('缺額')
+  })
+
+  it('各班缺額＝容量−在籍；年級小計與全園總計也各自加總', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(capacityStats() as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    // 列順序：天堂鳥、向日葵、大班小計、蒲公英、中班小計、全園總計
+    expect(colTexts(wrapper, 'col-capacity')).toEqual(['30', '25', '55', '20', '20', '75'])
+    // 缺額：3、0、3（大班小計）、-2（超額）、-2（中班小計）、1（全園）
+    expect(colTexts(wrapper, 'col-vacancy')).toEqual(['3', '0', '3', '-2', '-2', '1'])
+  })
+
+  it('超額（在籍多於容量）的缺額以警示樣式標出', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(capacityStats() as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    const over = wrapper.findAll('td.col-vacancy .num-over')
+    // 蒲公英與中班小計兩格
+    expect(over.map((n) => n.text())).toEqual(['-2', '-2'])
+  })
+
+  it('班級沒設容量（null）時，該班與其上層小計／總計的容量、缺額都顯示「—」，不拿殘缺總和充數', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(
+      capacityStats({ cap: null }) as never,
+    )
+    const wrapper = mountView()
+    await flushPromises()
+
+    // 大班兩班容量都有 → 小計照算；中班唯一的班沒容量 → 班、中班小計、全園總計皆「—」
+    expect(colTexts(wrapper, 'col-capacity')).toEqual(['30', '25', '55', '—', '—', '—'])
+    expect(colTexts(wrapper, 'col-vacancy')).toEqual(['3', '0', '3', '—', '—', '—'])
+  })
+
+  it('班名連到班級頁 /classrooms?selected=<classroom_id>；小計與總計列沒有連結', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(capacityStats() as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    expect(links.map((l) => l.props('to'))).toEqual([
+      '/classrooms?selected=10',
+      '/classrooms?selected=11',
+      '/classrooms?selected=12',
+    ])
+    expect(links.map((l) => l.text())).toEqual(['天堂鳥', '向日葵', '蒲公英'])
+  })
+
+  it('手機寬度也保留容量／缺額欄（不為了擠進 390px 把新欄砍掉）', async () => {
+    mockIsMobile.value = true
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(capacityStats() as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(colTexts(wrapper, 'col-capacity')).toHaveLength(6)
+    expect(colTexts(wrapper, 'col-vacancy')).toHaveLength(6)
+    expect(wrapper.find('.ratio-bar').exists()).toBe(false)
+  })
+
+  it('手機寬度：欄寬總和塞得進 390px 視口下的表格區（286px），缺額欄不被推出畫面', async () => {
+    // 實機量測（Playwright 390px）：頁面與卡片內距扣完，表格區只剩 286px。
+    // 欄寬總和超過它就會橫向捲動，而缺額是最右一欄——捲動就看不到。
+    mockIsMobile.value = true
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(capacityStats() as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    const widths = wrapper
+      .find('.enrollment-table colgroup')
+      .findAll('col')
+      .map((c) => Number(c.attributes('width')))
+      .filter((w) => w > 0)
+    expect(widths).toHaveLength(8) // 年級／班級／男／女／未填／合計／容量／缺額
+    expect(widths.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(286)
+    // 手機表頭簡寫，省下的寬度才夠留給容量／缺額
+    const heads = wrapper.findAll('th').map((th) => th.text())
+    expect(heads).toEqual(expect.arrayContaining(['男', '女', '容量', '缺額']))
+    expect(heads).not.toContain('男生')
   })
 })

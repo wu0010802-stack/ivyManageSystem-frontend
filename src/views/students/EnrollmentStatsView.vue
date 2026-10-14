@@ -22,18 +22,14 @@ import { coerceRocYear, getTermDateRange } from '@/utils/academic'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { apiError } from '@/utils/error'
+import type { ApiResponse, Schema } from '@/api/_generated/typed'
 import { describeReconcile, type LedgerSummary, type ReconcileResult } from '@/utils/enrollmentLedger'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EnrollmentLedgerPanel from './EnrollmentLedgerPanel.vue'
 
-interface TermOption { school_year: number; semester: number; label: string }
-interface GradeClassStat { class_name: string; male: number; female: number; total: number }
-interface GradeStat { grade_name: string; male: number; female: number; total: number; classes: GradeClassStat[] }
-interface EnrollmentSummary { total: number; male: number; female: number; class_count: number }
-interface EnrollmentStats {
-  school_year: number; semester: number; semester_label: string
-  summary: EnrollmentSummary; by_grade: GradeStat[]
-}
+type TermOption = Schema<'TermOption'>
+type GradeClassStat = Schema<'ClassStats'>
+type EnrollmentStats = ApiResponse<'/student-enrollment/stats', 'get'>
 
 const termStore = useAcademicTermStore()
 const { isMobile } = useIsMobile()
@@ -94,7 +90,7 @@ const termParams = () => ({
 const fetchOptions = async () => {
   try {
     const res = await getEnrollmentOptions()
-    termOptions.value = res.data as TermOption[]
+    termOptions.value = res.data
   } catch (e) {
     ElMessage.error(apiError(e, '載入學年選項失敗'))
   }
@@ -104,7 +100,7 @@ const fetchStats = async () => {
   loading.value = true
   try {
     const res = await getEnrollmentStats(termParams())
-    stats.value = res.data as EnrollmentStats
+    stats.value = res.data
   } catch (e) {
     ElMessage.error(apiError(e, '載入在籍統計失敗'))
   } finally {
@@ -225,6 +221,19 @@ const changeSummary = computed(() => {
 // ---------------------------------------------------------------------------
 // 表格資料（展開 + 年級小計 + 全園總計）
 // ---------------------------------------------------------------------------
+/**
+ * 容量／缺額合計。有任何一班沒設容量（null）就整組回 null、畫面顯示「—」：
+ * 殘缺的加總看起來像真值，會讓人以為還有位子或已經滿了。
+ */
+const capacityOf = (classes: GradeClassStat[]) => {
+  if (!classes.length || classes.some((c) => c.capacity == null)) {
+    return { capacity: null, vacancy: null }
+  }
+  const capacity = classes.reduce((n, c) => n + (c.capacity ?? 0), 0)
+  const enrolled = classes.reduce((n, c) => n + c.total, 0)
+  return { capacity, vacancy: capacity - enrolled }
+}
+
 const tableData = computed(() => {
   if (!stats.value?.by_grade) return []
   const rows = []
@@ -233,11 +242,13 @@ const tableData = computed(() => {
       rows.push({
         type: 'class',
         grade_name: grade.grade_name,
+        classroom_id: cls.classroom_id,
         class_name: cls.class_name,
         male: cls.male,
         female: cls.female,
         unknown: unknownGenderOf(cls.total, cls.male, cls.female),
         total: cls.total,
+        ...capacityOf([cls]),
         _gradeClassCount: grade.classes.length,
       })
     }
@@ -249,6 +260,7 @@ const tableData = computed(() => {
       female: grade.female,
       unknown: unknownGenderOf(grade.total, grade.male, grade.female),
       total: grade.total,
+      ...capacityOf(grade.classes),
     })
   }
   rows.push({
@@ -263,6 +275,7 @@ const tableData = computed(() => {
       stats.value.summary.female,
     ),
     total: stats.value.summary.total,
+    ...capacityOf(stats.value.by_grade.flatMap((g) => g.classes)),
   })
   return rows
 })
@@ -436,19 +449,43 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
         :row-class-name="rowClassName"
         class="enrollment-table"
       >
-        <el-table-column label="年級" prop="grade_name" :width="isMobile ? 60 : 120" align="center" />
-        <el-table-column label="班級" prop="class_name" :width="isMobile ? 80 : 110" align="center" />
-        <el-table-column label="男生" prop="male" :width="isMobile ? 54 : 80" align="right" />
-        <el-table-column label="女生" prop="female" :width="isMobile ? 54 : 80" align="right" />
-        <el-table-column label="未填" prop="unknown" :width="isMobile ? 54 : 80" align="right">
+        <el-table-column label="年級" prop="grade_name" :width="isMobile ? 46 : 120" align="center" />
+        <el-table-column label="班級" prop="class_name" :width="isMobile ? 58 : 110" align="center">
+          <template #default="{ row }">
+            <router-link
+              v-if="row.type === 'class' && row.classroom_id"
+              :to="`/classrooms?selected=${row.classroom_id}`"
+              class="class-link"
+            >
+              {{ row.class_name }}
+            </router-link>
+            <template v-else>{{ row.class_name }}</template>
+          </template>
+        </el-table-column>
+        <el-table-column :label="isMobile ? '男' : '男生'" prop="male" :width="isMobile ? 26 : 80" align="right" />
+        <el-table-column :label="isMobile ? '女' : '女生'" prop="female" :width="isMobile ? 26 : 80" align="right" />
+        <el-table-column label="未填" prop="unknown" :width="isMobile ? 32 : 80" align="right">
           <template #default="{ row }">
             <span v-if="row.unknown > 0" class="num-unknown">{{ row.unknown }}</span>
             <span v-else class="ratio-empty">0</span>
           </template>
         </el-table-column>
-        <el-table-column label="合計" prop="total" :width="isMobile ? 66 : 90" align="right">
+        <el-table-column label="合計" prop="total" :width="isMobile ? 32 : 90" align="right">
           <template #default="{ row }">
             <span class="num-total">{{ row.total }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="容量" prop="capacity" class-name="col-capacity" :width="isMobile ? 32 : 80" align="right">
+          <template #default="{ row }">
+            <span v-if="row.capacity != null">{{ row.capacity }}</span>
+            <span v-else class="ratio-empty">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="缺額" prop="vacancy" class-name="col-vacancy" :width="isMobile ? 32 : 80" align="right">
+          <template #default="{ row }">
+            <span v-if="row.vacancy == null" class="ratio-empty">—</span>
+            <span v-else-if="row.vacancy < 0" class="num-over">{{ row.vacancy }}</span>
+            <span v-else>{{ row.vacancy }}</span>
           </template>
         </el-table-column>
         <el-table-column v-if="!isMobile" label="男女比例" min-width="180">
@@ -475,7 +512,8 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
         :image-size="80"
       />
       <p v-if="tableData.length" class="table-footnote">
-        百分比以已填性別者為分母，未填不計入男／女占比。
+        百分比以已填性別者為分母，未填不計入男／女占比。缺額＝容量−在籍（負數＝超額）；
+        有班級未設容量時，該小計與總計顯示「—」。
       </p>
     </el-card>
 
@@ -682,19 +720,23 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
   font-weight: 600;
 }
 
-/* 手機收欄（2026-09-17）：拿掉男女比例欄（原本佔表格 53% 寬）後，剩餘 6 欄
-   配合 template 內 isMobile 縮窄的欄寬（見下）大多數情況已不必橫向捲動；
-   縮小 cell padding 換出一點空間給數字，不強行擠到會讓文字折行的地步——
-   折行比小幅橫向捲動更傷可讀性。卡片 padding 一起收窄，避免兩側留白吃掉
-   本就緊繃的表格寬度。 */
+/* 手機收欄：8 欄（年級／班級／男／女／未填／合計／容量／缺額）要塞進 390px 視口下
+   約 286px 的表格區，欄寬總和＝46+58+26+26+32+32+32+32＝284px，不橫向捲動。
+   折行比橫向捲動更傷可讀性（缺額是最右一欄，捲動就看不到），所以：
+   ① 表格字級降到 13px；② 男生／女生表頭在手機簡寫成「男」「女」（template 內 isMobile）；
+   ③ 儲存格內距收到最小——el-table 的 td 與內層 .cell 各有一層 padding，兩層都要縮。 */
 @media (--to-sm) {
-  .enrollment-table :deep(.el-table__cell) {
-    padding: 8px 2px;
+  .enrollment-table {
+    font-size: 13px;
   }
-  /* el-table 的儲存格內還有一層 .cell，左右各吃掉 12px padding——只縮外層
-     td 沒用，數字欄照樣被這層內距擠到折行（實測 39px 的 td 只剩 15px 可用）。 */
-  .enrollment-table :deep(.el-table .cell) {
-    padding: 0 4px;
+  .enrollment-table :deep(.el-table__cell) {
+    padding: 8px 0;
+  }
+  /* ⚠ class="enrollment-table" 就掛在 el-table 根節點上，選擇器不能寫成
+     `.enrollment-table .el-table .cell`（要求根節點底下再有一層 .el-table，永遠比不到；
+     舊寫法就是因此整段失效，.cell 仍吃 12px 內距，數字欄被擠到折行）。 */
+  .enrollment-table :deep(.cell) {
+    padding: 0 2px;
   }
   .table-card :deep(.el-card__body) {
     padding: 12px;
@@ -703,6 +745,20 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 
 .num-unknown {
   color: var(--text-secondary);
+}
+
+/* 超額（在籍多於容量）：沿用全站 danger 色，與「缺額」的正常數字區隔。 */
+.num-over {
+  color: var(--color-danger, #f56c6c);
+  font-weight: 600;
+}
+
+.class-link {
+  color: var(--color-primary, var(--el-color-primary));
+  text-decoration: none;
+}
+.class-link:hover {
+  text-decoration: underline;
 }
 
 .ratio-bar {

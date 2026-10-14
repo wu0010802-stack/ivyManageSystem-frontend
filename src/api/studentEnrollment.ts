@@ -1,8 +1,12 @@
 import api from './index'
 import type { ApiQuery, AxiosResp } from './_generated/typed'
 
-export const getEnrollmentStats = (params: unknown) => api.get('/student-enrollment/stats', { params })
-export const getEnrollmentOptions = () => api.get('/student-enrollment/options')
+export const getEnrollmentStats = (
+  params: ApiQuery<'/student-enrollment/stats', 'get'>,
+): AxiosResp<'/student-enrollment/stats', 'get'> =>
+  api.get('/student-enrollment/stats', { params })
+export const getEnrollmentOptions = (): AxiosResp<'/student-enrollment/options', 'get'> =>
+  api.get('/student-enrollment/options')
 export const getEnrollmentRoster = (params: unknown) => api.get('/student-enrollment/roster', { params })
 export const getEnrollmentRosterPdf = (params: unknown) =>
   api.get('/student-enrollment/roster.pdf', { params, responseType: 'blob' })
