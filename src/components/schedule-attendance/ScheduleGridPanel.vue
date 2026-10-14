@@ -350,7 +350,8 @@ let monthWeeklySeq = 0
 async function openMonthCell(employeeId: number, date: string): Promise<void> {
   openCell(employeeId, date)
   monthWeekly.value = null
-  if (!monthData.value?.caller.can_edit_plan) return
+  // 深連結開頁時週資料常比整月資料先回來（7 天 vs 31 天）：整月資料還沒到就用週資料的權限判斷（同一位呼叫者）
+  if (!(monthData.value ?? gridData.value)?.caller.can_edit_plan) return
   const current = ++monthWeeklySeq
   try {
     const rows = (await getAssignments({ week_start: mondayOf(date) })).data
@@ -369,7 +370,9 @@ watch(gridData, (g) => {
   if (focusHandled || !g || !props.focusEmployeeId || !props.focusDate) return
   if (state.cells.value.has(cellKey(props.focusEmployeeId, props.focusDate))) {
     focusHandled = true
-    openCell(props.focusEmployeeId, props.focusDate)
+    // 月模式的抽屜也要該格那週的週排班（來源層與說明），走點格同一條路徑
+    if (isMonth.value) void openMonthCell(props.focusEmployeeId, props.focusDate)
+    else openCell(props.focusEmployeeId, props.focusDate)
   }
 })
 

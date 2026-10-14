@@ -523,6 +523,49 @@ describe('ScheduleGridPanel 月模式（SPEC-027 C 期）', () => {
     expect(wrapper.emitted('update:view')).toEqual([['week', '2026-10-05']])
   })
 
+  describe('深連結在月模式開抽屜（M-2）', () => {
+    const SEP28_WEEK = ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']
+    /** 錨點 10/1 的週資料（9/28 那週，含 focus 的格子）與整月資料；month 可延後回來，模擬週資料先到 */
+    function mockGrids(monthGate?: Promise<void>) {
+      api.grid.mockImplementation(async ({ start_date }: { start_date: string }) => {
+        if (start_date === monthRange('2026-10-01').start) {
+          await monthGate
+          return { data: grid({ start_date, days: OCT, cells: [cell(1, '2026-10-01', { actual: {} })] }) }
+        }
+        return { data: grid({ days: SEP28_WEEK.map((d) => day(d)), cells: [cell(1, '2026-10-01', { actual: {} })] }) }
+      })
+      api.getAssignments.mockImplementation(async ({ week_start }: { week_start: string }) => ({
+        data: week_start === '2026-09-28' ? [assignment(1, 2)] : [],
+      }))
+    }
+    const mountFocused = () => mountPanel({
+      date: '2026-10-01', view: 'month', focusEmployeeId: 1, focusDate: '2026-10-01',
+      month: effectScope().run(() => useMonthGrid(ref('2026-10-01'), ref(0)))!,
+    })
+
+    it('補抓該格那週的週排班，抽屜帶該員工的週排班班別', async () => {
+      mockGrids()
+      const wrapper = mountFocused()
+      await flushPromises()
+      const drawer = wrapper.findComponent(DrawerStub)
+      expect(drawer.props('modelValue')).toBe(true)
+      expect(drawer.props('cell')).toMatchObject({ employee_id: 1, date: '2026-10-01' })
+      expect(api.getAssignments).toHaveBeenCalledWith({ week_start: '2026-09-28' })
+      expect(drawer.props('weeklyShiftId')).toBe(2)
+    })
+
+    it('週資料先於整月資料回來時也要補抓（不能只靠整月資料才知道有沒有排班權限）', async () => {
+      let releaseMonth: () => void = () => {}
+      mockGrids(new Promise<void>((resolve) => { releaseMonth = resolve }))
+      const wrapper = mountFocused()
+      await flushPromises()
+      releaseMonth()
+      await flushPromises()
+      expect(api.getAssignments).toHaveBeenCalledWith({ week_start: '2026-09-28' })
+      expect(wrapper.findComponent(DrawerStub).props('weeklyShiftId')).toBe(2)
+    })
+  })
+
   it('整月載入失敗：給重新載入，不顯示空白格子', async () => {
     api.grid.mockRejectedValue({ displayMessage: '伺服器錯誤' })
     const month = monthState()
