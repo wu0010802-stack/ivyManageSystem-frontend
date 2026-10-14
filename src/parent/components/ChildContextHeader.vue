@@ -148,7 +148,7 @@ button.child-context-header:active { background: var(--pt-surface-mute-soft); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--m3-secondary-container, var(--pt-tint-brand, var(--brand-primary-soft)));
+  background: var(--m3-secondary-container, #d2e8d4);
   color: var(--brand-primary);
   font-weight: 900;
   flex-shrink: 0;
@@ -235,7 +235,7 @@ button.child-context-header:active { background: var(--pt-surface-mute-soft); }
   flex-shrink: 0;
 }
 .cch-item--active .cch-item-avatar {
-  background: var(--m3-secondary-container, var(--pt-tint-brand));
+  background: var(--m3-secondary-container, #d2e8d4);
 }
 .cch-item-copy { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .cch-item-name { font-weight: 700; color: var(--pt-text-strong); }

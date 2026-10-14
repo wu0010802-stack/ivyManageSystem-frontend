@@ -186,9 +186,9 @@ const dialogStyle = computed<Record<string, string>>(() => ({
 }
 
 .modal-dialog {
-  background: var(--m3-surface-container-high, var(--pt-surface-card, var(--neutral-0, #fff)));
+  background: var(--m3-surface-container-high, #fff);
   border-radius: var(--radius-xl, 28px);
-  box-shadow: var(--m3-elev-3, var(--pt-elev-3, var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,.1))));
+  box-shadow: var(--m3-elev-3, var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,.1)));
   border: var(--pt-hairline);
   width: 100%;
   max-height: calc(100dvh - var(--space-8, 32px));

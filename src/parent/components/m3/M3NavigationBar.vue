@@ -203,9 +203,7 @@ function onTabClick(item: NavItem): void {
   justify-content: center;
 }
 
-.m3-nav-tab-label {
-  color: var(--m3-on-surface-variant, #424941);
-}
+/* 未選中標籤沿用列本身的 --m3-on-surface-variant（.m3-nav-tab 為 color: inherit） */
 .m3-nav-tab.is-active .m3-nav-tab-label {
   color: var(--m3-on-surface, #181d18);
 }

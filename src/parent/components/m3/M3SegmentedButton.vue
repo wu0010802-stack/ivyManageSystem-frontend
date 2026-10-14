@@ -93,7 +93,6 @@ function onSegmentClick(value: string): void {
   /* 不用 overflow:hidden 裁圓角：會把 segment 的命中區 ::after 一起裁掉。
      圓角改由首尾 segment 自己帶（見下方 :first-child／:last-child）。 */
   background: var(--m3-surface, #f7fbf3);
-  font-family: var(--m3-font-body, 'Roboto', sans-serif);
 }
 
 .m3-segment {

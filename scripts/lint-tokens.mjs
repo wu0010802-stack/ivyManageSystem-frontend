@@ -37,11 +37,11 @@ const SELF_PATH = 'scripts/lint-tokens.mjs';
  * 這一步是刻意的：把成果鎖進版控，等同 eslint 的 reportUnusedDisableDirectives。
  */
 const BASELINE = {
-  brand: 196,
+  brand: 193,
   ivy: 29,
-  m3: 385,
-  neutral: 281,
-  pt: 866,
+  m3: 384,
+  neutral: 279,
+  pt: 863,
 };
 
 /**

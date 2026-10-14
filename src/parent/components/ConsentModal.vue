@@ -267,7 +267,7 @@ async function handleSubmit() {
 .submit-btn {
   width: 100%;
   min-height: 48px;
-  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  background: var(--m3-primary, #006d3d);
   color: var(--m3-on-primary, #fff);
   border: none;
   border-radius: 12px;

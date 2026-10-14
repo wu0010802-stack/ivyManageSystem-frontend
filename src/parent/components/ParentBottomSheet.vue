@@ -379,7 +379,7 @@ const hasFooterSlot = computed<boolean>(() => !!slots.footer)
 }
 
 .pt-bsheet-dialog {
-  background: var(--m3-surface-container-low, var(--pt-surface-card, #fff));
+  background: var(--m3-surface-container-low, #fff);
   border: var(--pt-hairline);
   border-radius: var(--pt-hero-radius, 30px) var(--pt-hero-radius, 30px) 0 0;
   box-shadow: var(--pt-shadow-float);

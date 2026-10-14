@@ -101,7 +101,6 @@ function onRemove(e: Event): void {
   border-radius: 9999px;
   background: var(--m3-surface-container-low, #f1f5ee);
   color: var(--m3-on-surface, #181d18);
-  font-family: var(--m3-font-body, 'Roboto', sans-serif);
   cursor: pointer;
   transition:
     background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
