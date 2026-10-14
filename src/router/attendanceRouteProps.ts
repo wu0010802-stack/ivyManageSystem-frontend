@@ -6,11 +6,14 @@
  *   /settings?tab=shifts（原「設定 › 輪班別管理」）＝ tab=shifts（legacySettingsShiftsRedirect）
  * - date：YYYY-MM-DD；emp：員工 id（開頁即開該人 date 那天的格子抽屜）
  * - filter：all／issues／future
+ * - view：week（預設）／month（月格子，桌機限定；手機由頁面強制週）
  */
 import type { LocationQuery } from 'vue-router'
+import type { GridView } from '@/utils/scheduleAttendanceGrid'
 
 const TABS = ['grid', 'records', 'rotation', 'swaps', 'shifts'] as const
 const FILTERS = ['all', 'issues', 'future'] as const
+const VIEWS: readonly GridView[] = ['week', 'month']
 export type AttendanceTab = (typeof TABS)[number]
 export type AttendanceFilter = (typeof FILTERS)[number]
 
@@ -41,6 +44,7 @@ export function attendanceRouteProps(query: LocationQuery): {
   date?: string
   emp?: number
   filter?: AttendanceFilter
+  view?: GridView
 } {
   const rawTab = first(query.tab)
   const rawFilter = first(query.filter)
@@ -49,6 +53,7 @@ export function attendanceRouteProps(query: LocationQuery): {
   const filter = legacyReconcile
     ? 'issues'
     : (FILTERS as readonly string[]).includes(rawFilter ?? '') ? (rawFilter as AttendanceFilter) : undefined
+  const rawView = first(query.view)
   const date = first(query.date)
   const emp = Number(first(query.emp))
   return {
@@ -56,5 +61,6 @@ export function attendanceRouteProps(query: LocationQuery): {
     date: isValidDateQuery(date) ? date : undefined,
     emp: Number.isInteger(emp) && emp > 0 ? emp : undefined,
     filter,
+    view: (VIEWS as readonly string[]).includes(rawView ?? '') ? (rawView as GridView) : undefined,
   }
 }

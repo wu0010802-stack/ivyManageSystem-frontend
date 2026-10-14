@@ -1,5 +1,5 @@
 vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }) }))
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
 import { downloadFile } from '@/utils/download'
@@ -29,9 +29,11 @@ vi.mock('@/utils/auth', () => ({
   hasFullSalaryView: () => mockHasFullSalaryView(),
 }))
 
+// 裝置寬度：掛載前改 value（元件 setup 時才讀）；各案例結束由 describe 的 afterEach 還原
+const mockIsMobile = vi.hoisted(() => ({ value: false }))
 vi.mock('@/composables/useIsMobile', async () => {
   const { ref } = await import('vue')
-  return { useIsMobile: () => ({ isMobile: ref(false), cleanup: () => {} }) }
+  return { useIsMobile: () => ({ isMobile: ref(mockIsMobile.value), cleanup: () => {} }) }
 })
 
 vi.mock('@/composables/useErrorNotify', () => ({
@@ -100,8 +102,8 @@ const AttendanceMonthStatsStub = {
 
 const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
-  props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
-  emits: ['records', 'import', 'import-punches', 'changed', 'update:date', 'update:filter'],
+  props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision', 'view', 'month'],
+  emits: ['records', 'import', 'import-punches', 'changed', 'update:date', 'update:filter', 'update:view'],
   methods: { confirmWeekChange: (date: string) => panelConfirmWeekChange(date) },
   template: '<div class="grid-panel-stub" />',
 }
@@ -592,6 +594,7 @@ describe('班表核對與明細互通', () => {
 })
 
 describe('頁籤與權限（SPEC-027 §8）', () => {
+  afterEach(() => { mockIsMobile.value = false })
   beforeEach(() => {
     routerReplace.mockReset()
     getSummaryMock.mockReset().mockResolvedValue({ data: sampleRoster })
@@ -644,6 +647,50 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     await flushPromises()
     expect(panel().props('date')).toBe('2026-10-12')
     expect(routerReplace).toHaveBeenLastCalledWith({ query: { date: '2026-10-12' } })
+    wrapper.unmount()
+  })
+
+  it('view=month 傳給格子面板；面板切週／月寫回網址（切回週拿掉 view、帶 date）', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-16', view: 'month' }, global: { stubs: STUBS } })
+    await flushPromises()
+    const panel = wrapper.findComponent(ScheduleGridPanelStub)
+    expect(panel.props('view')).toBe('month')
+    expect(panel.props('month')).toBeTruthy()
+    panel.vm.$emit('update:view', 'week', '2026-09-28')
+    await flushPromises()
+    expect(panelConfirmWeekChange).toHaveBeenCalledWith('2026-09-28')
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: expect.objectContaining({ date: '2026-09-28' }) })
+    expect(routerReplace.mock.calls.at(-1)![0].query.view).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('手機：view=month 仍是週模式（月模式不提供）', async () => {
+    mockIsMobile.value = true
+    const wrapper = mount(ScheduleAttendanceView, { props: { view: 'month' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('view')).toBe('week')
+    wrapper.unmount()
+  })
+
+  it('切到月模式寫 view=month；週模式有未儲存排班時換月仍先問面板，被擋就不寫網址', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    const panel = () => wrapper.findComponent(ScheduleGridPanelStub)
+    expect(panel().props('view')).toBe('week')
+    // 單純切週／月不換週、不問緩衝
+    panelConfirmWeekChange.mockClear()
+    panel().vm.$emit('update:view', 'month')
+    await flushPromises()
+    expect(panelConfirmWeekChange).not.toHaveBeenCalled()
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: { view: 'month' } })
+    // 月模式的上／下個月走 update:date → 先問面板（未儲存的週排班），不放行就停在原月
+    routerReplace.mockClear()
+    panelConfirmWeekChange.mockResolvedValueOnce(false)
+    panel().vm.$emit('update:date', '2026-10-01')
+    await flushPromises()
+    expect(panelConfirmWeekChange).toHaveBeenLastCalledWith('2026-10-01')
+    expect(panel().props('date')).toBe('2026-09-16')
+    expect(routerReplace).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

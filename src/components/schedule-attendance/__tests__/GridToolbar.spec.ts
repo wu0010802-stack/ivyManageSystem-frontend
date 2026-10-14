@@ -90,3 +90,26 @@ describe('GridToolbar', () => {
     expect(css).toMatch(/@media \(--bp-sm\)[^@]*\.grid-toolbar[^{]*\{[^}]*position: sticky[^}]*top: 0/)
   })
 })
+
+describe('GridToolbar 週／月（SPEC-027 C 期）', () => {
+  it('桌機才有週／月切換；切換送出 update:view', () => {
+    expect(mountToolbar().find('[data-test="toolbar-view"]').exists()).toBe(false)
+    const wrapper = mountToolbar({ canMonth: true })
+    // 週／月與篩選都是 ElRadioGroup：以 data-test 取週／月那一組，不依賴 DOM 順序
+    wrapper.find('[data-test="toolbar-view"]').findComponent({ name: 'ElRadioGroup' }).vm.$emit('update:modelValue', 'month')
+    expect(wrapper.emitted('update:view')).toEqual([['month']])
+  })
+
+  it('月模式：寫年月；上／下個月與月份選擇送出月初；排班工具收起、未儲存週排班有提示', async () => {
+    const wrapper = mountToolbar({ canMonth: true, view: 'month', date: '2026-01-16', pendingCount: 2 })
+    expect(wrapper.text()).toContain('2026 年 1 月')
+    await wrapper.find('[data-test="toolbar-prev-month"]').trigger('click')
+    await wrapper.find('[data-test="toolbar-next-month"]').trigger('click')
+    wrapper.findComponent({ name: 'ElDatePicker' }).vm.$emit('update:modelValue', '2026-05')
+    expect(wrapper.emitted('update:date')).toEqual([['2025-12-01'], ['2026-02-01'], ['2026-05-01']])
+    expect(wrapper.find('[data-test="toolbar-save"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="toolbar-copy"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="toolbar-prev"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="toolbar-month-pending"]').text()).toContain('2 處')
+  })
+})

@@ -3,7 +3,7 @@ import { attendanceRouteProps, isValidDateQuery, legacySettingsShiftsRedirect } 
 
 describe('attendanceRouteProps（SPEC-027 §6.1）', () => {
   it('未帶 query：全部 undefined，由頁面套預設（班表核對、今天）', () => {
-    expect(attendanceRouteProps({})).toEqual({ tab: undefined, date: undefined, emp: undefined, filter: undefined })
+    expect(attendanceRouteProps({})).toEqual({ tab: undefined, date: undefined, emp: undefined, filter: undefined, view: undefined })
   })
 
   it('五個頁籤原樣帶入，未知值忽略', () => {
@@ -23,6 +23,14 @@ describe('attendanceRouteProps（SPEC-027 §6.1）', () => {
     expect(attendanceRouteProps({ date: ['2026-09-15', '2026-09-16'], emp: 'abc' })).toMatchObject({ date: '2026-09-15', emp: undefined })
     expect(isValidDateQuery('2026-02-30')).toBe(true) // Date.parse 寬鬆；與原 router 驗證一致
     expect(isValidDateQuery(20260914)).toBe(false)
+  })
+})
+
+describe('attendanceRouteProps view（SPEC-027 C 期）', () => {
+  it('view：week／month 原樣帶入，未知值忽略（頁面預設週）', () => {
+    expect(attendanceRouteProps({ view: 'month' }).view).toBe('month')
+    expect(attendanceRouteProps({ view: ['week', 'month'] }).view).toBe('week')
+    expect(attendanceRouteProps({ view: 'year' }).view).toBeUndefined()
   })
 })
 

@@ -1,6 +1,34 @@
 <template>
   <section class="grid-toolbar" aria-label="班表核對工具列">
-    <div class="grid-toolbar__nav" role="group" aria-label="選擇週次">
+    <el-radio-group
+      v-if="canMonth"
+      :model-value="view ?? 'week'"
+      size="small"
+      aria-label="週或月檢視"
+      data-test="toolbar-view"
+      @update:model-value="(v: string | number | boolean | undefined) => emit('update:view', v as GridView)"
+    >
+      <el-radio-button value="week">週</el-radio-button>
+      <el-radio-button value="month">月</el-radio-button>
+    </el-radio-group>
+
+    <div v-if="isMonth" class="grid-toolbar__nav" role="group" aria-label="選擇月份">
+      <el-button :icon="ArrowLeft" data-test="toolbar-prev-month" @click="emit('update:date', shiftMonthISO(anchor, -1))">上個月</el-button>
+      <el-date-picker
+        :model-value="anchor.slice(0, 7)"
+        type="month"
+        format="YYYY-MM"
+        value-format="YYYY-MM"
+        :clearable="false"
+        aria-label="月份"
+        class="grid-toolbar__picker"
+        data-test="toolbar-month"
+        @update:model-value="(v: string | null) => v && emit('update:date', `${v}-01`)"
+      />
+      <el-button data-test="toolbar-next-month" @click="emit('update:date', shiftMonthISO(anchor, 1))">下個月 <el-icon><ArrowRight /></el-icon></el-button>
+      <span class="grid-toolbar__label">{{ monthLabel }}</span>
+    </div>
+    <div v-else class="grid-toolbar__nav" role="group" aria-label="選擇週次">
       <el-button :icon="ArrowLeft" data-test="toolbar-prev" :disabled="saving" @click="go(-7)">上週</el-button>
       <el-date-picker
         :model-value="weekStart"
@@ -40,7 +68,7 @@
       @update:model-value="(v: string) => emit('update:keyword', v)"
     />
 
-    <div v-if="canEditPlan" class="grid-toolbar__tools" role="group" aria-label="排班工具">
+    <div v-if="canEditPlan && !isMonth" class="grid-toolbar__tools" role="group" aria-label="排班工具">
       <el-dropdown split-button :disabled="busy" data-test="toolbar-copy" @click="emit('copy-prev-week')" @command="onCommand">
         複製上週排班
         <template #dropdown>
@@ -69,13 +97,16 @@
         @click="emit('save')"
       >儲存排班（{{ pendingCount }} 處變更）</el-button>
     </div>
+    <span v-if="isMonth && pendingCount > 0" class="grid-toolbar__pending" data-test="toolbar-month-pending">
+      週模式還有 {{ pendingCount }} 處排班變更未儲存
+    </span>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowDown, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { addDaysISO, mondayOf, type GridFilter } from '@/utils/scheduleAttendanceGrid'
+import { addDaysISO, mondayOf, shiftMonthISO, type GridFilter, type GridView } from '@/utils/scheduleAttendanceGrid'
 
 export type ToolbarCommand = 'copy-week' | 'copy-prev-month' | 'import' | 'template' | 'export'
 
@@ -88,15 +119,27 @@ const props = defineProps<{
   saving?: boolean
   busy?: boolean
   issueCount?: number
+  /** 檢視（預設週）；月模式唯讀，排班工具收起 */
+  view?: GridView
+  /** 錨點日期（月模式的年月與上下月以它為準）；沒給用 weekStart */
+  date?: string
+  /** 可切月模式（桌機） */
+  canMonth?: boolean
 }>()
 const emit = defineEmits<{
   'update:weekStart': [value: string]
   'update:filter': [value: GridFilter]
   'update:keyword': [value: string]
+  'update:view': [value: GridView]
+  'update:date': [value: string]
   'copy-prev-week': []
   command: [command: ToolbarCommand]
   save: []
 }>()
+
+const isMonth = computed(() => props.view === 'month')
+const anchor = computed(() => props.date ?? props.weekStart)
+const monthLabel = computed(() => `${anchor.value.slice(0, 4)} 年 ${Number(anchor.value.slice(5, 7))} 月`)
 
 const weekLabel = computed(() => {
   const end = addDaysISO(props.weekStart, 6)
@@ -122,6 +165,7 @@ function onCommand(command: string | number | object): void {
 .grid-toolbar__tools { margin-left: auto; }
 .grid-toolbar__picker { width: 150px; }
 .grid-toolbar__keyword { width: 200px; }
+.grid-toolbar__pending { margin-left: auto; color: var(--color-warning-darker); font-size: var(--text-sm); }
 .grid-toolbar__label { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 /* 桌機：捲動時工具列（週次、篩選、儲存排班）固定在捲動區頂端，改到第 60 列也按得到儲存 */
 @media (--bp-sm) {

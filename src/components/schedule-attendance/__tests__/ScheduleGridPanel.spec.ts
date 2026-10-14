@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { effectScope, ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import ScheduleGridPanel from '../ScheduleGridPanel.vue'
+import { useMonthGrid } from '@/composables/useMonthGrid'
 import { cell, day, grid, W1, WEEK } from './gridFixtures'
 
 const api = vi.hoisted(() => ({
@@ -29,9 +31,11 @@ vi.mock('@/api/shifts', () => ({
   importShifts: api.importShifts,
 }))
 vi.mock('@/utils/download', () => ({ downloadFile: api.download }))
+// 裝置寬度：掛載前改 value（元件 setup 時才讀）；beforeEach 還原
+const device = vi.hoisted(() => ({ mobile: false }))
 vi.mock('@/composables/useIsMobile', async () => {
   const { ref } = await import('vue')
-  return { useIsMobile: () => ({ isMobile: ref(false) }) }
+  return { useIsMobile: () => ({ isMobile: ref(device.mobile) }) }
 })
 vi.mock('element-plus', async (orig) => ({
   ...(await orig<typeof import('element-plus')>()),
@@ -82,6 +86,7 @@ function recordedGrid() {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  device.mobile = false
   api.grid.mockResolvedValue({ data: recordedGrid() })
   api.getAssignments.mockResolvedValue({ data: [assignment(1, 1), assignment(2, 1)] })
   api.saveAssignments.mockResolvedValue({ data: { message: 'ok', week_start_date: W1, warnings: [] } })
@@ -91,6 +96,35 @@ beforeEach(() => {
 })
 
 describe('ScheduleGridPanel', () => {
+  it('月模式：工具列換月送出 update:date（頁面據此先問未儲存的週排班）；週／月切換送出 update:view', async () => {
+    api.grid.mockResolvedValue({ data: grid() })
+    api.getAssignments.mockResolvedValue({ data: [] })
+    const month = effectScope().run(() => useMonthGrid(ref('2026-09-16'), ref(0)))!
+    const wrapper = mountPanel({ view: 'month', month })
+    await flushPromises()
+    const toolbar = wrapper.findComponent({ name: 'GridToolbar' })
+    expect(toolbar.props('view')).toBe('month')
+    toolbar.vm.$emit('update:date', '2026-10-01')
+    toolbar.vm.$emit('update:view', 'week')
+    expect(wrapper.emitted('update:date')).toEqual([['2026-10-01']])
+    expect(wrapper.emitted('update:view')).toEqual([['week']])
+  })
+
+  it('只有桌機且頁面給了整月資料才能切月；手機與沒給 month 都不出現週／月切換', async () => {
+    api.grid.mockResolvedValue({ data: grid() })
+    api.getAssignments.mockResolvedValue({ data: [] })
+    const month = effectScope().run(() => useMonthGrid(ref('2026-09-16'), ref(0)))!
+    const canMonth = async (props: Record<string, unknown>) => {
+      const wrapper = mountPanel(props)
+      await flushPromises()
+      return wrapper.findComponent({ name: 'GridToolbar' }).props('canMonth')
+    }
+    expect(await canMonth({ month })).toBe(true)
+    expect(await canMonth({})).toBe(false)
+    device.mobile = true
+    expect(await canMonth({ month })).toBe(false)
+  })
+
   it('載入錨點所在週，顯示格子與問題數', async () => {
     const wrapper = mountPanel()
     await flushPromises()

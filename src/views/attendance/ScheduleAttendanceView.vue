@@ -47,8 +47,11 @@
       :focus-employee-id="props.emp ?? null"
       :focus-date="props.emp ? props.date ?? null : null"
       :revision="externalRevision"
+      :view="gridView"
+      :month="monthGrid"
       @update:date="setAnchorDate"
       @update:filter="setFilter"
+      @update:view="setView"
       @records="openRecords"
       @import="onGridImport"
       @import-punches="onGridImportMonth"
@@ -196,7 +199,7 @@ import DetailColumn from '@/components/attendance/DetailColumn.vue'
 import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue'
 import MonthProgressBar, { type MonthSummary } from '@/components/schedule-attendance/MonthProgressBar.vue'
 import ScheduleGridPanel from '@/components/schedule-attendance/ScheduleGridPanel.vue'
-import type { GridFilter } from '@/utils/scheduleAttendanceGrid'
+import type { GridFilter, GridView } from '@/utils/scheduleAttendanceGrid'
 import { hasPermission, hasFullSalaryView } from '@/utils/auth'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
 const DutyRotationPanel = defineAsyncComponent(() => import('@/components/schedule/DutyRotationPanel.vue'))
@@ -212,6 +215,8 @@ const props = defineProps<{
   /** 深連結：開頁即開這個人（date 那天）的格子抽屜 */
   emp?: number
   filter?: GridFilter
+  /** 班表核對的檢視（預設週）；月格子只在桌機，網址是唯一來源 */
+  view?: GridView
 }>()
 const emit = defineEmits<{ dateChange: [date: string] }>()
 
@@ -329,6 +334,15 @@ const { notify } = useErrorNotify()
 // ── 響應式版面 ──────────────────────────────────────────────────────────────
 const { isMobile } = useIsMobile()
 const isDesktop = computed(() => !isMobile.value)
+// 月格子只在桌機（SPEC-027 §2：手機只有週模式）；網址是唯一來源
+const gridView = computed<GridView>(() => (isMobile.value ? 'week' : props.view ?? 'week'))
+
+/** 週／月切換；帶 date＝點月格子的週次欄頭切到該週（先問面板未儲存的週排班） */
+async function setView(view: GridView, date?: string): Promise<void> {
+  if (date && gridPanel.value && !(await gridPanel.value.confirmWeekChange(date))) return
+  if (date) anchorDate.value = date
+  syncQuery({ view: view === 'month' ? 'month' : undefined, ...(date ? { date } : {}) })
+}
 
 // ── UI 狀態機 ────────────────────────────────────────────────────────────────
 const selectedEmployeeId = ref<number | null>(null)

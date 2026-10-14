@@ -10,6 +10,11 @@
       :saving="state.saving.value"
       :busy="busy || state.loading.value"
       :issue-count="issueCount"
+      :view="isMonth ? 'month' : 'week'"
+      :date="date"
+      :can-month="!isMobile && !!month"
+      @update:view="(v: GridView) => emit('update:view', v)"
+      @update:date="(v: string) => emit('update:date', v)"
       @update:week-start="(v: string) => emit('update:date', v)"
       @update:filter="(v: GridFilter) => emit('update:filter', v)"
       @update:keyword="(v: string) => (keyword = v)"
@@ -133,6 +138,7 @@ import BatchConfirmDialog from './BatchConfirmDialog.vue'
 import { useScheduleGrid } from '@/composables/useScheduleGrid'
 import { attendanceRouteProps } from '@/router/attendanceRouteProps'
 import { useIsMobile } from '@/composables/useIsMobile'
+import type { MonthGridState } from '@/composables/useMonthGrid'
 import { copyMonthAssignments, importShifts } from '@/api/shifts'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { downloadFile } from '@/utils/download'
@@ -149,6 +155,7 @@ import {
   type BatchUnit,
   type GridFilter,
   type GridOut,
+  type GridView,
 } from '@/utils/scheduleAttendanceGrid'
 
 type ImportResult = ApiResponse<'/shifts/import', 'post'>
@@ -163,6 +170,10 @@ const props = defineProps<{
   focusDate?: string | null
   /** 格子以外的異動（明細處理異常、匯入打卡、套用輪值表）遞增；變動即重新載入 */
   revision?: number
+  /** 週（預設）／月；月模式唯讀，由頁面依網址與裝置決定 */
+  view?: GridView
+  /** 頁面建立的整月格子資料（與本月進度共用，D-06） */
+  month?: MonthGridState
 }>()
 const emit = defineEmits<{
   'update:date': [value: string]
@@ -172,6 +183,8 @@ const emit = defineEmits<{
   /** 整週都還沒匯入時的空狀態入口：開整月匯入（不帶人員） */
   'import-punches': [date: string]
   changed: []
+  /** 週／月切換；帶 date＝切到該週（月格子週次欄頭） */
+  'update:view': [view: GridView, date?: string]
 }>()
 
 const { isMobile } = useIsMobile()
@@ -252,8 +265,10 @@ const employeeNames = computed<Record<number, string>>(() =>
 const shiftNames = computed<Record<number, string>>(() =>
   Object.fromEntries((gridData.value?.shift_types ?? []).map((s) => [s.shift_type_id, s.name])),
 )
+const isMonth = computed(() => props.view === 'month' && !!props.month)
+const monthData = computed(() => (isMonth.value ? props.month!.data.value : null))
 const issueCount = computed(() => {
-  const g = gridData.value
+  const g = isMonth.value ? monthData.value : gridData.value
   if (!g) return 0
   const uncovered = uncoveredDates(g.days)
   return g.cells.filter((c) => isIssue(c, g.today, uncovered)).length
