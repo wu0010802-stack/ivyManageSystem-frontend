@@ -12,6 +12,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { isNotFoundError, loadErrorMessage } from '../utils/loadError'
+import { MEDICATION_PHOTO_MAX } from '../utils/medicationForm'
 
 interface MedPhoto {
   id: number
@@ -183,7 +184,7 @@ onMounted(fetchOrder)
         <h2 class="pt-card-title">
           <span class="material-symbols-rounded">photo_library</span>
           藥袋／處方照
-          <span class="pt-card-title-count">{{ order.photos.length }} / 5</span>
+          <span class="pt-card-title-count">{{ order.photos.length }} / {{ MEDICATION_PHOTO_MAX }}</span>
         </h2>
         <div v-if="order.photos.length === 0" class="hint">尚未上傳</div>
         <div v-else class="photos">
@@ -197,7 +198,7 @@ onMounted(fetchOrder)
             >×</button>
           </div>
         </div>
-        <label v-if="order.photos.length < 5" class="pt-action-btn upload-btn">
+        <label v-if="order.photos.length < MEDICATION_PHOTO_MAX" class="pt-action-btn upload-btn">
           <input type="file" accept="image/*,application/pdf" @change="onPhotoPick" hidden :disabled="uploading" />
           <span class="material-symbols-rounded">add_photo_alternate</span>
           {{ uploading ? '上傳中…' : '加照片' }}

@@ -8,6 +8,7 @@ import {
 } from '../api/medications'
 import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
+import { MEDICATION_PHOTO_MAX, MEDICATION_PHOTO_MAX_BYTES, nextMedicationSlot } from '../utils/medicationForm'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 
@@ -62,7 +63,8 @@ onMounted(async () => {
 
 function addSlot() {
   if (form.value.time_slots.length >= 10) return
-  form.value.time_slots.push('12:00')
+  // 依上一個時段推算（08:00 → 12:00 → 16:00），不再每次都塞 12:00 讓家長逐一改
+  form.value.time_slots.push(nextMedicationSlot(form.value.time_slots))
 }
 
 function removeSlot(i: number) {
@@ -73,16 +75,21 @@ function removeSlot(i: number) {
 function onPick(e: Event) {
   const input = e.target as HTMLInputElement
   const incoming = Array.from(input.files || [])
-  // 簡單前置檢查：max 3、size < 10MB
+  // 簡單前置檢查：張數上限與詳情頁共用 MEDICATION_PHOTO_MAX、單檔 < 10MB
   const valid: File[] = []
+  let overflow = 0
   for (const f of incoming) {
-    if (valid.length + photoFiles.value.length >= 3) break
-    if (f.size > 10 * 1024 * 1024) {
+    if (valid.length + photoFiles.value.length >= MEDICATION_PHOTO_MAX) {
+      overflow += 1
+      continue
+    }
+    if (f.size > MEDICATION_PHOTO_MAX_BYTES) {
       toast.warn(`${f.name} 超過 10MB，已略過`)
       continue
     }
     valid.push(f)
   }
+  if (overflow > 0) toast.warn(`最多 ${MEDICATION_PHOTO_MAX} 張，已略過 ${overflow} 張`)
   photoFiles.value = [...photoFiles.value, ...valid]
   input.value = ''
 }
@@ -248,7 +255,7 @@ function cancelAllergy() {
           maxlength="500"
         />
 
-        <label for="med-files">藥袋／處方照（最多 3 張）</label>
+        <label for="med-files">藥袋／處方照（最多 {{ MEDICATION_PHOTO_MAX }} 張，已選 {{ photoFiles.length }} 張）</label>
         <input id="med-files" type="file" accept="image/*,application/pdf" multiple @change="onPick" />
         <ul class="files">
           <li v-for="(f, i) in photoFiles" :key="i">
