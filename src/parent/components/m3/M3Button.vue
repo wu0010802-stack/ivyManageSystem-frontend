@@ -86,6 +86,17 @@ const classes = computed<Record<string, boolean>>(() => ({
   pointer-events: none;
   transition: opacity var(--m3-dur-short-2, 100ms) var(--m3-easing-standard, ease);
 }
+.m3-button::after {
+  /* 命中區擴張：視覺尺寸維持 M3 規格，透明 ::after 以本體為中心撐到 ≥48px 觸控熱區
+   * （::before 已是 state layer）。本體不設 overflow，偽元素可超出邊界；點到它即點到本體。 */
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--touch-target-m3, 48px));
+  height: max(100%, var(--touch-target-m3, 48px));
+  transform: translate(-50%, -50%);
+}
 .m3-button:hover:not(.is-disabled)::before { opacity: var(--m3-state-hover, 0.08); }
 .m3-button:focus-visible:not(.is-disabled)::before { opacity: var(--m3-state-focus, 0.12); }
 .m3-button:active:not(.is-disabled)::before { opacity: var(--m3-state-pressed, 0.12); }

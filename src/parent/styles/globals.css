@@ -231,6 +231,9 @@
    * 改 alias 到上方 elevation 段真源（不再本地重複定義）。
    * ============================================================ */
   --pt-app-max-width: 560px;
+  /* M3 最小觸控區 48dp。家長端使用者含祖父母，M3 元件視覺尺寸（40px 按鈕、32px chip）
+     維持規格，命中區以透明 ::after 撐到此值；非 M3 的 pattern 按鈕用 --touch-target-min（44px）。 */
+  --touch-target-m3: 48px;
   --pt-page-gap: 18px;
   --pt-card-radius: 26px;
   --pt-control-radius: 14px;
