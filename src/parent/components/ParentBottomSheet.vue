@@ -3,7 +3,9 @@
  * 家長端底部彈窗（snap points 進階版）。
  *
  * 功能：
- *  - 三段 snap：peek (30vh) / mid (60vh) / full (92vh)；`setSnap()` 可程式化切換
+ *  - 三段 snap：peek (30) / mid (60) / full (92) 視窗高百分比；`setSnap()` 可程式化切換。
+ *    支援 dvh 的瀏覽器用 dvh（LINE／Safari 網址列伸縮時不會把面板底部推出畫面），
+ *    其餘退回 vh
  *  - 拖曳手勢：drag-to-dismiss、速度判定（>600 px/s 視為快滑）、距離判定（>60px 切段、<30px 回彈）
  *  - keyboard 模式：visualViewport 縮小 > 100px 時自動切 full 並鎖拖曳，鍵盤收回時解鎖
  *  - a11y：role="dialog"、aria-modal、aria-labelledby、focus trap、ESC 關閉、開啟時自動 focus 第一個可 focus 元素、關閉時還原焦點
@@ -61,7 +63,8 @@ const dialogRef = ref<HTMLElement | null>(null)
 const previouslyFocused = ref<Element | null>(null)
 const headerId = `pt-bsheet-${Math.random().toString(36).slice(2, 9)}`
 
-const SNAP_HEIGHT: Record<SnapPoint, string> = { peek: '30vh', mid: '60vh', full: '92vh' }
+/** 各 snap 佔視窗高的百分比；CSS 同時拿 vh（fallback）與 dvh 兩種單位 */
+const SNAP_RATIO: Record<SnapPoint, number> = { peek: 30, mid: 60, full: 92 }
 // SNAP_ORDER 由上至下：full（最高）→ mid → peek（最低）。
 // 「向下吸附」= index + 1（變矮）；「向上吸附」= index - 1（變高）。
 const SNAP_ORDER: SnapPoint[] = ['full', 'mid', 'peek']
@@ -194,7 +197,8 @@ watch(
   { flush: 'pre' },
 )
 
-const snapHeight = computed<string>(() => SNAP_HEIGHT[currentSnap.value])
+const snapHeight = computed<string>(() => `${SNAP_RATIO[currentSnap.value]}vh`)
+const snapHeightDvh = computed<string>(() => `${SNAP_RATIO[currentSnap.value]}dvh`)
 
 // ---------- keyboard mode (visualViewport) ----------
 // 行動裝置鍵盤彈出時 visualViewport.height 會縮小；超過 100px 視為鍵盤開啟，
@@ -315,6 +319,7 @@ const hasFooterSlot = computed<boolean>(() => !!slots.footer)
           class="pt-bsheet-dialog"
           :style="{
             '--pt-bsheet-h': snapHeight,
+            '--pt-bsheet-h-dvh': snapHeightDvh,
             transform: dialogTransform,
             transition: isDragging ? 'none' : undefined,
           }"
@@ -388,6 +393,15 @@ const hasFooterSlot = computed<boolean>(() => !!slots.footer)
   outline: none;
   padding-bottom: env(safe-area-inset-bottom, 0);
   overscroll-behavior: contain;
+}
+/* dvh：行動瀏覽器網址列／LIFF 工具列伸縮時 vh 不跟著變，92vh 的面板底部（含送出鈕）
+   會被推到可視區外。var() 裡放 dvh 在不支援的瀏覽器會整條宣告失效（不會退回上一條），
+   所以用 @supports 分流，而不是連寫兩條 height。 */
+@supports (height: 1dvh) {
+  .pt-bsheet-dialog {
+    height: var(--pt-bsheet-h-dvh, 60dvh);
+    max-height: 92dvh;
+  }
 }
 
 /* 把手本體是 64×24 的透明觸控區，36×4 的視覺橫條畫在 ::before；::after 再把命中區

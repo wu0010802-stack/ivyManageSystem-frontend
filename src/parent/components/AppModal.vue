@@ -7,7 +7,8 @@
  *  - Focus trap：Tab 不會跑出 modal
  *  - 開啟時把焦點移到 modal、關閉後還原焦點
  *  - Esc 鍵關閉（可關）
- *  - Body scroll lock
+ *  - Body scroll lock（共用 useBodyLock 的 reference count：巢狀 modal／sheet 關掉內層時
+ *    背景仍鎖著；舊版直接寫 body.style.overflow = ''，內層一關背景就能捲）
  *  - Click overlay 關閉（可關）
  *  - prefers-reduced-motion 友善
  *
@@ -21,6 +22,7 @@
  *   </AppModal>
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useBodyLock } from '@/composables/useBodyLock'
 
 const props = withDefaults(defineProps<{
   open?: boolean
@@ -98,13 +100,7 @@ function trapFocus(e: KeyboardEvent): void {
   }
 }
 
-function lockBody(): void {
-  document.body.style.overflow = 'hidden'
-}
-
-function unlockBody(): void {
-  document.body.style.overflow = ''
-}
+const { lock: lockBody, unlock: unlockBody } = useBodyLock()
 
 watch(
   () => props.open,
