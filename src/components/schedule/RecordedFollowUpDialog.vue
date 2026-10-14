@@ -18,6 +18,10 @@
         </p>
         <el-button :disabled="!canConfirm || !units.length" data-test="rfu-confirm-open" @click="batchOpen = true">開啟批次確認</el-button>
       </section>
+      <p v-if="split.kept.length" class="rfu__hint" data-test="rfu-kept">
+        已有個別調整，不更動：{{ split.kept.map((k) => `${formatMonthDay(k.date)}（${k.label}）`).join('、') }}。
+        週排班本來就不會蓋過每日調整、換班和排休。
+      </p>
       <p v-if="split.blocked.length" class="rfu__hint" data-test="rfu-blocked">
         {{ split.blocked.map(formatMonthDay).join('、') }} 無法在這裡處理（本人出勤、已封存或不在職）。
       </p>
@@ -26,7 +30,8 @@
       <el-button data-test="rfu-close" @click="emit('update:modelValue', false)">關閉</el-button>
     </template>
   </el-dialog>
-  <BatchConfirmDialog v-model="batchOpen" :units="units" :employee-names="employeeNames" :shift-names="shiftNames" @done="onBatchDone" />
+  <!-- append-to-body：本元件巢狀在套用對話框的 overlay（自成 stacking context）裡，批次確認不 teleport 會被蓋住 -->
+  <BatchConfirmDialog v-model="batchOpen" :append-to-body="true" :units="units" :employee-names="employeeNames" :shift-names="shiftNames" @done="onBatchDone" />
 </template>
 
 <script setup lang="ts">
@@ -43,7 +48,7 @@ import { saveDaily } from '@/api/shifts'
 import { formatMonthDay } from '@/utils/attendanceConfirm'
 import { apiError } from '@/utils/error'
 import type { ApplyChange } from '@/utils/dutyRotationGrid'
-import { addDaysISO, cellKey, confirmUnits, indexCells, isRecordedConflict, type GridOut } from '@/utils/scheduleAttendanceGrid'
+import { SOURCE_TAGS, addDaysISO, cellKey, confirmUnits, indexCells, isRecordedConflict, type GridOut, type PlanSource } from '@/utils/scheduleAttendanceGrid'
 
 const props = defineProps<{
   modelValue: boolean
@@ -58,6 +63,8 @@ const loadError = ref('')
 const savingDaily = ref(false)
 const batchOpen = ref(false)
 const BLOCKING_LOCKS: ReadonlySet<string> = new Set(['self', 'finalized', 'not_employed'])
+/** 日層級的個別調整：週排班層（含輪值表套用）本來就不會蓋過它們，後續處理也不更動（裁定：補做輪值表本來會做的事） */
+const KEPT_SOURCES: ReadonlySet<PlanSource> = new Set<PlanSource>(['daily', 'swap', 'daily_off'])
 
 const target = computed(() => props.change?.to_shift_type_id ?? null)
 const targetName = computed(() => (target.value != null ? props.shiftNames[target.value] ?? `#${target.value}` : ''))
@@ -66,9 +73,12 @@ const employeeNames = computed<Record<number, string>>(() => (props.change ? { [
 const canConfirm = computed(() => grid.value?.caller.can_confirm ?? false)
 const cells = computed(() => indexCells(grid.value?.cells ?? []))
 
-/** 該週工作日依可做的動作分三類（判斷與週格子整週拆分同源：edit.recorded／edit.plan／locked_reason） */
+/**
+ * 該週工作日依可做的動作分四類（判斷與週格子整週拆分同源：edit.recorded／edit.plan／locked_reason）。
+ * 優先序：無法處理（本人／已封存／不在職）→ 已有個別調整（不更動）→ 已打卡（逐日確認）→ 可改（每日調整）。
+ */
 const split = computed(() => {
-  const out = { daily: [] as string[], confirm: [] as string[], blocked: [] as string[] }
+  const out = { daily: [] as string[], confirm: [] as string[], blocked: [] as string[], kept: [] as Array<{ date: string; label: string }> }
   const g = grid.value
   const c = props.change
   if (!g || !c) return out
@@ -78,6 +88,7 @@ const split = computed(() => {
     if (!cell || !cell.employed) continue
     const lock = cell.edit.locked_reason
     if (lock && BLOCKING_LOCKS.has(lock)) out.blocked.push(d.date)
+    else if (KEPT_SOURCES.has(cell.plan.source)) out.kept.push({ date: d.date, label: SOURCE_TAGS[cell.plan.source].label })
     else if (cell.edit.recorded) out.confirm.push(d.date)
     else if (cell.edit.plan) out.daily.push(d.date)
     else out.blocked.push(d.date)

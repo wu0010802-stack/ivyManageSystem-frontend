@@ -4,10 +4,11 @@ import ElementPlus from 'element-plus'
 import { cell, grid, WEEK, W1 } from '@/components/schedule-attendance/__tests__/gridFixtures'
 import type { ApplyChange } from '@/utils/dutyRotationGrid'
 
-const api = vi.hoisted(() => ({ grid: vi.fn(), saveDaily: vi.fn() }))
+const api = vi.hoisted(() => ({ grid: vi.fn(), saveDaily: vi.fn(), batch: vi.fn() }))
 const ui = vi.hoisted(() => ({ success: vi.fn(), warning: vi.fn(), error: vi.fn() }))
 vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: api.grid }))
 vi.mock('@/api/shifts', () => ({ saveDaily: api.saveDaily }))
+vi.mock('@/api/attendanceReconciliation', () => ({ confirmReconciliationShiftBatch: api.batch }))
 vi.mock('element-plus', async (orig) => ({
   ...(await orig<typeof import('element-plus')>()),
   ElMessage: { success: ui.success, warning: ui.warning, error: ui.error },
@@ -15,7 +16,7 @@ vi.mock('element-plus', async (orig) => ({
 
 import RecordedFollowUpDialog from '../RecordedFollowUpDialog.vue'
 
-const BatchStub = { name: 'BatchConfirmDialog', props: ['modelValue', 'units', 'employeeNames', 'shiftNames'], emits: ['done', 'update:modelValue'], template: '<div data-test="batch-stub" />' }
+const BatchStub = { name: 'BatchConfirmDialog', props: ['modelValue', 'units', 'employeeNames', 'shiftNames', 'appendToBody'], emits: ['done', 'update:modelValue'], template: '<div data-test="batch-stub" />' }
 const CHANGE: ApplyChange = {
   employee_id: 1, employee_name: '林班導', week_start_date: W1, from_shift_type_id: 1, to_shift_type_id: 2,
   label: '晚車', action: 'skip', skip_reason: 'recorded', recorded_dates: ['2026-09-15', '2026-09-16'],
@@ -66,6 +67,7 @@ describe('RecordedFollowUpDialog（D-08）', () => {
     expect(wrapper.find('[data-test="rfu-daily"]').text()).toContain('9/14、9/18')
     expect(wrapper.find('[data-test="rfu-confirm"]').text()).toContain('9/15')
     expect(wrapper.find('[data-test="rfu-blocked"]').text()).toContain('9/16、9/17')
+    expect(wrapper.find('[data-test="rfu-kept"]').exists()).toBe(false) // 沒有個別調整的日子就不顯示這段
   })
 
   it('送出每日調整：逐日送輪值表班別，成功後通知並重讀', async () => {
@@ -106,6 +108,72 @@ describe('RecordedFollowUpDialog（D-08）', () => {
     batch.vm.$emit('done', 1)
     await flushPromises()
     expect(wrapper.emitted('changed')).toHaveLength(1)
+  })
+
+  it('已有個別調整（換班／排休／每日調整）的日子不更動：兩桶都排除，另列「已有個別調整」，送出每日調整與批次確認都不含它們', async () => {
+    api.grid.mockResolvedValue({
+      data: grid({
+        cells: [
+          cell(1, WEEK[0], { plan: { source: 'swap' } }), // 9/14 未打卡、換班
+          cell(1, WEEK[1], { plan: { source: 'daily_off', day_off: true } }), // 9/15 未打卡、排休
+          cell(1, WEEK[2], { plan: { source: 'daily' }, edit: RECORDED, actual: { version: 'k'.repeat(64) } }), // 9/16 已打卡、每日調整
+          cell(1, WEEK[3]), // 9/17 未打卡、週排班 → 每日調整
+          cell(1, WEEK[4], { edit: RECORDED, actual: { version: 'w'.repeat(64) } }), // 9/18 已打卡、週排班 → 逐日確認
+          cell(1, WEEK[5], { plan: { expected: false } }),
+        ],
+      }),
+    })
+    const wrapper = mountDialog()
+    await flushPromises()
+    const kept = wrapper.find('[data-test="rfu-kept"]').text()
+    expect(kept).toContain('9/14（換班）')
+    expect(kept).toContain('9/15（排休）')
+    expect(kept).toContain('9/16（每日調整）')
+    const daily = wrapper.find('[data-test="rfu-daily"]').text()
+    expect(daily).toContain('9/17')
+    for (const d of ['9/14', '9/15', '9/16']) expect(daily).not.toContain(d)
+    const confirm = wrapper.find('[data-test="rfu-confirm"]').text()
+    expect(confirm).toContain('9/18')
+    for (const d of ['9/14', '9/15', '9/16']) expect(confirm).not.toContain(d)
+
+    await wrapper.find('[data-test="rfu-daily-submit"]').trigger('click')
+    await flushPromises()
+    expect(api.saveDaily.mock.calls.map((c) => c[0])).toEqual([{ employee_id: 1, date: '2026-09-17', shift_type_id: 2 }])
+
+    await wrapper.find('[data-test="rfu-confirm-open"]').trigger('click')
+    expect(wrapper.findComponent(BatchStub).props('units')).toEqual([
+      { items: [{ employee_id: 1, date: '2026-09-18', shift_type_id: 2, day_off: false, version: 'w'.repeat(64) }] },
+    ])
+  })
+
+  it('批次確認對話框要 append-to-body：RFU 本身巢狀在套用對話框的遮罩裡，不 teleport 會被蓋住', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.findComponent(BatchStub).props('appendToBody')).toBe(true)
+  })
+
+  it('append-to-body 一路透傳到真正的 el-dialog（BatchConfirmDialog → FormDialog → el-dialog）', async () => {
+    api.batch.mockResolvedValue({ data: { dry_run: true, applied_count: 0, results: [] } })
+    const wrapper = mount(RecordedFollowUpDialog, {
+      props: { modelValue: true, change: CHANGE, shiftNames: { 1: '早車', 2: '晚車' } },
+      global: {
+        plugins: [ElementPlus],
+        // 不 stub BatchConfirmDialog／FormDialog；ElDialog 以標題區分 RFU 與批次確認，並暴露 appendToBody
+        stubs: {
+          ElDialog: {
+            name: 'ElDialog',
+            props: ['modelValue', 'title', 'appendToBody'],
+            template: '<section v-if="modelValue" :data-title="title" :data-append="String(appendToBody)"><slot /><slot name="footer" /></section>',
+          },
+        },
+      },
+    })
+    await flushPromises()
+    await wrapper.find('[data-test="rfu-confirm-open"]').trigger('click')
+    await flushPromises()
+    const batchDialog = wrapper.find('[data-title="逐日確認當日班別"]')
+    expect(batchDialog.exists()).toBe(true)
+    expect(batchDialog.attributes('data-append')).toBe('true')
   })
 
   it('沒有出勤寫入權限：已打卡日照列出，但確認鈕停用並說明', async () => {
