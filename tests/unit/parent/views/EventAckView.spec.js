@@ -26,6 +26,7 @@ vi.mock('@/parent/utils/toast', () => ({
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { eventId: 999 }, query: {} }),
   useRouter: () => ({ replace: vi.fn() }),
+  onBeforeRouteLeave: vi.fn(),
 }))
 
 import EventAckView from '@/parent/views/EventAckView.vue'

@@ -14,6 +14,8 @@ import { OP_KINDS } from '@/utils/offlineQueue'
 import { isNetworkError } from '@/composables/useOnlineStatus'
 import { invalidateHomeSummary } from '../composables/useHomeSummary'
 import { eventTypeLabel } from '@/constants/calendarEventTypes'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useLeaveConfirm } from '../composables/useUnsavedGuard'
 
 interface EventItem {
   id: number
@@ -62,6 +64,13 @@ const loading = ref(true)
 const notFound = ref(false)
 // 連線／伺服器失敗 ≠ 找不到事件：失敗給可重試錯誤態，只有清單裡真的沒有才算找不到
 const loadError = ref<unknown>(null)
+
+/** 已經簽了名（或打了簽名文字）但還沒送出：離開前要確認，否則要整個重簽 */
+function hasUnsentSignature(): boolean {
+  const inked = !!(padRef.value && !padRef.value.isEmpty())
+  return inked || (signatureRetryFor.value === null && !!signatureName.value.trim())
+}
+const { dialogOpen: leaveConfirmOpen, confirmLeave, allowLeave } = useLeaveConfirm(hasUnsentSignature)
 
 async function init() {
   loading.value = true
@@ -126,6 +135,7 @@ async function submit() {
     }
     try {
       await queueAck()
+      allowLeave()
       router.replace({ path: '/events' })
     } catch (err) {
       const e = err as Record<string, unknown>
@@ -152,6 +162,7 @@ async function submit() {
       try {
         await queueAck()
         submitting.value = false
+        allowLeave()
         router.replace({ path: '/events' })
         return
       } catch { /* 佇列也寫不進去 → 落回下方錯誤提示 */ }
@@ -172,6 +183,7 @@ async function submit() {
   }
   toast.success('已簽收')
   submitting.value = false
+  allowLeave()
   router.replace({ path: '/events' })
 }
 
@@ -199,13 +211,16 @@ async function retrySignatureUpload() {
   if (ok) {
     signatureRetryFor.value = null
     toast.success('手寫簽名已上傳')
+    allowLeave()
     router.replace({ path: '/events' })
   } else {
     toast.warn('簽名仍上傳失敗，請確認網路後再試；簽收本身已經完成')
   }
 }
 
+/** 家長自己按「回事件列表／先回事件列表」：明確選擇離開，不再追問 */
 function backToEvents() {
+  allowLeave()
   router.replace({ path: '/events' })
 }
 
@@ -329,6 +344,16 @@ onMounted(async () => {
         <p class="not-found-note">事件可能已被取消或連結已失效，請回到事件列表確認。</p>
       </div>
     </template>
+    <!-- 有未送出的修改時離開前確認（返回鍵／LINE 返回／底部導覽） -->
+    <ConfirmDialog
+      v-model:open="leaveConfirmOpen"
+      title="要離開簽收頁嗎？"
+      message="手寫簽名還沒送出，離開後需要重新簽名。"
+      confirm-label="離開"
+      cancel-label="繼續填寫"
+      destructive
+      @confirm="confirmLeave"
+    />
   </div>
 </template>
 

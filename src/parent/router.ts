@@ -121,13 +121,14 @@ const routes: RouteRecordRaw[] = [
       path: '/sign/:id',
       name: 'parent-sign-detail',
       component: () => import('./views/SignDetailView.vue'),
-      meta: { title: '入學文件', tab: 'admin', showBack: true },
+      // 全頁表單（hideTabBar）：底部 tab 收起讓出單手操作空間；返回鍵由 showBack 保留
+      meta: { title: '入學文件', tab: 'admin', showBack: true, hideTabBar: true },
     },
     {
       path: '/events/:eventId/ack',
       name: 'parent-event-ack',
       component: () => import('./views/EventAckView.vue'),
-      meta: { title: '簽收', tab: 'admin', showBack: true },
+      meta: { title: '簽收', tab: 'admin', showBack: true, hideTabBar: true },
     },
     {
       path: '/medications',
@@ -139,7 +140,7 @@ const routes: RouteRecordRaw[] = [
       path: '/medications/new',
       name: 'parent-medication-new',
       component: () => import('./views/MedicationFormView.vue'),
-      meta: { title: '新增用藥單', tab: 'admin', showBack: true },
+      meta: { title: '新增用藥單', tab: 'admin', showBack: true, hideTabBar: true },
     },
     {
       path: '/medications/:id',
@@ -177,7 +178,7 @@ const routes: RouteRecordRaw[] = [
       path: '/pickup/new',
       name: 'parent-pickup-new',
       component: () => import('./views/PickupCreateView.vue'),
-      meta: { title: '建立臨時接送授權', tab: 'admin', showBack: true },
+      meta: { title: '建立臨時接送授權', tab: 'admin', showBack: true, hideTabBar: true },
     },
     {
       path: '/bind-additional',

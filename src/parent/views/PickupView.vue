@@ -30,6 +30,8 @@ import M3Chip from '../components/m3/M3Chip.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import DiscardChangesPrompt from '../components/DiscardChangesPrompt.vue'
+import { useSheetCloseGuard } from '../composables/useUnsavedGuard'
 
 interface PickupAuth {
   id: number
@@ -239,9 +241,18 @@ const personForm = ref({
   photoFile: null as File | null,
 })
 
+// 常用接送人表單在 sheet 內：改過內容後點背景／ESC 先確認
+let personFormSnapshot = ''
+function personFormKey(): string {
+  const f = personForm.value
+  return JSON.stringify([f.personName, f.personRelation, f.personPhone, f.note, f.photoFile?.name ?? null])
+}
+const personSheet = useSheetCloseGuard(showPersonForm, () => personFormKey() !== personFormSnapshot)
+
 function openAddPerson() {
   editingPersonId.value = null
   personForm.value = { personName: '', personRelation: '', personPhone: '', note: '', photoFile: null }
+  personFormSnapshot = personFormKey()
   showPersonForm.value = true
 }
 
@@ -251,6 +262,7 @@ function openEditPerson(p: PickupPerson) {
     personName: p.person_name, personRelation: p.person_relation,
     personPhone: p.person_phone, note: (p.note as string) || '', photoFile: null,
   }
+  personFormSnapshot = personFormKey()
   showPersonForm.value = true
 }
 
@@ -430,12 +442,19 @@ onMounted(async () => {
       :title="editingPersonId ? '編輯接送人' : '新增常用接送人'"
       :snap-points="['mid', 'full']"
       default-snap="mid"
+      :before-close="personSheet.beforeClose"
     >
+      <DiscardChangesPrompt
+        v-if="personSheet.promptVisible.value"
+        message="接送人資料還沒儲存，要放棄剛剛填的內容嗎？"
+        @keep="personSheet.keepEditing"
+        @discard="personSheet.discard"
+      />
       <PickupPersonForm
         v-model="personForm"
         :submitting="personSubmitting"
         @submit="submitPerson"
-        @cancel="showPersonForm = false"
+        @cancel="personSheet.requestClose"
       />
     </ParentBottomSheet>
 

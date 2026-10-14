@@ -20,6 +20,8 @@ import PickupCodeCard from '../components/pickup/PickupCodeCard.vue'
 import M3Card from '../components/m3/M3Card.vue'
 import M3Checkbox from '../components/m3/M3Checkbox.vue'
 import M3Button from '../components/m3/M3Button.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useLeaveConfirm } from '../composables/useUnsavedGuard'
 
 interface Child {
   student_id: number
@@ -191,6 +193,23 @@ async function submit() {
   }
 }
 
+/** 已選／已填接送資訊但還沒建立授權：離開前要確認 */
+function isFormDirty(): boolean {
+  if (resultCode.value) return false
+  const m = manualForm.value
+  return (
+    selectedPersonId.value !== null
+    || !!m.personName.trim()
+    || !!m.personRelation.trim()
+    || !!m.personPhone.trim()
+    || !!m.note.trim()
+    || m.photoFile !== null
+    || saveToList.value
+    || pickupDate.value !== todayStr
+  )
+}
+const { dialogOpen: leaveConfirmOpen, confirmLeave } = useLeaveConfirm(isFormDirty)
+
 function backToList() {
   router.push('/pickup')
 }
@@ -314,6 +333,17 @@ onMounted(async () => {
         </M3Button>
       </div>
     </template>
+
+    <!-- 有未送出的修改時離開前確認（返回鍵／LINE 返回／底部導覽） -->
+    <ConfirmDialog
+      v-model:open="leaveConfirmOpen"
+      title="要放棄這筆接送授權嗎？"
+      message="剛剛選擇或填寫的接送資訊還沒送出，離開後不會保留。"
+      confirm-label="離開"
+      cancel-label="繼續填寫"
+      destructive
+      @confirm="confirmLeave"
+    />
   </div>
 </template>
 

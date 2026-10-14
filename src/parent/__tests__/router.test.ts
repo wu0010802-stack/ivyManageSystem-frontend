@@ -145,6 +145,17 @@ describe('parent router IA (2026-05-22 restructure)', () => {
     })
   })
 
+  describe('全頁表單隱藏底部 tab、保留返回鍵', () => {
+    it.each(['/medications/new', '/pickup/new', '/events/:eventId/ack', '/sign/:id'])(
+      '%s 應 hideTabBar=true 且 showBack=true',
+      (path) => {
+        const r = findRoute(path)
+        expect(r?.meta?.hideTabBar).toBe(true)
+        expect(r?.meta?.showBack).toBe(true)
+      },
+    )
+  })
+
   describe('Public routes 不變', () => {
     it.each(['/login', '/bind'])('%s 應 public=true 且 hideTabBar=true', (path) => {
       const r = findRoute(path)

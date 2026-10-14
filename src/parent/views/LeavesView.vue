@@ -33,6 +33,8 @@ import PullToRefresh from '../components/PullToRefresh.vue'
 import LeaveHero from '../components/leaves/LeaveHero.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 import EmptyState from '@/components/common/EmptyState.vue'
+import DiscardChangesPrompt from '../components/DiscardChangesPrompt.vue'
+import { useSheetCloseGuard } from '../composables/useUnsavedGuard'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { loadErrorMessage } from '../utils/loadError'
@@ -364,6 +366,10 @@ async function fetchData() {
   }
 }
 
+// 請假表單在 sheet 內：點背景／ESC／下拉關閉時，若已改過內容先確認，避免單手誤觸整份丟失
+let leaveFormSnapshot = ''
+const leaveSheet = useSheetCloseGuard(showForm, () => JSON.stringify(form.value) !== leaveFormSnapshot)
+
 function openForm() {
   const childItems = (childrenStore.items || []) as { student_id: number }[]
   if (childItems.length === 0) {
@@ -377,6 +383,7 @@ function openForm() {
     end_date: todayStr.value,
     reason: '',
   }
+  leaveFormSnapshot = JSON.stringify(form.value)
   showForm.value = true
 }
 
@@ -582,7 +589,14 @@ async function pullRefresh() {
       title="申請請假"
       :snap-points="['mid', 'full']"
       default-snap="full"
+      :before-close="leaveSheet.beforeClose"
     >
+      <DiscardChangesPrompt
+        v-if="leaveSheet.promptVisible.value"
+        message="請假還沒送出，要放棄剛剛填的內容嗎？"
+        @keep="leaveSheet.keepEditing"
+        @discard="leaveSheet.discard"
+      />
       <LeaveForm
         v-model="form"
         :children="childrenItemsTyped"
@@ -590,7 +604,7 @@ async function pullRefresh() {
         :future-limit="futureLimitStr"
         :submitting="submitting"
         @submit="submit"
-        @cancel="showForm = false"
+        @cancel="leaveSheet.requestClose"
       />
     </ParentBottomSheet>
 

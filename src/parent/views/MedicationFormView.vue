@@ -11,6 +11,8 @@ import { todayISO } from '@/utils/format'
 import { MEDICATION_PHOTO_MAX, MEDICATION_PHOTO_MAX_BYTES, nextMedicationSlot } from '../utils/medicationForm'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useLeaveConfirm } from '../composables/useUnsavedGuard'
 
 interface AllergyWarning {
   code?: string
@@ -44,6 +46,24 @@ const form = ref<{
   time_slots: ['08:00'],
   note: '',
 })
+
+const INITIAL_ORDER_DATE = form.value.order_date
+const INITIAL_SLOTS = form.value.time_slots.join(',')
+
+/** 還沒送出、且家長已經填了東西：離開前要確認 */
+function isFormDirty(): boolean {
+  if (createdOrderId.value !== null) return false
+  const f = form.value
+  return (
+    !!f.medication_name.trim()
+    || !!f.dose.trim()
+    || !!f.note.trim()
+    || photoFiles.value.length > 0
+    || f.order_date !== INITIAL_ORDER_DATE
+    || f.time_slots.join(',') !== INITIAL_SLOTS
+  )
+}
+const { dialogOpen: leaveConfirmOpen, confirmLeave } = useLeaveConfirm(isFormDirty)
 
 const studentOptions = computed(() => (childrenStore.items || []) as { student_id: number; name?: string }[])
 
@@ -292,6 +312,17 @@ function cancelAllergy() {
         {{ submitting ? '送出中…' : '送出' }}
       </button>
     </div>
+
+    <!-- 有未送出的修改時離開前確認（返回鍵／LINE 返回／底部導覽） -->
+    <ConfirmDialog
+      v-model:open="leaveConfirmOpen"
+      title="要放棄這張用藥單嗎？"
+      message="剛剛填寫的內容還沒送出，離開後不會保留。"
+      confirm-label="離開"
+      cancel-label="繼續填寫"
+      destructive
+      @confirm="confirmLeave"
+    />
 
     <!-- 過敏軟警告彈框（已套 AppModal：focus trap + esc + a11y） -->
     <AppModal

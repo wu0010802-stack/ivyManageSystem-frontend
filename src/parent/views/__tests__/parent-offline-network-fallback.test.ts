@@ -46,6 +46,7 @@ const mockRoute = reactive<{ params: Record<string, string>; query: Record<strin
 vi.mock('vue-router', () => ({
   useRoute: () => mockRoute,
   useRouter: () => ({ push: h.routerPush, replace: h.routerReplace }),
+  onBeforeRouteLeave: vi.fn(),
 }))
 
 vi.mock('@/parent/api/contactBook', () => ({

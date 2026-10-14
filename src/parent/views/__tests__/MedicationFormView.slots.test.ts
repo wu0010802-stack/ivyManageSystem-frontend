@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import MedicationFormView from '../MedicationFormView.vue'
 import { MEDICATION_PHOTO_MAX } from '../../utils/medicationForm'
+import { onBeforeRouteLeave } from 'vue-router'
 
 const mocks = vi.hoisted(() => ({ warn: vi.fn() }))
 vi.mock('vue-router', () => ({
@@ -35,5 +36,16 @@ describe('MedicationFormView 時段與照片', () => {
     await w.get('#med-files').trigger('change')
     expect(w.findAll('.files li')).toHaveLength(MEDICATION_PHOTO_MAX)
     expect(mocks.warn).toHaveBeenCalledWith(`最多 ${MEDICATION_PHOTO_MAX} 張，已略過 2 張`)
+  })
+})
+
+describe('MedicationFormView 離開保護', () => {
+  it('還沒填任何東西 → 直接放行；填了藥名 → 離開前要確認', async () => {
+    const w = mount(MedicationFormView, { global: { stubs: { AppModal: true } } })
+    await flushPromises()
+    const guard = vi.mocked(onBeforeRouteLeave).mock.calls.at(-1)![0] as unknown as () => unknown
+    expect(guard()).toBe(true)
+    await w.get('#med-name').setValue('退燒藥')
+    expect(guard()).toBeInstanceOf(Promise)
   })
 })

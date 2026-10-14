@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 
 const h = vi.hoisted(() => ({ persons: vi.fn(), create: vi.fn() }))
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }), onBeforeRouteLeave: vi.fn() }))
 vi.mock('@/parent/stores/children', () => ({
   useChildrenStore: () => ({
     items: [{ student_id: 1, name: '合成孩子甲' }, { student_id: 2, name: '合成孩子乙' }],

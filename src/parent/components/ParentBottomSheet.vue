@@ -17,6 +17,8 @@
  *
  * Props：
  *  - modelValue / title / snapPoints / defaultSnap / dismissible / showHandle
+ *  - beforeClose：使用者關閉（點背景／ESC／下拉）前呼叫，回傳 false 則不關
+ *    （表單有未送出的修改時改顯示放棄確認，見 composables/useUnsavedGuard）
  *
  * Emits：
  *  - update:modelValue / close / snap-change
@@ -43,6 +45,7 @@ const props = withDefaults(defineProps<{
   defaultSnap?: SnapPoint
   dismissible?: boolean
   showHandle?: boolean
+  beforeClose?: () => boolean
 }>(), {
   modelValue: false,
   title: '',
@@ -50,6 +53,7 @@ const props = withDefaults(defineProps<{
   defaultSnap: 'mid',
   dismissible: true,
   showHandle: true,
+  beforeClose: undefined,
 })
 
 const emit = defineEmits<{
@@ -229,6 +233,7 @@ onMounted(() => {
 defineExpose({ setSnap, isDraggingForTest: isDragging })
 
 function close(): void {
+  if (props.beforeClose && props.beforeClose() === false) return
   emit('update:modelValue', false)
   emit('close')
 }

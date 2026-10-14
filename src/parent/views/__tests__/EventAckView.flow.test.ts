@@ -42,6 +42,7 @@ vi.mock('vue-router', () => ({
 }))
 
 import EventAckView from '@/parent/views/EventAckView.vue'
+import { onBeforeRouteLeave } from 'vue-router'
 
 /** 已簽名的替身畫布（jsdom/happy-dom 沒有 canvas 2d context）。 */
 const InkedPad = defineComponent({
@@ -126,5 +127,26 @@ describe('EventAckView', () => {
     expect(h.acknowledgeEvent).toHaveBeenCalledTimes(1)
     expect(h.uploadAckSignature).toHaveBeenCalledTimes(2)
     expect(h.replace).toHaveBeenCalledWith({ path: '/events' })
+  })
+})
+
+describe('EventAckView 離開保護', () => {
+  type Guard = () => boolean | Promise<boolean>
+  const lastGuard = () => vi.mocked(onBeforeRouteLeave).mock.calls.at(-1)![0] as unknown as Guard
+
+  it('已手寫簽名但還沒送出 → 離開前要確認；送出成功後導頁不再確認', async () => {
+    h.listEvents.mockResolvedValue({ data: { items: [event()] } })
+    h.acknowledgeEvent.mockResolvedValue({})
+    h.uploadAckSignature.mockResolvedValue({})
+    const w = mountView()
+    await flushPromises()
+
+    const pending = lastGuard()()
+    expect(pending).toBeInstanceOf(Promise)
+
+    await w.find('.submit-btn').trigger('click')
+    await flushPromises()
+    expect(h.replace).toHaveBeenCalledWith({ path: '/events' })
+    expect(lastGuard()()).toBe(true)
   })
 })
