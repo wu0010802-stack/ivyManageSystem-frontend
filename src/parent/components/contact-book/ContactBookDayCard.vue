@@ -187,16 +187,11 @@ const stats = computed(() => {
 }
 
 /* awaiting / offday：今天還沒有故事可講，漸層收斂較淡，
-   讓「有聯絡簿的日子」在視覺上明顯更飽滿。三色同源、只降飽和度，
-   不能對 --pt-gradient-hero（gradient 值）直接 color-mix，故獨立複寫三色。 */
+   讓「有聯絡簿的日子」在視覺上明顯更飽滿。三色同源、只降飽和度；
+   light/dark 成對定義在 globals.css（元件內寫死 light 三色時 dark 會混出中灰底）。 */
 .day-card-awaiting,
 .day-card-offday {
-  background: linear-gradient(
-    150deg,
-    color-mix(in srgb, #fff7dd 55%, var(--pt-surface-card)) 0%,
-    color-mix(in srgb, #d9f4e2 55%, var(--pt-surface-card)) 78%,
-    color-mix(in srgb, #cdeef9 55%, var(--pt-surface-card)) 130%
-  );
+  background: var(--pt-gradient-hero-quiet);
 }
 
 .hero {

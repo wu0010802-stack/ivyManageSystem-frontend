@@ -150,6 +150,15 @@
   --pt-gradient-warm:       linear-gradient(135deg, var(--ivy-tile-yellow-bg) 0%, var(--ivy-star-yellow) 100%);
   /* Hero 漸層：暖黃 → 嫩綠 → 天藍斜向過渡（M3 Expressive，spec §3） */
   --pt-gradient-hero:       linear-gradient(150deg, #fff7dd 0%, #d9f4e2 78%, #cdeef9 130%);
+  /* 收斂版 hero（聯絡簿 awaiting／offday）：同三色只把飽和度向卡片底色收 45%。
+     先前元件內寫死 light 三色再 color-mix 卡片底，dark 下混出中灰底配近白字（約 2.5:1），
+     所以收進 token 層、light/dark 成對定義。 */
+  --pt-gradient-hero-quiet: linear-gradient(
+    150deg,
+    color-mix(in srgb, #fff7dd 55%, #ffffff) 0%,
+    color-mix(in srgb, #d9f4e2 55%, #ffffff) 78%,
+    color-mix(in srgb, #cdeef9 55%, #ffffff) 130%
+  );
 
   /* ============================================================
    * 童彩 tonal 配對（M3 Expressive，spec §3）
@@ -325,6 +334,13 @@
   --pt-gradient-warm:       linear-gradient(135deg, var(--ivy-tile-yellow-bg) 0%, rgba(255, 222, 81, 0.14) 100%);
   /* Hero 漸層：暖黃 → 嫩綠 → 天藍的深色版（對齊 light 段 §3） */
   --pt-gradient-hero:       linear-gradient(150deg, #2c2a1c 0%, #1c332a 78%, #14313c 130%);
+  /* 收斂版 hero dark：深色三色向 dark 卡片底（m3 surface-container-lowest #0c0f0c）收 45% */
+  --pt-gradient-hero-quiet: linear-gradient(
+    150deg,
+    color-mix(in srgb, #2c2a1c 55%, #0c0f0c) 0%,
+    color-mix(in srgb, #1c332a 55%, #0c0f0c) 78%,
+    color-mix(in srgb, #14313c 55%, #0c0f0c) 130%
+  );
 
   /* 童彩 tonal 配對 dark（對齊 light 段 §3） */
   --pt-accent-sun-container: #4a3a10;   --pt-accent-sun-on: #ffe08c;
@@ -374,6 +390,12 @@
   --ivy-tile-teal-bg:    rgba(77, 196, 196, 0.18);  --ivy-tile-teal-fg:    #4dc4c4;
 
   --pt-shadow-press: var(--pt-shadow-card);
+  /* Hero 卡（LeaveHero／UserHeroCard／ActivityHero／FeeHero）的漸層終點與統計小卡底。
+     先前 dark 未覆寫 → 維持 #fff／#f5fbe6，疊上已翻近白的 --pt-text-* 幾乎看不到字。
+     raised＝m3 dark surface-container（比 app 底 #141614 高一階）、recessed＝dark 嫩綠底（同 --ivy-leaf-bg dark）。 */
+  --pt-surface-raised: #1d201d;
+  --pt-surface-recessed: #1a2418;
+  --pt-page-border: rgba(168, 230, 207, 0.14);
   --pt-tint-brand: rgba(90, 168, 66, 0.16);
   --pt-tint-sun: rgba(255, 230, 109, 0.16);
   --pt-icon-chip-bg: rgba(255, 255, 255, 0.1);
