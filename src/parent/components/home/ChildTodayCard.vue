@@ -296,7 +296,7 @@ function goMedications(): void {
 .ctc-step.is-done .ctc-dot,
 .ctc-step.is-current .ctc-dot { opacity: 1; border-style: solid; color: var(--ctc-accent); }
 .ctc-step.is-done .ctc-dot { background: var(--ctc-accent); }
-.ctc-step.is-done .ctc-dot .material-symbols-rounded { color: var(--pt-on-accent); }
+.ctc-step.is-done .ctc-dot .material-symbols-rounded { color: var(--m3-on-primary); }
 .ctc-step.is-current .ctc-dot { border-width: 3px; }
 .ctc-step-label { font-size: 13px; font-weight: 800; }
 .ctc-step-caption { font-size: 12px; font-weight: 600; opacity: 0.72; font-variant-numeric: tabular-nums; }
@@ -339,6 +339,6 @@ function goMedications(): void {
   font-size: 11px;
   font-weight: 700;
   background: var(--ctc-accent);
-  color: var(--pt-on-accent);
+  color: var(--m3-on-primary); /* --ctc-accent 即 --m3-primary，dark 為淺綠，須配成對 on-primary */
 }
 </style>

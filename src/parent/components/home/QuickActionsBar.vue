@@ -189,8 +189,9 @@ const sheetCandidates = computed(() => availableModules())
   cursor: pointer;
 }
 .qa-edit .material-symbols-rounded { font-size: 16px; }
-/* 小字綠底一律 --m3-primary（#006d3d，白字過 AA）；--brand-primary(#0d9053) 白字僅 4.1:1（aaContrast gate） */
-.qa-edit.is-active { background: var(--m3-primary, #006d3d); color: var(--color-primary-contrast, #fff); }
+/* 小字綠底一律 --m3-primary（#006d3d，白字過 AA）；--brand-primary(#0d9053) 白字僅 4.1:1。
+   文字必配成對的 --m3-on-primary：dark 的 --m3-primary 是淺綠 #6ddc97，恆白的 --color-primary-contrast 只剩 1.7:1 */
+.qa-edit.is-active { background: var(--m3-primary, #006d3d); color: var(--m3-on-primary, #fff); }
 
 
 .qa-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -229,7 +230,7 @@ const sheetCandidates = computed(() => availableModules())
 .qa-mod-badge {
   position: absolute; top: -6px; right: -6px;
   width: 20px; height: 20px; border-radius: 50%;
-  background: var(--m3-primary, #006d3d); color: var(--color-primary-contrast, #fff);
+  background: var(--m3-primary, #006d3d); color: var(--m3-on-primary, #fff);
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }

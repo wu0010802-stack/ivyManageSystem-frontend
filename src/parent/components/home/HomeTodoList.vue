@@ -123,7 +123,7 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
   font-size: 13px;
   font-weight: 700;
   line-height: 1;
-  color: var(--color-primary-contrast, #fff);
+  color: var(--m3-on-primary, #fff); /* 成對 on-primary：dark 的 m3-primary／coral-700／sky-700 皆翻淺色，恆白字掉到 2:1 以下 */
   background: var(--m3-primary, #006d3d);
 }
 /* 逾期款項：唯一該讓家長心跳快一下的情況 */
