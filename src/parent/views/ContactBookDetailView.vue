@@ -155,7 +155,8 @@ async function queueAck() {
   await enqueueParent({
     kind: OP_KINDS.CONTACT_BOOK_ACK,
     payload: { entry_id: entryId.value },
-    meta: { entry_id: entryId.value },
+    // log_date 給「無法同步」對話框辨認是哪一天的聯絡簿
+    meta: { entry_id: entryId.value, log_date: entry.value?.log_date ?? '' },
   })
   // 樂觀 UI
   if (entry.value) {

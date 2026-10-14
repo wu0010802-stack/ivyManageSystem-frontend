@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
@@ -12,7 +12,13 @@ import {
   getLeave,
 } from '../api/leaves'
 import { toast } from '../utils/toast'
-import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
+import {
+  enqueueParent,
+  flushParentQueue,
+  listParentQueued,
+  onParentQueueChange,
+  type ParentQueuedOp,
+} from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
 import { isNetworkError } from '@/composables/useOnlineStatus'
 import { useFriendlyError } from '@/composables/useFriendlyError'
@@ -148,6 +154,34 @@ const studentNameMap = computed(() => {
   for (const c of (childrenStore.items || []) as { student_id: number; name?: string }[]) m.set(c.student_id, c.name || '')
   return m
 })
+
+// 離線暫存、還沒送到園所的請假：在列表頂端顯示「待送出」佔位卡，
+// 否則家長按完送出卻在列表找不到那筆，會以為沒送成功而重填一次。
+interface QueuedLeavePayload {
+  student_id?: number
+  leave_type?: string
+  start_date?: string
+  end_date?: string
+}
+const queuedLeaves = ref<ParentQueuedOp[]>([])
+
+async function refreshQueued() {
+  try {
+    queuedLeaves.value = await listParentQueued(OP_KINDS.PARENT_LEAVE_REQUEST)
+  } catch {
+    queuedLeaves.value = []
+  }
+}
+
+function queuedPayload(op: ParentQueuedOp): QueuedLeavePayload {
+  return (op.payload ?? {}) as QueuedLeavePayload
+}
+
+const visibleQueued = computed(() =>
+  queuedLeaves.value.filter(
+    (op) => !selectedId.value || queuedPayload(op).student_id === selectedId.value,
+  ),
+)
 
 // 多孩家庭：以選擇器篩選；單孩家庭 selectedId 仍會被預設成唯一 student
 const filteredItems = computed(() => {
@@ -352,6 +386,7 @@ async function queueLeave(leavePayload: {
   })
   toast.success('請假已暫存，連線後自動送出')
   showForm.value = false
+  await refreshQueued()
   flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST).catch(() => {})
 }
 
@@ -423,12 +458,23 @@ async function doCancel() {
   }
 }
 
+// 背景補送成功（或在「無法同步」對話框捨棄）後：更新佔位卡；有請假送出成功就重抓清單，
+// 讓佔位卡換成園所端的正式紀錄。
+let offQueueChange: (() => void) | null = null
+
 onMounted(async () => {
+  offQueueChange = onParentQueueChange((change) => {
+    refreshQueued()
+    if ((change.succeededByKind[OP_KINDS.PARENT_LEAVE_REQUEST] ?? 0) > 0) fetchData()
+  })
+  refreshQueued()
   await childrenStore.load()
   ensureSelected(childrenStore.items as { student_id: number }[])
   fetchData()
   flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST).catch(() => {})
 })
+
+onBeforeUnmount(() => offQueueChange?.())
 
 async function pullRefresh() {
   await fetchData()
@@ -448,6 +494,30 @@ async function pullRefresh() {
       </template>
     </LeaveHero>
 
+    <!-- 離線暫存、尚未送到園所的請假（待送出佔位卡） -->
+    <article
+      v-for="op in visibleQueued"
+      :key="op.id"
+      class="pt-card queued-leave"
+      data-testid="queued-leave"
+    >
+      <div class="queued-leave-head">
+        <strong>{{ studentNameMap.get(queuedPayload(op).student_id ?? 0) || '' }} {{ queuedPayload(op).leave_type }}</strong>
+        <span
+          class="pt-pill"
+          :class="op.status === 'needs_review' ? 'pt-pill-danger' : 'pt-pill-warn'"
+        >{{ op.status === 'needs_review' ? '無法送出' : '待送出' }}</span>
+      </div>
+      <p class="queued-leave-range">
+        {{ queuedPayload(op).start_date }}<template v-if="queuedPayload(op).end_date && queuedPayload(op).end_date !== queuedPayload(op).start_date"> ~ {{ queuedPayload(op).end_date }}</template>
+      </p>
+      <p class="pt-muted-note">
+        {{ op.status === 'needs_review'
+          ? '多次嘗試仍送不出去，請點畫面下方「無法同步」重試或捨棄'
+          : '已暫存在這支手機，連上網路後會自動送出' }}
+      </p>
+    </article>
+
     <!-- 三態：載入中 → 載入失敗（可重試）→ 空狀態 -->
     <div v-if="loading && items.length === 0" class="leaves-skeleton">
       <SkeletonBlock variant="card" :count="2" />
@@ -458,7 +528,7 @@ async function pullRefresh() {
       @retry="fetchData"
     />
     <EmptyState
-      v-else-if="filteredItems.length === 0"
+      v-else-if="filteredItems.length === 0 && visibleQueued.length === 0"
       variant="mobile"
       title="尚無請假紀錄"
     />
@@ -540,6 +610,16 @@ async function pullRefresh() {
 
 .render-sentinel { height: 1px; }
 .leaves-skeleton { display: flex; flex-direction: column; gap: 10px; }
+
+.queued-leave { border-style: dashed; }
+.queued-leave-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+}
+.queued-leave-range { margin: var(--space-1, 4px) 0 0; }
+.queued-leave .pt-muted-note { margin: var(--space-1, 4px) 0 0; }
 
 .hero-cta {
   background: var(--pt-surface-card, rgba(255, 255, 255, 0.95));

@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { ref } from 'vue'
 
-const h = vi.hoisted(() => ({ leaves: vi.fn(), toastError: vi.fn() }))
+const h = vi.hoisted(() => ({
+  leaves: vi.fn(),
+  toastError: vi.fn(),
+  listQueued: vi.fn(),
+  queueListeners: [] as ((c: { succeededByKind: Record<string, number> }) => void)[],
+}))
 const selectedId = ref<number | null>(1)
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: {}, query: {} }),
@@ -25,8 +30,11 @@ vi.mock('@/parent/utils/toast', () => ({
 vi.mock('@/parent/utils/parentOfflineQueue', () => ({
   enqueueParent: vi.fn(),
   flushParentQueue: vi.fn().mockResolvedValue({}),
-  listParentQueued: vi.fn().mockResolvedValue([]),
-  onParentQueueChange: vi.fn(() => () => {}),
+  listParentQueued: h.listQueued,
+  onParentQueueChange: vi.fn((cb: (c: { succeededByKind: Record<string, number> }) => void) => {
+    h.queueListeners.push(cb)
+    return () => {}
+  }),
 }))
 vi.mock('@/parent/api/leaves', () => ({
   listLeaves: h.leaves, createLeave: vi.fn(), cancelLeave: vi.fn(),
@@ -48,7 +56,13 @@ function mountView() {
   return w
 }
 
-beforeEach(() => { h.leaves.mockReset(); h.toastError.mockReset() })
+beforeEach(() => {
+  h.leaves.mockReset()
+  h.toastError.mockReset()
+  h.listQueued.mockReset()
+  h.listQueued.mockResolvedValue([])
+  h.queueListeners.length = 0
+})
 afterEach(() => { wrappers.splice(0).forEach((w) => w.unmount()) })
 
 describe('LeavesView 三態', () => {
@@ -80,5 +94,51 @@ describe('LeavesView 三態', () => {
     await flushPromises()
     expect(w.text()).toContain('尚無請假紀錄')
     expect(w.find('[role="alert"]').exists()).toBe(false)
+  })
+})
+
+describe('LeavesView 離線暫存的請假', () => {
+  const queuedOp = {
+    id: 'op-1',
+    kind: 'parent_leave_request',
+    status: 'pending',
+    payload: { student_id: 1, leave_type: '病假', start_date: '2026-10-14', end_date: '2026-10-15' },
+  }
+
+  it('佇列裡的請假顯示「待送出」佔位卡，不畫成「尚無請假紀錄」', async () => {
+    h.leaves.mockResolvedValue({ data: { items: [] } })
+    h.listQueued.mockResolvedValue([queuedOp])
+    const w = mountView()
+    await flushPromises()
+    const card = w.find('[data-testid="queued-leave"]')
+    expect(card.exists()).toBe(true)
+    expect(card.text()).toContain('待送出')
+    expect(card.text()).toContain('合成孩子甲 病假')
+    expect(card.text()).toContain('2026-10-14 ~ 2026-10-15')
+    expect(w.text()).not.toContain('尚無請假紀錄')
+  })
+
+  it('無法同步的那筆標「無法送出」並指引去處理', async () => {
+    h.leaves.mockResolvedValue({ data: { items: [] } })
+    h.listQueued.mockResolvedValue([{ ...queuedOp, status: 'needs_review' }])
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid="queued-leave"]').text()).toContain('無法送出')
+    expect(w.find('[data-testid="queued-leave"]').text()).toContain('無法同步')
+  })
+
+  it('背景補送成功 → 佔位卡消失並重抓清單', async () => {
+    h.leaves.mockResolvedValue({ data: { items: [] } })
+    h.listQueued.mockResolvedValueOnce([queuedOp])
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid="queued-leave"]').exists()).toBe(true)
+    const callsBefore = h.leaves.mock.calls.length
+
+    h.listQueued.mockResolvedValue([])
+    h.queueListeners.forEach((cb) => cb({ succeededByKind: { parent_leave_request: 1 } }))
+    await flushPromises()
+    expect(w.find('[data-testid="queued-leave"]').exists()).toBe(false)
+    expect(h.leaves.mock.calls.length).toBe(callsBefore + 1)
   })
 })

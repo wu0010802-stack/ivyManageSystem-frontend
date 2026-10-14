@@ -68,6 +68,9 @@ vi.mock('@/parent/utils/parentOfflineQueue', () => ({
   enqueueParent: h.enqueueParent,
   flushParentQueue: h.flushParentQueue,
   flushAllParent: h.flushAllParent,
+  // LeavesView 的「待送出」佔位卡讀佇列；本檔只驗證入列分流，回空即可
+  listParentQueued: vi.fn().mockResolvedValue([]),
+  onParentQueueChange: vi.fn(() => () => {}),
 }))
 
 vi.mock('@/parent/utils/toast', () => ({

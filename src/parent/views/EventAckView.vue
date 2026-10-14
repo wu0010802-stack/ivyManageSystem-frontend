@@ -81,7 +81,8 @@ async function queueAck() {
       student_id: studentId.value,
       signature_name: signatureName.value || null,
     },
-    meta: { event_id: event.value!.id },
+    // title 給「無法同步」對話框辨認是哪一筆（家長看不到 event_id）
+    meta: { event_id: event.value!.id, title: event.value!.title ?? '' },
   })
   toast.success('已暫存，連線後自動送出')
   flushParentQueue(OP_KINDS.EVENT_ACK).catch(() => {})
