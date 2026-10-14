@@ -26707,8 +26707,12 @@ export interface components {
         };
         /** ClassStats */
         ClassStats: {
+            /** Capacity */
+            capacity?: number | null;
             /** Class Name */
             class_name: string;
+            /** Classroom Id */
+            classroom_id: number;
             /** Female */
             female: number;
             /** Male */
