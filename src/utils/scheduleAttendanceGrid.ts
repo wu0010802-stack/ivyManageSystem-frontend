@@ -219,7 +219,6 @@ export function groupDaysByWeek(days: readonly GridDay[]): MonthWeek[] {
 }
 
 export type MonthDot = 'red' | 'orange' | 'blue'
-const OPEN_CONFIRMATIONS: ReadonlySet<string> = new Set(['pending', 'agreed', 'disputed'])
 
 /**
  * 月格子狀態點（SPEC-027 §2 月模式）。紅／橘只給「待處理」（與 isIssue、只看待處理同一定義，D14）：
@@ -229,7 +228,8 @@ const OPEN_CONFIRMATIONS: ReadonlySet<string> = new Set(['pending', 'agreed', 'd
 export function monthDot(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): MonthDot | null {
   if (!cell.employed) return null
   if (isIssue(cell, today, uncovered)) {
-    if (cell.confirmation && OPEN_CONFIRMATIONS.has(cell.confirmation.status)) return 'orange'
+    // 與 isIssue 共用同一個進行中確認集合：兩處日後只會一起改，月格子顏色不會和「只看待處理」分叉（D14）
+    if (cell.confirmation && ACTIVE_CONFIRMATION_STATUSES.has(cell.confirmation.status)) return 'orange'
     return cell.actual && STATUS_TONES[cell.actual.status] === 'danger' ? 'red' : 'orange'
   }
   return cell.leaves.length > 0 ? 'blue' : null
