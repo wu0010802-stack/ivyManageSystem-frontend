@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 import { buildParentDocumentTitle } from './utils/parentPageTitle'
+import { createParentScrollBehavior } from './utils/scrollRestoration'
 
 const routes: RouteRecordRaw[] = [
     { path: '/', redirect: '/home' },
@@ -261,6 +262,11 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes,
+  // 返回時還原列表捲動位置、進新頁捲到頂；等 out-in 轉場與非同步資料的細節見
+  // utils/scrollRestoration.ts（App.vue 的 <transition @enter> 負責通知新頁已插入）
+  scrollBehavior: createParentScrollBehavior(
+    (fullPath) => router.currentRoute.value.fullPath === fullPath,
+  ),
 })
 
 router.beforeEach((to) => {
