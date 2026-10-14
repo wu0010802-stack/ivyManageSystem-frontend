@@ -114,9 +114,9 @@ const printRoster = async () => {
   })
 }
 
-const onSelectStudent = ({ id, name }: { id: number; name: string }) => {
+const onSelectStudent = ({ id }: { id: number }) => {
   emit('update:visible', false)
-  router.push({ path: '/students', query: { tab: 'roster', student_id: String(id), q: name } })
+  router.push(`/students/profile/${id}`)
 }
 </script>
 

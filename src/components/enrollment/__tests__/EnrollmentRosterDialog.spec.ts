@@ -197,4 +197,21 @@ describe('EnrollmentRosterDialog', () => {
     expect((termSelect(w).element as HTMLSelectElement).value).toBe('115-1')
     expect(setTermSpy).not.toHaveBeenCalled()
   })
+
+  // M-4：舊行為進「學生列表 + 以姓名搜尋」（/students?tab=roster&q=姓名），同名學生會讓人點錯人；
+  // 改直接進該生完整檔案，名冊裡每個姓名背後本來就有確切的 student_id。
+  it('點名冊裡的學生姓名：關閉對話框並直接進該生完整檔案', async () => {
+    const w = mountDialog()
+    await flushPromises()
+
+    w.findComponent({ name: 'EnrollmentRosterTable' }).vm.$emit('select-student', {
+      id: 42,
+      name: '王小明',
+    })
+    await flushPromises()
+
+    expect(routerPush).toHaveBeenCalledTimes(1)
+    expect(routerPush).toHaveBeenCalledWith('/students/profile/42')
+    expect(w.emitted('update:visible')?.[0]).toEqual([false])
+  })
 })
