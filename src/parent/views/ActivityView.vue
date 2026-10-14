@@ -21,6 +21,7 @@ import {
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { isActionablePromotion } from '../utils/activityPromotion'
 import { toast } from '../utils/toast'
+import { copyText } from '../utils/clipboard'
 import { sumOutstanding } from '../utils/activityPayment'
 import {
   collectBusySlots,
@@ -63,6 +64,15 @@ const confirmingKey = ref<string | null>(null)
 // #2：報名成功後後端回傳一次性 query_token，組成公開「管理我的報名」連結供家長保存。
 // 後端只存 hash、明文僅此一次，故必須在此即時呈現並提供複製；遺失需洽校方重發。
 const manageUrl = ref('')
+// 管理連結是改課／取消報名的唯一入口、且只出現這一次：關閉前一律確認，並依是否
+// 複製過給不同提醒（複製到剪貼簿還不算保存，要提醒貼到記事本或自己的 LINE）。
+const manageLinkCopied = ref(false)
+const confirmDismissManageLink = ref(false)
+const dismissManageLinkMessage = computed(() =>
+  manageLinkCopied.value
+    ? '連結已複製，記得貼到記事本或傳給自己的 LINE 保存。關閉後這張卡片不會再出現。'
+    : '您還沒複製這個連結。日後改課、取消報名都需要它，關閉後不會再顯示。',
+)
 
 // ② 報名時段守衛（前端 UX；後端 _check_registration_open 仍為硬閘）。
 // 預設 null＝尚未載入 → fail-open：載入前 / 讀取失敗時不擋報名入口，避免誤鎖
@@ -375,6 +385,7 @@ async function submitRegister() {
     })
     const token = (res as { data?: { query_token?: string } })?.data?.query_token
     manageUrl.value = token ? buildPublicEditUrl(window.location.origin, token) : ''
+    manageLinkCopied.value = false
     toast.success('報名成功')
     showRegister.value = false
     tab.value = 'my'
@@ -403,16 +414,21 @@ async function submitRegister() {
 
 async function copyManageLink() {
   if (!manageUrl.value) return
-  try {
-    await navigator.clipboard.writeText(manageUrl.value)
+  if (await copyText(manageUrl.value)) {
+    manageLinkCopied.value = true
     toast.success('管理連結已複製')
-  } catch {
-    toast.error('複製失敗，請長按連結手動複製')
+  } else {
+    toast.error('無法自動複製，請長按連結手動複製')
   }
+}
+
+function askDismissManageLink() {
+  confirmDismissManageLink.value = true
 }
 
 function dismissManageLink() {
   manageUrl.value = ''
+  manageLinkCopied.value = false
 }
 
 async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
@@ -544,7 +560,13 @@ async function pullRefresh() {
     <template v-if="tab === 'my'">
       <!-- #2：報名成功後一次性管理連結（公開查詢頁，憑 token 修改/取消） -->
       <div v-if="manageUrl" class="manage-link-card" role="status">
-        <button class="manage-link-close" aria-label="關閉" @click="dismissManageLink">×</button>
+        <button
+          type="button"
+          class="manage-link-close"
+          aria-label="關閉管理連結"
+          data-testid="manage-link-close"
+          @click="askDismissManageLink"
+        >×</button>
         <div class="manage-link-title">報名成功！請保存您的管理連結</div>
         <div class="manage-link-desc">
           日後修改課程／用品或取消報名，請使用此連結（僅顯示這一次，建議立即複製保存）。
@@ -588,6 +610,15 @@ async function pullRefresh() {
         :confirming-key="confirmingKey"
         @confirm-promotion="onConfirmPromotion"
         @decline-promotion="onDeclinePromotion"
+      />
+      <ConfirmDialog
+        v-model:open="confirmDismissManageLink"
+        data-testid="manage-link-dismiss-confirm"
+        title="確定已保存管理連結？"
+        :message="dismissManageLinkMessage"
+        confirm-label="已保存，關閉"
+        cancel-label="先不要"
+        @confirm="dismissManageLink"
       />
       <ConfirmDialog
         v-model:open="declineDialogOpen"
@@ -731,6 +762,7 @@ async function pullRefresh() {
   background: var(--brand-primary-soft, #eef8fc);
 }
 .manage-link-title {
+  padding-right: var(--touch-target-min, 44px);
   font-weight: 700;
   font-size: 14px;
   margin-bottom: 4px;
@@ -755,8 +787,10 @@ async function pullRefresh() {
 }
 .manage-link-close {
   position: absolute;
-  top: 8px;
-  right: 10px;
+  top: 0;
+  right: 0;
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
   border: none;
   background: transparent;
   font-size: 20px;
