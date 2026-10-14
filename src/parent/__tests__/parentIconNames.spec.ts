@@ -71,4 +71,30 @@ describe('parent-icon-names 抽取器', () => {
     // 區塊結束後不再擴散
     expect(names).not.toContain('success')
   })
+
+  // 2026-10：規則 4（raw ligature span）只認 class 值以 material-symbols-rounded 開頭，
+  // `class="foo material-symbols-rounded"` 這種前面多一個 class 的寫法整個漏收，
+  // main 上曾因此出現破字圖示。class 清單任何位置（含跨行屬性）都要收。
+  it('raw ligature span：material-symbols-rounded 不在 class 開頭也會被收進候選', () => {
+    const root = makeRepo({
+      'src/parent/components/Foo.vue':
+        '<template>\n'
+        + '  <span class="chev material-symbols-rounded" aria-hidden="true">chevron_left</span>\n'
+        + '  <span\n    class="a material-symbols-rounded b"\n    aria-hidden="true"\n  >pets</span>\n'
+        + '  <span class="material-symbols-rounded">home</span>\n'
+        + '</template>\n',
+    })
+    const names = extractIconNames(root)
+    expect(names).toContain('chevron_left')
+    expect(names).toContain('pets')
+    expect(names).toContain('home')
+  })
+
+  it('raw ligature span：只是名稱相近的 class（如 material-symbols-rounded-x）不誤收', () => {
+    const root = makeRepo({
+      'src/parent/components/Bar.vue':
+        '<template><span class="material-symbols-rounded-x">notaglyph</span></template>\n',
+    })
+    expect(extractIconNames(root)).not.toContain('notaglyph')
+  })
 })
