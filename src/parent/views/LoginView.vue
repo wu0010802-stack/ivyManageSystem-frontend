@@ -362,7 +362,7 @@ onMounted(() => {
             class="error-next-step"
             data-testid="login-error-next-step"
           >
-            💡 {{ errorState.nextStep }}
+            {{ errorState.nextStep }}
           </p>
         </div>
         <button type="button" class="pt-action-btn retry" @click="manualRetry">
@@ -460,7 +460,7 @@ onMounted(() => {
 }
 
 .welcome-mark {
-  width: min(190px, 52vw);
+  width: min(120px, 36vw);
   height: auto;
   margin: 12px auto 20px;
   display: block;

@@ -59,7 +59,7 @@ export const ERROR_CODE_REGISTRY: Record<string, FriendlyError> = {
   },
   LINE_PROFILE_FETCH_FAILED: {
     message: '無法取得 LINE 個人資料',
-    nextStep: '請稍後再試，或重新開啟 LIFF 頁面',
+    nextStep: '請稍後再試，或回到 LINE 重新開啟此頁',
     level: 'warning',
   },
 
