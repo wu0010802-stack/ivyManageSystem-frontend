@@ -16,9 +16,10 @@
  * 格的副標告知「今天 N 張」，不另開一段。
  */
 import { computed } from 'vue'
-import { useHomeSummary } from '../composables/useHomeSummary'
+import { invalidateHomeSummary, useHomeSummary } from '../composables/useHomeSummary'
 import { ALL_SERVICES_ORDER, PARENT_SERVICES } from '../utils/parentServices'
 import HomeTodoList from '../components/home/HomeTodoList.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 
 const { badges } = useHomeSummary()
 
@@ -30,10 +31,19 @@ const services = computed(() =>
     return s
   }),
 )
+
+/**
+ * 下拉刷新（2026-10-14）：重抓待處理清單的三支來源（summary／入學文件／臨時
+ * 接送）。走 invalidateHomeSummary 而非只 refresh 本頁的 consumer——後者不會帶動
+ * HomeTodoList 與底部 tab 徽章各自持有的資料。
+ */
+function pullRefresh(): Promise<void> {
+  return invalidateHomeSummary()
+}
 </script>
 
 <template>
-  <div class="admin-list-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="admin-list-view">
     <HomeTodoList title="待處理" empty-text="目前沒有要處理的事" class="admin-todo" />
 
     <section class="svc" aria-labelledby="svc-title">
@@ -54,16 +64,19 @@ const services = computed(() =>
         </router-link>
       </div>
     </section>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
 .admin-list-view {
+  padding: var(--space-2, 8px) 0 var(--space-8, 32px);
+  min-height: 100%;
+}
+/* 版面排在 PullToRefresh 的內容層（.ptr-content），下拉時整段一起位移 */
+.admin-list-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
   gap: var(--space-5, 20px);
-  padding: var(--space-2, 8px) 0 var(--space-8, 32px);
-  min-height: 100%;
 }
 
 .svc {

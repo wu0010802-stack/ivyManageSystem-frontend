@@ -15,7 +15,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getTodayContactBook, type ContactBookEntry } from '../api/contactBook'
-import { useHomeSummary } from '../composables/useHomeSummary'
+import { invalidateHomeSummary, useHomeSummary } from '../composables/useHomeSummary'
 import { useTodayStatusCache } from '../composables/useTodayStatusCache'
 import { useTodayTimeline } from '../composables/useTodayTimeline'
 import { useChildSelection } from '../composables/useChildSelection'
@@ -57,7 +57,6 @@ const {
   data: summaryData,
   error: summaryError,
   pending: summaryPending,
-  refresh: refreshSummary,
   summary,
   badges,
 } = useHomeSummary()
@@ -148,17 +147,24 @@ const { buckets } = useTodayTimeline({ summary, todayChildren })
 // 娃娃車兩格在 HomeBusRow（2026-09-02），它自己 onMounted 抓資料；
 // 下拉刷新與錯誤重試要一併帶到它，故透過 defineExpose 的 reload 呼叫。
 const busRow = ref<{ reload: () => Promise<void> } | null>(null)
+const announcementsCard = ref<{ refresh: () => Promise<void> } | null>(null)
 
 onMounted(() => {
   refreshToday()
 })
 
+/**
+ * summary 走 invalidateHomeSummary（2026-10-14）：只 refresh 本頁自己的 consumer
+ * 不會帶動待辦清單（HomeTodoList 另有 consumer、另有入學文件／臨時接送兩支來源）
+ * 與底部 tab 徽章——下拉刷新後首頁上半部更新了、待辦卻還是舊的。
+ */
 async function pullRefresh(): Promise<void> {
   await Promise.all([
-    refreshSummary(true),
+    invalidateHomeSummary(),
     refreshToday(),
     loadContactBooks(),
     busRow.value?.reload() ?? Promise.resolve(),
+    announcementsCard.value?.refresh() ?? Promise.resolve(),
   ])
 }
 
@@ -226,7 +232,7 @@ function go(path: string): void {
       校園公告預覽卡（2026-09-08）：公告的首頁入口統一收斂到這裡（待辦清單不再
       重複列未讀公告）。
     -->
-    <AnnouncementsHomeCard />
+    <AnnouncementsHomeCard ref="announcementsCard" />
 
     <!-- 待辦清單（2026-09-02）：同一筆待辦在首頁只出現一次，資料來源為 useParentTodos。 -->
     <HomeTodoList />

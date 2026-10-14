@@ -16,6 +16,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import UserHeroCard from '../components/more/UserHeroCard.vue'
 import AppearanceSettings from '../components/more/AppearanceSettings.vue'
 import ChildrenList from '../components/me/ChildrenList.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
@@ -65,6 +66,14 @@ onMounted(async () => {
   await childrenStore.load()
 })
 
+/**
+ * 下拉刷新（2026-10-14）：這頁會變的資料是子女清單（加綁、班級異動）。
+ * 家長身分（authStore.user）只能經 switchParentIdentity 寫入，這裡不重抓。
+ */
+async function pullRefresh(): Promise<void> {
+  await childrenStore.load(true)
+}
+
 const PREFS = [
   { key: 'notifications', label: '通知偏好', icon: 'notifications', path: '/notifications/preferences', hint: '推播 / 公告 / 聯絡簿' },
   // P0c-3 法規/個資權利 (個資法 §3 五權)
@@ -97,7 +106,7 @@ const PREFS = [
 </script>
 
 <template>
-  <div class="me-view" data-testid="me-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="me-view" data-testid="me-view">
     <UserHeroCard
       :user-name="userName"
       :avatar-initial="avatarInitial"
@@ -204,17 +213,20 @@ const PREFS = [
         </div>
       </div>
     </AppModal>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
 .me-view {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
   padding-bottom: 16px;
   /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
   padding-inline: var(--space-4, 16px);
+}
+/* 版面排在 PullToRefresh 的內容層（.ptr-content），下拉時整段一起位移 */
+.me-view :deep(.ptr-content) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* 全域 .pt-list-group 自帶左右 16px，容器已給留白，這裡歸零避免疊成 32px */

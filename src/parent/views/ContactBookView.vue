@@ -18,6 +18,7 @@ import { OP_KINDS } from '@/utils/offlineQueue'
 import SectionHeader from '../components/SectionHeader.vue'
 import StatusPill from '../components/StatusPill.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 
 import MonthDateStrip from '../components/contact-book/MonthDateStrip.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
@@ -128,6 +129,14 @@ watch(selectedStudentId, (_next, prev) => {
   return fetchAll()
 }, { immediate: true })
 
+/**
+ * 下拉刷新（2026-10-14）：重抓目前孩子的今日聯絡簿與歷史紀錄。公告分頁
+ * （?tab=announcements）由 AnnouncementsPanel 自帶 PullToRefresh，不重複包。
+ */
+async function pullRefresh(): Promise<void> {
+  await fetchAll()
+}
+
 function entryHref(id: number | string) {
   return `/contact-book/${id}`
 }
@@ -168,7 +177,7 @@ const activeTab = computed<CbTab>(() =>
   <div class="cb">
     <AnnouncementsPanel v-if="activeTab === 'announcements'" />
 
-    <template v-else>
+    <PullToRefresh v-else :on-refresh="pullRefresh" class="cb-ptr">
       <ChildContextHeader variant="page" />
 
       <MonthDateStrip
@@ -271,7 +280,7 @@ const activeTab = computed<CbTab>(() =>
           description="連續紀錄會慢慢累積出孩子的成長故事"
         />
       </template>
-    </template>
+    </PullToRefresh>
   </div>
 </template>
 
@@ -283,6 +292,12 @@ const activeTab = computed<CbTab>(() =>
   gap: var(--space-1);
 }
 .skeleton-wrap { padding: var(--space-2) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2, 8px); }
+/* 聯絡簿本體包在 PullToRefresh 裡：版面改排在它的內容層，維持原本的直向間距 */
+.cb-ptr :deep(.ptr-content) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
 
 .render-sentinel { height: 1px; }
 

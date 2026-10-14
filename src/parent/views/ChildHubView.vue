@@ -7,6 +7,7 @@ import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 import { PARENT_SERVICES } from '../utils/parentServices'
 
 const router = useRouter()
@@ -92,6 +93,13 @@ async function retryLoad() {
   ensureSelected(children.value)
 }
 
+/**
+ * 主分頁下拉刷新（2026-10-14）：body 設了 overscroll-behavior-y: contain 擋掉
+ * 原生下拉刷新，主分頁若不自己接 PullToRefresh，家長往下拉毫無反應。
+ * 這頁的資料只有子女清單（加綁／班級異動後重抓）。
+ */
+const pullRefresh = retryLoad
+
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(children.value)
@@ -99,7 +107,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="child-hub-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="child-hub-view">
     <ChildContextHeader />
     <MobileErrorRetry v-if="loadFailed" :error="childrenStore.error" @retry="retryLoad" />
     <M3List v-else>
@@ -115,7 +123,7 @@ onMounted(async () => {
         @click="go(item)"
       />
     </M3List>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>

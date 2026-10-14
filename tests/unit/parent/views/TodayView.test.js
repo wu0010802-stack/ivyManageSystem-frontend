@@ -46,6 +46,7 @@ const contactBookMock = vi.hoisted(() => ({
 vi.mock('@/parent/api/contactBook', () => contactBookMock)
 
 const busReloadMock = vi.fn().mockResolvedValue(undefined)
+const annRefreshMock = vi.fn().mockResolvedValue(undefined)
 
 import TodayView from '@/parent/views/TodayView.vue'
 
@@ -60,7 +61,10 @@ function mountWith(summary, today) {
         MobileErrorRetry: true,
         TodayTimeline: true,
         QuickActionsBar: { template: '<div class="qa-stub"></div>' },
-        AnnouncementsHomeCard: { template: '<div class="ann-home-card-stub"></div>' },
+        AnnouncementsHomeCard: {
+          template: '<div class="ann-home-card-stub"></div>',
+          setup(_props, { expose }) { expose({ refresh: annRefreshMock }) },
+        },
         HomeTodoList: { template: '<div class="home-todo-stub"></div>' },
         HomeBusRow: {
           template: '<div class="home-bus-stub"></div>',
@@ -91,6 +95,7 @@ beforeEach(() => {
   pushMock.mockClear()
   refreshSummaryMock.mockClear()
   busReloadMock.mockClear()
+  annRefreshMock.mockClear()
   selectionMock.setSelected.mockClear()
   selectionMock.ensureSelected.mockClear()
   contactBookMock.getTodayContactBook.mockReset()
@@ -300,7 +305,7 @@ describe('TodayView 區塊組成', () => {
     expect(two.find('a.cb-open').exists()).toBe(false)
   })
 
-  it('下拉刷新：summary、聯絡簿與娃娃車列一起重抓', async () => {
+  it('下拉刷新：summary、聯絡簿、娃娃車列與公告卡一起重抓', async () => {
     const w = mountWith(ONE_CHILD(), today({ attendance: { status: '已入園' } }))
     await flushPromises()
     contactBookMock.getTodayContactBook.mockClear()
@@ -308,6 +313,8 @@ describe('TodayView 區塊組成', () => {
     expect(refreshSummaryMock).toHaveBeenCalledWith(true)
     expect(contactBookMock.getTodayContactBook).toHaveBeenCalledWith(1)
     expect(busReloadMock).toHaveBeenCalled()
+    // 2026-10-14：公告預覽卡原本不在下拉刷新範圍內
+    expect(annRefreshMock).toHaveBeenCalled()
   })
 })
 
