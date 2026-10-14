@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
   toastWarn: vi.fn(),
   toastSuccess: vi.fn(),
   query: {} as Record<string, string>,
+  /** 替身簽名板狀態：empty=家長按了「清除」；blobNull=畫布匯出失敗 */
+  pad: { empty: false, blobNull: false },
 }))
 
 vi.mock('@/parent/api/events', () => ({ listEvents: h.listEvents, acknowledgeEvent: h.acknowledgeEvent }))
@@ -48,8 +50,10 @@ import { onBeforeRouteLeave } from 'vue-router'
 const InkedPad = defineComponent({
   setup(_, { expose }) {
     expose({
-      isEmpty: () => false,
-      toBlob: () => Promise.resolve(new Blob([new Uint8Array([1])], { type: 'image/png' })),
+      isEmpty: () => h.pad.empty,
+      toBlob: () => Promise.resolve(
+        h.pad.blobNull ? null : new Blob([new Uint8Array([1])], { type: 'image/png' }),
+      ),
     })
     return {}
   },
@@ -70,6 +74,8 @@ function mountView() {
 beforeEach(() => {
   Object.values(h).forEach((v) => { if (typeof v === 'function' && 'mockReset' in v) v.mockReset() })
   for (const k of Object.keys(h.query)) delete h.query[k]
+  h.pad.empty = false
+  h.pad.blobNull = false
 })
 
 describe('EventAckView', () => {
@@ -127,6 +133,43 @@ describe('EventAckView', () => {
     expect(h.acknowledgeEvent).toHaveBeenCalledTimes(1)
     expect(h.uploadAckSignature).toHaveBeenCalledTimes(2)
     expect(h.replace).toHaveBeenCalledWith({ path: '/events' })
+  })
+})
+
+describe('EventAckView 重新上傳簽名：空白或匯出失敗不算成功', () => {
+  async function failFirstUpload() {
+    h.listEvents.mockResolvedValue({ data: { items: [event()] } })
+    h.acknowledgeEvent.mockResolvedValue({})
+    h.uploadAckSignature.mockRejectedValueOnce({ displayMessage: '網路連線異常' })
+    const w = mountView()
+    await flushPromises()
+    await w.find('.submit-btn').trigger('click')
+    await flushPromises()
+    h.toastWarn.mockClear()
+    return w
+  }
+
+  it('重傳前把簽名清掉 → 提示先簽名、不呼叫上傳、不離開頁面', async () => {
+    const w = await failFirstUpload()
+    h.pad.empty = true
+    await w.find('[data-testid="retry-signature"]').trigger('click')
+    await flushPromises()
+    expect(h.uploadAckSignature).toHaveBeenCalledTimes(1)
+    expect(h.toastSuccess).not.toHaveBeenCalledWith('手寫簽名已上傳')
+    expect(h.replace).not.toHaveBeenCalled()
+    expect(String(h.toastWarn.mock.calls[0]?.[0] ?? '')).toContain('簽名')
+    expect(w.find('[data-testid="retry-signature"]').exists()).toBe(true)
+  })
+
+  it('畫布匯出失敗（toBlob 回 null）→ 視為上傳失敗、留在原頁', async () => {
+    const w = await failFirstUpload()
+    h.pad.blobNull = true
+    await w.find('[data-testid="retry-signature"]').trigger('click')
+    await flushPromises()
+    expect(h.uploadAckSignature).toHaveBeenCalledTimes(1)
+    expect(h.toastSuccess).not.toHaveBeenCalledWith('手寫簽名已上傳')
+    expect(h.replace).not.toHaveBeenCalled()
+    expect(w.find('[data-testid="retry-signature"]').exists()).toBe(true)
   })
 })
 

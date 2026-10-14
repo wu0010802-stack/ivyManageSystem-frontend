@@ -190,12 +190,13 @@ async function submit() {
 /** 簽收已成功、只差手寫簽名沒傳上去的孩子；有值時主按鈕改為「重新上傳簽名」。 */
 const signatureRetryFor = ref<number | null>(null)
 
-/** 有手寫簽名就上傳；沒有簽名視為成功。 */
+/** 有手寫簽名就上傳；沒有簽名視為成功。畫布有筆跡卻匯出不了圖檔算失敗（簽名沒送出去）。 */
 async function uploadSignature(sid: number): Promise<boolean> {
   if (!padRef.value || padRef.value.isEmpty() || !event.value) return true
   try {
     const blob = await padRef.value.toBlob()
-    if (blob) await uploadAckSignature(event.value.id, sid, blob)
+    if (!blob) return false
+    await uploadAckSignature(event.value.id, sid, blob)
     return true
   } catch {
     return false
@@ -205,6 +206,11 @@ async function uploadSignature(sid: number): Promise<boolean> {
 async function retrySignatureUpload() {
   const sid = signatureRetryFor.value
   if (sid === null || submitting.value) return
+  // 重傳的目的就是補上簽名：空白畫布（家長按了「清除」）不能當成功，否則會誤報已上傳並離開
+  if (!padRef.value || padRef.value.isEmpty()) {
+    toast.warn('請先在上方簽名，再按「重新上傳簽名」')
+    return
+  }
   submitting.value = true
   const ok = await uploadSignature(sid)
   submitting.value = false
