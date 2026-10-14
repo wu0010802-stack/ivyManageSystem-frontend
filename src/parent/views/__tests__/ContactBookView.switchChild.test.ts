@@ -27,9 +27,10 @@ describe('ContactBookView 切換孩子（F14）', () => {
       ? Promise.resolve({ data: { entry: { id: 101, student_id: 1, log_date: '2026-10-04', isRead: false } } })
       : Promise.reject(new Error('synthetic network error')))
     state.history.mockResolvedValue({ data: { entries: [] } })
+    // shallowMount 不渲染 stub 的 slot；聯絡簿本體 2026-10-14 起包在 PullToRefresh 裡，透傳 slot
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div />' } }] })
     await router.push('/')
-    const wrapper = shallowMount(ContactBookView, { global: { plugins: [createPinia(), router], stubs: { RouterLink: { template: '<div><slot /></div>' } } } })
+    const wrapper = shallowMount(ContactBookView, { global: { plugins: [createPinia(), router], stubs: { RouterLink: { template: '<div><slot /></div>' }, PullToRefresh: { template: '<div><slot /></div>' } } } })
     await flushPromises()
     expect(wrapper.findComponent(ContactBookDayCard).props('entry').student_id).toBe(1)
     state.selected.value = 2
