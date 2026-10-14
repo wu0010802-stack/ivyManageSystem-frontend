@@ -32,6 +32,7 @@ import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatTaipeiDateTimeMinute, nowTaipeiNaiveISO, todayTaipeiISO } from '@/utils/format'
+import { formatTaipeiMonthDayMinute } from '@/utils/taipeiTime'
 import { SURVEY_QUESTION_TYPES, firstUnansweredRequiredQuestion, type SurveyQuestionType } from '@/constants/surveyQuestionTypes'
 import { SURVEY_STATUS_LABELS, SURVEY_STATUS_TAG, deadlineHint, deriveSurveyStatus } from './surveyListModel'
 import {
@@ -135,7 +136,8 @@ const subtitle = computed(() => {
 const reminderText = computed(() => {
   const last = survey.value?.last_reminded_at
   if (!last) return '尚未催覆'
-  return `${formatTaipeiDateTimeMinute(last)}・累計推播 ${survey.value?.reminded_parent_count ?? 0} 人次`
+  const when = formatTaipeiMonthDayMinute(last, nowTaipeiNaiveISO()) ?? '—'
+  return `${when}・累計推播 ${survey.value?.reminded_parent_count ?? 0} 人次`
 })
 
 const overview = computed(() => (stats.value ? buildOverview(stats.value) : null))

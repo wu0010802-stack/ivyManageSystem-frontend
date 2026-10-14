@@ -326,7 +326,10 @@ describe('SurveyDetailView', () => {
       await flushPromises()
 
       const meta = w.find('[data-test="survey-meta"]')
-      expect(meta.text()).toContain('2026-09-12 14:30・累計推播 23 人次')
+      // D-13：同年只顯示月/日（「10/12 14:30」格式），不帶年份
+      expect(meta.text()).toContain('9/12 14:30・累計推播 23 人次')
+      expect(meta.text()).not.toContain('2026/9/12')
+      expect(meta.text()).not.toContain('2026-09-12 14:30')
       expect(meta.find('[data-test="meta-creator"]').text()).toBe('—')
       w.unmount()
     })
@@ -345,7 +348,7 @@ describe('SurveyDetailView', () => {
 
       expect(confirmSpy.mock.calls[0][0]).toContain('天堂鳥')
       expect(remindSurveyMock).toHaveBeenCalledWith(7, [12])
-      expect(w.find('[data-test="survey-meta"]').text()).toContain('2026-09-15 10:05・累計推播 2 人次')
+      expect(w.find('[data-test="survey-meta"]').text()).toContain('9/15 10:05・累計推播 2 人次')
       expect(getSurveyMock).toHaveBeenCalledTimes(1)
       confirmSpy.mockRestore()
       w.unmount()
@@ -383,7 +386,7 @@ describe('SurveyDetailView', () => {
       await w.find('[data-test="action-remind"]').trigger('click')
       await flushPromises()
       expect(remindSurveyMock).toHaveBeenCalledWith(7)
-      expect(w.find('[data-test="survey-meta"]').text()).toContain('2026-09-15 10:05・累計推播 26 人次')
+      expect(w.find('[data-test="survey-meta"]').text()).toContain('9/15 10:05・累計推播 26 人次')
       confirmSpy.mockRestore()
       w.unmount()
     })

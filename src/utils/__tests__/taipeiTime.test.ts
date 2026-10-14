@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseTaipeiDate, formatTaipeiClock, taipeiHour, formatTaipeiDay, taipeiDayKey,
+  formatTaipeiMonthDayMinute,
 } from '../taipeiTime'
 
 /**
@@ -88,6 +89,25 @@ describe('taipeiTime', () => {
       expect(formatTaipeiDay(null)).toBeNull()
       expect(formatTaipeiDay('not-a-date')).toBeNull()
       expect(formatTaipeiDay(new Date('nope'))).toBeNull()
+    })
+  })
+
+  describe('formatTaipeiMonthDayMinute — M/D HH:mm（跨年才帶年份）', () => {
+    const now = '2026-10-14T09:00:00'
+    it('同一台北年份只顯示月/日與時分，月日不補零', () => {
+      expect(formatTaipeiMonthDayMinute('2026-10-12T14:30:00', now)).toBe('10/12 14:30')
+      expect(formatTaipeiMonthDayMinute('2026-09-03T08:05:00', now)).toBe('9/3 08:05')
+    })
+    it('不同年份帶年份，避免去年的紀錄看起來像今年', () => {
+      expect(formatTaipeiMonthDayMinute('2025-12-31T23:59:00', now)).toBe('2025/12/31 23:59')
+    })
+    it('以台北牆鐘判斷年份：UTC 跨年夜已是台北新年', () => {
+      // 2025-12-31T17:00Z = 2026-01-01 01:00 台北
+      expect(formatTaipeiMonthDayMinute('2025-12-31T17:00:00Z', now)).toBe('1/1 01:00')
+    })
+    it('空值 / 不合法回 null', () => {
+      expect(formatTaipeiMonthDayMinute(null, now)).toBeNull()
+      expect(formatTaipeiMonthDayMinute('not-a-date', now)).toBeNull()
     })
   })
 

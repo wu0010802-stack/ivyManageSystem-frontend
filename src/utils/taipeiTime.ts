@@ -93,6 +93,25 @@ function toValidDate(value: string | Date | null | undefined): Date | null {
 }
 
 /**
+ * 顯示用台北牆鐘 `M/D HH:mm`（例如「上次催覆 10/12 14:30」）；與 `now` 不同台北年份時
+ * 改顯示 `YYYY/M/D HH:mm`，避免去年的紀錄看起來像今年。空值 / 不合法回 null。
+ * `now` 由呼叫端帶入（預設現在），測試可固定時鐘。
+ */
+export function formatTaipeiMonthDayMinute(
+  value: string | Date | null | undefined,
+  now: string | Date = new Date(),
+): string | null {
+  const d = toValidDate(value)
+  if (!d) return null
+  const { year, month, day } = taipeiDateParts(d)
+  const { hour, minute } = taipeiParts(d)
+  const clock = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  const nowDate = toValidDate(now)
+  const sameYear = nowDate !== null && taipeiDateParts(nowDate).year === year
+  return sameYear ? `${month}/${day} ${clock}` : `${year}/${month}/${day} ${clock}`
+}
+
+/**
  * 顯示用台北曆日 `M/D（週）`，例如 `9/3（四）`。接受 ISO 字串或 `Date`；空值 / 不合法回 null。
  *
  * 星期**不用** `Intl` 的 `weekday` 字串：測試機與使用者裝置的預設 locale 不保證
