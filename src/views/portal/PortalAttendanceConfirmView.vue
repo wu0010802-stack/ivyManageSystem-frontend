@@ -22,7 +22,9 @@ import {
   amendButtonLabel,
   amendKindsFor,
   amendLabel,
+  BACKDATED_TAG,
   describeSuggestion,
+  isBackdated,
   KIND_LABELS,
   partnerChoices,
   STATUS_LABELS,
@@ -295,6 +297,7 @@ async function signoff() {
       <el-card v-for="item in items" :key="item.id ?? 0" class="attendance-confirm__card" shadow="never">
         <div class="attendance-confirm__head">
           <el-tag size="small">{{ KIND_LABELS[item.kind] }}</el-tag>
+          <el-tag v-if="isBackdated(item)" size="small" type="warning" effect="plain">{{ BACKDATED_TAG }}</el-tag>
           <el-tag size="small" :type="item.status === 'agreed' ? 'success' : item.status === 'disputed' ? 'warning' : 'info'">
             {{ STATUS_LABELS[item.status] }}
           </el-tag>

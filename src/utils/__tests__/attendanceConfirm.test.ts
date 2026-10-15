@@ -8,7 +8,9 @@ import {
   amendLabel,
   describeResolution,
   describeSuggestion,
+  BACKDATED_TAG,
   formatMonthDay,
+  isBackdated,
   itemsByPersonDay,
   partnerChoices,
   pickDisplayRound,
@@ -228,5 +230,91 @@ describe('進度條④輪次狀態（D-07）', () => {
     expect(roundStatusText(round(1, 'closed'), null)).toBe('已結束')
     expect(roundStatusText(round(1, 'open'), [emp(1, 0), emp(2, 2), emp(3, 0)])).toBe('確認中・已回覆 2/3')
     expect(roundStatusText(round(1, 'open'), [])).toBe('確認中')
+  })
+})
+
+// 老師自行補登（SPEC-026 3-3）：雙方打卡皆為 null（BE 審查 F1：不存對方打卡）、party.status 固定 "reported"，
+// 文案不得出現「打卡」「推測」，教師端（viewerId）與行政端（null）都要正確。
+describe('attendanceConfirm 補登項目', () => {
+  const reported = (id: number, name: string, original: typeof BUS) => ({
+    ...party(id, name, original, null, null),
+    status: 'reported',
+  })
+  function backdated(over: Partial<ConfirmationItem> = {}, sug: Record<string, unknown> = {}): ConfirmationItem {
+    return makeItem({
+      round_id: null,
+      initiated_by: 'employee',
+      suggestion: {
+        confidence: 'teacher',
+        parties: { '10': reported(10, '王副導', BUS), '20': reported(20, '張副導', LATE) },
+        proposed: [{ employee_id: 10, shift: LATE }, { employee_id: 20, shift: BUS }],
+        partner_options: [], shift_candidates: [], leave_missing: false,
+        initiator_employee_id: 10, note: '臨時對調',
+        ...sug,
+      },
+      ...over,
+    })
+  }
+
+  it('isBackdated 只認 initiated_by=employee；標籤文字固定', () => {
+    expect(isBackdated(backdated())).toBe(true)
+    expect(isBackdated(makeItem())).toBe(false)
+    expect(BACKDATED_TAG).toBe('老師補登')
+  })
+
+  it('對方（被邀請者）視角：雙方各自改上對方原班，註明發起人與原因', () => {
+    expect(describeSuggestion(backdated(), 20)).toBe(
+      '10/3 補登換班：王副導改上晚車 08:30–18:00、你改上早車 07:00–16:30（王副導提出，原因：臨時對調）',
+    )
+  })
+
+  it('發起人視角：自己是「你」，提出者也是「你」', () => {
+    expect(describeSuggestion(backdated(), 10)).toBe(
+      '10/3 補登換班：你改上晚車 08:30–18:00、張副導改上早車 07:00–16:30（你提出，原因：臨時對調）',
+    )
+  })
+
+  it('行政視角（viewerId=null）：全部用姓名', () => {
+    expect(describeSuggestion(backdated())).toBe(
+      '10/3 補登換班：王副導改上晚車 08:30–18:00、張副導改上早車 07:00–16:30（王副導提出，原因：臨時對調）',
+    )
+  })
+
+  it('沒有原因只寫提出者；既沒有原因也不知道發起人就不加括號', () => {
+    expect(describeSuggestion(backdated({}, { note: null }))).toMatch(/（王副導提出）$/)
+    expect(describeSuggestion(backdated({}, { note: '  ' }))).toMatch(/（王副導提出）$/)
+    const bare = describeSuggestion(backdated({}, { note: null, initiator_employee_id: null }))
+    expect(bare).toBe('10/3 補登換班：王副導改上晚車 08:30–18:00、張副導改上早車 07:00–16:30')
+  })
+
+  it('不得出現打卡或推測字樣（雙方打卡皆為 null，也不寫「沒有打卡」）', () => {
+    for (const viewer of [null, 10, 20]) {
+      const text = describeSuggestion(backdated(), viewer)
+      expect(text).not.toMatch(/打卡|推測|可能是/)
+    }
+  })
+
+  it('suggestion.proposed 為空：退回以雙方原班互換推算', () => {
+    expect(describeSuggestion(backdated({}, { proposed: [] }), null)).toContain(
+      '王副導改上晚車 08:30–18:00、張副導改上早車 07:00–16:30',
+    )
+  })
+
+  it('parties 缺姓名時退回 item 上的姓名', () => {
+    const item = backdated({}, { parties: {}, proposed: [{ employee_id: 10, shift: LATE }, { employee_id: 20, shift: BUS }] })
+    expect(describeSuggestion(item)).toContain('王副導改上晚車')
+    expect(describeSuggestion(item)).toContain('張副導改上早車')
+  })
+
+  it('系統推測的項目文案不受影響', () => {
+    expect(describeSuggestion(makeItem(), 10)).toContain('你打卡 08:31–18:02')
+  })
+
+  it('補登項目只開放「其他（說明）」；按鈕文字不再叫「改成…」', () => {
+    expect(amendKindsFor(portal({ initiated_by: 'employee', can_repair: false }))).toEqual(['other'])
+    expect(amendKindsFor(portal({ initiated_by: 'employee', can_repair: false, my_role: 'partner' }))).toEqual(['other'])
+    expect(amendButtonLabel(portal({ initiated_by: 'employee', can_repair: false }))).toBe('不對，說明原因…')
+    // 非補登維持原樣
+    expect(amendKindsFor(portal({ initiated_by: 'system' }))).toEqual(['swap_with', 'cover_for', 'leave', 'forgot_punch', 'other'])
   })
 })

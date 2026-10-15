@@ -1,6 +1,8 @@
 /**
  * 月底出勤確認的顯示與表單純函式（SPEC-026 §3.6）。
  * 推測文案範例：「10/3 你打卡 08:31–18:02，原班早車 07:00–16:30。推測：與 張副導（晚車）對調」。
+ * 老師自行補登（initiated_by=employee，SPEC-026 3-3）沒有打卡可推測，文案另寫：
+ * 「10/3 補登換班：王副導改上晚車 08:30–18:00、你改上早車 07:00–16:30（王副導提出，原因：臨時對調）」。
  */
 import type { ApiResponse } from '@/api/_generated/typed'
 import { dateToLocalISO } from '@/utils/format'
@@ -18,6 +20,13 @@ export interface PartnerChoice {
   id: number
   name: string
   kind: 'swap' | 'cover'
+}
+
+/** 老師自行補登的項目（SPEC-026 3-3）：無輪次、無打卡可配對，只能回覆「對」或「其他（說明）」。 */
+export const BACKDATED_TAG = '老師補登'
+
+export function isBackdated(item: { initiated_by: ConfirmationItem['initiated_by'] }): boolean {
+  return item.initiated_by === 'employee'
 }
 
 export const KIND_LABELS: Record<ConfirmationItem['kind'], string> = {
@@ -128,8 +137,39 @@ function partyName(s: Suggestion, id: number | null | undefined): string {
   return s.parties[String(id)]?.employee_name ?? `#${id}`
 }
 
-/** 推測文案；viewerId 為 null 時以第三人稱描述項目當事人（行政端）。 */
+/**
+ * 補登項目的對調結果：優先用 suggestion.proposed（雙方各改上哪一班）；缺時以雙方原班互換推算。
+ * 補登的雙方打卡一律為 null（BE 不存對方打卡），所以不得走 punchText／推測文案。
+ */
+function backdatedMoves(item: ConfirmationItem): Array<{ employee_id: number; shift: Shift | null | undefined }> {
+  const s = item.suggestion
+  if (s.proposed.length) return s.proposed.map((p) => ({ employee_id: p.employee_id, shift: p.shift }))
+  if (item.partner_employee_id == null) return []
+  return [
+    { employee_id: item.employee_id, shift: s.parties[String(item.partner_employee_id)]?.original },
+    { employee_id: item.partner_employee_id, shift: s.parties[String(item.employee_id)]?.original },
+  ]
+}
+
+function describeBackdated(item: ConfirmationItem, viewerId: number | null): string {
+  const s = item.suggestion
+  const nameOf = (id: number): string => {
+    if (id === viewerId) return '你'
+    const fallback = id === item.employee_id ? item.employee_name : item.partner_name
+    return s.parties[String(id)]?.employee_name ?? fallback ?? `#${id}`
+  }
+  const moves = backdatedMoves(item).map((m) => `${nameOf(m.employee_id)}改上${shiftText(m.shift)}`)
+  const note = s.note?.trim()
+  const details = [
+    s.initiator_employee_id != null ? `${nameOf(s.initiator_employee_id)}提出` : '',
+    note ? `原因：${note}` : '',
+  ].filter(Boolean)
+  return `${formatMonthDay(item.date)} 補登換班：${moves.join('、')}${details.length ? `（${details.join('，')}）` : ''}`
+}
+
+/** 推測文案；viewerId 為 null 時以第三人稱描述項目當事人（行政端）。補登項目改寫（見 describeBackdated）。 */
 export function describeSuggestion(item: ConfirmationItem, viewerId: number | null = null): string {
+  if (isBackdated(item)) return describeBackdated(item, viewerId)
   const s = item.suggestion
   const subjectId = viewerId ?? item.employee_id
   const subject = s.parties[String(subjectId)]
@@ -164,8 +204,9 @@ export function describeSuggestion(item: ConfirmationItem, viewerId: number | nu
   return `${head}打卡時間接近${near || '其他班別'}，但找不到對調或代班的同事，請選實際情況`
 }
 
-/** 只有項目當事人能重新指定對象；對象只能補請假、補卡或說明。 */
+/** 只有項目當事人能重新指定對象；對象只能補請假、補卡或說明。補登項目一律只能「其他（說明）」（BE P9）。 */
 export function amendKindsFor(item: PortalConfirmationItem): AmendKind[] {
+  if (isBackdated(item)) return ['other']
   return item.can_repair
     ? ['swap_with', 'cover_for', 'leave', 'forgot_punch', 'other']
     : ['leave', 'forgot_punch', 'other']
@@ -176,8 +217,9 @@ function isCoveredPartner(item: PortalConfirmationItem): boolean {
   return item.kind === 'cover' && item.my_role === 'partner'
 }
 
-/** 修正按鈕文案：被代班者看到的是「補請假或其他…」，其餘身分維持原本的「不對，改成…」。 */
+/** 修正按鈕文案：被代班者看到的是「補請假或其他…」；補登項目沒有可改的內容，只能說明原因；其餘維持「不對，改成…」。 */
 export function amendButtonLabel(item: PortalConfirmationItem): string {
+  if (isBackdated(item)) return '不對，說明原因…'
   return isCoveredPartner(item) ? '補請假或其他…' : '不對，改成…'
 }
 

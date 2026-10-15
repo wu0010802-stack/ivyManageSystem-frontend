@@ -292,3 +292,71 @@ describe('PortalAttendanceConfirmView', () => {
     expect(wrapper.get('[data-test="amend-11"]').text()).toBe('補請假或其他…')
   })
 })
+
+describe('PortalAttendanceConfirmView 老師補登項目（SPEC-026 3-3）', () => {
+  const reported = (id: number, name: string, original: typeof BUS) => ({
+    employee_id: id, employee_name: name, status: 'reported', punch_in: null, punch_out: null,
+    expected_start: original.work_start, expected_end: original.work_end, original,
+  })
+  const backdated = (over: Record<string, unknown> = {}) =>
+    item({
+      id: 31, round_id: null, initiated_by: 'employee', can_repair: false, my_role: 'partner',
+      needs_my_response: true, employee_response: 'agree', partner_response: 'pending',
+      suggestion: {
+        confidence: 'teacher',
+        parties: { '10': reported(10, '王副導', BUS), '20': reported(20, '張副導', LATE) },
+        proposed: [{ employee_id: 10, shift: LATE }, { employee_id: 20, shift: BUS }],
+        partner_options: [], shift_candidates: [], leave_missing: false,
+        initiator_employee_id: 10, note: '臨時對調',
+      },
+      ...over,
+    })
+
+  it('顯示「老師補登」標籤與補登文案，沒有打卡或推測字樣', async () => {
+    api.get.mockResolvedValue(view([backdated()], 1))
+    await mountView()
+    const card = wrapper.get('.attendance-confirm__card')
+    expect(card.text()).toContain('老師補登')
+    expect(card.text()).toContain('補登換班：王副導改上晚車 08:30–18:00、你改上早車 07:00–16:30（王副導提出，原因：臨時對調）')
+    expect(card.text()).not.toMatch(/打卡|推測/)
+  })
+
+  it('系統項目沒有「老師補登」標籤', async () => {
+    api.get.mockResolvedValue(view([item()], 1))
+    await mountView()
+    expect(wrapper.text()).not.toContain('老師補登')
+  })
+
+  it('可以按「對」', async () => {
+    api.get.mockResolvedValue(view([backdated()], 1))
+    api.respond.mockResolvedValue({ data: backdated({ partner_response: 'agree', needs_my_response: false, status: 'agreed' }) })
+    await mountView()
+    await wrapper.get('[data-test="agree-31"]').trigger('click')
+    await flushPromises()
+    expect(api.respond).toHaveBeenCalledWith(31, { action: 'agree' })
+  })
+
+  it('不對：只剩「其他（請說明）」，沒有改配對、補請假、補卡選項，送出為 kind=other', async () => {
+    api.get.mockResolvedValue(view([backdated()], 1))
+    api.respond.mockResolvedValue({ data: backdated({ status: 'disputed', needs_my_response: false }) })
+    await mountView()
+    expect(wrapper.get('[data-test="amend-31"]').text()).toBe('不對，說明原因…')
+    await wrapper.get('[data-test="amend-31"]').trigger('click')
+    for (const k of ['swap_with', 'cover_for', 'leave', 'forgot_punch']) {
+      expect(wrapper.find(`[data-test="amend-kind-${k}"]`).exists()).toBe(false)
+    }
+    await wrapper.get('[data-test="amend-kind-other"]').trigger('click')
+    await wrapper.get('[data-test="amend-note-31"]').setValue('那天我沒有換')
+    await wrapper.get('[data-test="amend-submit-31"]').trigger('click')
+    await flushPromises()
+    expect(api.respond).toHaveBeenCalledWith(31, { action: 'amend', amend: { kind: 'other', note: '那天我沒有換' } })
+  })
+
+  it('發起人自己的項目（已同意、等對方）：不顯示回覆按鈕', async () => {
+    api.get.mockResolvedValue(view([backdated({ my_role: 'employee', needs_my_response: false, employee_response: 'agree' })], 0))
+    await mountView()
+    expect(wrapper.find('[data-test="agree-31"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="amend-31"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('補登換班')
+  })
+})
