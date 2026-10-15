@@ -3774,6 +3774,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/confirmation-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Unrounded Confirmation Items
+         * @description 無輪次（老師自行補登）且仍待處理的確認項目（SPEC-026 3-3 T11）。
+         *
+         *     這類項目不屬於任何輪次，輪次進度看不到；行政在「老師確認」抽屜據此處理（套用／結案）。
+         *     無期限、不升級（deadline=None）。目前只支援 unrounded=true，留參數是為了日後擴充時不必改路徑。
+         */
+        get: operations["list_unrounded_confirmation_items_api_attendance_confirmation_items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/confirmation-items/{item_id}/dismiss": {
         parameters: {
             query?: never;
@@ -32472,6 +32495,8 @@ export interface components {
              * @enum {string}
              */
             source: "rotation" | "weekly" | "daily" | "swap" | "daily_off" | "employee" | "default";
+            /** Swap Confirmation Item Id */
+            swap_confirmation_item_id?: number | null;
             /** Swap Request Id */
             swap_request_id?: number | null;
             /** Work End */
@@ -46427,12 +46452,23 @@ export interface components {
          * @description POST /portal/swap-requests — 發起換班申請。
          *
          *     warnings 為週工時超時非阻斷預警（雙方任一週工時超勞基法上限即附加）。
+         *
+         *     SPEC-026 3-3：換班日已過（或今天且任一方已有打卡）時不直接生效，改建無輪次的出勤確認項目，
+         *     此時 mode="backdated"、id=None、confirmation_item_id＝項目 id，且不附週工時預警。
          */
         ScheduleSwapCreateOut: {
+            /** Confirmation Item Id */
+            confirmation_item_id?: number | null;
             /** Id */
-            id: number;
+            id?: number | null;
             /** Message */
             message: string;
+            /**
+             * Mode
+             * @default immediate
+             * @enum {string}
+             */
+            mode: "immediate" | "backdated";
             /** Warnings */
             warnings?: components["schemas"]["ScheduleWeeklyHoursWarning"][] | null;
         };
@@ -47262,8 +47298,14 @@ export interface components {
         /**
          * ShiftSwapHistoryOut
          * @description 換班歷史單筆 (GET /swap-history)。
+         *
+         *     SPEC-026 3-3：除換班申請單（source="request"）外，也合併行政已套用的老師自行補登
+         *     （source="backdated"，status 固定 "applied"）。兩種來源的 id 各自編號、會撞號，
+         *     列表 key 必須用 `${source}-${id}`；補登列另帶 confirmation_item_id（＝id）。
          */
         ShiftSwapHistoryOut: {
+            /** Confirmation Item Id */
+            confirmation_item_id?: number | null;
             /** Created At */
             created_at?: string | null;
             /** Id */
@@ -47274,6 +47316,12 @@ export interface components {
             requester_name: string;
             /** Requester Shift */
             requester_shift: string;
+            /**
+             * Source
+             * @default request
+             * @enum {string}
+             */
+            source: "request" | "backdated";
             /** Status */
             status: string;
             /** Swap Date */
@@ -49113,11 +49161,15 @@ export interface components {
              * @enum {string}
              */
             confidence: "high" | "medium" | "low" | "teacher";
+            /** Initiator Employee Id */
+            initiator_employee_id?: number | null;
             /**
              * Leave Missing
              * @default false
              */
             leave_missing: boolean;
+            /** Note */
+            note?: string | null;
             /** Parties */
             parties: {
                 [key: string]: components["schemas"]["PartyOut"];
@@ -56739,6 +56791,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttendanceCalendarOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_unrounded_confirmation_items_api_attendance_confirmation_items_get: {
+        parameters: {
+            query: {
+                end_date: string;
+                start_date: string;
+                unrounded?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationItemOut"][];
                 };
             };
             /** @description Validation Error */
