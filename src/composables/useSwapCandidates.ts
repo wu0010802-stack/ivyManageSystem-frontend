@@ -6,9 +6,12 @@
  * - roster 失敗不影響換班：降級為原本的候選清單（只是少了職務加註），不提示。
  * - 候選請求失敗才算失敗：load() 回 false，由呼叫端決定要不要 toast。
  * - 競態：使用者快速換日期時，只採用最新一次請求的結果（含較慢的 roster）；clear() 也會作廢進行中的請求。
+ * - 補登（SPEC-026 3-3）：換班日嚴格早於台北今天 → 併入 roster 時改用補登規則（沒有排定班別，含排休，不可選）。
+ *   「今天」不在此列：今天是否已打卡走補登由後端判斷，前端無從預知。
  */
 import { ref } from 'vue'
 import { getDayRoster, getSwapCandidates } from '@/api/portal'
+import { todayTaipeiISO } from '@/utils/format'
 import {
   mergeRosterIntoCandidates,
   type DayRosterEntry,
@@ -43,7 +46,7 @@ export function useSwapCandidates() {
       loading.value = false
       const roster = await rosterRequest
       if (mine !== seq) return true
-      if (roster) candidates.value = mergeRosterIntoCandidates(base, roster)
+      if (roster) candidates.value = mergeRosterIntoCandidates(base, roster, { backdated: dateStr < todayTaipeiISO() })
       return true
     } finally {
       if (mine === seq) loading.value = false

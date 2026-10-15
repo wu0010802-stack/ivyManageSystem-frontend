@@ -38,6 +38,11 @@ const { candidates, loading: candidatesLoading, load: loadCandidates, clear: cle
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六']
 
+// 過去日期（或今天已打卡）不直接改班表，而是建「補登」確認項目，對方同意後由行政套用（SPEC-026 3-3）
+const SWAP_SENT_MESSAGE = '換班申請已送出'
+const BACKDATED_SENT_MESSAGE = '已送出補登，等對方同意後由行政套用；可在「出勤確認」查看'
+const BACKDATED_SHEET_HINT = '過去日期會以補登方式送出'
+
 // ============ Calendar (composable) ============
 const { calendarWeeks, isToday, isFutureDate } = useScheduleCalendar(
   scheduleData,
@@ -73,15 +78,16 @@ const selectedDayLabel = computed(() => {
 const canSwapSelected = computed(() => {
   const d = selectedDay.value
   if (!d) return false
-  return !!d.shift_name && isFutureDate(d.date ?? '') && !d.is_weekend
+  return !!d.shift_name && !d.is_weekend
 })
 
-const swapDisabledReason = computed(() => {
+// 抽屜底下的說明：不能換的原因；能換但日期已過則提醒會走補登
+const swapSheetHint = computed(() => {
   const d = selectedDay.value
   if (!d) return ''
   if (!d.shift_name) return '此日無排班，不需申請換班'
   if (d.is_weekend) return '週末無排班，不需申請換班'
-  if (!isFutureDate(d.date ?? '')) return '換班僅限今日（含）之後的日期'
+  if (!isFutureDate(d.date ?? '')) return BACKDATED_SHEET_HINT
   return ''
 })
 
@@ -148,12 +154,13 @@ const submitSwap = async (payload: { swap_date: string; target_id: number | null
   }
   swapSubmitLoading.value = true
   try {
-    await createSwapRequest({
+    const res = await createSwapRequest({
       target_id: payload.target_id,
       swap_date: payload.swap_date,
       reason: payload.reason,
     })
-    ElMessage.success('換班申請已送出')
+    // 是否改走補登由後端判斷（含「今天已打卡」），以 response.mode 為準
+    ElMessage.success(res.data.mode === 'backdated' ? BACKDATED_SENT_MESSAGE : SWAP_SENT_MESSAGE)
     showSwapDialog.value = false
     fetchSwapRequests()
   } catch (error) {
@@ -164,33 +171,37 @@ const submitSwap = async (payload: { swap_date: string; target_id: number | null
 }
 
 // ============ Respond / Cancel ============
+// 確認框被取消／關閉不是錯誤；API 失敗才提示。失敗後一律重抓列表：
+// 例如接受時換班日已過（409），後端已把申請轉「已取消」，列表要跟著更新。
+const confirmed = (message: string) =>
+  ElMessageBox.confirm(message, '確認', { type: 'warning' }).then(
+    () => true,
+    () => false,
+  )
+
 const respondSwap = async (id: number, action: string) => {
   const label = action === 'accept' ? '接受' : '拒絕'
+  if (!(await confirmed(`確定要${label}此換班申請？`))) return
   try {
-    await ElMessageBox.confirm(`確定要${label}此換班申請？`, '確認', { type: 'warning' })
     await respondToSwap(id, action)
     ElMessage.success(`已${label}換班申請`)
     fetchSwapRequests()
     fetchSchedule()
-  } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    if (e !== 'cancel') {
-      ElMessage.error(err.response?.data?.detail || `${label}失敗`)
-    }
+  } catch (error) {
+    ElMessage.error(apiError(error, `${label}失敗`))
+    fetchSwapRequests()
   }
 }
 
 const cancelSwap = async (id: number) => {
+  if (!(await confirmed('確定要撤銷此換班申請？'))) return
   try {
-    await ElMessageBox.confirm('確定要撤銷此換班申請？', '確認', { type: 'warning' })
     await cancelSwapRequest(id)
     ElMessage.success('已撤銷')
     fetchSwapRequests()
-  } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    if (e !== 'cancel') {
-      ElMessage.error(err.response?.data?.detail || '撤銷失敗')
-    }
+  } catch (error) {
+    ElMessage.error(apiError(error, '撤銷失敗'))
+    fetchSwapRequests()
   }
 }
 
@@ -287,7 +298,7 @@ onMounted(() => {
             :disabled="!canSwapSelected"
             @click="swapFromSheet"
           >申請換班</el-button>
-          <p v-if="!canSwapSelected" class="day-sheet__hint">{{ swapDisabledReason }}</p>
+          <p v-if="swapSheetHint" class="day-sheet__hint">{{ swapSheetHint }}</p>
         </div>
       </div>
     </el-drawer>

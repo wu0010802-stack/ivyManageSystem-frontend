@@ -6,6 +6,7 @@ const { getSwapCandidates, getDayRoster } = vi.hoisted(() => ({
 }))
 vi.mock('@/api/portal', () => ({ getSwapCandidates, getDayRoster }))
 import { useSwapCandidates } from '../useSwapCandidates'
+import { todayTaipeiISO } from '@/utils/format'
 
 const cand = (id: number, name = `T${id}`) => ({
   employee_id: id, name, shift_name: '早班', work_start: '08:00', work_end: '17:00', has_pending_swap: false,
@@ -125,5 +126,41 @@ describe('useSwapCandidates', () => {
     await p
     expect(state.candidates.value).toEqual([])
     expect(state.loading.value).toBe(false)
+  })
+
+  // 補登（SPEC-026 3-3）：換班日早於台北今天 → 候選併入 roster 時改用補登規則（排休也不可選）
+  it('過去日期：排休的同事標為補登不可選', async () => {
+    getSwapCandidates.mockResolvedValue({ data: [cand(1), cand(2)] })
+    getDayRoster.mockResolvedValue({
+      data: [
+        { ...rosterRow(1, false), shift_name: null, work_start: null, work_end: null, source: 'daily_off' },
+        rosterRow(2, false),
+      ],
+    })
+    const state = useSwapCandidates()
+    await expect(state.load('2020-01-06')).resolves.toBe(true)
+    const byId = Object.fromEntries(state.candidates.value.map((c) => [c.employee_id, c]))
+    expect(byId[1]!.unavailable_reason).toBe('補登換班限雙方當天都有排定班別')
+    expect(byId[2]!.unavailable_reason).toBeUndefined()
+  })
+
+  it('未來日期：排休維持可選（3-1 規則不變）', async () => {
+    getSwapCandidates.mockResolvedValue({ data: [cand(1)] })
+    getDayRoster.mockResolvedValue({
+      data: [{ ...rosterRow(1, false), shift_name: null, work_start: null, work_end: null, source: 'daily_off' }],
+    })
+    const state = useSwapCandidates()
+    await expect(state.load('2099-01-04')).resolves.toBe(true)
+    expect(state.candidates.value[0]!.unavailable_reason).toBeUndefined()
+  })
+
+  it('今天不算補登日（BE 以是否已打卡決定，前端無從預知）：排休維持可選', async () => {
+    getSwapCandidates.mockResolvedValue({ data: [cand(1)] })
+    getDayRoster.mockResolvedValue({
+      data: [{ ...rosterRow(1, false), shift_name: null, work_start: null, work_end: null, source: 'daily_off' }],
+    })
+    const state = useSwapCandidates()
+    await expect(state.load(todayTaipeiISO())).resolves.toBe(true)
+    expect(state.candidates.value[0]!.unavailable_reason).toBeUndefined()
   })
 })

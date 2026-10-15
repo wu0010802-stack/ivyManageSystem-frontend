@@ -39,6 +39,11 @@ const STUBS = {
     props: ['modelValue', 'type', 'rows', 'placeholder'],
     emits: ['update:modelValue'],
   },
+  // data-test 由元件端傳入（fallthrough attrs），title 以文字輸出供斷言
+  ElAlert: {
+    template: '<div>{{ title }}<slot /></div>',
+    props: ['type', 'closable', 'showIcon', 'title'],
+  },
   ElButton: {
     template: '<button :disabled="disabled" :data-loading="loading" @click="$emit(\'click\')"><slot /></button>',
     props: ['disabled', 'loading', 'type', 'size'],
@@ -297,5 +302,65 @@ describe('ScheduleSwapDialog', () => {
     expect(submitBtn().attributes('disabled')).toBeDefined()
     w.vm.submit()
     expect(w.emitted('submit')).toBeUndefined()
+  })
+})
+
+describe('ScheduleSwapDialog 補登模式（SPEC-026 3-3 T5）', () => {
+  const BACKDATE_HINT = '過去日期會送出「補登」：對方同意後由行政套用'
+  const EMPTY_HINT = '這一天沒有輪值名單內的同事，無法補登；請洽行政'
+  const mountDialog = (props, isMobile = false) =>
+    mount(ScheduleSwapDialog, {
+      props: { modelValue: true, isMobile, loading: false, ...props },
+      global: { stubs: STUBS },
+    })
+
+  it('日期選擇器不再停用過去日期', () => {
+    const w = mountDialog({ initialDate: '2020-01-06', candidates: CANDIDATES })
+    const disabledDate = w.findComponent('[data-test="date-picker"]').props('disabledDate')
+    // 不傳 disabled-date 或一律回 false 都算開放；真正的上限留給後端封存守衛
+    expect(disabledDate === undefined || disabledDate(new Date('2020-01-06')) === false).toBe(true)
+  })
+
+  it.each([
+    ['桌面', false],
+    ['手機', true],
+  ])('選過去日期：顯示補登提示（%s）', (_name, isMobile) => {
+    const w = mountDialog({ initialDate: '2020-01-06', candidates: CANDIDATES }, isMobile)
+    expect(w.find('[data-test="backdate-alert"]').text()).toContain(BACKDATE_HINT)
+  })
+
+  it('選未來日期：不顯示補登提示', () => {
+    const w = mountDialog({ initialDate: '2099-01-05', candidates: CANDIDATES })
+    expect(w.find('[data-test="backdate-alert"]').exists()).toBe(false)
+  })
+
+  it('尚未選日期：不顯示補登提示', () => {
+    const w = mountDialog({ initialDate: '', candidates: [] })
+    expect(w.find('[data-test="backdate-alert"]').exists()).toBe(false)
+    expect(w.text()).not.toContain(EMPTY_HINT)
+  })
+
+  it('過去日期且候選為空：說明沒有輪值名單內的同事', () => {
+    const w = mountDialog({ initialDate: '2020-01-06', candidates: [] })
+    expect(w.text()).toContain(EMPTY_HINT)
+  })
+
+  it('過去日期但候選還在載入：先不下結論（不顯示空名單文案）', () => {
+    const w = mountDialog({ initialDate: '2020-01-06', candidates: [], candidatesLoading: true })
+    expect(w.text()).not.toContain(EMPTY_HINT)
+  })
+
+  it('未來日期候選為空：不顯示補登專用的空名單文案', () => {
+    const w = mountDialog({ initialDate: '2099-01-05', candidates: [] })
+    expect(w.text()).not.toContain(EMPTY_HINT)
+  })
+
+  it('過去日期仍可正常送出（payload 不變，是否補登由後端決定）', async () => {
+    const w = mountDialog({ initialDate: '2020-01-06', candidates: CANDIDATES })
+    await w.vm.$nextTick()
+    w.vm.form.target_id = 5
+    await w.vm.$nextTick()
+    await w.findAll('button').find((b) => b.text().includes('送出')).trigger('click')
+    expect(w.emitted('submit')[0][0]).toEqual({ swap_date: '2020-01-06', target_id: 5, reason: '' })
   })
 })

@@ -55,8 +55,9 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
           </div>
           <!-- 換班按鈕：desktop only；mobile 改走 cell-click BottomSheet -->
           <!-- 用 div 攔截 click 冒泡，避免同時觸發 cell-click -->
+          <!-- 過去日期也開放（SPEC-026 3-3）：後端改建「補登」確認項目，鈕文字改為「補登換班」 -->
           <div
-            v-if="day.shift_name && isFutureDate(day.date ?? '') && !day.is_weekend"
+            v-if="day.shift_name && !day.is_weekend"
             class="cell-swap-btn-wrap"
             @click.stop
           >
@@ -66,7 +67,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
               link
               class="cell-swap-btn"
               @click="emit('swap-click', day)"
-            >換班</el-button>
+            >{{ isFutureDate(day.date ?? '') ? '換班' : '補登換班' }}</el-button>
           </div>
         </template>
       </div>

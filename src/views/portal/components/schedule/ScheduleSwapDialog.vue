@@ -2,6 +2,10 @@
 /**
  * ScheduleSwapDialog — 換班申請表單
  *
+ * 日期不設下限（SPEC-026 3-3）：選到過去日期時後端會改建「補登」確認項目（對方同意後由行政套用），
+ * 這裡只負責提示；「今天且已打卡」是否走補登由後端判斷，前端無從預知，改靠送出後的 response.mode。
+ * 太久以前的日期留給後端的薪資封存守衛擋，前端不設上限。
+ *
  * Mobile：使用 TeacherBottomSheet（snap mid/full）
  * Desktop：使用 el-dialog
  *
@@ -23,6 +27,10 @@
 import { computed, ref, watch } from 'vue'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 import { SAME_TIME_HINT } from '@/utils/swapRoster'
+import { todayTaipeiISO } from '@/utils/format'
+
+const BACKDATE_HINT = '過去日期會送出「補登」：對方同意後由行政套用'
+const EMPTY_ROSTER_HINT = '這一天沒有輪值名單內的同事，無法補登；請洽行政'
 
 interface SwapCandidate { employee_id?: number; name?: string; shift_name?: string; work_start?: string; work_end?: string; has_pending_swap?: boolean; duty_label?: string; same_time?: boolean; unavailable_reason?: string; [key: string]: unknown }
 
@@ -72,10 +80,12 @@ const onDateChange = (val: string) => {
   emit('date-change', val)
 }
 
-// 今天凌晨，用於停用過去日期
-const todayMidnight = new Date()
-todayMidnight.setHours(0, 0, 0, 0)
-const disabledDate = (d: Date) => d < todayMidnight
+// 換班日早於台北今天 → 走補登
+const isBackdated = computed(() => !!form.value.date && form.value.date < todayTaipeiISO())
+// 補登的人員範圍是該日輪值名單：候選載入完仍是空的 → 沒有人可補登，明講免得老師以為壞掉
+const showEmptyRosterHint = computed(
+  () => isBackdated.value && !props.candidatesLoading && !props.candidates?.length,
+)
 
 function submit() {
   if (!canSubmit.value) return
@@ -113,6 +123,15 @@ function optionLabel(c: SwapCandidate): string {
     default-snap="mid"
   >
     <div class="swap-form">
+      <el-alert
+        v-if="isBackdated"
+        data-test="backdate-alert"
+        class="swap-backdate-alert"
+        type="info"
+        :closable="false"
+        show-icon
+        :title="BACKDATE_HINT"
+      />
       <!-- 手機與其他申請表單一致：標籤在上、日期面板貼齊畫面底部（09-03 漏套這張） -->
       <el-form label-position="top">
         <el-form-item label="換班日期" required>
@@ -122,7 +141,6 @@ function optionLabel(c: SwapCandidate): string {
             type="date"
             placeholder="選擇日期"
             value-format="YYYY-MM-DD"
-            :disabled-date="disabledDate"
             style="width: 100%"
             @change="onDateChange"
           />
@@ -149,6 +167,7 @@ function optionLabel(c: SwapCandidate): string {
               </span>
             </el-option>
           </el-select>
+          <p v-if="showEmptyRosterHint" data-test="empty-roster-hint" class="swap-empty-hint">{{ EMPTY_ROSTER_HINT }}</p>
         </el-form-item>
         <el-form-item label="原因">
           <el-input v-model="form.reason" type="textarea" :rows="2" placeholder="選填" />
@@ -173,6 +192,15 @@ function optionLabel(c: SwapCandidate): string {
     title="發起換班申請"
     width="500px"
   >
+    <el-alert
+      v-if="isBackdated"
+      data-test="backdate-alert"
+      class="swap-backdate-alert"
+      type="info"
+      :closable="false"
+      show-icon
+      :title="BACKDATE_HINT"
+    />
     <el-form label-width="80px">
       <el-form-item label="換班日期">
         <el-date-picker
@@ -180,7 +208,6 @@ function optionLabel(c: SwapCandidate): string {
           type="date"
           placeholder="選擇日期"
           value-format="YYYY-MM-DD"
-          :disabled-date="disabledDate"
           style="width: 100%"
           @change="onDateChange"
         />
@@ -207,6 +234,7 @@ function optionLabel(c: SwapCandidate): string {
             </span>
           </el-option>
         </el-select>
+        <p v-if="showEmptyRosterHint" data-test="empty-roster-hint" class="swap-empty-hint">{{ EMPTY_ROSTER_HINT }}</p>
       </el-form-item>
       <el-form-item label="原因">
         <el-input v-model="form.reason" type="textarea" :rows="2" placeholder="選填" />
@@ -227,5 +255,15 @@ function optionLabel(c: SwapCandidate): string {
 <style scoped>
 .swap-form {
   padding: var(--space-2) 0;
+}
+
+.swap-backdate-alert {
+  margin-bottom: var(--space-3);
+}
+
+.swap-empty-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--el-color-danger);
 }
 </style>

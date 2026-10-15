@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BACKFILL_NO_SHIFT_HINT,
   NO_SHIFT_HINT,
   SAME_TIME_HINT,
   formatRosterDuty,
@@ -112,5 +113,39 @@ describe('mergeRosterIntoCandidates', () => {
       const out = mergeRosterIntoCandidates([cand(9, '外人')], [entry({ employee_id: 1, shift_name: null, source: 'employee' })])
       expect('unavailable_reason' in out[0]!).toBe(false)
     })
+  })
+})
+
+// 補登（SPEC-026 3-3 P4）：套用時雙方互換各自的原班，任一方沒有排定班別（含排休）就無從互換。
+describe('補登模式（backdated: true）：沒有排定班別一律不可選', () => {
+  // 用字面值而非常數斷言：常數若漏匯出會是 undefined，與「未標記」的 undefined 無從區分
+  const HINT = '補登換班限雙方當天都有排定班別'
+  const cand = (id: number) => ({ employee_id: id, name: `T${id}`, shift_name: '未排班', has_pending_swap: false })
+  const merged = (over: Partial<DayRosterEntry>, backdated: boolean) =>
+    mergeRosterIntoCandidates([cand(1)], [entry({ employee_id: 1, ...over })], { backdated })[0]!
+
+  it('提示文案常數', () => {
+    expect(BACKFILL_NO_SHIFT_HINT).toBe('補登換班限雙方當天都有排定班別')
+  })
+
+  it('明確排休（daily_off）在補登模式也不可選，原因為補登專用文案', () => {
+    expect(merged({ shift_name: null, source: 'daily_off', work_start: null, work_end: null }, true).unavailable_reason).toBe(HINT)
+  })
+
+  it('個人工時／預設時段（無班別）→ 補登專用文案（非 3-1 文案）', () => {
+    expect(merged({ shift_name: null, source: 'employee', work_start: '09:00', work_end: '18:00' }, true).unavailable_reason).toBe(HINT)
+    expect(merged({ shift_name: null, source: 'default', work_start: '08:00', work_end: '17:00' }, true).unavailable_reason).toBe(HINT)
+  })
+
+  it('有班別名稱 → 補登模式仍可選', () => {
+    expect(merged({}, true).unavailable_reason).toBeUndefined()
+  })
+
+  it('backdated 為 false（或不傳）時沿用 3-1：排休仍可選', () => {
+    const dayOff = { shift_name: null, source: 'daily_off', work_start: null, work_end: null } as const
+    expect(merged(dayOff, false).unavailable_reason).toBeUndefined()
+    expect(
+      mergeRosterIntoCandidates([cand(1)], [entry({ employee_id: 1, ...dayOff })])[0]!.unavailable_reason,
+    ).toBeUndefined()
   })
 })

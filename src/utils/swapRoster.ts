@@ -32,6 +32,8 @@ export type SwapCandidateView = SwapCandidateBase & RosterAnnotation
 
 export const SAME_TIME_HINT = '時段相同，不用登記'
 export const NO_SHIFT_HINT = '對方當天沒有排定班別，無法換班'
+/** 補登模式（SPEC-026 3-3 P4）：套用時雙方互換各自的原班，任一方沒有排定班別（含排休）就無從互換。 */
+export const BACKFILL_NO_SHIFT_HINT = '補登換班限雙方當天都有排定班別'
 
 /**
  * 對方當天沒有排定班別（無 ShiftType）且不是明確排休＝實際走個人工時／預設時段在上班。
@@ -40,6 +42,11 @@ export const NO_SHIFT_HINT = '對方當天沒有排定班別，無法換班'
  */
 function hasNoScheduledShift(entry: DayRosterEntry): boolean {
   return entry.shift_name == null && entry.source !== 'daily_off'
+}
+
+function unavailableAnnotation(entry: DayRosterEntry, backdated: boolean): Pick<RosterAnnotation, 'unavailable_reason'> {
+  if (backdated) return entry.shift_name == null ? { unavailable_reason: BACKFILL_NO_SHIFT_HINT } : {}
+  return hasNoScheduledShift(entry) ? { unavailable_reason: NO_SHIFT_HINT } : {}
 }
 
 /** 同事當日職務的顯示文字：排休／班別名稱＋時段／個人工時＋時段／未排班（預設）。 */
@@ -54,10 +61,14 @@ export function formatRosterDuty(entry: DayRosterEntry): string {
 /**
  * 以 employee_id 把 roster 併進候選：加註 duty_label／same_time，並把時段相同者穩定地排到最後。
  * roster 沒有的候選原樣保留（例如 roster 載入失敗時整批不加註）。
+ *
+ * backdated＝換班日早於今天（走補登）：沒有排定班別的人一律不可選，連明確排休也不行；
+ * 其餘維持 3-1 規則（排休是合法的換休）。
  */
 export function mergeRosterIntoCandidates<T extends { employee_id?: number }>(
   candidates: readonly T[],
   roster: readonly DayRosterEntry[],
+  { backdated = false }: { backdated?: boolean } = {},
 ): Array<T & RosterAnnotation> {
   const byId = new Map(roster.map((r) => [r.employee_id, r]))
   const annotated = candidates.map((c): T & RosterAnnotation => {
@@ -67,7 +78,7 @@ export function mergeRosterIntoCandidates<T extends { employee_id?: number }>(
           ...c,
           duty_label: formatRosterDuty(hit),
           same_time: hit.same_time_as_me,
-          ...(hasNoScheduledShift(hit) ? { unavailable_reason: NO_SHIFT_HINT } : {}),
+          ...unavailableAnnotation(hit, backdated),
         }
       : { ...c }
   })
