@@ -3,6 +3,9 @@
  * 打卡核對頁的「月底出勤確認」列（SPEC-026 §3.6）：發送、進度、重新推測、套用雙方已確認。
  * 老師的回覆只是證詞；唯一寫入班表的動作是「套用雙方已確認」（後端逐項走 confirm_shifts）。
  * 不發推播（D4）：發送後請行政口頭提醒老師上系統確認。
+ *
+ * 「老師自行補登」區塊（SPEC-026 3-3）：老師自行登記的過去日期換班是無輪次項目，輪次進度看不到，
+ * 所以獨立於輪次分支另列（沒有任何輪次時也顯示），套用與結案重用同一組流程。
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -14,6 +17,7 @@ import {
   dismissConfirmationItem,
   getConfirmationRound,
   listConfirmationRounds,
+  listUnroundedConfirmationItems,
   refreshConfirmationRound,
   updateConfirmationRound,
 } from '@/api/attendanceConfirmation'
@@ -79,6 +83,28 @@ const agreedIds = computed(
 )
 const agreedCount = computed(() => agreedIds.value.length)
 const agreedItems = computed(() => detail.value?.items.filter((i) => i.status === 'agreed') ?? [])
+
+// ---- 老師自行補登（無輪次）----
+const backdated = ref<ConfirmationItem[]>([])
+const backdatedError = ref(false)
+// 雙方已確認的預設全勾（套用前一定會先預覽並確認）；只記「被取消勾選」的，重讀後新出現的項目才會預設勾選
+const unchecked = ref<ReadonlySet<number>>(new Set())
+const backdatedAgreed = computed(() => backdated.value.filter((i) => i.status === 'agreed' && i.id != null))
+const backdatedSelectedIds = computed(() =>
+  backdatedAgreed.value.flatMap((i) => (i.id != null && !unchecked.value.has(i.id) ? [i.id] : [])),
+)
+
+function isBackdatedChecked(item: ConfirmationItem): boolean {
+  return item.id != null && !unchecked.value.has(item.id)
+}
+
+function toggleBackdated(item: ConfirmationItem, checked: unknown) {
+  if (item.id == null) return
+  const next = new Set(unchecked.value)
+  if (checked) next.delete(item.id)
+  else next.add(item.id)
+  unchecked.value = next
+}
 const summary = computed(() => {
   const employees = detail.value?.employees ?? []
   return {
@@ -110,7 +136,7 @@ function errorText(e: unknown): string {
 }
 
 let seq = 0
-async function load() {
+async function loadRound() {
   const mine = ++seq
   loading.value = true
   try {
@@ -131,6 +157,26 @@ async function load() {
   } finally {
     if (mine === seq) loading.value = false
   }
+}
+
+// 補登清單與輪次各自讀、各自防亂序；讀不到補登清單只顯示一行失敗提示，不影響輪次區塊
+let backdatedSeq = 0
+async function loadBackdated() {
+  const mine = ++backdatedSeq
+  try {
+    const res = await listUnroundedConfirmationItems({ start_date: props.start, end_date: props.end })
+    if (mine !== backdatedSeq) return
+    backdated.value = res.data
+    backdatedError.value = false
+  } catch {
+    if (mine !== backdatedSeq) return
+    backdated.value = []
+    backdatedError.value = true
+  }
+}
+
+async function load() {
+  await Promise.all([loadRound(), loadBackdated()])
 }
 
 watch(() => [props.start, props.end], () => void load(), { immediate: true })
@@ -183,10 +229,11 @@ async function refresh() {
   }
 }
 
-async function planApply() {
+// 預覽的 item_ids 由呼叫端決定：輪次的「套用雙方已確認」帶本輪 agreed，補登區塊帶勾選的；之後共用同一個確認對話框
+async function planApplyFor(ids: number[]) {
   busy.value = true
   try {
-    applyPlan.value = (await applyAgreedConfirmations({ dry_run: true, item_ids: agreedIds.value })).data
+    applyPlan.value = (await applyAgreedConfirmations({ dry_run: true, item_ids: ids })).data
     applyOpen.value = true
   } catch (e) {
     ElMessage.error(errorText(e))
@@ -194,6 +241,8 @@ async function planApply() {
     busy.value = false
   }
 }
+
+const planApply = () => planApplyFor(agreedIds.value)
 
 async function confirmApply() {
   busy.value = true
@@ -352,6 +401,48 @@ async function dismissItem(item: ConfirmationItem) {
         </template>
       </div>
     </template>
+
+    <div v-if="backdated.length" class="confirm-bar__backdated" data-test="backdated-section">
+      <h4 class="confirm-bar__subhead">老師自行補登（{{ backdated.length }}）</h4>
+      <p class="confirm-bar__hint">
+        老師自行登記的過去日期換班，不屬於任何輪次；對方同意後才能套用，套用時才寫入班表。
+      </p>
+      <ul class="confirm-bar__list">
+        <li v-for="item in backdated" :key="item.id ?? 0" :data-test="`backdated-item-${item.id}`">
+          <el-checkbox
+            v-if="canWrite && item.status === 'agreed' && item.id != null"
+            :model-value="isBackdatedChecked(item)"
+            :data-test="`backdated-check-${item.id}`"
+            @change="toggleBackdated(item, $event)"
+          />
+          {{ describeSuggestion(item) }}
+          <el-tag size="small" :type="STATUS_TAG_TYPE[item.status]">{{ STATUS_LABELS[item.status] }}</el-tag>
+          <p v-if="describeResolution(item)" class="confirm-bar__resolution">{{ describeResolution(item) }}</p>
+          <el-button
+            v-if="canWrite && item.id != null && (item.status === 'agreed' || item.status === 'disputed')"
+            size="small"
+            text
+            :data-test="`backdated-dismiss-${item.id}`"
+            @click="dismissItem(item)"
+          >
+            {{ item.status === 'agreed' ? '不套用，結案' : '結案' }}
+          </el-button>
+        </li>
+      </ul>
+      <el-button
+        v-if="canWrite && backdatedAgreed.length"
+        type="primary"
+        :disabled="backdatedSelectedIds.length === 0"
+        :loading="busy"
+        data-test="backdated-plan-apply"
+        @click="planApplyFor(backdatedSelectedIds)"
+      >
+        套用選取（{{ backdatedSelectedIds.length }}）
+      </el-button>
+    </div>
+    <p v-else-if="backdatedError" class="confirm-bar__line" data-test="backdated-error">
+      讀取老師補登項目失敗，請稍後重新整理。
+    </p>
 
     <el-dialog v-model="createOpen" title="發給老師確認" width="640px">
       <el-form label-position="top" class="confirm-bar__grid">
@@ -523,5 +614,13 @@ async function dismissItem(item: ConfirmationItem) {
 .confirm-bar__resolution {
   margin: 2px 0 6px;
   color: var(--el-text-color-secondary);
+}
+.confirm-bar__backdated {
+  flex: 1 1 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.confirm-bar__backdated .confirm-bar__subhead {
+  margin-top: 0;
 }
 </style>

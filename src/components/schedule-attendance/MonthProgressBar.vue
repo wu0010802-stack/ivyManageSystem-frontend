@@ -41,9 +41,9 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
-import { getConfirmationRound, listConfirmationRounds } from '@/api/attendanceConfirmation'
+import { getConfirmationRound, listConfirmationRounds, listUnroundedConfirmationItems } from '@/api/attendanceConfirmation'
 import type { MonthGridState } from '@/composables/useMonthGrid'
-import { pickDisplayRound, roundStatusText } from '@/utils/attendanceConfirm'
+import { backdatedPendingCount, pickDisplayRound, roundStatusText, withBackdatedPending } from '@/utils/attendanceConfirm'
 import { hasPermission } from '@/utils/auth'
 import { importProgress, isIssue, uncoveredDates } from '@/utils/scheduleAttendanceGrid'
 
@@ -82,14 +82,26 @@ const roundsOpen = ref(false)
 // 跟著整月資料重讀：換月、明細處理、關閉確認抽屜（頁面遞增 revision）後都會更新。
 const roundStatus = ref('')
 let roundSeq = 0
+
+/** 老師自行補登中行政要動手的筆數（SPEC-026 3-3）。補登清單讀不到只是少了這段，不影響輪次狀態。 */
+async function loadBackdatedPending(start: string, end: string): Promise<number> {
+  try {
+    return backdatedPendingCount((await listUnroundedConfirmationItems({ start_date: start, end_date: end })).data)
+  } catch {
+    return 0
+  }
+}
+
 async function loadRoundStatus(): Promise<void> {
   if (!canConfirmRounds) return
   const current = ++roundSeq
   const { start, end } = range.value
   try {
+    const backdated = loadBackdatedPending(start, end)
     const round = pickDisplayRound((await listConfirmationRounds({ start_date: start, end_date: end })).data)
     const employees = round?.status === 'open' ? (await getConfirmationRound(round.id)).data.employees : null
-    if (current === roundSeq) roundStatus.value = roundStatusText(round, employees)
+    const text = withBackdatedPending(roundStatusText(round, employees), await backdated)
+    if (current === roundSeq) roundStatus.value = text
   } catch {
     if (current === roundSeq) roundStatus.value = ''
   }

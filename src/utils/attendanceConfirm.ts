@@ -294,3 +294,16 @@ export function roundStatusText(
   const replied = list.filter((e) => e.awaiting_response === 0).length
   return `確認中・已回覆 ${replied}/${list.length}`
 }
+
+/**
+ * ④ 老師確認的「補登待處理」數（SPEC-026 3-3 P18）：無輪次的老師自行補登中，行政要動手的——
+ * 雙方已確認（待套用）與轉行政（待處理）。等對方回覆的還輪不到行政，不算。
+ */
+export function backdatedPendingCount(items: ReadonlyArray<{ status: ConfirmationItem['status'] }>): number {
+  return items.filter((i) => i.status === 'agreed' || i.status === 'disputed').length
+}
+
+/** 輪次狀態文字後接補登待處理數；0 筆不附加。 */
+export function withBackdatedPending(statusText: string, pending: number): string {
+  return pending > 0 ? `${statusText}・補登待處理 ${pending}` : statusText
+}

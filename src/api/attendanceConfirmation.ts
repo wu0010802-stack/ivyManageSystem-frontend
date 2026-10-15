@@ -50,3 +50,12 @@ export const dismissConfirmationItem = (
   body: ApiBody<'/attendance/confirmation-items/{item_id}/dismiss', 'post'>,
 ): AxiosResp<'/attendance/confirmation-items/{item_id}/dismiss', 'post'> =>
   api.post(`/attendance/confirmation-items/${itemId}/dismiss`, body)
+
+/**
+ * 無輪次（老師自行補登）且仍待處理的確認項目（SPEC-026 3-3 T11）。
+ * 這類項目不屬於任何輪次，輪次進度看不到；後端要求 unrounded=true（不帶或 false 會 400），由這裡固定帶上。
+ */
+export const listUnroundedConfirmationItems = (
+  params: Omit<ApiQuery<'/attendance/confirmation-items', 'get'>, 'unrounded'>,
+): AxiosResp<'/attendance/confirmation-items', 'get'> =>
+  api.get('/attendance/confirmation-items', { params: { ...params, unrounded: true } })

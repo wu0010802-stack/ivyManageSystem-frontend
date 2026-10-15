@@ -5,7 +5,7 @@ import ConfirmationRoundBar from '@/components/attendance/ConfirmationRoundBar.v
 
 const api = vi.hoisted(() => ({
   list: vi.fn(), create: vi.fn(), get: vi.fn(), refresh: vi.fn(), apply: vi.fn(),
-  update: vi.fn(), close: vi.fn(), dismiss: vi.fn(),
+  update: vi.fn(), close: vi.fn(), dismiss: vi.fn(), unrounded: vi.fn(),
 }))
 const perm = vi.hoisted(() => ({ allow: true }))
 vi.mock('@/api/attendanceConfirmation', () => ({
@@ -17,6 +17,7 @@ vi.mock('@/api/attendanceConfirmation', () => ({
   updateConfirmationRound: api.update,
   closeConfirmationRound: api.close,
   dismissConfirmationItem: api.dismiss,
+  listUnroundedConfirmationItems: api.unrounded,
 }))
 vi.mock('@/utils/auth', () => ({ hasPermission: () => perm.allow }))
 
@@ -69,6 +70,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-02T10:00:00+08:00'))
   perm.allow = true
   Object.values(api).forEach((fn) => fn.mockReset())
+  api.unrounded.mockResolvedValue({ data: [] })
 })
 afterEach(() => {
   wrapper?.unmount()
@@ -309,5 +311,170 @@ describe('ConfirmationRoundBar', () => {
     await flushPromises()
     expect(promptSpy).toHaveBeenCalled()
     expect(api.dismiss).toHaveBeenCalledWith(21, { note: '已處理' })
+  })
+})
+
+// 老師自行補登（SPEC-026 3-3 T11）：無輪次、不屬於任何輪次進度，獨立於輪次分支顯示。
+describe('ConfirmationRoundBar 老師自行補登區塊', () => {
+  const reported = (id: number, name: string, original: typeof BUS) => ({
+    employee_id: id, employee_name: name, status: 'reported', punch_in: null, punch_out: null,
+    expected_start: original.work_start, expected_end: original.work_end, original,
+  })
+  const backdated = (over: Record<string, unknown> = {}) => ({
+    id: 31, round_id: null, employee_id: 10, employee_name: '王副導', partner_employee_id: 20, partner_name: '張副導',
+    date: '2026-09-09', kind: 'swap',
+    suggestion: {
+      confidence: 'teacher',
+      parties: { '10': reported(10, '王副導', BUS), '20': reported(20, '張副導', LATE) },
+      proposed: [{ employee_id: 10, shift: LATE }, { employee_id: 20, shift: BUS }],
+      partner_options: [], shift_candidates: [], leave_missing: false,
+      initiator_employee_id: 10, note: '臨時對調',
+    },
+    employee_response: 'agree', partner_response: 'agree', resolution: null, status: 'agreed',
+    escalated: false, linked_leave_id: null, linked_punch_correction_id: null, initiated_by: 'employee', applied_at: null,
+    ...over,
+  })
+  const SECTION = '[data-test="backdated-section"]'
+  const planResult = (ids: number[]) => ({
+    data: {
+      planned: ids.map((id) => ({ item_id: id, date: '2026-09-09', kind: 'swap', changes: [{ employee_id: 10, employee_name: '王副導', from_shift: BUS, to_shift: LATE }] })),
+      applied: [], skipped: [], superseded: [], failed: [],
+    },
+  })
+
+  it('沒有任何輪次時照樣列出，並以本期間查詢', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    api.unrounded.mockResolvedValue({
+      data: [backdated(), backdated({ id: 32, status: 'disputed', partner_response: 'amend' }), backdated({ id: 33, status: 'pending', partner_response: 'pending' })],
+    })
+    mountBar()
+    await flushPromises()
+    expect(api.unrounded).toHaveBeenCalledWith({ start_date: '2026-09-01', end_date: '2026-09-30' })
+    const section = wrapper.get(SECTION).text()
+    expect(section).toContain('老師自行補登')
+    expect(section.match(/補登換班：王副導改上晚車 08:30–18:00、張副導改上早車 07:00–16:30（王副導提出，原因：臨時對調）/g)).toHaveLength(3)
+    expect(section).not.toMatch(/打卡|推測/)
+    // 輪次區塊不受影響
+    expect(wrapper.find('[data-test="open-create"]').exists()).toBe(true)
+  })
+
+  it('有輪次時兩塊並存', async () => {
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS })
+    api.unrounded.mockResolvedValue({ data: [backdated()] })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.get('[data-test="round-summary"]').text()).toContain('確認輪次 #7')
+    expect(wrapper.find(SECTION).exists()).toBe(true)
+    // 輪次的「套用雙方已確認」只算輪次內的，不含補登
+    expect(wrapper.get('[data-test="plan-apply"]').text()).toContain('套用雙方已確認（1）')
+  })
+
+  it('沒有補登項目：不顯示區塊', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.find(SECTION).exists()).toBe(false)
+  })
+
+  it('讀取失敗：不顯示區塊，改顯示一行失敗提示', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    api.unrounded.mockRejectedValue(new Error('boom'))
+    mountBar()
+    await flushPromises()
+    expect(wrapper.find(SECTION).exists()).toBe(false)
+    expect(wrapper.get('[data-test="backdated-error"]').text()).toContain('讀取老師補登項目失敗')
+  })
+
+  it('雙方已確認的預設全勾，套用只送勾選的 id；套用後重讀清單', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    api.unrounded.mockResolvedValue({ data: [backdated(), backdated({ id: 34 }), backdated({ id: 32, status: 'disputed' })] })
+    api.apply.mockResolvedValueOnce(planResult([31]))
+      .mockResolvedValueOnce({ data: { planned: [], applied: [31], skipped: [], superseded: [], failed: [] } })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.get('[data-test="backdated-plan-apply"]').text()).toContain('套用選取（2）')
+    // 取消勾選 34 → 只剩 31
+    await wrapper.get('[data-test="backdated-check-34"] input').setValue(false)
+    expect(wrapper.get('[data-test="backdated-plan-apply"]').text()).toContain('套用選取（1）')
+    await wrapper.get('[data-test="backdated-plan-apply"]').trigger('click')
+    await flushPromises()
+    expect(api.apply).toHaveBeenNthCalledWith(1, { dry_run: true, item_ids: [31] })
+    // 接著走既有確認對話框
+    expect(wrapper.get('[data-test="apply-plan"]').text()).toContain('王副導 早車 → 晚車')
+    await wrapper.get('[data-test="confirm-apply"]').trigger('click')
+    await flushPromises()
+    expect(api.apply).toHaveBeenNthCalledWith(2, { dry_run: false, item_ids: [31] })
+    expect(api.unrounded).toHaveBeenCalledTimes(2)
+  })
+
+  it('全部取消勾選：套用鈕停用', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    api.unrounded.mockResolvedValue({ data: [backdated()] })
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="backdated-check-31"] input').setValue(false)
+    expect(wrapper.get('[data-test="backdated-plan-apply"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('只有轉行政或等對方回覆的項目：沒有套用鈕與勾選框', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    api.unrounded.mockResolvedValue({ data: [backdated({ id: 32, status: 'disputed' }), backdated({ id: 33, status: 'pending' })] })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.find('[data-test="backdated-plan-apply"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="backdated-check-32"]').exists()).toBe(false)
+  })
+
+  it('轉行政的項目可結案，結案後重讀清單', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    api.unrounded.mockResolvedValue({ data: [backdated({ id: 32, status: 'disputed', partner_response: 'amend', resolution: { kind: 'other', note: '那天我沒換', by_role: 'partner' } })] })
+    const promptSpy = vi.spyOn(ElMessageBox, 'prompt').mockResolvedValue({ value: '已電話確認', action: 'confirm' } as never)
+    api.dismiss.mockResolvedValueOnce({ data: backdated({ id: 32, status: 'dismissed' }) })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.get(SECTION).text()).toContain('說明：那天我沒換')
+    await wrapper.get('[data-test="backdated-dismiss-32"]').trigger('click')
+    await flushPromises()
+    expect(promptSpy).toHaveBeenCalled()
+    expect(api.dismiss).toHaveBeenCalledWith(32, { note: '已電話確認' })
+    expect(api.unrounded).toHaveBeenCalledTimes(2)
+  })
+
+  it('雙方已確認的項目也可「不套用，結案」', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    api.unrounded.mockResolvedValue({ data: [backdated()] })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.find('[data-test="backdated-dismiss-31"]').exists()).toBe(true)
+  })
+
+  it('沒有 ATTENDANCE_WRITE：仍列出，但沒有勾選框與任何動作鈕', async () => {
+    perm.allow = false
+    api.list.mockResolvedValue({ data: [] })
+    api.unrounded.mockResolvedValue({ data: [backdated(), backdated({ id: 32, status: 'disputed' })] })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.find(SECTION).exists()).toBe(true)
+    for (const sel of ['backdated-plan-apply', 'backdated-check-31', 'backdated-dismiss-31', 'backdated-dismiss-32']) {
+      expect(wrapper.find(`[data-test="${sel}"]`).exists()).toBe(false)
+    }
+  })
+
+  it('換月時重新查詢；較慢的舊月份回應不得覆蓋新月份', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    let resolveOld!: (v: unknown) => void
+    api.unrounded
+      .mockImplementationOnce(() => new Promise((r) => { resolveOld = r }))
+      .mockResolvedValueOnce({ data: [backdated({ id: 41 })] })
+    mountBar()
+    await flushPromises()
+    await wrapper.setProps({ start: '2026-10-01', end: '2026-10-31' })
+    await flushPromises()
+    expect(api.unrounded).toHaveBeenLastCalledWith({ start_date: '2026-10-01', end_date: '2026-10-31' })
+    resolveOld({ data: [backdated({ id: 40 })] })
+    await flushPromises()
+    expect(wrapper.find('[data-test="backdated-item-41"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="backdated-item-40"]').exists()).toBe(false)
   })
 })

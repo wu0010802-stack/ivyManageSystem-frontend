@@ -4,6 +4,7 @@ import {
   absenceDayText,
   AMEND_LABELS,
   amendButtonLabel,
+  backdatedPendingCount,
   amendKindsFor,
   amendLabel,
   describeResolution,
@@ -17,6 +18,7 @@ import {
   resolutionTooltip,
   roundStatusText,
   STATUS_LABELS,
+  withBackdatedPending,
   yesterdayISO,
   type ConfirmationAbsenceDay,
   type ConfirmationItem,
@@ -316,5 +318,20 @@ describe('attendanceConfirm 補登項目', () => {
     expect(amendButtonLabel(portal({ initiated_by: 'employee', can_repair: false }))).toBe('不對，說明原因…')
     // 非補登維持原樣
     expect(amendKindsFor(portal({ initiated_by: 'system' }))).toEqual(['swap_with', 'cover_for', 'leave', 'forgot_punch', 'other'])
+  })
+})
+
+describe('補登待處理數（④老師確認狀態文字）', () => {
+  const st = (status: ConfirmationItem['status']) => ({ status })
+
+  it('只算雙方已確認（待套用）與轉行政（待處理）；等對方回覆的、已結案的不算', () => {
+    expect(backdatedPendingCount([st('agreed'), st('disputed'), st('pending'), st('applied'), st('dismissed'), st('superseded')])).toBe(2)
+    expect(backdatedPendingCount([])).toBe(0)
+  })
+
+  it('N>0 才附加「・補登待處理 N」', () => {
+    expect(withBackdatedPending('確認中・已回覆 2/3', 2)).toBe('確認中・已回覆 2/3・補登待處理 2')
+    expect(withBackdatedPending('尚未發送', 1)).toBe('尚未發送・補登待處理 1')
+    expect(withBackdatedPending('已結束', 0)).toBe('已結束')
   })
 })
