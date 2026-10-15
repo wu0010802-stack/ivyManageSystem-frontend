@@ -14,11 +14,16 @@
 
     <AdminListToolbar v-model:search="search" search-placeholder="搜尋發起人或對象姓名" :total="total" :shown="shown" />
 
-    <el-table v-if="!isMobile" v-loading="loading" :data="filtered" stripe class="swap-history__table" data-test="swap-table">
+    <el-table v-if="!isMobile" v-loading="loading" :data="filtered" :row-key="rowKey" stripe class="swap-history__table" data-test="swap-table">
       <template #empty>
         <el-empty :description="search ? '沒有符合搜尋條件的換班紀錄' : '尚無換班紀錄'" />
       </template>
-      <el-table-column prop="swap_date" label="換班日期" width="120" />
+      <el-table-column label="換班日期" width="120">
+        <template #default="{ row }">
+          {{ row.swap_date }}
+          <el-tag v-if="isBackdated(row)" type="warning" size="small" effect="plain" data-test="swap-backdated-tag">補登</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="requester_name" label="發起人" width="100" />
       <el-table-column prop="requester_shift" label="發起人班別" width="110" />
       <el-table-column prop="target_name" label="對象" width="100" />
@@ -36,12 +41,13 @@
       v-else
       :items="filtered"
       :columns="cardColumns"
-      row-key="id"
+      row-key="__key"
       :loading="loading"
       :empty-text="search ? '沒有符合搜尋條件的換班紀錄' : '尚無換班紀錄'"
     >
       <template #title="{ item }">
         {{ item.requester_name }} <el-icon><ArrowRight /></el-icon> {{ item.target_name }}
+        <el-tag v-if="isBackdated(item)" type="warning" size="small" effect="plain" data-test="swap-backdated-tag">補登</el-tag>
       </template>
       <template #cell-__requester="{ item }">
         {{ item.requester_name }}<span v-if="item.requester_shift">（{{ item.requester_shift }}）</span>
@@ -68,6 +74,8 @@ import { getSwapHistory } from '@/api/shifts'
 import { friendlyError } from '@/utils/errorMessages'
 
 // 原屬排班頁「換班紀錄」頁籤（SPEC-027 §6.2 抽成可重用面板，行為不變）。
+// SPEC-026 3-3：BE 另把行政已套用的老師自行補登併進來（source="backdated"，status 固定 "applied"）。
+// 兩種來源的 id 各自編號、會撞號，列 key 一律用 `${source}-${id}`。
 const cardColumns = [
   { label: '換班日期', prop: 'swap_date' },
   { label: '發起人', prop: '__requester' },
@@ -77,6 +85,11 @@ const cardColumns = [
   { label: '回覆時間', prop: '__responded', formatter: (r: Record<string, unknown>) => (r.target_responded_at as string) || '—' },
   { label: '原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
 ]
+
+type HistoryRow = Record<string, unknown>
+const isBackdated = (r: HistoryRow) => r.source === 'backdated'
+// 舊版後端沒有 source 欄位時視為一般申請
+const rowKey = (r: HistoryRow) => `${(r.source as string | undefined) ?? 'request'}-${r.id}`
 
 const { isMobile } = useIsMobile()
 const history = ref<Record<string, unknown>[]>([])
@@ -96,7 +109,7 @@ async function fetchHistory(): Promise<void> {
     if (filter.start_date) params.start_date = filter.start_date
     if (filter.end_date) params.end_date = filter.end_date
     if (filter.status) params.status = filter.status
-    history.value = (await getSwapHistory(params)).data
+    history.value = (await getSwapHistory(params)).data.map((r: HistoryRow) => ({ ...r, __key: rowKey(r) }))
   } catch (err) {
     ElMessage.error(friendlyError('載入換班紀錄失敗', err))
   } finally {
@@ -105,11 +118,11 @@ async function fetchHistory(): Promise<void> {
 }
 
 const statusLabel = (status: string) =>
-  ({ pending: '待回覆', accepted: '已接受', rejected: '已拒絕', cancelled: '已撤銷' } as Record<string, string>)[status] || status
+  ({ pending: '待回覆', accepted: '已接受', rejected: '已拒絕', cancelled: '已撤銷', applied: '已補登' } as Record<string, string>)[status] || status
 
 type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const statusType = (status: string): TagType =>
-  ({ pending: 'warning', accepted: 'success', rejected: 'danger', cancelled: 'info' } as Record<string, TagType>)[status] ?? 'info'
+  ({ pending: 'warning', accepted: 'success', rejected: 'danger', cancelled: 'info', applied: 'success' } as Record<string, TagType>)[status] ?? 'info'
 
 onMounted(fetchHistory)
 </script>

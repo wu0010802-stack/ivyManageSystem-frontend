@@ -258,6 +258,13 @@ const inheritLabel = computed(() => {
   return weekly === '無' ? '不另外調整（沿用預設工時）' : `不另外調整（沿用週排班：${weekly}）`
 })
 
+// 換班來源：一般換班是申請單編號；老師自行補登（SPEC-026 3-3）套用後寫入的格子沒有申請單，改寫確認項目編號
+function swapOrigin(plan: GridCell['plan']): string {
+  if (plan.swap_request_id != null) return `換班單 #${plan.swap_request_id}`
+  if (plan.swap_confirmation_item_id != null) return `換班補登（確認項目 #${plan.swap_confirmation_item_id}）`
+  return '換班'
+}
+
 const chain = computed(() => {
   const cell = props.cell
   if (!cell) return []
@@ -283,7 +290,7 @@ const chain = computed(() => {
     {
       key: 'swap',
       label: '換班',
-      value: plan.source === 'swap' ? `換班單 #${plan.swap_request_id}：${plan.day_off ? '排休' : shiftName(plan.shift_type_id)}` : '無',
+      value: plan.source === 'swap' ? `${swapOrigin(plan)}：${plan.day_off ? '排休' : shiftName(plan.shift_type_id)}` : '無',
       active: plan.source === 'swap',
     },
     {

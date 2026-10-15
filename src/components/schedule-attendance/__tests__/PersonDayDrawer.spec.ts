@@ -82,6 +82,26 @@ describe('PersonDayDrawer', () => {
     expect(items.at(-1)!.text()).toContain('事假（13:00–17:00）・待審')
   })
 
+  it('換班層：一般換班寫換班單編號；補登換班寫確認項目編號，不出現 #null（SPEC-026 3-3）', () => {
+    const request = mountDrawer(cell(1, W1, { plan: { source: 'swap', swap_request_id: 5, shift_type_id: 2, name: '晚車' }, actual: {} }))
+    expect(request.findAll('[data-test="pdd-chain"] li')[3].text()).toContain('換班單 #5：晚車')
+
+    const backdated = mountDrawer(
+      cell(1, W1, { plan: { source: 'swap', swap_request_id: null, swap_confirmation_item_id: 77, shift_type_id: 2, name: '晚車' }, actual: {} }),
+    )
+    const layer = backdated.findAll('[data-test="pdd-chain"] li')[3]
+    expect(layer.text()).toContain('換班補登（確認項目 #77）：晚車')
+    expect(layer.classes()).toContain('pdd__chain-item--active')
+    expect(backdated.text()).not.toContain('#null')
+  })
+
+  it('換班層：兩種編號都沒有時只寫「換班」，不出現 #null', () => {
+    const w = mountDrawer(cell(1, W1, { plan: { source: 'swap', swap_request_id: null, shift_type_id: 2, name: '晚車' }, actual: {} }))
+    const text = w.findAll('[data-test="pdd-chain"] li')[3].text()
+    expect(text).toContain('換班：晚車')
+    expect(text).not.toContain('#null')
+  })
+
   it('沒有 SCHEDULE（週排班取不到，weeklyShiftId 為 null）：來源為週排班／輪值表時，週排班層用格子計畫的班別名，不寫「無」', () => {
     const weekly = mountDrawer(
       cell(1, W1, { plan: { source: 'weekly' }, actual: {}, edit: { plan: false, locked_reason: 'no_permission' } }),
