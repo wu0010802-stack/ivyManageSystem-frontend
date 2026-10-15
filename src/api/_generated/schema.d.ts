@@ -17501,6 +17501,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports/historical-pnl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Historical Pnl
+         * @description 依目前租戶列出原表參考；未匯入月份維持缺席。
+         */
+        get: operations["read_historical_pnl_api_reports_historical_pnl_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/historical-pnl/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Execute Historical Pnl Import
+         * @description 原子新增月份並同交易留存稽核；相同內容重跑不重複記錄。
+         */
+        post: operations["execute_historical_pnl_import_api_reports_historical_pnl_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/historical-pnl/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Historical Pnl Import
+         * @description 唯讀檢查月份衝突，不建立資料或稽核。
+         */
+        post: operations["preview_historical_pnl_import_api_reports_historical_pnl_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reports/monthly-pnl": {
         parameters: {
             query?: never;
@@ -33128,6 +33188,192 @@ export interface components {
             total: number;
             /** Unack Count */
             unack_count: number;
+        };
+        /**
+         * HistoricalPnlErrorOut
+         * @description 錯誤只含安全文字，不回傳來源內容或驗證 input。
+         */
+        HistoricalPnlErrorOut: {
+            /** Detail */
+            detail: string;
+        };
+        /** HistoricalPnlImportOut */
+        HistoricalPnlImportOut: {
+            /** Created Months */
+            created_months: number[];
+            /** Unchanged Months */
+            unchanged_months: number[];
+            /** Year */
+            year: number;
+        };
+        /** HistoricalPnlImportRequest */
+        HistoricalPnlImportRequest: {
+            /** Basis Note */
+            basis_note: string;
+            /** Months */
+            months: components["schemas"]["HistoricalPnlMonthInput"][];
+            /** Source Name */
+            source_name: string;
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Year */
+            year: number;
+        };
+        /** HistoricalPnlMonthInput */
+        HistoricalPnlMonthInput: {
+            /** Expense */
+            expense: number | string;
+            /** Month */
+            month: number;
+            /** Profit */
+            profit: number | string;
+            /** Revenue */
+            revenue: number | string;
+            /** Rows */
+            rows: components["schemas"]["HistoricalPnlRowInput"][];
+        };
+        /** HistoricalPnlMonthOut */
+        HistoricalPnlMonthOut: {
+            /**
+             * Actual Status
+             * @default unverified
+             * @constant
+             */
+            actual_status: "unverified";
+            /** Basis Note */
+            basis_note: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Expense */
+            expense: string;
+            /** Month */
+            month: number;
+            /** Profit */
+            profit: string;
+            /** Revenue */
+            revenue: string;
+            /** Rows */
+            rows: components["schemas"]["HistoricalPnlRowOut"][];
+            /** Source Name */
+            source_name: string;
+            /** Source Sha256 */
+            source_sha256: string;
+        };
+        /** HistoricalPnlPreviewMonthOut */
+        HistoricalPnlPreviewMonthOut: {
+            /** Expense */
+            expense: string;
+            /** Month */
+            month: number;
+            /** Profit */
+            profit: string;
+            /** Revenue */
+            revenue: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "new" | "unchanged" | "conflict";
+        };
+        /** HistoricalPnlPreviewOut */
+        HistoricalPnlPreviewOut: {
+            /** Can Import */
+            can_import: boolean;
+            /** Conflict Count */
+            conflict_count: number;
+            /** Insert Count */
+            insert_count: number;
+            /** Months */
+            months: components["schemas"]["HistoricalPnlPreviewMonthOut"][];
+            /** Replay Count */
+            replay_count: number;
+            totals: components["schemas"]["HistoricalPnlTotalsOut"];
+            /** Year */
+            year: number;
+        };
+        /** HistoricalPnlRowInput */
+        HistoricalPnlRowInput: {
+            /** Amount */
+            amount: number | string | null;
+            /** Direct Flags */
+            direct_flags: ("estimate" | "amortized" | "full_nhi_amount" | "fixed_contribution_filled")[];
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Parent Key */
+            parent_key: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "detail" | "subtotal" | "total";
+            /**
+             * Section
+             * @enum {string}
+             */
+            section: "income" | "expense" | "profit" | "personnel_breakdown";
+            /** Source Cell */
+            source_cell: string;
+        };
+        /** HistoricalPnlRowOut */
+        HistoricalPnlRowOut: {
+            /**
+             * Actual Status
+             * @default unverified
+             * @constant
+             */
+            actual_status: "unverified";
+            /** Amount */
+            amount: string | null;
+            /** Direct Flags */
+            direct_flags: ("estimate" | "amortized" | "full_nhi_amount" | "fixed_contribution_filled")[];
+            /** Inclusive Flags */
+            inclusive_flags: ("estimate" | "amortized" | "full_nhi_amount" | "fixed_contribution_filled")[];
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Parent Key */
+            parent_key: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "detail" | "subtotal" | "total";
+            /**
+             * Section
+             * @enum {string}
+             */
+            section: "income" | "expense" | "profit" | "personnel_breakdown";
+            /** Source Cell */
+            source_cell: string;
+        };
+        /** HistoricalPnlTotalsOut */
+        HistoricalPnlTotalsOut: {
+            /** Expense */
+            expense: string;
+            /** Profit */
+            profit: string;
+            /** Revenue */
+            revenue: string;
+        };
+        /** HistoricalPnlYearOut */
+        HistoricalPnlYearOut: {
+            /**
+             * Actual Status
+             * @default unverified
+             * @constant
+             */
+            actual_status: "unverified";
+            /** Months */
+            months: components["schemas"]["HistoricalPnlMonthOut"][];
+            totals: components["schemas"]["HistoricalPnlTotalsOut"];
+            /** Year */
+            year: number;
         };
         /**
          * HolidayImportResultOut
@@ -80217,6 +80463,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_historical_pnl_api_reports_historical_pnl_get: {
+        parameters: {
+            query: {
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalPnlYearOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalPnlErrorOut"];
+                };
+            };
+        };
+    };
+    execute_historical_pnl_import_api_reports_historical_pnl_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoricalPnlImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalPnlImportOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalPnlErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalPnlErrorOut"];
+                };
+            };
+        };
+    };
+    preview_historical_pnl_import_api_reports_historical_pnl_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoricalPnlImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalPnlPreviewOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalPnlErrorOut"];
                 };
             };
         };

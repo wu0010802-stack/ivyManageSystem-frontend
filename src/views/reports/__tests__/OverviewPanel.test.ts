@@ -39,6 +39,13 @@ vi.mock('@/views/reports/chartSetup', () => ({
 vi.mock('@/api/vendorPayment', () => ({ getVendorPaymentSummary: vi.fn().mockResolvedValue({ data: { pending_count: 0, pending_amount: 0 } }) }))
 vi.mock('@/api/miscReceipt', () => ({ getMiscReceiptSummary: vi.fn().mockResolvedValue({ data: { pending_count: 0, pending_amount: 0 } }) }))
 
+vi.mock('@/api/historicalPnl', () => ({
+  getHistoricalPnl: vi.fn().mockResolvedValue({ data: { year: 2026, actual_status: 'unverified', months: [], totals: { revenue: '0.00', expense: '0.00', profit: '0.00' } } }),
+  previewHistoricalPnl: vi.fn(),
+  importHistoricalPnl: vi.fn(),
+}))
+
+import { getHistoricalPnl } from '@/api/historicalPnl'
 import { getFinanceSummary } from '@/api/reports'
 import OverviewPanel from '@/views/reports/OverviewPanel.vue'
 
@@ -96,6 +103,15 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers() })
 
 describe('收支等式（焦點月）', () => {
+  it('歷史參考尚在載入時，現金收支數字仍獨立顯示', async () => {
+    vi.mocked(getHistoricalPnl).mockReturnValueOnce(new Promise(() => {}))
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.text()).toContain('歷史損益參考')
+    expect(w.find('[data-test="value-revenue"]').text()).toBe('1,965,811')
+    expect(w.find('[data-test="value-net"]').text()).toBe('1,942,717')
+  })
+
   it('主數字是焦點月、第二行是年初至今', async () => {
     const w = mountPanel()
     await flushPromises()
@@ -277,6 +293,7 @@ describe('報表模組樣式 token 紀律（DESIGN.md 硬規則）', () => {
   const FILES = [
     'src/views/ReportsView.vue',
     'src/views/reports/OverviewPanel.vue',
+    'src/views/reports/HistoricalPnlPanel.vue',
     'src/views/reports/FinanceSummaryPanel.vue',
     'src/views/reports/FinanceDetailDrawer.vue',
     'src/views/reports/ReportNotesDrawer.vue',

@@ -274,9 +274,27 @@ export function scrubQueryString(value: unknown) {
   return scrubMapping(value)
 }
 
+/** 歷史損益可含自由文字與整包財務資料；限定此組端點不送監控事件。 */
+function isHistoricalPnlUrl(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  try {
+    const path = new URL(value, 'https://sentry.invalid').pathname
+    return /^\/(?:api\/)?reports\/historical-pnl(?:\/(?:preview|import))?\/?$/.test(path)
+  } catch {
+    return false
+  }
+}
+
+function historicalPnlEvent(event: Record<string, unknown>): boolean {
+  const request = event['request'] as Record<string, unknown> | undefined
+  const extra = event['extra'] as Record<string, unknown> | undefined
+  return isHistoricalPnlUrl(request?.['url']) || isHistoricalPnlUrl(extra?.['url'])
+}
+
 export function scrubEvent(event: unknown) {
   if (!event || typeof event !== 'object') return event
   const ev = event as Record<string, unknown>
+  if (historicalPnlEvent(ev)) return null
 
   if (ev['request'] && typeof ev['request'] === 'object') {
     const req = ev['request'] as Record<string, unknown>
@@ -313,15 +331,14 @@ export function scrubEvent(event: unknown) {
     (ev['user'] as Record<string, unknown>)['id'] = hashUserId((ev['user'] as Record<string, unknown>)['id'])
   }
 
-  if (ev['breadcrumbs'] && Array.isArray((ev['breadcrumbs'] as Record<string, unknown>)['values'])) {
-    for (const crumb of (ev['breadcrumbs'] as Record<string, unknown[]>)['values']) {
-      if (crumb && typeof crumb === 'object') {
-        const c = crumb as Record<string, unknown>
-        if (c['data']) c['data'] = scrubMapping(c['data'])
-        if (typeof c['message'] === 'string') {
-          c['message'] = redactPiiValue(sanitizeUrl(c['message']))
-        }
-      }
+  // 防止直接組裝事件繞過 beforeBreadcrumb；兼容瀏覽器陣列與 values 包裝。
+  const breadcrumbs = ev['breadcrumbs']
+  if (Array.isArray(breadcrumbs)) {
+    ev['breadcrumbs'] = breadcrumbs.map(scrubBreadcrumb).filter(crumb => crumb !== null)
+  } else if (breadcrumbs && typeof breadcrumbs === 'object') {
+    const wrapped = breadcrumbs as Record<string, unknown>
+    if (Array.isArray(wrapped['values'])) {
+      wrapped['values'] = wrapped['values'].map(scrubBreadcrumb).filter(crumb => crumb !== null)
     }
   }
 
@@ -368,6 +385,7 @@ export function scrubEvent(event: unknown) {
 export function scrubBreadcrumb(crumb: unknown) {
   if (!crumb || typeof crumb !== 'object') return crumb
   const c = crumb as Record<string, unknown>
+  if (isHistoricalPnlUrl((c['data'] as Record<string, unknown> | undefined)?.['url'])) return null
   if (c['data']) c['data'] = scrubMapping(c['data'])
   if (typeof c['message'] === 'string') {
     c['message'] = redactPiiValue(sanitizeUrl(c['message']))
@@ -466,6 +484,8 @@ export async function initSentry(
  * `.catch(() => {})` 防呆。
  */
 export async function captureException(err: unknown, context: Record<string, unknown> = {}) {
+  const config = (err as { config?: { url?: unknown } } | null)?.config
+  if (isHistoricalPnlUrl(context['url']) || isHistoricalPnlUrl(config?.url)) return
   if (!_SentryRef) return
   const sentry = _SentryRef as { withScope: (fn: (scope: { setExtra: (k: string, v: unknown) => void }) => void) => void; captureException: (err: unknown) => void }
   try {

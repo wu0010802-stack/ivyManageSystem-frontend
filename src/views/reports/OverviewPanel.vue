@@ -17,6 +17,7 @@ import { hasPermission } from '@/utils/auth'
 import { money } from '@/utils/format'
 import { apiError } from '@/utils/error'
 import { BarChart } from './chartSetup'
+import HistoricalPnlPanel from './HistoricalPnlPanel.vue'
 import { computeReportPeriod, monthState } from './useReportPeriod'
 import { buildMonthlyMoneyChart, monthBandsPlugin } from './trendChart'
 import {
@@ -295,6 +296,7 @@ const ratio = computed(() => {
 </script>
 
 <template>
+  <HistoricalPnlPanel :year="year" />
   <el-skeleton v-if="loading" :rows="10" animated />
   <div v-else class="overview">
     <!-- 收支等式 -->

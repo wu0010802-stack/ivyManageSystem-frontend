@@ -893,3 +893,68 @@ it('沖銷範圍巢狀姓名仍被遮罩', () => {
   const result = scrubMapping({ reversal_scope: [{ student_name: '合成測試幼生', amount: 100 }] })
   expect(result.reversal_scope[0].student_name).toBe('[Filtered]')
 })
+
+
+describe('歷史損益端點的完整監控隔離', () => {
+  it('在 Sentry SDK 收到 Axios 錯誤物件前就丟棄財務端點', async () => {
+    import.meta.env.VITE_SENTRY_DSN = 'https://pub@o0.ingest.sentry.io/0'
+    const capture = vi.fn()
+    const withScope = vi.fn(callback => callback({ setExtra: vi.fn() }))
+    vi.doMock('@sentry/vue', () => ({ init: vi.fn(), setTag: vi.fn(), withScope, captureException: capture }))
+    try {
+      const mod = await import('@/utils/sentry?historical-pnl=' + Date.now())
+      await mod.initSentry({}, { entry: 'admin' })
+      await mod.captureException({ config: { url: '/reports/historical-pnl/import', data: '{"revenue":"123.45"}' } })
+      await mod.captureException(new Error('合成資料'), { url: '/api/reports/historical-pnl/preview' })
+      expect(withScope).not.toHaveBeenCalled()
+      expect(capture).not.toHaveBeenCalled()
+      await mod.captureException(new Error('其他錯誤'), { url: '/api/reports/finance-summary' })
+      expect(capture).toHaveBeenCalledOnce()
+    } finally {
+      vi.doUnmock('@sentry/vue')
+    }
+  })
+
+  it.each([
+    '/reports/historical-pnl?year=2026',
+    '/api/reports/historical-pnl/preview',
+    'https://staging.example.test/api/reports/historical-pnl/import/',
+  ])('丟棄 %s 的 request 與 exception locals 整包事件', url => {
+    expect(scrubEvent({
+      request: { url, data: '{"revenue":"123.45","basis_note":"合成註記"}' },
+      exception: { values: [{ stacktrace: { frames: [{ vars: { payload: { amount: '123.45', label: '合成科目' } } }] } }] },
+      extra: { raw: '{"expense":"12.00"}' },
+    })).toBeNull()
+  })
+
+  it('axios 的 sanitized URL 放在 extra 時仍整包丟棄', () => {
+    expect(scrubEvent({ extra: { url: '/reports/historical-pnl/import', payload: { revenue: '123.45' } } })).toBeNull()
+  })
+
+  it('不保留歷史損益 HTTP breadcrumb 的原始內容', () => {
+    expect(scrubBreadcrumb({ category: 'xhr', data: { url: '/api/reports/historical-pnl/preview', body: '{"profit":"111.45"}' } })).toBeNull()
+  })
+
+  it.each(['array', 'values'])('事件內嵌 %s breadcrumbs 也移除歷史損益內容，保留一般報表事件', kind => {
+    const entries = [
+      { category: 'xhr', data: { url: '/api/reports/historical-pnl/import', body: '{"profit":"123.45"}' } },
+      { category: 'xhr', data: { url: '/api/reports/finance-summary', status: 200 } },
+    ]
+    const event = { request: { url: '/api/reports/finance-summary' }, breadcrumbs: kind === 'array' ? entries : { values: entries } }
+    const clean = scrubEvent(event)
+    expect(clean).not.toBeNull()
+    expect(JSON.stringify(clean)).not.toContain('123.45')
+    const crumbs = kind === 'array' ? clean.breadcrumbs : clean.breadcrumbs.values
+    expect(crumbs).toHaveLength(1)
+    expect(crumbs[0].data.url).toBe('/api/reports/finance-summary')
+  })
+
+  it.each([
+    '/api/reports/finance-summary',
+    '/api/reports/historical-pnl-summary',
+    '/api/other?next=/reports/historical-pnl/import',
+  ])('不誤傷其他端點 %s', url => {
+    expect(scrubEvent({ request: { url } })).not.toBeNull()
+    expect(scrubBreadcrumb({ data: { url } })).not.toBeNull()
+  })
+})
