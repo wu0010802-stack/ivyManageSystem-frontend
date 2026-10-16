@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { usePortalAppraisal } from '@/composables/usePortalAppraisal'
 import LatestSummaryCard from '@/components/portal/growth/LatestSummaryCard.vue'
 import TrendChart from '@/components/portal/growth/TrendChart.vue'
 import CycleTimelineItem from '@/components/portal/growth/CycleTimelineItem.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const {
   items: _items,
@@ -26,13 +29,14 @@ onMounted(fetchAll)
 </script>
 
 <template>
-  <div class="portal-growth">
-    <header class="page-header">
-      <h2>我的成長軌跡</h2>
-      <el-button :loading="loading" plain size="small" @click="fetchAll">
-        重新整理
-      </el-button>
-    </header>
+  <div class="portal-growth portal-page--reading">
+    <PortalPageHeader title="我的成長軌跡">
+      <template #actions>
+        <el-button :icon="Refresh" :loading="loading" plain size="small" @click="fetchAll">
+          重新整理
+        </el-button>
+      </template>
+    </PortalPageHeader>
 
     <div v-if="error" class="error-banner">
       載入失敗：{{ (error as Record<string, unknown>)?.message || '請稍後再試' }}
@@ -43,9 +47,7 @@ onMounted(fetchAll)
     </div>
 
     <template v-else>
-      <div v-if="emptyState === 'no-data'" class="empty">
-        您尚未列入任何考核週期。
-      </div>
+      <EmptyState v-if="emptyState === 'no-data'" variant="mobile" title="您尚未列入任何考核週期。" />
 
       <template v-else>
         <LatestSummaryCard
@@ -81,22 +83,9 @@ onMounted(fetchAll)
 
 <style scoped>
 .portal-growth {
-  max-width: 800px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-4, 16px);
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.page-header h2 {
-  margin: 0;
-  font-size: var(--text-xl, 20px);
-  font-weight: 700;
-  color: var(--pt-text-strong, #111);
 }
 .error-banner {
   padding: var(--space-3, 12px);
@@ -113,11 +102,6 @@ onMounted(fetchAll)
   height: 120px;
   border-radius: var(--radius-md, 8px);
   background: var(--neutral-100, #f1f5f9);
-}
-.empty {
-  text-align: center;
-  padding: var(--space-6, 24px);
-  color: var(--pt-text-muted, #6b7280);
 }
 .section {
   display: flex;

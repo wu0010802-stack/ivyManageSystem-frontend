@@ -224,13 +224,13 @@
     </div>
 
     <!-- 詳細資料 / 編輯 / 新增 Dialog -->
-    <el-dialog
+    <FormDialog
+      ref="formDialogRef"
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="640px"
-      destroy-on-close
-      :before-close="handleDialogBeforeClose"
-      class="so-dialog"
+      size="standardNarrow"
+      :dirty="isFormDirty"
+      :enter-submit="false"
     >
       <!-- 頂部：流程狀態與鎖定說明 -->
       <div v-if="editingId" class="so-flow-head">
@@ -444,7 +444,7 @@
           <span v-else-if="reconcileSelfBlocked && showReconcileActions" class="so-dialog-footer__hint">
             不可對帳自己確認{{ config.texts.unitLabel }}的交易
           </span>
-          <el-button @click="requestClose">關閉</el-button>
+          <el-button @click="requestClose">{{ isFormLocked ? '關閉' : '取消' }}</el-button>
 
           <!-- 草稿 / 被駁回：儲存草稿與送出審核是不同動作 -->
           <template v-if="!isFormLocked && canWrite">
@@ -501,7 +501,7 @@
           </template>
         </div>
       </template>
-    </el-dialog>
+    </FormDialog>
 
     <SignoffSignDialog
       v-model="signDialogVisible"
@@ -549,6 +549,7 @@ import AdminListToolbar, {
   type FilterGroup,
 } from '@/components/common/AdminListToolbar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
 import FormSection from '@/components/common/FormSection.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import SignoffFlowSummary, {
@@ -634,6 +635,8 @@ async function handleExport() {
 
 const summary = ref<SignoffSummary>({ ...EMPTY_SIGNOFF_SUMMARY })
 const summaryLoading = ref(false)
+let listRequestSeq = 0
+let summaryRequestSeq = 0
 
 const filters = reactive<{
   dateRange: string[] | null
@@ -742,6 +745,7 @@ function buildRangeParams(): Record<string, unknown> {
 }
 
 async function fetchList() {
+  const seq = ++listRequestSeq
   loading.value = true
   try {
     const params = buildRangeParams()
@@ -751,25 +755,28 @@ async function fetchList() {
     if (filters.flow) Object.assign(params, FLOW_FILTER_PARAMS[filters.flow])
 
     const res = await config.api.list(params)
+    if (seq !== listRequestSeq) return
     const data = res.data as { items: Record<string, unknown>[]; total: number }
     items.value = data.items
     total.value = data.total
   } catch (e) {
-    ElMessage.error(extractApiErrorMessage(e, '載入失敗'))
+    if (seq === listRequestSeq) ElMessage.error(extractApiErrorMessage(e, '載入失敗'))
   } finally {
-    loading.value = false
+    if (seq === listRequestSeq) loading.value = false
   }
 }
 
 async function fetchSummary() {
+  const seq = ++summaryRequestSeq
   summaryLoading.value = true
   try {
     const res = await config.api.summary(buildRangeParams())
+    if (seq !== summaryRequestSeq) return
     summary.value = res.data as SignoffSummary
   } catch {
-    summary.value = { ...EMPTY_SIGNOFF_SUMMARY }
+    if (seq === summaryRequestSeq) summary.value = { ...EMPTY_SIGNOFF_SUMMARY }
   } finally {
-    summaryLoading.value = false
+    if (seq === summaryRequestSeq) summaryLoading.value = false
   }
 }
 
@@ -913,6 +920,11 @@ const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
+const formDialogRef = ref<InstanceType<typeof FormDialog>>()
+// 關閉鈕與測試共用的關閉入口：委派給 FormDialog（dirty 判定與確認框都在殼層）
+function requestClose(): Promise<void> {
+  return formDialogRef.value?.requestClose() ?? Promise.resolve()
+}
 const dialogTitle = computed(() => {
   if (!editingId.value) return config.texts.addButton
   return isFormLocked.value
@@ -1020,26 +1032,6 @@ function editableSnapshot(): string {
 }
 const isFormDirty = () => !isFormLocked.value && editableSnapshot() !== formSnapshot
 
-function handleDialogBeforeClose(done: () => void) {
-  if (!isFormDirty()) {
-    done()
-    return
-  }
-  ElMessageBox.confirm('表單內容尚未儲存，確定要離開嗎？', '尚未儲存', {
-    type: 'warning',
-    confirmButtonText: '放棄變更',
-    cancelButtonText: '留在此頁',
-  })
-    .then(() => done())
-    .catch(() => {})
-}
-
-function requestClose() {
-  handleDialogBeforeClose(() => {
-    dialogVisible.value = false
-  })
-}
-
 function resetForm() {
   Object.assign(form, {
     plannedDate: '',
@@ -1072,13 +1064,16 @@ function resetForm() {
 function openCreate() {
   editingId.value = null
   resetForm()
+  eventsRequestSeq += 1
   events.value = []
+  eventsLoading.value = false
   formSnapshot = editableSnapshot()
   dialogVisible.value = true
 }
 
 function openEdit(row: Record<string, unknown>) {
   editingId.value = row.id as number | null
+  events.value = []
   Object.assign(form, {
     plannedDate: row[config.fields.plannedDate.key] || '',
     partyName: row[config.fields.partyName.key],
@@ -1122,17 +1117,21 @@ function onRowCommand(command: string, row: Record<string, unknown>) {
 // ─── 事件時間軸 ──────────────────────────────────────────────────────────
 const events = ref<SignoffEvent[]>([])
 const eventsLoading = ref(false)
+let eventsRequestSeq = 0
 
 async function fetchEvents() {
-  if (!editingId.value) return
+  const id = editingId.value
+  if (!id) return
+  const seq = ++eventsRequestSeq
   eventsLoading.value = true
   try {
-    const res = await config.api.events(editingId.value)
+    const res = await config.api.events(id)
+    if (seq !== eventsRequestSeq || !dialogVisible.value || editingId.value !== id) return
     events.value = (res.data as { items: SignoffEvent[] }).items
   } catch {
-    events.value = []
+    if (seq === eventsRequestSeq && dialogVisible.value && editingId.value === id) events.value = []
   } finally {
-    eventsLoading.value = false
+    if (seq === eventsRequestSeq) eventsLoading.value = false
   }
 }
 
@@ -1528,6 +1527,7 @@ defineExpose({
   handleSave,
   handleDelete,
   disabledFutureDate,
+  requestClose,
 })
 </script>
 

@@ -67,6 +67,7 @@ const SOURCE_LABEL: Record<PosQueueSource, string> = {
   onsite: '現場',
   reservation: '預約',
   proxy: '代理',
+  bus: '娃娃車',
 }
 
 const sourceLabel = computed(() => SOURCE_LABEL[props.item.source])
@@ -193,7 +194,7 @@ const bodyStyle = computed(() => ({
         :tabindex="isOpen ? 0 : -1"
         @click="handleConfirmClick"
       >
-        {{ confirming ? '確認中…' : '確認接送' }}
+        {{ confirming ? '確認中…' : '確認交接' }}
       </button>
       <button
         type="button"
@@ -358,6 +359,11 @@ const bodyStyle = computed(() => ({
 .pos-queue-card__source-tag--reservation {
   background: var(--color-info-soft);
   color: var(--color-info-darker);
+}
+
+.pos-queue-card__source-tag--bus {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-darker);
 }
 
 .pos-queue-card__source-tag--proxy {

@@ -3,6 +3,8 @@
  * 台灣學制：8/1 起為上學期，2/1 起為下學期，1/31 前仍屬前一學年上學期。
  */
 
+import { dateToLocalISO } from '@/utils/format'
+
 /** 西元年與民國年的差值（民國元年 = 西元 1912）。 */
 export const ROC_OFFSET = 1911
 
@@ -63,4 +65,28 @@ export function buildSchoolYearOptions(currentYear: number, range = 5) {
     years.add(currentYear + i)
   }
   return Array.from(years).sort((a, b) => b - a)
+}
+
+/**
+ * 學年學期 → 日曆日期區間 `[from, to]`（皆為 `YYYY-MM-DD`）。
+ *
+ * 上學期＝該學年 8/1 至隔年 1/31；下學期＝隔年 2/1 至 7/31。
+ * 進行中的學期把結束日截到今天——帳本不會有未來的異動，區間拉到學期末只是空白。
+ * 尚未開始的學期不截斷，否則 `to` 會早於 `from`、成為顛倒區間。
+ *
+ * ⚠ 一律用 `dateToLocalISO`，不可 `toISOString()`：後者是 UTC，
+ * 台北（UTC+8）早上 8 點前會取到前一天。
+ */
+export function getTermDateRange(
+  schoolYear: number,
+  semester: number,
+  now: Date = new Date(),
+): [string, string] {
+  const adYear = toAdYear(schoolYear)
+  const start =
+    semester === 1 ? new Date(adYear, 7, 1) : new Date(adYear + 1, 1, 1)
+  const end =
+    semester === 1 ? new Date(adYear + 1, 0, 31) : new Date(adYear + 1, 6, 31)
+  const to = now >= start && now < end ? now : end
+  return [dateToLocalISO(start), dateToLocalISO(to)]
 }

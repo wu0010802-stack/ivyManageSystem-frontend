@@ -1,5 +1,7 @@
 <template>
   <div class="anomaly-queue-column" v-loading="loading">
+    <el-input v-model="searchTerm" aria-label="搜尋異常人員" placeholder="搜尋異常人員姓名或工號" clearable />
+    <p class="anomaly-queue-column__scope">搜尋僅套用此異常清單；全選限目前篩選結果，變更篩選會清除選取。</p>
     <!-- 頂部篩選 -->
     <div class="anomaly-queue-column__filters">
       <el-select
@@ -24,13 +26,13 @@
       </el-select>
     </div>
 
-    <!-- 全選列（多選批次處理，P?-batch-ux-tail）-->
-    <div v-if="filteredWithIndex.length > 0" class="anomaly-queue-column__select-all">
+    <!-- 全選列（多選批次處理，P?-batch-ux-tail）；唯讀帳號無批次動作可用，整列不顯示 -->
+    <div v-if="canWrite && filteredWithIndex.length > 0" class="anomaly-queue-column__select-all">
       <el-checkbox
         :model-value="allVisibleSelected"
         :indeterminate="someVisibleSelected"
         @update:model-value="toggleSelectAll"
-      >全選（{{ filteredWithIndex.length }}）</el-checkbox>
+      >全選目前篩選結果（{{ filteredWithIndex.length }}）</el-checkbox>
       <span v-if="selectedIds.size > 0" class="anomaly-queue-column__selected-count">
         已選 {{ selectedIds.size }} 筆
       </span>
@@ -96,8 +98,8 @@
       </li>
     </ul>
 
-    <!-- 批次動作列：選取 >0 時顯示 -->
-    <div v-if="selectedIds.size > 0" class="anomaly-queue-column__batch-bar">
+    <!-- 批次動作列：選取 >0 時顯示；與 ResolveCard 的單筆動作一致，需 ATTENDANCE_WRITE -->
+    <div v-if="canWrite && selectedIds.size > 0" class="anomaly-queue-column__batch-bar">
       <el-input
         v-model="batchRemark"
         placeholder="備註（選填）"
@@ -109,7 +111,7 @@
         type="success"
         :loading="batchBusy"
         @click="confirmBatchAction('admin_accept')"
-      >批次視為正常（{{ selectedIds.size }}）</el-button>
+      >批次接受扣款（{{ selectedIds.size }}）</el-button>
       <el-button
         size="small"
         type="warning"
@@ -131,6 +133,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { batchConfirmAnomalies } from '@/api/attendance'
+import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
@@ -148,6 +151,11 @@ const emit = defineEmits<{
 
 const { notify } = useErrorNotify()
 
+// 唯讀帳號（有 ATTENDANCE_READ 無 ATTENDANCE_WRITE）不該看到批次接受／豁免——
+// 單筆動作的 ResolveCard 一向有這道檢查，此處漏了，按下去才被後端 403。
+const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
+
+const searchTerm = ref('')
 const typeFilter = ref<string>('all')
 // 預設只看未處理（沿用舊佇列語意）；已處理／全部由使用者切換
 const statusFilter = ref<string>('pending')
@@ -170,6 +178,7 @@ function deductionOf(card: AnomalyDayCard): number {
 const filteredWithIndex = computed<{ item: AnomalyDayCard; origIndex: number }[]>(() => {
   return props.items
     .map((it, i) => ({ item: it, origIndex: i }))
+    .filter(({ item }) => !searchTerm.value.trim() || `${item.employee_name} ${item.employee_number}`.toLowerCase().includes(searchTerm.value.trim().toLowerCase()))
     .filter(
       ({ item }) =>
         typeFilter.value === 'all' || item.items.some((x) => x.type === typeFilter.value),
@@ -187,11 +196,12 @@ const filteredWithIndex = computed<{ item: AnomalyDayCard; origIndex: number }[]
 const MAX_BATCH_IDS = 500
 
 const ACTION_LABELS: Record<'admin_accept' | 'admin_waive', string> = {
-  admin_accept: '視為正常',
+  admin_accept: '接受扣款',
   admin_waive: '豁免',
 }
 
 const selectedIds = reactive(new Set<number>())
+watch([searchTerm, typeFilter, statusFilter], () => selectedIds.clear())
 const batchRemark = ref('')
 const batchBusy = ref(false)
 
@@ -247,7 +257,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 
   try {
     await ElMessageBox.confirm(
-      `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？`,
+      `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？此操作套用選取日期的整日異常。${action === 'admin_accept' ? '接受扣款仍依原規則計算扣款，並非豁免。' : ''}`,
       '批次處理',
       { type: 'warning', confirmButtonText: '確認', cancelButtonText: '取消' },
     )
@@ -277,6 +287,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 </script>
 
 <style scoped>
+.anomaly-queue-column__scope { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .anomaly-queue-column {
   display: flex;
   flex-direction: column;
@@ -353,9 +364,9 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 }
 
 .anomaly-item--selected {
-  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin） */
+  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin）；2026-09-10 改版
+     移除側邊色條（impeccable AI-slop 偵測命中），與 RosterColumn 選取態一致。 */
   background-color: var(--brand-primary-soft, #e0f2fe);
-  border-left: 3px solid var(--brand-primary, #0284c7);
 }
 
 .anomaly-item__checkbox-wrap {

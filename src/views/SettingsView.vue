@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
-import { useShiftStore } from '@/stores/shift'
-import SettingsShiftTab from '@/components/settings/SettingsShiftTab.vue'
 import SettingsLineTab from '@/components/settings/SettingsLineTab.vue'
-import SettingsObservabilityTab from '@/components/settings/SettingsObservabilityTab.vue'
 import SettingsTenantConfigTab from '@/components/settings/SettingsTenantConfigTab.vue'
 import DsrRequestsView from '@/views/DsrRequestsView.vue'
 import PolicyVersionsView from '@/views/PolicyVersionsView.vue'
@@ -15,14 +12,18 @@ import { PAGE_TERMS } from '@/constants/moduleTerms'
 const route = useRoute()
 const router = useRouter()
 
-const BASE_TABS = ['shifts', 'line', 'observability', 'tenant-config']
-
-const availableTabs = (): string[] =>
-  hasPermission('DSR_MANAGE') ? [...BASE_TABS, 'dsr-requests', 'policy-versions'] : [...BASE_TABS]
+// 班別設定已搬到「排班與出勤 › 班別設定」（2026-10）；舊 ?tab=shifts 由 authGuard 轉址，到不了這裡。
+const availableTabs = (): string[] => {
+  const tabs: string[] = []
+  if (hasPermission('SETTINGS_READ')) tabs.push('line', 'tenant-config')
+  if (hasPermission('DSR_MANAGE')) tabs.push('dsr-requests', 'policy-versions')
+  return tabs
+}
 
 const resolveTab = (raw: unknown): string => {
   const r = String(Array.isArray(raw) ? raw[0] : (raw ?? ''))
-  return availableTabs().includes(r) ? r : 'shifts'
+  const tabs = availableTabs()
+  return tabs.includes(r) ? r : (tabs[0] ?? 'line')
 }
 
 const activeTab = ref(resolveTab(route.query.tab))
@@ -49,29 +50,17 @@ watch(
 const onTabChange = (name: string | number) => {
   router.replace({ query: { ...route.query, tab: String(name) } })
 }
-
-const shiftStore = useShiftStore()
-
-onMounted(() => {
-  shiftStore.fetchShiftTypes()
-})
 </script>
 
 <template>
   <div class="settings-page">
-    <PageHeader :title="PAGE_TERMS.settingsGeneral" subtitle="輪班別、通知、排程觀測、分校設定與個資治理設定" />
+    <PageHeader :title="PAGE_TERMS.settingsGeneral" subtitle="通知、分校設定與個資治理設定" />
     <el-tabs v-model="activeTab" type="card" @tab-change="onTabChange">
-      <el-tab-pane label="輪班別管理" name="shifts">
-        <SettingsShiftTab v-if="activeTab === 'shifts'" />
-      </el-tab-pane>
-      <el-tab-pane name="line">
+      <el-tab-pane v-if="hasPermission('SETTINGS_READ')" name="line">
         <template #label>LINE 通知設定 <el-tag type="warning" size="small" style="margin-left:4px;">Beta</el-tag></template>
         <SettingsLineTab v-if="activeTab === 'line'" />
       </el-tab-pane>
-      <el-tab-pane label="排程狀態" name="observability" lazy>
-        <SettingsObservabilityTab v-if="activeTab === 'observability'" />
-      </el-tab-pane>
-      <el-tab-pane label="分校設定" name="tenant-config" lazy>
+      <el-tab-pane v-if="hasPermission('SETTINGS_READ')" label="分校設定" name="tenant-config" lazy>
         <SettingsTenantConfigTab v-if="activeTab === 'tenant-config'" />
       </el-tab-pane>
       <el-tab-pane

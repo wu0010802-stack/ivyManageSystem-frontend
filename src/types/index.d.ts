@@ -31,6 +31,8 @@ declare module 'vue-router' {
     tab?: string
     /** Parent: show back button */
     showBack?: boolean
+    /** Parent: 返回鍵在沒有站內上一頁時的落點（預設為所屬分頁根頁，見 parent/utils/backNavigation.ts） */
+    backTo?: string
     /** Parent: hide bottom tab bar */
     hideTabBar?: boolean
   }

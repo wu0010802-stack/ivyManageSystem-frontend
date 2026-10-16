@@ -67,7 +67,9 @@ interface SetupState {
 function isoOffset(days: number): string {
   const [y, m, d] = todayTaipeiISO().split('-').map(Number)
   const base = Date.UTC(y, m - 1, d) + days * 86400000
-  return new Date(base).toISOString().slice(0, 10)
+  const shifted = new Date(base)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`
 }
 
 function daysBetween(a: string, b: string): number {

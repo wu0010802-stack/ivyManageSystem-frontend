@@ -44,6 +44,22 @@ describe('PortalOvertimeForm', () => {
         expect(wrapper.html()).toContain('overtime-form')
     })
 
+    it('時數由起迄時間無條件捨去到 0.5h，不得超出實際時段（教師端深度掃描 F2）', async () => {
+        const wrapper = mountForm()
+        const vm = wrapper.vm
+        vm.form.start_time = '18:00'
+        vm.form.end_time = '18:45'
+        await wrapper.vm.$nextTick()
+        // 45 分鐘：舊版四捨五入成 1h（超報 15 分鐘）；後端現在也會拒絕 hours > 時段差
+        expect(vm.form.hours).toBe(0.5)
+        vm.form.end_time = '19:15'
+        await wrapper.vm.$nextTick()
+        expect(vm.form.hours).toBe(1)
+        vm.form.end_time = '19:29'
+        await wrapper.vm.$nextTick()
+        expect(vm.form.hours).toBe(1)
+    })
+
     it('emits cancel when cancel button clicked', async () => {
         const wrapper = mountForm()
         const cancelBtn = wrapper.findAll('button').find((b) => b.text().includes('取消'))

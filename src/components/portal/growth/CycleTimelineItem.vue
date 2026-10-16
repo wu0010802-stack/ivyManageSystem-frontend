@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, useId } from 'vue'
+import { CaretRight } from '@element-plus/icons-vue'
 import { gradeStyle, cycleLabel } from '@/composables/usePortalAppraisal'
 import ItemRadarChart from './ItemRadarChart.vue'
 import ScoreItemsTable from './ScoreItemsTable.vue'
@@ -35,6 +36,7 @@ const props = defineProps<{
   fetchDetail: (cycleId: number | string) => Promise<unknown>
 }>()
 
+const detailId = useId()
 const expanded = ref(false)
 const detail = ref<CycleDetail | null>(null)
 const loading = ref(false)
@@ -42,24 +44,25 @@ const error = ref<string | null>(null)
 
 const label = `${cycleLabel(props.item.academic_year ?? '', String(props.item.semester ?? ''))}`
 
-const toggle = async () => {
-  // 未 FINALIZED 不可展開
+async function loadDetail() {
+  if (loading.value || !props.item.is_visible || props.item.cycle_id == null) return
+  loading.value = true
+  error.value = null
+  try {
+    const resp = await props.fetchDetail(props.item.cycle_id)
+    const body = (resp as { data?: CycleDetail } | null | undefined)?.data
+    detail.value = body ?? (resp as CycleDetail)
+  } catch {
+    error.value = '明細載入失敗，請重新載入。'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function toggle() {
   if (!props.item.is_visible) return
   expanded.value = !expanded.value
-  if (expanded.value && !detail.value) {
-    loading.value = true
-    try {
-      if (props.item.cycle_id == null) return
-      const resp = await props.fetchDetail(props.item.cycle_id)
-      const body = (resp as { data?: CycleDetail } | null | undefined)?.data
-      detail.value = body ?? (resp as CycleDetail)
-    } catch (e: unknown) {
-      const axErr = e as { response?: { data?: { detail?: string } } }
-      error.value = axErr?.response?.data?.detail || '載入失敗'
-    } finally {
-      loading.value = false
-    }
-  }
+  if (expanded.value && !detail.value) await loadDetail()
 }
 
 const statusLabel = (item: AppraisalCycle) => {
@@ -73,7 +76,7 @@ const statusLabel = (item: AppraisalCycle) => {
 
 <template>
   <article class="timeline-item" :class="{ expanded }">
-    <button class="row" :disabled="!item.is_visible" @click="toggle">
+    <button type="button" class="row" :aria-controls="detailId" :disabled="!item.is_visible" :aria-expanded="expanded" @click="toggle">
       <span class="label">{{ label }}</span>
       <span v-if="item.is_visible" class="score">{{ item.total_score }}</span>
       <span
@@ -82,11 +85,15 @@ const statusLabel = (item: AppraisalCycle) => {
         :style="{ background: gradeStyle(item.grade ?? '').color }"
       >{{ gradeStyle(item.grade ?? '').label }}</span>
       <span v-else class="status-chip">{{ statusLabel(item) }}</span>
-      <span class="chevron" :class="{ open: expanded }">▸</span>
+      <!-- 未公布的學期不能展開，箭頭只會誤導成「點得開」 -->
+      <el-icon v-if="item.is_visible" class="chevron" :class="{ open: expanded }" aria-hidden="true"><CaretRight /></el-icon>
     </button>
-    <div v-if="expanded && item.is_visible" class="detail">
+    <div v-if="expanded && item.is_visible" :id="detailId" class="detail">
       <div v-if="loading" class="loading">載入中…</div>
-      <div v-else-if="error" class="error">{{ error }}</div>
+      <div v-else-if="error" class="error" role="alert">
+        <p>{{ error }}</p>
+        <button type="button" class="retry-button" data-test="detail-retry" @click="loadDetail">重新載入本學期明細</button>
+      </div>
       <template v-else-if="detail">
         <ItemRadarChart :items="detail.score_items" />
         <ScoreItemsTable :items="detail.score_items" />
@@ -123,6 +130,10 @@ const statusLabel = (item: AppraisalCycle) => {
   font-size: 0.85rem;
 }
 .status-chip {
+  /* 未公布時沒有分數與等第，狀態字要橫跨那兩欄；否則塞進 60px 的分數欄會直排成四行 */
+  grid-column: 2 / 5;
+  justify-self: start;
+  white-space: nowrap;
   padding: 2px 10px;
   border-radius: 999px;
   background: var(--neutral-100, #f1f5f9);
@@ -145,4 +156,6 @@ const statusLabel = (item: AppraisalCycle) => {
   color: var(--pt-text-muted, #6b7280);
 }
 .error { color: #b91c1c; }
+.retry-button { padding: var(--space-2) var(--space-3); border: 1px solid currentColor; border-radius: var(--radius-md); color: inherit; background: transparent; cursor: pointer; min-height: 44px; }
+@media (max-width: 600px) { .row { grid-template-columns: 1fr auto auto 24px; gap: var(--space-2); } .status-chip { grid-column: span 2; } }
 </style>

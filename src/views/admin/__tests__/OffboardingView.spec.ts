@@ -80,6 +80,14 @@ function detailFixture(overrides: Record<string, unknown> = {}) {
     }
 }
 
+function deferred<T>() {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((done) => {
+        resolve = done
+    })
+    return { promise, resolve }
+}
+
 function mountView() {
     return mount(OffboardingView, {
         global: { plugins: [ElementPlus], stubs: { RouterLink: RouterLinkStub } },
@@ -195,6 +203,36 @@ describe('OffboardingView 清單（單一 list 請求）三態操作', () => {
         expect(mockGetDetail).toHaveBeenCalledTimes(2)
         // 初載 1 次 + toggle 後清單同步 1 次
         expect(mockGetList).toHaveBeenCalledTimes(2)
+    })
+
+    it('快速由 A 切換至 B 時，A 的晚到明細不得覆蓋 B 的 drawer', async () => {
+        mockGetList.mockResolvedValue(
+            listResponse([
+                listItem({ employee_id: 1, employee_name: '員工 A', has_record: true }),
+                listItem({ employee_id: 2, employee_name: '員工 B', has_record: true }),
+            ]),
+        )
+        const requestA = deferred<{ data: ReturnType<typeof detailFixture> }>()
+        const requestB = deferred<{ data: ReturnType<typeof detailFixture> }>()
+        mockGetDetail
+            .mockImplementationOnce(() => requestA.promise)
+            .mockImplementationOnce(() => requestB.promise)
+
+        const w = mountView()
+        await flushPromises()
+        await w.findAll('.offboard-action-btn')[0].trigger('click')
+
+        ;(w.vm as unknown as { drawerVisible: boolean }).drawerVisible = false
+        await w.vm.$nextTick()
+        await w.findAll('.offboard-action-btn')[1].trigger('click')
+
+        requestB.resolve({ data: detailFixture({ employee_id: 2, employee_name: '員工 B' }) })
+        await flushPromises()
+        requestA.resolve({ data: detailFixture({ employee_id: 1, employee_name: '員工 A' }) })
+        await flushPromises()
+
+        expect(w.text()).toContain('離職管理 — 員工 B')
+        expect(w.findComponent({ name: 'MagicLinkPanel' }).props('employeeId')).toBe(2)
     })
 
     it('closed 列：NHI 退保開關 disabled，且已產生的離職證明可下載', async () => {

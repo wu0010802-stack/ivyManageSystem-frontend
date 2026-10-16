@@ -1,21 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // vi.mock 會被 hoist 到檔頭，factory 內不得引用一般的 top-level 變數 → 用 vi.hoisted。
-const { liffInit, fetchTenantMetaForLiff, fetchTenantMeta } = vi.hoisted(() => ({
+const { liffInit, fetchTenantMetaForLine, fetchTenantMeta } = vi.hoisted(() => ({
   liffInit: vi.fn(() => Promise.resolve()),
-  fetchTenantMetaForLiff: vi.fn(),
+  fetchTenantMetaForLine: vi.fn(),
   fetchTenantMeta: vi.fn(),
 }))
 
 vi.mock('@line/liff', () => ({
   default: { init: liffInit, isLoggedIn: () => false, logout: vi.fn(), login: vi.fn() },
 }))
-vi.mock('@/api/tenantMeta', () => ({
-  fetchTenantMeta: () => fetchTenantMeta(),
-  fetchTenantMetaForLiff: () => fetchTenantMetaForLiff(),
-}))
+vi.mock('@/api/tenantMeta', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/tenantMeta')>()
+  return {
+    ...actual,
+    fetchTenantMeta: () => fetchTenantMeta(),
+    fetchTenantMetaForLine: () => fetchTenantMetaForLine(),
+  }
+})
 
 import { initLiff, _resetLiffInitForTests } from '@/parent/services/liff'
+import { TenantMetaError } from '@/api/tenantMeta'
+import { _resetTenantCacheForTests } from '@/utils/tenant'
 
 /**
  * LIFF ID 改 runtime（fb §4.5）：LIFF App 綁 LINE Login Channel，每間園所一組
@@ -29,18 +35,25 @@ const setEnv = (patch: Record<string, string>) => Object.assign(import.meta.env,
 beforeEach(() => {
   _resetLiffInitForTests()
   liffInit.mockClear()
-  fetchTenantMetaForLiff.mockReset()
+  fetchTenantMetaForLine.mockReset()
   fetchTenantMeta.mockReset()
-  setEnv({ VITE_LIFF_ID: '' })
+  setEnv({
+    VITE_LIFF_ID: '',
+    VITE_TENANT_META_ENABLED: '',
+    VITE_TENANT_BASE_DOMAIN: '',
+    VITE_TENANT_DOMAIN_MAP: '',
+  })
+  _resetTenantCacheForTests()
 })
 
 afterEach(() => {
   Object.assign(import.meta.env, ORIGINAL_ENV)
   _resetLiffInitForTests()
+  _resetTenantCacheForTests()
 })
 
 it('優先用 tenant-meta 的 liff_id', async () => {
-  fetchTenantMetaForLiff.mockResolvedValue({ liff_id: 'tenant-liff-1' })
+  fetchTenantMetaForLine.mockResolvedValue({ liff_id: 'tenant-liff-1' })
   setEnv({ VITE_LIFF_ID: 'env-liff' })
 
   await initLiff()
@@ -57,8 +70,8 @@ it('優先用 tenant-meta 的 liff_id', async () => {
  *
  * LIFF ID 是**登入前置**，不該被「品牌 API 灰度」這個無關的旗標擋住 ⇒ 走專用管道。
  */
-it('LIFF ID 不受品牌灰度閘門限制：改走 fetchTenantMetaForLiff', async () => {
-  fetchTenantMetaForLiff.mockResolvedValue({ liff_id: 'tenant-liff-9' })
+it('LIFF ID 不受品牌灰度閘門限制：改走 fetchTenantMetaForLine', async () => {
+  fetchTenantMetaForLine.mockResolvedValue({ liff_id: 'tenant-liff-9' })
   // 受閘門限制的那支在灰度關閉時是直接 reject 的——LIFF 不可以依賴它
   fetchTenantMeta.mockRejectedValue(new Error('TENANT_META_DISABLED'))
   setEnv({ VITE_LIFF_ID: '' })
@@ -69,8 +82,39 @@ it('LIFF ID 不受品牌灰度閘門限制：改走 fetchTenantMetaForLiff', asy
   expect(fetchTenantMeta).not.toHaveBeenCalled()
 })
 
-it('tenant-meta 不可用（灰度未開 / 網路錯誤）→ 退回 VITE_LIFF_ID', async () => {
-  fetchTenantMetaForLiff.mockRejectedValue(new Error('disabled'))
+it('tenant-meta 網路錯誤時不退回 env，避免未知 Host 使用 default tenant LIFF', async () => {
+  fetchTenantMetaForLine.mockRejectedValue(new TypeError('Failed to fetch'))
+  setEnv({ VITE_LIFF_ID: 'env-liff' })
+
+  await expect(initLiff()).rejects.toThrow('此園所尚未設定 LIFF ID，請聯絡園所確認 LINE 設定')
+
+  expect(liffInit).not.toHaveBeenCalled()
+})
+
+it('tenant-meta 已識別租戶但 liff_id 為空時不退回 env', async () => {
+  fetchTenantMetaForLine.mockResolvedValue({ tenant: { slug: 'renwu' }, liff_id: '' })
+  setEnv({ VITE_LIFF_ID: 'env-liff' })
+
+  await expect(initLiff()).rejects.toThrow('此園所尚未設定 LIFF ID，請聯絡園所確認 LINE 設定')
+
+  expect(liffInit).not.toHaveBeenCalled()
+})
+
+it.each([
+  [404, 'TENANT_NOT_FOUND'],
+  [403, 'TENANT_SUSPENDED'],
+  [503, 'TENANT_PROVISIONING'],
+])('tenant-meta %i 租戶錯誤時不退回 env', async (status, code) => {
+  fetchTenantMetaForLine.mockRejectedValue(new TenantMetaError(status, code))
+  setEnv({ VITE_LIFF_ID: 'env-liff' })
+
+  await expect(initLiff()).rejects.toThrow('此園所尚未設定 LIFF ID，請聯絡園所確認 LINE 設定')
+  expect(liffInit).not.toHaveBeenCalled()
+})
+
+it('只有單租戶 legacy 後端明確缺 tenant-meta 路由時才退回 env', async () => {
+  const error = Object.assign(new TenantMetaError(404), { legacyRouteMissing: true })
+  fetchTenantMetaForLine.mockRejectedValue(error)
   setEnv({ VITE_LIFF_ID: 'env-liff' })
 
   await initLiff()
@@ -78,34 +122,35 @@ it('tenant-meta 不可用（灰度未開 / 網路錯誤）→ 退回 VITE_LIFF_I
   expect(liffInit).toHaveBeenCalledWith({ liffId: 'env-liff', withLoginOnExternalBrowser: true })
 })
 
-it('tenant-meta 有回但 liff_id 為空 → 也退回 env（園所還沒填 LINE 設定）', async () => {
-  fetchTenantMetaForLiff.mockResolvedValue({ liff_id: '' })
-  setEnv({ VITE_LIFF_ID: 'env-liff' })
+it('多租戶模式即使收到缺路由標記也不退回 env', async () => {
+  const error = Object.assign(new TenantMetaError(404), { legacyRouteMissing: true })
+  fetchTenantMetaForLine.mockRejectedValue(error)
+  setEnv({ VITE_LIFF_ID: 'env-liff', VITE_TENANT_BASE_DOMAIN: 'ivy.tw' })
+  _resetTenantCacheForTests()
 
-  await initLiff()
-
-  expect(liffInit).toHaveBeenCalledWith({ liffId: 'env-liff', withLoginOnExternalBrowser: true })
+  await expect(initLiff()).rejects.toThrow('此園所尚未設定 LIFF ID，請聯絡園所確認 LINE 設定')
+  expect(liffInit).not.toHaveBeenCalled()
 })
 
 it('兩者皆缺 → throw，且訊息指向園所而非工程 env（看到這行的是家長）', async () => {
-  fetchTenantMetaForLiff.mockRejectedValue(new Error('x'))
+  fetchTenantMetaForLine.mockRejectedValue(new Error('x'))
 
   await expect(initLiff()).rejects.toThrow('此園所尚未設定 LIFF ID，請聯絡園所確認 LINE 設定')
   expect(liffInit).not.toHaveBeenCalled()
 })
 
 it('失敗後可重試：_initPromise 不快取 rejection（LoginView.manualRetry 依賴）', async () => {
-  fetchTenantMetaForLiff.mockRejectedValueOnce(new Error('x'))
+  fetchTenantMetaForLine.mockRejectedValueOnce(new Error('x'))
   await expect(initLiff()).rejects.toThrow()
 
-  fetchTenantMetaForLiff.mockResolvedValue({ liff_id: 'tenant-liff-1' })
+  fetchTenantMetaForLine.mockResolvedValue({ liff_id: 'tenant-liff-1' })
   await expect(initLiff()).resolves.toBeUndefined()
   expect(liffInit).toHaveBeenCalledTimes(1)
 })
 
 describe('成功後的去重', () => {
   it('多次呼叫共用同一個 init promise', async () => {
-    fetchTenantMetaForLiff.mockResolvedValue({ liff_id: 'tenant-liff-1' })
+    fetchTenantMetaForLine.mockResolvedValue({ liff_id: 'tenant-liff-1' })
     await Promise.all([initLiff(), initLiff(), initLiff()])
     expect(liffInit).toHaveBeenCalledTimes(1)
   })

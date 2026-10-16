@@ -146,7 +146,7 @@ const stats = computed(() => {
     <div v-if="isFull && stats.length" class="stats">
       <div v-for="s in stats" :key="s.key" class="stat" :class="`stat-${s.tone}`">
         <span class="stat-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">{{ s.icon }}</span>
+          <span class="material-symbols-rounded" aria-hidden="true">{{ s.icon }}</span>
         </span>
         <span class="stat-value">{{ s.value }}</span>
         <span class="stat-label">{{ s.label }}</span>
@@ -187,16 +187,11 @@ const stats = computed(() => {
 }
 
 /* awaiting / offday：今天還沒有故事可講，漸層收斂較淡，
-   讓「有聯絡簿的日子」在視覺上明顯更飽滿。三色同源、只降飽和度，
-   不能對 --pt-gradient-hero（gradient 值）直接 color-mix，故獨立複寫三色。 */
+   讓「有聯絡簿的日子」在視覺上明顯更飽滿。三色同源、只降飽和度；
+   light/dark 成對定義在 globals.css（元件內寫死 light 三色時 dark 會混出中灰底）。 */
 .day-card-awaiting,
 .day-card-offday {
-  background: linear-gradient(
-    150deg,
-    color-mix(in srgb, #fff7dd 55%, var(--pt-surface-card)) 0%,
-    color-mix(in srgb, #d9f4e2 55%, var(--pt-surface-card)) 78%,
-    color-mix(in srgb, #cdeef9 55%, var(--pt-surface-card)) 130%
-  );
+  background: var(--pt-gradient-hero-quiet);
 }
 
 .hero {
@@ -227,7 +222,7 @@ const stats = computed(() => {
 
 .hint {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.65;
   color: var(--pt-text-muted);
 }
@@ -236,7 +231,7 @@ const stats = computed(() => {
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--pt-text-strong);
@@ -267,7 +262,7 @@ const stats = computed(() => {
 }
 .meta {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--pt-text-muted);
 }
@@ -313,13 +308,13 @@ const stats = computed(() => {
 .stat-coral .stat-icon, .stat-coral .stat-value { color: var(--pt-accent-coral-on); }
 
 .stat-value {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   line-height: 1.1;
 }
 .stat-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;
@@ -327,7 +322,7 @@ const stats = computed(() => {
 
 .note {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.7;
   color: var(--pt-text-body);
   font-style: italic;
@@ -359,7 +354,7 @@ const stats = computed(() => {
   background: color-mix(in srgb, var(--m3-primary, #006d3d) 88%, transparent);
   color: var(--m3-on-primary, #fff);
   font-weight: 700;
-  font-size: 17px;
+  font-size: 1.0625rem;
   border-radius: 12px;
 }
 </style>

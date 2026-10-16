@@ -23,16 +23,29 @@
               @dragleave="onDragLeave(cls.id)"
               @drop="onDrop(cls.id, $event)"
             >
-              <span class="class-name-text">{{ cls.target_name }}</span>
-              <el-button
-                v-if="editable"
-                :icon="Edit"
-                circle
-                size="small"
-                class="class-edit-btn"
-                title="編輯班級"
-                @click="emit('class-edit', cls.id)"
-              />
+              <div class="class-name-line">
+                <el-checkbox
+                  v-if="editable && classStudents(cls.id).length"
+                  class="class-select-all"
+                  :aria-label="`勾選${cls.target_name}全班`"
+                  :model-value="classAllSelected(cls.id)"
+                  :indeterminate="classSomeSelected(cls.id) && !classAllSelected(cls.id)"
+                  @change="(val: string | number | boolean) => emit('set-selected', classStudents(cls.id).map(st => st.id), Boolean(val))"
+                />
+                <span class="class-name-text">{{ cls.target_name }}</span>
+              </div>
+              <div class="class-meta-line">
+                <span v-if="cls.class_code" class="class-code">{{ cls.class_code }}</span>
+                <el-button
+                  v-if="editable"
+                  :icon="Edit"
+                  link
+                  class="class-edit-btn"
+                  title="編輯班級"
+                  :aria-label="`編輯${cls.target_name}`"
+                  @click="emit('class-edit', cls.id)"
+                />
+              </div>
             </td>
           </tr>
           <!-- 容量 badge -->
@@ -49,43 +62,26 @@
               </span>
             </td>
           </tr>
-          <!-- 班導 -->
-          <tr>
-            <td class="row-label teacher-label">班導</td>
+          <!-- 三師：格內直接選老師（取代逐班開對話框）；未指派時直接顯示原班老師 -->
+          <tr v-for="role in TEACHER_ROLES" :key="role">
+            <td class="row-label teacher-label">{{ TEACHER_ROLE_LABELS[role] }}</td>
             <td
               v-for="cls in flatClasses"
               :key="cls.id"
               class="teacher-cell"
               :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
             >
-              <span v-if="cls.head_teacher_name" class="teacher-name">{{ cls.head_teacher_name }}</span>
-              <span v-else class="teacher-unassigned" :title="referenceTitle(cls, 'head')">待確認</span>
-            </td>
-          </tr>
-          <!-- 副班導 -->
-          <tr>
-            <td class="row-label teacher-label">副班導</td>
-            <td
-              v-for="cls in flatClasses"
-              :key="cls.id"
-              class="teacher-cell"
-              :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
-            >
-              <span v-if="cls.assistant_teacher_name" class="teacher-name">{{ cls.assistant_teacher_name }}</span>
-              <span v-else class="teacher-unassigned" :title="referenceTitle(cls, 'assistant')">待確認</span>
-            </td>
-          </tr>
-          <!-- 美語老師 -->
-          <tr>
-            <td class="row-label teacher-label">美語老師</td>
-            <td
-              v-for="cls in flatClasses"
-              :key="cls.id"
-              class="teacher-cell"
-              :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
-            >
-              <span v-if="cls.art_teacher_name" class="teacher-name">{{ cls.art_teacher_name }}</span>
-              <span v-else class="teacher-unassigned" :title="referenceTitle(cls, 'art')">待確認</span>
+              <PlanTeacherCell
+                :role="role"
+                :class-name="cls.target_name"
+                :teacher-id="cls[TEACHER_FIELD_BY_ROLE[role]] ?? null"
+                :teacher-name="teacherNameOf(cls, role)"
+                :source-teacher-name="sourceTeacherName(cls, role)"
+                :editable="editable"
+                :disabled="busy"
+                :options="teacherOptionsByCell.get(`${cls.id}:${role}`) ?? []"
+                @change="(id: number | null) => emit('teacher-change', cls.id, TEACHER_FIELD_BY_ROLE[role], id)"
+              />
             </td>
           </tr>
         </thead>
@@ -126,8 +122,16 @@
                       class="disposition-tag"
                       :class="`disposition-tag-${student.disposition}`"
                     >{{ dispositionTag(student) }}</span>
+                    <span
+                      v-if="student.manually_adjusted"
+                      class="manual-mark"
+                      role="img"
+                      title="手動調整過"
+                      aria-label="手動調整過"
+                    />
                   </label>
-                  <div class="student-source">{{ student.source_classroom_name ?? '' }}</div>
+                  <!-- 同班升上來的不重複寫原班；只標出從別班搬進來的 -->
+                  <div v-if="isMovedIn(student, cls)" class="student-moved">← {{ student.source_classroom_name }}</div>
                 </div>
               </template>
             </td>
@@ -145,7 +149,8 @@
           </tr>
           <tr class="grand-total-row">
             <td class="row-label grand-total-label" :colspan="flatClasses.length + 1">
-              總計：{{ grandTotal }} 人（不含畢業／排除）
+              已分班 {{ grandTotal }} 人・待分班 {{ unassignedCount }} 人
+              <span class="grand-total-note">（另有畢業 {{ graduateCount }}、排除 {{ excludeCount }}，不在表內）</span>
             </td>
           </tr>
         </tfoot>
@@ -159,16 +164,35 @@ import { ref, computed } from 'vue'
 import { Edit } from '@element-plus/icons-vue'
 import type { Schema } from '@/api/_generated/typed'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
+import type { TeacherOptionLike } from '@/utils/teacherOption'
+import PlanTeacherCell from './PlanTeacherCell.vue'
+import {
+  TEACHER_FIELD_BY_ROLE,
+  TEACHER_ROLES,
+  TEACHER_ROLE_LABELS,
+  buildTeacherOptions,
+  sourceTeacherName,
+  type TeacherCellOption,
+  type TeacherField,
+  type TeacherRole,
+} from './planHelpers'
 
 type PlanDetail = Schema<'PlanDetailOut'>
 type PlanClass = Schema<'PlanClassOut'>
 type PlanStudent = Schema<'PlanStudentOut'>
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   plan: PlanDetail
   editable: boolean
   selectedIds: Set<number>
-}>()
+  /** 老師下拉的全部人選（GET /classrooms/teacher-options），唯讀時可不給 */
+  teacherOptions?: TeacherOptionLike[]
+  /** 父層 mutation in-flight：鎖住老師格觸發點 */
+  busy?: boolean
+}>(), {
+  teacherOptions: () => [],
+  busy: false,
+})
 
 const emit = defineEmits<{
   'set-selected': [ids: number[], checked: boolean]
@@ -176,6 +200,7 @@ const emit = defineEmits<{
   // 對齊後端 BulkStudentsRequest 語意（批次 student_ids＋op＋plan_class_id）；拖曳搬班
   // 尚未接線（brief 明示 checkbox 批次優先，拖曳延後），單人移動＝ids 長度 1。
   'student-move': [payload: { studentIds: number[]; op: BulkOp; planClassId?: number | null; excludeReason?: string | null }]
+  'teacher-change': [planClassId: number, field: TeacherField, teacherId: number | null]
 }>()
 
 // ── 年級分組（依 target_grade_id 首次出現順序分組，容忍後端非嚴格連續排序）──
@@ -217,17 +242,23 @@ function isOverCapacity(cls: PlanClass): boolean {
   return cls.capacity != null && cls.assigned_count > cls.capacity
 }
 
-// 教師「待確認」hover 參考：改顯示對應原班的三師姓名之一（source_head/assistant/
-// art_teacher_name，Task 12 後端已補此三欄），None 顯「—」；取代 Task 11 只能顯示
-// 來源班名稱字串的粗略提示。
-function referenceTitle(cls: PlanClass, role: 'head' | 'assistant' | 'art'): string {
-  const label = role === 'head' ? '班導' : role === 'assistant' ? '副班導' : '美語老師'
-  const sourceName =
-    role === 'head' ? cls.source_head_teacher_name
-    : role === 'assistant' ? cls.source_assistant_teacher_name
-    : cls.source_art_teacher_name
-  return `原班${label}：${sourceName ?? '—'}`
+function teacherNameOf(cls: PlanClass, role: TeacherRole): string | null {
+  if (role === 'head') return cls.head_teacher_name ?? null
+  if (role === 'assistant') return cls.assistant_teacher_name ?? null
+  return cls.art_teacher_name ?? null
 }
+
+// 每格下拉選項（含「已是某班班導」停用註記）；只在可編輯時計算
+const teacherOptionsByCell = computed(() => {
+  const map = new Map<string, TeacherCellOption[]>()
+  if (!props.editable || props.teacherOptions.length === 0) return map
+  for (const cls of props.plan.classes) {
+    for (const role of TEACHER_ROLES) {
+      map.set(`${cls.id}:${role}`, buildTeacherOptions(props.teacherOptions, props.plan.classes, cls.id, role))
+    }
+  }
+  return map
+})
 
 function gradeAssignedTotal(group: GradeGroup): number {
   return group.classes.reduce((sum, cls) => sum + cls.assigned_count, 0)
@@ -248,6 +279,31 @@ const studentsByClass = computed(() => {
   }
   return map
 })
+
+function classStudents(classId: number): PlanStudent[] {
+  return studentsByClass.value.get(classId) ?? []
+}
+
+function classAllSelected(classId: number): boolean {
+  const list = classStudents(classId)
+  return list.length > 0 && list.every(st => props.selectedIds.has(st.id))
+}
+
+function classSomeSelected(classId: number): boolean {
+  return classStudents(classId).some(st => props.selectedIds.has(st.id))
+}
+
+function isMovedIn(student: PlanStudent, cls: PlanClass): boolean {
+  return !!student.source_classroom_name && student.source_classroom_name !== cls.source_name
+}
+
+const unassignedCount = computed(() =>
+  props.plan.students.filter(
+    st => (st.disposition === 'promote' || st.disposition === 'retain') && st.plan_class_id == null,
+  ).length,
+)
+const graduateCount = computed(() => props.plan.students.filter(st => st.disposition === 'graduate').length)
+const excludeCount = computed(() => props.plan.students.filter(st => st.disposition === 'exclude').length)
 
 const maxRowCount = computed(() => {
   let max = 0
@@ -314,7 +370,13 @@ function onDrop(targetClassId: number, event: DragEvent): void {
     dragged = { id, planClassId: null }
   }
   if (dragged.planClassId === targetClassId) return // 同班放回 no-op，免無意義 version bump
-  emit('student-move', { studentIds: [dragged.id], op: 'assign', planClassId: targetClassId })
+  emit('student-move', { studentIds: [dragged.id], op: moveOpFor(dragged.id), planClassId: targetClassId })
+}
+
+// 留級生換班要維持 retain（assign 會把 disposition 改回 promote、丟掉留級標記；
+// 大班留級生還會因此被 7/31 自動畢業）。年級不符時後端回 422，由父層 toast。
+function moveOpFor(studentId: number): BulkOp {
+  return props.plan.students.find(st => st.id === studentId)?.disposition === 'retain' ? 'retain' : 'assign'
 }
 
 function onDragEnd(): void {
@@ -360,7 +422,7 @@ defineExpose({ locateStudent, locateClass })
 <style scoped>
 .plan-roster-wrapper {
   --yp-h-grade: 34px;
-  --yp-h-name: 40px;
+  --yp-h-name: 50px;
   font-size: 14px;
   color: var(--text-primary);
 }
@@ -369,7 +431,8 @@ defineExpose({ locateStudent, locateClass })
   overflow: auto;
   /* 垂直捲動收在表格容器內，sticky 表頭對此容器生效（el-main 為外層捲動根，
      對 window/el-main sticky 需算 header 高度，內部容器最穩） */
-  max-height: calc(100vh - 230px);
+  /* 上方還有頁首、進度列與批次列；扣掉它們讓頁面本身不再出現第二條捲軸 */
+  max-height: max(320px, calc(100vh - 330px));
 }
 
 .plan-roster-table {
@@ -382,7 +445,7 @@ defineExpose({ locateStudent, locateClass })
 .plan-roster-table td {
   border-right: 1px solid var(--neutral-300);
   border-bottom: 1px solid var(--neutral-300);
-  padding: 5px 8px;
+  padding: var(--space-1) 6px;
   text-align: center;
   vertical-align: top;
   background: var(--surface-color);
@@ -432,12 +495,12 @@ defineExpose({ locateStudent, locateClass })
   border-right: none !important;
   border-top: none !important;
   border-left: none !important;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
 }
 
 .plan-roster-table .grade-group-cell {
   font-weight: 700;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   border-right: 2px solid var(--neutral-600) !important;
 }
 
@@ -446,18 +509,30 @@ defineExpose({ locateStudent, locateClass })
   left: 0;
   z-index: 2;
   font-weight: 600;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   border-right: 2px solid var(--neutral-600) !important;
   white-space: nowrap;
 }
 
 .class-name-cell {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
+}
+
+.class-name-line,
+.class-meta-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.class-meta-line {
+  min-height: 18px;
 }
 
 .class-edit-btn {
-  margin-left: 4px;
-  vertical-align: middle;
+  height: auto;
+  padding: 0;
 }
 
 .capacity-badge {
@@ -465,7 +540,7 @@ defineExpose({ locateStudent, locateClass })
   padding: 1px 6px;
   border-radius: var(--radius-full, 9999px);
   font-weight: 600;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
 }
 
 .capacity-badge.over-capacity {
@@ -473,34 +548,24 @@ defineExpose({ locateStudent, locateClass })
   background: var(--color-danger-soft);
 }
 
-.plan-roster-table .teacher-label {
-  background: var(--color-warning-soft);
-}
-
-.teacher-cell {
-  font-size: 13px;
-}
-
-.teacher-unassigned {
-  color: var(--color-warning-hover);
-  border: 1px dashed var(--color-warning);
-  border-radius: var(--radius-sm);
-  padding: 0 4px;
-  cursor: help;
+.plan-roster-table .teacher-cell {
+  font-size: var(--text-sm);
+  padding: 2px;
 }
 
 .plan-roster-table .seq-cell {
   position: sticky;
   left: 0;
   z-index: 2;
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   color: var(--text-secondary);
   font-size: 12px;
   border-right: 2px solid var(--neutral-600) !important;
 }
 
+/* 欄寬收斂：1440 寬桌機在側欄 320px 旁仍能一次看到 8 個班 */
 .student-cell {
-  min-width: 96px;
+  min-width: 84px;
   text-align: left;
 }
 
@@ -530,8 +595,31 @@ defineExpose({ locateStudent, locateClass })
   cursor: default;
 }
 
-.student-source {
-  font-size: 11px;
+.student-moved {
+  font-size: var(--text-xs);
+  color: var(--color-info-hover);
+}
+
+.manual-mark {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-info);
+}
+
+.class-select-all {
+  height: auto;
+}
+
+.class-code {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-secondary);
+}
+
+.grand-total-note {
+  font-weight: var(--font-weight-regular);
   color: var(--text-secondary);
 }
 
@@ -565,7 +653,7 @@ tfoot tr:first-child td {
 }
 
 .plan-roster-table .grade-total-cell {
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
   font-weight: 700;
   font-size: 13px;
 }

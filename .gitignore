@@ -20,6 +20,7 @@ frontend.log
 vite.config.js.timestamp-*
 CLAUDE.md.before-*
 .playwright-cli/
+.playwright-mcp/
 
 # Claude Code 本機狀態（skills/settings 是否版控另行決定，session/worktree 不入版控）
 .claude/worktrees/

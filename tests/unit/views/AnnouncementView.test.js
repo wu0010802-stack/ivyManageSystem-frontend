@@ -49,6 +49,13 @@ vi.mock('@/api/employees', () => ({
   getEmployees: vi.fn(() => Promise.resolve({ data: [] })),
 }))
 
+vi.mock('@/api/announcementCategories', () => ({
+  getAnnouncementCategories: vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } })),
+  createAnnouncementCategory: vi.fn(),
+  updateAnnouncementCategory: vi.fn(),
+  deleteAnnouncementCategory: vi.fn(),
+}))
+
 const flushPromises = async () => {
   await Promise.resolve()
   await Promise.resolve()

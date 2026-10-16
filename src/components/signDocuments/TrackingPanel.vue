@@ -130,6 +130,7 @@
           v-if="dispatchStep < 2"
           type="primary"
           :disabled="!canProceedDispatch"
+          :loading="dispatchStep === 0 && dispatchStudentLoading"
           @click="dispatchStep += 1"
         >
           下一步
@@ -299,6 +300,8 @@ const classroomStudents = ref<StudentOption[]>([])
 const selectedStudentIds = ref<number[]>([])
 const selectedTemplateIds = ref<number[]>([])
 const dispatching = ref(false)
+const dispatchStudentLoading = ref(false)
+let dispatchStudentEpoch = 0
 
 const allStudentsSelected = computed(
   () =>
@@ -311,15 +314,26 @@ function toggleSelectAllStudents(checked: string | number | boolean) {
 }
 
 async function onDispatchClassroomChange(classroomId: number) {
+  const requestEpoch = ++dispatchStudentEpoch
+  classroomStudents.value = []
+  selectedStudentIds.value = []
+  dispatchStudentLoading.value = true
   // getStudents() 回傳 StudentListOut = {items, limit, skip, total}（分頁包裝）；
   // limit 顯式帶大值避免大班級被預設分頁截斷。
-  const { data } = await getStudents({ classroom_id: classroomId, is_active: true, limit: 500 })
-  classroomStudents.value = (data.items ?? []) as unknown as StudentOption[]
-  selectedStudentIds.value = classroomStudents.value.map((s) => s.id)
+  try {
+    const { data } = await getStudents({ classroom_id: classroomId, is_active: true, limit: 500 })
+    if (requestEpoch !== dispatchStudentEpoch || dispatchClassroomId.value !== classroomId) return
+    classroomStudents.value = (data.items ?? []) as unknown as StudentOption[]
+    selectedStudentIds.value = classroomStudents.value.map((s) => s.id)
+  } catch {
+    if (requestEpoch === dispatchStudentEpoch) ElMessage.error('載入班級學生失敗')
+  } finally {
+    if (requestEpoch === dispatchStudentEpoch) dispatchStudentLoading.value = false
+  }
 }
 
 const canProceedDispatch = computed(() => {
-  if (dispatchStep.value === 0) return selectedStudentIds.value.length > 0
+  if (dispatchStep.value === 0) return !dispatchStudentLoading.value && selectedStudentIds.value.length > 0
   if (dispatchStep.value === 1) return selectedTemplateIds.value.length > 0
   return true
 })
@@ -330,6 +344,8 @@ function openDispatchDialog() {
 }
 
 function resetDispatch() {
+  dispatchStudentEpoch += 1
+  dispatchStudentLoading.value = false
   dispatchStep.value = 0
   dispatchClassroomId.value = null
   classroomStudents.value = []

@@ -23,7 +23,11 @@
       class="tenant-brand__alert"
     />
 
-    <el-form v-loading="loading" label-position="top">
+    <el-form
+      v-loading="loading"
+      :disabled="loading || saving || loadedTenantId !== props.tenantId"
+      label-position="top"
+    >
       <section v-for="group in groups" :key="group.key" class="brand-group">
         <h4 class="brand-group__title">{{ group.title }}</h4>
         <div class="brand-group__fields">
@@ -48,7 +52,7 @@
         v-if="canManage"
         type="primary"
         :loading="saving"
-        :disabled="!dirtyKeys.length"
+        :disabled="loading || saving || loadedTenantId !== props.tenantId || !dirtyKeys.length"
         data-testid="brand-save"
         @click="save"
       >
@@ -59,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 import { getErrorMessage } from '@/utils/errorHandler'
@@ -72,6 +76,8 @@ const canManage = computed(() => hasPermission('PLATFORM_TENANTS_MANAGE'))
 const loading = ref(false)
 const saving = ref(false)
 const loaded = ref(false)
+const loadedTenantId = ref<number | null>(null)
+let requestGeneration = 0
 const knownKeys = ref<string[]>([])
 const missingKeys = ref<string[]>([])
 /** key → 目前輸入值（空字串代表「未填」，送出時轉 null）。 */
@@ -125,10 +131,24 @@ const groupOrder = (key: string): number => {
 
 const dirtyKeys = computed(() => knownKeys.value.filter((k) => (values[k] ?? '') !== (original[k] ?? '')))
 
+function clearState(): void {
+  loaded.value = false
+  loadedTenantId.value = null
+  knownKeys.value = []
+  missingKeys.value = []
+  for (const key of Object.keys(values)) delete values[key]
+  for (const key of Object.keys(original)) delete original[key]
+}
+
 async function load(): Promise<void> {
+  const tenantId = props.tenantId
+  const generation = ++requestGeneration
   loading.value = true
+  saving.value = false
+  clearState()
   try {
-    const res = await getTenantBrand(props.tenantId)
+    const res = await getTenantBrand(tenantId)
+    if (generation !== requestGeneration || tenantId !== props.tenantId) return
     const payload = res.data
     knownKeys.value = payload?.known_keys ?? []
     missingKeys.value = payload?.missing_keys ?? []
@@ -139,14 +159,19 @@ async function load(): Promise<void> {
       original[key] = v
     }
     loaded.value = true
+    loadedTenantId.value = tenantId
   } catch (err) {
+    if (generation !== requestGeneration || tenantId !== props.tenantId) return
     ElMessage.error(getErrorMessage(err, '品牌設定載入失敗'))
   } finally {
-    loading.value = false
+    if (generation === requestGeneration) loading.value = false
   }
 }
 
 async function save(): Promise<void> {
+  const tenantId = props.tenantId
+  const generation = requestGeneration
+  if (loading.value || saving.value || loadedTenantId.value !== tenantId) return
   const changed = dirtyKeys.value
   if (!changed.length) return
   saving.value = true
@@ -154,7 +179,8 @@ async function save(): Promise<void> {
     // 清空欄位＝送 null（刪除該 key，回退前端預設值），不是送空字串。
     const payload: Record<string, string | null> = {}
     for (const key of changed) payload[key] = values[key].trim() === '' ? null : values[key]
-    const res = await updateTenantBrand(props.tenantId, { values: payload })
+    const res = await updateTenantBrand(tenantId, { values: payload })
+    if (generation !== requestGeneration || tenantId !== props.tenantId || loadedTenantId.value !== tenantId) return
     ElMessage.success(`已更新 ${changed.length} 個品牌字串`)
     missingKeys.value = res.data?.missing_keys ?? missingKeys.value
     const stored = (res.data?.values ?? {}) as Record<string, string | null>
@@ -164,13 +190,18 @@ async function save(): Promise<void> {
       original[key] = v
     }
   } catch (err) {
+    if (generation !== requestGeneration || tenantId !== props.tenantId) return
     ElMessage.error(getErrorMessage(err, '品牌設定儲存失敗'))
   } finally {
-    saving.value = false
+    if (generation === requestGeneration && tenantId === props.tenantId) saving.value = false
   }
 }
 
-watch(() => props.tenantId, load, { immediate: true })
+watch(() => props.tenantId, load, { immediate: true, flush: 'sync' })
+
+onUnmounted(() => {
+  requestGeneration += 1
+})
 </script>
 
 <style scoped>

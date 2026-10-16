@@ -1,4 +1,15 @@
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
+const compact = ref(false)
+let compactQuery: MediaQueryList | undefined
+function updateCompact() { compact.value = compactQuery?.matches ?? false }
+onMounted(() => {
+  compactQuery = window.matchMedia('(max-width: 600px)')
+  updateCompact()
+  compactQuery.addEventListener('change', updateCompact)
+})
+onUnmounted(() => compactQuery?.removeEventListener('change', updateCompact))
+
 import { statusLabel as labelStatus, gradeLabel, SIGN_STATUS_ORDER, ROLE_GROUP_LABEL } from '@/constants/appraisalYearEnd'
 
 interface Summary { id: number; status?: string; total_score?: number; grade?: string; bonus_amount?: number; employee_name?: string; [key: string]: unknown }
@@ -10,6 +21,7 @@ const props = defineProps<{
   summaryByParticipant?: Record<number, Summary | undefined>
   catalog?: unknown[]
   selectedIds?: number[]
+  selectableIds?: number[]
   busy?: boolean
   signingIds?: number[]
   canSignSupervisor?: boolean
@@ -83,12 +95,14 @@ function openDetail(row: Participant) { emit('open-detail', row) }
         <el-checkbox
           v-if="hasSummary(row.id)"
           :model-value="isSelected(getSummary(row.id).id)"
+          :disabled="rowBusy(getSummary(row.id).id) || (selectableIds != null && !selectableIds.includes(getSummary(row.id).id))"
+          :aria-label="`選取 ${row.employee_name ?? `員工 ${row.employee_id}`} 的考核`"
           :data-test="`list-checkbox-${row.id}`"
           @update:model-value="(v) => toggleSelect(getSummary(row.id).id, v as boolean)"
         />
       </template>
     </el-table-column>
-    <el-table-column label="員工" width="120">
+    <el-table-column :label="compact ? '員工摘要' : '員工'" min-width="140" :fixed="compact ? false : 'left'">
       <template #default="{ row }">
         <el-button
           link
@@ -96,31 +110,39 @@ function openDetail(row: Participant) { emit('open-detail', row) }
           :data-test="`detail-btn-${row.id}`"
           @click="openDetail(row)"
         >{{ row.employee_name ?? `員工 ${row.employee_id}` }}</el-button>
+        <div v-if="compact" class="employee-summary">
+          <template v-if="hasSummary(row.id)">
+            <span>{{ statusLabel(getSummary(row.id).status ?? '') }}</span>
+            <span>總分 {{ Number(getSummary(row.id).total_score).toFixed(2) }} · {{ gradeLabel(getSummary(row.id).grade ?? '') }}</span>
+            <span>獎金 {{ Number(getSummary(row.id).bonus_amount).toLocaleString() }}</span>
+          </template>
+          <span v-else>尚未產生考核結果</span>
+        </div>
       </template>
     </el-table-column>
-    <el-table-column label="角色群" width="140">
+    <el-table-column v-if="!compact" label="角色群" width="140">
       <template #default="{ row }">{{ ROLE_GROUP_LABEL[row.role_group ?? ''] || row.role_group }}</template>
     </el-table-column>
-    <el-table-column label="總分" width="100" sortable :sort-method="sortByTotalScore">
+    <el-table-column v-if="!compact" label="總分" width="100" sortable :sort-method="sortByTotalScore">
       <template #default="{ row }">
         <span v-if="hasSummary(row.id)">
           {{ Number(getSummary(row.id).total_score).toFixed(2) }}
         </span>
       </template>
     </el-table-column>
-    <el-table-column label="等第" width="100">
+    <el-table-column v-if="!compact" label="等第" width="100">
       <template #default="{ row }">
         <span v-if="hasSummary(row.id)">{{ gradeLabel(getSummary(row.id).grade as string ?? '') }}</span>
       </template>
     </el-table-column>
-    <el-table-column label="獎金" width="120" sortable :sort-method="sortByBonusAmount">
+    <el-table-column v-if="!compact" label="獎金" width="120" sortable :sort-method="sortByBonusAmount">
       <template #default="{ row }">
         <span v-if="hasSummary(row.id)">
           {{ Number(getSummary(row.id).bonus_amount).toLocaleString() }}
         </span>
       </template>
     </el-table-column>
-    <el-table-column label="簽核狀態" width="140" sortable :sort-method="sortByStatus">
+    <el-table-column v-if="!compact" label="簽核狀態" width="140" sortable :sort-method="sortByStatus">
       <template #default="{ row }">
         <el-button
           v-if="hasSummary(row.id)"
@@ -131,9 +153,10 @@ function openDetail(row: Participant) { emit('open-detail', row) }
         >
           {{ statusLabel(getSummary(row.id).status ?? '') }}
         </el-button>
+        <span v-else>尚未產生考核結果</span>
       </template>
     </el-table-column>
-    <el-table-column label="簽核操作" width="240">
+    <el-table-column label="簽核操作" :width="compact ? 110 : 240" :fixed="compact ? false : 'right'">
       <template #default="{ row }">
         <template v-if="hasSummary(row.id)">
           <!-- P0-A：每個 stage-specific 動作按鈕都依對應 APPRAISAL_* 旗標守衛 -->
@@ -196,3 +219,10 @@ function openDetail(row: Participant) { emit('open-detail', row) }
     </el-table-column>
   </el-table>
 </template>
+
+<style scoped>
+.employee-summary { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-xs); }
+@media (max-width: 600px) {
+  :deep(.el-button) { min-height: 40px; margin-left: 0; }
+}
+</style>

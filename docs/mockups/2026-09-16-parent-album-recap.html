@@ -1,0 +1,1300 @@
+<title>相簿回顧</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+/* ===========================================================================
+   家長端「相簿回顧」UI preview
+   2026-09-16 · docs/mockups/2026-09-16-parent-album-recap.html
+
+   Token 來源（snapshot，非副本 — 實作時一律改讀 var()）：
+     src/parent/styles/m3-tokens.css   （自動產生，禁止手改）
+     src/parent/styles/globals.css     （--pt-* 語意層）
+     src/parent/styles/patterns.css    （pt-page-hero / pt-pill / pt-section-pad-x）
+     src/parent/styles/motion.css      （--motion-* / --m3-easing-*）
+   現況頁面：src/parent/views/ChildPhotosView.vue
+   =========================================================================== */
+
+:root {
+  /* ---- M3 parent tokens（light）---- */
+  --m3-primary: #006d3d;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #89f9b1;
+  --m3-on-primary-container: #00210f;
+  --m3-secondary-container: #d2e8d4;
+  --m3-on-secondary-container: #0d1f13;
+  --m3-surface: #fbfdf8;
+  --m3-on-surface: #191c19;
+  --m3-on-surface-variant: #414942;
+  --m3-outline: #717971;
+  --m3-outline-variant: #c0c9bf;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f3f4ef;
+  --m3-surface-container: #edeee9;
+  --m3-surface-container-high: #e7e9e4;
+  --m3-surface-container-highest: #e1e3de;
+
+  /* ---- pt-* 語意層（globals.css 對應）---- */
+  --pt-text-strong: var(--m3-on-surface);
+  --pt-text-muted: var(--m3-on-surface-variant);
+  --pt-text-faint: var(--m3-outline);
+  --pt-surface-card: var(--m3-surface-container-lowest);
+  --pt-border-light: var(--m3-outline-variant);
+  --pt-app-bg: #f7f6ef;
+  --pt-gradient-hero: linear-gradient(150deg, #fff7dd 0%, #d9f4e2 78%, #cdeef9 130%);
+  --pt-accent-leaf-container: #d8f1de;
+  --pt-accent-leaf-on: #1c5232;
+  --pt-accent-sun-container: #ffedb8;
+  --pt-accent-sun-on: #5c4300;
+  --pt-shadow-card: 0 1px 2px rgba(27, 60, 38, .05), 0 6px 20px -8px rgba(27, 60, 38, .14);
+  --pt-shadow-float: 0 8px 28px -6px rgba(27, 60, 38, .25);
+  --pt-card-radius: 26px;
+  --pt-hero-radius: 30px;
+
+  /* ---- motion ---- */
+  --motion-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --motion-emphasized: cubic-bezier(.05, .7, .1, 1);
+  --motion-quick: 160ms;
+  --motion-base: 260ms;
+  --motion-page: 350ms;
+
+  /* ---- 文件外殼（studio chrome，非 app token）---- */
+  --doc-bg: #eceee7;
+  --doc-panel: #ffffff;
+  --doc-ink: #1d211c;
+  --doc-ink-soft: #5a6159;
+  --doc-ink-faint: #878d84;
+  --doc-rule: #d8dcd4;
+  --doc-accent: #006d3d;
+  --doc-code-bg: #f1f3ed;
+
+  --font-body: 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --m3-primary: #6ddc97;
+    --m3-on-primary: #00391d;
+    --m3-primary-container: #00522c;
+    --m3-on-primary-container: #89f9b1;
+    --m3-secondary-container: #384b3d;
+    --m3-on-secondary-container: #d2e8d4;
+    --m3-surface: #191c19;
+    --m3-on-surface: #e1e3de;
+    --m3-on-surface-variant: #c0c9bf;
+    --m3-outline: #8b938a;
+    --m3-outline-variant: #414942;
+    --m3-surface-container-lowest: #0c0f0c;
+    --m3-surface-container-low: #191c19;
+    --m3-surface-container: #1d201d;
+    --m3-surface-container-high: #282b27;
+    --m3-surface-container-highest: #333630;
+
+    --pt-app-bg: #12140f;
+    --pt-gradient-hero: linear-gradient(150deg, #33301f 0%, #1e3327 78%, #1b3038 130%);
+    --pt-accent-leaf-container: #1c4630;
+    --pt-accent-leaf-on: #b8ecc9;
+    --pt-accent-sun-container: #4a3a10;
+    --pt-accent-sun-on: #ffe5a3;
+    --pt-shadow-card: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -8px rgba(0, 0, 0, .6);
+    --pt-shadow-float: 0 8px 28px -6px rgba(0, 0, 0, .7);
+
+    --doc-bg: #141713;
+    --doc-panel: #1c201b;
+    --doc-ink: #e3e6df;
+    --doc-ink-soft: #a6ada3;
+    --doc-ink-faint: #767c73;
+    --doc-rule: #2e332c;
+    --doc-accent: #6ddc97;
+    --doc-code-bg: #24291f;
+  }
+}
+
+:root[data-theme="dark"] {
+  --m3-primary: #6ddc97;
+  --m3-on-primary: #00391d;
+  --m3-primary-container: #00522c;
+  --m3-on-primary-container: #89f9b1;
+  --m3-secondary-container: #384b3d;
+  --m3-on-secondary-container: #d2e8d4;
+  --m3-surface: #191c19;
+  --m3-on-surface: #e1e3de;
+  --m3-on-surface-variant: #c0c9bf;
+  --m3-outline: #8b938a;
+  --m3-outline-variant: #414942;
+  --m3-surface-container-lowest: #0c0f0c;
+  --m3-surface-container-low: #191c19;
+  --m3-surface-container: #1d201d;
+  --m3-surface-container-high: #282b27;
+  --m3-surface-container-highest: #333630;
+
+  --pt-app-bg: #12140f;
+  --pt-gradient-hero: linear-gradient(150deg, #33301f 0%, #1e3327 78%, #1b3038 130%);
+  --pt-accent-leaf-container: #1c4630;
+  --pt-accent-leaf-on: #b8ecc9;
+  --pt-accent-sun-container: #4a3a10;
+  --pt-accent-sun-on: #ffe5a3;
+  --pt-shadow-card: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -8px rgba(0, 0, 0, .6);
+  --pt-shadow-float: 0 8px 28px -6px rgba(0, 0, 0, .7);
+
+  --doc-bg: #141713;
+  --doc-panel: #1c201b;
+  --doc-ink: #e3e6df;
+  --doc-ink-soft: #a6ada3;
+  --doc-ink-faint: #767c73;
+  --doc-rule: #2e332c;
+  --doc-accent: #6ddc97;
+  --doc-code-bg: #24291f;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--doc-bg);
+  color: var(--doc-ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-inline: 20px;
+  padding-block: 40px 72px;
+}
+
+/* ===== 文件標頭 ===== */
+.doc-head { margin-bottom: 36px; }
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--doc-accent);
+}
+h1 {
+  margin: 0;
+  font-size: clamp(30px, 5vw, 42px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+.lede {
+  margin: 14px 0 0;
+  max-width: 62ch;
+  font-size: 16px;
+  color: var(--doc-ink-soft);
+}
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border: 1px solid var(--doc-rule);
+  border-radius: 999px;
+  background: var(--doc-panel);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--doc-ink-soft);
+}
+.meta-chip b { color: var(--doc-ink); font-weight: 700; }
+.meta-chip.is-pending {
+  border-color: transparent;
+  background: var(--pt-accent-sun-container);
+  color: var(--pt-accent-sun-on);
+}
+.meta-chip.is-settled {
+  border-color: transparent;
+  background: var(--pt-accent-leaf-container);
+  color: var(--pt-accent-leaf-on);
+  font-weight: 700;
+}
+
+/* ===== 舞台 ===== */
+.stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 44px 56px;
+  align-items: flex-start;
+  margin-top: 44px;
+}
+.frame-block { margin: 0; flex: 0 1 auto; }
+.frame-cap {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+.frame-num {
+  flex: none;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--doc-accent);
+  color: var(--doc-bg);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+.frame-title { font-size: 15px; font-weight: 700; }
+.frame-note { font-size: 13px; color: var(--doc-ink-faint); }
+
+/* ===== 手機外框 ===== */
+.phone {
+  position: relative;
+  width: 360px;
+  max-width: 100%;
+  height: 740px;
+  border-radius: 40px;
+  border: 1px solid var(--doc-rule);
+  background: var(--pt-app-bg);
+  box-shadow: 0 30px 60px -24px rgba(20, 35, 25, .35);
+  overflow: hidden;
+  isolation: isolate;
+}
+:root[data-theme="dark"] .phone,
+:root:not([data-theme="light"]) .phone { box-shadow: 0 30px 60px -24px rgba(0, 0, 0, .7); }
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 22px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pt-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.status-dots { display: flex; gap: 3px; }
+.status-dots i {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--pt-text-faint);
+  display: block;
+}
+
+.screen {
+  height: calc(100% - 34px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 28px;
+  scrollbar-width: thin;
+}
+.screen::-webkit-scrollbar { width: 5px; }
+.screen::-webkit-scrollbar-thumb { background: var(--m3-outline-variant); border-radius: 3px; }
+
+/* ===== 照片牆現況元素（對齊 ChildPhotosView.vue）===== */
+.pt-page-hero {
+  margin: 4px 16px 0;
+  padding: 18px 20px 20px;
+  background: var(--pt-gradient-hero);
+  border-radius: var(--pt-hero-radius);
+}
+.pt-page-hero-eyebrow {
+  margin: 0;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--pt-text-muted);
+}
+.pt-page-hero-title {
+  margin: 4px 0 0;
+  font-size: 26px; font-weight: 800;
+  letter-spacing: -.01em; line-height: 1.15;
+  color: var(--pt-text-strong);
+}
+.pt-page-hero-note {
+  margin: 6px 0 0;
+  font-size: 14px; font-weight: 500;
+  color: var(--pt-text-muted);
+}
+
+.seg {
+  display: inline-flex;
+  margin: 16px 16px 0;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--m3-surface-container);
+}
+.seg button {
+  appearance: none; border: 0; cursor: pointer;
+  padding: 7px 15px;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--pt-text-muted);
+  transition: background var(--motion-quick) ease, color var(--motion-quick) ease;
+}
+.seg button[aria-pressed="true"] {
+  background: var(--m3-secondary-container);
+  color: var(--m3-on-secondary-container);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 0 16px;
+  margin-top: 14px;
+}
+.grid .cell {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 0; padding: 0;
+  cursor: pointer;
+}
+
+/* ===== ★ 新增：回顧橫向卡片列 ===== */
+.recap-sec { margin-top: 22px; }
+.recap-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 16px 10px;
+}
+.recap-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--pt-text-strong);
+}
+.recap-head .hint {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pt-text-faint);
+}
+
+.recap-rail {
+  display: flex;
+  gap: 12px;
+  padding: 2px 16px 6px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.recap-rail::-webkit-scrollbar { display: none; }
+
+.recap-card {
+  flex: none;
+  position: relative;
+  width: 132px;
+  aspect-ratio: 3 / 4;
+  scroll-snap-align: start;
+  border: 0; padding: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: var(--pt-shadow-card);
+  transition: transform var(--motion-quick) var(--motion-spring);
+}
+.recap-card:active { transform: scale(.96); }
+.recap-card:focus-visible { outline: 2px solid var(--m3-primary); outline-offset: 3px; }
+.recap-card .cover { position: absolute; inset: 0; }
+.recap-card .veil {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, .74) 0%, rgba(0, 0, 0, .28) 42%, rgba(0, 0, 0, 0) 72%);
+}
+.recap-card .body {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 10px 11px 11px;
+  color: #fff;
+}
+.recap-card .when {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+}
+.recap-card .sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: .9;
+  font-variant-numeric: tabular-nums;
+}
+.recap-card .count {
+  position: absolute;
+  top: 8px; right: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* 相簿「外匡」：這一疊代表回顧是多張照片的集合 */
+.recap-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  pointer-events: none;
+}
+.recap-stack {
+  flex: none;
+  position: relative;
+  width: 132px;
+  aspect-ratio: 3 / 4;
+}
+.recap-stack .recap-card { position: absolute; inset: 0; width: auto; }
+.recap-stack .sheet {
+  position: absolute;
+  border-radius: 20px;
+  background: var(--m3-surface-container-high);
+  border: 1px solid var(--pt-border-light);
+}
+.recap-stack .sheet.s1 { inset: 8px -5px -6px 5px; opacity: .55; }
+.recap-stack .sheet.s2 { inset: 4px -2px -3px 2px; opacity: .8; }
+
+/* ===== ★ 新增：回顧輪播檢視器 ===== */
+.viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 12, 9, .96);
+  color: #fff;
+  animation: viewer-in var(--motion-page) var(--motion-emphasized);
+}
+@keyframes viewer-in {
+  from { opacity: 0; transform: scale(1.04); }
+  to { opacity: 1; transform: scale(1); }
+}
+.viewer[hidden] { display: none !important; }
+
+.v-head { padding: 14px 14px 0; flex: none; }
+
+/* 分段進度（每段 = 一張照片，故事式） */
+.v-segs { display: flex; gap: 3px; }
+.v-segs .s {
+  flex: 1;
+  height: 2.5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .26);
+  overflow: hidden;
+}
+.v-segs .s > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: #fff;
+}
+.v-segs .s.done > i { width: 100%; }
+.v-segs .s.live > i { animation: seg-fill var(--dwell, 3600ms) linear forwards; }
+.viewer.is-paused .v-segs .s.live > i { animation-play-state: paused; }
+@keyframes seg-fill { from { width: 0; } to { width: 100%; } }
+
+.v-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+/* 「這個回顧屬於哪一個」的外匡標籤 */
+.v-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--pt-accent-leaf-container);
+  color: var(--pt-accent-leaf-on);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+.v-badge .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+  opacity: .55;
+}
+.v-range {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, .68);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+}
+.v-actions { display: flex; gap: 6px; flex: none; }
+.icon-btn {
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background var(--motion-quick) ease;
+}
+.icon-btn:hover { background: rgba(255, 255, 255, .24); }
+.icon-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* 舞台：中央大圖 + 左右鄰張 peek */
+.v-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  touch-action: pan-y;
+  overflow: hidden;
+}
+.v-track { position: absolute; inset: 0; }
+.slide {
+  position: absolute;
+  top: 50%;
+  left: 14%;
+  width: 72%;
+  aspect-ratio: 3 / 4;
+  max-height: 76%;
+  margin-top: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 18px 40px -14px rgba(0, 0, 0, .8);
+  transform: translate(calc(var(--o) * 106% + var(--drag, 0px)), -50%) scale(var(--sc));
+  opacity: var(--op);
+  transition:
+    transform var(--motion-base) var(--motion-emphasized),
+    opacity var(--motion-base) var(--motion-emphasized);
+  will-change: transform, opacity;
+}
+.v-stage.is-dragging .slide { transition: none; }
+.slide.is-far { visibility: hidden; }
+.slide .img { position: absolute; inset: 0; }
+.slide .cap {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 22px 14px 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, .6), transparent);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.slide:not(.is-current) .cap { opacity: 0; }
+
+.v-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .13);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 3;
+}
+.v-nav:disabled { opacity: .22; cursor: not-allowed; }
+.v-nav.prev { left: 8px; }
+.v-nav.next { right: 8px; }
+.v-nav svg { width: 22px; height: 22px; fill: currentColor; }
+
+/* 底部膠卷 */
+.v-foot { flex: none; padding: 10px 0 max(14px, env(safe-area-inset-bottom)); }
+.filmstrip {
+  display: flex;
+  gap: 5px;
+  padding: 0 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filmstrip::-webkit-scrollbar { display: none; }
+.filmstrip .f {
+  flex: none;
+  width: 38px; height: 38px;
+  border: 0; padding: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  cursor: pointer;
+  opacity: .4;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  transition: opacity var(--motion-quick) ease, outline-color var(--motion-quick) ease;
+}
+.filmstrip .f.is-current { opacity: 1; outline-color: #fff; }
+.filmstrip .f > span { display: block; width: 100%; height: 100%; }
+
+/* ===== 說明區 ===== */
+.notes { margin-top: 68px; }
+h2.sec {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--doc-accent);
+}
+h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 1px;
+  margin-top: 20px;
+  background: var(--doc-rule);
+  border: 1px solid var(--doc-rule);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.spec {
+  background: var(--doc-panel);
+  padding: 20px 22px;
+}
+.spec p { margin: 0; font-size: 14px; color: var(--doc-ink-soft); }
+.spec ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px; color: var(--doc-ink-soft); }
+.spec li { margin-bottom: 4px; }
+.spec li::marker { color: var(--doc-ink-faint); }
+code {
+  font-family: var(--font-mono);
+  font-size: .87em;
+  background: var(--doc-code-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--doc-ink);
+}
+
+.window-table {
+  width: 100%;
+  margin-top: 20px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.window-table caption {
+  text-align: left;
+  font-size: 13px;
+  color: var(--doc-ink-faint);
+  padding-bottom: 8px;
+}
+.window-table th, .window-table td {
+  text-align: left;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--doc-rule);
+}
+.window-table th {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--doc-ink-faint);
+}
+.window-table td:nth-child(2),
+.window-table td:nth-child(3) { font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 13px; }
+.table-scroll { overflow-x: auto; }
+
+.decide {
+  margin-top: 48px;
+  border: 1px solid var(--doc-rule);
+  border-left: 3px solid var(--pt-accent-sun-on);
+  border-radius: 0 14px 14px 0;
+  background: var(--doc-panel);
+  padding: 22px 24px;
+}
+.decide.is-settled { border-left-color: var(--doc-accent); }
+.decide ol { margin: 12px 0 0; padding-left: 20px; }
+.decide li { margin-bottom: 12px; font-size: 14px; color: var(--doc-ink-soft); }
+.decide li b { color: var(--doc-ink); }
+
+.foot {
+  margin-top: 48px;
+  padding-top: 18px;
+  border-top: 1px solid var(--doc-rule);
+  font-size: 12.5px;
+  color: var(--doc-ink-faint);
+}
+
+@media (max-width: 760px) {
+  .phone { height: 660px; }
+  .stage { gap: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide, .recap-card, .icon-btn, .seg button, .filmstrip .f { transition: none; }
+  .viewer { animation: none; }
+  .v-segs .s.live > i { animation: none; width: 100%; }
+}
+</style>
+
+<div class="wrap">
+
+  <header class="doc-head">
+    <p class="eyebrow">家長端 · UI Preview · 2026-09-16</p>
+    <h1>相簿回顧</h1>
+    <p class="lede">
+      把孩子的照片按「幾個月前的今天」自動集結成回顧，放在照片牆頂部。
+      點開後是自動輪播的檢視器，左右可見前後張。設計已裁定，待實作。
+    </p>
+    <div class="meta-row">
+      <span class="meta-chip">現況頁 <b>ChildPhotosView.vue</b></span>
+      <span class="meta-chip">設計系統 <b>Parent M3</b></span>
+      <span class="meta-chip">照片池 <b>全來源</b></span>
+      <span class="meta-chip">門檻 <b>1 張成立</b></span>
+      <span class="meta-chip">v1 <b>不推播</b></span>
+      <span class="meta-chip is-settled">已裁定</span>
+    </div>
+  </header>
+
+  <section class="stage">
+
+    <figure class="frame-block">
+      <figcaption class="frame-cap">
+        <span class="frame-num">1</span>
+        <span class="frame-title">照片牆入口</span>
+        <span class="frame-note">點任一張回顧卡開啟檢視器</span>
+      </figcaption>
+      <div class="phone" id="phoneA">
+        <div class="status-bar">
+          <span>9:41</span>
+          <span class="status-dots"><i></i><i></i><i></i></span>
+        </div>
+        <div class="screen">
+          <header class="pt-page-hero">
+            <p class="pt-page-hero-eyebrow">成長相簿</p>
+            <h1 class="pt-page-hero-title">128 張珍藏</h1>
+            <p class="pt-page-hero-note">老師為您拍下的學校點滴</p>
+          </header>
+
+          <section class="recap-sec">
+            <div class="recap-head">
+              <h2>回顧</h2>
+              <span class="hint">同一天前的照片</span>
+            </div>
+            <div class="recap-rail" id="railA"></div>
+          </section>
+
+          <div class="seg" role="group" aria-label="照片分類">
+            <button type="button" aria-pressed="true">全部</button>
+            <button type="button" aria-pressed="false">生活照</button>
+            <button type="button" aria-pressed="false">作品</button>
+          </div>
+
+          <div class="grid" id="gridA"></div>
+        </div>
+        <div class="viewer" hidden data-viewer></div>
+      </div>
+    </figure>
+
+    <figure class="frame-block">
+      <figcaption class="frame-cap">
+        <span class="frame-num">2</span>
+        <span class="frame-title">回顧輪播檢視器</span>
+        <span class="frame-note">自動播放中 · 可拖曳／方向鍵</span>
+      </figcaption>
+      <div class="phone" id="phoneB">
+        <div class="status-bar">
+          <span>9:41</span>
+          <span class="status-dots"><i></i><i></i><i></i></span>
+        </div>
+        <div class="screen" aria-hidden="true">
+          <header class="pt-page-hero">
+            <p class="pt-page-hero-eyebrow">成長相簿</p>
+            <h1 class="pt-page-hero-title">128 張珍藏</h1>
+          </header>
+        </div>
+        <div class="viewer" data-viewer></div>
+      </div>
+    </figure>
+
+  </section>
+
+  <section class="notes">
+    <h2 class="sec">互動規格</h2>
+    <div class="spec-grid">
+
+      <div class="spec">
+        <h3>外匡歸屬</h3>
+        <p>每個回顧是一疊照片，需要一眼看出屬於哪一段時間。</p>
+        <ul>
+          <li>卡片正面：<code>1 個月前</code> + 實際日期區間 + 張數角標</li>
+          <li>卡片右下疊紙：暗示這是一疊而非單張</li>
+          <li>檢視器頂部：綠色 pill 常駐，捲不掉</li>
+          <li>pill 下方標出實際涵蓋日期，避免「一個月前」語意含糊</li>
+        </ul>
+      </div>
+
+      <div class="spec">
+        <h3>輪播與前後預覽</h3>
+        <p>中央大圖固定 72% 寬，左右鄰張各露出約 10%。</p>
+        <ul>
+          <li>鄰張 <code>scale(.86)</code> + <code>opacity .45</code>，景深感但不搶焦點</li>
+          <li>水平拖曳即時跟手，放開超過 40px 換張</li>
+          <li>點左右鄰張直接跳過去</li>
+          <li>底部膠卷可跳任意張，當前張白框標示</li>
+        </ul>
+      </div>
+
+      <div class="spec">
+        <h3>自動播放</h3>
+        <p>頂部分段進度條，每段代表一張照片。</p>
+        <ul>
+          <li>每張停留 3.6 秒，播到最後一張自動停住不循環</li>
+          <li>點畫面中央 = 暫停／繼續；拖曳時自動暫停</li>
+          <li>手動換張後不恢復自動播放，尊重使用者接管</li>
+          <li><code>prefers-reduced-motion</code> 下預設暫停，進度條不跑</li>
+        </ul>
+      </div>
+
+      <div class="spec">
+        <h3>沿用現況</h3>
+        <p>不重造輪子，接在既有 pattern 上。</p>
+        <ul>
+          <li>色彩全走 <code>--m3-*</code> / <code>--pt-*</code>，不寫死 hex</li>
+          <li>focus trap、<code>Esc</code>／<code>←</code>／<code>→</code> 比照現有 lightbox</li>
+          <li>照片格線與漸進渲染維持 <code>useIncrementalRender</code></li>
+          <li>觸控目標 ≥ 44px，深色模式同步供應</li>
+        </ul>
+      </div>
+
+      <div class="spec">
+        <h3>照片池</h3>
+        <p>與照片牆同一口徑，不另設過濾規則。</p>
+        <ul>
+          <li>六種來源全收：班級相簿、聯絡簿、觀察記錄、作品集、成長報告、餵藥單</li>
+          <li>班級相簿照片須「有標記到本人」；合照也納入，不要求獨照</li>
+          <li>其餘來源沿用既有的擁有者可見性（草稿、軟刪、未 ready 一律不露出）</li>
+          <li>日期基準 <code>COALESCE(class_albums.event_date, attachments.created_at)</code>，避免補傳的活動照被歸錯月份</li>
+        </ul>
+      </div>
+
+      <div class="spec">
+        <h3>成立條件</h3>
+        <p>回顧是「有就給看」，不做策展篩選。</p>
+        <ul>
+          <li>該時間窗有 1 張照片即成立，不設下限</li>
+          <li>完全沒照片的時間窗，那張卡不出現</li>
+          <li>五個時間窗全空時，整個回顧區塊隱藏，照片牆回到現況版面</li>
+          <li>卡片恆依時間由近到遠排列</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="table-scroll">
+      <table class="window-table">
+        <caption>回顧時間窗 — 以「今天往回推的同一天」為錨點，前後各 5 天，共 11 天區間。示例日期以 2026-09-16 計算。</caption>
+        <thead>
+          <tr><th>回顧</th><th>錨點日</th><th>涵蓋區間</th><th>卡片文案</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1 個月</td><td>2026-08-16</td><td>08-11 → 08-21</td><td>1 個月前</td></tr>
+          <tr><td>3 個月</td><td>2026-06-16</td><td>06-11 → 06-21</td><td>3 個月前</td></tr>
+          <tr><td>6 個月</td><td>2026-03-16</td><td>03-11 → 03-21</td><td>半年前</td></tr>
+          <tr><td>1 年</td><td>2025-09-16</td><td>09-11 → 09-21</td><td>1 年前</td></tr>
+          <tr><td>2 年</td><td>2024-09-16</td><td>09-11 → 09-21</td><td>2 年前</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="decide is-settled">
+    <h3>裁定紀錄 · 2026-09-16</h3>
+    <ol>
+      <li><b>空窗不顯示。</b>該時間窗沒照片，那張卡就不出現；不做「這段時間還沒有照片」的灰卡，避免家長把系統的空窗誤讀成孩子沒被拍到。</li>
+      <li><b>單張也算回顧。</b>不設張數下限。回顧的價值在於把舊照片重新推到眼前，一張也值得。</li>
+      <li><b>文案用「半年前」。</b>刻意不與其他四張的「N 個月前／N 年前」格式對齊，中文自然度優先。</li>
+      <li><b>照片全收。</b>六種來源一併納入，與照片牆同口徑。連帶決定日期基準取 <code>COALESCE(class_albums.event_date, attachments.created_at)</code>：班級相簿常常晚幾週才補傳，用上傳時間會把活動照歸到錯的月份；其餘來源的附件是當天隨記錄一起上傳，<code>created_at</code> 已足夠準確。</li>
+    </ol>
+  </section>
+
+  <p class="foot">
+    Token 取自 <code>src/parent/styles/</code> 於 2026-09-16 的快照值，實作時一律改讀 <code>var(--…)</code>，不複製本頁 hex。
+    照片為漸層佔位，非真實孩童影像。
+  </p>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var DWELL = 3600;
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // 擬真但非真實個資：用漸層與抽象色塊代表照片
+  var SCENES = [
+    { a: '#ffd9a0', b: '#f2854f', cap: '玩沙區' },
+    { a: '#bde8c8', b: '#3f9b6d', cap: '菜圃澆水' },
+    { a: '#cfe6f7', b: '#4f8fc0', cap: '戲水池' },
+    { a: '#ffd7d0', b: '#e0705c', cap: '生日慶生' },
+    { a: '#e7dcff', b: '#8768c4', cap: '律動課' },
+    { a: '#fff0b8', b: '#e0a63c', cap: '點心時間' },
+    { a: '#d3f0ea', b: '#3f9d98', cap: '積木區' },
+    { a: '#ffe0ef', b: '#d4649a', cap: '繪本角' },
+    { a: '#dfeab5', b: '#7d9b3c', cap: '戶外散步' },
+    { a: '#cfe4ff', b: '#5a7fc4', cap: '美勞課' },
+    { a: '#ffe3c7', b: '#d8834a', cap: '團體遊戲' },
+    { a: '#d8e8d2', b: '#5c8f63', cap: '午餐時間' }
+  ];
+
+  function paint(el, i) {
+    var s = SCENES[i % SCENES.length];
+    el.style.background =
+      'radial-gradient(circle at 28% 22%, rgba(255,255,255,.5), transparent 46%),' +
+      'radial-gradient(circle at 78% 82%, rgba(0,0,0,.14), transparent 52%),' +
+      'linear-gradient(148deg, ' + s.a + ' 0%, ' + s.b + ' 100%)';
+    return s;
+  }
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  // 錨點日往前推 N 個月，前後各 5 天
+  function windowFor(today, months) {
+    var anchor = new Date(today.getFullYear(), today.getMonth() - months, today.getDate());
+    var from = new Date(anchor); from.setDate(from.getDate() - 5);
+    var to = new Date(anchor); to.setDate(to.getDate() + 5);
+    return {
+      label: from.getFullYear() + '/' + pad(from.getMonth() + 1) + '/' + pad(from.getDate()) +
+        ' – ' + pad(to.getMonth() + 1) + '/' + pad(to.getDate()),
+      year: from.getFullYear()
+    };
+  }
+
+  var TODAY = new Date(2026, 8, 16);
+  var RECAPS = [
+    { when: '1 個月前', months: 1, n: 8, seed: 0 },
+    { when: '半年前', months: 6, n: 11, seed: 2 },
+    { when: '1 年前', months: 12, n: 14, seed: 4 },
+    { when: '2 年前', months: 24, n: 6, seed: 7 }
+  ].map(function (r) {
+    var w = windowFor(TODAY, r.months);
+    r.range = w.label;
+    r.photos = [];
+    for (var i = 0; i < r.n; i++) r.photos.push(r.seed + i);
+    return r;
+  });
+
+  /* ---------------- 回顧輪播檢視器 ---------------- */
+  function Viewer(root) {
+    this.root = root;
+    this.idx = 0;
+    this.recap = null;
+    this.playing = false;
+    this.timer = null;
+    this.build();
+  }
+
+  Viewer.prototype.build = function () {
+    this.root.innerHTML =
+      '<div class="v-head">' +
+        '<div class="v-segs"></div>' +
+        '<div class="v-meta">' +
+          '<div>' +
+            '<span class="v-badge"><span class="dot"></span><span class="v-when"></span></span>' +
+            '<p class="v-range"></p>' +
+          '</div>' +
+          '<div class="v-actions">' +
+            '<button class="icon-btn v-play" type="button" aria-label="暫停自動播放">' +
+              '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>' +
+            '</button>' +
+            '<button class="icon-btn v-close" type="button" aria-label="關閉回顧">' +
+              '<svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="v-stage">' +
+        '<button class="v-nav prev" type="button" aria-label="上一張">' +
+          '<svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z"/></svg>' +
+        '</button>' +
+        '<div class="v-track"></div>' +
+        '<button class="v-nav next" type="button" aria-label="下一張">' +
+          '<svg viewBox="0 0 24 24"><path d="M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z"/></svg>' +
+        '</button>' +
+      '</div>' +
+      '<div class="v-foot"><div class="filmstrip"></div></div>';
+
+    this.el = {
+      segs: this.root.querySelector('.v-segs'),
+      when: this.root.querySelector('.v-when'),
+      range: this.root.querySelector('.v-range'),
+      play: this.root.querySelector('.v-play'),
+      close: this.root.querySelector('.v-close'),
+      stage: this.root.querySelector('.v-stage'),
+      track: this.root.querySelector('.v-track'),
+      prev: this.root.querySelector('.v-nav.prev'),
+      next: this.root.querySelector('.v-nav.next'),
+      film: this.root.querySelector('.filmstrip')
+    };
+
+    var self = this;
+    this.el.prev.addEventListener('click', function () { self.step(-1, true); });
+    this.el.next.addEventListener('click', function () { self.step(1, true); });
+    this.el.play.addEventListener('click', function () { self.toggle(); });
+    this.el.close.addEventListener('click', function () { self.close(); });
+    this.root.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); self.close(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); self.step(1, true); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); self.step(-1, true); }
+      else if (e.key === ' ') { e.preventDefault(); self.toggle(); }
+    });
+    this.root.tabIndex = -1;
+    this.bindDrag();
+  };
+
+  Viewer.prototype.bindDrag = function () {
+    var self = this, startX = 0, dx = 0, dragging = false, moved = false;
+    var stage = this.el.stage;
+
+    stage.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('.v-nav')) return;
+      dragging = true; moved = false; startX = e.clientX; dx = 0;
+      stage.classList.add('is-dragging');
+      stage.setPointerCapture(e.pointerId);
+    });
+
+    stage.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      dx = e.clientX - startX;
+      if (Math.abs(dx) > 4) { moved = true; self.pause(); }
+      self.applyDrag(dx);
+    });
+
+    function end() {
+      if (!dragging) return;
+      dragging = false;
+      stage.classList.remove('is-dragging');
+      self.applyDrag(0);
+      if (Math.abs(dx) > 40) self.step(dx < 0 ? 1 : -1, true);
+      else if (!moved) self.toggle();
+      dx = 0;
+    }
+    stage.addEventListener('pointerup', end);
+    stage.addEventListener('pointercancel', end);
+  };
+
+  Viewer.prototype.applyDrag = function (dx) {
+    var slides = this.el.track.children;
+    for (var i = 0; i < slides.length; i++) slides[i].style.setProperty('--drag', dx + 'px');
+  };
+
+  Viewer.prototype.open = function (recap, autoplay) {
+    this.recap = recap;
+    this.idx = 0;
+    this.root.hidden = false;
+    this.el.when.textContent = recap.when;
+    this.el.range.textContent = recap.range + ' · 共 ' + recap.photos.length + ' 張';
+
+    var self = this;
+    this.el.segs.innerHTML = '';
+    this.el.track.innerHTML = '';
+    this.el.film.innerHTML = '';
+
+    recap.photos.forEach(function (p, i) {
+      var seg = document.createElement('span');
+      seg.className = 's';
+      seg.innerHTML = '<i></i>';
+      self.el.segs.appendChild(seg);
+
+      var slide = document.createElement('div');
+      slide.className = 'slide';
+      var img = document.createElement('div');
+      img.className = 'img';
+      var scene = paint(img, p);
+      var cap = document.createElement('div');
+      cap.className = 'cap';
+      cap.innerHTML = '<span>' + scene.cap + '</span><span>' + (i + 1) + ' / ' + recap.photos.length + '</span>';
+      slide.appendChild(img);
+      slide.appendChild(cap);
+      slide.addEventListener('click', function () {
+        if (i !== self.idx) self.go(i, true);
+      });
+      self.el.track.appendChild(slide);
+
+      var f = document.createElement('button');
+      f.className = 'f';
+      f.type = 'button';
+      f.setAttribute('aria-label', '第 ' + (i + 1) + ' 張');
+      var inner = document.createElement('span');
+      paint(inner, p);
+      f.appendChild(inner);
+      f.addEventListener('click', function () { self.go(i, true); });
+      self.el.film.appendChild(f);
+    });
+
+    this.render();
+    if (autoplay && !reduceMotion) this.play(); else this.pause();
+    this.root.focus();
+  };
+
+  Viewer.prototype.close = function () {
+    this.pause();
+    this.root.hidden = true;
+  };
+
+  Viewer.prototype.render = function () {
+    var slides = this.el.track.children;
+    for (var i = 0; i < slides.length; i++) {
+      var o = i - this.idx;
+      var s = slides[i];
+      var far = Math.abs(o) > 2;
+      s.style.setProperty('--o', o);
+      s.style.setProperty('--sc', o === 0 ? 1 : 0.86);
+      s.style.setProperty('--op', o === 0 ? 1 : (Math.abs(o) === 1 ? 0.45 : 0));
+      s.style.zIndex = String(10 - Math.abs(o));
+      s.classList.toggle('is-current', o === 0);
+      s.classList.toggle('is-far', far);
+    }
+
+    var segs = this.el.segs.children;
+    for (var j = 0; j < segs.length; j++) {
+      segs[j].classList.remove('done', 'live');
+      if (j < this.idx) segs[j].classList.add('done');
+    }
+    if (this.playing && segs[this.idx]) {
+      var live = segs[this.idx];
+      // 重排一次讓 animation 重新起跑
+      void live.offsetWidth;
+      live.classList.add('live');
+      live.style.setProperty('--dwell', DWELL + 'ms');
+    } else if (segs[this.idx]) {
+      segs[this.idx].classList.add('done');
+    }
+
+    var fs = this.el.film.children;
+    for (var k = 0; k < fs.length; k++) fs[k].classList.toggle('is-current', k === this.idx);
+    if (fs[this.idx] && fs[this.idx].scrollIntoView) {
+      fs[this.idx].scrollIntoView({ block: 'nearest', inline: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+    }
+
+    this.el.prev.disabled = this.idx === 0;
+    this.el.next.disabled = this.idx === this.recap.photos.length - 1;
+  };
+
+  Viewer.prototype.go = function (i, manual) {
+    if (i < 0 || i >= this.recap.photos.length) return;
+    this.idx = i;
+    // 手動接管後不再自動播放（pause 不自己 render，故統一在這裡收斂成一次）
+    if (manual) this.pause();
+    this.render();
+  };
+
+  Viewer.prototype.step = function (d, manual) {
+    this.go(this.idx + d, manual);
+  };
+
+  Viewer.prototype.play = function () {
+    var self = this;
+    this.playing = true;
+    this.root.classList.remove('is-paused');
+    this.el.play.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
+    this.el.play.setAttribute('aria-label', '暫停自動播放');
+    clearInterval(this.timer);
+    this.timer = setInterval(function () {
+      if (self.idx >= self.recap.photos.length - 1) { self.pause(); return; }
+      self.idx++;
+      self.render();
+    }, DWELL);
+    this.render();
+  };
+
+  Viewer.prototype.pause = function () {
+    this.playing = false;
+    this.root.classList.add('is-paused');
+    this.el.play.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+    this.el.play.setAttribute('aria-label', '開始自動播放');
+    clearInterval(this.timer);
+    this.timer = null;
+  };
+
+  Viewer.prototype.toggle = function () {
+    if (this.playing) this.pause();
+    else if (this.idx >= this.recap.photos.length - 1) { this.idx = 0; this.play(); }
+    else this.play();
+  };
+
+  /* ---------------- Frame 1：照片牆 ---------------- */
+  var viewerA = new Viewer(document.querySelector('#phoneA [data-viewer]'));
+  var rail = document.getElementById('railA');
+
+  RECAPS.forEach(function (r, ri) {
+    var holder = document.createElement('div');
+    holder.className = 'recap-stack';
+    holder.innerHTML = '<div class="sheet s1"></div><div class="sheet s2"></div>';
+
+    var card = document.createElement('button');
+    card.className = 'recap-card';
+    card.type = 'button';
+    card.setAttribute('aria-label', r.when + '的回顧，共 ' + r.photos.length + ' 張照片');
+
+    var cover = document.createElement('div');
+    cover.className = 'cover';
+    paint(cover, r.photos[0]);
+
+    card.appendChild(cover);
+    var veil = document.createElement('div');
+    veil.className = 'veil';
+    card.appendChild(veil);
+
+    var count = document.createElement('span');
+    count.className = 'count';
+    count.textContent = r.photos.length + ' 張';
+    card.appendChild(count);
+
+    var body = document.createElement('span');
+    body.className = 'body';
+    body.innerHTML = '<span class="when">' + r.when + '</span><span class="sub">' + r.range + '</span>';
+    card.appendChild(body);
+
+    card.addEventListener('click', function () { viewerA.open(r, true); });
+    holder.appendChild(card);
+    rail.appendChild(holder);
+    void ri;
+  });
+
+  var grid = document.getElementById('gridA');
+  for (var g = 0; g < 18; g++) {
+    var cell = document.createElement('button');
+    cell.className = 'cell';
+    cell.type = 'button';
+    cell.setAttribute('aria-label', '查看第 ' + (g + 1) + ' 張照片');
+    paint(cell, g + 3);
+    grid.appendChild(cell);
+  }
+
+  /* ---------------- Frame 2：檢視器常駐開啟 ---------------- */
+  var viewerB = new Viewer(document.querySelector('#phoneB [data-viewer]'));
+  viewerB.el.close.addEventListener('click', function () {
+    // 這一格是專門展示檢視器的，關掉後立刻重開，避免留下空畫面
+    setTimeout(function () { viewerB.open(RECAPS[1], true); }, 260);
+  });
+  viewerB.open(RECAPS[1], true);
+})();
+</script>

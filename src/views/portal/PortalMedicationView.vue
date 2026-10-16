@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { listToday, administer, skipLog } from '@/api/portalMedications'
 import { broadcastDashboardInvalidate } from '@/composables/usePortalDashboard'
 
@@ -98,30 +101,31 @@ function statusLabel(s: string) {
 
 <template>
   <div class="med-view">
-    <header class="page-header">
-      <h2>今日用藥（{{ date || '—' }}）</h2>
-      <el-button :loading="loading" @click="load">重新整理</el-button>
-    </header>
+    <PortalPageHeader title="今日用藥" :subtitle="date || ''">
+      <template #actions>
+        <el-button :icon="Refresh" :loading="loading" @click="load">重新整理</el-button>
+      </template>
+    </PortalPageHeader>
 
     <div v-if="loading && !groups.length" class="loading">
       <div class="pt-shimmer skeleton-block"></div>
       <div class="pt-shimmer skeleton-block"></div>
     </div>
 
-    <p v-else-if="!groups.length" class="empty">今日無用藥單</p>
+    <EmptyState v-else-if="!groups.length" variant="mobile" title="今日無用藥單" />
 
     <div v-else class="groups">
       <section v-for="g in groups" :key="g.classroom_id" class="classroom-group">
         <div class="group-header">
           <h3>{{ g.classroom_name }}</h3>
           <div class="stats">
-            <span class="stat pending">待 {{ g.stats.pending }}</span>
-            <span class="stat done">已 {{ g.stats.administered }}</span>
-            <span class="stat skip">略 {{ g.stats.skipped }}</span>
+            <span class="stat pending">待給藥 {{ g.stats.pending }}</span>
+            <span class="stat done">已給藥 {{ g.stats.administered }}</span>
+            <span class="stat skip">略過 {{ g.stats.skipped }}</span>
           </div>
         </div>
 
-        <p v-if="!g.items.length" class="empty">本班今日無用藥</p>
+        <EmptyState v-if="!g.items.length" variant="inline" title="本班今日無用藥" />
         <div v-else class="cards">
           <div
             v-for="item in g.items"
@@ -160,22 +164,9 @@ function statusLabel(s: string) {
 </template>
 
 <style scoped>
-.med-view { max-width: 1000px; margin: 0 auto; }
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-3);
-}
 
 .loading { display: flex; flex-direction: column; gap: var(--space-3); }
 .skeleton-block { height: 100px; border-radius: var(--radius-md); }
-
-.empty {
-  text-align: center;
-  color: var(--pt-text-muted);
-  padding: var(--space-6);
-}
 
 .groups { display: flex; flex-direction: column; gap: var(--space-4); }
 
@@ -191,21 +182,37 @@ function statusLabel(s: string) {
   margin: 0;
   color: var(--pt-text-strong);
 }
-.stats { display: flex; gap: var(--space-2); font-size: var(--text-sm); }
-.stat.pending { color: var(--color-warning); }
+.stats { display: flex; font-size: var(--text-sm); }
+/* 三項統計之間用「・」分隔 */
+.stat + .stat::before {
+  content: '・';
+  margin: 0 var(--space-1);
+  color: var(--el-text-color-placeholder);
+}
+.stat.pending { color: var(--color-warning-darker); }
 .stat.done { color: var(--color-success); }
 .stat.skip { color: var(--pt-text-muted); }
 
-.cards { display: flex; flex-direction: column; gap: var(--space-2); }
+/* 滿版後卡片不拉成一整條：桌機多欄、手機單欄 */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); align-items: start; gap: var(--space-2); }
 
+/* 用藥狀態：淡底色 + 完整 1px 邊框（不用側邊色條）；狀態另有文字標籤（待執行／已執行／已略過），不只靠顏色 */
 .med-card {
   display: flex;
   gap: var(--space-3);
   padding: var(--space-3);
-  border-left: 4px solid var(--color-warning);
+  border: 1px solid var(--color-warning);
+  background: var(--el-color-warning-light-9);
 }
-.med-card.status-administered { border-left-color: var(--color-success); }
-.med-card.status-skipped { border-left-color: var(--pt-text-muted); opacity: 0.7; }
+.med-card.status-administered {
+  border-color: var(--color-success);
+  background: var(--el-color-success-light-9);
+}
+.med-card.status-skipped {
+  border-color: var(--el-border-color);
+  background: var(--el-fill-color-light);
+  opacity: 0.7;
+}
 
 .time {
   font-size: var(--text-xl);
@@ -231,7 +238,7 @@ function statusLabel(s: string) {
   border-radius: 999px;
   font-size: var(--text-xs);
 }
-.status-tag.pending { background: var(--color-warning-lighter); color: var(--color-warning); }
+.status-tag.pending { background: var(--color-warning-lighter); color: var(--color-warning-darker); }
 .status-tag.administered { background: var(--color-success-lighter); color: var(--color-success); }
 .status-tag.skipped { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
 .source-tag { background: var(--pt-tint-message); color: var(--pt-tint-message-fg); }
@@ -241,5 +248,9 @@ function statusLabel(s: string) {
   flex-direction: column;
   gap: var(--space-1);
   align-self: center;
+}
+/* 直向堆疊時 EP 的 .el-button + .el-button margin-left 會讓「略過」往右縮 12px */
+.actions .el-button + .el-button {
+  margin-left: 0;
 }
 </style>

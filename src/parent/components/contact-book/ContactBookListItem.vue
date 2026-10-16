@@ -83,14 +83,14 @@ const previewText = computed<string>(() => {
   text-align: center;
 }
 .day-num {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   line-height: 1;
 }
 .weekday {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;
 }
@@ -101,7 +101,7 @@ const previewText = computed<string>(() => {
 }
 .preview {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pt-text-body);
   line-height: 1.4;
   overflow: hidden;
@@ -117,7 +117,7 @@ const previewText = computed<string>(() => {
   align-items: center;
   gap: 4px;
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint);
 }
 

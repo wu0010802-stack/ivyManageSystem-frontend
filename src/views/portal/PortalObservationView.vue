@@ -5,11 +5,13 @@ import { ElMessage } from 'element-plus'
 import { getMyStudents } from '@/api/portal'
 import { listObservations, createObservation } from '@/api/portalObservations'
 import { todayISO, dateToLocalISO } from '@/utils/format'
-import { usePortalFromHub } from '@/composables/usePortalFromHub'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import { StarFilled } from '@element-plus/icons-vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
+const { isMobile } = useIsMobile()
 const route = useRoute()
-const { fromHub, backToHub } = usePortalFromHub()
 
 // 7 領域對齊台灣課綱（後端 StudentObservation.domain）
 const DOMAINS = [
@@ -128,27 +130,25 @@ async function submit() {
 </script>
 
 <template>
-  <div class="obs-view">
-    <div v-if="fromHub" class="from-hub-bar">
-      <el-button type="primary" link @click="backToHub">
-        ← 返回今日工作台
-      </el-button>
-    </div>
-    <header class="page-header">
-      <h2>課堂觀察 / 成長紀錄</h2>
-    </header>
+  <div class="obs-view portal-page--reading">
+    <PortalPageHeader title="課堂觀察 / 成長紀錄" />
 
     <!-- 快速記錄表單 -->
     <div class="pt-card form-card">
       <h3>記錄新觀察</h3>
-      <el-form label-width="80px" :inline="false">
-        <el-form-item label="學生">
+      <!-- 手機與申請表單一致改標籤在上；必填三欄補星號（原本只靠送出後的 toast 才知道） -->
+      <el-form
+        :label-position="isMobile ? 'top' : 'right'"
+        :label-width="isMobile ? undefined : '80px'"
+        :inline="false"
+      >
+        <el-form-item label="學生" required>
           <el-select
             v-model="studentId"
             filterable
             placeholder="選擇學生"
             :disabled="lockedStudent"
-            style="width: 320px"
+            style="width: 100%; max-width: 320px"
           >
             <el-option
               v-for="s in allStudents"
@@ -164,7 +164,7 @@ async function submit() {
           <el-date-picker v-model="formDate" type="date" value-format="YYYY-MM-DD" />
         </el-form-item>
 
-        <el-form-item label="領域">
+        <el-form-item label="領域" required>
           <div class="domain-chips">
             <button
               v-for="d in DOMAINS"
@@ -186,7 +186,7 @@ async function submit() {
           <span class="hint">（選填）</span>
         </el-form-item>
 
-        <el-form-item label="觀察內容">
+        <el-form-item label="觀察內容" required>
           <el-input
             v-model="formNarrative"
             type="textarea"
@@ -198,7 +198,7 @@ async function submit() {
         </el-form-item>
 
         <el-form-item>
-          <el-checkbox v-model="formIsHighlight">標記為成長亮點 ✨</el-checkbox>
+          <el-checkbox v-model="formIsHighlight">標記為成長亮點</el-checkbox>
         </el-form-item>
 
         <el-form-item>
@@ -220,7 +220,7 @@ async function submit() {
         <li v-for="o in recent" :key="o.id">
           <strong>{{ o.observation_date }}</strong>
           <span v-if="o.domain" class="domain-tag">{{ o.domain }}</span>
-          <span v-if="o.is_highlight" class="hl">✨</span>
+          <el-icon v-if="o.is_highlight" class="hl" aria-label="成長亮點"><StarFilled /></el-icon>
           <p>{{ o.narrative }}</p>
         </li>
       </ul>
@@ -229,13 +229,6 @@ async function submit() {
 </template>
 
 <style scoped>
-.obs-view { max-width: 800px; margin: 0 auto; }
-.from-hub-bar {
-  margin: 0 0 12px;
-  padding: 4px 0;
-}
-.page-header { margin-bottom: var(--space-3); }
-.page-header h2 { margin: 0; color: var(--pt-text-strong); }
 
 .form-card, .timeline-card {
   padding: var(--space-4);
@@ -263,6 +256,14 @@ async function submit() {
   color: white;
   border-color: var(--color-primary);
 }
+/* 觸控裝置（含平板，DESIGN.md 教師端規則）：chip 只有 28px 高，
+   老師在課堂上單手點選學生／領域常點錯 */
+@media (pointer: coarse) {
+  .chip-btn {
+    min-height: var(--touch-target-min);
+    padding: 6px var(--space-3);
+  }
+}
 
 .hint, .lock-hint {
   margin-left: var(--space-2);
@@ -287,7 +288,8 @@ async function submit() {
 }
 .hl {
   margin-left: var(--space-1);
-  color: var(--color-warning);
+  color: var(--color-warning-darker);
+  vertical-align: -2px;
 }
 .empty {
   text-align: center;

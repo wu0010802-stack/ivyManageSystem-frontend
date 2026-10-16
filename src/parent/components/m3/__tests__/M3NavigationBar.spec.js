@@ -5,7 +5,7 @@ import M3NavigationBar from '../M3NavigationBar.vue'
 const ITEMS = [
   { key: 'home', label: '首頁', icon: 'home', path: '/home' },
   { key: 'messages', label: '訊息', icon: 'chat', path: '/messages', badge: 3 },
-  { key: 'admin', label: '事務', icon: 'assignment', path: '/admin' },
+  { key: 'admin', label: '待辦', icon: 'assignment', path: '/admin' },
   { key: 'me', label: '我的', icon: 'person', path: '/me' },
 ]
 
@@ -81,6 +81,36 @@ describe('M3NavigationBar', () => {
     expect(messagesTab.find('.m3-nav-tab-badge').text()).toBe('99+')
   })
 
+  it('badge 數量併入按鈕 aria-label，徽章本身對 AT 隱藏', () => {
+    const w = mount(M3NavigationBar, {
+      props: { items: ITEMS, currentKey: 'home' },
+    })
+    const tabs = w.findAll('.m3-nav-tab')
+    expect(tabs[1].attributes('aria-label')).toBe('訊息，3 項待處理')
+    expect(tabs[1].find('.m3-nav-tab-badge').attributes('aria-hidden')).toBe('true')
+    expect(tabs[1].find('.m3-nav-tab-badge').attributes('aria-label')).toBeUndefined()
+    // 沒有徽章的 tab 維持純標籤
+    expect(tabs[0].attributes('aria-label')).toBe('首頁')
+  })
+
+  it('badge > 99 時 aria-label 念「超過 99 項」而非「99+」', () => {
+    const items = [...ITEMS]
+    items[1] = { ...items[1], badge: 120 }
+    const w = mount(M3NavigationBar, { props: { items, currentKey: 'home' } })
+    expect(w.findAll('.m3-nav-tab')[1].attributes('aria-label')).toBe('訊息，超過 99 項待處理')
+  })
+
+  it('列高 = 80px 內容區＋safe-area（不再固定 80px 被 padding 壓縮）', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const sfc = readFileSync(resolve(__dirname, '../M3NavigationBar.vue'), 'utf-8')
+    const css = sfc.slice(sfc.indexOf('<style')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ')
+    const bar = css.match(/\.m3-navigation-bar \{([^}]*)\}/)[1]
+    expect(bar).toContain('height: calc(80px + env(safe-area-inset-bottom, 0px))')
+    expect(bar).toContain('padding-bottom: env(safe-area-inset-bottom, 0px)')
+    expect(bar).not.toMatch(/height: 80px;/)
+  })
+
   it('badge 為 0 或 undefined 不顯示', () => {
     const w = mount(M3NavigationBar, {
       props: { items: ITEMS, currentKey: 'home' },
@@ -97,7 +127,7 @@ describe('M3NavigationBar', () => {
     const emitted = w.emitted('select')
     expect(emitted).toHaveLength(1)
     expect(emitted[0][0]).toBe('admin')
-    expect(emitted[0][1]).toMatchObject({ key: 'admin', label: '事務' })
+    expect(emitted[0][1]).toMatchObject({ key: 'admin', label: '待辦' })
   })
 
   it('activeIcon 覆寫 active 狀態的 icon name', () => {
@@ -108,5 +138,53 @@ describe('M3NavigationBar', () => {
     const w = mount(M3NavigationBar, { props: { items, currentKey: 'a' } })
     const activeTab = w.findAll('.m3-nav-tab')[0]
     expect(activeTab.find('.material-symbols-rounded').text()).toBe('cottage')
+  })
+
+  describe('prominent tab（永久隆起 FAB）', () => {
+    const PROMINENT_ITEMS = [
+      ITEMS[0],
+      ITEMS[1],
+      { key: 'contact-book', label: '聯絡簿', icon: 'menu_book', path: '/contact-book', badge: 2, prominent: true },
+      ITEMS[2],
+      ITEMS[3],
+    ]
+
+    it('沒有 prominent item 時不渲染 m3-nav-fab', () => {
+      const w = mount(M3NavigationBar, { props: { items: ITEMS, currentKey: 'home' } })
+      expect(w.find('.m3-nav-fab').exists()).toBe(false)
+      expect(w.find('.is-prominent').exists()).toBe(false)
+    })
+
+    it('prominent item 掛 is-prominent + m3-nav-fab；列本身不掛凹槽 class / 變數（平整列）', () => {
+      const w = mount(M3NavigationBar, { props: { items: PROMINENT_ITEMS, currentKey: 'home' } })
+      expect(w.classes()).not.toContain('has-prominent')
+      expect(w.attributes('style') || '').not.toContain('--m3-nav-notch-x')
+      const tab = w.findAll('.m3-nav-tab')[2]
+      expect(tab.classes()).toContain('is-prominent')
+      expect(tab.find('.m3-nav-fab').exists()).toBe(true)
+      expect(tab.find('.m3-nav-tab-indicator').exists()).toBe(false)
+      expect(tab.find('.m3-nav-tab-dot').exists()).toBe(true)
+    })
+
+    it('prominent tab 不論是否 active 都保留 aria-label / 標籤 / badge', () => {
+      const w = mount(M3NavigationBar, { props: { items: PROMINENT_ITEMS, currentKey: 'home' } })
+      const tab = w.findAll('.m3-nav-tab')[2]
+      // 徽章數量併入按鈕名稱（按鈕 aria-label 會蓋掉子節點文字）
+      expect(tab.attributes('aria-label')).toBe('聯絡簿，2 項待處理')
+      expect(tab.attributes('aria-current')).toBeUndefined()
+      expect(tab.find('.m3-nav-tab-label').text()).toBe('聯絡簿')
+      expect(tab.find('.m3-nav-fab .m3-nav-tab-badge').text()).toBe('2')
+      expect(tab.find('.material-symbols-rounded').attributes('style')).toContain('"FILL" 0')
+    })
+
+    it('prominent tab 為 active 時：aria-current=page + filled icon + is-active', async () => {
+      const w = mount(M3NavigationBar, { props: { items: PROMINENT_ITEMS, currentKey: 'contact-book' } })
+      const tab = w.findAll('.m3-nav-tab')[2]
+      expect(tab.classes()).toContain('is-active')
+      expect(tab.attributes('aria-current')).toBe('page')
+      expect(tab.find('.material-symbols-rounded').attributes('style')).toContain('"FILL" 1')
+      await tab.trigger('click')
+      expect(w.emitted('select')[0][0]).toBe('contact-book')
+    })
   })
 })

@@ -50,17 +50,19 @@ describe('家長端 dark mode legacy 色階覆寫（2026-08-13 文字/背景對�
       '--coral-100:', '--coral-700:',
       '--leaf-100:', '--leaf-700:',
       '--grape-100:', '--grape-700:',
-      '--pt-amber-bg:',
+      // 2026-09-02：--pt-amber-bg 隨兩張待辦橫幅（PendingSignBanner /
+      // PendingSurveyBanner）一起退場，token 本身已從 globals.css 刪除，
+      // 這裡不再要求 dark 覆寫。原本守著它的獨立案例同時移除。
     ]
     for (const token of required) {
       expect(dark, `dark 區塊缺 ${token} 覆寫`).toContain(token)
     }
   })
 
-  it('待辦橫幅琥珀 token 必須在 light :root 有定義（曾為未定義變數永遠吃 fallback）', () => {
+  it('琥珀 token 已隨待辦橫幅退場，不應再定義（避免死碼復活）', () => {
     const css = globals()
-    expect(css).toMatch(/--pt-amber-bg:\s*#fff4dc/)
-    expect(css).toMatch(/--pt-amber-icon-bg:\s*#f5b637/)
+    expect(css).not.toMatch(/--pt-amber-bg:/)
+    expect(css).not.toMatch(/--pt-amber-icon-bg:/)
   })
 
   it('--sun-700 light 值調深至 AA（#c99500 對 sun-100 僅 2.45:1、對白底 2.9:1）', () => {
@@ -98,5 +100,38 @@ describe('家長端 dark mode legacy 色階覆寫（2026-08-13 文字/背景對�
       }
     }
     expect(offenders, `違規檔案：${offenders.join(', ')}`).toEqual([])
+  })
+
+  it('--m3-primary 底不得配恆白文字（dark 的 --m3-primary 是淺綠 #6ddc97，白字僅 1.7:1）', () => {
+    // 文字一律配成對的 --m3-on-primary（light #fff／dark #00391d）。
+    // --color-primary-contrast／--pt-on-accent 是「light/dark 皆白」的語意，只能配 dark 不變淺的有色底。
+    const { readdirSync } = require('node:fs') as typeof import('node:fs')
+    const root = resolve(process.cwd(), 'src/parent')
+    const CONSTANT_WHITE = /^\s*(var\(--(color-primary-contrast|pt-on-accent)\b|#fff\b|#ffffff\b|white\b)/i
+    const offenders: string[] = []
+    for (const entry of readdirSync(root, { recursive: true }) as string[]) {
+      const file = String(entry)
+      if (!file.endsWith('.vue') && !file.endsWith('.css')) continue
+      const content = read(`src/parent/${file}`)
+      const styleStart = file.endsWith('.vue') ? content.indexOf('<style') : 0
+      if (styleStart < 0) continue
+      for (const m of content.slice(styleStart).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const body = m[2]
+        const bg = body.match(/background(?:-color)?\s*:\s*([^;]+)/)
+        if (!bg || !/^\s*var\(--m3-primary[,)]/.test(bg[1])) continue
+        const color = body.match(/(?:^|[;\s])color\s*:\s*([^;]+)/)
+        if (color && CONSTANT_WHITE.test(color[1])) offenders.push(`${file} ${m[1].trim().split('\n').pop()}`)
+      }
+    }
+    expect(offenders, `違規規則：${offenders.join(', ')}`).toEqual([])
+  })
+})
+
+describe('家長端狀態語意色（2026-09-01 UI/UX 打磨）', () => {
+  it('DashboardHero 玻璃 pill 覆蓋不得吃掉 danger 警示色（逾期 chip 曾被白玻璃蓋到看不出事態）', () => {
+    const sfc = read('src/parent/components/DashboardHero.vue').replace(/\s+/g, ' ')
+    // 白玻璃覆蓋必須排除 tone-danger，讓 StatusPill 原生警示紅（淺紅底深紅字）呈現
+    expect(sfc).toMatch(/\.dash-hero-pill:not\(\.tone-danger\)/)
+    expect(sfc).not.toMatch(/\.dash-hero-pill \{[^}]*!important/)
   })
 })

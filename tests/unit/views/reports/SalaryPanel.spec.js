@@ -4,20 +4,24 @@
  * 2026-07-05 報表重構：獎金相關 tooltip 加註不可與應發相加（避免使用者誤將
  * 「應發+獎金」相加算成實際成本）。
  * 2026-07-11（spec §8 圖表編碼重整，Task 11）：獎金/加班不再是獨立 dataset
- * （改為 tooltip afterBody 顯示），警語隨之搬到 afterBody；本檔斷言同步更新，
- * 新測試見兄弟樹 src/views/reports/__tests__/SalaryPanel.test.ts。
+ * （改為 tooltip afterBody 顯示），警語隨之搬到 afterBody。
+ * 2026-10-12（報表改版）：分頁改名「人事成本」、點長條改切月份焦點（不再開榜首彈窗）；
+ * 本檔只保留「獎金不可與應發相加」這條不變式，其餘行為見兄弟樹
+ * src/views/reports/__tests__/SalaryPanel.test.ts。
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-const { mockGetDashboard, mockGetFinanceSummary } = vi.hoisted(() => ({
+const { mockGetDashboard, mockGetFinanceSummary, mockGetSalaryContributors } = vi.hoisted(() => ({
   mockGetDashboard: vi.fn(),
   mockGetFinanceSummary: vi.fn(),
+  mockGetSalaryContributors: vi.fn(),
 }))
 
 vi.mock('@/api/reports', () => ({
   getDashboard: mockGetDashboard,
   getFinanceSummary: mockGetFinanceSummary,
+  getSalaryContributors: mockGetSalaryContributors,
 }))
 vi.mock('@/composables/useChartJs', () => ({
   LineChart: { name: 'LineChart', props: ['data', 'options'], template: '<div />' },
@@ -30,29 +34,37 @@ vi.mock('@/composables/useChartJs', () => ({
 import { _resetCacheForTesting } from '@/composables/useCachedAsync'
 import SalaryPanel from '@/views/reports/SalaryPanel.vue'
 
+// 後端回 12 個月密集陣列；1 月為已封存（employee_count > 0），其餘月份無薪資
+const denseMonths = Array.from({ length: 12 }, (_, i) => ({
+  month: i + 1,
+  employee_count: i === 0 ? 10 : 0,
+  employee_count_pending: 0,
+  total_gross: i === 0 ? 100000 : 0,
+  total_net: i === 0 ? 90000 : 0,
+  total_bonus: i === 0 ? 5000 : 0,
+  total_overtime_pay: i === 0 ? 1000 : 0,
+}))
+
 beforeEach(() => {
+  // 只固定 Date（2026-07-10）：1 月才是「已過月份」，圖才會畫出來；其餘計時器維持真實
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 6, 10))
   _resetCacheForTesting()
   mockGetDashboard.mockReset()
   mockGetFinanceSummary.mockReset()
-  mockGetDashboard.mockResolvedValue({
-    data: {
-      salary_monthly: [
-        { month: 1, total_gross: 100000, total_net: 90000, total_bonus: 5000, total_overtime_pay: 1000 },
-      ],
-    },
-  })
+  mockGetSalaryContributors.mockReset()
+  mockGetDashboard.mockResolvedValue({ data: { salary_monthly: denseMonths } })
   mockGetFinanceSummary.mockResolvedValue({ data: { expense_by_category: [] } })
+  mockGetSalaryContributors.mockResolvedValue({ data: { year: 2026, month: 1, top_gross: [], top_overtime: [] } })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('SalaryPanel 獎金 label 澄清', () => {
   it('只剩應發/實發兩個 dataset；tooltip afterBody 對獎金合計加註不可與應發相加', async () => {
-    const w = mount(SalaryPanel, {
-      props: { year: 2026 },
-      // SalaryContributorsDialog（子元件，恆渲染但 modelValue=false 隱藏）用
-      // el-table-column scoped slot；未解析時 Vue 會用 undefined 呼叫 slot function
-      // 造成 destructure 崩潰，比照其他 panel 測試 stub 掉。
-      global: { stubs: { ElTable: true, ElTableColumn: true } },
-    })
+    const w = mount(SalaryPanel, { props: { year: 2026, focusMonth: 1 } })
     await flushPromises()
 
     const bar = w.findComponent({ name: 'BarChart' })

@@ -82,9 +82,9 @@ function resetForRetry() {
       height="512"
     >
     <div class="card pt-card">
-      <h2 class="title">加綁第二個小孩</h2>
+      <h2 class="title">加綁子女</h2>
       <p class="desc">
-        請輸入由園所提供的另一張綁定碼。完成後，新的小孩將會出現在您的子女清單中。
+        請輸入園所提供給這位孩子的綁定碼。完成後，孩子會出現在您的子女清單中。
       </p>
       <div class="input-group">
         <label for="bind-add-code" class="sr-only">加綁綁定碼</label>
@@ -114,7 +114,7 @@ function resetForRetry() {
           class="error-next-step"
           data-testid="bind-add-error-next-step"
         >
-          💡 {{ errorState.nextStep }}
+          {{ errorState.nextStep }}
         </p>
       </div>
 
@@ -175,13 +175,13 @@ function resetForRetry() {
 
 .title {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: 1.125rem;
   color: var(--brand-primary);
 }
 
 .desc {
   color: var(--pt-text-soft);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   margin-bottom: 16px;
 }
@@ -190,7 +190,7 @@ function resetForRetry() {
   width: 100%;
   min-height: var(--touch-target-min, 44px);
   padding: 12px 14px;
-  font-size: 18px;
+  font-size: max(16px, 1.125rem);
   letter-spacing: 4px;
   text-align: center;
   border: 1px solid var(--pt-border-strong);
@@ -207,7 +207,7 @@ function resetForRetry() {
 
 .error {
   color: var(--coral-700, #b14545);
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin: 12px 0 0;
   padding: 10px 12px;
   background: var(--coral-100, #ffe3e0);
@@ -223,7 +223,7 @@ function resetForRetry() {
   border-top: 1px dashed var(--coral-300, #ffb5ad);
   color: var(--pt-text-body, #5a4a4a);
   font-weight: 400;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 .recovery-actions {
@@ -236,7 +236,7 @@ function resetForRetry() {
 .recovery-retry {
   width: 100%;
   min-height: 44px;
-  font-size: 14px;
+  font-size: 0.875rem;
   background: rgba(13, 144, 83, 0.08);
   color: var(--brand-primary);
   border: 1px solid rgba(13, 144, 83, 0.2);

@@ -253,3 +253,48 @@ describe('ScheduleCalendarGrid', () => {
     })
   })
 })
+
+describe('ScheduleCalendarGrid 補登換班鈕（SPEC-026 3-3 T5）', () => {
+  const cellOf = (w, date) => {
+    const cells = w.findAll('.calendar-cell')
+    return cells.find((c) => c.text().startsWith(String(Number(date.slice(-2)))))
+  }
+
+  it('過去的平日且有班別：出現「補登換班」鈕', () => {
+    const w = mount(ScheduleCalendarGrid, {
+      props: { weeks: WEEKS, isToday, isFutureDate, isMobile: false },
+      global: { stubs: globalStubs },
+    })
+    // 5/1 早於 TODAY_DATE（2026-05-04），有班別、非週末
+    const btn = cellOf(w, '2026-05-01').find('.cell-swap-btn')
+    expect(btn.exists()).toBe(true)
+    expect(btn.text()).toBe('補登換班')
+  })
+
+  it('今天與未來日：維持「換班」', () => {
+    const w = mount(ScheduleCalendarGrid, {
+      props: { weeks: WEEKS, isToday, isFutureDate, isMobile: false },
+      global: { stubs: globalStubs },
+    })
+    expect(cellOf(w, '2026-05-04').find('.cell-swap-btn').text()).toBe('換班')
+    expect(cellOf(w, '2026-05-06').find('.cell-swap-btn').text()).toBe('換班')
+  })
+
+  it('週末與沒有班別的格子：過去日期也沒有按鈕', () => {
+    const w = mount(ScheduleCalendarGrid, {
+      props: { weeks: WEEKS, isToday, isFutureDate, isMobile: false },
+      global: { stubs: globalStubs },
+    })
+    expect(cellOf(w, '2026-05-02').find('.cell-swap-btn').exists()).toBe(false)
+  })
+
+  it('點過去日期的補登換班鈕：照常 emit swap-click 且不觸發 cell-click', async () => {
+    const w = mount(ScheduleCalendarGrid, {
+      props: { weeks: WEEKS, isToday, isFutureDate, isMobile: false },
+      global: { stubs: globalStubs },
+    })
+    await cellOf(w, '2026-05-01').find('.cell-swap-btn').trigger('click')
+    expect(w.emitted('swap-click')[0][0]).toEqual(expect.objectContaining({ date: '2026-05-01' }))
+    expect(w.emitted('cell-click')).toBeFalsy()
+  })
+})

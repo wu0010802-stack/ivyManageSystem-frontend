@@ -92,17 +92,13 @@ describe('ActivityRegistrationPanel', () => {
     expect(w.find('.registration-panel').exists()).toBe(false)
   })
 
-  it('renders 4 summary cards with correct values', () => {
+  it('摘要列顯示正確的報名、正式、候補與繳費人數', () => {
     const w = mount(ActivityRegistrationPanel, {
       props: { data: DATA, activeClass: null },
       global: GLOBAL,
     })
-    const cards = w.findAll('.el-card')
-    expect(cards.length).toBe(4)
-    expect(w.text()).toContain('30')  // total_registrations
-    expect(w.text()).toContain('25')  // total_enrolled
-    expect(w.text()).toContain('3')   // total_waitlist
-    expect(w.text()).toContain('20')  // total_paid
+    const summary = w.find('.reg-summary').text().replace(/\s+/g, ' ')
+    expect(summary).toBe('已報名 30 人・ 正式 25・ 候補 3・ 已繳費 20')
   })
 
   it('shows classroom tabs when 2+ classrooms', () => {
@@ -166,5 +162,40 @@ describe('ActivityRegistrationPanel', () => {
     })
 
     expect(w.vm.courseStatusLabel(status)).toBe(label)
+  })
+
+  it('手機改渲染卡片：課程標籤與繳費狀態完整可見，多班時不重複列班級', () => {
+    const original = window.matchMedia
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true, media: '(max-width: 767.98px)', onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })
+    try {
+      const w = mount(ActivityRegistrationPanel, {
+        props: { data: DATA, activeClass: '小綠葉' },
+        global: {
+          ...GLOBAL,
+          stubs: {
+            ...STUBS,
+            ElSkeleton: true,
+            ElCard: { template: '<div class="el-card"><slot /></div>', props: ['shadow'] },
+          },
+        },
+      })
+      expect(w.findComponent({ name: 'ElTable' }).exists()).toBe(false)
+      const cards = w.findComponent({ name: 'AdminListCards' })
+      expect(cards.exists()).toBe(true)
+      expect(cards.props('items')).toHaveLength(1)
+      const labels = cards.props('columns').map(c => c.label)
+      expect(labels).not.toContain('班級') // 已有班級分頁
+      expect(labels).toEqual(expect.arrayContaining(['繳費', '課程']))
+      const text = cards.text()
+      expect(text).toContain('小華')
+      expect(text).toContain('音樂（候補 #1）')
+      expect(text).toContain('未繳費')
+    } finally {
+      window.matchMedia = original
+    }
   })
 })

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // 本頁自 2026-07-27 起會讀 route.query.classroom_id（首頁班級卡的 deep link），
 // 沒有 router 也沒有 mock 時 useRoute() 會回 undefined，setup 階段就爆。
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ params: {}, query: {} }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))
@@ -35,7 +36,8 @@ vi.mock('@/utils/auth', () => ({ getUserInfo: vi.fn(() => ({ id: 1 })) }))
 // fetchClassrooms 以 route.query.classroom_id 做 deep-link 預選班級；未 mock 時
 // useRoute() 回 undefined，存取 .query 拋錯會被 catch 吞掉，導致 classroomId 始終
 // 為 null、fetchDailyAttendance/fetchMonthly 提前 return，競態行為根本測不到。
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
+vi.mock('vue-router', () => ({ onBeforeRouteLeave: vi.fn(),
+  useRoute: () => ({ query: {} }) }))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn() },

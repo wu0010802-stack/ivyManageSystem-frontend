@@ -19,6 +19,12 @@ import CalendarView from '@/parent/views/CalendarView.vue'
 
 const emptyPayload = { data: { items: [] } }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 beforeEach(() => {
   weekMock.mockReset().mockResolvedValue(emptyPayload)
   monthMock.mockReset().mockResolvedValue(emptyPayload)
@@ -77,6 +83,25 @@ describe('CalendarView 範圍切換', () => {
     await flushPromises()
 
     expect(weekMock).toHaveBeenLastCalledWith(3)
+    w.unmount()
+  })
+
+  it('快速切到整月時，較晚回來的舊週資料不得覆蓋整月行程', async () => {
+    const oldWeek = deferred<{ data: { items: Array<{ date: string; title: string }> } }>()
+    const currentMonth = deferred<{ data: { items: Array<{ date: string; title: string }> } }>()
+    weekMock.mockReturnValueOnce(oldWeek.promise)
+    monthMock.mockReturnValueOnce(currentMonth.promise)
+
+    const w = await mountCal()
+    await rangeButton(w, '整月').trigger('click')
+
+    currentMonth.resolve({ data: { items: [{ date: '2026-09-20', title: '整月新行程' }] } })
+    await flushPromises()
+    oldWeek.resolve({ data: { items: [{ date: '2026-09-15', title: '舊週行程' }] } })
+    await flushPromises()
+
+    expect(w.text()).toContain('整月新行程')
+    expect(w.text()).not.toContain('舊週行程')
     w.unmount()
   })
 

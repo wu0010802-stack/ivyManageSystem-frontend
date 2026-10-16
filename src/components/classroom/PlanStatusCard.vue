@@ -12,6 +12,7 @@ import { hasPermission } from '@/utils/auth'
 import { formatDateTimeTW } from '@/utils/format'
 import { apiError } from '@/utils/error'
 import type { Schema } from '@/api/_generated/typed'
+import { formatPlanDate } from '@/components/enrollment/planning/planHelpers'
 
 type StatusOut = Schema<'StatusOut'>
 
@@ -26,6 +27,8 @@ const state = computed(() => status.value?.state ?? 'none')
 const applyOverdue = computed(() => status.value?.apply_overdue ?? false)
 const blockingCount = computed(() => status.value?.blocking_count ?? 0)
 const warningCount = computed(() => status.value?.warning_count ?? 0)
+// 補救模式：目前已是目標學年上學期，發布後排程下一輪（約一小時內）就套用
+const appliesImmediately = computed(() => status.value?.applies_immediately === true)
 
 // 樣式：讀取失敗用 error；排程套用逾期用 warning 蓋過其他狀態；applied 用 success；
 // draft 有待處理問題時用 warning；其餘（none / 無問題的 draft）用 info。
@@ -33,7 +36,7 @@ const alertType = computed<'info' | 'warning' | 'success' | 'error'>(() => {
   if (loadError.value) return 'error'
   if (applyOverdue.value) return 'warning'
   if (state.value === 'applied') return 'success'
-  if (state.value === 'draft' && blockingCount.value > 0) return 'warning'
+  if (state.value === 'draft' && (blockingCount.value > 0 || appliesImmediately.value)) return 'warning'
   return 'info'
 })
 
@@ -48,15 +51,19 @@ const displayMessage = computed(() => {
   if (applyOverdue.value) return '計畫尚未套用，排程器重試中'
   switch (state.value) {
     case 'draft': {
+      let base = '草稿編輯中'
       if (blockingCount.value > 0) {
-        const base = `草稿編輯中，尚有 ${blockingCount.value} 項問題`
-        return warningCount.value > 0 ? `${base}（另 ${warningCount.value} 項提醒）` : base
+        base = `草稿編輯中，尚有 ${blockingCount.value} 項問題`
+        if (warningCount.value > 0) base += `（另 ${warningCount.value} 項提醒）`
+      } else if (warningCount.value > 0) {
+        base = `草稿編輯中，有 ${warningCount.value} 項提醒`
       }
-      if (warningCount.value > 0) return `草稿編輯中，有 ${warningCount.value} 項提醒`
-      return '草稿編輯中'
+      return appliesImmediately.value ? `${base}；已開學，發布後約一小時內套用` : base
     }
-    case 'published':
-      return '已確認，等待學年切換（預計 8/1 套用）'
+    case 'published': {
+      const date = formatPlanDate(status.value?.apply_date)
+      return date ? `已確認，將於 ${date} 自動套用` : '已確認，等待學年切換後自動套用'
+    }
     case 'applied':
       return `已於 ${formatDateTimeTW(status.value?.applied_at)} 套用`
     case 'none':

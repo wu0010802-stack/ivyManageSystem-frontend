@@ -12,17 +12,22 @@
  *    client 的自訂碼是 post-accept 的 4003（token 到期，composable 靜默 refresh 後重連）。
  *    因此**不做**「權限不足請聯絡管理員」這類永遠不觸發的 UI。
  *
- * 隱私：座標只交給 Leaflet 畫點，不進 console / Sentry / URL query / storage / 標題。
- * Leaflet 動態 import（含 CSS），理由同家長端。
+ * 隱私：座標只交給地圖 SDK 畫點，不進 console / Sentry / URL query / storage / 標題。
+ * 底圖 provider 見下方「底圖 provider」段：設了金鑰走 Google Maps，否則 Leaflet + OSM。
+ * 兩個 SDK 都動態 import（Leaflet 含 CSS），理由同家長端——不讓地圖庫進首屏 bundle。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, watch, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 import { useBusMonitor, DIRECTION_LABELS } from '@/composables/useBusMonitor'
+import { excuseReasonLabel } from '@/constants/bus'
+import { ensureGoogleMaps } from '@/utils/googleMapsLoader'
 
+const router = useRouter()
 const monitor = useBusMonitor()
 const {
-  routes, selectedRouteId, trip, stops, loading, snapshotFailed,
+  routes, selectedRouteId, trip, stops, loading, snapshotFailed, rosterOutOfSync,
   reconnecting, isLive, stale, showMap, tripSummary,
 } = monitor
 
@@ -39,27 +44,65 @@ const directionLabel = computed(
   () => DIRECTION_LABELS[trip.value?.direction ?? ''] ?? trip.value?.direction ?? '',
 )
 
-function stopTagType(status: string): 'success' | 'info' | undefined {
+const endTimeText = computed(() => {
+  const clock = formatTaipeiClock(trip.value?.end_time_estimated ?? null)
+  return clock ? `預計 ${clock} 回到園所` : ''
+})
+
+function stopTagType(status: string): 'success' | 'info' | 'warning' | undefined {
   if (status === 'departed') return 'success'
   if (status === 'skipped') return 'info'
+  if (status === 'excused') return 'warning'
   return undefined
 }
+/**
+ * 後端 `status` 是裸 `str`（沒有 enum），值域日後可能再擴。未知值**原樣顯示**而不是
+ * 落進「待接送」——把一個不認識的狀態說成「等一下會接」是這一頁最不該犯的謊，
+ * 而印出裸英文碼至少讓行政知道要回報。與 `BusDispatchStopsTable.statusMeta` 同慣例。
+ */
+const STOP_LABELS: Record<string, string> = {
+  pending: '待接送',
+  departed: '已離站',
+  skipped: '已跳過',
+  excused: '今日不搭',
+}
 function stopLabel(status: string): string {
-  if (status === 'departed') return '已離站'
-  if (status === 'skipped') return '已跳過'
-  return '待接送'
+  return STOP_LABELS[status] ?? status
+}
+/** excused 站才有原因；其餘狀態不顯示（空字串＝該欄留白）。 */
+function excuseText(status: string, reason: string | null): string {
+  return status === 'excused' ? excuseReasonLabel(reason) : ''
+}
+/**
+ * 站點 ETA：`eta_live`（行進間即時重算）優先，退回 `eta_planned`（當日平移值）。
+ * 與後端 `services/bus_events.py::build_stop_update_event` 的 `eta` 取值同順序，
+ * 家長端與監看頁看到的是同一個數字。
+ *
+ * **只有 `pending` 的站才有 ETA**：excused 的站後端會跳過、departed／skipped 已經
+ * 過去了。對一件不會發生的事給出精確時間，行政（或被行政轉述的家長）會照著在門口
+ * 等——那比不顯示更糟。
+ */
+function stopEtaText(status: string, etaLive: string | null, etaPlanned: string | null): string {
+  if (status !== 'pending') return '—'
+  return formatTaipeiClock(etaLive ?? etaPlanned) ?? '—'
 }
 
 async function onRouteChange(routeId: number): Promise<void> {
   await monitor.selectRoute(routeId)
 }
 
-// ── Leaflet（動態載入）──
-// leaflet 無 @types，比照 repo 既有慣例以 any + 逐行 eslint-disable 承接。
+// ── 底圖 provider ──
+// 設了 VITE_GOOGLE_MAPS_API_KEY 就走 Google Maps，否則（含金鑰無效、SDK 被網路
+// 擋掉）退回 Leaflet + OpenStreetMap。兩條路徑畫的東西完全一樣：一個車輛 marker
+// ＋各站 marker，差別只在底圖與 SDK 的呼叫方式。
+// 兩個 SDK 都沒有 @types，比照 repo 既有慣例以 any + 逐行 eslint-disable 承接。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let leafletApi: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let leafletPromise: Promise<any> | null = null
+/** 非 null 代表目前這顆地圖是 Google 畫的（拆除方式與 Leaflet 不同）。 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let googleApi: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let map: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,30 +137,73 @@ function stopSignature(): string {
     .join('|')
 }
 
+/** 站名 tooltip 只放順位與學生名，**不放座標數字**（座標＝家庭住址等級資料）。 */
+function stopTitle(stop: { seq: number; student_name: string }): string {
+  return `${stop.seq}. ${stop.student_name}`
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function drawStopMarkers(L: any): void {
+function drawLeafletStopMarkers(L: any): void {
   const signature = stopSignature()
   if (signature === renderedStopSignature) return
   stopMarkers.forEach((m) => { m.remove?.() })
   stopMarkers = []
   for (const stop of stops.value) {
     if (stop.lat == null || stop.lng == null) continue
-    stopMarkers.push(
-      L.marker([stop.lat, stop.lng], { title: `${stop.seq}. ${stop.student_name}` }).addTo(map),
-    )
+    stopMarkers.push(L.marker([stop.lat, stop.lng], { title: stopTitle(stop) }).addTo(map))
   }
   renderedStopSignature = signature
 }
 
-async function renderMap(): Promise<void> {
-  if (!showMap.value) return
-  await nextTick()
-  const current = trip.value
-  if (!mapEl.value || !current || current.last_lat == null || current.last_lng == null) return
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function drawGoogleStopMarkers(gmaps: any): void {
+  const signature = stopSignature()
+  if (signature === renderedStopSignature) return
+  stopMarkers.forEach((m) => { m.setMap?.(null) })
+  stopMarkers = []
+  for (const stop of stops.value) {
+    if (stop.lat == null || stop.lng == null) continue
+    stopMarkers.push(new gmaps.Marker({
+      position: { lat: stop.lat, lng: stop.lng },
+      map,
+      title: stopTitle(stop),
+    }))
+  }
+  renderedStopSignature = signature
+}
+
+/**
+ * Google 的計費單位是「建立一次 Map 實例」，而位置每幾秒就更新一次——
+ * 所以**只有 map 不存在時才 new**，位置變動一律只移動 marker。
+ *
+ * 用 legacy `Marker` 而非 `AdvancedMarkerElement`：後者要求 `mapId`（雲端樣式）
+ * 且需多載 `libraries=marker`，對「一台車＋幾個站」的需求沒有好處。與招生熱點圖
+ * 的既有用法也一致。console 會有 deprecation 提示，屬預期。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderGoogleMap(gmaps: any, position: [number, number]): void {
+  const center = { lat: position[0], lng: position[1] }
+  if (!map) {
+    googleApi = gmaps
+    map = new gmaps.Map(mapEl.value, {
+      center,
+      zoom: MAP_ZOOM,
+      // 監看頁只要看車在哪，其餘控制項都是干擾
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+    })
+    busMarker = new gmaps.Marker({ position: center, map, title: '娃娃車' })
+  } else {
+    busMarker?.setPosition(center)
+  }
+  drawGoogleStopMarkers(gmaps)
+}
+
+async function renderLeafletMap(position: [number, number]): Promise<void> {
   const L = await ensureLeaflet()
   // await 期間可能已改判為不可信（stale / 快照失敗）或元件已卸載
   if (!mapEl.value || !showMap.value) return
-  const position: [number, number] = [current.last_lat, current.last_lng]
   if (!map) {
     map = L.map(mapEl.value).setView(position, MAP_ZOOM)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -127,12 +213,39 @@ async function renderMap(): Promise<void> {
   } else {
     busMarker?.setLatLng(position)
   }
-  drawStopMarkers(L)
+  drawLeafletStopMarkers(L)
+}
+
+async function renderMap(): Promise<void> {
+  if (!showMap.value) return
+  await nextTick()
+  const current = trip.value
+  if (!mapEl.value || !current || current.last_lat == null || current.last_lng == null) return
+  const position: [number, number] = [current.last_lat, current.last_lng]
+
+  // 已經有一顆 Google 地圖時就不必再問載入器（也不會重複載入）
+  const gmaps = googleApi ?? await ensureGoogleMaps()
+  // await 期間可能已改判為不可信（stale / 快照失敗）或元件已卸載
+  if (!mapEl.value || !showMap.value) return
+
+  if (gmaps) {
+    renderGoogleMap(gmaps, position)
+    return
+  }
+  await renderLeafletMap(position)
 }
 
 function destroyMap(): void {
   if (!map) return
-  map.remove?.()
+  if (googleApi) {
+    // Google Maps 沒有 map.remove()：解掉 marker 與地圖的綁定即可，
+    // 容器 DOM 由 v-if 移除，實例失去引用後由 GC 回收。
+    busMarker?.setMap?.(null)
+    stopMarkers.forEach((m) => { m.setMap?.(null) })
+  } else {
+    map.remove?.()
+  }
+  googleApi = null
   map = null
   busMarker = null
   stopMarkers = []
@@ -163,7 +276,10 @@ onBeforeUnmount(() => {
   <div class="bus-monitor">
     <PageHeader title="娃娃車監看" subtitle="今日班次的車輛位置與各站接送進度">
       <template #actions>
+        <label class="bus-monitor__route-filter">
+          <span>監看路線</span>
         <el-select
+          aria-label="監看路線"
           :model-value="selectedRouteId"
           data-testid="bus-monitor-route"
           placeholder="選擇路線"
@@ -177,6 +293,7 @@ onBeforeUnmount(() => {
             :value="r.id"
           />
         </el-select>
+        </label>
       </template>
     </PageHeader>
 
@@ -195,7 +312,10 @@ onBeforeUnmount(() => {
         :closable="false"
         title="無法取得最新班次資料"
         description="與伺服器的連線出了狀況，畫面上的資訊可能已經過時，因此暫時不顯示地圖。"
-      />
+      >
+        <p>與伺服器的連線出了狀況，畫面上的資訊可能已經過時，因此暫時不顯示地圖。</p>
+        <el-button data-testid="bus-monitor-retry" @click="monitor.refresh">重試</el-button>
+      </el-alert>
 
       <el-empty
         v-else-if="!trip"
@@ -208,6 +328,23 @@ onBeforeUnmount(() => {
           {{ tripSummary }}
           <el-tag v-if="isLive" type="success" size="small">行駛中</el-tag>
         </div>
+
+        <!--
+          監看頁是唯讀（沒有重設按鈕）——只能引導去調度頁操作，語意同
+          BusDispatchView.vue 的同名警示，見 useBusMonitor.ts::rosterOutOfSync。
+        -->
+        <el-alert
+          v-if="rosterOutOfSync"
+          data-testid="bus-monitor-roster-out-of-sync"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="班次名單有更新，此班次的名單/地址與路線設定不同步"
+          description="請到「今日調度」確認名單差異，再決定是否重設。"
+        >
+        <p>請到「今日調度」確認名單差異，再決定是否重設。</p>
+          <el-button v-if="trip.trip_date" data-testid="bus-monitor-dispatch" @click="router.push({ path: '/bus/dispatch', query: { date: trip.trip_date, trip_id: String(trip.id) } })">前往此班次調度</el-button>
+        </el-alert>
 
         <el-alert
           v-if="!isLive"
@@ -252,18 +389,26 @@ onBeforeUnmount(() => {
             </template>
           </el-table-column>
           <!--
-            這站仍是 pending（後端刻意不自動跳站，怕請假資料有誤漏接）——沒有這欄，
-            行政只會看到「這站沒接」而誤判成漏接，得靠這個標示明講「預期如此」。
+            excused 站的原因（第二期起 excused 是落庫事實，後端會跳站）。沒有這欄，
+            行政只看得到「這站沒接」，分不出是家長按了今天不搭、老師准的假，還是
+            後台自己排除的——三者的後續處置完全不同。
           -->
-          <el-table-column label="請假" width="90">
+          <el-table-column label="不搭原因" width="110">
             <template #default="{ row }">
               <el-tag
-                v-if="row.on_leave"
+                v-if="row.status === 'excused'"
                 type="warning"
-                :data-testid="`bus-monitor-onleave-${row.stop_id}`"
+                :data-testid="`bus-monitor-excused-${row.stop_id}`"
               >
-                已請假
+                {{ excuseText(row.status, row.excuse_reason) }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="預計抵達" width="110">
+            <template #default="{ row }">
+              <span :data-testid="`bus-monitor-eta-${row.stop_id}`">
+                {{ stopEtaText(row.status, row.eta_live, row.eta_planned) }}
+              </span>
             </template>
           </el-table-column>
           <el-table-column label="離站時間" width="140">
@@ -272,6 +417,9 @@ onBeforeUnmount(() => {
             </template>
           </el-table-column>
         </el-table>
+        <p v-if="isLive && endTimeText" data-testid="bus-monitor-end-time" class="bus-monitor__direction">
+          {{ endTimeText }}
+        </p>
         <p class="bus-monitor__direction">方向：{{ directionLabel }}</p>
       </template>
     </template>
@@ -279,6 +427,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.bus-monitor__route-filter {
+  display: grid;
+  gap: var(--space-1);
+}
+
 .bus-monitor {
   padding: var(--space-4, 16px);
   display: flex;

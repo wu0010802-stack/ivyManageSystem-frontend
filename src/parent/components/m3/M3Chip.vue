@@ -101,7 +101,6 @@ function onRemove(e: Event): void {
   border-radius: 9999px;
   background: var(--m3-surface-container-low, #f1f5ee);
   color: var(--m3-on-surface, #181d18);
-  font-family: var(--m3-font-body, 'Roboto', sans-serif);
   cursor: pointer;
   transition:
     background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
@@ -117,6 +116,17 @@ function onRemove(e: Event): void {
   pointer-events: none;
   transition: opacity var(--m3-dur-short-2, 100ms) var(--m3-easing-standard, ease);
 }
+.m3-chip::after {
+  /* 命中區擴張：視覺尺寸維持 M3 規格，透明 ::after 以本體為中心撐到 ≥48px 觸控熱區
+   * （::before 已是 state layer）。本體不設 overflow，偽元素可超出邊界；點到它即點到本體。 */
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--touch-target-m3, 48px));
+  height: max(100%, var(--touch-target-m3, 48px));
+  transform: translate(-50%, -50%);
+}
 .m3-chip:hover:not(.is-disabled)::before        { opacity: var(--m3-state-hover, 0.08); }
 .m3-chip:focus-visible:not(.is-disabled)::before{ opacity: var(--m3-state-focus, 0.12); }
 .m3-chip:active:not(.is-disabled)::before       { opacity: var(--m3-state-pressed, 0.12); }
@@ -130,6 +140,9 @@ function onRemove(e: Event): void {
 .m3-chip-leading { color: inherit; }
 .m3-chip-label { white-space: nowrap; }
 .m3-chip-remove {
+  /* 疊在命中區 ::after 之上，否則點移除鈕會被當成點整顆 chip */
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;

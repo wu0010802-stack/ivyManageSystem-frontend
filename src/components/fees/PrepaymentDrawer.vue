@@ -213,24 +213,38 @@ async function doTransfer(row: PrepayCreditRow) {
   }
 }
 
+let applyRequestSeq = 0
 async function openApply(row: PrepayCreditRow) {
+  if (!row.student_id) return
+  const seq = ++applyRequestSeq
+  applyVisible.value = false
+  applyRecords.value = []
   applyCredit.value = row
   applyTarget.value = null
   try {
-    const data = await getFeeRecords({
-      student_id: row.student_id,
-      status: 'unpaid',
-      page: 1,
-      page_size: 50,
-    })
-    // 只列註冊費且學期符合的費用單（後端仍會再驗證）
+    // 同一學生、目標學期完整讀取；不能只查 unpaid，部分已繳仍可折抵。
     const expected = `${row.target_school_year}-${row.target_semester}`
-    applyRecords.value = (data.items as FeeRecordRow[]).filter(
-      (r) => r.fee_type === 'registration' && r.period === expected,
+    const records: FeeRecordRow[] = []
+    let page = 1
+    while (true) {
+      const data = await getFeeRecords({
+        student_id: row.student_id,
+        period: expected,
+        page,
+        page_size: 50,
+      })
+      if (seq !== applyRequestSeq) return
+      records.push(...(data.items as FeeRecordRow[]))
+      if (records.length >= data.total || data.items.length === 0) break
+      page += 1
+    }
+    // 已清帳或其他費項不可套用；後端仍會驗證學生、學期與折抵上限。
+    applyRecords.value = records.filter(
+      (r) => r.fee_type === 'registration' && r.period === expected && r.amount_paid < r.amount_due,
     )
     applyVisible.value = true
   } catch (e) {
-    ElMessage.error(friendlyError('載入註冊費費用單失敗', e))
+    if (seq === applyRequestSeq) ElMessage.error(friendlyError('載入註冊費費用單失敗', e))
   }
 }
 

@@ -1,16 +1,113 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { ChartData, ChartOptions } from 'chart.js'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getDashboard } from '@/api/reports'
-import { LineChart, BarChart, MONTH_LABELS } from './chartSetup'
-import { computeReportPeriod } from './useReportPeriod'
+import { apiError } from '@/utils/error'
+import { BarChart, MONTH_LABELS } from './chartSetup'
+import { computeReportPeriod, monthState } from './useReportPeriod'
+import { formatAmount, monthRangeText } from './reportFormat'
+import { readCssVar, resolveTrendPalette, withAlpha } from './trendChart'
 import AttendanceDetailDialog from './AttendanceDetailDialog.vue'
+
+/**
+ * 經營報表 › 教職員出勤（2026-10-12 改版）。
+ *
+ * 資料是「教職員打卡」（遲到／早退／缺卡），不是幼生出席。班級＝員工目前所屬班級，
+ * 調班前的月份也算在現在的班。後端對沒有打卡紀錄的月份回 `rate: 0, total_records: 0`，
+ * 這不是「出勤率 0%」，圖表一律以 null 表示（不畫），並在表格末列說明。
+ */
+
+interface AttendanceMonthRow {
+  month: number
+  total_records?: number
+  normal?: number
+  late?: number
+  early_leave?: number
+  missing?: number
+  rate?: number
+}
+
+interface AttendanceClassroomRow {
+  classroom_id: number
+  classroom: string
+  total_records?: number
+  late?: number
+  early_leave?: number
+  rate?: number
+}
+
+const LEAVE_KEYS = ['personal', 'sick', 'annual', 'menstrual', 'maternity', 'paternity'] as const
+type LeaveKey = (typeof LEAVE_KEYS)[number]
+type LeaveMonthRow = { month: number } & Partial<Record<LeaveKey, number>>
+
+interface DashboardAttendance {
+  attendance_monthly?: AttendanceMonthRow[]
+  attendance_by_classroom?: AttendanceClassroomRow[]
+  leave_monthly?: LeaveMonthRow[]
+}
+
+interface AnomalyRow {
+  month: number
+  total: number
+  late: number
+  early: number
+  missing: number
+  rate: number
+}
+
+interface ClassroomRow {
+  classroomId: number
+  classroom: string
+  total: number
+  rate: number
+  insufficient: boolean
+  level: RateLevel
+}
+
+type RateLevel = 'good' | 'warn' | 'bad'
+
+// 出勤率門檻與樣本下限（班級表、月圖共用同一組）
+const RATE_GOOD_MIN = 95
+const RATE_WARN_MIN = 90
+const MIN_SAMPLE = 10
+
+const LEVEL_KEYS: RateLevel[] = ['good', 'warn', 'bad']
+const LEVEL_TEXT: Record<RateLevel, string> = {
+  good: '95% 以上',
+  warn: '90–95%',
+  bad: '低於 90%',
+}
+const LEVEL_TAG: Record<RateLevel, 'success' | 'warning' | 'danger'> = {
+  good: 'success',
+  warn: 'warning',
+  bad: 'danger',
+}
+
+// el-table slot 的 row 是 any：經型別化的 helper 取值，避免 noImplicitAny 索引錯誤
+const levelTag = (row: { level: RateLevel }) => LEVEL_TAG[row.level]
+const levelText = (row: { level: RateLevel }) => LEVEL_TEXT[row.level]
+
+function rateLevel(rate: number): RateLevel {
+  if (rate >= RATE_GOOD_MIN) return 'good'
+  if (rate >= RATE_WARN_MIN) return 'warn'
+  return 'bad'
+}
+
+function clampRate(rate: number): number {
+  return Math.max(0, Math.min(100, rate))
+}
 
 const props = defineProps<{
   year: number
+  focusMonth: number
 }>()
 
-const dashboard = useCachedAsync(
+const emit = defineEmits<{
+  (e: 'update:focusMonth', month: number): void
+}>()
+
+const dashboard = useCachedAsync<DashboardAttendance>(
   `reports/dashboard:${props.year}`,
   () => getDashboard({ year: props.year }).then(r => r.data),
   { ttl: 300_000 }
@@ -18,22 +115,193 @@ const dashboard = useCachedAsync(
 
 watch(() => props.year, () => dashboard.refresh(false))
 
-const data = computed(() => dashboard.data.value || {
-  attendance_monthly: [],
-  attendance_by_classroom: [],
-  leave_monthly: [],
+const data = computed<DashboardAttendance>(() => dashboard.data.value || {})
+
+const loading = computed(() => dashboard.pending.value && !dashboard.data.value)
+// 有快取資料時，背景刷新失敗不蓋掉畫面（stale-while-revalidate）
+const loadFailed = computed(() => !!dashboard.error.value && !dashboard.data.value)
+const errorText = computed(() => apiError(dashboard.error.value, '載入出勤資料失敗'))
+
+function retry() {
+  dashboard.refresh(true)
+}
+
+// 報表截止期間單一事實來源（spec §2）：未來月不畫、不列入「沒有紀錄」。
+const period = computed(() => computeReportPeriod(props.year))
+
+// 有打卡紀錄的月份（未來月、total_records = 0 都不算）
+const recordedByMonth = computed(() => {
+  const map = new Map<number, AttendanceMonthRow>()
+  for (const row of data.value.attendance_monthly || []) {
+    if (monthState(period.value, row.month) === 'future') continue
+    if ((row.total_records ?? 0) > 0) map.set(row.month, row)
+  }
+  return map
 })
 
-// 班級多選 filter（client-side）
-const selectedClassrooms = ref<number[]>([])
-const classroomOptions = computed(() =>
-  (data.value.attendance_by_classroom || []).map((d: { classroom_id: number; classroom: string }) => ({
-    id: d.classroom_id,
-    name: d.classroom,
-  })),
+// 已過或本月、但沒有打卡紀錄的月份
+const emptyMonths = computed(() => {
+  const out: number[] = []
+  for (let m = 1; m <= 12; m++) {
+    if (monthState(period.value, m) !== 'future' && !recordedByMonth.value.has(m)) out.push(m)
+  }
+  return out
+})
+const emptyMonthsNote = computed(() =>
+  emptyMonths.value.length ? `${monthRangeText(emptyMonths.value)}沒有打卡紀錄` : '',
 )
 
-// drill-down dialog state
+const focusTagText = computed(() => {
+  const m = props.focusMonth
+  const rec = recordedByMonth.value.get(m)
+  return rec
+    ? `${m} 月有 ${formatAmount(rec.total_records)} 筆打卡紀錄`
+    : `${m} 月沒有打卡紀錄`
+})
+
+// ── 圖表顏色：canvas 吃不到 CSS 變數，繪圖前先解析 design token ──
+// resolveTrendPalette 的 revenue／refund／expense 分別解析自 --color-success／
+// --color-warning／--color-danger（含讀不到 token 時的退場值），這裡借用其結果。
+function ratePalette(): Record<RateLevel, string> {
+  const pal = resolveTrendPalette()
+  return { good: pal.revenue, warn: pal.refund, bad: pal.expense }
+}
+
+// ── 每月出勤率 ──
+const rateChartData = computed<ChartData<'bar', (number | null)[]>>(() => {
+  const pal = ratePalette()
+  const rates: (number | null)[] = []
+  const colors: string[] = []
+  for (let m = 1; m <= 12; m++) {
+    const rec = recordedByMonth.value.get(m)
+    const rate = rec ? (rec.rate ?? 0) : null
+    rates.push(rate)
+    const base = pal[rateLevel(rate ?? 0)]
+    // 焦點月實色，其餘月淡化
+    colors.push(m === props.focusMonth ? base : withAlpha(base, 0.55))
+  }
+  return {
+    labels: MONTH_LABELS,
+    datasets: [{
+      label: '出勤率 (%)',
+      data: rates,
+      backgroundColor: colors,
+      borderRadius: 4,
+      maxBarThickness: 40,
+    }],
+  }
+})
+
+const rateChartOptions: ChartOptions<'bar'> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        title: () => '',
+        label: (ctx) => {
+          const month = ctx.dataIndex + 1
+          const rec = recordedByMonth.value.get(month)
+          return `${month} 月｜出勤率 ${rec?.rate ?? 0}%｜打卡 ${formatAmount(rec?.total_records ?? 0)} 筆`
+        },
+      },
+    },
+  },
+  scales: {
+    y: { min: 0, max: 100, ticks: { callback: (v) => `${v}%` } },
+  },
+  onClick: (_e, elements) => {
+    if (!elements.length) return
+    emit('update:focusMonth', elements[0].index + 1)
+  },
+}
+
+// ── 異常次數表（只列有紀錄的月份） ──
+const anomalyRows = computed<AnomalyRow[]>(() =>
+  [...recordedByMonth.value.values()]
+    .sort((a, b) => a.month - b.month)
+    .map(r => ({
+      month: r.month,
+      total: r.total_records ?? 0,
+      late: r.late ?? 0,
+      early: r.early_leave ?? 0,
+      missing: r.missing ?? 0,
+      rate: r.rate ?? 0,
+    })),
+)
+
+function anomalyRowClass({ row }: { row: AnomalyRow }): string {
+  return row.month === props.focusMonth ? 'is-focus-row' : ''
+}
+
+// ── 依所屬班級（全年） ──
+const classroomRows = computed<ClassroomRow[]>(() =>
+  (data.value.attendance_by_classroom || []).map(r => {
+    const total = r.total_records ?? 0
+    const rate = r.rate ?? 0
+    return {
+      classroomId: r.classroom_id,
+      classroom: r.classroom,
+      total,
+      rate,
+      insufficient: total < MIN_SAMPLE,
+      level: rateLevel(rate),
+    }
+  }),
+)
+
+// ── 請假 ──
+const leaveRows = computed(() => {
+  const map = new Map<number, LeaveMonthRow>()
+  for (const row of data.value.leave_monthly || []) map.set(row.month, row)
+  return map
+})
+
+const hasLeave = computed(() =>
+  [...leaveRows.value.values()].some(row => LEAVE_KEYS.some(k => (row[k] ?? 0) > 0)),
+)
+
+const leaveChartData = computed<ChartData<'bar', number[]>>(() => {
+  const pal = resolveTrendPalette()
+  const personal: number[] = []
+  const sick: number[] = []
+  const annual: number[] = []
+  const other: number[] = []
+  for (let m = 1; m <= 12; m++) {
+    const d = leaveRows.value.get(m)
+    personal.push(d?.personal || 0)
+    sick.push(d?.sick || 0)
+    annual.push(d?.annual || 0)
+    other.push((d?.menstrual || 0) + (d?.maternity || 0) + (d?.paternity || 0))
+  }
+  return {
+    labels: MONTH_LABELS,
+    datasets: [
+      { label: '事假', data: personal, backgroundColor: pal.refund, stack: 'leaves' },
+      { label: '病假', data: sick, backgroundColor: pal.net, stack: 'leaves' },
+      { label: '特休', data: annual, backgroundColor: pal.revenue, stack: 'leaves' },
+      {
+        label: '其他',
+        data: other,
+        backgroundColor: readCssVar('--color-neutral-400').trim() || 'gray',
+        stack: 'leaves',
+      },
+    ],
+  }
+})
+
+const leaveChartOptions: ChartOptions<'bar'> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'top' } },
+  scales: {
+    x: { stacked: true },
+    y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+  },
+}
+
+// ── 明細彈窗 ──
 const detailDialog = ref<{
   visible: boolean
   month: number | null
@@ -46,193 +314,166 @@ const detailDialog = ref<{
   classroomName: null,
 })
 
-function openMonthDetail(monthIdx: number) {
-  detailDialog.value = {
-    visible: true,
-    month: monthIdx + 1,
-    classroomId: null,
-    classroomName: null,
-  }
+function openMonthDetail(row: AnomalyRow) {
+  detailDialog.value = { visible: true, month: row.month, classroomId: null, classroomName: null }
 }
 
-function openClassroomDetail(arrIdx: number) {
-  const arr = filteredClassroomData.value._rawData as Array<{ classroom_id: number; classroom: string; rate: number }> | undefined
-  if (!arr || arrIdx >= arr.length) return
-  const row = arr[arrIdx]
+function openClassroomDetail(row: ClassroomRow) {
   detailDialog.value = {
     visible: true,
     month: null,
-    classroomId: row.classroom_id,
+    classroomId: row.classroomId,
     classroomName: row.classroom,
   }
-}
-
-// 報表截止期間單一事實來源（spec §2）：cutoffMonth 之後的月份不畫（避免懸崖假 0）。
-const period = computed(() => computeReportPeriod(props.year))
-
-const attendanceChartData = computed(() => {
-  const monthMap: Record<number, { rate?: number; late?: number; early_leave?: number; missing?: number }> = {}
-  ;(data.value.attendance_monthly || []).forEach((d: { month: number; rate?: number; late?: number; early_leave?: number; missing?: number }) => { monthMap[d.month] = d })
-  const rates: (number | null)[] = []
-  const late: (number | null)[] = []
-  const early: (number | null)[] = []
-  const miss: (number | null)[] = []
-  for (let m = 1; m <= 12; m++) {
-    if (m > period.value.cutoffMonth) {
-      rates.push(null)
-      late.push(null)
-      early.push(null)
-      miss.push(null)
-      continue
-    }
-    const d = monthMap[m]
-    rates.push(d?.rate ?? null)
-    late.push(d?.late ?? null)
-    early.push(d?.early_leave ?? null)
-    miss.push(d?.missing ?? null)
-  }
-  return {
-    labels: MONTH_LABELS,
-    datasets: [
-      { label: '出勤率 (%)', data: rates, borderColor: '#409EFF', backgroundColor: 'rgba(64,158,255,0.1)', fill: true, tension: 0.3, yAxisID: 'y' },
-      { label: '遲到次數', data: late, borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' },
-      { label: '早退次數', data: early, borderColor: '#9B59B6', backgroundColor: 'rgba(155,89,182,0.1)', borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' },
-      { label: '缺卡次數', data: miss, borderColor: '#F56C6C', backgroundColor: 'rgba(245,108,108,0.1)', borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' },
-    ],
-  }
-})
-
-const attendanceChartOptions = computed(() => ({
-  responsive: true, maintainAspectRatio: false,
-  interaction: { mode: 'index' as const, intersect: false },
-  plugins: { legend: { position: 'top' as const }, title: { display: false } },
-  scales: {
-    y: { type: 'linear' as const, position: 'left' as const, min: 0, max: 100, title: { display: true, text: '出勤率 (%)' } },
-    y1: { type: 'linear' as const, position: 'right' as const, min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: '次數' } },
-  },
-  spanGaps: true,
-  onClick: (_e: unknown, elements: Array<{ index: number }>) => {
-    if (!elements.length) return
-    openMonthDetail(elements[0].index)
-  },
-}))
-
-// 班級長條圖：套用 client-side filter
-const filteredClassroomData = computed(() => {
-  const arr = (data.value.attendance_by_classroom || []) as Array<{ classroom_id: number; classroom: string; rate: number }>
-  const filtered = selectedClassrooms.value.length === 0
-    ? arr
-    : arr.filter(d => selectedClassrooms.value.includes(d.classroom_id))
-  const labels = filtered.map(d => d.classroom)
-  const rates = filtered.map(d => d.rate)
-  const colors = rates.map(r => r >= 95 ? '#67C23A' : r >= 90 ? '#E6A23C' : '#F56C6C')
-  return {
-    labels,
-    datasets: [{ label: '出勤率 (%)', data: rates, backgroundColor: colors, borderRadius: 4 }],
-    _rawData: filtered,
-  }
-})
-
-const classroomChartOptions = computed(() => ({
-  responsive: true, maintainAspectRatio: false, indexAxis: 'y' as const,
-  plugins: { legend: { display: false } },
-  scales: { x: { min: 0, max: 100, title: { display: true, text: '出勤率 (%)' } } },
-  onClick: (_e: unknown, elements: Array<{ index: number }>) => {
-    if (!elements.length) return
-    openClassroomDetail(elements[0].index)
-  },
-}))
-
-const leaveChartData = computed(() => {
-  // 依月份鍵值取值（防禦性）：後端 `_query_leave_monthly` 已保證回傳固定 12 筆
-  // 密集陣列，但那是隱性契約；比照上面 attendanceChartData 建 monthMap，
-  // 避免未來後端回傳稀疏陣列時前端按 index 對錯月份（2026-07-05 稽核 P3-3）。
-  const arr = (data.value.leave_monthly || []) as Array<{ month: number; personal?: number; sick?: number; annual?: number; menstrual?: number; maternity?: number; paternity?: number }>
-  const monthMap: Record<number, typeof arr[number]> = {}
-  arr.forEach(d => { monthMap[d.month] = d })
-  const personal: number[] = []
-  const sick: number[] = []
-  const annual: number[] = []
-  const other: number[] = []
-  for (let m = 1; m <= 12; m++) {
-    const d = monthMap[m]
-    personal.push(d?.personal || 0)
-    sick.push(d?.sick || 0)
-    annual.push(d?.annual || 0)
-    other.push((d?.menstrual || 0) + (d?.maternity || 0) + (d?.paternity || 0))
-  }
-  return {
-    labels: MONTH_LABELS,
-    datasets: [
-      { label: '事假', data: personal, backgroundColor: '#E6A23C', stack: 'leaves' },
-      { label: '病假', data: sick, backgroundColor: '#409EFF', stack: 'leaves' },
-      { label: '特休', data: annual, backgroundColor: '#67C23A', stack: 'leaves' },
-      { label: '其他', data: other, backgroundColor: '#909399', stack: 'leaves' },
-    ],
-  }
-})
-
-const leaveChartOptions = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { position: 'top' as const } },
-  scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: '次數' } } },
 }
 </script>
 
 <template>
-  <el-skeleton v-if="dashboard.pending.value && !dashboard.data.value" :rows="8" animated />
-  <div v-else>
-    <div class="filter-bar">
-      <el-select
-        v-model="selectedClassrooms"
-        multiple
-        collapse-tags
-        collapse-tags-tooltip
-        placeholder="選擇班級（不選 = 全部）"
-        style="width: 320px;"
-      >
-        <el-option
-          v-for="opt in classroomOptions"
-          :key="opt.id"
-          :label="opt.name"
-          :value="opt.id"
+  <el-skeleton v-if="loading" :rows="8" animated data-test="attendance-skeleton" />
+  <div v-else-if="loadFailed" class="load-error" data-test="attendance-error">
+    <el-empty :description="errorText">
+      <el-button type="primary" data-test="attendance-retry" @click="retry">重新載入</el-button>
+    </el-empty>
+  </div>
+  <div v-else class="attendance-panel">
+    <p class="panel-note" data-test="panel-note">
+      <span>依教職員打卡紀錄計算。班級為員工目前所屬班級，調班前的月份也算在現在的班。</span>
+      <el-tag size="small" type="info" data-test="focus-tag">{{ focusTagText }}</el-tag>
+    </p>
+
+    <div class="grid-2-1">
+      <el-card class="panel-card" shadow="never" data-test="rate-card">
+        <template #header>
+          <div class="card-header">
+            <span class="card-title">每月出勤率</span>
+            <span class="threshold-legend" data-test="threshold-legend">
+              <span v-for="key in LEVEL_KEYS" :key="key" class="lg-item">
+                <i class="sw" :class="`sw-${key}`" aria-hidden="true" />{{ LEVEL_TEXT[key] }}
+              </span>
+            </span>
+          </div>
+        </template>
+        <div v-if="recordedByMonth.size" class="chart-container is-clickable">
+          <BarChart :data="rateChartData" :options="rateChartOptions" />
+        </div>
+        <el-empty
+          v-else
+          :image-size="60"
+          :description="`${year} 年目前沒有教職員打卡紀錄。`"
+          data-test="rate-empty"
         />
-      </el-select>
+      </el-card>
+
+      <el-card class="panel-card" shadow="never" data-test="anomaly-card">
+        <template #header>
+          <div class="card-header">
+            <span class="card-title">異常次數</span>
+            <span class="card-hint">點選月份看明細</span>
+          </div>
+        </template>
+        <!-- 月份欄的 button 不綁 handler：鍵盤 Enter／Space 的 click 會冒泡到列，由 row-click 處理 -->
+        <el-table
+          :data="anomalyRows"
+          size="small"
+          empty-text="目前沒有打卡紀錄"
+          :row-class-name="anomalyRowClass"
+          data-test="anomaly-table"
+          @row-click="openMonthDetail"
+        >
+          <el-table-column label="月份" min-width="64">
+            <template #default="{ row }">
+              <button type="button" class="row-link" data-test="anomaly-month">{{ row.month }} 月</button>
+            </template>
+          </el-table-column>
+          <el-table-column label="打卡筆數" min-width="80" align="right" class-name="num-cell">
+            <template #default="{ row }">{{ formatAmount(row.total) }}</template>
+          </el-table-column>
+          <el-table-column label="遲到" min-width="56" align="right" class-name="num-cell">
+            <template #default="{ row }">{{ row.late }}</template>
+          </el-table-column>
+          <el-table-column label="早退" min-width="56" align="right" class-name="num-cell">
+            <template #default="{ row }">{{ row.early }}</template>
+          </el-table-column>
+          <el-table-column label="缺卡" min-width="56" align="right" class-name="num-cell">
+            <template #default="{ row }">{{ row.missing }}</template>
+          </el-table-column>
+          <el-table-column label="出勤率" min-width="68" align="right" class-name="num-cell">
+            <template #default="{ row }">{{ row.rate }}%</template>
+          </el-table-column>
+        </el-table>
+        <p v-if="emptyMonthsNote" class="table-note" data-test="anomaly-empty-months">{{ emptyMonthsNote }}</p>
+      </el-card>
     </div>
 
-    <el-row :gutter="16">
-      <el-col :xs="24" :lg="12">
-        <el-card class="chart-card" shadow="hover">
-          <template #header><span class="chart-title">月度出勤率趨勢（點擊長條開明細）</span></template>
-          <div class="chart-container"><LineChart :data="attendanceChartData" :options="attendanceChartOptions" /></div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :lg="12">
-        <el-card class="chart-card" shadow="hover">
-          <template #header>
-            <div class="chart-header">
-              <span class="chart-title">各班級出勤統計（點擊長條開明細）</span>
-              <span class="threshold-legend" data-test="threshold-legend">
-                <span class="lg-item"><i class="sw sw-green" />≥95%</span>
-                <span class="lg-item"><i class="sw sw-orange" />90–95%</span>
-                <span class="lg-item"><i class="sw sw-red" />&lt;90%</span>
-              </span>
-              <span class="filter-hint" data-test="classroom-filter-hint">班級篩選只影響此圖</span>
-            </div>
-          </template>
-          <div class="chart-container">
-            <BarChart v-if="filteredClassroomData._rawData?.length" :data="filteredClassroomData" :options="classroomChartOptions" />
-            <el-empty v-else description="無班級出勤資料" :image-size="60" />
+    <div class="grid-2-1">
+      <el-card class="panel-card" shadow="never" data-test="classroom-card">
+        <template #header>
+          <div class="card-header">
+            <span class="card-title">依所屬班級（全年）</span>
+            <span class="card-hint">點選班級看明細，細線為 90%</span>
           </div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :lg="24">
-        <el-card class="chart-card" shadow="hover">
-          <template #header><span class="chart-title">請假趨勢分析</span></template>
-          <div class="chart-container"><BarChart :data="leaveChartData" :options="leaveChartOptions" /></div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </template>
+        <el-table
+          :data="classroomRows"
+          size="small"
+          empty-text="目前沒有班級打卡紀錄"
+          data-test="classroom-table"
+          @row-click="openClassroomDetail"
+        >
+          <el-table-column label="班級" min-width="96">
+            <template #default="{ row }">
+              <button type="button" class="row-link" data-test="classroom-name">{{ row.classroom }}</button>
+            </template>
+          </el-table-column>
+          <el-table-column label="打卡筆數" min-width="80" align="right" class-name="num-cell">
+            <template #default="{ row }">{{ formatAmount(row.total) }}</template>
+          </el-table-column>
+          <el-table-column label="出勤率" min-width="190">
+            <template #default="{ row }">
+              <span
+                v-if="row.insufficient"
+                class="muted"
+                :title="`打卡筆數少於 ${MIN_SAMPLE} 筆`"
+                data-test="classroom-insufficient"
+              >樣本不足，不計算</span>
+              <div v-else class="rate-cell" data-test="classroom-rate-cell">
+                <div class="rate-track" aria-hidden="true">
+                  <div
+                    class="rate-fill"
+                    :class="`is-${row.level}`"
+                    :style="{ width: `${clampRate(row.rate)}%` }"
+                    data-test="classroom-rate-bar"
+                  />
+                  <i class="rate-target" />
+                </div>
+                <span class="rate-text" data-test="classroom-rate-text">{{ row.rate }}%</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="狀態" min-width="96">
+            <template #default="{ row }">
+              <el-tag v-if="row.insufficient" type="info" size="small" data-test="classroom-status">樣本不足</el-tag>
+              <el-tag v-else :type="levelTag(row)" size="small" data-test="classroom-status">
+                {{ levelText(row) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        <p class="table-note" data-test="classroom-note">表上沒有的班級，表示沒有教職員打卡紀錄。</p>
+      </el-card>
+
+      <el-card class="panel-card" shadow="never" data-test="leave-card">
+        <template #header>
+          <span class="card-title">請假次數</span>
+        </template>
+        <p v-if="!hasLeave" class="muted empty-line" data-test="leave-empty">
+          {{ year }} 年目前沒有教職員請假紀錄。
+        </p>
+        <div v-else class="chart-container">
+          <BarChart :data="leaveChartData" :options="leaveChartOptions" />
+        </div>
+      </el-card>
+    </div>
 
     <AttendanceDetailDialog
       v-model="detailDialog.visible"
@@ -245,22 +486,115 @@ const leaveChartOptions = {
 </template>
 
 <style scoped>
-.chart-card { margin-bottom: var(--space-4); }
-.chart-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
-.chart-container { height: 320px; position: relative; cursor: pointer; }
-.filter-bar {
+.attendance-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.panel-note {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* 寬螢幕 2:1 並排；右欄有下限避免表格欄位被擠壞。窄螢幕單欄。 */
+.grid-2-1 {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(400px, 1fr);
+  gap: var(--space-4);
+}
+
+.panel-card { height: 100%; }
+
+.card-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: var(--space-4);
+  justify-content: space-between;
   flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
 }
-.chart-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.threshold-legend { display: inline-flex; gap: 8px; font-size: 12px; color: var(--text-secondary); }
-.lg-item { display: inline-flex; align-items: center; gap: 3px; }
-.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-.sw-green { background: #67C23A; }
-.sw-orange { background: #E6A23C; }
-.sw-red { background: #F56C6C; }
-.filter-hint { font-size: 12px; color: var(--text-secondary); margin-left: auto; }
+.card-title { font-size: var(--text-lg); font-weight: 600; color: var(--text-primary); }
+.card-hint { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+.threshold-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+.lg-item { display: inline-flex; align-items: center; gap: var(--space-1); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.sw-good { background: var(--color-success); }
+.sw-warn { background: var(--color-warning); }
+.sw-bad { background: var(--color-danger); }
+
+.chart-container { height: 300px; position: relative; }
+.chart-container.is-clickable { cursor: pointer; }
+
+/* 表格列可點（開明細）：button 只提供鍵盤入口，外觀與一般文字一致 */
+.row-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.row-link:hover { color: var(--el-color-primary); }
+:deep(.el-table__row) { cursor: pointer; }
+:deep(.el-table__row.is-focus-row > td.el-table__cell) {
+  background: var(--el-color-primary-light-9);
+}
+
+.rate-cell { display: flex; align-items: center; gap: var(--space-2); }
+.rate-track {
+  position: relative;
+  flex: 1;
+  min-width: 56px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-100);
+}
+.rate-fill { height: 100%; border-radius: inherit; }
+.rate-fill.is-good { background: var(--color-success); }
+.rate-fill.is-warn { background: var(--color-warning); }
+.rate-fill.is-bad { background: var(--color-danger); }
+/* 90% 位置的細刻度線 */
+.rate-target {
+  position: absolute;
+  left: 90%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--text-tertiary);
+}
+.rate-text {
+  min-width: 3.5em;
+  text-align: right;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted { font-size: var(--text-sm); color: var(--text-tertiary); }
+.table-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+.empty-line { margin: 0; padding: var(--space-4) 0; }
+
+@media (--to-lg) {
+  .grid-2-1 { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (--to-sm) {
+  .chart-container { height: 240px; }
+}
 </style>

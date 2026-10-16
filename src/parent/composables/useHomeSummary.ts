@@ -3,18 +3,22 @@
  * 家長端 `GET /parent/home/summary` 的共用讀取層。
  *
  * summary 一支就帶齊多個計數（未讀公告 / 待繳 / 待簽 / 才藝候補待確認 /
- * 假單審核結果 / 今日用藥單），所以事務頁列徽章、底部 tab 徽章都從這裡拿，
+ * 假單審核結果 / 今日用藥單），所以待辦清單、底部 tab 徽章都從這裡拿，
  * 不再各自打 API。
  *
  * 後端仍回傳 unread_messages，但親師訊息已於 2026-08-28 自家長端下架，
  * 前端不再讀取該欄位。
  *
  * 快取鍵刻意與 TodayView 相同：useCachedAsync 對同 key 共用 cache 條目
- * 並 dedupe in-flight 請求，因此首頁與事務頁同時掛載也只會有一次網路請求。
+ * 並 dedupe in-flight 請求，因此首頁與待辦頁同時掛載也只會有一次網路請求。
+ *
+ * 2026-10-14：快取改經 useHomeDataCache 登記，家長完成動作（簽收、填調查、簽
+ * 入學文件）後呼叫 invalidateHomeSummary()，待辦清單與 tab 徽章立刻重抓，不必
+ * 等 60 秒 TTL。
  */
 import { computed } from 'vue'
-import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getHomeSummary } from '../api/profile'
+import { invalidateHomeData, useHomeDataCache } from './useHomeDataCache'
 
 export const HOME_SUMMARY_CACHE_KEY = 'parent/today/summary'
 
@@ -26,6 +30,8 @@ export interface HomeBadges {
   pendingEventAcks: number
   pendingActivityPromotions: number
   recentLeaveReviews: number
+  /** 待回覆的活動調查份數（2026-09-02 併入，原本事務頁（現待辦頁）自己 cast summary 讀） */
+  pendingSurveyCount: number
   /** 今日生效的委託用藥單張數；資訊性，不計入 tab 徽章 */
   activeMedicationOrders: number
 }
@@ -40,13 +46,13 @@ function num(v: unknown): number {
  */
 export function useHomeSummary(options: { immediate?: boolean } = {}) {
   const { immediate = true } = options
-  const { data, error, pending, refresh } = useCachedAsync(
+  const { data, error, pending, refresh } = useHomeDataCache(
     HOME_SUMMARY_CACHE_KEY,
     async () => {
       const res = await getHomeSummary()
       return res.data
     },
-    { ttl: 60_000, immediate },
+    { immediate },
   )
 
   const summary = computed<Record<string, unknown> | null>(() => {
@@ -64,15 +70,21 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
       pendingEventAcks: num(s.pending_event_acks),
       pendingActivityPromotions: num(s.pending_activity_promotions),
       recentLeaveReviews: num(s.recent_leave_reviews),
+      pendingSurveyCount: num(s.pending_survey_count),
       activeMedicationOrders: num(s.active_medication_orders),
     }
   })
 
   /**
-   * 底部「事務」tab 的總數徽章。
+   * 底部「待辦」tab（2026-10-08 前叫「事務」）的總數徽章。
    *
-   * 只加「需要家長動作或該知道結果」的四項。今日用藥單是資訊性的
-   * （家長已經送出、老師照表執行），計進去只會讓紅點天天亮著而失去意義。
+   * 只加「需要家長動作」的四項，與首頁待辦標題的「N 件」（useParentTodos
+   * actionCount）同一口徑。今日用藥單、近 7 天請假審核結果是資訊性的，
+   * 計進去會讓 tab 數字比首頁多、紅點天天亮著而失去意義（2026-09-26）。
+   *
+   * 刻意不加入首頁待辦清單的另外兩項（入學文件簽署、臨時接送）：那兩支是
+   * summary 之外的獨立 API，而 ParentLayout 在登入頁也會掛載，為了徽章
+   * 多打兩支請求不划算。因此待辦清單的件數可能比 tab 徽章多，屬已知取捨。
    */
   const adminTabBadge = computed<number>(() => {
     const b = badges.value
@@ -80,19 +92,9 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
       b.outstandingFees +
       b.pendingEventAcks +
       b.pendingActivityPromotions +
-      b.recentLeaveReviews
+      b.pendingSurveyCount
     )
   })
-
-  /**
-   * 底部「聯絡簿」tab 徽章。
-   *
-   * 目前只有未讀公告——後端 summary 尚無「未讀聯絡簿」計數，加上去要另開欄位；
-   * 聯絡簿本身的未讀在頁內以「N 則未讀」pill 呈現。
-   */
-  const contactBookTabBadge = computed<number>(
-    () => badges.value.unreadAnnouncements,
-  )
 
   return {
     data,
@@ -102,6 +104,15 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
     summary,
     badges,
     adminTabBadge,
-    contactBookTabBadge,
   }
+}
+
+/**
+ * 家長完成一個待辦動作後呼叫（簽收通知、填活動調查、簽署入學文件…）：
+ * summary 與待辦清單另外兩支來源（入學文件、臨時接送）一起失效並重抓——
+ * 掛載中的 tab 徽章、首頁／待辦頁清單立即更新，沒掛載的下次進來強制重抓。
+ * 只在 API 成功分支呼叫；不會 reject，呼叫端用 `void invalidateHomeSummary()` 即可。
+ */
+export function invalidateHomeSummary(): Promise<void> {
+  return invalidateHomeData()
 }

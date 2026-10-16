@@ -114,17 +114,58 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div v-if="resultsWithChanges.length" class="role-sync__diff" data-testid="sync-diff">
+        <h4>權限差異</h4>
+        <div
+          v-for="row in resultsWithChanges"
+          :key="row.tenant_id"
+          class="role-sync__diff-target"
+          :data-testid="`sync-diff-${row.tenant_id}`"
+        >
+          <div class="role-sync__diff-tenant">{{ row.tenant_slug }}</div>
+          <ul class="role-sync__diff-list">
+            <li
+              v-for="change in row.role_changes"
+              :key="change.code"
+              class="role-sync__diff-role"
+              :data-testid="`sync-diff-${row.tenant_id}-${change.code}`"
+            >
+              <div class="role-sync__diff-head">
+                <span class="role-sync__diff-code">{{ change.code }}</span>
+                <el-tag :type="change.action === 'created' ? 'success' : 'warning'" size="small">
+                  {{ change.action === 'created' ? '新建' : '覆寫' }}
+                </el-tag>
+                <span v-if="labelText(change)" class="role-sync__diff-meta">{{ labelText(change) }}</span>
+                <span v-if="change.description_changed" class="role-sync__diff-meta">描述將更新</span>
+              </div>
+              <div v-if="change.permissions_added?.length" class="perm-added" data-testid="sync-diff-added">
+                ＋ 新增權限：{{ change.permissions_added.join('、') }}
+              </div>
+              <div v-if="change.permissions_removed?.length" class="perm-removed" data-testid="sync-diff-removed">
+                － 移除權限：{{ change.permissions_removed.join('、') }}
+              </div>
+              <div
+                v-if="!change.permissions_added?.length && !change.permissions_removed?.length"
+                class="role-sync__diff-meta"
+              >
+                權限不變
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { hasPermission } from '@/utils/auth'
-import { getErrorMessage } from '@/utils/errorHandler'
-import { syncRoles, type RoleSyncReport } from '@/api/platform'
+import { classifyError, ErrorType, getErrorMessage } from '@/utils/errorHandler'
+import { syncRoles, type RoleSyncReport, type RoleSyncRoleChange } from '@/api/platform'
 import { usePlatformTenants } from './usePlatformTenants'
 
 const canManage = computed(() => hasPermission('PLATFORM_TENANTS_MANAGE'))
@@ -137,14 +178,50 @@ const mode = ref<'merge' | 'overwrite'>('merge')
 const running = ref(false)
 const previewed = ref(false)
 const report = ref<RoleSyncReport | null>(null)
+/**
+ * 預覽回傳的來源快照雜湊（F57／MT-08）。實跑時帶回，後端比對當下來源；
+ * 預覽後來源被改過 → 409，確保寫入的就是總部看過的那份差異。
+ */
+const snapshotHash = ref<string | null>(null)
+/** 表單參數世代：在途的預覽回來時若參數已變，結果不得解鎖實跑。 */
+let paramsGeneration = 0
 
 const targetOptions = computed(() => selectableSchools.value.filter((t) => t.id !== sourceId.value))
 const canSubmit = computed(() => Boolean(sourceId.value) && targetIds.value.length > 0)
+const resultsWithChanges = computed(() =>
+  (report.value?.results ?? []).filter((row) => row.role_changes?.length),
+)
 
 const listText = (items?: string[] | null): string => (items?.length ? items.join('、') : '—')
 
+function labelText(change: RoleSyncRoleChange): string {
+  if (change.action === 'created') return change.label_to ? `名稱：${change.label_to}` : ''
+  if ((change.label_from ?? null) === (change.label_to ?? null)) return ''
+  return `名稱：${change.label_from || '（空白）'} → ${change.label_to || '（空白）'}`
+}
+
+/**
+ * 回到「必須重新預覽」：清掉雜湊與 previewed；畫面上的預覽差異一併收掉，
+ * 免得把舊參數／舊來源的差異當成接下來要寫入的內容。
+ */
+function invalidatePreview(): void {
+  previewed.value = false
+  snapshotHash.value = null
+  if (report.value?.dry_run) report.value = null
+}
+
+// 來源、目標或模式任一變更，預覽的差異與雜湊就不再對應接下來的實跑。
+watch([sourceId, targetIds, mode], () => {
+  paramsGeneration += 1
+  invalidatePreview()
+}, { deep: true })
+
+/** 後端 F57 409 沒有結構化 code，detail 為固定句；以關鍵片語辨識「來源在預覽後已變動」。 */
+const SOURCE_CHANGED_MARKER = '預覽之後已變動'
+
 async function run(dryRun: boolean): Promise<void> {
   if (!canSubmit.value || !sourceId.value) return
+  const generation = paramsGeneration
   running.value = true
   try {
     const res = await syncRoles({
@@ -153,17 +230,34 @@ async function run(dryRun: boolean): Promise<void> {
       target_tenant_ids: targetIds.value.filter((id) => id !== sourceId.value),
       mode: mode.value,
       dry_run: dryRun,
+      ...(dryRun ? {} : { source_snapshot_hash: snapshotHash.value }),
     })
-    report.value = res.data ?? null
     if (dryRun) {
+      // 在途期間改了參數：這份預覽對應的是舊參數，不能拿它的雜湊解鎖實跑。
+      if (generation !== paramsGeneration) return
+      report.value = res.data ?? null
+      snapshotHash.value = res.data?.source_snapshot_hash ?? null
       previewed.value = true
       ElMessage.success('預覽完成，請確認差異後再執行')
     } else {
+      report.value = res.data ?? null
       previewed.value = false
+      snapshotHash.value = null
       ElMessage.success('角色同步已執行')
     }
   } catch (err) {
-    // 409 = 該目標分校正被另一個同步作業鎖住（後端 advisory lock），不是資料錯誤。
+    if (!dryRun && classifyError(err) === ErrorType.CONFLICT) {
+      // 實跑 409 一律回到需預覽：來源在預覽後被改過（F57），或目標正被另一個同步鎖住
+      // （advisory lock）——後者結束後目標角色也已不同，舊預覽同樣不可信。
+      invalidatePreview()
+      const message = getErrorMessage(err, '同步失敗')
+      if (message.includes(SOURCE_CHANGED_MARKER)) {
+        ElMessage.warning('來源已變動，請重新預覽')
+      } else {
+        ElMessage.error(message)
+      }
+      return
+    }
     ElMessage.error(getErrorMessage(err, dryRun ? '預覽失敗' : '同步失敗'))
   } finally {
     running.value = false
@@ -232,6 +326,57 @@ async function confirmApply(): Promise<void> {
 }
 
 .error-text {
+  color: var(--el-color-danger);
+}
+
+.role-sync__diff {
+  margin-top: var(--space-4);
+}
+
+.role-sync__diff-target + .role-sync__diff-target {
+  margin-top: var(--space-3);
+}
+
+.role-sync__diff-tenant {
+  font-weight: 600;
+}
+
+.role-sync__diff-list {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+}
+
+.role-sync__diff-role + .role-sync__diff-role {
+  margin-top: var(--space-2);
+}
+
+.role-sync__diff-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.role-sync__diff-code {
+  font-family: var(--font-mono, monospace);
+}
+
+.role-sync__diff-meta {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.perm-added,
+.perm-removed {
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.perm-added {
+  color: var(--el-color-success);
+}
+
+.perm-removed {
   color: var(--el-color-danger);
 }
 </style>

@@ -10,6 +10,7 @@ import {
 } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import { useIsMobile } from '@/composables/useIsMobile'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const props = withDefaults(defineProps<{
   refreshTrigger?: number
@@ -300,7 +301,7 @@ defineExpose({ fetchLeaves })
         </el-table-column>
       </el-table>
     </div>
-    <el-empty v-if="!loading && leaves.length === 0" description="本月無請假記錄" />
+    <EmptyState v-if="!loading && leaves.length === 0" variant="inline" title="本月無請假記錄" />
   </el-card>
 
   <!-- 附件預覽 Dialog -->
@@ -422,6 +423,13 @@ defineExpose({ fetchLeaves })
   gap: var(--space-3);
   margin-top: 8px;
   flex-wrap: wrap;
+}
+/* 卡片只在手機渲染：link 鈕原本 18px 高，「撤回」這種破壞性動作也點不準。
+   撐出觸控高度；gap 已控間距，去掉 EP 的相鄰 margin-left。 */
+.leave-card__actions .el-button {
+  min-height: var(--touch-target-min);
+  margin-left: 0;
+  padding: 0 var(--space-2);
 }
 
 .attach-loading {

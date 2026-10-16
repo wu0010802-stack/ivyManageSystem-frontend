@@ -1,232 +1,216 @@
 <template>
-  <div v-if="employeeId === null" class="emp-month-panel__no-employee">
-    請選擇員工
-  </div>
-  <div v-else v-loading="loading" class="emp-month-panel">
-    <template v-if="!loading && records.length === 0">
-      <EmptyState title="本月無考勤記錄" />
-    </template>
-    <template v-else>
-      <div
-        v-for="(rec, idx) in records"
-        :key="rec.id"
-        class="month-record-row"
-        :class="{ 'month-record-row--anomaly': isAnomaly(rec) }"
-      >
-        <span class="month-record-row__date">{{ rec.date }}</span>
-        <span class="month-record-row__weekday">{{ rec.weekday }}</span>
-        <span class="month-record-row__punch-in">
-          <template v-if="rec.punch_in">{{ rec.punch_in }}</template>
-          <el-time-picker
-            v-else
-            v-model="editPunchIn[idx]"
-            format="HH:mm"
-            value-format="HH:mm"
-            placeholder="補上班"
-            class="month-record-row__picker"
-          />
-        </span>
-        <span class="month-record-row__punch-out">
-          <template v-if="rec.punch_out">{{ rec.punch_out }}</template>
-          <el-time-picker
-            v-else
-            v-model="editPunchOut[idx]"
-            format="HH:mm"
-            value-format="HH:mm"
-            placeholder="補下班"
-            class="month-record-row__picker"
-          />
-        </span>
-        <span class="month-record-row__status">{{ rec.status }}</span>
-        <el-button
-          v-if="isAnomaly(rec)"
-          size="small"
-          :loading="saving[idx]"
-          @click="handleUpsert(rec, idx)"
-        >補打卡</el-button>
-      </div>
-    </template>
+  <div v-if="employeeId === null" class="emp-month-panel__no-employee">請選擇員工</div>
+  <div v-else ref="panel" v-loading="loading" class="emp-month-panel">
+    <h3>{{ employeeName || '所選員工' }} · {{ year }} 年 {{ month }} 月出勤明細</h3>
+    <p v-if="focusDate" role="status">核對日期：{{ focusDate }}<template v-if="!loading && !loadFailed && !rows.some(row => row.date === focusDate)"> · {{ focusDate }} 尚無打卡紀錄或應出勤班表</template></p>
+    <div v-if="loadFailed" role="alert">載入出勤紀錄或班表失敗，無法判定缺卡。<el-button @click="load">重新載入</el-button></div>
+    <EmptyState v-else-if="!loading && !rows.length" title="本月沒有應出勤日或打卡紀錄" />
+    <table v-else-if="!loadFailed" class="month-record-table">
+      <caption class="sr-only">{{ employeeName || '所選員工' }} {{ year }} 年 {{ month }} 月出勤</caption>
+      <thead><tr><th scope="col">日期</th><th scope="col">應上班時段</th><th scope="col">上班打卡</th><th scope="col">下班打卡</th><th scope="col">狀態／請假</th><th scope="col">操作</th></tr></thead>
+      <tbody>
+        <tr v-for="row in visibleRows" :key="row.date" class="month-record-row" :class="{ 'month-record-row--anomaly': row.warning }" :data-attendance-date="row.date" :aria-current="row.date === focusDate ? 'date' : undefined" :tabindex="row.date === focusDate ? -1 : undefined">
+          <th scope="row" data-label="日期">{{ row.date }}<small>{{ row.weekday }}</small></th>
+          <td data-label="應上班時段">{{ row.expectedLabel }}</td>
+          <td class="month-record-row__punch-in" data-label="上班打卡">{{ row.record?.punch_in || '—' }}</td>
+          <td class="month-record-row__punch-out" data-label="下班打卡">{{ row.record?.punch_out || '—' }}</td>
+          <td class="month-record-row__status" data-label="狀態／請假">{{ row.status }}<small v-if="row.deviationLabel">{{ row.deviationLabel }}</small><small v-if="row.leaveLabel">{{ row.leaveLabel }}</small><RawPunchDetails v-if="row.record" :import-metadata="row.record.import_metadata" /></td>
+          <td data-label="操作"><el-button v-if="canWrite && row.canSupplement" size="small" :disabled="saving" @click="openSupplement(row)">補打卡</el-button></td>
+        </tr>
+        <tr v-if="futureRows.length && !showFuture" class="month-future-toggle">
+          <td colspan="6">
+            <button type="button" class="month-future-toggle__btn" @click="showFuture = true">
+              ▸ {{ futureRows[0].date }} 起尚未到班日（{{ futureRows.length }} 天{{ futureLeaveCount ? `，含請假 ${futureLeaveCount} 天` : '' }}）
+            </button>
+          </td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr class="month-record-total">
+          <th scope="row" data-label="項目">本月合計</th>
+          <td colspan="3"></td>
+          <!-- 合計列的操作欄本來就空著，讓數字跨兩欄，否則 table-layout: fixed 的
+               六等分寬度會把「共 1 小時 10 分鐘」折成兩行。 -->
+          <td class="month-record-total__value" colspan="2" data-label="遲到／早退">
+            <div v-if="monthTotals.hasDeviation">
+              <span>遲到 {{ monthTotals.lateCount }} 次・共 {{ formatMinutes(monthTotals.lateMinutes) }}</span>
+              <span>早退 {{ monthTotals.earlyCount }} 次・共 {{ formatMinutes(monthTotals.earlyMinutes) }}</span>
+            </div>
+            <div v-else>本月無遲到、早退</div>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+    <section v-if="editing && canWrite" ref="editForm" class="month-edit" aria-label="補打卡">
+      <p>{{ employeeName || '所選員工' }} · {{ editing.date }}</p>
+      <label>上班時間<el-time-picker v-model="punchIn" format="HH:mm" value-format="HH:mm" :disabled="saving" aria-label="補上班時間" placeholder="補上班" /></label>
+      <label>下班時間<el-time-picker v-model="punchOut" format="HH:mm" value-format="HH:mm" :disabled="saving" aria-label="補下班時間" placeholder="補下班" /></label>
+      <el-button :disabled="saving" @click="editing = null">取消</el-button>
+      <el-button type="primary" :loading="saving" :disabled="saving || !hasNewPunch" @click="saveSupplement">儲存補卡</el-button>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getRecords, upsertRecord } from '@/api/attendance'
+import { getAttendanceMonthContext } from '@/api/attendanceMonthContext'
+import { buildAttendanceMonthRows, taipeiDate } from '@/utils/attendanceMonthRows'
+import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import EmptyState from '@/components/common/EmptyState.vue'
+import RawPunchDetails from './RawPunchDetails.vue'
+import type { ApiResponse } from '@/api/_generated/typed'
 
-// ── props & emits ──────────────────────────────────────────────────────────────
-const props = defineProps<{
-  employeeId: number | null
-  year: number
-  month: number
-}>()
-
-const emit = defineEmits<{
-  (e: 'updated'): void
-}>()
-
-// ── error notify ───────────────────────────────────────────────────────────────
+const props = defineProps<{ employeeId: number | null; employeeName?: string; year: number; month: number; focusDate?: string | null; revision?: number }>()
+const emit = defineEmits<{ updated: [] }>()
 const { notify } = useErrorNotify()
-
-// ── state ──────────────────────────────────────────────────────────────────────
-interface AttendanceRecord {
-  id: number
-  employee_id: number
-  employee_name: string
-  employee_number: string
-  date: string
-  weekday: string
-  punch_in: string | null
-  punch_out: string | null
-  status: string
-  is_late: boolean
-  is_early_leave: boolean
-  is_missing_punch_in: boolean
-  is_missing_punch_out: boolean
-  late_minutes: number
-  early_leave_minutes: number
-  remark: string
-}
-
-const records = ref<AttendanceRecord[]>([])
+const records = ref<ApiResponse<'/attendance/records', 'get'>>([])
+const days = ref<ApiResponse<'/attendance/month-context', 'get'>['days']>([])
 const loading = ref(false)
-const editPunchIn = ref<(string | null)[]>([])
-const editPunchOut = ref<(string | null)[]>([])
-const saving = ref<boolean[]>([])
-
-// ── helpers ────────────────────────────────────────────────────────────────────
-function isAnomaly(rec: AttendanceRecord): boolean {
-  return rec.is_late || rec.is_early_leave || rec.is_missing_punch_in || rec.is_missing_punch_out
+const loadFailed = ref(false)
+const panel = ref<HTMLElement | null>(null)
+const editForm = ref<HTMLElement | null>(null)
+const now = ref(Date.now())
+const clockTimer = window.setInterval(() => { now.value = Date.now() }, 60_000)
+onUnmounted(() => { window.clearInterval(clockTimer); loadSequence += 1 })
+const rows = computed(() => buildAttendanceMonthRows(days.value, records.value, now.value))
+// 月合計：一律以整月 rows 計算，不跟著「未來日收合」變動——收起來的是尚未到班日，
+// 本來就不會有遲到早退，但合計的語意是整個月，不該隨畫面展開與否改變。
+// 次數以 is_late / is_early_leave 旗標為準，與後端扣款判定（anomalies.py）同口徑。
+const monthTotals = computed(() => {
+  let lateCount = 0, lateMinutes = 0, earlyCount = 0, earlyMinutes = 0
+  for (const row of rows.value) {
+    if (row.record?.is_late) { lateCount += 1; lateMinutes += row.lateMinutes }
+    if (row.record?.is_early_leave) { earlyCount += 1; earlyMinutes += row.earlyLeaveMinutes }
+  }
+  return { lateCount, lateMinutes, earlyCount, earlyMinutes, hasDeviation: lateCount > 0 || earlyCount > 0 }
+})
+function formatMinutes(total: number): string {
+  if (total < 60) return `${total} 分鐘`
+  const hours = Math.floor(total / 60)
+  const minutes = total % 60
+  return minutes ? `${hours} 小時 ${minutes} 分鐘` : `${hours} 小時`
 }
+// 未來日收合（UI/UX 改版提案 09-10）：整月排到月底的「尚未到班日」預設摺起，展開一次
+// 後維持展開；核對日期落在未來時自動視為已展開，確保 focusDate 定位一定找得到目標列。
+const todayISO = computed(() => taipeiDate(now.value))
+const pastRows = computed(() => rows.value.filter(row => row.date <= todayISO.value))
+const futureRows = computed(() => rows.value.filter(row => row.date > todayISO.value))
+const futureLeaveCount = computed(() => futureRows.value.filter(row => row.leaveLabel).length)
+const showFuture = ref(false)
+const visibleRows = computed(() => (
+  showFuture.value || (!!props.focusDate && futureRows.value.some(row => row.date === props.focusDate))
+) ? rows.value : pastRows.value)
+const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
+const editing = ref<ReturnType<typeof buildAttendanceMonthRows>[number] | null>(null)
+const punchIn = ref<string | null>(null)
+const punchOut = ref<string | null>(null)
+const saving = ref(false)
+let loadSequence = 0
+const hasNewPunch = computed(() => !!editing.value && ((!!punchIn.value && punchIn.value !== editing.value.record?.punch_in) || (!!punchOut.value && punchOut.value !== editing.value.record?.punch_out)))
 
-// ── load ───────────────────────────────────────────────────────────────────────
 async function load(): Promise<void> {
-  if (props.employeeId === null) return
+  const sequence = ++loadSequence
+  records.value = []; days.value = []; editing.value = null
+  loadFailed.value = false; loading.value = false; showFuture.value = false
+  const employeeId = props.employeeId
+  if (employeeId === null) return
   loading.value = true
   try {
-    const res = await getRecords({ employee_id: props.employeeId, year: props.year, month: props.month })
-    // OpenAPI 契約列 → 本地 view model（nullable 欄位正規化為預設值）
-    const list: AttendanceRecord[] = (res.data ?? []).map((r) => ({
-      id: r.id,
-      employee_id: r.employee_id,
-      employee_name: r.employee_name,
-      employee_number: r.employee_number,
-      date: r.date,
-      weekday: r.weekday ?? '',
-      punch_in: r.punch_in ?? null,
-      punch_out: r.punch_out ?? null,
-      status: r.status ?? '',
-      is_late: r.is_late ?? false,
-      is_early_leave: r.is_early_leave ?? false,
-      is_missing_punch_in: r.is_missing_punch_in ?? false,
-      is_missing_punch_out: r.is_missing_punch_out ?? false,
-      late_minutes: r.late_minutes ?? 0,
-      early_leave_minutes: r.early_leave_minutes ?? 0,
-      remark: r.remark ?? '',
-    }))
-    records.value = list
-    editPunchIn.value = list.map((r) => r.punch_in)
-    editPunchOut.value = list.map((r) => r.punch_out)
-    saving.value = list.map(() => false)
-  } catch (err) {
-    notify(err, 'EmployeeMonthPanel.load', null, { prefix: '載入失敗' })
+    const query = { employee_id: employeeId, year: props.year, month: props.month }
+    const [recordResult, contextResult] = await Promise.all([getRecords(query), getAttendanceMonthContext(query)])
+    if (sequence !== loadSequence) return
+    records.value = recordResult.data ?? []
+    days.value = contextResult.data.days
+    now.value = Date.now()
+  } catch (error) {
+    if (sequence !== loadSequence) return
+    loadFailed.value = true
+    notify(error, 'EmployeeMonthPanel.load', null, { prefix: '載入失敗' })
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
-
-watch(
-  [() => props.employeeId, () => props.year, () => props.month],
-  load,
-  { immediate: true },
-)
-
-// ── upsert ─────────────────────────────────────────────────────────────────────
-async function handleUpsert(rec: AttendanceRecord, idx: number): Promise<void> {
-  saving.value[idx] = true
-  try {
-    const payload: { employee_id: number; date: string; punch_in?: string; punch_out?: string } = {
-      employee_id: props.employeeId!,
-      date: rec.date,
-    }
-    const pi = editPunchIn.value[idx] ?? rec.punch_in
-    const po = editPunchOut.value[idx] ?? rec.punch_out
-    if (pi !== null) payload.punch_in = pi
-    if (po !== null) payload.punch_out = po
-    await upsertRecord(payload)
-    ElMessage.success('補打卡成功')
-    emit('updated')
-    await load()
-  } catch (err) {
-    notify(err, 'EmployeeMonthPanel.upsert', null, { prefix: '補打卡失敗' })
-  } finally {
-    saving.value[idx] = false
+// revision 一併納入：匯入同一位員工的同一個月時 employeeId/year/month 都沒變，
+// 少了它，匯入完成後回到整月明細仍顯示匯入前的缺卡與舊時間，要換人或重整才更新。
+watch([() => props.employeeId, () => props.year, () => props.month, () => props.revision], load, { immediate: true })
+watch([() => props.focusDate, rows, loading], async () => {
+  if (!props.focusDate || loading.value) return
+  await nextTick()
+  const target = [...(panel.value?.querySelectorAll<HTMLElement>('[data-attendance-date]') ?? [])].find(element => element.dataset.attendanceDate === props.focusDate)
+  target?.scrollIntoView?.({ block: 'center' }); target?.focus({ preventScroll: true })
+}, { flush: 'post' })
+async function openSupplement(row: ReturnType<typeof buildAttendanceMonthRows>[number]): Promise<void> {
+  if (!canWrite.value || saving.value || !row.canSupplement) return
+  editing.value = row; punchIn.value = row.record?.punch_in ?? null; punchOut.value = row.record?.punch_out ?? null
+  await nextTick()
+  editForm.value?.scrollIntoView?.({ block: 'center' })
+  editForm.value?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true })
+}
+async function saveSupplement(): Promise<void> {
+  const row = editing.value
+  const employeeId = props.employeeId
+  if (!row || employeeId === null || saving.value || !canWrite.value || !hasNewPunch.value) return
+  const sequence = loadSequence
+  const payload = { employee_id: employeeId, date: row.date,
+    ...(punchIn.value ? { punch_in: punchIn.value } : {}),
+    ...(punchOut.value ? { punch_out: punchOut.value } : {}),
   }
+  saving.value = true
+  try {
+    await upsertRecord(payload)
+    emit('updated')
+    if (sequence !== loadSequence) return
+    ElMessage.success('補打卡成功'); editing.value = null
+    await load()
+  } catch (error) {
+    notify(error, 'EmployeeMonthPanel.upsert', null, { prefix: '補打卡失敗' })
+  } finally { saving.value = false }
 }
 </script>
 
 <style scoped>
-.emp-month-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
+.emp-month-panel { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-3); }
+.emp-month-panel h3, .emp-month-panel p { margin: 0; }
+.emp-month-panel__no-employee { padding: var(--space-8); color: var(--el-text-color-secondary); }
+.month-record-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--text-sm); }
+.month-record-table th, .month-record-table td { padding: var(--space-2); text-align: left; vertical-align: top; overflow-wrap: anywhere; border-bottom: 1px solid var(--el-border-color-light); }
+.month-record-table thead th { position: sticky; top: 0; z-index: 1; background: var(--el-fill-color-light); font-weight: 600; }
+.month-record-table small { display: block; color: var(--el-text-color-secondary); margin-top: var(--space-1); }
+.month-record-row--anomaly { background: var(--el-color-warning-light-9); }
+.month-record-total { background: var(--el-fill-color-light); font-weight: 600; }
+.month-record-total th, .month-record-total td { border-bottom: 0; border-top: 2px solid var(--el-border-color); }
+.month-record-total__value span { display: block; }
+.month-record-total__value span + span { margin-top: var(--space-1); }
+.month-future-toggle__btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) 0;
+  cursor: pointer;
 }
-
-.emp-month-panel__no-employee {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-8);
-  color: var(--text-tertiary, #94a3b8);
-  font-size: var(--text-sm, 0.875rem);
-}
-
-.month-record-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm, 4px);
-  font-size: var(--text-sm, 0.875rem);
-  border: 1px solid var(--border-color-light, #f1f5f9);
-  background: var(--fill-color-blank, #fff);
-}
-
-.month-record-row--anomaly {
-  background: var(--danger-soft, #fef2f2);
-  border-color: var(--danger-border, #fecaca);
-  color: var(--danger, #ef4444);
-}
-
-.month-record-row__date {
-  width: 90px;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.month-record-row__weekday {
-  width: 24px;
-  flex-shrink: 0;
-  text-align: center;
-  color: var(--text-secondary, #475569);
-}
-
-.month-record-row__punch-in,
-.month-record-row__punch-out {
-  width: 80px;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.month-record-row__status {
-  flex: 1;
-  color: var(--text-secondary, #475569);
-}
-
-.month-record-row__picker {
-  width: 80px;
+.month-future-toggle__btn:hover,
+.month-future-toggle__btn:focus-visible { color: var(--el-color-primary); }
+.month-record-row[aria-current='date'] { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.month-edit { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); padding: var(--space-3); }
+.month-edit p { width: 100%; }
+.month-edit label { display: grid; gap: var(--space-1); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (--to-sm) {
+  .month-record-table, .month-record-table tbody, .month-record-table tfoot, .month-record-table tr { display: block; }
+  .month-record-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .month-record-table tr { border: 1px solid var(--el-border-color-light); border-radius: var(--radius-sm); margin-bottom: var(--space-3); padding: var(--space-2); }
+  .month-record-table td, .month-record-table tbody th, .month-record-table tfoot th { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-2); }
+  .month-record-table td::before, .month-record-table tbody th::before, .month-record-table tfoot th::before { content: attr(data-label); color: var(--el-text-color-secondary); font-weight: normal; }
+  /* 窄螢幕堆疊後中間三欄的空白合併格沒有內容，留著只會多一條空列 */
+  .month-record-total td[colspan]:empty, .month-record-total td:empty { display: none; }
+  /* 小字是 td 的第三個 grid item，不指定欄位會掉到標籤欄底下、跟所屬的值錯開 */
+  .month-record-table td small { grid-column: 2; }
+  .month-edit label { width: 100%; }
 }
 </style>

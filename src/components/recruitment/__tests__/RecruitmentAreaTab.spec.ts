@@ -78,3 +78,32 @@ describe('RecruitmentAreaTab KPI 零值中性化', () => {
     expect(vals[2].classes()).not.toContain('kpi-val--zero')
   })
 })
+
+describe('RecruitmentAreaTab 本園座標未設定（F65）', () => {
+  // 熱點圖是 async 元件、被 stub 掉，拿不到宣告的 props——改讀傳進去的原始 attrs 值（未字串化）
+  const heatmapCoords = async (campus: Record<string, unknown>) => {
+    const wrapper = await mountArea({ campus })
+    const heatmap = wrapper.findComponent({ name: 'RecruitmentAddressHeatmap' })
+    expect(heatmap.exists()).toBe(true)
+    const attrs = heatmap.vm.$attrs as Record<string, unknown>
+    expect('school-lat' in attrs && 'school-lng' in attrs).toBe(true)
+    return { lat: attrs['school-lat'], lng: attrs['school-lng'] }
+  }
+
+  /**
+   * 上游（RecruitmentStatsPanel）對非預設租戶未設座標時給 null。這裡以前用 `|| 0`
+   * 把「未設定」轉成 0,0（大西洋上的 Null Island），熱點圖會把「本園」畫在那裡。
+   * 未設定必須以非有限值往下傳，讓熱點圖走「尚未設定本園座標」的空狀態。
+   */
+  it('campus_lat／lng 為 null 時傳給熱點圖的 school-lat／lng 不是 0，而是非有限值', async () => {
+    const { lat, lng } = await heatmapCoords({ campus_name: '本園', campus_lat: null, campus_lng: null })
+    expect(typeof lat).toBe('number')
+    expect(Number.isFinite(lat)).toBe(false)
+    expect(Number.isFinite(lng)).toBe(false)
+  })
+
+  it('有座標時照傳（含 0 不被吃掉）', async () => {
+    expect(await heatmapCoords({ campus_lat: 22.73, campus_lng: 120.33 })).toEqual({ lat: 22.73, lng: 120.33 })
+    expect(await heatmapCoords({ campus_lat: 0, campus_lng: 0 })).toEqual({ lat: 0, lng: 0 })
+  })
+})

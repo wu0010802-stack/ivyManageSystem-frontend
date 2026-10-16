@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { Search } from '@element-plus/icons-vue'
 import type {
   DatesSetArg,
   EventClickArg,
@@ -199,31 +200,45 @@ const fmtDate = (d: Date) => {
   return `${y}-${m}-${day}`
 }
 
+let adminFeedEpoch = 0
 const fetchAdminFeed = async (start: Date, end: Date) => {
+  const requestEpoch = ++adminFeedEpoch
   try {
     const fromStr = fmtDate(start)
     const toExclusive = new Date(end)
     toExclusive.setDate(toExclusive.getDate() - 1)
     const toStr = fmtDate(toExclusive)
     const resp = await getAdminFeed(fromStr, toStr)
+    if (requestEpoch !== adminFeedEpoch) return
     setItems(resp.data.items)
   } catch (error) {
+    if (requestEpoch !== adminFeedEpoch) return
     console.error('[calendar] getAdminFeed failed', error)
     setItems([])
   }
 }
 
+let calendarEventsEpoch = 0
 const fetchEvents = async () => {
+  const requestEpoch = ++calendarEventsEpoch
+  const requestedYear = currentYear.value
+  const requestedMonth = currentMonth.value
   loading.value = true
   try {
-    const res = await getCalendarFeed({ year: currentYear.value, month: currentMonth.value })
+    const res = await getCalendarFeed({ year: requestedYear, month: requestedMonth })
+    if (
+      requestEpoch !== calendarEventsEpoch
+      || currentYear.value !== requestedYear
+      || currentMonth.value !== requestedMonth
+    ) return
     const d = res.data as { events: CalendarEvent[]; official_sync?: OfficialSync }
     events.value = d.events
     officialSync.value = d.official_sync ?? null
   } catch (error) {
+    if (requestEpoch !== calendarEventsEpoch) return
     ElMessage.error(apiError(error, '載入失敗'))
   } finally {
-    loading.value = false
+    if (requestEpoch === calendarEventsEpoch) loading.value = false
   }
 }
 
@@ -469,7 +484,7 @@ const onEventDrop = async (info: EventDropArg) => {
     <el-card style="margin-top: 20px">
       <div class="list-header">
         <h3>事件列表</h3>
-        <el-input v-model="searchText" placeholder="搜尋事件" clearable style="width: 220px" prefix-icon="Search" />
+        <el-input v-model="searchText" placeholder="搜尋事件" clearable style="width: 220px" :prefix-icon="Search" />
       </div>
       <el-table :data="filteredEvents" stripe style="width: 100%" max-height="600" empty-text="本月無事件">
         <el-table-column label="日期" width="120">

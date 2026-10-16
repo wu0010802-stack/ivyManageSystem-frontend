@@ -540,6 +540,18 @@ describe('useDismissalPosQueue', () => {
       stop()
     })
 
+    it('確認失敗且後端沒給說明時，退回「確認交接失敗：<學生>」（與三端語彙一致）', async () => {
+      vi.mocked(confirmVisualMatch).mockRejectedValueOnce(new Error('network'))
+      const activeCalls = ref<DismissalCallView[]>(proxyActiveCalls())
+      const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+      const item = api.queue.value.find(i => i.id === 70)
+      await api.confirmProxyPickup(item!)
+
+      expect(ElMessage.error).toHaveBeenCalledWith('確認交接失敗：陳小華')
+      stop()
+    })
+
     it('外部 activeCalls 追上（狀態變 completed）後，卡片以 phase=done 保留在佇列尾端供回顧（與現場/預約一致），不重複出現、不無界成長', async () => {
       const activeCalls = ref<DismissalCallView[]>(proxyActiveCalls())
       const { api, stop } = run(() => useDismissalPosQueue(activeCalls))

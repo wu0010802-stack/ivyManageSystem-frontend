@@ -56,6 +56,7 @@ function buildRouter() {
         { path: 'bonus-rates', component: BonusStub },
         { path: 'catalog', component: CatalogStub },
         { path: 'enrollment-targets', component: EnrollmentStub },
+        { path: 'festival-headcount', component: { template: '<div class="stub-festival-headcount" />' } },
         { path: 'year-end-rules', component: YearEndRulesStub },
       ],
     }],
@@ -80,12 +81,20 @@ describe('RulesSettingsLayout', () => {
     listAppraisalCyclesMock.mockResolvedValue({ data: [] })
   })
 
-  it('持 APPRAISAL_READ + SETTINGS_READ → 5 個分頁全顯示', async () => {
+  it('全權限 → 6 個分頁全顯示（2026-08-20 起含節慶人數）', async () => {
     const { w } = await mountAt('/appraisal-year-end/rules/scoring')
     const panes = w.findAllComponents({ name: 'ElTabPane' })
     expect(panes.map((p) => p.props('name'))).toEqual([
-      'scoring', 'bonus-rates', 'catalog', 'enrollment-targets', 'year-end-rules',
+      'scoring', 'bonus-rates', 'catalog', 'enrollment-targets',
+      'festival-headcount', 'year-end-rules',
     ])
+  })
+
+  it('節慶人數分頁需 SALARY_READ（業主裁定 D4：沿用薪資權限）', async () => {
+    hasPermissionMock.mockImplementation((code: string) => code !== 'SALARY_READ')
+    const { w } = await mountAt('/appraisal-year-end/rules/scoring')
+    const panes = w.findAllComponents({ name: 'ElTabPane' })
+    expect(panes.map((p) => p.props('name'))).not.toContain('festival-headcount')
   })
 
   it('path=.../year-end-rules 渲染年終規則子頁且 tabs active=year-end-rules', async () => {

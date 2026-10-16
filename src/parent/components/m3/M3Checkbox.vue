@@ -77,7 +77,7 @@ function onClick(): void {
   transition: background-color var(--motion-quick, 150ms) ease,
     border-color var(--motion-quick, 150ms) ease;
   color: var(--m3-on-primary, #ffffff);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1;
 }
 .m3-checkbox.is-checked .m3-checkbox-box,

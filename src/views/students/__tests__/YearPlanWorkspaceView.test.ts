@@ -29,6 +29,7 @@ vi.mock('@/api/classroomYearPlan', () => ({
   publishClassroomYearPlan: vi.fn(),
   unpublishClassroomYearPlan: vi.fn(),
   cancelClassroomYearPlan: vi.fn(),
+  carryOverClassroomYearPlanTeachers: vi.fn(),
 }))
 vi.mock('@/api/classrooms', () => ({
   getGrades: vi.fn().mockResolvedValue({ data: [] }),
@@ -50,7 +51,10 @@ import {
   getClassroomYearPlanPreview,
   publishClassroomYearPlan,
   cancelClassroomYearPlan,
+  updateClassroomYearPlanClass,
+  carryOverClassroomYearPlanTeachers,
 } from '@/api/classroomYearPlan'
+import { getTeacherOptions } from '@/api/classrooms'
 import YearPlanWorkspaceView from '../YearPlanWorkspaceView.vue'
 import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.vue'
 import PlanRosterTable from '@/components/enrollment/planning/PlanRosterTable.vue'
@@ -67,6 +71,9 @@ const mockBulkStudents = bulkUpdateClassroomYearPlanStudents as ReturnType<typeo
 const mockPreview = getClassroomYearPlanPreview as ReturnType<typeof vi.fn>
 const mockPublish = publishClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockCancel = cancelClassroomYearPlan as ReturnType<typeof vi.fn>
+const mockUpdateClass = updateClassroomYearPlanClass as ReturnType<typeof vi.fn>
+const mockCarryOver = carryOverClassroomYearPlanTeachers as ReturnType<typeof vi.fn>
+const mockTeacherOptions = getTeacherOptions as ReturnType<typeof vi.fn>
 
 function statusNone() {
   return {
@@ -232,6 +239,213 @@ describe('YearPlanWorkspaceView', () => {
     expect(mockBulkStudents).toHaveBeenCalledWith(5, {
       base_version: 1, op: 'assign', student_ids: [1], plan_class_id: 10, exclude_reason: null,
     })
+  })
+
+  it('寫入失敗（例如 422）時工作台不被錯誤畫面取代，表格仍在', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    mockBulkStudents.mockRejectedValueOnce({
+      response: { status: 422 },
+      errorDetail: { code: 'retain_grade_mismatch', message: '年級不符' },
+      displayMessage: '留級學生現況年級與指定班級年級不符',
+    })
+
+    const w = mountView()
+    await flushPromises()
+    const checkbox = w.findComponent({ name: 'ElCheckbox' })
+    await checkbox.find('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+    const vm = w.findComponent(PlanBatchToolbar).vm as unknown as { assignTargetId: number | null; applyAssign: () => void }
+    vm.assignTargetId = 10
+    vm.applyAssign()
+    await flushPromises()
+
+    expect(mockBulkStudents).toHaveBeenCalledOnce()
+    expect(w.find('.workspace-error').exists()).toBe(false)
+    expect(w.find('.plan-roster-table').exists()).toBe(true)
+  })
+
+  it('補救模式（applies_immediately）：常駐警示條並把套用資訊傳給發布對話框', async () => {
+    const remedial = statusDraft()
+    Object.assign(remedial.data, { applies_immediately: true, apply_date: '2026-08-01' })
+    mockStatus.mockResolvedValue(remedial)
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    const banner = w.find('.remedial-banner')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('115 學年上學期')
+    expect(banner.text()).toContain('約一小時內')
+    const dialog = w.findComponent({ name: 'PlanPublishDialog' })
+    expect(dialog.props('appliesImmediately')).toBe(true)
+    expect(dialog.props('targetSchoolYear')).toBe(115)
+    expect(dialog.props('applyDate')).toBe('2026-08-01')
+  })
+
+  it('補救模式但還沒有草稿：警示條不說「這份計畫」', async () => {
+    const none = statusNone()
+    Object.assign(none.data, { applies_immediately: true, apply_date: '2026-08-01' })
+    mockStatus.mockResolvedValue(none)
+    const w = mountView()
+    await flushPromises()
+    const banner = w.find('.remedial-banner')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).not.toContain('這份計畫')
+    expect(banner.text()).toContain('約一小時內')
+  })
+
+  it('一般模式不顯示補救警示條', async () => {
+    const normal = statusDraft()
+    Object.assign(normal.data, { applies_immediately: false, apply_date: '2026-08-01' })
+    mockStatus.mockResolvedValue(normal)
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.remedial-banner').exists()).toBe(false)
+  })
+
+  it('大班留級：側欄勾選畢業生 → 批次列拿到該生資訊，標記留級帶正確 payload', async () => {
+    const detail = detailDraftWithClasses({
+      classes: [
+        {
+          id: 10, source_name: '大班舊', target_name: '玫瑰', target_grade_id: 1, grade_name: '大班',
+          capacity: 30, class_code: '大1', head_teacher_id: null, head_teacher_name: null,
+          assistant_teacher_id: null, assistant_teacher_name: null, art_teacher_id: null, art_teacher_name: null,
+          assigned_count: 0,
+        },
+      ],
+      students: [
+        { id: 7, student_id: 'S007', name: '大寶', source_classroom_name: '天堂鳥', plan_class_id: null, disposition: 'graduate', exclude_reason: null, manually_adjusted: false, current_grade_name: '大班' },
+      ],
+    })
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detail)
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+
+    const w = mountView()
+    await flushPromises()
+    w.findComponent(PlanSidePanel).vm.$emit('set-selected', [7], true)
+    await flushPromises()
+
+    const toolbar = w.findComponent(PlanBatchToolbar)
+    expect(toolbar.props('selectedStudents')).toEqual([
+      expect.objectContaining({ id: 7, disposition: 'graduate', current_grade_name: '大班' }),
+    ])
+    expect(toolbar.props('planClasses')).toEqual([{ id: 10, label: '大班 玫瑰', gradeName: '大班' }])
+
+    const vm = toolbar.vm as unknown as { retainTargetId: number | null; applyRetain: () => void }
+    vm.retainTargetId = 10
+    vm.applyRetain()
+    await flushPromises()
+    expect(mockBulkStudents).toHaveBeenCalledWith(5, {
+      base_version: 1, op: 'retain', student_ids: [7], plan_class_id: 10, exclude_reason: null,
+    })
+  })
+
+  it('老師格：編班表 emit teacher-change → PATCH 該班該欄位（帶 base_version）', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    mockUpdateClass.mockResolvedValue({ data: { id: 10, version: 2 } })
+    const w = mountView()
+    await flushPromises()
+
+    w.findComponent(PlanRosterTable).vm.$emit('teacher-change', 10, 'head_teacher_id', 100)
+    await flushPromises()
+
+    expect(mockUpdateClass).toHaveBeenCalledWith(5, 10, { head_teacher_id: 100, base_version: 1 })
+  })
+
+  it('可寫入的草稿：載入老師名單並傳給編班表', async () => {
+    mockTeacherOptions.mockResolvedValueOnce({ data: [{ id: 100, name: '林佳蓉' }] })
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent(PlanRosterTable).props('teacherOptions')).toEqual([{ id: 100, name: '林佳蓉' }])
+  })
+
+  it('沿用原班老師：有可沿用的空格才顯示；確認後呼叫 API 並提示結果', async () => {
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    const detail = detailDraftWithClasses()
+    Object.assign(detail.data.classes[0], { source_head_teacher_name: '林佳蓉', source_art_teacher_name: '黃雅婷' })
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detail)
+    mockCarryOver.mockResolvedValue({ data: { filled: 2, skipped_inactive: 0, skipped_conflict: 0, version: 2 } })
+    const w = mountView()
+    await flushPromises()
+
+    await w.find('.btn-carry-over').trigger('click')
+    await flushPromises()
+
+    expect(String(confirmSpy.mock.calls[0][0])).toContain('2 個')
+    expect(mockCarryOver).toHaveBeenCalledWith(5, { base_version: 1 })
+  })
+
+  it('進度列「查看」待分班 → 側欄第一位待分班學生閃爍定位', async () => {
+    const detail = detailDraftWithClasses()
+    detail.data.students.push({ id: 2, student_id: 'S002', name: '小華', source_classroom_name: '幼幼B', plan_class_id: null, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' })
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detail)
+    const w = mountView()
+    await flushPromises()
+
+    await w.find('.btn-show-unassigned').trigger('click')
+    await flushPromises()
+
+    expect(w.find('.unassigned-row[data-student-id="2"]').classes()).toContain('flash-highlight')
+  })
+
+  it('沒有可沿用的空格時不顯示「沿用原班老師」', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.btn-carry-over').exists()).toBe(false)
+  })
+
+  it('尚無草稿：說明系統會在準備期自動產生，並寫出日期', async () => {
+    const none = statusNone()
+    Object.assign(none.data, { prep_start_date: '2027-06-01', apply_date: '2027-08-01', applies_immediately: false })
+    mockStatus.mockResolvedValue(none)
+    const w = mountView()
+    await flushPromises()
+    const text = w.find('.empty-state').text()
+    expect(text).toContain('2027/06/01')
+    expect(text).toContain('自動產生')
+  })
+
+  it('草稿沒有任何班級：說明原因並指出下一步，不顯示空骨架表', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraft())
+    const w = mountView()
+    await flushPromises()
+    const zero = w.find('.zero-class-state')
+    expect(zero.exists()).toBe(true)
+    expect(zero.text()).toContain('114 學年下學期')
+    expect(zero.text()).toContain('新增班級')
+    expect(w.find('.plan-roster-table').exists()).toBe(false)
+  })
+
+  it('重新產生建議：勾選放棄手動調整時確認鈕轉為危險樣式', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    await w.find('.btn-regenerate').trigger('click')
+    await flushPromises()
+    const confirmBtn = () => w.findAllComponents({ name: 'ElButton' }).find(b => b.classes().includes('btn-regenerate-confirm'))!
+    expect(confirmBtn().props('type')).toBe('primary')
+    expect(confirmBtn().text()).toBe('重新產生')
+    await w.find('.regenerate-overwrite input[type="checkbox"]').setValue(true)
+    expect(confirmBtn().props('type')).toBe('danger')
+  })
+
+  it('初次載入失敗（沒有 plan）才顯示錯誤畫面與重新載入鈕', async () => {
+    mockStatus.mockRejectedValueOnce({ response: { status: 500 }, displayMessage: '伺服器錯誤' })
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.workspace-error').exists()).toBe(true)
+    expect(w.find('.btn-reload').exists()).toBe(true)
   })
 
   it('發布流程：點擊發布開啟 dialog，確認後呼叫 publish、顯示成功並關閉 dialog', async () => {
@@ -435,6 +649,20 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.findComponent({ name: 'ElDropdown' }).exists()).toBe(false)
   })
 
+  it('作廢確認文案講清楚：手動調整與老師指派會一起消失', async () => {
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+    w.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'cancel-plan')
+    await flushPromises()
+    const message = String(confirmSpy.mock.calls[0][0])
+    expect(message).toContain('手動調整')
+    expect(message).toContain('老師指派')
+    expect(mockCancel).not.toHaveBeenCalled()
+  })
+
   it('作廢草稿流程：使用者取消 ElMessageBox.confirm 時不呼叫 cancel API', async () => {
     vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
     mockStatus.mockResolvedValue(statusDraft())
@@ -477,6 +705,8 @@ describe('YearPlanWorkspaceView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.findComponent(PlanBatchToolbar).exists()).toBe(false)
+    // 未勾選時同一位置顯示操作提示（含可拖曳），勾選後換成批次列，表格不會被推動
+    expect(w.find('.batch-hint').text()).toContain('拖')
 
     const checkbox = w.findComponent({ name: 'ElCheckbox' })
     await checkbox.find('input[type="checkbox"]').setValue(true)

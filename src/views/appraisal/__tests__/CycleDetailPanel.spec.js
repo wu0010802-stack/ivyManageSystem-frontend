@@ -169,7 +169,7 @@ describe('CycleDetailPanel', () => {
     expect(wrapper.text()).toContain('114 學年')
   })
 
-  it('batch-zone 常駐顯示；未勾選時 BatchSignButton disabled，勾選後 enabled', async () => {
+  it('批次操作常駐；選取草稿後僅主管簽核可用', async () => {
     const wrapper = mountPanel()
     await flush()
     // 常駐：即使 selectedIds 為空，batch-zone 仍渲染（不再 v-if 隱藏）
@@ -180,12 +180,14 @@ describe('CycleDetailPanel', () => {
       expect(btn.attributes('disabled')).toBeDefined()
     }
 
-    wrapper.vm.selectedIds = [1, 2]
+    wrapper.vm.summaries = [{ id: 1, status: 'DRAFT' }]
+    await nextTick()
+    wrapper.vm.selectedIds = [1]
     await nextTick()
     const btnsAfter = wrapper.findAll('[data-test="batch-btn-stub"]')
-    for (const btn of btnsAfter) {
-      expect(btn.attributes('disabled')).toBeUndefined()
-    }
+    expect(btnsAfter[0].attributes('disabled')).toBeUndefined()
+    expect(btnsAfter[1].attributes('disabled')).toBeDefined()
+    expect(btnsAfter[2].attributes('disabled')).toBeDefined()
   })
 
   it('頂部渲染簽核進度列 SignProgressBar，counts 來自 getSignStatusSummary', async () => {

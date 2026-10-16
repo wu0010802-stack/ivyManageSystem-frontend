@@ -741,6 +741,27 @@ defineExpose({
   align-items: center;
 }
 
+/* 手機：搜尋框 220px＋角色 160px 寫死寬度不換行，角色下拉超出卡片右緣。
+   左右兩組各占一整列、控制項等分鋪滿。 */
+@media (--to-sm) {
+  .toolbar-left,
+  .toolbar-right {
+    flex: 1 1 100%;
+  }
+
+  .toolbar-left > .el-input,
+  .toolbar-left > .el-select,
+  .toolbar-right > .el-button {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto !important;
+  }
+
+  .toolbar-right > .el-button + .el-button {
+    margin-left: 0;
+  }
+}
+
 .deviation-alert {
   width: 100%;
 }

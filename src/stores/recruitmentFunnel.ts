@@ -24,6 +24,8 @@ export type TimelineEventData = Schema<'TimelineEvent'>
 interface FunnelBoard {
   stages: Record<Stage, FunnelCardData[]>
   summary: FunnelSummaryData
+  /** 沒有入學學期、不屬於任何學年看板的訪視數（2026-09-06） */
+  unscoped_count?: number
 }
 
 interface CardSnapshot {
@@ -110,7 +112,7 @@ export const useRecruitmentFunnelStore = defineStore('recruitmentFunnel', {
     async transition(
       visitId: number,
       toStage: Stage,
-      opts: { classroomId?: number; reason?: string },
+      opts: { classroomId?: number; reason?: string; depositCollector?: string },
     ): Promise<Schema<'TransitionOut'>> {
       if (!this.board) throw new Error('Board not loaded')
       const snapshot = this._snapshotCard(visitId)
@@ -124,6 +126,8 @@ export const useRecruitmentFunnelStore = defineStore('recruitmentFunnel', {
           to_stage: toStage,
           classroom_id: opts.classroomId ?? null,
           reason: opts.reason ?? null,
+          // 標記已預繳時一併記下誰收的（2026-09-06，原本只有訪視表單填得到）
+          deposit_collector: opts.depositCollector ?? null,
         })
         this._applyServerResult(visitId, resp.data, opts.reason ?? null)
         this.invalidateTimeline(visitId)

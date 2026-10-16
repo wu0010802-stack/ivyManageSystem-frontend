@@ -29,7 +29,7 @@ const { inProgress } = useParentLogoutState()
   gap: 16px;
   background: var(--m3-surface, #f7fbf3);
   color: var(--m3-on-surface, #181d18);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   text-align: center;
 }

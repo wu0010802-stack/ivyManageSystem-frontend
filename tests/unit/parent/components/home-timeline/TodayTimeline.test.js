@@ -22,7 +22,7 @@ describe('TodayTimeline', () => {
   it('buckets 為空 → 顯示 empty 文案', () => {
     const wrapper = mount(TodayTimeline, { props: { buckets: [] }, global: { stubs } })
     expect(wrapper.find('.timeline').exists()).toBe(false)
-    expect(wrapper.text()).toContain('今天目前沒有需要處理的事項')
+    expect(wrapper.text()).toContain('今天還沒有新的動態')
   })
 
   it('渲染所有 bucket 與 label', () => {

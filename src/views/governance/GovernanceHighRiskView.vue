@@ -10,6 +10,8 @@ type Item = Schema<"AuditLogHighRiskItem">;
 const items = ref<Item[]>([]);
 const loading = ref(false);
 const unackOnly = ref(true);
+const ackingId = ref<number | null>(null);
+const ackingAll = ref(false);
 
 const RISK_TAG_LABEL: Record<Item["risk_kind"], string> = {
   hard_delete: "真刪",
@@ -40,20 +42,37 @@ async function load(): Promise<void> {
 }
 
 async function onAck(id: number): Promise<void> {
-  await ackAudit(id);
-  ElMessage.success("已標為已讀");
-  await load();
+  if (ackingId.value !== null || ackingAll.value) return;
+  ackingId.value = id;
+  try {
+    await ackAudit(id);
+    ElMessage.success("已標為已讀");
+    await load();
+  } catch {
+    ElMessage.error("標記已讀失敗，請稍後再試");
+  } finally {
+    ackingId.value = null;
+  }
 }
 
 async function onAckAll(): Promise<void> {
+  if (ackingAll.value || ackingId.value !== null) return;
+  ackingAll.value = true;
   try {
     await ElMessageBox.confirm("確定把所有 7 天內高風險事件標為已讀？", "確認", { type: "warning" });
+  } catch {
+    ackingAll.value = false;
+    return;
+  }
+  try {
     const res = await ackAllAudits({ days: 7 });
     const count = res.data.acknowledged_count ?? 0;
     ElMessage.success(`已標 ${count} 筆為已讀`);
     await load();
-  } catch (e) {
-    // user cancelled — ignore
+  } catch {
+    ElMessage.error("全部標記已讀失敗，請稍後再試");
+  } finally {
+    ackingAll.value = false;
   }
 }
 
@@ -66,7 +85,13 @@ onMounted(load);
       <p class="hint">近 7 天內的真刪、被擋與權限變更事件</p>
       <div class="actions">
         <el-checkbox v-model="unackOnly" @change="load">只看未讀</el-checkbox>
-        <el-button type="primary" data-test="ack-all-btn" @click="onAckAll">全部標已讀</el-button>
+        <el-button
+          type="primary"
+          data-test="ack-all-btn"
+          :loading="ackingAll"
+          :disabled="ackingId !== null"
+          @click="onAckAll"
+        >全部標已讀</el-button>
       </div>
     </div>
 
@@ -89,6 +114,8 @@ onMounted(load);
             v-if="!row.acknowledged_at"
             size="small"
             data-test="ack-btn"
+            :loading="ackingId === row.id"
+            :disabled="ackingAll || (ackingId !== null && ackingId !== row.id)"
             @click="onAck(row.id)"
           >
             標已讀

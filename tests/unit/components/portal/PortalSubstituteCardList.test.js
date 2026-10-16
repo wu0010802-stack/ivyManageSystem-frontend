@@ -74,4 +74,20 @@ describe('PortalSubstituteCardList', () => {
         await wrapper.find('[data-test="reject-btn"]').trigger('click')
         expect(wrapper.emitted('respond')[0]).toEqual([1, 'reject'])
     })
+
+    it('要求接手職務時顯示標籤與說明，沒要求時不顯示', () => {
+        const wrapper = mount(PortalSubstituteCardList, {
+            props: {
+                requests: [
+                    { ...sampleRequests[0], id: 11, substitute_takes_duty: true },
+                    { ...sampleRequests[1], id: 12, substitute_takes_duty: false },
+                ],
+                respondLoading: false,
+            },
+        })
+        const cards = wrapper.findAll('[data-test="substitute-card"]')
+        expect(cards[0].find('[data-test="takes-duty-tag"]').exists()).toBe(true)
+        expect(cards[0].text()).toContain('接手')
+        expect(cards[1].find('[data-test="takes-duty-tag"]').exists()).toBe(false)
+    })
 })

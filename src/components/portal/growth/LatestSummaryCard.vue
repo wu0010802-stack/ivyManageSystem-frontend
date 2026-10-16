@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
+import { CaretTop, CaretBottom, Minus } from '@element-plus/icons-vue'
 import { gradeStyle, cycleLabel } from '@/composables/usePortalAppraisal'
 
 interface SummaryItem {
@@ -25,8 +26,12 @@ const label = computed(() =>
 
 const deltaText = computed(() => {
   if (props.delta === null) return '無上期可比較'
-  const sign = props.delta > 0 ? '▲ +' : props.delta < 0 ? '▼ ' : '◆ '
-  return `比上期 ${sign}${props.delta}`
+  return `比上期 ${props.delta > 0 ? '+' : ''}${props.delta}`
+})
+// 升降用圖示表示（原本是 ▲▼◆ 字元，各平台字型不一致）
+const deltaIcon = computed<Component | null>(() => {
+  if (props.delta === null) return null
+  return props.delta > 0 ? CaretTop : props.delta < 0 ? CaretBottom : Minus
 })
 const deltaClass = computed(() => {
   if (props.delta === null) return 'delta-none'
@@ -50,7 +55,7 @@ const deltaClass = computed(() => {
     </div>
     <div class="meta">
       <span class="bonus">獎金 ${{ Number(item.bonus_amount).toLocaleString() }}</span>
-      <span class="delta" :class="deltaClass">{{ deltaText }}</span>
+      <span class="delta" :class="deltaClass"><el-icon v-if="deltaIcon" aria-hidden="true"><component :is="deltaIcon" /></el-icon>{{ deltaText }}</span>
     </div>
   </section>
 </template>
@@ -93,7 +98,8 @@ header {
   font-size: var(--text-sm, 13px);
 }
 .bonus { color: var(--pt-text-muted, #6b7280); }
-.delta-up { color: #1e7e34; font-weight: 600; }
-.delta-down { color: #b91c1c; font-weight: 600; }
+.delta { display: inline-flex; align-items: center; gap: 2px; }
+.delta-up { color: var(--color-success-darker); font-weight: 600; }
+.delta-down { color: var(--color-danger-darker); font-weight: 600; }
 .delta-flat, .delta-none { color: var(--pt-text-muted, #6b7280); }
 </style>

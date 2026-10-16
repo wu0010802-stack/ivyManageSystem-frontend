@@ -4,7 +4,9 @@ import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoa
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo, clearAuth, hasPortalPermission, hasPermission, isPlatformAdmin } from '@/utils/auth'
 import { captureException } from '@/utils/sentry'
 import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
-import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
+import { attendanceRouteProps, isValidDateQuery, legacySettingsShiftsRedirect } from './attendanceRouteProps'
+
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
 function resolveLegacySectionQuery(to: RouteLocation): RouteLocationRaw | null {
@@ -94,6 +96,12 @@ export const routes: RouteRecordRaw[] = [
                     component: () => import('../views/governance/DataQualityView.vue'),
                     meta: { title: PAGE_TERMS.dataQuality },
                 },
+                {
+                    path: 'parent-monitor',
+                    name: 'GovernanceParentMonitor',
+                    component: () => import('../views/governance/ParentMonitorView.vue'),
+                    meta: { title: '家長端監控' },
+                },
             ],
         },
         {
@@ -119,7 +127,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/students',
             name: 'students',
             component: () => import('../views/StudentWorkbenchView.vue'),
-            // 舊 ?tab=enrollment 深連結：在籍統計已移至班級學生管理／統計圖表，導回班級學生管理即可
+            // 舊 ?tab=enrollment 深連結：在籍統計已移至班級學生管理／在籍統計，導回班級學生管理即可
             beforeEnter: (to) => to.query.tab === 'enrollment'
                 ? ({ path: '/classrooms', replace: true })
                 : true,
@@ -166,7 +174,7 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '今日用藥', parent: '/students' }
         },
         {
-            // 在籍記錄表已折入班級學生管理頁的「統計表」modal；統計圖表獨立為 /enrollment-stats。
+            // 在籍記錄表已折入班級學生管理頁的「統計表」modal；在籍統計獨立為 /enrollment-stats。
             // 舊連結一律導回班級學生管理（不再有 tab query）。
             path: '/student-enrollment',
             redirect: '/classrooms',
@@ -175,7 +183,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/enrollment-stats',
             name: 'enrollment-stats',
             component: () => import('../views/students/EnrollmentStatsView.vue'),
-            meta: { title: '統計圖表' }
+            meta: { title: '在籍統計' }
         },
         {
             path: '/students/admissions',
@@ -210,7 +218,7 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/classrooms',
             name: 'classrooms',
-            // 外層 tabs 殼已移除：在籍記錄表折入本頁「統計表」modal、統計圖表獨立為 /enrollment-stats。
+            // 外層 tabs 殼已移除：在籍記錄表折入本頁「統計表」modal、在籍統計獨立為 /enrollment-stats。
             component: () => import('../views/ClassroomView.vue'),
             meta: { title: PAGE_TERMS.classrooms }
         },
@@ -223,8 +231,12 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/attendance',
             name: 'attendance',
-            component: () => import('../views/attendance/AttendanceWorkspaceView.vue'),
-            meta: { title: MODULE_TERMS.attendance }
+            component: () => import('../views/attendance/ScheduleAttendanceView.vue'),
+            // 2026-10 SPEC-027：排班與出勤合併成單一頁（推翻 2026-09-10 拆成兩個側欄項目）。
+            // query：tab=grid|records|rotation|swaps|shifts、date、emp、filter；舊 tab=reconcile 相容。
+            // shifts＝班別設定（2026-10 自 /settings 搬入；舊 /settings?tab=shifts 由 authGuard 轉來）。
+            props: (route) => attendanceRouteProps(route.query),
+            meta: { title: '排班與出勤' }
         },
         {
             path: '/leaves',
@@ -239,10 +251,13 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: PAGE_TERMS.overtime }
         },
         {
+            // 舊「排班管理」入口（書籤／外部連結相容）：併入排班與出勤的班表核對，保留 date。
+            // 刻意不掛 name 與 meta.title：全域搜尋掃 meta.title，同名會讓結果重複。
             path: '/schedule',
-            name: 'schedule',
-            component: () => import('../views/ScheduleView.vue'),
-            meta: { title: MODULE_TERMS.schedule }
+            redirect: (to) => ({
+                path: '/attendance',
+                query: { ...(isValidDateQuery(to.query.date) ? { date: to.query.date } : {}), tab: 'grid' },
+            }),
         },
         {
             path: '/salary',
@@ -303,6 +318,12 @@ export const routes: RouteRecordRaw[] = [
             name: 'announcements',
             component: () => import('../views/AnnouncementView.vue'),
             meta: { title: '公告管理' }
+        },
+        {
+            path: '/announcement-categories',
+            name: 'announcement-categories',
+            component: () => import('../views/AnnouncementCategoryView.vue'),
+            meta: { title: '公告分類管理' }
         },
         {
             path: '/finance-signoffs',
@@ -376,6 +397,16 @@ export const routes: RouteRecordRaw[] = [
             name: 'platform-audit',
             component: () => import('../views/platform/PlatformAuditView.vue'),
             meta: { title: '跨分校稽核' }
+        },
+        {
+            path: '/platform/observability',
+            name: 'platform-observability',
+            component: () => import('../views/platform/PlatformObservabilityView.vue'),
+            meta: { title: '排程監控' },
+            beforeEnter: (to) => isPlatformAdmin() || {
+                path: '/error',
+                query: { type: 'forbidden', feature: '排程監控', from: to.fullPath },
+            },
         },
         {
             path: '/platform/gov-data',
@@ -469,6 +500,8 @@ export const routes: RouteRecordRaw[] = [
                         { path: 'bonus-rates', name: 'aye-rules-bonus-rates', component: () => import('../views/appraisal/components/BonusRatesPanel.vue'), meta: { title: '年終獎金率' } },
                         { path: 'catalog', name: 'aye-rules-catalog', component: () => import('../views/appraisal/components/PenaltyCatalogPanel.vue'), meta: { title: PAGE_TERMS.appraisalCatalog } },
                         { path: 'enrollment-targets', name: 'aye-rules-enrollment', component: () => import('../views/appraisal/YearlyEnrollmentTargetSection.vue'), meta: { title: '學年目標人數' } },
+                        // 節慶人數（月度共用人數）：與薪資結算 StepPrecheck 共用同一元件與資料頁。
+                        { path: 'festival-headcount', name: 'aye-rules-festival-headcount', component: () => import('../views/appraisalYearEnd/FestivalHeadcountView.vue'), meta: { title: '節慶人數' } },
                         { path: 'year-end-rules', name: 'aye-rules-year-end', component: () => import('../views/yearEnd/YearEndRulesPanel.vue'), meta: { title: '年終規則' } },
                     ],
                 },
@@ -554,6 +587,11 @@ export const routes: RouteRecordRaw[] = [
         // 2026-08-13 三頁整合單一入口＋頁內分頁（比照 /workbench）：分頁權限不同
         //（monitor/history=BUS_READ、routes=BUS_WRITE），只持其中一碼者硬導對面
         // 分頁會撞路由守衛，故落點依權限決定。
+        // 2026-08-26 班次排程再加兩頁：dispatch（今日調度）=BUS_READ 進頁——發車後
+        // 的寫入另由 BUS_IN_PROGRESS_WRITE 在頁內控制，故**不可**掛成 BUS_WRITE，
+        // 否則只有檢視碼的行政連當日名單都看不到；settings（娃娃車設定）=BUS_WRITE。
+        // 落點維持「有 BUS_READ → monitor、否則 routes」：兩碼分別對應的最左分頁，
+        // 加了 dispatch/settings 也不變（dispatch 排在 monitor 之後、settings 在最後）。
         {
             path: '/bus',
             component: () => import('../views/bus/BusLayout.vue'),
@@ -567,6 +605,12 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '娃娃車即時監看' },
                 },
                 {
+                    path: 'dispatch',
+                    name: 'bus-dispatch',
+                    component: () => import('../views/bus/BusDispatchView.vue'),
+                    meta: { title: '娃娃車今日調度' },
+                },
+                {
                     path: 'history',
                     name: 'bus-history',
                     component: () => import('../views/BusHistoryView.vue'),
@@ -577,6 +621,14 @@ export const routes: RouteRecordRaw[] = [
                     name: 'bus-routes',
                     component: () => import('../views/BusRoutesView.vue'),
                     meta: { title: '娃娃車路線管理' },
+                },
+                {
+                    // BusSettingsPanel 為自足元件（無 props、自行載入 system_configs
+                    // 四個 bus.* key），直接當 route component 掛載，不另包 view。
+                    path: 'settings',
+                    name: 'bus-settings',
+                    component: () => import('../views/bus/BusSettingsPanel.vue'),
+                    meta: { title: '娃娃車設定' },
                 },
             ],
         },
@@ -658,7 +710,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/surveys',
             name: 'surveys',
             component: () => import('../views/surveys/SurveyListView.vue'),
-            meta: { title: '活動調查' }
+            meta: { title: '調查管理' }
         },
         {
             path: '/surveys/new',
@@ -750,18 +802,37 @@ export const routes: RouteRecordRaw[] = [
                     path: 'home',
                     name: 'portal-home',
                     component: () => import('../views/portal/PortalHomeView.vue'),
-                    meta: { title: '今日待辦' },
+                    meta: { title: '今日工作台' },
                 },
                 {
+                    // /portal/class-hub 已於 SPEC-024 移除；班級功能又於 2026-09-14
+                    // 整頁併進 /portal/home。這條 redirect 永久保留：存量推播通知的
+                    // deep_link 寫在 DB 裡改不動（用藥提醒帶 ?sheet=medication&id=，
+                    // 學生請假不帶 query），老師點開歷史通知仍會走到這裡。
                     path: 'class-hub',
-                    name: 'portal-class-hub',
-                    component: () => import('../views/portal/PortalClassHubView.vue'),
-                    meta: { title: '今日班級工作台', permission: 'STUDENTS_READ' },
+                    redirect: (to) =>
+                        to.query.sheet === 'medication'
+                            ? { path: '/portal/medications', query: { id: to.query.id } }
+                            : { path: '/portal/home' },
+                },
+                {
+                    // 班級功能 2026-09-14 整頁併入首頁（見 PortalHomeView 的功能格區）。
+                    // 同樣是永久轉址：老師書籤、側欄舊連結與 class-hub 轉來的流量都落
+                    // 在這裡。用 function 形式保住 query（例如 classroom_id）。
+                    //
+                    // 原本掛在本路由的 meta.permission（STUDENTS_READ）不隨之搬到首頁：
+                    // 首頁對全體 portal 使用者開放，掛上去會把沒有該權限的行政同仁擋在
+                    // 首頁外。學生相關入口改由功能格自己的 hasPortalPermission 過濾，
+                    // 加上每個目的頁各自的 meta.permission 把關——這兩道原本就都在，
+                    // 防護沒有降級。
+                    path: 'class',
+                    redirect: (to) => ({ path: '/portal/home', query: to.query }),
                 },
                 {
                     path: 'attendance',
                     name: 'portal-attendance',
                     component: () => import('../views/portal/PortalAttendanceView.vue'),
+                    meta: { title: '我的出勤' },
                 },
                 {
                     path: 'students/:studentId',
@@ -792,32 +863,43 @@ export const routes: RouteRecordRaw[] = [
                     path: 'leave',
                     name: 'portal-leave',
                     component: () => import('../views/portal/PortalLeaveView.vue'),
+                    meta: { title: '請假申請' },
                 },
                 {
                     path: 'overtime',
                     name: 'portal-overtime',
                     component: () => import('../views/portal/PortalOvertimeView.vue'),
+                    meta: { title: '加班申請' },
                 },
                 {
                     path: 'punch-correction',
                     name: 'portal-punch-correction',
                     component: () => import('../views/portal/PortalPunchCorrectionView.vue'),
+                    meta: { title: '補打卡申請' },
                 },
                 {
                     path: 'schedule',
                     name: 'portal-schedule',
                     component: () => import('../views/portal/PortalScheduleView.vue'),
+                    meta: { title: '我的排班' },
                 },
                 {
                     path: 'anomalies',
                     name: 'portal-anomalies',
                     component: () => import('../views/portal/PortalAnomalyView.vue'),
+                    meta: { title: '異常確認' },
+                },
+                {
+                    path: 'attendance-confirm',
+                    name: 'portal-attendance-confirm',
+                    component: () => import('../views/portal/PortalAttendanceConfirmView.vue'),
+                    meta: { title: '本月出勤確認' },
                 },
                 {
                     path: 'students',
                     name: 'portal-students',
                     component: () => import('../views/portal/PortalStudentsView.vue'),
-                    meta: { permission: 'STUDENTS_READ' },
+                    meta: { title: '班級學生', permission: 'STUDENTS_READ' },
                 },
                 {
                     path: 'albums',
@@ -889,37 +971,60 @@ export const routes: RouteRecordRaw[] = [
                     path: 'calendar',
                     name: 'portal-calendar',
                     component: () => import('../views/portal/PortalCalendarView.vue'),
+                    meta: { title: '學校行事曆' },
                 },
                 {
                     path: 'salary',
                     name: 'portal-salary',
                     component: () => import('../views/portal/PortalSalaryView.vue'),
+                    meta: { title: '薪資查詢' },
                 },
                 {
                     path: 'announcements',
                     name: 'portal-announcements',
                     component: () => import('../views/portal/PortalAnnouncementView.vue'),
+                    meta: { title: '公告通知' },
                 },
                 {
                     path: 'profile',
                     name: 'portal-profile',
                     component: () => import('../views/portal/PortalProfileView.vue'),
+                    meta: { title: '個人資料' },
                 },
                 {
                     path: 'change-password',
                     name: 'portal-change-password',
                     component: () => import('../views/portal/PortalChangePasswordView.vue'),
-                    meta: { mustChangePassword: true },
+                    meta: { title: '修改密碼', mustChangePassword: true },
                 },
                 {
                     path: 'activity',
                     name: 'portal-activity',
                     component: () => import('../views/portal/PortalActivityView.vue'),
-                    meta: { title: '才藝管理' },
+                    meta: { title: '才藝報名' },
+                    // 課程點名 2026-09-14 拆成獨立頁（側欄獨立入口）後，本頁只剩課程報名。
+                    // 舊網址 ?tab=attendance 存在老師書籤與既有推播 deep link 裡改不動，
+                    // 這條轉址永久保留（同 /portal/class-hub 的處理慣例）。
+                    beforeEnter: (to) =>
+                        to.query.tab === 'attendance'
+                            ? { path: '/portal/activity/attendance', replace: true }
+                            : true,
                 },
                 {
                     path: 'activity/attendance',
-                    redirect: { path: '/portal/activity', query: { tab: 'attendance' } },
+                    name: 'portal-activity-attendance',
+                    component: () => import('../views/portal/PortalActivityAttendanceView.vue'),
+                    meta: { title: '課程點名' },
+                },
+                {
+                    // 2026-09-14：點名從列表的右側 drawer 改成獨立頁面——與到園點名
+                    // 一致、手機不必在 drawer 裡塞表格，也讓每一堂有自己的網址可深連結。
+                    path: 'activity/attendance/:sessionId',
+                    name: 'portal-activity-rollcall',
+                    component: () => import('../views/portal/PortalActivityRollcallView.vue'),
+                    // 與列表的「課程點名」刻意不同名：分頁標題與瀏覽紀錄要分得出
+                    // 「在挑場次」還是「在點某一堂」（portalRouteTitles 守衛強制不重複）。
+                    meta: { title: '點名名冊' },
                 },
                 {
                     path: 'leave-history',
@@ -1013,6 +1118,10 @@ async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
 // 抽成具名匯出供單元測試（src/router/__tests__/authGuardErrorRedirects.spec.ts）；
 // startRouteLoading 留在 beforeEach wrapper，authGuard 本身不碰載入狀態。
 export async function authGuard(to: RouteLocationNormalized) {
+    // 舊書籤先轉址再做任何檢查（見 legacySettingsShiftsRedirect：否則只有 SCHEDULE 的人會被 /settings 擋成 403）
+    const legacy = legacySettingsShiftsRedirect(to)
+    if (legacy) return legacy
+
     const { loggedIn, userInfo } = await restoreSessionIfNeeded(to)
 
     // 強制改密碼攔截：已登入且旗標為 true，且目標路由不是改密碼頁也不是登入頁

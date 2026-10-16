@@ -1,52 +1,71 @@
 import api from './index'
-import type { ApiBody, ApiQuery, ApiResponse } from './_generated/typed'
+import type { ApiBody, ApiQuery, ApiResponse, AxiosResp } from './_generated/typed'
+import type { AxiosResponse } from 'axios'
 
-export const getFeePeriods = () => api.get('/fees/periods').then((res) => res.data)
+/** 補登未列入銷帳單的單筆額外應收。 */
+export const createManualFeeRecord = (
+  payload: ApiBody<'/fees/records', 'post'>,
+): AxiosResp<'/fees/records', 'post'> => api.post('/fees/records', payload)
+
+export const getFeePeriods = (): Promise<ApiResponse<'/fees/periods', 'get'>> =>
+  api.get('/fees/periods').then((res) => res.data)
 // params 維持 unknown：FeesTab.vue 以 Record<string, unknown> 建構（含條件式賦值），
 // 改用 ApiQuery 會破壞既有 typecheck；回傳型別化以消除下游 as any（後端已補 response_model）。
 export const getFeeRecords = (
   params: unknown,
 ): Promise<ApiResponse<'/fees/records', 'get'>> =>
   api.get('/fees/records', { params }).then((res) => res.data)
-export const payFeeRecord = (id: number, data: unknown) => api.put(`/fees/records/${id}/pay`, data).then((res) => res.data)
+export const payFeeRecord = (
+  id: number,
+  payload: ApiBody<'/fees/records/{record_id}/pay', 'put'>,
+): Promise<ApiResponse<'/fees/records/{record_id}/pay', 'put'>> =>
+  api.put(`/fees/records/${id}/pay`, payload).then((res) => res.data)
 // 批次登記繳費（語意固定「繳清全額」；部分繳費仍走單筆 payFeeRecord）
 export const batchPayFeeRecords = (
   payload: ApiBody<'/fees/records/batch-pay', 'post'>,
 ): Promise<ApiResponse<'/fees/records/batch-pay', 'post'>> =>
   api.post('/fees/records/batch-pay', payload).then((res) => res.data)
-export const refundFeeRecord = (id: number, data: unknown) => api.post(`/fees/records/${id}/refund`, data).then((res) => res.data)
-export const suggestRefund = (recordId: number, payload: unknown) =>
+export const refundFeeRecord = (
+  id: number,
+  payload: ApiBody<'/fees/records/{record_id}/refund', 'post'>,
+): Promise<ApiResponse<'/fees/records/{record_id}/refund', 'post'>> =>
+  api.post(`/fees/records/${id}/refund`, payload).then((res) => res.data)
+export const suggestRefund = (
+  recordId: number,
+  payload: ApiBody<'/fees/records/{record_id}/refund-suggest', 'post'>,
+): Promise<ApiResponse<'/fees/records/{record_id}/refund-suggest', 'post'>> =>
   api.post(`/fees/records/${recordId}/refund-suggest`, payload).then((res) => res.data)
-export const getFeeRefunds = (id: number) => api.get(`/fees/records/${id}/refunds`).then((res) => res.data)
+export const getFeeRefunds = (
+  id: number,
+): Promise<ApiResponse<'/fees/records/{record_id}/refunds', 'get'>> =>
+  api.get(`/fees/records/${id}/refunds`).then((res) => res.data)
 // 退費列表（伺服器分頁；Phase 2 取代前端掃 100 筆逐筆查 refunds 的 fan-out）
 // params 維持 unknown：FeeRefundsTab 以 Record<string, unknown> 建構（含條件式賦值），對齊本檔慣例。
 export const getRefundedFeeRecords = (
   params: unknown,
 ): Promise<ApiResponse<'/fees/refunds', 'get'>> =>
   api.get('/fees/refunds', { params }).then((res) => res.data)
-export const getFeeSummary = (params: unknown) => api.get('/fees/summary', { params }).then((res) => res.data)
+export const getFeeSummary = (
+  params: ApiQuery<'/fees/summary', 'get'>,
+): Promise<ApiResponse<'/fees/summary', 'get'>> =>
+  api.get('/fees/summary', { params }).then((res) => res.data)
 // 月繳總表（帳單工作區「彙總繳費表」）：per-student 聚合，單月一次撈全、前端快篩
 export const getFeeMonthlyStatement = (
   params: ApiQuery<'/fees/monthly-statement', 'get'>,
 ): Promise<ApiResponse<'/fees/monthly-statement', 'get'>> =>
   api.get('/fees/monthly-statement', { params }).then((res) => res.data)
-
-// ===== 費用範本 =====
-export const getFeeTemplates = (params: unknown = {}) =>
-  api.get('/fees/templates', { params }).then((res) => res.data)
-export const createFeeTemplate = (payload: unknown) =>
-  api.post('/fees/templates', payload).then((res) => res.data)
-export const updateFeeTemplate = (id: number, payload: unknown) =>
-  api.put(`/fees/templates/${id}`, payload).then((res) => res.data)
-export const deleteFeeTemplate = (id: number) =>
-  api.delete(`/fees/templates/${id}`).then((res) => res.data)
-// 整學年複製（SPEC-015 年度設定）：金額照抄、收費/逾期日自動平移、既有組合冪等 skip
-export const copyYearFeeTemplates = (
-  payload: ApiBody<'/fees/templates/copy-year', 'post'>,
-): Promise<ApiResponse<'/fees/templates/copy-year', 'post'>> =>
-  api.post('/fees/templates/copy-year', payload).then((res) => res.data)
-
-// 產生費用單已改後端每日排程自動化（POST /fees/generate 僅維運保底，前端不再呼叫）
+// 帳款收款明細（月表「檢視」彈窗）：誰收的、什麼時候登錄／媒合、走哪條鏈。
+// record_id 為多值 query（?record_id=1&record_id=2），axios 預設會加 []，
+// 比照 studentRecords.ts 以 indexes:null 關掉。
+export const getFeeRecordCollections = (
+  recordIds: number[],
+): Promise<ApiResponse<'/fees/records/collections', 'get'>> =>
+  api
+    .get('/fees/records/collections', {
+      params: { record_id: recordIds },
+      paramsSerializer: { indexes: null },
+    })
+    .then((res) => res.data)
 
 // ===== 學費折抵 CRUD（同胞優惠 / 預繳 / 請假扣款 / 其他）=====
 // getFeeAdjustments 參數維持 unknown：FeesTab.vue 以 Record<string, unknown> 傳入，
@@ -55,37 +74,24 @@ export const getFeeAdjustments = (
   params?: unknown,
 ): Promise<ApiResponse<'/fees/adjustments', 'get'>> =>
   api.get('/fees/adjustments', { params }).then((res) => res.data)
-export const createFeeAdjustment = (payload: ApiBody<'/fees/adjustments', 'post'>) =>
+export const createFeeAdjustment = (
+  payload: ApiBody<'/fees/adjustments', 'post'>,
+): Promise<ApiResponse<'/fees/adjustments', 'post'>> =>
   api.post('/fees/adjustments', payload).then((res) => res.data)
 export const updateFeeAdjustment = (
   id: number,
   payload: ApiBody<'/fees/adjustments/{adjustment_id}', 'put'>,
-) => api.put(`/fees/adjustments/${id}`, payload).then((res) => res.data)
-export const deleteFeeAdjustment = (id: number) =>
+): Promise<ApiResponse<'/fees/adjustments/{adjustment_id}', 'put'>> =>
+  api.put(`/fees/adjustments/${id}`, payload).then((res) => res.data)
+export const deleteFeeAdjustment = (
+  id: number,
+): Promise<ApiResponse<'/fees/adjustments/{adjustment_id}', 'delete'>> =>
   api.delete(`/fees/adjustments/${id}`).then((res) => res.data)
 
 // ============================================================================
 // SPEC-014：銀行對帳 / 銷帳碼 / 預繳款 / 現金交接 / 關帳
 // 型別自 OpenAPI codegen 下放（後端全數標 response_model）；沿用本檔自解包慣例。
 // ============================================================================
-
-// ===== 銷帳末四碼 =====
-export const getBillingCodes = (
-  params?: unknown,
-): Promise<ApiResponse<'/fees/billing-codes', 'get'>> =>
-  api.get('/fees/billing-codes', { params }).then((res) => res.data)
-export const suggestBillingCodes = (
-  payload: ApiBody<'/fees/billing-codes/suggest', 'post'>,
-): Promise<ApiResponse<'/fees/billing-codes/suggest', 'post'>> =>
-  api.post('/fees/billing-codes/suggest', payload).then((res) => res.data)
-export const activateBillingCodes = (
-  payload: ApiBody<'/fees/billing-codes/activate', 'post'>,
-): Promise<ApiResponse<'/fees/billing-codes/activate', 'post'>> =>
-  api.post('/fees/billing-codes/activate', payload).then((res) => res.data)
-export const deactivateBillingCode = (
-  id: number,
-  payload: ApiBody<'/fees/billing-codes/{assignment_id}/deactivate', 'post'>,
-) => api.post(`/fees/billing-codes/${id}/deactivate`, payload).then((res) => res.data)
 
 // ===== 永豐 CSV 匯入 =====
 export const previewBankImport = (
@@ -160,7 +166,7 @@ export const confirmCollectionImport = (
     .then((res) => res.data)
 }
 export const getCollectionPayments = (
-  params?: unknown,
+  params?: ApiQuery<'/fees/collection-payments', 'get'>,
 ): Promise<ApiResponse<'/fees/collection-payments', 'get'>> =>
   api.get('/fees/collection-payments', { params }).then((res) => res.data)
 export const getCollectionCandidates = (
@@ -181,6 +187,16 @@ export const reconcileCollectionCoverage = (
 ): Promise<ApiResponse<'/fees/collection-coverage', 'post'>> =>
   api.post('/fees/collection-coverage', payload).then((res) => res.data)
 
+// ===== SPEC-022 批次媒合 =====
+export const batchCollectionCandidates = (
+  payload: ApiBody<'/fees/collection-payments/batch-candidates', 'post'>,
+): Promise<ApiResponse<'/fees/collection-payments/batch-candidates', 'post'>> =>
+  api.post('/fees/collection-payments/batch-candidates', payload).then((res) => res.data)
+export const batchAllocateCollectionPayments = (
+  payload: ApiBody<'/fees/collection-payments/batch-allocate', 'post'>,
+): Promise<ApiResponse<'/fees/collection-payments/batch-allocate', 'post'>> =>
+  api.post('/fees/collection-payments/batch-allocate', payload).then((res) => res.data)
+
 // ===== 發單快照與未繳差集（SPEC-016 Phase 3）=====
 export const previewBillSlipBatch = (
   file: File,
@@ -193,13 +209,15 @@ export const previewBillSlipBatch = (
     })
     .then((res) => res.data)
 }
+export type BillSlipKind = 'monthly' | 'registration'
 export const importBillSlipBatch = (
   file: File,
-  meta: { title: string; batch_no?: string },
+  meta: { title: string; batch_no?: string; batch_kind: BillSlipKind },
 ): Promise<ApiResponse<'/fees/bill-slip-batches', 'post'>> => {
   const form = new FormData()
   form.append('file', file)
   form.append('title', meta.title)
+  form.append('batch_kind', meta.batch_kind)
   if (meta.batch_no) form.append('batch_no', meta.batch_no)
   return api
     .post('/fees/bill-slip-batches', form, {
@@ -207,6 +225,23 @@ export const importBillSlipBatch = (
     })
     .then((res) => res.data)
 }
+// SPEC-019 §6.1：改批次類型（僅未產單批次）
+export const patchBillSlipBatch = (
+  batchId: number,
+  payload: ApiBody<'/fees/bill-slip-batches/{batch_id}', 'patch'>,
+): Promise<ApiResponse<'/fees/bill-slip-batches/{batch_id}', 'patch'>> =>
+  api.patch(`/fees/bill-slip-batches/${batchId}`, payload).then((res) => res.data)
+// SPEC-019 §5.2：檢核檔姓名對不上時人工指定學生
+export const assignBillSlipItemStudent = (
+  batchId: number,
+  itemId: number,
+  payload: ApiBody<'/fees/bill-slip-batches/{batch_id}/items/{item_id}/student', 'put'>,
+): Promise<
+  ApiResponse<'/fees/bill-slip-batches/{batch_id}/items/{item_id}/student', 'put'>
+> =>
+  api
+    .put(`/fees/bill-slip-batches/${batchId}/items/${itemId}/student`, payload)
+    .then((res) => res.data)
 export const getBillSlipBatches = (
   params?: unknown,
 ): Promise<ApiResponse<'/fees/bill-slip-batches', 'get'>> =>
@@ -222,6 +257,43 @@ export const getOutstandingReport = (
   api
     .get(`/fees/bill-slip-batches/${batchId}/outstanding`, { params })
     .then((res) => res.data)
+// SPEC-018：發單批次一鍵產生費用單（一生一筆淨額單；dry_run 先預覽）
+export const generateBillSlipRecords = (
+  batchId: number,
+  payload: ApiBody<'/fees/bill-slip-batches/{batch_id}/generate-records', 'post'>,
+): Promise<
+  ApiResponse<'/fees/bill-slip-batches/{batch_id}/generate-records', 'post'>
+> =>
+  api
+    .post(`/fees/bill-slip-batches/${batchId}/generate-records`, payload)
+    .then((res) => res.data)
+
+// ===== 現金項目批次（SPEC-019 §7.1）=====
+export const previewCashFeeBatch = (
+  payload: ApiBody<'/fees/cash-fee-batches/preview', 'post'>,
+): Promise<ApiResponse<'/fees/cash-fee-batches/preview', 'post'>> =>
+  api.post('/fees/cash-fee-batches/preview', payload).then((res) => res.data)
+export const createCashFeeBatch = (
+  payload: ApiBody<'/fees/cash-fee-batches', 'post'>,
+): Promise<ApiResponse<'/fees/cash-fee-batches', 'post'>> =>
+  api.post('/fees/cash-fee-batches', payload).then((res) => res.data)
+export const addCashFeeBatchEntries = (
+  batchId: number,
+  payload: ApiBody<'/fees/cash-fee-batches/{batch_id}/entries', 'post'>,
+): Promise<ApiResponse<'/fees/cash-fee-batches/{batch_id}/entries', 'post'>> =>
+  api.post(`/fees/cash-fee-batches/${batchId}/entries`, payload).then((res) => res.data)
+export const getCashFeeBatches = (
+  params?: ApiQuery<'/fees/cash-fee-batches', 'get'>,
+): Promise<ApiResponse<'/fees/cash-fee-batches', 'get'>> =>
+  api.get('/fees/cash-fee-batches', { params }).then((res) => res.data)
+export const getCashFeeBatch = (
+  batchId: number,
+): Promise<ApiResponse<'/fees/cash-fee-batches/{batch_id}', 'get'>> =>
+  api.get(`/fees/cash-fee-batches/${batchId}`).then((res) => res.data)
+export const deleteCashFeeBatch = (
+  batchId: number,
+): Promise<ApiResponse<'/fees/cash-fee-batches/{batch_id}', 'delete'>> =>
+  api.delete(`/fees/cash-fee-batches/${batchId}`).then((res) => res.data)
 
 // ===== 現金收款 / 收款流水 =====
 export const createCashReceipt = (
@@ -232,6 +304,12 @@ export const getFeeReceipts = (
   params?: unknown,
 ): Promise<ApiResponse<'/fees/receipts', 'get'>> =>
   api.get('/fees/receipts', { params }).then((res) => res.data)
+/** 現金收款沖銷（誤登現金的正規更正路徑；收據轉 reversed，當日交接批即時排除該筆） */
+export const reverseCashReceipt = (
+  receiptId: number,
+  payload: ApiBody<'/fees/receipts/{receipt_id}/reverse', 'post'>,
+): Promise<ApiResponse<'/fees/receipts/{receipt_id}/reverse', 'post'>> =>
+  api.post(`/fees/receipts/${receiptId}/reverse`, payload).then((res) => res.data)
 
 // ===== 預繳款 =====
 export const getPrepayments = (
@@ -308,3 +386,15 @@ export const reopenClosePeriod = (
   closeId: number,
   payload: ApiBody<'/fees/close-periods/{close_id}/reopen', 'post'>,
 ) => api.post(`/fees/close-periods/${closeId}/reopen`, payload).then((res) => res.data)
+
+// ===== SPEC-025 繳款單範本產出 =====
+export type SlipTemplateKind = 'monthly' | 'registration'
+export const previewSlipTemplate = (
+  payload: ApiBody<'/fees/slip-templates/preview', 'post'>,
+): Promise<ApiResponse<'/fees/slip-templates/preview', 'post'>> =>
+  api.post('/fees/slip-templates/preview', payload).then((res) => res.data)
+/** 回傳整個 response：檔名在 Content-Disposition，交給 saveBlobResponse 解析 */
+export const exportSlipTemplate = (
+  payload: ApiBody<'/fees/slip-templates/export', 'post'>,
+): Promise<AxiosResponse<Blob>> =>
+  api.post('/fees/slip-templates/export', payload, { responseType: 'blob' })

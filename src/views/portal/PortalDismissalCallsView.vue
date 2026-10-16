@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, CircleCheck, Mute, Refresh } from '@element-plus/icons-vue'
+import { Bell, CircleCheck, Mute, Refresh, Pointer, Close } from '@element-plus/icons-vue'
 import {
   acknowledgeDismissalCall,
   completeDismissalCall,
   cancelPortalDismissalCall,
 } from '@/api/dismissalCalls'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import {
   useNowClock,
   isPreArrivalNotice,
   type DismissalCallView,
 } from '@/composables/useDismissalUrgency'
 import { usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 type DismissalCall = DismissalCallView
 
@@ -107,6 +109,14 @@ const handleCancel = async (call: DismissalCall) => {
 onMounted(() => {
   fetchCalls()
 })
+
+// 「此裝置無法背景推播」是裝置常態而非待辦，看過即可收起（P2-13）
+const NOTIFY_HINT_KEY = 'portal_dismissal_notify_hint_dismissed'
+const notifyHintDismissed = ref(tenantGetItem(NOTIFY_HINT_KEY) === '1')
+function dismissNotifyHint() {
+  notifyHintDismissed.value = true
+  tenantSetItem(NOTIFY_HINT_KEY, '1')
+}
 </script>
 
 <template>
@@ -114,12 +124,14 @@ onMounted(() => {
     <!-- 無障礙即時宣告：新通知到達時報讀，與 beep/震動/瀏覽器推播對等 -->
     <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ liveAnnounce }}</p>
 
+    <!-- sticky 外殼保留（接送通知要一直看得到連線狀態與聲音開關），內容改走共用頁首 -->
     <header class="page-head">
-      <h2 class="page-head__title">
-        接送通知
-        <span v-if="activeCalls.length" class="page-head__count">待接送 {{ activeCalls.length }}</span>
-      </h2>
-      <div class="page-head__tools">
+      <PortalPageHeader>
+        <template #title>
+          接送通知
+          <span v-if="activeCalls.length" class="page-head__count">待接送 {{ activeCalls.length }}</span>
+        </template>
+        <template #actions>
         <el-tag
           :type="wsConnected ? 'success' : 'warning'"
           size="small"
@@ -146,17 +158,35 @@ onMounted(() => {
             @click="testSound"
           >測試</button>
         </div>
-      </div>
+        </template>
+      </PortalPageHeader>
     </header>
 
-    <!-- 音效尚未解鎖提示：iOS/LINE WebView 需 user gesture 才能播聲音 -->
-    <div v-if="!audioUnlocked" class="degrade-hint degrade-hint--audio" role="status">
-      <span>👆 點一下畫面以啟用接送提醒音</span>
-    </div>
-
-    <!-- 背景推播不可用提示：此裝置/瀏覽器不支援 Notification，或使用者未授權 -->
-    <div v-if="!notificationPermitted" class="degrade-hint degrade-hint--notify" role="status">
-      <span>此裝置無法背景推播，請保持 App 開啟並開啟聲音</span>
+    <!-- 裝置提示合併成一列（P2-13）：原本音效與推播各佔一條橫幅，加上頁首的
+         連線 tag 與聲音開關，一進頁面就有四條狀態訊息把佇列擠到螢幕外。
+         「無法背景推播」是裝置常態、不是待辦，看過可以收起。 -->
+    <div
+      v-if="!audioUnlocked || (!notificationPermitted && !notifyHintDismissed)"
+      class="degrade-hint degrade-hint--audio"
+      role="status"
+    >
+      <el-icon class="degrade-hint__icon" aria-hidden="true"><Pointer /></el-icon>
+      <!-- 兩段提示上下各一行、左對齊（手機版並排會各擠成三行） -->
+      <div class="degrade-hint__lines">
+        <span v-if="!audioUnlocked" class="degrade-hint__main">點一下畫面以啟用接送提醒音</span>
+        <span v-if="!notificationPermitted && !notifyHintDismissed" class="degrade-hint__sub">
+          此裝置無法背景推播，請保持 App 開啟並開啟聲音
+        </span>
+      </div>
+      <button
+        v-if="!notificationPermitted && !notifyHintDismissed"
+        type="button"
+        class="degrade-hint__close"
+        aria-label="不再顯示推播提示"
+        @click="dismissNotifyHint"
+      >
+        <el-icon aria-hidden="true"><Close /></el-icon>
+      </button>
     </div>
 
     <!-- 連線狀態 banner（reconnecting 黃 / exhausted 紅）-->
@@ -226,12 +256,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.portal-dismissal-calls {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: var(--space-4);
-}
-
 /* 螢幕報讀專用，視覺隱藏（portal app 無全域 sr-only，自帶 scoped 版） */
 .sr-only {
   position: absolute;
@@ -250,21 +274,13 @@ onMounted(() => {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
   padding: var(--space-3) 0;
   margin-bottom: var(--space-3);
   background: var(--bg-color, var(--neutral-50));
 }
 
-.page-head__title {
-  margin: 0;
-  font-size: var(--text-3xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-primary);
+.page-head :deep(.portal-page-header) {
+  margin-bottom: 0;
 }
 /* 待接送即時計數：老師一眼知道還有幾位待處理 */
 .page-head__count {
@@ -280,11 +296,6 @@ onMounted(() => {
   vertical-align: middle;
 }
 
-.page-head__tools {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
 
 /* ─── 聲音控制：顯性顯示開/關 + 測試 ─── */
 .sound-ctl {
@@ -337,12 +348,45 @@ onMounted(() => {
 /* ─── 降級提示（音效 / 推播不可用）─── */
 .degrade-hint {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
   font-size: var(--text-sm);
+}
+.degrade-hint__icon {
+  /* 與第一行文字（line-height 約 1.5em）垂直對齊 */
+  flex-shrink: 0;
+  margin-top: var(--space-1);
+}
+/* 兩段提示上下堆疊、左對齊；關閉鈕用 margin-left:auto 固定在右上 */
+.degrade-hint__lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+  padding-top: var(--space-1);
+}
+.degrade-hint__sub {
+  color: var(--text-secondary, var(--el-text-color-secondary));
+}
+.degrade-hint__close {
+  margin-left: auto;
+  flex-shrink: 0;
+  /* 觸控區 44px 但不撐高提示列：負 margin 抵銷上下多出的空間 */
+  margin-top: calc(var(--space-2) * -1);
+  margin-bottom: calc(var(--space-2) * -1);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 .degrade-hint--audio {
   background-color: var(--color-warning-soft);
@@ -423,8 +467,10 @@ onMounted(() => {
 
 /* ─── 列表 ─── */
 .call-list {
-  display: flex;
-  flex-direction: column;
+  /* 滿版後卡片不拉成一整條：桌機多欄、手機自然單欄 */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  align-items: start;
   gap: var(--space-3);
 }
 
@@ -462,7 +508,7 @@ onMounted(() => {
 }
 
 @media (max-width: 560px) {
-  .page-head__tools {
+  .page-head :deep(.portal-page-header__actions) {
     width: 100%;
     justify-content: space-between;
   }

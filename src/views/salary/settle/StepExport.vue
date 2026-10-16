@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, watch } from 'vue'
 import SalarySnapshotDialog from '../SalarySnapshotDialog.vue'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { downloadFile } from '@/utils/download'
@@ -85,6 +85,14 @@ const ROSTER_TYPE_LABELS = {
 
 const hasExported = ref(false)
 const showSnapshotDialog = ref(false)
+
+watch(
+    () => [q.year, q.month],
+    () => {
+        hasExported.value = false
+        showSnapshotDialog.value = false
+    },
+)
 
 // 重型匯出（薪資全員 Excel/PDF、逐筆轉帳名冊）慢且原本無回饋，易誤判沒點到而重複點擊。
 // 改 await + per-action loading：按鈕顯示忙碌、進行中防重送（並發另有 api dedupe 兜底）。

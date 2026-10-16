@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   sumTrendUpTo,
+  firstMonthWithData,
   futurePreloggedExpense,
   cutSeries,
   deltaKind,
@@ -95,5 +96,17 @@ describe('deltaKind', () => {
   it('v ≥ 0.1 → up；v ≤ -0.1 → down', () => {
     expect(deltaKind(0.1)).toBe('up')
     expect(deltaKind(-23.1)).toBe('down')
+  })
+})
+
+describe('firstMonthWithData', () => {
+  it('回傳年度第一個四欄任一非 0 的月份；全 0 回 null；不依陣列順序', () => {
+    const rows = [
+      { month: 9, revenue: 1, refund: 0, expense: 0, net: 1 },
+      { month: 3, revenue: 0, refund: 0, expense: 0, net: 0 },
+      { month: 8, revenue: 0, refund: 0, expense: 4, net: -4 },
+    ]
+    expect(firstMonthWithData(rows)).toBe(8)
+    expect(firstMonthWithData([{ month: 1, revenue: 0, refund: 0, expense: 0, net: 0 }])).toBeNull()
   })
 })

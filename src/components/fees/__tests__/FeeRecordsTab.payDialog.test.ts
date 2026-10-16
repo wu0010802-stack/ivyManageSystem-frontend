@@ -75,17 +75,17 @@ beforeEach(() => {
 })
 
 describe('付款 dialog 標題與脈絡', () => {
-  it('未繳 → 標題「登記繳費」；部分繳費 → 「更新繳費」', async () => {
+  it('未繳 → 標題「收款」；部分繳費 → 「更新收款」', async () => {
     const w = mountTab()
     const vm = vmOf(w)
 
     vm.openPayDialog(UNPAID_ROW)
     await nextTick()
-    expect(w.find('el-dialog').attributes('title')).toBe('登記繳費')
+    expect(w.find('el-dialog').attributes('title')).toBe('收款')
 
     vm.openPayDialog(PARTIAL_ROW)
     await nextTick()
-    expect(w.find('el-dialog').attributes('title')).toBe('更新繳費')
+    expect(w.find('el-dialog').attributes('title')).toBe('更新收款')
   })
 
   it('頂部脈絡含學生、班級、期別、費用項目、應繳與目前已繳', async () => {

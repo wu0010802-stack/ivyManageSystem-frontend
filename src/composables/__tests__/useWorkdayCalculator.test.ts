@@ -150,3 +150,36 @@ describe('useWorkdayCalculator — 晚到舊請求不覆寫（epoch 守衛）', 
     expect(form.leave_hours).toBe(3.5)
   })
 })
+
+/**
+ * 教師端深度掃描 F3：全天模式（date-only picker）API 失敗時，fallbackCalc 不可把同日
+ * 00:00–00:00 當零長度時段而降成 0.5h；改走工作日×8h 預設班制，非工作日不得抬成 0.5h 放行。
+ */
+describe('useWorkdayCalculator — 全天模式 API 失敗 fallback（F3）', () => {
+  const run = async (date: string) => {
+    const form = reactive<Record<string, unknown>>({
+      employee_id: 1,
+      start_date: '',
+      end_date: '',
+      leave_hours: 8,
+    })
+    const calc = useWorkdayCalculator({ form, fetchFn: () => Promise.reject(new Error('network down')) })
+    form.start_date = date
+    form.end_date = date
+    await nextTick()
+    await new Promise((r) => setTimeout(r, 350)) // useDebounceFn 300ms
+    await flushPromises()
+    return { form, calc }
+  }
+
+  it('同日平日：保留 8h，而非 0.5h', async () => {
+    const { form } = await run('2026-10-07') // 週三
+    expect(form.leave_hours).toBe(8)
+  })
+
+  it('同日週末：leave_hours 為 0（交由 ≥ 0.5h 表單驗證擋下），不抬成 0.5h', async () => {
+    const { form, calc } = await run('2026-10-10') // 週六
+    expect(form.leave_hours).toBe(0)
+    expect(calc.calcHint.value).toContain('非工作日')
+  })
+})

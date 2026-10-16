@@ -110,13 +110,6 @@
   --pt-info-link:         #5ba8cc;       /* link 色 */
   --pt-violet-text:       #6e3f94;       /* medication chip text */
 
-  /* 首頁待辦橫幅琥珀色（PendingSignBanner / PendingSurveyBanner）。
-     2026-08-13 前為未定義變數、永遠吃元件 fallback → dark 無法翻色，
-     近白 --pt-text-strong 配淺琥珀底看不到字。icon-bg 為飽和裝飾色，
-     兩主題共用不覆寫。 */
-  --pt-amber-bg: #fff4dc;
-  --pt-amber-icon-bg: #f5b637;
-
   color-scheme: light;
 
   /* ============================================================
@@ -157,6 +150,15 @@
   --pt-gradient-warm:       linear-gradient(135deg, var(--ivy-tile-yellow-bg) 0%, var(--ivy-star-yellow) 100%);
   /* Hero 漸層：暖黃 → 嫩綠 → 天藍斜向過渡（M3 Expressive，spec §3） */
   --pt-gradient-hero:       linear-gradient(150deg, #fff7dd 0%, #d9f4e2 78%, #cdeef9 130%);
+  /* 收斂版 hero（聯絡簿 awaiting／offday）：同三色只把飽和度向卡片底色收 45%。
+     先前元件內寫死 light 三色再 color-mix 卡片底，dark 下混出中灰底配近白字（約 2.5:1），
+     所以收進 token 層、light/dark 成對定義。 */
+  --pt-gradient-hero-quiet: linear-gradient(
+    150deg,
+    color-mix(in srgb, #fff7dd 55%, #ffffff) 0%,
+    color-mix(in srgb, #d9f4e2 55%, #ffffff) 78%,
+    color-mix(in srgb, #cdeef9 55%, #ffffff) 130%
+  );
 
   /* ============================================================
    * 童彩 tonal 配對（M3 Expressive，spec §3）
@@ -205,7 +207,10 @@
   --ivy-green-deep:    #0d9053;  /* primary CTA, emphasis bar */
   --ivy-green-bright:  #0caf76;  /* hover state */
   --ivy-green-laurel:  #5aa842;  /* 月桂葉、accent bar */
-  --ivy-green-mid:     #41a074;  /* 中綠 icon bg */
+  --color-green-mid: #41a074;
+  /* 月桂綠當「文字」用時的 AA 版本（--ivy-green-laurel #5aa842 白底僅 2.95:1，只適合裝飾） */
+  --color-laurel-text: #2f6f22;
+  --ivy-green-mid: var(--color-green-mid);  /* 中綠 icon bg */
   --ivy-teal-primary:  #33aaaa;  /* secondary primary button */
   --ivy-teal-soft:     #d3ecec;  /* teal soft tint */
   --ivy-star-yellow:   #ffde51;  /* kawaii 星黃 */
@@ -228,6 +233,9 @@
    * 改 alias 到上方 elevation 段真源（不再本地重複定義）。
    * ============================================================ */
   --pt-app-max-width: 560px;
+  /* M3 最小觸控區 48dp。家長端使用者含祖父母，M3 元件視覺尺寸（40px 按鈕、32px chip）
+     維持規格，命中區以透明 ::after 撐到此值；非 M3 的 pattern 按鈕用 --touch-target-min（44px）。 */
+  --touch-target-m3: 48px;
   --pt-page-gap: 18px;
   --pt-card-radius: 26px;
   --pt-control-radius: 14px;
@@ -248,6 +256,21 @@
      原本只定義在 assets/public-theme.css，家長端不 import 該檔，所以在此補上同值定義。
      存量的 --pt-on-accent 待 token 遷移批次一併收斂。 */
   --color-primary-contrast: #ffffff;
+
+  /* M3 state layer 的遮罩底色（2026-09-13 稽核裁定：parent:audit 禁止直寫 hex）。
+     M3 的 hover／pressed 是在元件上疊一層固定色、只調 opacity；泛白用亮色、壓暗用
+     暗色，light/dark 兩主題**皆同值**——遮罩是相對於它底下那層顏色作用的，隨主題
+     翻轉會讓深色主題的「按下」變成打亮。
+     刻意不重用 --color-primary-contrast：那是「有色背景上的文字」語意，與遮罩無關，
+     共用會讓日後想調文字白階時連帶改掉所有 state layer。 */
+  --color-state-layer-light: #ffffff;
+  --color-state-layer-dark: #000000;
+
+  /* 手寫簽名板（SignaturePad）的紙與筆：紙本語意，light/dark **皆同值、刻意不覆寫**。
+     簽名區要像一張白紙，深色主題下也維持白底深色筆，才看得清筆跡、與匯出的 PNG 一致。
+     ink 由元件以 getComputedStyle 讀取（canvas 不認 CSS 變數）。 */
+  --color-signature-paper: #ffffff;
+  --color-signature-ink: #191c19;
 }
 
 /* ============================================================
@@ -322,6 +345,13 @@
   --pt-gradient-warm:       linear-gradient(135deg, var(--ivy-tile-yellow-bg) 0%, rgba(255, 222, 81, 0.14) 100%);
   /* Hero 漸層：暖黃 → 嫩綠 → 天藍的深色版（對齊 light 段 §3） */
   --pt-gradient-hero:       linear-gradient(150deg, #2c2a1c 0%, #1c332a 78%, #14313c 130%);
+  /* 收斂版 hero dark：深色三色向 dark 卡片底（m3 surface-container-lowest #0c0f0c）收 45% */
+  --pt-gradient-hero-quiet: linear-gradient(
+    150deg,
+    color-mix(in srgb, #2c2a1c 55%, #0c0f0c) 0%,
+    color-mix(in srgb, #1c332a 55%, #0c0f0c) 78%,
+    color-mix(in srgb, #14313c 55%, #0c0f0c) 130%
+  );
 
   /* 童彩 tonal 配對 dark（對齊 light 段 §3） */
   --pt-accent-sun-container: #4a3a10;   --pt-accent-sun-on: #ffe08c;
@@ -354,7 +384,9 @@
   --ivy-green-deep:    #5aa842;
   --ivy-green-bright:  #6dc068;
   --ivy-green-laurel:  #8bc34a;
-  --ivy-green-mid:     #6dc068;
+  --color-green-mid: #6dc068;
+  --color-laurel-text: #a5d86e;
+  --ivy-green-mid: var(--color-green-mid);
   --ivy-teal-primary:  #4dc4c4;
   --ivy-teal-soft:     rgba(77, 196, 196, 0.18);
   --ivy-star-yellow:   #ffe66d;
@@ -370,6 +402,12 @@
   --ivy-tile-teal-bg:    rgba(77, 196, 196, 0.18);  --ivy-tile-teal-fg:    #4dc4c4;
 
   --pt-shadow-press: var(--pt-shadow-card);
+  /* Hero 卡（LeaveHero／UserHeroCard／ActivityHero／FeeHero）的漸層終點與統計小卡底。
+     先前 dark 未覆寫 → 維持 #fff／#f5fbe6，疊上已翻近白的 --pt-text-* 幾乎看不到字。
+     raised＝m3 dark surface-container（比 app 底 #141614 高一階）、recessed＝dark 嫩綠底（同 --ivy-leaf-bg dark）。 */
+  --pt-surface-raised: #1d201d;
+  --pt-surface-recessed: #1a2418;
+  --pt-page-border: rgba(168, 230, 207, 0.14);
   --pt-tint-brand: rgba(90, 168, 66, 0.16);
   --pt-tint-sun: rgba(255, 230, 109, 0.16);
   --pt-icon-chip-bg: rgba(255, 255, 255, 0.1);
@@ -392,7 +430,6 @@
   --leaf-700: #a8e6cf;
   --grape-100: rgba(181, 140, 217, 0.20);
   --grape-700: #d4bce6;
-  --pt-amber-bg: rgba(255, 222, 81, 0.14);
 }
 
 /* ========== Focus Visible ==========
@@ -435,9 +472,16 @@ button:focus-visible,
  * webview 的預設行為調整：避免 iOS 點擊高光、tap 延遲。
  */
 html {
+  /* 字級設定（useA11y → html.ivy-size-*）經由根字級生效：家長端 font-size / line-height
+     一律用 rem（守衛：src/parent/__tests__/parentFontSizeRem.spec.ts）。 */
+  font-size: calc(16px * var(--ivy-font-scale, 1));
   -webkit-tap-highlight-color: transparent;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
+  /* sticky top bar（M3TopAppBar，64px＋safe-area）下的捲動定位：沒有這條時
+     鍵盤聚焦與 scrollIntoView 會把目標元素捲進 bar 底下（tab 導航看不到焦點、
+     錨點跳轉被遮住頂端）。取 96px 含 bar 高與一點呼吸空間。 */
+  scroll-padding-top: 96px;
 }
 
 body {
@@ -463,7 +507,8 @@ button {
 input,
 textarea,
 select {
-  font-size: 16px;
+  /* 字級設定縮小（sm）時 1rem < 16px 仍會觸發 iOS 聚焦放大，所以保底 16px、只放大不縮小 */
+  font-size: max(16px, 1rem);
 }
 
 /* ========== Touch Target Helper ==========
@@ -523,7 +568,7 @@ select {
 
 /* ========== Section title（首頁/More 統一，M3 Expressive 大字階）========== */
 .pt-section-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 900;
   color: var(--pt-text-strong);
   margin: 0 0 10px;
@@ -550,7 +595,7 @@ select {
 
 .pt-muted-note {
   color: var(--pt-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 

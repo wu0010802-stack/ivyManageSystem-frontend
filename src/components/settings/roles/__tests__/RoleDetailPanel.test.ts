@@ -40,6 +40,7 @@ const definition: RolesDefinition = {
     admin: { label: '管理員', description: '', permissions: ['*'], flags: ['super_admin'] },
     hr: { label: '人資', description: '', permissions: ['DASHBOARD'], flags: [] },
     parent: { label: '家長', description: '', permissions: [], flags: ['parent', 'portal_only'] },
+    teacher: { label: '教師', description: '', permissions: ['DASHBOARD'], flags: ['portal_only'] },
     custom_x: { label: '自訂X', description: '', permissions: ['DASHBOARD'], flags: [] },
   },
 }
@@ -88,16 +89,50 @@ describe('RoleDetailPanel', () => {
   })
 
   it('儲存：confirm（含帳號數文案）→ updateRole payload 含 flags 且保留 portal_only；一律送 permissions', async () => {
-    const w = mountPanel('parent', 5)
+    const w = mountPanel('teacher', 5)
     const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
     await (w.vm as unknown as { handleSave: () => Promise<void> }).handleSave()
     await flushPromises()
     expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('5 個帳號'), expect.any(String), expect.any(Object))
     const payload = vi.mocked(updateRole).mock.calls[0][1] as { flags?: string[]; permissions?: string[] }
     expect(payload.flags).toContain('portal_only')
-    expect(payload.flags).toContain('parent')
-    expect(payload.permissions).toEqual([])
+    expect(payload.permissions).toEqual(['DASHBOARD'])
     confirmSpy.mockRestore()
+  })
+
+  // 整合審查 R7／R14（F46／MT-69）：全域 parent 角色由各分校共用，後端 update_role 一律
+  // 403 並寫高風險 BLOCKED_UPDATE 稽核；前端不能讓正常操作走到那一步。
+  it('全域角色（parent）：不可儲存——儲存鈕停用、handleSave 不跳 confirm 也不送 API', async () => {
+    const w = mountPanel('parent', 5)
+    expect((w.find('[data-testid="save-role"]').element as HTMLButtonElement).disabled).toBe(true)
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    await (w.vm as unknown as { handleSave: () => Promise<void> }).handleSave()
+    await flushPromises()
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(vi.mocked(updateRole)).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
+  })
+
+  it('全域角色（parent）：顯示「全域角色由平台管理」，名稱／說明／身份全部唯讀', async () => {
+    const w = mountPanel('parent', 0)
+    const vm = w.vm as unknown as { activeTab: string; superAdminDisabled: boolean; parentDisabled: boolean }
+    expect(w.find('[data-testid="global-role-notice"]').text()).toContain('全域角色由平台管理')
+    vm.activeTab = 'basic'
+    await flushPromises()
+    expect((w.find('input[data-testid="role-label-input"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((w.find('textarea[data-testid="role-description-input"]').element as HTMLTextAreaElement).disabled).toBe(true)
+    // 呼叫者是 super_admin 也不行：全域角色的 flag 是全平台共用
+    expect(vm.superAdminDisabled).toBe(true)
+    expect(vm.parentDisabled).toBe(true)
+  })
+
+  it('分校角色不受全域唯讀影響：沒有說明、名稱可編輯、可儲存', async () => {
+    const w = mountPanel('custom_x', 0)
+    expect(w.find('[data-testid="global-role-notice"]').exists()).toBe(false)
+    expect((w.find('[data-testid="save-role"]').element as HTMLButtonElement).disabled).toBe(false)
+    ;(w.vm as unknown as { activeTab: string }).activeTab = 'basic'
+    await flushPromises()
+    expect((w.find('input[data-testid="role-label-input"]').element as HTMLInputElement).disabled).toBe(false)
   })
 
   it('儲存 confirm 取消 → 不送 API', async () => {

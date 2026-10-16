@@ -70,7 +70,7 @@ function runAction(): void {
   border-radius: 999px;
   background: var(--pt-surface-card, #fff);
   color: var(--brand-primary, #0d9053);
-  font-size: 14px; font-weight: 500;
+  font-size: 0.875rem; font-weight: 500;
   cursor: pointer;
 }
 .cta:active { background: var(--brand-primary-soft, #ecfdf5); }

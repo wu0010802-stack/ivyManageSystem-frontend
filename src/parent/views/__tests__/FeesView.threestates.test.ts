@@ -10,11 +10,12 @@ import { createPinia, setActivePinia } from 'pinia'
 // ── 可控的 mock：讓 getFeesSummary / listFeeRecords 可在各 test 動態設定 ──
 const summaryMock = vi.fn()
 const recordsMock = vi.fn()
+const paymentsMock = vi.fn()
 
 vi.mock('@/parent/api/fees', () => ({
   getFeesSummary: (...args: unknown[]) => summaryMock(...args),
   listFeeRecords: (...args: unknown[]) => recordsMock(...args),
-  getFeePayments: vi.fn().mockResolvedValue({ data: { payments: [], refunds: [] } }),
+  getFeePayments: (...args: unknown[]) => paymentsMock(...args),
 }))
 
 vi.mock('@/parent/stores/children', () => ({
@@ -171,3 +172,23 @@ describe('FeesView 三態（Task 9）', () => {
     w.unmount()
   })
 })
+
+ it('收據載入失敗不顯示尚無繳費，重試後才開放複製', async () => {
+   summaryMock.mockResolvedValue(SUCCESS_SUMMARY)
+   recordsMock.mockResolvedValue(SUCCESS_RECORDS)
+   paymentsMock.mockRejectedValueOnce(new Error('測試失敗')).mockResolvedValueOnce({ data: { payments: [{ amount: 3000, receipt_no: 'TEST' }], refunds: [] } })
+   const FeesView = (await import('@/parent/views/FeesView.vue')).default
+   const w = mount(FeesView, { global: { stubs: { ...STUBS, FeeReceiptSheet: false, ParentBottomSheet: { props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' } } } })
+   await flushPromises()
+   w.findComponent({ name: 'FeeListGroup' }).vm.$emit('record-click', SUCCESS_RECORDS.data.items[0])
+   await flushPromises()
+   expect(w.text()).toContain('收據載入失敗')
+   expect(w.text()).not.toContain('尚無繳費')
+   expect(w.text()).not.toContain('複製收據資訊')
+   await w.get('[data-testid="receipt-retry"]').trigger('click')
+   await flushPromises()
+   expect(w.text()).toContain('複製收據資訊')
+   expect(w.text()).toContain('TEST')
+   expect(paymentsMock).toHaveBeenCalledTimes(2)
+   w.unmount()
+ })

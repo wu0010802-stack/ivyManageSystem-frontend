@@ -12,6 +12,7 @@ import {
   publishClassroomYearPlan,
   unpublishClassroomYearPlan,
   cancelClassroomYearPlan,
+  carryOverClassroomYearPlanTeachers,
 } from '@/api/classroomYearPlan'
 import type { Schema } from '@/api/_generated/typed'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -31,6 +32,7 @@ type PlanDetailOut = Schema<'PlanDetailOut'>
 type PreviewOut = Schema<'PreviewOut'>
 type IssueOut = Schema<'IssueOut'>
 type RegenerateResultOut = Schema<'RegenerateResultOut'>
+type CarryOverTeachersResultOut = Schema<'PlanCarryOverTeachersResultOut'>
 export type BulkOp = 'assign' | 'retain' | 'graduate' | 'exclude' | 'reset'
 
 interface AxiosLikeError {
@@ -245,6 +247,18 @@ export function useYearPlanWorkspace() {
     return result != null
   }
 
+  /** 沿用原班老師：只填空格、不覆蓋；回傳實際填入與略過筆數（由後端判定）。 */
+  async function carryOverTeachers(): Promise<CarryOverTeachersResultOut | null> {
+    if (!plan.value) return null
+    const planId = plan.value.id
+    const baseVersion = plan.value.version
+    return _runMutation(
+      () => carryOverClassroomYearPlanTeachers(planId, { base_version: baseVersion }).then(r => r.data),
+      'useYearPlanWorkspace.carryOverTeachers',
+      '沿用原班老師失敗',
+    )
+  }
+
   /** 發布前摘要（逐班分派、畢業/排除名單、blocking/warnings）；發布 dialog 開啟時載入。 */
   async function loadPreview(): Promise<void> {
     if (!plan.value) return
@@ -335,6 +349,7 @@ export function useYearPlanWorkspace() {
     updateClass,
     deleteClass,
     bulkUpdateStudents,
+    carryOverTeachers,
     preview,
     previewLoading,
     loadPreview,

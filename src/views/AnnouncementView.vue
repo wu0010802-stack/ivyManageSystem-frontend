@@ -14,6 +14,7 @@ import {
   uploadAnnouncementAttachment,
   deleteAnnouncementAttachment,
 } from '@/api/announcements'
+import { getAnnouncementCategories } from '@/api/announcementCategories'
 import { getStudents } from '@/api/students'
 import {
   buildParentRecipientsPayload,
@@ -25,9 +26,12 @@ import { useAllClassroomStore } from '@/stores/classroomAll'
 import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
 import { Top, Document } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
 import { useTableFilters } from '@/composables/useTableFilters'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { previewIconFor } from '@/constants/announcementCategoryIcons'
+import type { Schema } from '@/api/_generated/typed'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 
@@ -45,6 +49,9 @@ type AttachmentItem = {
   thumb_url: string | null
 }
 
+type AnnouncementCategoryRow = Schema<'AnnouncementCategoryOut'>
+type CategoryBrief = Schema<'AnnouncementCategoryBriefOut'>
+
 interface AnnouncementItem {
   id: number
   title: string
@@ -60,6 +67,7 @@ interface AnnouncementItem {
   expires_at?: string | null
   status?: 'scheduled' | 'active' | 'expired'
   attachments?: AttachmentItem[]
+  category?: CategoryBrief | null
   [key: string]: unknown
 }
 
@@ -84,6 +92,9 @@ const onAnnFilterChange = (v: Record<string, unknown>) => {
 }
 const dialogVisible = ref(false)
 const isEdit = ref(false)
+const recipientSettingsLoading = ref(false)
+const recipientSettingsReady = ref(true)
+let recipientHydrationEpoch = 0
 const employeeStore = useEmployeeStore()
 const classroomStore = useAllClassroomStore()
 const employeeOptions = computed(() =>
@@ -100,6 +111,26 @@ const classroomOptions = computed(() =>
     label: c.label,
   }))
 )
+
+// 公告分類（anncat01）：下拉選單資料源，新公告預設帶入該 tenant 的 is_default 分類。
+const categories = ref<AnnouncementCategoryRow[]>([])
+const fetchCategories = async () => {
+  try {
+    const res = await getAnnouncementCategories()
+    categories.value = res.data.items
+  } catch (error) {
+    ElMessage.warning(apiError(error, '載入公告分類失敗'))
+  }
+}
+const defaultCategoryId = computed(
+  () => categories.value.find((c) => c.is_default)?.id ?? null,
+)
+
+// 公告受眾範圍獨立權限碼（2026-09-08 anncat01）：SCHOOL_WRITE 控「全部家長／校園」，
+// CLASS_WRITE 控「指定班級」；scope='student'（指定學生）與既有 preserved
+// guardian/classroom 項不受影響，仍只需基礎 ANNOUNCEMENTS_WRITE。
+const canScopeSchool = computed(() => hasPermission('ANNOUNCEMENTS_SCHOOL_WRITE'))
+const canScopeClass = computed(() => hasPermission('ANNOUNCEMENTS_CLASS_WRITE'))
 
 const priorityOptions: { value: string; label: string; type: ElTagType }[] = [
   { value: 'normal', label: '一般', type: 'info' },
@@ -181,6 +212,7 @@ const form = reactive<{
   title: string
   content: string
   priority: string
+  category_id: number | null
   is_pinned: boolean
   restrict_recipients: boolean
   target_employee_ids: number[]
@@ -194,6 +226,7 @@ const form = reactive<{
   title: '',
   content: '',
   priority: 'normal',
+  category_id: null,
   is_pinned: false,
   restrict_recipients: false,
   target_employee_ids: [],
@@ -247,6 +280,7 @@ const resetForm = () => {
   form.title = ''
   form.content = ''
   form.priority = 'normal'
+  form.category_id = defaultCategoryId.value
   form.is_pinned = false
   form.restrict_recipients = false
   form.target_employee_ids = []
@@ -262,16 +296,23 @@ const resetForm = () => {
 }
 
 const openAdd = () => {
+  recipientHydrationEpoch += 1
+  recipientSettingsLoading.value = false
+  recipientSettingsReady.value = true
   resetForm()
   isEdit.value = false
   dialogVisible.value = true
 }
 
 const openEdit = async (row: AnnouncementItem) => {
+  const requestEpoch = ++recipientHydrationEpoch
+  recipientSettingsLoading.value = true
+  recipientSettingsReady.value = false
   form.id = row.id
   form.title = row.title
   form.content = row.content
   form.priority = row.priority
+  form.category_id = row.category?.id ?? null
   form.is_pinned = row.is_pinned
   form.publish_at = (row.publish_at as string | null) ?? null
   form.expires_at = (row.expires_at as string | null) ?? null
@@ -293,6 +334,7 @@ const openEdit = async (row: AnnouncementItem) => {
       getAnnouncementRecipients(row.id),
       getAnnouncementParentRecipients(row.id),
     ])
+    if (requestEpoch !== recipientHydrationEpoch || form.id !== row.id || !dialogVisible.value) return
     const empIds: number[] = (recRes.data as { employee_ids?: number[] })?.employee_ids || []
     form.target_employee_ids = empIds
     form.restrict_recipients = empIds.length > 0
@@ -303,10 +345,22 @@ const openEdit = async (row: AnnouncementItem) => {
     form.parent_target_classroom_ids = scope.classroomIds
     form.parent_target_student_ids = scope.studentIds
     preservedParentItems.value = scope.preservedItems
+    recipientSettingsReady.value = true
   } catch (error) {
-    ElMessage.warning('讀取設定失敗，部分欄位可能未填入')
+    if (requestEpoch !== recipientHydrationEpoch) return
+    ElMessage.warning('讀取受眾設定失敗，請取消後重試')
     form.parent_visibility = 'unchanged'
+  } finally {
+    if (requestEpoch === recipientHydrationEpoch) {
+      recipientSettingsLoading.value = false
+    }
   }
+}
+
+const invalidateRecipientHydration = () => {
+  recipientHydrationEpoch += 1
+  recipientSettingsLoading.value = false
+  recipientSettingsReady.value = false
 }
 
 const buildParentRecipients = () => buildParentRecipientsPayload({
@@ -319,6 +373,11 @@ const buildParentRecipients = () => buildParentRecipientsPayload({
 const submitLoading = ref(false)
 
 const handleSubmit = async () => {
+  if (recipientSettingsLoading.value || (isEdit.value && !recipientSettingsReady.value)) return
+  if (form.restrict_recipients && form.target_employee_ids.length === 0) {
+    ElMessage.warning('已選「指定員工」，請至少選擇一位員工')
+    return
+  }
   if (!form.title.trim() || !form.content.trim()) {
     ElMessage.warning('請填寫標題和內容')
     return
@@ -347,6 +406,7 @@ const handleSubmit = async () => {
         title: form.title,
         content: form.content,
         priority: form.priority,
+        category_id: form.category_id,
         is_pinned: form.is_pinned,
         target_employee_ids: recipientIds,
         publish_at: form.publish_at,
@@ -357,6 +417,7 @@ const handleSubmit = async () => {
         title: form.title,
         content: form.content,
         priority: form.priority,
+        category_id: form.category_id,
         is_pinned: form.is_pinned,
         target_employee_ids: recipientIds.length > 0 ? recipientIds : null,
         publish_at: form.publish_at,
@@ -455,6 +516,7 @@ const announcementCardColumns = [
 
 onMounted(() => {
   fetchAnnouncements()
+  fetchCategories()
   employeeStore.fetchEmployees()
   classroomStore.fetchClassrooms()
 })
@@ -500,6 +562,18 @@ onMounted(() => {
         </template>
       </el-table-column>
 
+      <el-table-column label="分類" width="110" align="center">
+        <template #default="{ row }">
+          <span v-if="row.category" class="category-option">
+            <el-icon :size="14" :color="row.category.color || undefined">
+              <component :is="previewIconFor(row.category.icon)" />
+            </el-icon>
+            {{ row.category.name }}
+          </span>
+          <span v-else class="text-muted">—</span>
+        </template>
+      </el-table-column>
+
       <el-table-column label="狀態" width="90" align="center">
         <template #default="{ row }">
           <el-tag v-if="row.status === 'scheduled'" type="info" size="small">預定</el-tag>
@@ -524,14 +598,19 @@ onMounted(() => {
 
       <el-table-column label="對象" width="100" align="center">
         <template #default="{ row }">
-          <el-tag v-if="!row.recipient_count" type="primary" size="small">全員</el-tag>
-          <el-tag v-else type="warning" size="small">{{ row.recipient_count }} 位員工</el-tag>
+          <el-tag v-if="!row.recipient_count && !row.parent_recipient_count" type="primary" size="small">全員</el-tag>
+          <template v-else>
+            <el-tag v-if="row.recipient_count" type="warning" size="small">{{ row.recipient_count }} 位員工</el-tag>
+            <el-tag v-if="row.parent_recipient_count" type="success" size="small">含家長</el-tag>
+          </template>
         </template>
       </el-table-column>
 
       <el-table-column label="已讀預覽" min-width="220">
         <template #default="{ row }">
           <div class="read-preview-cell">
+            <!-- 家長已讀另計：純家長導向公告 read_count 恆 0，原本會誤顯「尚未有人已讀」 -->
+            <span v-if="row.parent_read_count > 0" class="parent-read-count">家長已讀 {{ row.parent_read_count }} 人</span>
             <template v-if="row.read_count > 0">
               <div class="read-preview-tags">
                 <el-tag
@@ -571,7 +650,7 @@ onMounted(() => {
                 </div>
               </el-popover>
             </template>
-            <span v-else class="text-muted">尚未有人已讀</span>
+            <span v-else-if="!row.parent_read_count" class="text-muted">尚未有人已讀</span>
           </div>
         </template>
       </el-table-column>
@@ -668,6 +747,7 @@ onMounted(() => {
       v-model="dialogVisible"
       width="600px"
       :close-on-click-modal="false"
+      @closed="invalidateRecipientHydration"
     >
       <el-form label-width="80px">
         <el-form-item label="標題">
@@ -681,6 +761,29 @@ onMounted(() => {
               :label="opt.label"
               :value="opt.value"
             />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="分類">
+          <el-select
+            v-model="form.category_id"
+            placeholder="請選擇分類"
+            clearable
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="cat in categories"
+              :key="cat.id"
+              :label="cat.name"
+              :value="cat.id"
+            >
+              <span class="category-option">
+                <el-icon :size="16" :color="cat.color || undefined">
+                  <component :is="previewIconFor(cat.icon)" />
+                </el-icon>
+                {{ cat.name }}
+                <el-tag v-if="cat.is_default" size="small" type="success" effect="plain">預設</el-tag>
+              </span>
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="置頂">
@@ -763,8 +866,17 @@ onMounted(() => {
         <el-form-item label="家長端">
           <el-radio-group v-model="form.parent_visibility">
             <el-radio value="off">不對家長公開</el-radio>
-            <el-radio value="all">全部家長</el-radio>
-            <el-radio value="classroom">指定班級</el-radio>
+            <!-- ANNOUNCEMENTS_SCHOOL_WRITE／ANNOUNCEMENTS_CLASS_WRITE（anncat01）：
+                 與基礎 ANNOUNCEMENTS_WRITE 互不隱含的獨立範圍碼，缺碼即停用對應選項
+                 （指定學生／既有進階設定不受影響，仍只需 ANNOUNCEMENTS_WRITE）。 -->
+            <el-radio value="all" :disabled="!canScopeSchool">
+              全部家長
+              <span v-if="!canScopeSchool" class="text-muted">（需校園發布權限）</span>
+            </el-radio>
+            <el-radio value="classroom" :disabled="!canScopeClass">
+              指定班級
+              <span v-if="!canScopeClass" class="text-muted">（需班級發布權限）</span>
+            </el-radio>
             <el-radio value="custom" data-test="parent-custom-radio">指定學生</el-radio>
             <el-radio v-if="form.parent_visibility === 'unchanged'" value="unchanged" disabled>
               讀取失敗，將不變更
@@ -817,7 +929,12 @@ onMounted(() => {
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitLoading">
+        <el-button
+          type="primary"
+          @click="handleSubmit"
+          :loading="submitLoading || recipientSettingsLoading"
+          :disabled="recipientSettingsLoading || (isEdit && !recipientSettingsReady)"
+        >
           {{ isEdit ? '更新' : '發佈' }}
         </el-button>
       </template>
@@ -834,6 +951,12 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.parent-read-count {
+  font-size: var(--text-xs);
+  color: var(--color-success-darker);
+  font-weight: 600;
 }
 
 .read-preview-tags {
@@ -874,6 +997,12 @@ onMounted(() => {
 
 .text-muted {
   color: var(--text-tertiary);
+}
+
+.category-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .attachments-block {

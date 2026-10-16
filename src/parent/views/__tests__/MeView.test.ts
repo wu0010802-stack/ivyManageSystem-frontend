@@ -24,9 +24,6 @@ vi.mock('@/parent/composables/useDataExport', () => ({
 vi.mock('@/parent/components/more/UserHeroCard.vue', () => ({
   default: { template: '<div data-testid="user-hero-card" />' },
 }))
-vi.mock('@/parent/components/me/FeeSummaryCard.vue', () => ({
-  default: { template: '<div data-testid="fee-summary-card" />' },
-}))
 vi.mock('@/parent/components/me/ChildrenList.vue', () => ({
   default: { template: '<div data-testid="children-list" />' },
 }))
@@ -128,5 +125,27 @@ describe('MeView — 下載個人資料 button', () => {
 
     expect(w.text()).toContain('50MB')
     expect(w.find('[data-testid="confirm-export"]').exists()).toBe(true)
+  })
+})
+
+describe('MeView 入口收斂（2026-09-02）', () => {
+  it('不再顯示費用摘要卡', () => {
+    const w = mountMeView()
+    // FeeSummaryCard 的 vi.mock 已移除（Task 8 會刪掉該元件檔），
+    // 因此改以真實元件的根 class 與標題斷言；沿用 mock 的 data-testid
+    // 會在元件仍存在時假綠（該元件本身並沒有那個 data-testid）。
+    expect(w.find('.fee-summary-card').exists()).toBe(false)
+    expect(w.text()).not.toContain('繳費中心')
+  })
+
+  it('偏好清單不再有「費用查詢」', () => {
+    const w = mountMeView()
+    expect(w.text()).not.toContain('費用查詢')
+  })
+
+  it('偏好清單新增「常見問題」，連到 /assistant', () => {
+    const w = mountMeView()
+    expect(w.text()).toContain('常見問題')
+    expect(w.find('a[href="/assistant"]').exists()).toBe(true)
   })
 })

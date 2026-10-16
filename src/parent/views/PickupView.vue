@@ -3,7 +3,7 @@
  * 臨時接送：進行中/歷史授權列表 + 常用接送人管理。
  * 建立新授權導去 /pickup/new（Task 11）。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
@@ -18,6 +18,7 @@ import {
   regeneratePickupCode,
 } from '../api/pickup'
 import { toast } from '../utils/toast'
+import { copyText } from '../utils/clipboard'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import ParentBottomSheet from '../components/ParentBottomSheet.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -29,6 +30,8 @@ import M3Chip from '../components/m3/M3Chip.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import DiscardChangesPrompt from '../components/DiscardChangesPrompt.vue'
+import { useSheetCloseGuard } from '../composables/useUnsavedGuard'
 
 interface PickupAuth {
   id: number
@@ -91,18 +94,28 @@ const STATUS_LABEL: Record<string, string> = {
   expired: '已過期',
 }
 
+// F09：常用接送人依「頁首目前孩子」載入；序號守衛讓換孩子後較舊的回應不得覆寫，
+// personsSid 記錄目前清單所屬（或正在載入）的孩子，供 watch 判斷是否需重載。
+let personsSeq = 0
+let personsSid: number | null = null
+
 async function fetchData() {
   loading.value = true
   loadError.value = false
+  const seq = ++personsSeq
+  const sid = selectedId.value
+  personsSid = sid
   try {
     const [authRes, personRes] = await Promise.all([
       listPickupAuthorizations(),
-      selectedId.value
-        ? listPickupPersons(selectedId.value)
+      sid
+        ? listPickupPersons(sid)
         : Promise.resolve({ data: { items: [] } }),
     ])
     authorizations.value = (authRes.data as { items?: PickupAuth[] })?.items || []
-    persons.value = (personRes.data as { items?: PickupPerson[] })?.items || []
+    if (seq === personsSeq) {
+      persons.value = (personRes.data as { items?: PickupPerson[] })?.items || []
+    }
   } catch (err) {
     loadError.value = true
     _toastFriendly(err, '載入失敗')
@@ -110,6 +123,21 @@ async function fetchData() {
     loading.value = false
   }
 }
+
+watch(selectedId, async (sid) => {
+  if (sid === personsSid) return
+  persons.value = []
+  const seq = ++personsSeq
+  personsSid = sid
+  if (!sid) return
+  try {
+    const res = await listPickupPersons(sid)
+    if (seq !== personsSeq) return
+    persons.value = (res.data as { items?: PickupPerson[] })?.items || []
+  } catch (err) {
+    if (seq === personsSeq) _toastFriendly(err, '載入常用接送人失敗')
+  }
+})
 
 function goCreate() {
   router.push('/pickup/new')
@@ -119,14 +147,63 @@ function goCreate() {
 const codeCardAuth = ref<PickupAuth | null>(null)
 const codeCardCode = ref('')
 
-async function askRegenerate(auth: PickupAuth) {
+async function refreshAuthorizations() {
+  try {
+    const res = await listPickupAuthorizations()
+    authorizations.value = (res.data as { items?: PickupAuth[] })?.items || []
+  } catch {
+    // 已以回應就地更新碼；背景對齊失敗不打擾使用者
+  }
+}
+
+// 重發會讓舊碼立即失效（同批授權一起換），家長若已把舊碼傳給接送人，對方到園會
+// 被擋下——所以先確認並說清楚後果，不再一按就換。
+const regenTarget = ref<PickupAuth | null>(null)
+const regenOpen = computed({
+  get: () => regenTarget.value !== null,
+  set: (v: boolean) => {
+    if (!v) regenTarget.value = null
+  },
+})
+const regenMessage = computed(() => {
+  const auth = regenTarget.value
+  if (!auth) return ''
+  const sameBatch = auth.batch_key
+    ? authorizations.value.filter((a) => a.batch_key === auth.batch_key && a.effective_status === 'active').length
+    : 1
+  const batchNote = sameBatch > 1 ? `同一批的 ${sameBatch} 筆授權會一起換成新碼。` : ''
+  return `重發後，原本的取件碼${auth.pickup_code ? `「${auth.pickup_code}」` : ''}會立即失效，${batchNote}請記得把新碼再傳給${auth.person_name}。`
+})
+
+function askRegenerate(auth: PickupAuth) {
+  regenTarget.value = auth
+}
+
+async function doRegenerate() {
+  const auth = regenTarget.value
+  regenTarget.value = null
+  if (!auth) return
   try {
     const { data } = await regeneratePickupCode(auth.id)
-    codeCardCode.value = (data as { code: string }).code
+    const code = (data as { code: string }).code
+    codeCardCode.value = code
     codeCardAuth.value = auth
+    // F10：後端重發會更新整批授權的碼；畫面上同批（無 batch_key 則僅該筆）仍顯示的
+    // 授權卡立刻換成新碼，再背景重載授權清單對齊後端，不得保留已失效舊碼。
+    authorizations.value = authorizations.value.map((a) =>
+      a.id === auth.id || (auth.batch_key && a.batch_key === auth.batch_key)
+        ? { ...a, pickup_code: code }
+        : a,
+    )
+    refreshAuthorizations()
   } catch (err) {
     _toastFriendly(err, '重發取件碼失敗')
   }
+}
+
+async function copyAuthCode(code: string) {
+  if (await copyText(code)) toast.success('已複製取件碼')
+  else toast.warn('無法自動複製，請長按取件碼手動複製')
 }
 
 // ── 取消授權 ──────────────────────────────────────────────────────────
@@ -164,9 +241,18 @@ const personForm = ref({
   photoFile: null as File | null,
 })
 
+// 常用接送人表單在 sheet 內：改過內容後點背景／ESC 先確認
+let personFormSnapshot = ''
+function personFormKey(): string {
+  const f = personForm.value
+  return JSON.stringify([f.personName, f.personRelation, f.personPhone, f.note, f.photoFile?.name ?? null])
+}
+const personSheet = useSheetCloseGuard(showPersonForm, () => personFormKey() !== personFormSnapshot)
+
 function openAddPerson() {
   editingPersonId.value = null
   personForm.value = { personName: '', personRelation: '', personPhone: '', note: '', photoFile: null }
+  personFormSnapshot = personFormKey()
   showPersonForm.value = true
 }
 
@@ -176,6 +262,7 @@ function openEditPerson(p: PickupPerson) {
     personName: p.person_name, personRelation: p.person_relation,
     personPhone: p.person_phone, note: (p.note as string) || '', photoFile: null,
   }
+  personFormSnapshot = personFormKey()
   showPersonForm.value = true
 }
 
@@ -248,12 +335,12 @@ onMounted(async () => {
 
 <template>
   <div class="pickup-view">
-    <ChildContextHeader variant="page" />
+    <ChildContextHeader variant="page" :inset="false" />
 
     <M3Card class="create-cta">
       <p class="create-cta-text">臨時有事無法接送？授權親友代為到園接送。</p>
       <M3Button variant="filled" @click="goCreate">
-        <template #icon><span class="material-symbols-rounded">add</span></template>
+        <template #icon><span class="material-symbols-rounded" aria-hidden="true">add</span></template>
         建立臨時接送授權
       </M3Button>
     </M3Card>
@@ -281,16 +368,25 @@ onMounted(async () => {
             </div>
             <M3Chip>{{ STATUS_LABEL[a.effective_status] || a.effective_status }}</M3Chip>
           </div>
-          <div
-            v-if="a.pickup_code && a.effective_status === 'active'"
-            class="auth-code"
-            data-testid="active-pickup-code"
-          >
-            取件碼：<span class="auth-code-value">{{ a.pickup_code }}</span>
+          <div v-if="a.pickup_code && a.effective_status === 'active'" class="auth-code-row">
+            <div class="auth-code" data-testid="active-pickup-code">
+              取件碼：<span class="auth-code-value">{{ a.pickup_code }}</span>
+            </div>
+            <M3Button
+              variant="text"
+              class="auth-action"
+              :aria-label="`複製取件碼 ${a.pickup_code}`"
+              data-testid="copy-pickup-code"
+              @click="copyAuthCode(a.pickup_code)"
+            >
+              <template #icon><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></template>
+              複製
+            </M3Button>
           </div>
+          <!-- 兩顆動作拉開放在兩端、各至少 44px 高，避免單手時誤按到「取消授權」 -->
           <div class="auth-actions">
-            <button type="button" class="link-btn" @click="askRegenerate(a)">重發取件碼</button>
-            <button type="button" class="link-btn danger" @click="askCancel(a)">取消授權</button>
+            <M3Button variant="tonal" class="auth-action" @click="askRegenerate(a)">重發取件碼</M3Button>
+            <M3Button variant="outlined" class="auth-action is-danger" @click="askCancel(a)">取消授權</M3Button>
           </div>
         </M3Card>
       </section>
@@ -346,12 +442,19 @@ onMounted(async () => {
       :title="editingPersonId ? '編輯接送人' : '新增常用接送人'"
       :snap-points="['mid', 'full']"
       default-snap="mid"
+      :before-close="personSheet.beforeClose"
     >
+      <DiscardChangesPrompt
+        v-if="personSheet.promptVisible.value"
+        message="接送人資料還沒儲存，要放棄剛剛填的內容嗎？"
+        @keep="personSheet.keepEditing"
+        @discard="personSheet.discard"
+      />
       <PickupPersonForm
         v-model="personForm"
         :submitting="personSubmitting"
         @submit="submitPerson"
-        @cancel="showPersonForm = false"
+        @cancel="personSheet.requestClose"
       />
     </ParentBottomSheet>
 
@@ -371,6 +474,15 @@ onMounted(async () => {
       />
     </ParentBottomSheet>
 
+    <ConfirmDialog
+      v-model:open="regenOpen"
+      data-testid="regen-confirm"
+      title="重發新的取件碼？"
+      :message="regenMessage"
+      confirm-label="重發"
+      cancel-label="不重發"
+      @confirm="doRegenerate"
+    />
     <ConfirmDialog
       v-model:open="cancelOpen"
       title="確定取消此授權？"
@@ -397,6 +509,8 @@ onMounted(async () => {
   flex-direction: column;
   gap: 16px;
   padding-bottom: 16px;
+  /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
+  padding-inline: var(--space-4, 16px);
 }
 
 .create-cta {
@@ -408,7 +522,7 @@ onMounted(async () => {
 }
 .create-cta-text {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
@@ -431,12 +545,12 @@ onMounted(async () => {
   justify-content: space-between;
 }
 .section-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   margin: 0;
 }
 .empty-hint {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
   padding: 8px 0;
 }
@@ -456,12 +570,18 @@ onMounted(async () => {
   gap: 2px;
 }
 .auth-meta {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
-.auth-code {
+.auth-code-row {
   margin-top: 8px;
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+}
+.auth-code {
+  font-size: 0.8125rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .auth-code-value {
@@ -472,14 +592,20 @@ onMounted(async () => {
 }
 .auth-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 8px;
+  justify-content: space-between;
+  gap: var(--space-4, 16px);
+  margin-top: var(--space-3, 12px);
+}
+.auth-action { min-height: var(--touch-target-min, 44px); }
+.auth-action.is-danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
 }
 .link-btn {
   background: transparent;
   border: none;
   color: var(--m3-primary, var(--brand-primary));
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 4px 0;
   cursor: pointer;
 }
@@ -493,7 +619,7 @@ onMounted(async () => {
   background: transparent;
   border: none;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 8px 0;
   text-align: left;
   cursor: pointer;

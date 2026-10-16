@@ -30,7 +30,7 @@
               type="primary"
               size="large"
               :loading="finalizing"
-              :disabled="!!disabledReason"
+              :disabled="!!disabledReason || finalizing"
               @click="onFinalize"
             >
               整月定案
@@ -50,6 +50,8 @@
           type="danger"
           size="small"
           plain
+          :loading="finalizing"
+          :disabled="finalizing"
           @click="onForceFinalize"
         >
           強制封存（跳過上述問題，需填理由）
@@ -100,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Money, User, WarningFilled } from '@element-plus/icons-vue'
 import StatCard from '@/components/common/StatCard.vue'
@@ -146,22 +148,61 @@ const disabledReason = computed(() => {
 
 const finalizing = ref(false)
 const blockers = ref<string[]>([])
+let finalizeActionEpoch = 0
+let componentActive = true
 
-const runFinalize = async (force = false, forceReason = '') => {
+interface FinalizeTarget {
+    epoch: number
+    year: number
+    month: number
+}
+
+const beginFinalizeAction = (): FinalizeTarget | null => {
+    if (finalizing.value) return null
     finalizing.value = true
+    return { epoch: ++finalizeActionEpoch, year: q.year, month: q.month }
+}
+
+const isFinalizeTargetCurrent = (target: FinalizeTarget): boolean =>
+    componentActive
+    && target.epoch === finalizeActionEpoch
+    && target.year === q.year
+    && target.month === q.month
+
+const finishFinalizeAction = (target: FinalizeTarget): void => {
+    if (target.epoch === finalizeActionEpoch) finalizing.value = false
+}
+
+watch(
+    () => [q.year, q.month],
+    () => {
+        finalizeActionEpoch += 1
+        finalizing.value = false
+        blockers.value = []
+    },
+)
+
+onUnmounted(() => {
+    componentActive = false
+    finalizeActionEpoch += 1
+})
+
+const runFinalize = async (target: FinalizeTarget, force = false, forceReason = '') => {
     try {
         const res = await finalizeMonth({
-            year: q.year,
-            month: q.month,
+            year: target.year,
+            month: target.month,
             force,
             ...(force ? { force_reason: forceReason } : {}),
         })
+        if (!isFinalizeTargetCurrent(target)) return
         blockers.value = []
         const d = res.data
         const skipped = [...(d.skipped_missing ?? []), ...(d.skipped_stale ?? [])]
         ElMessage.success(skipped.length > 0 ? `${d.message}（跳過 ${skipped.length} 筆）` : d.message)
         await settlement.refresh()
     } catch (error) {
+        if (!isFinalizeTargetCurrent(target)) return
         const e = error as { response?: { status?: number; data?: { detail?: unknown } } }
         if (e?.response?.status === 409) {
             const detail = e.response?.data?.detail
@@ -169,25 +210,30 @@ const runFinalize = async (force = false, forceReason = '') => {
         } else {
             notify(error, 'StepFinalize.finalize', null, { prefix: '定案失敗' })
         }
-    } finally {
-        finalizing.value = false
     }
 }
 
 const onFinalize = async () => {
+    const target = beginFinalizeAction()
+    if (!target) return
     try {
         await ElMessageBox.confirm(
-            `將封存 ${q.year} 年 ${q.month} 月共 ${settlement.records.value.length - settlement.finalizedCount.value} 筆未封存薪資，封存後不可再調整。確定定案？`,
+            `將封存 ${target.year} 年 ${target.month} 月共 ${settlement.records.value.length - settlement.finalizedCount.value} 筆未封存薪資，封存後不可再調整。確定定案？`,
             '整月定案',
             { confirmButtonText: '確定封存', cancelButtonText: '取消', type: 'warning' },
         )
     } catch {
+        finishFinalizeAction(target)
         return
     }
-    await runFinalize()
+    if (!isFinalizeTargetCurrent(target)) return
+    await runFinalize(target)
+    finishFinalizeAction(target)
 }
 
 const onForceFinalize = async () => {
+    const target = beginFinalizeAction()
+    if (!target) return
     let reason: string
     try {
         const res = await ElMessageBox.prompt(
@@ -202,9 +248,12 @@ const onForceFinalize = async () => {
         )
         reason = (res as { value: string }).value
     } catch {
+        finishFinalizeAction(target)
         return
     }
-    await runFinalize(true, reason.trim())
+    if (!isFinalizeTargetCurrent(target)) return
+    await runFinalize(target, true, reason.trim())
+    finishFinalizeAction(target)
 }
 
 // in-flight 守衛：await 期間重複觸發會開第二個 prompt（後端會拒，但 UX 噪音）

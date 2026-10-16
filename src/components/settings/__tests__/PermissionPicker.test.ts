@@ -252,7 +252,7 @@ describe('PermissionPicker 渲染', () => {
     const w = mountPicker([])
     const hint = w.find('[data-perm-page="studentsMain"] .perm-shared-hint')
     expect(hint.exists()).toBe(true)
-    expect(hint.text()).toContain('統計圖表')
+    expect(hint.text()).toContain('在籍統計')
   })
 
   it('多檢視頁顯示各 view label；單檢視頁顯示「檢視」', () => {

@@ -154,6 +154,57 @@ afterEach(() => {
 })
 
 describe('RecruitmentAddressHeatmap', () => {
+  /**
+   * F65（MT-59）：非預設租戶沒設園所座標時，上游不再塞義華座標（也不再塞 0,0）。
+   * 熱點圖不得以一個不存在的「本園」為中心畫圖——改顯示「尚未設定本園座標」。
+   */
+  it('本園座標未設定時不建立地圖、改提示先設定座標（F65）', async () => {
+    const RecruitmentAddressHeatmap = await loadComponent()
+    leafletMap.mockClear()
+
+    const wrapper = mount(RecruitmentAddressHeatmap, {
+      props: {
+        hotspots: [
+          {
+            address: '高雄市仁武區仁雄路1號',
+            district: '仁武區',
+            visit: 2,
+            deposit: 1,
+            lat: 22.7011,
+            lng: 120.3478,
+            geocode_status: 'resolved',
+          },
+        ],
+        campus: { campus_name: '本園', campus_lat: null, campus_lng: null },
+        recordsWithAddress: 2,
+        totalHotspots: 1,
+        geocodedHotspots: 1,
+        pendingHotspots: 0,
+        staleHotspots: 0,
+        failedHotspots: 0,
+        providerAvailable: true,
+        providerName: 'google',
+        schoolLat: Number.NaN,
+        schoolLng: Number.NaN,
+        canWrite: true,
+        syncingMode: '',
+        fmtPct: (deposit, visit) => (visit ? `${(deposit / visit * 100).toFixed(1)}%` : '0%'),
+        nearbySchools: [],
+        nearbySchoolsLoading: false,
+        nearbySchoolsAvailable: true,
+        nearbySchoolsMessage: '',
+      },
+      global: {
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption, ElInput },
+      },
+    })
+    await flushPromises()
+
+    expect(leafletMap).not.toHaveBeenCalled()
+    expect(wrapper.find('.heatmap-map').exists()).toBe(false)
+    expect(wrapper.find('.el-empty').text()).toContain('尚未設定本園座標')
+  })
+
   it('initializes the map after async hotspot data inserts the map container', async () => {
     const RecruitmentAddressHeatmap = await loadComponent()
     leafletMap.mockClear()

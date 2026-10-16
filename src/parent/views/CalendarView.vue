@@ -32,6 +32,11 @@ const days = ref(7)
  * 「這個月還有什麼活動」。兩者共用同一份 items 形狀，只差查詢區間。
  */
 const mode = ref<'days' | 'month'>('days')
+let fetchEpoch = 0
+// S04：最近一次成功套用到畫面的範圍；切換失敗時退回此範圍，讓標題／按鈕狀態與
+// 畫面上仍顯示的資料一致，且再按同一顆按鈕可重試（selectMonth 對 month 模式會直接 return）。
+let appliedMode: 'days' | 'month' = 'days'
+let appliedDays = 7
 const now = new Date()
 const monthYear = now.getFullYear()
 const monthNo = now.getMonth() + 1
@@ -47,7 +52,7 @@ const CATEGORY_META: Record<string, { icon: string; tone: string; label: string 
   holiday:       { icon: 'celebration',    tone: 'sky',   label: '假日' },
   contact_book:  { icon: 'menu_book',      tone: 'leaf',  label: '聯絡簿' },
   leave:         { icon: 'event_busy',     tone: 'sky',   label: '請假' },
-  medication:    { icon: 'medication',     tone: 'grape', label: '用藥' },
+  medication:    { icon: 'medication',     tone: 'grape', label: '用藥委託' },
 }
 
 const groupedByDate = computed(() => {
@@ -64,18 +69,31 @@ const groupedByDate = computed(() => {
 })
 
 async function fetchData() {
+  const requestEpoch = ++fetchEpoch
+  const requestedMode = mode.value
+  const requestedDays = days.value
   loading.value = true
   try {
     const { data: d } =
-      mode.value === 'month'
+      requestedMode === 'month'
         ? await getMonthAgenda(monthYear, monthNo)
-        : await getWeekAgenda(days.value)
+        : await getWeekAgenda(requestedDays)
+    if (
+      requestEpoch !== fetchEpoch
+      || mode.value !== requestedMode
+      || (requestedMode === 'days' && days.value !== requestedDays)
+    ) return
     data.value = d
+    appliedMode = requestedMode
+    appliedDays = requestedDays
   } catch (err) {
+    if (requestEpoch !== fetchEpoch) return
+    mode.value = appliedMode
+    days.value = appliedDays
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入行事曆失敗'))
   } finally {
-    loading.value = false
+    if (requestEpoch === fetchEpoch) loading.value = false
   }
 }
 
@@ -121,6 +139,7 @@ onMounted(() => {
   }, 60 * 1000)
 })
 onBeforeUnmount(() => {
+  fetchEpoch += 1
   if (todayInterval) clearInterval(todayInterval)
 })
 
@@ -136,8 +155,8 @@ function dayLabel(iso: string) {
 
 <template>
   <div class="cal-view">
+    <!-- top bar 已標「行事曆」，hero eyebrow 同名屬冗餘，僅留內容性標題 -->
     <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">行事曆</p>
       <h1 class="pt-page-hero-title">{{ rangeLabel }}</h1>
       <div class="day-filter" role="group" aria-label="行事曆範圍">
         <button
@@ -195,14 +214,14 @@ function dayLabel(iso: string) {
             @click="gotoItem(it)"
           >
             <span class="cat-dot" :class="`tone-${CATEGORY_META[it.category || '']?.tone || 'leaf'}`" aria-hidden="true">
-              <span class="material-symbols-rounded">{{ CATEGORY_META[it.category || '']?.icon || 'info' }}</span>
+              <span class="material-symbols-rounded" aria-hidden="true">{{ CATEGORY_META[it.category || '']?.icon || 'info' }}</span>
             </span>
             <span class="content">
               <span class="cat-label">{{ CATEGORY_META[it.category || '']?.label || it.category }}</span>
               <span class="title">{{ it.title }}</span>
               <span v-if="it.subtitle" class="subtitle">{{ it.subtitle }}</span>
             </span>
-            <span v-if="it.requires_acknowledgment" class="pt-pill pt-pill-danger">需簽閱</span>
+            <span v-if="it.requires_acknowledgment" class="pt-pill pt-pill-danger">需簽收</span>
           </button>
         </div>
       </section>
@@ -229,7 +248,7 @@ function dayLabel(iso: string) {
   background: color-mix(in srgb, var(--pt-surface-card, #fff) 70%, transparent);
   border: 1px solid rgba(13, 144, 83, 0.12);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--pt-text-body);
   cursor: pointer;
@@ -259,18 +278,18 @@ function dayLabel(iso: string) {
 }
 .day-label { display: flex; flex-direction: column; gap: 2px; }
 .day-primary {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--pt-text-strong);
 }
 .day-primary.is-today { color: var(--brand-primary, #0d9053); }
 .day-secondary {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;
 }
 .day-count {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;
@@ -325,14 +344,14 @@ function dayLabel(iso: string) {
   min-width: 0;
 }
 .cat-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--pt-text-muted);
 }
 .title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--pt-text-strong);
   overflow: hidden;
@@ -340,7 +359,7 @@ function dayLabel(iso: string) {
   white-space: nowrap;
 }
 .subtitle {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint);
   overflow: hidden;
   text-overflow: ellipsis;

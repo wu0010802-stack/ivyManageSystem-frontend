@@ -20,7 +20,7 @@ withDefaults(defineProps<{
   <div class="row">
     <div class="rail" :class="`tone-${iconTone}`">
       <span class="dot">
-        <span class="material-symbols-rounded">{{ icon }}</span>
+        <span class="material-symbols-rounded" aria-hidden="true">{{ icon }}</span>
       </span>
       <span v-if="!hideConnector" class="line" aria-hidden="true" />
     </div>
@@ -90,7 +90,7 @@ withDefaults(defineProps<{
 }
 .label {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -98,14 +98,14 @@ withDefaults(defineProps<{
 }
 .value {
   margin: 4px 0 0;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--pt-text-strong);
   line-height: 1.4;
 }
 .detail {
   margin: 4px 0 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--pt-text-body);
   line-height: 1.65;
   white-space: pre-wrap;

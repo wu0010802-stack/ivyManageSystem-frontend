@@ -149,7 +149,7 @@ describe('DismissalPosQueueCard', () => {
       expect(w.text()).not.toContain('已通知教師端')
     })
 
-    describe('確認接送按鈕（T-022，2026-08-23 改走 swipe reveal）', () => {
+    describe('確認交接按鈕（T-022，2026-08-23 改走 swipe reveal）', () => {
       function proxyItemWithAuth(overrides: Partial<PosQueueItem> = {}) {
         return proxyItem({
           call: { ...proxyItem().call!, pickup_authorization_id: 900 },
@@ -165,7 +165,7 @@ describe('DismissalPosQueueCard', () => {
         await body.dispatchEvent(new PointerEvent('pointerup', { clientX: -120, pointerId: 1 }))
       }
 
-      it('未滑開前不顯示「確認接送」按鈕文字（藏在 reveal 區），但按鈕已存在 DOM 且 disabled', () => {
+      it('未滑開前不顯示「確認交接」按鈕文字（藏在 reveal 區），但按鈕已存在 DOM 且 disabled', () => {
         const item = proxyItemWithAuth()
         const w = mount(DismissalPosQueueCard, { props: { item } })
         const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]')
@@ -173,13 +173,15 @@ describe('DismissalPosQueueCard', () => {
         expect(btn.attributes('disabled')).not.toBeUndefined()
       })
 
-      it('proxy 卡片帶 pickup_authorization_id 時，滑開後點擊確認接送按鈕 emit confirm-pickup(item) 恰一次', async () => {
+      it('proxy 卡片帶 pickup_authorization_id 時，滑開後點擊確認交接按鈕 emit confirm-pickup(item) 恰一次', async () => {
         const item = proxyItemWithAuth()
         const w = mount(DismissalPosQueueCard, { props: { item } })
 
         await swipeOpen(w)
         const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]')
         expect(btn.attributes('disabled')).toBeUndefined()
+        // 三端語彙統一（管理端、教師端、POS 都叫「確認交接」）
+        expect(btn.text()).toBe('確認交接')
 
         await btn.trigger('click')
 
@@ -198,7 +200,7 @@ describe('DismissalPosQueueCard', () => {
         expect(w.find('.pos-queue-card__cancel-btn').exists()).toBe(true)
       })
 
-      it('非 proxy 卡片不渲染確認接送按鈕，reveal 區只有取消鈕', async () => {
+      it('非 proxy 卡片不渲染確認交接按鈕，reveal 區只有取消鈕', async () => {
         const w = mount(DismissalPosQueueCard, { props: { item: activeItem({ source: 'onsite' }) } })
         await swipeOpen(w)
         expect(w.find('[data-testid="pos-queue-card-confirm-pickup"]').exists()).toBe(false)
@@ -246,7 +248,7 @@ describe('DismissalPosQueueCard', () => {
         expect(w.emitted('confirm-pickup')).toHaveLength(1)
       })
 
-      it('點擊確認接送後不會自動收合（留在滑開狀態供失敗重試）', async () => {
+      it('點擊確認交接後不會自動收合（留在滑開狀態供失敗重試）', async () => {
         const item = proxyItemWithAuth()
         const w = mount(DismissalPosQueueCard, { props: { item } })
         await swipeOpen(w)

@@ -7,13 +7,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import PrivacyRightsView from '../PrivacyRightsView.vue'
+import ConfirmDialog from '../../components/ConfirmDialog.vue'
 
 // ===== Module mocks (hoisted) =====
-const { mockGetMyConsents, mockListMyDsrRequests, mockSubmitOptOutRequest } = vi.hoisted(
+const { mockGetMyConsents, mockListMyDsrRequests, mockSubmitOptOutRequest, mockWriteConsent, mockSubmitDelete } = vi.hoisted(
   () => ({
     mockGetMyConsents: vi.fn(),
     mockListMyDsrRequests: vi.fn(),
     mockSubmitOptOutRequest: vi.fn(),
+    mockWriteConsent: vi.fn(),
+    mockSubmitDelete: vi.fn(),
   }),
 )
 
@@ -26,8 +29,8 @@ vi.mock('@/parent/api/consent', async (importOriginal) => {
     listMyDsrRequests: mockListMyDsrRequests,
     submitOptOutRequest: mockSubmitOptOutRequest,
     // writeConsent / submitDeleteRequest / submitCorrectRequest 不在 opt-out 測試路徑上
-    writeConsent: vi.fn(),
-    submitDeleteRequest: vi.fn(),
+    writeConsent: mockWriteConsent,
+    submitDeleteRequest: mockSubmitDelete,
     submitCorrectRequest: vi.fn(),
   }
 })
@@ -74,6 +77,18 @@ beforeEach(() => {
   mockListMyDsrRequests.mockResolvedValue({ data: MOCK_DSR_RESPONSE })
   mockSubmitOptOutRequest.mockResolvedValue({ data: { id: 1, request_type: 'opt_out', status: 'approved', scope: 'photo_publish', submitted_at: '2026-06-03' } })
 })
+
+function confirmDialog(w: ReturnType<typeof mountView>, titlePrefix: string) {
+  const d = w.findAllComponents(ConfirmDialog).find((c) => String(c.props('title')).startsWith(titlePrefix))
+  if (!d) throw new Error(`找不到標題以「${titlePrefix}」開頭的 ConfirmDialog`)
+  return d
+}
+
+async function openTab(w: ReturnType<typeof mountView>, label: string) {
+  const tab = w.findAll('[role="tab"]').find((t) => t.text().includes(label))
+  await tab!.trigger('click')
+  await flushPromises()
+}
 
 // ===== Tests =====
 describe('PrivacyRightsView — opt-out UX (P2-4)', () => {
@@ -129,10 +144,15 @@ describe('PrivacyRightsView — opt-out UX (P2-4)', () => {
     // 清除初始載入呼叫次數，只計算 submit 後的 refetch
     const initialCallCount = mockGetMyConsents.mock.calls.length
 
-    // 點擊確認停止處理
+    // 點擊確認停止處理 → 先開確認框（即時生效，不可一按就停）
     const submitBtn = w.find('.submit-btn')
     expect(submitBtn.exists()).toBe(true)
     await submitBtn.trigger('click')
+    await flushPromises()
+    expect(mockSubmitOptOutRequest).not.toHaveBeenCalled()
+    const dialog = confirmDialog(w, '確定停止')
+    expect(dialog.props('open')).toBe(true)
+    dialog.vm.$emit('confirm')
     await flushPromises()
 
     // submitOptOutRequest 應被呼叫（預設 scope = photo_publish）
@@ -150,5 +170,49 @@ describe('PrivacyRightsView — opt-out UX (P2-4)', () => {
     expect(successMsg.text()).toContain('已即時停止')
     expect(successMsg.text()).not.toContain('申請已送出')
     expect(successMsg.text()).not.toContain('待審核')
+  })
+})
+
+describe('PrivacyRightsView — 確認與文案', () => {
+  it('撤回同意改用 ConfirmDialog，不再呼叫原生 confirm()', async () => {
+    const nativeConfirm = vi.fn(() => true)
+    vi.stubGlobal('confirm', nativeConfirm)
+    mockWriteConsent.mockResolvedValue({ data: {} })
+    const w = mountView()
+    await flushPromises()
+
+    await w.findAll('.revoke-btn')[1].trigger('click') // photo_publish
+    expect(nativeConfirm).not.toHaveBeenCalled()
+    expect(mockWriteConsent).not.toHaveBeenCalled()
+    const dialog = confirmDialog(w, '確定撤回')
+    expect(dialog.props('open')).toBe(true)
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(mockWriteConsent).toHaveBeenCalledWith(expect.objectContaining({ scope: 'photo_publish', consented: false }))
+    vi.unstubAllGlobals()
+  })
+
+  it('家長看到的文案不含工程用語（queue、IDOR、service_essential、portal）', async () => {
+    const w = mountView()
+    await flushPromises()
+    const texts: string[] = [w.text()]
+    for (const label of ['申請刪除', '申請更正', '停止處理']) {
+      await openTab(w, label)
+      texts.push(w.text())
+    }
+    const all = texts.join('\n')
+    for (const jargon of ['queue', 'IDOR', 'service_essential', 'portal', '≥']) {
+      expect(all).not.toContain(jargon)
+    }
+  })
+
+  it('切換分頁時清掉上一頁的錯誤訊息', async () => {
+    const w = mountView()
+    await flushPromises()
+    await openTab(w, '申請刪除')
+    await w.find('.submit-btn').trigger('click') // 未填理由 → 錯誤
+    expect(w.find('[role="alert"]').exists()).toBe(true)
+    await openTab(w, '申請更正')
+    expect(w.find('[role="alert"]').exists()).toBe(false)
   })
 })

@@ -47,7 +47,10 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
     sDay.setHours(0, 0, 0, 0)
     const eDay = new Date(e)
     eDay.setHours(0, 0, 0, 0)
-    if (sDay.getTime() === eDay.getTime()) {
+    // 全天模式的 picker 是 date-only（無時段）：同日 00:00–00:00 會被 calcSameDayHours 算成 0 分鐘、
+    // 再被下限抬成 0.5h（教師端深度掃描 F3）。無時段的同日改走工作日×預設班制，與多日分支一致。
+    const dateOnly = start.length <= 10 && end.length <= 10
+    if (sDay.getTime() === eDay.getTime() && !dateOnly) {
       const hours = calcSameDayHours(s, e)
       form.leave_hours = Math.max(0.5, Math.round(hours * 2) / 2)
       const lunchNote = hours < (e.getTime() - s.getTime()) / 3600000 ? '（已扣除 1h 午休）' : ''
@@ -56,8 +59,11 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
     }
     const workdays = countWorkdays(sDay, eDay)
     const total = workdays * DAILY_WORK_HOURS
-    form.leave_hours = Math.max(0.5, total)
-    calcHint.value = `${workdays} 個工作日 × ${DAILY_WORK_HOURS}h = ${total}h（預設班制，已排除週末）`
+    // 所選日期全為非工作日：不可抬成 0.5h 讓表單放行，交由 leave_hours ≥ 0.5 的驗證擋下
+    form.leave_hours = workdays === 0 ? 0 : Math.max(0.5, total)
+    calcHint.value = workdays === 0
+      ? '所選日期皆為非工作日（預設班制），請改選工作日'
+      : `${workdays} 個工作日 × ${DAILY_WORK_HOURS}h = ${total}h（預設班制，已排除週末）`
   }
 
   const applyBreakdownResult = (start: string, end: string, total_hours: number, breakdown: { type: string; date: string; hours?: number; work_start?: string; work_end?: string }[]) => {

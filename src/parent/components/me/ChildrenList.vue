@@ -69,7 +69,7 @@ function initialOf(name: string | undefined): string {
   background: var(--brand-primary-soft, var(--ivy-leaf-bg, #f5fbe6));
   color: var(--brand-primary);
   font-weight: 800;
-  font-size: 16px;
+  font-size: 1rem;
 }
 .meta { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .name { font-weight: var(--font-weight-semibold, 600); }

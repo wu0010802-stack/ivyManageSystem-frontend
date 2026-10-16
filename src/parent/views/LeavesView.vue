@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
@@ -12,7 +12,13 @@ import {
   getLeave,
 } from '../api/leaves'
 import { toast } from '../utils/toast'
-import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
+import {
+  enqueueParent,
+  flushParentQueue,
+  listParentQueued,
+  onParentQueueChange,
+  type ParentQueuedOp,
+} from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
 import { isNetworkError } from '@/composables/useOnlineStatus'
 import { useFriendlyError } from '@/composables/useFriendlyError'
@@ -27,6 +33,11 @@ import PullToRefresh from '../components/PullToRefresh.vue'
 import LeaveHero from '../components/leaves/LeaveHero.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 import EmptyState from '@/components/common/EmptyState.vue'
+import DiscardChangesPrompt from '../components/DiscardChangesPrompt.vue'
+import { useSheetCloseGuard } from '../composables/useUnsavedGuard'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import { loadErrorMessage } from '../utils/loadError'
 
 interface LeaveItem {
   id: number
@@ -66,7 +77,10 @@ function _toastFriendly(err: unknown, fallback: string) {
   else toast.error(text)
 }
 const items = ref<LeaveItem[]>([])
-const loading = ref(false)
+// 初值 true：onMounted 要先等子女清單才發請求，這段空檔不得先畫「尚無請假紀錄」
+const loading = ref(true)
+// 載入失敗且沒有任何紀錄時進持久錯誤態，不得與「尚無請假紀錄」同形
+const loadError = ref<unknown>(null)
 const showForm = ref(false)
 const submitting = ref(false)
 
@@ -143,6 +157,34 @@ const studentNameMap = computed(() => {
   return m
 })
 
+// 離線暫存、還沒送到園所的請假：在列表頂端顯示「待送出」佔位卡，
+// 否則家長按完送出卻在列表找不到那筆，會以為沒送成功而重填一次。
+interface QueuedLeavePayload {
+  student_id?: number
+  leave_type?: string
+  start_date?: string
+  end_date?: string
+}
+const queuedLeaves = ref<ParentQueuedOp[]>([])
+
+async function refreshQueued() {
+  try {
+    queuedLeaves.value = await listParentQueued(OP_KINDS.PARENT_LEAVE_REQUEST)
+  } catch {
+    queuedLeaves.value = []
+  }
+}
+
+function queuedPayload(op: ParentQueuedOp): QueuedLeavePayload {
+  return (op.payload ?? {}) as QueuedLeavePayload
+}
+
+const visibleQueued = computed(() =>
+  queuedLeaves.value.filter(
+    (op) => !selectedId.value || queuedPayload(op).student_id === selectedId.value,
+  ),
+)
+
 // 多孩家庭：以選擇器篩選；單孩家庭 selectedId 仍會被預設成唯一 student
 const filteredItems = computed(() => {
   if (!selectedId.value) return items.value
@@ -159,6 +201,29 @@ function currentSemesterRange(today = new Date()) {
   }
 }
 
+/**
+ * F08：請假天數。後端 `duration_days`（期間內應到日天數）是有限數字就用它；
+ * 否則 fallback 為 start..end（含頭尾）週一～週五天數。日期以字串解析、用 UTC
+ * 計算星期，不受裝置時區位移。
+ */
+function leaveDays(l: LeaveItem): number {
+  const raw = l.duration_days
+  if (raw !== null && raw !== undefined && raw !== '' && Number.isFinite(Number(raw))) return Number(raw)
+  const parse = (v?: string | null) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || '')
+    return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN
+  }
+  const start = parse(l.start_date)
+  const end = parse(l.end_date || l.start_date)
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return 0
+  let days = 0
+  for (let t = start; t <= end; t += 86400000) {
+    const dow = new Date(t).getUTCDay()
+    if (dow !== 0 && dow !== 6) days += 1
+  }
+  return days
+}
+
 const heroSummary = computed(() => {
   const { start, end, label } = currentSemesterRange()
   const inSemester = (filteredItems.value ?? []).filter((l) => {
@@ -169,7 +234,7 @@ const heroSummary = computed(() => {
   let total = 0
   for (const l of inSemester) {
     const t = l.leave_type || ''
-    const days = Number(l.duration_days) || 0
+    const days = leaveDays(l)
     by_type[t] = (by_type[t] || 0) + days
     total += days
   }
@@ -192,6 +257,21 @@ const detailOpen = computed({
   set: (v: boolean) => {
     if (!v) detail.value = null
   },
+})
+
+/**
+ * 附件不可編輯時給家長的具體原因。規則與後端一致（POST／DELETE attachments 只受理
+ * status='approved' 且 start_date > 今天），前端不放寬；當天病假要補診斷書只能
+ * 交給老師，所以要明講去哪裡補，而不是只說「無法新增」。
+ */
+const attLockedReason = computed(() => {
+  const d = detail.value
+  if (!d) return undefined
+  if (d.status === 'cancelled') return '這筆請假已取消，無法再新增或刪除附件。'
+  if ((d.start_date || '') <= todayStr.value) {
+    return '請假開始後（含當天）就不能再上傳附件；需要補交證明（例如病假的診斷書）時，請直接交給老師或聯絡園所。'
+  }
+  return undefined
 })
 
 async function openDetail(item: LeaveItem) {
@@ -273,15 +353,22 @@ function timelineSteps(item: LeaveItem | null) {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = null
   try {
     const { data } = await listLeaves()
     items.value = (data as { items?: LeaveItem[] })?.items || []
   } catch (err) {
-    _toastFriendly(err, '載入失敗')
+    loadError.value = err
+    // 已有紀錄（下拉重新整理失敗）時保留舊清單，只用 toast 告知
+    if (items.value.length > 0) _toastFriendly(err, '載入失敗')
   } finally {
     loading.value = false
   }
 }
+
+// 請假表單在 sheet 內：點背景／ESC／下拉關閉時，若已改過內容先確認，避免單手誤觸整份丟失
+let leaveFormSnapshot = ''
+const leaveSheet = useSheetCloseGuard(showForm, () => JSON.stringify(form.value) !== leaveFormSnapshot)
 
 function openForm() {
   const childItems = (childrenStore.items || []) as { student_id: number }[]
@@ -296,6 +383,7 @@ function openForm() {
     end_date: todayStr.value,
     reason: '',
   }
+  leaveFormSnapshot = JSON.stringify(form.value)
   showForm.value = true
 }
 
@@ -320,6 +408,7 @@ async function queueLeave(leavePayload: {
   })
   toast.success('請假已暫存，連線後自動送出')
   showForm.value = false
+  await refreshQueued()
   flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST).catch(() => {})
 }
 
@@ -391,12 +480,23 @@ async function doCancel() {
   }
 }
 
+// 背景補送成功（或在「無法同步」對話框捨棄）後：更新佔位卡；有請假送出成功就重抓清單，
+// 讓佔位卡換成園所端的正式紀錄。
+let offQueueChange: (() => void) | null = null
+
 onMounted(async () => {
+  offQueueChange = onParentQueueChange((change) => {
+    refreshQueued()
+    if ((change.succeededByKind[OP_KINDS.PARENT_LEAVE_REQUEST] ?? 0) > 0) fetchData()
+  })
+  refreshQueued()
   await childrenStore.load()
   ensureSelected(childrenStore.items as { student_id: number }[])
   fetchData()
   flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST).catch(() => {})
 })
+
+onBeforeUnmount(() => offQueueChange?.())
 
 async function pullRefresh() {
   await fetchData()
@@ -405,7 +505,7 @@ async function pullRefresh() {
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="leaves-view">
-    <ChildContextHeader variant="page" />
+    <ChildContextHeader variant="page" :inset="false" />
 
     <LeaveHero :summary="heroSummary">
       <template #action>
@@ -416,8 +516,41 @@ async function pullRefresh() {
       </template>
     </LeaveHero>
 
+    <!-- 離線暫存、尚未送到園所的請假（待送出佔位卡） -->
+    <article
+      v-for="op in visibleQueued"
+      :key="op.id"
+      class="pt-card queued-leave"
+      data-testid="queued-leave"
+    >
+      <div class="queued-leave-head">
+        <strong>{{ studentNameMap.get(queuedPayload(op).student_id ?? 0) || '' }} {{ queuedPayload(op).leave_type }}</strong>
+        <span
+          class="pt-pill"
+          :class="op.status === 'needs_review' ? 'pt-pill-danger' : 'pt-pill-warn'"
+        >{{ op.status === 'needs_review' ? '無法送出' : '待送出' }}</span>
+      </div>
+      <p class="queued-leave-range">
+        {{ queuedPayload(op).start_date }}<template v-if="queuedPayload(op).end_date && queuedPayload(op).end_date !== queuedPayload(op).start_date"> ~ {{ queuedPayload(op).end_date }}</template>
+      </p>
+      <p class="pt-muted-note">
+        {{ op.status === 'needs_review'
+          ? '多次嘗試仍送不出去，請點畫面下方「無法同步」重試或捨棄'
+          : '已暫存在這支手機，連上網路後會自動送出' }}
+      </p>
+    </article>
+
+    <!-- 三態：載入中 → 載入失敗（可重試）→ 空狀態 -->
+    <div v-if="loading && items.length === 0" class="leaves-skeleton">
+      <SkeletonBlock variant="card" :count="2" />
+    </div>
+    <MobileErrorRetry
+      v-else-if="loadError && items.length === 0"
+      :error="loadErrorMessage(loadError, '請假紀錄載入失敗，請檢查網路後重試')"
+      @retry="fetchData"
+    />
     <EmptyState
-      v-if="!loading && filteredItems.length === 0"
+      v-else-if="filteredItems.length === 0 && visibleQueued.length === 0"
       variant="mobile"
       title="尚無請假紀錄"
     />
@@ -444,6 +577,7 @@ async function pullRefresh() {
       :timeline-steps="detail ? timelineSteps(detail) : []"
       :att-uploading="detailUploading"
       :att-editable="!!detail && detail.status === 'approved' && (detail.start_date || '') > todayStr"
+      :att-locked-reason="attLockedReason"
       :url-resolver="attUrl"
       @att-upload="onAttUpload"
       @att-remove="askRemoveAttachment"
@@ -455,7 +589,14 @@ async function pullRefresh() {
       title="申請請假"
       :snap-points="['mid', 'full']"
       default-snap="full"
+      :before-close="leaveSheet.beforeClose"
     >
+      <DiscardChangesPrompt
+        v-if="leaveSheet.promptVisible.value"
+        message="請假還沒送出，要放棄剛剛填的內容嗎？"
+        @keep="leaveSheet.keepEditing"
+        @discard="leaveSheet.discard"
+      />
       <LeaveForm
         v-model="form"
         :children="childrenItemsTyped"
@@ -463,7 +604,7 @@ async function pullRefresh() {
         :future-limit="futureLimitStr"
         :submitting="submitting"
         @submit="submit"
-        @cancel="showForm = false"
+        @cancel="leaveSheet.requestClose"
       />
     </ParentBottomSheet>
 
@@ -493,9 +634,22 @@ async function pullRefresh() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* 頁面左右留白由容器統一給（2026-09-26：原本卡片貼齊螢幕邊緣） */
+  padding-inline: var(--space-4, 16px);
 }
 
 .render-sentinel { height: 1px; }
+.leaves-skeleton { display: flex; flex-direction: column; gap: 10px; }
+
+.queued-leave { border-style: dashed; }
+.queued-leave-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+}
+.queued-leave-range { margin: var(--space-1, 4px) 0 0; }
+.queued-leave .pt-muted-note { margin: var(--space-1, 4px) 0 0; }
 
 .hero-cta {
   background: var(--pt-surface-card, rgba(255, 255, 255, 0.95));

@@ -4,17 +4,20 @@
  * 驗證月度損益表 panel：
  *  1. 渲染所有 sections 與 rows
  *  2. 年度切換 prop 觸發 refetch
- *  3. pending_items 渲染為 alert
- *  4. 結餘負數顯示紅色（class）
+ *  3. pending_items 渲染為註腳條列（2026-10-12 改版：不再用 el-alert）
+ *  4. 結餘負數顯示紅色（class，合計列在 tfoot）
  *  5. 小計列加粗（is_subtotal → row-subtotal class）
  *  6. 金額千分位格式
- *  7. unit='person'/'class' 後綴；unit='amount' 0 → '—'
+ *  7. unit='person'/'class' 後綴；unit='amount' 0 → '—'；未來月金額留白
+ *
+ * 2026-10-12 改版後，隱藏全年為 0 的列、欄位狀態、月份焦點、tfoot 等新行為
+ * 由 src/views/reports/__tests__/MonthlyPnLPanel.spec.ts 覆蓋；本檔保留舊不變式。
  *
  * Mock pattern 模仿 tests/unit/api/reports.test.js 的 vi.hoisted 寫法，
  * 避免直接接 axios。
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 
 const { mockGetMonthlyPnL } = vi.hoisted(() => ({
@@ -132,35 +135,41 @@ const globalConfig = {
         ])
       },
     }),
-    ElAlert: defineComponent({
-      name: 'ElAlert',
-      props: ['type', 'closable', 'showIcon'],
-      setup(_, { slots }) {
-        return () => h('div', { class: 'el-alert' }, [
-          slots.title?.(),
-          slots.default?.(),
-        ])
+    ElSwitch: defineComponent({
+      name: 'ElSwitch',
+      props: ['modelValue', 'size', 'ariaLabel'],
+      emits: ['update:modelValue'],
+      setup() {
+        return () => h('div', { class: 'el-switch' })
       },
     }),
-    ElTag: defineComponent({
-      name: 'ElTag',
-      props: ['type', 'effect', 'size'],
+    ElButton: defineComponent({
+      name: 'ElButton',
+      props: ['type', 'size'],
       setup(_, { slots }) {
-        return () => h('span', { class: 'el-tag' }, slots.default?.())
+        return () => h('button', { class: 'el-button' }, slots.default?.())
       },
     }),
   },
+  stubs: { 'router-link': RouterLinkStub },
 }
 
 describe('MonthlyPnLPanel', () => {
   beforeEach(() => {
     mockGetMonthlyPnL.mockReset()
+    // 欄位狀態（過去／本月／未來）依今天決定；固定為 2026-10-12：1–9 月過去、10 月本月、11–12 月未來
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 12))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('掛載時依 year 呼叫 getMonthlyPnL 並渲染所有 sections + rows', async () => {
     mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2026 },
+      props: { year: 2026, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()
@@ -177,7 +186,7 @@ describe('MonthlyPnLPanel', () => {
   it('年度切換 prop 變化會觸發 refetch', async () => {
     mockGetMonthlyPnL.mockResolvedValue(makeFixture())
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2025 },
+      props: { year: 2025, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()
@@ -190,28 +199,31 @@ describe('MonthlyPnLPanel', () => {
     expect(mockGetMonthlyPnL).toHaveBeenCalledTimes(2)
   })
 
-  it('pending_items 渲染為 alert 與條列', async () => {
+  it('pending_items 渲染為註腳條列，並附雜項收款／廠商付款入口', async () => {
     mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2026 },
+      props: { year: 2026, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()
 
-    const alert = w.find('.el-alert')
-    expect(alert.exists()).toBe(true)
-    const items = alert.findAll('li')
+    const pending = w.find('[data-test="pnl-pending"]')
+    expect(pending.exists()).toBe(true)
+    // 不再使用 el-alert
+    expect(w.find('.el-alert').exists()).toBe(false)
+    const items = pending.findAll('li')
     expect(items.length).toBe(2)
     expect(items[0].text()).toContain('全校節慶人數')
     expect(items[1].text()).toContain('預繳收入')
-    // alert 也含「廠商付款」入口提示
-    expect(alert.text()).toContain('廠商付款')
+    expect(pending.text()).toContain('還沒算進本表的項目')
+    expect(pending.text()).toContain('雜項收款')
+    expect(pending.text()).toContain('廠商付款')
   })
 
   it('結餘列負數顯示 cell-negative class（紅色）', async () => {
     mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2026 },
+      props: { year: 2026, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()
@@ -233,7 +245,7 @@ describe('MonthlyPnLPanel', () => {
   it('切片資訊列加上 row-breakdown class（縮排 + 柔色，避免被誤判為重複計算）', async () => {
     mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2026 },
+      props: { year: 2026, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()
@@ -248,7 +260,7 @@ describe('MonthlyPnLPanel', () => {
   it('小計列加上 row-subtotal class（用於粗體 + 淺底）', async () => {
     mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2026 },
+      props: { year: 2026, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()
@@ -261,7 +273,7 @@ describe('MonthlyPnLPanel', () => {
   it('金額千分位格式：100000 → "100,000"，0 → "—"', async () => {
     mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2026 },
+      props: { year: 2026, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()
@@ -277,12 +289,15 @@ describe('MonthlyPnLPanel', () => {
     expect(cells[2].text()).toBe('—')
     // 合計欄（最後一格）= 300000
     expect(cells[cells.length - 1].text()).toBe('300,000')
+    // 11、12 月為未來月 → 金額格留白（不顯示「—」）
+    expect(cells[10].text()).toBe('')
+    expect(cells[11].text()).toBe('')
   })
 
   it('unit=class 後綴 "班"、unit=amount 0 顯示 "—"', async () => {
     mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2026 },
+      props: { year: 2026, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()
@@ -293,29 +308,43 @@ describe('MonthlyPnLPanel', () => {
     // monthly[0] = 8 → "8 班"（unit=class）
     expect(cells[0].text()).toContain('班')
     expect(cells[0].text()).toContain('8')
+    // 統計指標在未來月（12 月）照常顯示
+    expect(cells[11].text()).toBe('9 班')
     // total === null → "—"（無單位後綴）
     const lastCell = cells[cells.length - 1]
     expect(lastCell.text()).toBe('—')
   })
 
-  it('標題正名「月度現金收支表」並顯示「現金收付實現制」badge（2026-07-05 owner 裁定①）', async () => {
+  it('標題與「現金收付實現制」badge 已移到頁首：panel 不重複顯示，舊名也不殘留', async () => {
     mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2026 },
+      props: { year: 2026, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()
 
-    expect(w.find('[data-test="pnl-title"]').text()).toBe('月度現金收支表')
-    expect(w.find('[data-test="pnl-cashbasis-badge"]').text()).toBe('現金收付實現制')
+    expect(w.find('[data-test="pnl-title"]').exists()).toBe(false)
+    expect(w.find('[data-test="pnl-cashbasis-badge"]').exists()).toBe(false)
     // 舊名不應殘留
     expect(w.text()).not.toContain('月度損益表')
+  })
+
+  it('匯出按鈕已移到頁首：panel 內不再有匯出與「跳到本月」', async () => {
+    mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
+    const w = mount(MonthlyPnLPanel, {
+      props: { year: 2026, focusMonth: 10 },
+      global: globalConfig,
+    })
+    await flushPromises()
+
+    expect(w.findAll('button').some(b => b.text().includes('匯出'))).toBe(false)
+    expect(w.find('[data-test="jump-to-current"]').exists()).toBe(false)
   })
 
   it('API 失敗時顯示 errorMsg empty state，不 crash', async () => {
     mockGetMonthlyPnL.mockRejectedValueOnce(new Error('boom'))
     const w = mount(MonthlyPnLPanel, {
-      props: { year: 2026 },
+      props: { year: 2026, focusMonth: 10 },
       global: globalConfig,
     })
     await flushPromises()

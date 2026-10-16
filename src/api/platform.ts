@@ -28,6 +28,7 @@ export type PlatformReport = Schema<'PlatformReportOut'>
 export type PlatformReportTenantRow = Schema<'PlatformReportTenantRow'>
 export type RoleSyncReport = Schema<'PlatformRoleSyncOut'>
 export type RoleSyncTargetResult = Schema<'PlatformRoleSyncTargetOut'>
+export type RoleSyncRoleChange = Schema<'PlatformRoleChangeOut'>
 export type PlatformAuditPage = Schema<'PlatformAuditOut'>
 export type PlatformAuditRow = Schema<'PlatformAuditRow'>
 
@@ -181,7 +182,12 @@ export function getPlatformReport(
 
 /**
  * `dry_run` 預設 **true**（CT-P-05）：UI 一律先預覽 `results` 再實跑。
- * 回應為單一聚合物件 `RoleSyncReport`，逐 target 資料在 `results`（CT-FIX-07）。
+ * 回應為單一聚合物件 `RoleSyncReport`，逐 target 資料在 `results`（CT-FIX-07），
+ * 逐角色權限差異在 `results[].role_changes`。
+ *
+ * **實跑必須帶回預覽的 `source_snapshot_hash`**（F57／MT-08）：dry-run 與實跑是兩個
+ * 請求、各自重讀來源；帶回雜湊後端才會比對「寫入的是否就是預覽過的內容」，來源在
+ * 預覽後被改過即回 409。沒帶雜湊時後端走相容分支照常寫入（稽核記未經確認）。
  */
 export function syncRoles(
   body: ApiBody<'/platform/roles/sync', 'post'>,

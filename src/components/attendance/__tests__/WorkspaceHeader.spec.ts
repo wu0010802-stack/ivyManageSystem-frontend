@@ -35,11 +35,11 @@ const ElStatistic = {
 
 const stubs = { ElButton, ElSelect, ElOption, ElStatistic }
 
-function mountHeader() {
+function mountHeader(period: { year?: number; month?: number } = {}) {
   return mount(WorkspaceHeader, {
     props: {
-      year: 2026,
-      month: 6,
+      year: period.year ?? 2026,
+      month: period.month ?? 6,
       kpis: { fullAttendance: 0, lateCount: 0, missingCount: 0, pendingAnomalies: 0 },
     },
     global: { plugins: [router], stubs },
@@ -51,6 +51,16 @@ describe('WorkspaceHeader — 電子打卡入口', () => {
     const wrapper = mountHeader()
     expect(wrapper.get('button[aria-label="上個月"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="下個月"]').exists()).toBe(true)
+  })
+
+  it('上／下個月以單一事件送出年月（跨年不會先換年再用舊年份換月）', async () => {
+    const jan = mountHeader({ year: 2026, month: 1 })
+    await jan.get('button[aria-label="上個月"]').trigger('click')
+    expect(jan.emitted('update:period')).toEqual([[2025, 12]])
+    expect(jan.emitted('update:year')).toBeUndefined()
+    const dec = mountHeader({ year: 2026, month: 12 })
+    await dec.get('button[aria-label="下個月"]').trigger('click')
+    expect(dec.emitted('update:period')).toEqual([[2027, 1]])
   })
 
   it('工具列渲染「電子打卡」按鈕', () => {

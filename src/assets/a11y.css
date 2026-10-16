@@ -94,14 +94,20 @@ html.dark {
    * 寫死 hex，alias 在 main.css 才綁到 scale，所以翻 scale 一處同時帶動 alias
    * 與直接引用兩種寫法。 */
   --neutral-0: #0f172a;
-  --neutral-50: #1e293b;
-  --neutral-100: #334155;
-  --neutral-200: #475569;
-  --neutral-300: #64748b;
-  --neutral-400: #94a3b8;
+  --color-neutral-50: #1e293b;
+  --neutral-50: var(--color-neutral-50);
+  --color-neutral-100: #334155;
+  --neutral-100: var(--color-neutral-100);
+  --color-neutral-200: #475569;
+  --neutral-200: var(--color-neutral-200);
+  --color-neutral-300: #64748b;
+  --neutral-300: var(--color-neutral-300);
+  --color-neutral-400: #94a3b8;
+  --neutral-400: var(--color-neutral-400);
   --neutral-500: #cbd5e1;
   --neutral-600: #e2e8f0;
-  --neutral-700: #f1f5f9;
+  --color-neutral-700: #f1f5f9;
+  --neutral-700: var(--color-neutral-700);
   --neutral-800: #f8fafc;
   --neutral-900: #ffffff;
 
@@ -275,7 +281,8 @@ html.dark .portal-layout .el-aside {
   --text-primary: #1e293b;
   --text-secondary: #94a3b8;
   --text-tertiary: #94a3b8;
-  --neutral-700: #334155;
+  --color-neutral-700: #334155;
+  --neutral-700: var(--color-neutral-700);
   --neutral-800: #1e293b;
   --neutral-900: #0f172a;
 }
@@ -306,11 +313,16 @@ html[class*="ivy-size-"] {
 /* ===== Parent: 高對比（亮模式）===== */
 html.ivy-contrast-high {
   /* 文字加深到接近黑 */
-  --pt-text-strong: #000000;
-  --pt-text-body: #000000;
-  --pt-text-muted: #1a1d20;
-  --pt-text-soft: #2e3338;
-  --pt-text-faint: #424850;
+  --color-portal-text-strong: #000000;
+  --pt-text-strong: var(--color-portal-text-strong);
+  --color-portal-text-body: #000000;
+  --pt-text-body: var(--color-portal-text-body);
+  --color-portal-text-muted: #1a1d20;
+  --pt-text-muted: var(--color-portal-text-muted);
+  --color-portal-text-soft: #2e3338;
+  --pt-text-soft: var(--color-portal-text-soft);
+  --color-portal-text-faint: #424850;
+  --pt-text-faint: var(--color-portal-text-faint);
   --pt-text-placeholder: #424850;
   --pt-text-disabled: #6b7280;
   --pt-text-hint: #6b7280;
@@ -333,16 +345,37 @@ html.ivy-contrast-high {
   --color-warning-soft: #fde68a;
   --color-success: #047857;
   --color-success-soft: #a7f3d0;
+
+  /* M3 色彩角色（家長端 200+ 處直接用 --m3-*，只改 --pt-*／--brand-* 的話開了高對比
+     灰字、細框、主色按鈕都不變，且品牌已變藍而 M3 主色仍綠）。
+     primary 系列對齊上方高對比 brand；文字／框線對齊上方 --pt-text-*／--pt-border-*。
+     只在 ivy-contrast-high 下生效：該 class 僅家長端 useA11y 會掛，admin／portal 不受影響。
+     對比（對 M3 light surface #fbfdf8）：primary #1d4ed8 白字 6.7:1、on-surface-variant 16.5:1、
+     outline 9.0:1、outline-variant 4.7:1；on-primary-container 對 container 8.5:1。 */
+  --m3-primary: #1d4ed8;
+  --m3-on-primary: #ffffff;
+  --m3-primary-container: #dbeafe;
+  --m3-on-primary-container: #1e3a8a;
+  --m3-inverse-primary: #93c5fd;
+  --m3-on-surface: #000000;
+  --m3-on-surface-variant: #1a1d20;
+  --m3-outline: #424850;
+  --m3-outline-variant: #6b7280;
 }
 
 /* 高對比 dark 模式：useTheme 永遠顯式設 data-theme，所以僅需單一
    html.ivy-contrast-high[data-theme="dark"] 選擇器，不需 @media 區塊。 */
 html.ivy-contrast-high[data-theme="dark"] {
-  --pt-text-strong: #ffffff;
-  --pt-text-body: #ffffff;
-  --pt-text-muted: #f1f5f9;
-  --pt-text-soft: #cbd5e1;
-  --pt-text-faint: #cbd5e1;
+  --color-portal-text-strong: #ffffff;
+  --pt-text-strong: var(--color-portal-text-strong);
+  --color-portal-text-body: #ffffff;
+  --pt-text-body: var(--color-portal-text-body);
+  --color-portal-text-muted: #f1f5f9;
+  --pt-text-muted: var(--color-portal-text-muted);
+  --color-portal-text-soft: #cbd5e1;
+  --pt-text-soft: var(--color-portal-text-soft);
+  --color-portal-text-faint: #cbd5e1;
+  --pt-text-faint: var(--color-portal-text-faint);
   --pt-text-placeholder: #94a3b8;
   --pt-text-disabled: #94a3b8;
   --pt-text-hint: #94a3b8;
@@ -360,6 +393,20 @@ html.ivy-contrast-high[data-theme="dark"] {
   --color-danger: #fca5a5;
   --color-warning: #fcd34d;
   --color-success: #6ee7b7;
+
+  /* M3 色彩角色 dark（見上方 light 段說明；選擇器 (0,2,1) 壓過 m3-tokens.css 的
+     :root[data-theme='dark'] (0,2,0)）。對比（對 M3 dark surface #191c19）：
+     primary #6ee7b7 配 on-primary #003822 為 8.7:1、on-surface-variant 15.7:1、
+     outline 11.6:1、outline-variant 6.7:1；on-primary-container 對 container 8.5:1。 */
+  --m3-primary: #6ee7b7;
+  --m3-on-primary: #003822;
+  --m3-primary-container: #004d2e;
+  --m3-on-primary-container: #c8f7e2;
+  --m3-inverse-primary: #065f46; /* 對 inverse-surface #e1e3de 5.9:1（snackbar 動作鈕文字用） */
+  --m3-on-surface: #ffffff;
+  --m3-on-surface-variant: #f1f5f9;
+  --m3-outline: #cbd5e1;
+  --m3-outline-variant: #94a3b8;
 }
 
 /* 高對比時 focus 環加粗 + 換高對比色 */

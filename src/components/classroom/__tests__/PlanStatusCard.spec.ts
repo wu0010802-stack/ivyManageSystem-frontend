@@ -176,12 +176,14 @@ describe('PlanStatusCard', () => {
         published_at: '2026-06-15T10:00:00+08:00',
         prep_start_date: '2026-06-01',
         apply_overdue: false,
+        apply_date: '2026-08-01',
+        applies_immediately: false,
       },
     })
     const wrapper = mountCard()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('已確認，等待學年切換（預計 8/1 套用）')
+    expect(wrapper.text()).toContain('已確認，將於 2026/08/01 自動套用')
     expect(wrapper.text()).not.toContain('排程器重試中')
   })
 
@@ -204,6 +206,29 @@ describe('PlanStatusCard', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('計畫尚未套用，排程器重試中')
+    expect(wrapper.find('.plan-banner').classes()).toContain('plan-banner--warning')
+  })
+
+  it('draft 態 + 補救模式（已開學）：提醒發布後約一小時內就套用', async () => {
+    getClassroomYearPlanStatus.mockResolvedValue({
+      data: {
+        state: 'draft',
+        target_school_year: 115,
+        source_school_year: 114,
+        plan_id: 1,
+        version: 3,
+        blocking_count: 0,
+        warning_count: 0,
+        prep_start_date: '2026-06-01',
+        apply_overdue: false,
+        apply_date: '2026-08-01',
+        applies_immediately: true,
+      },
+    })
+    const wrapper = mountCard()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已開學，發布後約一小時內套用')
     expect(wrapper.find('.plan-banner').classes()).toContain('plan-banner--warning')
   })
 

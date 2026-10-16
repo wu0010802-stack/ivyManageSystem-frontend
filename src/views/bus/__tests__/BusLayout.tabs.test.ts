@@ -4,6 +4,10 @@
  * 2026-08-13 三頁整合為單一入口＋頁內分頁：即時監看／乘車歷史＝BUS_READ、
  * 路線管理＝BUS_WRITE，分頁可見性各自跟碼走（比照 WorkbenchLayout 先例）；
  * 只持單一碼者由 /bus 的 redirect 落到自己看得到的分頁，本層不重複判斷落點。
+ *
+ * 2026-08-26 班次排程加兩分頁：今日調度（BUS_READ）與設定（BUS_WRITE）。
+ * 今日調度掛 BUS_READ 是刻意的——發車後的編輯權另由 BUS_IN_PROGRESS_WRITE 在
+ * 頁內控制，分頁層若改掛 BUS_WRITE，只持檢視碼的行政會連當日名單都看不到。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref, nextTick } from 'vue'
@@ -51,19 +55,26 @@ describe('BusLayout 分頁可見性', () => {
     routePath.value = '/bus/monitor'
   })
 
-  it('BUS_READ + BUS_WRITE → 三個分頁都在', () => {
+  it('BUS_READ + BUS_WRITE → 五個分頁都在（含順序）', () => {
     grantedPermissions.value = ['BUS_READ', 'BUS_WRITE']
-    expect(tabNames(mountLayout())).toEqual(['monitor', 'history', 'routes'])
+    expect(tabNames(mountLayout())).toEqual([
+      'monitor', 'dispatch', 'history', 'routes', 'settings',
+    ])
   })
 
-  it('只有 BUS_READ → 看不到路線管理分頁', () => {
+  it('只有 BUS_READ → 看得到今日調度，看不到路線管理／設定分頁', () => {
     grantedPermissions.value = ['BUS_READ']
-    expect(tabNames(mountLayout())).toEqual(['monitor', 'history'])
+    expect(tabNames(mountLayout())).toEqual(['monitor', 'dispatch', 'history'])
   })
 
-  it('只有 BUS_WRITE → 只看得到路線管理分頁', () => {
+  it('只有 BUS_WRITE → 只看得到路線管理與設定分頁', () => {
     grantedPermissions.value = ['BUS_WRITE']
-    expect(tabNames(mountLayout())).toEqual(['routes'])
+    expect(tabNames(mountLayout())).toEqual(['routes', 'settings'])
+  })
+
+  it('BUS_IN_PROGRESS_WRITE 單獨持有帶不出今日調度（進頁碼仍是 BUS_READ）', () => {
+    grantedPermissions.value = ['BUS_IN_PROGRESS_WRITE']
+    expect(tabNames(mountLayout())).toEqual([])
   })
 
   it('BUS_TRIPS_OPERATE（隨車老師碼）帶不出任何分頁', () => {
@@ -83,11 +94,36 @@ describe('BusLayout 分頁導覽', () => {
     expect(mountLayout().find('.tabs').attributes('data-active')).toBe('history')
   })
 
+  it('activeTab 由路由初始化（新分頁：/bus/dispatch、/bus/settings）', () => {
+    for (const [path, tab] of [
+      ['/bus/dispatch', 'dispatch'],
+      ['/bus/settings', 'settings'],
+    ]) {
+      routePath.value = path
+      expect(mountLayout().find('.tabs').attributes('data-active'), path).toBe(tab)
+    }
+  })
+
+  it('未知子路徑退回 monitor（不炸、也不停在前一個分頁）', () => {
+    routePath.value = '/bus/unknown-subpage'
+    expect(mountLayout().find('.tabs').attributes('data-active')).toBe('monitor')
+  })
+
   it('tab-change 推對應子路由', () => {
     routePath.value = '/bus/monitor'
     const wrapper = mountLayout()
     wrapper.findComponent({ name: 'ElTabsStub' }).vm.$emit('tab-change', 'routes')
     expect(push).toHaveBeenCalledWith('/bus/routes')
+  })
+
+  it('tab-change 推新分頁（dispatch／settings 的 name 必須等於路徑尾段）', () => {
+    routePath.value = '/bus/monitor'
+    const wrapper = mountLayout()
+    const tabs = wrapper.findComponent({ name: 'ElTabsStub' })
+    tabs.vm.$emit('tab-change', 'dispatch')
+    expect(push).toHaveBeenCalledWith('/bus/dispatch')
+    tabs.vm.$emit('tab-change', 'settings')
+    expect(push).toHaveBeenCalledWith('/bus/settings')
   })
 
   it('路由變更反向同步 activeTab（瀏覽器返回鍵）', async () => {
@@ -96,5 +132,9 @@ describe('BusLayout 分頁導覽', () => {
     routePath.value = '/bus/routes'
     await nextTick()
     expect(wrapper.find('.tabs').attributes('data-active')).toBe('routes')
+
+    routePath.value = '/bus/dispatch'
+    await nextTick()
+    expect(wrapper.find('.tabs').attributes('data-active')).toBe('dispatch')
   })
 })

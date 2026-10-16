@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import ClassroomOpsCard from '@/components/portal/home/ClassroomOpsCard.vue'
@@ -57,24 +57,6 @@ describe('ClassroomOpsCard', () => {
     expect(w.text()).toContain('15')
   })
 
-  it('renders contact_book percentage', () => {
-    const w = mountIt()
-    // cbPercent = "10/15 (66.7%)"
-    expect(w.text()).toMatch(/66\.7/)
-  })
-
-  it('shows pending dismissal count', () => {
-    const w = mountIt()
-    // "2 件待處理"
-    expect(w.text()).toContain('2')
-  })
-
-  it('shows pending medications count', () => {
-    const w = mountIt()
-    // "1 筆未執行"
-    expect(w.text()).toContain('1')
-  })
-
   it('renders allergy alerts with allergen names', () => {
     const w = mountIt()
     // 花生、海鮮 來自 allergens[].allergen joined by 、
@@ -109,14 +91,6 @@ describe('ClassroomOpsCard', () => {
     expect(w.text()).toContain('今天')
   })
 
-  it('shows attendance_called_today status', () => {
-    const w = mountIt()
-    expect(w.text()).toContain('未點名')
-    const calledCard = { ...FULL_CARD, attendance_called_today: true }
-    const w2 = mountIt(calledCard)
-    expect(w2.text()).toContain('已完成')
-  })
-
   it('handles empty card gracefully', () => {
     const w = mountIt(EMPTY_CARD)
     expect(w.text()).toContain('空班')
@@ -134,21 +108,38 @@ describe('ClassroomOpsCard', () => {
     expect(() => mountIt(minimal)).not.toThrow()
   })
 
-  it('clicking contact book kpi pushes to contact-book route', async () => {
-    const push = vi.spyOn(router, 'push')
+  // 2026-09-14 首頁整併：聯絡簿／點名／接送／用藥四格 KPI 與首頁功能格指的是
+  // 同一批功能，並存等於同一個入口在首頁出現兩次。本卡只保留「別處看不到」的
+  // 三條提醒（連續缺席／近期生日／過敏注意）。
+  it('不再渲染四格 KPI——那批入口已由首頁功能格承接', () => {
     const w = mountIt()
-    const kpis = w.findAll('.kpi')
-    // first kpi = 聯絡簿
-    await kpis[0].trigger('click')
-    expect(push).toHaveBeenCalledWith({ path: '/portal/contact-book', query: { classroom_id: 1 } })
+    expect(w.find('.kpi').exists()).toBe(false)
+    expect(w.text()).not.toContain('未點名')
+    expect(w.text()).not.toContain('件待處理')
+    expect(w.text()).not.toContain('筆未執行')
+    expect(w.text()).not.toMatch(/66\.7/)
+  })
+})
+
+// 2026-10-12：沒有任何提醒時卡片只剩「班名＋人數」，看不出是載入中還是今天沒事。
+describe('ClassroomOpsCard 沒有提醒時', () => {
+  it('明講今天沒有提醒，且三類都列出來讓老師知道查過哪些', () => {
+    const w = mount(ClassroomOpsCard, {
+      props: { card: { classroom_id: 9, classroom_name: '小熊班', student_count: 20 } },
+      global: { plugins: [router] },
+    })
+    const empty = w.get('[data-test="ops-empty"]')
+    expect(empty.text()).toContain('今天沒有')
+    expect(empty.text()).toContain('過敏')
+    expect(empty.text()).toContain('連續缺席')
+    expect(empty.text()).toContain('生日')
   })
 
-  it('clicking dismissal kpi pushes to dismissal-calls route', async () => {
-    const push = vi.spyOn(router, 'push')
-    const w = mountIt()
-    const kpis = w.findAll('.kpi')
-    // third kpi = 接送
-    await kpis[2].trigger('click')
-    expect(push).toHaveBeenCalledWith('/portal/dismissal-calls')
+  it('有任一提醒時不顯示空狀態', () => {
+    const w = mount(ClassroomOpsCard, {
+      props: { card: { classroom_id: 9, classroom_name: '小熊班', student_count: 20, upcoming_birthdays_7d: [{ student_id: 1, student_name: '小美', days_until: 1 }] } },
+      global: { plugins: [router] },
+    })
+    expect(w.find('[data-test="ops-empty"]').exists()).toBe(false)
   })
 })

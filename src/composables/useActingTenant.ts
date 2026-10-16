@@ -8,19 +8,13 @@
  * 分校」比「回到清單」更容易誤操作（改到的是別校的設定）。hq-reporting §2.5 因此明訂
  * **不落 localStorage**。
  *
- * ## CT-A-06：每次變更必須 `advanceAdminSession()`
+ * ## CT-A-06：每次變更必須重設本分頁管理端 runtime
  *
  * `useCachedAsync` 的 `_cache` 與 axios dedupe 都是 module-level、生命週期＝單一分頁。
  * 同一分頁內把 acting tenant 從甲校換成乙校時，若不推進身分世代，甲校的 in-flight 回應
- * 會落到乙校畫面上（hq-reporting 風險 #16）。`advanceAdminSession()` 一次做四件事：
- * 中止 in-flight → `invalidateCachedAsync()` 全清 → 清 axios dedupe → 跨分頁廣播。
- *
- * ⚠ **已知代價（非本檔可獨力解決，列入移交）**：`advanceAdminSession()` 的第四件事會
- * 讓**其他分頁**收到 `source: 'remote'` 的 reset，而 `utils/auth.ts` 對 remote reset 的
- * 既有處置是「清本地身分並導回登入頁」。也就是說總部管理員開兩個分頁時，在其中一頁切
- * 分校會把另一頁登出。契約（CT-A-06）明文要求呼叫這支，故本批照契約實作；若要消除該
- * 副作用，需要 fc 在 `utils/adminSession.ts` 提供一支「只做本分頁失效、不廣播」的變體，
- * 那是 fc 擁有的介面，不由 hq 自行改寫。
+ * 會落到乙校畫面上（hq-reporting 風險 #16）。`resetAdminSessionLocally()` 會中止
+ * in-flight、清 `useCachedAsync` 與 axios dedupe，但不廣播身分變更；acting tenant 是
+ * per-tab 狀態，不能因此把其他分頁登出。
  *
  * ## 快取 key 守則
  *
@@ -31,7 +25,7 @@
  * 之類的前綴失效仍可用。既有分校頁 call site **一律不改**（frontend-core §2.8）。
  */
 import { computed, readonly, shallowRef } from 'vue'
-import { advanceAdminSession, onAdminSessionReset } from '@/utils/adminSession'
+import { onAdminSessionReset, resetAdminSessionLocally } from '@/utils/adminSession'
 import { tenantCacheKey } from '@/utils/tenantStorage'
 
 export interface ActingTenant {
@@ -46,7 +40,7 @@ const _acting = shallowRef<ActingTenant | null>(null)
 
 // 身分世代推進（登入／登出／代操作／另一分頁換身分）時，acting tenant 一定要跟著歸零：
 // 舊身分選的分校對新身分沒有意義，留著等於讓下一個使用者接手一個已選好的操作目標。
-// ⚠ 這也是 `setActingTenant()` 必須「先 advance、後賦值」的原因（見下）。
+// ⚠ 這也是 `setActingTenant()` 必須「先 reset、後賦值」的原因（見下）。
 onAdminSessionReset(() => {
   _acting.value = null
 })
@@ -68,8 +62,8 @@ export function setActingTenant(tenant: ActingTenant | null): void {
     if (tenant) _acting.value = tenant
     return
   }
-  // 先失效再賦值：advance 會觸發上面的 reset listener 把 _acting 清成 null。
-  advanceAdminSession()
+  // 先失效再賦值：local reset 會觸發上面的 listener 把 _acting 清成 null。
+  resetAdminSessionLocally()
   _acting.value = tenant
 }
 

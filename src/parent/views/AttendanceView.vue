@@ -11,6 +11,7 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import ParentIcon from '../components/ParentIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -72,10 +73,18 @@ const calendarDays = computed(() => {
   return cells
 })
 
-const selected = ref<{ date: string; day: number; info: { status?: string; remark?: string } | null } | null>(null)
-function selectCell(cell: typeof selected.value) {
+type DayInfo = { status?: string; remark?: string }
+type DayCell = { date: string; day: number; info: DayInfo | null } | null
+
+// 只記所選「日期」，狀態／備註一律由目前的 dayMap 推導：存 cell 快照會讓下拉重整
+// 或資料更新後，詳情卡仍顯示點選當下的舊備註（深掃審查 FE-R2）。
+const selectedDate = ref<string | null>(null)
+const selectedInfo = computed<DayInfo | null>(() =>
+  selectedDate.value ? dayMap.value.get(selectedDate.value) || null : null,
+)
+function selectCell(cell: DayCell) {
   if (!cell) return
-  selected.value = cell
+  selectedDate.value = cell.date
 }
 
 async function fetchData() {
@@ -106,23 +115,38 @@ function goToday() {
   month.value = d.getMonth() + 1
 }
 
-// status → 色系 mapping（cream / leaf / coral / sun / sky）
-const STATUS_TONE: Record<string, { tone: string; label: string }> = {
-  出席:  { tone: 'success', label: '出席' },
-  缺席:  { tone: 'danger',  label: '缺席' },
-  病假:  { tone: 'info',    label: '病假' },
-  事假:  { tone: 'info',    label: '事假' },
-  遲到:  { tone: 'warn',    label: '遲到' },
+// status → 色系 mapping（cream / leaf / coral / sun / sky）＋格內記號。
+// PRODUCT.md：純色不可作為唯一狀態指示——病假／事假同色、紅綠色弱分不出出席／缺席，
+// 所以每格另印一個字（出席用 ✓），月曆下方附圖例。
+const STATUS_TONE: Record<string, { tone: string; label: string; mark: string }> = {
+  出席:  { tone: 'success', label: '出席', mark: '✓' },
+  遲到:  { tone: 'warn',    label: '遲到', mark: '遲' },
+  病假:  { tone: 'info',    label: '病假', mark: '病' },
+  事假:  { tone: 'info',    label: '事假', mark: '事' },
+  缺席:  { tone: 'danger',  label: '缺席', mark: '缺' },
+}
+const LEGEND = Object.values(STATUS_TONE)
+
+/** 格內記號：已知狀態用對照表，未知狀態退回狀態文字的第一個字（仍不只靠顏色） */
+function statusMark(status?: string): string {
+  if (!status) return ''
+  return STATUS_TONE[status]?.mark ?? status.slice(0, 1)
 }
 
-function cellClass(cell: typeof selected.value) {
+/** 「日期 狀態」；今天另以 aria-current="date" 宣告，不塞進名稱 */
+function cellAriaLabel(cell: DayCell): string {
+  if (!cell) return ''
+  return `${cell.date} ${cell.info?.status || '無紀錄'}`
+}
+
+function cellClass(cell: DayCell) {
   if (!cell) return ''
   const status = cell.info?.status
   const tone = status ? STATUS_TONE[status]?.tone : undefined
   return [
     cell.info ? 'has' : '',
     tone ? `tone-${tone}` : '',
-    selected.value?.date === cell.date ? 'is-selected' : '',
+    selectedDate.value === cell.date ? 'is-selected' : '',
     cell.date === todayStr.value ? 'is-today' : '',
   ].filter(Boolean).join(' ')
 }
@@ -133,7 +157,13 @@ onMounted(async () => {
   fetchData()
 })
 
-watch([selectedId, year, month], fetchData)
+// F17：換孩子或換月份後，前一查詢所選的日期必須清除，月資料也一併丟掉——否則新月份
+// 載入中或失敗時，新標題下仍顯示前一個查詢的統計與日卡（深掃審查 FE-R2）。
+watch([selectedId, year, month], () => {
+  selectedDate.value = null
+  attRes.value = null
+  return fetchData()
+})
 
 async function pullRefresh() { await fetchData() }
 </script>
@@ -182,47 +212,62 @@ async function pullRefresh() { await fetchData() }
           :class="cellClass(cell)"
           :role="cell ? 'button' : undefined"
           :tabindex="cell ? 0 : -1"
-          :aria-label="cell ? `${cell.date}${cell.info ? ' ' + cell.info.status : ''}` : ''"
+          :aria-label="cell ? cellAriaLabel(cell) : undefined"
+          :aria-current="cell && cell.date === todayStr ? 'date' : undefined"
+          :aria-hidden="cell ? undefined : 'true'"
           @click="selectCell(cell)"
           @keydown.enter="selectCell(cell)"
+          @keydown.space.prevent="selectCell(cell)"
         >
           <template v-if="cell">
             <span class="day-num">{{ cell.day }}</span>
-            <span v-if="cell.info" class="dot" aria-hidden="true" />
+            <span v-if="cell.info" class="status-mark" aria-hidden="true">{{ statusMark(cell.info.status) }}</span>
           </template>
         </div>
       </div>
+
+      <ul class="legend" aria-label="圖例">
+        <li v-for="item in LEGEND" :key="item.label" class="legend-item" :class="`tone-${item.tone}`">
+          <span class="legend-mark" aria-hidden="true">{{ item.mark }}</span>
+          <span class="legend-label">{{ item.label }}</span>
+        </li>
+      </ul>
     </section>
 
     <!-- Detail -->
-    <section v-if="selected?.info" class="pt-card detail">
+    <section v-if="selectedDate && selectedInfo" class="pt-card detail">
       <div class="detail-row">
         <span class="material-symbols-rounded" aria-hidden="true">calendar_today</span>
         <span class="detail-label">日期</span>
-        <span class="detail-value">{{ selected.date }}</span>
+        <span class="detail-value">{{ selectedDate }}</span>
       </div>
       <div class="detail-row">
         <span class="material-symbols-rounded" aria-hidden="true">how_to_reg</span>
         <span class="detail-label">狀態</span>
-        <span class="pt-pill" :class="`pt-pill-${STATUS_TONE[selected.info.status ?? '']?.tone || 'info'}`">
-          {{ selected.info.status }}
+        <span class="pt-pill" :class="`pt-pill-${STATUS_TONE[selectedInfo.status ?? '']?.tone || 'info'}`">
+          {{ selectedInfo.status }}
         </span>
       </div>
-      <div v-if="selected.info.remark" class="detail-row">
+      <div v-if="selectedInfo.remark" class="detail-row">
         <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
         <span class="detail-label">備註</span>
-        <span class="detail-value">{{ selected.info.remark }}</span>
+        <span class="detail-value">{{ selectedInfo.remark }}</span>
       </div>
     </section>
     <EmptyState
-      v-else-if="selected"
+      v-else-if="selectedDate && data"
       variant="inline"
-      :title="`${selected.date} 尚無紀錄`"
+      :title="`${selectedDate} 尚無紀錄`"
     />
 
     <div v-if="loading && !data" class="skeleton-wrap">
       <SkeletonBlock variant="card" :count="2" />
     </div>
+    <MobileErrorRetry
+      v-else-if="attError && !data"
+      :error="attError as Error"
+      @retry="fetchData"
+    />
   </PullToRefresh>
 </template>
 
@@ -234,8 +279,8 @@ async function pullRefresh() { await fetchData() }
 }
 .skeleton-wrap { padding: 0 16px; display: flex; flex-direction: column; gap: 12px; }
 
-/* Hero */
-.att-hero { display: flex; flex-direction: column; gap: 12px; }
+/* Hero：與下方月曆、孩子 header 同一條 16px 左右留白（容器本身不給 padding-inline） */
+.att-hero { display: flex; flex-direction: column; gap: 12px; margin: 0 var(--space-4, 16px); }
 .month-row {
   display: flex;
   align-items: center;
@@ -247,7 +292,7 @@ async function pullRefresh() { await fetchData() }
 }
 .month-eyebrow {
   margin: 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -255,7 +300,7 @@ async function pullRefresh() { await fetchData() }
 }
 .month-title {
   margin: 2px 0 0;
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 800;
   color: var(--pt-text-strong);
   letter-spacing: -0.01em;
@@ -268,12 +313,12 @@ async function pullRefresh() { await fetchData() }
   align-items: center;
 }
 .summary-total {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
   font-weight: 500;
 }
 .summary-total strong { color: var(--pt-text-strong); }
-.today-btn { margin-left: auto; font-size: 12px; }
+.today-btn { margin-left: auto; font-size: 0.75rem; }
 
 /* Calendar */
 .calendar-wrap {
@@ -288,7 +333,7 @@ async function pullRefresh() { await fetchData() }
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
   text-align: center;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;
@@ -307,7 +352,7 @@ async function pullRefresh() { await fetchData() }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 0.8125rem;
   background: transparent;
   position: relative;
   cursor: default;
@@ -325,22 +370,55 @@ async function pullRefresh() { await fetchData() }
 .cell.has:active { transform: scale(0.95); }
 
 .day-num { font-weight: 600; color: var(--pt-text-strong); line-height: 1; }
-.cell .dot {
-  position: absolute;
-  bottom: 6px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+/* 狀態記號（字）：顏色只是輔助，字本身就能讀出狀態；色值走童彩 tonal 配對的 on 色，
+   light/dark 對各自的格底皆 ≥4.5:1 */
+.status-mark {
+  margin-top: 3px;
+  font-size: var(--text-xs, 12px);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--tone-on, var(--pt-text-muted));
 }
 
-.cell.tone-success { background: var(--leaf-100, #dcf4e6); }
-.cell.tone-success .dot { background: var(--brand-primary, #0d9053); }
-.cell.tone-danger  { background: var(--coral-100, #ffe3e0); }
-.cell.tone-danger .dot { background: var(--coral-600, #e96b6b); }
-.cell.tone-info    { background: var(--sky-100, #dceef5); }
-.cell.tone-info .dot { background: var(--sky-700, #2d6f8e); }
-.cell.tone-warn    { background: var(--sun-100, #fff4c9); }
-.cell.tone-warn .dot { background: var(--sun-700, #c99500); }
+.tone-success { --tone-bg: var(--leaf-100, #dcf4e6); --tone-on: var(--pt-accent-leaf-on); }
+.tone-danger  { --tone-bg: var(--coral-100, #ffe3e0); --tone-on: var(--pt-accent-coral-on); }
+.tone-info    { --tone-bg: var(--sky-100, #dceef5); --tone-on: var(--pt-accent-sky-on); }
+.tone-warn    { --tone-bg: var(--sun-100, #fff4c9); --tone-on: var(--pt-accent-sun-on); }
+.cell.tone-success,
+.cell.tone-danger,
+.cell.tone-info,
+.cell.tone-warn { background: var(--tone-bg); }
+
+/* 圖例 */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 12px 0 0;
+  padding: 10px 2px 0;
+  list-style: none;
+  border-top: 1px solid var(--pt-border-light, #ecf5f9);
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm, 13px);
+  color: var(--pt-text-muted);
+}
+.legend-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--tone-bg);
+  color: var(--tone-on);
+  font-size: var(--text-xs, 12px);
+  font-weight: 800;
+  line-height: 1;
+}
 
 .cell.is-today {
   outline: 2px solid var(--brand-primary, #0d9053);
@@ -359,7 +437,7 @@ async function pullRefresh() { await fetchData() }
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .detail-row .material-symbols-rounded {
   font-size: 20px;
@@ -368,7 +446,7 @@ async function pullRefresh() { await fetchData() }
 }
 .detail-label {
   width: 48px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--pt-text-muted);
   letter-spacing: 0.04em;

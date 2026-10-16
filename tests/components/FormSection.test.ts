@@ -31,14 +31,16 @@ describe('FormSection', () => {
     expect(isHidden(body.element)).toBe(false)
   })
 
-  it('Enter 鍵可展開收合', async () => {
+  it('標頭是原生 button（Enter/Space 由瀏覽器原生觸發 click，不需自綁 keydown）', () => {
     const wrapper = mount(FormSection, {
       props: { title: '個資', collapsible: true, defaultOpen: false },
       slots: { default: '<div class="inner">內容</div>' },
     })
-    await wrapper.find('.form-section__header').trigger('keydown.enter')
-    const body = wrapper.find('.form-section__body')
-    expect(isHidden(body.element)).toBe(false)
+    const header = wrapper.find('.form-section__header')
+    expect(header.element.tagName).toBe('BUTTON')
+    // type="button"：置於 el-form 內不可觸發表單 submit
+    expect(header.attributes('type')).toBe('button')
+    expect(header.attributes('aria-expanded')).toBe('false')
   })
 
   it('expand() 強制展開', async () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import StepExport from '../StepExport.vue'
 import type { SettlementRecord } from '@/composables/useSalarySettlement'
 
@@ -49,11 +49,14 @@ const STUBS = {
     SalarySnapshotDialog: true,
 }
 
-const mountStep = (settlement: ReturnType<typeof makeSettlement>) =>
+const mountStep = (
+    settlement: ReturnType<typeof makeSettlement>,
+    query = reactive({ year: 2026, month: 5 }),
+) =>
     mount(StepExport, {
         global: {
             stubs: STUBS,
-            provide: { settlement, settleQuery: { year: 2026, month: 5 } },
+            provide: { settlement, settleQuery: query },
             mocks: { $router: { push: vi.fn() } },
         },
     })
@@ -101,6 +104,21 @@ describe('StepExport', () => {
         const btn = wrapper.findAll('button').find((b) => b.text().includes('節慶獎金名冊'))
         await btn!.trigger('click')
         await flushPromises()
+        expect(wrapper.text()).not.toContain('本月結薪完成')
+    })
+
+    it('切換月份後不沿用前一月份的匯出完成狀態', async () => {
+        downloadFileMock.mockResolvedValueOnce(true)
+        const query = reactive({ year: 2026, month: 5 })
+        const wrapper = mountStep(makeSettlement([rec()]), query)
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('節慶獎金名冊'))!
+        await btn.trigger('click')
+        await flushPromises()
+        expect(wrapper.text()).toContain('本月結薪完成')
+
+        query.month = 6
+        await flushPromises()
+
         expect(wrapper.text()).not.toContain('本月結薪完成')
     })
 

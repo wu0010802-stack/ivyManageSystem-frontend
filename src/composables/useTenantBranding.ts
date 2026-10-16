@@ -20,7 +20,7 @@ import {
   TenantMetaError,
   type TenantMeta,
 } from '@/api/tenantMeta'
-import { tenantSlugOrPlaceholder } from '@/utils/tenant'
+import { TENANT_RESOLUTION_BUSY, tenantSlugOrPlaceholder } from '@/utils/tenant'
 // 三態遮罩（CT-F-01）：與 fc 的 boot 檢查、兩個 axios interceptor 共用**同一款畫面**
 // （CT-F-08）。fb 刻意不自建第二款——三種長相不同的「無法識別園所」是使用者的災難。
 import { showTenantBlocked } from '@/utils/tenantBlocked'
@@ -58,7 +58,12 @@ export interface TenantBranding {
   logo_url: string
   theme: { admin_primary: string; parent_primary: string }
   contact: { campus_label: string; address: string; phone: string; phone_display: string }
-  map: { lat: number; lng: number }
+  /**
+   * 園所座標（地圖預設中心）。`null` ＝**非預設租戶**尚未設定座標（F65）：
+   * 消費端改用 `NEUTRAL_MAP_VIEW` 或要求先設定，**不得**自行補任何一間園所的座標。
+   * 預設租戶（與灰度模式）恆有值。
+   */
+  map: { lat: number; lng: number } | null
   share: {
     site_name: string
     og_title: string
@@ -73,6 +78,9 @@ export interface TenantBranding {
   line_bot_friend_url: string
   public_site_origin: string
 }
+
+/** 預設租戶（義華）的校區座標；原 src/constants/recruitment.ts 的 FALLBACK_SCHOOL_LAT/LNG。 */
+const DEFAULT_TENANT_MAP: Readonly<{ lat: number; lng: number }> = Object.freeze({ lat: 22.642, lng: 120.3243 })
 
 /**
  * 預設品牌 = **改造前的現行字面**（default tenant 義華 / 常春藤）。
@@ -138,8 +146,9 @@ export const BRANDING_DEFAULTS: TenantBranding = Object.freeze({
     phone: '',
     phone_display: '',
   }),
-  // 招生地圖預設中心；原 src/constants/recruitment.ts 的 FALLBACK_SCHOOL_LAT/LNG
-  map: Object.freeze({ lat: 22.642, lng: 120.3243 }),
+  // 招生／娃娃車地圖預設中心（義華座標）。⚠ 只給預設租戶與灰度模式用——
+  // 非預設租戶缺值時是 null，不退回這裡（F65，見 normalizeBranding）。
+  map: DEFAULT_TENANT_MAP,
   share: Object.freeze({
     site_name: '常春藤教育機構',
     og_title: '常春藤教育機構｜課後才藝線上報名',
@@ -149,12 +158,20 @@ export const BRANDING_DEFAULTS: TenantBranding = Object.freeze({
     poster_alt: '常春藤教育機構課後才藝課程海報',
     share_text: '常春藤教育機構才藝報名海報',
   }),
+  // ⚠ 兩者同 map：義華專屬值，只給預設租戶當 fallback（F65）。
   school_keywords: Object.freeze(['常春藤']) as unknown as string[],
   school_aliases: Object.freeze(['明華幼兒園']) as unknown as string[],
   liff_id: '',
   line_bot_friend_url: '',
   public_site_origin: '',
 }) as TenantBranding
+
+/**
+ * 非預設租戶未設定園所座標（`branding.map === null`）時地圖的中性視角：台灣本島全覽。
+ * 刻意不指向任何一間園所——退回義華座標會讓別校的地圖「錯得很像真的」（F65），
+ * 小比例尺也讓使用者一眼看出「還沒定位」，而不是誤以為那就是自家園所。
+ */
+export const NEUTRAL_MAP_VIEW = Object.freeze({ lat: 23.7, lng: 120.96, zoom: 7 })
 
 // ── 狀態 ────────────────────────────────────────────────────────────────────
 
@@ -194,10 +211,20 @@ function saveSnapshot(value: TenantBranding): void {
   }
 }
 
-/** 逐欄 fallback：API 缺欄一律退回 `BRANDING_DEFAULTS`，不會出現空字串或 undefined。 */
+/**
+ * 逐欄 fallback：品牌**字串**缺欄一律退回 `BRANDING_DEFAULTS`，不會出現空字串或 undefined。
+ *
+ * ⚠ 例外（F65／MT-59）：`school_keywords`／`school_aliases`／`map` 是**義華專屬的事實**
+ * （自家校名關鍵字、別名、校區經緯度），不是可共用的品牌字串。只有預設租戶
+ * （slug 等於 `BRANDING_DEFAULTS.slug`，含沒帶 slug 的 payload 與灰度模式）才退回預設值；
+ * 其他租戶以後端為權威——空陣列就是空、缺座標就是 `null`。後端
+ * `utils/tenant_branding.get_school_keywords` 與 `get_default_campus_payload` 同一口徑。
+ */
 export function normalizeBranding(meta: TenantMeta | null | undefined): TenantBranding {
   const d = BRANDING_DEFAULTS
   const m = meta ?? {}
+  const slug = m.tenant?.slug || d.slug
+  const isDefaultTenant = slug === d.slug
   const pickManifest = (
     src: { name?: string; short_name?: string; description?: string } | undefined,
     fallback: TenantBrandingManifest,
@@ -207,8 +234,25 @@ export function normalizeBranding(meta: TenantMeta | null | undefined): TenantBr
     description: src?.description || fallback.description,
   })
 
+  const lat = m.map?.lat
+  const lng = m.map?.lng
+  // 預設租戶維持改造前的逐欄行為（DEV-12）；非預設租戶必須兩個座標都有，
+  // 否則是 null——不拿義華的另一半拼出一個不存在的點。
+  const map: TenantBranding['map'] = isDefaultTenant
+    ? {
+        lat: typeof lat === 'number' ? lat : DEFAULT_TENANT_MAP.lat,
+        lng: typeof lng === 'number' ? lng : DEFAULT_TENANT_MAP.lng,
+      }
+    : typeof lat === 'number' && typeof lng === 'number'
+      ? { lat, lng }
+      : null
+  // 預設租戶：keywords 空陣列也退回預設、aliases 只在非陣列時退回（改造前行為）。
+  // 非預設租戶：後端是權威，非陣列一律給空。
+  const keywords = Array.isArray(m.school_keywords) ? m.school_keywords.slice() : []
+  const aliases = Array.isArray(m.school_aliases) ? m.school_aliases.slice() : null
+
   return {
-    slug: m.tenant?.slug || d.slug,
+    slug,
     school_name: m.school_name || d.school_name,
     org_name: m.org_name || d.org_name,
     org_name_en: m.org_name_en || d.org_name_en,
@@ -238,10 +282,7 @@ export function normalizeBranding(meta: TenantMeta | null | undefined): TenantBr
       phone: m.contact?.phone || d.contact.phone,
       phone_display: m.contact?.phone_display || d.contact.phone_display,
     },
-    map: {
-      lat: typeof m.map?.lat === 'number' ? m.map.lat : d.map.lat,
-      lng: typeof m.map?.lng === 'number' ? m.map.lng : d.map.lng,
-    },
+    map,
     share: {
       site_name: m.share?.site_name || d.share.site_name,
       og_title: m.share?.og_title || d.share.og_title,
@@ -253,13 +294,8 @@ export function normalizeBranding(meta: TenantMeta | null | undefined): TenantBr
       poster_alt: m.share?.poster_alt || d.share.poster_alt,
       share_text: m.share?.share_text || d.share.share_text,
     },
-    school_keywords:
-      Array.isArray(m.school_keywords) && m.school_keywords.length
-        ? m.school_keywords.slice()
-        : d.school_keywords.slice(),
-    school_aliases: Array.isArray(m.school_aliases)
-      ? m.school_aliases.slice()
-      : d.school_aliases.slice(),
+    school_keywords: isDefaultTenant && !keywords.length ? d.school_keywords.slice() : keywords,
+    school_aliases: aliases ?? (isDefaultTenant ? d.school_aliases.slice() : []),
     liff_id: m.liff_id || d.liff_id,
     line_bot_friend_url: m.line_bot_friend_url || d.line_bot_friend_url,
     public_site_origin: m.public_site_origin || d.public_site_origin,
@@ -283,7 +319,9 @@ async function _fetchOnce(): Promise<void> {
       if (e.code === TENANT_META_DISABLED) return // 灰度未開，不是錯誤
       if (e.status === 404) return showTenantBlocked('TENANT_NOT_FOUND')
       if (e.status === 403) return showTenantBlocked('TENANT_SUSPENDED')
-      if (e.status === 503) return showTenantBlocked('TENANT_PROVISIONING')
+      // 解析負載削減（TENANT_RESOLUTION_BUSY）不是開通中：fetchTenantMeta 已重試過，
+      // 仍削減就與 5xx 同樣 fail-soft，不掛「園所開通中」終態遮罩（整合審查 R5）。
+      if (e.status === 503 && e.code !== TENANT_RESOLUTION_BUSY) return showTenantBlocked('TENANT_PROVISIONING')
     }
     // 網路錯誤 / 5xx → fail-soft，保留 defaults 或 snapshot。
     // 刻意不呼叫 captureException：Sentry / global handler 已涵蓋 unhandled，

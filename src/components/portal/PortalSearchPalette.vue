@@ -16,6 +16,7 @@ import {
   User,
   UserFilled,
   Notebook,
+  List,
 } from '@element-plus/icons-vue'
 import { searchPortal } from '@/api/portalSearch'
 import { usePortalSearch } from '@/composables/usePortalSearch'
@@ -23,16 +24,20 @@ import { usePortalSearch } from '@/composables/usePortalSearch'
 const router = useRouter()
 const { isOpen, closePalette } = usePortalSearch()
 
+// label 一律等於目的頁的標題（側欄、首頁功能格同名）；舊叫法留在 keywords 裡照樣搜得到。
 const COMMANDS: { id: string; keywords: string[]; label: string; icon: Component; route: string }[] = [
-  { id: 'leave', keywords: ['請假', '請假申請', 'leave'], label: '申請請假', icon: Sunny, route: '/portal/leave' },
-  { id: 'punch', keywords: ['補打卡', 'punch'], label: '補打卡申請', icon: Timer, route: '/portal/punch-correction' },
+  { id: 'class', keywords: ['班級', 'class', '工作台', '首頁', '班級功能'], label: '今日工作台', icon: HomeFilled, route: '/portal/home' },
+  { id: 'student-attendance', keywords: ['點名', '學生點名', '到園', 'attendance'], label: '學生點名', icon: List, route: '/portal/student-attendance' },
+  { id: 'contact-book', keywords: ['聯絡簿', '每日聯絡簿', 'contact book'], label: '每日聯絡簿', icon: Notebook, route: '/portal/contact-book' },
+  { id: 'observation', keywords: ['觀察', '新增觀察', '課堂觀察', 'observation'], label: '課堂觀察', icon: View, route: '/portal/observations' },
+  { id: 'leave', keywords: ['請假', '請假申請', '申請請假', 'leave'], label: '請假申請', icon: Sunny, route: '/portal/leave' },
   { id: 'overtime', keywords: ['加班', '加班申請', 'overtime'], label: '加班申請', icon: Clock, route: '/portal/overtime' },
-  { id: 'swap', keywords: ['換班', '代課', 'swap'], label: '換班 / 代課', icon: Refresh, route: '/portal/schedule' },
-  { id: 'salary', keywords: ['薪資', '薪水', 'salary'], label: '薪資預覽', icon: Money, route: '/portal/salary' },
-  { id: 'calendar', keywords: ['行事曆', 'calendar'], label: '行事曆', icon: Calendar, route: '/portal/calendar' },
-  { id: 'observation', keywords: ['觀察', '新增觀察', 'observation'], label: '新增觀察', icon: View, route: '/portal/observations' },
+  { id: 'punch', keywords: ['補打卡', 'punch'], label: '補打卡申請', icon: Timer, route: '/portal/punch-correction' },
+  { id: 'swap', keywords: ['換班', '代課', '排班', 'swap'], label: '我的排班（換班）', icon: Refresh, route: '/portal/schedule' },
+  { id: 'attendance-confirm', keywords: ['出勤確認', '月底', '考核', '簽認'], label: '月底出勤確認', icon: Refresh, route: '/portal/attendance-confirm' },
+  { id: 'salary', keywords: ['薪資', '薪水', '薪資預覽', 'salary'], label: '薪資查詢', icon: Money, route: '/portal/salary' },
   { id: 'announcement', keywords: ['公告', 'announcement'], label: '公告通知', icon: Bell, route: '/portal/announcements' },
-  { id: 'hub', keywords: ['今日', '工作台', 'hub', 'today'], label: '今日工作台', icon: HomeFilled, route: '/portal/class-hub' },
+  { id: 'calendar', keywords: ['行事曆', 'calendar'], label: '學校行事曆', icon: Calendar, route: '/portal/calendar' },
 ]
 
 // 結果分類圖示（對齊 EP icon 系統，取代原本的裝飾 emoji）
@@ -73,9 +78,12 @@ const activeDescId = computed(() =>
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+// 還沒輸入時列出全部捷徑當「常用」：原本清單一片空白，手機滿版時整個畫面只剩輸入框
+const isIdle = computed(() => query.value.trim().length < 1)
+
 const commandResults = computed(() => {
   const q = query.value.trim().toLowerCase()
-  if (q.length < 1) return []
+  if (q.length < 1) return COMMANDS
   return COMMANDS.filter(
     (c) =>
       c.keywords.some((k) => k.toLowerCase().includes(q)) ||
@@ -242,7 +250,7 @@ defineExpose({ activeIndex })
 
         <div id="psp-listbox" class="psp-results" role="listbox" aria-label="搜尋結果">
           <template v-if="commandResults.length">
-            <div class="psp-section" role="presentation">快捷</div>
+            <div class="psp-section" role="presentation">{{ isIdle ? '常用' : '快捷' }}</div>
             <div
               v-for="(c, i) in commandResults"
               :id="`psp-opt-${i}`"
@@ -413,6 +421,12 @@ defineExpose({ activeIndex })
   border-radius: 4px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+/* 手機沒有實體鍵盤，esc 提示只是噪音；右側關閉鈕才是關閉方式 */
+@media (--to-sm) {
+  .psp-esc {
+    display: none;
+  }
 }
 /* 明確的關閉鈕（≥44px 觸控目標）：手機滿版時是唯一可靠的關閉方式 */
 .psp-close {

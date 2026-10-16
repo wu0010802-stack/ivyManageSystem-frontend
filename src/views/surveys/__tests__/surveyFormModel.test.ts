@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { addQuestion, emptyDraft, isDraftDirty, moveQuestion, removeQuestion, validateDraft, type SurveyDraft } from '../surveyFormModel'
+import { addQuestion, copyDraftFrom, deadlineHints, emptyDraft, isDraftDirty, moveQuestion, removeQuestion, validateDraft, type SurveyDraft } from '../surveyFormModel'
 
 /** 產生一份除待測欄位外皆合法的草稿，用來隔離單一規則。 */
 function validBaseDraft(): SurveyDraft {
@@ -133,6 +133,93 @@ describe('surveyFormModel', () => {
       const base = JSON.parse(JSON.stringify(draft)) as SurveyDraft
       draft.questions[0].question_text = '交通方式'
       expect(isDraftDirty(base, draft)).toBe(true)
+    })
+  })
+
+  describe('題目編號與表單／詳情頁一致', () => {
+    it('驗證訊息以「附加題 N」稱呼自訂題（主題目「是否參加」固定不編號）', () => {
+      const d = validBaseDraft()
+      addQuestion(d, 'single_choice')
+      addQuestion(d, 'text')
+      expect(validateDraft(d)).toContain('附加題 1請填寫題目文字')
+      expect(validateDraft(d)).toContain('附加題 2請填寫題目文字')
+      expect(validateDraft(d).some(m => m.startsWith('第 '))).toBe(false)
+    })
+  })
+
+  describe('deadlineHints（非阻擋提示）', () => {
+    const TODAY = '2026-09-15'
+
+    it('沒填截止日就沒有提示', () => {
+      expect(deadlineHints({ reply_deadline: '', event_date: '2026-10-01' }, TODAY)).toEqual([])
+    })
+
+    it('截止日已過會提示發布會被拒絕', () => {
+      const hints = deadlineHints({ reply_deadline: '2026-09-14', event_date: null }, TODAY)
+      expect(hints).toHaveLength(1)
+      expect(hints[0]).toContain('已過')
+    })
+
+    it('截止日晚於活動日會提示；等於活動日不提示', () => {
+      expect(deadlineHints({ reply_deadline: '2026-10-02', event_date: '2026-10-01' }, TODAY)[0]).toContain('晚於活動日期')
+      expect(deadlineHints({ reply_deadline: '2026-10-01', event_date: '2026-10-01' }, TODAY)).toEqual([])
+    })
+
+    it('兩個問題同時成立會各給一條', () => {
+      expect(deadlineHints({ reply_deadline: '2026-09-10', event_date: '2026-09-01' }, TODAY)).toHaveLength(2)
+    })
+  })
+
+  describe('copyDraftFrom（複製調查）', () => {
+    function source(overrides: Record<string, unknown> = {}) {
+      return {
+        title: '秋季戶外教學',
+        description: '動物園一日遊',
+        event_date: '2026-10-01',
+        location: '動物園',
+        fee_note: null,
+        audience_type: 'classrooms' as const,
+        classroom_ids: [11, 12],
+        reply_deadline: '2026-09-20',
+        questions: [
+          { id: 5, question_text: '搭乘遊覽車', question_type: 'single_choice' as const, options: ['是', '否'], is_required: true, sort_order: 0 },
+        ],
+        ...overrides,
+      }
+    }
+
+    it('標題加「（複本）」，活動日期與回覆截止日清空，其餘內容沿用', () => {
+      const d = copyDraftFrom(source(), [11, 12])
+      expect(d.title).toBe('秋季戶外教學（複本）')
+      expect(d.event_date).toBeNull()
+      expect(d.reply_deadline).toBe('')
+      expect(d.description).toBe('動物園一日遊')
+      expect(d.location).toBe('動物園')
+      expect(d.fee_note).toBe('')
+      expect(d.audience_type).toBe('classrooms')
+      expect(d.classroom_ids).toEqual([11, 12])
+    })
+
+    it('題目沿用但不帶原題 id（新建的是新題目）', () => {
+      const d = copyDraftFrom(source(), null)
+      expect(d.questions).toEqual([
+        { question_text: '搭乘遊覽車', question_type: 'single_choice', options: ['是', '否'], is_required: true, sort_order: 0 },
+      ])
+    })
+
+    it('原班級已不在目前班級清單（例如去年的班）就不帶入；清單載入失敗（null）時照原樣保留', () => {
+      expect(copyDraftFrom(source(), [12, 13]).classroom_ids).toEqual([12])
+      expect(copyDraftFrom(source(), null).classroom_ids).toEqual([11, 12])
+    })
+
+    it('標題加後綴超過 100 字時截短原標題，總長不超過上限', () => {
+      const d = copyDraftFrom(source({ title: '長'.repeat(100) }), null)
+      expect(d.title).toHaveLength(100)
+      expect(d.title.endsWith('（複本）')).toBe(true)
+    })
+
+    it('複本仍需重填截止日才能存：validateDraft 會擋', () => {
+      expect(validateDraft(copyDraftFrom(source(), null), false).join()).toContain('截止')
     })
   })
 })

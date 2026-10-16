@@ -72,7 +72,9 @@ function toActiveItem(call: DismissalCallView): PosQueueItem {
       ? 'reservation'
       : call.request_source === 'proxy'
         ? 'proxy'
-        : 'onsite'
+        : call.request_source === 'bus'
+          ? 'bus'
+          : 'onsite'
   return {
     id: call.id,
     phase: 'active',
@@ -333,7 +335,7 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
       localActiveCalls.delete(id)
     } catch (e) {
       const err = e as { response?: { data?: { detail?: string } } }
-      ElMessage.error(err.response?.data?.detail || `確認接送失敗：${item.studentName}`)
+      ElMessage.error(err.response?.data?.detail || `確認交接失敗：${item.studentName}`)
     } finally {
       confirmingIds.delete(id)
     }

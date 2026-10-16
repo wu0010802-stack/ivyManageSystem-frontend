@@ -11,6 +11,7 @@
  */
 
 import api from './index'
+import type { AxiosRequestConfig } from 'axios'
 
 /**
  * Domain shape for a contact-book entry as consumed by parent-side Vue components.
@@ -129,16 +130,21 @@ export async function getContactBookDetail(entryId: number) {
   return { ...res, data: toEntry(res.data) }
 }
 
-export async function ackContactBook(entryId: number) {
-  const res = await api.post(`/parent/contact-book/${entryId}/ack`)
+export async function ackContactBook(entryId: number, config?: AxiosRequestConfig) {
+  const res = config
+    ? await api.post(`/parent/contact-book/${entryId}/ack`, undefined, config)
+    : await api.post(`/parent/contact-book/${entryId}/ack`)
   return { ...res, data: toAckResponse(res.data || {}) }
 }
 
 export function replyContactBook(
   entryId: number,
   payload: { body: string; client_request_id?: string },
+  config?: AxiosRequestConfig,
 ) {
-  return api.post(`/parent/contact-book/${entryId}/reply`, payload)
+  return config
+    ? api.post(`/parent/contact-book/${entryId}/reply`, payload, config)
+    : api.post(`/parent/contact-book/${entryId}/reply`, payload)
 }
 
 export function deleteContactBookReply(entryId: number, replyId: number) {

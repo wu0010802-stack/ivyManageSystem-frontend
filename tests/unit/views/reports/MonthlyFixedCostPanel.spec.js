@@ -3,10 +3,11 @@
  *
  * 驗證固定費用登錄面板：
  *  1. 渲染 8 category × 12 month = 96 cells（input.cell-input，type=text＋inputmode=numeric）
- *  2. 改一個 cell 變 dirty → save 按鈕 enabled → 點擊呼 batch 含正確 entries
+ *  2. 改一個 cell 變 dirty → 底部儲存列出現（沒修改時不存在）→ 點擊呼 batch 含正確 entries
  *  3. 多 cell dirty → batch 含全部 dirty entries
- *  4. 儲存成功後重抓 + dirty 清零 → save 按鈕 disabled
+ *  4. 儲存成功後重抓 + dirty 清零 → 儲存列消失
  *  5. 無寫權限：所有 input disabled、無 save button、警示訊息顯示
+ *     （403 提示文案不露出權限代碼；快取失效／儲存失敗不清 dirty 的不變式同樣保留）
  *  6. year prop 改變 → refetch
  *  7. category 合計與月度合計即時更新
  */
@@ -163,19 +164,20 @@ describe('MonthlyFixedCostPanel', () => {
     const w = mountPanel({ year: 2026 })
     await flushPromises()
 
-    // 初始 save 按鈕 disabled
-    const btn = w.find('[data-test="save-all-btn"]')
-    expect(btn.attributes('disabled')).toBeDefined()
+    // 沒有修改時不顯示儲存列（舊版是頂部常駐的 disabled「儲存全部」）
+    expect(w.find('[data-test="save-bar"]').exists()).toBe(false)
+    expect(w.find('[data-test="save-all-btn"]').exists()).toBe(false)
 
     // 修改 3-electricity → 12000
     const cell = w.find('[data-cell-key="3-electricity"]')
     const input = cell.find('input')
     await input.setValue('12000')
     expect(cell.classes()).toContain('cell-dirty')
-    // dirtyCount > 0 → button enabled
+    // dirtyCount > 0 → 儲存列出現、按鈕 enabled 並顯示格數
+    const btn = w.find('[data-test="save-all-btn"]')
+    expect(btn.exists()).toBe(true)
     expect(btn.attributes('disabled')).toBeUndefined()
-    // 顯示 dirtyCount
-    expect(btn.text()).toContain('1')
+    expect(btn.text()).toBe('儲存 1 格')
 
     // 點擊 save
     await btn.trigger('click')
@@ -192,8 +194,9 @@ describe('MonthlyFixedCostPanel', () => {
     expect(cellAfter.classes()).not.toContain('cell-dirty')
     // 未 focus 顯示千分位（spec §9）
     expect(cellAfter.find('input').element.value).toBe('12,000')
-    // 改完後一樣 disabled
-    expect(w.find('[data-test="save-all-btn"]').attributes('disabled')).toBeDefined()
+    // dirty 清零 → 儲存列消失
+    expect(w.find('[data-test="save-bar"]').exists()).toBe(false)
+    expect(w.emitted('saved')).toHaveLength(1)
   })
 
   it('多 cell dirty → batch entries 含全部 dirty', async () => {
@@ -209,7 +212,7 @@ describe('MonthlyFixedCostPanel', () => {
     await w.find('[data-cell-key="5-water"] input').setValue('5989')
 
     const btn = w.find('[data-test="save-all-btn"]')
-    expect(btn.text()).toContain('3')
+    expect(btn.text()).toBe('儲存 3 格')
 
     await btn.trigger('click')
     await flushPromises()
@@ -254,18 +257,24 @@ describe('MonthlyFixedCostPanel', () => {
       expect(inp.attributes('disabled')).toBeDefined()
     }
 
-    // 無 save button
+    // 無 save button、無儲存列、無「帶入」入口
     expect(w.find('[data-test="save-all-btn"]').exists()).toBe(false)
+    expect(w.find('[data-test="save-bar"]').exists()).toBe(false)
+    expect(w.find('[data-test="fill-rent"]').exists()).toBe(false)
     // 警示訊息
     expect(w.text()).toContain('您只有查看權限')
   })
 
-  it('載入 403（無 VENDOR_PAYMENT_READ）時顯示明確權限提示，非通用「載入失敗」（2026-07-05 稽核 §0/P3-11）', async () => {
+  it('載入 403（無 VENDOR_PAYMENT_READ）時顯示明確權限提示，非通用「載入失敗」（2026-07-05 稽核 §0/P3-11）；文案不露出權限代碼', async () => {
+    const { ElMessage } = await import('element-plus')
     mockGet.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'Forbidden' } } })
     const w = mountPanel({ year: 2026 })
     await flushPromises()
 
-    expect(w.text()).toContain('需要廠商付款讀取權限')
+    expect(w.text()).toContain('需要廠商付款的讀取權限，請洽管理員開通。')
+    expect(w.text()).not.toContain('VENDOR_PAYMENT_READ')
+    expect(w.text()).not.toContain('載入固定支出失敗')
+    expect(ElMessage.error).toHaveBeenCalledWith('需要廠商付款的讀取權限，請洽管理員開通。')
   })
 
   it('year prop 改變 → refetch', async () => {
@@ -302,6 +311,11 @@ describe('MonthlyFixedCostPanel', () => {
     // 總計 = 500000 + 500000 + 3000 = 1,003,000
     const grand = w.find('[data-grand-total]')
     expect(grand.text().replace(/\s/g, '')).toContain('1,003,000')
+
+    // 含編輯中的值 → 合計下方標「未儲存」；沒動的月份不標
+    expect(rentTotal.text()).toContain('未儲存')
+    expect(m1Total.text()).toContain('未儲存')
+    expect(w.find('[data-month-total="3"]').text()).not.toContain('未儲存')
   })
 
   it('儲存成功後呼叫 invalidateCachedAsync 失效 reports/finance: 與 reports/dashboard: 前綴（2026-07-05 補 P1 缺口：固定支出併入總支出後，概況/收支彙總/薪資頁的舊快取需失效）', async () => {

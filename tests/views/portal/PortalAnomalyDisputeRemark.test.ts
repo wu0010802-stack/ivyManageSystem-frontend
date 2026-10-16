@@ -35,6 +35,11 @@ vi.mock('@/api/portal', () => ({
   confirmAnomaly: vi.fn().mockResolvedValue({ data: { message: '申訴已提交' } }),
 }))
 
+vi.mock('@/api/portalHome', () => ({
+  getHomeSummary: vi.fn().mockResolvedValue({ data: { actions: {} } }),
+}))
+
+import { createPinia, setActivePinia } from 'pinia'
 import { getAnomalies, confirmAnomaly } from '@/api/portal'
 import PortalAnomalyView from '@/views/portal/PortalAnomalyView.vue'
 
@@ -60,6 +65,7 @@ async function mountWithDispute(remark: string) {
 
 describe('教師端出勤異常申訴', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.mocked(confirmAnomaly).mockClear()
   })
 

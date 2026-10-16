@@ -95,6 +95,9 @@ function mountCard(overrides: {
   total?: number
   context?: typeof defaultContext | typeof missingOutContext
   busy?: boolean
+  showNav?: boolean
+  actions?: Array<'punch' | 'admin_accept' | 'admin_waive'>
+  primaryAction?: boolean
 }) {
   return mount(ResolveCard, {
     props: {
@@ -103,6 +106,9 @@ function mountCard(overrides: {
       total: overrides.total ?? 3,
       context: overrides.context ?? defaultContext,
       busy: overrides.busy ?? false,
+      ...(overrides.showNav !== undefined ? { showNav: overrides.showNav } : {}),
+      ...(overrides.actions ? { actions: overrides.actions } : {}),
+      ...(overrides.primaryAction !== undefined ? { primaryAction: overrides.primaryAction } : {}),
     },
     global: { stubs },
   })
@@ -324,5 +330,30 @@ describe('ResolveCard', () => {
     const pickersAfter = wrapper.findAll('.el-time-picker')
     const outPickerAfter = pickersAfter[pickersAfter.length - 1]
     expect(outPickerAfter.element.value).toBe('')
+  })
+})
+
+describe('ResolveCard — 嵌在排班與出勤抽屜', () => {
+  it('showNav=false 不顯示「第 N / M 筆」與上下筆（抽屜只有一天）', () => {
+    const w = mountCard({ showNav: false, total: 1 })
+    expect(w.text()).not.toContain('第 1 / 1 筆')
+    expect(w.findAll('button').map((b) => b.text())).not.toContain('◀')
+  })
+
+  it('actions 只列允許的動作；沒有接受扣款／豁免時也不顯示「套用到整天」提示', () => {
+    const punchOnly = mountCard({ item: itemMissingPunch, context: missingOutContext, actions: ['punch'] })
+    const labels = punchOnly.findAll('button').map((b) => b.text())
+    expect(labels).toContain('補打卡並重算')
+    expect(labels).not.toContain('接受扣款')
+    expect(labels).not.toContain('豁免')
+    expect(punchOnly.text()).not.toContain('整天')
+    const confirmOnly = mountCard({ actions: ['admin_accept', 'admin_waive'] })
+    expect(confirmOnly.findAll('button').map((b) => b.text())).not.toContain('補打卡並重算')
+  })
+
+  it('primaryAction=false：補打卡不是主要按鈕（同一抽屜不得兩顆主色鈕）', () => {
+    const w = mountCard({ item: itemMissingPunch, context: missingOutContext, primaryAction: false })
+    expect(w.findAll('button').find((b) => b.text() === '補打卡並重算')!.attributes('data-type')).not.toBe('primary')
+    expect(mountCard({ item: itemMissingPunch, context: missingOutContext }).findAll('button').find((b) => b.text() === '補打卡並重算')!.attributes('data-type')).toBe('primary')
   })
 })

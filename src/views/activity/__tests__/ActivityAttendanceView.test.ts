@@ -44,6 +44,7 @@ import {
 } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
 import ActivityAttendanceView from '../ActivityAttendanceView.vue'
+import AttendanceMarkControl from '@/components/activity/AttendanceMarkControl.vue'
 
 const asMock = (fn: unknown): Mock => fn as Mock
 
@@ -286,10 +287,13 @@ describe('ActivityAttendanceView — drawer 寫入按鈕蓋 canWrite（A2）', (
     // 唯讀仍可列印/匯出
     expect(texts).toContain('列印點名單')
     expect(texts).toContain('匯出 Excel')
-    // 點名 switch 一併 disabled（排除頂部分組切換 switch）
-    const studentSwitches = wrapper.findAllComponents(ElSwitchStub).filter(s => s.props('modelValue') !== true && s.props('modelValue') !== false)
-    expect(studentSwitches.length).toBeGreaterThan(0)
-    expect(studentSwitches.every(s => s.props('disabled') === true)).toBe(true)
+    // 每位學生的出缺席控制項一併 disabled。
+    // 2026-09-14：這裡原本找的是 el-switch stub；出缺席改成三態的
+    // AttendanceMarkControl 後（el-switch 會把「未點名」null 改寫成缺席），
+    // 守衛意圖不變、只換成新元件。
+    const marks = wrapper.findAllComponents(AttendanceMarkControl)
+    expect(marks.length).toBeGreaterThan(0)
+    expect(marks.every(m => m.props('disabled') === true)).toBe(true)
   })
 
   it('有寫入權限時按鈕照常顯示', async () => {

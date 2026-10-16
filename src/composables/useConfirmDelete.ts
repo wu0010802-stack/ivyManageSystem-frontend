@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
+import { notifySubstituteDutyWarnings } from './substituteDutyNotice'
 
 /**
  * @param {Object} options
@@ -34,8 +35,11 @@ export function useConfirmDelete({ endpoint, onSuccess, successMsg = '已刪除'
 
     deleting.value = true
     try {
-      await api.delete(`${endpoint}/${row[idField]}`)
+      const res = await api.delete(`${endpoint}/${row[idField]}`)
       ElMessage.success(successMsg)
+      // 刪除已核准假單會回收代理人的代理班（SPEC-026）；回應若帶 substitute_duty_warnings 一併顯示。
+      // 其他資源的刪除回應沒有這個欄位，notify 什麼都不做。
+      notifySubstituteDutyWarnings(res)
       if (onSuccess) onSuccess(row)
     } catch (e) {
       const err = e as { response?: { data?: { detail?: string } } }

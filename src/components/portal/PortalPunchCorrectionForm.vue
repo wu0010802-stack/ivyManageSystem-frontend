@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const emit = defineEmits<{
   'submit': [payload: Record<string, unknown>]
@@ -69,13 +70,17 @@ const submit = async () => {
 }
 
 defineExpose({ form })
+
+// 手機改用頂端標籤，避免固定 label-width 把「開始時間」等標籤折行（P1-02）
+const { isMobile } = useIsMobile()
 </script>
 
 <template>
     <div class="punch-correction-form">
-        <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+        <el-form ref="formRef" :model="form" :rules="rules" :label-position="isMobile ? 'top' : 'right'"
+            :label-width="isMobile ? undefined : '100px'">
             <el-form-item label="申請日期" prop="attendance_date">
-                <el-date-picker
+                <el-date-picker popper-class="portal-sheet-picker"
                     v-model="form.attendance_date"
                     type="date"
                     value-format="YYYY-MM-DD"
@@ -100,7 +105,7 @@ defineExpose({ form })
                 </el-select>
             </el-form-item>
             <el-form-item v-if="showPunchIn" label="申請上班時間" required>
-                <el-time-picker
+                <el-time-picker popper-class="portal-sheet-picker"
                     v-model="form.requested_punch_in_time"
                     format="HH:mm"
                     value-format="HH:mm"
@@ -109,7 +114,7 @@ defineExpose({ form })
                 />
             </el-form-item>
             <el-form-item v-if="showPunchOut" label="申請下班時間" required>
-                <el-time-picker
+                <el-time-picker popper-class="portal-sheet-picker"
                     v-model="form.requested_punch_out_time"
                     format="HH:mm"
                     value-format="HH:mm"
