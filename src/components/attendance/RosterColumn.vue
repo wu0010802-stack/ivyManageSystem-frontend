@@ -44,12 +44,11 @@
               <el-tag type="success" size="small">紀錄無異常</el-tag>
             </template>
             <template v-else>
-              <el-tag
-                v-if="row.late_count > 0 || row.early_leave_count > 0"
-                type="warning"
-                size="small"
-              >
-                遲{{ row.late_count + row.early_leave_count }}
+              <el-tag v-if="row.late_count > 0" type="warning" size="small">
+                遲{{ row.late_count }}
+              </el-tag>
+              <el-tag v-if="row.early_leave_count > 0" type="warning" size="small">
+                早{{ row.early_leave_count }}
               </el-tag>
               <el-tag
                 v-if="row.missing_punch_in > 0 || row.missing_punch_out > 0"

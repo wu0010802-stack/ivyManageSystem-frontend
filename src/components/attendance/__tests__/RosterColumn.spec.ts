@@ -246,4 +246,25 @@ describe('RosterColumn — 分組用真正的待處理數', () => {
     expect(text.indexOf('李缺卡')).toBeLessThan(cleanIdx)
     wrapper.unmount()
   })
+
+  // 2026-10-16 staging 實測：徽章「遲N」原本是遲到＋早退的合計，只有早退的人也顯示「遲」
+  it('shows late and early-leave counts as separate badges', () => {
+    const earlyOnly: RosterRow = {
+      ...rowFull,
+      employee_id: 4,
+      employee_name: '趙早退',
+      employee_number: 'E004',
+      early_leave_count: 3,
+    }
+    const wrapper = mountRoster({ roster: [rowLate, earlyOnly] })
+    const badges = (name: string) =>
+      wrapper
+        .findAll('.roster-item')
+        .find((i) => i.text().includes(name))!
+        .findAll('.roster-item__badges span')
+        .map((b) => b.text())
+    expect(badges('王遲到')).toEqual(['遲2', '早1'])
+    expect(badges('趙早退')).toEqual(['早3'])
+    wrapper.unmount()
+  })
 })

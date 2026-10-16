@@ -26,7 +26,7 @@ import type { ReviewEdit, ReviewAction, ReviewFilter } from '@/utils/attendanceB
 import { useAttendanceScheduleReview } from '@/composables/useAttendanceScheduleReview'
 import { reviewFingerprint, proposeScheduleReview, SCHEDULE_WINDOW_MINUTES } from '@/utils/attendanceScheduleReview'
 import { csvRow } from '@/utils/csv'
-import ClockReportBlockReview from './ClockReportBlockReview.vue'
+import ClockReportBlockReview, { type BlockDateMoves } from './ClockReportBlockReview.vue'
 
 // ── Props / Emits ──────────────────────────────────────────────────────────────
 const props = defineProps<{
@@ -141,6 +141,16 @@ function toggleBlock(blockId: string, checked: boolean) {
   confirmedBlocks.value = next
   reviewDirty.value = true
 }
+// 推估日期的人工修正（區塊 → { 原推估日期: 改成的日期 }），重新預覽成功後寫回區塊推估並清空
+const blockDateMoves = ref<BlockDateMoves>({})
+function moveBlockDate(blockId: string, from: string, to: string) {
+  const { [from]: _previous, ...rest } = blockDateMoves.value[blockId] ?? {}
+  blockDateMoves.value = { ...blockDateMoves.value, [blockId]: to === from ? rest : { ...rest, [from]: to } }
+  reviewDirty.value = true
+}
+function movedDate(blockId: string | null | undefined, date: string): string {
+  return (blockId && blockDateMoves.value[blockId]?.[date]) || date
+}
 const singlePunchCount = computed(() => previewResult.value?.rows.filter(row => row.punches?.length === 1).length ?? 0)
 const multiPunchCount = computed(() => previewResult.value?.rows.filter(row => (row.punches?.length ?? 0) > 2).length ?? 0)
 const sourceEmployees = computed(() => {
@@ -194,6 +204,7 @@ function checkLabel(row: PreviewRow): string {
 function clearPreview() {
   generation++
   confirmedBlocks.value = new Set()
+  blockDateMoves.value = {}
   invalidateSchedule()
   manualTimeKeys.value = new Set()
   clearReviewSelection()
@@ -273,17 +284,24 @@ async function handleReviewPreview() {
   invalidateSchedule(false)
   reviewFilter.value = 'all'
   const current = previewResult.value
-  const records = current.rows.map(row => ({
-    department: '', weekday: '', employee_number: row.employee_number, name: row.employee_name,
-    date: row.date ?? '', punch_in: reviewEdits.value[row.row_num]?.punch_in || null,
-    punch_out: reviewEdits.value[row.row_num]?.punch_out || null,
-    import_format: row.import_format, device_id: row.device_id,
-    source_employee_number: row.source_employee_number, source_rows: row.source_rows,
-    punches: row.punches, review_required: row.review_required || scheduleRequiredKeys.value.has(reviewFingerprint(row)),
-    review_confirmed: reviewEdits.value[row.row_num]?.confirmed ?? false,
-    source_tokens: row.source_tokens, block_id: row.block_id, block_layout: row.block_layout,
-    block_confirmed: row.block_id ? confirmedBlocks.value.has(row.block_id) : false,
-  }))
+  const moves = blockDateMoves.value
+  const records = current.rows.map(row => {
+    const date = movedDate(row.block_id, row.date ?? '')
+    const moved = date !== (row.date ?? '')
+    return {
+      department: '', weekday: '', employee_number: row.employee_number, name: row.employee_name,
+      date, punch_in: reviewEdits.value[row.row_num]?.punch_in || null,
+      punch_out: reviewEdits.value[row.row_num]?.punch_out || null,
+      import_format: row.import_format, device_id: row.device_id,
+      source_employee_number: row.source_employee_number, source_rows: row.source_rows,
+      // 推估日期改過的列，打卡時間戳的日期一併改到新日期
+      punches: moved ? row.punches?.map(punch => `${date}${punch.slice(10)}`) : row.punches,
+      review_required: row.review_required || scheduleRequiredKeys.value.has(reviewFingerprint(row)),
+      review_confirmed: reviewEdits.value[row.row_num]?.confirmed ?? false,
+      source_tokens: row.source_tokens, block_id: row.block_id, block_layout: row.block_layout,
+      block_confirmed: row.block_id ? confirmedBlocks.value.has(row.block_id) : false,
+    }
+  })
   const request = ++generation
   previewing.value = true
   previewResult.value = null
@@ -292,7 +310,10 @@ async function handleReviewPreview() {
     if (request !== generation) return
     previewResult.value = { ...res.data, import_format: current.import_format, device_id: current.device_id,
       source_count: current.source_count, date_start: current.date_start, date_end: current.date_end,
-      blocks: current.blocks }
+      blocks: current.blocks?.map(block => ({ ...block, proposals: block.proposals
+        .map(proposal => ({ ...proposal, date: moves[block.block_id]?.[proposal.date] ?? proposal.date }))
+        .sort((a, b) => a.date.localeCompare(b.date)) })) }
+    blockDateMoves.value = {}
     initializeReview()
   } catch (err) {
     if (request === generation) {
@@ -695,9 +716,11 @@ defineExpose({
           v-if="isClockReport && clockBlocks.length"
           :blocks="clockBlocks"
           :confirmed="confirmedBlocks"
+          :moves="blockDateMoves"
           :disabled="busy || !canWrite || mappingDirty || !!pendingBatch"
           :dirty="reviewDirty"
           @toggle="toggleBlock"
+          @move="moveBlockDate"
           @reapply="handleReviewPreview"
         />
         <details v-if="reviewRows.length">

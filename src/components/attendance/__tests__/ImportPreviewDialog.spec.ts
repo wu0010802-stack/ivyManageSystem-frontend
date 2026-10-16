@@ -1262,6 +1262,29 @@ describe('打卡鐘報表預覽', () => {
     expect(wrapper.text()).toContain('所有區塊皆已確認')
   })
 
+  // 2026-10-16 staging 實測：推估日期排錯時原本只能整月不匯入
+  it('改推估日期後重新預覽，送出的列與區塊推估都改到新日期', async () => {
+    const junBlock = { ...block, date_line: '21 日        22 一     23 二    24 三     25 四     26 五     27 六     28 日     29 一     30 二' }
+    mockPreviewClockReport.mockResolvedValueOnce({ data: clockFixture({ blocks: [junBlock] }) })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...clockFixture(), blocks: [], summary: { importable: 2, problems: 0, overwrites: 0 },
+      rows: [clockRow({ date: '2026-06-24', check: 'importable', block_confirmed: true }), { ...sibling(), check: 'importable' }],
+      normalized: [{ employee_number: 'T901', date: '2026-06-24', punch_in: '15:52', punch_out: '17:13' }] } })
+    const wrapper = mountDialog()
+    await uploadTxt(wrapper)
+    await wrapper.find('[data-block-id="901:21"] tbody select').setValue('2026-06-24')
+    await wrapper.find('[data-block-id="901:21"] input[type="checkbox"]').setValue(true)
+    await wrapper.find('[data-reapply]').trigger('click')
+    await flushPromises()
+    expect(mockPreviewImport).toHaveBeenLastCalledWith(expect.objectContaining({ records: [
+      expect.objectContaining({ block_id: '901:21', date: '2026-06-24', block_confirmed: true,
+        punches: ['2026-06-24T15:52:00', '2026-06-24T17:13:00'] }),
+      expect.objectContaining({ block_id: null, date: '2026-06-22' }),
+    ] }))
+    const select = wrapper.find('[data-block-id="901:21"] tbody select')
+    expect((select.element as HTMLSelectElement).value).toBe('2026-06-24')
+    expect(wrapper.find('[data-block-id="901:21"] tbody').text()).not.toContain('已改')
+  })
+
   it('區塊確認變更後必須重新預覽才能匯入', async () => {
     const ready = clockFixture({ summary: { importable: 1, problems: 0, overwrites: 0 }, rows: [sibling()],
       normalized: [{ employee_number: 'T902', date: '2026-06-22', punch_in: '08:00', punch_out: '17:00' }] })
