@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :model-value="modelValue" :title="title" width="560px" append-to-body @update:model-value="(v: boolean) => emit('update:modelValue', v)">
+  <el-dialog :model-value="modelValue" :title="title" :width="FORM_DIALOG_WIDTH.compact" append-to-body @update:model-value="(v: boolean) => emit('update:modelValue', v)">
     <p v-if="loading" role="status">正在讀取這一週的出勤…</p>
     <p v-else-if="loadError" class="rfu__error" role="alert">{{ loadError }}</p>
     <template v-else-if="grid">
@@ -46,6 +46,7 @@ import BatchConfirmDialog from '@/components/schedule-attendance/BatchConfirmDia
 import { getScheduleAttendanceGrid } from '@/api/scheduleAttendance'
 import { saveDaily } from '@/api/shifts'
 import { formatMonthDay } from '@/utils/attendanceConfirm'
+import { FORM_DIALOG_WIDTH } from '@/constants/formDialog'
 import { apiError } from '@/utils/error'
 import type { ApplyChange } from '@/utils/dutyRotationGrid'
 import { SOURCE_TAGS, addDaysISO, cellKey, confirmUnits, indexCells, isRecordedConflict, type BatchUnit, type GridOut, type PlanSource } from '@/utils/scheduleAttendanceGrid'
