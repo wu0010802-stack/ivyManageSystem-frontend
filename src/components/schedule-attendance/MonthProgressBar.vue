@@ -17,6 +17,13 @@
         <button type="button" class="month-progress__link" data-test="progress-issues" @click="emit('show-issues')">
           核對 <strong :class="{ 'month-progress__warn': issues > 0 && !loadError }">{{ loading ? '…' : loadError ? '—' : `本月 ${issues} 格待處理` }}</strong>
         </button>
+        <button
+          v-if="patterns.length && !loading && !loadError"
+          type="button"
+          class="month-progress__link month-progress__patterns"
+          data-test="progress-patterns"
+          @click="patternsOpen = true"
+        >其中 {{ patternIssues }} 格是 {{ patterns.length }} 人的設定問題</button>
       </li>
       <li v-if="canConfirmRounds" class="month-progress__step">
         <span class="month-progress__index">④</span>
@@ -33,6 +40,9 @@
       {{ loadError }}
       <button type="button" class="month-progress__link" data-test="progress-retry" @click="month.reload()">重試</button>
     </p>
+    <el-drawer v-if="canViewAttendance" v-model="patternsOpen" title="本月設定檢查" :size="mobile ? '100%' : '520px'" append-to-body>
+      <AttendancePatternList v-if="patternsOpen" :patterns="patterns" @records="onPatternRecords" @import="onPatternImport" />
+    </el-drawer>
     <el-drawer v-if="canConfirmRounds" v-model="roundsOpen" title="月底出勤確認（老師確認）" :size="mobile ? '100%' : '640px'" append-to-body @closed="emit('changed')">
       <ConfirmationRoundBar v-if="roundsOpen" :start="range.start" :end="range.end" />
     </el-drawer>
@@ -46,6 +56,8 @@ import type { MonthGridState } from '@/composables/useMonthGrid'
 import { backdatedPendingCount, pickDisplayRound, roundStatusText, withBackdatedPending } from '@/utils/attendanceConfirm'
 import { hasPermission } from '@/utils/auth'
 import { importProgress, isIssue, uncoveredDates } from '@/utils/scheduleAttendanceGrid'
+import { patternIssueTotal } from '@/utils/attendancePatterns'
+import AttendancePatternList from './AttendancePatternList.vue'
 
 const ConfirmationRoundBar = defineAsyncComponent(() => import('@/components/attendance/ConfirmationRoundBar.vue'))
 
@@ -62,7 +74,15 @@ export interface MonthSummary {
   /** 到昨天為止還沒匯入打卡的工作日數 */
   missingImportDays: number
 }
-const emit = defineEmits<{ 'show-issues': []; changed: []; summary: [value: MonthSummary] }>()
+const emit = defineEmits<{
+  'show-issues': []
+  changed: []
+  summary: [value: MonthSummary]
+  /** 設定檢查清單：看某人整月出勤（帶第一個應上班日） */
+  records: [employeeId: number, date: string]
+  /** 設定檢查清單：開匯入打卡（重新匯入時把卡號對上） */
+  import: []
+}>()
 
 const range = computed(() => props.month.range.value)
 const data = computed(() => props.month.data.value)
@@ -77,6 +97,19 @@ const canViewSalary = hasPermission('SALARY_READ')
 const canConfirmRounds = hasPermission('SCHEDULE') && canViewAttendance
 
 const roundsOpen = ref(false)
+
+// ③旁的本月設定檢查（型態診斷）：沒有出勤讀取權限時格子沒有打卡資料，本來就判斷不出型態
+const patterns = computed(() => (canViewAttendance ? props.month.patterns.value : []))
+const patternIssues = computed(() => patternIssueTotal(patterns.value))
+const patternsOpen = ref(false)
+function onPatternRecords(employeeId: number, date: string): void {
+  patternsOpen.value = false
+  emit('records', employeeId, date)
+}
+function onPatternImport(): void {
+  patternsOpen.value = false
+  emit('import')
+}
 
 // ④：最新輪次狀態（D-07）。狀態只是輔助，讀不到就不顯示，按鈕照常可開抽屜。
 // 跟著整月資料重讀：換月、明細處理、關閉確認抽屜（頁面遞增 revision）後都會更新。
@@ -160,6 +193,7 @@ watch(data, (g) => {
 .month-progress__index { color: var(--el-text-color-secondary); }
 .month-progress__status { color: var(--el-text-color-secondary); }
 .month-progress__warn { color: var(--color-warning-darker); }
+.month-progress__patterns { color: var(--color-warning-darker); text-decoration: underline; text-underline-offset: 2px; }
 .month-progress__link { min-height: var(--touch-target-min); padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-1); }
 .month-progress__error { margin: 0; color: var(--el-color-danger); font-size: var(--text-sm); }
 .month-progress__link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }

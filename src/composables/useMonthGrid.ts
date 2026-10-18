@@ -6,6 +6,7 @@ import { computed, ref, watch, type Ref } from 'vue'
 import { getScheduleAttendanceGrid } from '@/api/scheduleAttendance'
 import { apiError } from '@/utils/error'
 import { indexCells, monthRange, type GridOut } from '@/utils/scheduleAttendanceGrid'
+import { detectAttendancePatterns } from '@/utils/attendancePatterns'
 
 export function useMonthGrid(anchorDate: Ref<string>, revision: Ref<number>) {
   const range = computed(() => monthRange(anchorDate.value))
@@ -42,7 +43,9 @@ export function useMonthGrid(anchorDate: Ref<string>, revision: Ref<number>) {
   watch([() => range.value.start, revision], () => { void reload() }, { immediate: true })
 
   const cells = computed(() => indexCells(data.value?.cells ?? []))
-  return { range, data, cells, loading, loadError, reload }
+  /** 本月型態診斷（整月同一種情形的人）：進度條的設定檢查與格子人員欄的註記共用 */
+  const patterns = computed(() => (data.value ? detectAttendancePatterns(data.value) : []))
+  return { range, data, cells, patterns, loading, loadError, reload }
 }
 
 export type MonthGridState = ReturnType<typeof useMonthGrid>

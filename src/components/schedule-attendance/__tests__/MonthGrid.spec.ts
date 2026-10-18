@@ -26,6 +26,16 @@ const ALL = [
   cell(2, '2026-10-06', { employed: false }),
 ]
 
+describe('MonthGrid 人員註記（本月型態）', () => {
+  it('人員欄寫出註記與整句說明', () => {
+    const wrapper = mountMonth(ALL, { personNotes: { 1: { tag: '時段可能設錯', detail: '上下班都有打卡的 20 天中，20 天遲到（多為 55 分）' } } })
+    const note = wrapper.get('[data-test="mperson-note-1"]')
+    expect(note.text()).toBe('時段可能設錯')
+    expect(note.attributes('title')).toContain('20 天遲到')
+    expect(wrapper.find('[data-test="mperson-note-2"]').exists()).toBe(false)
+  })
+})
+
 describe('MonthGrid（SPEC-027 C 期，唯讀）', () => {
   it('週次欄頭依週一分組；點欄頭送出該週週一（跨月週是 9/28）', async () => {
     const wrapper = mountMonth(ALL)

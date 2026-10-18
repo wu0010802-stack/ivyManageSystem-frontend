@@ -28,6 +28,7 @@ function mountGrid(opts: {
   days?: ReturnType<typeof day>[]
   canImport?: boolean
   maxHeight?: number
+  personNotes?: Record<number, { tag: string; detail: string }>
 } = {}) {
   const g = grid({
     ...(opts.days ? { days: opts.days } : {}),
@@ -54,6 +55,7 @@ function mountGrid(opts: {
       mobile: opts.mobile ?? false,
       canImport: opts.canImport ?? false,
       maxHeight: opts.maxHeight,
+      personNotes: opts.personNotes,
     },
     global: { plugins: [ElementPlus] },
   })
@@ -269,6 +271,19 @@ describe('ShiftGrid 標記', () => {
     expect(wrapper.find(`[data-test="not-imported-${WEEK[0]}"]`).exists()).toBe(true)
     expect(wrapper.find(`[data-test="not-imported-${WEEK[5]}"]`).exists()).toBe(false)
     expect(wrapper.find(`[data-test="not-imported-${WEEK[6]}"]`).exists()).toBe(false)
+  })
+})
+
+describe('ShiftGrid 人員註記（本月型態）', () => {
+  const NOTES = { 2: { tag: '本月沒有打卡', detail: '本月 20 個應上班日都沒有打卡' } }
+
+  it('桌機人員欄與手機卡片都寫出註記，滑鼠移上去看整句', () => {
+    const desk = mountGrid({ personNotes: NOTES })
+    const note = desk.get('[data-test="person-note-2"]')
+    expect(note.text()).toBe('本月沒有打卡')
+    expect(note.attributes('title')).toBe('本月 20 個應上班日都沒有打卡')
+    expect(desk.find('[data-test="person-note-1"]').exists()).toBe(false)
+    expect(mountGrid({ personNotes: NOTES, mobile: true }).find('[data-test="person-note-2"]').exists()).toBe(true)
   })
 })
 

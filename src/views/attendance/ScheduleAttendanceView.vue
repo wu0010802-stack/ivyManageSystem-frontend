@@ -20,7 +20,7 @@
       </template>
     </PageHeader>
 
-    <MonthProgressBar v-show="activeTab === 'grid' || activeTab === 'records'" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" />
+    <MonthProgressBar v-show="activeTab === 'grid' || activeTab === 'records'" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" />
 
     <div class="workspace-mode" role="tablist" aria-label="排班與出勤檢視">
       <button

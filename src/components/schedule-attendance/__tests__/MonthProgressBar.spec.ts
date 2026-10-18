@@ -6,6 +6,7 @@ import { effectScope, ref } from 'vue'
 import ElementPlus, { ElDrawer } from 'element-plus'
 import { useMonthGrid } from '@/composables/useMonthGrid'
 import MonthProgressBar from '../MonthProgressBar.vue'
+import AttendancePatternList from '../AttendancePatternList.vue'
 import { cell, day, grid, WEEK } from './gridFixtures'
 
 const api = vi.hoisted(() => ({ grid: vi.fn(), rounds: vi.fn(), round: vi.fn(), unrounded: vi.fn() }))
@@ -160,7 +161,7 @@ describe('MonthProgressBar', () => {
     await flushPromises()
     await wrapper.find('[data-test="progress-rounds"]').trigger('click')
     await flushPromises()
-    wrapper.findComponent(ElDrawer).vm.$emit('closed')
+    wrapper.findAllComponents(ElDrawer).find((d) => d.props('title') === '月底出勤確認（老師確認）')!.vm.$emit('closed')
     await flushPromises()
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
@@ -324,5 +325,64 @@ describe('MonthProgressBar ④ 補登待處理（SPEC-026 3-3 P18）', () => {
     mountBar()
     await flushPromises()
     expect(api.unrounded).not.toHaveBeenCalled()
+  })
+})
+
+describe('MonthProgressBar 本月設定檢查', () => {
+  // 員工 1 在已匯入的 9/14–9/16 都是資料待補（匯入檔裡沒有他）＝整月沒有打卡的型態
+  function patternGrid() {
+    return grid({
+      today: '2026-09-21',
+      days: WEEK.map((d, i) => day(d, { import_covered: i < 3 })),
+      cells: [
+        ...WEEK.slice(0, 3).map((d) => cell(1, d, { actual: { status: 'data_incomplete' } })),
+        cell(2, WEEK[0], { actual: { status: 'anomaly' } }),
+      ],
+    })
+  }
+
+  // 抽屜 teleport 到 body：不 stub teleport 才找得到 ElDrawer；清單內容從元件 wrapper 找
+  const patternDrawer = (wrapper: ReturnType<typeof mountBar>) => wrapper.findAllComponents(ElDrawer).find((d) => d.props('title') === '本月設定檢查')!
+
+  it('有型態時在③旁寫出其中幾格是幾個人的設定問題，點開側邊清單', async () => {
+    api.grid.mockImplementation(async () => ({ data: patternGrid() }))
+    const wrapper = mountBar({ stubTeleport: false })
+    await flushPromises()
+    const link = wrapper.get('[data-test="progress-patterns"]')
+    expect(link.text()).toBe('其中 3 格是 1 人的設定問題')
+    await link.trigger('click')
+    await flushPromises()
+    expect(patternDrawer(wrapper).props('modelValue')).toBe(true)
+    expect(wrapper.findComponent(AttendancePatternList).find('[data-test="pattern-1"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('清單的看他整月與匯入打卡往上送給頁面，並收起清單', async () => {
+    api.grid.mockImplementation(async () => ({ data: patternGrid() }))
+    perms.set = new Set(['SCHEDULE', 'ATTENDANCE_READ', 'ATTENDANCE_WRITE', 'SALARY_READ'])
+    const wrapper = mountBar({ stubTeleport: false })
+    await flushPromises()
+    await wrapper.get('[data-test="progress-patterns"]').trigger('click')
+    await flushPromises()
+    await wrapper.findComponent(AttendancePatternList).get('[data-test="pattern-records-1"]').trigger('click')
+    expect(wrapper.emitted('records')).toEqual([[1, '2026-09-14']])
+    expect(patternDrawer(wrapper).props('modelValue')).toBe(false)
+    await wrapper.get('[data-test="progress-patterns"]').trigger('click')
+    await flushPromises()
+    await wrapper.findComponent(AttendancePatternList).get('[data-test="pattern-import-1"]').trigger('click')
+    expect(wrapper.emitted('import')).toHaveLength(1)
+    expect(patternDrawer(wrapper).props('modelValue')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('沒有型態、或沒有出勤讀取權限：不顯示', async () => {
+    const wrapper = mountBar()
+    await flushPromises()
+    expect(wrapper.find('[data-test="progress-patterns"]').exists()).toBe(false)
+    api.grid.mockImplementation(async () => ({ data: patternGrid() }))
+    perms.set = new Set(['SCHEDULE', 'SALARY_READ'])
+    const noRead = mountBar()
+    await flushPromises()
+    expect(noRead.find('[data-test="progress-patterns"]').exists()).toBe(false)
   })
 })

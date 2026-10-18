@@ -38,6 +38,7 @@
               <span class="shift-grid__who">
                 <span class="shift-grid__name">{{ emp.name }}</span>
                 <span v-if="emp.role_label" class="shift-grid__role">{{ emp.role_label }}</span>
+                <span v-if="personNotes?.[emp.employee_id]" class="shift-grid__note" :title="personNotes[emp.employee_id].detail" :data-test="`person-note-${emp.employee_id}`">{{ personNotes[emp.employee_id].tag }}</span>
               </span>
               <el-select
                 v-if="canEditPlan"
@@ -124,6 +125,7 @@
           >
             <strong>{{ emp.name }}</strong>
             <span v-if="emp.role_label" class="shift-grid__role">{{ emp.role_label }}</span>
+            <span v-if="personNotes?.[emp.employee_id]" class="shift-grid__note" :title="personNotes[emp.employee_id].detail" :data-test="`person-note-${emp.employee_id}`">{{ personNotes[emp.employee_id].tag }}</span>
             <span class="shift-grid__plan">{{ display(emp.employee_id, mobileDay).source ? `${display(emp.employee_id, mobileDay).source!.short}・` : '' }}{{ display(emp.employee_id, mobileDay).plan }}</span>
             <span v-if="isInactivePlan(emp.employee_id, mobileDay)" class="shift-grid__inactive">已停用</span>
             <span v-if="display(emp.employee_id, mobileDay).actual" class="shift-grid__actual">{{ display(emp.employee_id, mobileDay).actual }}</span>
@@ -189,6 +191,8 @@ const props = defineProps<{
   canImport?: boolean
   /** 捲動容器高度（px）：面板依實際工具列高度量出；沒給就用 CSS 的估算值 */
   maxHeight?: number | null
+  /** 本月型態註記（整月沒打卡、時段可能設錯），key＝員工 id */
+  personNotes?: Record<number, { tag: string; detail: string }>
 }>()
 const emit = defineEmits<{
   select: [employeeId: number, date: string]
@@ -342,6 +346,8 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
 .shift-grid__name { font-weight: 600; }
 .shift-grid__role { color: var(--el-text-color-secondary); font-size: var(--text-xs); }
+/* 本月型態註記：整月同一種情形多半是設定問題，列首提示，細節在本月進度的設定檢查 */
+.shift-grid__note { color: var(--color-warning-darker); font-size: var(--text-xs); font-weight: 600; cursor: help; }
 .shift-grid__weekly { margin-top: var(--space-1); width: 100%; }
 .shift-grid__unsaved { display: inline-block; margin-top: var(--space-1); padding: 0 var(--space-1); border: 1px dashed var(--el-color-primary); border-radius: var(--radius-sm); color: var(--el-color-primary); font-size: var(--text-xs); font-weight: 600; }
 .shift-grid__cell {

@@ -50,6 +50,7 @@
         :filter="filter"
         :keyword="keyword"
         :max-height="gridMaxHeight"
+        :person-notes="personNotes"
         @select="openMonthCell"
         @open-week="openWeek"
       />
@@ -78,6 +79,7 @@
         :mobile="isMobile"
         :can-import="caller.can_edit_attendance"
         :max-height="gridMaxHeight"
+        :person-notes="personNotes"
         @select="openCell"
         @weekly-change="state.setWeekly"
         @import-punches="(date: string) => emit('import-punches', date)"
@@ -167,6 +169,7 @@ import type { ApiResponse } from '@/api/_generated/typed'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 import { computeWeekCoverage } from '@/utils/scheduleCoverage'
+import { patternSummary, patternTag } from '@/utils/attendancePatterns'
 import {
   addDaysISO,
   cellKey,
@@ -298,6 +301,10 @@ const issueCount = computed(() => {
   const uncovered = uncoveredDates(g.days)
   return g.cells.filter((c) => isIssue(c, g.today, uncovered)).length
 })
+/** 本月型態（整月資料算的）：人員欄註記，週、月格子共用 */
+const personNotes = computed<Record<number, { tag: string; detail: string }>>(() =>
+  Object.fromEntries((props.month?.patterns.value ?? []).map((p) => [p.employeeId, { tag: patternTag(p), detail: patternSummary(p) }])),
+)
 const EMPTY_CELLS: Map<string, GridCell> = new Map()
 const monthLoading = computed(() => (isMonth.value ? props.month!.loading.value : false))
 const monthError = computed(() => (isMonth.value ? props.month!.loadError.value : ''))

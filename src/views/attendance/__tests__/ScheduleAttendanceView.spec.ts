@@ -108,7 +108,7 @@ const ScheduleGridPanelStub = {
   template: '<div class="grid-panel-stub" />',
 }
 const rotationMounts = { count: 0 }
-const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary'], template: '<div class="month-progress-stub" />' }
+const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary', 'records', 'import'], template: '<div class="month-progress-stub" />' }
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
   MonthProgressBar: MonthProgressBarStub,
@@ -564,6 +564,23 @@ describe('班表核對與明細互通', () => {
     // 格子自己的編輯：本月進度重算，格子不重複載入（格子已自行 reload）
     expect(monthApi.grid.mock.calls.length).toBe(monthCallsBefore + 1)
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('本月設定檢查的「看他整月」與「匯入打卡」走頁面同一套流程', async () => {
+    mockHasPermission.mockReturnValue(true)
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(MonthProgressBarStub).vm.$emit('records', 7, '2026-09-01')
+    await flushPromises()
+    expect(wrapper.find('[data-test="tab-records"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(7)
+    expect(wrapper.findComponent(DetailColumnStub).props('focusDate')).toBe('2026-09-01')
+    wrapper.findComponent(MonthProgressBarStub).vm.$emit('import')
+    await flushPromises()
+    expect(wrapper.findComponent(ImportPreviewDialogStub).props('modelValue')).toBe(true)
+    // 整月匯入：不帶單一人員的來源
+    expect(wrapper.findComponent(ImportPreviewDialogStub).props('sourceContext')).toBeNull()
     wrapper.unmount()
   })
 

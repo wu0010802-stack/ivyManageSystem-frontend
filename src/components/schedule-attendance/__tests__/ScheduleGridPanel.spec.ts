@@ -463,6 +463,21 @@ describe('ScheduleGridPanel 月模式（SPEC-027 C 期）', () => {
     api.getAssignments.mockResolvedValue({ data: [] })
   })
 
+  it('本月型態的人在週格子與月格子的人員欄都有註記', async () => {
+    // 員工 1 在 10/1、10/2、10/5 都是資料待補（匯入檔裡沒有他）
+    api.grid.mockImplementation(async ({ start_date }: { start_date: string }) =>
+      start_date === monthRange('2026-10-05').start
+        ? { data: grid({ start_date, days: OCT, today: '2026-10-08', cells: OCT.filter((d) => d.is_workday).slice(0, 3).map((d) => cell(1, d.date, { actual: { status: 'data_incomplete' } })) }) }
+        : { data: grid() },
+    )
+    const week = mountPanel({ date: '2026-10-05', view: 'week', month: monthState() })
+    await flushPromises()
+    expect(week.findComponent({ name: 'ShiftGrid' }).props('personNotes')).toEqual({ 1: { tag: '本月沒有打卡', detail: '本月 3 個應上班日都沒有打卡（匯入的打卡檔裡沒有這位員工）' } })
+    const month = mountPanel({ date: '2026-10-05', view: 'month', month: monthState() })
+    await flushPromises()
+    expect(month.findComponent({ name: 'MonthGrid' }).props('personNotes')).toHaveProperty('1')
+  })
+
   it('月模式畫月格子不畫週格子；點格用整月資料開抽屜並補抓該週週排班', async () => {
     api.getAssignments.mockImplementation(async ({ week_start }: { week_start: string }) => ({
       data: week_start === '2026-09-28' ? [assignment(1, 2)] : [],

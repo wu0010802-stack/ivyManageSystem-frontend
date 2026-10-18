@@ -44,6 +44,7 @@
             <tr v-for="emp in section.employees" :key="emp.employee_id" :data-test="`mrow-${emp.employee_id}`">
               <th scope="row" class="month-grid__person">
                 {{ emp.name }}<span v-if="emp.role_label" class="month-grid__role">{{ emp.role_label }}</span>
+                <span v-if="personNotes?.[emp.employee_id]" class="month-grid__note" :title="personNotes[emp.employee_id].detail" :data-test="`mperson-note-${emp.employee_id}`">{{ personNotes[emp.employee_id].tag }}</span>
               </th>
               <td v-for="d in shownDays" :key="d.date" class="month-grid__cell-wrap">
                 <button
@@ -106,6 +107,8 @@ const props = defineProps<{
   filter: GridFilter
   keyword?: string
   maxHeight?: number | null
+  /** 本月型態註記（整月沒打卡、時段可能設錯），key＝員工 id */
+  personNotes?: Record<number, { tag: string; detail: string }>
 }>()
 const emit = defineEmits<{
   select: [employeeId: number, date: string]
@@ -176,6 +179,7 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .month-grid__table .month-grid__person { z-index: calc(var(--z-sticky) - 1); font-weight: 400; }
 .month-grid__table thead .month-grid__corner { z-index: calc(var(--z-sticky) + 1); }
 .month-grid__role { margin-left: var(--space-1); font-size: var(--text-xs); color: var(--el-text-color-secondary); }
+.month-grid__note { display: block; color: var(--color-warning-darker); font-size: var(--text-xs); font-weight: 600; cursor: help; }
 .month-grid__week-btn { width: 100%; min-height: var(--touch-target-min); border: 0; border-bottom: 1px solid var(--el-border-color-light); background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; }
 .month-grid__week-btn:hover { background: var(--el-fill-color-light); }
 .month-grid__table .month-grid__day { min-width: 40px; padding: var(--space-1) 0; }
