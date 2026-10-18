@@ -284,7 +284,7 @@ function handlePunch(): void {
 }
 
 .resolve-card__context {
-  background: var(--fill-color-light, #f9fafb);
+  background: var(--el-fill-color-light);
   border: 1px solid var(--border-color-light, #f1f5f9);
   border-radius: var(--radius-md, 6px);
   padding: var(--space-3);
@@ -319,7 +319,7 @@ function handlePunch(): void {
 .resolve-card__leave-badge {
   font-size: var(--text-xs, 0.75rem);
   color: var(--warning, #f59e0b);
-  background: var(--warning-soft, #fefce8);
+  background: var(--el-color-warning-light-9);
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--warning-border, #fde68a);

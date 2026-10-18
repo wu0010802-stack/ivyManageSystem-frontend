@@ -171,12 +171,12 @@ const groupedRows = computed(() => {
   padding: var(--space-3) var(--space-3);
   cursor: pointer;
   border-bottom: 1px solid var(--border-color-light, #f1f5f9);
-  transition: background-color 0.15s;
+  transition: background-color var(--transition-fast);
   gap: var(--space-2);
 }
 
 .roster-item:hover {
-  background-color: var(--fill-color-light, #f9fafb);
+  background-color: var(--el-fill-color-light);
 }
 
 .roster-item--selected {
@@ -219,6 +219,11 @@ const groupedRows = computed(() => {
   font-size: var(--text-xs, 0.75rem);
   color: var(--text-tertiary, #94a3b8);
   margin-top: 1px;
+}
+
+/* 選取列底色較深：工號改用一般字色，維持 AA 對比（原本 4.15:1） */
+.roster-item--selected .roster-item__number {
+  color: var(--el-text-color-regular);
 }
 
 .roster-item__badges {

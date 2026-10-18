@@ -108,13 +108,11 @@
       />
       <el-button
         size="small"
-        type="success"
         :loading="batchBusy"
         @click="confirmBatchAction('admin_accept')"
       >批次接受扣款（{{ selectedIds.size }}）</el-button>
       <el-button
         size="small"
-        type="warning"
         :loading="batchBusy"
         @click="confirmBatchAction('admin_waive')"
       >批次豁免（{{ selectedIds.size }}）</el-button>
@@ -355,12 +353,12 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   padding: var(--space-3);
   cursor: pointer;
   border-bottom: 1px solid var(--border-color-light, #f1f5f9);
-  transition: background-color 0.15s;
+  transition: background-color var(--transition-fast);
   gap: var(--space-2);
 }
 
 .anomaly-item:hover {
-  background-color: var(--fill-color-light, #f9fafb);
+  background-color: var(--el-fill-color-light);
 }
 
 .anomaly-item--selected {

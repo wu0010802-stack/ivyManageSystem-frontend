@@ -178,7 +178,7 @@ async function saveSupplement(): Promise<void> {
 .month-record-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--text-sm); }
 .month-record-table th, .month-record-table td { padding: var(--space-2); text-align: left; vertical-align: top; overflow-wrap: anywhere; border-bottom: 1px solid var(--el-border-color-light); }
 .month-record-table thead th { position: sticky; top: 0; z-index: 1; background: var(--el-fill-color-light); font-weight: 600; }
-.month-record-table small { display: block; color: var(--el-text-color-secondary); margin-top: var(--space-1); }
+.month-record-table small { display: block; color: var(--el-text-color-secondary); font-size: var(--text-xs); margin-top: var(--space-1); }
 .month-record-row--anomaly { background: var(--el-color-warning-light-9); }
 .month-record-total { background: var(--el-fill-color-light); font-weight: 600; }
 .month-record-total th, .month-record-total td { border-bottom: 0; border-top: 2px solid var(--el-border-color); }

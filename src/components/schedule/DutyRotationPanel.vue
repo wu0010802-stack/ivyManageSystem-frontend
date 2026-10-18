@@ -442,7 +442,7 @@ onMounted(async () => {
 .drp-empty { padding: 24px 0; }
 .drp-issues { margin: 0; padding-left: 20px; }
 .drp-issues .is-error { color: var(--el-color-danger); }
-.drp-issues .is-warning { color: var(--el-color-warning); }
+.drp-issues .is-warning { color: var(--color-warning-darker); }
 .drp-section h3 { margin: 8px 0; font-size: 15px; }
 .drp-defaults { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 8px; }
 .drp-defaults label { display: flex; gap: 8px; align-items: center; }

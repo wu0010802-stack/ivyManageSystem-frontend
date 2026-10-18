@@ -3,7 +3,6 @@
     <el-radio-group
       v-if="canMonth"
       :model-value="view ?? 'week'"
-      size="small"
       aria-label="週或月檢視"
       data-test="toolbar-view"
       @update:model-value="(v: string | number | boolean | undefined) => emit('update:view', v as GridView)"
@@ -48,7 +47,6 @@
 
     <el-radio-group
       :model-value="filter"
-      size="small"
       aria-label="篩選格子"
       data-test="toolbar-filter"
       @update:model-value="(v: string | number | boolean | undefined) => emit('update:filter', v as GridFilter)"
