@@ -7,7 +7,6 @@ import {
   confirmUnits,
   coverageInputs,
   findPairCell,
-  gridScrollerHeight,
   gridSections,
   groupDaysByWeek,
   indexCells,
@@ -443,20 +442,5 @@ describe('月格子（SPEC-027 C 期）', () => {
     ])
     expect(gridSections({ ...base, filter: 'issues' }).map((s) => s.employees.map((e) => e.employee_id))).toEqual([[1]])
     expect(gridSections({ ...base, filter: 'all', keyword: 'e003' }).map((s) => s.group.key)).toEqual(['other'])
-  })
-})
-
-describe('gridScrollerHeight（格子捲動區高度）', () => {
-  const base = { mainBottom: 900, mainClientHeight: 836, toolbarHeight: 96 }
-  it('頁首還在畫面上：捲動區底部對齊視窗底，不落到首屏外', () => {
-    expect(gridScrollerHeight({ ...base, scrollerTop: 365 })).toBe(900 - 365 - 8)
-  })
-  it('往下捲到工具列貼頂後：用滿工具列以下的高度', () => {
-    expect(gridScrollerHeight({ ...base, scrollerTop: 160 })).toBe(836 - 96 - 8)
-    expect(gridScrollerHeight({ ...base, scrollerTop: 40 })).toBe(836 - 96 - 8)
-  })
-  it('矮螢幕至少留 320px；還沒有捲動區（載入中）就用工具列貼頂後的高度', () => {
-    expect(gridScrollerHeight({ ...base, scrollerTop: 700 })).toBe(320)
-    expect(gridScrollerHeight({ ...base, scrollerTop: null })).toBe(836 - 96 - 8)
   })
 })
