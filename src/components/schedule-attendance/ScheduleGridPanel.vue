@@ -1,5 +1,5 @@
 <template>
-  <div class="schedule-grid-panel">
+  <div ref="panelRoot" class="schedule-grid-panel">
     <GridToolbar
       ref="toolbarRef"
       :week-start="weekStart"
@@ -176,6 +176,7 @@ import {
   addDaysISO,
   cellKey,
   coverageInputs,
+  gridScrollerHeight,
   gridSections,
   isIssue,
   mondayOf,
@@ -264,26 +265,48 @@ defineExpose({ confirmWeekChange })
 // ── 表格捲動容器高度 ─────────────────────────────────────────────
 // 工具列在桌機固定於捲動區頂端；它會依寬度換成 1–3 行。表格高度＝捲動區可視高度－工具列實際高度，
 // 寫死估算值時工具列一換行，表格固定的日期表頭就會疊到工具列上、蓋住「儲存排班」。
+// 外層（el-main）捲動時捲動區頂端跟著移動：高度要跟著重算，頁首還在畫面上時表格底部才不會落到首屏外。
+const panelRoot = ref<HTMLElement | null>(null)
 const toolbarRef = ref<InstanceType<typeof GridToolbar> | null>(null)
 const gridMaxHeight = ref<number | null>(null)
-const GRID_BOTTOM_GAP = 8
-const GRID_MIN_HEIGHT = 320
 let resizeObserver: ResizeObserver | null = null
+let scrollMain: HTMLElement | null = null
+let measureFrame = 0
 function measureGrid(): void {
   const toolbar = toolbarRef.value?.$el as HTMLElement | undefined
   const main = toolbar?.closest('.el-main') as HTMLElement | null | undefined
   if (!toolbar || !main || !main.clientHeight) return
-  gridMaxHeight.value = Math.max(GRID_MIN_HEIGHT, main.clientHeight - toolbar.offsetHeight - GRID_BOTTOM_GAP)
+  const scroller = panelRoot.value?.querySelector<HTMLElement>('.shift-grid__scroller, .month-grid__scroller')
+  gridMaxHeight.value = gridScrollerHeight({
+    mainBottom: main.getBoundingClientRect().bottom,
+    mainClientHeight: main.clientHeight,
+    toolbarHeight: toolbar.offsetHeight,
+    scrollerTop: scroller ? scroller.getBoundingClientRect().top : null,
+  })
+}
+function scheduleMeasure(): void {
+  if (measureFrame) return
+  measureFrame = requestAnimationFrame(() => {
+    measureFrame = 0
+    measureGrid()
+  })
 }
 onMounted(() => {
   const toolbar = toolbarRef.value?.$el as HTMLElement | undefined
-  const main = toolbar?.closest('.el-main')
-  if (!toolbar || !main || typeof ResizeObserver === 'undefined') return
-  resizeObserver = new ResizeObserver(measureGrid)
+  const main = toolbar?.closest('.el-main') as HTMLElement | null | undefined
+  if (!toolbar || !main) return
+  scrollMain = main
+  main.addEventListener('scroll', scheduleMeasure, { passive: true })
+  if (typeof ResizeObserver === 'undefined') return
+  resizeObserver = new ResizeObserver(scheduleMeasure)
   resizeObserver.observe(toolbar)
   resizeObserver.observe(main)
 })
-onBeforeUnmount(() => resizeObserver?.disconnect())
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  scrollMain?.removeEventListener('scroll', scheduleMeasure)
+  if (measureFrame) cancelAnimationFrame(measureFrame)
+})
 
 const NO_CALLER: GridOut['caller'] = { can_view_attendance: false, can_edit_plan: false, can_confirm: false, can_edit_attendance: false }
 const gridData = computed(() => state.grid.value)
@@ -448,6 +471,13 @@ const drawerWeeklyShiftId = computed(() => {
   if (!selected.value) return null
   return isMonth.value ? monthWeekly.value : state.assignments.value[selected.value.employeeId]?.shift_type_id ?? null
 })
+
+// 捲動區出現、換週／月、篩選改變列數或上方多了預警時，捲動區頂端位置會變：畫面更新後重量
+watch(
+  [gridData, monthData, isMonth, () => props.filter, keyword, () => state.warnings.value.length],
+  scheduleMeasure,
+  { flush: 'post' },
+)
 
 let focusHandled = false
 watch(gridData, (g) => {

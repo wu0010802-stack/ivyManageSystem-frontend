@@ -537,3 +537,18 @@ export function isRecordedConflict(err: unknown): boolean {
   const message = (err as { displayMessage?: string })?.displayMessage ?? ''
   return status === 409 && message.includes('出勤紀錄')
 }
+
+/**
+ * 格子捲動區高度（px）：不超過工具列貼頂後的可用高度，也不超過捲動區頂端到捲動容器底的距離。
+ * 只用前者時，頁首還在畫面上的初始狀態下捲動區底部落在首屏外：滾輪先捲內層，最後幾列被視窗切掉。
+ * scrollerTop＝null（捲動區還沒出現）時用工具列貼頂後的高度。
+ */
+export function gridScrollerHeight(
+  m: { mainBottom: number; mainClientHeight: number; toolbarHeight: number; scrollerTop: number | null },
+  gap = 8,
+  min = 320,
+): number {
+  const max = m.mainClientHeight - m.toolbarHeight - gap
+  const visible = m.scrollerTop === null ? max : m.mainBottom - m.scrollerTop - gap
+  return Math.max(min, Math.round(Math.min(max, visible)))
+}
