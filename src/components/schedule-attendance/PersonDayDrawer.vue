@@ -319,8 +319,11 @@ const verdict = computed(() => {
   if (shown.state === 'working' || shown.state === 'not_punched' || shown.state === 'awaiting_import') return shown.verdict?.label ?? ''
   // 與格子同一個判定文字（含「・已豁免／已接受扣款」）；非應出勤日格子不寫判定，這裡仍寫狀態名
   const parts = [shown.verdict?.label ?? RECON_STATUS_LABELS[actual.status]]
-  if (actual.late_minutes) parts.push(`遲到 ${actual.late_minutes} 分`)
-  if (actual.early_leave_minutes) parts.push(`早退 ${actual.early_leave_minutes} 分`)
+  // 出勤異常的格子判定已寫出分鐘數，不再重複
+  if (actual.status !== 'anomaly') {
+    if (actual.late_minutes) parts.push(`遲到 ${actual.late_minutes} 分`)
+    if (actual.early_leave_minutes) parts.push(`早退 ${actual.early_leave_minutes} 分`)
+  }
   return parts.join('・')
 })
 

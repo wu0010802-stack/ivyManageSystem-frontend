@@ -46,11 +46,12 @@ export const RECON_STATUS_LABELS: Record<ReconStatus, string> = {
 
 export type Tone = 'info' | 'warning' | 'danger'
 
+// 資料待補是待處理（isIssue）：警示色才看得出要處理；整天未匯入的「未匯入」另有自己的灰色顯示
 const STATUS_TONES: Record<ReconStatus, Tone> = {
   matched: 'info',
   off_day: 'info',
   leave: 'info',
-  data_incomplete: 'info',
+  data_incomplete: 'warning',
   possible_shift_change: 'warning',
   unscheduled_attendance: 'warning',
   missing_punch: 'danger',
@@ -350,13 +351,15 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
     if (actual.punch_in && !actual.punch_out) {
       return { ...base, state: 'working', actual: openShift, verdict: { label: '上班中', tone: 'info' } }
     }
-    if (!actual.punch_in && !actual.punch_out) {
+    // 今天不用上班（非應出勤日、排休）沒打卡是正常的，不寫「尚未打卡」
+    if (!actual.punch_in && !actual.punch_out && cell.plan.expected && !cell.plan.day_off) {
       return { ...base, state: 'not_punched', actual: null, verdict: { label: '尚未打卡', tone: 'info' } }
     }
   }
   const handled = actual.confirmed_action && !NON_ISSUE_STATUSES.has(actual.status)
     ? CONFIRMED_ACTION_LABELS[actual.confirmed_action] ?? '已處理'
     : null
+  const label = statusLabel(actual)
   return {
     ...base,
     state: 'judged',
@@ -365,9 +368,22 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
     verdict: actual.status === 'off_day'
       ? null
       : handled
-        ? { label: `${RECON_STATUS_LABELS[actual.status]}・${handled}`, tone: isHandled(actual) ? 'info' : STATUS_TONES[actual.status] }
-        : { label: RECON_STATUS_LABELS[actual.status], tone: STATUS_TONES[actual.status] },
+        ? { label: `${label}・${handled}`, tone: isHandled(actual) ? 'info' : STATUS_TONES[actual.status] }
+        : { label, tone: STATUS_TONES[actual.status] },
   }
+}
+
+/**
+ * 格子的判定文字。「出勤異常」就是遲到／早退，直接寫分鐘數（不用開抽屜才知道是遲到 5 分還是早退半天）；
+ * 其他判定的分鐘數只是附帶資訊，留在抽屜。
+ */
+function statusLabel(actual: NonNullable<GridCell['actual']>): string {
+  if (actual.status !== 'anomaly') return RECON_STATUS_LABELS[actual.status]
+  const parts = [
+    actual.late_minutes ? `遲到 ${actual.late_minutes} 分` : '',
+    actual.early_leave_minutes ? `早退 ${actual.early_leave_minutes} 分` : '',
+  ].filter(Boolean)
+  return parts.length ? parts.join('・') : RECON_STATUS_LABELS.anomaly
 }
 
 const DAILY_SOURCES: ReadonlySet<PlanSource> = new Set(['daily', 'daily_off', 'swap'])

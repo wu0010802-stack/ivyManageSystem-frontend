@@ -106,6 +106,36 @@ describe('cellDisplay（§2.2）', () => {
     expect(dayOff.verdict).toBeNull()
   })
 
+  it('出勤異常直接寫遲到／早退分鐘，處理過的接在後面；沒有分鐘才退回「出勤異常」', () => {
+    const late = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:30:00`, punch_out: `${W1}T16:30:00`, late_minutes: 30 } }), TODAY)
+    expect(late.verdict).toEqual({ label: '遲到 30 分', tone: 'danger' })
+    const both = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:57:00`, punch_out: `${W1}T11:48:00`, late_minutes: 57, early_leave_minutes: 342 } }), TODAY)
+    expect(both.verdict?.label).toBe('遲到 57 分・早退 342 分')
+    const early = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:00:00`, punch_out: `${W1}T16:10:00`, early_leave_minutes: 20 } }), TODAY)
+    expect(early.verdict?.label).toBe('早退 20 分')
+    const waived = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:30:00`, punch_out: `${W1}T16:30:00`, late_minutes: 30, confirmed_action: 'admin_waive' } }), TODAY)
+    expect(waived.verdict).toEqual({ label: '遲到 30 分・已豁免', tone: 'info' })
+    // 疑似換班等其他判定仍寫判定名（分鐘數在抽屜）
+    expect(cellDisplay(cell(1, W1, { actual: { status: 'possible_shift_change', punch_in: `${W1}T08:01:00`, punch_out: `${W1}T17:31:00`, late_minutes: 1 } }), TODAY).verdict?.label).toBe('疑似換班')
+  })
+
+  it('資料待補（當天已有人匯入）是待處理：用警示色，不是灰字', () => {
+    const shown = cellDisplay(cell(1, W1, { actual: { status: 'data_incomplete' } }), TODAY, new Set())
+    expect(shown.state).toBe('judged')
+    expect(shown.verdict).toEqual({ label: '資料待補', tone: 'warning' })
+    expect(isIssue(cell(1, W1, { actual: { status: 'data_incomplete' } }), TODAY, new Set())).toBe(true)
+  })
+
+  it('今天不用上班（非應出勤日、排休）沒打卡：不寫「尚未打卡」', () => {
+    const off = cellDisplay(cell(1, TODAY, { plan: { expected: false }, actual: { status: 'off_day' } }), TODAY)
+    expect(off.verdict).toBeNull()
+    expect(off.state).toBe('judged')
+    const dayOff = cellDisplay(cell(1, TODAY, { plan: { expected: false, day_off: true, source: 'daily_off' }, actual: { status: 'off_day' } }), TODAY)
+    expect(dayOff.verdict).toBeNull()
+    // 不用上班但有打卡：今天仍照「上班中」顯示
+    expect(cellDisplay(cell(1, TODAY, { plan: { expected: false }, actual: { status: 'unscheduled_attendance', punch_in: `${TODAY}T09:00:00` } }), TODAY).verdict?.label).toBe('上班中')
+  })
+
   it('單邊打卡寫「缺」而不是破折號接破折號；今天上班中寫「起」', () => {
     expect(cellDisplay(cell(1, W1, { actual: { status: 'missing_punch', punch_in: `${W1}T07:52:00`, punch_out: null } }), TODAY).actual).toBe('07:52–缺')
     expect(cellDisplay(cell(1, W1, { actual: { status: 'missing_punch', punch_in: null, punch_out: `${W1}T17:33:00` } }), TODAY).actual).toBe('缺–17:33')

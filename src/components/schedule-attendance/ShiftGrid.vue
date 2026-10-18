@@ -17,7 +17,7 @@
             <span class="shift-grid__date">{{ dayLabel(d) }}<span v-if="d.date === today" class="shift-grid__today">今天</span></span>
             <el-tag v-if="d.is_holiday" size="small" type="info">{{ d.holiday_name || '假日' }}</el-tag>
             <el-tag v-else-if="d.is_makeup_workday" size="small" type="warning">補班</el-tag>
-            <el-tag v-if="d.import_covered === false && d.date < today" size="small" type="info" :data-test="`not-imported-${d.date}`">未匯入</el-tag>
+            <el-tag v-if="d.is_workday && d.import_covered === false && d.date < today" size="small" type="info" :data-test="`not-imported-${d.date}`">未匯入</el-tag>
             <span
               v-for="gap in gapsOf(d.date)"
               :key="gap.shiftTypeId"
@@ -101,7 +101,7 @@
       <div v-if="mobileDayInfo" class="shift-grid__day-marks" data-test="mobile-day-marks">
         <el-tag v-if="mobileDayInfo.is_holiday" size="small" type="info">{{ mobileDayInfo.holiday_name || '假日' }}</el-tag>
         <el-tag v-else-if="mobileDayInfo.is_makeup_workday" size="small" type="warning">補班</el-tag>
-        <el-tag v-if="mobileDayInfo.import_covered === false && mobileDayInfo.date < today" size="small" type="info" :data-test="`mobile-not-imported-${mobileDayInfo.date}`">未匯入</el-tag>
+        <el-tag v-if="mobileDayInfo.is_workday && mobileDayInfo.import_covered === false && mobileDayInfo.date < today" size="small" type="info" :data-test="`mobile-not-imported-${mobileDayInfo.date}`">未匯入</el-tag>
         <span
           v-for="gap in gapsOf(mobileDayInfo.date)"
           :key="gap.shiftTypeId"

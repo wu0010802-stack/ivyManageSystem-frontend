@@ -262,6 +262,14 @@ describe('ShiftGrid 標記', () => {
     expect(wrapper.find(`[data-test="not-imported-${WEEK[0]}"]`).exists()).toBe(true)
     expect(wrapper.find(`[data-test="not-imported-${WEEK[4]}"]`).exists()).toBe(false) // 未來日不標
   })
+
+  it('週末沒人打卡不是「未匯入」：欄頭只標工作日', () => {
+    const days = WEEK.map((date) => day(date, { import_covered: false }))
+    const wrapper = mountGrid({ days, showAllDays: true, today: '2026-09-21' })
+    expect(wrapper.find(`[data-test="not-imported-${WEEK[0]}"]`).exists()).toBe(true)
+    expect(wrapper.find(`[data-test="not-imported-${WEEK[5]}"]`).exists()).toBe(false)
+    expect(wrapper.find(`[data-test="not-imported-${WEEK[6]}"]`).exists()).toBe(false)
+  })
 })
 
 describe('ShiftGrid 手機', () => {
