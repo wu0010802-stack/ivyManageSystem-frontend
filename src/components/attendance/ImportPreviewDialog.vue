@@ -45,10 +45,11 @@ const emit = defineEmits<{
 const { notify } = useErrorNotify()
 
 // ── 計算標題 ───────────────────────────────────────────────────────────────────
-const dialogTitle = computed(() => `匯入打卡記錄 · ${props.year} 年 ${props.month} 月`)
+const dialogTitle = computed(() => `匯入打卡紀錄 · ${props.year} 年 ${props.month} 月`)
 
 // ── Tab 狀態 ───────────────────────────────────────────────────────────────────
-const activeTab = ref<'paste' | 'excel'>('paste')
+// 預設上傳檔案：園方實際匯入的是打卡鐘報表 txt（與 Excel 同一頁籤），貼上文字是少用的備援
+const activeTab = ref<'paste' | 'excel'>('excel')
 
 // ── 預覽結果（Tab A / Tab B 共用）──────────────────────────────────────────────
 type PreviewResult = ApiResponse<'/attendance/upload/preview', 'post'>
@@ -355,7 +356,7 @@ function resetState() {
   rawText.value = ''
   previewResult.value = null
   legacyExcelFile.value = null
-  activeTab.value = 'paste'
+  activeTab.value = 'excel'
 }
 
 function handleClose() {
@@ -594,30 +595,8 @@ defineExpose({
   >
     <el-alert v-if="sourceContext" type="info" :closable="false" show-icon :title="`待補資料：${sourceContext.employee_name} · ${sourceContext.date}`" description="本次從此人員與日期進入；不會自動限制匯入範圍，實際匯入以預覽清單為準，請確認所有人員與日期後再匯入。" />
     <el-tabs v-model="activeTab">
-      <!-- ── Tab A: 貼上 / CSV 文字 ────────────────────────────────────────── -->
-      <el-tab-pane label="貼上 / CSV 文字" name="paste">
-        <div class="import-preview-dialog__paste-section">
-          <el-input
-            v-model="rawText"
-            type="textarea"
-            :rows="6"
-            placeholder="貼上 CSV / TSV 文字（含標題列），例如：&#10;部門,員工編號,姓名,日期,星期,上班,下班&#10;一年一班,E001,王小明,2026-06-01,一,08:00,17:00"
-          />
-          <div class="import-preview-dialog__actions">
-            <el-button
-              type="primary"
-              :loading="previewing"
-              :disabled="previewing || !rawText.trim()"
-              @click="handlePreview"
-            >
-              預覽核對
-            </el-button>
-          </div>
-        </div>
-      </el-tab-pane>
-
-      <!-- ── Tab B: 上傳 Excel 檔（先預覽再確認）──────────────────────────── -->
-      <el-tab-pane label="上傳 Excel 檔" name="excel">
+      <!-- ── 上傳檔案（打卡鐘 txt／Excel，先預覽再確認；預設頁籤）──────────────── -->
+      <el-tab-pane label="上傳檔案（打卡鐘 txt／Excel）" name="excel">
         <div class="import-preview-dialog__excel-section">
           <p class="import-preview-dialog__note">
             支援 .xlsx / .xls（每日上下班欄位與逐筆刷卡格式會自動辨識）與打卡鐘匯出的「員工上下班時間表」.txt。
@@ -677,6 +656,28 @@ defineExpose({
           </div>
         </div>
       </el-tab-pane>
+      <!-- ── 貼上 / CSV 文字（備援）──────────────────────────────────────────── -->
+      <el-tab-pane label="貼上 / CSV 文字" name="paste">
+        <div class="import-preview-dialog__paste-section">
+          <el-input
+            v-model="rawText"
+            type="textarea"
+            :rows="6"
+            placeholder="貼上 CSV / TSV 文字（含標題列），例如：&#10;部門,員工編號,姓名,日期,星期,上班,下班&#10;一年一班,E001,王小明,2026-06-01,一,08:00,17:00"
+          />
+          <div class="import-preview-dialog__actions">
+            <el-button
+              type="primary"
+              :loading="previewing"
+              :disabled="previewing || !rawText.trim()"
+              @click="handlePreview"
+            >
+              預覽核對
+            </el-button>
+          </div>
+        </div>
+      </el-tab-pane>
+
     </el-tabs>
 
     <!-- ── 預覽結果（Tab A / Tab B 共用）──────────────────────────────────── -->

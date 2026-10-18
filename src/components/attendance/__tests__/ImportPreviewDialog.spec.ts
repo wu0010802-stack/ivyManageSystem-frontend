@@ -233,6 +233,16 @@ describe('ImportPreviewDialog', () => {
     expect(wrapper.find('.el-dialog-stub').exists()).toBe(false)
   })
 
+  it('開啟時先在「上傳檔案」頁籤（打卡鐘 txt 與 Excel 都在這裡），標題用「紀錄」與頁首一致', async () => {
+    const wrapper = mountDialog()
+    await nextTick()
+    const tabs = wrapper.findComponent(ElTabs)
+    expect(tabs.props('modelValue')).toBe('excel')
+    const labels = wrapper.findAll('.el-tab-pane-stub').map((p) => p.attributes('data-label'))
+    expect(labels).toEqual(['上傳檔案（打卡鐘 txt／Excel）', '貼上 / CSV 文字'])
+    expect(wrapper.findComponent(ElDialog).props('title')).toContain('匯入打卡紀錄')
+  })
+
   // ── Tab A: 貼上 / CSV 文字流程 ────────────────────────────────────────────────
   it('Tab A: 點「預覽核對」→ 呼叫 previewImport', async () => {
     mockPreviewImport.mockResolvedValue({ data: previewFixture })
