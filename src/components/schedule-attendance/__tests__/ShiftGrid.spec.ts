@@ -124,6 +124,9 @@ describe('ShiftGrid 桌機', () => {
   it('狀態色：不用側邊色條；判定文字用達 AA 的深色 token；未來格不像停用', () => {
     const css = readFileSync(resolve(__dirname, '../ShiftGrid.vue'), 'utf8')
     expect(css).not.toMatch(/border-left:\s*[2-9]px/)
+    // 判定只在「・」之間換行（每段不拆）：整串不換行會把欄寬撐開，1440 寬時週末欄被擠出畫面
+    expect(css).toMatch(/\.shift-grid__verdict-part \{[^}]*white-space: nowrap/)
+    expect(css).not.toMatch(/\.shift-grid__plan-time, \.shift-grid__verdict \{[^}]*white-space: nowrap/)
     expect(css).toMatch(/\.shift-grid__cell--danger \.shift-grid__verdict \{[^}]*color: var\(--color-danger-darker\)/)
     expect(css).toMatch(/\.shift-grid__cell--warning \.shift-grid__verdict \{[^}]*color: var\(--color-warning-darker\)/)
     expect(css).not.toMatch(/color: var\(--el-color-warning\)/)
@@ -271,6 +274,15 @@ describe('ShiftGrid 標記', () => {
     expect(wrapper.find(`[data-test="not-imported-${WEEK[0]}"]`).exists()).toBe(true)
     expect(wrapper.find(`[data-test="not-imported-${WEEK[5]}"]`).exists()).toBe(false)
     expect(wrapper.find(`[data-test="not-imported-${WEEK[6]}"]`).exists()).toBe(false)
+  })
+})
+
+describe('ShiftGrid 判定分段', () => {
+  it('「遲到 N 分・早退 M 分」拆成兩段，每段不折行', () => {
+    const cells = cellsFor({ [`1|${WEEK[0]}`]: { actual: { status: 'anomaly', punch_in: `${WEEK[0]}T07:57:00`, punch_out: `${WEEK[0]}T11:48:00`, late_minutes: 57, early_leave_minutes: 342 } } })
+    const verdict = mountGrid({ cells }).get(`[data-test="cell-1-${WEEK[0]}"] .shift-grid__verdict`)
+    expect(verdict.findAll('.shift-grid__verdict-part').map((p) => p.text())).toEqual(['遲到 57 分・', '早退 342 分'])
+    expect(verdict.text()).toBe('遲到 57 分・早退 342 分')
   })
 })
 

@@ -72,7 +72,7 @@
                 </span>
                 <span v-if="hasResult(display(emp.employee_id, d.date))" class="shift-grid__result">
                   <span v-if="display(emp.employee_id, d.date).actual" class="shift-grid__actual">{{ display(emp.employee_id, d.date).actual }}</span>
-                  <span v-if="display(emp.employee_id, d.date).verdict" class="shift-grid__verdict">{{ display(emp.employee_id, d.date).verdict!.label }}</span>
+                  <span v-if="display(emp.employee_id, d.date).verdict" class="shift-grid__verdict"><span v-for="(part, i) in verdictParts(display(emp.employee_id, d.date).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
                   <span v-for="tag in display(emp.employee_id, d.date).leaveTags" :key="tag" class="shift-grid__leave">{{ tag }}</span>
                   <span v-if="display(emp.employee_id, d.date).confirmation" class="shift-grid__confirm">{{ display(emp.employee_id, d.date).confirmation }}</span>
                 </span>
@@ -129,7 +129,7 @@
             <span class="shift-grid__plan">{{ display(emp.employee_id, mobileDay).source ? `${display(emp.employee_id, mobileDay).source!.short}・` : '' }}{{ display(emp.employee_id, mobileDay).plan }}</span>
             <span v-if="isInactivePlan(emp.employee_id, mobileDay)" class="shift-grid__inactive">已停用</span>
             <span v-if="display(emp.employee_id, mobileDay).actual" class="shift-grid__actual">{{ display(emp.employee_id, mobileDay).actual }}</span>
-            <span v-if="display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict">{{ display(emp.employee_id, mobileDay).verdict!.label }}</span>
+            <span v-if="display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict"><span v-for="(part, i) in verdictParts(display(emp.employee_id, mobileDay).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
             <span v-for="tag in display(emp.employee_id, mobileDay).leaveTags" :key="tag" class="shift-grid__leave">{{ tag }}</span>
             <span v-if="display(emp.employee_id, mobileDay).confirmation" class="shift-grid__confirm">{{ display(emp.employee_id, mobileDay).confirmation }}</span>
           </button>
@@ -283,6 +283,15 @@ function planParts(plan: string): Array<{ text: string; time: boolean }> {
   return plan.split(' ').filter(Boolean).map((text) => ({ text, time: /^\d{2}:\d{2}–\d{2}:\d{2}$/.test(text) }))
 }
 
+/**
+ * 「遲到 57 分・早退 342 分」→ [「遲到 57 分・」,「早退 342 分」]：分段才能只在「・」換行。
+ * 「・」（U+30FB）在斷行規則裡不能放行首，所以接在前一段尾巴，斷點落在它後面。
+ */
+function verdictParts(label: string): string[] {
+  const parts = label.split('・')
+  return parts.map((part, i) => (i < parts.length - 1 ? `${part}・` : part))
+}
+
 function hasResult(d: CellDisplay): boolean {
   return !!(d.actual || d.verdict || d.leaveTags.length || d.confirmation)
 }
@@ -362,7 +371,9 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__result { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
 .shift-grid__actual { color: var(--el-text-color-regular); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* 只在班別名與時段之間、打卡與判定之間換行，時段本身不拆成「08:00–」／「17:30」 */
-.shift-grid__plan-time, .shift-grid__verdict { white-space: nowrap; }
+.shift-grid__plan-time { white-space: nowrap; }
+/* 判定只在「・」之間換行，每段（「遲到 57 分」）不拆；整串不換行會把欄寬撐開，1440 寬時週末欄被擠出畫面 */
+.shift-grid__verdict-part { white-space: nowrap; }
 .shift-grid__verdict { font-size: var(--text-xs); color: var(--el-text-color-secondary); }
 .shift-grid__cell--danger .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--color-danger-darker); }
 .shift-grid__cell--warning .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--color-warning-darker); }
