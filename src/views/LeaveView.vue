@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { parseLeaveCreateQuery, stripLeaveCreateQuery } from '@/utils/leaveDeepLink'
 import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -350,6 +351,25 @@ function openReviewLogs(row: Record<string, unknown>) {
   if (typeof s === 'string' && s) leaveSearch.value = s
 }
 
+// 排班與出勤「建立請假單」深連結：?create=1&employee_id=<id>&date=YYYY-MM-DD
+// 開頁即開新增對話框並帶入員工與當天（整天），列表切到那個月；開完拿掉參數，重新整理不再開一次
+const leaveCreateRoute = useRoute()
+const leaveCreateRouter = useRouter()
+const createPrefill = parseLeaveCreateQuery(leaveCreateRoute?.query)
+if (createPrefill) {
+  query.year = Number(createPrefill.date.slice(0, 4))
+  query.month = Number(createPrefill.date.slice(5, 7))
+}
+async function openCreateFromLink(): Promise<void> {
+  if (!createPrefill) return
+  openCreate()
+  await nextTick()
+  form.employee_id = createPrefill.employeeId
+  form.start_date = createPrefill.date
+  form.end_date = createPrefill.date
+  void leaveCreateRouter?.replace({ query: stripLeaveCreateQuery(leaveCreateRoute.query) })
+}
+
 const saveLoading = ref(false)
 
 const {
@@ -659,6 +679,7 @@ onMounted(() => {
     fetchLeaves(),
     approvalPolicyStore.fetchPolicies(),
   ])
+  void openCreateFromLink()
 })
 </script>
 

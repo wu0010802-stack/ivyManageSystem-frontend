@@ -42,6 +42,11 @@
             <dt>判定</dt><dd>{{ verdict }}</dd>
           </dl>
           <p class="pdd__reason">{{ cell.actual.reason }}</p>
+          <div v-if="absenceRisk" class="pdd__absence" data-test="pdd-absence">
+            <p class="pdd__absence-lead">這天沒有任何打卡。正職員工不處理的話，算薪時會算曠職扣款。</p>
+            <p class="pdd__note">有上班但忘了打卡：在下方補登上下班。有請假：建立請假單。確定是曠職就不必動作，算薪會自動扣（這格會留在待處理）。</p>
+            <router-link v-if="canCreateLeave" :to="leaveCreateLink(cell.employee_id, cell.date)" class="pdd__link" data-test="pdd-create-leave">建立請假單</router-link>
+          </div>
           <p v-if="cell.actual.candidates.length" data-test="pdd-candidates">
             系統推測：{{ cell.actual.candidates.map((c) => `${c.name} ${c.work_start}–${c.work_end}`).join('、') }}
             <template v-if="suggestedPair">（疑似和 {{ employeeNames[suggestedPair.employee_id] }} 對調）</template>
@@ -145,6 +150,8 @@ import { deleteDaily, getDaily, saveDaily } from '@/api/shifts'
 import { apiError } from '@/utils/error'
 import { confirmDiscardChanges } from '@/composables/useUnsavedChangesGuard'
 import { KIND_LABELS, STATUS_LABELS } from '@/utils/attendanceConfirm'
+import { hasPermission } from '@/utils/auth'
+import { leaveCreateLink } from '@/utils/leaveDeepLink'
 import {
   LOCKED_REASON_LABELS,
   RECON_STATUS_LABELS,
@@ -243,6 +250,21 @@ const lockedNote = computed(() => {
   if (reason === 'no_permission' && resolveMode.value !== 'none') return '沒有改班權限；打卡仍可在下方處理'
   return LOCKED_REASON_LABELS[reason]
 })
+
+/**
+ * 應上班卻整天沒有打卡（疑似缺勤，或當天有匯入但沒有這個人的資料待補）：薪資引擎對正職會把這天算曠職
+ * （應上班日－有打卡日－全天假），不管是不是「資料待補」。整天未匯入的日子格子寫「未匯入」，這裡不重複。
+ */
+const absenceRisk = computed(() => {
+  const cell = props.cell
+  const actual = cell?.actual
+  if (!cell || !actual || cell.date >= props.today) return false
+  if (!cell.plan.expected || cell.plan.day_off || actual.punch_in || actual.punch_out) return false
+  if (cell.leaves.some((leave) => leave.status === 'approved' && leave.is_full_day)) return false
+  if (actual.status === 'suspected_absence') return true
+  return actual.status === 'data_incomplete' && props.day?.import_covered !== false
+})
+const canCreateLeave = hasPermission('LEAVES_WRITE')
 
 /** spec §7：兼兩班時歸主要班級組，抽屜註明另一班 */
 const otherClasses = computed(() => (props.employee?.other_classroom_labels ?? []).join('、'))
@@ -550,6 +572,11 @@ async function submitConfirm(): Promise<void> {
 .pdd__facts dt { color: var(--el-text-color-secondary); }
 .pdd__facts dd { margin: 0; }
 .pdd__reason { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--el-text-color-regular); }
+.pdd__absence { display: grid; gap: var(--space-1); margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--el-color-warning-light-5); border-radius: var(--radius-md); background: var(--el-color-warning-light-9); }
+.pdd__absence p { margin: 0; }
+.pdd__absence-lead { font-size: var(--text-sm); font-weight: 600; color: var(--color-warning-darker); }
+.pdd__link { justify-self: start; color: var(--el-color-primary); font-size: var(--text-sm); }
+.pdd__link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .pdd__select { width: 100%; margin-bottom: var(--space-2); }
 .pdd__candidates { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
 .pdd__candidates .el-button { margin-left: 0; }

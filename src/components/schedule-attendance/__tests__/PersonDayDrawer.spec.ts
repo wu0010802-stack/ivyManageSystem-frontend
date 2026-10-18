@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import PersonDayDrawer from '../PersonDayDrawer.vue'
 import ResolveCard from '@/components/attendance/ResolveCard.vue'
@@ -42,6 +42,7 @@ function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]
     global: {
       plugins: [ElementPlus],
       stubs: {
+        RouterLink: RouterLinkStub,
         // 「關閉」鈕模擬 X／Esc／點遮罩：有 before-close 就交給它決定要不要關
         ElDrawer: {
           name: 'ElDrawer',
@@ -691,5 +692,24 @@ describe('PersonDayDrawer 上一筆／下一筆待處理', () => {
     box.confirm.mockRejectedValueOnce('cancel')
     expect(await (wrapper.vm as unknown as DrawerApi).requestClose()).toBe(false)
     wrapper.unmount()
+  })
+})
+
+describe('PersonDayDrawer 沒有打卡的應上班日', () => {
+  it('疑似缺勤：寫出不處理會算曠職、三種處理方式，並可建立請假單（帶人帶日期）', async () => {
+    const wrapper = mountDrawer(cell(2, W1, { actual: { status: 'suspected_absence', attendance_id: null } }))
+    await flushPromises()
+    const box = wrapper.get('[data-test="pdd-absence"]')
+    expect(box.text()).toContain('算曠職扣款')
+    expect(box.text()).toContain('建立請假單')
+    const link = wrapper.findAllComponents(RouterLinkStub).find((l) => l.attributes('data-test') === 'pdd-create-leave')
+    expect(link?.props('to')).toEqual({ path: '/leaves', query: { create: '1', employee_id: '2', date: W1 } })
+  })
+
+  it('有匯入但沒有這個人的資料待補也一樣會被算曠職；整天未匯入、有打卡、不用上班的日子不提示', async () => {
+    expect(mountDrawer(cell(2, W1, { actual: { status: 'data_incomplete' } })).find('[data-test="pdd-absence"]').exists()).toBe(true)
+    expect(mountDrawer(cell(2, W1, { actual: { status: 'data_incomplete' } }), { importCovered: false }).find('[data-test="pdd-absence"]').exists()).toBe(false)
+    expect(mountDrawer(cell(2, W1, { actual: { status: 'missing_punch', punch_in: `${W1}T07:00:00` } })).find('[data-test="pdd-absence"]').exists()).toBe(false)
+    expect(mountDrawer(cell(2, '2026-09-19', { plan: { expected: false }, actual: { status: 'off_day' } })).find('[data-test="pdd-absence"]').exists()).toBe(false)
   })
 })
