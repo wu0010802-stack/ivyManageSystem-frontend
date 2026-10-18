@@ -16,12 +16,34 @@ map "${TENANT_HOST_GUARD}:$tb_known_host" $tb_reject_host {
     "on:0"  1;
 }
 
+# ─── access log 不記 query string（F16）────────────────────────────────────
+# nginx:alpine 預設 `access_log … main` 的 "$request" 含完整 query：離職包 magic-link
+# `/api/offboarding/download?token=<明文>` 經本層反代，token 會先於後端
+# MagicLinkLogScrubMiddleware（只遮 uvicorn）寫進 Railway 前端 log，30 天／3 次內
+# 可直接重放下載；職員查詢的 PII 參數（student_name=、payer_name=、q=）同理。
+# 改記 $request_method + $uri（不含 args），Referer 也去掉 query。
+# 欄位順序沿用官方 main，既有 log 解析不受影響。
+# ⛔ 勿加回 $request／$request_uri／$args／$query_string／$arg_*／原樣 $http_referer
+#    （tests/unit/build/nginxAccessLogPrivacy.test.ts 把關）。
+map $http_referer $ivy_log_referer {
+    default                     "";
+    "~^(?<ivy_ref_noq>[^?]*)"   $ivy_ref_noq;
+}
+
+log_format ivy_noquery '$remote_addr - $remote_user [$time_local] '
+                       '"$request_method $uri $server_protocol" $status $body_bytes_sent '
+                       '"$ivy_log_referer" "$http_user_agent" "$http_x_forwarded_for"';
+
 server {
     listen 8080;
     server_name _;
 
     root /usr/share/nginx/html;
     index index.html;
+
+    # 覆寫 nginx.conf 預設的 `access_log … main`（見檔首 F16 說明）；
+    # /var/log/nginx/access.log 在官方 image 是指向 /dev/stdout 的 symlink。
+    access_log /var/log/nginx/access.log ivy_noquery;
 
     # 本檔在 Zeabur 上是「container 內部埠 8080」被外層反代終止 TLS 後轉發進來，
     # 對外實際埠是 443（或根本不露埠）。nginx 對「本地 URI」的 redirect（如下方
