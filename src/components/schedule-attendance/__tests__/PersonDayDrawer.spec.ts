@@ -15,13 +15,15 @@ vi.mock('@/api/attendance', () => ({ getAnomalyList: att.getAnomalyList, upsertR
 vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
 vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: vi.fn() }) }))
 const box = vi.hoisted(() => ({ confirm: vi.fn() }))
+const router = vi.hoisted(() => ({ push: vi.fn() }))
+vi.mock('vue-router', () => ({ useRouter: () => router }))
 vi.mock('element-plus', async (orig) => ({ ...(await orig<typeof import('element-plus')>()), ElMessage: message, ElMessageBox: box }))
 
 const CALLER = grid().caller
 
-type DrawerNav = { position: number | null; total: number; hasPrev: boolean; hasNext: boolean }
+type DrawerNav = { position: number | null; total: number; hasPrev: boolean; hasNext: boolean; back?: string | null }
 
-function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]; caller: typeof CALLER; weeklyShiftId: number | null; employee: GridEmployee; importCovered: boolean; nav: DrawerNav | null; attach: boolean }> = {}) {
+function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]; caller: typeof CALLER; weeklyShiftId: number | null; employee: GridEmployee; importCovered: boolean; nav: DrawerNav | null; attach: boolean; actionsLocked: boolean }> = {}) {
   return mount(PersonDayDrawer, {
     props: {
       modelValue: true,
@@ -36,6 +38,7 @@ function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]
       today: '2026-09-21',
       caller: extra.caller ?? CALLER,
       nav: extra.nav ?? null,
+      actionsLocked: extra.actionsLocked ?? false,
     },
     // 鍵盤事件要從輸入框冒泡到 window，元件得掛在 document 上
     ...(extra.attach ? { attachTo: document.body } : {}),
@@ -701,9 +704,34 @@ describe('PersonDayDrawer 沒有打卡的應上班日', () => {
     await flushPromises()
     const box = wrapper.get('[data-test="pdd-absence"]')
     expect(box.text()).toContain('算曠職扣款')
-    expect(box.text()).toContain('建立請假單')
-    const link = wrapper.findAllComponents(RouterLinkStub).find((l) => l.attributes('data-test') === 'pdd-create-leave')
-    expect(link?.props('to')).toEqual({ path: '/leaves', query: { create: '1', employee_id: '2', date: W1 } })
+    expect(box.text()).toContain('在下方補登上下班')
+    await wrapper.get('[data-test="pdd-create-leave"]').trigger('click')
+    await flushPromises()
+    expect(router.push).toHaveBeenCalledWith({ path: '/leaves', query: { create: '1', employee_id: '2', date: W1 } })
+  })
+
+  it('建立請假單會離開這頁：原因打到一半先問，取消就不走', async () => {
+    const wrapper = mountDrawer(cell(2, W1, { edit: { confirm: true, plan: true }, actual: { status: 'suspected_absence', attendance_id: null } }))
+    await flushPromises()
+    await wrapper.get('textarea[data-test="pdd-confirm-reason"]').setValue('補登')
+    box.confirm.mockRejectedValueOnce('cancel')
+    await wrapper.get('[data-test="pdd-create-leave"]').trigger('click')
+    await flushPromises()
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('不能補登的格子：已封存不提示；沒有寫入權限、本人只寫後果，不叫人「在下方補登」', async () => {
+    const absent = (extra: Parameters<typeof cell>[2] = {}) => cell(2, W1, { ...extra, actual: { status: 'suspected_absence', attendance_id: null } })
+    expect(mountDrawer(absent({ edit: { locked_reason: 'finalized', plan: false } })).find('[data-test="pdd-absence"]').exists()).toBe(false)
+    const readOnly = mountDrawer(absent(), { caller: { ...CALLER, can_edit_attendance: false } })
+    await flushPromises()
+    const text = readOnly.get('[data-test="pdd-absence"]').text()
+    expect(text).toContain('算曠職扣款')
+    expect(text).not.toContain('在下方補登')
+    expect(text).toContain('由有出勤寫入權限的行政人員')
+    const own = mountDrawer(absent(), { caller: { ...CALLER, employee_id: 2 } })
+    await flushPromises()
+    expect(own.get('[data-test="pdd-absence"]').text()).not.toContain('在下方補登')
   })
 
   it('有匯入但沒有這個人的資料待補也一樣會被算曠職；整天未匯入、有打卡、不用上班的日子不提示', async () => {
@@ -743,5 +771,62 @@ describe('PersonDayDrawer 版面順序', () => {
     await reason.setValue('園長口頭同意換班')
     await wrapper.get('[data-test="pdd-candidate-2"]').trigger('click')
     expect((reason.element as HTMLTextAreaElement).value).toBe('園長口頭同意換班')
+  })
+})
+
+describe('PersonDayDrawer 審查修正', () => {
+  const NAV: DrawerNav = { position: 3, total: 12, hasPrev: true, hasNext: true }
+  const press = (target: EventTarget, init: KeyboardEventInit = {}) => target.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, ...init }))
+
+  it('焦點在疊在上面的其他對話框（例如匯入打卡）時，J／K 不換筆；按住不放不連續換', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { actual: {} }), { nav: NAV, attach: true })
+    await flushPromises()
+    const overlay = document.createElement('div')
+    overlay.className = 'el-overlay'
+    const tab = document.createElement('button')
+    overlay.appendChild(tab)
+    document.body.appendChild(overlay)
+    press(tab)
+    press(document.body, { repeat: true })
+    await flushPromises()
+    expect(wrapper.emitted('navigate')).toBeUndefined()
+    press(document.body)
+    await flushPromises()
+    expect(wrapper.emitted('navigate')).toEqual([[1]])
+    overlay.remove()
+    wrapper.unmount()
+  })
+
+  it('剛自動跳過來時鎖住動作（避免連點落到下一筆）', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { edit: { confirm: true, plan: true }, actual: { status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00`, candidates: [{ shift_type_id: 2, name: '晚車', work_start: '08:30', work_end: '18:00' }] } }), { actionsLocked: true })
+    await flushPromises()
+    await wrapper.get('textarea[data-test="pdd-confirm-reason"]').setValue('換班')
+    expect(wrapper.get('[data-test="pdd-confirm-submit"]').attributes('disabled')).toBeDefined()
+    wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', -1)
+    await flushPromises()
+    expect(wrapper.get('[data-test="pdd-day-apply"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.findComponent({ name: 'DayResolveSection' }).props('locked')).toBe(true)
+  })
+
+  it('自動跳過來後可以回剛才那格', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { actual: {} }), { nav: { ...NAV, back: '林班導 9/14' } })
+    await flushPromises()
+    await wrapper.get('[data-test="pdd-back"]').trigger('click')
+    expect(wrapper.emitted('back')).toHaveLength(1)
+    expect(mountDrawer(cell(1, W1, { actual: {} }), { nav: NAV }).find('[data-test="pdd-back"]').exists()).toBe(false)
+  })
+
+  it('同一格重抓（cell 物件換新）不重設打到一半的原因', async () => {
+    const shift = () => cell(1, W1, { edit: { confirm: true, plan: false, recorded: true, locked_reason: 'recorded' }, actual: { status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00` } })
+    const wrapper = mountDrawer(shift())
+    await flushPromises()
+    await wrapper.get('textarea[data-test="pdd-confirm-reason"]').setValue('園長同意')
+    await wrapper.setProps({ cell: shift() })
+    await flushPromises()
+    expect((wrapper.get('textarea[data-test="pdd-confirm-reason"]').element as HTMLTextAreaElement).value).toBe('園長同意')
+    // 換到另一格才重設
+    await wrapper.setProps({ cell: cell(1, '2026-09-15', { edit: { confirm: true }, actual: { status: 'possible_shift_change', punch_in: '2026-09-15T08:31:00', punch_out: '2026-09-15T18:02:00' } }) })
+    await flushPromises()
+    expect((wrapper.get('textarea[data-test="pdd-confirm-reason"]').element as HTMLTextAreaElement).value).toBe('')
   })
 })

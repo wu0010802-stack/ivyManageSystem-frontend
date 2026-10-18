@@ -29,6 +29,17 @@ vi.mock('@/stores/approvalPolicy', () => ({
   useApprovalPolicyStore: () => ({ policies: [], fetchPolicies: vi.fn(() => Promise.resolve()) }),
 }))
 vi.mock('@/stores/notification', () => ({ useNotificationStore: () => ({ fetchSummary: vi.fn() }) }))
+// 抓草稿 composable 的 enabled：深連結帶入的內容不能寫進（蓋掉）使用者原本的草稿
+const draft = vi.hoisted(() => ({ enabled: null as null | (() => boolean), prompt: vi.fn() }))
+vi.mock('@/composables/useFormDraft', async () => {
+  const { ref } = await import('vue')
+  return {
+    useFormDraft: (opts: { enabled?: () => boolean }) => {
+      draft.enabled = opts.enabled ?? null
+      return { hasDraft: ref(false), draftSavedAt: ref(null), maybePromptRestore: draft.prompt, clearDraft: vi.fn(), flush: vi.fn() }
+    },
+  }
+})
 
 import LeaveView from '@/views/LeaveView.vue'
 
@@ -66,6 +77,9 @@ describe('LeaveView 帶人帶日期開新增假單', () => {
     expect(range?.props('modelValue')).toEqual(['2026-09-15', '2026-09-15'])
     expect(api.getLeaves).toHaveBeenLastCalledWith(expect.objectContaining({ year: 2026, month: 9 }))
     expect(router.replace).toHaveBeenCalledWith({ query: { search: '林' } })
+    // 深連結開的這次不存草稿、也不問要不要還原
+    expect(draft.enabled?.()).toBe(false)
+    expect(draft.prompt).not.toHaveBeenCalled()
   })
 
   it('沒有或格式不對的參數：不開對話框', async () => {

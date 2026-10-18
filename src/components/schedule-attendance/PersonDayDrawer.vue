@@ -14,6 +14,7 @@
         <span class="pdd__nav-pos" data-test="pdd-nav-pos">{{ nav.position ? `待處理 ${nav.position}／${nav.total}` : `共 ${nav.total} 筆待處理` }}</span>
         <el-button :disabled="!nav.hasNext" title="下一筆待處理（J）" aria-keyshortcuts="j" data-test="pdd-next" @click="go(1)">下一筆 <el-icon class="el-icon--right"><ArrowRight /></el-icon></el-button>
       </nav>
+      <p v-if="nav?.back" class="pdd__back"><el-button link type="primary" data-test="pdd-back" @click="goBack">回剛才處理的 {{ nav.back }}</el-button></p>
       <p v-if="otherClasses" class="pdd__note" data-test="pdd-other-classes">另兼：{{ otherClasses }}</p>
       <section class="pdd__section">
         <h3>應上班</h3>
@@ -34,8 +35,9 @@
           <p class="pdd__reason">{{ cell.actual.reason }}</p>
           <div v-if="absenceRisk" class="pdd__absence" data-test="pdd-absence">
             <p class="pdd__absence-lead">這天沒有任何打卡。正職員工不處理的話，算薪時會算曠職扣款。</p>
-            <p class="pdd__note">有上班但忘了打卡：在下方補登上下班。有請假：建立請假單。確定是曠職就不必動作，算薪會自動扣（這格會留在待處理）。</p>
-            <router-link v-if="canCreateLeave" :to="leaveCreateLink(cell.employee_id, cell.date)" class="pdd__link" data-test="pdd-create-leave">建立請假單</router-link>
+            <p v-if="resolveMode !== 'none'" class="pdd__note">有上班但忘了打卡：在下方補登上下班。有請假：建立請假單。確定是曠職就不必動作，算薪會自動扣（這格會留在待處理）。</p>
+            <p v-else-if="!isOwnCell" class="pdd__note">有上班或有請假，要由有出勤寫入權限的行政人員補登或建立請假單。</p>
+            <el-button v-if="canCreateLeave" link type="primary" class="pdd__link" data-test="pdd-create-leave" @click="openLeave">建立請假單</el-button>
           </div>
           <p v-if="cell.actual.candidates.length" data-test="pdd-candidates">
             系統推測：{{ cell.actual.candidates.map((c) => `${c.name} ${c.work_start}–${c.work_end}`).join('、') }}
@@ -53,6 +55,7 @@
         v-if="resolveMode !== 'none' && resolveMode !== 'confirm-first'"
         ref="resolveRef"
         :cell="cell"
+        :locked="actionsLocked"
         :mode="resolveMode"
         :employee-name="employee.name"
         :employee-number="employee.employee_number ?? ''"
@@ -67,7 +70,7 @@
           <el-option v-for="s in optionsWith(initialDayChoice)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
           <el-option :value="DAY_OFF" label="排休（明確不上班）" />
         </el-select>
-        <el-button :type="resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="savingDay" :disabled="dayChoice === initialDayChoice || loadingDaily" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
+        <el-button :type="resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="savingDay" :disabled="dayChoice === initialDayChoice || loadingDaily || actionsLocked" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
       </section>
 
       <section v-if="cell.edit.confirm && cell.actual" class="pdd__section" data-test="pdd-confirm">
@@ -99,13 +102,14 @@
             <el-input v-model="confirmReason" type="textarea" :rows="2" :maxlength="500" data-test="pdd-confirm-reason" />
           </el-form-item>
         </el-form>
-        <el-button v-if="confirmExpanded" :type="resolveMode === 'resolve-first' || resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="confirming" :disabled="confirmChoice === null || !confirmReason.trim()" data-test="pdd-confirm-submit" @click="submitConfirm">確認並重算</el-button>
+        <el-button v-if="confirmExpanded" :type="resolveMode === 'resolve-first' || resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="confirming" :disabled="confirmChoice === null || !confirmReason.trim() || actionsLocked" data-test="pdd-confirm-submit" @click="submitConfirm">確認並重算</el-button>
       </section>
 
       <DayResolveSection
         v-if="resolveMode === 'confirm-first'"
         ref="resolveRef"
         :cell="cell"
+        :locked="actionsLocked"
         mode="confirm-first"
         :employee-name="employee.name"
         :employee-number="employee.employee_number ?? ''"
@@ -145,6 +149,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import { confirmReconciliationShift } from '@/api/attendanceReconciliation'
 import DayResolveSection, { type DayResolveMode } from './DayResolveSection.vue'
 import { deleteDaily, getDaily, saveDaily } from '@/api/shifts'
@@ -186,13 +191,17 @@ const props = defineProps<{
   today: string
   caller: GridOut['caller']
   mobile?: boolean
-  /** 上一筆／下一筆待處理（面板依畫面上的列與篩選排好）；null＝不顯示 */
-  nav?: { position: number | null; total: number; hasPrev: boolean; hasNext: boolean } | null
+  /** 上一筆／下一筆待處理（面板依畫面上的列與篩選排好）；back＝剛自動跳走的那格（可回去）；null＝不顯示 */
+  nav?: { position: number | null; total: number; hasPrev: boolean; hasNext: boolean; back?: string | null } | null
+  /** 剛自動跳到這格：短暫鎖住動作，連點不會落到這一筆 */
+  actionsLocked?: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   /** 換到上一筆（-1）或下一筆（1）待處理 */
   navigate: [direction: 1 | -1]
+  /** 回剛才自動跳走的那格 */
+  back: []
   changed: []
   records: [employeeId: number, date: string]
   /** 沒有任何打卡的人日：帶人員與日期開匯入（沿用原打卡核對清單的「匯入打卡」） */
@@ -260,12 +269,21 @@ const absenceRisk = computed(() => {
   const cell = props.cell
   const actual = cell?.actual
   if (!cell || !actual || cell.date >= props.today) return false
+  // 已封存：薪資已結算，「不處理會扣」不再成立
+  if (cell.edit.locked_reason === 'finalized') return false
   if (!cell.plan.expected || cell.plan.day_off || actual.punch_in || actual.punch_out) return false
   if (cell.leaves.some((leave) => leave.status === 'approved' && leave.is_full_day)) return false
   if (actual.status === 'suspected_absence') return true
   return actual.status === 'data_incomplete' && props.day?.import_covered !== false
 })
 const canCreateLeave = hasPermission('LEAVES_WRITE')
+const router = useRouter()
+/** 建立請假單會離開這頁：先過未送出檢查 */
+async function openLeave(): Promise<void> {
+  const cell = props.cell
+  if (!cell || !(await requestClose())) return
+  void router?.push(leaveCreateLink(cell.employee_id, cell.date))
+}
 
 /** spec §7：兼兩班時歸主要班級組，抽屜註明另一班 */
 const otherClasses = computed(() => (props.employee?.other_classroom_labels ?? []).join('、'))
@@ -433,12 +451,21 @@ async function go(direction: 1 | -1): Promise<void> {
   if (!(await requestClose())) return
   emit('navigate', direction)
 }
-/** J／K 換筆（打字中、選單展開或確認框開著時不算） */
+async function goBack(): Promise<void> {
+  if (!(await requestClose())) return
+  emit('back')
+}
+/**
+ * J／K 換筆：焦點在這個抽屜裡（或沒有焦點）才算。疊在上面的對話框（例如從抽屜開的匯入打卡）、
+ * 打字中、選單展開、確認框開著、按住不放都不算。
+ */
 function onKeydown(event: KeyboardEvent): void {
-  if (!props.modelValue || !props.nav || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return
+  if (!props.modelValue || !props.nav || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return
   const key = event.key.toLowerCase()
   if (key !== 'j' && key !== 'k') return
   const target = event.target instanceof Element ? event.target : null
+  const inDrawer = !!target?.closest('[data-test="person-day-drawer"]')
+  if (!inDrawer && target !== document.body && target !== document.documentElement) return
   if (target?.closest('input, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"]')) return
   if (document.querySelector('.el-overlay-message-box')) return
   event.preventDefault()
@@ -448,8 +475,9 @@ onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 let openSeq = 0
+// 只在開關或換格時重設表單：getter 回傳陣列會讓每次重抓（cell 物件換新）都重設、打到一半的原因被清掉
 watch(
-  () => [props.modelValue, props.cell?.employee_id, props.cell?.date] as const,
+  [() => props.modelValue, () => props.cell?.employee_id, () => props.cell?.date],
   async ([open]) => {
     const cell = props.cell
     if (!open || !cell) return
@@ -569,6 +597,7 @@ async function submitConfirm(): Promise<void> {
 .pdd__nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding-bottom: var(--space-3); border-bottom: 1px solid var(--el-border-color-lighter); }
 .pdd__nav .el-button { margin-left: 0; }
 .pdd__nav-pos { color: var(--el-text-color-secondary); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.pdd__back { margin: calc(-1 * var(--space-2)) 0 0; }
 .pdd__section h3 { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 .pdd__plan { margin: 0; font-weight: 600; }
 .pdd__note { margin: 0; color: var(--el-text-color-secondary); font-size: var(--text-sm); }
@@ -585,8 +614,7 @@ async function submitConfirm(): Promise<void> {
 .pdd__absence { display: grid; gap: var(--space-1); margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--el-color-warning-light-5); border-radius: var(--radius-md); background: var(--el-color-warning-light-9); }
 .pdd__absence p { margin: 0; }
 .pdd__absence-lead { font-size: var(--text-sm); font-weight: 600; color: var(--color-warning-darker); }
-.pdd__link { justify-self: start; color: var(--el-color-primary); font-size: var(--text-sm); }
-.pdd__link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.pdd__link { justify-self: start; }
 .pdd__select { width: 100%; margin-bottom: var(--space-2); }
 .pdd__candidates { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
 .pdd__candidates .el-button { margin-left: 0; }

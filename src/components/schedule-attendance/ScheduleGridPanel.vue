@@ -102,7 +102,9 @@
       :caller="drawerGrid.caller"
       :mobile="isMobile"
       :nav="drawerNav"
+      :actions-locked="actionsLocked"
       @navigate="onNavigate"
+      @back="onBack"
       @changed="onChanged"
       @records="onRecords"
       @import="(ctx: ImportContext) => emit('import', ctx)"
@@ -282,7 +284,8 @@ let scrollMain: HTMLElement | null = null
 function onGridWheel(event: WheelEvent): void {
   const main = scrollMain
   const toolbar = toolbarRef.value?.$el as HTMLElement | undefined
-  if (!main || !toolbar || event.ctrlKey) return
+  // 縮放、shift＋滾輪與觸控板橫向捲動（表格左右捲）都照瀏覽器預設
+  if (!main || !toolbar || event.ctrlKey || event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
   if (!(event.target instanceof Element) || !event.target.closest('.shift-grid__scroller, .month-grid__scroller')) return
   const deltaY = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaMode === 2 ? event.deltaY * main.clientHeight : event.deltaY
   const amount = outerScrollFirst({
@@ -373,6 +376,7 @@ const sameDayCells = computed(() => (drawerGrid.value?.cells ?? []).filter((c) =
 
 function openCell(employeeId: number, date: string): void {
   pendingAdvance = null
+  backKey.value = null
   selected.value = { employeeId, date }
   drawerOpen.value = true
 }
@@ -411,8 +415,43 @@ const navState = computed(() => {
 const drawerNav = computed(() => {
   const n = navState.value
   if (!n) return null
-  return { position: n.position, total: issueKeys.value.length, hasPrev: n.before.length > 0, hasNext: n.after.length > 0 }
+  return { position: n.position, total: issueKeys.value.length, hasPrev: n.before.length > 0, hasNext: n.after.length > 0, back: backKey.value ? keyLabel(backKey.value) : null }
 })
+
+/** 「林班導 9/16」 */
+function keyLabel(key: string): string {
+  const [employeeId, date] = key.split('|')
+  const [, m, d] = date.split('-').map(Number)
+  return `${employeeNames.value[Number(employeeId)] ?? ''} ${m}/${d}`
+}
+
+/** 剛自動跳走的那格（處理完就不算待處理，上一筆回不去）：抽屜給「回剛才處理的…」 */
+const backKey = ref<string | null>(null)
+function onBack(): void {
+  const key = backKey.value
+  if (key) selectKey(key)
+}
+
+/**
+ * 送出後到重抓完成、以及自動跳到下一筆後的短暫時間，鎖住抽屜的動作：送出完成時按鈕會先恢復可按，
+ * 連點的第二下可能重送同一格，或在跳格後落到下一筆（按鈕位置一樣、沒有確認框）。保險上限 4 秒自動解鎖。
+ */
+const actionsLocked = ref(false)
+let lockTimer: ReturnType<typeof setTimeout> | null = null
+function lockActions(ms: number): void {
+  actionsLocked.value = true
+  if (lockTimer) clearTimeout(lockTimer)
+  lockTimer = setTimeout(() => {
+    actionsLocked.value = false
+    lockTimer = null
+  }, ms)
+}
+function unlockActions(): void {
+  if (lockTimer) clearTimeout(lockTimer)
+  lockTimer = null
+  actionsLocked.value = false
+}
+onBeforeUnmount(() => { if (lockTimer) clearTimeout(lockTimer) })
 
 function selectKey(key: string): void {
   const [employeeId, date] = key.split('|')
@@ -431,23 +470,34 @@ function onNavigate(direction: 1 | -1): void {
  * 所以等「這格的新資料」到了才判斷，不在 onChanged 裡直接判斷。
  */
 let pendingAdvance: { key: string; after: string[] } | null = null
-watch(drawerOpen, (open) => { if (!open) pendingAdvance = null })
+watch(drawerOpen, (open) => {
+  if (open) return
+  pendingAdvance = null
+  backKey.value = null
+  unlockActions()
+})
+// 整月資料重抓失敗（data 變 null）時抽屜跟著卸載：一併收起，重新載入後才不會自己彈回來跳格
+watch(drawerGrid, (g) => { if (!g && drawerOpen.value) drawerOpen.value = false })
 watch(() => (selected.value ? drawerCells.value.get(cellKey(selected.value.employeeId, selected.value.date)) : undefined), (cell) => {
   const pending = pendingAdvance
   const g = drawerGrid.value
   if (!pending || !cell || !g || cellKey(cell.employee_id, cell.date) !== pending.key) return
   pendingAdvance = null
-  if (isIssue(cell, g.today, uncoveredDates(g.days))) return
+  if (isIssue(cell, g.today, uncoveredDates(g.days))) {
+    unlockActions()
+    return
+  }
   const remaining = new Set(issueKeys.value)
   const target = pending.after.find((k) => remaining.has(k)) ?? issueKeys.value.find((k) => k !== pending.key) ?? null
   if (!target) {
+    unlockActions()
     ElMessage.success(isMonth.value ? '這個月的待處理都處理完了' : '這週的待處理都處理完了')
     return
   }
   selectKey(target)
-  const [employeeId, date] = target.split('|')
-  const [, m, d] = date.split('-').map(Number)
-  ElMessage.success(`已處理。下一筆待處理：${employeeNames.value[Number(employeeId)] ?? ''} ${m}/${d}`)
+  backKey.value = pending.key
+  lockActions(600)
+  ElMessage.success(`已處理。下一筆待處理：${keyLabel(target)}`)
 })
 
 /**
@@ -499,6 +549,7 @@ async function onRecords(employeeId: number, date: string): Promise<void> {
 async function onChanged(): Promise<void> {
   const n = navState.value
   pendingAdvance = drawerOpen.value && n && n.position !== null ? { key: n.key, after: n.after } : null
+  if (pendingAdvance) lockActions(4000)
   await state.reload()
   emit('changed')
 }

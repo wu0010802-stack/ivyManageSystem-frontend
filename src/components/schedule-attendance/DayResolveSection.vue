@@ -11,7 +11,7 @@
       :index="0"
       :total="1"
       :context="context"
-      :busy="resolving"
+      :busy="resolving || locked"
       :show-nav="false"
       :actions="actions"
       :primary-action="mode === 'resolve-first'"
@@ -46,6 +46,8 @@ const props = defineProps<{
   employeeNumber: string
   /** 「一」…「日」 */
   weekday: string
+  /** 抽屜剛自動跳到這格：短暫鎖住動作（連點不會落到這一筆） */
+  locked?: boolean
   /**
    * 處理成功（父層以 @changed 綁定）。刻意用函式 prop 而不是 emit：送出途中抽屜換到另一格、本元件換位置被卸載時，
    * Vue 會丟掉已卸載元件的 emit，格子就不會重抓；函式 prop 仍會被呼叫。

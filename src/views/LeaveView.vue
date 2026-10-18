@@ -215,6 +215,9 @@ const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDial
 })
 
 // 表單草稿暫存：排除醫療旗標；保留 reason（核心欄位）
+// 從排班與出勤深連結開的這一次不存草稿：帶入的人與日期會蓋掉使用者原本的草稿
+const draftSuspended = ref(false)
+watch(dialogVisible, (visible) => { if (!visible) draftSuspended.value = false })
 const LEAVE_DRAFT_EXCLUDE = ['id', 'is_hospitalized']
 const leaveDraft = useFormDraft({
   formId: 'leave',
@@ -222,7 +225,7 @@ const leaveDraft = useFormDraft({
   recordId: () => form.id,
   userScope: () => (getUserInfo()?.employee_id as string | number | null) || 'anon',
   exclude: LEAVE_DRAFT_EXCLUDE,
-  enabled: () => dialogVisible.value,
+  enabled: () => dialogVisible.value && !draftSuspended.value,
 })
 
 const openCreateWithDraft = async () => {
@@ -362,6 +365,7 @@ if (createPrefill) {
 }
 async function openCreateFromLink(): Promise<void> {
   if (!createPrefill) return
+  draftSuspended.value = true
   openCreate()
   await nextTick()
   form.employee_id = createPrefill.employeeId

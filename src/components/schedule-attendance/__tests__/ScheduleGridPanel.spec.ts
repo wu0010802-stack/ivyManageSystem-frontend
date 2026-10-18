@@ -52,8 +52,8 @@ const assignment = (employeeId: number, shiftTypeId: number) => ({
 const drawerRequestClose = vi.hoisted(() => vi.fn(async () => true))
 const DrawerStub = {
   name: 'PersonDayDrawer',
-  props: ['modelValue', 'cell', 'weeklyShiftId', 'day', 'employeeNames', 'nav'],
-  emits: ['records', 'changed', 'update:modelValue', 'navigate'],
+  props: ['modelValue', 'cell', 'weeklyShiftId', 'day', 'employeeNames', 'nav', 'actionsLocked'],
+  emits: ['records', 'changed', 'update:modelValue', 'navigate', 'back'],
   methods: { requestClose: () => drawerRequestClose() },
   template: '<div data-test="drawer-stub" />',
 }
@@ -624,14 +624,14 @@ describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
     await flushPromises()
     wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[0])
     await flushPromises()
-    expect(drawer(wrapper).props('nav')).toEqual({ position: 1, total: 3, hasPrev: false, hasNext: true })
+    expect(drawer(wrapper).props('nav')).toEqual({ position: 1, total: 3, hasPrev: false, hasNext: true, back: null })
     drawer(wrapper).vm.$emit('navigate', 1)
     await flushPromises()
     expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
     drawer(wrapper).vm.$emit('navigate', 1)
     await flushPromises()
     expect(at(wrapper)).toBe(`2|${WEEK[1]}`)
-    expect(drawer(wrapper).props('nav')).toEqual({ position: 3, total: 3, hasPrev: true, hasNext: false })
+    expect(drawer(wrapper).props('nav')).toEqual({ position: 3, total: 3, hasPrev: true, hasNext: false, back: null })
     drawer(wrapper).vm.$emit('navigate', -1)
     await flushPromises()
     expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
@@ -642,7 +642,7 @@ describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
     await flushPromises()
     wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[1])
     await flushPromises()
-    expect(drawer(wrapper).props('nav')).toEqual({ position: null, total: 3, hasPrev: true, hasNext: true })
+    expect(drawer(wrapper).props('nav')).toEqual({ position: null, total: 3, hasPrev: true, hasNext: true, back: null })
     drawer(wrapper).vm.$emit('navigate', 1)
     await flushPromises()
     expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
@@ -654,7 +654,7 @@ describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
     wrapper.findComponent({ name: 'GridToolbar' }).vm.$emit('update:keyword', '王')
     wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 2, WEEK[1])
     await flushPromises()
-    expect(drawer(wrapper).props('nav')).toEqual({ position: 1, total: 1, hasPrev: false, hasNext: false })
+    expect(drawer(wrapper).props('nav')).toEqual({ position: 1, total: 1, hasPrev: false, hasNext: false, back: null })
   })
 
   it('處理完這格（重抓後不再是待處理）自動跳下一筆並提示', async () => {
@@ -668,6 +668,46 @@ describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
     expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
     expect(ui.success).toHaveBeenCalledWith(expect.stringContaining('下一筆待處理：林班導 9/16'))
     expect(drawer(wrapper).props('modelValue')).toBe(true)
+    // 剛跳過來短暫鎖住動作（連點不會落到這一筆），之後解鎖
+    expect(drawer(wrapper).props('actionsLocked')).toBe(true)
+    await new Promise((r) => setTimeout(r, 750))
+    expect(drawer(wrapper).props('actionsLocked')).toBe(false)
+    // 可以回剛才那格；回去後不再顯示
+    expect(drawer(wrapper).props('nav')).toMatchObject({ back: '林班導 9/14' })
+    drawer(wrapper).vm.$emit('back')
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[0]}`)
+    expect(drawer(wrapper).props('nav').back ?? null).toBeNull()
+  })
+
+  it('送出後等重抓期間鎖住動作（避免同一格重複送出）', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[0])
+    await flushPromises()
+    let resolveGrid: (v: unknown) => void = () => {}
+    api.grid.mockImplementation(() => new Promise((r) => { resolveGrid = r }))
+    drawer(wrapper).vm.$emit('changed')
+    await flushPromises()
+    expect(drawer(wrapper).props('actionsLocked')).toBe(true)
+    resolveGrid({ data: issueGrid() })
+    await flushPromises()
+    // 仍是待處理：留在原格並解鎖
+    expect(at(wrapper)).toBe(`1|${WEEK[0]}`)
+    expect(drawer(wrapper).props('actionsLocked')).toBe(false)
+  })
+
+  it('手動換格後「回剛才」就不再顯示', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[0])
+    await flushPromises()
+    api.grid.mockImplementation(async () => ({ data: issueGrid(['1|0']) }))
+    drawer(wrapper).vm.$emit('changed')
+    await flushPromises()
+    drawer(wrapper).vm.$emit('navigate', 1)
+    await flushPromises()
+    expect(drawer(wrapper).props('nav').back ?? null).toBeNull()
   })
 
   it('重抓後仍是待處理（例如只處理了一半）就留在原格', async () => {
@@ -716,6 +756,24 @@ describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
     expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
   })
 
+  it('月模式整月資料重抓失敗：抽屜收起，重新載入後不會自己彈回來跳格', async () => {
+    const revision = ref(0)
+    const month = effectScope().run(() => useMonthGrid(ref('2026-09-16'), revision))!
+    const wrapper = mountPanel({ view: 'month', month })
+    await flushPromises()
+    wrapper.findComponent({ name: 'MonthGrid' }).vm.$emit('select', 1, WEEK[0])
+    await flushPromises()
+    drawer(wrapper).vm.$emit('changed')
+    await flushPromises()
+    api.grid.mockRejectedValueOnce(new Error('boom'))
+    revision.value += 1
+    await flushPromises()
+    api.grid.mockImplementation(async () => ({ data: issueGrid(['1|0']) }))
+    await month.reload()
+    await flushPromises()
+    expect(drawer(wrapper).props('modelValue')).toBe(false)
+  })
+
   it('從不是待處理的格子操作（例如改未來的班）不會自動跳走', async () => {
     const wrapper = mountPanel()
     await flushPromises()
@@ -762,6 +820,21 @@ describe('ScheduleGridPanel 在格子上捲動先收起頁首', () => {
     expect(main.scrollTop).toBe(120)
     // 往上捲照瀏覽器預設（格子捲到頂後自然帶動外層）
     expect(wheel(scroller, -120).defaultPrevented).toBe(false)
+    cleanup()
+  })
+
+  it('shift＋滾輪（橫向捲動）不攔', async () => {
+    const { wrapper, main, cleanup } = mountInMain(365)
+    await flushPromises()
+    const event = new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })
+    // happy-dom 的 WheelEvent 不吃 shiftKey 初始值
+    Object.defineProperty(event, 'shiftKey', { value: true })
+    wrapper.get('.shift-grid__scroller').element.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    const horizontal = new WheelEvent('wheel', { deltaX: 200, deltaY: 30, bubbles: true, cancelable: true })
+    wrapper.get('.shift-grid__scroller').element.dispatchEvent(horizontal)
+    expect(horizontal.defaultPrevented).toBe(false)
+    expect(main.scrollTop).toBe(0)
     cleanup()
   })
 
