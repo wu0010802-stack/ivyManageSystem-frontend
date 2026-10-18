@@ -3,9 +3,14 @@
  * 共用錯誤狀態頁（403 / 404）。
  *
  * 三條路由共用：/portal/error（PortalLayout 下）、/error（AdminLayout 下）、
- * /:pathMatch(.*)* catch-all（bare 獨立頁）。型態取 query.type，缺時退回
- * route.meta.errorType；「回首頁」依身分決定落點（admin 落 '/' 後由守衛
- * 自動導向第一個有權限的路由）。
+ * /:pathMatch(.*)* catch-all（bare 獨立頁）。「回首頁」依身分決定落點（admin 落
+ * '/' 後由守衛自動導向第一個有權限的路由）。
+ *
+ * ⚠ 內容偽造防線（F31）：catch-all 是 noAuth，任何人都能在官方網域組出
+ * `/#/x?type=…&feature=…&from=…` 發到 LINE 群釣魚，故 query **一律不得原樣上畫面**：
+ * - 型態只認 route.meta.errorType（三條路由皆有宣告），query.type 不採信；
+ * - 功能名稱不讀 query.feature，改由 query.from resolve 出的站內真實路由 meta.title 決定；
+ * - 原網址只在 from 對應到非錯誤頁的真實路由時顯示，且只顯示 path（不回顯 query string）。
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -21,14 +26,33 @@ function firstOf(value: unknown): string {
   return typeof v === 'string' ? v : ''
 }
 
-const kind = computed<ErrorKind>(() => {
-  const q = firstOf(route.query.type)
-  if (q === 'forbidden' || q === 'not-found') return q
-  return route.meta.errorType === 'forbidden' ? 'forbidden' : 'not-found'
+const FROM_PATH_MAX = 100
+
+const kind = computed<ErrorKind>(() =>
+  route.meta.errorType === 'forbidden' ? 'forbidden' : 'not-found'
+)
+
+/** from 只接受站內絕對路徑，且必須 resolve 到非錯誤頁的真實路由；否則視為缺值。 */
+const fromRoute = computed(() => {
+  const raw = firstOf(route.query.from)
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return null
+  try {
+    const resolved = router.resolve(raw)
+    if (!resolved.matched.length || resolved.meta.errorPage) return null
+    return resolved
+  } catch {
+    return null
+  }
 })
 
-const feature = computed(() => firstOf(route.query.feature))
-const fromPath = computed(() => firstOf(route.query.from))
+const feature = computed(() => {
+  const title = fromRoute.value?.meta.title
+  return typeof title === 'string' ? title : ''
+})
+const fromPath = computed(() => {
+  const path = fromRoute.value?.path ?? ''
+  return path.length > FROM_PATH_MAX ? `${path.slice(0, FROM_PATH_MAX)}…` : path
+})
 const isBare = computed(() => route.meta.bare === true)
 
 const title = computed(() =>
