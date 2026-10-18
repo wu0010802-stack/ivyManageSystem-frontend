@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import MonthGrid from '../MonthGrid.vue'
 import { cell, day, employee, grid } from './gridFixtures'
@@ -71,5 +73,17 @@ describe('MonthGrid（SPEC-027 C 期，唯讀）', () => {
     expect(mountMonth(ALL, { filter: 'issues' }).findAll('[data-test^="mrow-"]').map((r) => r.attributes('data-test'))).toEqual(['mrow-1'])
     expect(mountMonth(ALL, { keyword: 'e002' }).findAll('[data-test^="mrow-"]').map((r) => r.attributes('data-test'))).toEqual(['mrow-2'])
     expect(mountMonth(ALL, { keyword: '不存在' }).text()).toContain('找不到符合的人員')
+  })
+})
+
+describe('MonthGrid 狀態點不只靠顏色', () => {
+  // 紅、橘兩色彼此對比只有約 1.3:1：用形狀區分（紅＝實心圓、橘＝空心圈、藍＝方塊），圖例同一套 class
+  const css = readFileSync(resolve(__dirname, '../MonthGrid.vue'), 'utf8')
+  const rule = (cls: string) => css.match(new RegExp(`\\.${cls} \\{([^}]*)\\}`))?.[1] ?? ''
+  it('橘色是空心圈、藍色是方塊、紅色是實心圓', () => {
+    expect(rule('month-grid__dot--orange')).toMatch(/background: transparent/)
+    expect(rule('month-grid__dot--orange')).toMatch(/border: 2px solid var\(--color-warning-darker\)/)
+    expect(rule('month-grid__dot--blue')).toMatch(/border-radius: 1px/)
+    expect(rule('month-grid__dot--red')).toMatch(/background: var\(--color-danger-darker\)/)
   })
 })

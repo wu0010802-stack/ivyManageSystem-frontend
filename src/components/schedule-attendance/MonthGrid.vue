@@ -2,7 +2,7 @@
   <div class="month-grid">
     <p class="month-grid__legend" data-test="month-legend">
       <span><i class="month-grid__dot month-grid__dot--red" aria-hidden="true" />遲到／早退／缺卡／疑似缺勤</span>
-      <span><i class="month-grid__dot month-grid__dot--orange" aria-hidden="true" />疑似換班／待老師確認等其他待處理</span>
+      <span><i class="month-grid__dot month-grid__dot--orange" aria-hidden="true" />疑似換班／資料待補／待老師確認等其他待處理</span>
       <span><i class="month-grid__dot month-grid__dot--blue" aria-hidden="true" />請假</span>
       <span class="month-grid__legend-hint">月總覽唯讀；點週次可切回該週排班</span>
     </p>
@@ -193,8 +193,9 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .month-grid__cell--off { background: var(--el-fill-color-lighter); }
 .month-grid__cell--future { color: var(--el-text-color-secondary); }
 .month-grid__week-btn:focus-visible, .month-grid__cell:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
-.month-grid__dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+/* 狀態點用形狀區分（紅、橘兩色彼此對比只有約 1.3:1，不能只靠顏色）：紅＝實心圓、橘＝空心圈、藍＝方塊 */
+.month-grid__dot { display: inline-block; box-sizing: border-box; width: 8px; height: 8px; border-radius: 50%; }
 .month-grid__dot--red { background: var(--color-danger-darker); }
-.month-grid__dot--orange { background: var(--color-warning-darker); }
-.month-grid__dot--blue { background: var(--month-grid-leave); }
+.month-grid__dot--orange { background: transparent; border: 2px solid var(--color-warning-darker); }
+.month-grid__dot--blue { background: var(--month-grid-leave); border-radius: 1px; }
 </style>
