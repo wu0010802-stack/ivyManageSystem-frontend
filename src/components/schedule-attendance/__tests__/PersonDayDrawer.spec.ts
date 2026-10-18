@@ -306,7 +306,7 @@ describe('PersonDayDrawer', () => {
   })
 
   it('已在出勤明細豁免的異常：判定寫出處理結果（與格子一致）', async () => {
-    const wrapper = mountDrawer(cell(1, W1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive', late_minutes: 12, punch_in: `${W1}T08:12:00`, punch_out: `${W1}T17:00:00` } }))
+    const wrapper = mountDrawer(cell(1, W1, { plan: { work_start: '08:00', work_end: '17:00' }, actual: { status: 'anomaly', confirmed_action: 'admin_waive', late_minutes: 12, punch_in: `${W1}T08:12:00`, punch_out: `${W1}T17:00:00` } }))
     await flushPromises()
     const text = wrapper.find('[data-test="pdd-actual"]').text()
     expect(text).toContain('遲到 12 分・已豁免')

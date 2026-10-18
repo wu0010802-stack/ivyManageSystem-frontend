@@ -12,7 +12,7 @@
           <p class="pattern-list__who">
             <strong>{{ p.name }}</strong>
             <span v-if="p.roleLabel" class="pattern-list__role">{{ p.roleLabel }}</span>
-            <span class="pattern-list__count">待處理 {{ p.issueCount }} 格</span>
+            <span class="pattern-list__count">{{ countText(p) }}</span>
           </p>
           <p class="pattern-list__fact">{{ patternSummary(p) }}</p>
           <p class="pattern-list__hint">{{ p.notInImport ? NOT_IN_IMPORT_HINT : FEW_PUNCHES_HINT }}</p>
@@ -33,7 +33,7 @@
           <p class="pattern-list__who">
             <strong>{{ p.name }}</strong>
             <span v-if="p.roleLabel" class="pattern-list__role">{{ p.roleLabel }}</span>
-            <span class="pattern-list__count">待處理 {{ p.issueCount }} 格</span>
+            <span class="pattern-list__count">{{ countText(p) }}</span>
           </p>
           <p class="pattern-list__fact">{{ patternSummary(p) }}</p>
           <p class="pattern-list__fact">實際多在 {{ p.typicalIn }} 上班、{{ p.typicalOut }} 下班；系統認定的應上班時段是 {{ p.planWindow }}。</p>
@@ -66,6 +66,11 @@ const NOT_IN_IMPORT_HINT = '多半是打卡機卡號還沒對照到這位員工�
 const FEW_PUNCHES_HINT = '多半是卡號對照到別人、這位員工不用打卡，或請假還沒登打。'
 
 const canImport = hasPermission('ATTENDANCE_WRITE')
+
+/** 符合型態的格數；這個人還有其他待處理（缺卡、疑似換班…）時另外寫出，不混在一起 */
+function countText(p: AttendancePattern): string {
+  return p.matchCount === p.issueCount ? `待處理 ${p.issueCount} 格` : `${p.matchCount} 格是這個型態（共待處理 ${p.issueCount} 格）`
+}
 const canViewEmployees = hasPermission('EMPLOYEES_READ')
 
 const noPunches = computed(() => props.patterns.filter((p): p is NoPunchPattern => p.kind === 'no_punches'))

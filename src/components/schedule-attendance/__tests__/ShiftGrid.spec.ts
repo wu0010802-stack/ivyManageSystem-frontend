@@ -279,7 +279,7 @@ describe('ShiftGrid 標記', () => {
 
 describe('ShiftGrid 判定分段', () => {
   it('「遲到 N 分・早退 M 分」拆成兩段，每段不折行', () => {
-    const cells = cellsFor({ [`1|${WEEK[0]}`]: { actual: { status: 'anomaly', punch_in: `${WEEK[0]}T07:57:00`, punch_out: `${WEEK[0]}T11:48:00`, late_minutes: 57, early_leave_minutes: 342 } } })
+    const cells = cellsFor({ [`1|${WEEK[0]}`]: { actual: { status: 'anomaly', punch_in: `${WEEK[0]}T07:57:00`, punch_out: `${WEEK[0]}T10:48:00`, late_minutes: 57, early_leave_minutes: 342 } } })
     const verdict = mountGrid({ cells }).get(`[data-test="cell-1-${WEEK[0]}"] .shift-grid__verdict`)
     expect(verdict.findAll('.shift-grid__verdict-part').map((p) => p.text())).toEqual(['遲到 57 分・', '早退 342 分'])
     expect(verdict.text()).toBe('遲到 57 分・早退 342 分')

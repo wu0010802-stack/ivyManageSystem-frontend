@@ -110,12 +110,20 @@ describe('cellDisplay（§2.2）', () => {
   it('出勤異常直接寫遲到／早退分鐘，處理過的接在後面；沒有分鐘才退回「出勤異常」', () => {
     const late = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:30:00`, punch_out: `${W1}T16:30:00`, late_minutes: 30 } }), TODAY)
     expect(late.verdict).toEqual({ label: '遲到 30 分', tone: 'danger' })
-    const both = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:57:00`, punch_out: `${W1}T11:48:00`, late_minutes: 57, early_leave_minutes: 342 } }), TODAY)
+    const both = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:57:00`, punch_out: `${W1}T10:48:00`, late_minutes: 57, early_leave_minutes: 342 } }), TODAY)
     expect(both.verdict?.label).toBe('遲到 57 分・早退 342 分')
     const early = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:00:00`, punch_out: `${W1}T16:10:00`, early_leave_minutes: 20 } }), TODAY)
     expect(early.verdict?.label).toBe('早退 20 分')
     const waived = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:30:00`, punch_out: `${W1}T16:30:00`, late_minutes: 30, confirmed_action: 'admin_waive' } }), TODAY)
     expect(waived.verdict).toEqual({ label: '遲到 30 分・已豁免', tone: 'info' })
+    // 存檔分鐘數與打卡、應上班時段對不上（改了時段還沒重匯）：不寫數字
+    const stale = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:20:00`, punch_out: `${W1}T16:30:00`, late_minutes: 80 } }), TODAY)
+    expect(stale.verdict?.label).toBe('出勤異常')
+    const staleEarly = cellDisplay(cell(1, W1, { actual: { status: 'anomaly', punch_in: `${W1}T07:00:00`, punch_out: `${W1}T16:00:00`, early_leave_minutes: 90 } }), TODAY)
+    expect(staleEarly.verdict?.label).toBe('出勤異常')
+    // 當天有假：應上班時段依假單調整，照存檔值寫
+    const halfLeave = { leave_id: 3, leave_type_label: '事假', status: 'approved' as const, is_full_day: false, start_time: '07:00', end_time: '09:00' }
+    expect(cellDisplay(cell(1, W1, { leaves: [halfLeave], actual: { status: 'anomaly', punch_in: `${W1}T09:20:00`, punch_out: `${W1}T16:30:00`, late_minutes: 20 } }), TODAY).verdict?.label).toBe('遲到 20 分')
     // 疑似換班等其他判定仍寫判定名（分鐘數在抽屜）
     expect(cellDisplay(cell(1, W1, { actual: { status: 'possible_shift_change', punch_in: `${W1}T08:01:00`, punch_out: `${W1}T17:31:00`, late_minutes: 1 } }), TODAY).verdict?.label).toBe('疑似換班')
   })

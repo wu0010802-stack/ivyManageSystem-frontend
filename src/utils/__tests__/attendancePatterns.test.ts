@@ -107,6 +107,27 @@ describe('detectAttendancePatterns：每天固定遲到或早退', () => {
     expect(p).toMatchObject({ kind: 'fixed_offset', lateDays: 8, earlyDays: 0, typicalLate: 26, typicalEarly: null })
   })
 
+  it('常遲到但時間分散（不是固定在某個時刻）：是遲到，不是時段設錯', () => {
+    const scattered = [12, 45, 20, 60, 15, 38, 25, 55, 18, 50]
+    expect(detect(rowOf(3, (date, i) => punched(date, `08:${String(scattered[i]).padStart(2, '0')}`.replace('08:60', '09:00'), '17:05', scattered[i], 0)))).toEqual([])
+  })
+
+  it('半天班每天提早好幾小時走，離開時刻前後差個幾十分鐘仍算固定型態（集中度依偏移大小放寬）', () => {
+    const outs = ['11:20', '11:45', '12:05', '11:30', '11:10', '11:55', '11:40', '12:00', '11:25', '11:50']
+    const [p] = detect(rowOf(4, (date, i) => {
+      const [h, m] = outs[i].split(':').map(Number)
+      return punched(date, '07:58', outs[i], 0, 17 * 60 - (h * 60 + m))
+    }))
+    expect(p).toMatchObject({ kind: 'fixed_offset', earlyDays: 10, lateDays: 0 })
+  })
+
+  it('符合型態的格數只算型態那幾格（同一人的缺卡、疑似換班不算進設定問題）', () => {
+    const [p] = detect(rowOf(2, (date, i) => (i < 8
+      ? punched(date, '08:55', '11:45', 55, 315)
+      : { actual: { status: 'missing_punch', punch_in: `${date}T08:55:00` } })))
+    expect(p).toMatchObject({ kind: 'fixed_offset', issueCount: 10, matchCount: 8 })
+  })
+
   it('偶爾遲到（10 天 5 天）、或遲到不到 10 分，不算設定問題', () => {
     expect(detect(rowOf(3, (date, i) => (i < 5 ? punched(date, '08:30', '17:05', 30, 0) : punched(date, '07:58', '17:01', 0, 0))))).toEqual([])
     expect(detect(rowOf(3, (date) => punched(date, '08:05', '17:05', 5, 0)))).toEqual([])
@@ -131,6 +152,7 @@ describe('排序與合計', () => {
     const patterns = detect(cells)
     expect(patterns.map((p) => [p.kind, p.employeeId])).toEqual([['no_punches', 3], ['fixed_offset', 2], ['fixed_offset', 1]])
     expect(patternIssueTotal(patterns)).toBe(10 + 10 + 6)
+    expect(patterns.map((p) => p.matchCount)).toEqual([10, 10, 6])
   })
 
   it('沒有打卡權限（actual 全是 null）時不判斷', () => {

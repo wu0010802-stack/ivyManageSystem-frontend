@@ -1,7 +1,7 @@
 /**
  * 本月型態診斷：從整月格子找出「一整個月都是同一種情形」的人。
  *
- * 實測 115 年 9 月：470 格待處理裡約六成來自少數幾個人——整月沒有打卡（多半是卡號沒對照）、
+ * 實測 115 年 9 月：470 格待處理裡約六成來自少數幾個人：整月沒有打卡（多半是卡號沒對照）、
  * 每天固定遲到早退（多半是應上班時段或員工類型設錯）。這些不是逐日要處理的異常，修好設定
  * 才會一次消失；混在逐日清單裡只會讓人逐格豁免。本檔只判斷型態，不改任何資料。
  */
@@ -17,6 +17,12 @@ const MIN_BOTH_PUNCHED_DAYS = 5
 const OFFSET_MINUTES = 10
 /** 偏移天數占兩邊都有打卡日子的比例 */
 const OFFSET_MIN_RATIO = 0.6
+/**
+ * 偏移分鐘數的四分位距上限：固定在某個時刻才像時段設錯，時間分散是真的常遲到。
+ * 依偏移大小放寬（中位數的 15%）：半天班每天早退 5 小時、離開時刻前後差 40 分鐘仍是同一個型態。
+ */
+const OFFSET_MAX_IQR = 15
+const OFFSET_IQR_RATIO = 0.15
 
 interface PatternBase {
   employeeId: number
@@ -24,6 +30,8 @@ interface PatternBase {
   roleLabel: string | null
   /** 這個人本月的待處理格數（與本月進度、只看待處理同一個定義） */
   issueCount: number
+  /** 其中符合這個型態的待處理格數（設定修好會一起消失的那幾格） */
+  matchCount: number
   /** 納入判斷的應上班日：過去、當天有匯入、非全天假、在職 */
   expectedDays: number
   /** 有任一打卡的天數 */
@@ -55,6 +63,12 @@ export interface FixedOffsetPattern extends PatternBase {
 }
 
 export type AttendancePattern = NoPunchPattern | FixedOffsetPattern
+
+/** 四分位距（Q3－Q1，取最接近的實際值） */
+function iqr(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.floor((sorted.length - 1) * 0.75)] - sorted[Math.floor((sorted.length - 1) * 0.25)]
+}
 
 function median(values: readonly number[]): number | null {
   if (!values.length) return null
@@ -103,12 +117,13 @@ export function detectAttendancePatterns(grid: GridOut): AttendancePattern[] {
   const patterns: AttendancePattern[] = []
   for (const emp of grid.employees) {
     const cells = (byEmployee.get(emp.employee_id) ?? []).slice().sort((a, b) => a.date.localeCompare(b.date))
-    const issueCount = cells.filter((c) => isIssue(c, grid.today, uncovered)).length
+    const issue = (c: GridCell) => isIssue(c, grid.today, uncovered)
+    const issueCount = cells.filter(issue).length
     if (issueCount === 0) continue
     const considered = cells.filter((c) => isConsidered(c, grid.today, uncovered))
     if (considered.length < MIN_EXPECTED_DAYS) continue
 
-    const base: PatternBase = {
+    const base: Omit<PatternBase, 'matchCount'> = {
       employeeId: emp.employee_id,
       name: emp.name,
       roleLabel: emp.role_label ?? null,
@@ -120,7 +135,12 @@ export function detectAttendancePatterns(grid: GridOut): AttendancePattern[] {
 
     if (base.punchedDays <= Math.floor(considered.length * NO_PUNCH_MAX_RATIO)) {
       const unpunched = considered.filter((c) => !c.actual!.punch_in && !c.actual!.punch_out)
-      patterns.push({ ...base, kind: 'no_punches', notInImport: unpunched.every((c) => c.actual!.status === 'data_incomplete') })
+      patterns.push({
+        ...base,
+        kind: 'no_punches',
+        matchCount: unpunched.filter(issue).length,
+        notInImport: unpunched.every((c) => c.actual!.status === 'data_incomplete'),
+      })
       continue
     }
 
@@ -128,12 +148,16 @@ export function detectAttendancePatterns(grid: GridOut): AttendancePattern[] {
     if (both.length < MIN_BOTH_PUNCHED_DAYS) continue
     const lates = both.map((c) => c.actual!.late_minutes).filter((m) => m >= OFFSET_MINUTES)
     const earlies = both.map((c) => c.actual!.early_leave_minutes).filter((m) => m >= OFFSET_MINUTES)
-    const lateShaped = lates.length / both.length >= OFFSET_MIN_RATIO
-    const earlyShaped = earlies.length / both.length >= OFFSET_MIN_RATIO
+    const concentrated = (values: number[]) => iqr(values) <= Math.max(OFFSET_MAX_IQR, (median(values) ?? 0) * OFFSET_IQR_RATIO)
+    const lateShaped = lates.length / both.length >= OFFSET_MIN_RATIO && concentrated(lates)
+    const earlyShaped = earlies.length / both.length >= OFFSET_MIN_RATIO && concentrated(earlies)
     if (!lateShaped && !earlyShaped) continue
+    const shaped = (c: GridCell) =>
+      (lateShaped && c.actual!.late_minutes >= OFFSET_MINUTES) || (earlyShaped && c.actual!.early_leave_minutes >= OFFSET_MINUTES)
     patterns.push({
       ...base,
       kind: 'fixed_offset',
+      matchCount: both.filter((c) => shaped(c) && issue(c)).length,
       bothDays: both.length,
       lateDays: lateShaped ? lates.length : 0,
       earlyDays: earlyShaped ? earlies.length : 0,
@@ -149,9 +173,9 @@ export function detectAttendancePatterns(grid: GridOut): AttendancePattern[] {
   return patterns.sort((a, b) => rank(a) - rank(b) || b.issueCount - a.issueCount || a.name.localeCompare(b.name, 'zh-Hant'))
 }
 
-/** 這些型態合計占了本月多少格待處理 */
+/** 這些型態合計占了本月多少格待處理（只算符合型態的那幾格） */
 export function patternIssueTotal(patterns: readonly AttendancePattern[]): number {
-  return patterns.reduce((sum, p) => sum + p.issueCount, 0)
+  return patterns.reduce((sum, p) => sum + p.matchCount, 0)
 }
 
 /** 格子人員欄的短註記（滑鼠移上去看 patternSummary） */

@@ -359,7 +359,7 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
   const handled = actual.confirmed_action && !NON_ISSUE_STATUSES.has(actual.status)
     ? CONFIRMED_ACTION_LABELS[actual.confirmed_action] ?? '已處理'
     : null
-  const label = statusLabel(actual)
+  const label = statusLabel(cell, actual)
   return {
     ...base,
     state: 'judged',
@@ -376,14 +376,38 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
 /**
  * 格子的判定文字。「出勤異常」就是遲到／早退，直接寫分鐘數（不用開抽屜才知道是遲到 5 分還是早退半天）；
  * 其他判定的分鐘數只是附帶資訊，留在抽屜。
+ *
+ * 判定是後端即時重算，分鐘數卻是出勤存檔值：改了班別時段或員工上下班時間、還沒重新匯入前兩者會分歧。
+ * 存檔分鐘數和「打卡 vs 應上班時段」對不上時不寫數字，退回「出勤異常」，免得寫錯遲到幾分。
+ * 當天有假時應上班時段會依假單調整，無法從格子推算，照存檔值寫。
  */
-function statusLabel(actual: NonNullable<GridCell['actual']>): string {
+function statusLabel(cell: GridCell, actual: NonNullable<GridCell['actual']>): string {
   if (actual.status !== 'anomaly') return RECON_STATUS_LABELS[actual.status]
+  if (!cell.leaves.length && !minutesConsistent(cell, actual)) return RECON_STATUS_LABELS.anomaly
   const parts = [
     actual.late_minutes ? `遲到 ${actual.late_minutes} 分` : '',
     actual.early_leave_minutes ? `早退 ${actual.early_leave_minutes} 分` : '',
   ].filter(Boolean)
   return parts.length ? parts.join('・') : RECON_STATUS_LABELS.anomaly
+}
+
+const clockMinutes = (hhmmText: string): number => {
+  const [h, m] = hhmmText.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** 存檔的遲到／早退分鐘與「打卡時刻 vs 應上班時段」相差不超過 1 分（秒數取捨） */
+function minutesConsistent(cell: GridCell, actual: NonNullable<GridCell['actual']>): boolean {
+  const { work_start: start, work_end: end } = cell.plan
+  if (actual.late_minutes) {
+    if (!start || !actual.punch_in) return false
+    if (Math.abs(clockMinutes(actual.punch_in.slice(11, 16)) - clockMinutes(start) - actual.late_minutes) > 1) return false
+  }
+  if (actual.early_leave_minutes) {
+    if (!end || !actual.punch_out) return false
+    if (Math.abs(clockMinutes(end) - clockMinutes(actual.punch_out.slice(11, 16)) - actual.early_leave_minutes) > 1) return false
+  }
+  return true
 }
 
 const DAILY_SOURCES: ReadonlySet<PlanSource> = new Set(['daily', 'daily_off', 'swap'])

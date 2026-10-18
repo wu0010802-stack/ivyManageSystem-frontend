@@ -8,13 +8,13 @@ const perms = vi.hoisted(() => ({ set: new Set<string>() }))
 vi.mock('@/utils/auth', () => ({ hasPermission: (code: string) => perms.set.has(code) }))
 
 const notInImport: AttendancePattern = {
-  kind: 'no_punches', employeeId: 7, name: '陳瑞玲', roleLabel: '副班導', issueCount: 20, expectedDays: 20, punchedDays: 0, firstDate: '2026-09-01', notInImport: true,
+  kind: 'no_punches', employeeId: 7, name: '陳瑞玲', roleLabel: '副班導', issueCount: 20, matchCount: 20, expectedDays: 20, punchedDays: 0, firstDate: '2026-09-01', notInImport: true,
 }
 const fewPunches: AttendancePattern = {
-  kind: 'no_punches', employeeId: 8, name: '林佳穎', roleLabel: '班導', issueCount: 20, expectedDays: 20, punchedDays: 1, firstDate: '2026-09-01', notInImport: false,
+  kind: 'no_punches', employeeId: 8, name: '林佳穎', roleLabel: '班導', issueCount: 20, matchCount: 20, expectedDays: 20, punchedDays: 1, firstDate: '2026-09-01', notInImport: false,
 }
 const halfDay: AttendancePattern = {
-  kind: 'fixed_offset', employeeId: 9, name: '簡鳳儀', roleLabel: '美語老師', issueCount: 20, expectedDays: 20, punchedDays: 20, firstDate: '2026-09-01',
+  kind: 'fixed_offset', employeeId: 9, name: '簡鳳儀', roleLabel: '美語老師', issueCount: 20, matchCount: 17, expectedDays: 20, punchedDays: 20, firstDate: '2026-09-01',
   bothDays: 20, lateDays: 20, earlyDays: 20, typicalLate: 55, typicalEarly: 315, typicalIn: '08:55', typicalOut: '11:45', planWindow: '08:00–17:00',
 }
 
@@ -48,6 +48,8 @@ describe('AttendancePatternList', () => {
     // 改了設定要重匯才會重算扣款（存檔的遲到早退不會自己變）
     expect(offset.text()).toContain('重新匯入本月打卡')
     const item = wrapper.get('[data-test="pattern-9"]')
+    // 這個人還有 3 格是別的待處理：分開寫
+    expect(item.text()).toContain('17 格是這個型態（共待處理 20 格）')
     expect(item.text()).toContain('20 天遲到（多為 55 分）、20 天早退（多為 315 分）')
     expect(item.text()).toContain('實際多在 08:55 上班、11:45 下班')
     expect(item.text()).toContain('08:00–17:00')
