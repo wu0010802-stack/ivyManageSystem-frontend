@@ -6,6 +6,7 @@
     <p v-else-if="loadState === 'error'" class="pdd-resolve__note" role="alert">讀取異常資料失敗，可按「看他整月」到出勤明細處理。</p>
     <ResolveCard
       v-else-if="displayCard"
+      ref="cardRef"
       :item="displayCard"
       :index="0"
       :total="1"
@@ -122,6 +123,10 @@ const handledNote = computed(() => {
   const action = props.cell.actual?.confirmed_action
   return action ? `${HANDLED_LABELS[action] ?? '已處理'}，需要的話可以改成另一個動作。` : ''
 })
+
+const cardRef = ref<InstanceType<typeof ResolveCard> | null>(null)
+/** 補卡時間填了還沒送出（抽屜關閉、換筆前問） */
+defineExpose({ isDirty: (): boolean => cardRef.value?.isDirty() ?? false })
 
 const { resolving, resolve } = useResolveAnomaly(() => props.onChanged?.(), 'DayResolveSection.resolve')
 function onResolve(payload: ResolvePayload): void {

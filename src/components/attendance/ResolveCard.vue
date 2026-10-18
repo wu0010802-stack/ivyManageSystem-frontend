@@ -190,6 +190,12 @@ const canPunch = computed(() => {
   return true
 })
 
+/** 缺的那側已填了時間還沒送出：外層（排班與出勤抽屜）關閉或換筆前要先問 */
+function isDirty(): boolean {
+  return (props.context.punch_in === null && !!localPunchIn.value) || (props.context.punch_out === null && !!localPunchOut.value)
+}
+defineExpose({ isDirty })
+
 function handlePunch(): void {
   const payload: { action: 'punch'; punch_in?: string; punch_out?: string } = {
     action: 'punch',

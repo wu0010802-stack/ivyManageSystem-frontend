@@ -52,8 +52,8 @@ const assignment = (employeeId: number, shiftTypeId: number) => ({
 const drawerRequestClose = vi.hoisted(() => vi.fn(async () => true))
 const DrawerStub = {
   name: 'PersonDayDrawer',
-  props: ['modelValue', 'cell', 'weeklyShiftId', 'day', 'employeeNames'],
-  emits: ['records', 'changed', 'update:modelValue'],
+  props: ['modelValue', 'cell', 'weeklyShiftId', 'day', 'employeeNames', 'nav'],
+  emits: ['records', 'changed', 'update:modelValue', 'navigate'],
   methods: { requestClose: () => drawerRequestClose() },
   template: '<div data-test="drawer-stub" />',
 }
@@ -591,5 +591,138 @@ describe('ScheduleGridPanel 月模式（SPEC-027 C 期）', () => {
     await wrapper.find('[data-test="month-load-error"] button').trigger('click')
     await flushPromises()
     expect(wrapper.findComponent({ name: 'MonthGrid' }).exists()).toBe(true)
+  })
+})
+
+describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
+  // 今天 9/21：林班導 9/14 遲到、9/16 缺卡；王副導 9/15 疑似缺勤
+  function issueGrid(resolved: string[] = []) {
+    const status = (key: string, s: 'anomaly' | 'missing_punch' | 'suspected_absence') => (resolved.includes(key) ? 'matched' : s)
+    return grid({
+      cells: [
+        ...WEEK.map((d) => cell(1, d, d === WEEK[0]
+          ? { actual: { status: status('1|0', 'anomaly'), late_minutes: 20 } }
+          : d === WEEK[2]
+            ? { actual: { status: status('1|2', 'missing_punch') } }
+            : { plan: { expected: day(d).is_workday } })),
+        ...WEEK.map((d) => cell(2, d, d === WEEK[1] ? { actual: { status: status('2|1', 'suspected_absence') } } : { plan: { expected: day(d).is_workday } })),
+      ],
+    })
+  }
+  const drawer = (w: ReturnType<typeof mountPanel>) => w.findComponent(DrawerStub)
+  const at = (w: ReturnType<typeof mountPanel>) => {
+    const c = drawer(w).props('cell') as { employee_id: number; date: string } | null
+    return c ? `${c.employee_id}|${c.date}` : null
+  }
+
+  beforeEach(() => {
+    api.grid.mockImplementation(async () => ({ data: issueGrid() }))
+  })
+
+  it('依畫面上的列由上而下、每人由左而右排；上一筆／下一筆在待處理之間跳', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[0])
+    await flushPromises()
+    expect(drawer(wrapper).props('nav')).toEqual({ position: 1, total: 3, hasPrev: false, hasNext: true })
+    drawer(wrapper).vm.$emit('navigate', 1)
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
+    drawer(wrapper).vm.$emit('navigate', 1)
+    await flushPromises()
+    expect(at(wrapper)).toBe(`2|${WEEK[1]}`)
+    expect(drawer(wrapper).props('nav')).toEqual({ position: 3, total: 3, hasPrev: true, hasNext: false })
+    drawer(wrapper).vm.$emit('navigate', -1)
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
+  })
+
+  it('從不用處理的格子開：寫共幾筆，下一筆跳到它後面第一筆待處理', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[1])
+    await flushPromises()
+    expect(drawer(wrapper).props('nav')).toEqual({ position: null, total: 3, hasPrev: true, hasNext: true })
+    drawer(wrapper).vm.$emit('navigate', 1)
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
+  })
+
+  it('人員搜尋與篩選後只在看得到的列之間跳', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'GridToolbar' }).vm.$emit('update:keyword', '王')
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 2, WEEK[1])
+    await flushPromises()
+    expect(drawer(wrapper).props('nav')).toEqual({ position: 1, total: 1, hasPrev: false, hasNext: false })
+  })
+
+  it('處理完這格（重抓後不再是待處理）自動跳下一筆並提示', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[0])
+    await flushPromises()
+    api.grid.mockImplementation(async () => ({ data: issueGrid(['1|0']) }))
+    drawer(wrapper).vm.$emit('changed')
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
+    expect(ui.success).toHaveBeenCalledWith(expect.stringContaining('下一筆待處理：林班導 9/16'))
+    expect(drawer(wrapper).props('modelValue')).toBe(true)
+  })
+
+  it('重抓後仍是待處理（例如只處理了一半）就留在原格', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[0])
+    await flushPromises()
+    drawer(wrapper).vm.$emit('changed')
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[0]}`)
+  })
+
+  it('最後一筆處理完：往前找還沒處理的；全部處理完就留在原格並說清完了', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 2, WEEK[1])
+    await flushPromises()
+    api.grid.mockImplementation(async () => ({ data: issueGrid(['2|1']) }))
+    drawer(wrapper).vm.$emit('changed')
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[0]}`)
+
+    api.grid.mockImplementation(async () => ({ data: issueGrid(['1|0', '1|2', '2|1']) }))
+    drawer(wrapper).vm.$emit('changed')
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[0]}`)
+    expect(ui.success).toHaveBeenLastCalledWith('這週的待處理都處理完了')
+  })
+
+  it('月模式：等頁面重抓整月資料（revision）後才判斷，處理完一樣跳下一筆', async () => {
+    const revision = ref(0)
+    const month = effectScope().run(() => useMonthGrid(ref('2026-09-16'), revision))!
+    const wrapper = mountPanel({ view: 'month', month })
+    await flushPromises()
+    wrapper.findComponent({ name: 'MonthGrid' }).vm.$emit('select', 1, WEEK[0])
+    await flushPromises()
+    expect(drawer(wrapper).props('nav')).toMatchObject({ position: 1, total: 3 })
+    api.grid.mockImplementation(async () => ({ data: issueGrid(['1|0']) }))
+    drawer(wrapper).vm.$emit('changed')
+    await flushPromises()
+    // 週資料重抓了但整月資料還沒：抽屜仍在原格
+    expect(at(wrapper)).toBe(`1|${WEEK[0]}`)
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+    revision.value += 1
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
+  })
+
+  it('從不是待處理的格子操作（例如改未來的班）不會自動跳走', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[4])
+    await flushPromises()
+    drawer(wrapper).vm.$emit('changed')
+    await flushPromises()
+    expect(at(wrapper)).toBe(`1|${WEEK[4]}`)
   })
 })

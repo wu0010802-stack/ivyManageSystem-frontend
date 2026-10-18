@@ -9,6 +9,11 @@
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
     <div v-if="cell && employee" class="pdd">
+      <nav v-if="nav && nav.total > 0" class="pdd__nav" aria-label="待處理導覽" data-test="pdd-nav">
+        <el-button :icon="ArrowLeft" :disabled="!nav.hasPrev" title="上一筆待處理（K）" aria-keyshortcuts="k" data-test="pdd-prev" @click="go(-1)">上一筆</el-button>
+        <span class="pdd__nav-pos" data-test="pdd-nav-pos">{{ nav.position ? `待處理 ${nav.position}／${nav.total}` : `共 ${nav.total} 筆待處理` }}</span>
+        <el-button :disabled="!nav.hasNext" title="下一筆待處理（J）" aria-keyshortcuts="j" data-test="pdd-next" @click="go(1)">下一筆 <el-icon class="el-icon--right"><ArrowRight /></el-icon></el-button>
+      </nav>
       <p v-if="otherClasses" class="pdd__note" data-test="pdd-other-classes">另兼：{{ otherClasses }}</p>
       <section class="pdd__section">
         <h3>應上班</h3>
@@ -51,6 +56,7 @@
 
       <DayResolveSection
         v-if="resolveMode !== 'none' && resolveMode !== 'confirm-first'"
+        ref="resolveRef"
         :cell="cell"
         :mode="resolveMode"
         :employee-name="employee.name"
@@ -103,6 +109,7 @@
 
       <DayResolveSection
         v-if="resolveMode === 'confirm-first'"
+        ref="resolveRef"
         :cell="cell"
         mode="confirm-first"
         :employee-name="employee.name"
@@ -129,8 +136,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { confirmReconciliationShift } from '@/api/attendanceReconciliation'
 import DayResolveSection, { type DayResolveMode } from './DayResolveSection.vue'
 import { deleteDaily, getDaily, saveDaily } from '@/api/shifts'
@@ -170,9 +178,13 @@ const props = defineProps<{
   today: string
   caller: GridOut['caller']
   mobile?: boolean
+  /** 上一筆／下一筆待處理（面板依畫面上的列與篩選排好）；null＝不顯示 */
+  nav?: { position: number | null; total: number; hasPrev: boolean; hasNext: boolean } | null
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
+  /** 換到上一筆（-1）或下一筆（1）待處理 */
+  navigate: [direction: 1 | -1]
   changed: []
   records: [employeeId: number, date: string]
   /** 沒有任何打卡的人日：帶人員與日期開匯入（沿用原打卡核對清單的「匯入打卡」） */
@@ -363,12 +375,13 @@ watch(confirmChoice, () => { includePair.value = false })
 
 // X、Esc、點遮罩關閉前：打了一半的確認原因或選了沒套用的「改這天」不能無聲丟掉。
 // 只算畫面上看得到的區塊：重載後區塊消失（例如改這天撞到已打卡）殘留的選擇不算。
+const resolveRef = ref<InstanceType<typeof DayResolveSection> | null>(null)
 const isDirty = (): boolean => {
   const cell = props.cell
   if (!cell) return false
   const dayDirty = cell.edit.plan && dayChoice.value !== initialDayChoice.value
   const reasonDirty = cell.edit.confirm && !!cell.actual && confirmReason.value.trim() !== ''
-  return dayDirty || reasonDirty
+  return dayDirty || reasonDirty || (resolveRef.value?.isDirty() ?? false)
 }
 /** 頁面要程式關閉（看他整月）前呼叫；回 true＝可以關 */
 async function requestClose(): Promise<boolean> {
@@ -383,6 +396,27 @@ async function beforeClose(done: () => void): Promise<void> {
   if (await requestClose()) done()
 }
 defineExpose({ requestClose })
+
+// ── 上一筆／下一筆待處理 ───────────────────────────────────────────
+async function go(direction: 1 | -1): Promise<void> {
+  const nav = props.nav
+  if (!nav || (direction === 1 ? !nav.hasNext : !nav.hasPrev)) return
+  if (!(await requestClose())) return
+  emit('navigate', direction)
+}
+/** J／K 換筆（打字中、選單展開或確認框開著時不算） */
+function onKeydown(event: KeyboardEvent): void {
+  if (!props.modelValue || !props.nav || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return
+  const key = event.key.toLowerCase()
+  if (key !== 'j' && key !== 'k') return
+  const target = event.target instanceof Element ? event.target : null
+  if (target?.closest('input, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"]')) return
+  if (document.querySelector('.el-overlay-message-box')) return
+  event.preventDefault()
+  void go(key === 'j' ? 1 : -1)
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 let openSeq = 0
 watch(
@@ -503,6 +537,9 @@ async function submitConfirm(): Promise<void> {
 
 <style scoped>
 .pdd { display: grid; gap: var(--space-4); }
+.pdd__nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding-bottom: var(--space-3); border-bottom: 1px solid var(--el-border-color-lighter); }
+.pdd__nav .el-button { margin-left: 0; }
+.pdd__nav-pos { color: var(--el-text-color-secondary); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 .pdd__section h3 { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 .pdd__plan { margin: 0; font-weight: 600; }
 .pdd__note { margin: 0; color: var(--el-text-color-secondary); font-size: var(--text-sm); }

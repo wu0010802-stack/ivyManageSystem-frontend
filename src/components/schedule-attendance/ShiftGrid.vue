@@ -158,7 +158,7 @@ import type { DayCoverage, ShiftGap } from '@/utils/scheduleCoverage'
 import {
   cellDisplay,
   cellKey,
-  rowMatchesFilter,
+  gridSections,
   type CellDisplay,
   type GridCell,
   type GridDay,
@@ -246,30 +246,21 @@ const displays = computed(() => {
 const display = (employeeId: number, date: string): CellDisplay => displays.value.get(cellKey(employeeId, date))!
 
 const needle = computed(() => (props.keyword ?? '').trim().toLowerCase())
-function matchesKeyword(emp: GridEmployee): boolean {
-  if (!needle.value) return true
-  return emp.name.toLowerCase().includes(needle.value) || (emp.employee_number ?? '').toLowerCase().includes(needle.value)
-}
 
-// 桌機表格與手機卡片共用同一份列
-const visibleRows = computed(() =>
-  props.employees
-    .filter((emp) =>
-      rowMatchesFilter(
-        props.days.map((d) => cellOf(emp.employee_id, d.date)).filter((c): c is GridCell => c !== undefined),
-        props.filter,
-        props.today,
-        uncovered.value,
-      ),
-    )
-    .filter(matchesKeyword),
-)
-
+// 桌機表格與手機卡片共用同一份列；與月格子、抽屜的上一筆／下一筆同一套篩選與分組（gridSections）
 const sections = computed(() =>
-  props.groups
-    .map((group) => ({ group, employees: visibleRows.value.filter((emp) => emp.group_key === group.key) }))
-    .filter((section) => section.employees.length > 0),
+  gridSections({
+    groups: props.groups,
+    employees: props.employees,
+    days: props.days,
+    cells: props.cells,
+    filter: props.filter,
+    today: props.today,
+    keyword: props.keyword,
+    uncovered: uncovered.value,
+  }),
 )
+const visibleRows = computed(() => sections.value.flatMap((section) => section.employees))
 
 const showImportHint = computed(() => !needle.value && props.filter === 'issues' && missingImportDays.value > 0)
 const emptyText = computed(() => {

@@ -101,6 +101,8 @@
       :today="drawerGrid.today"
       :caller="drawerGrid.caller"
       :mobile="isMobile"
+      :nav="drawerNav"
+      @navigate="onNavigate"
       @changed="onChanged"
       @records="onRecords"
       @import="(ctx: ImportContext) => emit('import', ctx)"
@@ -174,6 +176,7 @@ import {
   addDaysISO,
   cellKey,
   coverageInputs,
+  gridSections,
   isIssue,
   mondayOf,
   uncoveredDates,
@@ -344,9 +347,83 @@ const selectedGroupLabel = computed(() => drawerGrid.value?.groups.find((g) => g
 const sameDayCells = computed(() => (drawerGrid.value?.cells ?? []).filter((c) => c.date === selected.value?.date))
 
 function openCell(employeeId: number, date: string): void {
+  pendingAdvance = null
   selected.value = { employeeId, date }
   drawerOpen.value = true
 }
+
+// ── 抽屜的待處理佇列：上一筆／下一筆、處理完自動跳下一筆 ─────────────────
+/** 畫面上看得到的格子，順序與格子相同：列（班級分組、篩選與搜尋後）由上而下，每人由左而右 */
+const navOrder = computed<GridCell[]>(() => {
+  const g = drawerGrid.value
+  if (!g) return []
+  const navDays = isMonth.value ? monthDays.value : days.value
+  const cells = drawerCells.value
+  const sections = gridSections({ groups: g.groups, employees: g.employees, days: navDays, cells, filter: props.filter, today: g.today, keyword: keyword.value, uncovered: uncoveredDates(g.days) })
+  return sections
+    .flatMap((section) => section.employees)
+    .flatMap((emp) => navDays.map((d) => cells.get(cellKey(emp.employee_id, d.date))).filter((c): c is GridCell => c !== undefined))
+})
+const issueKeys = computed<string[]>(() => {
+  const g = drawerGrid.value
+  if (!g) return []
+  const uncovered = uncoveredDates(g.days)
+  return navOrder.value.filter((c) => isIssue(c, g.today, uncovered)).map((c) => cellKey(c.employee_id, c.date))
+})
+/** 目前這格在佇列裡的位置：前後的待處理（不在畫面上的格子＝從頭開始） */
+const navState = computed(() => {
+  const sel = selected.value
+  if (!sel || !drawerGrid.value) return null
+  const key = cellKey(sel.employeeId, sel.date)
+  const issues = new Set(issueKeys.value)
+  const keys = navOrder.value.map((c) => cellKey(c.employee_id, c.date))
+  const index = keys.indexOf(key)
+  const before = index >= 0 ? keys.slice(0, index).filter((k) => issues.has(k)) : []
+  const after = index >= 0 ? keys.slice(index + 1).filter((k) => issues.has(k)) : issueKeys.value.filter((k) => k !== key)
+  const position = issueKeys.value.indexOf(key)
+  return { key, before, after, position: position >= 0 ? position + 1 : null }
+})
+const drawerNav = computed(() => {
+  const n = navState.value
+  if (!n) return null
+  return { position: n.position, total: issueKeys.value.length, hasPrev: n.before.length > 0, hasNext: n.after.length > 0 }
+})
+
+function selectKey(key: string): void {
+  const [employeeId, date] = key.split('|')
+  if (isMonth.value) void openMonthCell(Number(employeeId), date)
+  else openCell(Number(employeeId), date)
+}
+function onNavigate(direction: 1 | -1): void {
+  const n = navState.value
+  const target = direction === 1 ? n?.after[0] : n?.before[n.before.length - 1]
+  if (target) selectKey(target)
+}
+
+/**
+ * 處理完自動跳下一筆：送出前記下這格與它後面的待處理，重抓後這格不再是待處理就跳到後面第一筆
+ * 還沒處理的（到底了就回到最前面）。月模式要等整月資料重抓（頁面遞增 revision）才看得到結果，
+ * 所以等「這格的新資料」到了才判斷，不在 onChanged 裡直接判斷。
+ */
+let pendingAdvance: { key: string; after: string[] } | null = null
+watch(drawerOpen, (open) => { if (!open) pendingAdvance = null })
+watch(() => (selected.value ? drawerCells.value.get(cellKey(selected.value.employeeId, selected.value.date)) : undefined), (cell) => {
+  const pending = pendingAdvance
+  const g = drawerGrid.value
+  if (!pending || !cell || !g || cellKey(cell.employee_id, cell.date) !== pending.key) return
+  pendingAdvance = null
+  if (isIssue(cell, g.today, uncoveredDates(g.days))) return
+  const remaining = new Set(issueKeys.value)
+  const target = pending.after.find((k) => remaining.has(k)) ?? issueKeys.value.find((k) => k !== pending.key) ?? null
+  if (!target) {
+    ElMessage.success(isMonth.value ? '這個月的待處理都處理完了' : '這週的待處理都處理完了')
+    return
+  }
+  selectKey(target)
+  const [employeeId, date] = target.split('|')
+  const [, m, d] = date.split('-').map(Number)
+  ElMessage.success(`已處理。下一筆待處理：${employeeNames.value[Number(employeeId)] ?? ''} ${m}/${d}`)
+})
 
 /**
  * 月模式點的格子多半不在目前這週：抽屜「來源」的週排班層與「不另外調整」的說明要用該格那週的週排班，
@@ -395,6 +472,8 @@ async function onRecords(employeeId: number, date: string): Promise<void> {
 }
 
 async function onChanged(): Promise<void> {
+  const n = navState.value
+  pendingAdvance = drawerOpen.value && n && n.position !== null ? { key: n.key, after: n.after } : null
   await state.reload()
   emit('changed')
 }

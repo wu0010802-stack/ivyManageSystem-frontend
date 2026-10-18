@@ -19,7 +19,9 @@ vi.mock('element-plus', async (orig) => ({ ...(await orig<typeof import('element
 
 const CALLER = grid().caller
 
-function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]; caller: typeof CALLER; weeklyShiftId: number | null; employee: GridEmployee; importCovered: boolean }> = {}) {
+type DrawerNav = { position: number | null; total: number; hasPrev: boolean; hasNext: boolean }
+
+function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]; caller: typeof CALLER; weeklyShiftId: number | null; employee: GridEmployee; importCovered: boolean; nav: DrawerNav | null; attach: boolean }> = {}) {
   return mount(PersonDayDrawer, {
     props: {
       modelValue: true,
@@ -33,7 +35,10 @@ function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]
       weeklyShiftId: 'weeklyShiftId' in extra ? extra.weeklyShiftId! : 1,
       today: '2026-09-21',
       caller: extra.caller ?? CALLER,
+      nav: extra.nav ?? null,
     },
+    // 鍵盤事件要從輸入框冒泡到 window，元件得掛在 document 上
+    ...(extra.attach ? { attachTo: document.body } : {}),
     global: {
       plugins: [ElementPlus],
       stubs: {
@@ -603,5 +608,88 @@ describe('PersonDayDrawer 審查修正', () => {
       expect(w.findComponent(ResolveCard).exists()).toBe(false)
       expect(w.find('[data-test="pdd-records"]').exists()).toBe(true)
     })
+  })
+})
+
+describe('PersonDayDrawer 上一筆／下一筆待處理', () => {
+  const NAV: DrawerNav = { position: 3, total: 12, hasPrev: true, hasNext: true }
+  const press = (key: string, target: EventTarget = document.body) => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  }
+
+  it('寫出第幾筆與共幾筆；上一筆、下一筆送出 navigate；到頭到尾就停用', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { actual: { status: 'anomaly', late_minutes: 20, punch_in: `${W1}T07:20:00`, punch_out: `${W1}T16:30:00` } }), { nav: NAV })
+    await flushPromises()
+    expect(wrapper.get('[data-test="pdd-nav-pos"]').text()).toBe('待處理 3／12')
+    await wrapper.get('[data-test="pdd-next"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="pdd-prev"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('navigate')).toEqual([[1], [-1]])
+    await wrapper.setProps({ nav: { position: 12, total: 12, hasPrev: true, hasNext: false } })
+    expect(wrapper.get('[data-test="pdd-next"]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('開的是不用處理的格子：寫共幾筆待處理，仍可跳到下一筆', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { actual: {} }), { nav: { position: null, total: 5, hasPrev: false, hasNext: true } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="pdd-nav-pos"]').text()).toBe('共 5 筆待處理')
+    wrapper.unmount()
+  })
+
+  it('沒有待處理（或沒有導覽）就不顯示導覽列', async () => {
+    expect(mountDrawer(cell(1, W1, { actual: {} }), { nav: { position: null, total: 0, hasPrev: false, hasNext: false } }).find('[data-test="pdd-nav"]').exists()).toBe(false)
+    expect(mountDrawer(cell(1, W1, { actual: {} })).find('[data-test="pdd-nav"]').exists()).toBe(false)
+  })
+
+  it('J／K 切換；在輸入框裡打字不算', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { actual: { status: 'possible_shift_change', punch_in: `${W1}T08:01:00`, punch_out: `${W1}T17:31:00`, candidates: [{ shift_type_id: 2, name: '晚車', work_start: '08:30', work_end: '18:00' }] }, edit: { confirm: true } }), { nav: NAV, attach: true })
+    await flushPromises()
+    press('j')
+    await flushPromises()
+    press('k')
+    await flushPromises()
+    press('j', wrapper.get('textarea[data-test="pdd-confirm-reason"]').element)
+    await flushPromises()
+    expect(wrapper.emitted('navigate')).toEqual([[1], [-1]])
+    // 卸載後不再聽鍵盤（拿掉的是掛上去的同一個 handler）
+    const add = vi.spyOn(window, 'addEventListener')
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const again = mountDrawer(cell(1, W1, { actual: {} }), { nav: NAV })
+    const handler = add.mock.calls.find(([type]) => type === 'keydown')?.[1]
+    again.unmount()
+    expect(handler).toBeDefined()
+    expect(remove).toHaveBeenCalledWith('keydown', handler)
+    add.mockRestore()
+    remove.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('原因打到一半要換筆：先問，取消就留在這筆', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { actual: { status: 'possible_shift_change', punch_in: `${W1}T08:01:00`, punch_out: `${W1}T17:31:00` }, edit: { confirm: true } }), { nav: NAV })
+    await flushPromises()
+    await wrapper.get('textarea[data-test="pdd-confirm-reason"]').setValue('補登')
+    box.confirm.mockRejectedValueOnce('cancel')
+    await wrapper.get('[data-test="pdd-next"]').trigger('click')
+    await flushPromises()
+    expect(box.confirm).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('navigate')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('補卡時間填了還沒送出：關閉或換筆前也要問（原本按 Esc 會無聲丟掉）', async () => {
+    att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [
+      { id: 101, employee_name: '林班導', employee_number: 'E001', date: W1, weekday: '一', type: 'missing_punch', type_label: '未打卡', detail: '缺下班打卡', estimated_deduction: 0, confirmed_action: null },
+    ] } })
+    const wrapper = mountDrawer(cell(1, W1, { actual: { status: 'missing_punch', attendance_id: 101, punch_in: `${W1}T07:00:00` } }), { nav: NAV })
+    await flushPromises()
+    type DrawerApi = { requestClose: () => Promise<boolean> }
+    expect(await (wrapper.vm as unknown as DrawerApi).requestClose()).toBe(true)
+    wrapper.findComponent(ResolveCard).findAllComponents({ name: 'ElTimePicker' })[0].vm.$emit('update:modelValue', '17:00')
+    await flushPromises()
+    box.confirm.mockRejectedValueOnce('cancel')
+    expect(await (wrapper.vm as unknown as DrawerApi).requestClose()).toBe(false)
+    wrapper.unmount()
   })
 })
