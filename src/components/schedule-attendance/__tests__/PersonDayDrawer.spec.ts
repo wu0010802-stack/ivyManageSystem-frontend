@@ -713,3 +713,35 @@ describe('PersonDayDrawer 沒有打卡的應上班日', () => {
     expect(mountDrawer(cell(2, '2026-09-19', { plan: { expected: false }, actual: { status: 'off_day' } })).find('[data-test="pdd-absence"]').exists()).toBe(false)
   })
 })
+
+describe('PersonDayDrawer 版面順序', () => {
+  const shiftChange = () => cell(1, W1, {
+    actual: { status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00`, candidates: [{ shift_type_id: 2, name: '晚車', work_start: '08:30', work_end: '18:00' }] },
+    edit: { confirm: true, plan: false, recorded: true, locked_reason: 'recorded' },
+  })
+
+  it('判定與動作在前，班別來源收在最後（預設收起，標題寫出生效的那一層）', async () => {
+    const wrapper = mountDrawer(shiftChange())
+    await flushPromises()
+    const html = wrapper.html()
+    expect(html.indexOf('data-test="pdd-actual"')).toBeLessThan(html.indexOf('data-test="pdd-confirm"'))
+    expect(html.indexOf('data-test="pdd-confirm"')).toBeLessThan(html.indexOf('data-test="pdd-chain"'))
+    const source = wrapper.get('[data-test="pdd-source"]')
+    expect(source.element.tagName).toBe('DETAILS')
+    expect(source.attributes('open')).toBeUndefined()
+    expect(source.get('summary').text()).toBe('班別來源：週排班')
+  })
+
+  it('點系統推測的班別：原因還空著就帶入建議原因；已經打了就不蓋掉', async () => {
+    const wrapper = mountDrawer(shiftChange())
+    await flushPromises()
+    const reason = wrapper.get('textarea[data-test="pdd-confirm-reason"]')
+    // 開抽屜時不自動帶（否則還沒動就算未送出）
+    expect((reason.element as HTMLTextAreaElement).value).toBe('')
+    await wrapper.get('[data-test="pdd-candidate-2"]').trigger('click')
+    expect((reason.element as HTMLTextAreaElement).value).toBe('打卡時間符合晚車 08:30–18:00（系統推測）')
+    await reason.setValue('園長口頭同意換班')
+    await wrapper.get('[data-test="pdd-candidate-2"]').trigger('click')
+    expect((reason.element as HTMLTextAreaElement).value).toBe('園長口頭同意換班')
+  })
+})

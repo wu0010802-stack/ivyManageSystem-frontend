@@ -22,16 +22,6 @@
       </section>
 
       <section class="pdd__section">
-        <h3>來源</h3>
-        <ol class="pdd__chain" data-test="pdd-chain">
-          <li v-for="layer in chain" :key="layer.key" :class="{ 'pdd__chain-item--active': layer.active }">
-            <span class="pdd__chain-label">{{ layer.label }}</span>
-            <span>{{ layer.value }}</span>
-          </li>
-        </ol>
-      </section>
-
-      <section class="pdd__section">
         <h3>打卡與判定</h3>
         <p v-if="!caller.can_view_attendance" class="pdd__note">沒有查看打卡紀錄的權限。</p>
         <p v-else-if="!cell.actual" class="pdd__note">{{ cell.date > today ? '尚未到這一天。' : '這天不在核對範圍內。' }}</p>
@@ -93,7 +83,7 @@
               :type="confirmChoice === c.shift_type_id ? 'primary' : 'default'"
               :plain="confirmChoice === c.shift_type_id"
               :data-test="`pdd-candidate-${c.shift_type_id}`"
-              @click="confirmChoice = c.shift_type_id"
+              @click="pickCandidate(c)"
             >{{ c.name }} {{ c.work_start }}–{{ c.work_end }}</el-button>
           </div>
           <el-form-item label="實際班別" required>
@@ -126,6 +116,17 @@
       <p v-if="!cell.edit.plan && !cell.edit.confirm && cell.edit.locked_reason" class="pdd__note" data-test="pdd-locked">
         {{ lockedNote }}
       </p>
+
+      <!-- 班別來源是查證用的細節：判定與動作在前，來源收在最後（標題寫出生效的那一層） -->
+      <details class="pdd__source" data-test="pdd-source">
+        <summary>班別來源：{{ SOURCE_TAGS[cell.plan.source].label }}</summary>
+        <ol class="pdd__chain" data-test="pdd-chain">
+          <li v-for="layer in chain" :key="layer.key" :class="{ 'pdd__chain-item--active': layer.active }">
+            <span class="pdd__chain-label">{{ layer.label }}</span>
+            <span>{{ layer.value }}</span>
+          </li>
+        </ol>
+      </details>
 
       <footer class="pdd__footer">
         <el-button
@@ -395,6 +396,12 @@ const pair = computed(() => {
 })
 watch(confirmChoice, () => { includePair.value = false })
 
+/** 點系統推測的班別：原因還空著就帶入建議原因（可再改）；開抽屜時不自動帶，否則還沒動就算未送出 */
+function pickCandidate(c: { shift_type_id: number; name: string; work_start: string; work_end: string }): void {
+  confirmChoice.value = c.shift_type_id
+  if (!confirmReason.value.trim()) confirmReason.value = `打卡時間符合${c.name} ${c.work_start}–${c.work_end}（系統推測）`
+}
+
 // X、Esc、點遮罩關閉前：打了一半的確認原因或選了沒套用的「改這天」不能無聲丟掉。
 // 只算畫面上看得到的區塊：重載後區塊消失（例如改這天撞到已打卡）殘留的選擇不算。
 const resolveRef = ref<InstanceType<typeof DayResolveSection> | null>(null)
@@ -565,6 +572,9 @@ async function submitConfirm(): Promise<void> {
 .pdd__section h3 { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 .pdd__plan { margin: 0; font-weight: 600; }
 .pdd__note { margin: 0; color: var(--el-text-color-secondary); font-size: var(--text-sm); }
+.pdd__source summary { cursor: pointer; color: var(--el-text-color-secondary); font-size: var(--text-sm); }
+.pdd__source summary:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.pdd__source[open] summary { margin-bottom: var(--space-2); }
 .pdd__chain { margin: 0; padding-left: var(--space-4); display: grid; gap: var(--space-1); }
 .pdd__chain-label { display: inline-block; min-width: 4.5em; color: var(--el-text-color-secondary); }
 .pdd__chain-item--active { font-weight: 600; }
