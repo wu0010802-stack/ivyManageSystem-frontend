@@ -726,3 +726,51 @@ describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
     expect(at(wrapper)).toBe(`1|${WEEK[4]}`)
   })
 })
+
+describe('ScheduleGridPanel 在格子上捲動先收起頁首', () => {
+  function mountInMain(toolbarTop: number) {
+    const main = document.createElement('div')
+    main.className = 'el-main'
+    document.body.appendChild(main)
+    let top = 0
+    Object.defineProperty(main, 'clientHeight', { value: 836, configurable: true })
+    Object.defineProperty(main, 'scrollHeight', { value: 1300, configurable: true })
+    Object.defineProperty(main, 'scrollTop', { get: () => top, set: (v: number) => { top = v }, configurable: true })
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const y = this === main ? 64 : this.classList.contains('grid-toolbar') ? toolbarTop : 0
+      return { top: y, bottom: y, left: 0, right: 0, width: 0, height: 0, x: 0, y, toJSON: () => ({}) } as DOMRect
+    })
+    const wrapper = mount(ScheduleGridPanel, {
+      props: { date: '2026-09-16', filter: 'all' },
+      attachTo: main,
+      global: { plugins: [ElementPlus], stubs: { PersonDayDrawer: DrawerStub, BatchConfirmDialog: BatchStub, teleport: true } },
+    })
+    return { wrapper, main, rect, cleanup: () => { wrapper.unmount(); rect.mockRestore(); main.remove() } }
+  }
+  const wheel = (el: Element, deltaY: number) => {
+    const event = new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true })
+    el.dispatchEvent(event)
+    return event
+  }
+
+  it('工具列還沒貼頂：往下捲先捲外層並擋下格子的捲動', async () => {
+    const { wrapper, main, cleanup } = mountInMain(365)
+    await flushPromises()
+    const scroller = wrapper.get('.shift-grid__scroller').element
+    const event = wheel(scroller, 120)
+    expect(event.defaultPrevented).toBe(true)
+    expect(main.scrollTop).toBe(120)
+    // 往上捲照瀏覽器預設（格子捲到頂後自然帶動外層）
+    expect(wheel(scroller, -120).defaultPrevented).toBe(false)
+    cleanup()
+  })
+
+  it('工具列已貼頂：交給格子自己捲', async () => {
+    const { wrapper, main, cleanup } = mountInMain(64)
+    await flushPromises()
+    const event = wheel(wrapper.get('.shift-grid__scroller').element, 120)
+    expect(event.defaultPrevented).toBe(false)
+    expect(main.scrollTop).toBe(0)
+    cleanup()
+  })
+})

@@ -1,5 +1,5 @@
 <template>
-  <div class="schedule-grid-panel">
+  <div ref="panelRoot" class="schedule-grid-panel">
     <GridToolbar
       ref="toolbarRef"
       :week-start="weekStart"
@@ -179,6 +179,7 @@ import {
   gridSections,
   isIssue,
   mondayOf,
+  outerScrollFirst,
   uncoveredDates,
   visibleDays,
   type BatchUnit,
@@ -275,15 +276,39 @@ function measureGrid(): void {
   if (!toolbar || !main || !main.clientHeight) return
   gridMaxHeight.value = Math.max(GRID_MIN_HEIGHT, main.clientHeight - toolbar.offsetHeight - GRID_BOTTOM_GAP)
 }
+// 在格子上往下捲時先收起頁首（見 outerScrollFirst）：工具列貼頂後才捲格子本身，底部的列才不會一直被視窗切掉
+const panelRoot = ref<HTMLElement | null>(null)
+let scrollMain: HTMLElement | null = null
+function onGridWheel(event: WheelEvent): void {
+  const main = scrollMain
+  const toolbar = toolbarRef.value?.$el as HTMLElement | undefined
+  if (!main || !toolbar || event.ctrlKey) return
+  if (!(event.target instanceof Element) || !event.target.closest('.shift-grid__scroller, .month-grid__scroller')) return
+  const deltaY = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaMode === 2 ? event.deltaY * main.clientHeight : event.deltaY
+  const amount = outerScrollFirst({
+    deltaY,
+    toolbarOffset: toolbar.getBoundingClientRect().top - main.getBoundingClientRect().top,
+    outerRoom: main.scrollHeight - main.clientHeight - main.scrollTop,
+  })
+  if (!amount) return
+  event.preventDefault()
+  main.scrollTop += amount
+}
 onMounted(() => {
   const toolbar = toolbarRef.value?.$el as HTMLElement | undefined
-  const main = toolbar?.closest('.el-main')
-  if (!toolbar || !main || typeof ResizeObserver === 'undefined') return
+  const main = toolbar?.closest('.el-main') as HTMLElement | null | undefined
+  if (!toolbar || !main) return
+  scrollMain = main
+  panelRoot.value?.addEventListener('wheel', onGridWheel, { passive: false })
+  if (typeof ResizeObserver === 'undefined') return
   resizeObserver = new ResizeObserver(measureGrid)
   resizeObserver.observe(toolbar)
   resizeObserver.observe(main)
 })
-onBeforeUnmount(() => resizeObserver?.disconnect())
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  panelRoot.value?.removeEventListener('wheel', onGridWheel)
+})
 
 const NO_CALLER: GridOut['caller'] = { can_view_attendance: false, can_edit_plan: false, can_confirm: false, can_edit_attendance: false }
 const gridData = computed(() => state.grid.value)

@@ -9,6 +9,7 @@ import {
   findPairCell,
   gridSections,
   groupDaysByWeek,
+  outerScrollFirst,
   indexCells,
   importProgress,
   isIssue,
@@ -442,5 +443,19 @@ describe('月格子（SPEC-027 C 期）', () => {
     ])
     expect(gridSections({ ...base, filter: 'issues' }).map((s) => s.employees.map((e) => e.employee_id))).toEqual([[1]])
     expect(gridSections({ ...base, filter: 'all', keyword: 'e003' }).map((s) => s.group.key)).toEqual(['other'])
+  })
+})
+
+describe('outerScrollFirst（在格子上捲動時先收起頁首）', () => {
+  it('往下捲且工具列還沒貼頂：先捲外層，最多捲到工具列貼頂為止', () => {
+    expect(outerScrollFirst({ deltaY: 100, toolbarOffset: 301, outerRoom: 400 })).toBe(100)
+    expect(outerScrollFirst({ deltaY: 500, toolbarOffset: 301, outerRoom: 400 })).toBe(301)
+    expect(outerScrollFirst({ deltaY: 500, toolbarOffset: 301, outerRoom: 120 })).toBe(120)
+  })
+  it('工具列已貼頂、外層捲不動、或往上捲：交給格子自己捲', () => {
+    expect(outerScrollFirst({ deltaY: 100, toolbarOffset: 0, outerRoom: 400 })).toBe(0)
+    expect(outerScrollFirst({ deltaY: 100, toolbarOffset: 0.5, outerRoom: 400 })).toBe(0)
+    expect(outerScrollFirst({ deltaY: 100, toolbarOffset: 301, outerRoom: 0 })).toBe(0)
+    expect(outerScrollFirst({ deltaY: -100, toolbarOffset: 301, outerRoom: 400 })).toBe(0)
   })
 })

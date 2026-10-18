@@ -537,3 +537,14 @@ export function isRecordedConflict(err: unknown): boolean {
   const message = (err as { displayMessage?: string })?.displayMessage ?? ''
   return status === 409 && message.includes('出勤紀錄')
 }
+
+/**
+ * 在格子上往下捲時先收起頁首：格子的捲動區高度是「工具列貼頂後」的可用高度，頁首還在畫面上時
+ * 捲動區底部落在首屏外；若照瀏覽器預設先捲格子，最後幾列會一直被視窗切掉。工具列還沒貼頂
+ * （toolbarOffset＝工具列頂端到外層捲動區頂端的距離）且外層還捲得動時，先捲外層，最多捲到貼頂。
+ * 回傳外層要捲的量（px）；0＝交給格子自己捲。
+ */
+export function outerScrollFirst(m: { deltaY: number; toolbarOffset: number; outerRoom: number }): number {
+  if (m.deltaY <= 0 || m.toolbarOffset <= 1 || m.outerRoom <= 0) return 0
+  return Math.min(m.deltaY, m.toolbarOffset, m.outerRoom)
+}
