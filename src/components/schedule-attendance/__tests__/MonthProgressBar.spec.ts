@@ -64,6 +64,8 @@ describe('MonthProgressBar', () => {
     expect(api.grid).toHaveBeenCalledWith({ start_date: '2026-09-01', end_date: '2026-09-30' })
     expect(wrapper.find('[data-test="progress-schedule"]').text()).toContain('2 人日用預設工時')
     expect(wrapper.find('[data-test="progress-import"]').text()).toContain('已匯入至 9/16')
+    // 9/17、9/18 到昨天為止還沒匯入：要亮警示（不是只有中間漏匯才亮）
+    expect(wrapper.find('[data-test="progress-import"] strong').classes()).toContain('month-progress__warn')
     expect(wrapper.find('[data-test="progress-issues"]').text()).toContain('本月 1 格待處理')
     // 匯出月報前的提醒要用同一份數字（9/17、9/18 是到昨天為止沒匯入的工作日）
     expect(wrapper.emitted('summary')!.at(-1)).toEqual([{ month: '2026-09-01', issues: 1, missingImportDays: 2 }])

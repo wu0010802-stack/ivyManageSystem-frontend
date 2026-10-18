@@ -10,7 +10,7 @@
       <li v-if="canViewAttendance" class="month-progress__step" data-test="progress-import">
         <span class="month-progress__index">②</span>
         <span>匯入打卡</span>
-        <strong :class="{ 'month-progress__warn': imports.gaps.length > 0 }">{{ loading ? '…' : loadError ? '—' : importText }}</strong>
+        <strong :class="{ 'month-progress__warn': imports.missingWorkdays.length > 0 && !loadError }">{{ loading ? '…' : loadError ? '—' : importText }}</strong>
       </li>
       <li v-if="canViewAttendance" class="month-progress__step">
         <span class="month-progress__index">③</span>

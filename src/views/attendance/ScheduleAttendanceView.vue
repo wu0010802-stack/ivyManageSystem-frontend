@@ -71,7 +71,7 @@
       <el-button v-if="hasPermission('ATTENDANCE_WRITE')" type="primary" @click="openImport">匯入打卡紀錄</el-button>
     </section>
     <template v-else-if="ws.hasCurrentData.value">
-    <div class="workspace-record-actions"><el-button @click="anomalyDrawerOpen = true">全月待處理異常（{{ ws.kpis.value.pendingAnomalies }}）</el-button><span>名冊搜尋只篩選人員；異常清單可另外搜尋與批次處理。</span></div>
+    <div class="workspace-record-actions"><el-button @click="anomalyDrawerOpen = true">遲到・早退・缺卡清單（{{ ws.kpis.value.pendingAnomalies }} 筆待處理）</el-button><span>一人一天算一筆；疑似缺勤、疑似換班與資料待補在「班表核對」處理。</span></div>
     <!-- 桌機名冊與整月明細 -->
     <div v-if="isDesktop" class="workspace-cols">
       <div class="col-roster">
@@ -271,10 +271,11 @@ function setFilter(filter: GridFilter): void {
   syncQuery({ filter: filter === 'all' ? undefined : filter })
 }
 
+/** 本月進度③與匯入完成：看整月的待處理。桌機切到月格子，看到的數字才會和「本月 N 格待處理」相同 */
 function showIssues(): void {
   activeTab.value = 'grid'
   gridFilter.value = 'issues'
-  syncQuery({ tab: 'grid', filter: 'issues' })
+  syncQuery({ tab: 'grid', filter: 'issues', ...(isDesktop.value ? { view: 'month' } : {}) })
 }
 
 // ── getRecords 回傳列（OpenAPI 契約型別）────────────────────────────────────

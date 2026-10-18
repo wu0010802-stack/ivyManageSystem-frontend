@@ -131,7 +131,7 @@ describe('ScheduleGridPanel', () => {
     await flushPromises()
     expect(api.grid).toHaveBeenCalledWith({ start_date: W1, end_date: WEEK[6] })
     expect(wrapper.find('[data-test="shift-grid-table"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('只看待處理（1）')
+    expect(wrapper.text()).toContain('只看待處理（本週 1）')
   })
 
   it('整週改班遇到已打卡日：其餘工作日送每日調整，已打卡日開批次確認', async () => {

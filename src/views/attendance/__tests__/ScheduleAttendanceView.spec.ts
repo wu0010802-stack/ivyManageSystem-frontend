@@ -484,7 +484,7 @@ describe('AttendanceMonthStats', () => {
       props: { displayState: 'ready', kpis: { fullAttendance: 5, lateCount: 3, missingCount: 1, pendingAnomalies: 2 } },
       global: { stubs: WH_STUBS },
     })
-    expect(wrapper.text()).toContain('待處理異常')
+    expect(wrapper.text()).toContain('待處理遲到／早退／缺卡')
     expect(wrapper.text()).toContain('0 筆異常不代表打卡資料已齊全')
   })
 })
@@ -898,13 +898,29 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     await flushPromises()
     expect(wrapper.find('[data-test="tab-grid"]').attributes('aria-selected')).toBe('true')
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('issues')
-    expect(routerReplace).toHaveBeenCalledWith({ query: { tab: 'grid', filter: 'issues' } })
+    // 桌機切到月格子：「本月 N 格待處理」點進來看到的是同一個 N（不是本週的數字）
+    expect(routerReplace).toHaveBeenCalledWith({ query: { tab: 'grid', filter: 'issues', view: 'month' } })
 
     await wrapper.find('[data-test="tab-records"]').trigger('click')
     wrapper.findComponent(MonthProgressBarStub).vm.$emit('show-issues')
     await flushPromises()
     expect(wrapper.find('[data-test="tab-grid"]').attributes('aria-selected')).toBe('true')
     wrapper.unmount()
+  })
+
+  it('手機沒有月格子：本月進度③只切到只看待處理', async () => {
+    mockHasPermission.mockReturnValue(true)
+    mockIsMobile.value = true
+    try {
+      const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'records' }, global: { stubs: STUBS } })
+      await flushPromises()
+      wrapper.findComponent(MonthProgressBarStub).vm.$emit('show-issues')
+      await flushPromises()
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'grid', filter: 'issues' } })
+      wrapper.unmount()
+    } finally {
+      mockIsMobile.value = false
+    }
   })
 })
 
@@ -1012,7 +1028,7 @@ it('預設整月明細，異常清單收進抽屜且點選後關閉', async () =
   expect(wrapper.findComponent(DetailColumnStub).props('mode')).toBe('month')
   expect(wrapper.findComponent(RosterColumnStub).props('selectedEmployeeId')).toBe(wrapper.findComponent(DetailColumnStub).props('employeeId'))
   expect(wrapper.find('.workspace-cols .col-anomaly').exists()).toBe(false)
-  await wrapper.findAll('button').find(button => button.text().includes('待處理異常'))!.trigger('click')
+  await wrapper.findAll('button').find(button => button.text().includes('遲到・早退・缺卡清單'))!.trigger('click')
   expect(wrapper.find('[data-test="anomaly-drawer"]').attributes('data-open')).toBe('true')
   await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 1)
   await flushPromises()

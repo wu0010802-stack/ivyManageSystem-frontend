@@ -92,6 +92,23 @@ describe('useAttendanceWorkspace load', () => {
     expect(ws.anomalyQueue.value.length).toBe(1)
     expect(ws.kpis.value.pendingAnomalies).toBe(1)
   })
+  it('待處理異常以「一人一天」計（與異常清單的卡片數一致），不是後端的逐項數', async () => {
+    ;(getSummary as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] })
+    ;(getAnomalyList as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        total: 3, pending: 3, confirmed: 0,
+        items: [
+          { id: 1, type: 'late', confirmed_action: null },
+          { id: 1, type: 'early_leave', confirmed_action: null },
+          { id: 2, type: 'missing_punch', confirmed_action: null },
+          { id: 3, type: 'late', confirmed_action: 'admin_waive' },
+        ],
+      },
+    })
+    const ws = useAttendanceWorkspace(ref(2026), ref(2))
+    await ws.refresh()
+    expect(ws.kpis.value.pendingAnomalies).toBe(2)
+  })
   it('queue 含已處理日卡（狀態篩選在列表端生效，不在資料層截斷）', async () => {
     ;(getSummary as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] })
     ;(getAnomalyList as ReturnType<typeof vi.fn>).mockResolvedValue({

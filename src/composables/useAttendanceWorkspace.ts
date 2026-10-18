@@ -153,7 +153,10 @@ export function useAttendanceWorkspace(year: Ref<number>, month: Ref<number>) {
   // 防切月 race：晚到的舊請求不得蓋掉新月資料（epoch 比對，鏡像 useSalarySettlement）
   let epoch = 0
 
-  const kpis = computed<Kpis>(() => buildKpis(summary.value, anomalyMeta.value))
+  // 待處理異常以「一人一天」計，與異常清單（預設只看未處理）的卡片數一致；後端 pending 是逐項數（遲到＋早退算兩項）
+  const kpis = computed<Kpis>(() =>
+    buildKpis(summary.value, { pending: anomalyQueue.value.filter((card) => card.confirmed_action === null).length }),
+  )
 
   async function refresh() {
     const my = ++epoch

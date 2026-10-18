@@ -25,7 +25,9 @@ describe('GridToolbar', () => {
 
   it('篩選切換與問題數', () => {
     const wrapper = mountToolbar({ issueCount: 3 })
-    expect(wrapper.text()).toContain('只看待處理（3）')
+    // 數字寫出範圍：週檢視是本週，與本月進度的「本月 N 格」分得開
+    expect(wrapper.text()).toContain('只看待處理（本週 3）')
+    expect(mountToolbar({ issueCount: 7, view: 'month', canMonth: true }).text()).toContain('只看待處理（本月 7）')
     wrapper.findComponent({ name: 'ElRadioGroup' }).vm.$emit('update:modelValue', 'issues')
     expect(wrapper.emitted('update:filter')).toEqual([['issues']])
   })

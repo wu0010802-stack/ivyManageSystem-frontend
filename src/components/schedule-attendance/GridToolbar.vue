@@ -54,7 +54,7 @@
       @update:model-value="(v: string | number | boolean | undefined) => emit('update:filter', v as GridFilter)"
     >
       <el-radio-button value="all">全部</el-radio-button>
-      <el-radio-button value="issues">只看待處理{{ issueCount ? `（${issueCount}）` : '' }}</el-radio-button>
+      <el-radio-button value="issues">只看待處理{{ issueCount ? `（${isMonth ? '本月' : '本週'} ${issueCount}）` : '' }}</el-radio-button>
       <el-radio-button value="future">只看未來可排</el-radio-button>
     </el-radio-group>
 

@@ -6,14 +6,14 @@
       <el-statistic title="遲到人次" :value="kpis.lateCount" />
       <el-statistic title="缺卡人次" :value="kpis.missingCount" />
       <el-statistic
-        title="待處理異常"
+        title="待處理遲到／早退／缺卡"
         :value="kpis.pendingAnomalies"
         :value-style="kpis.pendingAnomalies > 0 ? { color: 'var(--el-color-danger)' } : undefined"
       />
     </div>
     <p v-else role="status">{{ displayState === 'loading' ? '出勤統計載入中…' : '出勤統計尚未載入成功' }}</p>
     <p v-if="displayState === 'stale'" class="month-stats__scope" role="status">統計為此月份上次成功載入的資料，尚未更新。</p>
-    <p class="month-stats__scope">統計來自已匯入的出勤紀錄（遲到、缺卡以次數計，待處理異常以項目計）；0 筆異常不代表打卡資料已齊全。</p>
+    <p class="month-stats__scope">統計來自已匯入的出勤紀錄（遲到、缺卡以次數計，待處理以一人一天一筆計）；0 筆異常不代表打卡資料已齊全。</p>
   </section>
 </template>
 
