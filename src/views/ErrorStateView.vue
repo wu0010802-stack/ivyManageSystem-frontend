@@ -10,7 +10,8 @@
  * `/#/x?type=…&feature=…&from=…` 發到 LINE 群釣魚，故 query **一律不得原樣上畫面**：
  * - 型態只認 route.meta.errorType（三條路由皆有宣告），query.type 不採信；
  * - 功能名稱不讀 query.feature，改由 query.from resolve 出的站內真實路由 meta.title 決定；
- * - 原網址只在 from 對應到非錯誤頁的真實路由時顯示，且只顯示 path（不回顯 query string）。
+ * - 原網址只在 from 對應到非錯誤頁的真實路由、且所有動態 params 皆為純數字／UUID 時顯示，
+ *   且只顯示 path（不回顯 query string）。
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -49,8 +50,23 @@ const feature = computed(() => {
   const title = fromRoute.value?.meta.title
   return typeof title === 'string' ? title : ''
 })
+/**
+ * 動態參數（/students/profile/:id 等）會把攻擊者文字原樣帶進 path，
+ * 故只有每個 param 都是純數字或 UUID 時才顯示原網址；否則不顯示（功能名稱仍取固定 title）。
+ */
+const SAFE_PARAM = /^(?:\d{1,20}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
+function paramsAreSafe(params: Record<string, string | string[]>): boolean {
+  return Object.values(params).every((value) =>
+    (Array.isArray(value) ? value : [value]).every(
+      (v) => typeof v === 'string' && SAFE_PARAM.test(v)
+    )
+  )
+}
+
 const fromPath = computed(() => {
-  const path = fromRoute.value?.path ?? ''
+  const resolved = fromRoute.value
+  if (!resolved || !paramsAreSafe(resolved.params)) return ''
+  const path = resolved.path
   return path.length > FROM_PATH_MAX ? `${path.slice(0, FROM_PATH_MAX)}…` : path
 })
 const isBare = computed(() => route.meta.bare === true)

@@ -4,22 +4,35 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const pushMock = vi.fn()
 let routeMock: { query: Record<string, unknown>; meta: Record<string, unknown> }
 
-// 模擬 router.resolve：只認得 /portal/albums 與 /employees，其餘落 404 catch-all
-const KNOWN_ROUTES: Record<string, { name: string; title: string }> = {
-  '/portal/albums': { name: 'portal-albums', title: '班級相簿' },
-  '/employees': { name: 'employees', title: '員工管理' },
-}
-const resolveMock = vi.fn((to: string) => {
-  const path = to.split('?')[0] ?? ''
-  const known = KNOWN_ROUTES[path]
-  if (known) return { name: known.name, path, meta: { title: known.title }, matched: [{}] }
-  return { name: 'not-found', path, meta: { title: '找不到頁面', errorPage: true }, matched: [{}] }
-})
+// router.resolve 用真的 vue-router（createRouter + memory history），含動態參數路由，
+// 才抓得到「from resolve 到 /students/profile/:id 時 params 夾帶攻擊者文字」這類繞法。
+const { realResolve } = vi.hoisted(() => ({ realResolve: { fn: null as null | ((to: string) => unknown) } }))
 
-vi.mock('vue-router', () => ({
-  useRoute: () => routeMock,
-  useRouter: () => ({ push: pushMock, replace: vi.fn(), resolve: resolveMock }),
-}))
+vi.mock('vue-router', async () => {
+  const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
+  const Stub = { render: () => null }
+  const router = actual.createRouter({
+    history: actual.createMemoryHistory(),
+    routes: [
+      { path: '/portal/albums', name: 'portal-albums', component: Stub, meta: { title: '班級相簿' } },
+      { path: '/portal/albums/:id', name: 'portal-album-detail', component: Stub, meta: { title: '相簿內容' } },
+      { path: '/employees', name: 'employees', component: Stub, meta: { title: '員工管理' } },
+      { path: '/students/profile/:id', name: 'student-profile', component: Stub, meta: { title: '學生檔案' } },
+      { path: '/surveys/:id', name: 'survey-detail', component: Stub, meta: { title: '問卷內容' } },
+      {
+        path: '/:pathMatch(.*)*',
+        name: 'not-found',
+        component: Stub,
+        meta: { title: '找不到頁面', errorPage: true, errorType: 'not-found' },
+      },
+    ],
+  })
+  realResolve.fn = (to: string) => router.resolve(to)
+  return {
+    useRoute: () => routeMock,
+    useRouter: () => ({ push: pushMock, replace: vi.fn(), resolve: (to: string) => realResolve.fn!(to) }),
+  }
+})
 vi.mock('@/utils/auth', () => ({
   getUserInfo: vi.fn(),
   clearAuth: vi.fn(async () => {}),
@@ -176,6 +189,34 @@ describe('ErrorStateView', () => {
       const wrapper = mountView()
       expect(wrapper.text()).toContain('原網址：/employees')
       expect(wrapper.text()).not.toContain('@fake-ivy')
+    })
+
+    it('from resolve 到動態參數路由但 params 夾帶任意文字時，不顯示原網址（功能名稱仍取固定 title）', () => {
+      vi.mocked(getUserInfo).mockReturnValue(null)
+      for (const from of [
+        '/students/profile/您的帳號已停用 請加LINE @fake-ivy',
+        '/surveys/%E8%AB%8B%E5%8A%A0LINE%20%40fake-ivy',
+        '/portal/albums/12abc@fake-ivy',
+      ]) {
+        routeMock = { query: { from }, meta: FORBIDDEN_META }
+        const wrapper = mountView()
+        expect(wrapper.text()).not.toContain('原網址')
+        expect(wrapper.text()).not.toContain('@fake-ivy')
+        expect(wrapper.text()).not.toContain('請加')
+        expect(wrapper.text()).not.toContain('帳號已停用')
+      }
+      routeMock = { query: { from: '/students/profile/請加LINE@fake-ivy' }, meta: FORBIDDEN_META }
+      expect(mountView().text()).toContain('你目前沒有「學生檔案」的使用權限。')
+    })
+
+    it('動態參數皆為純數字或 UUID 時才顯示原網址', () => {
+      vi.mocked(getUserInfo).mockReturnValue(ADMIN)
+      routeMock = { query: { from: '/students/profile/42' }, meta: FORBIDDEN_META }
+      expect(mountView().text()).toContain('原網址：/students/profile/42')
+
+      const uuid = '3f2504e0-4f89-11d3-9a0c-0305e82c3301'
+      routeMock = { query: { from: `/surveys/${uuid}` }, meta: FORBIDDEN_META }
+      expect(mountView().text()).toContain(`原網址：/surveys/${uuid}`)
     })
   })
 })
