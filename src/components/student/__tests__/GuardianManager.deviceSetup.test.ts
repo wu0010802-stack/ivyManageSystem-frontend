@@ -157,6 +157,38 @@ describe('GuardianManager — 已綁 LINE 的監護人不可簽發設定碼（�
   })
 })
 
+describe('GuardianManager — 載入時依 GuardianOut.line_bound 預先停用設定碼', () => {
+  it('line_bound=true → 載入後即停用，按下也不呼叫 API（不必先吃一次 409）', async () => {
+    mockListGuardians.mockReset().mockResolvedValue({
+      data: { items: [{ ...GUARDIAN_ROW, line_bound: true }] },
+    })
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as {
+      handleIssueDeviceSetupCode: (row: Record<string, unknown>) => Promise<void>
+      isDeviceSetupBlocked: (row: Record<string, unknown>) => boolean
+      guardians: Record<string, unknown>[]
+    }
+    const row = vm.guardians[0]
+    expect(vm.isDeviceSetupBlocked(row)).toBe(true)
+    await vm.handleIssueDeviceSetupCode(row)
+    expect(mockConfirm).not.toHaveBeenCalled()
+    expect(mockCreateGuardianDeviceSetupCode).not.toHaveBeenCalled()
+    expect(String(mockMessageWarning.mock.calls[0][0])).toContain('LINE')
+  })
+
+  it('line_bound=false → 不停用', async () => {
+    mockListGuardians.mockReset().mockResolvedValue({
+      data: { items: [{ ...GUARDIAN_ROW, line_bound: false }] },
+    })
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as {
+      isDeviceSetupBlocked: (row: Record<string, unknown>) => boolean
+      guardians: Record<string, unknown>[]
+    }
+    expect(vm.isDeviceSetupBlocked(vm.guardians[0])).toBe(false)
+  })
+})
+
 describe('GuardianManager — 設定碼彌窗附家長端網址', () => {
   it('網址以目前後台網域推導（多租戶下自動對應該分校）', async () => {
     const wrapper = await mountManager()

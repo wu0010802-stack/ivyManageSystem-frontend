@@ -215,6 +215,7 @@ interface Guardian {
   can_pickup: boolean
   custody_note?: string | null
   sort_order: number
+  line_bound?: boolean
   [key: string]: unknown
 }
 const guardians = ref<Guardian[]>([])
@@ -382,12 +383,13 @@ const deviceSetupCode = ref('')
 const deviceSetupCodeExpiresAt = ref('')
 
 // 已綁 LINE 家長帳號的監護人：後端拒發裝置設定碼（409，F01——碼會落到既有
-// LINE 帳號上，等於職員能無聲取得家長 session）。GuardianOut 目前沒有可判斷
-// LINE 綁定的欄位，只能在收到這種 409 後記下該監護人、停用其按鈕；切換學生
-// 或重新開啟本元件即重置（狀態以後端為準）。
+// LINE 帳號上，等於職員能無聲取得家長 session）。主要依 GuardianOut.line_bound
+// （後端與 409 共用同一判定 helper）在載入時就停用按鈕；lineBoundGuardianIds
+// 為後備——列表載入後才被綁定、收到 409 時記下該監護人。切換學生即重置。
 const lineBoundGuardianIds = ref<Set<number>>(new Set())
 const LINE_BOUND_FALLBACK = '此監護人已綁定 LINE 家長帳號，請家長以 LINE 登入，不可改發裝置設定碼'
 function isDeviceSetupBlocked(row: Record<string, unknown>): boolean {
+  if (row.line_bound === true) return true
   return typeof row.id === 'number' && lineBoundGuardianIds.value.has(row.id)
 }
 function isLineBoundConflict(err: unknown): boolean {
