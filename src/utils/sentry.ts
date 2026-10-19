@@ -16,7 +16,7 @@
 import type { App } from 'vue'
 // @sentry/vue 是 runtime dynamic import；型別僅在 dev/build 時靜態引用，不增加 bundle。
 // 用直接依賴 @sentry/vue（而非 transitive @sentry/core）確保 lockfile prune 不會斷掉型別。
-import type { ErrorEvent as SentryErrorEvent, Breadcrumb } from '@sentry/vue'
+import type { ErrorEvent as SentryErrorEvent, TransactionEvent as SentryTransactionEvent, Breadcrumb } from '@sentry/vue'
 
 // PII 欄位 denylist（與後端 utils/sentry_init.py 保持一致）
 const PII_KEY_SUBSTRINGS = [
@@ -107,7 +107,11 @@ const PII_KEY_SUBSTRINGS = [
 // `/parent/bus/today` 與 WS payload 的家庭座標鍵名是這兩個（BusChildOut），
 // 裸字 lat/lng 只涵蓋司機端鍵名——同一類資料兩種鍵名，缺一即漏。同樣走整字
 // 相等：substring 'lat' 的誤傷問題不因加了前綴而消失。
-const PII_KEY_EXACT = ['student', 'child', 'parent', 'lat', 'lng', 'stop_lat', 'stop_lng']
+// kiosk 打卡 PIN（2026-10-18，與 BE _PII_KEY_EXACT 同步）：kiosk 打卡與教師端設定
+// PIN 的 request body 鍵名都是裸字 `pin`（4–6 位數字＋employee_id＝完整打卡憑證）；
+// punch_pin_hash 短數字 hash 可離線窮舉。走整字相等——substring 'pin' 會誤傷
+// is_pinned / shipping / mapping / last_ping_at。
+const PII_KEY_EXACT = ['student', 'child', 'parent', 'lat', 'lng', 'stop_lat', 'stop_lng', 'pin', 'punch_pin_hash']
 
 const FILTERED = '[Filtered]'
 const URL_LIKE_CONTEXT_KEYS = new Set(['url', 'path', 'from'])
@@ -382,6 +386,57 @@ export function scrubEvent(event: unknown) {
   return ev
 }
 
+// span.data 的 URL／query 欄位（與後端 _SPAN_URL_DATA_KEYS／_SPAN_QUERY_DATA_KEYS 對齊）。
+const SPAN_URL_DATA_KEYS = new Set(['url', 'http.url', 'url.full'])
+const SPAN_QUERY_DATA_KEYS = new Set(['http.query', 'url.query', 'http.fragment', 'url.fragment'])
+
+function scrubSpanData(data: unknown): unknown {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return scrubMapping(data)
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+    if (typeof v === 'string' && SPAN_URL_DATA_KEYS.has(k)) {
+      out[k] = redactPiiValue(sanitizeUrl(v))
+    } else if (typeof v === 'string' && SPAN_QUERY_DATA_KEYS.has(k)) {
+      const lead = v.startsWith('?') || v.startsWith('#') ? v[0] : ''
+      out[k] = lead + String(redactPiiValue(scrubQueryString(v.slice(lead.length))))
+    } else {
+      out[k] = keyIsPii(k) ? FILTERED : scrubMapping(v)
+    }
+  }
+  return out
+}
+
+/**
+ * beforeSendTransaction hook（對齊後端 `_scrub_transaction`，F14 2026-10-18）。
+ *
+ * Sentry 的 `beforeSend` 不跑 transaction 事件；tracesSampleRate > 0 時取樣到的
+ * pageload／navigation／http.client 交易會把 URL query、span description（含完整
+ * 請求 URL）原樣送出。效能分析不需要 request body，直接丟棄；其餘走與 error
+ * event 相同的 scrubEvent，再遮 spans 的 data／description。
+ */
+export function scrubTransaction(event: unknown) {
+  if (!event || typeof event !== 'object') return event
+  const ev = event as Record<string, unknown>
+  const req = ev['request']
+  if (req && typeof req === 'object') delete (req as Record<string, unknown>)['data']
+  const scrubbed = scrubEvent(ev)
+  if (!scrubbed || typeof scrubbed !== 'object') return scrubbed
+  const spans = (scrubbed as Record<string, unknown>)['spans']
+  if (Array.isArray(spans)) {
+    for (const span of spans) {
+      if (!span || typeof span !== 'object') continue
+      const sp = span as Record<string, unknown>
+      if ('data' in sp) sp['data'] = scrubSpanData(sp['data'])
+      if (typeof sp['description'] === 'string') {
+        // 前端 span description 多為「METHOD URL」或資源 URL，沒有後端 SQL `?`
+        // placeholder 的顧慮，先跑 sanitizeUrl 遮 query／path id 再做 value-level 遮罩。
+        sp['description'] = redactPiiKvInText(redactPiiValue(sanitizeUrl(sp['description'])))
+      }
+    }
+  }
+  return scrubbed
+}
+
 export function scrubBreadcrumb(crumb: unknown) {
   if (!crumb || typeof crumb !== 'object') return crumb
   const c = crumb as Record<string, unknown>
@@ -442,6 +497,9 @@ export async function initSentry(
     // Vue errorHandler 由 @sentry/vue 整合自動掛上；同時抓 promise rejection
     // 與 window.onerror
     beforeSend: (event) => scrubEvent(event) as SentryErrorEvent | null,
+    // tracing 開著（tracesSampleRate 預設 0.1）時 transaction 事件不走 beforeSend，
+    // 必須另掛同一套遮罩，否則 URL query／span description 原樣上傳。
+    beforeSendTransaction: (event) => scrubTransaction(event) as SentryTransactionEvent | null,
     beforeBreadcrumb: (crumb) => scrubBreadcrumb(crumb) as Breadcrumb | null,
     denyUrls: [
       /^chrome-extension:\/\//,

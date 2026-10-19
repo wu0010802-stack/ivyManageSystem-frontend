@@ -6,6 +6,7 @@ import {
   scrubEvent,
   scrubBreadcrumb,
   scrubQueryString,
+  scrubTransaction,
   hashUserId,
   redactPiiValue,
   redactPiiKvInText,
@@ -739,6 +740,16 @@ describe('initSentry', () => {
     expect(args.sendDefaultPii).toBe(false)
     expect(typeof args.beforeSend).toBe('function')
     expect(typeof args.beforeBreadcrumb).toBe('function')
+    // F14 前端對應：tracing 開著時 transaction 事件不走 beforeSend，必須另掛
+    expect(typeof args.beforeSendTransaction).toBe('function')
+    const tx = args.beforeSendTransaction({
+      type: 'transaction',
+      transaction: '/students/12?phone=0912345678',
+      request: { url: '/api/students/12?phone=0912345678', data: { pin: '1234' } },
+    })
+    expect(tx.request.data).toBeUndefined()
+    expect(tx.request.url).not.toContain('0912345678')
+    expect(tx.transaction).not.toContain('0912345678')
     // beforeSend 確實是我們的 scrubber
     const scrubbed = args.beforeSend({
       request: { url: '/api/x/1', data: { password: 'x' } },
@@ -956,5 +967,79 @@ describe('歷史損益端點的完整監控隔離', () => {
   ])('不誤傷其他端點 %s', url => {
     expect(scrubEvent({ request: { url } })).not.toBeNull()
     expect(scrubBreadcrumb({ data: { url } })).not.toBeNull()
+  })
+})
+
+
+describe('kiosk PIN 精確比對（與後端 _PII_KEY_EXACT 同步，2026-10-18）', () => {
+  it('裸字 pin 與 punch_pin_hash 遮罩', () => {
+    const out = scrubMapping({ pin: '1234', punch_pin_hash: 'abc', employee_id: 7 })
+    expect(out.pin).toBe('[Filtered]')
+    expect(out.punch_pin_hash).toBe('[Filtered]')
+    expect(out.employee_id).toBe(7)
+  })
+
+  it('整字相等：不誤傷 is_pinned / shipping / mapping / last_ping_at', () => {
+    const out = scrubMapping({ is_pinned: true, shipping: 'x', mapping: 'y', last_ping_at: 'z' })
+    expect(out).toEqual({ is_pinned: true, shipping: 'x', mapping: 'y', last_ping_at: 'z' })
+  })
+
+  it('query string 的 pin= 也遮', () => {
+    expect(sanitizeUrl('/api/attendance/kiosk?pin=1234&employee_id=7')).toBe(
+      '/api/attendance/kiosk?pin=%5BFiltered%5D&employee_id=7',
+    )
+  })
+})
+
+describe('scrubTransaction（beforeSendTransaction，對齊後端 _scrub_transaction F14）', () => {
+  it('丟棄 request.data，其餘走 scrubEvent', () => {
+    const out = scrubTransaction({
+      type: 'transaction',
+      transaction: '/students/42',
+      request: { url: '/api/students/42?phone=0912345678', data: { password: 'p', pin: '1234' }, headers: { 'x-a': '1' } },
+      user: { id: 5 },
+    })
+    expect(out.request.data).toBeUndefined()
+    expect(out.request.url).toBe('/api/students/:id?phone=%5BFiltered%5D')
+    expect(out.transaction).toBe('/students/:id')
+    expect(out.user.id).not.toBe(5)
+  })
+
+  it('遮 spans 的 data（URL／query 欄位）與 description', () => {
+    const out = scrubTransaction({
+      type: 'transaction',
+      spans: [
+        {
+          op: 'http.client',
+          description: 'GET https://x.test/api/guardians/9?phone=0912345678',
+          data: {
+            url: 'https://x.test/api/guardians/9?phone=0912345678',
+            'http.url': 'https://x.test/api/guardians/9?email=a@b.c',
+            'url.full': 'https://x.test/api/a?pin=1234',
+            'http.query': '?id_number=A123456789',
+            'http.method': 'GET',
+            pin: '1234',
+          },
+        },
+        { op: 'ui.click', description: '聯絡電話 0912345678' },
+        'not-a-span',
+      ],
+    })
+    const [http, ui] = out.spans
+    expect(http.description).not.toContain('0912345678')
+    expect(http.description).toContain('/api/guardians/:id')
+    expect(http.data.url).not.toContain('0912345678')
+    expect(http.data['http.url']).not.toContain('a@b.c')
+    expect(http.data['url.full']).not.toContain('1234')
+    expect(http.data['http.query']).not.toContain('A123456789')
+    expect(http.data['http.method']).toBe('GET')
+    expect(http.data.pin).toBe('[Filtered]')
+    expect(ui.description).not.toContain('0912345678')
+    expect(out.spans[2]).toBe('not-a-span')
+  })
+
+  it('歷史損益交易整包丟棄（沿用 scrubEvent）；非物件原樣回傳', () => {
+    expect(scrubTransaction({ type: 'transaction', request: { url: '/api/reports/historical-pnl/preview' } })).toBeNull()
+    expect(scrubTransaction(null)).toBeNull()
   })
 })
