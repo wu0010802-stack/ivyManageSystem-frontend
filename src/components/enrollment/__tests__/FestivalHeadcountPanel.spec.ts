@@ -49,8 +49,11 @@ const STUBS = {
     'el-tag': true,
     'el-empty': true,
     'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
-    'el-form': true,
-    'el-form-item': true,
+    'el-form': { template: '<form><slot /></form>' },
+    'el-alert': { props: ['title'], template: '<div class="alert">{{ title }}<slot /></div>' },
+    'el-checkbox': { template: '<label class="ack"><slot /></label>' },
+    'router-link': { props: ['to'], template: '<a class="rl" :href="to"><slot /></a>' },
+    'el-form-item': { template: '<div><slot /></div>' },
     'el-input': true,
     'el-input-number': true,
     'el-button': { template: '<button><slot /></button>' },
@@ -269,5 +272,134 @@ describe('FestivalHeadcountPanel — 節慶人數結算', () => {
         const wrapper = mountPanel({ mode: 'coverage', year: 2026, month: 5 })
         await flushPromises()
         expect(wrapper.find('.snap-card').exists()).toBe(false)
+    })
+
+    describe('註冊口徑', () => {
+        const incomplete = { complete: false, latest_paid_date: '2026-09-25', unmatched_count: 3 }
+
+        it('代收未齊時顯示提示', async () => {
+            getMock.mockResolvedValue(
+                monthResponse([row({ rule_version: 'fh-v2' })], {
+                    registered_mode: true,
+                    rule_version: 'fh-v2',
+                    collection_coverage: incomplete,
+                }),
+            )
+            const wrapper = mountPanel()
+            await flushPromises()
+            expect(wrapper.text()).toContain('代收明細尚未涵蓋到月底')
+            expect(wrapper.text()).toContain('3 筆未配對')
+        })
+
+        it('有列時顯示列的 rule_version，而非頂層', async () => {
+            getMock.mockResolvedValue(
+                monthResponse([row({ rule_version: 'fh-v1' })], { rule_version: 'fh-v2' }),
+            )
+            const wrapper = mountPanel()
+            await flushPromises()
+            expect(wrapper.text()).toContain('fh-v1')
+        })
+
+        it('產生遇 FEE_RECORDS_MISSING 顯示匯入提示與前往 /fees 連結', async () => {
+            getMock.mockResolvedValue(monthResponse([]))
+            generateMock.mockRejectedValue({
+                response: {
+                    status: 422,
+                    data: { detail: { code: 'FEE_RECORDS_MISSING', detail: '本月尚未匯入月費檢核檔' } },
+                },
+            })
+            const wrapper = mountPanel()
+            await flushPromises()
+            const vm = wrapper.vm as unknown as { generateAll: () => Promise<void> }
+            await vm.generateAll()
+            await flushPromises()
+            expect(wrapper.text()).toContain('本月尚未匯入月費檢核檔')
+            expect(wrapper.find('a.rl').attributes('href')).toBe('/fees')
+        })
+
+        it('代收未齊時確認對話框出現勾選與原因欄，原因 <10 字不可確認', async () => {
+            getMock.mockResolvedValue(
+                monthResponse([row({ rule_version: 'fh-v2' })], {
+                    registered_mode: true,
+                    collection_coverage: incomplete,
+                }),
+            )
+            const wrapper = mountPanel()
+            await flushPromises()
+            const vm = wrapper.vm as unknown as {
+                confirmActive: () => Promise<void>
+                ackForm: { acknowledged: boolean; reason: string }
+            }
+            await vm.confirmActive()
+            await flushPromises()
+            expect(confirmMock).not.toHaveBeenCalled()
+            expect(wrapper.find('.ack').exists()).toBe(true)
+            const btn = () => wrapper.findAll('button').find((b) => b.text() === '確認並送出')!
+            vm.ackForm.acknowledged = true
+            vm.ackForm.reason = '太短'
+            await flushPromises()
+            expect(btn().attributes('disabled')).toBeDefined()
+            vm.ackForm.reason = '銀行代收檔尚未到齊，先行確認'
+            await flushPromises()
+            expect(btn().attributes('disabled')).toBeUndefined()
+        })
+
+        it('勾選並填原因後送出帶 acknowledge 欄位', async () => {
+            getMock.mockResolvedValue(
+                monthResponse([row()], { registered_mode: true, collection_coverage: incomplete }),
+            )
+            confirmMock.mockResolvedValue({ data: {} })
+            const wrapper = mountPanel()
+            await flushPromises()
+            const vm = wrapper.vm as unknown as {
+                confirmActive: () => Promise<void>
+                submitAck: () => Promise<void>
+                ackForm: { acknowledged: boolean; reason: string }
+            }
+            await vm.confirmActive()
+            vm.ackForm.acknowledged = true
+            vm.ackForm.reason = '銀行代收檔尚未到齊，先行確認'
+            await vm.submitAck()
+            expect(confirmMock).toHaveBeenCalledWith({
+                year: 2026,
+                month: 1,
+                acknowledge_incomplete_collection: true,
+                incomplete_reason: '銀行代收檔尚未到齊，先行確認',
+            })
+        })
+
+        it('代收齊全時直接確認', async () => {
+            getMock.mockResolvedValue(
+                monthResponse([row()], {
+                    registered_mode: true,
+                    collection_coverage: { complete: true, latest_paid_date: '2026-09-30', unmatched_count: 0 },
+                }),
+            )
+            confirmMock.mockResolvedValue({ data: {} })
+            const wrapper = mountPanel()
+            await flushPromises()
+            await (wrapper.vm as unknown as { confirmActive: () => Promise<void> }).confirmActive()
+            expect(confirmMock).toHaveBeenCalledWith({
+                year: 2026,
+                month: 1,
+                acknowledge_incomplete_collection: false,
+            })
+        })
+
+        it('後端回 COLLECTION_INCOMPLETE 時開啟確認對話框', async () => {
+            getMock.mockResolvedValue(monthResponse([row()]))
+            confirmMock.mockRejectedValue({
+                response: {
+                    status: 422,
+                    data: { detail: { code: 'COLLECTION_INCOMPLETE', collection_coverage: incomplete } },
+                },
+            })
+            const wrapper = mountPanel()
+            await flushPromises()
+            await (wrapper.vm as unknown as { confirmActive: () => Promise<void> }).confirmActive()
+            await flushPromises()
+            expect(wrapper.find('.ack').exists()).toBe(true)
+            expect(wrapper.text()).toContain('3 筆未配對')
+        })
     })
 })

@@ -20,6 +20,11 @@ import {
 } from '@/api/salary'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { Schema } from '@/api/_generated/typed'
+import {
+    reasonLabel,
+    collectionCoverageMessage,
+    type CollectionCoverage,
+} from './festivalHeadcountLabels'
 
 // 型別一律由 OpenAPI codegen 衍生，**不手寫**——手寫會讓後端改欄位時前端在
 // 編譯期抓不到漂移（workspace CLAUDE.md「OpenAPI codegen 防漂移」）。
@@ -57,8 +62,25 @@ const coveredLabel = computed(() => months.value.map((m) => `${m[1]}月`).join('
 const activeConfirmed = computed(
     () => currentExists.value && rows.value.every((r) => r.is_confirmed),
 )
+// 有快照列時顯示列自己的規則版本；頂層 rule_version 只代表「重新產生會用的版本」
+const displayRuleVersion = computed(() => rows.value[0]?.rule_version ?? meta.value.rule_version ?? '')
+const coverageMessage = computed(() =>
+    meta.value.registered_mode && meta.value.collection_coverage
+        ? collectionCoverageMessage(meta.value.collection_coverage)
+        : null,
+)
+const feeRecordsMissing = ref(false)
 const longLeaveEnforced = computed(() => meta.value.long_leave_mode === 'enforce')
 const longLeaveThreshold = computed(() => meta.value.long_leave_threshold_days ?? 10)
+
+// 後端錯誤格式：HTTPException(detail={code, detail, ...}) → response.data.detail
+type CodedError = {
+    response?: { data?: { detail?: { code?: string; collection_coverage?: CollectionCoverage } | string } }
+}
+const errorDetail = (e: unknown) => {
+    const d = (e as CodedError)?.response?.data?.detail
+    return typeof d === 'object' && d !== null ? d : null
+}
 
 const modeLabel = (mode: string) =>
     ({ month_end: '月底統計', daily_weighted: '按日加權', manual: '人工調整' })[mode] || mode
@@ -77,6 +99,10 @@ const fetchMonth = async (m: [number, number]) => {
         long_leave_threshold_days: data.long_leave_threshold_days,
         is_post_cutoff: data.is_post_cutoff,
         cutoff_ym: data.cutoff_ym,
+        rule_version: data.rule_version,
+        registered_mode: data.registered_mode,
+        estimated: data.estimated,
+        collection_coverage: data.collection_coverage,
     }
 }
 
@@ -119,6 +145,7 @@ watch(() => [props.year, props.month, props.mode], load)
 
 const generateAll = async () => {
     generating.value = true
+    feeRecordsMissing.value = false
     try {
         for (const m of months.value) {
             await generateEnrollmentSnapshot({ year: m[0], month: m[1] })
@@ -126,21 +153,78 @@ const generateAll = async () => {
         ElMessage.success('節慶人數已產生')
         await refresh()
     } catch (e) {
-        notify(e, 'FestivalHeadcountPanel', '產生節慶人數失敗')
+        if (errorDetail(e)?.code === 'FEE_RECORDS_MISSING') {
+            feeRecordsMissing.value = true
+        } else {
+            notify(e, 'FestivalHeadcountPanel', '產生節慶人數失敗')
+        }
     } finally {
         generating.value = false
     }
 }
 
+const doConfirm = async (
+    m: [number, number],
+    ack: { acknowledge_incomplete_collection: boolean; incomplete_reason?: string } = {
+        acknowledge_incomplete_collection: false,
+    },
+) => {
+    await confirmEnrollmentSnapshot({ year: m[0], month: m[1], ...ack })
+    ElMessage.success(`${m[1]} 月節慶人數已確認`)
+    await fetchMonth(m)
+}
+
+// ── 代收未齊確認（C13）────────────────────────────────────────────────────
+const ackVisible = ref(false)
+const ackSaving = ref(false)
+const ackCoverage = ref<CollectionCoverage | null>(null)
+const ackForm = reactive({ acknowledged: false, reason: '' })
+const ackMessage = computed(() =>
+    ackCoverage.value ? collectionCoverageMessage(ackCoverage.value) : null,
+)
+const ackValid = computed(() => ackForm.acknowledged && ackForm.reason.trim().length >= 10)
+
+const openAck = (coverage: CollectionCoverage | null) => {
+    ackCoverage.value = coverage
+    ackForm.acknowledged = false
+    ackForm.reason = ''
+    ackVisible.value = true
+}
+
 const confirmActive = async () => {
     const m = activeMonth.value
     if (!m) return
+    const cov = meta.value.collection_coverage
+    if (meta.value.registered_mode && cov && !cov.complete) {
+        openAck(cov)
+        return
+    }
     try {
-        await confirmEnrollmentSnapshot({ year: m[0], month: m[1] })
-        ElMessage.success(`${m[1]} 月節慶人數已確認`)
-        await fetchMonth(m)
+        await doConfirm(m)
+    } catch (e) {
+        const d = errorDetail(e)
+        if (d?.code === 'COLLECTION_INCOMPLETE') {
+            openAck(d.collection_coverage ?? null)
+            return
+        }
+        notify(e, 'FestivalHeadcountPanel', '確認失敗')
+    }
+}
+
+const submitAck = async () => {
+    const m = activeMonth.value
+    if (!m || !ackValid.value) return
+    ackSaving.value = true
+    try {
+        await doConfirm(m, {
+            acknowledge_incomplete_collection: true,
+            incomplete_reason: ackForm.reason.trim(),
+        })
+        ackVisible.value = false
     } catch (e) {
         notify(e, 'FestivalHeadcountPanel', '確認失敗')
+    } finally {
+        ackSaving.value = false
     }
 }
 
@@ -219,9 +303,6 @@ const exclusionLoading = ref(false)
 const exclusionRow = ref<SnapshotRow | null>(null)
 const exclusionItems = ref<ExclusionItem[]>([])
 
-const reasonLabel = (code: string) =>
-    ({ long_leave: `請假逾 ${longLeaveThreshold.value} 天`, on_leave: '休學' })[code] || code
-
 const openExclusions = async (row: SnapshotRow) => {
     exclusionRow.value = row
     exclusionItems.value = []
@@ -267,6 +348,29 @@ const openExclusions = async (row: SnapshotRow) => {
         </div>
       </div>
     </template>
+
+    <el-alert
+      v-if="feeRecordsMissing"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="snap-alert"
+      title="本月尚未匯入月費檢核檔"
+    >
+      <router-link to="/fees">前往月費管理匯入</router-link>
+    </el-alert>
+    <el-alert
+      v-if="coverageMessage"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="snap-alert"
+      :title="coverageMessage"
+    />
+    <p v-if="displayRuleVersion" class="snap-note">
+      規則版本 {{ displayRuleVersion }}
+      <el-tag v-if="meta.estimated" type="warning" size="small">估算</el-tag>
+    </p>
 
     <el-tabs v-model="activeKey">
       <el-tab-pane
@@ -363,6 +467,29 @@ const openExclusions = async (row: SnapshotRow) => {
       </template>
     </el-dialog>
 
+    <el-dialog v-if="ackVisible" v-model="ackVisible" title="確認本月節慶人數" width="460px">
+      <el-alert v-if="ackMessage" type="warning" :closable="false" show-icon :title="ackMessage" />
+      <el-form label-width="90px" class="snap-ack-form">
+        <el-form-item label="已知代收未齊">
+          <el-checkbox v-model="ackForm.acknowledged">我知道代收明細未齊，仍要確認</el-checkbox>
+        </el-form-item>
+        <el-form-item label="原因">
+          <el-input
+            v-model="ackForm.reason"
+            type="textarea"
+            :rows="3"
+            placeholder="至少 10 字，例如：銀行代收檔尚未到齊，先行確認"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="ackVisible = false">取消</el-button>
+        <el-button type="success" :loading="ackSaving" :disabled="!ackValid" @click="submitAck">
+          確認並送出
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="reopenVisible" title="重開本月節慶人數" width="420px">
       <el-form label-width="90px">
         <el-form-item label="重開原因">
@@ -389,7 +516,7 @@ const openExclusions = async (row: SnapshotRow) => {
           <template #default="{ row }">{{ row.student_number || `#${row.student_id}` }}</template>
         </el-table-column>
         <el-table-column label="排除原因" min-width="130">
-          <template #default="{ row }">{{ reasonLabel(row.reason_code) }}</template>
+          <template #default="{ row }">{{ reasonLabel(row.reason_code, longLeaveThreshold) }}</template>
         </el-table-column>
         <el-table-column label="請假天數" width="96" align="right">
           <template #default="{ row }">{{ row.leave_days ?? '—' }}</template>
@@ -415,6 +542,10 @@ const openExclusions = async (row: SnapshotRow) => {
   margin: var(--space-3) 0 0;
   color: var(--text-tertiary);
   font-size: var(--text-sm);
+}
+
+.snap-alert {
+  margin-bottom: var(--space-3);
 }
 
 .snap-hint {

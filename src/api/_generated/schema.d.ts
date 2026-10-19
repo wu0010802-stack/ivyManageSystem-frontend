@@ -8546,6 +8546,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/records/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Manual Monthly Fee Record
+         * @description 逐生補建當月月費單（月中入學／檢核檔漏列）；不建立繳費流水或收據。
+         *
+         *     與發單批次共用同生同月互擋：該生該月已有任一 monthly 單 → 409。
+         */
+        post: operations["create_manual_monthly_fee_record_api_fees_records_monthly_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/refunds": {
         parameters: {
             query?: never;
@@ -21797,17 +21819,51 @@ export interface components {
         /**
          * ActivityDashboardTableOut
          * @description GET /dashboard-table 回應（含學期 echo）。
+         *
+         *     分母口徑（spec C10，2026-10-19）：student_count 在註冊口徑下＝該學期基準日
+         *     （上學期 9/15、下學期 3/15）班級**註冊**數（在學且當月月費於基準日前已繳清，
+         *     班級依基準日轉班歷史），達標人次與參與人數只計這批學生；顯示人次
+         *     （courses／total_enrollments）與待審核不受影響。
          */
         ActivityDashboardTableOut: {
             /** Courses */
             courses: components["schemas"]["ActivityDashboardCourseOut"][];
+            /**
+             * Denominator Basis Date
+             * Format: date
+             * @description 分母計數日：註冊口徑為學期基準日（未到則為今天）；舊口徑為今天
+             */
+            denominator_basis_date: string;
+            /**
+             * Denominator Kind
+             * @description 分母口徑：registered＝基準日註冊數；enrolled＝現態在籍數（舊口徑）
+             * @enum {string}
+             */
+            denominator_kind: "registered" | "enrolled";
+            /**
+             * Denominator Provisional
+             * @description True＝今天尚未到學期基準日，分母為今天的註冊數（暫估）
+             */
+            denominator_provisional: boolean;
             /** Grades */
             grades: components["schemas"]["ActivityDashboardGradeRowOut"][];
             grand_total: components["schemas"]["ActivityDashboardGrandTotalOut"];
+            /**
+             * Qoq Denominator Kind
+             * @description 環比（上一學期）分母口徑；前期基準日早於 cutoff 為 enrolled
+             * @enum {string}
+             */
+            qoq_denominator_kind: "registered" | "enrolled";
             /** School Year */
             school_year: number;
             /** Semester */
             semester: number;
+            /**
+             * Yoy Denominator Kind
+             * @description 同比（去年同學期）分母口徑；前期基準日早於 cutoff 為 enrolled
+             * @enum {string}
+             */
+            yoy_denominator_kind: "registered" | "enrolled";
         };
         /**
          * ActivityPosterUploadResultOut
@@ -26746,6 +26802,8 @@ export interface components {
             is_active: boolean;
             /** Name */
             name: string;
+            /** Registered Count */
+            registered_count?: number | null;
             /** School Year */
             school_year: number;
             /** Semester */
@@ -26864,6 +26922,8 @@ export interface components {
             is_active: boolean;
             /** Name */
             name: string;
+            /** Registered Count */
+            registered_count?: number | null;
             /** School Year */
             school_year: number;
             /** Semester */
@@ -26973,6 +27033,8 @@ export interface components {
             female: number;
             /** Male */
             male: number;
+            /** Registered */
+            registered?: number | null;
             /** Total */
             total: number;
         };
@@ -27334,6 +27396,24 @@ export interface components {
             prepayment?: components["schemas"]["CandidatePrepayOptionOut"] | null;
             /** Student Id */
             student_id: number;
+        };
+        /**
+         * CollectionCoverageOut
+         * @description 代收明細涵蓋狀況（C13，只作提示）。
+         */
+        CollectionCoverageOut: {
+            /**
+             * Complete
+             * @default false
+             */
+            complete: boolean;
+            /** Latest Paid Date */
+            latest_paid_date?: string | null;
+            /**
+             * Unmatched Count
+             * @default 0
+             */
+            unmatched_count: number;
         };
         /** CollectionImportOut */
         CollectionImportOut: {
@@ -29125,6 +29205,15 @@ export interface components {
             end_date: string;
             /** Enrollment Actual */
             enrollment_actual: number | null;
+            /** Enrollment Actual Auto */
+            enrollment_actual_auto?: number | null;
+            /**
+             * Enrollment Actual Overridden
+             * @default false
+             */
+            enrollment_actual_overridden: boolean;
+            /** Enrollment Actual Override Reason */
+            enrollment_actual_override_reason?: string | null;
             /** Enrollment Target */
             enrollment_target: number | null;
             /** Id */
@@ -29176,6 +29265,10 @@ export interface components {
             base_score?: number | string | null;
             /** Enrollment Actual */
             enrollment_actual?: number | null;
+            /** Enrollment Actual Overridden */
+            enrollment_actual_overridden?: boolean | null;
+            /** Enrollment Actual Override Reason */
+            enrollment_actual_override_reason?: string | null;
             /** Enrollment Target */
             enrollment_target?: number | null;
             status?: components["schemas"]["CycleStatus"] | null;
@@ -30632,17 +30725,37 @@ export interface components {
         EnrollmentSnapshotGenerateOut: {
             /** Changes */
             changes?: components["schemas"]["EnrollmentSnapshotChangeOut"][];
+            collection_coverage?: components["schemas"]["CollectionCoverageOut"] | null;
             /** Generated */
             generated: number;
             /** Message */
             message: string;
+            /**
+             * Rule Version
+             * @default fh-v1
+             */
+            rule_version: string;
             stale?: components["schemas"]["StaleDependentsOut"] | null;
         };
         /**
          * EnrollmentSnapshotMonthIn
          * @description 指定年月（confirm 用）。
+         *
+         *     註冊口徑月份（fh-v2）代收明細未齊時，須 `acknowledge_incomplete_collection=True`
+         *     並填 `incomplete_reason`（≥10 字）才可確認（C13）。
          */
         EnrollmentSnapshotMonthIn: {
+            /**
+             * Acknowledge Incomplete Collection
+             * @description 已知代收明細未齊仍確認（註冊口徑月份才檢查）
+             * @default false
+             */
+            acknowledge_incomplete_collection: boolean;
+            /**
+             * Incomplete Reason
+             * @description 代收未齊仍確認的原因（勾選時必填，至少 10 個字）
+             */
+            incomplete_reason?: string | null;
             /** Month */
             month: number;
             /** Year */
@@ -30653,10 +30766,16 @@ export interface components {
          * @description 某月節慶人數總覽。
          */
         EnrollmentSnapshotMonthOut: {
+            collection_coverage?: components["schemas"]["CollectionCoverageOut"] | null;
             /** Covered Months */
             covered_months?: number[][];
             /** Cutoff Ym */
             cutoff_ym?: string | null;
+            /**
+             * Estimated
+             * @default false
+             */
+            estimated: boolean;
             /** Exists */
             exists: boolean;
             /**
@@ -30681,8 +30800,18 @@ export interface components {
             long_leave_threshold_days: number;
             /** Month */
             month: number;
+            /**
+             * Registered Mode
+             * @default false
+             */
+            registered_mode: boolean;
             /** Rows */
             rows?: components["schemas"]["EnrollmentSnapshotRowOut"][];
+            /**
+             * Rule Version
+             * @default fh-v1
+             */
+            rule_version: string;
             school_reconciliation?: components["schemas"]["EnrollmentSnapshotReconciliationOut"] | null;
             /** Year */
             year: number;
@@ -30840,6 +30969,8 @@ export interface components {
             female: number;
             /** Male */
             male: number;
+            /** Registered */
+            registered?: number | null;
             /** Total */
             total: number;
         };
@@ -32477,6 +32608,8 @@ export interface components {
             grade_name: string;
             /** Male */
             male: number;
+            /** Registered */
+            registered?: number | null;
             /** Total */
             total: number;
         };
@@ -35075,6 +35208,20 @@ export interface components {
             notes?: string | null;
             /** Student Id */
             student_id: number;
+        };
+        /**
+         * ManualMonthlyFeeRecordRequest
+         * @description 逐生補建當月月費單（月中入學／檢核檔漏列），不代表已收款。
+         */
+        ManualMonthlyFeeRecordRequest: {
+            /** Amount Due */
+            amount_due: number;
+            /** Reason */
+            reason: string;
+            /** Student Id */
+            student_id: number;
+            /** Target Month */
+            target_month: string;
         };
         /** ManualPatchRequest */
         ManualPatchRequest: {
@@ -65939,6 +66086,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeeRecordCollectionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_monthly_fee_record_api_fees_records_monthly_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualMonthlyFeeRecordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeRecordOut"];
                 };
             };
             /** @description Validation Error */
