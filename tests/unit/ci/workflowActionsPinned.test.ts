@@ -1,7 +1,8 @@
 /**
  * F33（2026-10-19）：GitHub Actions 的 `uses:` 必須釘完整 40 字元 commit SHA。
- * 浮動 tag（@v7）可被上游（或竊得維護者權限者）改指向任意 commit，對
- * `pull_request_target`＋`contents: write` 的 dependabot-auto-merge 尤其致命。
+ * 浮動 tag（@v7）可被上游（或竊得維護者權限者）改指向任意 commit。
+ * dependabot-auto-merge.yml（`pull_request_target`＋`contents: write`）已於
+ * sec-round5 刪除，並由下方守衛防止再加回同類高權限觸發。
  * SHA 之後須附 `# vX.Y.Z` 註解，讓人與 Dependabot 看得出版本。
  */
 import { describe, expect, it } from 'vitest'
@@ -12,8 +13,14 @@ const DIR = resolve(process.cwd(), '.github/workflows')
 const files = readdirSync(DIR).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
 
 describe('F33：workflow uses: 一律釘完整 commit SHA', () => {
-  it('至少掃到 ci.yml 與 dependabot-auto-merge.yml', () => {
-    expect(files).toEqual(expect.arrayContaining(['ci.yml', 'dependabot-auto-merge.yml']))
+  it('至少掃到 ci.yml，且 dependabot-auto-merge.yml 已移除', () => {
+    expect(files).toEqual(expect.arrayContaining(['ci.yml']))
+    expect(files).not.toContain('dependabot-auto-merge.yml')
+  })
+
+  it.each(files)('%s 不使用 pull_request_target 觸發（高權限 token＋外部 PR 程式碼的攻擊面）', (file) => {
+    const src = readFileSync(resolve(DIR, file), 'utf-8')
+    expect(src).not.toMatch(/^\s*pull_request_target\s*:/m)
   })
 
   it.each(files)('%s 的每個 uses: 都是 owner/repo@<40 hex> # vX.Y.Z', (file) => {
