@@ -38407,6 +38407,9 @@ export interface components {
          *     `created_by_me`：目前家長是否為建立者（F02，2026-10-19）。只有建立者看得到
          *     明碼、可重發；前端以此決定按鈕，不從 `pickup_code is None` 反推（他人建立
          *     與已過期兩種 null 語意不同）。建立者帳號已刪（NULL）時一律 False。
+         *
+         *     `creator_deleted`：建立者帳號已刪（`created_by_user_id` 為 NULL）。此類授權
+         *     同學生具 can_pickup 的監護人可取消（不可重發／看碼），前端以此顯示取消鈕。
          */
         PickupAuthorizationOut: {
             /** Batch Key */
@@ -38424,6 +38427,8 @@ export interface components {
             created_at: string;
             /** Created By Me */
             created_by_me: boolean;
+            /** Creator Deleted */
+            creator_deleted: boolean;
             /** Effective Status */
             effective_status: string;
             /** Id */

@@ -102,6 +102,15 @@ describe('PickupView 他人建立的授權（F02）', () => {
     expect(w.findAll('[data-testid="auth-not-owner-note"]')).toHaveLength(1)
   })
 
+  it('creator_deleted=true（建立者帳號已刪）→ 只顯示取消，不顯示重發，附孤兒說明', async () => {
+    h.auths.mockResolvedValue({ data: { items: [{ ...auth(1, null, false), creator_deleted: true }] } })
+    const w = await render()
+    expect(btn(w, '重發取件碼')).toBeUndefined()
+    expect(btn(w, '取消授權')).toBeDefined()
+    expect(w.find('[data-testid="auth-not-owner-note"]').exists()).toBe(false)
+    expect(w.find('[data-testid="auth-orphan-note"]').text()).toContain('建立者帳號已刪除')
+  })
+
   it('重發被後端 403 擋下 → toast 顯示後端說明', async () => {
     h.auths.mockResolvedValue({ data: { items: [auth(1, '482913', true)] } })
     h.regenerate.mockRejectedValue({

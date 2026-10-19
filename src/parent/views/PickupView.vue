@@ -47,6 +47,8 @@ interface PickupAuth {
   pickup_code?: string | null
   /** 後端 sec-round5 起必填；舊後端回應沒有此欄位時為 undefined。 */
   created_by_me?: boolean
+  /** 建立者帳號已刪：同學生具接送資格的監護人可取消（不可重發）。 */
+  creator_deleted?: boolean
   [key: string]: unknown
 }
 
@@ -398,6 +400,14 @@ onMounted(async () => {
             <M3Button variant="tonal" class="auth-action" @click="askRegenerate(a)">重發取件碼</M3Button>
             <M3Button variant="outlined" class="auth-action is-danger" @click="askCancel(a)">取消授權</M3Button>
           </div>
+          <template v-else-if="a.creator_deleted === true">
+            <div class="auth-actions">
+              <M3Button variant="outlined" class="auth-action is-danger" @click="askCancel(a)">取消授權</M3Button>
+            </div>
+            <p class="auth-not-owner-note" data-testid="auth-orphan-note">
+              此授權的建立者帳號已刪除，無法重發取件碼；如不再需要請取消授權。
+            </p>
+          </template>
           <p v-else class="auth-not-owner-note" data-testid="auth-not-owner-note">
             此授權由其他監護人建立，取件碼與重發、取消僅限建立者操作；如需協助請聯絡園所。
           </p>
