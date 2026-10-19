@@ -47,7 +47,10 @@ vi.mock('element-plus', () => ({
 
 import GuardianManager from '../GuardianManager.vue'
 
-const GUARDIAN_ROW = { id: 7, name: '陳美玲', relation: '母親', is_primary: true }
+const GUARDIAN_ROW = {
+  id: 7, student_id: 1, name: '陳美玲', relation: '母親',
+  is_primary: true, is_emergency: false, can_pickup: true, line_bound: false,
+}
 
 beforeEach(() => {
   mockListGuardians.mockReset().mockResolvedValue({ data: { items: [GUARDIAN_ROW] } })
