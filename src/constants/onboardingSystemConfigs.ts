@@ -52,8 +52,9 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
   {
     title: 'Kiosk / WiFi IP 白名單',
     hint:
-      '控制哪些來源 IP 可以使用 Kiosk 打卡機、或視為「校內 WiFi」允許登入。' +
-      '⚠ 這兩項若未設定，對應功能會直接全部擋下（fail-closed），新租戶請務必填寫。',
+      '控制哪些來源 IP 可以使用 Kiosk 打卡機、或視為「校內 WiFi」允許教師登入。' +
+      '⚠ 兩項留空的效果相反：Kiosk 留空＝打卡全部擋下（fail-closed），新租戶請務必填寫；' +
+      '校內 WiFi 留空＝教師登入不限來源（全部放行）。',
     fields: [
       {
         key: 'kiosk.allowed_ips',
@@ -65,7 +66,11 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
       {
         key: 'auth.school_wifi_ips',
         label: '校內 WiFi 允許登入 IP',
-        hint: '逗號分隔 IP 或 CIDR，例：127.0.0.1/32,192.168.0.0/16。⚠ 未設定時 kiosk 打卡會全部擋下（fail-closed）',
+        // 後端 api/auth._is_school_wifi：白名單為空＝全部放行（fail-open，刻意與 kiosk 相反），
+        // 只限制 teacher 角色登入；預設租戶留空時會沿用環境變數 SCHOOL_WIFI_IPS。
+        hint:
+          '逗號分隔 IP 或 CIDR，例：127.0.0.1/32,192.168.0.0/16。設定後，教師帳號只能從這些網段登入；' +
+          '留空＝不限制教師登入來源（全部放行；預設租戶會改用系統環境變數的網段）。',
         type: 'text',
         warnJsonArray: true,
       },
@@ -127,6 +132,22 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
     ],
   },
 ]
+
+/**
+ * 寫入需「超級管理員」的 key（內控開關＋安全邊界設定）。
+ *
+ * 與後端 `api/system_config.py::INTERNAL_CONTROL_CONFIG_KEYS`（安全稽核 F22）
+ * 手動同步：這些 key 關掉／放寬＝削弱內控或把守衛打開，只有 SETTINGS_WRITE 的
+ * 行政寫入會被後端 403。前端只用來把欄位改唯讀並提示，授權仍以後端為準。
+ * `gov_subsidy.sod_mode` 目前不在本 tab 顯示，列入是為了日後任何畫面共用同一份清單。
+ */
+export const SUPER_ADMIN_ONLY_CONFIG_KEYS: ReadonlySet<string> = new Set([
+  'gov_subsidy.sod_mode',
+  'consent.enforcement_enabled',
+  'leave.ot_offset_enabled',
+  'kiosk.allowed_ips',
+  'auth.school_wifi_ips',
+])
 
 export const ALL_SYSTEM_CONFIG_FIELDS: SystemConfigFieldDef[] = SYSTEM_CONFIG_SECTIONS.flatMap(
   (section) => section.fields,

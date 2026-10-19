@@ -42,7 +42,14 @@
           <div class="row-actions">
             <el-button size="small" @click="openEditDialog(row)">編輯</el-button>
             <el-button size="small" type="primary" plain @click="handleIssueBindingCode(row)">發碼</el-button>
-            <el-button size="small" type="primary" plain @click="handleIssueDeviceSetupCode(row)">設定碼</el-button>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :disabled="isDeviceSetupBlocked(row)"
+              :title="isDeviceSetupBlocked(row) ? '已綁定 LINE 家長帳號，請家長以 LINE 登入' : undefined"
+              @click="handleIssueDeviceSetupCode(row)"
+            >設定碼</el-button>
             <el-button size="small" type="warning" plain @click="handleRevokeDevices(row)">撤銷裝置</el-button>
             <el-button size="small" type="danger" @click="handleDelete(row)">刪除</el-button>
           </div>
@@ -190,12 +197,17 @@ import {
 } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import type { components } from '@/api/_generated/schema'
 
 const props = defineProps<{ studentId: number }>()
 const emit = defineEmits<{ 'change': [] }>()
 
 const relationOptions = ['父親', '母親', '祖父', '祖母', '外公', '外婆', '監護人', '其他']
 const canWrite = computed(() => hasPermission('GUARDIANS_WRITE'))
+
+// 列表列＝後端 GuardianOut（line_bound 等欄位以 OpenAPI 契約為準，不自宣告）；
+// Guardian 只描述新增／編輯表單的欄位。
+type GuardianOut = components['schemas']['GuardianOut']
 
 interface Guardian {
   id?: number | null
@@ -210,7 +222,7 @@ interface Guardian {
   sort_order: number
   [key: string]: unknown
 }
-const guardians = ref<Guardian[]>([])
+const guardians = ref<GuardianOut[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
@@ -250,7 +262,7 @@ async function fetchGuardians() {
   loading.value = true
   try {
     const { data } = await listGuardians(props.studentId)
-    guardians.value = (data as { items?: Guardian[] }).items || []
+    guardians.value = (data as { items?: GuardianOut[] }).items || []
   } catch (err) {
     ElMessage.error(apiError(err, '讀取監護人失敗'))
   } finally {
@@ -271,7 +283,7 @@ function openCreateDialog() {
   dialogVisible.value = true
 }
 
-function openEditDialog(row: Guardian) {
+function openEditDialog(row: GuardianOut) {
   dialogMode.value = 'edit'
   Object.assign(form, { ...emptyForm(), ...row })
   dialogVisible.value = true
@@ -311,7 +323,7 @@ async function handleSave() {
   }
 }
 
-async function handleDelete(row: Guardian) {
+async function handleDelete(row: GuardianOut) {
   try {
     await ElMessageBox.confirm(
       `確定要刪除監護人「${row.name}」嗎？`,
@@ -336,7 +348,7 @@ const bindingCodeVisible = ref(false)
 const bindingCode = ref('')
 const bindingCodeExpiresAt = ref('')
 
-async function handleIssueBindingCode(row: Record<string, unknown>) {
+async function handleIssueBindingCode(row: GuardianOut) {
   try {
     await ElMessageBox.confirm(
       `確定要為「${row.name}」簽發 LINE 綁定碼嗎？\n明碼僅顯示一次，請務必當下抄寫並當面交給家長。`,
@@ -374,7 +386,28 @@ const deviceSetupCodeVisible = ref(false)
 const deviceSetupCode = ref('')
 const deviceSetupCodeExpiresAt = ref('')
 
-async function handleIssueDeviceSetupCode(row: Record<string, unknown>) {
+// 已綁 LINE 家長帳號的監護人：後端拒發裝置設定碼（409，F01——碼會落到既有
+// LINE 帳號上，等於職員能無聲取得家長 session）。主要依 GuardianOut.line_bound
+// （後端與 409 共用同一判定 helper）在載入時就停用按鈕；lineBoundGuardianIds
+// 為後備——列表載入後才被綁定、收到 409 時記下該監護人。切換學生即重置。
+const lineBoundGuardianIds = ref<Set<number>>(new Set())
+const LINE_BOUND_FALLBACK = '此監護人已綁定 LINE 家長帳號，請家長以 LINE 登入，不可改發裝置設定碼'
+function isDeviceSetupBlocked(row: Pick<GuardianOut, 'id' | 'line_bound'>): boolean {
+  if (row.line_bound === true) return true
+  return lineBoundGuardianIds.value.has(row.id)
+}
+function isLineBoundConflict(err: unknown): boolean {
+  const res = (err as { response?: { status?: number; data?: { detail?: unknown } } })?.response
+  if (res?.status !== 409) return false
+  const detail = res.data?.detail
+  return typeof detail === 'string' && detail.includes('LINE') && detail.includes('綁定')
+}
+
+async function handleIssueDeviceSetupCode(row: GuardianOut) {
+  if (isDeviceSetupBlocked(row)) {
+    ElMessage.warning(LINE_BOUND_FALLBACK)
+    return
+  }
   try {
     await ElMessageBox.confirm(
       `確定要為「${row.name}」簽發裝置設定碼嗎？\n此碼可讓沒有 LINE 或換新手機的家長直接登入（跟 LINE 綁定碼不同，不需要先加 LINE 好友）。明碼僅顯示一次，請務必當下抄寫並當面交給家長。`,
@@ -392,6 +425,16 @@ async function handleIssueDeviceSetupCode(row: Record<string, unknown>) {
       : ''
     deviceSetupCodeVisible.value = true
   } catch (err) {
+    if (isLineBoundConflict(err)) {
+      lineBoundGuardianIds.value = new Set([...lineBoundGuardianIds.value, row.id as number])
+      ElMessage.warning(apiError(err, LINE_BOUND_FALLBACK))
+      return
+    }
+    if ((err as { response?: { status?: number } })?.response?.status === 409) {
+      // 其餘 409（例如未使用碼已達上限）：照後端說明提示，不停用按鈕。
+      ElMessage.warning(apiError(err, '目前無法簽發裝置設定碼'))
+      return
+    }
     ElMessage.error(apiError(err, '簽發失敗'))
   }
 }
@@ -446,7 +489,7 @@ async function copyDeviceSetupMessage() {
 }
 
 // 撤銷此監護人對應家長帳號的所有裝置（危險操作，二次確認）
-async function handleRevokeDevices(row: Record<string, unknown>) {
+async function handleRevokeDevices(row: GuardianOut) {
   try {
     await ElMessageBox.confirm(
       `確定要撤銷「${row.name}」的所有裝置嗎？\n該監護人目前已登入的所有裝置（含 LINE 裝置）都會立即登出，需要重新綁定或用新的設定碼登入。`,
@@ -468,7 +511,13 @@ async function handleRevokeDevices(row: Record<string, unknown>) {
 defineExpose({ refresh: fetchGuardians })
 
 onMounted(fetchGuardians)
-watch(() => props.studentId, fetchGuardians)
+watch(
+  () => props.studentId,
+  () => {
+    lineBoundGuardianIds.value = new Set()
+    fetchGuardians()
+  },
+)
 </script>
 
 <style scoped>

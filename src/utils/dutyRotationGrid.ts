@@ -28,6 +28,17 @@ export const SKIP_REASON_LABELS: Record<string, string> = {
   manual: '行政手動設定過',
   finalized: '該月薪資已封存',
   recorded: '該週已有打卡紀錄',
+  // 稽核 F07：套用者本人的週班表不由自己寫入（後端逐列略過），須由他人套用。
+  self: '本人排班須由他人套用',
+}
+
+/**
+ * 「被擋」類略過列：封存／已有打卡／本人排班。這些列無法在本對話框覆寫，
+ * 只收成彙總計數＋展開明細（Final fix FE-1），不逐筆列進週分組。
+ */
+const COLLAPSED_SKIP_REASONS = new Set(['finalized', 'recorded', 'self'])
+export function isCollapsedSkip(c: Pick<ApplyChange, 'action' | 'skip_reason'>): boolean {
+  return c.action === 'skip' && COLLAPSED_SKIP_REASONS.has(c.skip_reason ?? '')
 }
 export const ACTION_LABELS: Record<string, string> = {
   create: '新增',
@@ -209,12 +220,13 @@ export function thisWeekMonday(now: Date = new Date()): string {
 }
 
 export function summarizeChanges(changes: ApplyChange[]) {
-  const out = { create: 0, update: 0, removed: 0, unchanged: 0, manual: 0, finalized: 0, recorded: 0 }
+  const out = { create: 0, update: 0, removed: 0, unchanged: 0, manual: 0, finalized: 0, recorded: 0, self: 0 }
   for (const c of changes) {
     if (c.action === 'skip') {
       if (c.skip_reason === 'manual') out.manual += 1
       else if (c.skip_reason === 'finalized') out.finalized += 1
       else if (c.skip_reason === 'recorded') out.recorded += 1
+      else if (c.skip_reason === 'self') out.self += 1
     } else if (c.action in out) {
       out[c.action as 'create' | 'update' | 'removed' | 'unchanged'] += 1
     }
@@ -228,15 +240,15 @@ export interface ChangeWeekGroup {
 }
 
 /**
- * 依週分組供套用預覽列出，只含「真正的變動」：unchanged 排除；已封存／已有打卡
- * 略過列另有彙總計數區塊呈現（Final fix FE-1，避免上百筆淹沒真正變動），這裡
+ * 依週分組供套用預覽列出，只含「真正的變動」：unchanged 排除；已封存／已有打卡／
+ * 本人排班略過列另有彙總計數區塊呈現（Final fix FE-1，避免上百筆淹沒真正變動），這裡
  * 不逐筆列出；手動略過列仍逐筆列出（需要保留 checkbox 讓行政勾選覆寫）。
  */
 export function groupChangesByWeek(changes: ApplyChange[]): ChangeWeekGroup[] {
   const map = new Map<string, ApplyChange[]>()
   for (const c of changes) {
     if (c.action === 'unchanged') continue
-    if (c.action === 'skip' && (c.skip_reason === 'finalized' || c.skip_reason === 'recorded')) continue
+    if (isCollapsedSkip(c)) continue
     const list = map.get(c.week_start_date) ?? []
     list.push(c)
     map.set(c.week_start_date, list)

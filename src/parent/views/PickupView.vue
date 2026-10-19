@@ -45,6 +45,10 @@ interface PickupAuth {
   effective_status: string
   batch_key: string | null
   pickup_code?: string | null
+  /** 後端 sec-round5 起必填；舊後端回應沒有此欄位時為 undefined。 */
+  created_by_me?: boolean
+  /** 建立者帳號已刪：同學生具接送資格的監護人可取消（不可重發）。 */
+  creator_deleted?: boolean
   [key: string]: unknown
 }
 
@@ -86,6 +90,14 @@ const historyAuths = computed(() =>
   authorizations.value.filter((a) => a.effective_status !== 'active'),
 )
 const showHistory = ref(false)
+
+// F02（2026-10-19）：重發／取消只限建立者本人。以後端回傳的 created_by_me 判定
+// （他人建立與明碼缺漏兩種 pickup_code=null 語意不同，不可從明碼反推）；只有舊後端
+// 回應沒有該欄位時，才退回「active 且有明碼」判定。非本人建立者隱藏會被 403 的兩顆按鈕。
+function isOwnActiveAuth(a: PickupAuth): boolean {
+  if (typeof a.created_by_me === 'boolean') return a.created_by_me
+  return !!a.pickup_code
+}
 
 const STATUS_LABEL: Record<string, string> = {
   active: '進行中',
@@ -384,10 +396,21 @@ onMounted(async () => {
             </M3Button>
           </div>
           <!-- 兩顆動作拉開放在兩端、各至少 44px 高，避免單手時誤按到「取消授權」 -->
-          <div class="auth-actions">
+          <div v-if="isOwnActiveAuth(a)" class="auth-actions">
             <M3Button variant="tonal" class="auth-action" @click="askRegenerate(a)">重發取件碼</M3Button>
             <M3Button variant="outlined" class="auth-action is-danger" @click="askCancel(a)">取消授權</M3Button>
           </div>
+          <template v-else-if="a.creator_deleted === true">
+            <div class="auth-actions">
+              <M3Button variant="outlined" class="auth-action is-danger" @click="askCancel(a)">取消授權</M3Button>
+            </div>
+            <p class="auth-not-owner-note" data-testid="auth-orphan-note">
+              此授權的建立者帳號已刪除，無法重發取件碼；如不再需要請取消授權。
+            </p>
+          </template>
+          <p v-else class="auth-not-owner-note" data-testid="auth-not-owner-note">
+            此授權由其他監護人建立，取件碼與重發、取消僅限建立者操作；如需協助請聯絡園所。
+          </p>
         </M3Card>
       </section>
 
@@ -623,5 +646,11 @@ onMounted(async () => {
   padding: 8px 0;
   text-align: left;
   cursor: pointer;
+}
+.auth-not-owner-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 </style>

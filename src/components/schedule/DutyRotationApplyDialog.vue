@@ -11,6 +11,7 @@ import {
   SKIP_REASON_LABELS,
   countChangesInGroups,
   groupChangesByWeek,
+  isCollapsedSkip,
   partitionWeekGroups,
   shiftTypeLabel,
   summarizeChanges,
@@ -67,8 +68,16 @@ const partitioned = computed(() => partitionWeekGroups(allGroups.value, todayMon
 const pastGroups = computed(() => partitioned.value.past)
 const upcomingGroups = computed(() => partitioned.value.upcoming)
 const pastCount = computed(() => countChangesInGroups(pastGroups.value))
-const collapsedSkipItems = computed(() =>
-  changes.value.filter((c) => c.action === 'skip' && (c.skip_reason === 'finalized' || c.skip_reason === 'recorded'))
+const collapsedSkipItems = computed(() => changes.value.filter(isCollapsedSkip))
+/** 被擋彙總各段（封存／已有打卡／本人排班），只列出筆數 > 0 的段落，以「、」串接 */
+const collapsedSkipParts = computed(() =>
+  [
+    { n: summary.value.finalized, label: '已封存略過' },
+    { n: summary.value.recorded, label: '已有打卡略過' },
+    { n: summary.value.self, label: '本人排班略過' },
+  ]
+    .filter((p) => p.n > 0)
+    .map((p) => `${p.label} ${p.n} 筆`)
 )
 
 // 每次呼叫給一個遞增序號；只有「目前最新一次」的請求可以寫 changes／
@@ -155,7 +164,14 @@ const confirm = async () => {
       from_week_start: toApiFromWeekStart(previewedForApply),
       overwrite_manual: overwrite,
     })
-    ElMessage.success('已套用到週班表')
+    // 後端對套用者本人的週一律略過（skip_reason='self'），即使該手動列已勾選覆寫；
+    // 只顯示「已套用」會讓行政誤以為本人班表也寫進去了。
+    const selfSkipped = res.data.changes.filter((c) => c.action === 'skip' && c.skip_reason === 'self').length
+    if (selfSkipped > 0) {
+      ElMessage.warning(`已套用到週班表；本人 ${selfSkipped} 筆未寫入，須由他人套用`)
+    } else {
+      ElMessage.success('已套用到週班表')
+    }
     emit('applied', res.data)
     const recorded = res.data.changes.filter((c) => c.action === 'skip' && c.skip_reason === 'recorded')
     if (recorded.length) {
@@ -226,13 +242,11 @@ const confirm = async () => {
           新增 {{ summary.create }}・更新 {{ summary.update }}・移除 {{ summary.removed }}・不變 {{ summary.unchanged }}
         </p>
         <p
-          v-if="summary.finalized || summary.recorded"
+          v-if="collapsedSkipParts.length"
           class="drad-collapsed-skips"
           data-test="collapsed-skips"
         >
-          <template v-if="summary.finalized">已封存略過 {{ summary.finalized }} 筆</template>
-          <template v-if="summary.finalized && summary.recorded">、</template>
-          <template v-if="summary.recorded">已有打卡略過 {{ summary.recorded }} 筆</template>
+          {{ collapsedSkipParts.join('、') }}
           <el-button
             link
             size="small"

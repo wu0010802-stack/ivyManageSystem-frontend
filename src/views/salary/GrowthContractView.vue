@@ -87,6 +87,7 @@
         show-icon
         :closable="false"
         :title="settleResultLabel"
+        :description="settleSelfSkipDescription"
       />
 
       <EmptyState
@@ -424,9 +425,21 @@ const settleResult = ref<GrowthSettleResult | null>(null)
 const settleTargets = computed(() => previewRows.value.filter((r) => r.eligible && r.amount > 0))
 const settleTotalAmount = computed(() => settleTargets.value.reduce((sum, r) => sum + r.amount, 0))
 const settleDisabled = computed(() => settleTargets.value.length === 0)
+// 職權分離（稽核 F08）：結算操作者本人那筆後端會跳過、落在 skipped_self，
+// 須由他人另行結算補發；統計文案一併列出，避免 HR 誤以為已全數發放。
+const settleCountsText = (r: GrowthSettleResult): string => {
+    const selfCount = (r.skipped_self ?? []).length
+    const selfPart = selfCount > 0 ? `、本人須由他人結算 ${selfCount} 位` : ''
+    return `發放 ${r.created.length} 位、跳過（已發過）${r.skipped_already_paid.length} 位${selfPart}，共 ${formatCurrency(r.total_amount)}`
+}
 const settleResultLabel = computed(() => {
     if (!settleResult.value) return ''
-    return `本次結算：發放 ${settleResult.value.created.length} 位、跳過（已發過）${settleResult.value.skipped_already_paid.length} 位，共 ${formatCurrency(settleResult.value.total_amount)}`
+    return `本次結算：${settleCountsText(settleResult.value)}`
+})
+const settleSelfSkipDescription = computed(() => {
+    const selfRows = settleResult.value?.skipped_self ?? []
+    if (selfRows.length === 0) return ''
+    return `未發放給結算者本人：${selfRows.map((r) => r.employee_name).join('、')}，請由其他有權限的人員再次結算即可補發。`
 })
 
 const doSettle = async () => {
@@ -448,9 +461,7 @@ const doSettle = async () => {
         const body: SettleBody = { school_year: schoolYear.value }
         const res = await settleGrowthContract(body)
         settleResult.value = res.data
-        ElMessage.success(
-            `結算完成：發放 ${res.data.created.length} 位、跳過（已發過）${res.data.skipped_already_paid.length} 位，共 ${formatCurrency(res.data.total_amount)}`,
-        )
+        ElMessage.success(`結算完成：${settleCountsText(res.data)}`)
         // fetchPreview 內會一併重抓已發放明細（paid_period 由此帶出）。
         await fetchPreview()
     } catch (e) {

@@ -46,10 +46,10 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm
@@ -76,10 +76,10 @@ jobs:
         shard: [1, 2]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm
@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload blob report（分片 ${{ matrix.shard }}）
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2（原 @v7）
         with:
           name: vitest-blob-${{ matrix.shard }}
           path: .vitest-reports/
@@ -115,10 +115,10 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm
@@ -127,7 +127,7 @@ jobs:
         run: npm ci
 
       - name: Download all blob reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0（原 @v4）
         with:
           pattern: vitest-blob-*
           path: .vitest-reports
@@ -146,10 +146,10 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm
@@ -208,7 +208,7 @@ jobs:
 
     steps:
       - name: Checkout ivy-frontend
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
         with:
           path: ivy-frontend
 
@@ -222,7 +222,7 @@ jobs:
           fi
 
       - name: Checkout ivy-backend (sibling)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
         with:
           repository: ${{ github.repository_owner }}/ivyManageSystem-backend
           path: ivy-backend
@@ -255,7 +255,7 @@ jobs:
           echo "Companion backend ref unavailable; using backend main"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0（原 @v6）
         with:
           python-version: "3.13"
           cache: pip
@@ -274,7 +274,7 @@ jobs:
         run: python scripts/dump_openapi.py
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm

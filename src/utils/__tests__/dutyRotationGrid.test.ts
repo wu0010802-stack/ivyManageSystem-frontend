@@ -16,11 +16,13 @@ import {
   fromRotation,
   generateWeeks,
   groupChangesByWeek,
+  isCollapsedSkip,
   issueSeverityByCell,
   mergeWeeks,
   partitionWeekGroups,
   removeRow,
   removeWeek,
+  SKIP_REASON_LABELS,
   setCell,
   shiftTypeLabel,
   snapshotKey,
@@ -148,7 +150,7 @@ describe('問題標示與差異彙總', () => {
       { ...base, employee_id: 4, week_start_date: '2026-09-21', action: 'skip', skip_reason: 'finalized' },
     ]
     expect(summarizeChanges(changes)).toEqual({
-      create: 1, update: 0, removed: 0, unchanged: 1, manual: 1, finalized: 1, recorded: 0,
+      create: 1, update: 0, removed: 0, unchanged: 1, manual: 1, finalized: 1, recorded: 0, self: 0,
     })
     // Final fix FE-1：groupChangesByWeek 只列「真正的變動」——unchanged 與
     // finalized/recorded 略過列都不逐筆列出（上百筆會淹沒真正變動，另有彙總
@@ -157,6 +159,20 @@ describe('問題標示與差異彙總', () => {
     const groups = groupChangesByWeek(changes)
     expect(groups.map((g) => [g.week, g.items.length])).toEqual([['2026-09-14', 1], ['2026-09-21', 1]])
     expect(groups[1].items[0].skip_reason).toBe('manual')
+  })
+
+  it('self（本人排班）略過列：計入 self、不逐筆列出，並有對應標籤', () => {
+    const base = { employee_name: 'A', from_shift_type_id: null, to_shift_type_id: 6, label: '早車' }
+    const changes: ApplyChange[] = [
+      { ...base, employee_id: 1, week_start_date: '2026-09-14', action: 'create', skip_reason: null },
+      { ...base, employee_id: 5, week_start_date: '2026-09-14', action: 'skip', skip_reason: 'self' },
+    ]
+    expect(summarizeChanges(changes).self).toBe(1)
+    const groups = groupChangesByWeek(changes)
+    expect(groups.map((g) => [g.week, g.items.length])).toEqual([['2026-09-14', 1]])
+    expect(isCollapsedSkip(changes[1])).toBe(true)
+    expect(isCollapsedSkip({ ...changes[1], skip_reason: 'manual' })).toBe(false)
+    expect(SKIP_REASON_LABELS.self).toBe('本人排班須由他人套用')
   })
 
   it('partitionWeekGroups 依本週一拆成本週以前／本週及以後；countChangesInGroups 計總筆數', () => {

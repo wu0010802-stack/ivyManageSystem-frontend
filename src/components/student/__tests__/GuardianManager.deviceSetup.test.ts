@@ -16,13 +16,14 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockListGuardians, mockCreateGuardianDeviceSetupCode, mockRevokeGuardianDevices, mockConfirm, mockMessageSuccess, mockMessageError } = vi.hoisted(() => ({
+const { mockListGuardians, mockCreateGuardianDeviceSetupCode, mockRevokeGuardianDevices, mockConfirm, mockMessageSuccess, mockMessageError, mockMessageWarning } = vi.hoisted(() => ({
   mockListGuardians: vi.fn(),
   mockCreateGuardianDeviceSetupCode: vi.fn(),
   mockRevokeGuardianDevices: vi.fn(),
   mockConfirm: vi.fn(),
   mockMessageSuccess: vi.fn(),
   mockMessageError: vi.fn(),
+  mockMessageWarning: vi.fn(),
 }))
 
 vi.mock('@/api/students', () => ({
@@ -40,13 +41,16 @@ vi.mock('@/utils/auth', () => ({
 }))
 
 vi.mock('element-plus', () => ({
-  ElMessage: { success: mockMessageSuccess, error: mockMessageError, warning: vi.fn() },
+  ElMessage: { success: mockMessageSuccess, error: mockMessageError, warning: mockMessageWarning },
   ElMessageBox: { confirm: mockConfirm },
 }))
 
 import GuardianManager from '../GuardianManager.vue'
 
-const GUARDIAN_ROW = { id: 7, name: '陳美玲', relation: '母親', is_primary: true }
+const GUARDIAN_ROW = {
+  id: 7, student_id: 1, name: '陳美玲', relation: '母親',
+  is_primary: true, is_emergency: false, can_pickup: true, line_bound: false,
+}
 
 beforeEach(() => {
   mockListGuardians.mockReset().mockResolvedValue({ data: { items: [GUARDIAN_ROW] } })
@@ -55,6 +59,7 @@ beforeEach(() => {
   mockConfirm.mockReset()
   mockMessageSuccess.mockReset()
   mockMessageError.mockReset()
+  mockMessageWarning.mockReset()
 })
 
 async function mountManager() {
@@ -109,6 +114,81 @@ describe('GuardianManager — 產生裝置設定碼', () => {
     await vm.handleIssueDeviceSetupCode(GUARDIAN_ROW)
 
     expect(mockMessageError).toHaveBeenCalled()
+  })
+})
+
+describe('GuardianManager — 已綁 LINE 的監護人不可簽發設定碼（後端 409，F01）', () => {
+  const LINE_BOUND_DETAIL = '此監護人已綁定 LINE 家長帳號，請家長以 LINE 登入，不可改發裝置登入碼'
+
+  it('409（已綁 LINE）→ 以明確警示說明改用 LINE 登入，並停用該列的設定碼按鈕', async () => {
+    mockConfirm.mockResolvedValueOnce(undefined)
+    mockCreateGuardianDeviceSetupCode.mockRejectedValueOnce({
+      response: { status: 409, data: { detail: LINE_BOUND_DETAIL } },
+    })
+
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as {
+      handleIssueDeviceSetupCode: (row: typeof GUARDIAN_ROW) => Promise<void>
+      isDeviceSetupBlocked: (row: typeof GUARDIAN_ROW) => boolean
+    }
+    expect(vm.isDeviceSetupBlocked(GUARDIAN_ROW)).toBe(false)
+    await vm.handleIssueDeviceSetupCode(GUARDIAN_ROW)
+
+    expect(mockMessageError).not.toHaveBeenCalled()
+    expect(mockMessageWarning).toHaveBeenCalledTimes(1)
+    const [msg] = mockMessageWarning.mock.calls[0]
+    expect(String(msg)).toContain('LINE')
+    expect(vm.isDeviceSetupBlocked(GUARDIAN_ROW)).toBe(true)
+  })
+
+  it('409（未使用碼已達上限）→ 顯示後端說明，但不停用按鈕（失效後仍可再發）', async () => {
+    mockConfirm.mockResolvedValueOnce(undefined)
+    mockCreateGuardianDeviceSetupCode.mockRejectedValueOnce({
+      response: { status: 409, data: { detail: '此監護人已有 3 個未使用的裝置登入碼，請先讓家長使用既有碼或等失效後再簽發' } },
+    })
+
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as {
+      handleIssueDeviceSetupCode: (row: typeof GUARDIAN_ROW) => Promise<void>
+      isDeviceSetupBlocked: (row: typeof GUARDIAN_ROW) => boolean
+    }
+    await vm.handleIssueDeviceSetupCode(GUARDIAN_ROW)
+
+    expect(mockMessageWarning).toHaveBeenCalledTimes(1)
+    expect(String(mockMessageWarning.mock.calls[0][0])).toContain('未使用的裝置登入碼')
+    expect(vm.isDeviceSetupBlocked(GUARDIAN_ROW)).toBe(false)
+  })
+})
+
+describe('GuardianManager — 載入時依 GuardianOut.line_bound 預先停用設定碼', () => {
+  it('line_bound=true → 載入後即停用，按下也不呼叫 API（不必先吃一次 409）', async () => {
+    mockListGuardians.mockReset().mockResolvedValue({
+      data: { items: [{ ...GUARDIAN_ROW, line_bound: true }] },
+    })
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as {
+      handleIssueDeviceSetupCode: (row: Record<string, unknown>) => Promise<void>
+      isDeviceSetupBlocked: (row: Record<string, unknown>) => boolean
+      guardians: Record<string, unknown>[]
+    }
+    const row = vm.guardians[0]
+    expect(vm.isDeviceSetupBlocked(row)).toBe(true)
+    await vm.handleIssueDeviceSetupCode(row)
+    expect(mockConfirm).not.toHaveBeenCalled()
+    expect(mockCreateGuardianDeviceSetupCode).not.toHaveBeenCalled()
+    expect(String(mockMessageWarning.mock.calls[0][0])).toContain('LINE')
+  })
+
+  it('line_bound=false → 不停用', async () => {
+    mockListGuardians.mockReset().mockResolvedValue({
+      data: { items: [{ ...GUARDIAN_ROW, line_bound: false }] },
+    })
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as {
+      isDeviceSetupBlocked: (row: Record<string, unknown>) => boolean
+      guardians: Record<string, unknown>[]
+    }
+    expect(vm.isDeviceSetupBlocked(vm.guardians[0])).toBe(false)
   })
 })
 
