@@ -54,7 +54,7 @@ describe('統計表待審核欄位定義', () => {
     expect(SFC_SOURCE).toContain('待審核人次')
   })
 
-  it('待審核欄不套達標紅綠著色（達標一律看參與率）', () => {
+  it('待審核欄不套達標紅綠著色（達標只看人次比率欄）', () => {
     const start = SFC_SOURCE.indexOf('prop="total_pending_review"')
     expect(start).toBeGreaterThan(-1) // 欄位不存在時不得靜默通過
     const end = SFC_SOURCE.indexOf('</el-table-column>', start)

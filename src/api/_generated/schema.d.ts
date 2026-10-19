@@ -21638,8 +21638,18 @@ export interface components {
          * ActivityDashboardClassroomRowOut
          * @description dashboard-table 班級列。courses 為 {course_id(str): 報名數}。
          *
-         *     ratio 是**參與率**（不重複參與學生 ÷ 在籍數，≤100%）；enrollment_ratio 是
-         *     **人次比率**（報名人次 ÷ 在籍數，可 >100%）。兩者分子不同，勿互相取代。
+         *     ratio 是**參與率**（不重複參與學生 ÷ 在籍數，≤100%），**僅供顯示、不用於
+         *     判定**；enrollment_ratio 是**人次比率**（報名人次 ÷ 在籍數，可 >100%）。
+         *
+         *     達標（2026-10-19 業主裁定）一律用人次比率口徑：meets_target 以未取整比率
+         *     對 target_percent（該班年級門檻：大 100／中 90／小 80／幼幼 70）比較；
+         *     shortfall_enrollments＝max(0, ceil(target_percent × student_count / 100) −
+         *     達標人次)，在籍 0 時為 0。達標人次＝報名人次中屬於本班現態在籍學生者
+         *     （與分母同源）；未綁定／已離校學生的報名會出現在 total_enrollments，但不進
+         *     達標分子，故兩者可能不同。同一學生同一課程只算 1 人次（courses、
+         *     total_enrollments、達標人次皆同）。
+         *
+         *     班級每學年重組，班級列**不提供**同比／環比（只在年級小計與全園總計）。
          *
          *     pending_review_courses / total_pending_review 是**顯示專用**的待審核人次
          *     （只計 pending_review，不含 pending_review_waitlist），刻意不進 courses /
@@ -21656,14 +21666,20 @@ export interface components {
             };
             /** Enrollment Ratio */
             enrollment_ratio: number;
+            /** Meets Target */
+            meets_target: boolean;
             /** Pending Review Courses */
             pending_review_courses: {
                 [key: string]: number;
             };
             /** Ratio */
             ratio: number;
+            /** Shortfall Enrollments */
+            shortfall_enrollments: number;
             /** Student Count */
             student_count: number;
+            /** Target Percent */
+            target_percent: number;
             /** Teacher Name */
             teacher_name: string;
             /** Total Enrollments */
@@ -21699,6 +21715,12 @@ export interface components {
         /**
          * ActivityDashboardGradeSubtotalOut
          * @description 年級小計（bonus/points 為達標獎勵展示值）。
+         *
+         *     meets_target／bonus／points 依**人次比率**（年級合計達標人次 ÷ 年級在籍）
+         *     判定（2026-10-19 業主裁定）；ratio（參與率）僅供顯示。shortfall_enrollments
+         *     算法同班級列。yoy／qoq_enrollment_ratio＝去年同學期／上一學期（115 上的
+         *     上一學期＝114 下）該年級人次比率：分子用前期報名快照班級歸年級，分母用
+         *     前期基準日（上學期 9/15、下學期 3/15）在籍數；無資料為 null。
          */
         ActivityDashboardGradeSubtotalOut: {
             /** Bonus */
@@ -21709,24 +21731,35 @@ export interface components {
             };
             /** Enrollment Ratio */
             enrollment_ratio: number;
+            /** Meets Target */
+            meets_target: boolean;
             /** Pending Review Courses */
             pending_review_courses: {
                 [key: string]: number;
             };
             /** Points */
             points: number;
+            /** Qoq Enrollment Ratio */
+            qoq_enrollment_ratio: number | null;
             /** Ratio */
             ratio: number;
+            /** Shortfall Enrollments */
+            shortfall_enrollments: number;
             /** Student Count */
             student_count: number;
             /** Total Enrollments */
             total_enrollments: number;
             /** Total Pending Review */
             total_pending_review: number;
+            /** Yoy Enrollment Ratio */
+            yoy_enrollment_ratio: number | null;
         };
         /**
          * ActivityDashboardGrandTotalOut
          * @description dashboard-table 全園總計。
+         *
+         *     yoy／qoq_enrollment_ratio 為去年同學期／上一學期全園 enrollment_ratio，
+         *     前期無資料為 null。全園不做達標判定（門檻依年級而異）。
          */
         ActivityDashboardGrandTotalOut: {
             /** Courses */
@@ -21739,6 +21772,8 @@ export interface components {
             pending_review_courses: {
                 [key: string]: number;
             };
+            /** Qoq Enrollment Ratio */
+            qoq_enrollment_ratio: number | null;
             /** Ratio */
             ratio: number;
             /** Student Count */
@@ -21747,6 +21782,8 @@ export interface components {
             total_enrollments: number;
             /** Total Pending Review */
             total_pending_review: number;
+            /** Yoy Enrollment Ratio */
+            yoy_enrollment_ratio: number | null;
         };
         /**
          * ActivityDashboardTableOut
@@ -21780,7 +21817,10 @@ export interface components {
         };
         /** ActivityRateAggregateOut */
         ActivityRateAggregateOut: {
-            /** Activity Rate */
+            /**
+             * Activity Rate
+             * @description 才藝人次比率（%）＝報名人次 ÷ 該班在籍數，可 >100
+             */
             activity_rate: string;
             /** Classroom Id */
             classroom_id?: number | null;
@@ -21791,7 +21831,10 @@ export interface components {
              * @description 班級年級名
              */
             grade_name?: string | null;
-            /** Registered For Activity */
+            /**
+             * Registered For Activity
+             * @description 該班才藝報名人次（一生報兩門算 2；2026-10-19 起非去重學生數）
+             */
             registered_for_activity: number;
             /** Suggested Score Delta */
             suggested_score_delta: string;
