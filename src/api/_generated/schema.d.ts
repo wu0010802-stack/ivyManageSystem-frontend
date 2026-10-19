@@ -38403,6 +38403,10 @@ export interface components {
         /**
          * PickupAuthorizationOut
          * @description 單筆接送授權（家長端視角）。
+         *
+         *     `created_by_me`：目前家長是否為建立者（F02，2026-10-19）。只有建立者看得到
+         *     明碼、可重發；前端以此決定按鈕，不從 `pickup_code is None` 反推（他人建立
+         *     與已過期兩種 null 語意不同）。建立者帳號已刪（NULL）時一律 False。
          */
         PickupAuthorizationOut: {
             /** Batch Key */
@@ -38418,6 +38422,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Created By Me */
+            created_by_me: boolean;
             /** Effective Status */
             effective_status: string;
             /** Id */
