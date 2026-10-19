@@ -199,7 +199,7 @@ watch(calFilterEmp, () => {
       />
     </el-select>
 
-    <!-- 圖例：六類涵蓋全部 18 種假別（見 utils/leaves.ts LEAVE_CATEGORY_MAP） -->
+    <!-- 圖例：六類涵蓋全部假別（見 utils/leaves.ts LEAVE_CATEGORY_MAP） -->
     <div class="cal-legend">
       <span class="cal-legend-item"><span class="legend-dot legend-dot--per"></span>事假類</span>
       <span class="cal-legend-item"><span class="legend-dot legend-dot--sick"></span>病假類</span>

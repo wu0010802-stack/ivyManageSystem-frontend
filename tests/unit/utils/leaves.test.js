@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LEAVE_TYPES, LEAVE_TYPE_MAP, LEAVE_CATEGORY_MAP, LEAVE_CATEGORY_LABELS, getLeaveCategory } from '@/utils/leaves'
+import { LEAVE_TYPES, LEAVE_TYPE_MAP, LEAVE_CATEGORY_MAP, LEAVE_CATEGORY_LABELS, LEAVE_RULE_HINTS, getLeaveCategory } from '@/utils/leaves'
 
 describe('LEAVE_TYPES', () => {
   it('至少包含 18 種假別（容許未來新增不打破測試）', () => {
@@ -43,8 +43,16 @@ describe('LEAVE_TYPES', () => {
     expect(sick.deduction).toBe('扣半薪')
   })
 
+  it('易假（time_swap）：園所換休，不扣薪、與補休同歸「特休／補休」類、有規則說明', () => {
+    const t = LEAVE_TYPES.find(x => x.value === 'time_swap')
+    expect(t?.label).toBe('易假')
+    expect(t?.deduction).toBe('不扣')
+    expect(LEAVE_CATEGORY_MAP.time_swap).toBe('ann')
+    expect(LEAVE_RULE_HINTS.time_swap).toContain('不扣薪')
+  })
+
   it('不扣薪假別正確標示（特休、產假、公假等）', () => {
-    const noDeductTypes = ['annual', 'maternity', 'paternity', 'official', 'marriage', 'bereavement', 'prenatal', 'compensatory', 'occupational_injury']
+    const noDeductTypes = ['annual', 'maternity', 'paternity', 'official', 'marriage', 'bereavement', 'prenatal', 'compensatory', 'occupational_injury', 'time_swap']
     for (const value of noDeductTypes) {
       const t = LEAVE_TYPES.find(t => t.value === value)
       expect(t.deduction).toBe('不扣')

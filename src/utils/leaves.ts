@@ -25,6 +25,7 @@ export const LEAVE_TYPES = [
   { value: 'occupational_injury', label: '公傷病假',   color: 'success', deduction: '不扣' },
   { value: 'pregnancy_rest', label: '安胎休養假',      color: 'info',    deduction: '扣半薪（依病假）' },
   { value: 'typhoon',        label: '颱風假',          color: 'warning', deduction: '得不給薪' },
+  { value: 'time_swap',      label: '易假',            color: 'success', deduction: '不扣' },
 ]
 
 /** 以 value 為 key 的查詢表（type 欄位對應 Element Plus tag 的 type prop）*/
@@ -51,6 +52,7 @@ export const LEAVE_RULE_HINTS = {
   occupational_injury: '因職災治療休養期間可請公傷病假。',
   pregnancy_rest: '安胎休養需附醫師證明，薪資依病假規定辦理。',
   typhoon: '依勞基法辦理，勞工可不出勤，雇主得不給薪。',
+  time_swap: '晚到或早走、以多留時間抵；不扣薪、不佔額度，以 0.5 小時為單位。',
 }
 
 /**
@@ -82,14 +84,14 @@ export const leaveRequiresAttachment = (startDate: unknown, endDate: unknown) =>
   getRequestedCalendarDays(startDate, endDate) > 2
 
 /**
- * 假別 → 六大類（供行事曆事件底色與圖例用）。18 種假別若各配一色圖例會爆版，
+ * 假別 → 六大類（供行事曆事件底色與圖例用）。十多種假別若各配一色圖例會爆版，
  * 收斂成六類：事假類／病假類／特休補休／公假／產育類／其他。
  * 類別鍵值與 CSS class 對齊（見 LeaveCalendar.vue 的 .cal-event--<key>）。
  */
 export const LEAVE_CATEGORY_MAP: Record<string, string> = {
   personal: 'per', family_care: 'per', typhoon: 'per',
   sick: 'sick', menstrual: 'sick', pregnancy_rest: 'sick', occupational_injury: 'sick',
-  annual: 'ann', compensatory: 'ann',
+  annual: 'ann', compensatory: 'ann', time_swap: 'ann',
   official: 'off',
   maternity: 'mat', paternity: 'mat', prenatal: 'mat', paternity_new: 'mat', miscarriage: 'mat',
   marriage: 'oth', bereavement: 'oth', parental_unpaid: 'oth',
