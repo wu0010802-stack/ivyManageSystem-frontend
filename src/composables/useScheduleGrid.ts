@@ -150,6 +150,13 @@ export function useScheduleGrid(weekStart: Ref<string>) {
     return copied
   }
 
+  /** 批次確認單位依 employee_id|date 去重，後到的（重試時重新載入的版本）覆蓋先到的 */
+  function dedupeUnits(units: SaveOutcome['units']): SaveOutcome['units'] {
+    const byKey = new Map<string, SaveOutcome['units'][number]>()
+    for (const unit of units) byKey.set(unit.items.map((i) => `${i.employee_id}|${i.date}`).join(','), unit)
+    return [...byKey.values()]
+  }
+
   async function run(retried: boolean): Promise<SaveOutcome> {
     const outcome: SaveOutcome = { weeklySaved: 0, dailySaved: 0, units: [], blocked: [], errors: [] }
     if (!grid.value || saving.value) return outcome
@@ -244,8 +251,9 @@ export function useScheduleGrid(weekStart: Ref<string>) {
             return {
               weeklySaved: second.weeklySaved,
               dailySaved: outcome.dailySaved + second.dailySaved,
-              units: [...outcome.units, ...second.units],
-              blocked: [...outcome.blocked, ...second.blocked],
+              // 第一輪沒存完的員工會在重試再拆一次：同一人日／同一人只留重試那份（版本較新）
+              units: dedupeUnits([...outcome.units, ...second.units]),
+              blocked: [...new Map([...outcome.blocked, ...second.blocked].map((b) => [b.employeeId, b])).values()],
               errors: [...outcome.errors, ...second.errors],
             }
           }

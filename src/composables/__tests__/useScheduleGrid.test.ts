@@ -310,3 +310,20 @@ describe('useScheduleGrid 寫入後重抓繞過 apiDedupe（QA P3）', () => {
     expect(api.getAssignments).toHaveBeenLastCalledWith({ week_start: W1 }, { force: true })
   })
 })
+
+describe('useScheduleGrid 409 重試的批次確認去重（QA P3）', () => {
+  it('第一輪拆分已列入的確認單位，重試時同一人日不再重複列', async () => {
+    const { state } = await loaded(recordedWeek())
+    api.saveDaily.mockImplementation(async ({ date }: { date: string }) => {
+      if (date === WEEK[2]) throw Object.assign(new Error('500'), { response: { status: 500 }, displayMessage: '伺服器忙碌' })
+      return { data: {} }
+    })
+    api.saveAssignments.mockRejectedValueOnce({ response: { status: 409 }, displayMessage: '已有出勤紀錄' })
+    api.grid.mockResolvedValue({ data: recordedWeek() })
+    state.setWeekly(1, 2)
+    state.setWeekly(2, 2)
+    const outcome = await state.save()
+    const keys = outcome.units.flatMap((u) => u.items.map((i) => `${i.employee_id}|${i.date}`))
+    expect(keys).toEqual([`2|${WEEK[0]}`])
+  })
+})
