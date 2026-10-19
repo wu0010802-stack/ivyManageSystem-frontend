@@ -52,8 +52,9 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
   {
     title: 'Kiosk / WiFi IP 白名單',
     hint:
-      '控制哪些來源 IP 可以使用 Kiosk 打卡機、或視為「校內 WiFi」允許登入。' +
-      '⚠ 這兩項若未設定，對應功能會直接全部擋下（fail-closed），新租戶請務必填寫。',
+      '控制哪些來源 IP 可以使用 Kiosk 打卡機、或視為「校內 WiFi」允許教師登入。' +
+      '⚠ 兩項留空的效果相反：Kiosk 留空＝打卡全部擋下（fail-closed），新租戶請務必填寫；' +
+      '校內 WiFi 留空＝教師登入不限來源（全部放行）。',
     fields: [
       {
         key: 'kiosk.allowed_ips',
@@ -65,7 +66,11 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
       {
         key: 'auth.school_wifi_ips',
         label: '校內 WiFi 允許登入 IP',
-        hint: '逗號分隔 IP 或 CIDR，例：127.0.0.1/32,192.168.0.0/16。⚠ 未設定時 kiosk 打卡會全部擋下（fail-closed）',
+        // 後端 api/auth._is_school_wifi：白名單為空＝全部放行（fail-open，刻意與 kiosk 相反），
+        // 只限制 teacher 角色登入；預設租戶留空時會沿用環境變數 SCHOOL_WIFI_IPS。
+        hint:
+          '逗號分隔 IP 或 CIDR，例：127.0.0.1/32,192.168.0.0/16。設定後，教師帳號只能從這些網段登入；' +
+          '留空＝不限制教師登入來源（全部放行；預設租戶會改用系統環境變數的網段）。',
         type: 'text',
         warnJsonArray: true,
       },
