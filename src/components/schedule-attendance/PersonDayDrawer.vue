@@ -65,12 +65,13 @@
 
       <section v-if="cell.edit.plan" class="pdd__section" data-test="pdd-edit-day">
         <h3>改這天</h3>
-        <el-select v-model="dayChoice" :aria-label="'改這天的班別'" class="pdd__select" data-test="pdd-day-select">
+        <p v-if="swapLocked" class="pdd__note" data-test="pdd-swap-locked">{{ swapLockedNote }}</p>
+        <el-select v-model="dayChoice" :aria-label="'改這天的班別'" :disabled="swapLocked" class="pdd__select" data-test="pdd-day-select">
           <el-option :value="INHERIT" :label="inheritLabel" />
           <el-option v-for="s in optionsWith(initialDayChoice)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
           <el-option :value="DAY_OFF" label="排休（明確不上班）" />
         </el-select>
-        <el-button :type="resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="savingDay" :disabled="dayChoice === initialDayChoice || loadingDaily || actionsLocked" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
+        <el-button :type="resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="savingDay" :disabled="swapLocked || dayChoice === initialDayChoice || loadingDaily || actionsLocked" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
       </section>
 
       <section v-if="cell.edit.confirm && cell.actual" class="pdd__section" data-test="pdd-confirm">
@@ -395,6 +396,28 @@ const suggestedPair = computed(() => {
 })
 
 // ── 改這天（每日調整）────────────────────────────────────────────
+/**
+ * 換班格（換班單或老師補登換班）不能用「改這天」：改寫會丟掉換班標記（notes），選「不另外調整」只刪本人
+ * 那列、對方仍是對調後的班（QA #21）。要改得先撤銷換班。
+ */
+const swapLocked = computed(() => props.cell?.plan.source === 'swap')
+const swapPartnerName = computed(() => {
+  const cell = props.cell
+  if (!cell || !swapLocked.value) return null
+  const { swap_request_id: requestId, swap_confirmation_item_id: itemId } = cell.plan
+  const partner = props.sameDayCells.find((c) =>
+    c.employee_id !== cell.employee_id
+    && c.plan.source === 'swap'
+    && ((requestId != null && c.plan.swap_request_id === requestId)
+      || (itemId != null && c.plan.swap_confirmation_item_id === itemId)))
+  return partner ? props.employeeNames[partner.employee_id] ?? null : null
+})
+const swapLockedNote = computed(() => {
+  const cell = props.cell
+  if (!cell) return ''
+  const partner = swapPartnerName.value ? `，與 ${swapPartnerName.value} 對調` : ''
+  return `這天的班來自${swapOrigin(cell.plan)}${partner}。直接改只會改到本人、對方仍是對調後的班，需先撤銷換班再調整。`
+})
 const dayChoice = ref<number>(INHERIT)
 const initialDayChoice = ref<number>(INHERIT)
 const dailyRecordId = ref<number | null>(null)
@@ -498,7 +521,7 @@ watch(
     confirmReason.value = ''
     includePair.value = false
     confirmExpanded.value = resolveMode.value !== 'resolve-first'
-    if (cell.edit.plan && current !== INHERIT) {
+    if (cell.edit.plan && current !== INHERIT && plan.source !== 'swap') {
       loadingDaily.value = true
       try {
         const rows = (await getDaily({ start_date: cell.date, end_date: cell.date, employee_id: cell.employee_id })).data
@@ -513,12 +536,19 @@ watch(
   { immediate: true },
 )
 
+/** 送出時的格子：送出途中換到別格，舊格完成時不能改寫新格的表單 */
+const cellKey = (cell: GridCell | null): string => (cell ? `${cell.employee_id}|${cell.date}` : '')
+
 async function applyDay(): Promise<void> {
   const cell = props.cell
-  if (!cell) return
+  if (!cell || swapLocked.value) return
+  const key = cellKey(cell)
+  const choice = dayChoice.value
+  // 帶回原本每日調整的備註：後端 upsert 會把沒帶的 notes 存成 None
+  const notes = cell.plan.daily_notes ?? null
   savingDay.value = true
   try {
-    if (dayChoice.value === INHERIT) {
+    if (choice === INHERIT) {
       let id = dailyRecordId.value
       if (id === null) {
         const rows = (await getDaily({ start_date: cell.date, end_date: cell.date, employee_id: cell.employee_id })).data
@@ -530,15 +560,17 @@ async function applyDay(): Promise<void> {
         return
       }
       await deleteDaily(id)
-    } else if (dayChoice.value === DAY_OFF) {
-      await saveDaily({ employee_id: cell.employee_id, date: cell.date, day_off: true })
+    } else if (choice === DAY_OFF) {
+      await saveDaily({ employee_id: cell.employee_id, date: cell.date, day_off: true, notes })
     } else {
-      await saveDaily({ employee_id: cell.employee_id, date: cell.date, shift_type_id: dayChoice.value, day_off: false })
+      await saveDaily({ employee_id: cell.employee_id, date: cell.date, shift_type_id: choice, day_off: false, notes })
     }
     ElMessage.success('已更新這天的班別')
-    // 抽屜不關（同一格的 watch 不會重跑），套用後的選擇就是新的現值
-    initialDayChoice.value = dayChoice.value
-    if (dayChoice.value === INHERIT) dailyRecordId.value = null
+    // 抽屜不關（同一格的 watch 不會重跑），套用後的選擇就是新的現值；已換到別格就不動新格的表單
+    if (cellKey(props.cell) === key) {
+      initialDayChoice.value = choice
+      if (choice === INHERIT) dailyRecordId.value = null
+    }
     emit('changed')
   } catch (err) {
     if (isRecordedConflict(err)) {
@@ -572,12 +604,15 @@ async function submitConfirm(): Promise<void> {
       version: partner.actual.version,
     })
   }
+  const key = cellKey(cell)
   confirming.value = true
   try {
     await confirmReconciliationShift({ items, reason: confirmReason.value.trim() })
     ElMessage.success('已更新當日班別並重新計算出勤')
-    confirmReason.value = ''
-    includePair.value = false
+    if (cellKey(props.cell) === key) {
+      confirmReason.value = ''
+      includePair.value = false
+    }
     emit('changed')
   } catch (err) {
     if ((err as { response?: { status?: number } })?.response?.status === 409) {

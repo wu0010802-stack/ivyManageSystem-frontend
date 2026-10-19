@@ -161,7 +161,7 @@ describe('PersonDayDrawer', () => {
     await weekly.vm.$nextTick()
     await weekly.find('[data-test="pdd-day-apply"]').trigger('click')
     await flushPromises()
-    expect(api.saveDaily).toHaveBeenCalledWith({ employee_id: 1, date: W1, day_off: true })
+    expect(api.saveDaily).toHaveBeenCalledWith({ employee_id: 1, date: W1, day_off: true, notes: null })
     expect(weekly.emitted('changed')).toHaveLength(1)
 
     const daily = mountDrawer(cell(1, W1, { plan: { source: 'daily', shift_type_id: 2, name: '晚車' } }))
@@ -828,5 +828,76 @@ describe('PersonDayDrawer 審查修正', () => {
     await wrapper.setProps({ cell: cell(1, '2026-09-15', { edit: { confirm: true }, actual: { status: 'possible_shift_change', punch_in: '2026-09-15T08:31:00', punch_out: '2026-09-15T18:02:00' } }) })
     await flushPromises()
     expect((wrapper.get('textarea[data-test="pdd-confirm-reason"]').element as HTMLTextAreaElement).value).toBe('')
+  })
+})
+
+describe('PersonDayDrawer 改這天與換班格（QA #21）', () => {
+  it('非換班格改班：帶回原本每日調整的備註，不讓後端存成 None', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { plan: { source: 'daily', shift_type_id: 2, name: '晚車', daily_notes: '支援大班' } }))
+    await flushPromises()
+    wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', 1)
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-test="pdd-day-apply"]').trigger('click')
+    await flushPromises()
+    expect(api.saveDaily).toHaveBeenCalledWith({ employee_id: 1, date: W1, shift_type_id: 1, day_off: false, notes: '支援大班' })
+  })
+
+  it('換班格：寫出和誰對調、要先撤銷換班，改這天整區停用', async () => {
+    const me = cell(1, W1, { plan: { source: 'swap', shift_type_id: 2, name: '晚車', swap_request_id: 9, daily_notes: '換班 #9' } })
+    const partner = cell(2, W1, { plan: { source: 'swap', shift_type_id: 1, name: '早車', swap_request_id: 9, daily_notes: '換班 #9' } })
+    const wrapper = mountDrawer(me, { sameDayCells: [me, partner] })
+    await flushPromises()
+    const hint = wrapper.get('[data-test="pdd-swap-locked"]')
+    expect(hint.text()).toContain('換班單 #9')
+    expect(hint.text()).toContain('王副導')
+    expect(hint.text()).toContain('需先撤銷換班')
+    expect(wrapper.findAllComponents({ name: 'ElSelect' })[0].props('disabled')).toBe(true)
+    expect(wrapper.get('[data-test="pdd-day-apply"]').attributes('disabled')).toBeDefined()
+    expect(api.getDaily).not.toHaveBeenCalled()
+  })
+
+  it('換班補登格（沒有換班單）也一樣停用', async () => {
+    const me = cell(1, W1, { plan: { source: 'swap', shift_type_id: 2, name: '晚車', swap_request_id: null, swap_confirmation_item_id: 5 } })
+    const wrapper = mountDrawer(me)
+    await flushPromises()
+    expect(wrapper.get('[data-test="pdd-swap-locked"]').text()).toContain('換班補登')
+    expect(wrapper.get('[data-test="pdd-day-apply"]').attributes('disabled')).toBeDefined()
+  })
+})
+
+describe('PersonDayDrawer 送出途中換格（QA P3）', () => {
+  it('改這天送出途中換到別格：舊格完成不改寫新格的選擇', async () => {
+    let resolveSave: (v: unknown) => void = () => {}
+    api.saveDaily.mockReturnValueOnce(new Promise((r) => { resolveSave = r }))
+    const wrapper = mountDrawer(cell(1, W1))
+    await flushPromises()
+    wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', -1)
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-test="pdd-day-apply"]').trigger('click')
+    await wrapper.setProps({ cell: cell(2, W1) })
+    await flushPromises()
+    wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', 2)
+    await wrapper.vm.$nextTick()
+    resolveSave({ data: {} })
+    await flushPromises()
+    // 新格的選擇（晚車）仍是未套用狀態：套用鈕可按
+    expect(wrapper.findAllComponents({ name: 'ElSelect' })[0].props('modelValue')).toBe(2)
+    expect(wrapper.get('[data-test="pdd-day-apply"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('確認當日班別送出途中換格：舊格完成不清掉新格打到一半的原因', async () => {
+    let resolveConfirm: (v: unknown) => void = () => {}
+    api.confirm.mockReturnValueOnce(new Promise((r) => { resolveConfirm = r }))
+    const shift = (id: number) => cell(id, W1, { edit: { confirm: true, plan: false, recorded: true, locked_reason: 'recorded' }, actual: { status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00` } })
+    const wrapper = mountDrawer(shift(1))
+    await flushPromises()
+    await wrapper.get('textarea[data-test="pdd-confirm-reason"]').setValue('對調')
+    await wrapper.get('[data-test="pdd-confirm-submit"]').trigger('click')
+    await wrapper.setProps({ cell: shift(2) })
+    await flushPromises()
+    await wrapper.get('textarea[data-test="pdd-confirm-reason"]').setValue('另一位')
+    resolveConfirm({ data: { message: 'ok', updated_count: 1 } })
+    await flushPromises()
+    expect((wrapper.get('textarea[data-test="pdd-confirm-reason"]').element as HTMLTextAreaElement).value).toBe('另一位')
   })
 })
