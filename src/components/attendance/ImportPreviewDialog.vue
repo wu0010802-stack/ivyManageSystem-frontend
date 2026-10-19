@@ -20,7 +20,7 @@ import { previewImport, previewExcel, previewClockReport, uploadCsv, uploadFile,
 import type { ApiResponse } from '@/api/_generated/typed'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
-import { summarizeCsvImportResult } from '@/utils/attendanceImport'
+import { summarizeCsvImportResult, previewRowNote, protectedOverwritesText, unmatchedNamesText } from '@/utils/attendanceImport'
 import { proposeReview, reviewReasons, matchesReviewFilter, punchOptions } from '@/utils/attendanceBatchReview'
 import type { ReviewEdit, ReviewAction, ReviewFilter } from '@/utils/attendanceBatchReview'
 import { useAttendanceScheduleReview } from '@/composables/useAttendanceScheduleReview'
@@ -194,6 +194,9 @@ function checkLabel(row: PreviewRow): string {
     if (row.block_id && !confirmedBlocks.value.has(row.block_id)) return '推估區塊待確認'
     if (row.source_employee_number && pendingBlockCards.value.has(row.source_employee_number)) return '同員工尚有推估區塊未確認'
   }
+  // 同名、不在任職期間、只補空白側：比 check 標籤更具體，優先顯示
+  const note = previewRowNote(row)
+  if (note) return note
   if (row.check !== 'employee_not_found' || !row.import_format) return CHECK_LABEL[row.check]
   const number = row.source_employee_number
   const saved = settings.value?.employee_mappings?.find(entry => entry.source_employee_number === number)?.employee_id
@@ -451,6 +454,9 @@ async function handleLegacyDirectImport() {
     } else {
       ElMessage.warning(summary.text)
     }
+    // legacy 以姓名對員工：對不到的整列靜默跳過，列出姓名
+    const unmatched = unmatchedNamesText(res.data)
+    if (unmatched) ElMessage.warning({ message: unmatched, duration: 0, showClose: true })
     emit('imported', res.data)
     resetState()
     closeDialog()
@@ -774,6 +780,9 @@ defineExpose({
           將覆蓋 <strong>{{ previewResult.summary.overwrites }}</strong> 筆
         </span>
       </div>
+      <p v-if="protectedOverwritesText(previewResult.summary.protected_overwrites)" class="import-preview-dialog__note" role="status" data-test="import-protected-overwrites">
+        {{ protectedOverwritesText(previewResult.summary.protected_overwrites) }}
+      </p>
 
       <!-- 預覽表格 -->
       <el-table

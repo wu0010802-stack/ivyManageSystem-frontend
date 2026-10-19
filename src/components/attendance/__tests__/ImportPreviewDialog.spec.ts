@@ -1323,3 +1323,39 @@ describe('打卡鐘報表預覽', () => {
     expect(wrapper.text()).toContain('同員工尚有推估區塊未確認')
   })
 })
+
+describe('ImportPreviewDialog 保護既有紀錄與 legacy 未對到姓名（QA #1 #8）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  async function previewWith(summary: Record<string, number>) {
+    mockPreviewImport.mockResolvedValue({ data: { ...previewFixture, summary } })
+    const wrapper = mountDialog()
+    await wrapper.find('.el-input-stub').setValue('raw csv text')
+    await nextTick()
+    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('預覽核對'))!.trigger('click')
+    await flushPromises()
+    return wrapper
+  }
+
+  it('protected_overwrites > 0：摘要提示保留既有補卡／手動／打卡機紀錄', async () => {
+    const wrapper = await previewWith({ importable: 1, problems: 0, overwrites: 2, protected_overwrites: 2 })
+    expect(wrapper.find('[data-test="import-protected-overwrites"]').text()).toContain('2 筆')
+    const none = await previewWith({ importable: 1, problems: 0, overwrites: 1, protected_overwrites: 0 })
+    expect(none.find('[data-test="import-protected-overwrites"]').exists()).toBe(false)
+  })
+
+  it('legacy 直接匯入回 unmatched_names：列出未對到的姓名', async () => {
+    const mockFile = new File(['data'], 'legacy.xls', { type: 'application/vnd.ms-excel' })
+    mockPreviewExcel.mockRejectedValue({ response: { data: { detail: '此檔非新格式考勤表…legacy 月統計格式請走原 Excel 匯入' } } })
+    mockUploadFile.mockResolvedValue({ data: { message: '上傳完成', anomalies: [], anomaly_count: 0, summary: [], unmatched_names: ['王小明', '李小花'] } })
+    const wrapper = mountDialog()
+    await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: mockFile })
+    await nextTick()
+    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('legacy 格式直接匯入'))!.trigger('click')
+    await flushPromises()
+    expect(mockElMessageWarning).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('王小明、李小花'), duration: 0 }))
+  })
+})
