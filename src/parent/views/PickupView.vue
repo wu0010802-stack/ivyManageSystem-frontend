@@ -546,7 +546,7 @@ onMounted(async () => {
 .create-cta-text {
   margin: 0;
   font-size: 0.875rem;
-  color: var(--color-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
 .skeleton-wrap {
@@ -594,7 +594,11 @@ onMounted(async () => {
 }
 .auth-meta {
   font-size: 0.75rem;
-  color: var(--color-text-muted);
+}
+/* 說明文字與 meta 同色；共用同一條宣告，不新增 deprecated token 用量 */
+.auth-meta,
+.auth-not-owner-note {
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .auth-code-row {
   margin-top: 8px;
@@ -605,7 +609,7 @@ onMounted(async () => {
 }
 .auth-code {
   font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .auth-code-value {
   font-weight: 700;
@@ -641,7 +645,7 @@ onMounted(async () => {
 .section-toggle {
   background: transparent;
   border: none;
-  color: var(--color-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   font-size: 0.8125rem;
   padding: 8px 0;
   text-align: left;
@@ -651,6 +655,5 @@ onMounted(async () => {
   margin: 8px 0 0;
   font-size: 0.8125rem;
   line-height: 1.5;
-  color: var(--color-text-muted);
 }
 </style>
