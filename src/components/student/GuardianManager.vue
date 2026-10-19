@@ -42,7 +42,14 @@
           <div class="row-actions">
             <el-button size="small" @click="openEditDialog(row)">編輯</el-button>
             <el-button size="small" type="primary" plain @click="handleIssueBindingCode(row)">發碼</el-button>
-            <el-button size="small" type="primary" plain @click="handleIssueDeviceSetupCode(row)">設定碼</el-button>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :disabled="isDeviceSetupBlocked(row)"
+              :title="isDeviceSetupBlocked(row) ? '已綁定 LINE 家長帳號，請家長以 LINE 登入' : undefined"
+              @click="handleIssueDeviceSetupCode(row)"
+            >設定碼</el-button>
             <el-button size="small" type="warning" plain @click="handleRevokeDevices(row)">撤銷裝置</el-button>
             <el-button size="small" type="danger" @click="handleDelete(row)">刪除</el-button>
           </div>
@@ -374,7 +381,27 @@ const deviceSetupCodeVisible = ref(false)
 const deviceSetupCode = ref('')
 const deviceSetupCodeExpiresAt = ref('')
 
+// 已綁 LINE 家長帳號的監護人：後端拒發裝置設定碼（409，F01——碼會落到既有
+// LINE 帳號上，等於職員能無聲取得家長 session）。GuardianOut 目前沒有可判斷
+// LINE 綁定的欄位，只能在收到這種 409 後記下該監護人、停用其按鈕；切換學生
+// 或重新開啟本元件即重置（狀態以後端為準）。
+const lineBoundGuardianIds = ref<Set<number>>(new Set())
+const LINE_BOUND_FALLBACK = '此監護人已綁定 LINE 家長帳號，請家長以 LINE 登入，不可改發裝置設定碼'
+function isDeviceSetupBlocked(row: Record<string, unknown>): boolean {
+  return typeof row.id === 'number' && lineBoundGuardianIds.value.has(row.id)
+}
+function isLineBoundConflict(err: unknown): boolean {
+  const res = (err as { response?: { status?: number; data?: { detail?: unknown } } })?.response
+  if (res?.status !== 409) return false
+  const detail = res.data?.detail
+  return typeof detail === 'string' && detail.includes('LINE') && detail.includes('綁定')
+}
+
 async function handleIssueDeviceSetupCode(row: Record<string, unknown>) {
+  if (isDeviceSetupBlocked(row)) {
+    ElMessage.warning(LINE_BOUND_FALLBACK)
+    return
+  }
   try {
     await ElMessageBox.confirm(
       `確定要為「${row.name}」簽發裝置設定碼嗎？\n此碼可讓沒有 LINE 或換新手機的家長直接登入（跟 LINE 綁定碼不同，不需要先加 LINE 好友）。明碼僅顯示一次，請務必當下抄寫並當面交給家長。`,
@@ -392,6 +419,16 @@ async function handleIssueDeviceSetupCode(row: Record<string, unknown>) {
       : ''
     deviceSetupCodeVisible.value = true
   } catch (err) {
+    if (isLineBoundConflict(err)) {
+      lineBoundGuardianIds.value = new Set([...lineBoundGuardianIds.value, row.id as number])
+      ElMessage.warning(apiError(err, LINE_BOUND_FALLBACK))
+      return
+    }
+    if ((err as { response?: { status?: number } })?.response?.status === 409) {
+      // 其餘 409（例如未使用碼已達上限）：照後端說明提示，不停用按鈕。
+      ElMessage.warning(apiError(err, '目前無法簽發裝置設定碼'))
+      return
+    }
     ElMessage.error(apiError(err, '簽發失敗'))
   }
 }
@@ -468,7 +505,13 @@ async function handleRevokeDevices(row: Record<string, unknown>) {
 defineExpose({ refresh: fetchGuardians })
 
 onMounted(fetchGuardians)
-watch(() => props.studentId, fetchGuardians)
+watch(
+  () => props.studentId,
+  () => {
+    lineBoundGuardianIds.value = new Set()
+    fetchGuardians()
+  },
+)
 </script>
 
 <style scoped>
