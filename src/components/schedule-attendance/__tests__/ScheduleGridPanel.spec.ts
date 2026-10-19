@@ -257,6 +257,16 @@ describe('ScheduleGridPanel', () => {
     expect(wrapper.find(`[data-test="cell-1-${WEEK[0]}"]`).exists()).toBe(false)
   })
 
+  it('複製上週遇到已停用班別：略過並提示（QA P3）', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    api.getAssignments.mockResolvedValueOnce({ data: [assignment(1, 3), assignment(2, 2)] })
+    wrapper.findAllComponents({ name: 'ElDropdown' })[0].vm.$emit('click')
+    await flushPromises()
+    expect(ui.warning).toHaveBeenCalledWith(expect.stringContaining('1 人的班別已停用'))
+    expect(wrapper.find('[data-test="toolbar-save"]').text()).toBe('儲存排班（1 處變更）')
+  })
+
   it('複製上週只改緩衝；上月整月先試算再確認才寫入', async () => {
     const wrapper = mountPanel()
     await flushPromises()

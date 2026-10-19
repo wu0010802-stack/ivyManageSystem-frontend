@@ -133,21 +133,29 @@ export function useScheduleGrid(weekStart: Ref<string>) {
   /**
    * 把來源週有週排班的人帶進本地緩衝（不寫後端）。只覆蓋來源週有列的人；來源週沒有排班的人
    * 保留本週原值，與舊頁「整份取代」不同（較安全，不會把沒列的人清空）。換週途中則不寫入。
+   * 來源週的班別已停用就不帶入（保留本週原值），回報略過人數讓畫面提示（QA P3）。
    */
-  async function copyFromWeek(sourceWeekStart: string): Promise<number> {
+  async function copyFromWeek(sourceWeekStart: string): Promise<{ copied: number; skippedInactive: number }> {
     const start = weekStart.value
     const rows = (await getAssignments({ week_start: sourceWeekStart })).data
-    if (weekStart.value !== start) return 0
+    if (weekStart.value !== start) return { copied: 0, skippedInactive: 0 }
     const known = new Set((grid.value?.employees ?? []).map((e) => e.employee_id))
+    const active = new Set((grid.value?.shift_types ?? []).filter((s) => s.is_active).map((s) => s.shift_type_id))
     const next = { ...weeklyEdits.value }
     let copied = 0
+    let skippedInactive = 0
     for (const row of rows) {
       if (!known.has(row.employee_id)) continue
-      next[row.employee_id] = row.shift_type_id ?? null
+      const shiftTypeId = row.shift_type_id ?? null
+      if (shiftTypeId !== null && !active.has(shiftTypeId)) {
+        skippedInactive += 1
+        continue
+      }
+      next[row.employee_id] = shiftTypeId
       copied += 1
     }
     weeklyEdits.value = next
-    return copied
+    return { copied, skippedInactive }
   }
 
   /** 批次確認單位依 employee_id|date 去重，後到的（重試時重新載入的版本）覆蓋先到的 */

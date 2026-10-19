@@ -153,7 +153,7 @@ describe('useScheduleGrid', () => {
   it('複製指定週只帶入格子內的員工，且只改本地緩衝', async () => {
     const { state } = await loaded()
     api.getAssignments.mockResolvedValueOnce({ data: [assignment(1, 2), assignment(99, 2)] })
-    const copied = await state.copyFromWeek('2026-09-07')
+    const { copied } = await state.copyFromWeek('2026-09-07')
     expect(copied).toBe(1)
     expect(state.weeklyValue(1)).toBe(2)
     expect(api.saveAssignments).not.toHaveBeenCalled()
@@ -200,7 +200,7 @@ describe('useScheduleGrid', () => {
     weekStart.value = '2026-10-19'
     await flushPromises()
     resolveCopy({ data: [assignment(1, 2)] })
-    const copied = await pending
+    const { copied } = await pending
 
     expect(copied).toBe(0)
     expect(state.pendingCount.value).toBe(0)
@@ -325,5 +325,16 @@ describe('useScheduleGrid 409 重試的批次確認去重（QA P3）', () => {
     const outcome = await state.save()
     const keys = outcome.units.flatMap((u) => u.items.map((i) => `${i.employee_id}|${i.date}`))
     expect(keys).toEqual([`2|${WEEK[0]}`])
+  })
+})
+
+describe('useScheduleGrid 複製週略過已停用班別（QA P3）', () => {
+  it('來源週的班別已停用：不帶入（保留本週原值）並回報略過人數', async () => {
+    const { state } = await loaded()
+    // SHIFTS：3＝舊班別（已停用）
+    api.getAssignments.mockResolvedValueOnce({ data: [assignment(1, 3), assignment(2, 2)] })
+    const result = await state.copyFromWeek('2026-09-07')
+    expect(result).toEqual({ copied: 1, skippedInactive: 1 })
+    expect(state.weeklyEdits.value).toEqual({ 2: 2 })
   })
 })

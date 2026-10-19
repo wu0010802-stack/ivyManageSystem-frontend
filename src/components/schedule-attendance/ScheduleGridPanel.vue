@@ -572,8 +572,10 @@ async function copySpecificWeek(): Promise<void> {
 async function copyFrom(source: string, label: string): Promise<void> {
   busy.value = true
   try {
-    const copied = await state.copyFromWeek(source)
-    if (copied === 0) ElMessage.warning(`${label}沒有可複製的週排班`)
+    const { copied, skippedInactive } = await state.copyFromWeek(source)
+    const skipped = skippedInactive ? `；${skippedInactive} 人的班別已停用，未帶入（保留本週原值）` : ''
+    if (copied === 0) ElMessage.warning(`${label}沒有可複製的週排班${skipped}`)
+    else if (skipped) ElMessage.warning(`已帶入 ${copied} 人的${label}排班${skipped}，確認後按「儲存排班」`)
     else ElMessage.success(`已帶入 ${copied} 人的${label}排班，確認後按「儲存排班」`)
   } catch (err) {
     ElMessage.error(apiError(err, '讀取來源週排班失敗'))
