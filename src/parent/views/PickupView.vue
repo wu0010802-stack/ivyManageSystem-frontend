@@ -649,7 +649,7 @@ onMounted(async () => {
 }
 .auth-not-owner-note {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.5;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
