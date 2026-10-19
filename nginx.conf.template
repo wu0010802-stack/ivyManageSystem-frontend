@@ -99,6 +99,18 @@ server {
     resolver_timeout 5s;
     set $backend_upstream ${BACKEND_URL};
 
+    # ── error_log 的 query 殘餘風險（已評估、刻意不改設定）──────────────────
+    # 上游出錯時（upstream timed out／connect() failed／prematurely closed），nginx
+    # 以 error 等級寫一行固定格式的 error_log，結尾附 `request: "GET /api/...?<query>
+    # HTTP/1.1"`——含完整 query（例：離職包 magic-link 的 ?token=、職員查詢的 PII 參數）。
+    # error_log 沒有 log_format 可套（格式寫死在 nginx 原始碼），也無法逐 location
+    # 改寫 request 欄位；唯一能擋的是把等級拉到 crit 以上，但會一併吞掉 502/504 的
+    # 上游診斷訊息，維運代價高於風險，故不採用。（access log 去 query 由 F16 另案處理。）
+    # 接受的殘餘：只在「上游失敗」的那幾筆請求出現；magic-link token 有效期與使用
+    # 次數皆有上限；Railway 前端 log 僅部署管理者可讀。
+    # 日後要收斂時，優先讓敏感 token 改走 POST body／header（不進 request line），
+    # 而不是調高 error_log 等級。
+
     location /api/ws/ {
         proxy_pass $backend_upstream;
         proxy_http_version 1.1;
