@@ -3986,7 +3986,6 @@ export interface paths {
          * @description 即時打卡：驗 PIN 後寫入伺服器當前時間（first-in/last-out）。body 無時間戳欄位，天然防止 self 反向注入。
          *
          *     body 可帶 expected_action（確認頁顯示的動作），與伺服器判定不符回 409 請重新確認。
-         *     當天第一次打卡若已過應上班時段中點，記為下班（缺上班卡、不判遲到）。
          */
         post: operations["kiosk_punch_api_attendance_kiosk_punch_post"];
         delete?: never;
@@ -31342,6 +31341,8 @@ export interface components {
             anomaly_count: number;
             /** Message */
             message: string;
+            /** Row Errors */
+            row_errors?: string[];
             /** Summary */
             summary: {
                 [key: string]: unknown;
@@ -42104,7 +42105,7 @@ export interface components {
             /** Overwrite Mode */
             overwrite_mode?: ("replace" | "fill_empty") | null;
             /** Problem Reason */
-            problem_reason?: ("ambiguous_name" | "not_employed") | null;
+            problem_reason?: ("ambiguous_name" | "not_employed" | "protected_span_exceeded") | null;
             /** Punch In */
             punch_in?: string | null;
             /** Punch Out */
