@@ -643,13 +643,13 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
     expect(wrapper.find('[data-testid="registered-summary"]').text()).toContain('45')
   })
 
-  it('註冊數為 null（舊口徑／非當期／尚無月費單）時顯示「—」，不當 0', async () => {
+  it('註冊數為 null（舊口徑／非當期／尚無月費單）時表格顯示「—」，狀態列不出現註冊（舊口徑畫面不變）', async () => {
     // 預設 statsResponse 沒有 registered 欄位（舊版回應）
     const wrapper = mountView()
     await flushPromises()
 
     expect(colTexts(wrapper, 'col-registered')).toEqual(['—', '—', '—'])
-    expect(wrapper.find('[data-testid="registered-summary"]').text()).toContain('—')
+    expect(wrapper.find('[data-testid="registered-summary"]').exists()).toBe(false)
   })
 
   it('手機寬度收起註冊欄（塞不進 286px），註冊總數仍在狀態列', async () => {

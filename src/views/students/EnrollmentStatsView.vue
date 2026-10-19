@@ -380,7 +380,11 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
           <div class="status-value">{{ statusSummary.hasData ? statusSummary.total : '—' }}</div>
         </div>
         <!-- 註冊口徑（spec C1/C8）：基準日在學且當月月費已繳清；null＝舊口徑／非當期／尚無月費單 -->
-        <div class="status-group" data-testid="registered-summary">
+        <div
+          v-if="stats?.summary?.registered != null"
+          class="status-group"
+          data-testid="registered-summary"
+        >
           <div class="status-label">註冊</div>
           <div class="status-row-inline">
             <span class="num-total">{{ formatRegistered(stats?.summary?.registered) }}</span>

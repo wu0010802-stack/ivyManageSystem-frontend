@@ -134,19 +134,34 @@ function canSaveEdit(cycle: CycleEntry): boolean {
 }
 
 /**
- * 組 PATCH body。註冊口徑未覆寫時不送 enrollment_actual：值由後端自動帶入，前端
- * 手上的數字可能已過時（OPEN 期間補登收款），送出去會被當成覆寫而 422。
+ * 組 PATCH body。註冊口徑未覆寫時不送 enrollment_actual（前端手上的數字可能已過時，
+ * 送出去會被當成覆寫而 422），改送 `enrollment_actual_overridden: false`：後端先寫
+ * target，再以基準日註冊數重寫 actual 並重算 base_score——只送 target 會跳過
+ * actual 處理，base_score 停在舊值。
  */
 function buildPatchPayload(cycle: CycleEntry, form: EditForm) {
   if (!usesRegisteredBasis(cycle)) {
     return { enrollment_target: form.enrollment_target, enrollment_actual: form.enrollment_actual }
   }
-  if (!form.override) return { enrollment_target: form.enrollment_target }
+  if (!form.override) {
+    return { enrollment_target: form.enrollment_target, enrollment_actual_overridden: false }
+  }
   return {
     enrollment_target: form.enrollment_target,
     enrollment_actual: form.enrollment_actual,
     enrollment_actual_override_reason: form.override_reason.trim(),
   }
+}
+
+/**
+ * 檢視模式的「實際註冊」：註冊口徑未覆寫時顯示即時註冊數（enrollment_actual_auto），
+ * 已覆寫或舊口徑顯示存檔值；auto 為 null 時退回存檔值。
+ */
+function displayedActual(cycle: CycleEntry): number | null {
+  if (!cycle.enrollment_actual_overridden && cycle.enrollment_actual_auto != null) {
+    return cycle.enrollment_actual_auto
+  }
+  return cycle.enrollment_actual ?? null
 }
 
 async function restoreAuto(cycle: CycleEntry) {
@@ -190,12 +205,16 @@ function cancelEdit(semester: SemesterKey) {
 async function saveEdit(cycle: CycleEntry) {
   if (!canEditTarget.value || !canSaveEdit(cycle)) return
   const semester = cycle.semester as SemesterKey
-  const reason = await confirmWithReason({
-    title: '確認更新目標人數',
-    message: '此變更會影響考核基礎分數計算，請確認並填寫原因。',
-    minLength: 10,
-  })
-  if (reason == null) return
+  // 手動覆寫已在表單內填原因（並隨 PATCH 送出），不再跳第二次原因確認
+  const inlineOverride = usesRegisteredBasis(cycle) && editForm.value[semester].override
+  if (!inlineOverride) {
+    const reason = await confirmWithReason({
+      title: '確認更新目標人數',
+      message: '此變更會影響考核基礎分數計算，請確認並填寫原因。',
+      minLength: 10,
+    })
+    if (reason == null) return
+  }
   savingSemester.value[semester] = true
   try {
     await patchAppraisalCycle(cycle.id, buildPatchPayload(cycle, editForm.value[semester]))
@@ -267,7 +286,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
                 {{ firstCycle.enrollment_target ?? '—' }}
               </el-descriptions-item>
               <el-descriptions-item label="實際註冊">
-                {{ firstCycle.enrollment_actual ?? '—' }}
+                <span data-test="actual-value-first">{{ displayedActual(firstCycle) ?? '—' }}</span>
                 <div v-if="usesRegisteredBasis(firstCycle)" class="actual-meta" data-test="actual-meta-first">
                   <template v-if="firstCycle.enrollment_actual_overridden">
                     <el-tag size="small" type="warning">已手動覆寫</el-tag>
@@ -304,7 +323,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
             <TargetCrossRef
               :cycle-target="firstCycle.enrollment_target ?? null"
               :org-setting-target="null"
-              :actual="firstCycle.enrollment_actual ?? null"
+              :actual="displayedActual(firstCycle)"
             />
             <div class="semester-card__actions">
               <el-tooltip content="需要考核核定權限（APPRAISAL_FINALIZE）" :disabled="canEditTarget" placement="top">
@@ -404,7 +423,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
                 {{ secondCycle.enrollment_target ?? '—' }}
               </el-descriptions-item>
               <el-descriptions-item label="實際註冊">
-                {{ secondCycle.enrollment_actual ?? '—' }}
+                <span data-test="actual-value-second">{{ displayedActual(secondCycle) ?? '—' }}</span>
                 <div v-if="usesRegisteredBasis(secondCycle)" class="actual-meta" data-test="actual-meta-second">
                   <template v-if="secondCycle.enrollment_actual_overridden">
                     <el-tag size="small" type="warning">已手動覆寫</el-tag>
@@ -440,7 +459,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
             <TargetCrossRef
               :cycle-target="secondCycle.enrollment_target ?? null"
               :org-setting-target="null"
-              :actual="secondCycle.enrollment_actual ?? null"
+              :actual="displayedActual(secondCycle)"
             />
             <div class="semester-card__actions">
               <el-tooltip content="需要考核核定權限（APPRAISAL_FINALIZE）" :disabled="canEditTarget" placement="top">

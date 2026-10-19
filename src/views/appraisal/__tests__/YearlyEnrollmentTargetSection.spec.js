@@ -465,6 +465,8 @@ describe('YearlyEnrollmentTargetSection', () => {
       await wrapper.find('[data-test="save-first-btn"]').trigger('click')
       await flushPromises()
 
+      // 原因已在表單內填，不再跳第二次 confirmWithReason
+      expect(confirmWithReasonMock).not.toHaveBeenCalled()
       expect(patchAppraisalCycle).toHaveBeenCalledWith(AUTO_CYCLE.id, {
         enrollment_target: 100,
         enrollment_actual: 193,
@@ -472,14 +474,31 @@ describe('YearlyEnrollmentTargetSection', () => {
       })
     })
 
-    it('未覆寫只改目標人數：不送 enrollment_actual（交給後端自動帶入，避免誤觸覆寫 422）', async () => {
+    it('未覆寫只改目標人數：送 overridden=false 讓後端重帶註冊數並重算基礎分數，不送 enrollment_actual', async () => {
       patchAppraisalCycle.mockResolvedValue({ data: AUTO_CYCLE })
       const wrapper = await openEdit(AUTO_CYCLE)
       wrapper.vm.editForm.FIRST.enrollment_target = 120
       await wrapper.find('[data-test="save-first-btn"]').trigger('click')
       await flushPromises()
 
-      expect(patchAppraisalCycle).toHaveBeenCalledWith(AUTO_CYCLE.id, { enrollment_target: 120 })
+      expect(confirmWithReasonMock).toHaveBeenCalledTimes(1)
+      expect(patchAppraisalCycle).toHaveBeenCalledWith(AUTO_CYCLE.id, {
+        enrollment_target: 120,
+        enrollment_actual_overridden: false,
+      })
+    })
+
+    it('未覆寫：檢視模式顯示即時註冊數（auto），不是存檔的舊值', async () => {
+      const stale = { ...AUTO_CYCLE, enrollment_actual: 180, enrollment_actual_auto: 189 }
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [stale, SECOND_CYCLE] })
+      const wrapper = await mountView()
+      expect(wrapper.find('[data-test="actual-value-first"]').text()).toBe('189')
+    })
+
+    it('已覆寫：檢視模式顯示覆寫值（存檔值）', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [OVERRIDDEN_CYCLE, SECOND_CYCLE] })
+      const wrapper = await mountView()
+      expect(wrapper.find('[data-test="actual-value-first"]').text()).toBe('193')
     })
 
     it('已覆寫：顯示「已手動覆寫」、原因與「恢復自動」；恢復自動送 overridden=false', async () => {
