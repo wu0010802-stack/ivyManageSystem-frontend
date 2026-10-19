@@ -23004,7 +23004,7 @@ export interface components {
             /** Recorded Dates */
             recorded_dates?: string[];
             /** Skip Reason */
-            skip_reason?: ("manual" | "finalized" | "recorded") | null;
+            skip_reason?: ("manual" | "finalized" | "recorded" | "self") | null;
             /** To Shift Type Id */
             to_shift_type_id?: number | null;
             /**
@@ -32994,6 +32994,11 @@ export interface components {
             school_year: number;
             /** Skipped Already Paid */
             skipped_already_paid: components["schemas"]["GrowthSettleSkippedOut"][];
+            /**
+             * Skipped Self
+             * @default []
+             */
+            skipped_self: components["schemas"]["GrowthSettleSkippedOut"][];
             /** Total Amount */
             total_amount: number;
         };
