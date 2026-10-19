@@ -43,7 +43,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createManualMonthlyRecord } from '@/api/fees'
 import { getStudents } from '@/api/students'
-import { friendlyError } from '@/utils/errorMessages'
+import { errorDetailObject, friendlyError } from '@/utils/errorMessages'
 import FormDialog from '@/components/common/FormDialog.vue'
 import StudentPickerDialog from './StudentPickerDialog.vue'
 import { validateManualMonthly, type ManualMonthlyForm } from './manualMonthlyRecord'
@@ -128,8 +128,8 @@ async function submit() {
     emit('created')
     emit('update:modelValue', false)
   } catch (error) {
-    const e = error as { response?: { status?: number; data?: { detail?: { code?: string } } } }
-    if (e.response?.status === 409 && e.response.data?.detail?.code === 'MONTHLY_RECORD_EXISTS') {
+    const e = error as { response?: { status?: number } }
+    if (e.response?.status === 409 && errorDetailObject(error)?.code === 'MONTHLY_RECORD_EXISTS') {
       ElMessage.error('此學生該月已有月費單')
     } else {
       ElMessage.error(friendlyError('補建月費單失敗，請稍後重試', error))

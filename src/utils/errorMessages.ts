@@ -87,6 +87,17 @@ function extractSafeDetail(err: unknown): string | null {
 }
 
 /**
+ * 取後端結構化 detail 物件（HTTPException(detail={code, ...})），非物件回 null。
+ * 供元件依 code 分支處理；顯示訊息仍走 friendlyError。
+ */
+export function errorDetailObject<T extends Record<string, unknown> = Record<string, unknown>>(
+  err: unknown,
+): (T & { code?: string }) | null {
+  const d = (err as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail
+  return d && typeof d === 'object' && !Array.isArray(d) ? (d as T & { code?: string }) : null
+}
+
+/**
  * 產生「動作失敗：原因。下一步」格式的使用者友善訊息。
  *
  * @param action 完整動作片語（含「失敗」），如「載入請假清單失敗」「儲存加班單失敗」

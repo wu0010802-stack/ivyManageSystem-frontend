@@ -19,6 +19,8 @@ import {
     getEnrollmentSnapshotExclusions,
 } from '@/api/salary'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import { errorDetailObject } from '@/utils/errorMessages'
+import FormDialog from '@/components/common/FormDialog.vue'
 import type { Schema } from '@/api/_generated/typed'
 import {
     reasonLabel,
@@ -73,14 +75,8 @@ const feeRecordsMissing = ref(false)
 const longLeaveEnforced = computed(() => meta.value.long_leave_mode === 'enforce')
 const longLeaveThreshold = computed(() => meta.value.long_leave_threshold_days ?? 10)
 
-// 後端錯誤格式：HTTPException(detail={code, detail, ...}) → response.data.detail
-type CodedError = {
-    response?: { data?: { detail?: { code?: string; collection_coverage?: CollectionCoverage } | string } }
-}
-const errorDetail = (e: unknown) => {
-    const d = (e as CodedError)?.response?.data?.detail
-    return typeof d === 'object' && d !== null ? d : null
-}
+// 後端錯誤格式：HTTPException(detail={code, detail, ...})
+const errorDetail = (e: unknown) => errorDetailObject<{ collection_coverage?: CollectionCoverage }>(e)
 
 const modeLabel = (mode: string) =>
     ({ month_end: '月底統計', daily_weighted: '按日加權', manual: '人工調整' })[mode] || mode
@@ -467,9 +463,18 @@ const openExclusions = async (row: SnapshotRow) => {
       </template>
     </el-dialog>
 
-    <el-dialog v-if="ackVisible" v-model="ackVisible" title="確認本月節慶人數" width="460px">
+    <FormDialog
+      v-if="ackVisible"
+      v-model="ackVisible"
+      title="確認本月節慶人數"
+      size="compact"
+      submit-text="確認並送出"
+      :loading="ackSaving"
+      :disabled="!ackValid"
+      @submit="submitAck"
+    >
       <el-alert v-if="ackMessage" type="warning" :closable="false" show-icon :title="ackMessage" />
-      <el-form label-width="90px" class="snap-ack-form">
+      <el-form label-position="top" class="snap-ack-form">
         <el-form-item label="已知代收未齊">
           <el-checkbox v-model="ackForm.acknowledged">我知道代收明細未齊，仍要確認</el-checkbox>
         </el-form-item>
@@ -482,13 +487,7 @@ const openExclusions = async (row: SnapshotRow) => {
           />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="ackVisible = false">取消</el-button>
-        <el-button type="success" :loading="ackSaving" :disabled="!ackValid" @click="submitAck">
-          確認並送出
-        </el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
 
     <el-dialog v-model="reopenVisible" title="重開本月節慶人數" width="420px">
       <el-form label-width="90px">
