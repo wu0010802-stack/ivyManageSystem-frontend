@@ -33070,6 +33070,8 @@ export interface components {
             is_emergency: boolean;
             /** Is Primary */
             is_primary: boolean;
+            /** Line Bound */
+            line_bound: boolean;
             /** Name */
             name?: string | null;
             /** Phone */
