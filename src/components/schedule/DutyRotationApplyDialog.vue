@@ -164,7 +164,14 @@ const confirm = async () => {
       from_week_start: toApiFromWeekStart(previewedForApply),
       overwrite_manual: overwrite,
     })
-    ElMessage.success('已套用到週班表')
+    // 後端對套用者本人的週一律略過（skip_reason='self'），即使該手動列已勾選覆寫；
+    // 只顯示「已套用」會讓行政誤以為本人班表也寫進去了。
+    const selfSkipped = res.data.changes.filter((c) => c.action === 'skip' && c.skip_reason === 'self').length
+    if (selfSkipped > 0) {
+      ElMessage.warning(`已套用到週班表；本人 ${selfSkipped} 筆未寫入，須由他人套用`)
+    } else {
+      ElMessage.success('已套用到週班表')
+    }
     emit('applied', res.data)
     const recorded = res.data.changes.filter((c) => c.action === 'skip' && c.skip_reason === 'recorded')
     if (recorded.length) {

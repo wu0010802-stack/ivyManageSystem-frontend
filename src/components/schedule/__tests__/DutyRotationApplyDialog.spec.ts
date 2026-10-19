@@ -145,6 +145,48 @@ describe('DutyRotationApplyDialog', () => {
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
   })
 
+  it('勾選覆寫的手動列被後端改判本人（self）略過：提示本人 N 筆未寫入，不只顯示已套用', async () => {
+    const { ElMessage } = await import('element-plus')
+    vi.mocked(ElMessage.success).mockClear()
+    vi.mocked(ElMessage.warning).mockClear()
+    const wrapper = mountDialog({ fromWeekStart: null })
+    await flushPromises()
+    await wrapper.findAll('[data-test="overwrite-checkbox"]')[0].setValue(true)
+    await wrapper.findAll('[data-test="overwrite-checkbox"]')[1].setValue(true)
+    mockApply.mockResolvedValueOnce({
+      data: {
+        applied: true,
+        counts: { create: 1, skip: 2 },
+        changes: [
+          change({}),
+          change({ employee_id: 2, employee_name: '李老師', action: 'skip', skip_reason: 'self' }),
+          change({ employee_id: 3, employee_name: '陳老師', week_start_date: '2026-09-21', action: 'skip', skip_reason: 'self' }),
+        ],
+      },
+    })
+    await wrapper.find('[data-test="confirm-apply"]').trigger('click')
+    await flushPromises()
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledTimes(1)
+    const msg = String(vi.mocked(ElMessage.warning).mock.calls[0][0])
+    expect(msg).toContain('本人 2 筆未寫入')
+    expect(msg).toContain('須由他人套用')
+    expect(wrapper.emitted('applied')).toHaveLength(1)
+  })
+
+  it('套用結果沒有本人略過：照常顯示已套用', async () => {
+    const { ElMessage } = await import('element-plus')
+    vi.mocked(ElMessage.success).mockClear()
+    vi.mocked(ElMessage.warning).mockClear()
+    const wrapper = mountDialog({ fromWeekStart: null })
+    await flushPromises()
+    mockApply.mockResolvedValueOnce({ data: { applied: true, counts: {}, changes: [change({})] } })
+    await wrapper.find('[data-test="confirm-apply"]').trigger('click')
+    await flushPromises()
+    expect(ElMessage.success).toHaveBeenCalledWith('已套用到週班表')
+    expect(ElMessage.warning).not.toHaveBeenCalled()
+  })
+
   it('套用後有已打卡略過的員工週：留在對話框列出，可逐筆後續處理；完成才關閉', async () => {
     const wrapper = mountDialog()
     await flushPromises()
