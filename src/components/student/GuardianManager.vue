@@ -400,7 +400,7 @@ function isDeviceSetupBlocked(row: Pick<GuardianOut, 'id' | 'line_bound'>): bool
 function isLineBoundConflict(err: unknown): boolean {
   const status = (err as { response?: { status?: number } })?.response?.status
   if (status !== 409) return false
-  // 經 friendlyError 取 interceptor／後端的安全訊息，不直讀 response.data.detail（錯誤處理棘輪）
+  // 經 friendlyError 取 interceptor／後端的安全訊息，不直讀後端原始 detail（錯誤處理棘輪）
   const msg = friendlyError('', err)
   return msg.includes('LINE') && msg.includes('綁定')
 }
