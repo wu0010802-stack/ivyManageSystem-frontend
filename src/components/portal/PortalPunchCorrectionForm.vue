@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { correctionTimes, type CorrectionType } from '@/utils/punchCorrection'
 
 const emit = defineEmits<{
   'submit': [payload: Record<string, unknown>]
@@ -44,11 +45,6 @@ const rules = {
     correction_type: [{ required: true, message: '請選擇補正類型', trigger: 'change' }],
 }
 
-const buildDatetime = (dateStr: string, timeStr: string) => {
-    if (!dateStr || !timeStr) return null
-    return `${dateStr}T${timeStr}:00`
-}
-
 const canSubmit = computed(() => !!form.attendance_date)
 
 const submit = async () => {
@@ -63,8 +59,8 @@ const submit = async () => {
     emit('submit', {
         attendance_date: form.attendance_date,
         correction_type: form.correction_type,
-        requested_punch_in: buildDatetime(form.attendance_date, form.requested_punch_in_time),
-        requested_punch_out: buildDatetime(form.attendance_date, form.requested_punch_out_time),
+        // 只送補卡類型對應那側：切換類型後隱藏側的時間不送出
+        ...correctionTimes(form.correction_type as CorrectionType, form.attendance_date, form.requested_punch_in_time, form.requested_punch_out_time),
         reason: form.reason || null,
     })
 }

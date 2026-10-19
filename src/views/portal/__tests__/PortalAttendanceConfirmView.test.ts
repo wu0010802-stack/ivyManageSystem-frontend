@@ -360,3 +360,28 @@ describe('PortalAttendanceConfirmView 老師補登項目（SPEC-026 3-3）', () 
     expect(wrapper.text()).toContain('補登換班')
   })
 })
+
+describe('PortalAttendanceConfirmView 忘了打卡只送對應那側（QA P3）', () => {
+  it('先補全天填了兩側，再改補下班：送出不帶上班時間', async () => {
+    api.get.mockResolvedValue(view([item()], 1))
+    api.respond.mockResolvedValue({ data: item({ status: 'disputed', needs_my_response: false }) })
+    await mountView()
+    await wrapper.get('[data-test="amend-11"]').trigger('click')
+    await wrapper.get('[data-test="amend-kind-forgot_punch"]').trigger('click')
+    await flushPromises()
+    const pickers = wrapper.findAllComponents({ name: 'ElTimePicker' })
+    expect(pickers).toHaveLength(2)
+    pickers[0].vm.$emit('update:modelValue', '07:00')
+    pickers[1].vm.$emit('update:modelValue', '16:30')
+    await flushPromises()
+    const select = wrapper.findAllComponents({ name: 'ElSelect' }).find((s) => s.props('modelValue') === 'both')!
+    select.vm.$emit('update:modelValue', 'punch_out')
+    await flushPromises()
+    await wrapper.get('[data-test="amend-submit-11"]').trigger('click')
+    await flushPromises()
+    expect(api.respond).toHaveBeenCalledWith(11, {
+      action: 'amend',
+      amend: { kind: 'forgot_punch', correction_type: 'punch_out', requested_punch_out: '2026-09-15T16:30:00' },
+    })
+  })
+})

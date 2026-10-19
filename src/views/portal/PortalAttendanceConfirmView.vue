@@ -17,6 +17,7 @@ import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { apiError } from '@/utils/error'
 import { todayTaipeiISO } from '@/utils/format'
+import { correctionTimes } from '@/utils/punchCorrection'
 import {
   absenceDayText,
   amendButtonLabel,
@@ -212,14 +213,17 @@ function amendPayload(item: PortalConfirmationItem, form: AmendForm): AmendBody 
       return form.partner ? { kind: form.kind, partner_employee_id: form.partner, ...(note ? { note } : {}) } : null
     case 'leave':
       return { kind: 'leave', leave_type: form.leaveType, ...(note ? { note } : {}) }
-    case 'forgot_punch':
+    case 'forgot_punch': {
+      // 只送補卡類型對應那側：切換類型後隱藏側的時間不送出
+      const { requested_punch_in, requested_punch_out } = correctionTimes(form.correctionType, item.date, form.punchIn, form.punchOut)
       return {
         kind: 'forgot_punch',
         correction_type: form.correctionType,
-        ...(form.punchIn ? { requested_punch_in: `${item.date}T${form.punchIn}:00` } : {}),
-        ...(form.punchOut ? { requested_punch_out: `${item.date}T${form.punchOut}:00` } : {}),
+        ...(requested_punch_in ? { requested_punch_in } : {}),
+        ...(requested_punch_out ? { requested_punch_out } : {}),
         ...(note ? { note } : {}),
       }
+    }
     case 'other':
       return note ? { kind: 'other', note } : null
     default:
