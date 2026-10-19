@@ -20,7 +20,7 @@ describe('F33：workflow uses: 一律釘完整 commit SHA', () => {
 
   it.each(files)('%s 不使用 pull_request_target 觸發（高權限 token＋外部 PR 程式碼的攻擊面）', (file) => {
     const src = readFileSync(resolve(DIR, file), 'utf-8')
-    expect(src).not.toMatch(/^\s*pull_request_target\s*:/m)
+    expect(src.replace(/#.*$/gm, '')).not.toMatch(/\bpull_request_target\b/)
   })
 
   it.each(files)('%s 的每個 uses: 都是 owner/repo@<40 hex> # vX.Y.Z', (file) => {
