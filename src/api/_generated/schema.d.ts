@@ -3934,12 +3934,12 @@ export interface paths {
         };
         /**
          * Get Import Settings
-         * @description 取得校內設備設定及可對應的在職員工。
+         * @description 取得校內設備設定及可對應的員工（在職者與近期離職者）。
          */
         get: operations["get_import_settings_api_attendance_import_settings_get"];
         /**
          * Put Import Settings
-         * @description 儲存單一設備的完整對照；拒絕跨租戶及離職員工。
+         * @description 儲存單一設備的完整對照；拒絕跨租戶及停用但無離職日的員工。
          */
         put: operations["put_import_settings_api_attendance_import_settings_put"];
         post?: never;
@@ -3984,6 +3984,9 @@ export interface paths {
         /**
          * Kiosk Punch
          * @description 即時打卡：驗 PIN 後寫入伺服器當前時間（first-in/last-out）。body 無時間戳欄位，天然防止 self 反向注入。
+         *
+         *     body 可帶 expected_action（確認頁顯示的動作），與伺服器判定不符回 409 請重新確認。
+         *     當天第一次打卡若已過應上班時段中點，記為下班（缺上班卡、不判遲到）。
          */
         post: operations["kiosk_punch_api_attendance_kiosk_punch_post"];
         delete?: never;
@@ -15524,7 +15527,14 @@ export interface paths {
         };
         /**
          * Get My Schedule
-         * @description 取得自己當月排班
+         * @description 取得自己當月排班。
+         *
+         *     班別以四層判定（load_effective_shifts：每日調整 > 週排班 > 員工自訂工時 > 預設）
+         *     解析，與打卡判定／月格子同源；停用班別仍顯示名稱。沒排班的日子只在行事曆
+         *     上班日（非時薪制）顯示員工自訂／預設時段。
+         *
+         *     快取：以回應內容算 ETag（Cache-Control: private, no-cache）。舊的 Last-Modified
+         *     取 max(updated_at)，刪列（代理撤回、清空週班）不會推進 → 老師拿 304 看到舊班（bug 盤點 #10）。
          */
         get: operations["get_my_schedule_api_portal_my_schedule_get"];
         put?: never;
@@ -31336,6 +31346,8 @@ export interface components {
             summary: {
                 [key: string]: unknown;
             }[];
+            /** Unmatched Names */
+            unmatched_names?: string[];
         };
         /** ExceptionItemOut */
         ExceptionItemOut: {
@@ -33736,6 +33748,8 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /** Resign Date */
+            resign_date?: string | null;
         };
         /** ImportRecord */
         ImportRecord: {
@@ -34346,6 +34360,8 @@ export interface components {
         KioskPunchRequest: {
             /** Employee Id */
             employee_id: number;
+            /** Expected Action */
+            expected_action?: ("punch_in" | "punch_out") | null;
             /** Pin */
             pin: string;
         };
@@ -42079,10 +42095,16 @@ export interface components {
             employee_name: string;
             /** Employee Number */
             employee_number: string;
+            /** Existing Source */
+            existing_source?: string | null;
             /** Import Format */
             import_format?: ("punch_events" | "clock_report") | null;
             /** Matched Employee Id */
             matched_employee_id?: number | null;
+            /** Overwrite Mode */
+            overwrite_mode?: ("replace" | "fill_empty") | null;
+            /** Problem Reason */
+            problem_reason?: ("ambiguous_name" | "not_employed") | null;
             /** Punch In */
             punch_in?: string | null;
             /** Punch Out */
@@ -42133,6 +42155,11 @@ export interface components {
             overwrites: number;
             /** Problems */
             problems: number;
+            /**
+             * Protected Overwrites
+             * @default 0
+             */
+            protected_overwrites: number;
         };
         /** PreviewTotalsOut */
         PreviewTotalsOut: {
@@ -46704,6 +46731,13 @@ export interface components {
             date: string;
             /** Day */
             day: number;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /**
+             * Is Holiday
+             * @default false
+             */
+            is_holiday: boolean;
             /** Is Makeup Workday */
             is_makeup_workday: boolean;
             /** Is Override */
