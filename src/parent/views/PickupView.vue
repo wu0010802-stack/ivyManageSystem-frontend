@@ -87,6 +87,13 @@ const historyAuths = computed(() =>
 )
 const showHistory = ref(false)
 
+// F02（2026-10-19）：後端只對「建立者本人」回傳 active 授權的明碼，重發／取消
+// 也只限建立者。回應沒有 created_by_me 欄位，故以「active 且有明碼」判定為
+// 本人建立；無明碼者（同學生另一位監護人建立）隱藏會被 403 的兩顆按鈕。
+function isOwnActiveAuth(a: PickupAuth): boolean {
+  return !!a.pickup_code
+}
+
 const STATUS_LABEL: Record<string, string> = {
   active: '進行中',
   completed: '已完成',
@@ -384,10 +391,13 @@ onMounted(async () => {
             </M3Button>
           </div>
           <!-- 兩顆動作拉開放在兩端、各至少 44px 高，避免單手時誤按到「取消授權」 -->
-          <div class="auth-actions">
+          <div v-if="isOwnActiveAuth(a)" class="auth-actions">
             <M3Button variant="tonal" class="auth-action" @click="askRegenerate(a)">重發取件碼</M3Button>
             <M3Button variant="outlined" class="auth-action is-danger" @click="askCancel(a)">取消授權</M3Button>
           </div>
+          <p v-else class="auth-not-owner-note" data-testid="auth-not-owner-note">
+            此授權由其他監護人建立，取件碼與重發、取消僅限建立者操作；如需協助請聯絡園所。
+          </p>
         </M3Card>
       </section>
 
@@ -623,5 +633,11 @@ onMounted(async () => {
   padding: 8px 0;
   text-align: left;
   cursor: pointer;
+}
+.auth-not-owner-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 </style>
