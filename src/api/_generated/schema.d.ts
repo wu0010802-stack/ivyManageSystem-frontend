@@ -4059,6 +4059,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/recalculate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recalculate Attendance Endpoint
+         * @description 依目前的班表、員工上下班時間與員工類型，重算某月已匯入出勤的遲到／早退／缺卡。
+         *
+         *     預設 dry_run：回報每人哪些天會改（改前／改後），不寫入。正式送出時逐人一個交易，
+         *     已封存月份、本人、已用特休抵銷的日子、需個別核查的請假組合不重算；異常內容改變時
+         *     舊的接受扣款／豁免失效，並標記該月薪資需重算。
+         */
+        post: operations["recalculate_attendance_endpoint_api_attendance_recalculate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/reconciliation/confirm-shift": {
         parameters: {
             query?: never;
@@ -23408,6 +23432,103 @@ export interface components {
              */
             source_count: number;
             summary: components["schemas"]["PreviewSummary"];
+        };
+        /** AttendanceRecalculateDayChangeOut */
+        AttendanceRecalculateDayChangeOut: {
+            after: components["schemas"]["AttendanceRecalculateFlagsOut"];
+            before: components["schemas"]["AttendanceRecalculateFlagsOut"];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+        };
+        /** AttendanceRecalculateEmployeeOut */
+        AttendanceRecalculateEmployeeOut: {
+            /** Changes */
+            changes: components["schemas"]["AttendanceRecalculateDayChangeOut"][];
+            /** Code */
+            code?: ("SELF" | "FINALIZED" | "NOT_EMPLOYED" | "ERROR") | null;
+            /** Confirmations Cleared */
+            confirmations_cleared: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "changed" | "unchanged" | "skipped" | "failed";
+            /** Skipped Days */
+            skipped_days: components["schemas"]["AttendanceRecalculateSkippedDayOut"][];
+        };
+        /**
+         * AttendanceRecalculateFlagsOut
+         * @description 一天出勤存檔中與扣款相關的欄位。
+         */
+        AttendanceRecalculateFlagsOut: {
+            /** Early Leave Minutes */
+            early_leave_minutes: number;
+            /** Is Missing Punch In */
+            is_missing_punch_in: boolean;
+            /** Is Missing Punch Out */
+            is_missing_punch_out: boolean;
+            /** Late Minutes */
+            late_minutes: number;
+            /** Status */
+            status?: string | null;
+        };
+        /**
+         * AttendanceRecalculateIn
+         * @description 依目前的班表與員工上下班時間重算某月出勤存檔；預設 dry_run，先預覽哪些天會改再正式送出。
+         */
+        AttendanceRecalculateIn: {
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+            /** Employee Ids */
+            employee_ids?: number[] | null;
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /** AttendanceRecalculateOut */
+        AttendanceRecalculateOut: {
+            /** Changed Employees */
+            changed_employees: number;
+            /** Changed Rows */
+            changed_rows: number;
+            /** Checked Rows */
+            checked_rows: number;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Month */
+            month: number;
+            /** Results */
+            results: components["schemas"]["AttendanceRecalculateEmployeeOut"][];
+            /** Year */
+            year: number;
+        };
+        /**
+         * AttendanceRecalculateSkippedDayOut
+         * @description 沒有重算的日子：USE_PTO＝已用特休抵銷、LEAVE_CONFLICT＝請假組合或請假連結需個別核查、
+         *     NOT_EMPLOYED＝不在在職區間。
+         */
+        AttendanceRecalculateSkippedDayOut: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "USE_PTO" | "LEAVE_CONFLICT" | "NOT_EMPLOYED";
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
         };
         /** AttendanceRecordItem */
         AttendanceRecordItem: {
@@ -57547,6 +57668,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PayrollComparisonOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recalculate_attendance_endpoint_api_attendance_recalculate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceRecalculateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceRecalculateOut"];
                 };
             };
             /** @description Validation Error */
