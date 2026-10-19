@@ -20,11 +20,14 @@ export function useMonthGrid(anchorDate: Ref<string>, revision: Ref<number>) {
   async function reload(): Promise<void> {
     const current = ++seq
     const { start, end } = range.value
-    if (loadedStart !== start) data.value = null
+    // 同一個月再抓＝寫入後的重抓（revision、面板呼叫）：繞過 apiDedupe，不領到寫入前就在途的舊快照
+    const sameMonth = loadedStart === start
+    const opts = sameMonth ? [{ force: true }] as const : [] as const
+    if (!sameMonth) data.value = null
     loading.value = true
     loadError.value = ''
     try {
-      const res = await getScheduleAttendanceGrid({ start_date: start, end_date: end })
+      const res = await getScheduleAttendanceGrid({ start_date: start, end_date: end }, ...opts)
       if (current === seq) {
         data.value = res.data
         loadedStart = start

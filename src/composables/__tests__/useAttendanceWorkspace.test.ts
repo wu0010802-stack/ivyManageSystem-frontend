@@ -210,3 +210,18 @@ it('月份任職名冊包含零打卡員工，但不增加紀錄無異常KPI', a
   expect(ws.roster.value.map(row => row.employee_id)).toEqual([7])
   expect(ws.kpis.value.fullAttendance).toBe(0)
 })
+
+describe('useAttendanceWorkspace 寫入後重抓繞過 apiDedupe（QA P3）', () => {
+  it('首次載入走去重；同月再 refresh 三支都帶 force', async () => {
+    ;(getSummary as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] })
+    ;(getAnomalyList as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { total: 0, pending: 0, confirmed: 0, items: [] } })
+    mockMonthRoster.mockResolvedValue({ data: { roster: [], days: [] } })
+    const ws = useAttendanceWorkspace(ref(2026), ref(2))
+    await ws.refresh()
+    expect((getSummary as ReturnType<typeof vi.fn>).mock.lastCall).toHaveLength(1)
+    await ws.refresh()
+    expect(getSummary).toHaveBeenLastCalledWith({ year: 2026, month: 2 }, { force: true })
+    expect(mockMonthRoster).toHaveBeenLastCalledWith({ year: 2026, month: 2 }, { force: true })
+    expect(getAnomalyList).toHaveBeenLastCalledWith({ year: 2026, month: 2, status: 'all' }, { force: true })
+  })
+})

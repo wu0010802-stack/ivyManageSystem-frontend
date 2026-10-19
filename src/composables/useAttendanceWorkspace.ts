@@ -161,13 +161,15 @@ export function useAttendanceWorkspace(year: Ref<number>, month: Ref<number>) {
   async function refresh() {
     const my = ++epoch
     const period = currentPeriod.value
+    // 同一個月再抓＝處理異常／匯入後的重抓：繞過 apiDedupe，不領到寫入前就在途的舊快照
+    const opts = loadedPeriod.value === period ? [{ force: true }] as const : [] as const
     loading.value = true
     loadState.value = 'loading'
     try {
       const [sumRes, monthRes, anoRes] = await Promise.all([
-        getSummary({ year: year.value, month: month.value }),
-        getAttendanceMonthContext({ year: year.value, month: month.value }),
-        getAnomalyList({ year: year.value, month: month.value, status: 'all' }),
+        getSummary({ year: year.value, month: month.value }, ...opts),
+        getAttendanceMonthContext({ year: year.value, month: month.value }, ...opts),
+        getAnomalyList({ year: year.value, month: month.value, status: 'all' }, ...opts),
       ])
       if (my !== epoch || period !== currentPeriod.value) return
       const anoData = anoRes.data ?? { total: 0, pending: 0, confirmed: 0, items: [] }

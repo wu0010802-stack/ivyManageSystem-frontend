@@ -78,3 +78,14 @@ describe('useMonthGrid', () => {
     expect(state.data.value).not.toBeNull()
   })
 })
+
+describe('useMonthGrid 寫入後重抓繞過 apiDedupe（QA P3）', () => {
+  it('換月走去重；同月 revision 重抓帶 force', async () => {
+    const { revision } = setup()
+    await flushPromises()
+    expect(api.grid.mock.calls[0]).toHaveLength(1)
+    revision.value += 1
+    await flushPromises()
+    expect(api.grid).toHaveBeenLastCalledWith({ start_date: '2026-09-01', end_date: '2026-09-30' }, { force: true })
+  })
+})

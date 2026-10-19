@@ -300,3 +300,13 @@ describe('useScheduleGrid', () => {
     expect(outcome.errors.some((msg) => msg.includes('重新載入失敗'))).toBe(true)
   })
 })
+
+describe('useScheduleGrid 寫入後重抓繞過 apiDedupe（QA P3）', () => {
+  it('第一次載入走去重；同一週重抓（儲存後、revision）帶 force，不領在途的舊快照', async () => {
+    const { state } = await loaded()
+    expect(api.grid.mock.calls[0]).toHaveLength(1)
+    await state.reload()
+    expect(api.grid).toHaveBeenLastCalledWith({ start_date: W1, end_date: WEEK[6] }, { force: true })
+    expect(api.getAssignments).toHaveBeenLastCalledWith({ week_start: W1 }, { force: true })
+  })
+})

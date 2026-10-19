@@ -103,13 +103,15 @@ export function useScheduleGrid(weekStart: Ref<string>) {
       grid.value = null
       assignments.value = {}
     }
+    // 同一週再抓＝寫入後的重抓：繞過 apiDedupe，不領到寫入前就在途的舊快照
+    const opts = grid.value?.start_date === start ? [{ force: true }] as const : [] as const
     try {
-      const res = await getScheduleAttendanceGrid({ start_date: start, end_date: addDaysISO(start, 6) })
+      const res = await getScheduleAttendanceGrid({ start_date: start, end_date: addDaysISO(start, 6) }, ...opts)
       if (seq !== epoch) return
       // 格子與週排班兩支都回來才一起寫入；任一支失敗＝整次失敗，不留新週 grid 搭配舊週 assignments。
       let nextAssignments: Record<number, AssignmentRow> = {}
       if (res.data.caller.can_edit_plan) {
-        const rows = (await getAssignments({ week_start: start })).data
+        const rows = (await getAssignments({ week_start: start }, ...opts)).data
         if (seq !== epoch) return
         nextAssignments = Object.fromEntries(rows.map((row) => [row.employee_id, row]))
       }

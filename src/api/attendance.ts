@@ -1,4 +1,5 @@
 import api from './index'
+import { withDedupeEscape, type ReadOptions } from '@/utils/apiDedupe'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 // ── 匯入 ─────────────────────────────────────────────────────────────────────
@@ -46,7 +47,8 @@ export const getRecords = (
 
 export const getSummary = (
   params: ApiQuery<'/attendance/summary', 'get'>,
-): AxiosResp<'/attendance/summary', 'get'> => api.get('/attendance/summary', { params })
+  opts?: ReadOptions,
+): AxiosResp<'/attendance/summary', 'get'> => api.get('/attendance/summary', withDedupeEscape({ params }, opts))
 
 export const getToday = (): AxiosResp<'/attendance/today', 'get'> =>
   api.get('/attendance/today')
@@ -56,7 +58,8 @@ export const getTodayAnomalies = (): AxiosResp<'/attendance/today-anomalies', 'g
 
 export const getAnomalyList = (
   params: ApiQuery<'/attendance/anomalies', 'get'>,
-): AxiosResp<'/attendance/anomalies', 'get'> => api.get('/attendance/anomalies', { params })
+  opts?: ReadOptions,
+): AxiosResp<'/attendance/anomalies', 'get'> => api.get('/attendance/anomalies', withDedupeEscape({ params }, opts))
 
 export const getCalendar = (
   params: ApiQuery<'/attendance/calendar', 'get'>,

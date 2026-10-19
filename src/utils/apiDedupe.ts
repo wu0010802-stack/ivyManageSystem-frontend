@@ -40,6 +40,16 @@ const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 const READ_METHODS = new Set(['get', 'head'])
 const _inflightByInstance = new WeakMap<AxiosInstance, Map<string, Promise<unknown>>>()
 
+/** 讀取 API 的選項：force＝寫入後的重抓，走去重逃生口（不領到寫入前就在途的舊快照） */
+export interface ReadOptions {
+  force?: boolean
+}
+
+/** 比照 src/api/activity.ts withDedupeEscape：force 時帶 meta.allowConcurrent 繞過去重 */
+export function withDedupeEscape<T extends AxiosRequestConfig>(config: T, opts?: ReadOptions): T & { meta?: { allowConcurrent: boolean } } {
+  return opts?.force ? { ...config, meta: { allowConcurrent: true } } : config
+}
+
 /**
  * 在 axios instance 上套用「同 key in-flight 請求去重」。
  * - mutating（POST/PUT/PATCH/DELETE）：以 method+url+body 為 key，併發共用 promise；
