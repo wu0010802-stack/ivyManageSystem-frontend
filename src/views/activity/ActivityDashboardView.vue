@@ -52,7 +52,7 @@
       >
         <el-table-column prop="classroom_name" label="班級" width="100" align="center" fixed="left" />
         <el-table-column prop="teacher_name" label="班級老師" width="100" align="center" fixed="left" />
-        <el-table-column prop="student_count" label="在籍人數" width="90" align="center" />
+        <el-table-column prop="student_count" :label="denominatorLabels.header" width="110" align="center" />
         
         <!-- 動態課程欄位：報名數 +（待審核）。待審核不進任何比率，僅此處與待審核人次欄呈現 -->
         <el-table-column
@@ -101,7 +101,7 @@
              紅綠著色直接讀後端 meets_target（未取整比率對年級門檻），前端不自行比較。 -->
         <el-table-column prop="enrollment_ratio" label="人次比率" width="95" align="center">
             <template #header>
-              <el-tooltip content="人次比率＝報名人次 ÷ 在籍人數（一生報兩門算 2，可超過 100%）。達標判定看這一欄：大班 100%／中班 90%／小班 80%／幼幼班 70%" placement="top">
+              <el-tooltip :content="`人次比率＝報名人次 ÷ ${denominatorLabels.noun}（一生報兩門算 2，可超過 100%）。達標判定看這一欄：大班 100%／中班 90%／小班 80%／幼幼班 70%`" placement="top">
                 <span>人次比率</span>
               </el-tooltip>
             </template>
@@ -126,8 +126,8 @@
         <!-- 同比（去年同學期）／環比（上一學期）：年級小計與全園的人次比率差值（百分點）；前期無資料顯示「—」 -->
         <el-table-column label="與前期比較" width="130" align="center">
             <template #header>
-              <el-tooltip content="年級小計與全園的人次比率，與上一學期、去年同學期相比增減幾個百分點；前期無資料時顯示「—」" placement="top">
-                <span>與前期比較</span>
+              <el-tooltip :content="`年級小計與全園的人次比率，與上一學期、去年同學期相比增減幾個百分點；前期無資料時顯示「—」${denominatorLabels.priorBasisNote ? `。${denominatorLabels.priorBasisNote}` : ''}`" placement="top">
+                <span>與前期比較<span v-if="denominatorLabels.priorBasisNote" class="basis-mark">＊</span></span>
               </el-tooltip>
             </template>
             <template #default="scope">
@@ -141,7 +141,7 @@
         <!-- 參與率（不重複學生）：僅供參考，不參與達標判定，故不著色 -->
         <el-table-column prop="ratio" label="參與率（參考）" width="110" align="center">
             <template #header>
-              <el-tooltip content="參與率＝有參加才藝的學生數 ÷ 在籍人數；同一學生報多門只計一次，不超過 100%。僅供參考，不用於達標判定" placement="top">
+              <el-tooltip :content="`參與率＝有參加才藝的學生數 ÷ ${denominatorLabels.noun}；同一學生報多門只計一次，不超過 100%。僅供參考，不用於達標判定`" placement="top">
                 <span>參與率（參考）</span>
               </el-tooltip>
             </template>
@@ -151,7 +151,7 @@
         </el-table-column>
         <el-table-column prop="bonus" label="達成獎金 +1000" width="140" align="center">
             <template #header>
-              <el-tooltip content="年級人次比率（年級報名人次 ÷ 年級在籍）達到該年級門檻時發給的獎金" placement="top">
+              <el-tooltip :content="`年級人次比率（年級報名人次 ÷ 年級${denominatorLabels.noun}）達到該年級門檻時發給的獎金`" placement="top">
                 <span>達成獎金 +1000</span>
               </el-tooltip>
             </template>
@@ -236,6 +236,7 @@ import { exportDashboardTable } from '@/api/activity'
 import { buildBonusLabel, buildCourseCell } from './activityDashboardTable'
 import {
   buildDashboardRows,
+  buildDenominatorLabels,
   buildShortfallLabel,
   buildTrendLabel,
   isBelowTarget,
@@ -322,6 +323,9 @@ const statCards = computed(() =>
 // buildDashboardRows 將每個年級展開成「各班列 + 小計列」（未達標班排前），並標記
 // rowSpan / isFirstOfGrade 給 objectSpanMethod 合併「獎金」「積分」兩欄。
 const onlyBelowTarget = ref(false)
+// 分母口徑（spec C10）：註冊口徑為學期基準日註冊數（未到基準日＝今天，暫估），舊口徑為在籍
+const denominatorLabels = computed(() => buildDenominatorLabels(dashboardData.value ?? {}))
+
 const flattenedTableData = computed<DashboardTableRow[]>(() => {
     if (!dashboardData.value) return []
     return buildDashboardRows(dashboardData.value, {
@@ -490,6 +494,8 @@ async function handleExportTable() {
 .met-mark { color: var(--color-success-hover); font-size: 12px; }
 .secondary-ratio { color: var(--text-secondary); }
 /* 同比／環比為次要資訊：小字灰底，不搶主比率版面 */
+/* 前期分母口徑與本期不同（在籍 vs 註冊）的提示星號，說明在表頭 tooltip */
+.basis-mark { margin-left: 2px; color: var(--color-warning-darker); }
 .trend-cell { display: flex; flex-direction: column; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
 .trend-up { color: var(--color-success-hover); font-weight: 600; }
 .trend-down { color: #e11d48; font-weight: 600; }

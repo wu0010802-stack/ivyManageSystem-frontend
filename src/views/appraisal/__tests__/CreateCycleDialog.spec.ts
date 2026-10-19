@@ -117,6 +117,16 @@ describe('CreateCycleDialog', () => {
     expect(wrapper.find('[data-test="create-cycle-actual"]').exists()).toBe(true)
   })
 
+  it('實際註冊欄附註冊口徑說明：可留空待自動帶入，手填不同於註冊數會標為手動覆寫（spec C7）', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    const hint = wrapper.find('[data-test="create-cycle-actual-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('留空')
+    expect(hint.text()).toContain('手動覆寫')
+  })
+
   it('開啟時（visible false→true）重置為當前學年學期，target/actual 留空', async () => {
     const wrapper = mount(CreateCycleDialog, {
       props: { visible: false, canWrite: true },

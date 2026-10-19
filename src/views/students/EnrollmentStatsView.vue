@@ -26,6 +26,7 @@ import type { ApiResponse, Schema } from '@/api/_generated/typed'
 import { describeReconcile, type LedgerSummary, type ReconcileResult } from '@/utils/enrollmentLedger'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EnrollmentLedgerPanel from './EnrollmentLedgerPanel.vue'
+import { formatRegistered } from '@/utils/headcountLabels'
 
 type TermOption = Schema<'TermOption'>
 type GradeClassStat = Schema<'ClassStats'>
@@ -248,6 +249,7 @@ const tableData = computed(() => {
         female: cls.female,
         unknown: unknownGenderOf(cls.total, cls.male, cls.female),
         total: cls.total,
+        registered: cls.registered ?? null,
         ...capacityOf([cls]),
         _gradeClassCount: grade.classes.length,
       })
@@ -260,6 +262,7 @@ const tableData = computed(() => {
       female: grade.female,
       unknown: unknownGenderOf(grade.total, grade.male, grade.female),
       total: grade.total,
+      registered: grade.registered ?? null,
       ...capacityOf(grade.classes),
     })
   }
@@ -275,6 +278,7 @@ const tableData = computed(() => {
       stats.value.summary.female,
     ),
     total: stats.value.summary.total,
+    registered: stats.value.summary.registered ?? null,
     ...capacityOf(stats.value.by_grade.flatMap((g) => g.classes)),
   })
   return rows
@@ -375,6 +379,13 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
           <div class="status-label">在籍總人數</div>
           <div class="status-value">{{ statusSummary.hasData ? statusSummary.total : '—' }}</div>
         </div>
+        <!-- 註冊口徑（spec C1/C8）：基準日在學且當月月費已繳清；null＝舊口徑／非當期／尚無月費單 -->
+        <div class="status-group" data-testid="registered-summary">
+          <div class="status-label">註冊</div>
+          <div class="status-row-inline">
+            <span class="num-total">{{ formatRegistered(stats?.summary?.registered) }}</span>
+          </div>
+        </div>
         <div class="status-group">
           <div class="status-label">
             性別
@@ -470,9 +481,23 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
             <span v-else class="ratio-empty">0</span>
           </template>
         </el-table-column>
-        <el-table-column label="合計" prop="total" :width="isMobile ? 32 : 90" align="right">
+        <el-table-column label="在籍" prop="total" :width="isMobile ? 32 : 90" align="right">
           <template #default="{ row }">
             <span class="num-total">{{ row.total }}</span>
+          </template>
+        </el-table-column>
+        <!-- 註冊（spec C1/C8）：手機 286px 塞不下第九欄，收起，總數仍在狀態列 -->
+        <el-table-column
+          v-if="!isMobile"
+          label="註冊"
+          prop="registered"
+          class-name="col-registered"
+          :width="90"
+          align="right"
+        >
+          <template #default="{ row }">
+            <span v-if="row.registered != null">{{ row.registered }}</span>
+            <span v-else class="ratio-empty">—</span>
           </template>
         </el-table-column>
         <el-table-column label="容量" prop="capacity" class-name="col-capacity" :width="isMobile ? 32 : 80" align="right">
@@ -513,7 +538,8 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
       />
       <p v-if="tableData.length" class="table-footnote">
         百分比以已填性別者為分母，未填不計入男／女占比。缺額＝容量−在籍（負數＝超額）；
-        有班級未設容量時，該小計與總計顯示「—」。
+        有班級未設容量時，該小計與總計顯示「—」。註冊＝當月月費已繳清的在學人數，
+        未啟用註冊口徑、非本學期或本月尚無月費單時顯示「—」。
       </p>
     </el-card>
 

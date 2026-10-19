@@ -402,4 +402,132 @@ describe('YearlyEnrollmentTargetSection', () => {
       expect(mockNotifyRuleChanged).toHaveBeenCalledWith('已更新目標人數')
     })
   })
+
+  // ── spec C7（2026-10-19 註冊口徑）：招生實際人數自動帶入基準日註冊數；
+  // 手改需「手動覆寫」＋原因（≥10 字），可「恢復自動」。舊口徑（auto=null）行為不變。
+  describe('註冊口徑：招生實際人數自動帶入／手動覆寫', () => {
+    const AUTO_CYCLE = {
+      ...FIRST_CYCLE,
+      enrollment_actual: 189,
+      enrollment_actual_auto: 189,
+      enrollment_actual_overridden: false,
+      enrollment_actual_override_reason: null,
+    }
+    const OVERRIDDEN_CYCLE = {
+      ...FIRST_CYCLE,
+      enrollment_actual: 193,
+      enrollment_actual_auto: 189,
+      enrollment_actual_overridden: true,
+      enrollment_actual_override_reason: '業主裁定以在籍名冊人數計算',
+    }
+
+    async function openEdit(cycle) {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [cycle, SECOND_CYCLE] })
+      const wrapper = await mountView()
+      await wrapper.find('[data-test="edit-first-btn"]').trigger('click')
+      await flushPromises()
+      return wrapper
+    }
+
+    it('未覆寫：檢視模式顯示「自動（9/15 註冊數）」與最後計算時間', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [AUTO_CYCLE, SECOND_CYCLE] })
+      const wrapper = await mountView()
+      const card = wrapper.find('[data-test="card-first"]').text()
+      expect(card).toContain('自動（9/15 註冊數）')
+      expect(card).toContain('最後計算：')
+      expect(card).not.toContain('已手動覆寫')
+    })
+
+    it('未覆寫：編輯時實際註冊唯讀、顯示自動說明；點「手動覆寫」才出現原因欄', async () => {
+      const wrapper = await openEdit(AUTO_CYCLE)
+      expect(wrapper.vm.isActualLocked(AUTO_CYCLE)).toBe(true)
+      expect(wrapper.find('[data-test="edit-first-actual-caption"]').text()).toContain('自動（9/15 註冊數）')
+      expect(wrapper.find('[data-test="override-reason-first"]').exists()).toBe(false)
+
+      await wrapper.find('[data-test="override-first-btn"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.vm.isActualLocked(AUTO_CYCLE)).toBe(false)
+      expect(wrapper.find('[data-test="override-reason-first"]').exists()).toBe(true)
+    })
+
+    it('手動覆寫原因不足 10 字（trim 後）不能存；滿 10 字送出 enrollment_actual＋原因', async () => {
+      patchAppraisalCycle.mockResolvedValue({ data: OVERRIDDEN_CYCLE })
+      const wrapper = await openEdit(AUTO_CYCLE)
+      await wrapper.find('[data-test="override-first-btn"]').trigger('click')
+      wrapper.vm.editForm.FIRST.enrollment_actual = 193
+      wrapper.vm.editForm.FIRST.override_reason = '   太短了   '
+      await flushPromises()
+      expect(wrapper.find('[data-test="save-first-btn"]').attributes('disabled')).toBeDefined()
+
+      wrapper.vm.editForm.FIRST.override_reason = '  業主裁定以在籍名冊人數計算  '
+      await flushPromises()
+      expect(wrapper.find('[data-test="save-first-btn"]').attributes('disabled')).toBeUndefined()
+      await wrapper.find('[data-test="save-first-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(patchAppraisalCycle).toHaveBeenCalledWith(AUTO_CYCLE.id, {
+        enrollment_target: 100,
+        enrollment_actual: 193,
+        enrollment_actual_override_reason: '業主裁定以在籍名冊人數計算',
+      })
+    })
+
+    it('未覆寫只改目標人數：不送 enrollment_actual（交給後端自動帶入，避免誤觸覆寫 422）', async () => {
+      patchAppraisalCycle.mockResolvedValue({ data: AUTO_CYCLE })
+      const wrapper = await openEdit(AUTO_CYCLE)
+      wrapper.vm.editForm.FIRST.enrollment_target = 120
+      await wrapper.find('[data-test="save-first-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(patchAppraisalCycle).toHaveBeenCalledWith(AUTO_CYCLE.id, { enrollment_target: 120 })
+    })
+
+    it('已覆寫：顯示「已手動覆寫」、原因與「恢復自動」；恢復自動送 overridden=false', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [OVERRIDDEN_CYCLE, SECOND_CYCLE] })
+      patchAppraisalCycle.mockResolvedValue({ data: AUTO_CYCLE })
+      const wrapper = await mountView()
+      const card = wrapper.find('[data-test="card-first"]')
+      expect(card.text()).toContain('已手動覆寫')
+      expect(card.text()).toContain('業主裁定以在籍名冊人數計算')
+      expect(card.text()).not.toContain('自動（9/15 註冊數）')
+
+      await wrapper.find('[data-test="restore-first-btn"]').trigger('click')
+      await flushPromises()
+      expect(patchAppraisalCycle).toHaveBeenCalledWith(OVERRIDDEN_CYCLE.id, {
+        enrollment_actual_overridden: false,
+      })
+      expect(mockNotifyRuleChanged).toHaveBeenCalled()
+    })
+
+    it('已覆寫：沒有 APPRAISAL_FINALIZE 時「恢復自動」disabled', async () => {
+      permState.finalize = false
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [OVERRIDDEN_CYCLE, SECOND_CYCLE] })
+      const wrapper = await mountView()
+      expect(wrapper.find('[data-test="restore-first-btn"]').attributes('disabled')).toBeDefined()
+    })
+
+    it('已覆寫：編輯時實際註冊可改、原因預帶舊原因', async () => {
+      const wrapper = await openEdit(OVERRIDDEN_CYCLE)
+      expect(wrapper.vm.isActualLocked(OVERRIDDEN_CYCLE)).toBe(false)
+      expect(wrapper.vm.editForm.FIRST.override_reason).toBe('業主裁定以在籍名冊人數計算')
+      expect(wrapper.find('[data-test="override-reason-first"]').exists()).toBe(true)
+    })
+
+    it('舊口徑（enrollment_actual_auto 為 null、未覆寫）：維持手填，無唯讀、無覆寫按鈕，PATCH 照舊帶 enrollment_actual', async () => {
+      patchAppraisalCycle.mockResolvedValue({ data: FIRST_CYCLE })
+      const legacy = { ...FIRST_CYCLE, enrollment_actual_auto: null, enrollment_actual_overridden: false }
+      const wrapper = await openEdit(legacy)
+      expect(wrapper.vm.isActualLocked(legacy)).toBe(false)
+      expect(wrapper.find('[data-test="override-first-btn"]').exists()).toBe(false)
+      expect(wrapper.find('[data-test="override-reason-first"]').exists()).toBe(false)
+      expect(wrapper.text()).not.toContain('註冊數）')
+
+      await wrapper.find('[data-test="save-first-btn"]').trigger('click')
+      await flushPromises()
+      expect(patchAppraisalCycle).toHaveBeenCalledWith(legacy.id, {
+        enrollment_target: 100,
+        enrollment_actual: 92,
+      })
+    })
+  })
 })

@@ -590,11 +590,76 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
       .findAll('col')
       .map((c) => Number(c.attributes('width')))
       .filter((w) => w > 0)
-    expect(widths).toHaveLength(8) // 年級／班級／男／女／未填／合計／容量／缺額
+    expect(widths).toHaveLength(8) // 年級／班級／男／女／未填／在籍／容量／缺額（註冊欄手機收起）
     expect(widths.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(286)
     // 手機表頭簡寫，省下的寬度才夠留給容量／缺額
     const heads = wrapper.findAll('th').map((th) => th.text())
     expect(heads).toEqual(expect.arrayContaining(['男', '女', '容量', '缺額']))
     expect(heads).not.toContain('男生')
+  })
+
+  // ---------------------------------------------------------------------
+  // 註冊口徑（2026-10-19 spec C1/C8）：「合計」改標「在籍」，旁加「註冊」欄
+  // ---------------------------------------------------------------------
+
+  const registeredStats = () => ({
+    data: {
+      school_year: 115,
+      semester: 1,
+      semester_label: '上學期',
+      summary: { total: 49, male: 28, female: 20, class_count: 2, registered: 45 },
+      by_grade: [
+        {
+          grade_name: '大班',
+          total: 49,
+          male: 28,
+          female: 20,
+          registered: 45,
+          classes: [
+            { classroom_id: 10, class_name: '天堂鳥', capacity: 30, total: 27, male: 14, female: 13, registered: 25 },
+            { classroom_id: 11, class_name: '向日葵', capacity: 25, total: 22, male: 14, female: 7, registered: 20 },
+          ],
+        },
+      ],
+    },
+  })
+
+  it('表頭：人數欄改標「在籍」並新增「註冊」欄，不再叫「合計」', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const heads = wrapper.findAll('th').map((th) => th.text())
+    expect(heads).toContain('在籍')
+    expect(heads).toContain('註冊')
+    expect(heads).not.toContain('合計')
+  })
+
+  it('註冊欄：班級／年級小計／全園總計逐列顯示後端註冊數', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(registeredStats() as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(colTexts(wrapper, 'col-registered')).toEqual(['25', '20', '45', '45'])
+    expect(wrapper.find('[data-testid="registered-summary"]').text()).toContain('45')
+  })
+
+  it('註冊數為 null（舊口徑／非當期／尚無月費單）時顯示「—」，不當 0', async () => {
+    // 預設 statsResponse 沒有 registered 欄位（舊版回應）
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(colTexts(wrapper, 'col-registered')).toEqual(['—', '—', '—'])
+    expect(wrapper.find('[data-testid="registered-summary"]').text()).toContain('—')
+  })
+
+  it('手機寬度收起註冊欄（塞不進 286px），註冊總數仍在狀態列', async () => {
+    mockIsMobile.value = true
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(registeredStats() as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(colTexts(wrapper, 'col-registered')).toHaveLength(0)
+    expect(wrapper.find('[data-testid="registered-summary"]').text()).toContain('45')
   })
 })

@@ -11,6 +11,8 @@ export interface ClassroomRow {
   grade_name?: string
   capacity?: number
   current_count?: number
+  /** 註冊數（spec C1/C8：當期在學且當月月費已繳清）；null＝舊口徑／非當期／尚無月費單 */
+  registered_count?: number | null
   is_active?: boolean
   head_teacher_id?: number | null
   assistant_teacher_id?: number | null

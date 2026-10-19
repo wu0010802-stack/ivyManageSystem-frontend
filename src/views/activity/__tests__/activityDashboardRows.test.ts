@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildDashboardRows,
+  buildDenominatorLabels,
   buildShortfallLabel,
   buildTrendLabel,
   sortClassroomsUnmetFirst,
@@ -174,5 +175,58 @@ describe('buildDashboardRows', () => {
     )
     expect(rows.map((r) => r.rowType)).toEqual(['subtotal', 'grand_total'])
     expect(rows[0]).toMatchObject({ isFirstOfGrade: true, rowSpan: 1 })
+  })
+})
+
+// spec C10（2026-10-19）：分母改基準日註冊數；欄名與說明跟著後端口徑走，
+// 前期（同比／環比）若仍是在籍口徑要講清楚，免得把口徑差當成成長或衰退。
+describe('buildDenominatorLabels', () => {
+  const basis = {
+    denominator_kind: 'registered' as const,
+    denominator_basis_date: '2026-09-15',
+    denominator_provisional: false,
+    yoy_denominator_kind: 'registered' as const,
+    qoq_denominator_kind: 'registered' as const,
+  }
+
+  it('註冊口徑：欄名「註冊（9/15）」、說明用註冊人數、前後期同口徑不附註', () => {
+    const labels = buildDenominatorLabels(basis)
+    expect(labels.header).toBe('註冊（9/15）')
+    expect(labels.noun).toBe('註冊人數')
+    expect(labels.priorBasisNote).toBe('')
+  })
+
+  it('未到基準日：欄名標「暫估」', () => {
+    const labels = buildDenominatorLabels({
+      ...basis,
+      denominator_basis_date: '2026-09-10',
+      denominator_provisional: true,
+    })
+    expect(labels.header).toBe('註冊（今天，暫估）')
+  })
+
+  it('前期仍是在籍口徑：附註點名是哪一期', () => {
+    const labels = buildDenominatorLabels({
+      ...basis,
+      yoy_denominator_kind: 'enrolled',
+      qoq_denominator_kind: 'enrolled',
+    })
+    expect(labels.priorBasisNote).toBe('上學期、去年同期分母為在籍人數，與本期口徑不同')
+
+    const onlyYoy = buildDenominatorLabels({ ...basis, yoy_denominator_kind: 'enrolled' })
+    expect(onlyYoy.priorBasisNote).toBe('去年同期分母為在籍人數，與本期口徑不同')
+  })
+
+  it('舊口徑：欄名「在籍」、說明用在籍人數', () => {
+    const labels = buildDenominatorLabels({
+      denominator_kind: 'enrolled',
+      denominator_basis_date: '2026-10-19',
+      denominator_provisional: false,
+      yoy_denominator_kind: 'enrolled',
+      qoq_denominator_kind: 'enrolled',
+    })
+    expect(labels.header).toBe('在籍')
+    expect(labels.noun).toBe('在籍人數')
+    expect(labels.priorBasisNote).toBe('')
   })
 })

@@ -8,6 +8,7 @@
  * 參與率（ratio，不重複學生）僅供參考顯示，不參與判定。
  */
 import type { Schema } from '@/api/_generated/typed'
+import { denominatorCaption, type DenominatorKind } from '@/utils/headcountLabels'
 
 export type DashboardTable = Schema<'ActivityDashboardTableOut'>
 export type DashboardGrade = Schema<'ActivityDashboardGradeRowOut'>
@@ -159,4 +160,39 @@ export function buildDashboardRows(
   })
 
   return data
+}
+
+type DenominatorBasis = Partial<Pick<
+  DashboardTable,
+  | 'denominator_kind'
+  | 'denominator_basis_date'
+  | 'denominator_provisional'
+  | 'yoy_denominator_kind'
+  | 'qoq_denominator_kind'
+>>
+
+export interface DenominatorLabels {
+  /** 分母欄欄名：「註冊（9/15）」／「註冊（今天，暫估）」／「在籍」 */
+  header: string
+  /** 說明文字裡的分母名詞：「註冊人數」／「在籍人數」 */
+  noun: string
+  /** 同比／環比前期口徑與本期不同時的附註；同口徑為空字串 */
+  priorBasisNote: string
+}
+
+/**
+ * 分母口徑顯示（spec C10，2026-10-19）。後端欄位缺漏（舊版回應）一律視為在籍口徑。
+ * 前期（上學期／去年同期）基準日早於 cutoff 時後端回 enrolled，比較跨了口徑要講明。
+ */
+export function buildDenominatorLabels(table: DenominatorBasis): DenominatorLabels {
+  const kind: DenominatorKind = table.denominator_kind ?? 'enrolled'
+  const differs: string[] = []
+  if ((table.qoq_denominator_kind ?? 'enrolled') !== kind) differs.push('上學期')
+  if ((table.yoy_denominator_kind ?? 'enrolled') !== kind) differs.push('去年同期')
+  const priorNoun = kind === 'registered' ? '在籍人數' : '註冊人數'
+  return {
+    header: denominatorCaption(kind, table.denominator_basis_date, table.denominator_provisional ?? false),
+    noun: kind === 'registered' ? '註冊人數' : '在籍人數',
+    priorBasisNote: differs.length ? `${differs.join('、')}分母為${priorNoun}，與本期口徑不同` : '',
+  }
 }

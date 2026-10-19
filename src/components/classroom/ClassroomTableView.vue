@@ -8,6 +8,7 @@ import { computed } from 'vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { capacityPercent, capacityStatus } from '@/utils/classroomCapacity'
 import { reservedCountFor } from '@/utils/classroomReserved'
+import { formatRegistered } from '@/utils/headcountLabels'
 import ClassroomRowMenu from './ClassroomRowMenu.vue'
 import type { ClassroomCommand, ClassroomRow, GradeLite } from './types'
 
@@ -34,7 +35,7 @@ const { isMobile } = useIsMobile()
 const UNSET_GRADE = '未設定年級'
 const UNKNOWN_ORDER = 99
 const COLLATOR_LOCALE = 'zh-Hant'
-const COLUMN_COUNT = 7
+const COLUMN_COUNT = 8
 
 interface Summary {
   classCount: number
@@ -167,6 +168,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
           <tr>
             <th scope="col" class="col-name">班級</th>
             <th scope="col" class="col-count">在籍 / 容量</th>
+            <th scope="col" class="col-registered">註冊</th>
             <th scope="col" class="col-remain">尚餘</th>
             <th scope="col" class="col-head">班導</th>
             <th scope="col" class="col-assistant">副班導</th>
@@ -210,6 +212,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
                 <span v-if="capacityView(c).label" class="count-status" :class="`is-${capacityView(c).tone}`">{{ capacityView(c).label }}</span>
               </div>
             </td>
+            <td class="col-registered" :class="{ 'is-empty': c.registered_count == null }">{{ formatRegistered(c.registered_count) }}</td>
             <td class="col-remain">{{ capacityView(c).remaining }}</td>
             <td class="col-head" :class="{ 'is-missing': headMissing(c), 'is-empty': !c.head_teacher_name && !headMissing(c) }">{{ headText(c) }}</td>
             <td class="col-assistant" :class="{ 'is-empty': !c.assistant_teacher_name }">{{ c.assistant_teacher_name || '—' }}</td>
@@ -272,6 +275,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
               <span class="m-row__count">
                 <span v-if="capacityView(c).label" class="count-status" :class="`is-${capacityView(c).tone}`">{{ capacityView(c).label }}</span>
                 <span class="count-num" :class="`is-${capacityView(c).tone}`">{{ capacityView(c).count }} / {{ capacityView(c).capacityText }}</span>
+                <span v-if="c.registered_count != null" class="m-row__registered">註冊 {{ c.registered_count }}</span>
               </span>
             </span>
             <span class="bar bar--thin" aria-hidden="true">
@@ -317,6 +321,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
 
 /* 固定欄寬：數字欄/操作欄定寬，其餘（班級、班導、副班導、美語）平分剩餘空間 */
 .grade-table thead th.col-count { width: 300px; }
+.grade-table thead th.col-registered { width: 72px; }
 .grade-table thead th.col-remain { width: 88px; }
 .grade-table thead th.col-actions { width: 132px; }
 
@@ -338,6 +343,8 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
   padding-left: var(--space-4);
 }
 
+.grade-table thead th.col-registered,
+.grade-table tbody td.col-registered,
 .grade-table thead th.col-remain,
 .grade-table tbody td.col-remain {
   text-align: right;
@@ -393,6 +400,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
 
 .class-row.is-inactive .col-name,
 .class-row.is-inactive .col-count,
+.class-row.is-inactive .col-registered,
 .class-row.is-inactive .col-remain {
   opacity: 0.65;
 }
@@ -495,6 +503,15 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
 
 .bar-fill.is-full {
   background: var(--color-danger);
+}
+
+/* 註冊（spec C1/C8）：當月月費已繳清的在學人數；null 顯示「—」 */
+.col-registered {
+  font-variant-numeric: tabular-nums;
+}
+
+.col-registered.is-empty {
+  color: var(--el-text-color-placeholder);
 }
 
 .col-remain {
@@ -621,6 +638,12 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
   align-items: baseline;
   gap: var(--space-2);
   flex-shrink: 0;
+}
+
+.m-row__registered {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .m-row__count .count-num {

@@ -8,6 +8,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { Plus, Check } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 
 import {
   getAppraisalCyclesByYear,
@@ -17,6 +18,8 @@ import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
 import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { getCurrentAcademicTerm, buildSchoolYearOptions } from '@/utils/academic'
+import { autoEnrollmentCaption } from '@/utils/headcountLabels'
+import { formatTaipeiDateTimeMinute } from '@/utils/format'
 import { injectOpenCycleHint } from './composables/useOpenCycleHint'
 import CreateCycleDialog from './components/CreateCycleDialog.vue'
 import TargetCrossRef from './components/TargetCrossRef.vue'
@@ -30,8 +33,22 @@ interface CycleEntry {
   enrollment_actual?: number | null
   base_score?: number | null
   base_score_calc_date?: string
+  enrollment_actual_auto?: number | null
+  enrollment_actual_overridden?: boolean
+  enrollment_actual_override_reason?: string | null
   [key: string]: unknown
 }
+
+interface EditForm {
+  enrollment_target: number
+  enrollment_actual: number | null
+  /** 註冊口徑下是否手動覆寫招生實際人數（spec C7） */
+  override: boolean
+  override_reason: string
+}
+
+/** 後端 OVERRIDE_REASON_MIN_LEN（api/appraisal/cycles.py）：覆寫原因 trim 後至少 10 字 */
+const OVERRIDE_REASON_MIN_LEN = 10
 
 type SemesterKey = 'FIRST' | 'SECOND'
 
@@ -47,6 +64,11 @@ const yearOptions = computed(() => buildSchoolYearOptions(currentTerm.school_yea
 
 const cycles = ref<CycleEntry[]>([]) // 0-2 筆 CycleOut
 const loading = ref(false)
+/**
+ * spec C1：OPEN 期間補登收款會改變註冊數。`enrollment_actual_auto` 是後端在每次
+ * GET 時即時計算（CycleOut 未帶 updated_at），故「最後計算」取本頁最後一次載入的時間。
+ */
+const loadedAt = ref<string>('—')
 
 const firstCycle = computed<CycleEntry | null>(() => cycles.value.find((c) => c.semester === 'FIRST') || null)
 const secondCycle = computed<CycleEntry | null>(() => cycles.value.find((c) => c.semester === 'SECOND') || null)
@@ -56,6 +78,7 @@ async function load() {
   try {
     const { data } = await getAppraisalCyclesByYear(selectedYear.value)
     cycles.value = (Array.isArray(data) ? data : []) as CycleEntry[]
+    loadedAt.value = formatTaipeiDateTimeMinute(new Date())
   } catch (e) {
     notify(e, 'YearlyEnrollmentTargetSection:load', '載入學年週期失敗')
     cycles.value = []
@@ -69,9 +92,15 @@ onMounted(load)
 
 // ── 編輯模式 state（per semester）──────────────────────────
 const editing = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
-const editForm = ref<Record<SemesterKey, { enrollment_target: number; enrollment_actual: number | null }>>({
-  FIRST: { enrollment_target: 0, enrollment_actual: null },
-  SECOND: { enrollment_target: 0, enrollment_actual: null },
+const emptyForm = (): EditForm => ({
+  enrollment_target: 0,
+  enrollment_actual: null,
+  override: false,
+  override_reason: '',
+})
+const editForm = ref<Record<SemesterKey, EditForm>>({
+  FIRST: emptyForm(),
+  SECOND: emptyForm(),
 })
 const savingSemester = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
 
@@ -81,6 +110,66 @@ const savingSemester = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND:
 // 獨立命名 canEditTarget 以對應「編輯已存在週期」這個不同的使用者動作。
 const canEditTarget = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 
+// ── spec C7：註冊口徑下招生實際人數自動帶入基準日註冊數 ──────────────
+// 後端只在新口徑（基準日所在月 ≥ cutoff）回 enrollment_actual_auto；舊口徑租戶／學期
+// 為 null 且未覆寫 → 維持原本手填行為，不唯讀、不出覆寫按鈕（零漂移）。
+function usesRegisteredBasis(cycle: CycleEntry): boolean {
+  return cycle.enrollment_actual_auto != null || cycle.enrollment_actual_overridden === true
+}
+
+/** 編輯中「實際註冊」是否唯讀：註冊口徑且尚未進入手動覆寫。 */
+function isActualLocked(cycle: CycleEntry): boolean {
+  const semester = cycle.semester as SemesterKey
+  return usesRegisteredBasis(cycle) && !editForm.value[semester].override
+}
+
+function startOverride(semester: SemesterKey) {
+  editForm.value[semester].override = true
+}
+
+function canSaveEdit(cycle: CycleEntry): boolean {
+  const form = editForm.value[cycle.semester as SemesterKey]
+  if (!usesRegisteredBasis(cycle) || !form.override) return true
+  return form.override_reason.trim().length >= OVERRIDE_REASON_MIN_LEN
+}
+
+/**
+ * 組 PATCH body。註冊口徑未覆寫時不送 enrollment_actual：值由後端自動帶入，前端
+ * 手上的數字可能已過時（OPEN 期間補登收款），送出去會被當成覆寫而 422。
+ */
+function buildPatchPayload(cycle: CycleEntry, form: EditForm) {
+  if (!usesRegisteredBasis(cycle)) {
+    return { enrollment_target: form.enrollment_target, enrollment_actual: form.enrollment_actual }
+  }
+  if (!form.override) return { enrollment_target: form.enrollment_target }
+  return {
+    enrollment_target: form.enrollment_target,
+    enrollment_actual: form.enrollment_actual,
+    enrollment_actual_override_reason: form.override_reason.trim(),
+  }
+}
+
+async function restoreAuto(cycle: CycleEntry) {
+  if (!canEditTarget.value) return
+  try {
+    await ElMessageBox.confirm(
+      '恢復後招生實際人數改回自動帶入基準日註冊數，基礎分數隨之重算。',
+      '恢復自動帶入',
+      { confirmButtonText: '恢復自動', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    await patchAppraisalCycle(cycle.id, { enrollment_actual_overridden: false })
+    notifyRuleChanged('已恢復自動帶入註冊數')
+    editing.value[cycle.semester as SemesterKey] = false
+    await load()
+  } catch (e) {
+    notify(e, 'YearlyEnrollmentTargetSection:restoreAuto', '恢復自動帶入失敗')
+  }
+}
+
 function startEdit(cycle: CycleEntry) {
   // 防禦：UI 已用 disabled + tooltip 擋，仍保留一道守衛避免繞過。
   if (!canEditTarget.value) return
@@ -88,6 +177,8 @@ function startEdit(cycle: CycleEntry) {
   editForm.value[semester] = {
     enrollment_target: cycle.enrollment_target ?? 0,
     enrollment_actual: cycle.enrollment_actual ?? null,
+    override: cycle.enrollment_actual_overridden === true,
+    override_reason: cycle.enrollment_actual_override_reason ?? '',
   }
   editing.value[semester] = true
 }
@@ -97,7 +188,7 @@ function cancelEdit(semester: SemesterKey) {
 }
 
 async function saveEdit(cycle: CycleEntry) {
-  if (!canEditTarget.value) return
+  if (!canEditTarget.value || !canSaveEdit(cycle)) return
   const semester = cycle.semester as SemesterKey
   const reason = await confirmWithReason({
     title: '確認更新目標人數',
@@ -107,10 +198,7 @@ async function saveEdit(cycle: CycleEntry) {
   if (reason == null) return
   savingSemester.value[semester] = true
   try {
-    await patchAppraisalCycle(cycle.id, {
-      enrollment_target: editForm.value[semester].enrollment_target,
-      enrollment_actual: editForm.value[semester].enrollment_actual,
-    })
+    await patchAppraisalCycle(cycle.id, buildPatchPayload(cycle, editForm.value[semester]))
     notifyRuleChanged('已更新目標人數')
     editing.value[semester] = false
     await load()
@@ -180,6 +268,29 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
               </el-descriptions-item>
               <el-descriptions-item label="實際註冊">
                 {{ firstCycle.enrollment_actual ?? '—' }}
+                <div v-if="usesRegisteredBasis(firstCycle)" class="actual-meta" data-test="actual-meta-first">
+                  <template v-if="firstCycle.enrollment_actual_overridden">
+                    <el-tag size="small" type="warning">已手動覆寫</el-tag>
+                    <span class="actual-meta__text">自動註冊數 {{ firstCycle.enrollment_actual_auto ?? '—' }}</span>
+                    <span v-if="firstCycle.enrollment_actual_override_reason" class="actual-meta__reason">
+                      原因：{{ firstCycle.enrollment_actual_override_reason }}
+                    </span>
+                    <el-button
+                      size="small"
+                      link
+                      type="primary"
+                      :disabled="!canEditTarget"
+                      data-test="restore-first-btn"
+                      @click="restoreAuto(firstCycle)"
+                    >
+                      恢復自動
+                    </el-button>
+                  </template>
+                  <template v-else>
+                    <span class="actual-meta__text">{{ autoEnrollmentCaption(firstCycle.base_score_calc_date) }}</span>
+                    <span class="actual-meta__text">最後計算：{{ loadedAt }}</span>
+                  </template>
+                </div>
               </el-descriptions-item>
               <el-descriptions-item label="基礎分數">
                 {{ firstCycle.base_score != null ? Number(firstCycle.base_score).toFixed(1) : '—' }}
@@ -224,6 +335,28 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
                 <el-input-number
                   v-model="editForm.FIRST.enrollment_actual"
                   :min="0"
+                  :disabled="isActualLocked(firstCycle)"
+                />
+                <div v-if="usesRegisteredBasis(firstCycle)" class="actual-meta" data-test="edit-first-actual-caption">
+                  <template v-if="!editForm.FIRST.override">
+                    <span class="actual-meta__text">{{ autoEnrollmentCaption(firstCycle.base_score_calc_date) }}</span>
+                    <el-button size="small" link type="primary" data-test="override-first-btn" @click="startOverride('FIRST')">
+                      手動覆寫
+                    </el-button>
+                  </template>
+                  <span v-else class="actual-meta__text">
+                    手動覆寫（自動註冊數 {{ firstCycle.enrollment_actual_auto ?? '—' }}）
+                  </span>
+                </div>
+              </el-form-item>
+              <el-form-item v-if="usesRegisteredBasis(firstCycle) && editForm.FIRST.override" label="覆寫原因">
+                <el-input
+                  v-model="editForm.FIRST.override_reason"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  placeholder="至少 10 字，例：業主裁定本學期以在籍名冊計算"
+                  data-test="override-reason-first"
                 />
               </el-form-item>
             </el-form>
@@ -234,6 +367,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
                 type="primary"
                 :icon="Check"
                 :loading="savingSemester.FIRST"
+                :disabled="!canSaveEdit(firstCycle)"
                 data-test="save-first-btn"
                 @click="saveEdit(firstCycle)"
               >
@@ -271,6 +405,29 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
               </el-descriptions-item>
               <el-descriptions-item label="實際註冊">
                 {{ secondCycle.enrollment_actual ?? '—' }}
+                <div v-if="usesRegisteredBasis(secondCycle)" class="actual-meta" data-test="actual-meta-second">
+                  <template v-if="secondCycle.enrollment_actual_overridden">
+                    <el-tag size="small" type="warning">已手動覆寫</el-tag>
+                    <span class="actual-meta__text">自動註冊數 {{ secondCycle.enrollment_actual_auto ?? '—' }}</span>
+                    <span v-if="secondCycle.enrollment_actual_override_reason" class="actual-meta__reason">
+                      原因：{{ secondCycle.enrollment_actual_override_reason }}
+                    </span>
+                    <el-button
+                      size="small"
+                      link
+                      type="primary"
+                      :disabled="!canEditTarget"
+                      data-test="restore-second-btn"
+                      @click="restoreAuto(secondCycle)"
+                    >
+                      恢復自動
+                    </el-button>
+                  </template>
+                  <template v-else>
+                    <span class="actual-meta__text">{{ autoEnrollmentCaption(secondCycle.base_score_calc_date) }}</span>
+                    <span class="actual-meta__text">最後計算：{{ loadedAt }}</span>
+                  </template>
+                </div>
               </el-descriptions-item>
               <el-descriptions-item label="基礎分數">
                 {{ secondCycle.base_score != null ? Number(secondCycle.base_score).toFixed(1) : '—' }}
@@ -314,6 +471,28 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
                 <el-input-number
                   v-model="editForm.SECOND.enrollment_actual"
                   :min="0"
+                  :disabled="isActualLocked(secondCycle)"
+                />
+                <div v-if="usesRegisteredBasis(secondCycle)" class="actual-meta" data-test="edit-second-actual-caption">
+                  <template v-if="!editForm.SECOND.override">
+                    <span class="actual-meta__text">{{ autoEnrollmentCaption(secondCycle.base_score_calc_date) }}</span>
+                    <el-button size="small" link type="primary" data-test="override-second-btn" @click="startOverride('SECOND')">
+                      手動覆寫
+                    </el-button>
+                  </template>
+                  <span v-else class="actual-meta__text">
+                    手動覆寫（自動註冊數 {{ secondCycle.enrollment_actual_auto ?? '—' }}）
+                  </span>
+                </div>
+              </el-form-item>
+              <el-form-item v-if="usesRegisteredBasis(secondCycle) && editForm.SECOND.override" label="覆寫原因">
+                <el-input
+                  v-model="editForm.SECOND.override_reason"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  placeholder="至少 10 字，例：業主裁定本學期以在籍名冊計算"
+                  data-test="override-reason-second"
                 />
               </el-form-item>
             </el-form>
@@ -324,6 +503,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
                 type="primary"
                 :icon="Check"
                 :loading="savingSemester.SECOND"
+                :disabled="!canSaveEdit(secondCycle)"
                 data-test="save-second-btn"
                 @click="saveEdit(secondCycle)"
               >
@@ -412,6 +592,20 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.actual-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.actual-meta__reason {
+  flex-basis: 100%;
 }
 
 .semester-card__actions {

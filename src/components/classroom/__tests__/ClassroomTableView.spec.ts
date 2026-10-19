@@ -87,7 +87,7 @@ beforeEach(() => {
 })
 
 describe('ClassroomTableView 結構', () => {
-  it('用真正的 table：thead 七欄、每組一個 tbody、組標頭是 th[scope=rowgroup][colspan=7]', () => {
+  it('用真正的 table：thead 八欄、每組一個 tbody、組標頭是 th[scope=rowgroup][colspan=8]', () => {
     const wrapper = mountTable([
       mk({ name: '甲', grade_name: '大班' }),
       mk({ name: '乙', grade_name: '小班', grade_id: 2 }),
@@ -96,11 +96,35 @@ describe('ClassroomTableView 結構', () => {
     expect(wrapper.find('[data-test="classroom-table"]').exists()).toBe(true)
     expect(wrapper.find('table').exists()).toBe(true)
     const heads = wrapper.findAll('thead th').map((th) => th.text())
-    expect(heads).toEqual(['班級', '在籍 / 容量', '尚餘', '班導', '副班導', '美語老師', '操作'])
+    expect(heads).toEqual(['班級', '在籍 / 容量', '註冊', '尚餘', '班導', '副班導', '美語老師', '操作'])
     expect(wrapper.findAll('tbody').length).toBe(2)
     const groupTh = wrapper.find('tbody tr.group-row th')
     expect(groupTh.attributes('scope')).toBe('rowgroup')
-    expect(groupTh.attributes('colspan')).toBe('7')
+    expect(groupTh.attributes('colspan')).toBe('8')
+  })
+})
+
+describe('ClassroomTableView 註冊口徑（spec C1/C8）', () => {
+  it('註冊欄顯示 registered_count；null（舊口徑／尚無月費單）顯示「—」不當 0', () => {
+    const wrapper = mountTable([
+      mk({ name: '甲', class_code: '大1', registered_count: 8 }),
+      mk({ name: '乙', class_code: '大2', registered_count: 0 }),
+      mk({ name: '丙', class_code: '大3', registered_count: null }),
+      mk({ name: '丁', class_code: '大4' }),
+    ])
+    const cells = wrapper.findAll('[data-test="classroom-row"] td.col-registered').map((td) => td.text())
+    expect(cells).toEqual(['8', '0', '—', '—'])
+  })
+
+  it('手機版：有註冊數才在在籍旁附「註冊 N」', () => {
+    mobile.value = true
+    const wrapper = mountTable([
+      mk({ name: '甲', registered_count: 8 }),
+      mk({ name: '乙', registered_count: null }),
+    ])
+    const rows = wrapper.findAll('[data-test="classroom-row"]')
+    expect(rows.find((r) => r.text().includes('甲'))!.text()).toContain('註冊 8')
+    expect(rows.find((r) => r.text().includes('乙'))!.text()).not.toContain('註冊')
   })
 })
 

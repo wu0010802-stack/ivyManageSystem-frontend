@@ -62,6 +62,21 @@ describe('才藝儀表板欄位定義', () => {
   })
 })
 
+describe('分母口徑（spec C10，2026-10-19）', () => {
+  it('分母欄（student_count）欄名跟後端口徑走，不再寫死「在籍人數」', () => {
+    const start = SFC_SOURCE.indexOf('prop="student_count"')
+    const end = SFC_SOURCE.indexOf('/>', start)
+    expect(SFC_SOURCE.slice(start, end)).toContain(':label="denominatorLabels.header"')
+    expect(SFC_SOURCE).toContain('buildDenominatorLabels(')
+  })
+
+  it('比率說明的分母名詞與前期口徑附註來自 denominatorLabels', () => {
+    expect(SFC_SOURCE).toContain('denominatorLabels.noun')
+    expect(SFC_SOURCE).toContain('denominatorLabels.priorBasisNote')
+    expect(SFC_SOURCE).not.toContain('÷ 在籍人數')
+  })
+})
+
 describe('表格列組裝不做欄位白名單', () => {
   it('班級／小計／總計三種列皆以 spread 帶入後端欄位', () => {
     // 若日後改成逐欄挑選，新增的後端欄位會靜默消失在畫面上——釘住 spread 寫法。

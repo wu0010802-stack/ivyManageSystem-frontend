@@ -16,6 +16,7 @@ import { mapReservedByGrade, reservedCountFor, type IntakePlanRowLite } from '@/
 import { ElMessage, ElMessageBox, type FormItemRule } from 'element-plus'
 import { ArrowRight, Grid, List, Lock, Menu, Plus, WarningFilled } from '@element-plus/icons-vue'
 import { capacityStatus, capacityPercent } from '@/utils/classroomCapacity'
+import { sumRegistered } from '@/utils/headcountLabels'
 import { formatTeacherOptionLabel } from '@/utils/teacherOption'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -114,6 +115,9 @@ const rosterStats = computed(() => {
   }
   return { classCount: activeClassrooms.value.length, enrolled, capacity, near, full, noHead }
 })
+
+// 註冊合計（spec C1/C8）：啟用班全都有註冊數才顯示，殘缺加總會被當真值（舊口徑全為 null → 不顯示）
+const registeredTotal = computed(() => sumRegistered(activeClassrooms.value.map((c) => c.registered_count)))
 
 const remainingSeats = computed(() => Math.max(0, rosterStats.value.capacity - rosterStats.value.enrolled))
 const enrolledPercent = computed(() => capacityPercent(rosterStats.value.enrolled, rosterStats.value.capacity))
@@ -703,6 +707,9 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
           <span class="roster-enrolled__label">在籍</span>
           <strong class="roster-enrolled__num">{{ rosterStats.enrolled }}</strong> <span class="roster-enrolled__cap">/ {{ rosterStats.capacity }}</span>
         </div>
+        <span v-if="registeredTotal != null" class="roster-registered" data-test="stat-tile-registered">
+          註冊 <strong class="roster-registered__num">{{ registeredTotal }}</strong>
+        </span>
         <span class="roster-bar" aria-hidden="true">
           <span class="roster-bar__fill" :style="{ width: `${enrolledPercent}%` }" />
         </span>
@@ -854,6 +861,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
             <div class="capacity-block">
               <div class="capacity-line">
                 <span class="count-text">{{ classroom.current_count ?? 0 }} / {{ classroom.capacity ?? '—' }} 人</span>
+                <span v-if="classroom.registered_count != null" class="count-registered">註冊 {{ classroom.registered_count }}</span>
                 <span class="capacity-side">
                   <el-tag
                     v-if="reservedCountFor(reservedByGrade, classroom) > 0"
@@ -1105,6 +1113,17 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
   font-size: var(--text-lg);
   font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
+}
+
+.roster-registered {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.roster-registered__num {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
 }
 
 .roster-bar {
@@ -1429,6 +1448,12 @@ html.dark .grade-chip--senior { background: rgba(109, 40, 217, 0.3); color: #c4b
 .count-text {
   font-size: var(--text-2xl);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.count-registered {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 

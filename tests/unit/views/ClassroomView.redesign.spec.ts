@@ -259,6 +259,46 @@ describe('ClassroomView 改版：統計列', () => {
   })
 })
 
+describe('ClassroomView 註冊口徑（spec C1/C8）', () => {
+  beforeEach(resetEach)
+
+  const withRegistered = (counts: Array<number | null>) =>
+    threeClassrooms.map((c, i) => ({ ...c, registered_count: counts[i] }))
+
+  it('狀態列：啟用班都有註冊數時，在籍旁顯示註冊合計', async () => {
+    classroomsResponse = () => Promise.resolve({ data: withRegistered([14, 25, 17]) })
+    const wrapper = mountView()
+    await flush()
+
+    expect(wrapper.find('[data-test="stat-tile-registered"]').text()).toContain('註冊')
+    expect(wrapper.find('[data-test="stat-tile-registered"]').text()).toContain('56')
+  })
+
+  it('狀態列：任一班無註冊數（舊口徑／尚無月費單）不顯示殘缺合計', async () => {
+    classroomsResponse = () => Promise.resolve({ data: withRegistered([14, null, 17]) })
+    const wrapper = mountView()
+    await flush()
+    expect(wrapper.find('[data-test="stat-tile-registered"]').exists()).toBe(false)
+
+    classroomsResponse = () => Promise.resolve({ data: threeClassrooms })
+    const legacy = mountView()
+    await flush()
+    expect(legacy.find('[data-test="stat-tile-registered"]').exists()).toBe(false)
+  })
+
+  it('卡片：有註冊數才附「註冊 N」', async () => {
+    classroomsResponse = () => Promise.resolve({ data: withRegistered([14, null, 17]) })
+    const wrapper = mountView()
+    await flush()
+    await switchToCard(wrapper)
+
+    const cards = wrapper.findAll('.classroom-card')
+    const byName = (n: string) => cards.find((c) => c.text().includes(n))!
+    expect(byName('向日葵班').text()).toContain('註冊 14')
+    expect(byName('玫瑰班').text()).not.toContain('註冊')
+  })
+})
+
 describe('ClassroomView 改版：年級篩選', () => {
   beforeEach(resetEach)
 
