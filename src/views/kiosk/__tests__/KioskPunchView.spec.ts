@@ -99,4 +99,64 @@ describe('KioskPunchView', () => {
     expect(wrapper.text()).toContain('打卡成功')
     expect(wrapper.text()).not.toContain('打卡失敗')
   })
+
+  describe('閒置逾時與成功頁計時器（QA #24）', () => {
+    afterEach(() => { vi.useRealTimers() })
+
+    async function toConfirm() {
+      const wrapper = mount(KioskPunchView, { global: { stubs: { NumPad: true, ElButton } } })
+      await flushPromises()
+      await wrapper.find('.roster-item').trigger('click')
+      const numPad = wrapper.findComponent({ name: 'NumPad' })
+      await numPad.vm.$emit('update:modelValue', '1234')
+      return { wrapper, numPad }
+    }
+
+    it('PIN 階段閒置 30 秒自動回名單並清掉 PIN', async () => {
+      vi.useFakeTimers()
+      const { wrapper } = await toConfirm()
+      vi.advanceTimersByTime(29_000)
+      await flushPromises()
+      expect(wrapper.find('.pin-stage').exists()).toBe(true)
+      vi.advanceTimersByTime(1_500)
+      await flushPromises()
+      expect(wrapper.find('.roster').exists()).toBe(true)
+      // 再進 PIN 階段：上一位的 PIN 不能留著
+      await wrapper.find('.roster-item').trigger('click')
+      expect(wrapper.find('.pin-dots').text()).toBe('')
+      wrapper.unmount()
+    })
+
+    it('確認頁閒置 30 秒自動回名單：下一位不能替前一位按確認', async () => {
+      vi.useFakeTimers()
+      const { wrapper, numPad } = await toConfirm()
+      await numPad.vm.$emit('submit')
+      await flushPromises()
+      expect(wrapper.find('.confirm-stage').exists()).toBe(true)
+      vi.advanceTimersByTime(30_500)
+      await flushPromises()
+      expect(wrapper.find('.confirm-stage').exists()).toBe(false)
+      expect(wrapper.find('.roster').exists()).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('成功頁手動返回後，舊的 3 秒計時器不會清掉下一位正在輸的 PIN', async () => {
+      vi.useFakeTimers()
+      const { wrapper, numPad } = await toConfirm()
+      await numPad.vm.$emit('submit')
+      await flushPromises()
+      await wrapper.find('.confirm-stage .el-button').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('.success-stage').exists()).toBe(true)
+      // 手動返回 → 下一位選人輸 PIN
+      await wrapper.find('.success-stage .el-button').trigger('click')
+      await wrapper.find('.roster-item').trigger('click')
+      await wrapper.findComponent({ name: 'NumPad' }).vm.$emit('update:modelValue', '56')
+      vi.advanceTimersByTime(3_500)
+      await flushPromises()
+      expect(wrapper.find('.pin-stage').exists()).toBe(true)
+      expect(wrapper.find('.pin-dots').text()).toBe('●●')
+      wrapper.unmount()
+    })
+  })
 })
