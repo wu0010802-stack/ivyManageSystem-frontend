@@ -98,15 +98,21 @@ const swapFromSheet = () => {
 }
 
 // ============ Fetch Schedule ============
+// request-sequence guard（比照 PortalAttendanceView）：換月後在途的舊月回應晚到不得蓋掉目前月份，
+// 否則日期錯位、換班鈕送出舊月日期（QA #23）
+let fetchSeq = 0
 const fetchSchedule = async () => {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const res = await getMySchedule({ year: query.year, month: query.month })
+    if (seq !== fetchSeq) return
     scheduleData.value = res.data as { days: { date: string; day: number; weekday?: string }[] }
   } catch (error) {
+    if (seq !== fetchSeq) return
     ElMessage.error('載入排班失敗')
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
@@ -213,6 +219,8 @@ const changeMonth = (offset: number) => {
   if (m < 1) { m = 12; y-- }
   query.year = y
   query.month = m
+  // 換月先清空：新月還沒到之前不顯示舊月的格子（點了會拿舊月日期去換班）
+  scheduleData.value = null
   fetchSchedule()
 }
 
