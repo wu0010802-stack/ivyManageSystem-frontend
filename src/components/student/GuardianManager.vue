@@ -197,6 +197,7 @@ import {
 } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import { friendlyError } from '@/utils/errorMessages'
 import type { components } from '@/api/_generated/schema'
 
 const props = defineProps<{ studentId: number }>()
@@ -397,10 +398,11 @@ function isDeviceSetupBlocked(row: Pick<GuardianOut, 'id' | 'line_bound'>): bool
   return lineBoundGuardianIds.value.has(row.id)
 }
 function isLineBoundConflict(err: unknown): boolean {
-  const res = (err as { response?: { status?: number; data?: { detail?: unknown } } })?.response
-  if (res?.status !== 409) return false
-  const detail = res.data?.detail
-  return typeof detail === 'string' && detail.includes('LINE') && detail.includes('綁定')
+  const status = (err as { response?: { status?: number } })?.response?.status
+  if (status !== 409) return false
+  // 經 friendlyError 取 interceptor／後端的安全訊息，不直讀 response.data.detail（錯誤處理棘輪）
+  const msg = friendlyError('', err)
+  return msg.includes('LINE') && msg.includes('綁定')
 }
 
 async function handleIssueDeviceSetupCode(row: GuardianOut) {
