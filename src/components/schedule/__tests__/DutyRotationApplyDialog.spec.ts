@@ -280,6 +280,32 @@ describe('DutyRotationApplyDialog', () => {
     expect(list.text()).toContain('陳老師')
   })
 
+  it('self（本人排班，稽核 F07）略過列併入被擋彙總與展開明細，不逐筆列也不給覆寫勾選', async () => {
+    mockApply.mockResolvedValue({
+      data: {
+        applied: false,
+        counts: { create: 1, skip: 1 },
+        changes: [
+          change({}),
+          change({ employee_id: 9, employee_name: '張主任', action: 'skip', skip_reason: 'self' }),
+        ],
+      },
+    })
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    const collapsed = wrapper.find('[data-test="collapsed-skips"]')
+    expect(collapsed.exists()).toBe(true)
+    expect(collapsed.text()).toContain('本人排班略過 1 筆')
+    expect(wrapper.findAll('[data-test="overwrite-checkbox"]')).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('張主任')
+
+    await wrapper.find('[data-test="toggle-collapsed-skips"]').trigger('click')
+    const list = wrapper.find('[data-test="collapsed-skip-list"]')
+    expect(list.text()).toContain('張主任')
+    expect(list.text()).toContain('本人排班須由他人套用')
+  })
+
   it('R1：起始週快速改選造成兩個 dry-run 重疊時，先回來的舊請求不得解鎖確認鈕或覆寫畫面', async () => {
     const p1 = deferred<{ data: unknown }>()
     const p2 = deferred<{ data: unknown }>()

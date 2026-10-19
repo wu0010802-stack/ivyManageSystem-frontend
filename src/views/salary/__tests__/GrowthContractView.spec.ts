@@ -642,6 +642,32 @@ describe('GrowthContractView', () => {
         expect(wrapper.text()).toContain(formatCurrency(7440))
     })
 
+    it('⑨-b 結算回應含 skipped_self（稽核 F08 本人不得發放給自己）→ 結果與提示列出須由他人結算的員工', async () => {
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        settleGrowthContractMock.mockResolvedValue({
+            data: {
+                school_year: 115,
+                paid_period: '115-08',
+                created: [{ employee_id: 2, employee_name: '林慧慈', amount: 7440 }],
+                skipped_already_paid: [],
+                skipped_self: [{ employee_id: 1, employee_name: '黃主任' }],
+                total_amount: 7440,
+            },
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        await vm.doSettle()
+        await flushPromises()
+
+        const [toast] = vi.mocked(ElMessage.success).mock.calls.at(-1) ?? []
+        expect(String(toast)).toContain('本人須由他人結算 1 位')
+        const alert = wrapper.find('.settle-result-alert')
+        expect(alert.text()).toContain('本人須由他人結算 1 位')
+        expect(alert.text()).toContain('黃主任')
+    })
+
     it('⑩ 結算確認文案不得出現「不可撤銷」（per-employee 冪等，可再結算補發，不是招生獎金那種整批不可逆鎖定）', async () => {
         vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
         settleGrowthContractMock.mockResolvedValue({
