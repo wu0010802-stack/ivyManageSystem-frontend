@@ -20,7 +20,7 @@ const query = reactive({
   month: now.getMonth() + 1,
 })
 
-interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; [key: string]: unknown }
+interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; is_holiday?: boolean; holiday_name?: string | null; [key: string]: unknown }
 interface SwapRequest { is_mine?: boolean; id?: number; [key: string]: unknown }
 
 // Schedule data
@@ -78,13 +78,14 @@ const selectedDayLabel = computed(() => {
 const canSwapSelected = computed(() => {
   const d = selectedDay.value
   if (!d) return false
-  return !!d.shift_name && !d.is_weekend
+  return !!d.shift_name && !d.is_weekend && !d.is_holiday
 })
 
 // 抽屜底下的說明：不能換的原因；能換但日期已過則提醒會走補登
 const swapSheetHint = computed(() => {
   const d = selectedDay.value
   if (!d) return ''
+  if (d.is_holiday) return `${d.holiday_name || '國定假日'}：國定假日不需申請換班`
   if (!d.shift_name) return '此日無排班，不需申請換班'
   if (d.is_weekend) return '週末無排班，不需申請換班'
   if (!isFutureDate(d.date ?? '')) return BACKDATED_SHEET_HINT

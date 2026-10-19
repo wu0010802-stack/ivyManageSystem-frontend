@@ -1,5 +1,5 @@
 <script setup lang="ts">
-interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; [key: string]: unknown }
+interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; is_holiday?: boolean; holiday_name?: string | null; [key: string]: unknown }
 
 defineProps<{
   weeks: (DayObj | null)[][]
@@ -45,6 +45,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
       >
         <template v-if="day">
           <div class="cell-day">{{ day.day }}</div>
+          <div v-if="day.is_holiday" class="cell-holiday" data-test="cell-holiday">{{ day.holiday_name || '國定假日' }}</div>
           <div v-if="day.shift_name" class="cell-shift">{{ day.shift_name }}</div>
           <!-- 手機一格只剩約 45px：起訖拆兩行、隱藏「~」，避免撐破七欄（10-12 實測週六整欄被裁） -->
           <div v-if="day.work_start" class="cell-time">
@@ -56,8 +57,9 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
           <!-- 換班按鈕：desktop only；mobile 改走 cell-click BottomSheet -->
           <!-- 用 div 攔截 click 冒泡，避免同時觸發 cell-click -->
           <!-- 過去日期也開放（SPEC-026 3-3）：後端改建「補登」確認項目，鈕文字改為「補登換班」 -->
+          <!-- 國定假日後端拒絕換班，不給按鈕 -->
           <div
-            v-if="day.shift_name && !day.is_weekend"
+            v-if="day.shift_name && !day.is_weekend && !day.is_holiday"
             class="cell-swap-btn-wrap"
             @click.stop
           >
@@ -147,6 +149,13 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 .cell-time {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.cell-holiday {
+  font-size: var(--text-xs, 12px);
+  color: var(--el-color-danger);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .cell-override {

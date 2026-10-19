@@ -217,3 +217,19 @@ describe('PortalScheduleView 手機日格抽屜（過去日期可補登）', () 
     expect(weekend.get('[data-test="day-sheet"]').text()).toContain('週末無排班，不需申請換班')
   })
 })
+
+describe('PortalScheduleView 國定假日不能換班（QA #11 前端）', () => {
+  it('手機點國定假日格：寫出假日名稱、申請換班停用', async () => {
+    const w = await mountView()
+    w.findComponent(ScheduleCalendarGrid).vm.$emit('cell-click', {
+      day: 10, date: '2099-10-10', is_weekend: false, shift_name: '早車', work_start: '07:00', work_end: '16:30',
+      is_override: false, is_holiday: true, holiday_name: '國慶日',
+    })
+    await flushPromises()
+    const sheet = w.get('[data-test="day-sheet"]')
+    expect(sheet.text()).toContain('國慶日')
+    expect(sheet.text()).toContain('國定假日不需申請換班')
+    const btn = sheet.findAll('button').find((b) => b.text() === '申請換班')!
+    expect(btn.attributes('disabled')).toBeDefined()
+  })
+})
