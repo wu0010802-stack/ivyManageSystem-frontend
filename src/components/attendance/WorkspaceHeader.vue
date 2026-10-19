@@ -30,6 +30,7 @@
           <el-dropdown-menu>
             <el-dropdown-item v-if="canPayrollCompare" command="payroll">薪資扣項核對</el-dropdown-item>
             <el-dropdown-item command="export">匯出月報</el-dropdown-item>
+            <el-dropdown-item v-if="canWrite" command="recalculate">重算本月出勤…</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -62,6 +63,8 @@ const emit = defineEmits<{
   (e: 'import'): void
   (e: 'export'): void
   (e: 'payroll'): void
+  /** 依目前班表重算本月已匯入的出勤（改了員工上下班時間或班別時段之後） */
+  (e: 'recalculate'): void
 }>()
 
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
@@ -76,6 +79,7 @@ function openKiosk() {
 function onMonthTool(command: string | number | object): void {
   if (command === 'payroll') emit('payroll')
   else if (command === 'export') emit('export')
+  else if (command === 'recalculate') emit('recalculate')
 }
 
 const now = new Date()

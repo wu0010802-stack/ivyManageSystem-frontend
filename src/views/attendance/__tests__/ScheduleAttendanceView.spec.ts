@@ -88,7 +88,7 @@ const ImportPreviewDialogStub = {
 const WorkspaceHeaderStub = {
   name: 'WorkspaceHeader',
   props: ['year', 'month', 'canPayrollCompare'],
-  emits: ['update:year', 'update:month', 'update:period', 'import', 'export', 'payroll'],
+  emits: ['update:year', 'update:month', 'update:period', 'import', 'export', 'payroll', 'recalculate'],
   template: `<div class="workspace-header-stub"><slot /><slot name="month-tools" /></div>`,
 }
 
@@ -108,7 +108,8 @@ const ScheduleGridPanelStub = {
   template: '<div class="grid-panel-stub" />',
 }
 const rotationMounts = { count: 0 }
-const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary', 'records', 'import'], template: '<div class="month-progress-stub" />' }
+const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary', 'records', 'import', 'recalculate'], template: '<div class="month-progress-stub" />' }
+const RecalcDrawerStub = { name: 'RecalculateAttendanceDrawer', props: ['modelValue', 'year', 'month', 'mobile'], emits: ['update:modelValue', 'done'], template: '<div class="recalc-stub" />' }
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
   MonthProgressBar: MonthProgressBarStub,
@@ -123,6 +124,7 @@ const STUBS = {
   AnomalyQueueColumn: AnomalyQueueColumnStub,
   DetailColumn: DetailColumnStub,
   ImportPreviewDialog: ImportPreviewDialogStub,
+  RecalculateAttendanceDrawer: RecalcDrawerStub,
   WorkspaceHeader: WorkspaceHeaderStub,
   AttendanceMonthStats: AttendanceMonthStatsStub,
   'el-tabs': { template: '<div class="el-tabs"><slot /></div>' },
@@ -564,6 +566,28 @@ describe('班表核對與明細互通', () => {
     // 格子自己的編輯：本月進度重算，格子不重複載入（格子已自行 reload）
     expect(monthApi.grid.mock.calls.length).toBe(monthCallsBefore + 1)
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('月結選單與本月設定檢查都能開「重算本月出勤」；重算完整頁重抓', async () => {
+    mockHasPermission.mockReturnValue(true)
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    const drawer = () => wrapper.findComponent(RecalcDrawerStub)
+    expect(drawer().props('modelValue')).toBe(false)
+    expect([drawer().props('year'), drawer().props('month')]).toEqual([2026, 9])
+    wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('recalculate')
+    await flushPromises()
+    expect(drawer().props('modelValue')).toBe(true)
+    drawer().vm.$emit('update:modelValue', false)
+    wrapper.findComponent(MonthProgressBarStub).vm.$emit('recalculate')
+    await flushPromises()
+    expect(drawer().props('modelValue')).toBe(true)
+    const before = monthApi.grid.mock.calls.length
+    drawer().vm.$emit('done')
+    await flushPromises()
+    expect(monthApi.grid.mock.calls.length).toBe(before + 1)
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBeGreaterThan(0)
     wrapper.unmount()
   })
 

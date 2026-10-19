@@ -45,8 +45,8 @@ describe('AttendancePatternList', () => {
 
     const offset = wrapper.get('[data-test="pattern-section-fixed_offset"]')
     expect(offset.text()).toContain('每天固定遲到或早退（1 人）')
-    // 改了設定要重匯才會重算扣款（存檔的遲到早退不會自己變）
-    expect(offset.text()).toContain('重新匯入本月打卡')
+    // 改了設定要重算才會照新時段扣款（存檔的遲到早退不會自己變）
+    expect(offset.text()).toContain('按「重算本月出勤」')
     const item = wrapper.get('[data-test="pattern-9"]')
     // 這個人還有 3 格是別的待處理：分開寫
     expect(item.text()).toContain('17 格是這個型態（共待處理 20 格）')
@@ -78,5 +78,15 @@ describe('AttendancePatternList', () => {
     const wrapper = mountList([halfDay])
     expect(wrapper.find('[data-test="pattern-section-no_punches"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="pattern-section-fixed_offset"]').exists()).toBe(true)
+  })
+})
+
+describe('AttendancePatternList 重算本月出勤', () => {
+  it('時段型態那段給「重算本月出勤」（要有出勤寫入權限）', async () => {
+    const wrapper = mountList([notInImport, halfDay])
+    await wrapper.get('[data-test="pattern-recalculate"]').trigger('click')
+    expect(wrapper.emitted('recalculate')).toHaveLength(1)
+    perms.set = new Set(['ATTENDANCE_READ'])
+    expect(mountList([halfDay]).find('[data-test="pattern-recalculate"]').exists()).toBe(false)
   })
 })

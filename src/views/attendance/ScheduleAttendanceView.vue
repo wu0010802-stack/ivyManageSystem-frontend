@@ -16,11 +16,12 @@
           @import="openImport"
           @export="onExport"
           @payroll="payrollOpen = true"
+          @recalculate="recalcOpen = true"
         />
       </template>
     </PageHeader>
 
-    <MonthProgressBar v-show="activeTab === 'grid' || activeTab === 'records'" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" />
+    <MonthProgressBar v-show="activeTab === 'grid' || activeTab === 'records'" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" @recalculate="recalcOpen = true" />
 
     <div class="workspace-mode" role="tablist" aria-label="排班與出勤檢視">
       <button
@@ -164,6 +165,8 @@
     <el-drawer v-if="canViewAttendance && ws.hasCurrentData.value" v-model="anomalyDrawerOpen" title="全月出勤異常（全體人員）" :size="isMobile ? '100%' : '480px'" append-to-body>
       <AnomalyQueueColumn :items="ws.anomalyQueue.value" :selected-index="selectedAnomalyIndex" :loading="ws.loading.value" @select="onAnomalySelect" @filter-change="onFilterChange" @resolved="onDetailResolved" />
     </el-drawer>
+    <!-- 重算本月出勤（改了員工上下班時間或班別時段之後）：試算後確認，完成後整頁重抓 -->
+    <RecalculateAttendanceDrawer v-if="canViewAttendance" v-model="recalcOpen" :year="query.year" :month="query.month" :mobile="isMobile" @done="onDetailResolved" />
     <!-- 匯入 dialog -->
     <ImportPreviewDialog
       v-if="canViewAttendance"
@@ -205,6 +208,7 @@ const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/
 const DutyRotationPanel = defineAsyncComponent(() => import('@/components/schedule/DutyRotationPanel.vue'))
 const SwapHistoryPanel = defineAsyncComponent(() => import('@/components/schedule-attendance/SwapHistoryPanel.vue'))
 const ShiftTypesPanel = defineAsyncComponent(() => import('@/components/schedule-attendance/ShiftTypesPanel.vue'))
+const RecalculateAttendanceDrawer = defineAsyncComponent(() => import('@/components/attendance/RecalculateAttendanceDrawer.vue'))
 
 export type WorkspaceTab = 'grid' | 'records' | 'rotation' | 'swaps' | 'shifts'
 
@@ -355,6 +359,7 @@ const focusDate = ref<string | null>(null)
 const importContext = ref<{ employee_id: number; employee_name: string; date: string } | null>(null)
 function openImport(): void { importContext.value = null; importOpen.value = true }
 const payrollOpen = ref(false)
+const recalcOpen = ref(false)
 const importRevision = ref(0)
 watch(() => [query.year, query.month], () => {
   const monthPrefix = `${query.year}-${String(query.month).padStart(2, '0')}`

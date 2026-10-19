@@ -41,7 +41,7 @@
       <button type="button" class="month-progress__link" data-test="progress-retry" @click="month.reload()">重試</button>
     </p>
     <el-drawer v-if="canViewAttendance" v-model="patternsOpen" title="本月設定檢查" :size="mobile ? '100%' : '520px'" append-to-body>
-      <AttendancePatternList v-if="patternsOpen" :patterns="patterns" @records="onPatternRecords" @import="onPatternImport" />
+      <AttendancePatternList v-if="patternsOpen" :patterns="patterns" @records="onPatternRecords" @import="onPatternImport" @recalculate="onPatternRecalculate" />
     </el-drawer>
     <el-drawer v-if="canConfirmRounds" v-model="roundsOpen" title="月底出勤確認（老師確認）" :size="mobile ? '100%' : '640px'" append-to-body @closed="emit('changed')">
       <ConfirmationRoundBar v-if="roundsOpen" :start="range.start" :end="range.end" />
@@ -82,6 +82,8 @@ const emit = defineEmits<{
   records: [employeeId: number, date: string]
   /** 設定檢查清單：開匯入打卡（重新匯入時把卡號對上） */
   import: []
+  /** 設定檢查清單：重算本月出勤 */
+  recalculate: []
 }>()
 
 const range = computed(() => props.month.range.value)
@@ -109,6 +111,10 @@ function onPatternRecords(employeeId: number, date: string): void {
 function onPatternImport(): void {
   patternsOpen.value = false
   emit('import')
+}
+function onPatternRecalculate(): void {
+  patternsOpen.value = false
+  emit('recalculate')
 }
 
 // ④：最新輪次狀態（D-07）。狀態只是輔助，讀不到就不顯示，按鈕照常可開抽屜。

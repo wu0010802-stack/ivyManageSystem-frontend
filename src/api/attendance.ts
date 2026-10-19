@@ -69,6 +69,12 @@ export const batchConfirmAnomalies = (
 ): AxiosResp<'/attendance/anomalies/batch-confirm', 'post'> =>
   api.post('/attendance/anomalies/batch-confirm', payload)
 
+// 依目前的班表、員工上下班時間與員工類型重算一個月已匯入的出勤（預設 dry_run 只試算）
+export const recalculateAttendance = (
+  payload: ApiBody<'/attendance/recalculate', 'post'>,
+): AxiosResp<'/attendance/recalculate', 'post'> =>
+  api.post('/attendance/recalculate', payload)
+
 export const exportAnomalies = (year: number, month: number, status = 'all') =>
   api.get('/attendance/anomalies/export', { params: { year, month, status }, responseType: 'blob' })
 

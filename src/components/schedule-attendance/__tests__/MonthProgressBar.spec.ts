@@ -375,6 +375,19 @@ describe('MonthProgressBar 本月設定檢查', () => {
     wrapper.unmount()
   })
 
+  it('清單的「重算本月出勤」往上送給頁面並收起清單', async () => {
+    api.grid.mockImplementation(async () => ({ data: patternGrid() }))
+    const wrapper = mountBar({ stubTeleport: false })
+    await flushPromises()
+    await wrapper.get('[data-test="progress-patterns"]').trigger('click')
+    await flushPromises()
+    wrapper.findComponent(AttendancePatternList).vm.$emit('recalculate')
+    await flushPromises()
+    expect(wrapper.emitted('recalculate')).toHaveLength(1)
+    expect(patternDrawer(wrapper).props('modelValue')).toBe(false)
+    wrapper.unmount()
+  })
+
   it('沒有型態、或沒有出勤讀取權限：不顯示', async () => {
     const wrapper = mountBar()
     await flushPromises()

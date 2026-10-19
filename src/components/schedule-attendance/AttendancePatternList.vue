@@ -27,7 +27,8 @@
 
     <section v-if="offsets.length" class="pattern-list__section" data-test="pattern-section-fixed_offset" aria-labelledby="pattern-fixed-offset">
       <h3 id="pattern-fixed-offset">每天固定遲到或早退（{{ offsets.length }} 人）</h3>
-      <p class="pattern-list__consequence">到員工資料按「編輯」改上下班時間或員工類型後，要重新匯入本月打卡，遲到、早退的扣款才會照新時段重算。</p>
+      <p class="pattern-list__consequence">到員工資料按「編輯」改上下班時間或員工類型後，按「重算本月出勤」，遲到、早退的扣款才會照新時段重算。</p>
+      <el-button v-if="canImport" class="pattern-list__recalc" data-test="pattern-recalculate" @click="emit('recalculate')">重算本月出勤</el-button>
       <ul class="pattern-list__items">
         <li v-for="p in offsets" :key="p.employeeId" class="pattern-list__item" :data-test="`pattern-${p.employeeId}`">
           <p class="pattern-list__who">
@@ -60,6 +61,8 @@ const emit = defineEmits<{
   records: [employeeId: number, date: string]
   /** 開匯入打卡（重新匯入時在卡號對照把人對上） */
   import: []
+  /** 依目前班表重算本月出勤（改了上下班時間或員工類型之後） */
+  recalculate: []
 }>()
 
 const NOT_IN_IMPORT_HINT = '多半是打卡機卡號還沒對照到這位員工：重新匯入打卡檔時，在卡號對照把卡號對到這位員工。若這位員工本來就不用打卡，這些天要補登或請假。'
@@ -83,6 +86,7 @@ const offsets = computed(() => props.patterns.filter((p): p is FixedOffsetPatter
 .pattern-list__intro { color: var(--el-text-color-regular); font-size: var(--text-sm); line-height: 1.6; }
 .pattern-list__section h3 { margin: 0 0 var(--space-1); font-size: var(--text-base); }
 .pattern-list .pattern-list__consequence { margin-bottom: var(--space-2); color: var(--color-warning-darker); font-size: var(--text-sm); }
+.pattern-list__recalc { margin-bottom: var(--space-2); }
 .pattern-list__items { display: grid; margin: 0; padding: 0; list-style: none; }
 .pattern-list__item { display: grid; gap: var(--space-1); padding: var(--space-3) 0; border-top: 1px solid var(--el-border-color-lighter); }
 .pattern-list__who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }

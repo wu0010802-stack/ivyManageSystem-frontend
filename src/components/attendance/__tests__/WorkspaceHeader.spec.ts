@@ -4,6 +4,9 @@ import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import WorkspaceHeader from '../WorkspaceHeader.vue'
 
+const perms = vi.hoisted(() => ({ set: new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE']) }))
+vi.mock('@/utils/auth', () => ({ hasPermission: (code: string) => perms.set.has(code) }))
+
 // 真實 router（memory history）：讓組件內 useRouter().resolve 產生真實 href，
 // 少 mock、更貼近實際行為。註冊 kiosk-punch 路由即可。
 const router = createRouter({
@@ -33,7 +36,15 @@ const ElStatistic = {
   template: `<div class="el-statistic-stub">{{ title }}</div>`,
 }
 
-const stubs = { ElButton, ElSelect, ElOption, ElStatistic }
+const ElDropdown = {
+  name: 'ElDropdown',
+  emits: ['command'],
+  template: `<div class="el-dropdown-stub"><slot /><slot name="dropdown" /></div>`,
+}
+const ElDropdownMenu = { template: `<div><slot /></div>` }
+const ElDropdownItem = { props: ['command'], template: `<div class="dd-item" :data-command="command"><slot /></div>` }
+
+const stubs = { ElButton, ElSelect, ElOption, ElStatistic, ElDropdown, ElDropdownMenu, ElDropdownItem }
 
 function mountHeader(period: { year?: number; month?: number } = {}) {
   return mount(WorkspaceHeader, {
@@ -77,5 +88,21 @@ describe('WorkspaceHeader — 電子打卡入口', () => {
     expect(openSpy).toHaveBeenCalledTimes(1)
     expect(openSpy).toHaveBeenCalledWith('/kiosk/punch', '_blank')
     openSpy.mockRestore()
+  })
+})
+
+describe('WorkspaceHeader — 月結選單', () => {
+  it('有出勤寫入權限：列出「重算本月出勤」，選了送出 recalculate', async () => {
+    perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
+    const wrapper = mountHeader()
+    expect(wrapper.find('[data-command="recalculate"]').text()).toBe('重算本月出勤…')
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'recalculate')
+    expect(wrapper.emitted('recalculate')).toHaveLength(1)
+  })
+
+  it('沒有出勤寫入權限：不列重算', () => {
+    perms.set = new Set(['ATTENDANCE_READ'])
+    expect(mountHeader().find('[data-command="recalculate"]').exists()).toBe(false)
+    perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
   })
 })
