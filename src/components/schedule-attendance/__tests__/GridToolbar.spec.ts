@@ -14,13 +14,28 @@ function mountToolbar(props: Partial<InstanceType<typeof GridToolbar>['$props']>
 }
 
 describe('GridToolbar', () => {
-  it('上下週與日期選擇一律對齊週一', async () => {
+  it('上下週對齊週一；日期選擇器保留使用者選的那天（QA P3：寫成週一會讓跨月週跳到上個月）', async () => {
     const wrapper = mountToolbar()
     expect(wrapper.text()).toContain('9/14～9/20')
     await wrapper.find('[data-test="toolbar-prev"]').trigger('click')
     await wrapper.find('[data-test="toolbar-next"]').trigger('click')
     wrapper.findComponent({ name: 'ElDatePicker' }).vm.$emit('update:modelValue', '2026-10-01')
-    expect(wrapper.emitted('update:weekStart')).toEqual([['2026-09-07'], ['2026-09-21'], ['2026-09-28']])
+    expect(wrapper.emitted('update:weekStart')).toEqual([['2026-09-07'], ['2026-09-21'], ['2026-10-01']])
+  })
+
+  it('上下週跨月：該週有落在原月的日子就用原月的第一天（比照 openWeek），整週離開原月才用週一', async () => {
+    // 10 月：從 10/5 週往前到 9/28 週（9/28–10/4）仍含 10 月 → 10/1，不跳到 9 月
+    const oct = mountToolbar({ weekStart: '2026-10-05', date: '2026-10-07' })
+    await oct.find('[data-test="toolbar-prev"]').trigger('click')
+    // 10 月：從 9/28 週（錨點 10/1）再往前到 9/21 週：整週在 9 月 → 週一
+    const oct2 = mountToolbar({ weekStart: '2026-09-28', date: '2026-10-01' })
+    await oct2.find('[data-test="toolbar-prev"]').trigger('click')
+    // 9 月往後到 9/28 週：週一在 9 月 → 9/28
+    const sep = mountToolbar({ weekStart: '2026-09-21', date: '2026-09-21' })
+    await sep.find('[data-test="toolbar-next"]').trigger('click')
+    expect(oct.emitted('update:weekStart')).toEqual([['2026-10-01']])
+    expect(oct2.emitted('update:weekStart')).toEqual([['2026-09-21']])
+    expect(sep.emitted('update:weekStart')).toEqual([['2026-09-28']])
   })
 
   it('篩選切換與問題數', () => {

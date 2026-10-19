@@ -30,7 +30,7 @@
     <div v-else class="grid-toolbar__nav" role="group" aria-label="選擇週次">
       <el-button :icon="ArrowLeft" data-test="toolbar-prev" :disabled="saving" @click="go(-7)">上週</el-button>
       <el-date-picker
-        :model-value="weekStart"
+        :model-value="anchor"
         type="date"
         format="YYYY-MM-DD"
         value-format="YYYY-MM-DD"
@@ -39,7 +39,7 @@
         aria-label="週次日期"
         class="grid-toolbar__picker"
         data-test="toolbar-date"
-        @update:model-value="(v: string | null) => v && emit('update:weekStart', mondayOf(v))"
+        @update:model-value="(v: string | null) => v && emit('update:weekStart', v)"
       />
       <el-button data-test="toolbar-next" :disabled="saving" @click="go(7)">下週 <el-icon><ArrowRight /></el-icon></el-button>
       <span class="grid-toolbar__label">{{ weekLabel }}</span>
@@ -104,7 +104,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowDown, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { addDaysISO, mondayOf, shiftMonthISO, type GridFilter, type GridView } from '@/utils/scheduleAttendanceGrid'
+import { addDaysISO, shiftMonthISO, type GridFilter, type GridView } from '@/utils/scheduleAttendanceGrid'
 
 export type ToolbarCommand = 'copy-week' | 'copy-prev-month' | 'import' | 'template' | 'export'
 
@@ -148,8 +148,17 @@ const weekLabel = computed(() => {
   return `${fmt(props.weekStart)}～${fmt(end)}`
 })
 
+/**
+ * 上下週：錨點決定整頁的月份（本月進度等）。新的一週若仍有日子落在原本的月份，用該週落在原月的第一天
+ * （比照 ScheduleGridPanel.openWeek）；整週都離開原月才用週一。直接寫週一會讓跨月週整頁跳到上個月（QA P3）。
+ */
 function go(days: number): void {
-  emit('update:weekStart', addDaysISO(props.weekStart, days))
+  const monday = addDaysISO(props.weekStart, days)
+  const sunday = addDaysISO(monday, 6)
+  const month = anchor.value.slice(0, 7)
+  const monthStart = `${month}-01`
+  const overlapsMonth = monday.slice(0, 7) === month || sunday.slice(0, 7) === month
+  emit('update:weekStart', overlapsMonth && monday < monthStart ? monthStart : monday)
 }
 
 function onCommand(command: string | number | object): void {
