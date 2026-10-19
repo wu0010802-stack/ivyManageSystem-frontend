@@ -128,6 +128,22 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
   },
 ]
 
+/**
+ * 寫入需「超級管理員」的 key（內控開關＋安全邊界設定）。
+ *
+ * 與後端 `api/system_config.py::INTERNAL_CONTROL_CONFIG_KEYS`（安全稽核 F22）
+ * 手動同步：這些 key 關掉／放寬＝削弱內控或把守衛打開，只有 SETTINGS_WRITE 的
+ * 行政寫入會被後端 403。前端只用來把欄位改唯讀並提示，授權仍以後端為準。
+ * `gov_subsidy.sod_mode` 目前不在本 tab 顯示，列入是為了日後任何畫面共用同一份清單。
+ */
+export const SUPER_ADMIN_ONLY_CONFIG_KEYS: ReadonlySet<string> = new Set([
+  'gov_subsidy.sod_mode',
+  'consent.enforcement_enabled',
+  'leave.ot_offset_enabled',
+  'kiosk.allowed_ips',
+  'auth.school_wifi_ips',
+])
+
 export const ALL_SYSTEM_CONFIG_FIELDS: SystemConfigFieldDef[] = SYSTEM_CONFIG_SECTIONS.flatMap(
   (section) => section.fields,
 )

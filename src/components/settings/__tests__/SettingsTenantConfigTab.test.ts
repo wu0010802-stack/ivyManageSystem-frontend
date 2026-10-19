@@ -14,8 +14,10 @@ vi.mock('@/api/systemConfig', () => ({
 }))
 
 const hasPermissionMock = vi.fn()
+const isSuperAdminMock = vi.fn()
 vi.mock('@/utils/auth', () => ({
   hasPermission: (...a: unknown[]) => hasPermissionMock(...(a as [string])),
+  isSuperAdmin: () => isSuperAdminMock(),
 }))
 
 vi.mock('element-plus', () => ({
@@ -102,6 +104,7 @@ describe('SettingsTenantConfigTab — 12 項（onboarding 非 bank 10 項 + POS 
   beforeEach(() => {
     vi.clearAllMocks()
     hasPermissionMock.mockReturnValue(true)
+    isSuperAdminMock.mockReturnValue(true)
     updateSystemConfig.mockResolvedValue({
       data: { config_key: 'x', config_value: 'true', is_default: false },
     })
@@ -241,5 +244,65 @@ describe('SettingsTenantConfigTab — 12 項（onboarding 非 bank 10 項 + POS 
 
     expect(wrapper.text()).toContain('目前帳號無系統設定編輯權限')
     expect(wrapper.findAll('button').length).toBe(0)
+  })
+
+  describe('內控／安全邊界 key 需超級管理員（後端 INTERNAL_CONTROL_CONFIG_KEYS，稽核 F22）', () => {
+    const SUPER_KEYS_IN_TAB = [
+      'kiosk.allowed_ips',
+      'auth.school_wifi_ips',
+      'consent.enforcement_enabled',
+      'leave.ot_offset_enabled',
+    ]
+
+    it('有 SETTINGS_WRITE 但非超級管理員：這些 key 唯讀並提示「需超級管理員」，其餘欄位照常可編輯', async () => {
+      isSuperAdminMock.mockReturnValue(false)
+      mock404All()
+
+      const wrapper = mountPanel()
+      await flushPromises()
+      await nextTick()
+
+      for (const key of SUPER_KEYS_IN_TAB) {
+        const rowEl = wrapper.find(`[data-test="config-row-${key}"]`)
+        expect(rowEl.exists(), key).toBe(true)
+        expect(rowEl.text(), key).toContain('需超級管理員')
+        expect(rowEl.find('input').attributes('disabled'), key).toBeDefined()
+        expect(rowEl.findAll('button'), key).toHaveLength(0)
+      }
+
+      const orgRow = wrapper.find('[data-test="config-row-org_name"]')
+      expect(orgRow.text()).not.toContain('需超級管理員')
+      expect(orgRow.find('input').attributes('disabled')).toBeUndefined()
+      expect(orgRow.findAll('button').length).toBeGreaterThan(0)
+    })
+
+    it('非超級管理員即使繞過 UI 呼叫 saveConfig，也不送出內控 key 的 PUT', async () => {
+      isSuperAdminMock.mockReturnValue(false)
+      mock404All()
+
+      const wrapper = mountPanel()
+      await flushPromises()
+      await nextTick()
+
+      const row = findRow(wrapper, 'consent.enforcement_enabled')
+      row._editBool = true
+      const state = wrapper.vm.$.setupState as unknown as SetupState
+      await state.saveConfig(row)
+      await flushPromises()
+
+      expect(updateSystemConfig).not.toHaveBeenCalled()
+    })
+
+    it('超級管理員：不顯示「需超級管理員」提示，可編輯', async () => {
+      mock404All()
+
+      const wrapper = mountPanel()
+      await flushPromises()
+      await nextTick()
+
+      expect(wrapper.text()).not.toContain('需超級管理員')
+      const rowEl = wrapper.find('[data-test="config-row-kiosk.allowed_ips"]')
+      expect(rowEl.find('input').attributes('disabled')).toBeUndefined()
+    })
   })
 })
