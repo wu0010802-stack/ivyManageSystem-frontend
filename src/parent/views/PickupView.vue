@@ -45,6 +45,8 @@ interface PickupAuth {
   effective_status: string
   batch_key: string | null
   pickup_code?: string | null
+  /** 後端 sec-round5 起必填；舊後端回應沒有此欄位時為 undefined。 */
+  created_by_me?: boolean
   [key: string]: unknown
 }
 
@@ -87,10 +89,11 @@ const historyAuths = computed(() =>
 )
 const showHistory = ref(false)
 
-// F02（2026-10-19）：後端只對「建立者本人」回傳 active 授權的明碼，重發／取消
-// 也只限建立者。回應沒有 created_by_me 欄位，故以「active 且有明碼」判定為
-// 本人建立；無明碼者（同學生另一位監護人建立）隱藏會被 403 的兩顆按鈕。
+// F02（2026-10-19）：重發／取消只限建立者本人。以後端回傳的 created_by_me 判定
+// （他人建立與明碼缺漏兩種 pickup_code=null 語意不同，不可從明碼反推）；只有舊後端
+// 回應沒有該欄位時，才退回「active 且有明碼」判定。非本人建立者隱藏會被 403 的兩顆按鈕。
 function isOwnActiveAuth(a: PickupAuth): boolean {
+  if (typeof a.created_by_me === 'boolean') return a.created_by_me
   return !!a.pickup_code
 }
 
