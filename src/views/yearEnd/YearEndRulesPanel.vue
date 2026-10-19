@@ -68,10 +68,10 @@ const afterClassAwardRows = ref<AfterClassAwardEntry[]>([])
 // 才藝老師年終收款人 employee id list
 const artTeacherEmployeeIds = ref<number[]>([])
 
-// G15（園方福利辦法 115.01.01）：紅利才藝參與率逐年級門檻（顯示用百分比，0~100）。
+// G15（園方福利辦法 115.01.01）：紅利才藝人次比率逐年級門檻（顯示用百分比，0~100）。
 // 任一年級留空＝該年級沿用單一門檻 dividend_activity_threshold；四年級皆空 → 送出 null。
 const gradeThresholdPercents = reactive<GradeThresholdPercents>(emptyGradeThresholdPercents())
-// G15：幼生該學期出席堂數「超過」此值才計入才藝參與率分子；null＝停用堂數條件。
+// G15：逐門課判定：幼生在某門課出席堂數「超過」此值，該門才計入 1 人次；null＝停用堂數條件。
 const dividendActivityMinSessions = ref<number | null>(null)
 
 // G8（年終批次2）：教課獎勵金——暫依 Excel 慣例（R1）每滿 N 堂計 1 次 × 單價。
@@ -411,7 +411,7 @@ onMounted(() => {
         <el-button size="small" link @click="clearAllGradeThresholds">清空全部年級門檻</el-button>
       </div>
       <p class="desc-text">
-        逐年級設定才藝參與率門檻（百分比，0–100）；未設定之年級沿用上方「才藝率門檻」單一值。
+        逐年級設定才藝人次比率門檻（百分比，人次÷在籍）；未設定之年級沿用上方「才藝率門檻」單一值。
         四個年級皆清空即整組回退為單一門檻。
       </p>
       <el-row :gutter="20">
@@ -434,8 +434,8 @@ onMounted(() => {
         <el-col :span="12">
           <el-form-item>
             <template #label>
-              <el-tooltip content="幼生該學期出席堂數「超過」此值才計入才藝參與率分子" placement="top">
-                <span>幼生出席逾 N 堂才計入參加率</span>
+              <el-tooltip content="逐門課判定：幼生在某門課該學期出席堂數「超過」此值，該門才計入 1 人次（人次比率分子）" placement="top">
+                <span>單門課出席逾 N 堂才計入人次</span>
               </el-tooltip>
             </template>
             <el-input-number
