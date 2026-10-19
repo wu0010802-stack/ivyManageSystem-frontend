@@ -81,7 +81,8 @@ const emit = defineEmits<{
 }>()
 
 // ── 處理動作（與排班與出勤抽屜共用 useResolveAnomaly）──────────────────────────
-// 成功後不在此 emit navigate：容器 refresh 後同 index 自然顯示下一筆；navigate 只保留給 ResolveCard 的 ◀▶
+// 成功後不在此 emit navigate：容器 refresh 後依 attendance id 停在剛處理的那筆（清單保留已處理的日卡、
+// 重抓順序可能改變，不能靠索引）；navigate 只保留給 ResolveCard 的 ◀▶
 const { resolving, resolve } = useResolveAnomaly(() => emit('resolved'), 'DetailColumn.resolve')
 
 function onResolve(payload: ResolvePayload): void {

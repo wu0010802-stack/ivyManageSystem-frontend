@@ -1130,3 +1130,40 @@ describe('ScheduleAttendanceView 異常卡打卡紀錄載入狀態（QA #22）',
     wrapper.unmount()
   })
 })
+
+describe('ScheduleAttendanceView 異常選取以 attendance id 為準（QA P3）', () => {
+  beforeEach(() => {
+    getSummaryMock.mockReset().mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockReset().mockResolvedValue({ data: { items: sampleAnomalies, pending: 2, total: 2, confirmed: 0 } })
+    getRecordsMock.mockReset().mockResolvedValue({ data: [] })
+  })
+
+  it('處理後重抓順序改變：仍停在同一筆（同一人同一天），不跳到別人', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 1)
+    await flushPromises()
+    const dc = wrapper.findComponent(DetailColumnStub)
+    expect(dc.props('anomaly')).toMatchObject({ id: 11 })
+    // 後端回傳順序改變（無 ORDER BY）
+    getAnomalyListMock.mockResolvedValue({ data: { items: [...sampleAnomalies].reverse(), pending: 2, total: 2, confirmed: 0 } })
+    dc.vm.$emit('resolved')
+    await flushPromises()
+    expect(dc.props('anomaly')).toMatchObject({ id: 11 })
+    expect(dc.props('anomalyIndex')).toBe(0)
+    expect(wrapper.findComponent(AnomalyQueueColumnStub).props('selectedIndex')).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('選取的那筆消失：停在原位置（夾在範圍內）', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 1)
+    await flushPromises()
+    getAnomalyListMock.mockResolvedValue({ data: { items: [sampleAnomalies[0]], pending: 1, total: 1, confirmed: 0 } })
+    wrapper.findComponent(DetailColumnStub).vm.$emit('resolved')
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('anomaly')).toMatchObject({ id: 10 })
+    wrapper.unmount()
+  })
+})

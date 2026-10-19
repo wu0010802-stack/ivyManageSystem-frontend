@@ -353,7 +353,21 @@ async function setView(view: GridView, date?: string): Promise<void> {
 
 // ── UI 狀態機 ────────────────────────────────────────────────────────────────
 const selectedEmployeeId = ref<number | null>(null)
-const selectedAnomalyIndex = ref(0)
+/**
+ * 選取以日卡的 attendance id 為準（QA P3）：處理後重抓的清單順序可能改變，用索引會跳到別人。
+ * 子元件仍以索引溝通；那筆消失時停在原位置（夾在範圍內）。
+ */
+const selectedAnomalyId = ref<number | null>(null)
+const lastAnomalyIndex = ref(0)
+const selectedAnomalyIndex = computed(() => {
+  const queue = ws.anomalyQueue.value
+  const found = selectedAnomalyId.value == null ? -1 : queue.findIndex((card) => card.id === selectedAnomalyId.value)
+  return found >= 0 ? found : Math.min(lastAnomalyIndex.value, Math.max(0, queue.length - 1))
+})
+function selectAnomalyAt(index: number): void {
+  lastAnomalyIndex.value = index
+  selectedAnomalyId.value = ws.anomalyQueue.value[index]?.id ?? null
+}
 const detailMode = ref<'resolve' | 'month'>('month')
 const anomalyDrawerOpen = ref(false)
 const importOpen = ref(false)
@@ -501,16 +515,15 @@ function onRosterSelect(id: number): void {
 function onAnomalySelect(idx: number): void {
   anomalyDrawerOpen.value = false
   focusDate.value = null
-  selectedAnomalyIndex.value = idx
+  selectAnomalyAt(idx)
   selectedEmployeeId.value = null // 走 anomaly.employee_number → roster 對照
   detailMode.value = 'resolve'
   if (isMobile.value) mobileTab.value = 'detail'
 }
 
+/** 重抓後：選取的那筆還在就跟著它（位置可能變了）；不在了就改選原位置的那筆 */
 function clampSelectedIndex(): void {
-  if (selectedAnomalyIndex.value >= ws.anomalyQueue.value.length) {
-    selectedAnomalyIndex.value = Math.max(0, ws.anomalyQueue.value.length - 1)
-  }
+  selectAnomalyAt(selectedAnomalyIndex.value)
 }
 
 // 明細快取失效（P1-4）：resolve/import/upsert/delete 後打卡事實已變，
@@ -542,7 +555,7 @@ async function onDetailResolved(): Promise<void> {
 
 function onNavigate(delta: number): void {
   const max = Math.max(0, ws.anomalyQueue.value.length - 1)
-  selectedAnomalyIndex.value = Math.min(Math.max(0, selectedAnomalyIndex.value + delta), max)
+  selectAnomalyAt(Math.min(Math.max(0, selectedAnomalyIndex.value + delta), max))
 }
 
 /**
