@@ -266,6 +266,18 @@
                     >
                   </span>
 
+                  <el-button
+                    v-if="canWrite && grp.name"
+                    link
+                    type="primary"
+                    size="small"
+                    :aria-label="`${grp.label} 補建月費單`"
+                    data-test="stmt-manual-monthly"
+                    @click.stop="openManualMonthly(grp)"
+                  >
+                    補建月費單
+                  </el-button>
+
                   <!-- 收款狀況集中右側：進度條、收齊幾人、未收金額相鄰一眼讀完；
                        已收齊的班不畫滿格進度條，直接標示 -->
                   <span v-if="grp.allPaid" class="group-status group-status--clear">
@@ -535,6 +547,15 @@
       </footer>
     </aside>
 
+    <ManualMonthlyRecordDialog
+      v-if="manualMonthlyMounted"
+      v-model="manualMonthlyVisible"
+      :month="month"
+      :classroom-name="manualMonthlyClass.label"
+      :classroom-id="manualMonthlyClass.id"
+      :statement-students="manualMonthlyClass.students"
+      @created="fetchStatement"
+    />
     <BatchPayDialog v-model="payDialogVisible" :records="payRecords" @paid="onPaid" />
     <PrepaymentDrawer
       v-model="drawerVisible"
@@ -577,6 +598,7 @@ import { todayISO } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import BatchPayDialog from '@/components/fees/BatchPayDialog.vue'
+import ManualMonthlyRecordDialog from '@/components/fees/ManualMonthlyRecordDialog.vue'
 import BillingCodeCell from '@/components/fees/BillingCodeCell.vue'
 import FeeClassRail from '@/components/fees/FeeClassRail.vue'
 import { buildClassGroups } from '@/components/fees/feeClassGrouping'
@@ -598,6 +620,7 @@ type MonthlyStatement = Awaited<ReturnType<typeof getFeeMonthlyStatement>>
 type StatementStudent = MonthlyStatement['students'][number]
 
 interface ClassroomLite {
+  id?: number | null
   name?: string | null
   grade_name?: string | null
   /** 班級代號（`小2`）；年段內的班序依它排 */
@@ -794,6 +817,36 @@ const students = computed<StatementStudent[]>(() => statement.value?.students ??
  * ——「哪一班還沒收齊」是這頁的固定問題，不該隨手上的篩選跳動。
  */
 const classGroups = computed(() => buildClassGroups(students.value, props.classrooms))
+
+// ─── 補建月費單（SPEC registered-headcount C14）────────────────────────────
+// 月表只有「該月已有費用單」的學生，月中轉入但沒單的新生不在其中，
+// 所以對話框另以班級 id 撈在學名單；id 查不到時退回月表學生＋「搜尋其他學生」。
+const manualMonthlyVisible = ref(false)
+// 首次開啟才掛載（內含學生挑選器會用到 Pinia store，不開就不載入）
+const manualMonthlyMounted = ref(false)
+const manualMonthlyClass = ref<{
+  label: string
+  id: number | null
+  students: { id: number; name: string }[]
+}>({ label: '', id: null, students: [] })
+
+function resolveClassroomId(statementName: string): number | null {
+  const bare = (n: string) => n.replace(/班$/, '')
+  const hit = props.classrooms.find((c) => c.name && bare(c.name) === bare(statementName))
+  return hit?.id ?? null
+}
+
+function openManualMonthly(grp: { name: string; label: string }) {
+  manualMonthlyClass.value = {
+    label: grp.label,
+    id: resolveClassroomId(grp.name),
+    students: students.value
+      .filter((s) => (s.classroom_name ?? '') === grp.name)
+      .map((s) => ({ id: s.student_id, name: s.student_name ?? `學生 ${s.student_id}` })),
+  }
+  manualMonthlyMounted.value = true
+  manualMonthlyVisible.value = true
+}
 
 /** 導覽列「全部」的計數；與各班 chip 同語意（未收齊人數），可直接相加驗算 */
 const totalUnpaidCount = computed(

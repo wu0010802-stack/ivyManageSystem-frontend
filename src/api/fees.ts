@@ -7,6 +7,11 @@ export const createManualFeeRecord = (
   payload: ApiBody<'/fees/records', 'post'>,
 ): AxiosResp<'/fees/records', 'post'> => api.post('/fees/records', payload)
 
+/** 逐生補建月費單（中途轉入等發單批次漏掉者）；該生該月已有月費單 → 409 MONTHLY_RECORD_EXISTS。 */
+export const createManualMonthlyRecord = (
+  payload: ApiBody<'/fees/records/monthly', 'post'>,
+): AxiosResp<'/fees/records/monthly', 'post'> => api.post('/fees/records/monthly', payload)
+
 export const getFeePeriods = (): Promise<ApiResponse<'/fees/periods', 'get'>> =>
   api.get('/fees/periods').then((res) => res.data)
 // params 維持 unknown：FeesTab.vue 以 Record<string, unknown> 建構（含條件式賦值），
