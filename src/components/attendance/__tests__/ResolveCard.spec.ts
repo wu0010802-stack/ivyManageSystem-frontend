@@ -357,3 +357,26 @@ describe('ResolveCard — 嵌在排班與出勤抽屜', () => {
     expect(mountCard({ item: itemMissingPunch, context: missingOutContext }).findAll('button').find((b) => b.text() === '補打卡並重算')!.attributes('data-type')).toBe('primary')
   })
 })
+
+describe('ResolveCard — 打卡紀錄未載入／載入失敗（QA #22）', () => {
+  const unknownContext = (records: 'loading' | 'failed') => ({ punch_in: null, punch_out: null, has_leave: false, estimated_deduction: 0, records })
+
+  it('載入中：不把「不知道」顯示成缺卡，不出補卡時間欄，補打卡停用；接受扣款／豁免仍可用', () => {
+    const w = mountCard({ item: itemMissingPunch, context: unknownContext('loading') as never })
+    expect(w.findAll('.el-time-picker')).toHaveLength(0)
+    expect(w.text()).toContain('打卡紀錄載入中')
+    const buttons = w.findAll('button')
+    expect(buttons.find((b) => b.text() === '補打卡並重算')!.attributes('disabled')).toBeDefined()
+    expect(buttons.find((b) => b.text() === '接受扣款')!.attributes('disabled')).toBeUndefined()
+    expect(buttons.find((b) => b.text() === '豁免')!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('載入失敗：寫出失敗並可重試，補打卡停用', async () => {
+    const w = mountCard({ item: itemMissingPunch, context: unknownContext('failed') as never })
+    expect(w.findAll('.el-time-picker')).toHaveLength(0)
+    expect(w.text()).toContain('打卡紀錄載入失敗')
+    expect(w.findAll('button').find((b) => b.text() === '補打卡並重算')!.attributes('disabled')).toBeDefined()
+    await w.findAll('button').find((b) => b.text() === '重試')!.trigger('click')
+    expect(w.emitted('retry')).toHaveLength(1)
+  })
+})

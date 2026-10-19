@@ -382,3 +382,12 @@ describe('DetailColumn — mutation in-flight（P1-4）', () => {
     expect(probe.attributes('data-busy')).toBe('false')
   })
 })
+
+describe('DetailColumn — 打卡紀錄重試（QA #22）', () => {
+  it('ResolveCard 要求重試時往上送 retryRecords', async () => {
+    const w = mountDetail({})
+    w.findComponent({ name: 'ResolveCard' }).vm.$emit('retry')
+    await w.vm.$nextTick()
+    expect(w.emitted('retryRecords')).toHaveLength(1)
+  })
+})

@@ -103,6 +103,7 @@
           @resolved="onDetailResolved"
           @navigate="onNavigate"
           @switch-mode="switchDetailMode"
+          @retry-records="retryRecords"
         />
       </div>
     </div>
@@ -150,6 +151,7 @@
             @resolved="onDetailResolved"
             @navigate="onNavigate"
             @switch-mode="switchDetailMode"
+            @retry-records="retryRecords"
           />
         </div>
       </el-tab-pane>
@@ -381,6 +383,8 @@ function backFromDetail(): void {
 // ── 員工月記錄快取 ───────────────────────────────────────────────────────────
 // key = employee_id，val = 該員工在當月的記錄陣列
 const recordsCache = ref<Map<number, RecordRow[]>>(new Map())
+/** 載入失敗的員工（QA #22：沒載到不能當成缺卡）；快取清空時一併清 */
+const recordsFailed = ref<Set<number>>(new Set())
 
 // ── derived: 當前異常日卡 ──────────────────────────────────────────────────
 const currentAnomaly = computed<AnomalyDayCard | null>(
@@ -415,36 +419,59 @@ const currentEmployeeName = computed(() => ws.roster.value.find(row => row.emplo
 // 本快取只餵 context → ResolveCard（只在 detailMode==='resolve' 下渲染）；整月明細由
 // EmployeeMonthPanel 自己抓同一支 /attendance/records。
 let recSeq = 0
+async function loadRecords(empId: number, y: number, m: number, source: string): Promise<void> {
+  const seq = ++recSeq
+  if (recordsFailed.value.has(empId)) {
+    const failed = new Set(recordsFailed.value)
+    failed.delete(empId)
+    recordsFailed.value = failed
+  }
+  try {
+    const res = await getRecords({ year: y, month: m, employee_id: empId })
+    if (seq !== recSeq) return
+    recordsCache.value = new Map(recordsCache.value).set(empId, res.data ?? [])
+  } catch (err) {
+    if (seq !== recSeq) return
+    recordsFailed.value = new Set(recordsFailed.value).add(empId)
+    notify(err, source, null, { prefix: '載入打卡記錄失敗' })
+  }
+}
+function clearRecordsCache(): void {
+  recordsCache.value = new Map()
+  recordsFailed.value = new Set()
+}
 watch(
   [currentEmployeeId, () => query.year, () => query.month, detailMode] as const,
   async ([empId, y, m, mode], [, oldY, oldM]) => {
-    const seq = ++recSeq
     if (y !== oldY || m !== oldM) {
-      recordsCache.value = new Map()
+      ++recSeq
+      clearRecordsCache()
     }
     if (mode !== 'resolve') return
     if (empId == null) return
     if (recordsCache.value.has(empId)) return
-    try {
-      const res = await getRecords({ year: y, month: m, employee_id: empId })
-      if (seq !== recSeq) return
-      recordsCache.value = new Map(recordsCache.value).set(empId, res.data ?? [])
-    } catch (err) {
-      notify(err, 'ScheduleAttendanceView.loadRecords', null, { prefix: '載入打卡記錄失敗' })
-    }
+    await loadRecords(empId, y, m, 'ScheduleAttendanceView.loadRecords')
   },
   { immediate: false },
 )
+function retryRecords(): void {
+  const empId = currentEmployeeId.value
+  if (empId == null) return
+  void loadRecords(empId, query.year, query.month, 'ScheduleAttendanceView.retryRecords')
+}
 
 // ── context：從快取找當日記錄 ─────────────────────────────────────────────
 const context = computed(() => {
   const a = currentAnomaly.value
   const empId = currentEmployeeId.value
-  const rec =
-    a != null && empId != null
-      ? (recordsCache.value.get(empId) ?? []).find((r) => r.date === a.date) ?? null
-      : null
+  const rows = empId != null ? recordsCache.value.get(empId) : undefined
+  const rec = a != null && rows ? rows.find((r) => r.date === a.date) ?? null : null
+  // 沒載到（在途或失敗）≠ 缺卡：ResolveCard 據此停用補卡、只留接受扣款／豁免
+  const records: 'loading' | 'loaded' | 'failed' = rows
+    ? 'loaded'
+    : empId != null && recordsFailed.value.has(empId) ? 'failed' : 'loading'
   return {
+    records,
     punch_in: rec?.punch_in ?? null,
     punch_out: rec?.punch_out ?? null,
     has_leave: typeof rec?.status === 'string' && rec.status.includes('leave'),
@@ -489,18 +516,11 @@ function clampSelectedIndex(): void {
 // 明細快取失效（P1-4）：resolve/import/upsert/delete 後打卡事實已變，
 // 不失效會讓 ResolveCard/EmployeeMonthPanel 讀到舊資料。清空後立即補抓當前員工。
 async function invalidateRecordsCache(): Promise<void> {
-  recordsCache.value = new Map()
+  clearRecordsCache()
   if (detailMode.value !== 'resolve') return
   const empId = currentEmployeeId.value
   if (empId == null) return
-  const seq = ++recSeq
-  try {
-    const res = await getRecords({ year: query.year, month: query.month, employee_id: empId })
-    if (seq !== recSeq) return
-    recordsCache.value = new Map(recordsCache.value).set(empId, res.data ?? [])
-  } catch (err) {
-    notify(err, 'ScheduleAttendanceView.reloadRecords', null, { prefix: '載入打卡記錄失敗' })
-  }
+  await loadRecords(empId, query.year, query.month, 'ScheduleAttendanceView.reloadRecords')
 }
 
 function onFilterChange(): void {

@@ -46,6 +46,12 @@
 
     <!-- 脈絡卡 -->
     <div class="resolve-card__context">
+      <!-- 打卡紀錄還沒到或載入失敗：不知道有沒有打卡，不能當成缺卡叫人兩側都補（會整列覆寫真實打卡） -->
+      <div v-if="recordsState !== 'loaded'" class="resolve-card__row" data-test="resolve-records-state">
+        <span class="resolve-card__value">{{ recordsState === 'failed' ? '打卡紀錄載入失敗，無法補卡；接受扣款／豁免不受影響。' : '打卡紀錄載入中…' }}</span>
+        <el-button v-if="recordsState === 'failed'" size="small" @click="emit('retry')">重試</el-button>
+      </div>
+      <template v-else>
       <div class="resolve-card__row">
         <span class="resolve-card__label">上班時間</span>
         <el-time-picker
@@ -70,6 +76,7 @@
         />
         <span v-else class="resolve-card__value">{{ context.punch_out }}</span>
       </div>
+      </template>
       <div v-if="context.has_leave" class="resolve-card__row">
         <span class="resolve-card__leave-badge">當日有請假</span>
       </div>
@@ -91,7 +98,7 @@
           v-if="allows('punch')"
           :type="primaryAction ? 'primary' : 'default'"
           :loading="busy"
-          :disabled="busy || !canPunch"
+          :disabled="busy || !canPunch || recordsState !== 'loaded'"
           @click="handlePunch"
         >補打卡並重算</el-button>
         <el-button
@@ -131,6 +138,8 @@ const props = withDefaults(defineProps<{
     punch_out: string | null
     has_leave: boolean
     estimated_deduction: number
+    /** 打卡紀錄載入狀態；未給＝已載入（例如抽屜直接用格子資料） */
+    records?: 'loading' | 'loaded' | 'failed'
   }
   /** mutation in-flight：防重複送出 */
   busy?: boolean
@@ -152,7 +161,11 @@ const allows = (action: ResolveAction) => props.actions.includes(action)
 const emit = defineEmits<{
   (e: 'resolve', payload: { action: 'punch' | 'admin_accept' | 'admin_waive'; punch_in?: string; punch_out?: string }): void
   (e: 'navigate', delta: number): void
+  /** 打卡紀錄載入失敗後重試 */
+  (e: 'retry'): void
 }>()
+
+const recordsState = computed(() => props.context.records ?? 'loaded')
 
 // ── 權限 ───────────────────────────────────────────────────────────────────────
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
@@ -183,6 +196,7 @@ const effectivePunchOut = computed(() => localPunchOut.value ?? props.context.pu
 
 // 至少要填了缺的那側才能送出
 const canPunch = computed(() => {
+  if (recordsState.value !== 'loaded') return false
   const needIn = props.context.punch_in === null
   const needOut = props.context.punch_out === null
   if (needIn && !localPunchIn.value) return false
@@ -192,6 +206,7 @@ const canPunch = computed(() => {
 
 /** 缺的那側已填了時間還沒送出：外層（排班與出勤抽屜）關閉或換筆前要先問 */
 function isDirty(): boolean {
+  if (recordsState.value !== 'loaded') return false
   return (props.context.punch_in === null && !!localPunchIn.value) || (props.context.punch_out === null && !!localPunchOut.value)
 }
 defineExpose({ isDirty })

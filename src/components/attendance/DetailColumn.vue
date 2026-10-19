@@ -14,6 +14,7 @@
           :busy="resolving"
           @resolve="onResolve"
           @navigate="(d: number) => emit('navigate', d)"
+          @retry="emit('retryRecords')"
         />
       </template>
       <div v-else class="detail-column__empty">
@@ -58,6 +59,7 @@ const props = defineProps<{
     punch_out: string | null
     has_leave: boolean
     estimated_deduction: number
+    records?: 'loading' | 'loaded' | 'failed'
   }
   employeeId: number | null
   employeeName?: string
@@ -74,6 +76,8 @@ const emit = defineEmits<{
   (e: 'resolved'): void
   (e: 'navigate', delta: number): void
   (e: 'switchMode', mode: 'resolve' | 'month'): void
+  /** 打卡紀錄載入失敗，使用者按重試 */
+  (e: 'retryRecords'): void
 }>()
 
 // ── 處理動作（與排班與出勤抽屜共用 useResolveAnomaly）──────────────────────────

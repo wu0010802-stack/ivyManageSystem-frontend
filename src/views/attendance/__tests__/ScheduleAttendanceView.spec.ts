@@ -74,7 +74,7 @@ const AnomalyQueueColumnStub = {
 const DetailColumnStub = {
   name: 'DetailColumn',
   props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month', 'focusDate', 'revision'],
-  emits: ['resolved', 'navigate', 'switchMode'],
+  emits: ['resolved', 'navigate', 'switchMode', 'retryRecords'],
   template: `<div class="detail-column-stub"><slot /></div>`,
 }
 
@@ -1096,4 +1096,37 @@ it('新月份名冊不再包含原選人時回到可用員工', async () => {
   await flushPromises()
   expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(sampleRoster[0]!.employee_id)
   wrapper.unmount()
+})
+
+describe('ScheduleAttendanceView 異常卡打卡紀錄載入狀態（QA #22）', () => {
+  beforeEach(() => {
+    getSummaryMock.mockReset().mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockReset().mockResolvedValue({ data: { items: sampleAnomalies, pending: 2, total: 2, confirmed: 0 } })
+    getRecordsMock.mockReset()
+  })
+
+  it('打卡紀錄還在途：context 標 loading，不是缺卡', async () => {
+    getRecordsMock.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 0)
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('context')).toMatchObject({ records: 'loading', punch_in: null, punch_out: null })
+    wrapper.unmount()
+  })
+
+  it('載入失敗標 failed；重試成功後標 loaded 並帶出真實打卡', async () => {
+    getRecordsMock.mockRejectedValueOnce(new Error('network'))
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 0)
+    await flushPromises()
+    const dc = wrapper.findComponent(DetailColumnStub)
+    expect(dc.props('context')).toMatchObject({ records: 'failed' })
+    getRecordsMock.mockResolvedValueOnce({ data: [{ date: '2026-06-05', punch_in: '08:10', punch_out: '17:00', status: 'late' }] })
+    dc.vm.$emit('retryRecords')
+    await flushPromises()
+    expect(dc.props('context')).toMatchObject({ records: 'loaded', punch_in: '08:10', punch_out: '17:00' })
+    wrapper.unmount()
+  })
 })
