@@ -1358,4 +1358,17 @@ describe('ImportPreviewDialog 保護既有紀錄與 legacy 未對到姓名（QA 
     await flushPromises()
     expect(mockElMessageWarning).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('王小明、李小花'), duration: 0 }))
   })
+
+  it('legacy 直接匯入回 row_errors：用不自動消失的警告列出', async () => {
+    const mockFile = new File(['data'], 'legacy.xls', { type: 'application/vnd.ms-excel' })
+    mockPreviewExcel.mockRejectedValue({ response: { data: { detail: '此檔非新格式考勤表…legacy 月統計格式請走原 Excel 匯入' } } })
+    mockUploadFile.mockResolvedValue({ data: { message: '上傳完成', anomalies: [], anomaly_count: 0, summary: [], unmatched_names: [], row_errors: ['第 3 列時間格式錯誤'] } })
+    const wrapper = mountDialog()
+    await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: mockFile })
+    await nextTick()
+    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('legacy 格式直接匯入'))!.trigger('click')
+    await flushPromises()
+    expect(mockElMessageWarning).toHaveBeenCalledWith(expect.objectContaining({ message: '1 列未匯入：第 3 列時間格式錯誤', duration: 0 }))
+    expect(mockElMessageWarning).not.toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('姓名未對到') }))
+  })
 })

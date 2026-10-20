@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { previewRowNote, protectedOverwritesText, unmatchedNamesText } from '@/utils/attendanceImport'
+import { previewRowNote, protectedOverwritesText, rowErrorsText, unmatchedNamesText } from '@/utils/attendanceImport'
 
 describe('匯入預覽判讀（QA #1 #4 #14 前端）', () => {
   it('problem_reason：同名員工、不在任職期間', () => {
@@ -29,5 +29,23 @@ describe('匯入預覽判讀（QA #1 #4 #14 前端）', () => {
     expect(unmatchedNamesText({ message: 'ok' })).toBe('')
     expect(unmatchedNamesText({ unmatched_names: [] })).toBe('')
     expect(unmatchedNamesText({ unmatched_names: ['王小明', '李小花'] })).toBe('2 位姓名未對到員工、未匯入：王小明、李小花')
+  })
+
+  it('protected_span_exceeded：與既有來源紀錄合併後工時不合理，未補入', () => {
+    expect(previewRowNote({ check: 'review_required', problem_reason: 'protected_span_exceeded', existing_source: 'correction' })).toBe('與既有補卡紀錄合併後工時不合理，未補入')
+    expect(previewRowNote({ check: 'review_required', problem_reason: 'protected_span_exceeded', existing_source: 'kiosk' })).toBe('與既有打卡機紀錄合併後工時不合理，未補入')
+    expect(previewRowNote({ check: 'review_required', problem_reason: 'protected_span_exceeded' })).toBe('與既有紀錄合併後工時不合理，未補入')
+  })
+
+  it('legacy row_errors：列出前 10 筆，其餘寫「另 N 筆」', () => {
+    expect(rowErrorsText({ row_errors: [] })).toBe('')
+    expect(rowErrorsText({ message: 'ok' })).toBe('')
+    expect(rowErrorsText({ row_errors: ['第 3 列時間格式錯誤'] })).toBe('1 列未匯入：第 3 列時間格式錯誤')
+    const many = Array.from({ length: 12 }, (_, i) => `第 ${i + 1} 列錯誤`)
+    const text = rowErrorsText({ row_errors: many })
+    expect(text).toContain('12 列未匯入')
+    expect(text).toContain('第 10 列錯誤')
+    expect(text).not.toContain('第 11 列錯誤')
+    expect(text.endsWith('另 2 筆')).toBe(true)
   })
 })

@@ -20,7 +20,7 @@ import { previewImport, previewExcel, previewClockReport, uploadCsv, uploadFile,
 import type { ApiResponse } from '@/api/_generated/typed'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
-import { summarizeCsvImportResult, previewRowNote, protectedOverwritesText, unmatchedNamesText } from '@/utils/attendanceImport'
+import { summarizeCsvImportResult, previewRowNote, protectedOverwritesText, rowErrorsText, unmatchedNamesText } from '@/utils/attendanceImport'
 import { proposeReview, reviewReasons, matchesReviewFilter, punchOptions } from '@/utils/attendanceBatchReview'
 import type { ReviewEdit, ReviewAction, ReviewFilter } from '@/utils/attendanceBatchReview'
 import { useAttendanceScheduleReview } from '@/composables/useAttendanceScheduleReview'
@@ -457,6 +457,9 @@ async function handleLegacyDirectImport() {
     // legacy 以姓名對員工：對不到的整列靜默跳過，列出姓名
     const unmatched = unmatchedNamesText(res.data)
     if (unmatched) ElMessage.warning({ message: unmatched, duration: 0, showClose: true })
+    // 逐列錯誤（時間格式錯、日期無效等）同樣列出，不讓跳過的列無聲消失
+    const rowErrors = rowErrorsText(res.data)
+    if (rowErrors) ElMessage.warning({ message: rowErrors, duration: 0, showClose: true })
     emit('imported', res.data)
     resetState()
     closeDialog()
