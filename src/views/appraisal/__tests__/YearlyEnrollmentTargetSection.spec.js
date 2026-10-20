@@ -129,10 +129,11 @@ const GLOBAL_STUBS = {
   // canWrite gate/送出流程已在 CreateCycleDialog.spec.ts 用真實元件測過，這裡只驗證
   // parent wiring（開關 + canWrite 傳遞 + @created 觸發 reload）。
   CreateCycleDialog: {
-    props: ['visible', 'canWrite', 'defaultYear', 'defaultSemester'],
+    props: ['visible', 'canWrite', 'defaultYear', 'defaultSemester', 'registeredMode'],
     emits: ['update:visible', 'created'],
     template:
       '<div v-if="visible" data-test="create-cycle-dialog-stub" :data-can-write="canWrite" ' +
+      ':data-registered-mode="String(!!registeredMode)" ' +
       ':data-default-year="defaultYear" :data-default-semester="defaultSemester">' +
       '<button data-test="create-cycle-dialog-stub-created-btn" ' +
       '@click="$emit(\'created\', { id: 12, academic_year: 114, semester: \'SECOND\' })" />' +
@@ -493,6 +494,47 @@ describe('YearlyEnrollmentTargetSection', () => {
       getAppraisalCyclesByYear.mockResolvedValue({ data: [stale, SECOND_CYCLE] })
       const wrapper = await mountView()
       expect(wrapper.find('[data-test="actual-value-first"]').text()).toBe('189')
+    })
+
+    it('未覆寫且即時註冊數≠存檔值：基礎分數旁提示「目前註冊數 X，重算後生效」', async () => {
+      const stale = { ...AUTO_CYCLE, enrollment_actual: 180, enrollment_actual_auto: 189 }
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [stale, SECOND_CYCLE] })
+      const wrapper = await mountView()
+      expect(wrapper.find('[data-test="base-score-pending-first"]').text()).toBe(
+        '目前註冊數 189，重算後生效',
+      )
+    })
+
+    it('即時註冊數＝存檔值、或已覆寫、或舊口徑：不出現重算提示', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [AUTO_CYCLE, SECOND_CYCLE] })
+      let wrapper = await mountView()
+      expect(wrapper.find('[data-test="base-score-pending-first"]').exists()).toBe(false)
+
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [OVERRIDDEN_CYCLE, SECOND_CYCLE] })
+      wrapper = await mountView()
+      expect(wrapper.find('[data-test="base-score-pending-first"]').exists()).toBe(false)
+
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+      wrapper = await mountView()
+      expect(wrapper.find('[data-test="base-score-pending-first"]').exists()).toBe(false)
+    })
+
+    it('CreateCycleDialog 的註冊口徑提示：有週期帶 enrollment_actual_auto 才開', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [AUTO_CYCLE] })
+      let wrapper = await mountView()
+      await wrapper.find('[data-test="create-second-btn"]').trigger('click')
+      await flushPromises()
+      expect(
+        wrapper.find('[data-test="create-cycle-dialog-stub"]').attributes('data-registered-mode'),
+      ).toBe('true')
+
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE] })
+      wrapper = await mountView()
+      await wrapper.find('[data-test="create-second-btn"]').trigger('click')
+      await flushPromises()
+      expect(
+        wrapper.find('[data-test="create-cycle-dialog-stub"]').attributes('data-registered-mode'),
+      ).toBe('false')
     })
 
     it('已覆寫：檢視模式顯示覆寫值（存檔值）', async () => {

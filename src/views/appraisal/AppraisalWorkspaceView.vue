@@ -12,7 +12,7 @@ import CycleDetailPanel from './CycleDetailPanel.vue'
 import AppraisalCycleExceptionsSummary from './components/AppraisalCycleExceptionsSummary.vue'
 import { APPRAISAL_WORKSPACE_STEPS, normalizeAppraisalStep, type AppraisalStepKey } from './workspaceSteps'
 
-interface CycleOption { id: number; academic_year: number; semester: string; status: string }
+interface CycleOption { id: number; academic_year: number; semester: string; status: string; enrollment_actual_auto?: number | null }
 
 const route = useRoute()
 const router = useRouter()
@@ -133,7 +133,7 @@ defineExpose({ selectedCycleId, stage, cycles, currentCycleId, loadError, select
         <CycleDetailPanel v-else :key="selectedCycleId" :cycle-id="selectedCycleId" />
       </div>
     </template>
-    <CreateCycleDialog v-if="createDialogVisible" v-model:visible="createDialogVisible" :can-write="canCreateCycle" @created="onCreated" />
+    <CreateCycleDialog v-if="createDialogVisible" v-model:visible="createDialogVisible" :can-write="canCreateCycle" :registered-mode="cycles.some((c) => c.enrollment_actual_auto != null)" @created="onCreated" />
   </div>
 </template>
 

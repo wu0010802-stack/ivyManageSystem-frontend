@@ -625,6 +625,8 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
   })
 
   it('表頭：人數欄改標「在籍」並新增「註冊」欄，不再叫「合計」', async () => {
+    const api = await import('@/api/studentEnrollment')
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(registeredStats() as never)
     const wrapper = mountView()
     await flushPromises()
     const heads = wrapper.findAll('th').map((th) => th.text())
@@ -643,13 +645,28 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
     expect(wrapper.find('[data-testid="registered-summary"]').text()).toContain('45')
   })
 
-  it('註冊數為 null（舊口徑／非當期／尚無月費單）時表格顯示「—」，狀態列不出現註冊（舊口徑畫面不變）', async () => {
+  it('註冊數全為 null（舊口徑／非當期／尚無月費單）時整欄不出現、狀態列不出現註冊（舊口徑畫面不變，仍標「在籍」）', async () => {
     // 預設 statsResponse 沒有 registered 欄位（舊版回應）
     const wrapper = mountView()
     await flushPromises()
 
-    expect(colTexts(wrapper, 'col-registered')).toEqual(['—', '—', '—'])
+    const heads = wrapper.findAll('th').map((th) => th.text())
+    expect(heads).toContain('在籍')
+    expect(heads).not.toContain('註冊')
+    expect(colTexts(wrapper, 'col-registered')).toHaveLength(0)
     expect(wrapper.find('[data-testid="registered-summary"]').exists()).toBe(false)
+    expect(wrapper.find('.table-footnote').text()).not.toContain('註冊')
+  })
+
+  it('部分列有註冊數時整欄顯示，null 列顯示「—」', async () => {
+    const api = await import('@/api/studentEnrollment')
+    const res = registeredStats()
+    res.data.by_grade[0].classes[1].registered = null as unknown as number
+    vi.mocked(api.getEnrollmentStats).mockResolvedValueOnce(res as never)
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(colTexts(wrapper, 'col-registered')).toEqual(['25', '—', '45', '45'])
   })
 
   it('手機寬度收起註冊欄（塞不進 286px），註冊總數仍在狀態列', async () => {

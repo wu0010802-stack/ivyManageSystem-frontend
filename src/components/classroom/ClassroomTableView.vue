@@ -35,7 +35,7 @@ const { isMobile } = useIsMobile()
 const UNSET_GRADE = '未設定年級'
 const UNKNOWN_ORDER = 99
 const COLLATOR_LOCALE = 'zh-Hant'
-const COLUMN_COUNT = 8
+const BASE_COLUMN_COUNT = 7
 
 interface Summary {
   classCount: number
@@ -109,6 +109,10 @@ const groups = computed<RowGroup[]>(() => {
   })
 })
 
+// 註冊欄（spec C1/C8）：清單內全部為 null（舊口徑租戶／尚無月費單）時整欄不出現
+const showRegistered = computed(() => props.classrooms.some((c) => c.registered_count != null))
+const columnCount = computed(() => BASE_COLUMN_COUNT + (showRegistered.value ? 1 : 0))
+
 const totals = computed(() => summarize(props.classrooms))
 
 const groupMeta = (g: RowGroup): string => (
@@ -168,7 +172,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
           <tr>
             <th scope="col" class="col-name">班級</th>
             <th scope="col" class="col-count">在籍 / 容量</th>
-            <th scope="col" class="col-registered">註冊</th>
+            <th v-if="showRegistered" scope="col" class="col-registered">註冊</th>
             <th scope="col" class="col-remain">尚餘</th>
             <th scope="col" class="col-head">班導</th>
             <th scope="col" class="col-assistant">副班導</th>
@@ -178,7 +182,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
         </thead>
         <tbody v-for="g in groups" :key="g.key">
           <tr class="group-row" data-test="group-row">
-            <th scope="rowgroup" :colspan="COLUMN_COUNT">
+            <th scope="rowgroup" :colspan="columnCount">
               <span class="group-name">{{ g.name }}</span>{{ ' ' }}
               <span class="group-meta">{{ groupMeta(g) }}</span>
               <span
@@ -212,7 +216,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
                 <span v-if="capacityView(c).label" class="count-status" :class="`is-${capacityView(c).tone}`">{{ capacityView(c).label }}</span>
               </div>
             </td>
-            <td class="col-registered" :class="{ 'is-empty': c.registered_count == null }">{{ formatRegistered(c.registered_count) }}</td>
+            <td v-if="showRegistered" class="col-registered" :class="{ 'is-empty': c.registered_count == null }">{{ formatRegistered(c.registered_count) }}</td>
             <td class="col-remain">{{ capacityView(c).remaining }}</td>
             <td class="col-head" :class="{ 'is-missing': headMissing(c), 'is-empty': !c.head_teacher_name && !headMissing(c) }">{{ headText(c) }}</td>
             <td class="col-assistant" :class="{ 'is-empty': !c.assistant_teacher_name }">{{ c.assistant_teacher_name || '—' }}</td>
@@ -238,7 +242,7 @@ const onCommand = (cmd: ClassroomCommand, c: ClassroomRow) => emit('command', cm
         </tbody>
         <tfoot>
           <tr class="total-row">
-            <td :colspan="COLUMN_COUNT">{{ totalsText }}</td>
+            <td :colspan="columnCount">{{ totalsText }}</td>
           </tr>
         </tfoot>
       </table>

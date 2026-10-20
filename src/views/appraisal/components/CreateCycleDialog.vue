@@ -34,8 +34,16 @@ const props = withDefaults(
     canWrite: boolean
     defaultYear?: number
     defaultSemester?: SemesterEnum
+    /** 呼叫端已知租戶在用註冊口徑（有週期帶 enrollment_actual_auto）才顯示自動帶入說明 */
+    registeredMode?: boolean
   }>(),
-  { visible: false, canWrite: false, defaultYear: undefined, defaultSemester: undefined },
+  {
+    visible: false,
+    canWrite: false,
+    defaultYear: undefined,
+    defaultSemester: undefined,
+    registeredMode: false,
+  },
 )
 
 const emit = defineEmits<{
@@ -121,7 +129,7 @@ async function handleSubmit() {
         />
         <!-- spec C7：已啟用註冊口徑的學期，留空即由後端於基準日自動帶入註冊數；
         手填且與註冊數不同會被標為手動覆寫（舊口徑則照填照存）。 -->
-        <div class="form-hint" data-test="create-cycle-actual-hint">
+        <div v-if="registeredMode" class="form-hint" data-test="create-cycle-actual-hint">
           已啟用註冊口徑時可留空，系統自動帶入基準日（9/15、3/15）註冊數；手填且與註冊數不同會標為手動覆寫。
         </div>
       </el-form-item>

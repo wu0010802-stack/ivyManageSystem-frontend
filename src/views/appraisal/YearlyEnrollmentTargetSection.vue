@@ -164,6 +164,20 @@ function displayedActual(cycle: CycleEntry): number | null {
   return cycle.enrollment_actual ?? null
 }
 
+/**
+ * 基礎分數是存檔值（隨 enrollment_actual 一併存）；未覆寫且即時註冊數已與存檔值
+ * 不同時提示「重算後生效」，避免把畫面上的基礎分數誤讀成以即時註冊數算的。
+ */
+function pendingAutoNote(cycle: CycleEntry): string | null {
+  const auto = cycle.enrollment_actual_auto
+  if (cycle.enrollment_actual_overridden || auto == null) return null
+  if (auto === (cycle.enrollment_actual ?? null)) return null
+  return `目前註冊數 ${auto}，重算後生效`
+}
+
+// 建週期 dialog 的註冊口徑說明：本學年已有週期帶 enrollment_actual_auto 才顯示
+const registeredModeInUse = computed(() => cycles.value.some((c) => c.enrollment_actual_auto != null))
+
 async function restoreAuto(cycle: CycleEntry) {
   if (!canEditTarget.value) return
   try {
@@ -313,6 +327,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
               </el-descriptions-item>
               <el-descriptions-item label="基礎分數">
                 {{ firstCycle.base_score != null ? Number(firstCycle.base_score).toFixed(1) : '—' }}
+                <span v-if="pendingAutoNote(firstCycle)" class="actual-meta__text" data-test="base-score-pending-first">{{ pendingAutoNote(firstCycle) }}</span>
               </el-descriptions-item>
               <el-descriptions-item label="基準日">
                 {{ firstCycle.base_score_calc_date || '—' }}
@@ -450,6 +465,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
               </el-descriptions-item>
               <el-descriptions-item label="基礎分數">
                 {{ secondCycle.base_score != null ? Number(secondCycle.base_score).toFixed(1) : '—' }}
+                <span v-if="pendingAutoNote(secondCycle)" class="actual-meta__text" data-test="base-score-pending-second">{{ pendingAutoNote(secondCycle) }}</span>
               </el-descriptions-item>
               <el-descriptions-item label="基準日">
                 {{ secondCycle.base_score_calc_date || '—' }}
@@ -555,6 +571,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
       :can-write="canCreateCycle"
       :default-year="selectedYear"
       :default-semester="pendingCreateSemester"
+      :registered-mode="registeredModeInUse"
       @created="handleCycleCreated"
     />
   </div>

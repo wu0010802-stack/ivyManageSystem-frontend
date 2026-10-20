@@ -87,9 +87,20 @@ beforeEach(() => {
 })
 
 describe('ClassroomTableView 結構', () => {
-  it('用真正的 table：thead 八欄、每組一個 tbody、組標頭是 th[scope=rowgroup][colspan=8]', () => {
+  it('舊口徑（全部 registered_count 為 null）：thead 七欄、不出現註冊欄、colspan=7', () => {
     const wrapper = mountTable([
       mk({ name: '甲', grade_name: '大班' }),
+      mk({ name: '乙', grade_name: '小班', grade_id: 2, registered_count: null }),
+    ])
+    const heads = wrapper.findAll('thead th').map((th) => th.text())
+    expect(heads).toEqual(['班級', '在籍 / 容量', '尚餘', '班導', '副班導', '美語老師', '操作'])
+    expect(wrapper.findAll('td.col-registered').length).toBe(0)
+    expect(wrapper.find('tbody tr.group-row th').attributes('colspan')).toBe('7')
+  })
+
+  it('用真正的 table：thead 八欄、每組一個 tbody、組標頭是 th[scope=rowgroup][colspan=8]', () => {
+    const wrapper = mountTable([
+      mk({ name: '甲', grade_name: '大班', registered_count: 3 }),
       mk({ name: '乙', grade_name: '小班', grade_id: 2 }),
     ])
 

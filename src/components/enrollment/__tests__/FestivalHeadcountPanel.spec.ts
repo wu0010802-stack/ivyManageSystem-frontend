@@ -293,11 +293,51 @@ describe('FestivalHeadcountPanel — 節慶人數結算', () => {
 
         it('有列時顯示列的 rule_version，而非頂層', async () => {
             getMock.mockResolvedValue(
-                monthResponse([row({ rule_version: 'fh-v1' })], { rule_version: 'fh-v2' }),
+                monthResponse([row({ rule_version: 'fh-v1' })], {
+                    registered_mode: true,
+                    rule_version: 'fh-v2',
+                }),
             )
             const wrapper = mountPanel()
             await flushPromises()
             expect(wrapper.text()).toContain('fh-v1')
+        })
+
+        it('未啟用註冊口徑（舊租戶）不顯示規則版本', async () => {
+            getMock.mockResolvedValue(
+                monthResponse([row({ rule_version: 'fh-v1' })], {
+                    registered_mode: false,
+                    rule_version: 'fh-v1',
+                }),
+            )
+            const wrapper = mountPanel()
+            await flushPromises()
+            expect(wrapper.text()).not.toContain('規則版本')
+        })
+
+        it('切換年月時清掉 FEE_RECORDS_MISSING 提示', async () => {
+            getMock.mockResolvedValue(monthResponse([]))
+            generateMock.mockRejectedValue({
+                response: {
+                    status: 422,
+                    data: {
+                        detail: {
+                            code: 'FEE_RECORDS_MISSING',
+                            detail: '本月尚未匯入月費檢核檔',
+                            message: '本月尚未匯入月費檢核檔',
+                        },
+                    },
+                },
+            })
+            const wrapper = mountPanel()
+            await flushPromises()
+            const vm = wrapper.vm as unknown as { generateAll: () => Promise<void> }
+            await vm.generateAll()
+            await flushPromises()
+            expect(wrapper.text()).toContain('本月尚未匯入月費檢核檔')
+            await wrapper.setProps({ month: 2 })
+            await flushPromises()
+            expect(wrapper.text()).not.toContain('本月尚未匯入月費檢核檔')
         })
 
         it('產生遇 FEE_RECORDS_MISSING 顯示匯入提示與前往 /fees 連結', async () => {

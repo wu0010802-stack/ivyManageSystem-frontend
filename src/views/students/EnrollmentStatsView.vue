@@ -305,6 +305,9 @@ const spanMethod = ({ row, rowIndex, columnIndex }: { row: Record<string, unknow
   return undefined
 }
 
+// 註冊欄（spec C1/C8）：本頁資料全部為 null（舊口徑租戶／非當期／尚無月費單）時整欄不出現
+const showRegistered = computed(() => tableData.value.some((r) => r.registered != null))
+
 const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
   if (row.type === 'subtotal') return 'row-subtotal'
   if (row.type === 'grand_total') return 'row-grand-total'
@@ -492,7 +495,7 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
         </el-table-column>
         <!-- 註冊（spec C1/C8）：手機 286px 塞不下第九欄，收起，總數仍在狀態列 -->
         <el-table-column
-          v-if="!isMobile"
+          v-if="!isMobile && showRegistered"
           label="註冊"
           prop="registered"
           class-name="col-registered"
@@ -542,8 +545,8 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
       />
       <p v-if="tableData.length" class="table-footnote">
         百分比以已填性別者為分母，未填不計入男／女占比。缺額＝容量−在籍（負數＝超額）；
-        有班級未設容量時，該小計與總計顯示「—」。註冊＝當月月費已繳清的在學人數，
-        未啟用註冊口徑、非本學期或本月尚無月費單時顯示「—」。
+        有班級未設容量時，該小計與總計顯示「—」。<template v-if="showRegistered">註冊＝當月月費已繳清的在學人數，
+        本月尚無月費單的列顯示「—」。</template>
       </p>
     </el-card>
 

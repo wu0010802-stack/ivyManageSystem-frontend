@@ -137,7 +137,14 @@ const load = async () => {
 }
 
 onMounted(load)
-watch(() => [props.year, props.month, props.mode], load)
+watch(
+    () => [props.year, props.month, props.mode],
+    () => {
+        // 換月後上一個月的「尚未匯入月費檢核檔」提示不再成立
+        feeRecordsMissing.value = false
+        load()
+    },
+)
 
 const generateAll = async () => {
     generating.value = true
@@ -363,7 +370,7 @@ const openExclusions = async (row: SnapshotRow) => {
       class="snap-alert"
       :title="coverageMessage"
     />
-    <p v-if="displayRuleVersion" class="snap-note">
+    <p v-if="meta.registered_mode && displayRuleVersion" class="snap-note">
       規則版本 {{ displayRuleVersion }}
       <el-tag v-if="meta.estimated" type="warning" size="small">估算</el-tag>
     </p>
