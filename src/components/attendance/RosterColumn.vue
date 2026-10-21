@@ -17,48 +17,70 @@
       <el-button v-if="searchQuery.trim()" @click="searchQuery = ''">清除搜尋</el-button>
     </div>
 
-    <ul v-else class="roster-column__list" role="listbox" aria-label="人員名冊">
+    <!-- WAI-ARIA listbox（roving tabindex）：整個名冊只有一個 Tab 停點（選取列或第一列），
+         ↑↓／Home／End 移動焦點、Enter／Space 選取；分組用 role="group" 包 option，標題文字對輔助科技隱藏
+         改由 group 的 aria-label 唸出（listbox 的子層只能是 option 或 group）。 -->
+    <ul
+      v-else
+      ref="listRef"
+      class="roster-column__list"
+      role="listbox"
+      aria-label="人員名冊"
+      @focusout="onListFocusOut"
+    >
       <template v-for="group in groupedRows" :key="group.key">
-        <li v-if="group.rows.length" class="roster-column__group-label" role="presentation">
-          {{ group.label }}<span class="roster-column__group-count">{{ group.rows.length }}</span>
-        </li>
-        <li
-          v-for="row in group.rows"
-          :key="row.employee_id"
-          class="roster-item"
-          :class="{ 'roster-item--selected': row.employee_id === props.selectedEmployeeId }"
-          role="option"
-          :aria-selected="row.employee_id === props.selectedEmployeeId"
-          @click="emit('select', row.employee_id)"
-        >
-          <div class="roster-item__info">
-            <span class="roster-item__name">{{ row.employee_name }}</span>
-            <span v-if="row.employee_number" class="roster-item__number">
-              {{ row.employee_number }}
-            </span>
+        <li v-if="group.rows.length" class="roster-column__group" role="presentation">
+          <div class="roster-column__group-label" aria-hidden="true">
+            {{ group.label }}<span class="roster-column__group-count">{{ group.rows.length }}</span>
           </div>
-          <div class="roster-item__badges">
-            <el-tag v-if="row.has_summary === false" type="info" size="small">尚無統計</el-tag>
-            <template v-else-if="anomalyCount(row) === 0">
-              <!-- P1-3：expected workdays 未定義前不宣稱「全勤」（待業主裁定） -->
-              <el-tag type="success" size="small">紀錄無異常</el-tag>
-            </template>
-            <template v-else>
-              <el-tag v-if="row.late_count > 0" type="warning" size="small">
-                遲{{ row.late_count }}
-              </el-tag>
-              <el-tag v-if="row.early_leave_count > 0" type="warning" size="small">
-                早{{ row.early_leave_count }}
-              </el-tag>
-              <el-tag
-                v-if="row.missing_punch_in > 0 || row.missing_punch_out > 0"
-                type="danger"
-                size="small"
-              >
-                缺{{ row.missing_punch_in + row.missing_punch_out }}
-              </el-tag>
-            </template>
-          </div>
+          <ul
+            class="roster-column__group-list"
+            role="group"
+            :aria-label="`${group.label}，${group.rows.length} 人`"
+          >
+            <li
+              v-for="row in group.rows"
+              :key="row.employee_id"
+              class="roster-item"
+              :class="{ 'roster-item--selected': row.employee_id === props.selectedEmployeeId }"
+              role="option"
+              :data-employee-id="row.employee_id"
+              :tabindex="row.employee_id === tabStopId ? 0 : -1"
+              :aria-selected="row.employee_id === props.selectedEmployeeId"
+              @click="emit('select', row.employee_id)"
+              @focus="focusedId = row.employee_id"
+              @keydown="onOptionKeydown($event, row)"
+            >
+              <div class="roster-item__info">
+                <span class="roster-item__name">{{ row.employee_name }}</span>
+                <span v-if="row.employee_number" class="roster-item__number">
+                  {{ row.employee_number }}
+                </span>
+              </div>
+              <div class="roster-item__badges">
+                <el-tag v-if="row.has_summary === false" type="info" size="small">尚無統計</el-tag>
+                <template v-else-if="anomalyCount(row) === 0">
+                  <!-- P1-3：expected workdays 未定義前不宣稱「全勤」（待業主裁定） -->
+                  <el-tag type="success" size="small">紀錄無異常</el-tag>
+                </template>
+                <template v-else>
+                  <el-tag v-if="row.late_count > 0" type="warning" size="small">
+                    遲{{ row.late_count }}
+                  </el-tag>
+                  <el-tag v-if="row.early_leave_count > 0" type="warning" size="small">
+                    早{{ row.early_leave_count }}
+                  </el-tag>
+                  <el-tag
+                    v-if="row.missing_punch_in > 0 || row.missing_punch_out > 0"
+                    type="danger"
+                    size="small"
+                  >
+                    缺{{ row.missing_punch_in + row.missing_punch_out }}
+                  </el-tag>
+                </template>
+              </div>
+            </li>
+          </ul>
         </li>
       </template>
     </ul>
@@ -66,9 +88,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { RosterRow } from '@/composables/useAttendanceWorkspace'
+import { groupRoster, rosterAnomalyCount, sortRoster } from '@/utils/attendanceRoster'
 
 const props = defineProps<{
   roster: RosterRow[]
@@ -89,53 +112,74 @@ const emit = defineEmits<{
 
 const searchQuery = defineModel<string>('search', { default: '' })
 
-function anomalyCount(r: RosterRow): number {
-  return r.late_count + r.early_leave_count + r.missing_punch_in + r.missing_punch_out
-}
+const anomalyCount = rosterAnomalyCount
 
-/** 尚待處理的異常數：有 pendingCounts 就用它，否則退回月統計數（見 props 註解）。 */
-function pendingCount(r: RosterRow): number {
-  const counts = props.pendingCounts
-  if (!counts) return anomalyCount(r)
-  return counts[r.employee_number ?? ''] ?? 0
-}
-
-const sortedFiltered = computed<RosterRow[]>(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-
-  const filtered = q
-    ? props.roster.filter(
-        (r) =>
-          r.employee_name.toLowerCase().includes(q) ||
-          (r.employee_number?.toLowerCase().includes(q) ?? false),
-      )
-    : [...props.roster]
-
-  return filtered.slice().sort((a, b) => {
-    const diff = anomalyCount(b) - anomalyCount(a)
-    if (diff !== 0) return diff
-    return a.employee_name.localeCompare(b.employee_name, 'zh-TW')
-  })
-})
+const sortedFiltered = computed<RosterRow[]>(() => sortRoster(props.roster, searchQuery.value))
 
 // 名冊依「有待處理 → 無異常 → 尚無打卡」分組（UI/UX 改版提案 09-10）；組內沿用
 // sortedFiltered 既有的 anomalyCount 遞減排序，只是按組拆段呈現，不改變排序邏輯。
-const groupedRows = computed(() => {
-  const pending: RosterRow[] = []
-  const clean: RosterRow[] = []
-  const noSummary: RosterRow[] = []
-  for (const row of sortedFiltered.value) {
-    if (row.has_summary === false) noSummary.push(row)
-    else if (pendingCount(row) > 0) pending.push(row)
-    else clean.push(row)
+// 排序與分組在 utils/attendanceRoster（頁面預設選人也用同一份，才會選到畫面上的第一位）。
+const groupedRows = computed(() => groupRoster(sortedFiltered.value, props.pendingCounts))
+
+// ── 鍵盤操作（listbox + roving tabindex）────────────────────────────────────────
+const listRef = ref<HTMLElement | null>(null)
+/** 目前持有焦點的列（焦點離開名冊後清掉，Tab 停點回到選取列） */
+const focusedId = ref<number | null>(null)
+
+/** 畫面上由上到下的實際順序（跨分組攤平）；方向鍵依此移動，不依 sortedFiltered 的原排序 */
+const visibleRows = computed<RosterRow[]>(() => groupedRows.value.flatMap((g) => g.rows))
+
+/** roving tabindex 的唯一 Tab 停點：持有焦點的列 → 選取列 → 第一列（皆須在目前可見清單內） */
+const tabStopId = computed<number | null>(() => {
+  const ids = visibleRows.value.map((r) => r.employee_id)
+  if (focusedId.value !== null && ids.includes(focusedId.value)) return focusedId.value
+  if (props.selectedEmployeeId !== null && ids.includes(props.selectedEmployeeId)) {
+    return props.selectedEmployeeId
   }
-  return [
-    { key: 'pending', label: '有待處理', rows: pending },
-    // 「無待處理」而非「無異常」：本月有過異常但已接受扣款／豁免的人也歸在這裡
-    { key: 'clean', label: '無待處理', rows: clean },
-    { key: 'no-summary', label: '尚無打卡', rows: noSummary },
-  ]
+  return ids[0] ?? null
 })
+
+function focusRow(employeeId: number): void {
+  focusedId.value = employeeId
+  listRef.value?.querySelector<HTMLElement>(`[data-employee-id="${employeeId}"]`)?.focus()
+}
+
+function onOptionKeydown(e: KeyboardEvent, row: RosterRow): void {
+  if (e.altKey || e.ctrlKey || e.metaKey) return
+  const rows = visibleRows.value
+  const index = rows.findIndex((r) => r.employee_id === row.employee_id)
+  let nextIndex: number
+  switch (e.key) {
+    case 'ArrowDown':
+      nextIndex = Math.min(index + 1, rows.length - 1)
+      break
+    case 'ArrowUp':
+      nextIndex = Math.max(index - 1, 0)
+      break
+    case 'Home':
+      nextIndex = 0
+      break
+    case 'End':
+      nextIndex = rows.length - 1
+      break
+    case 'Enter':
+    case ' ':
+      // 與點擊同一路徑；Space 預設會捲動容器，必須擋掉
+      e.preventDefault()
+      emit('select', row.employee_id)
+      return
+    default:
+      return
+  }
+  e.preventDefault()
+  const target = rows[nextIndex]
+  if (target) focusRow(target.employee_id)
+}
+
+function onListFocusOut(e: FocusEvent): void {
+  const next = e.relatedTarget as Node | null
+  if (!next || !listRef.value?.contains(next)) focusedId.value = null
+}
 </script>
 
 <style scoped>
@@ -156,10 +200,14 @@ const groupedRows = computed(() => {
   padding: var(--space-4);
 }
 
-.roster-column__list {
+.roster-column__list,
+.roster-column__group-list {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.roster-column__list {
   overflow-y: auto;
   flex: 1;
 }
@@ -170,7 +218,7 @@ const groupedRows = computed(() => {
   justify-content: space-between;
   padding: var(--space-3) var(--space-3);
   cursor: pointer;
-  border-bottom: 1px solid var(--border-color-light, #f1f5f9);
+  border-bottom: 1px solid var(--border-color-light);
   transition: background-color var(--transition-fast);
   gap: var(--space-2);
 }
@@ -179,10 +227,15 @@ const groupedRows = computed(() => {
   background-color: var(--el-fill-color-light);
 }
 
+/* 捲動容器內往內畫焦點框，避免被 overflow 裁掉 */
+.roster-item:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: -2px;
+}
+
 .roster-item--selected {
-  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin）；2026-09-10 改版
-     移除側邊色條（impeccable AI-slop 偵測命中），選取態單純以底色區分。 */
-  background-color: var(--brand-primary-soft, #e0f2fe);
+  /* 2026-09-10 改版移除側邊色條（impeccable AI-slop 偵測命中），選取態單純以底色區分。 */
+  background-color: var(--color-primary-lighter);
 }
 
 .roster-column__group-label {
@@ -190,13 +243,13 @@ const groupedRows = computed(() => {
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3) 2px;
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   letter-spacing: 0.04em;
 }
 
 .roster-column__group-count {
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary);
 }
 
 .roster-item__info {
@@ -209,15 +262,15 @@ const groupedRows = computed(() => {
 .roster-item__name {
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .roster-item__number {
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   margin-top: 1px;
 }
 

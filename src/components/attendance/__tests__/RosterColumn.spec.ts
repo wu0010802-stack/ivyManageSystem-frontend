@@ -268,3 +268,108 @@ describe('RosterColumn — 分組用真正的待處理數', () => {
     wrapper.unmount()
   })
 })
+
+// ── 鍵盤操作：WAI-ARIA listbox + roving tabindex ─────────────────────────────
+describe('RosterColumn — 鍵盤操作（listbox / roving tabindex）', () => {
+  // 排序後：李缺卡(3)、王遲到(2) 在「有待處理」，陳全勤(1) 在「無待處理」
+  const mountAttached = (props: Parameters<typeof mountRoster>[0] = {}) => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const wrapper = mountRoster(props)
+    host.appendChild(wrapper.element)
+    return { wrapper, host }
+  }
+  const options = (wrapper: ReturnType<typeof mountRoster>) => wrapper.findAll('[role="option"]')
+
+  it('容器是 listbox 且有名稱；分組用 role=group 包住 option', () => {
+    const wrapper = mountRoster({})
+    const list = wrapper.find('[role="listbox"]')
+    expect(list.attributes('aria-label')).toBe('人員名冊')
+    const groups = wrapper.findAll('[role="group"]')
+    expect(groups.map((g) => g.attributes('aria-label'))).toEqual(['有待處理，2 人', '無待處理，1 人'])
+    // option 一律在 group 內，listbox 直屬子層沒有裸 option
+    expect(wrapper.findAll('.roster-column__list > [role="option"]')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('roving tabindex：沒有選取時只有第一列 tabindex=0，其餘 -1', () => {
+    const wrapper = mountRoster({})
+    expect(options(wrapper).map((o) => o.attributes('tabindex'))).toEqual(['0', '-1', '-1'])
+    wrapper.unmount()
+  })
+
+  it('roving tabindex：有選取列時 Tab 停點落在選取列，aria-selected 對應', () => {
+    const wrapper = mountRoster({ selectedEmployeeId: 1 })
+    const opts = options(wrapper)
+    // 順序：李缺卡(3)、王遲到(2)、陳全勤(1)
+    expect(opts.map((o) => o.attributes('tabindex'))).toEqual(['-1', '-1', '0'])
+    expect(opts.map((o) => o.attributes('aria-selected'))).toEqual(['false', 'false', 'true'])
+    wrapper.unmount()
+  })
+
+  it('Enter / Space 觸發與點擊相同的 select 事件', async () => {
+    const wrapper = mountRoster({})
+    const opts = options(wrapper)
+    await opts[1].trigger('keydown', { key: 'Enter' })
+    await opts[2].trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('select')).toEqual([[2], [1]])
+    wrapper.unmount()
+  })
+
+  it('Space 的預設捲動行為被擋下', async () => {
+    const wrapper = mountRoster({})
+    const evt = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })
+    options(wrapper)[0].element.dispatchEvent(evt)
+    expect(evt.defaultPrevented).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('↓／↑ 移動焦點（跨分組、到頭不循環），並更新 Tab 停點；不會誤觸 select', async () => {
+    const { wrapper, host } = mountAttached()
+    const opts = () => options(wrapper)
+    ;(opts()[0].element as HTMLElement).focus()
+    await opts()[0].trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(opts()[1].element)
+    await opts()[1].trigger('keydown', { key: 'ArrowDown' })
+    // 第三列在另一個分組（無待處理）
+    expect(document.activeElement).toBe(opts()[2].element)
+    expect(opts().map((o) => o.attributes('tabindex'))).toEqual(['-1', '-1', '0'])
+    // 到底再按 ↓ 不循環
+    await opts()[2].trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(opts()[2].element)
+    await opts()[2].trigger('keydown', { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(opts()[1].element)
+    expect(wrapper.emitted('select')).toBeFalsy()
+    wrapper.unmount()
+    host.remove()
+  })
+
+  it('Home／End 跳到第一列／最後一列', async () => {
+    const { wrapper, host } = mountAttached()
+    const opts = () => options(wrapper)
+    ;(opts()[1].element as HTMLElement).focus()
+    await opts()[1].trigger('keydown', { key: 'End' })
+    expect(document.activeElement).toBe(opts()[2].element)
+    await opts()[2].trigger('keydown', { key: 'Home' })
+    expect(document.activeElement).toBe(opts()[0].element)
+    wrapper.unmount()
+    host.remove()
+  })
+
+  it('搜尋縮小清單後，Tab 停點落在仍可見的列（不會指向被濾掉的人）', async () => {
+    const wrapper = mountRoster({ selectedEmployeeId: 3 })
+    await wrapper.find('input').setValue('陳')
+    const opts = options(wrapper)
+    expect(opts).toHaveLength(1)
+    expect(opts[0].attributes('tabindex')).toBe('0')
+    wrapper.unmount()
+  })
+
+  it('帶修飾鍵的按鍵（Ctrl／Meta／Alt）不被攔截', async () => {
+    const wrapper = mountRoster({})
+    const evt = new KeyboardEvent('keydown', { key: 'Home', ctrlKey: true, bubbles: true, cancelable: true })
+    options(wrapper)[1].element.dispatchEvent(evt)
+    expect(evt.defaultPrevented).toBe(false)
+    wrapper.unmount()
+  })
+})

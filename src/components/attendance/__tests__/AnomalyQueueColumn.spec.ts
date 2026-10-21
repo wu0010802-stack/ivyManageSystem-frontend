@@ -470,3 +470,120 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     expect(wrapper.find('.anomaly-queue-column__batch-bar').exists()).toBe(false)
   })
 })
+
+// ── 鍵盤操作：WAI-ARIA listbox + roving tabindex ─────────────────────────────
+describe('AnomalyQueueColumn — 鍵盤操作（listbox / roving tabindex）', () => {
+  const mountAttached = (overrides: Parameters<typeof mountQueue>[0] = {}) => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const wrapper = mountQueue(overrides)
+    host.appendChild(wrapper.element)
+    return { wrapper, host }
+  }
+  const options = (wrapper: ReturnType<typeof mountQueue>) => wrapper.findAll('[role="option"]')
+
+  it('容器是 listbox 且有名稱；option 是卡片內容區，li 為純展示', () => {
+    const wrapper = mountQueue({})
+    expect(wrapper.find('[role="listbox"]').attributes('aria-label')).toBe('異常佇列')
+    expect(wrapper.findAll('.anomaly-item').every((li) => li.attributes('role') === 'presentation')).toBe(true)
+    expect(options(wrapper)).toHaveLength(2) // 預設只顯示未處理的兩張
+    wrapper.unmount()
+  })
+
+  it('checkbox 在 option 之外，仍是獨立的可 Tab 控制項（不被 roving 吃掉）', () => {
+    const wrapper = mountQueue({})
+    for (const li of wrapper.findAll('.anomaly-item')) {
+      const box = li.find('input[type="checkbox"]')
+      expect(box.exists()).toBe(true)
+      // option 內不可有可聚焦子孫（ARIA：option 的子層是純展示）
+      expect(li.find('[role="option"] input').exists()).toBe(false)
+      // checkbox 沒被設 tabindex=-1，維持預設可 Tab
+      expect(box.attributes('tabindex')).toBeUndefined()
+    }
+    wrapper.unmount()
+  })
+
+  it('checkbox 的可存取名稱帶出員工與日期（不再是千篇一律的「選取此筆異常」）', () => {
+    const wrapper = mountQueue({})
+    const labels = wrapper
+      .findAll('.anomaly-item__checkbox-wrap > *')
+      .map((el) => el.attributes('aria-label'))
+    expect(labels).toEqual(['選取 王遲到 2026-06-01 的異常', '選取 李缺卡 2026-06-02 的異常'])
+    wrapper.unmount()
+  })
+
+  it('roving tabindex：沒有選取時第一張 tabindex=0，其餘 -1', () => {
+    const wrapper = mountQueue({})
+    expect(options(wrapper).map((o) => o.attributes('tabindex'))).toEqual(['0', '-1'])
+    wrapper.unmount()
+  })
+
+  it('roving tabindex：Tab 停點落在選取卡（以原始 index 對應），aria-selected 同步', () => {
+    const wrapper = mountQueue({ selectedIndex: 1 })
+    const opts = options(wrapper)
+    expect(opts.map((o) => o.attributes('tabindex'))).toEqual(['-1', '0'])
+    expect(opts.map((o) => o.attributes('aria-selected'))).toEqual(['false', 'true'])
+    wrapper.unmount()
+  })
+
+  it('Enter / Space 以原始 index emit select（篩選後也不偏移）', async () => {
+    const wrapper = mountQueue({})
+    const selects = wrapper.findAll('select')
+    await selects[0].setValue('missing_punch') // 只剩 cardMulti（原始 index=1）
+    await nextTick()
+    const opt = options(wrapper)[0]
+    await opt.trigger('keydown', { key: 'Enter' })
+    await opt.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('select')).toEqual([[1], [1]])
+    wrapper.unmount()
+  })
+
+  it('Space 的預設捲動行為被擋下', () => {
+    const wrapper = mountQueue({})
+    const evt = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })
+    options(wrapper)[0].element.dispatchEvent(evt)
+    expect(evt.defaultPrevented).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('↓／↑／Home／End 移動焦點與 Tab 停點，且不誤觸 select', async () => {
+    const { wrapper, host } = mountAttached()
+    const opts = () => options(wrapper)
+    ;(opts()[0].element as HTMLElement).focus()
+    await opts()[0].trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(opts()[1].element)
+    expect(opts().map((o) => o.attributes('tabindex'))).toEqual(['-1', '0'])
+    // 到底不循環
+    await opts()[1].trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(opts()[1].element)
+    await opts()[1].trigger('keydown', { key: 'Home' })
+    expect(document.activeElement).toBe(opts()[0].element)
+    await opts()[0].trigger('keydown', { key: 'End' })
+    expect(document.activeElement).toBe(opts()[1].element)
+    await opts()[1].trigger('keydown', { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(opts()[0].element)
+    expect(wrapper.emitted('select')).toBeFalsy()
+    wrapper.unmount()
+    host.remove()
+  })
+
+  it('點 option 本身只 emit 一次 select（冒泡到 li 的單一 handler）', async () => {
+    const wrapper = mountQueue({})
+    await options(wrapper)[1].trigger('click')
+    expect(wrapper.emitted('select')).toEqual([[1]])
+    wrapper.unmount()
+  })
+
+  it('未處理紅點是 role=img 並帶「未處理」名稱，已處理卡沒有', async () => {
+    const wrapper = mountQueue({})
+    await wrapper.findAll('select')[1].setValue('all')
+    await nextTick()
+    const dots = wrapper.findAll('.anomaly-item__pending')
+    expect(dots).toHaveLength(2)
+    for (const dot of dots) {
+      expect(dot.attributes('role')).toBe('img')
+      expect(dot.attributes('aria-label')).toBe('未處理')
+    }
+    wrapper.unmount()
+  })
+})

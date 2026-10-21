@@ -1,7 +1,8 @@
 // src/components/attendance/__tests__/DetailColumn.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { computed, nextTick } from 'vue'
+import { GRID_VERDICT_KEY, type GridVerdictLookup } from '@/composables/useGridVerdict'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 // ── hoisted mocks ─────────────────────────────────────────────────────────────
@@ -68,7 +69,7 @@ const missingContext = {
 // ResolveCard stub that exposes a way to emit 'resolve' and 'navigate'
 const ResolveCardStub = {
   name: 'ResolveCard',
-  props: ['item', 'index', 'total', 'context'],
+  props: ['item', 'index', 'total', 'context', 'acceptWarning'],
   emits: ['resolve', 'navigate'],
   template: `
     <div class="resolve-card-stub">
@@ -236,7 +237,7 @@ describe('DetailColumn', () => {
       await card.vm.$emit('resolve', { action: 'admin_accept' })
       await nextTick()
       await nextTick()
-      expect(mockElMessageSuccess).toHaveBeenCalledWith('已處理')
+      expect(mockElMessageSuccess).toHaveBeenCalledWith('已接受扣款')
     })
 
     it('calls notify and does NOT emit navigate on failure', async () => {
@@ -389,5 +390,38 @@ describe('DetailColumn — 打卡紀錄重試（QA #22）', () => {
     w.findComponent({ name: 'ResolveCard' }).vm.$emit('retry')
     await w.vm.$nextTick()
     expect(w.emitted('retryRecords')).toHaveLength(1)
+  })
+})
+
+describe('DetailColumn — 並列班表核對的判定（第五輪審查）', () => {
+  const mountWith = (lookup: GridVerdictLookup) => mount(DetailColumn, {
+    props: { mode: 'resolve', anomaly: anomalyItem, anomalyIndex: 0, anomalyTotal: 1, context: defaultContext, employeeId: 99, year: 2026, month: 6 },
+    global: { stubs, provide: { [GRID_VERDICT_KEY as symbol]: computed(() => lookup) } },
+  })
+
+  it('班表核對判定是疑似換班：提醒先去確認當日班別、不要在這裡接受扣款，並可跳過去', async () => {
+    const w = mountWith(() => ({ label: '疑似換班', status: 'possible_shift_change', acceptWarning: null }))
+    const note = w.get('[data-test="detail-grid-shift-change"]')
+    expect(note.text()).toContain('不要在這裡接受扣款')
+    await note.get('[data-test="detail-open-grid"]').trigger('click')
+    expect(w.emitted('openGrid')![0]).toEqual([99, anomalyItem.date])
+  })
+
+  it('遲到早退兩邊說的是同一件事：不重複寫；符合型態的格子把接受扣款前的提醒交給卡片', () => {
+    const w = mountWith(() => ({ label: '遲到 57 分・早退 342 分', status: 'anomaly', acceptWarning: '可能是設定問題' }))
+    expect(w.find('[data-test="detail-grid-verdict"]').exists()).toBe(false)
+    expect(w.find('[data-test="detail-grid-shift-change"]').exists()).toBe(false)
+    expect(w.findComponent(ResolveCardStub).props('acceptWarning')).toBe('可能是設定問題')
+  })
+
+  it('明細看不出的判定（例如資料待補）並列一行', () => {
+    const w = mountWith(() => ({ label: '資料待補', status: 'data_incomplete', acceptWarning: null }))
+    expect(w.get('[data-test="detail-grid-verdict"]').text()).toBe('班表核對：資料待補')
+  })
+
+  it('沒有提供班表核對時不顯示，提醒為 null', () => {
+    const w = mountDetail({})
+    expect(w.find('[data-test="detail-grid-verdict"]').exists()).toBe(false)
+    expect(w.findComponent(ResolveCardStub).props('acceptWarning')).toBeNull()
   })
 })

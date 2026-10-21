@@ -14,7 +14,7 @@
           <td data-label="應上班時段">{{ row.expectedLabel }}</td>
           <td class="month-record-row__punch-in" data-label="上班打卡">{{ row.record?.punch_in || '—' }}</td>
           <td class="month-record-row__punch-out" data-label="下班打卡">{{ row.record?.punch_out || '—' }}</td>
-          <td class="month-record-row__status" data-label="狀態／請假">{{ row.status }}<small v-if="row.deviationLabel">{{ row.deviationLabel }}</small><small v-if="row.leaveLabel">{{ row.leaveLabel }}</small><RawPunchDetails v-if="row.record" :import-metadata="row.record.import_metadata" /></td>
+          <td class="month-record-row__status" data-label="狀態／請假">{{ row.status }}<small v-if="row.deviationLabel">{{ row.deviationLabel }}</small><small v-if="row.leaveLabel">{{ row.leaveLabel }}</small><small v-if="gridLabel(row.date, row.status)" class="month-record-row__grid" :data-test="`grid-verdict-${row.date}`">班表核對：{{ gridLabel(row.date, row.status) }}</small><RawPunchDetails v-if="row.record" :import-metadata="row.record.import_metadata" /></td>
           <td data-label="操作"><el-button v-if="canWrite && row.canSupplement" size="small" :disabled="saving" @click="openSupplement(row)">補打卡</el-button></td>
         </tr>
         <tr v-if="futureRows.length && !showFuture" class="month-future-toggle">
@@ -61,6 +61,7 @@ import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import EmptyState from '@/components/common/EmptyState.vue'
 import RawPunchDetails from './RawPunchDetails.vue'
+import { isRecordsBlind, useGridVerdict } from '@/composables/useGridVerdict'
 import type { ApiResponse } from '@/api/_generated/typed'
 
 const props = defineProps<{ employeeId: number | null; employeeName?: string; year: number; month: number; focusDate?: string | null; revision?: number }>()
@@ -76,6 +77,16 @@ const now = ref(Date.now())
 const clockTimer = window.setInterval(() => { now.value = Date.now() }, 60_000)
 onUnmounted(() => { window.clearInterval(clockTimer); loadSequence += 1 })
 const rows = computed(() => buildAttendanceMonthRows(days.value, records.value, now.value))
+const verdictOf = useGridVerdict()
+/**
+ * 班表核對對同一天的判定（例如這裡寫「遲到 24 分鐘」、格子是「疑似換班」）：只在班表核對看到明細看不出的
+ * 情形時寫出來，讓兩個頁籤的說法並列而不是各說各話。月份不同或整月格子還沒載到時不寫。
+ */
+function gridLabel(date: string, status: string): string | null {
+  const verdict = verdictOf.value(props.employeeId, date)
+  if (!verdict || !isRecordsBlind(verdict.status) || verdict.label === status) return null
+  return verdict.label
+}
 // 月合計：一律以整月 rows 計算，不跟著「未來日收合」變動——收起來的是尚未到班日，
 // 本來就不會有遲到早退，但合計的語意是整個月，不該隨畫面展開與否改變。
 // 次數以 is_late / is_early_leave 旗標為準，與後端扣款判定（anomalies.py）同口徑。
@@ -180,6 +191,7 @@ async function saveSupplement(): Promise<void> {
 .month-record-table thead th { position: sticky; top: 0; z-index: 1; background: var(--el-fill-color-light); font-weight: 600; }
 .month-record-table small { display: block; color: var(--el-text-color-secondary); font-size: var(--text-xs); margin-top: var(--space-1); }
 .month-record-row--anomaly { background: var(--el-color-warning-light-9); }
+.month-record-table .month-record-row__grid { color: var(--color-warning-darker); }
 .month-record-total { background: var(--el-fill-color-light); font-weight: 600; }
 .month-record-total th, .month-record-total td { border-bottom: 0; border-top: 2px solid var(--el-border-color); }
 .month-record-total__value span { display: block; }

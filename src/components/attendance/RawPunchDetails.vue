@@ -35,7 +35,7 @@ const clockReport = computed(() => {
     <p v-if="details.confirmed">已人工核對</p>
   </details>
   <details v-else-if="clockReport" class="raw-punch-details">
-    <summary>查看打卡鐘報表原文</summary>
+    <summary>查看報表原文</summary>
     <p>設備 {{ clockReport.device }} · 卡號 {{ clockReport.number }}</p>
     <ul><li v-for="(token, index) in clockReport.tokens" :key="index">{{ token }}</li></ul>
     <p v-if="clockReport.estimated">此日由推估區塊匯入，已人工確認對應日期</p>
@@ -44,6 +44,8 @@ const clockReport = computed(() => {
 </template>
 
 <style scoped>
-.raw-punch-details { flex-basis: 100%; font-size: var(--text-sm, 0.875rem); }
+.raw-punch-details { flex-basis: 100%; font-size: var(--text-sm); }
 .raw-punch-details p { margin-block: 6px; }
+/* 狀態欄很窄，中文會逐字斷行（「原／文」）：標題縮短並禁止斷行 */
+.raw-punch-details summary { white-space: nowrap; }
 </style>

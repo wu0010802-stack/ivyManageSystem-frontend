@@ -5,7 +5,8 @@ vi.mock('@/utils/auth', () => ({ hasPermission: mockCanWrite }))
 // src/components/attendance/__tests__/EmployeeMonthPanel.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { computed, nextTick } from 'vue'
+import { GRID_VERDICT_KEY, type GridVerdictLookup } from '@/composables/useGridVerdict'
 
 // ── hoisted mocks (must be defined before vi.mock factories run) ───────────────
 const { mockGetRecords, mockUpsertRecord, mockNotify } = vi.hoisted(() => ({
@@ -495,5 +496,33 @@ describe('月合計列', () => {
 
     expect(wrapper.find('.month-record-total').exists()).toBe(false)
     wrapper.unmount()
+  })
+})
+
+describe('並列班表核對的判定（第五輪審查：同一人日兩個頁籤兩套判定）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
+    mockGetRecords.mockResolvedValue({ data: [recordNormal, recordMissing] })
+  })
+
+  it('班表核對看到明細看不出的情形（疑似缺勤／換班／資料待補）才寫在狀態欄下；遲到早退、缺卡、符合班表不重複寫', async () => {
+    const lookup: GridVerdictLookup = (_id, date) =>
+      date === '2026-06-03'
+        ? { label: '疑似缺勤', status: 'suspected_absence', acceptWarning: null }
+        : { label: '遲到 53 分・早退 300 分', status: 'anomaly', acceptWarning: null }
+    const wrapper = mount(EmployeeMonthPanel, {
+      props: { employeeId: 5, year: 2026, month: 6 },
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } }, provide: { [GRID_VERDICT_KEY as symbol]: computed(() => lookup) } },
+    })
+    await flushPromises()
+    expect(wrapper.get('[data-test="grid-verdict-2026-06-03"]').text()).toBe('班表核對：疑似缺勤')
+    expect(wrapper.find('[data-test="grid-verdict-2026-06-02"]').exists()).toBe(false)
+  })
+
+  it('沒有提供班表核對（單獨掛載）時照原本顯示', async () => {
+    const wrapper = mountPanel({})
+    await flushPromises()
+    expect(wrapper.find('[data-test^="grid-verdict-"]').exists()).toBe(false)
   })
 })

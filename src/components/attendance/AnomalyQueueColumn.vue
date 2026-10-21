@@ -50,49 +50,72 @@
       />
     </div>
 
-    <!-- 列表：一天一張卡（同 attendance id 的異常收在同卡） -->
-    <ul v-else class="anomaly-queue-column__list" role="listbox" aria-label="異常佇列">
+    <!-- 列表：一天一張卡（同 attendance id 的異常收在同卡）。
+         WAI-ARIA listbox + roving tabindex：option 是卡片內容區（.anomaly-item__option），
+         ↑↓／Home／End 移動焦點、Enter／Space 選取（與點擊同一個 select 事件）。
+         批次勾選用的 checkbox 是獨立的可聚焦控制項，option 的子層必須是純展示，所以它放在 option
+         **外面**（同一個 li 之內的兄弟）、保有自己的 Tab 停點；li 本身 role="presentation"，
+         只保留「點整列都能選」的滑鼠便利，鍵盤路徑是內層 option。 -->
+    <ul
+      v-else
+      ref="listRef"
+      class="anomaly-queue-column__list"
+      role="listbox"
+      aria-label="異常佇列"
+      @focusout="onListFocusOut"
+    >
       <li
         v-for="{ item, origIndex } in filteredWithIndex"
         :key="item.id"
         class="anomaly-item"
         :class="{ 'anomaly-item--selected': origIndex === props.selectedIndex }"
-        role="option"
-        :aria-selected="origIndex === props.selectedIndex"
+        role="presentation"
         @click="emit('select', origIndex)"
       >
-        <!-- 多選 checkbox：click.stop 避免連動觸發單選/切換明細 -->
+        <!-- 多選 checkbox：click.stop 避免連動觸發單選/切換明細；32×32 點擊區（見 style） -->
         <span class="anomaly-item__checkbox-wrap" @click.stop>
           <el-checkbox
             class="anomaly-item__checkbox"
             :model-value="selectedIds.has(item.id)"
-            aria-label="選取此筆異常"
+            :aria-label="`選取 ${item.employee_name} ${item.date} 的異常`"
             @update:model-value="(v) => toggleSelectOne(item.id, v)"
           />
         </span>
 
-        <!-- 未處理紅點 -->
-        <span
-          v-if="item.confirmed_action === null"
-          class="anomaly-item__pending"
-          aria-label="未處理"
-        />
+        <div
+          class="anomaly-item__option"
+          role="option"
+          :data-card-id="item.id"
+          :tabindex="item.id === tabStopId ? 0 : -1"
+          :aria-selected="origIndex === props.selectedIndex"
+          @focus="focusedId = item.id"
+          @keydown="onOptionKeydown($event, origIndex, item.id)"
+        >
+          <!-- 未處理紅點：role="img" 才能帶 aria-label（無角色的 span 不可命名），
+               並讓 option 的可存取名稱帶上「未處理」；點本身仍是純視覺 8px，不加可見文字以維持列密度 -->
+          <span
+            v-if="item.confirmed_action === null"
+            class="anomaly-item__pending"
+            role="img"
+            aria-label="未處理"
+          />
 
-        <div class="anomaly-item__main">
-          <div class="anomaly-item__header">
-            <span class="anomaly-item__name">{{ item.employee_name }}</span>
-            <span class="anomaly-item__type-label">{{ typeLabels(item) }}</span>
-          </div>
-          <div class="anomaly-item__sub">
-            <span class="anomaly-item__date">
-              {{ item.date }}（{{ item.weekday }}）
-            </span>
-            <span
-              v-if="deductionOf(item) > 0"
-              class="anomaly-item__deduction"
-            >
-              -NT${{ deductionOf(item).toLocaleString() }}
-            </span>
+          <div class="anomaly-item__main">
+            <div class="anomaly-item__header">
+              <span class="anomaly-item__name">{{ item.employee_name }}</span>
+              <span class="anomaly-item__type-label">{{ typeLabels(item) }}</span>
+            </div>
+            <div class="anomaly-item__sub">
+              <span class="anomaly-item__date">
+                {{ item.date }}（{{ item.weekday }}）
+              </span>
+              <span
+                v-if="deductionOf(item) > 0"
+                class="anomaly-item__deduction"
+              >
+                -NT${{ deductionOf(item).toLocaleString() }}
+              </span>
+            </div>
           </div>
         </div>
       </li>
@@ -187,6 +210,63 @@ const filteredWithIndex = computed<{ item: AnomalyDayCard; origIndex: number }[]
       return true
     })
 })
+
+// ── 鍵盤操作（listbox + roving tabindex）────────────────────────────────────────
+const listRef = ref<HTMLElement | null>(null)
+/** 目前持有焦點的卡（焦點離開清單後清掉，Tab 停點回到選取卡） */
+const focusedId = ref<number | null>(null)
+
+/** roving tabindex 的唯一 Tab 停點：持有焦點的卡 → 選取卡 → 第一張（皆須在目前篩選結果內） */
+const tabStopId = computed<number | null>(() => {
+  const rows = filteredWithIndex.value
+  if (focusedId.value !== null && rows.some(({ item }) => item.id === focusedId.value)) {
+    return focusedId.value
+  }
+  const selected = rows.find(({ origIndex }) => origIndex === props.selectedIndex)
+  return (selected ?? rows[0])?.item.id ?? null
+})
+
+function focusCard(cardId: number): void {
+  focusedId.value = cardId
+  listRef.value?.querySelector<HTMLElement>(`[data-card-id="${cardId}"]`)?.focus()
+}
+
+function onOptionKeydown(e: KeyboardEvent, origIndex: number, cardId: number): void {
+  if (e.altKey || e.ctrlKey || e.metaKey) return
+  const rows = filteredWithIndex.value
+  const index = rows.findIndex(({ item }) => item.id === cardId)
+  let nextIndex: number
+  switch (e.key) {
+    case 'ArrowDown':
+      nextIndex = Math.min(index + 1, rows.length - 1)
+      break
+    case 'ArrowUp':
+      nextIndex = Math.max(index - 1, 0)
+      break
+    case 'Home':
+      nextIndex = 0
+      break
+    case 'End':
+      nextIndex = rows.length - 1
+      break
+    case 'Enter':
+    case ' ':
+      // 與點擊同一路徑；Space 預設會捲動容器，必須擋掉
+      e.preventDefault()
+      emit('select', origIndex)
+      return
+    default:
+      return
+  }
+  e.preventDefault()
+  const target = rows[nextIndex]
+  if (target) focusCard(target.item.id)
+}
+
+function onListFocusOut(e: FocusEvent): void {
+  const next = e.relatedTarget as Node | null
+  if (!next || !listRef.value?.contains(next)) focusedId.value = null
+}
 
 // ── 多選批次處理（P?-batch-ux-tail）──────────────────────────────────────────
 // 後端 attendance_ids 契約上限 500（BatchConfirmRequest.max_length）；此處同步防呆，
@@ -314,13 +394,13 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border-color-light, #f1f5f9);
+  border-bottom: 1px solid var(--border-color-light);
   flex-shrink: 0;
-  font-size: var(--text-sm, 0.875rem);
+  font-size: var(--text-sm);
 }
 
 .anomaly-queue-column__selected-count {
-  color: var(--brand-primary, #0284c7);
+  color: var(--color-primary);
   font-weight: 500;
 }
 
@@ -329,7 +409,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  border-top: 1px solid var(--border-color-light, #f1f5f9);
+  border-top: 1px solid var(--border-color-light);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -352,7 +432,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   align-items: flex-start;
   padding: var(--space-3);
   cursor: pointer;
-  border-bottom: 1px solid var(--border-color-light, #f1f5f9);
+  border-bottom: 1px solid var(--border-color-light);
   transition: background-color var(--transition-fast);
   gap: var(--space-2);
 }
@@ -362,16 +442,39 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 }
 
 .anomaly-item--selected {
-  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin）；2026-09-10 改版
-     移除側邊色條（impeccable AI-slop 偵測命中），與 RosterColumn 選取態一致。 */
-  background-color: var(--brand-primary-soft, #e0f2fe);
+  /* 2026-09-10 改版移除側邊色條（impeccable AI-slop 偵測命中），與 RosterColumn 選取態一致。 */
+  background-color: var(--color-primary-lighter);
 }
 
+/* 可點範圍 32×32（原本只有 14×32）。視覺上方塊仍是 14px，靠左右負 margin 把多出來的
+   點擊區吃進列的 padding／gap，列的版面幾乎不變（誤差 2px）。 */
 .anomaly-item__checkbox-wrap {
   display: flex;
   align-items: flex-start;
   padding-top: 2px;
+  margin-inline: calc(var(--space-2) * -1);
   flex-shrink: 0;
+}
+
+.anomaly-item__checkbox {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  justify-content: center;
+}
+
+/* option 本體：鍵盤焦點停在這裡；點擊事件由外層 li 處理（含 padding 區） */
+.anomaly-item__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.anomaly-item__option:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .anomaly-item__pending {
@@ -379,7 +482,8 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--danger, #ef4444);
+  /* 圖形元件對白底需 ≥3:1；--color-danger（#ef4444）在選取列底色上只有約 3.2:1，用 darker */
+  background-color: var(--color-danger-darker);
   flex-shrink: 0;
   margin-top: 6px;
 }
@@ -398,15 +502,15 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 .anomaly-item__name {
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .anomaly-item__type-label {
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--text-secondary, #475569);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
@@ -417,14 +521,16 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   margin-top: 2px;
 }
 
+/* 日期與金額在選取列（--brand-primary-soft）上要 ≥4.5:1：
+   tertiary（#64748b）只有 4.15:1、--danger 系（#ef4444）只有 3.28:1，各升一階 */
 .anomaly-item__date {
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .anomaly-item__deduction {
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--danger, #ef4444);
+  font-size: var(--text-xs);
+  color: var(--color-danger-darker);
   font-weight: 500;
   flex-shrink: 0;
 }
