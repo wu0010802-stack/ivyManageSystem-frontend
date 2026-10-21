@@ -4427,6 +4427,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/working-month": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Working Month
+         * @description 排班與出勤頁預設月份：上月有出勤且薪資未全部封存回上月，否則回本月（唯讀）。
+         */
+        get: operations["read_working_month_api_attendance_working_month_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/audit-logs": {
         parameters: {
             query?: never;
@@ -23767,6 +23787,18 @@ export interface components {
             month: number;
             /** Records */
             records: components["schemas"]["AttendanceCSVRow"][];
+            /** Year */
+            year: number;
+        };
+        /**
+         * AttendanceWorkingMonthOut
+         * @description 排班與出勤頁預設月份；previous_unsettled=True 表示回的是「上月還沒結完薪資」。
+         */
+        AttendanceWorkingMonthOut: {
+            /** Month */
+            month: number;
+            /** Previous Unsettled */
+            previous_unsettled: boolean;
             /** Year */
             year: number;
         };
@@ -58460,6 +58492,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_working_month_api_attendance_working_month_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceWorkingMonthOut"];
                 };
             };
         };

@@ -7,3 +7,7 @@ export const getAttendanceMonthContext = (
   params: ApiQuery<'/attendance/month-context', 'get'>,
   opts?: ReadOptions,
 ): AxiosResp<'/attendance/month-context', 'get'> => api.get('/attendance/month-context', withDedupeEscape({ params }, opts))
+
+/** 排班與出勤進頁的預設月份：上個月有出勤、薪資還沒全部封存就回上個月（月初還在趕上個月薪資） */
+export const getAttendanceWorkingMonth = (): AxiosResp<'/attendance/working-month', 'get'> =>
+  api.get('/attendance/working-month')
