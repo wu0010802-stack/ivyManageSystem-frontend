@@ -16,6 +16,15 @@
       </nav>
       <p v-if="nav?.back" class="pdd__back"><el-button link type="primary" data-test="pdd-back" @click="goBack">回剛才處理的 {{ nav.back }}</el-button></p>
       <p v-if="otherClasses" class="pdd__note" data-test="pdd-other-classes">另兼：{{ otherClasses }}</p>
+      <div v-if="patternShown" class="pdd__pattern" role="note" data-test="pdd-pattern">
+        <p class="pdd__pattern-lead">{{ patternTag(pattern!) }}：{{ patternSummary(pattern!) }}</p>
+        <p class="pdd__pattern-text">{{ patternHint(pattern!) }}{{ patternNext }}</p>
+        <div class="pdd__pattern-actions">
+          <el-button link type="primary" data-test="pdd-pattern-list" @click="emit('patterns')">看本月設定檢查</el-button>
+          <el-button v-if="canViewEmployees" link type="primary" data-test="pdd-pattern-employee" @click="openEmployee">員工資料</el-button>
+          <el-button v-if="pattern!.kind === 'fixed_offset' && caller.can_edit_attendance" link type="primary" data-test="pdd-pattern-recalc" @click="emit('recalculate')">重算本月出勤</el-button>
+        </div>
+      </div>
       <section class="pdd__section">
         <h3>應上班</h3>
         <p class="pdd__plan" data-test="pdd-plan">{{ planLine }}</p>
@@ -32,11 +41,17 @@
             <dt>下班</dt><dd>{{ hhmm(cell.actual.punch_out) }}</dd>
             <dt>判定</dt><dd>{{ verdict }}</dd>
           </dl>
-          <p class="pdd__reason">{{ cell.actual.reason }}</p>
+          <p v-if="!missingFromImport" class="pdd__reason">{{ cell.actual.reason }}</p>
           <div v-if="absenceRisk" class="pdd__absence" data-test="pdd-absence">
-            <p class="pdd__absence-lead">這天沒有任何打卡。正職員工不處理的話，算薪時會算曠職扣款。</p>
-            <p v-if="resolveMode !== 'none'" class="pdd__note">有上班但忘了打卡：在下方補登上下班。有請假：建立請假單。確定是曠職就不必動作，算薪會自動扣（這格會留在待處理）。</p>
-            <p v-else-if="!isOwnCell" class="pdd__note">有上班或有請假，要由有出勤寫入權限的行政人員補登或建立請假單。</p>
+            <template v-if="missingFromImport">
+              <p class="pdd__absence-lead">打卡資料裡沒有他這天的紀錄。格子暫不判缺勤，但算薪只看有沒有打卡：正職員工不處理的話，這天會算曠職扣款。</p>
+              <p v-if="resolveMode !== 'none'" class="pdd__note">有上班：卡號對好後重新匯入這天打卡，或在下方補登上下班。有請假：建立請假單。</p>
+            </template>
+            <template v-else>
+              <p class="pdd__absence-lead">這天沒有任何打卡。正職員工不處理的話，算薪時會算曠職扣款。</p>
+              <p v-if="resolveMode !== 'none'" class="pdd__note">有上班但忘了打卡：在下方補登上下班。有請假：建立請假單。確定是曠職就不必動作，算薪會自動扣（這格會留在待處理）。</p>
+            </template>
+            <p v-if="resolveMode === 'none' && !isOwnCell && !caller.can_edit_attendance" class="pdd__note">有上班或有請假，要由有出勤寫入權限的行政人員補登或建立請假單。</p>
             <el-button v-if="canCreateLeave" link type="primary" class="pdd__link" data-test="pdd-create-leave" @click="openLeave">建立請假單</el-button>
           </div>
           <p v-if="cell.actual.candidates.length" data-test="pdd-candidates">
@@ -57,6 +72,7 @@
         :cell="cell"
         :locked="actionsLocked"
         :mode="resolveMode"
+        :accept-warning="acceptWarning"
         :employee-name="employee.name"
         :employee-number="employee.employee_number ?? ''"
         :weekday="weekdayLabel"
@@ -112,6 +128,7 @@
         :cell="cell"
         :locked="actionsLocked"
         mode="confirm-first"
+        :accept-warning="acceptWarning"
         :employee-name="employee.name"
         :employee-number="employee.employee_number ?? ''"
         :weekday="weekdayLabel"
@@ -159,6 +176,8 @@ import { confirmDiscardChanges } from '@/composables/useUnsavedChangesGuard'
 import { KIND_LABELS, STATUS_LABELS } from '@/utils/attendanceConfirm'
 import { hasPermission } from '@/utils/auth'
 import { leaveCreateLink } from '@/utils/leaveDeepLink'
+import { rotationWeekText } from '@/utils/dutyRotationGrid'
+import { patternAcceptWarning, patternHint, patternSummary, patternTag, type AttendancePattern } from '@/utils/attendancePatterns'
 import {
   LOCKED_REASON_LABELS,
   RECON_STATUS_LABELS,
@@ -196,6 +215,9 @@ const props = defineProps<{
   nav?: { position: number | null; total: number; hasPrev: boolean; hasNext: boolean; back?: string | null } | null
   /** 剛自動跳到這格：短暫鎖住動作，連點不會落到這一筆 */
   actionsLocked?: boolean
+  /** 這位員工本月的型態（整月沒打卡／時段可能設錯）；patternMatchesDay＝這格就是那個型態的一格 */
+  pattern?: AttendancePattern | null
+  patternMatchesDay?: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -207,6 +229,10 @@ const emit = defineEmits<{
   records: [employeeId: number, date: string]
   /** 沒有任何打卡的人日：帶人員與日期開匯入（沿用原打卡核對清單的「匯入打卡」） */
   import: [context: { employee_id: number; employee_name: string; date: string }]
+  /** 開本月設定檢查清單 */
+  patterns: []
+  /** 開重算本月出勤（改好員工上下班時間或類型之後） */
+  recalculate: []
 }>()
 
 // 下拉：在用班別＋目前已選的那個（即使已停用，才能顯示其名稱；但它不可再被選）
@@ -241,7 +267,14 @@ const actionableMode = computed<DayResolveMode | 'none'>(() => {
   if (actual.status === 'possible_shift_change') return 'confirm-first'
   if (actual.status === 'missing_punch' || actual.status === 'anomaly') return 'resolve-first'
   if (actual.status === 'suspected_absence') return 'side-by-side'
+  // 當天有匯入、打卡檔裡卻沒有這個人：和疑似缺勤一樣可以補登上下班（否則管理員只看到「要找有權限的人」）
+  if (missingFromImport.value) return 'side-by-side'
   return 'none'
+})
+/** 資料待補且整天沒打卡、當天又有匯入＝匯入的打卡檔裡沒有他這天（多半是卡號沒對照） */
+const missingFromImport = computed(() => {
+  const actual = props.cell?.actual
+  return !!actual && actual.status === 'data_incomplete' && !actual.punch_in && !actual.punch_out && props.day?.import_covered !== false
 })
 /**
  * 本人出勤一律不能自己補（後端 require_not_self_attendance 回 403）。已打卡的本人格後端給 locked_reason
@@ -250,9 +283,15 @@ const actionableMode = computed<DayResolveMode | 'none'>(() => {
 const isOwnCell = computed(() => props.caller.employee_id != null && props.cell?.employee_id === props.caller.employee_id)
 const selfBlocked = computed(() => isOwnCell.value && actionableMode.value !== 'none')
 const resolveMode = computed<DayResolveMode | 'none'>(() => (isOwnCell.value ? 'none' : actionableMode.value))
-/** 補卡是主要動作時，確認當日班別先收起（需要時再展開）；重抓後判定改變（例如補卡後變疑似換班）要跟著重設 */
-const confirmExpanded = ref(true)
-watch(resolveMode, (mode) => { confirmExpanded.value = mode !== 'resolve-first' })
+/**
+ * 「確認當日班別」只在它就是要做的事時展開：疑似換班、非原排班出勤。其他判定（全天請假、符合班表、
+ * 補卡為主的缺卡）收起來，需要時再按「改確認當日班別」——否則全天病假也會出現必填的班別與原因。
+ * 重抓後判定改變（例如補卡後變疑似換班）要跟著重設。
+ */
+const CONFIRM_FIRST_STATUSES: ReadonlySet<string> = new Set(['possible_shift_change', 'unscheduled_attendance'])
+const confirmFirst = computed(() => CONFIRM_FIRST_STATUSES.has(props.cell?.actual?.status ?? ''))
+const confirmExpanded = ref(false)
+watch(confirmFirst, (first) => { confirmExpanded.value = first })
 
 /** 沒有排班權限但能處理打卡時，「沒有修改權限」會和下方補卡區矛盾，改說清楚是不能改班 */
 const lockedNote = computed(() => {
@@ -278,7 +317,24 @@ const absenceRisk = computed(() => {
   return actual.status === 'data_incomplete' && props.day?.import_covered !== false
 })
 const canCreateLeave = hasPermission('LEAVES_WRITE')
+const canViewEmployees = hasPermission('EMPLOYEES_READ')
 const router = useRouter()
+
+/** 型態提醒只在這格就是那個型態的一格時出現（同一人的其他異常照常逐日處理） */
+const patternShown = computed(() => !!props.pattern && !!props.patternMatchesDay)
+const patternNext = computed(() => {
+  if (!props.pattern) return ''
+  return props.pattern.kind === 'fixed_offset'
+    ? '先改員工資料，再按「重算本月出勤」，這些格子會一起更新；不要逐格接受扣款。'
+    : '修好後重新匯入，這些天會一起補上；不要逐格補登。'
+})
+/** 接受扣款前的提醒（ResolveCard 會先問）：照現在設錯的時段逐格扣薪是最容易犯的錯 */
+const acceptWarning = computed(() => (props.pattern && props.patternMatchesDay ? patternAcceptWarning(props.pattern) : null))
+async function openEmployee(): Promise<void> {
+  const cell = props.cell
+  if (!cell || !(await requestClose())) return
+  void router?.push(`/employees/${cell.employee_id}`)
+}
 /** 建立請假單會離開這頁：先過未送出檢查 */
 async function openLeave(): Promise<void> {
   const cell = props.cell
@@ -330,7 +386,7 @@ const chain = computed(() => {
       key: 'rotation',
       label: '輪值表',
       value: rotation
-        ? `${rotation.school_year} 學年${rotation.semester === 1 ? '上' : '下'}學期・第 ${rotation.week_label ?? '?'} 週・${rotation.row_label ?? '—'}`
+        ? `${rotation.school_year} 學年${rotation.semester === 1 ? '上' : '下'}學期・${rotationWeekText(rotation.week_label)}・${rotation.row_label ?? '—'}`
         : '無',
       active: plan.source === 'rotation',
     },
@@ -520,7 +576,7 @@ watch(
     confirmInitial.value = confirmChoice.value
     confirmReason.value = ''
     includePair.value = false
-    confirmExpanded.value = resolveMode.value !== 'resolve-first'
+    confirmExpanded.value = confirmFirst.value
     if (cell.edit.plan && current !== INHERIT && plan.source !== 'swap') {
       loadingDaily.value = true
       try {
@@ -650,6 +706,12 @@ async function submitConfirm(): Promise<void> {
 .pdd__absence p { margin: 0; }
 .pdd__absence-lead { font-size: var(--text-sm); font-weight: 600; color: var(--color-warning-darker); }
 .pdd__link { justify-self: start; }
+.pdd__pattern { display: grid; gap: var(--space-1); padding: var(--space-2) var(--space-3); border: 1px solid var(--el-color-warning-light-5); border-radius: var(--radius-md); background: var(--el-color-warning-light-9); }
+.pdd__pattern p { margin: 0; }
+.pdd__pattern-lead { font-size: var(--text-sm); font-weight: 600; color: var(--color-warning-darker); }
+.pdd__pattern-text { font-size: var(--text-sm); color: var(--el-text-color-regular); }
+.pdd__pattern-actions { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
+.pdd__pattern-actions .el-button { margin-left: 0; }
 .pdd__select { width: 100%; margin-bottom: var(--space-2); }
 .pdd__candidates { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
 .pdd__candidates .el-button { margin-left: 0; }

@@ -1,4 +1,8 @@
-vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }) }))
+const workingMonth = vi.hoisted(() => vi.fn())
+vi.mock('@/api/attendanceMonthContext', () => ({
+  getAttendanceMonthContext: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }),
+  getAttendanceWorkingMonth: (...args: unknown[]) => workingMonth(...args),
+}))
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
@@ -46,7 +50,7 @@ vi.mock('@/utils/download', () => ({
 
 const msgBoxConfirm = vi.hoisted(() => vi.fn())
 vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
   ElMessageBox: { confirm: msgBoxConfirm },
   ElTabs: { template: '<div class="el-tabs"><slot /></div>' },
   ElTabPane: { template: '<div class="el-tab-pane"><slot /></div>', props: ['label', 'name'] },
@@ -74,7 +78,7 @@ const AnomalyQueueColumnStub = {
 const DetailColumnStub = {
   name: 'DetailColumn',
   props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month', 'focusDate', 'revision'],
-  emits: ['resolved', 'navigate', 'switchMode', 'retryRecords'],
+  emits: ['resolved', 'navigate', 'switchMode', 'retryRecords', 'openGrid'],
   template: `<div class="detail-column-stub"><slot /></div>`,
 }
 
@@ -102,13 +106,14 @@ const AttendanceMonthStatsStub = {
 
 const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
-  props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision', 'view', 'month'],
-  emits: ['records', 'import', 'import-punches', 'changed', 'update:date', 'update:filter', 'update:view'],
+  props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision', 'view', 'month', 'headerHasMonth'],
+  emits: ['records', 'import', 'import-punches', 'changed', 'update:date', 'update:filter', 'update:view', 'show-patterns', 'recalculate'],
   methods: { confirmWeekChange: (date: string) => panelConfirmWeekChange(date) },
   template: '<div class="grid-panel-stub" />',
 }
 const rotationMounts = { count: 0 }
-const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary', 'records', 'import', 'recalculate'], template: '<div class="month-progress-stub" />' }
+const openPatternsSpy = vi.fn()
+const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary', 'records', 'import', 'recalculate'], methods: { openPatterns: () => openPatternsSpy() }, template: '<div class="month-progress-stub" />' }
 const RecalcDrawerStub = { name: 'RecalculateAttendanceDrawer', props: ['modelValue', 'year', 'month', 'mobile'], emits: ['update:modelValue', 'done'], template: '<div class="recalc-stub" />' }
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
@@ -454,9 +459,11 @@ describe('WorkspaceHeader', () => {
     expect(wrapper.emitted('import')).toBeTruthy()
   })
 
-  it('月結選單：匯出月報 emit export；有薪資檢視權限才有薪資扣項核對', async () => {
+  it('月底作業選單：匯出月報 emit export；有薪資檢視權限才有薪資扣項核對', async () => {
     const wrapper = mountHeader()
-    expect(wrapper.find('[aria-label="月結工具"]').text()).toContain('匯出月報')
+    // 選單裡是月底要做的事、不會結帳：不叫「月結」
+    expect(wrapper.find('[aria-label="月底作業"]').text()).toContain('匯出月報')
+    expect(wrapper.text()).not.toContain('月結')
     expect(wrapper.find('[data-command="payroll"]').exists()).toBe(false)
     wrapper.findComponent(WH_DROPDOWN).vm.$emit('command', 'export')
     expect(wrapper.emitted('export')).toBeTruthy()
@@ -471,11 +478,11 @@ describe('WorkspaceHeader', () => {
     expect(mountHeader().text()).not.toContain('待處理異常')
   })
 
-  it('權限 gate：hasPermission 回 false 時「匯入打卡紀錄」不顯示，月結選單仍在', () => {
+  it('權限 gate：hasPermission 回 false 時「匯入打卡紀錄」不顯示，月底作業選單仍在', () => {
     mockHasPermission.mockReturnValue(false)
     const wrapper = mountHeader()
     expect(wrapper.findAll('button').find((b) => b.text().includes('匯入'))).toBeUndefined()
-    expect(wrapper.find('[aria-label="月結工具"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="月底作業"]').exists()).toBe(true)
     mockHasPermission.mockReturnValue(true)
   })
 })
@@ -1164,6 +1171,82 @@ describe('ScheduleAttendanceView 異常選取以 attendance id 為準（QA P3）
     wrapper.findComponent(DetailColumnStub).vm.$emit('resolved')
     await flushPromises()
     expect(wrapper.findComponent(DetailColumnStub).props('anomaly')).toMatchObject({ id: 10 })
+    wrapper.unmount()
+  })
+})
+
+describe('第五輪審查：預設月份、頁首範圍、兩頁籤互通', () => {
+  beforeEach(() => {
+    routerReplace.mockReset()
+    workingMonth.mockReset()
+    openPatternsSpy.mockReset()
+    mockHasPermission.mockReturnValue(true)
+    getSummaryMock.mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+  })
+
+  it('沒指定日期進頁、上個月薪資還沒封存：預設切到上個月並寫回網址', async () => {
+    workingMonth.mockResolvedValue({ data: { year: 2026, month: 9, previous_unsettled: true } })
+    const wrapper = mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('date')).toBe('2026-09-01')
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: { date: '2026-09-01' } })
+    wrapper.unmount()
+  })
+
+  it('上個月已封存、或網址帶日期：不改月份（帶日期時連問都不問）', async () => {
+    workingMonth.mockResolvedValue({ data: { year: 2026, month: 10, previous_unsettled: false } })
+    const settled = mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
+    await flushPromises()
+    expect(routerReplace).not.toHaveBeenCalledWith(expect.objectContaining({ query: expect.objectContaining({ date: expect.any(String) }) }))
+    settled.unmount()
+    workingMonth.mockClear()
+    const dated = mount(ScheduleAttendanceView, { props: { date: '2026-08-12' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(workingMonth).not.toHaveBeenCalled()
+    expect(dated.findComponent(ScheduleGridPanelStub).props('date')).toBe('2026-08-12')
+    dated.unmount()
+  })
+
+  it('年月與頁首動作只在班表核對／出勤明細顯示（輪值表、換班、班別設定不受它控制）', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'rotation', date: '2026-09-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.find('.workspace-header-stub').attributes('style') ?? '').toContain('display: none')
+    await wrapper.find('[data-test="tab-records"]').trigger('click')
+    expect(wrapper.find('.workspace-header-stub').attributes('style') ?? '').not.toContain('display: none')
+    wrapper.unmount()
+  })
+
+  it('格子的型態註記開本月設定檢查、抽屜的重算開重算抽屜；頁首有年月時告訴面板', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'grid', date: '2026-09-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    const panel = wrapper.findComponent(ScheduleGridPanelStub)
+    expect(panel.props('headerHasMonth')).toBe(true)
+    panel.vm.$emit('show-patterns')
+    expect(openPatternsSpy).toHaveBeenCalledTimes(1)
+    panel.vm.$emit('recalculate')
+    await flushPromises()
+    expect(wrapper.findComponent(RecalcDrawerStub).props('modelValue')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('出勤明細「到班表核對處理」：切到班表核對並帶人帶日期（開那格抽屜）', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'records', date: '2026-09-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(DetailColumnStub).vm.$emit('openGrid', 2, '2026-09-03')
+    await flushPromises()
+    expect(wrapper.find('[data-test="tab-grid"]').attributes('aria-selected')).toBe('true')
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'grid', date: '2026-09-03', emp: '2' } })
+    wrapper.unmount()
+  })
+
+  it('出勤明細寫出清單與班表核對待處理的關係（不讓兩個數字各說各話）', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'records', date: '2026-09-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(MonthProgressBarStub).vm.$emit('summary', { month: '2026-09-01', issues: 435, missingImportDays: 0 })
+    await flushPromises()
+    expect(wrapper.get('[data-test="records-scope-note"]').text()).toContain('班表核對本月 435 格待處理中，有打卡紀錄的遲到、早退、缺卡在這裡處理')
     wrapper.unmount()
   })
 })

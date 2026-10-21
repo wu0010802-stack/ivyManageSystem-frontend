@@ -2,7 +2,7 @@
   <div class="month-grid">
     <p class="month-grid__legend" data-test="month-legend">
       <span><i class="month-grid__dot month-grid__dot--red" aria-hidden="true" />遲到／早退／缺卡／疑似缺勤</span>
-      <span><i class="month-grid__dot month-grid__dot--orange" aria-hidden="true" />疑似換班／資料待補／待老師確認等其他待處理</span>
+      <span><i class="month-grid__dot month-grid__dot--orange" aria-hidden="true" />疑似換班／資料待補／待老師確認／待修設定等其他待處理</span>
       <span><i class="month-grid__dot month-grid__dot--blue" aria-hidden="true" />請假</span>
       <span class="month-grid__legend-hint">月總覽唯讀；點週次可切回該週排班</span>
     </p>
@@ -44,7 +44,15 @@
             <tr v-for="emp in section.employees" :key="emp.employee_id" :data-test="`mrow-${emp.employee_id}`">
               <th scope="row" class="month-grid__person">
                 {{ emp.name }}<span v-if="emp.role_label" class="month-grid__role">{{ emp.role_label }}</span>
-                <span v-if="personNotes?.[emp.employee_id]" class="month-grid__note" :title="personNotes[emp.employee_id].detail" :data-test="`mperson-note-${emp.employee_id}`">{{ personNotes[emp.employee_id].tag }}</span>
+                <button
+                  v-if="personNotes?.[emp.employee_id]"
+                  type="button"
+                  class="month-grid__note"
+                  :title="personNotes[emp.employee_id].detail"
+                  :aria-label="`${emp.name}：${personNotes[emp.employee_id].tag}，${personNotes[emp.employee_id].detail}。開本月設定檢查`"
+                  :data-test="`mperson-note-${emp.employee_id}`"
+                  @click="emit('show-patterns')"
+                >{{ personNotes[emp.employee_id].tag }}</button>
               </th>
               <td v-for="d in shownDays" :key="d.date" class="month-grid__cell-wrap">
                 <button
@@ -109,9 +117,13 @@ const props = defineProps<{
   maxHeight?: number | null
   /** 本月型態註記（整月沒打卡、時段可能設錯），key＝員工 id */
   personNotes?: Record<number, { tag: string; detail: string }>
+  /** 符合本月型態的待處理格（cellKey）：多半是設定問題，紅點降為橘點（待修設定） */
+  patternKeys?: ReadonlySet<string>
 }>()
 const emit = defineEmits<{
   select: [employeeId: number, date: string]
+  /** 列首型態註記：開本月設定檢查 */
+  'show-patterns': []
   /** 週次欄頭：帶該週真正的週一，面板據此切回週模式 */
   'open-week': [monday: string]
 }>()
@@ -123,7 +135,11 @@ const uncovered = computed(() => uncoveredDates(props.days))
 const cellOf = (employeeId: number, date: string) => props.cells.get(cellKey(employeeId, date))
 const dots = computed(() => {
   const map = new Map<string, MonthDot | null>()
-  for (const [key, cell] of props.cells) map.set(key, monthDot(cell, props.today, uncovered.value))
+  for (const [key, cell] of props.cells) {
+    const dot = monthDot(cell, props.today, uncovered.value)
+    // 整月同型態的格子：不和逐日異常同一種紅（一整排紅點多半只是一個設定錯）
+    map.set(key, dot === 'red' && props.patternKeys?.has(key) ? 'orange' : dot)
+  }
   return map
 })
 const dotOf = (employeeId: number, date: string): MonthDot | null => dots.value.get(cellKey(employeeId, date)) ?? null
@@ -154,15 +170,17 @@ const emptyText = computed(() => {
 /** 色點不能是唯一資訊：報讀帶出計畫、判定、假別與老師確認 */
 function cellAria(emp: GridEmployee, d: GridDay): string {
   const info = cellDisplay(cellOf(emp.employee_id, d.date)!, props.today, uncovered.value)
-  return [emp.name, `${formatMonthDay(d.date)}（${WEEKDAY[d.weekday]}）`, info.plan, info.verdict?.label, ...info.leaveTags, info.confirmation]
+  const pattern = props.patternKeys?.has(cellKey(emp.employee_id, d.date)) ? '整月同型態，可能是設定問題' : null
+  return [emp.name, `${formatMonthDay(d.date)}（${WEEKDAY[d.weekday]}）`, info.plan, info.verdict?.label, pattern, ...info.leaveTags, info.confirmation]
     .filter(Boolean)
     .join('，')
 }
 </script>
 
 <style scoped>
-/* 藍點（請假）：admin 色票沒有藍；圖形元件對白底 ≥3:1 */
-.month-grid { --month-grid-leave: #2f7fb5; }
+/* 藍點（請假）：用 info 色票的 darker 階（白底約 6.7:1，非文字元件只需 ≥3:1；暗色模式自動換成淺藍）。
+   紅／橘點同樣取 -darker，三色同一套明暗切換 */
+.month-grid { --month-grid-leave: var(--color-info-darker); }
 .month-grid__legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--el-text-color-secondary); }
 .month-grid__legend .month-grid__dot { margin-right: var(--space-1); }
 .month-grid__legend-hint { margin-left: auto; }
@@ -179,7 +197,8 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .month-grid__table .month-grid__person { z-index: calc(var(--z-sticky) - 1); font-weight: 400; }
 .month-grid__table thead .month-grid__corner { z-index: calc(var(--z-sticky) + 1); }
 .month-grid__role { margin-left: var(--space-1); font-size: var(--text-xs); color: var(--el-text-color-secondary); }
-.month-grid__note { display: block; color: var(--color-warning-darker); font-size: var(--text-xs); font-weight: 600; cursor: help; }
+.month-grid__note { display: block; padding: 0; border: 0; background: transparent; font: inherit; color: var(--color-warning-darker); font-size: var(--text-xs); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.month-grid__note:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .month-grid__week-btn { width: 100%; min-height: var(--touch-target-min); border: 0; border-bottom: 1px solid var(--el-border-color-light); background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; }
 .month-grid__week-btn:hover { background: var(--el-fill-color-light); }
 .month-grid__table .month-grid__day { min-width: 40px; padding: var(--space-1) 0; }

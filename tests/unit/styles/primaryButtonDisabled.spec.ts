@@ -23,4 +23,11 @@ describe('main.css 實心 primary 鈕覆寫', () => {
       }
     }
   })
+
+  it('停用的實心 primary 改用中性底色（不是淡主色），停用時不比可按的一般鈕搶眼', () => {
+    const rule = css.match(/\.el-button--primary\.is-disabled:not\(\.is-plain\):not\(\.is-link\):not\(\.is-text\)\s*\{([^}]*)\}/)
+    expect(rule, '缺少停用 primary 的中性樣式').not.toBeNull()
+    expect(rule![1]).toContain('--el-button-disabled-bg-color: var(--el-fill-color-light)')
+    expect(rule![1]).toContain('--el-button-disabled-text-color: var(--el-text-color-placeholder)')
+  })
 })

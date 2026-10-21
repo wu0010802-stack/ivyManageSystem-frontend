@@ -242,6 +242,14 @@ body {
   border-color: var(--color-primary-soft) !important;
 }
 
+/* 停用的實心 primary 退成中性（與停用的一般鈕同一種樣子）：EP 預設的淡主色底仍是整排最飽和的元素，
+ * 停用時比旁邊能按的白鈕更搶眼、看起來像能按（2026-10-21 排班與出勤審查：補打卡並重算、套用、確認重算 0 天） */
+.el-button--primary.is-disabled:not(.is-plain):not(.is-link):not(.is-text) {
+  --el-button-disabled-bg-color: var(--el-fill-color-light);
+  --el-button-disabled-border-color: var(--el-border-color-light);
+  --el-button-disabled-text-color: var(--el-text-color-placeholder);
+}
+
 /* Table */
 .el-table {
   --el-table-header-bg-color: var(--bg-color) !important;
@@ -267,6 +275,12 @@ body {
 }
 
 /* admin 表格密度：預設緊湊（僅 admin scope，避免影響 portal 觸控目標） */
+/* Admin 抽屜：EP 預設標題與內容之間約 52px（header margin-bottom 32＋body padding 20），
+ * 內容像是和標題脫節、側邊抽屜第一屏又少一截；收成約 28px（2026-10-21 排班與出勤審查） */
+html.ivy-admin .el-drawer__header {
+  margin-bottom: var(--space-2);
+}
+
 html.ivy-admin .el-table .el-table__cell {
   padding-top: 6px;
   padding-bottom: 6px;

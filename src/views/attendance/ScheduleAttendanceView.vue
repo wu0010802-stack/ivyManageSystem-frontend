@@ -5,8 +5,10 @@
          讓班表核對的格子盡量進首屏。 -->
     <PageHeader title="排班與出勤">
       <template #actions>
+        <!-- 年月與動作只管班表核對與出勤明細；輪值表、換班紀錄、班別設定不受它控制，不顯示以免誤會 -->
         <WorkspaceHeader
           v-if="canViewAttendance"
+          v-show="monthTabs"
           :year="query.year"
           :month="query.month"
           :can-payroll-compare="canPayrollCompare"
@@ -21,7 +23,7 @@
       </template>
     </PageHeader>
 
-    <MonthProgressBar v-show="activeTab === 'grid' || activeTab === 'records'" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" @recalculate="recalcOpen = true" />
+    <MonthProgressBar v-show="monthTabs" ref="progressBar" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" @recalculate="recalcOpen = true" />
 
     <div class="workspace-mode" role="tablist" aria-label="排班與出勤檢視">
       <button
@@ -50,6 +52,7 @@
       :revision="externalRevision"
       :view="gridView"
       :month="monthGrid"
+      :header-has-month="canViewAttendance"
       @update:date="setAnchorDate"
       @update:filter="setFilter"
       @update:view="setView"
@@ -57,6 +60,8 @@
       @import="onGridImport"
       @import-punches="onGridImportMonth"
       @changed="onGridChanged"
+      @show-patterns="progressBar?.openPatterns()"
+      @recalculate="recalcOpen = true"
     />
 
     <div v-if="canViewAttendance" v-show="activeTab === 'records'" data-test="records-panel">
@@ -72,7 +77,7 @@
       <el-button v-if="hasPermission('ATTENDANCE_WRITE')" type="primary" @click="openImport">匯入打卡紀錄</el-button>
     </section>
     <template v-else-if="ws.hasCurrentData.value">
-    <div class="workspace-record-actions"><el-button @click="anomalyDrawerOpen = true">遲到・早退・缺卡清單（{{ ws.kpis.value.pendingAnomalies }} 筆待處理）</el-button><span>一人一天算一筆；疑似缺勤、疑似換班與資料待補在「班表核對」處理。</span></div>
+    <div class="workspace-record-actions"><el-button @click="anomalyDrawerOpen = true">遲到・早退・缺卡清單（{{ ws.kpis.value.pendingAnomalies }} 筆待處理）</el-button><span data-test="records-scope-note">{{ recordsScopeNote }}</span></div>
     <!-- 桌機名冊與整月明細 -->
     <div v-if="isDesktop" class="workspace-cols">
       <div class="col-roster">
@@ -104,6 +109,7 @@
           @navigate="onNavigate"
           @switch-mode="switchDetailMode"
           @retry-records="retryRecords"
+          @open-grid="openGridCell"
         />
       </div>
     </div>
@@ -152,6 +158,7 @@
             @navigate="onNavigate"
             @switch-mode="switchDetailMode"
             @retry-records="retryRecords"
+            @open-grid="openGridCell"
           />
         </div>
       </el-tab-pane>
@@ -182,18 +189,21 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, toRef, onMounted, computed, ref, watch, defineAsyncComponent } from 'vue'
+import { reactive, toRef, onMounted, computed, provide, ref, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useAttendanceWorkspace } from '@/composables/useAttendanceWorkspace'
 import { useMonthGrid } from '@/composables/useMonthGrid'
+import { GRID_VERDICT_KEY, buildGridVerdictLookup } from '@/composables/useGridVerdict'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { downloadFile } from '@/utils/download'
+import { firstRosterEmployeeId } from '@/utils/attendanceRoster'
 import { todayTaipeiISO } from '@/utils/format'
 import { getRecords } from '@/api/attendance'
+import { getAttendanceWorkingMonth } from '@/api/attendanceMonthContext'
 import type { ApiResponse } from '@/api/_generated/typed'
 import PageHeader from '@/components/common/PageHeader.vue'
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
@@ -247,6 +257,8 @@ const normalizeTab = (tab: WorkspaceTab | undefined): WorkspaceTab =>
   tab && visibleTabs.some((t) => t.key === tab) ? tab : 'grid'
 
 const activeTab = ref<WorkspaceTab>(normalizeTab(props.tab))
+/** 年月切換與本月進度只對這兩個頁籤有意義 */
+const monthTabs = computed(() => activeTab.value === 'grid' || activeTab.value === 'records')
 const gridVisited = ref(activeTab.value === 'grid')
 const rotationVisited = ref(activeTab.value === 'rotation')
 const gridFilter = ref<GridFilter>(props.filter ?? 'all')
@@ -317,6 +329,9 @@ const dataRevision = ref(0)
 const externalRevision = ref(0)
 // 本月整月格子：進度條與月格子共用同一份（D-06）；換月或資料異動（dataRevision）時重抓
 const monthGrid = useMonthGrid(anchorDate, dataRevision)
+// 出勤明細借用班表核對的判定（同一人日兩個頁籤的判定並列，防止在疑似換班的日子接受遲到扣款）
+provide(GRID_VERDICT_KEY, buildGridVerdictLookup(monthGrid))
+const progressBar = ref<InstanceType<typeof MonthProgressBar> | null>(null)
 
 // ── workspace composable ───────────────────────────────────────────────────
 const ws = useAttendanceWorkspace(toRef(query, 'year'), toRef(query, 'month'))
@@ -410,7 +425,8 @@ const currentAnomaly = computed<AnomalyDayCard | null>(
 // 從 AnomalyQueue 選取時 selectedEmployeeId=null，用 anomaly.employee_number 對照名冊
 const currentEmployeeId = computed<number | null>(() => {
   if (selectedEmployeeId.value != null) return selectedEmployeeId.value
-  if (detailMode.value === 'month') return ws.roster.value[0]?.employee_id ?? null
+  // 名冊畫面上的第一位（排序分組後）；取後端原順序的第一筆會選到首屏外的人
+  if (detailMode.value === 'month') return firstRosterEmployeeId(ws.roster.value, pendingCountsByEmployee.value)
   const a = currentAnomaly.value
   if (!a) return null
   return ws.roster.value.find((r) => r.employee_number === a.employee_number)?.employee_id ?? null
@@ -620,6 +636,22 @@ async function onImported(): Promise<void> {
 // 月報匯出前的提醒：用本月進度那份統計（同一個「待處理」定義）；別月或還沒載到就不擋
 const monthSummary = ref<MonthSummary | null>(null)
 
+/** 出勤明細的清單只是班表核對待處理的一部分：把兩個數字的關係寫出來，不讓 284 與 435 各說各話 */
+const recordsScopeNote = computed(() => {
+  const monthStart = `${query.year}-${String(query.month).padStart(2, '0')}-01`
+  const s = monthSummary.value
+  const scope = s && s.month === monthStart && s.issues > 0 ? `班表核對本月 ${s.issues} 格待處理中，` : ''
+  return `${scope}有打卡紀錄的遲到、早退、缺卡在這裡處理（一人一天算一筆）；疑似缺勤、疑似換班與資料待補要在「班表核對」處理。`
+})
+
+/** 出勤明細「到班表核對處理」：切到班表核對並開這個人這天的抽屜（疑似換班要在那裡確認當日班別） */
+async function openGridCell(employeeId: number, date: string): Promise<void> {
+  if (gridPanel.value && !(await gridPanel.value.confirmWeekChange(date))) return
+  anchorDate.value = date
+  activeTab.value = 'grid'
+  syncQuery({ tab: 'grid', date, emp: String(employeeId), view: undefined })
+}
+
 async function onExport(): Promise<void> {
   const monthStart = `${query.year}-${String(query.month).padStart(2, '0')}-01`
   const s = monthSummary.value
@@ -646,7 +678,30 @@ async function onExport(): Promise<void> {
 }
 
 // ── 初始載入 ────────────────────────────────────────────────────────────────
-onMounted(() => { if (canViewAttendance) void ws.refresh() })
+onMounted(() => {
+  if (!canViewAttendance) return
+  void ws.refresh()
+  void applyWorkingMonth()
+})
+
+/**
+ * 沒指定日期進頁時，預設看「最早一個還沒交薪資的月份」（只回看上個月）：月初行政還在趕上個月薪資，
+ * 停在本月只會看到「等匯入打卡」。使用者在回應前已經自己換過月份就不動。讀不到就照舊停在本月。
+ */
+async function applyWorkingMonth(): Promise<void> {
+  if (props.date) return
+  const initial = anchorDate.value
+  try {
+    const { year, month, previous_unsettled: previousUnsettled } = (await getAttendanceWorkingMonth()).data
+    if (!previousUnsettled || anchorDate.value !== initial || props.date) return
+    await setAnchorDate(`${year}-${String(month).padStart(2, '0')}-01`)
+    if (anchorDate.value.slice(0, 7) === `${year}-${String(month).padStart(2, '0')}`) {
+      ElMessage.info(`${month} 月薪資還沒封存，先顯示 ${month} 月`)
+    }
+  } catch {
+    // 只是預設值，失敗就停在本月
+  }
+}
 </script>
 
 <style scoped>

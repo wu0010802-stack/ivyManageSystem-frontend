@@ -87,3 +87,22 @@ describe('MonthGrid 狀態點不只靠顏色', () => {
     expect(rule('month-grid__dot--red')).toMatch(/background: var\(--color-danger-darker\)/)
   })
 })
+
+describe('MonthGrid 第五輪審查', () => {
+  it('符合整月型態的格子：紅點降為橘點（一整排紅點多半只是一個設定錯），報讀寫出可能是設定問題', () => {
+    const cells = [cell(1, '2026-10-01', { actual: { status: 'anomaly' } }), cell(1, '2026-10-02', { actual: { status: 'anomaly' } })]
+    const wrapper = mountMonth(cells, { patternKeys: new Set(['1|2026-10-01']) })
+    expect(wrapper.get('[data-test="mdot-1-2026-10-01"]').classes()).toContain('month-grid__dot--orange')
+    expect(wrapper.get('[data-test="mcell-1-2026-10-01"]').attributes('aria-label')).toContain('可能是設定問題')
+    expect(wrapper.get('[data-test="mdot-1-2026-10-02"]').classes()).toContain('month-grid__dot--red')
+    expect(wrapper.get('[data-test="month-legend"]').text()).toContain('待修設定')
+  })
+
+  it('列首型態註記是按鈕，點了開本月設定檢查', async () => {
+    const wrapper = mountMonth(ALL, { personNotes: { 1: { tag: '時段可能設錯', detail: '每天遲到' } } })
+    const note = wrapper.get('[data-test="mperson-note-1"]')
+    expect(note.element.tagName).toBe('BUTTON')
+    await note.trigger('click')
+    expect(wrapper.emitted('show-patterns')).toHaveLength(1)
+  })
+})

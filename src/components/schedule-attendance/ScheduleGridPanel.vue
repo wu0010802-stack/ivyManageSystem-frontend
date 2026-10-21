@@ -10,9 +10,12 @@
       :saving="state.saving.value"
       :busy="busy || state.loading.value"
       :issue-count="issueCount"
+      :pattern-issue-count="patternIssueCount"
       :view="isMonth ? 'month' : 'week'"
       :date="date"
       :can-month="!isMobile && !!month"
+      :compact="isMobile"
+      :hide-month-nav="headerHasMonth"
       @update:view="(v: GridView) => emit('update:view', v)"
       @update:date="(v: string) => emit('update:date', v)"
       @update:week-start="(v: string) => emit('update:date', v)"
@@ -51,7 +54,9 @@
         :keyword="keyword"
         :max-height="gridMaxHeight"
         :person-notes="personNotes"
+        :pattern-keys="patternKeys"
         @select="openMonthCell"
+        @show-patterns="emit('show-patterns')"
         @open-week="openWeek"
       />
     </template>
@@ -80,7 +85,9 @@
         :can-import="caller.can_edit_attendance"
         :max-height="gridMaxHeight"
         :person-notes="personNotes"
+        :pattern-keys="patternKeys"
         @select="openCell"
+        @show-patterns="emit('show-patterns')"
         @weekly-change="state.setWeekly"
         @import-punches="(date: string) => emit('import-punches', date)"
       />
@@ -103,11 +110,15 @@
       :mobile="isMobile"
       :nav="drawerNav"
       :actions-locked="actionsLocked"
+      :pattern="selectedPattern"
+      :pattern-matches-day="selectedMatchesPattern"
       @navigate="onNavigate"
       @back="onBack"
       @changed="onChanged"
       @records="onRecords"
       @import="(ctx: ImportContext) => emit('import', ctx)"
+      @patterns="onDrawerPatterns"
+      @recalculate="onDrawerRecalculate"
     />
 
     <BatchConfirmDialog
@@ -173,7 +184,7 @@ import type { ApiResponse } from '@/api/_generated/typed'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 import { computeWeekCoverage } from '@/utils/scheduleCoverage'
-import { patternSummary, patternTag } from '@/utils/attendancePatterns'
+import { patternCellKeys, patternSummary, patternTag } from '@/utils/attendancePatterns'
 import {
   addDaysISO,
   cellKey,
@@ -207,6 +218,8 @@ const props = defineProps<{
   view?: GridView
   /** 頁面建立的整月格子資料（與本月進度共用，D-06） */
   month?: MonthGridState
+  /** 頁首已有年月切換：月模式工具列不再放第二組 */
+  headerHasMonth?: boolean
 }>()
 const emit = defineEmits<{
   'update:date': [value: string]
@@ -218,6 +231,10 @@ const emit = defineEmits<{
   changed: []
   /** 週／月切換；帶 date＝切到該週（月格子週次欄頭） */
   'update:view': [view: GridView, date?: string]
+  /** 開本月設定檢查（列首型態註記、抽屜的型態提醒） */
+  'show-patterns': []
+  /** 開重算本月出勤（抽屜的型態提醒） */
+  recalculate: []
 }>()
 
 const { isMobile } = useIsMobile()
@@ -336,6 +353,16 @@ const issueCount = computed(() => {
 const personNotes = computed<Record<number, { tag: string; detail: string }>>(() =>
   Object.fromEntries((props.month?.patterns.value ?? []).map((p) => [p.employeeId, { tag: patternTag(p), detail: patternSummary(p) }])),
 )
+/** 符合型態的待處理格（cellKey）：格子顯示為「待修設定」的橘色，不和逐日異常同一種紅 */
+const patternKeys = computed(() => patternCellKeys(props.month?.patterns.value ?? []))
+/** 目前這週／月的待處理中，有幾格屬於待修設定（工具列「只看待處理」的拆分數字） */
+const patternIssueCount = computed(() => {
+  const g = isMonth.value ? monthData.value : gridData.value
+  if (!g) return 0
+  const uncovered = uncoveredDates(g.days)
+  const keys = patternKeys.value
+  return g.cells.filter((c) => keys.has(cellKey(c.employee_id, c.date)) && isIssue(c, g.today, uncovered)).length
+})
 const EMPTY_CELLS: Map<string, GridCell> = new Map()
 const monthLoading = computed(() => (isMonth.value ? props.month!.loading.value : false))
 const monthError = computed(() => (isMonth.value ? props.month!.loadError.value : ''))
@@ -373,6 +400,8 @@ const selectedEmployee = computed(() => drawerGrid.value?.employees.find((e) => 
 const selectedDay = computed(() => drawerGrid.value?.days.find((d) => d.date === selected.value?.date) ?? null)
 const selectedGroupLabel = computed(() => drawerGrid.value?.groups.find((g) => g.key === selectedEmployee.value?.group_key)?.label ?? '')
 const sameDayCells = computed(() => (drawerGrid.value?.cells ?? []).filter((c) => c.date === selected.value?.date))
+const selectedPattern = computed(() => (props.month?.patterns.value ?? []).find((p) => p.employeeId === selected.value?.employeeId) ?? null)
+const selectedMatchesPattern = computed(() => !!selected.value && patternKeys.value.has(cellKey(selected.value.employeeId, selected.value.date)))
 
 function openCell(employeeId: number, date: string): void {
   pendingAdvance = null
@@ -525,7 +554,8 @@ const drawerWeeklyShiftId = computed(() => {
 })
 
 let focusHandled = false
-watch(gridData, (g) => {
+function tryFocus(): void {
+  const g = gridData.value
   if (focusHandled || !g || !props.focusEmployeeId || !props.focusDate) return
   if (state.cells.value.has(cellKey(props.focusEmployeeId, props.focusDate))) {
     focusHandled = true
@@ -533,6 +563,12 @@ watch(gridData, (g) => {
     if (isMonth.value) void openMonthCell(props.focusEmployeeId, props.focusDate)
     else openCell(props.focusEmployeeId, props.focusDate)
   }
+}
+watch(gridData, tryFocus)
+// 已掛載後才帶進來的深連結（出勤明細「到班表核對處理」）：換了人或日子就再開一次
+watch(() => [props.focusEmployeeId, props.focusDate], () => {
+  focusHandled = false
+  tryFocus()
 })
 
 /**
@@ -544,6 +580,19 @@ async function onRecords(employeeId: number, date: string): Promise<void> {
   if (drawerRef.value && !(await drawerRef.value.requestClose())) return
   drawerOpen.value = false
   emit('records', employeeId, date)
+}
+
+/** 抽屜的型態提醒：開設定檢查／重算前先問抽屜有沒有打到一半的內容，再收起抽屜（兩者都是頁面層的抽屜） */
+async function closeDrawerFirst(): Promise<boolean> {
+  if (drawerRef.value && !(await drawerRef.value.requestClose())) return false
+  drawerOpen.value = false
+  return true
+}
+async function onDrawerPatterns(): Promise<void> {
+  if (await closeDrawerFirst()) emit('show-patterns')
+}
+async function onDrawerRecalculate(): Promise<void> {
+  if (await closeDrawerFirst()) emit('recalculate')
 }
 
 async function onChanged(): Promise<void> {

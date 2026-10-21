@@ -4,6 +4,7 @@ import ElementPlus from 'element-plus'
 import PersonDayDrawer from '../PersonDayDrawer.vue'
 import ResolveCard from '@/components/attendance/ResolveCard.vue'
 import type { GridCell, GridEmployee } from '@/utils/scheduleAttendanceGrid'
+import type { FixedOffsetPattern } from '@/utils/attendancePatterns'
 import { cell, day, employee, grid, SHIFTS, W1 } from './gridFixtures'
 
 const api = vi.hoisted(() => ({ confirm: vi.fn(), getDaily: vi.fn(), saveDaily: vi.fn(), deleteDaily: vi.fn() }))
@@ -514,6 +515,9 @@ describe('PersonDayDrawer 審查修正', () => {
       const w = mountDrawer(cell(1, W1, { edit: RECORDED, actual: { status: 'suspected_absence', attendance_id: 77, punch_in: null, punch_out: null } }))
       await flushPromises()
       expect(w.find('[data-test="pdd-resolve"]').exists()).toBe(true)
+      // 確認當日班別不是這天要做的事：先收起，要用再展開
+      expect(w.find('[data-test="pdd-confirm-submit"]').exists()).toBe(false)
+      await w.find('[data-test="pdd-confirm-toggle"]').trigger('click')
       expect(w.find('[data-test="pdd-confirm-submit"]').classes()).not.toContain('el-button--primary')
       expect(solidPrimaries(w)).toBe(0)
     })
@@ -528,7 +532,8 @@ describe('PersonDayDrawer 審查修正', () => {
       const finalized = mountDrawer(cell(1, W1, { edit: { plan: false, confirm: false, recorded: true, locked_reason: 'finalized' }, actual: { status: 'missing_punch', attendance_id: 55 } }))
       await flushPromises()
       expect(finalized.find('[data-test="pdd-resolve"]').exists()).toBe(false)
-      const incomplete = mountDrawer(cell(1, W1, { actual: { status: 'data_incomplete', attendance_id: null } }))
+      // 整天未匯入的資料待補：等匯入就好，不給補登
+      const incomplete = mountDrawer(cell(1, W1, { actual: { status: 'data_incomplete', attendance_id: null } }), { importCovered: false })
       await flushPromises()
       expect(incomplete.find('[data-test="pdd-resolve"]').exists()).toBe(false)
       expect(att.getAnomalyList).not.toHaveBeenCalled() // 不顯示就不抓（也不讓只有排班權限的人打到 403）
@@ -713,6 +718,7 @@ describe('PersonDayDrawer 沒有打卡的應上班日', () => {
   it('建立請假單會離開這頁：原因打到一半先問，取消就不走', async () => {
     const wrapper = mountDrawer(cell(2, W1, { edit: { confirm: true, plan: true }, actual: { status: 'suspected_absence', attendance_id: null } }))
     await flushPromises()
+    await wrapper.get('[data-test="pdd-confirm-toggle"]').trigger('click')
     await wrapper.get('textarea[data-test="pdd-confirm-reason"]').setValue('補登')
     box.confirm.mockRejectedValueOnce('cancel')
     await wrapper.get('[data-test="pdd-create-leave"]').trigger('click')
@@ -732,6 +738,19 @@ describe('PersonDayDrawer 沒有打卡的應上班日', () => {
     const own = mountDrawer(absent(), { caller: { ...CALLER, employee_id: 2 } })
     await flushPromises()
     expect(own.get('[data-test="pdd-absence"]').text()).not.toContain('在下方補登')
+  })
+
+  it('資料待補（當天有匯入、打卡檔裡沒有他）：管理員可在抽屜補登，文案不自相矛盾、不叫人去找有權限的人', async () => {
+    const w = mountDrawer(cell(2, W1, { actual: { status: 'data_incomplete', attendance_id: null, punch_in: null, punch_out: null, reason: '本日打卡資料尚未匯入或未涵蓋此員工，暫不判缺勤' } }))
+    await flushPromises()
+    const text = w.get('[data-test="pdd-absence"]').text()
+    expect(text).toContain('格子暫不判缺勤，但算薪只看有沒有打卡')
+    expect(text).toContain('在下方補登上下班')
+    expect(text).not.toContain('由有出勤寫入權限的行政人員')
+    // 後端「暫不判缺勤」那句已改寫進上面，不再單獨出現（曾和「會算曠職」並排矛盾）
+    expect(w.text()).not.toContain('尚未匯入或未涵蓋此員工')
+    expect(w.find('[data-test="pdd-resolve"]').text()).toContain('補登上下班')
+    expect(att.getAnomalyList).not.toHaveBeenCalled()
   })
 
   it('有匯入但沒有這個人的資料待補也一樣會被算曠職；整天未匯入、有打卡、不用上班的日子不提示', async () => {
@@ -899,5 +918,60 @@ describe('PersonDayDrawer 送出途中換格（QA P3）', () => {
     resolveConfirm({ data: { message: 'ok', updated_count: 1 } })
     await flushPromises()
     expect((wrapper.get('textarea[data-test="pdd-confirm-reason"]').element as HTMLTextAreaElement).value).toBe('另一位')
+  })
+})
+
+describe('PersonDayDrawer 設定問題提醒（第五輪審查 P1）', () => {
+  const offset = (overrides: Partial<FixedOffsetPattern> = {}): FixedOffsetPattern => ({
+    kind: 'fixed_offset', employeeId: 1, name: '林班導', roleLabel: null, issueCount: 18, matchCount: 18, matchDates: [W1],
+    expectedDays: 20, punchedDays: 20, firstDate: W1, bothDays: 20, lateDays: 18, earlyDays: 18,
+    typicalLate: 57, typicalEarly: 342, typicalIn: '08:57', typicalOut: '11:18', planWindow: '08:00–17:00', ...overrides,
+  })
+  const late = () => cell(1, W1, { edit: { plan: false, confirm: true, recorded: true, locked_reason: 'recorded' }, actual: { status: 'anomaly', attendance_id: 55, late_minutes: 57, early_leave_minutes: 342, punch_in: `${W1}T08:57:00`, punch_out: `${W1}T11:18:00` } })
+
+  it('這格符合整月固定型態：頂端寫出型態與修法、連到設定檢查／員工資料／重算，接受扣款前會提醒', async () => {
+    att.getAnomalyList.mockResolvedValue({ data: { total: 0, pending: 0, confirmed: 0, items: [] } })
+    const w = mount(PersonDayDrawer, {
+      props: {
+        modelValue: true, cell: late(), employee: employee(1, '林班導'), day: day(W1), groupLabel: '滿天星', shiftTypes: SHIFTS,
+        sameDayCells: [], employeeNames: { 1: '林班導' }, weeklyShiftId: null, today: '2026-09-21', caller: CALLER,
+        pattern: offset(), patternMatchesDay: true,
+      },
+      global: { plugins: [ElementPlus], stubs: { RouterLink: RouterLinkStub, ElDrawer: { props: ['modelValue'], template: '<section v-if="modelValue"><slot /></section>' } } },
+    })
+    await flushPromises()
+    const banner = w.get('[data-test="pdd-pattern"]')
+    expect(banner.text()).toContain('時段可能設錯')
+    expect(banner.text()).toContain('不要逐格接受扣款')
+    await banner.get('[data-test="pdd-pattern-list"]').trigger('click')
+    await banner.get('[data-test="pdd-pattern-recalc"]').trigger('click')
+    expect(w.emitted('patterns')).toHaveLength(1)
+    expect(w.emitted('recalculate')).toHaveLength(1)
+    await banner.get('[data-test="pdd-pattern-employee"]').trigger('click')
+    await flushPromises()
+    expect(router.push).toHaveBeenCalledWith('/employees/1')
+    expect(w.findComponent(ResolveCard).props('acceptWarning')).toContain('林班導 本月')
+  })
+
+  it('同一人不是型態的那幾格（或沒有型態）不提醒', async () => {
+    att.getAnomalyList.mockResolvedValue({ data: { total: 0, pending: 0, confirmed: 0, items: [] } })
+    const base = {
+      modelValue: true, cell: late(), employee: employee(1, '林班導'), day: day(W1), groupLabel: '滿天星', shiftTypes: SHIFTS,
+      sameDayCells: [], employeeNames: { 1: '林班導' }, weeklyShiftId: null, today: '2026-09-21', caller: CALLER,
+    }
+    const global = { plugins: [ElementPlus], stubs: { RouterLink: RouterLinkStub, ElDrawer: { props: ['modelValue'], template: '<section v-if="modelValue"><slot /></section>' } } }
+    const other = mount(PersonDayDrawer, { props: { ...base, pattern: offset(), patternMatchesDay: false }, global })
+    const none = mount(PersonDayDrawer, { props: base, global })
+    await flushPromises()
+    expect(other.find('[data-test="pdd-pattern"]').exists()).toBe(false)
+    expect(other.findComponent(ResolveCard).props('acceptWarning')).toBeNull()
+    expect(none.find('[data-test="pdd-pattern"]').exists()).toBe(false)
+  })
+
+  it('全天請假的日子：確認當日班別預設收起（不出現必填的班別與原因）', async () => {
+    const w = mountDrawer(cell(1, W1, { edit: { plan: false, confirm: true, recorded: true, locked_reason: 'recorded' }, leaves: [{ leave_type_label: '病假', is_full_day: true, status: 'approved' }], actual: { status: 'leave', attendance_id: 9 } }))
+    await flushPromises()
+    expect(w.find('[data-test="pdd-confirm-toggle"]').exists()).toBe(true)
+    expect(w.find('textarea[data-test="pdd-confirm-reason"]').exists()).toBe(false)
   })
 })

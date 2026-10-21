@@ -29,6 +29,8 @@ function mountGrid(opts: {
   canImport?: boolean
   maxHeight?: number
   personNotes?: Record<number, { tag: string; detail: string }>
+  patternKeys?: ReadonlySet<string>
+  attach?: boolean
 } = {}) {
   const g = grid({
     ...(opts.days ? { days: opts.days } : {}),
@@ -56,7 +58,9 @@ function mountGrid(opts: {
       canImport: opts.canImport ?? false,
       maxHeight: opts.maxHeight,
       personNotes: opts.personNotes,
+      patternKeys: opts.patternKeys,
     },
+    ...(opts.attach ? { attachTo: document.body } : {}),
     global: { plugins: [ElementPlus] },
   })
 }
@@ -451,5 +455,68 @@ describe('ShiftGrid 全天假與無障礙標籤', () => {
     // 停用班別只出現在目前已選它的那位員工下拉（王副導不列）
     expect(options.filter(([label]) => String(label).startsWith('舊班別'))).toHaveLength(1)
     expect(options.filter(([label]) => String(label).startsWith('早車'))).toHaveLength(2)
+  })
+})
+
+describe('ShiftGrid 第五輪審查', () => {
+  const LATE = { status: 'anomaly' as const, late_minutes: 57, early_leave_minutes: 342, punch_in: `${WEEK[0]}T08:57:00`, punch_out: `${WEEK[0]}T11:18:00` }
+
+  it('符合整月型態的格子：紅色降為橘色（待修設定），報讀寫出可能是設定問題；同列其他異常照舊是紅色', () => {
+    const cells = cellsFor({ [`1|${WEEK[0]}`]: { actual: LATE }, [`1|${WEEK[1]}`]: { actual: { ...LATE, punch_in: `${WEEK[1]}T08:57:00`, punch_out: `${WEEK[1]}T11:18:00` } } })
+    const wrapper = mountGrid({ cells, patternKeys: new Set([`1|${WEEK[0]}`]) })
+    const pattern = wrapper.get(`[data-test="cell-1-${WEEK[0]}"]`)
+    expect(pattern.classes()).toContain('shift-grid__cell--warning')
+    expect(pattern.attributes('aria-label')).toContain('整月同型態，可能是設定問題')
+    expect(wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).classes()).toContain('shift-grid__cell--danger')
+  })
+
+  it('列首型態註記是按鈕：點了開本月設定檢查，報讀含型態說明', async () => {
+    const wrapper = mountGrid({ personNotes: { 2: { tag: '時段可能設錯', detail: '20 天中 18 天遲到' } } })
+    const note = wrapper.get('[data-test="person-note-2"]')
+    expect(note.element.tagName).toBe('BUTTON')
+    expect(note.attributes('aria-label')).toContain('20 天中 18 天遲到')
+    await note.trigger('click')
+    expect(wrapper.emitted('show-patterns')).toHaveLength(1)
+  })
+
+  it('非應出勤日只畫一槓（收窄的週末欄不折行），報讀仍念全文', () => {
+    const wrapper = mountGrid({ showAllDays: true })
+    const sat = wrapper.get(`[data-test="cell-1-${WEEK[5]}"]`)
+    expect(sat.text()).toBe('—')
+    expect(sat.attributes('aria-label')).toContain('非應出勤日')
+  })
+
+  it('只看待處理：同一列裡不是待處理的格子退到背景', () => {
+    const cells = cellsFor({ [`1|${WEEK[0]}`]: { actual: LATE }, [`1|${WEEK[1]}`]: { actual: { status: 'matched' } } })
+    const wrapper = mountGrid({ cells, filter: 'issues' })
+    expect(wrapper.get(`[data-test="cell-1-${WEEK[0]}"]`).classes()).not.toContain('shift-grid__cell--quiet')
+    expect(wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).classes()).toContain('shift-grid__cell--quiet')
+    expect(mountGrid({ cells }).get(`[data-test="cell-1-${WEEK[1]}"]`).classes()).not.toContain('shift-grid__cell--quiet')
+  })
+
+  it('方向鍵在格子間移動焦點（上下跨人、左右跨日）', async () => {
+    const wrapper = mountGrid({ attach: true })
+    const first = wrapper.get(`[data-test="cell-1-${WEEK[0]}"]`)
+    ;(first.element as HTMLElement).focus()
+    await first.trigger('keydown', { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).element)
+    await wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(wrapper.get(`[data-test="cell-2-${WEEK[1]}"]`).element)
+    await wrapper.get(`[data-test="cell-2-${WEEK[1]}"]`).trigger('keydown', { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(wrapper.get(`[data-test="cell-2-${WEEK[0]}"]`).element)
+    // 到邊界不動
+    await wrapper.get(`[data-test="cell-2-${WEEK[0]}"]`).trigger('keydown', { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(wrapper.get(`[data-test="cell-2-${WEEK[0]}"]`).element)
+    wrapper.unmount()
+  })
+
+  it('欄寬下限合計留餘裕塞進 1280 寬的內容區（約 924px）：週六有人上班時那欄會被內容撐到約 106px', () => {
+    const css = readFileSync(resolve(__dirname, '../ShiftGrid.vue'), 'utf8')
+    const px = (re: RegExp) => Number(css.match(re)![1])
+    const person = px(/\.shift-grid__person \{[^}]*min-width: (\d+)px/)
+    const weekday = px(/\.shift-grid__day \{ min-width: (\d+)px/)
+    const weekend = px(/\.shift-grid__day--off \{ min-width: (\d+)px/)
+    // 一個週末欄被內容撐到 106px 時仍要放得下
+    expect(person + weekday * 5 + weekend + 106).toBeLessThanOrEqual(924)
   })
 })

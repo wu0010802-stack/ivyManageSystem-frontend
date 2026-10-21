@@ -11,7 +11,8 @@
       <el-radio-button value="month">月</el-radio-button>
     </el-radio-group>
 
-    <div v-if="isMonth" class="grid-toolbar__nav" role="group" aria-label="選擇月份">
+    <!-- 頁首已有年月切換時不再放第二組（月模式曾同時出現三個月份選擇） -->
+    <div v-if="isMonth && !hideMonthNav" class="grid-toolbar__nav" role="group" aria-label="選擇月份">
       <el-button :icon="ArrowLeft" data-test="toolbar-prev-month" @click="emit('update:date', shiftMonthISO(anchor, -1))">上個月</el-button>
       <el-date-picker
         :model-value="anchor.slice(0, 7)"
@@ -27,7 +28,7 @@
       <el-button data-test="toolbar-next-month" @click="emit('update:date', shiftMonthISO(anchor, 1))">下個月 <el-icon><ArrowRight /></el-icon></el-button>
       <span class="grid-toolbar__label">{{ monthLabel }}</span>
     </div>
-    <div v-else class="grid-toolbar__nav" role="group" aria-label="選擇週次">
+    <div v-else-if="!isMonth" class="grid-toolbar__nav" role="group" aria-label="選擇週次">
       <el-button :icon="ArrowLeft" data-test="toolbar-prev" :disabled="saving" @click="go(-7)">上週</el-button>
       <el-date-picker
         :model-value="anchor"
@@ -52,7 +53,7 @@
       @update:model-value="(v: string | number | boolean | undefined) => emit('update:filter', v as GridFilter)"
     >
       <el-radio-button value="all">全部</el-radio-button>
-      <el-radio-button value="issues">只看待處理{{ issueCount ? `（${isMonth ? '本月' : '本週'} ${issueCount}）` : '' }}</el-radio-button>
+      <el-radio-button value="issues" :title="issueTitle">只看待處理{{ issueText }}</el-radio-button>
       <el-radio-button value="future">只看未來可排</el-radio-button>
     </el-radio-group>
 
@@ -66,31 +67,27 @@
       @update:model-value="(v: string) => emit('update:keyword', v)"
     />
 
-    <div v-if="canEditPlan && !isMonth" class="grid-toolbar__tools" role="group" aria-label="排班工具">
-      <el-dropdown split-button :disabled="busy" data-test="toolbar-copy" @click="emit('copy-prev-week')" @command="onCommand">
-        複製上週排班
+    <!-- 排班工具收成一個選單（核對時用不到，不和篩選搶位置）；手機不排班，整組收起 -->
+    <div v-if="canEditPlan && !isMonth && !compact" class="grid-toolbar__tools" role="group" aria-label="排班工具">
+      <el-dropdown :disabled="busy" trigger="click" data-test="toolbar-schedule" @command="onCommand">
+        <el-button :disabled="busy">排班工具 <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
         <template #dropdown>
           <el-dropdown-menu>
+            <el-dropdown-item command="copy-prev-week" data-test="toolbar-copy">複製上週排班</el-dropdown-item>
             <el-dropdown-item command="copy-week">複製指定週…</el-dropdown-item>
             <el-dropdown-item command="copy-prev-month">複製上月整月…</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-      <el-dropdown data-test="toolbar-io" @command="onCommand">
-        <el-button>匯入匯出 <el-icon><ArrowDown /></el-icon></el-button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="import">匯入班表…</el-dropdown-item>
+            <el-dropdown-item command="import" divided>匯入班表…</el-dropdown-item>
             <el-dropdown-item command="template">下載匯入範本</el-dropdown-item>
             <el-dropdown-item command="export">匯出本週班表</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
-      <!-- 沒有變更時退成一般按鈕：停用的主色鈕仍是整排最飽和的元素，會把視線拉走 -->
+      <!-- 有變更才出現：停用的「儲存排班（0 處變更）」是整排最搶眼的元素，卻什麼都不能做 -->
       <el-button
-        :type="pendingCount > 0 ? 'primary' : 'default'"
+        v-if="pendingCount > 0"
+        type="primary"
         :loading="saving"
-        :disabled="pendingCount === 0 || busy"
+        :disabled="busy"
         data-test="toolbar-save"
         @click="emit('save')"
       >儲存排班（{{ pendingCount }} 處變更）</el-button>
@@ -123,6 +120,12 @@ const props = defineProps<{
   date?: string
   /** 可切月模式（桌機） */
   canMonth?: boolean
+  /** 待處理中屬於「待修設定」（整月同型態）的格數：篩選鈕拆開寫 */
+  patternIssueCount?: number
+  /** 手機：收起排班工具 */
+  compact?: boolean
+  /** 頁首已有月份切換（有出勤讀取權限時）：月模式不再顯示工具列的月份導覽 */
+  hideMonthNav?: boolean
 }>()
 const emit = defineEmits<{
   'update:weekStart': [value: string]
@@ -136,6 +139,16 @@ const emit = defineEmits<{
 }>()
 
 const isMonth = computed(() => props.view === 'month')
+/** 「（本週 49＋待修設定 60）」：待修設定是整月同型態、修好設定會一起消失的格子，和逐日異常分開寫 */
+const issueText = computed(() => {
+  const total = props.issueCount ?? 0
+  if (!total) return ''
+  const scope = isMonth.value ? '本月' : '本週'
+  const pattern = Math.min(props.patternIssueCount ?? 0, total)
+  return pattern ? `（${scope} ${total - pattern}＋待修設定 ${pattern}）` : `（${scope} ${total}）`
+})
+const issueTitle = computed(() =>
+  props.patternIssueCount ? '待修設定：整月同一種情形的格子，多半是員工時段或卡號設定問題，修好設定後重算或重新匯入會一起消失' : undefined)
 const anchor = computed(() => props.date ?? props.weekStart)
 const monthLabel = computed(() => `${anchor.value.slice(0, 4)} 年 ${Number(anchor.value.slice(5, 7))} 月`)
 
@@ -162,7 +175,8 @@ function go(days: number): void {
 }
 
 function onCommand(command: string | number | object): void {
-  emit('command', command as ToolbarCommand)
+  if (command === 'copy-prev-week') emit('copy-prev-week')
+  else emit('command', command as ToolbarCommand)
 }
 </script>
 
@@ -170,8 +184,8 @@ function onCommand(command: string | number | object): void {
 .grid-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
 .grid-toolbar__nav, .grid-toolbar__tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .grid-toolbar__tools { margin-left: auto; }
-.grid-toolbar__picker { width: 150px; }
-.grid-toolbar__keyword { width: 200px; }
+.grid-toolbar__picker { width: 132px; }
+.grid-toolbar__keyword { width: 168px; }
 .grid-toolbar__pending { margin-left: auto; color: var(--color-warning-darker); font-size: var(--text-sm); }
 .grid-toolbar__label { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 /* 桌機：捲動時工具列（週次、篩選、儲存排班）固定在捲動區頂端，改到第 60 列也按得到儲存 */

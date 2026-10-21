@@ -5,7 +5,8 @@
       <li class="month-progress__step" data-test="progress-schedule">
         <span class="month-progress__index">①</span>
         <span>排班</span>
-        <strong :class="{ 'month-progress__warn': unscheduled > 0 }">{{ loading ? '…' : loadError ? '—' : unscheduled > 0 ? `${unscheduled} 人日用預設工時` : '已排滿' }}</strong>
+        <!-- 用預設工時不是錯（不排班的園所本來就這樣），只是告知：不用警示色 -->
+        <strong :title="unscheduled > 0 ? '這些人日沒有輪值表、週排班或每日調整，核對時用員工預設工時（沒設就用系統預設）' : undefined">{{ loading ? '…' : loadError ? '—' : unscheduled > 0 ? `${unscheduled} 人日用預設工時` : '已排滿' }}</strong>
       </li>
       <li v-if="canViewAttendance" class="month-progress__step" data-test="progress-import">
         <span class="month-progress__index">②</span>
@@ -15,15 +16,16 @@
       <li v-if="canViewAttendance" class="month-progress__step">
         <span class="month-progress__index">③</span>
         <button type="button" class="month-progress__link" data-test="progress-issues" @click="emit('show-issues')">
-          核對 <strong :class="{ 'month-progress__warn': issues > 0 && !loadError }">{{ loading ? '…' : loadError ? '—' : `本月 ${issues} 格待處理` }}</strong>
+          核對 <strong :class="{ 'month-progress__warn': dailyIssues > 0 && !loadError && !notImported }">{{ issuesText }}</strong>
         </button>
+        <!-- 待修設定：整月同型態的格子另外寫，不混在逐日待處理的數字裡（點開設定檢查） -->
         <button
           v-if="patterns.length && !loading && !loadError"
           type="button"
           class="month-progress__link month-progress__patterns"
           data-test="progress-patterns"
           @click="patternsOpen = true"
-        >其中 {{ patternIssues }} 格是 {{ patterns.length }} 人的設定問題</button>
+        >＋{{ patternIssues }} 格待修設定（{{ patterns.length }} 人）</button>
       </li>
       <li v-if="canConfirmRounds" class="month-progress__step">
         <span class="month-progress__index">④</span>
@@ -43,7 +45,7 @@
     <el-drawer v-if="canViewAttendance" v-model="patternsOpen" title="本月設定檢查" :size="mobile ? '100%' : '520px'" append-to-body>
       <AttendancePatternList v-if="patternsOpen" :patterns="patterns" @records="onPatternRecords" @import="onPatternImport" @recalculate="onPatternRecalculate" />
     </el-drawer>
-    <el-drawer v-if="canConfirmRounds" v-model="roundsOpen" title="月底出勤確認（老師確認）" :size="mobile ? '100%' : '640px'" append-to-body @closed="emit('changed')">
+    <el-drawer v-if="canConfirmRounds" v-model="roundsOpen" title="月底出勤確認（老師確認）" :size="mobile ? '100%' : '520px'" append-to-body @closed="emit('changed')">
       <ConfirmationRoundBar v-if="roundsOpen" :start="range.start" :end="range.end" />
     </el-drawer>
   </nav>
@@ -104,6 +106,8 @@ const roundsOpen = ref(false)
 const patterns = computed(() => (canViewAttendance ? props.month.patterns.value : []))
 const patternIssues = computed(() => patternIssueTotal(patterns.value))
 const patternsOpen = ref(false)
+/** 頁面（格子列首註記、抽屜型態提醒）也能開設定檢查 */
+defineExpose({ openPatterns: () => { if (canViewAttendance && patterns.value.length) patternsOpen.value = true } })
 function onPatternRecords(employeeId: number, date: string): void {
   patternsOpen.value = false
   emit('records', employeeId, date)
@@ -184,6 +188,16 @@ const issues = computed(() => {
   const uncovered = uncoveredDates(g.days)
   return g.cells.filter((c) => isIssue(c, g.today, uncovered)).length
 })
+/** 逐日要處理的（待處理扣掉待修設定） */
+const dailyIssues = computed(() => Math.max(0, issues.value - patternIssues.value))
+/** 一天都還沒匯入：「0 格待處理」會被讀成「都處理完了」，改說還不能核對 */
+const notImported = computed(() => !!data.value && !imports.value.lastCovered && imports.value.missingWorkdays.length > 0)
+const issuesText = computed(() => {
+  if (loading.value) return '…'
+  if (loadError.value) return '—'
+  if (notImported.value) return '等匯入打卡後才能核對'
+  return `本月 ${dailyIssues.value} 格待處理`
+})
 
 // 匯出月報前的提醒用同一份數字；載入失敗不送（避免拿 0 當「都處理完了」）
 watch(data, (g) => {
@@ -192,17 +206,22 @@ watch(data, (g) => {
 </script>
 
 <style scoped>
-.month-progress { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); margin-bottom: var(--space-2); font-size: var(--text-sm); }
-.month-progress__title { color: var(--el-text-color-secondary); }
-.month-progress__steps { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+.month-progress { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); margin-bottom: var(--space-2); font-size: var(--text-sm); }
+.month-progress__title { flex: none; color: var(--el-text-color-secondary); }
+/* 步驟跟標題同一列、在自己的欄裡換行：整條 ol 不會掉到標題下一列，1280 寬兩行收完（原本三行約 80px） */
+.month-progress__steps { display: flex; flex: 1 1 0; flex-wrap: wrap; gap: var(--space-1) var(--space-4); min-width: 240px; margin: 0; padding: 0; list-style: none; }
 .month-progress__step { display: flex; align-items: center; gap: var(--space-1); }
 .month-progress__index { color: var(--el-text-color-secondary); }
 .month-progress__status { color: var(--el-text-color-secondary); }
 .month-progress__warn { color: var(--color-warning-darker); }
 .month-progress__patterns { color: var(--color-warning-darker); text-decoration: underline; text-underline-offset: 2px; }
-.month-progress__link { min-height: var(--touch-target-min); padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-1); }
-.month-progress__error { margin: 0; color: var(--el-color-danger); font-size: var(--text-sm); }
+.month-progress__link { padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-1); }
+.month-progress__error { flex-basis: 100%; margin: 0; color: var(--el-color-danger); font-size: var(--text-sm); }
 .month-progress__link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+/* 觸控裝置才把連結撐到 44px：桌機也撐的話整列變高、1280 寬折成三行，把格子推出首屏 */
+@media (pointer: coarse) {
+  .month-progress__link { min-height: var(--touch-target-min); }
+}
 /* 手機：步驟換行時連結已有 44px 觸控高度，不再額外加列距 */
 @media (--to-sm) {
   .month-progress__steps { row-gap: 0; }

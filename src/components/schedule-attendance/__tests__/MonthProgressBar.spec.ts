@@ -95,6 +95,36 @@ describe('MonthProgressBar', () => {
     expect(css).toMatch(/\.month-progress__warn \{[^}]*color: var\(--color-warning-darker\)/)
   })
 
+  it('連結只在觸控裝置撐到 44px：桌機也撐的話 1280 寬折成三行、把格子推出首屏', () => {
+    const css = readFileSync(resolve(__dirname, '../MonthProgressBar.vue'), 'utf8')
+    // 基本規則（第一條 .month-progress__link）不設高度
+    const base = css.match(/\.month-progress__link \{([^}]*)\}/)![1]
+    expect(base).not.toContain('min-height')
+    expect(css).toMatch(/@media \(pointer: coarse\)[^@]*\.month-progress__link \{[^}]*min-height: var\(--touch-target-min\)/)
+  })
+
+  it('一天都還沒匯入：③不寫「0 格待處理」（會被讀成都處理完了），改寫等匯入', async () => {
+    api.grid.mockImplementation(async () => ({
+      data: grid({
+        today: '2026-09-21',
+        days: WEEK.map((d) => day(d, { import_covered: false })),
+        cells: [cell(1, WEEK[0], { actual: { status: 'data_incomplete', punch_in: null, punch_out: null } })],
+      }),
+    }))
+    const wrapper = mountBar()
+    await flushPromises()
+    const issues = wrapper.find('[data-test="progress-issues"]')
+    expect(issues.text()).toContain('等匯入打卡後才能核對')
+    expect(issues.text()).not.toContain('0 格待處理')
+    expect(issues.find('strong').classes()).not.toContain('month-progress__warn')
+  })
+
+  it('①用預設工時只是告知，不用警示色', async () => {
+    const wrapper = mountBar()
+    await flushPromises()
+    expect(wrapper.find('[data-test="progress-schedule"] strong').classes()).not.toContain('month-progress__warn')
+  })
+
   it('只有排班與薪資讀取權限：只看得到排班與交薪資兩步', async () => {
     perms.set = new Set(['SCHEDULE', 'SALARY_READ'])
     const wrapper = mountBar()
@@ -349,7 +379,11 @@ describe('MonthProgressBar 本月設定檢查', () => {
     const wrapper = mountBar({ stubTeleport: false })
     await flushPromises()
     const link = wrapper.get('[data-test="progress-patterns"]')
-    expect(link.text()).toBe('其中 3 格是 1 人的設定問題')
+    // 待修設定（整月同型態）和逐日待處理分開寫：員工 1 的 3 格是型態，員工 2 的 1 格才是逐日要處理的
+    expect(link.text()).toBe('＋3 格待修設定（1 人）')
+    expect(wrapper.find('[data-test="progress-issues"]').text()).toContain('本月 1 格待處理')
+    // 匯出月報前的提醒仍用全部待處理（含待修設定）
+    expect(wrapper.emitted('summary')!.at(-1)![0]).toMatchObject({ issues: 4 })
     await link.trigger('click')
     await flushPromises()
     expect(patternDrawer(wrapper).props('modelValue')).toBe(true)

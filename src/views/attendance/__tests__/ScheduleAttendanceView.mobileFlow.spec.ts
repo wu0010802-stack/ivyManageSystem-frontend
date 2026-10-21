@@ -1,4 +1,7 @@
-vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }) }))
+vi.mock('@/api/attendanceMonthContext', () => ({
+  getAttendanceMonthContext: vi.fn().mockResolvedValue({ data: { roster: [], days: [] } }),
+  getAttendanceWorkingMonth: vi.fn().mockResolvedValue({ data: { year: 2026, month: 9, previous_unsettled: false } }),
+}))
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'

@@ -52,8 +52,8 @@ const assignment = (employeeId: number, shiftTypeId: number) => ({
 const drawerRequestClose = vi.hoisted(() => vi.fn(async () => true))
 const DrawerStub = {
   name: 'PersonDayDrawer',
-  props: ['modelValue', 'cell', 'weeklyShiftId', 'day', 'employeeNames', 'nav', 'actionsLocked'],
-  emits: ['records', 'changed', 'update:modelValue', 'navigate', 'back'],
+  props: ['modelValue', 'cell', 'weeklyShiftId', 'day', 'employeeNames', 'nav', 'actionsLocked', 'pattern', 'patternMatchesDay'],
+  emits: ['records', 'changed', 'update:modelValue', 'navigate', 'back', 'patterns', 'recalculate'],
   methods: { requestClose: () => drawerRequestClose() },
   template: '<div data-test="drawer-stub" />',
 }
@@ -261,7 +261,7 @@ describe('ScheduleGridPanel', () => {
     const wrapper = mountPanel()
     await flushPromises()
     api.getAssignments.mockResolvedValueOnce({ data: [assignment(1, 3), assignment(2, 2)] })
-    wrapper.findAllComponents({ name: 'ElDropdown' })[0].vm.$emit('click')
+    wrapper.findAllComponents({ name: 'ElDropdown' })[0].vm.$emit('command', 'copy-prev-week')
     await flushPromises()
     expect(ui.warning).toHaveBeenCalledWith(expect.stringContaining('1 人的班別已停用'))
     expect(wrapper.find('[data-test="toolbar-save"]').text()).toBe('儲存排班（1 處變更）')
@@ -272,7 +272,7 @@ describe('ScheduleGridPanel', () => {
     await flushPromises()
     api.getAssignments.mockResolvedValueOnce({ data: [assignment(1, 2)] })
     const dropdowns = wrapper.findAllComponents({ name: 'ElDropdown' })
-    dropdowns[0].vm.$emit('click')
+    dropdowns[0].vm.$emit('command', 'copy-prev-week')
     await flushPromises()
     expect(api.getAssignments).toHaveBeenLastCalledWith({ week_start: '2026-09-07' })
     expect(wrapper.find('[data-test="toolbar-save"]').text()).toBe('儲存排班（1 處變更）')
@@ -293,7 +293,7 @@ describe('ScheduleGridPanel', () => {
     api.importShifts.mockResolvedValue({ data: { total: 3, saved: 2, failed: 1, errors: ['第 3 行: 找不到班別'] } })
     const wrapper = mountPanel()
     await flushPromises()
-    wrapper.findAllComponents({ name: 'ElDropdown' })[1].vm.$emit('command', 'import')
+    wrapper.findAllComponents({ name: 'ElDropdown' })[0].vm.$emit('command', 'import')
     await flushPromises()
     const upload = wrapper.findComponent({ name: 'ElUpload' })
     await (upload.props('onChange') as (f: { raw: File }) => Promise<void>)({ raw: new File(['x'], 'shifts.xlsx') })
@@ -323,7 +323,7 @@ describe('ScheduleGridPanel', () => {
   it('匯出本週與下載範本走共用下載工具', async () => {
     const wrapper = mountPanel()
     await flushPromises()
-    const io = wrapper.findAllComponents({ name: 'ElDropdown' })[1]
+    const io = wrapper.findAllComponents({ name: 'ElDropdown' })[0]
     io.vm.$emit('command', 'export')
     io.vm.$emit('command', 'template')
     expect(api.download).toHaveBeenCalledWith('/exports/shifts', `排班表_${W1}.xlsx`, { week_start: W1 })
@@ -408,7 +408,8 @@ describe('ScheduleGridPanel', () => {
       expect(await panel.confirmWeekChange('2026-09-23')).toBe(true)
       expect(ui.confirm).toHaveBeenCalledTimes(1)
       await flushPromises()
-      expect(saveText(wrapper)).toBe('儲存排班（0 處變更）')
+      // 沒有變更時儲存鈕不出現
+      expect(wrapper.find('[data-test="toolbar-save"]').exists()).toBe(false)
       expect(await panel.confirmWeekChange('2026-09-30')).toBe(true)
       expect(ui.confirm).toHaveBeenCalledTimes(1)
     })
@@ -486,6 +487,30 @@ describe('ScheduleGridPanel 月模式（SPEC-027 C 期）', () => {
     const month = mountPanel({ date: '2026-10-05', view: 'month', month: monthState() })
     await flushPromises()
     expect(month.findComponent({ name: 'MonthGrid' }).props('personNotes')).toHaveProperty('1')
+  })
+
+  it('型態的格子傳給格子（降為待修設定）、工具列（拆數字）與抽屜（提醒）；抽屜的設定檢查與重算往上送', async () => {
+    api.grid.mockImplementation(async ({ start_date }: { start_date: string }) =>
+      start_date === monthRange('2026-10-05').start
+        ? { data: grid({ start_date, days: OCT, today: '2026-10-08', cells: OCT.filter((d) => d.is_workday).slice(0, 3).map((d) => cell(1, d.date, { actual: { status: 'data_incomplete' } })) }) }
+        : { data: grid() },
+    )
+    const wrapper = mountPanel({ date: '2026-10-05', view: 'month', month: monthState() })
+    await flushPromises()
+    const keys = wrapper.findComponent({ name: 'MonthGrid' }).props('patternKeys') as Set<string>
+    expect([...keys].sort()).toEqual(['1|2026-10-01', '1|2026-10-02', '1|2026-10-05'])
+    expect(wrapper.findComponent({ name: 'GridToolbar' }).props('patternIssueCount')).toBe(3)
+    wrapper.findComponent({ name: 'MonthGrid' }).vm.$emit('select', 1, '2026-10-01')
+    await flushPromises()
+    const drawer = wrapper.findComponent(DrawerStub)
+    expect(drawer.props('pattern')).toMatchObject({ employeeId: 1, kind: 'no_punches' })
+    expect(drawer.props('patternMatchesDay')).toBe(true)
+    drawer.vm.$emit('patterns')
+    await flushPromises()
+    expect(wrapper.emitted('show-patterns')).toHaveLength(1)
+    expect(drawer.props('modelValue')).toBe(false)
+    wrapper.findComponent({ name: 'MonthGrid' }).vm.$emit('show-patterns')
+    expect(wrapper.emitted('show-patterns')).toHaveLength(2)
   })
 
   it('月模式畫月格子不畫週格子；點格用整月資料開抽屜並補抓該週週排班', async () => {

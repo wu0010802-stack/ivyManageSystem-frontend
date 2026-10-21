@@ -22,10 +22,12 @@
     </div>
 
     <div class="workspace-header__actions">
-      <el-button :icon="Monitor" @click="openKiosk">電子打卡</el-button>
-      <el-button v-if="canWrite" @click="emit('import')">匯入打卡紀錄</el-button>
-      <el-dropdown trigger="click" aria-label="月結工具" @command="onMonthTool">
-        <el-button>月結 <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+      <!-- 電子打卡台是給打卡用的平板開的，行政很少從這裡開：退成文字連結，不和匯入同級 -->
+      <el-button link :icon="Monitor" class="workspace-header__kiosk" data-test="header-kiosk" @click="openKiosk">開電子打卡台</el-button>
+      <el-button v-if="canWrite" data-test="header-import" @click="emit('import')">匯入打卡紀錄</el-button>
+      <!-- 選單裡是月底要做的事（核對扣項、匯出、重算），封存在薪資結算：叫「月結」會以為按了就結帳 -->
+      <el-dropdown trigger="click" aria-label="月底作業" @command="onMonthTool">
+        <el-button data-test="header-month-tools">月底作業 <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item v-if="canPayrollCompare" command="payroll">薪資扣項核對</el-dropdown-item>
@@ -40,7 +42,7 @@
 
 <script setup lang="ts">
 /**
- * 排班與出勤頁首列：月份切換＋動作（電子打卡、匯入打卡紀錄、月結選單）。
+ * 排班與出勤頁首列：月份切換＋動作（匯入打卡紀錄、月底作業選單、電子打卡台連結）。
  * 本月出勤統計在出勤明細頁籤（AttendanceMonthStats），不在這裡。
  */
 import { computed } from 'vue'
@@ -107,6 +109,7 @@ function nextMonth() {
 .workspace-header__month { width: 6rem; }
 .workspace-header__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .workspace-header__actions .el-button { margin-left: 0; }
+.workspace-header__kiosk { order: 1; }
 
 /* 手機：月份切換撐滿一列，圓鈕與動作鈕到觸控高度，動作列等寬鋪滿 */
 @media (--to-sm) {
