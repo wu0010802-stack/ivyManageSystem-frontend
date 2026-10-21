@@ -14,6 +14,15 @@ export interface ResolvePayload {
   action: ResolveAction
   punch_in?: string
   punch_out?: string
+  /** 成功提示（例如整天只有缺卡時「已確認缺卡」）；沒給用動作的預設說法 */
+  doneText?: string
+}
+
+/** 成功提示寫出做了什麼（只寫「已處理」看不出是扣了還是豁免了） */
+const DONE_TEXT: Record<ResolveAction, string> = {
+  punch: '已補打卡並重新計算',
+  admin_accept: '已接受扣款',
+  admin_waive: '已豁免',
 }
 export interface ResolveTarget {
   /** 員工主鍵（補打卡用） */
@@ -49,7 +58,7 @@ export function useResolveAnomaly(onDone: () => void | Promise<void>, source: st
       } else {
         await batchConfirmAnomalies({ attendance_ids: [target.attendanceId!], action: payload.action })
       }
-      ElMessage.success('已處理')
+      ElMessage.success(payload.doneText ?? DONE_TEXT[payload.action])
       await onDone()
       return true
     } catch (err) {

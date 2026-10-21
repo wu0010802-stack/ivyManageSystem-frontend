@@ -22,7 +22,18 @@ describe('useResolveAnomaly（出勤明細與排班抽屜共用的補卡／接�
     expect(await resolve(target, { action: 'punch', punch_in: '07:52', punch_out: '17:00' })).toBe(true)
     expect(api.upsertRecord).toHaveBeenCalledWith({ employee_id: 7, date: '2026-09-16', punch_in: '07:52', punch_out: '17:00' })
     expect(done).toHaveBeenCalledTimes(1)
-    expect(ui.success).toHaveBeenCalledWith('已處理')
+    // 提示寫出做了什麼（只寫「已處理」看不出是扣了還是豁免了）
+    expect(ui.success).toHaveBeenCalledWith('已補打卡並重新計算')
+  })
+
+  it('成功提示依動作寫出結果；呼叫端可指定（整天只有缺卡＝已確認缺卡）', async () => {
+    const { resolve } = useResolveAnomaly(vi.fn(), 'test')
+    await resolve(target, { action: 'admin_waive' })
+    expect(ui.success).toHaveBeenLastCalledWith('已豁免')
+    await resolve(target, { action: 'admin_accept' })
+    expect(ui.success).toHaveBeenLastCalledWith('已接受扣款')
+    await resolve(target, { action: 'admin_accept', doneText: '已確認缺卡' })
+    expect(ui.success).toHaveBeenLastCalledWith('已確認缺卡')
   })
 
   it('接受扣款／豁免：以出勤紀錄 id 批次確認', async () => {

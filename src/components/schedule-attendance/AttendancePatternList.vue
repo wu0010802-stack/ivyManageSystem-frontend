@@ -15,7 +15,7 @@
             <span class="pattern-list__count">{{ countText(p) }}</span>
           </p>
           <p class="pattern-list__fact">{{ patternSummary(p) }}</p>
-          <p class="pattern-list__hint">{{ p.notInImport ? NOT_IN_IMPORT_HINT : FEW_PUNCHES_HINT }}</p>
+          <p class="pattern-list__hint">{{ patternHint(p) }}</p>
           <div class="pattern-list__actions">
             <el-button :data-test="`pattern-records-${p.employeeId}`" @click="emit('records', p.employeeId, p.firstDate)">看他整月</el-button>
             <el-button v-if="canImport && p.notInImport" :data-test="`pattern-import-${p.employeeId}`" @click="emit('import')">匯入打卡</el-button>
@@ -38,7 +38,7 @@
           </p>
           <p class="pattern-list__fact">{{ patternSummary(p) }}</p>
           <p class="pattern-list__fact">實際多在 {{ p.typicalIn }} 上班、{{ p.typicalOut }} 下班；系統認定的應上班時段是 {{ p.planWindow }}。</p>
-          <p class="pattern-list__hint">多半是應上班時段設錯，或這位員工是半天班、時薪制。</p>
+          <p class="pattern-list__hint">{{ patternHint(p) }}</p>
           <div class="pattern-list__actions">
             <el-button :data-test="`pattern-records-${p.employeeId}`" @click="emit('records', p.employeeId, p.firstDate)">看他整月</el-button>
             <router-link v-if="canViewEmployees" :to="`/employees/${p.employeeId}`" class="pattern-list__link" :data-test="`pattern-employee-${p.employeeId}`">員工資料</router-link>
@@ -53,7 +53,7 @@
 /** 本月設定檢查清單（型態判斷見 utils/attendancePatterns）：只提示與連到該去的地方，不在這裡改資料。 */
 import { computed } from 'vue'
 import { hasPermission } from '@/utils/auth'
-import { patternSummary, type AttendancePattern, type FixedOffsetPattern, type NoPunchPattern } from '@/utils/attendancePatterns'
+import { patternHint, patternSummary, type AttendancePattern, type FixedOffsetPattern, type NoPunchPattern } from '@/utils/attendancePatterns'
 
 const props = defineProps<{ patterns: AttendancePattern[] }>()
 const emit = defineEmits<{
@@ -64,9 +64,6 @@ const emit = defineEmits<{
   /** 依目前班表重算本月出勤（改了上下班時間或員工類型之後） */
   recalculate: []
 }>()
-
-const NOT_IN_IMPORT_HINT = '多半是打卡機卡號還沒對照到這位員工：重新匯入打卡檔時，在卡號對照把卡號對到這位員工。若這位員工本來就不用打卡，這些天要補登或請假。'
-const FEW_PUNCHES_HINT = '多半是卡號對照到別人、這位員工不用打卡，或請假還沒登打。'
 
 const canImport = hasPermission('ATTENDANCE_WRITE')
 

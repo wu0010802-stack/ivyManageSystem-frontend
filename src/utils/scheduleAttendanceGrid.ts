@@ -63,6 +63,17 @@ const STATUS_TONES: Record<ReconStatus, Tone> = {
 const CONFIRMED_ACTION_LABELS: Record<string, string> = { admin_accept: '已接受扣款', admin_waive: '已豁免' }
 
 /**
+ * 處理結果文字。只有缺卡、沒有遲到早退的日子不扣薪（後端明細「不扣款，僅記錄」），
+ * 「接受」是記入缺卡次數，不能寫成「已接受扣款」。
+ */
+export function confirmedActionLabel(actual: Pick<NonNullable<GridCell['actual']>, 'confirmed_action' | 'status' | 'late_minutes' | 'early_leave_minutes'>): string {
+  const action = actual.confirmed_action
+  if (!action) return ''
+  if (action === 'admin_accept' && actual.status === 'missing_punch' && !actual.late_minutes && !actual.early_leave_minutes) return '已確認缺卡'
+  return CONFIRMED_ACTION_LABELS[action] ?? '已處理'
+}
+
+/**
  * 出勤明細已處理完。例外：疑似換班只「接受扣款」不算——異常清單只問遲到／缺卡，接受扣款沒有回答
  * 「是不是換了班」，仍要在格子確認當日班別；豁免＝不扣款，才算處理完。
  */
@@ -339,6 +350,8 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
   if (fullLeave && !punches) {
     return {
       ...base,
+      // 判定已寫假別，假別標籤不再重複同一張假（格子曾顯示「病假 病假」）
+      leaveTags: base.leaveTags.filter((_, i) => cell.leaves[i] !== fullLeave),
       state: 'full_leave',
       actual: null,
       verdict: { label: fullLeave.leave_type_label, tone: 'info' },
@@ -357,9 +370,12 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
     }
   }
   const handled = actual.confirmed_action && !NON_ISSUE_STATUSES.has(actual.status)
-    ? CONFIRMED_ACTION_LABELS[actual.confirmed_action] ?? '已處理'
+    ? confirmedActionLabel(actual)
     : null
-  const label = statusLabel(cell, actual)
+  // 處理過的缺卡不再「待確認」：寫「缺卡・已確認」／「缺卡・已豁免」（「缺卡待確認・已確認缺卡」重複又矛盾）
+  const missingHandled = !!handled && actual.status === 'missing_punch'
+  const label = missingHandled ? '缺卡' : statusLabel(cell, actual)
+  const handledText = missingHandled && handled === '已確認缺卡' ? '已確認' : handled
   return {
     ...base,
     state: 'judged',
@@ -368,7 +384,7 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
     verdict: actual.status === 'off_day'
       ? null
       : handled
-        ? { label: `${label}・${handled}`, tone: isHandled(actual) ? 'info' : STATUS_TONES[actual.status] }
+        ? { label: `${label}・${handledText}`, tone: isHandled(actual) ? 'info' : STATUS_TONES[actual.status] }
         : { label, tone: STATUS_TONES[actual.status] },
   }
 }

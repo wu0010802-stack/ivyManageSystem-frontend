@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectAttendancePatterns, patternIssueTotal } from '../attendancePatterns'
+import { detectAttendancePatterns, patternAcceptWarning, patternCellKeys, patternHint, patternIssueTotal } from '../attendancePatterns'
 import { cell, day, employee, grid } from '@/components/schedule-attendance/__tests__/gridFixtures'
 import type { GridCell, GridDay } from '@/utils/scheduleAttendanceGrid'
 
@@ -158,5 +158,33 @@ describe('排序與合計', () => {
   it('沒有打卡權限（actual 全是 null）時不判斷', () => {
     const cells = DAYS.map((d) => cell(1, d.date, { plan: { ...PLAN, expected: d.is_workday } }))
     expect(detect(cells)).toEqual([])
+  })
+})
+
+describe('符合型態的格子（第五輪審查：格子降為待修設定、抽屜提醒）', () => {
+  it('matchDates 就是 matchCount 那幾格；patternCellKeys 轉成格子鍵（同一人的其他異常不算）', () => {
+    const cells = rowOf(1, (date, i) => (i === 0 ? { actual: { status: 'missing_punch', punch_in: `${date}T08:56:00` } } : punched(date, '08:56', '11:50', 56, 310)))
+    const [p] = detect(cells)
+    expect(p.kind).toBe('fixed_offset')
+    expect(p.matchDates).toHaveLength(p.matchCount)
+    expect(p.matchDates).not.toContain(WORKDAYS[0])
+    const keys = patternCellKeys([p])
+    expect(keys.has(`1|${WORKDAYS[1]}`)).toBe(true)
+    expect(keys.has(`1|${WORKDAYS[0]}`)).toBe(false)
+  })
+
+  it('整月沒打卡的型態：matchDates 是沒打卡的那幾天', () => {
+    const [p] = detect(rowOf(1, () => ({ actual: { status: 'data_incomplete' } })))
+    expect(p.matchDates).toEqual(WORKDAYS)
+  })
+
+  it('接受扣款前的提醒只給固定偏移（整月沒打卡沒有扣款可接受）；可能成因與設定檢查清單同一句', () => {
+    const [offset] = detect(rowOf(1, (date) => punched(date, '08:56', '11:50', 56, 310)), DAYS, { 1: '黃毓慧' })
+    expect(patternAcceptWarning(offset)).toContain('黃毓慧 本月')
+    expect(patternAcceptWarning(offset)).toContain('會照目前的應上班時段扣薪')
+    expect(patternHint(offset)).toContain('半天班、時薪制')
+    const [none] = detect(rowOf(2, () => ({ actual: { status: 'data_incomplete' } })))
+    expect(patternAcceptWarning(none)).toBeNull()
+    expect(patternHint(none)).toContain('卡號還沒對照')
   })
 })

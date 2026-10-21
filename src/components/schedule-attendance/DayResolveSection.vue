@@ -15,6 +15,7 @@
       :show-nav="false"
       :actions="actions"
       :primary-action="mode === 'resolve-first'"
+      :accept-warning="acceptWarning"
       @resolve="onResolve"
     />
   </section>
@@ -35,7 +36,7 @@ import ResolveCard from '@/components/attendance/ResolveCard.vue'
 import { getAnomalyList } from '@/api/attendance'
 import { groupAnomalies, type AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useResolveAnomaly, type ResolveAction, type ResolvePayload } from '@/composables/useResolveAnomaly'
-import type { GridCell } from '@/utils/scheduleAttendanceGrid'
+import { confirmedActionLabel, type GridCell } from '@/utils/scheduleAttendanceGrid'
 
 export type DayResolveMode = 'resolve-first' | 'confirm-first' | 'side-by-side'
 
@@ -48,14 +49,14 @@ const props = defineProps<{
   weekday: string
   /** 抽屜剛自動跳到這格：短暫鎖住動作（連點不會落到這一筆） */
   locked?: boolean
+  /** 這格符合整月固定型態（多半是設定問題）：按「接受扣款」前先提醒（見 ResolveCard） */
+  acceptWarning?: string | null
   /**
    * 處理成功（父層以 @changed 綁定）。刻意用函式 prop 而不是 emit：送出途中抽屜換到另一格、本元件換位置被卸載時，
    * Vue 會丟掉已卸載元件的 emit，格子就不會重抓；函式 prop 仍會被呼叫。
    */
   onChanged?: () => void
 }>()
-
-const HANDLED_LABELS: Record<string, string> = { admin_accept: '已接受扣款', admin_waive: '已豁免' }
 
 const card = ref<AnomalyDayCard | null>(null)
 const loadState = ref<'idle' | 'loading' | 'error'>('idle')
@@ -122,8 +123,8 @@ const actions = computed<ResolveAction[]>(() => {
 })
 
 const handledNote = computed(() => {
-  const action = props.cell.actual?.confirmed_action
-  return action ? `${HANDLED_LABELS[action] ?? '已處理'}，需要的話可以改成另一個動作。` : ''
+  const actual = props.cell.actual
+  return actual?.confirmed_action ? `${confirmedActionLabel(actual)}，需要的話可以改成另一個動作。` : ''
 })
 
 const cardRef = ref<InstanceType<typeof ResolveCard> | null>(null)

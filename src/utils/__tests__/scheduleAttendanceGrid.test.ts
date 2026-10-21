@@ -199,7 +199,11 @@ describe('已在出勤明細處理過的異常（接受扣款／豁免）', () =
     expect(cellDisplay(waived, TODAY).verdict).toEqual({ label: '出勤異常・已豁免', tone: 'info' })
     const accepted = cell(1, W1, { actual: { status: 'missing_punch', confirmed_action: 'admin_accept', punch_in: `${W1}T07:52:00`, punch_out: null } })
     expect(isIssue(accepted, TODAY)).toBe(false)
-    expect(cellDisplay(accepted, TODAY).verdict?.label).toBe('缺卡待確認・已接受扣款')
+    // 只有缺卡（不扣薪）：「接受」是記入缺卡次數，不能寫「已接受扣款」；處理過也不再「待確認」
+    expect(cellDisplay(accepted, TODAY).verdict?.label).toBe('缺卡・已確認')
+    const lateMissingAccepted = cell(1, W1, { actual: { status: 'missing_punch', confirmed_action: 'admin_accept', late_minutes: 12, punch_in: `${W1}T08:12:00`, punch_out: null } })
+    expect(cellDisplay(lateMissingAccepted, TODAY).verdict?.label).toBe('缺卡・已接受扣款')
+    expect(cellDisplay(cell(1, W1, { actual: { status: 'missing_punch', confirmed_action: 'admin_waive', punch_in: `${W1}T07:52:00`, punch_out: null } }), TODAY).verdict?.label).toBe('缺卡・已豁免')
     // 疑似換班只「接受扣款」沒回答是不是換班：仍待處理（豁免＝不扣款，才算處理完）（審查 F2）
     const swapAccepted = cell(1, W1, { actual: { status: 'possible_shift_change', confirmed_action: 'admin_accept' } })
     expect(isIssue(swapAccepted, TODAY)).toBe(true)
@@ -465,5 +469,16 @@ describe('outerScrollFirst（在格子上捲動時先收起頁首）', () => {
     expect(outerScrollFirst({ deltaY: 100, toolbarOffset: 0.5, outerRoom: 400 })).toBe(0)
     expect(outerScrollFirst({ deltaY: 100, toolbarOffset: 301, outerRoom: 0 })).toBe(0)
     expect(outerScrollFirst({ deltaY: -100, toolbarOffset: 301, outerRoom: 400 })).toBe(0)
+  })
+})
+
+describe('全天請假格不重複假別（第五輪審查：格子曾顯示「病假 病假」）', () => {
+  it('判定已寫假別時，假別標籤不再列同一張假；同一天的其他假（例如待審）照列', () => {
+    const sick = { leave_id: 1, leave_type_label: '病假', is_full_day: true, status: 'approved' as const, start_time: null, end_time: null }
+    const pending = { leave_id: 2, leave_type_label: '特休', is_full_day: false, status: 'pending' as const, start_time: '13:00', end_time: '17:00' }
+    const shown = cellDisplay(cell(1, W1, { actual: { status: 'leave' }, leaves: [sick, pending] }), TODAY)
+    expect(shown.state).toBe('full_leave')
+    expect(shown.verdict?.label).toBe('病假')
+    expect(shown.leaveTags).toEqual(['特休（待審）'])
   })
 })

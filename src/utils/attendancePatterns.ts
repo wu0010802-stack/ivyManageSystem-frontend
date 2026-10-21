@@ -5,7 +5,7 @@
  * 每天固定遲到早退（多半是應上班時段或員工類型設錯）。這些不是逐日要處理的異常，修好設定
  * 才會一次消失；混在逐日清單裡只會讓人逐格豁免。本檔只判斷型態，不改任何資料。
  */
-import { isIssue, uncoveredDates, type GridCell, type GridOut } from '@/utils/scheduleAttendanceGrid'
+import { cellKey, isIssue, uncoveredDates, type GridCell, type GridOut } from '@/utils/scheduleAttendanceGrid'
 
 /** 至少這麼多個應上班日才下判斷（月初、剛到職的人資料太少） */
 const MIN_EXPECTED_DAYS = 3
@@ -32,6 +32,8 @@ interface PatternBase {
   issueCount: number
   /** 其中符合這個型態的待處理格數（設定修好會一起消失的那幾格） */
   matchCount: number
+  /** 符合型態的待處理格日期（matchCount 的那幾格）：格子降為「待修設定」、抽屜提醒用 */
+  matchDates: string[]
   /** 納入判斷的應上班日：過去、當天有匯入、非全天假、在職 */
   expectedDays: number
   /** 有任一打卡的天數 */
@@ -123,7 +125,7 @@ export function detectAttendancePatterns(grid: GridOut): AttendancePattern[] {
     const considered = cells.filter((c) => isConsidered(c, grid.today, uncovered))
     if (considered.length < MIN_EXPECTED_DAYS) continue
 
-    const base: Omit<PatternBase, 'matchCount'> = {
+    const base: Omit<PatternBase, 'matchCount' | 'matchDates'> = {
       employeeId: emp.employee_id,
       name: emp.name,
       roleLabel: emp.role_label ?? null,
@@ -135,10 +137,12 @@ export function detectAttendancePatterns(grid: GridOut): AttendancePattern[] {
 
     if (base.punchedDays <= Math.floor(considered.length * NO_PUNCH_MAX_RATIO)) {
       const unpunched = considered.filter((c) => !c.actual!.punch_in && !c.actual!.punch_out)
+      const matched = unpunched.filter(issue)
       patterns.push({
         ...base,
         kind: 'no_punches',
-        matchCount: unpunched.filter(issue).length,
+        matchCount: matched.length,
+        matchDates: matched.map((c) => c.date),
         notInImport: unpunched.every((c) => c.actual!.status === 'data_incomplete'),
       })
       continue
@@ -154,10 +158,12 @@ export function detectAttendancePatterns(grid: GridOut): AttendancePattern[] {
     if (!lateShaped && !earlyShaped) continue
     const shaped = (c: GridCell) =>
       (lateShaped && c.actual!.late_minutes >= OFFSET_MINUTES) || (earlyShaped && c.actual!.early_leave_minutes >= OFFSET_MINUTES)
+    const matched = both.filter((c) => shaped(c) && issue(c))
     patterns.push({
       ...base,
       kind: 'fixed_offset',
-      matchCount: both.filter((c) => shaped(c) && issue(c)).length,
+      matchCount: matched.length,
+      matchDates: matched.map((c) => c.date),
       bothDays: both.length,
       lateDays: lateShaped ? lates.length : 0,
       earlyDays: earlyShaped ? earlies.length : 0,
@@ -178,6 +184,11 @@ export function patternIssueTotal(patterns: readonly AttendancePattern[]): numbe
   return patterns.reduce((sum, p) => sum + p.matchCount, 0)
 }
 
+/** 符合型態的待處理格（cellKey）：格子把這些格從「紅色異常」降為「待修設定」的橘色 */
+export function patternCellKeys(patterns: readonly AttendancePattern[]): Set<string> {
+  return new Set(patterns.flatMap((p) => p.matchDates.map((date) => cellKey(p.employeeId, date))))
+}
+
 /** 格子人員欄的短註記（滑鼠移上去看 patternSummary） */
 export function patternTag(pattern: AttendancePattern): string {
   return pattern.kind === 'no_punches' ? '本月沒有打卡' : '時段可能設錯'
@@ -195,4 +206,23 @@ export function patternSummary(pattern: AttendancePattern): string {
     pattern.earlyDays ? `${pattern.earlyDays} 天早退（多為 ${pattern.typicalEarly} 分）` : '',
   ].filter(Boolean)
   return `上下班都有打卡的 ${pattern.bothDays} 天中，${parts.join('、')}`
+}
+
+const NOT_IN_IMPORT_HINT = '多半是打卡機卡號還沒對照到這位員工：重新匯入打卡檔時，在卡號對照把卡號對到這位員工。若這位員工本來就不用打卡，這些天要補登或請假。'
+const FEW_PUNCHES_HINT = '多半是卡號對照到別人、這位員工不用打卡，或請假還沒登打。'
+const FIXED_OFFSET_HINT = '多半是應上班時段設錯，或這位員工是半天班、時薪制。'
+
+/** 型態的可能成因（設定檢查清單與格子抽屜共用同一句） */
+export function patternHint(pattern: AttendancePattern): string {
+  if (pattern.kind === 'fixed_offset') return FIXED_OFFSET_HINT
+  return pattern.notInImport ? NOT_IN_IMPORT_HINT : FEW_PUNCHES_HINT
+}
+
+/**
+ * 符合固定型態的格子按「接受扣款」前的提醒：照設錯的應上班時段逐格扣薪是最容易犯的錯。
+ * 整月沒打卡的型態沒有「接受扣款」可按（只能補登），回 null。
+ */
+export function patternAcceptWarning(pattern: AttendancePattern): string | null {
+  if (pattern.kind !== 'fixed_offset') return null
+  return `${pattern.name} 本月${patternSummary(pattern)}。${patternHint(pattern)}現在接受扣款，會照目前的應上班時段扣薪；建議先改員工資料，再重算本月出勤。`
 }

@@ -20,14 +20,17 @@
         <span class="resolve-card__counter">第 {{ index + 1 }} / {{ total }} 筆</span>
         <el-button
           size="small"
+          :icon="ArrowLeft"
           :disabled="index <= 0"
+          data-test="resolve-prev"
           @click="emit('navigate', -1)"
-        >◀</el-button>
+        >上一筆</el-button>
         <el-button
           size="small"
           :disabled="index >= total - 1"
+          data-test="resolve-next"
           @click="emit('navigate', 1)"
-        >▶</el-button>
+        >下一筆<el-icon class="el-icon--right"><ArrowRight /></el-icon></el-button>
       </div>
     </div>
 
@@ -90,8 +93,9 @@
 
     <!-- 動作列 -->
     <div v-if="canWrite" class="resolve-card__actions-block">
-      <p v-if="allows('admin_accept') || allows('admin_waive')" class="resolve-card__whole-day-hint">
-        接受扣款／豁免會套用到<strong>整天</strong>的所有異常項目
+      <p v-if="allows('admin_accept') || allows('admin_waive')" class="resolve-card__whole-day-hint" data-test="resolve-whole-day-hint">
+        <template v-if="missingOnly">缺卡不扣薪，但會記入本月缺卡次數；豁免＝不記入。會套用到<strong>整天</strong>。</template>
+        <template v-else>{{ acceptLabel }}／豁免會套用到<strong>整天</strong>的所有異常項目</template>
       </p>
       <div class="resolve-card__actions">
         <el-button
@@ -105,8 +109,9 @@
           v-if="allows('admin_accept')"
           :loading="busy"
           :disabled="busy"
-          @click="emit('resolve', { action: 'admin_accept' })"
-        >接受扣款</el-button>
+          data-test="resolve-accept"
+          @click="handleAccept"
+        >{{ acceptLabel }}</el-button>
         <el-button
           v-if="allows('admin_waive')"
           :loading="busy"
@@ -123,6 +128,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { ElMessageBox } from 'element-plus'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import type { AnomalyDayCard, AnomalyEntry } from '@/composables/useAttendanceWorkspace'
 
@@ -149,17 +156,23 @@ const props = withDefaults(defineProps<{
   actions?: readonly ResolveAction[]
   /** 補打卡是否為主要按鈕；同一畫面另有主要動作時傳 false */
   primaryAction?: boolean
+  /**
+   * 這天符合該員工整月的固定型態（多半是設定問題）時的提醒文字：按「接受扣款」前先問一次，
+   * 免得照錯的應上班時段逐格扣薪。null／未給＝直接送出。
+   */
+  acceptWarning?: string | null
 }>(), {
   busy: false,
   showNav: true,
   actions: () => ['punch', 'admin_accept', 'admin_waive'],
   primaryAction: true,
+  acceptWarning: null,
 })
 
 const allows = (action: ResolveAction) => props.actions.includes(action)
 
 const emit = defineEmits<{
-  (e: 'resolve', payload: { action: 'punch' | 'admin_accept' | 'admin_waive'; punch_in?: string; punch_out?: string }): void
+  (e: 'resolve', payload: { action: 'punch' | 'admin_accept' | 'admin_waive'; punch_in?: string; punch_out?: string; doneText?: string }): void
   (e: 'navigate', delta: number): void
   /** 打卡紀錄載入失敗後重試 */
   (e: 'retry'): void
@@ -183,6 +196,29 @@ watch(
     localPunchOut.value = ctx.punch_out
   },
 )
+
+// ── 接受扣款 ───────────────────────────────────────────────────────────────────
+/**
+ * 整天只有缺卡（後端明細寫「不扣款，僅記錄」）：薪資不扣，但「接受」會記入缺卡次數、豁免不記入。
+ * 按鈕不能寫「接受扣款」，否則和明細自相矛盾。
+ */
+const missingOnly = computed(() => props.item.items.length > 0 && props.item.items.every((entry) => entry.type === 'missing_punch'))
+const acceptLabel = computed(() => (missingOnly.value ? '確認缺卡' : '接受扣款'))
+
+async function handleAccept(): Promise<void> {
+  if (props.acceptWarning) {
+    try {
+      await ElMessageBox.confirm(props.acceptWarning, '可能是設定問題', {
+        confirmButtonText: `仍要${acceptLabel.value}`,
+        cancelButtonText: '先不要',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+  }
+  emit('resolve', missingOnly.value ? { action: 'admin_accept', doneText: '已確認缺卡' } : { action: 'admin_accept' })
+}
 
 // ── tag 顏色 ───────────────────────────────────────────────────────────────────
 function tagTypeOf(entry: AnomalyEntry): 'warning' | 'danger' {
@@ -249,18 +285,18 @@ function handlePunch(): void {
 }
 
 .resolve-card__name {
-  font-size: var(--text-base, 1rem);
+  font-size: var(--text-base);
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
 }
 
 .resolve-card__separator {
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary);
 }
 
 .resolve-card__date {
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--text-secondary, #475569);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .resolve-card__type-tag {
@@ -275,8 +311,8 @@ function handlePunch(): void {
 }
 
 .resolve-card__counter {
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
   white-space: nowrap;
 }
 
@@ -286,7 +322,7 @@ function handlePunch(): void {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1, 4px);
+  gap: var(--space-1);
 }
 
 .resolve-card__entry {
@@ -294,14 +330,14 @@ function handlePunch(): void {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--text-secondary, #475569);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .resolve-card__context {
   background: var(--el-fill-color-light);
-  border: 1px solid var(--border-color-light, #f1f5f9);
-  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--radius-md);
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
@@ -315,15 +351,15 @@ function handlePunch(): void {
 }
 
 .resolve-card__label {
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--text-secondary, #475569);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   width: 72px;
   flex-shrink: 0;
 }
 
 .resolve-card__value {
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--text-primary, #1e293b);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -332,17 +368,17 @@ function handlePunch(): void {
 }
 
 .resolve-card__leave-badge {
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--warning, #f59e0b);
+  font-size: var(--text-xs);
+  color: var(--color-warning-darker);
   background: var(--el-color-warning-light-9);
   padding: 2px var(--space-2);
-  border-radius: var(--radius-sm, 4px);
-  border: 1px solid var(--warning-border, #fde68a);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--el-color-warning-light-5);
 }
 
 .resolve-card__deduction--negative {
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--danger, #ef4444);
+  font-size: var(--text-sm);
+  color: var(--color-danger-darker);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -355,8 +391,8 @@ function handlePunch(): void {
 
 .resolve-card__whole-day-hint {
   margin: 0;
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .resolve-card__actions {
@@ -366,8 +402,8 @@ function handlePunch(): void {
 }
 
 .resolve-card__readonly-hint {
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
   padding: var(--space-2) 0;
 }
 </style>
