@@ -1,14 +1,18 @@
 <script setup lang="ts">
 /**
- * 打卡核對頁的「月底出勤確認」列（SPEC-026 §3.6）：發送、進度、重新推測、套用雙方已確認。
+ * 打卡核對頁的「月底出勤確認」列（SPEC-026 §3.6）：發送、看各老師回覆、重新推測、套用雙方已確認。
  * 老師的回覆只是證詞；唯一寫入班表的動作是「套用雙方已確認」（後端逐項走 confirm_shifts）。
  * 不發推播（D4）：發送後請行政口頭提醒老師上系統確認。
  *
  * 「老師自行補登」區塊（SPEC-026 3-3）：老師自行登記的過去日期換班是無輪次項目，輪次進度看不到，
  * 所以獨立於輪次分支另列（沒有任何輪次時也顯示），套用與結案重用同一組流程。
+ *
+ * 「關閉輪次」是破壞性動作（未完成項目全數失效），收在「更多」選單裡、不與常用鈕並排：
+ * 這一列在「老師確認」抽屜一開就出現在游標附近，並排時曾被誤點（2026-10 排班與出勤 UI 收斂）。
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import type { ApiResponse } from '@/api/_generated/typed'
 import {
   applyAgreedConfirmations,
@@ -21,6 +25,9 @@ import {
   refreshConfirmationRound,
   updateConfirmationRound,
 } from '@/api/attendanceConfirmation'
+import FormDialog from '@/components/common/FormDialog.vue'
+import { FORM_DIALOG_WIDTH } from '@/constants/formDialog'
+import { useFormDirty } from '@/composables/useFormDirty'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { todayTaipeiISO } from '@/utils/format'
@@ -65,6 +72,9 @@ const draft = ref<Draft | null>(null)
 const applyPlan = ref<ApplyResult | null>(null)
 const form = ref(defaultForm())
 const deadlineForm = ref({ deadline_date: '' })
+// 開啟時 snapshot()；使用者動過日期才算 dirty，關閉前由 FormDialog 詢問是否捨棄
+const { isDirty: createDirty, snapshot: snapshotCreate } = useFormDirty(form)
+const { isDirty: deadlineDirty, snapshot: snapshotDeadline } = useFormDirty(deadlineForm)
 
 function defaultForm() {
   const today = todayTaipeiISO()
@@ -187,6 +197,7 @@ watch(form, () => { draft.value = null }, { deep: true })
 function openCreate() {
   form.value = defaultForm()
   draft.value = null
+  snapshotCreate()
   createOpen.value = true
 }
 
@@ -267,6 +278,7 @@ async function confirmApply() {
 function openDeadline() {
   if (!round.value) return
   deadlineForm.value = { deadline_date: round.value.deadline_date }
+  snapshotDeadline()
   deadlineOpen.value = true
 }
 
@@ -298,7 +310,12 @@ async function closeRound() {
         `轉行政 ${counts.disputed}）都會失效，已送出的請假／補卡申請不受影響。關閉後同一期間可以重新發送。` +
         applyHint,
       '關閉輪次',
-      { confirmButtonText: '關閉輪次', cancelButtonText: '取消', type: 'warning' },
+      {
+        confirmButtonText: '關閉輪次',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+      },
     )
   } catch {
     return
@@ -365,7 +382,7 @@ async function dismissItem(item: ConfirmationItem) {
         人・已簽認 {{ summary.signed }}/{{ summary.total }}
       </p>
       <div class="confirm-bar__actions">
-        <el-button data-test="open-progress" @click="progressOpen = true">進度</el-button>
+        <el-button data-test="open-progress" @click="progressOpen = true">老師回覆狀況</el-button>
         <template v-if="isClosed">
           <el-button v-if="canWrite" type="primary" data-test="open-create" @click="openCreate">
             發給老師確認
@@ -380,16 +397,6 @@ async function dismissItem(item: ConfirmationItem) {
           </el-button>
           <el-button
             v-if="canWrite"
-            type="danger"
-            plain
-            :disabled="closeDisabled"
-            data-test="close-round"
-            @click="closeRound"
-          >
-            關閉輪次
-          </el-button>
-          <el-button
-            v-if="canWrite"
             type="primary"
             :disabled="agreedCount === 0"
             :loading="busy"
@@ -398,6 +405,24 @@ async function dismissItem(item: ConfirmationItem) {
           >
             套用雙方已確認（{{ agreedCount }}）
           </el-button>
+          <!-- 破壞性動作收進次要選單：要先點「更多」再點項目，抽屜剛開、游標還停在原處時點不到 -->
+          <el-dropdown v-if="canWrite" trigger="click" class="confirm-bar__more">
+            <el-button data-test="more-actions">
+              更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  class="confirm-bar__close-item"
+                  :disabled="closeDisabled"
+                  data-test="close-round"
+                  @click="closeRound"
+                >
+                  關閉輪次
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </div>
     </template>
@@ -444,8 +469,19 @@ async function dismissItem(item: ConfirmationItem) {
       讀取老師補登項目失敗，請稍後重新整理。
     </p>
 
-    <el-dialog v-model="createOpen" title="發給老師確認" width="640px">
-      <el-form label-position="top" class="confirm-bar__grid">
+    <!-- 發給老師確認：3 個日期欄＋預覽清單。預覽內容偏長，用 standardNarrow 比 compact 好讀 -->
+    <FormDialog
+      v-model="createOpen"
+      title="發給老師確認"
+      size="standardNarrow"
+      :dirty="createDirty"
+      :loading="busy"
+      :disabled="!draft"
+      submit-text="發送"
+      :enter-submit="false"
+      @submit="release"
+    >
+      <el-form label-position="top" class="confirm-bar__grid" @submit.prevent>
         <el-form-item label="期間起">
           <el-date-picker v-model="form.period_start" type="date" value-format="YYYY-MM-DD" :clearable="false" />
         </el-form-item>
@@ -457,7 +493,7 @@ async function dismissItem(item: ConfirmationItem) {
         </el-form-item>
       </el-form>
       <p class="confirm-bar__hint">
-        只涵蓋輪值表上的班導與副班導；系統不發推播，請口頭提醒老師上系統確認。
+        只涵蓋輪值表上的班導與副班導；系統不發推播，請口頭提醒老師上系統確認。先按「預覽」確認內容，才能發送。
       </p>
       <div v-if="draft" data-test="draft">
         <p>適用 {{ draft.eligible_count }} 人，預計 {{ draft.items.length }} 筆待確認項目。</p>
@@ -467,17 +503,21 @@ async function dismissItem(item: ConfirmationItem) {
           </li>
         </ul>
       </div>
-      <template #footer>
-        <el-button @click="createOpen = false">取消</el-button>
+      <template #footer-extra>
         <el-button :loading="busy" data-test="preview" @click="previewDraft">預覽</el-button>
-        <el-button type="primary" :disabled="!draft" :loading="busy" data-test="release" @click="release">
-          發送
-        </el-button>
       </template>
-    </el-dialog>
+    </FormDialog>
 
-    <el-dialog v-model="deadlineOpen" title="改期限" width="420px">
-      <el-form label-position="top">
+    <FormDialog
+      v-model="deadlineOpen"
+      title="改期限"
+      size="compact"
+      :dirty="deadlineDirty"
+      :loading="busy"
+      submit-text="儲存"
+      @submit="saveDeadline"
+    >
+      <el-form label-position="top" @submit.prevent>
         <el-form-item label="回覆期限">
           <el-date-picker
             v-model="deadlineForm.deadline_date"
@@ -487,16 +527,10 @@ async function dismissItem(item: ConfirmationItem) {
           />
         </el-form-item>
       </el-form>
-      <p class="confirm-bar__hint">只改回覆期限，不改期間；期間發錯請改用「關閉輪次」後重發。</p>
-      <template #footer>
-        <el-button @click="deadlineOpen = false">取消</el-button>
-        <el-button type="primary" :loading="busy" data-test="save-deadline" @click="saveDeadline">
-          儲存
-        </el-button>
-      </template>
-    </el-dialog>
+      <p class="confirm-bar__hint">只改回覆期限，不改期間；期間發錯請用「更多 › 關閉輪次」關掉後重發。</p>
+    </FormDialog>
 
-    <el-drawer v-model="progressOpen" title="確認進度" size="520px">
+    <el-drawer v-model="progressOpen" title="老師回覆狀況" size="520px">
       <el-table v-if="detail" :data="detail.employees" data-test="progress-table">
         <el-table-column prop="employee_name" label="老師" />
         <el-table-column label="待回覆" width="80">
@@ -550,7 +584,7 @@ async function dismissItem(item: ConfirmationItem) {
       </ul>
     </el-drawer>
 
-    <el-dialog v-model="applyOpen" title="套用雙方已確認的調班" width="640px">
+    <el-dialog v-model="applyOpen" title="套用雙方已確認的調班" :width="FORM_DIALOG_WIDTH.standardNarrow">
       <p>以下調班會寫入當日班別並重新計算出勤；封存月份與資料已變動的項目會自動略過。</p>
       <ul class="confirm-bar__list" data-test="apply-plan">
         <li v-for="p in applyPlan?.planned ?? []" :key="p.item_id">
@@ -592,6 +626,9 @@ async function dismissItem(item: ConfirmationItem) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+.confirm-bar__close-item {
+  color: var(--el-color-danger);
 }
 .confirm-bar__grid {
   display: grid;

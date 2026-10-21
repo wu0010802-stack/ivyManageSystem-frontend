@@ -7,7 +7,7 @@
  *
  * Tab B「上傳 Excel 檔」（P1-1 起兩段式）：
  *   el-upload → previewExcel（唯讀逐列檢核，新格式）→ 共用預覽表 → 確認匯入 uploadCsv
- *   legacy 月統計格式無逐列可預覽 → 後端 400，另提供「以 legacy 格式直接匯入」退路
+ *   legacy（畫面上稱「舊版」）月統計格式無逐列可預覽 → 後端 400，另提供「以舊版格式直接匯入」退路
  *
  * Tab B 也收打卡鐘「員工上下班時間表」txt：previewClockReport（SPEC-027 §12）。
  *   報表中只能推估日期的區塊須在 ClockReportBlockReview 人工確認，未確認者該員工整月不匯入。
@@ -16,6 +16,8 @@
  */
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
+import { FORM_DIALOG_WIDTH } from '@/constants/formDialog'
 import { previewImport, previewExcel, previewClockReport, uploadCsv, uploadFile, getImportSettings, saveImportSettings } from '@/api/attendance'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -61,6 +63,12 @@ const importing = ref(false)
 type ImportSettings = ApiResponse<'/attendance/import-settings', 'get'>
 const settings = ref<ImportSettings | null>(null)
 const selectedFormat = ref<ImportSettings['default_format']>('auto')
+const FORMAT_OPTIONS: { value: ImportSettings['default_format']; label: string }[] = [
+  { value: 'auto', label: '自動辨識' },
+  { value: 'daily_columns', label: '每日上下班欄位' },
+  { value: 'punch_events', label: '逐筆刷卡' },
+  { value: 'clock_report', label: '打卡鐘報表（txt）' },
+]
 const deviceId = ref('default')
 const mappings = ref<Record<string, number | undefined>>({})
 const settingsLoading = ref(false)
@@ -431,7 +439,7 @@ async function handleExcelUpload(options: { file: File }) {
     if (request !== generation) return
     if (isLegacyFormatError(err)) {
       legacyExcelFile.value = options.file
-      ElMessage.warning('此檔為 legacy 月統計格式，無法逐列預覽；可改用直接匯入')
+      ElMessage.warning('此檔為舊版月統計格式，無法逐列預覽；可改用直接匯入')
     } else {
       notify(err, 'ImportPreviewDialog.excelPreview', null, { prefix: isClockReportFile ? '打卡鐘報表預覽失敗' : 'Excel 預覽失敗' })
     }
@@ -526,7 +534,7 @@ function handleDownloadProblems() {
         r.date,
         r.punch_in ?? '',
         r.punch_out ?? '',
-        r.check,
+        CHECK_LABEL[r.check] ?? r.check,
       ]),
     )
     .join('\n')
@@ -570,6 +578,21 @@ const CHECK_LABEL: Record<PreviewRow['check'], string> = {
   month_mismatch: '不在選定月份',
 }
 
+// 預覽列「狀態」是後端算出的英文代碼（可用 + 串接，如 late+early_leave、late+missing_out），顯示前轉白話
+const STATUS_TOKEN_LABEL: Record<string, string> = {
+  normal: '正常',
+  late: '遲到',
+  early_leave: '早退',
+  missing: '缺卡',
+  missing_in: '缺上班卡',
+  missing_out: '缺下班卡',
+}
+
+function statusLabel(status: string | null | undefined): string {
+  if (!status) return ''
+  return status.split('+').map(token => STATUS_TOKEN_LABEL[token] ?? token).join('、')
+}
+
 function rowClassName({ row }: { row: PreviewRow }): string {
   return row.check !== 'importable' && row.check !== 'overwrite' ? 'problem-row' : ''
 }
@@ -584,6 +607,7 @@ defineExpose({
   legacyExcelFile,
   CHECK_LABEL,
   CHECK_TAG_TYPE,
+  statusLabel,
   canWrite,
   handleExcelUpload,
   handleConfirmImport,
@@ -598,7 +622,7 @@ defineExpose({
   <el-dialog
     :model-value="modelValue"
     :title="dialogTitle"
-    width="860px"
+    :width="FORM_DIALOG_WIDTH.standard"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
     @closed="resetState"
   >
@@ -612,16 +636,15 @@ defineExpose({
             上傳後先逐列預覽，確認後才匯入。
           </p>
           <div class="import-preview-dialog__settings">
-            <label>打卡格式
-              <select v-model="selectedFormat" :disabled="busy" aria-label="打卡格式" @change="clearPreview">
-                <option value="auto">自動辨識</option>
-                <option value="daily_columns">每日上下班欄位</option>
-                <option value="punch_events">逐筆刷卡</option>
-                <option value="clock_report">打卡鐘報表（txt）</option>
-              </select>
+            <label class="import-preview-dialog__field">
+              <span>打卡格式</span>
+              <el-select v-model="selectedFormat" :disabled="busy" aria-label="打卡格式" class="import-preview-dialog__format" @change="clearPreview">
+                <el-option v-for="option in FORMAT_OPTIONS" :key="option.value" :label="option.label" :value="option.value" />
+              </el-select>
             </label>
-            <label>設備代號
-              <input v-model="deviceId" :disabled="busy" aria-label="設備代號" @change="clearPreview(); loadSettings()" />
+            <label class="import-preview-dialog__field">
+              <span>設備代號</span>
+              <el-input v-model="deviceId" :disabled="busy" aria-label="設備代號" class="import-preview-dialog__device-id" @change="clearPreview(); loadSettings()" />
             </label>
             <el-button :disabled="busy || !canWrite || !settings" @click="handleSaveSettings">儲存本校預設</el-button>
           </div>
@@ -638,20 +661,20 @@ defineExpose({
             :multiple="false"
             :disabled="busy || settingsLoading || !settings || !canWrite"
           >
-            <el-icon><span>⬆</span></el-icon>
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">
               拖曳或 <em>點擊上傳</em> Excel 或打卡鐘 txt 檔
             </div>
           </el-upload>
           <div v-if="!canWrite" class="import-preview-dialog__note">
-            您無 ATTENDANCE_WRITE 權限，僅可檢視
+            您沒有「出勤寫入」權限，僅可檢視
           </div>
           <div v-if="uploading" class="import-preview-dialog__uploading">
             解析預覽中…
           </div>
           <div v-if="legacyExcelFile" class="import-preview-dialog__legacy-row">
             <span class="import-preview-dialog__note">
-              「{{ legacyExcelFile.name }}」為 legacy 月統計格式，無逐列預覽。
+              「{{ legacyExcelFile.name }}」為舊版月統計格式，無逐列預覽。
             </span>
             <el-button
               v-if="canWrite"
@@ -660,7 +683,7 @@ defineExpose({
               :disabled="importing"
               @click="handleLegacyDirectImport"
             >
-              以 legacy 格式直接匯入
+              以舊版格式直接匯入
             </el-button>
           </div>
         </div>
@@ -804,7 +827,9 @@ defineExpose({
         <el-table-column label="日期" prop="date" width="110" />
         <el-table-column label="上班" prop="punch_in" width="80" />
         <el-table-column label="下班" prop="punch_out" width="80" />
-        <el-table-column label="狀態" prop="status" width="80" />
+        <el-table-column label="狀態" width="110">
+          <template #default="{ row }">{{ statusLabel(row.status) }}</template>
+        </el-table-column>
         <el-table-column label="檢核">
           <template #default="{ row }">
             <el-tag :type="CHECK_TAG_TYPE[row.check as PreviewRow['check']]">
@@ -859,9 +884,9 @@ defineExpose({
   display: flex;
   gap: 16px;
   padding: 10px 14px;
-  background: var(--el-fill-color-light, #f5f7fa);
+  background: var(--el-fill-color-light);
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--text-base);
   margin-top: 12px;
 }
 
@@ -870,15 +895,15 @@ defineExpose({
 }
 
 .banner-item--success {
-  color: var(--el-color-success, #67c23a);
+  color: var(--el-color-success);
 }
 
 .banner-item--danger {
-  color: var(--el-color-danger, #f56c6c);
+  color: var(--el-color-danger);
 }
 
 .banner-item--warning {
-  color: var(--el-color-warning, #e6a23c);
+  color: var(--el-color-warning);
 }
 
 .import-preview-dialog__confirm-row {
@@ -895,15 +920,15 @@ defineExpose({
 }
 
 .import-preview-dialog__note {
-  color: var(--el-text-color-secondary, #909399);
-  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
   margin: 0;
 }
 
 .import-preview-dialog__uploading {
   text-align: center;
-  color: var(--el-color-primary, #409eff);
-  font-size: 14px;
+  color: var(--el-color-primary);
+  font-size: var(--text-base);
 }
 
 .import-preview-dialog__legacy-row {
@@ -915,7 +940,7 @@ defineExpose({
 
 /* 問題列紅底 */
 :deep(.problem-row) {
-  background-color: var(--el-color-danger-light-9, #fef0f0);
+  background-color: var(--el-color-danger-light-9);
 }
 </style>
 
@@ -923,10 +948,13 @@ defineExpose({
 .import-preview-dialog__settings, .import-preview-dialog__mapping {
   display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-block: 8px;
 }
+.import-preview-dialog__field { display: inline-flex; align-items: center; gap: 8px; }
+.import-preview-dialog__format { width: 200px; }
+.import-preview-dialog__device-id { width: 160px; }
 .import-preview-dialog__device { padding: 12px; background: var(--el-fill-color-light); }
 .import-preview-dialog__device details { margin-block: 12px; }
 .import-preview-dialog__review-scroll { overflow-x: auto; max-height: 420px; }
-.import-preview-dialog__review-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.import-preview-dialog__review-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .import-preview-dialog__review-table th, .import-preview-dialog__review-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--el-border-color); vertical-align: top; }
 .import-preview-dialog__review-table thead { position: sticky; top: 0; background: var(--el-bg-color); }
 .import-preview-dialog__batch-confirm { padding: 12px; border: 1px solid var(--el-color-primary); border-radius: 4px; }

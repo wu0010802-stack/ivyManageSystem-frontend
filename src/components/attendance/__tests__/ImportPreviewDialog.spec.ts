@@ -101,7 +101,7 @@ const previewFixture = {
 
 // ── stubs ──────────────────────────────────────────────────────────────────────
 const ElDialog = {
-  props: ['modelValue', 'title'],
+  props: ['modelValue', 'title', 'width'],
   emits: ['update:modelValue'],
   template: `<div class="el-dialog-stub" v-if="modelValue"><slot /><slot name="footer" /></div>`,
 }
@@ -117,14 +117,40 @@ const ElTabPane = {
   template: `<div class="el-tab-pane-stub" :data-label="label"><slot /></div>`,
 }
 
+// 貼上頁籤是 type="textarea"；設備代號是單行 el-input（aria-label 由 prop 帶到 input，與真實 EP 一致）
 const ElInput = {
-  props: ['modelValue', 'type', 'rows', 'placeholder'],
-  emits: ['update:modelValue'],
+  props: ['modelValue', 'type', 'rows', 'placeholder', 'ariaLabel', 'disabled'],
+  emits: ['update:modelValue', 'change'],
   template: `<textarea
+    v-if="type === 'textarea'"
     class="el-input-stub"
     :value="modelValue ?? ''"
     @input="$emit('update:modelValue', $event.target.value)"
+  /><input
+    v-else
+    class="el-input-stub"
+    :value="modelValue ?? ''"
+    :aria-label="ariaLabel"
+    :disabled="disabled"
+    @input="$emit('update:modelValue', $event.target.value)"
+    @change="$emit('change', $event.target.value)"
   />`,
+}
+
+// 打卡格式是 el-select：stub 成原生 select，維持 setValue 驅動 update:modelValue／change 的測法
+const ElSelect = {
+  props: ['modelValue', 'disabled', 'ariaLabel'],
+  emits: ['update:modelValue', 'change'],
+  template: `<select
+    :aria-label="ariaLabel"
+    :value="modelValue"
+    :disabled="disabled"
+    @change="$emit('update:modelValue', $event.target.value); $emit('change', $event.target.value)"
+  ><slot /></select>`,
+}
+const ElOption = {
+  props: ['label', 'value'],
+  template: `<option :value="value">{{ label }}</option>`,
 }
 
 const ElButton = {
@@ -179,6 +205,8 @@ const stubs = {
   'el-tabs': ElTabs,
   'el-tab-pane': ElTabPane,
   'el-input': ElInput,
+  'el-select': ElSelect,
+  'el-option': ElOption,
   'el-button': ElButton,
   'el-table': ElTable,
   'el-table-column': ElTableColumn,
@@ -248,7 +276,7 @@ describe('ImportPreviewDialog', () => {
     mockPreviewImport.mockResolvedValue({ data: previewFixture })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('部門,員工編號,姓名,日期\nA,E001,王小明,2026-06-01')
     await nextTick()
 
@@ -268,7 +296,7 @@ describe('ImportPreviewDialog', () => {
     mockPreviewImport.mockResolvedValue({ data: previewFixture })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('raw csv text')
     await nextTick()
 
@@ -287,7 +315,7 @@ describe('ImportPreviewDialog', () => {
     mockPreviewImport.mockResolvedValue({ data: previewFixture })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('raw csv')
     await nextTick()
 
@@ -333,7 +361,7 @@ describe('ImportPreviewDialog', () => {
     mockUploadCsv.mockResolvedValue({ data: { message: '匯入完成' } })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -360,7 +388,7 @@ describe('ImportPreviewDialog', () => {
     mockUploadCsv.mockResolvedValue({ data: { message: '匯入完成', imported: 2 } })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -385,7 +413,7 @@ describe('ImportPreviewDialog', () => {
     mockUploadCsv.mockResolvedValue({ data: { message: '匯入完成' } })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -413,7 +441,7 @@ describe('ImportPreviewDialog', () => {
     })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -440,7 +468,7 @@ describe('ImportPreviewDialog', () => {
     mockPreviewImport.mockResolvedValue({ data: previewFixture })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -518,7 +546,7 @@ describe('ImportPreviewDialog', () => {
 
     const legacyBtn = wrapper
       .findAll('.el-button-stub')
-      .find((b) => b.text().includes('legacy 格式直接匯入'))
+      .find((b) => b.text().includes('舊版格式直接匯入'))
     expect(legacyBtn).toBeTruthy()
     await legacyBtn!.trigger('click')
     await nextTick()
@@ -545,7 +573,7 @@ describe('ImportPreviewDialog', () => {
     mockPreviewImport.mockRejectedValue(err)
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('bad data')
     await nextTick()
 
@@ -563,7 +591,7 @@ describe('ImportPreviewDialog', () => {
     mockUploadCsv.mockRejectedValue(err)
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -1333,7 +1361,7 @@ describe('ImportPreviewDialog 保護既有紀錄與 legacy 未對到姓名（QA 
   async function previewWith(summary: Record<string, number>) {
     mockPreviewImport.mockResolvedValue({ data: { ...previewFixture, summary } })
     const wrapper = mountDialog()
-    await wrapper.find('.el-input-stub').setValue('raw csv text')
+    await wrapper.find('textarea.el-input-stub').setValue('raw csv text')
     await nextTick()
     await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('預覽核對'))!.trigger('click')
     await flushPromises()
@@ -1354,7 +1382,7 @@ describe('ImportPreviewDialog 保護既有紀錄與 legacy 未對到姓名（QA 
     const wrapper = mountDialog()
     await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: mockFile })
     await nextTick()
-    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('legacy 格式直接匯入'))!.trigger('click')
+    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('舊版格式直接匯入'))!.trigger('click')
     await flushPromises()
     expect(mockElMessageWarning).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('王小明、李小花'), duration: 0 }))
   })
@@ -1366,9 +1394,91 @@ describe('ImportPreviewDialog 保護既有紀錄與 legacy 未對到姓名（QA 
     const wrapper = mountDialog()
     await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: mockFile })
     await nextTick()
-    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('legacy 格式直接匯入'))!.trigger('click')
+    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('舊版格式直接匯入'))!.trigger('click')
     await flushPromises()
     expect(mockElMessageWarning).toHaveBeenCalledWith(expect.objectContaining({ message: '1 列未匯入：第 3 列時間格式錯誤', duration: 0 }))
     expect(mockElMessageWarning).not.toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('姓名未對到') }))
+  })
+})
+
+// 2026-10 排班與出勤 UI 收斂：畫面文字白話化、寬度走常數、打卡格式／設備代號改 Element Plus 元件。
+describe('ImportPreviewDialog UI 收斂', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  it('對話框寬度用 FORM_DIALOG_WIDTH.standard，不再手寫 860px', () => {
+    const wrapper = mountDialog()
+    expect(wrapper.findComponent(ElDialog).props('width')).toBe('860px')
+  })
+
+  it('打卡格式是 el-select（四個選項），設備代號是 el-input；沒有原生 select／input 的設定列', () => {
+    const wrapper = mountDialog()
+    const select = wrapper.findComponent(ElSelect)
+    expect(select.exists()).toBe(true)
+    expect(select.props('ariaLabel')).toBe('打卡格式')
+    expect(wrapper.findAllComponents(ElOption).map((o) => o.text())).toEqual([
+      '自動辨識', '每日上下班欄位', '逐筆刷卡', '打卡鐘報表（txt）',
+    ])
+    const device = wrapper.findAllComponents(ElInput).find((c) => c.props('ariaLabel') === '設備代號')
+    expect(device).toBeTruthy()
+    expect(wrapper.find('.el-icon-stub').text()).not.toContain('⬆')
+    expect(wrapper.find('.el-icon-stub svg').exists()).toBe(true)
+  })
+
+  it('沒有出勤寫入權限：用中文權限名，不露出權限碼', () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mountDialog()
+    expect(wrapper.text()).toContain('您沒有「出勤寫入」權限，僅可檢視')
+    expect(wrapper.text()).not.toContain('ATTENDANCE_WRITE')
+  })
+
+  it('舊版月統計格式：提示與退路按鈕都不出現 legacy', async () => {
+    const mockFile = new File(['data'], 'old.xls', { type: 'application/vnd.ms-excel' })
+    mockPreviewExcel.mockRejectedValue({ response: { data: { detail: '此檔非新格式考勤表…legacy 月統計格式請走原 Excel 匯入' } } })
+    const wrapper = mountDialog()
+    await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: mockFile })
+    await nextTick()
+    expect(wrapper.text()).toContain('「old.xls」為舊版月統計格式，無逐列預覽。')
+    expect(wrapper.text()).toContain('以舊版格式直接匯入')
+    expect(wrapper.text()).not.toMatch(/legacy/i)
+    expect(mockElMessageWarning).toHaveBeenCalledWith('此檔為舊版月統計格式，無法逐列預覽；可改用直接匯入')
+  })
+
+  it('預覽列「狀態」的後端代碼轉白話（含 + 串接與未知代碼）', () => {
+    const wrapper = mountDialog()
+    const { statusLabel } = wrapper.vm as unknown as { statusLabel: (s: string | null | undefined) => string }
+    expect(statusLabel('normal')).toBe('正常')
+    expect(statusLabel('late')).toBe('遲到')
+    expect(statusLabel('early_leave')).toBe('早退')
+    expect(statusLabel('late+early_leave')).toBe('遲到、早退')
+    expect(statusLabel('late+missing_out')).toBe('遲到、缺下班卡')
+    expect(statusLabel('missing')).toBe('缺卡')
+    expect(statusLabel('something_new')).toBe('something_new')
+    expect(statusLabel(null)).toBe('')
+  })
+
+  it('下載問題清單：「問題類型」欄是中文檢核標籤，不是英文代碼', async () => {
+    mockPreviewExcel.mockResolvedValueOnce({ data: previewFixture })
+    const createUrl = vi.fn(() => 'blob:problems')
+    const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL }
+    URL.createObjectURL = createUrl
+    URL.revokeObjectURL = vi.fn()
+    try {
+      const wrapper = mountDialog()
+      await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: new File(['t'], 'p.xlsx') })
+      await nextTick()
+      await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('下載問題清單'))!.trigger('click')
+      const blob = createUrl.mock.calls[0]?.[0] as unknown as Blob
+      const csv = await blob.text()
+      expect(csv).toContain('找不到員工')
+      expect(csv).toContain('日期無效')
+      expect(csv).not.toContain('employee_not_found')
+      expect(csv).not.toContain('invalid_date')
+    } finally {
+      URL.createObjectURL = original.create
+      URL.revokeObjectURL = original.revoke
+    }
   })
 })

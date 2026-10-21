@@ -126,12 +126,12 @@ function onToggle(blockId: string, event: Event) {
 <style scoped>
 .clock-block-review { margin-block: 12px; padding: 12px; border: 1px solid var(--el-color-warning); border-radius: 4px; }
 .clock-block-review h4 { margin: 0 0 6px; }
-.clock-block-review__note { margin: 0 0 8px; color: var(--el-text-color-secondary, #909399); font-size: 13px; }
+.clock-block-review__note { margin: 0 0 8px; color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .clock-block-review__block { margin-block: 12px; padding-block-end: 12px; border-bottom: 1px solid var(--el-border-color); }
 .clock-block-review__block header { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-block-end: 6px; }
-.clock-block-review__raw { overflow-x: auto; margin: 0 0 8px; padding: 8px; background: var(--el-fill-color-light); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; }
-.clock-block-review__table { border-collapse: collapse; margin-block-end: 8px; font-size: 13px; }
+.clock-block-review__raw { overflow-x: auto; margin: 0 0 8px; padding: 8px; background: var(--el-fill-color-light); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-xs); line-height: 1.5; }
+.clock-block-review__table { border-collapse: collapse; margin-block-end: 8px; font-size: var(--text-sm); }
 .clock-block-review__table th, .clock-block-review__table td { padding: 4px 12px; text-align: left; border-bottom: 1px solid var(--el-border-color); }
-.clock-block-review__table caption { text-align: left; font-size: 12px; color: var(--el-text-color-secondary, #909399); }
-.clock-block-review__moved { margin-inline-start: 6px; color: var(--el-color-warning); font-size: 12px; }
+.clock-block-review__table caption { text-align: left; font-size: var(--text-xs); color: var(--el-text-color-secondary); }
+.clock-block-review__moved { margin-inline-start: 6px; color: var(--el-color-warning); font-size: var(--text-xs); }
 </style>

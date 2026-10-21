@@ -158,9 +158,9 @@ async function onFileChange(event: Event) {
 .payroll-comparison { display: flex; flex-direction: column; gap: 12px; }
 .payroll-comparison p { margin: 0; }
 .payroll-comparison__check { display: flex; gap: 8px; align-items: flex-start; }
-.payroll-comparison__hint { color: var(--el-text-color-secondary); font-size: 13px; }
+.payroll-comparison__hint { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .payroll-comparison__row { padding-block: 16px; border-top: 1px solid var(--el-border-color); }
-.payroll-comparison__row h3 { font-size: 16px; margin: 0 0 8px; }
+.payroll-comparison__row h3 { font-size: var(--text-lg); margin: 0 0 8px; }
 .payroll-comparison__row p, .payroll-comparison__row details { margin-block: 8px; }
 .payroll-comparison__table { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; margin-block: 12px; }

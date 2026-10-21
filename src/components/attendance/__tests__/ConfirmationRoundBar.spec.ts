@@ -56,6 +56,14 @@ const stubs = {
   teleport: true,
   ElDialog: { name: 'ElDialog', props: ['modelValue'], template: '<section v-if="modelValue" role="dialog"><slot /><slot name="footer" /></section>' },
   ElDrawer: { name: 'ElDrawer', props: ['modelValue'], template: '<aside v-if="modelValue"><slot /></aside>' },
+  ElDropdown: { name: 'ElDropdown', template: '<div class="dropdown-stub"><slot /><slot name="dropdown" /></div>' },
+  ElDropdownMenu: { name: 'ElDropdownMenu', template: '<ul><slot /></ul>' },
+  ElDropdownItem: {
+    name: 'ElDropdownItem',
+    props: ['disabled'],
+    emits: ['click'],
+    template: '<li class="el-dropdown-menu__item" :class="{ \'is-disabled\': disabled }" @click="!disabled && $emit(\'click\')"><slot /></li>',
+  },
 }
 
 function mountBar() {
@@ -64,6 +72,10 @@ function mountBar() {
     global: { plugins: [ElementPlus], stubs },
   })
 }
+
+// 「關閉輪次」收在「更多」選單（el-dropdown 的 popper 在 happy-dom 下不渲染內容，與 ElDialog／ElDrawer 一樣 stub 掉，
+// 只驗本元件的接線：項目 disabled 綁定與 click 導到 closeRound）
+const closeItem = () => wrapper.get('[data-test="close-round"]')
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -93,7 +105,7 @@ describe('ConfirmationRoundBar', () => {
     api.create.mockResolvedValueOnce({ data: { round: ROUND, items: [ITEM], eligible_count: 2 } })
     api.list.mockResolvedValue({ data: [ROUND] })
     api.get.mockResolvedValue({ data: PROGRESS })
-    await wrapper.get('[data-test="release"]').trigger('click')
+    await wrapper.get('[data-test="form-dialog-submit"]').trigger('click')
     await flushPromises()
     expect(api.create).toHaveBeenLastCalledWith(expect.objectContaining({ dry_run: false }))
     expect(wrapper.get('[data-test="round-summary"]').text()).toContain('確認輪次 #7')
@@ -108,7 +120,7 @@ describe('ConfirmationRoundBar', () => {
     await wrapper.get('[data-test="preview"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-test="draft"]').exists()).toBe(true)
-    expect(wrapper.get('[data-test="release"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-test="form-dialog-submit"]').attributes('disabled')).toBeUndefined()
 
     // 改動表單其中一欄（用真實 ElDatePicker 驅動 v-model，而非直改元件內部 state）；
     // 預覽後改表單卻沒重新預覽，發送不可再送出剛才預覽以外的內容。
@@ -117,7 +129,7 @@ describe('ConfirmationRoundBar', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-test="draft"]').exists()).toBe(false)
-    expect(wrapper.get('[data-test="release"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="form-dialog-submit"]').attributes('disabled')).toBeDefined()
     expect(api.create).not.toHaveBeenCalledWith(expect.objectContaining({ dry_run: false }))
   })
 
@@ -218,7 +230,7 @@ describe('ConfirmationRoundBar', () => {
     await flushPromises()
     api.list.mockResolvedValue({ data: [{ ...ROUND, deadline_date: '2026-10-10' }] })
     api.get.mockResolvedValue({ data: { ...PROGRESS, round: { ...ROUND, deadline_date: '2026-10-10' } } })
-    await wrapper.get('[data-test="save-deadline"]').trigger('click')
+    await wrapper.get('[data-test="form-dialog-submit"]').trigger('click')
     await flushPromises()
     expect(api.update).toHaveBeenCalledWith(7, { deadline_date: '2026-10-10' })
   })
@@ -232,7 +244,7 @@ describe('ConfirmationRoundBar', () => {
     api.close.mockResolvedValueOnce({ data: { round: { ...ROUND, status: 'closed' }, superseded: 2 } })
     mountBar()
     await flushPromises()
-    await wrapper.get('[data-test="close-round"]').trigger('click')
+    await closeItem().trigger('click')
     await flushPromises()
     expect(confirmSpy).toHaveBeenCalled()
     const message = confirmSpy.mock.calls[0][0] as string
@@ -248,7 +260,7 @@ describe('ConfirmationRoundBar', () => {
     const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
     mountBar()
     await flushPromises()
-    await wrapper.get('[data-test="close-round"]').trigger('click')
+    await closeItem().trigger('click')
     await flushPromises()
     const message = confirmSpy.mock.calls[0][0] as string
     expect(message).toContain('雙方已確認未套用 1')
@@ -263,7 +275,7 @@ describe('ConfirmationRoundBar', () => {
     const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
     mountBar()
     await flushPromises()
-    await wrapper.get('[data-test="close-round"]').trigger('click')
+    await closeItem().trigger('click')
     await flushPromises()
     const message = confirmSpy.mock.calls[0][0] as string
     expect(message).toContain('雙方已確認未套用 0')
@@ -277,7 +289,7 @@ describe('ConfirmationRoundBar', () => {
     mountBar()
     await flushPromises()
     expect(wrapper.get('[data-test="round-summary"]').text()).toContain('確認輪次 #7')
-    expect(wrapper.get('[data-test="close-round"]').attributes('disabled')).toBeDefined()
+    expect(closeItem().classes()).toContain('is-disabled')
   })
 
   it('disables closing when only a previous round\'s detail is on hand', async () => {
@@ -286,13 +298,13 @@ describe('ConfirmationRoundBar', () => {
     api.get.mockResolvedValue({ data: PROGRESS })
     mountBar()
     await flushPromises()
-    expect(wrapper.get('[data-test="close-round"]').attributes('disabled')).toBeUndefined()
+    expect(closeItem().classes()).not.toContain('is-disabled')
     api.list.mockResolvedValue({ data: [{ ...ROUND, id: 8, period_start: '2026-10-01', period_end: '2026-10-31' }] })
     api.get.mockRejectedValue(new Error('network'))
     await wrapper.setProps({ start: '2026-10-01', end: '2026-10-31' })
     await flushPromises()
     expect(wrapper.get('[data-test="round-summary"]').text()).toContain('確認輪次 #8')
-    expect(wrapper.get('[data-test="close-round"]').attributes('disabled')).toBeDefined()
+    expect(closeItem().classes()).toContain('is-disabled')
   })
 
   it('dismisses an item', async () => {
@@ -476,5 +488,110 @@ describe('ConfirmationRoundBar 老師自行補登區塊', () => {
     await flushPromises()
     expect(wrapper.find('[data-test="backdated-item-41"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="backdated-item-40"]').exists()).toBe(false)
+  })
+})
+
+// 2026-10 排班與出勤 UI 收斂：按鈕命名、破壞性動作位置、表單 dialog 改 FormDialog。
+describe('ConfirmationRoundBar UI 收斂', () => {
+  it('「進度」鈕改名為說明性的「老師回覆狀況」，抽屜標題同名', async () => {
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS })
+    mountBar()
+    await flushPromises()
+    const btn = wrapper.get('[data-test="open-progress"]')
+    expect(btn.text()).toBe('老師回覆狀況')
+    expect(wrapper.text()).not.toMatch(/(^|\s)進度(\s|$)/)
+    await btn.trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'ElDrawer' }).attributes('title')).toBe('老師回覆狀況')
+  })
+
+  it('「關閉輪次」不與常用鈕並排：動作列沒有 danger 鈕，項目收在「更多」選單裡', async () => {
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS })
+    mountBar()
+    await flushPromises()
+    const actions = wrapper.get('.confirm-bar__actions')
+    expect(actions.findAll('button.el-button--danger')).toHaveLength(0)
+    expect(actions.find('button[data-test="close-round"]').exists()).toBe(false)
+    expect(actions.get('[data-test="more-actions"]').text()).toContain('更多')
+    const item = actions.get('.dropdown-stub [data-test="close-round"]')
+    expect(item.element.tagName).toBe('LI')
+    expect(item.text()).toBe('關閉輪次')
+  })
+
+  it('關閉輪次的確認框保留，且確認鈕是 danger', async () => {
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS })
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mountBar()
+    await flushPromises()
+    await closeItem().trigger('click')
+    await flushPromises()
+    const options = confirmSpy.mock.calls[0][2] as { confirmButtonText: string; confirmButtonClass: string }
+    expect(options.confirmButtonText).toBe('關閉輪次')
+    expect(options.confirmButtonClass).toContain('el-button--danger')
+    expect(api.close).not.toHaveBeenCalled()
+  })
+
+  it('已關閉的輪次沒有「更多」選單', async () => {
+    const closedRound = { ...ROUND, status: 'closed' }
+    api.list.mockResolvedValue({ data: [closedRound] })
+    api.get.mockResolvedValue({ data: { ...PROGRESS, round: closedRound } })
+    mountBar()
+    await flushPromises()
+    expect(wrapper.find('[data-test="more-actions"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="close-round"]').exists()).toBe(false)
+  })
+
+  it('「發給老師確認」是 FormDialog standardNarrow：取消／預覽／發送，發送在預覽前停用', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="open-create"]').trigger('click')
+    const dialog = wrapper.get('.ivy-form-dialog--standardNarrow')
+    expect(dialog.attributes('title')).toBe('發給老師確認')
+    expect(dialog.get('[data-test="form-dialog-cancel"]').text()).toBe('取消')
+    expect(dialog.get('[data-test="preview"]').text()).toBe('預覽')
+    expect(dialog.get('[data-test="form-dialog-submit"]').text()).toBe('發送')
+    expect(dialog.get('[data-test="form-dialog-submit"]').attributes('disabled')).toBeDefined()
+    expect(dialog.find('form.el-form').classes()).toContain('el-form--label-top')
+  })
+
+  it('「發給老師確認」改過日期才算 dirty：沒動直接關；動過先詢問捨棄', async () => {
+    api.list.mockResolvedValue({ data: [] })
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="open-create"]').trigger('click')
+    await wrapper.get('[data-test="form-dialog-cancel"]').trigger('click')
+    await flushPromises()
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(wrapper.find('.ivy-form-dialog--standardNarrow').exists()).toBe(false)
+
+    await wrapper.get('[data-test="open-create"]').trigger('click')
+    await wrapper.findAllComponents({ name: 'ElDatePicker' })[0].vm.$emit('update:modelValue', '2026-09-02')
+    await flushPromises()
+    await wrapper.get('[data-test="form-dialog-cancel"]').trigger('click')
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.ivy-form-dialog--standardNarrow').exists()).toBe(true)
+  })
+
+  it('「改期限」是 FormDialog compact，主鈕「儲存」；沒改日期關閉不詢問', async () => {
+    api.list.mockResolvedValue({ data: [ROUND] })
+    api.get.mockResolvedValue({ data: PROGRESS })
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mountBar()
+    await flushPromises()
+    await wrapper.get('[data-test="open-deadline"]').trigger('click')
+    const dialog = wrapper.get('.ivy-form-dialog--compact')
+    expect(dialog.attributes('title')).toBe('改期限')
+    expect(dialog.get('[data-test="form-dialog-submit"]').text()).toBe('儲存')
+    expect(dialog.text()).toContain('更多 › 關閉輪次')
+    await dialog.get('[data-test="form-dialog-cancel"]').trigger('click')
+    await flushPromises()
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(wrapper.find('.ivy-form-dialog--compact').exists()).toBe(false)
   })
 })
