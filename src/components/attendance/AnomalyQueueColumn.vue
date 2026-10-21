@@ -157,6 +157,7 @@ import { batchConfirmAnomalies } from '@/api/attendance'
 import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
+import { useGridVerdict } from '@/composables/useGridVerdict'
 
 const props = defineProps<{
   items: AnomalyDayCard[]
@@ -324,6 +325,28 @@ function clearSelection(): void {
   batchRemark.value = ''
 }
 
+/**
+ * 批次接受扣款前把班表核對看得到的風險寫進確認文字（單筆在 ResolveCard 會另外問，批次不能繞過）：
+ * 整月同型態＝多半是設定問題、會照錯的時段扣薪；疑似換班＝該先確認當日班別。
+ */
+const verdictOf = useGridVerdict()
+function batchAcceptRisk(ids: number[]): string {
+  const chosen = new Set(ids)
+  let pattern = 0
+  let shift = 0
+  for (const card of props.items) {
+    if (!chosen.has(card.id)) continue
+    const verdict = verdictOf.value(null, card.date, card.employee_number)
+    if (verdict?.acceptWarning) pattern += 1
+    else if (verdict?.status === 'possible_shift_change') shift += 1
+  }
+  const parts = [
+    pattern ? `${pattern} 筆是整月同型態（多半是設定問題，會照目前的應上班時段扣薪）` : '',
+    shift ? `${shift} 筆班表核對判定為疑似換班（應先確認當日班別）` : '',
+  ].filter(Boolean)
+  return parts.length ? `注意：其中 ${parts.join('、')}。` : ''
+}
+
 async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promise<void> {
   if (batchBusy.value) return
   const ids = [...selectedIds]
@@ -335,7 +358,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 
   try {
     await ElMessageBox.confirm(
-      `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？此操作套用選取日期的整日異常。${action === 'admin_accept' ? '接受扣款仍依原規則計算扣款，並非豁免。' : ''}`,
+      `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？此操作套用選取日期的整日異常。${action === 'admin_accept' ? `接受扣款仍依原規則計算扣款，並非豁免。${batchAcceptRisk(ids)}` : ''}`,
       '批次處理',
       { type: 'warning', confirmButtonText: '確認', cancelButtonText: '取消' },
     )

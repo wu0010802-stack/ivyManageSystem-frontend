@@ -18,7 +18,8 @@ export interface GridVerdict {
   acceptWarning: string | null
 }
 
-export type GridVerdictLookup = (employeeId: number | null, date: string) => GridVerdict | null
+/** employeeId 為 null 時可改用員工編號（異常清單的日卡只有編號） */
+export type GridVerdictLookup = (employeeId: number | null, date: string, employeeNumber?: string | null) => GridVerdict | null
 
 /**
  * 出勤明細說不出來的判定：明細只看出勤紀錄（遲到／早退／缺卡），這幾種要看班表才知道。
@@ -39,7 +40,9 @@ export function buildGridVerdictLookup(month: MonthGridState): ComputedRef<GridV
     const patterns = month.patterns.value
     const patternKeys = patternCellKeys(patterns)
     const uncovered = grid ? uncoveredDates(grid.days) : new Set<string>()
-    return (employeeId, date) => {
+    const idByNumber = new Map((grid?.employees ?? []).filter((e) => e.employee_number).map((e) => [e.employee_number!, e.employee_id]))
+    return (employeeIdArg, date, employeeNumber) => {
+      const employeeId = employeeIdArg ?? (employeeNumber ? idByNumber.get(employeeNumber) ?? null : null)
       if (!grid || employeeId == null) return null
       const cell = cells.get(cellKey(employeeId, date))
       if (!cell?.actual) return null

@@ -405,6 +405,8 @@ describe('DetailColumn — 並列班表核對的判定（第五輪審查）', ()
     expect(note.text()).toContain('不要在這裡接受扣款')
     await note.get('[data-test="detail-open-grid"]').trigger('click')
     expect(w.emitted('openGrid')![0]).toEqual([99, anomalyItem.date])
+    // 卡片的接受扣款也先問（文字提醒之外，一鍵送出擋一下）
+    expect(w.findComponent(ResolveCardStub).props('acceptWarning')).toContain('現在接受扣款會照原班別扣薪')
   })
 
   it('遲到早退兩邊說的是同一件事：不重複寫；符合型態的格子把接受扣款前的提醒交給卡片', () => {

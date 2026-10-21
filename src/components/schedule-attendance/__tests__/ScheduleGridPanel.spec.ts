@@ -160,6 +160,25 @@ describe('ScheduleGridPanel', () => {
     expect(wrapper.emitted('records')).toEqual([[2, WEEK[0]]])
   })
 
+  it('深連結只開一次：開過就通知頁面清掉網址的 emp；之後再帶同一格（出勤明細再按一次）會重開', async () => {
+    const wrapper = mountPanel({ focusEmployeeId: 2, focusDate: WEEK[0] })
+    await flushPromises()
+    expect(wrapper.emitted('focus-handled')).toHaveLength(1)
+    const drawer = wrapper.findComponent(DrawerStub)
+    drawer.vm.$emit('update:modelValue', false)
+    // 頁面清掉 emp → 面板收到 null；換週不會再自己開
+    await wrapper.setProps({ focusEmployeeId: null, focusDate: null })
+    await wrapper.setProps({ date: WEEK[2] })
+    await flushPromises()
+    expect(drawer.props('modelValue')).toBe(false)
+    expect(wrapper.emitted('focus-handled')).toHaveLength(1)
+    // 同一格再帶一次（出勤明細第二次按「到班表核對處理」）
+    await wrapper.setProps({ focusEmployeeId: 2, focusDate: WEEK[0] })
+    await flushPromises()
+    expect(drawer.props('modelValue')).toBe(true)
+    expect(wrapper.emitted('focus-handled')).toHaveLength(2)
+  })
+
   it('抽屜「看他整月」先關抽屜再往上轉（append-to-body 抽屜不關會蓋住切換後的明細頁籤）', async () => {
     const wrapper = mountPanel()
     await flushPromises()

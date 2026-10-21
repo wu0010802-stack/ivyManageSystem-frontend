@@ -235,6 +235,8 @@ const emit = defineEmits<{
   'show-patterns': []
   /** 開重算本月出勤（抽屜的型態提醒） */
   recalculate: []
+  /** 深連結（focusEmployeeId／focusDate）已開過抽屜：頁面據此把網址的 emp 拿掉，之後換週不會再自己彈開 */
+  'focus-handled': []
 }>()
 
 const { isMobile } = useIsMobile()
@@ -562,6 +564,7 @@ function tryFocus(): void {
     // 月模式的抽屜也要該格那週的週排班（來源層與說明），走點格同一條路徑
     if (isMonth.value) void openMonthCell(props.focusEmployeeId, props.focusDate)
     else openCell(props.focusEmployeeId, props.focusDate)
+    emit('focus-handled')
   }
 }
 watch(gridData, tryFocus)

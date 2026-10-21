@@ -22,6 +22,10 @@ describe('buildGridVerdictLookup（出勤明細借用班表核對的判定）', 
     expect(lookup(1, '2026-09-14')).toMatchObject({ label: '疑似換班', status: 'possible_shift_change', acceptWarning: null })
     expect(lookup(1, '2026-09-15')).toBeNull()
     expect(lookup(null, '2026-09-14')).toBeNull()
+    // 異常清單的日卡只有員工編號
+    const g2 = grid({ days: [day('2026-09-14')], employees: [employee(1, '呂麗珍', { employee_number: 'E007' })], today: '2026-09-21', cells: [cell(1, '2026-09-14', { actual: { status: 'possible_shift_change' } })] })
+    expect(buildGridVerdictLookup(monthOf(g2)).value(null, '2026-09-14', 'E007')?.status).toBe('possible_shift_change')
+    expect(buildGridVerdictLookup(monthOf(g2)).value(null, '2026-09-14', 'E999')).toBeNull()
     expect(buildGridVerdictLookup(monthOf(null)).value(1, '2026-09-14')).toBeNull()
   })
 

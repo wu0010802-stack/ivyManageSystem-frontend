@@ -397,7 +397,8 @@ describe('ResolveCard — 只有缺卡的日子與設定問題提醒（第五輪
     const accept = w.find('[data-test="resolve-accept"]')
     expect(accept.text()).toBe('確認缺卡')
     expect(w.text()).not.toContain('接受扣款')
-    expect(w.find('[data-test="resolve-whole-day-hint"]').text()).toContain('缺卡不扣薪，但會記入本月缺卡次數')
+    // 豁免只影響本月薪資：年終缺卡照扣（業主 2026-07-02 裁示）、考核也照次計
+    expect(w.find('[data-test="resolve-whole-day-hint"]').text()).toContain('豁免只讓本月薪資不記入，年終與考核仍照次計')
     await accept.trigger('click')
     await nextTick()
     expect(w.emitted('resolve')![0][0]).toEqual({ action: 'admin_accept', doneText: '已確認缺卡' })

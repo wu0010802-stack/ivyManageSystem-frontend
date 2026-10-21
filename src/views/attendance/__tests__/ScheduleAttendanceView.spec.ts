@@ -107,7 +107,7 @@ const AttendanceMonthStatsStub = {
 const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
   props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision', 'view', 'month', 'headerHasMonth'],
-  emits: ['records', 'import', 'import-punches', 'changed', 'update:date', 'update:filter', 'update:view', 'show-patterns', 'recalculate'],
+  emits: ['records', 'import', 'import-punches', 'changed', 'update:date', 'update:filter', 'update:view', 'show-patterns', 'recalculate', 'focus-handled'],
   methods: { confirmWeekChange: (date: string) => panelConfirmWeekChange(date) },
   template: '<div class="grid-panel-stub" />',
 }
@@ -1248,5 +1248,56 @@ describe('第五輪審查：預設月份、頁首範圍、兩頁籤互通', () =
     await flushPromises()
     expect(wrapper.get('[data-test="records-scope-note"]').text()).toContain('班表核對本月 435 格待處理中，有打卡紀錄的遲到、早退、缺卡在這裡處理')
     wrapper.unmount()
+  })
+})
+
+describe('第五輪審查修正（獨立審查 F1／F4／F5）', () => {
+  beforeEach(() => {
+    routerReplace.mockReset()
+    workingMonth.mockReset()
+    mockHasPermission.mockReturnValue(true)
+    getSummaryMock.mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+  })
+
+  it('面板開過深連結抽屜後，頁面把網址的 emp 拿掉（之後換週不會再自己彈開）', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'grid', date: '2026-09-03', emp: 2 }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(ScheduleGridPanelStub).vm.$emit('focus-handled')
+    await flushPromises()
+    const last = routerReplace.mock.calls.at(-1)![0] as { query: Record<string, string> }
+    expect(last.query).not.toHaveProperty('emp')
+    wrapper.unmount()
+  })
+
+  it('出勤明細預設看的人在處理完他的待處理後不會換成別人（換月才重選）', async () => {
+    // 李小花月統計異常較多（排序在前）但沒有待處理；王小明有 1 筆待處理 → 分組後王小明是第一位
+    const roster = [sampleRoster[0], { ...sampleRoster[1], late_count: 3 }]
+    getSummaryMock.mockResolvedValue({ data: roster })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [sampleAnomalies[0]], pending: 1, total: 1, confirmed: 0 } })
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'records', date: '2026-06-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    // 王小明（E001）有 1 筆待處理 → 畫面第一位、預設看他
+    expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(1)
+    // 處理完：他的待處理變 0，名冊把他移到「無待處理」；預設的人不跟著換
+    getAnomalyListMock.mockResolvedValue({ data: { items: [{ ...sampleAnomalies[0], confirmed_action: 'admin_accept' }], pending: 0, total: 1, confirmed: 1 } })
+    getSummaryMock.mockResolvedValue({ data: roster.map((r) => ({ ...r })) })
+    wrapper.findComponent(DetailColumnStub).vm.$emit('resolved')
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(1)
+    wrapper.unmount()
+  })
+
+  it('預設月份的回應在離開頁面後才到：不改網址、不提示', async () => {
+    let resolve!: (v: unknown) => void
+    workingMonth.mockReturnValue(new Promise((r) => { resolve = r }))
+    const wrapper = mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.unmount()
+    routerReplace.mockClear()
+    resolve({ data: { year: 2026, month: 9, previous_unsettled: true } })
+    await flushPromises()
+    expect(routerReplace).not.toHaveBeenCalled()
   })
 })

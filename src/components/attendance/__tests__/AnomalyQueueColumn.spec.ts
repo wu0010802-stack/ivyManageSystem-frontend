@@ -31,6 +31,8 @@ vi.mock('element-plus', () => ({
 
 import { ElMessage } from 'element-plus'
 import AnomalyQueueColumn from '../AnomalyQueueColumn.vue'
+import { computed } from 'vue'
+import { GRID_VERDICT_KEY, type GridVerdictLookup } from '@/composables/useGridVerdict'
 
 // ── fixture data（P1-4：一天一張卡）────────────────────────────────────────────
 const cardLate: AnomalyDayCard = {
@@ -585,5 +587,37 @@ describe('AnomalyQueueColumn — 鍵盤操作（listbox / roving tabindex）', (
       expect(dot.attributes('aria-label')).toBe('未處理')
     }
     wrapper.unmount()
+  })
+})
+
+describe('批次接受扣款也寫出班表核對看得到的風險（獨立審查 F6）', () => {
+  beforeEach(() => {
+    mockConfirm.mockReset()
+    mockConfirm.mockResolvedValue('confirm')
+  })
+
+  it('選取裡有整月同型態或疑似換班的日卡：確認文字寫出筆數；豁免不寫', async () => {
+    const lookup: GridVerdictLookup = (_id, date, number) => {
+      if (number === 'E002' && date === cardLate.date) return { label: '遲到 57 分', status: 'anomaly', acceptWarning: '設定問題' }
+      if (number === 'E003' && date === cardMulti.date) return { label: '疑似換班', status: 'possible_shift_change', acceptWarning: null }
+      return null
+    }
+    const mountWithVerdict = () => mount(AnomalyQueueColumn, {
+      props: { items: defaultItems, selectedIndex: -1, loading: false },
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } }, provide: { [GRID_VERDICT_KEY as symbol]: computed(() => lookup) } },
+    })
+    const clickBatch = async (label: string) => {
+      const wrapper = mountWithVerdict()
+      const boxes = wrapper.findAll('.anomaly-item__checkbox-wrap input[type="checkbox"]')
+      await boxes[0].setValue(true)
+      await boxes[1].setValue(true)
+      await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes(label))!.trigger('click')
+      await flushPromises()
+      return mockConfirm.mock.calls.at(-1)![0] as string
+    }
+    const accept = await clickBatch('批次接受扣款')
+    expect(accept).toContain('1 筆是整月同型態')
+    expect(accept).toContain('1 筆班表核對判定為疑似換班')
+    expect(await clickBatch('批次豁免')).not.toContain('整月同型態')
   })
 })

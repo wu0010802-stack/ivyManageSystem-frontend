@@ -18,7 +18,7 @@
           :total="anomalyTotal"
           :context="context"
           :busy="resolving"
-          :accept-warning="gridVerdict?.acceptWarning ?? null"
+          :accept-warning="acceptWarning"
           @resolve="onResolve"
           @navigate="(d: number) => emit('navigate', d)"
           @retry="emit('retryRecords')"
@@ -94,6 +94,15 @@ const emit = defineEmits<{
 const verdictOf = useGridVerdict()
 /** 這張卡那天在班表核對的判定（頁面整月格子提供；月份不同或還沒載到＝null） */
 const gridVerdict = computed(() => (props.anomaly && props.employeeId != null ? verdictOf.value(props.employeeId, props.anomaly.date) : null))
+/** 接受扣款前的提醒：設定問題格用型態那句；疑似換班的日子在這裡只看得到遲到，接受下去就扣錯了 */
+const acceptWarning = computed(() => {
+  const verdict = gridVerdict.value
+  if (!verdict) return null
+  if (verdict.acceptWarning) return verdict.acceptWarning
+  return verdict.status === 'possible_shift_change'
+    ? `班表核對判定這天是「${verdict.label}」。若是換了班，應先到班表核對確認當日班別，遲到早退會照新班別重算；現在接受扣款會照原班別扣薪。`
+    : null
+})
 
 // ── 處理動作（與排班與出勤抽屜共用 useResolveAnomaly）──────────────────────────
 // 成功後不在此 emit navigate：容器 refresh 後依 attendance id 停在剛處理的那筆（清單保留已處理的日卡、

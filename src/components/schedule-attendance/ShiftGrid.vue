@@ -415,6 +415,8 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 /* 本月型態註記：整月同一種情形多半是設定問題，列首提示，細節在本月進度的設定檢查 */
 .shift-grid__note { padding: 0; border: 0; background: transparent; font: inherit; color: var(--color-warning-darker); font-size: var(--text-xs); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .shift-grid__note:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+/* 手機卡片裡的註記在整張卡的按鈕內（不能再包按鈕）：不畫成連結樣子 */
+.shift-grid__card-main .shift-grid__note { text-decoration: none; cursor: inherit; }
 .shift-grid__weekly { margin-top: var(--space-1); width: 100%; }
 .shift-grid__unsaved { display: inline-block; margin-top: var(--space-1); padding: 0 var(--space-1); border: 1px dashed var(--el-color-primary); border-radius: var(--radius-sm); color: var(--el-color-primary); font-size: var(--text-xs); font-weight: 600; }
 .shift-grid__cell {

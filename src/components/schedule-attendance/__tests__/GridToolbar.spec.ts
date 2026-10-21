@@ -72,6 +72,8 @@ describe('GridToolbar', () => {
     expect(none.find('[data-test="toolbar-save"]').exists()).toBe(false)
     expect(none.find('[data-test="toolbar-schedule"]').exists()).toBe(true)
     expect(mountToolbar({ compact: true }).find('[data-test="toolbar-schedule"]').exists()).toBe(false)
+    // 手機列上仍能改本週班別：有變更時儲存鈕要在（審查 F2）
+    expect(mountToolbar({ compact: true, pendingCount: 1 }).find('[data-test="toolbar-save"]').exists()).toBe(true)
     const some = mountToolbar({ pendingCount: 2 })
     const save = some.find('[data-test="toolbar-save"]')
     expect(save.text()).toBe('儲存排班（2 處變更）')

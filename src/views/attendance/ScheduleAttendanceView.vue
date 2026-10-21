@@ -61,6 +61,7 @@
       @import-punches="onGridImportMonth"
       @changed="onGridChanged"
       @show-patterns="progressBar?.openPatterns()"
+      @focus-handled="syncQuery({ emp: undefined })"
       @recalculate="recalcOpen = true"
     />
 
@@ -189,7 +190,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, toRef, onMounted, computed, provide, ref, watch, defineAsyncComponent } from 'vue'
+import { reactive, toRef, onBeforeUnmount, onMounted, computed, provide, ref, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -426,7 +427,7 @@ const currentAnomaly = computed<AnomalyDayCard | null>(
 const currentEmployeeId = computed<number | null>(() => {
   if (selectedEmployeeId.value != null) return selectedEmployeeId.value
   // 名冊畫面上的第一位（排序分組後）；取後端原順序的第一筆會選到首屏外的人
-  if (detailMode.value === 'month') return firstRosterEmployeeId(ws.roster.value, pendingCountsByEmployee.value)
+  if (detailMode.value === 'month') return defaultEmployeeId.value
   const a = currentAnomaly.value
   if (!a) return null
   return ws.roster.value.find((r) => r.employee_number === a.employee_number)?.employee_id ?? null
@@ -439,6 +440,21 @@ watch([ws.roster, ws.loadedPeriod], () => {
     focusDate.value = null
   }
 })
+
+/**
+ * 沒點人時預設看的人：換月才重選（名冊畫面上的第一位）。處理完他的待處理後他會移到「無待處理」組，
+ * 若每次都取當下的第一位，右側整月表會突然換成別人。
+ */
+const defaultEmployeeId = ref<number | null>(null)
+let defaultPeriod: string | null = null
+watch([ws.roster, ws.loadedPeriod], () => {
+  if (!ws.hasCurrentData.value) return
+  const stillThere = ws.roster.value.some((row) => row.employee_id === defaultEmployeeId.value)
+  if (ws.loadedPeriod.value !== defaultPeriod || !stillThere) {
+    defaultPeriod = ws.loadedPeriod.value
+    defaultEmployeeId.value = firstRosterEmployeeId(ws.roster.value, pendingCountsByEmployee.value)
+  }
+}, { immediate: true })
 
 const currentEmployeeName = computed(() => ws.roster.value.find(row => row.employee_id === currentEmployeeId.value)?.employee_name ?? '')
 
@@ -678,6 +694,8 @@ async function onExport(): Promise<void> {
 }
 
 // ── 初始載入 ────────────────────────────────────────────────────────────────
+let unmounted = false
+onBeforeUnmount(() => { unmounted = true })
 onMounted(() => {
   if (!canViewAttendance) return
   void ws.refresh()
@@ -693,9 +711,11 @@ async function applyWorkingMonth(): Promise<void> {
   const initial = anchorDate.value
   try {
     const { year, month, previous_unsettled: previousUnsettled } = (await getAttendanceWorkingMonth()).data
-    if (!previousUnsettled || anchorDate.value !== initial || props.date) return
+    // 回應到之前已離開這頁：useRoute 是全域目前路由，再寫網址會改到別頁
+    if (unmounted || !previousUnsettled || anchorDate.value !== initial || props.date) return
     await setAnchorDate(`${year}-${String(month).padStart(2, '0')}-01`)
-    if (anchorDate.value.slice(0, 7) === `${year}-${String(month).padStart(2, '0')}`) {
+    // 輪值表、換班、班別設定不以月為範圍：只換錨點，不提示
+    if (monthTabs.value && anchorDate.value.slice(0, 7) === `${year}-${String(month).padStart(2, '0')}`) {
       ElMessage.info(`${month} 月薪資還沒封存，先顯示 ${month} 月`)
     }
   } catch {

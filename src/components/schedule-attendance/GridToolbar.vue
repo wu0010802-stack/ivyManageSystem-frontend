@@ -67,9 +67,9 @@
       @update:model-value="(v: string) => emit('update:keyword', v)"
     />
 
-    <!-- 排班工具收成一個選單（核對時用不到，不和篩選搶位置）；手機不排班，整組收起 -->
-    <div v-if="canEditPlan && !isMonth && !compact" class="grid-toolbar__tools" role="group" aria-label="排班工具">
-      <el-dropdown :disabled="busy" trigger="click" data-test="toolbar-schedule" @command="onCommand">
+    <!-- 排班工具收成一個選單（核對時用不到，不和篩選搶位置）；手機收起選單，但列上仍能改本週班別，儲存鈕要留著 -->
+    <div v-if="canEditPlan && !isMonth" class="grid-toolbar__tools" role="group" aria-label="排班工具">
+      <el-dropdown v-if="!compact" :disabled="busy" trigger="click" data-test="toolbar-schedule" @command="onCommand">
         <el-button :disabled="busy">排班工具 <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
         <template #dropdown>
           <el-dropdown-menu>
@@ -122,7 +122,7 @@ const props = defineProps<{
   canMonth?: boolean
   /** 待處理中屬於「待修設定」（整月同型態）的格數：篩選鈕拆開寫 */
   patternIssueCount?: number
-  /** 手機：收起排班工具 */
+  /** 手機：收起排班工具選單（儲存排班仍在） */
   compact?: boolean
   /** 頁首已有月份切換（有出勤讀取權限時）：月模式不再顯示工具列的月份導覽 */
   hideMonthNav?: boolean

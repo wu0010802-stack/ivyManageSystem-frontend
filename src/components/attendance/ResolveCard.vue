@@ -94,7 +94,7 @@
     <!-- 動作列 -->
     <div v-if="canWrite" class="resolve-card__actions-block">
       <p v-if="allows('admin_accept') || allows('admin_waive')" class="resolve-card__whole-day-hint" data-test="resolve-whole-day-hint">
-        <template v-if="missingOnly">缺卡不扣薪，但會記入本月缺卡次數；豁免＝不記入。會套用到<strong>整天</strong>。</template>
+        <template v-if="missingOnly">缺卡不扣薪，但會記入缺卡次數；豁免只讓本月薪資不記入，年終與考核仍照次計。會套用到<strong>整天</strong>。</template>
         <template v-else>{{ acceptLabel }}／豁免會套用到<strong>整天</strong>的所有異常項目</template>
       </p>
       <div class="resolve-card__actions">
