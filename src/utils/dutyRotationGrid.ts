@@ -23,6 +23,17 @@ export type TeacherRole = 'head' | 'assistant'
  */
 export const ALL_WEEKS = '__all__'
 
+/**
+ * 輪值表週次文字。後端存原始標籤：數字週（"01"）與「預」（學期開始前的預備週）；
+ * 一律拼成「第 {label} 週」會出現「第 預 週」。
+ */
+export function rotationWeekText(label: string | null | undefined): string {
+  if (!label) return '週次未定'
+  if (/^\d+$/.test(label)) return `第 ${label} 週`
+  if (label === '預') return '預備週'
+  return label.endsWith('週') ? label : `${label}週`
+}
+
 export const ROLE_LABELS: Record<TeacherRole, string> = { head: '班導', assistant: '副班導' }
 export const SKIP_REASON_LABELS: Record<string, string> = {
   manual: '行政手動設定過',

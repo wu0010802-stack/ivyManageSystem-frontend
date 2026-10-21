@@ -13,6 +13,7 @@ import {
   groupChangesByWeek,
   isCollapsedSkip,
   partitionWeekGroups,
+  rotationWeekText,
   shiftTypeLabel,
   summarizeChanges,
   thisWeekMonday,
@@ -229,7 +230,7 @@ const confirm = async () => {
           <el-option
             v-for="w in weeks"
             :key="w.week_start_date"
-            :label="w.label"
+            :label="rotationWeekText(w.label)"
             :value="w.week_start_date"
           />
         </el-select>

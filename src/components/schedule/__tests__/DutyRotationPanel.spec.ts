@@ -216,3 +216,162 @@ describe('DutyRotationPanel', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 })
+
+// ── 檢查結果摘要（原本一條 issue 一行，數十條把表格推出首屏）────────────────────────
+describe('DutyRotationPanel — 檢查結果摘要', () => {
+  beforeEach(() => {
+    for (const m of [mockGet, mockCreate, mockReplace, mockImport, mockExport]) m.mockReset()
+  })
+
+  // 3 個班級都沒設副班導 × 2 個職務列 × 11 週（含「預」備週）＝ 66 筆 CLASS_MISSING_TEACHER
+  const weekDates = [
+    '2026-08-03', '2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07',
+    '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12',
+  ]
+  const weekLabels = ['預', ...Array.from({ length: 10 }, (_, i) => String(i + 1).padStart(2, '0'))]
+  const bigRotation = {
+    ...rotation,
+    rows: [
+      { id: 11, label: '早車', teacher_role: 'assistant', shift_type_id: 6, sort_order: 0 },
+      { id: 12, label: '午車', teacher_role: 'assistant', shift_type_id: 6, sort_order: 1 },
+    ],
+    weeks: weekDates.map((d, i) => ({ id: i + 1, week_start_date: d, label: weekLabels[i] })),
+    cells: [],
+    classrooms: [
+      { id: 101, name: '滿天星', class_code: '中1', head_teacher_id: 1, head_teacher_name: '甲', assistant_teacher_id: null, assistant_teacher_name: null },
+      { id: 102, name: '小太陽', class_code: '中2', head_teacher_id: 2, head_teacher_name: '乙', assistant_teacher_id: null, assistant_teacher_name: null },
+      { id: 103, name: '彩虹', class_code: '大1', head_teacher_id: 3, head_teacher_name: '丙', assistant_teacher_id: null, assistant_teacher_name: null },
+    ],
+    reapply_hint: { pending: false, from_week_start: null, affected_count: 0 },
+    issues: [
+      { code: 'NO_DEFAULT', severity: 'warning', message: '未設定班導未輪值時的班別；未輪值的班導不會寫入週班表', week_start_date: null, row_id: null, classroom_id: null, employee_id: null },
+      ...weekDates.flatMap((d, wi) =>
+        [11, 12].flatMap((rowId) =>
+          [101, 102, 103].map((roomId) => ({
+            code: 'CLASS_MISSING_TEACHER',
+            severity: 'warning',
+            message: `某班 尚未設定副班導，第 ${weekLabels[wi]} 週「${rowId === 11 ? '早車' : '午車'}」不會寫入週班表`,
+            week_start_date: d,
+            row_id: rowId,
+            classroom_id: roomId,
+            employee_id: null,
+          })),
+        ),
+      ),
+    ],
+  }
+
+  it('數十條提醒收成一行摘要＋分組明細：預設收合、只有警告時不擋；明細行數遠少於原始筆數', async () => {
+    mockGet.mockResolvedValueOnce({ data: bigRotation })
+    const wrapper = mount(DutyRotationPanel, { global: globalConfig })
+    await flushPromises()
+
+    const issues = wrapper.find('[data-test="issues"]')
+    // 摘要列：67 項提醒、無錯誤
+    expect(issues.find('.drp-checks__summary').text()).toContain('67 項提醒')
+    expect(issues.find('.drp-checks__summary').text()).not.toContain('項錯誤')
+    expect(issues.find('.drp-checks__summary').text()).toContain('班級尚未設定老師 66')
+    // 預設收合
+    const detail = issues.find('#drp-checks-detail')
+    expect((detail.element as HTMLElement).style.display).toBe('none')
+    expect(issues.find('[data-test="issues-toggle"]').attributes('aria-expanded')).toBe('false')
+    // 66 筆原始 issue 合併成「班級 × 職務列」6 行（3 班 × 2 職務），而不是 66 行
+    const missing = issues.find('[data-test="issue-group-CLASS_MISSING_TEACHER"]')
+    expect(missing.findAll('li')).toHaveLength(6)
+    expect(issues.findAll('li')).toHaveLength(7) // + NO_DEFAULT 1 行
+
+    // 展開
+    await issues.find('[data-test="issues-toggle"]').trigger('click')
+    expect((detail.element as HTMLElement).style.display).not.toBe('none')
+    expect(issues.find('[data-test="issues-toggle"]').attributes('aria-expanded')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('合併後不丟資訊：班級、角色、職務名稱與每一週都在明細行裡；「預」寫成預備週，不出現「第 預 週」', async () => {
+    mockGet.mockResolvedValueOnce({ data: bigRotation })
+    const wrapper = mount(DutyRotationPanel, { global: globalConfig })
+    await flushPromises()
+
+    const lines = wrapper
+      .find('[data-test="issue-group-CLASS_MISSING_TEACHER"]')
+      .findAll('li')
+      .map((li) => li.text())
+    // 依班級名稱（zh-TW 排序）再依職務列順序
+    const sample = lines.find((l) => l.includes('滿天星') && l.includes('早車'))!
+    expect(sample).toBe(
+      '滿天星 尚未設定副班導：「早車」在預備週、第 01、02、03、04、05、06、07、08、09、10 週不會寫入週班表',
+    )
+    for (const room of ['滿天星', '小太陽', '彩虹']) {
+      for (const row of ['早車', '午車']) {
+        expect(lines.some((l) => l.includes(room) && l.includes(`「${row}」`))).toBe(true)
+      }
+    }
+    expect(wrapper.find('[data-test="issues"]').text()).not.toContain('第 預 週')
+    wrapper.unmount()
+  })
+
+  it('後端原文（非合併類）裡的「第 預 週」改寫成預備週', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        ...bigRotation,
+        issues: [
+          { code: 'CLASS_WRONG_TERM', severity: 'error', message: '第 預 週「早車」的班級不屬於本學期', week_start_date: weekDates[0], row_id: 11, classroom_id: 101, employee_id: null },
+        ],
+      },
+    })
+    const wrapper = mount(DutyRotationPanel, { global: globalConfig })
+    await flushPromises()
+    const text = wrapper.find('[data-test="issues"]').text()
+    expect(text).toContain('預備週「早車」的班級不屬於本學期')
+    expect(text).not.toContain('第 預 週')
+    wrapper.unmount()
+  })
+
+  it('有錯誤時預設展開（錯誤會讓「套用到班表」停用，使用者要立刻看到原因），錯誤排在提醒之前', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        ...bigRotation,
+        issues: [
+          bigRotation.issues[1],
+          { code: 'EMPLOYEE_DOUBLE_BOOKED', severity: 'error', message: '第 01 週同一位老師被排到「早車」與「午車」（滿天星）', week_start_date: weekDates[1], row_id: 12, classroom_id: 101, employee_id: 9 },
+        ],
+      },
+    })
+    const wrapper = mount(DutyRotationPanel, { global: globalConfig })
+    await flushPromises()
+    const issues = wrapper.find('[data-test="issues"]')
+    expect((issues.find('#drp-checks-detail').element as HTMLElement).style.display).not.toBe('none')
+    expect(issues.find('.drp-checks__summary').text()).toContain('1 項錯誤')
+    expect(issues.find('.drp-checks__summary').text()).toContain('1 項提醒')
+    const titles = issues.findAll('h4').map((h) => h.text())
+    expect(titles[0]).toContain('同一位老師同週重複排入')
+    expect(isDisabled(wrapper, 'apply')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('結構化欄位對不回（班級／職務／週次查無）就不合併，原文照列', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        ...bigRotation,
+        issues: [
+          { code: 'CLASS_MISSING_TEACHER', severity: 'warning', message: '某班 尚未設定副班導，第 05 週「早車」不會寫入週班表', week_start_date: '2030-01-01', row_id: 999, classroom_id: 101, employee_id: null },
+        ],
+      },
+    })
+    const wrapper = mount(DutyRotationPanel, { global: globalConfig })
+    await flushPromises()
+    expect(wrapper.find('[data-test="issues"]').text()).toContain('某班 尚未設定副班導，第 05 週「早車」不會寫入週班表')
+    wrapper.unmount()
+  })
+
+  it('週次表頭：「預」顯示為預備週，數字週維持原樣；列內小按鈕帶放大點擊區的 class', async () => {
+    mockGet.mockResolvedValueOnce({ data: bigRotation })
+    const wrapper = mount(DutyRotationPanel, { global: globalConfig })
+    await flushPromises()
+    const heads = wrapper.findAll('[data-test="grid"] thead th').slice(2)
+    expect(heads[0].text()).toContain('預備週')
+    expect(heads[1].text()).toContain('01')
+    expect(wrapper.find(`[data-test="remove-week-${weekDates[0]}"]`).classes()).toContain('drp-link-btn')
+    wrapper.unmount()
+  })
+})

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createDutyRotation,
@@ -30,6 +30,7 @@ import {
   toDocumentBody,
   type ApplyResult,
   type EditableState,
+  type RotationIssue,
   type RotationOut,
 } from '@/utils/dutyRotationGrid'
 
@@ -66,6 +67,105 @@ const hasErrors = computed(() => rotation.value?.issues.some((i) => i.severity =
 const severity = computed(() =>
   rotation.value && state.value ? issueSeverityByCell(rotation.value.issues, state.value.rows) : new Map()
 )
+
+// ── 週次標籤顯示 ───────────────────────────────────────────────────────────────
+// 後端存的是原始標籤：數字週（"01"、"05"）與「預」（學期開始前的預備週，例如 8 月初的排班週）。
+// 直接拼成「第 {label} 週」會得到「第 預 週」，讀不順；預備週不是第 N 週，要單獨寫。
+const PREP_WEEK_LABEL = '預'
+const isNumericWeek = (label: string) => /^\d+$/.test(label)
+/** 一組週次標籤 → 「預備週、第 01、02 週」 */
+const formatWeekLabels = (labels: string[]): string => {
+  const numeric = labels.filter(isNumericWeek)
+  const others = labels
+    .filter((l) => !isNumericWeek(l))
+    .map((l) => (l === PREP_WEEK_LABEL ? '預備週' : `「${l}」週`))
+  return [...others, ...(numeric.length ? [`第 ${numeric.join('、')} 週`] : [])].join('、')
+}
+/** 表頭用的短寫：「預」→「預備週」，數字週維持原樣（欄寬有限） */
+const weekHeading = (label: string) => (label === PREP_WEEK_LABEL ? '預備週' : label)
+/** 後端 issue.message 內嵌「第 {label} 週」，label 為「預」時改寫成「預備週」 */
+const tidyMessage = (message: string) => message.replace(/第\s*預\s*週/g, '預備週')
+
+// ── 檢查結果摘要（原本一條 issue 一行，數十條會把表格推出首屏）──────────────────────────
+// 依 code 分組；CLASS_MISSING_TEACHER（班級沒設老師 → 該週職務不會寫入週班表）一個班級 × 職務
+// 會在每一週各產生一筆，另依「班級 × 職務列」合併成一行並列出所有週次。
+const ISSUE_TITLES: Record<string, string> = {
+  WEEK_NOT_MONDAY: '週次起始日不是週一',
+  NO_DEFAULT: '未設定未輪值時的預設班別',
+  CELL_ORPHAN: '格子指向不存在的職務或週次',
+  CLASS_WRONG_TERM: '班級不屬於本學期',
+  DUP_ROLE_IN_WEEK: '同班同角色重複排入',
+  CLASS_MISSING_TEACHER: '班級尚未設定老師',
+  EMPLOYEE_DOUBLE_BOOKED: '同一位老師同週重複排入',
+}
+
+interface IssueGroup {
+  code: string
+  severity: 'error' | 'warning'
+  title: string
+  /** 該類原始 issue 筆數（合併成較少的明細行後仍以原始筆數計） */
+  count: number
+  lines: string[]
+}
+
+const mergeMissingTeacher = (list: RotationIssue[], r: RotationOut): string[] => {
+  const rooms = new Map(r.classrooms.map((c) => [c.id, c]))
+  const rows = new Map(r.rows.map((row) => [row.id, row]))
+  const weeks = new Map(r.weeks.map((w) => [w.week_start_date, w.label]))
+  const merged = new Map<string, { room: string; order: number; text: string; labels: string[] }>()
+  const loose: string[] = []
+  for (const issue of list) {
+    const room = issue.classroom_id == null ? undefined : rooms.get(issue.classroom_id)
+    const row = issue.row_id == null ? undefined : rows.get(issue.row_id)
+    const weekLabel = issue.week_start_date ? weeks.get(issue.week_start_date) : undefined
+    if (!room || !row || weekLabel === undefined) {
+      // 對不回結構化欄位就不冒險合併，原文照列
+      loose.push(tidyMessage(issue.message))
+      continue
+    }
+    const key = `${room.id}|${row.id}`
+    const hit = merged.get(key)
+    if (hit) hit.labels.push(weekLabel)
+    else {
+      merged.set(key, {
+        room: room.name,
+        order: row.sort_order,
+        text: `${room.name} 尚未設定${ROLE_LABELS[row.teacher_role]}：「${row.label}」在`,
+        labels: [weekLabel],
+      })
+    }
+  }
+  const lines = [...merged.values()]
+    .sort((a, b) => a.room.localeCompare(b.room, 'zh-TW') || a.order - b.order)
+    .map((m) => `${m.text}${formatWeekLabels(m.labels)}不會寫入週班表`)
+  return [...lines, ...loose]
+}
+
+const issueGroups = computed<IssueGroup[]>(() => {
+  const r = rotation.value
+  if (!r) return []
+  const byCode = new Map<string, RotationIssue[]>()
+  for (const issue of r.issues) {
+    const list = byCode.get(issue.code)
+    if (list) list.push(issue)
+    else byCode.set(issue.code, [issue])
+  }
+  const groups = [...byCode].map(([code, list]): IssueGroup => ({
+    code,
+    severity: list.some((i) => i.severity === 'error') ? 'error' : 'warning',
+    title: ISSUE_TITLES[code] ?? '其他提醒',
+    count: list.length,
+    lines: code === 'CLASS_MISSING_TEACHER' ? mergeMissingTeacher(list, r) : list.map((i) => tidyMessage(i.message)),
+  }))
+  // 錯誤在前（會擋「套用到班表」），同嚴重度維持後端給的順序（Array.sort 為穩定排序）
+  return groups.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1))
+})
+const errorCount = computed(() => rotation.value?.issues.filter((i) => i.severity === 'error').length ?? 0)
+const warningCount = computed(() => (rotation.value?.issues.length ?? 0) - errorCount.value)
+const issueBreakdown = computed(() => issueGroups.value.map((g) => `${g.title} ${g.count}`).join('、'))
+// 只有提醒（warning）時預設收合；有錯誤就展開——錯誤會讓「套用到班表」停用，使用者得立刻看到原因
+const issuesOpen = ref(false)
+watch(hasErrors, (v) => { if (v) issuesOpen.value = true }, { immediate: true })
 
 const adopt = (r: RotationOut) => {
   rotation.value = r
@@ -293,9 +393,35 @@ onMounted(async () => {
         </el-button>
       </el-alert>
       <el-alert v-if="dirty" type="info" :closable="false" title="有未儲存的變更；儲存後才能套用到班表。" />
-      <ul v-if="rotation.issues.length" class="drp-issues" data-test="issues">
-        <li v-for="(issue, i) in rotation.issues" :key="i" :class="`is-${issue.severity}`">{{ issue.message }}</li>
-      </ul>
+      <section v-if="rotation.issues.length" class="drp-checks" data-test="issues" aria-label="輪值表檢查結果">
+        <div class="drp-checks__head">
+          <span class="drp-checks__summary">
+            <strong v-if="errorCount" class="is-error">{{ errorCount }} 項錯誤</strong>
+            <strong v-if="warningCount" class="is-warning">{{ warningCount }} 項提醒</strong>
+            <span class="drp-muted">{{ issueBreakdown }}</span>
+          </span>
+          <el-button
+            link
+            type="primary"
+            class="drp-link-btn"
+            data-test="issues-toggle"
+            :aria-expanded="issuesOpen"
+            aria-controls="drp-checks-detail"
+            @click="issuesOpen = !issuesOpen"
+          >
+            {{ issuesOpen ? '收合明細' : '展開明細' }}
+          </el-button>
+        </div>
+        <!-- v-show 而非 v-if：收合時文字仍在 DOM，不丟資訊，也不影響以文字斷言的既有測試 -->
+        <div v-show="issuesOpen" id="drp-checks-detail" class="drp-checks__detail">
+          <div v-for="g in issueGroups" :key="g.code" class="drp-checks__group" :data-test="`issue-group-${g.code}`">
+            <h4 :class="`is-${g.severity}`">{{ g.title }}（{{ g.count }}）</h4>
+            <ul>
+              <li v-for="(line, i) in g.lines" :key="i">{{ line }}</li>
+            </ul>
+          </div>
+        </div>
+      </section>
 
       <section class="drp-section">
         <h3>職務設定</h3>
@@ -330,7 +456,7 @@ onMounted(async () => {
                   <el-option v-for="t in shiftTypes" :key="t.id" :label="`${t.name} ${t.work_start}–${t.work_end}`" :value="t.id" />
                 </el-select>
               </td>
-              <td><el-button link type="danger" @click="onRemoveRow(row.uid)">刪除</el-button></td>
+              <td><el-button link type="danger" class="drp-link-btn" @click="onRemoveRow(row.uid)">刪除</el-button></td>
             </tr>
           </tbody>
         </table>
@@ -357,11 +483,12 @@ onMounted(async () => {
               <th>角色</th>
               <th>職務</th>
               <th v-for="w in state.weeks" :key="w.week_start_date">
-                <div>{{ w.label }}</div>
+                <div>{{ weekHeading(w.label) }}</div>
                 <div class="drp-muted">{{ w.week_start_date.slice(5) }}</div>
                 <el-button
                   link
                   size="small"
+                  class="drp-link-btn"
                   :data-test="`remove-week-${w.week_start_date}`"
                   @click="onRemoveWeek(w.week_start_date)"
                 >
@@ -438,12 +565,12 @@ onMounted(async () => {
 .drp { display: flex; flex-direction: column; gap: 12px; }
 .drp-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .drp-term { width: 120px; }
-.drp-muted { color: var(--el-text-color-secondary); font-size: 12px; }
+.drp-muted { color: var(--el-text-color-secondary); font-size: var(--text-xs); }
 .drp-empty { padding: 24px 0; }
 .drp-issues { margin: 0; padding-left: 20px; }
-.drp-issues .is-error { color: var(--el-color-danger); }
+.drp-issues .is-error { color: var(--color-danger-darker); }
 .drp-issues .is-warning { color: var(--color-warning-darker); }
-.drp-section h3 { margin: 8px 0; font-size: 15px; }
+.drp-section h3 { margin: 8px 0; font-size: var(--text-lg); }
 .drp-defaults { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 8px; }
 .drp-defaults label { display: flex; gap: 8px; align-items: center; }
 .drp-name { width: 220px; }
@@ -455,6 +582,25 @@ onMounted(async () => {
 .drp-grid td .el-select { width: 110px; }
 .drp-grid td.is-error { outline: 2px solid var(--el-color-danger); outline-offset: -2px; }
 .drp-grid td.is-warning { outline: 2px solid var(--el-color-warning); outline-offset: -2px; }
+/* 檢查結果摘要：一行摘要＋可展開的分組明細（取代逐條列出） */
+.drp-checks { border: 1px solid var(--el-border-color-lighter); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); }
+.drp-checks__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-1) var(--space-3); }
+.drp-checks__summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); font-size: var(--text-sm); }
+.drp-checks__detail { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--el-border-color-lighter); }
+.drp-checks__group + .drp-checks__group { margin-top: var(--space-3); }
+.drp-checks__group h4 { margin: 0 0 var(--space-1); font-size: var(--text-sm); }
+.drp-checks__group ul { margin: 0; padding-left: 20px; font-size: var(--text-sm); }
+.drp-checks .is-error { color: var(--color-danger-darker); }
+.drp-checks .is-warning { color: var(--color-warning-darker); }
+/* 列內 link 按鈕：EP 預設只有字高（約 18–21px），點擊區拉到 ≥28px（桌面工具，不強求 44） */
+.drp .drp-link-btn { min-height: 28px; padding-inline: var(--space-2); }
+/* EP el-alert warning 的標題 #e6a23c 在 #fdf6ec 上只有 2.04:1；只在這頁覆寫成 darker（不動全站 EP 主題） */
+.drp :deep(.el-alert--warning.is-light) { color: var(--color-warning-darker); }
+.drp :deep(.el-alert--warning.is-light .el-alert__title),
+.drp :deep(.el-alert--warning.is-light .el-alert__description) { color: var(--color-warning-darker); }
+/* 「有未儲存的變更」info alert 同理（#909399 on #f4f4f5 約 2.9:1） */
+.drp :deep(.el-alert--info.is-light),
+.drp :deep(.el-alert--info.is-light .el-alert__description) { color: var(--el-text-color-regular); }
 .drp-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 @media (max-width: 640px) {
   .drp-defaults { flex-direction: column; }

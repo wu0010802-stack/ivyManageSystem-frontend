@@ -30,8 +30,7 @@ import {
   thisWeekMonday,
   toDocumentBody,
   type ApplyChange,
-  type RotationOut,
-} from '../dutyRotationGrid'
+  type RotationOut, rotationWeekText } from '../dutyRotationGrid'
 
 const rotation = (): RotationOut => ({
   id: 1,
@@ -207,5 +206,15 @@ describe('問題標示與差異彙總', () => {
     const s = fromRotation(rotation())
     expect(snapshotKey(s)).toBe(snapshotKey(fromRotation(rotation())))
     expect(snapshotKey(setCell(s, '2026-09-21', s.rows[1].uid, 999))).not.toBe(snapshotKey(s))
+  })
+})
+
+describe('rotationWeekText（「第 預 週」讀不順）', () => {
+  it('數字週寫「第 N 週」，「預」寫「預備週」，其他標籤加「週」，沒有標籤寫週次未定', () => {
+    expect(rotationWeekText('01')).toBe('第 01 週')
+    expect(rotationWeekText('預')).toBe('預備週')
+    expect(rotationWeekText('寒假')).toBe('寒假週')
+    expect(rotationWeekText('期末週')).toBe('期末週')
+    expect(rotationWeekText(null)).toBe('週次未定')
   })
 })
