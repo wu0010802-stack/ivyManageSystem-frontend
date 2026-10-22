@@ -6,8 +6,15 @@
 // 與拆分前「父層 onMounted 內以 canReadSalarySettings 守衛才 fetch」等效。
 import { reactive, ref, onMounted } from 'vue'
 import { getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary } from '@/api/config'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
+import {
+  describeBelowMinimumWage,
+  describeNeedsConfirmation,
+  pickBelowMinimumWage,
+  pickNeedsConfirmation,
+  requiresGradeDefaultConfirm,
+} from './standardSalaryNotices'
 
 const positionSalary = reactive({
   head_teacher_a: 39240,
@@ -56,8 +63,11 @@ const fetchPositionSalary = async () => {
 const savePositionSalary = async () => {
   loadingPositionSalary.value = true
   try {
-    await updatePositionSalary(positionSalary)
+    const res = await updatePositionSalary(positionSalary)
     ElMessage.success('職位標準底薪設定已儲存')
+    // #61：低於該年度基本工資只示警不擋儲存（基本工資調升時既有標準可能整批落後）
+    const belowNotice = describeBelowMinimumWage(pickBelowMinimumWage(res?.data), STANDARD_KEY_LABEL)
+    if (belowNotice) ElMessage.warning(belowNotice)
     await fetchCompare()
   } catch (error) {
     ElMessage.error(friendlyError('職位底薪設定儲存失敗', error))
@@ -80,9 +90,24 @@ const fetchCompare = async () => {
 }
 
 const syncOne = async (row: Record<string, unknown>) => {
-  syncingIds.value = new Set([...syncingIds.value, row.employee_id as number])
+  const employeeId = row.employee_id as number
+  // #54：帶班但職稱與等級皆空白（預設 C 級）且會調降底薪 → 先確認，後端也只在
+  // confirm_grade_default_employee_ids 列入時才寫回主檔。
+  const needsConfirm = requiresGradeDefaultConfirm(row)
+  if (needsConfirm) {
+    try {
+      await ElMessageBox.confirm(
+        `${row.warning ?? '等級為預設 C 級'}。\n確定將 ${row.name} 底薪由 $${(row.current_salary as number).toLocaleString()} 調降為 $${(row.standard_salary as number).toLocaleString()}？`,
+        '等級可能未填',
+        { type: 'warning', confirmButtonText: '確定調降', cancelButtonText: '取消' },
+      )
+    } catch {
+      return
+    }
+  }
+  syncingIds.value = new Set([...syncingIds.value, employeeId])
   try {
-    await syncPositionSalary([row.employee_id as number])
+    await syncPositionSalary([employeeId], needsConfirm ? [employeeId] : [])
     ElMessage.success(`${row.name} 底薪已更新為 $${(row.standard_salary as number).toLocaleString()}`)
     await fetchCompare()
   } catch (e) {
@@ -99,6 +124,8 @@ const syncAll = async () => {
   try {
     const res = await syncPositionSalary([])
     ElMessage.success(`已同步 ${res.data.total_updated} 位員工底薪至職位標準`)
+    const pending = describeNeedsConfirmation(pickNeedsConfirmation(res.data))
+    if (pending) ElMessage.warning(pending)
     await fetchCompare()
   } catch (e) {
     ElMessage.error(friendlyError('批次同步底薪失敗', e))
@@ -198,17 +225,23 @@ onMounted(() => {
       </el-col>
       <el-col :span="8" class="mt-4">
         <el-card header="主任" shadow="never" class="box-card">
-          <div class="label">基本薪俸</div>
+          <div class="label">主任基本薪俸（留空表示不套用標準）</div>
           <el-input-number v-model="positionSalary.director" :min="0" :step="100" style="width: 100%" placeholder="未設定" />
         </el-card>
       </el-col>
       <el-col :span="8" class="mt-4">
         <el-card header="園長" shadow="never" class="box-card">
-          <div class="label">基本薪俸（留空表示不套用標準）</div>
+          <div class="label">園長基本薪俸（留空表示不套用標準）</div>
           <el-input-number v-model="positionSalary.principal" :min="0" :step="100" style="width: 100%" placeholder="未設定" />
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- #57：園長／主任各只有一欄，表達不了核薪表 A/B 兩級 -->
+    <p class="desc-text mt-4">
+      園長、主任核薪表分 A/B 兩級時請留空（填一個值會讓另一級的人被錯套），
+      改在員工資料填個人底薪並開啟「個人合約底薪」。
+    </p>
 
     <div class="mt-4" style="text-align: right">
       <el-button type="primary" @click="savePositionSalary">儲存職位底薪設定</el-button>
@@ -244,8 +277,13 @@ onMounted(() => {
           <el-table-column label="姓名" prop="name" width="90" />
           <el-table-column label="職稱" prop="title" width="90" />
           <el-table-column label="園內職務" prop="position" width="96" />
-          <el-table-column label="等級" width="60">
-            <template #default="{ row }">{{ row.bonus_grade || '—' }}</template>
+          <el-table-column label="等級" width="80">
+            <template #default="{ row }">
+              <el-tooltip v-if="row.grade_defaulted" :content="row.warning" placement="top">
+                <el-tag type="warning" size="small">預設 C</el-tag>
+              </el-tooltip>
+              <template v-else>{{ row.bonus_grade || '—' }}</template>
+            </template>
           </el-table-column>
           <el-table-column label="對應標準" width="120">
             <template #default="{ row }">{{ STANDARD_KEY_LABEL[row.standard_key] || row.standard_key }}</template>

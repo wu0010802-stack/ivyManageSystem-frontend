@@ -41350,6 +41350,11 @@ export interface components {
              */
             adjustment_reason: string;
             /**
+             * Confirm Grade Default Employee Ids
+             * @description 帶班但職稱與等級皆空白（等級預設 C）的員工，若同步會調降底薪，須列於此才會寫入；未列者回傳於 needs_confirmation
+             */
+            confirm_grade_default_employee_ids?: number[];
+            /**
              * Employee Ids
              * @description 空清單表示同步全部可對應員工
              */

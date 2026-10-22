@@ -60,5 +60,10 @@ export const comparePositionSalary = () => api.get('/config/position-salary/comp
 export const getPositionMapping = (): AxiosResp<'/config/position-mapping', 'get'> =>
   api.get('/config/position-mapping')
 
-export const syncPositionSalary = (employeeIds: number[] = []) =>
-  api.post('/config/position-salary/sync', { employee_ids: employeeIds })
+// confirmGradeDefaultIds：帶班但職稱與等級皆空白（預設 C 級）而會被調降底薪者，
+// 須列入才會寫回主檔（義華 2026-10-22 #54）；未列者由後端回傳 needs_confirmation。
+export const syncPositionSalary = (employeeIds: number[] = [], confirmGradeDefaultIds: number[] = []) =>
+  api.post('/config/position-salary/sync', {
+    employee_ids: employeeIds,
+    ...(confirmGradeDefaultIds.length ? { confirm_grade_default_employee_ids: confirmGradeDefaultIds } : {}),
+  })
