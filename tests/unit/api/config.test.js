@@ -123,17 +123,25 @@ describe('config api', () => {
     expect(mockGet).toHaveBeenCalledWith('/config/position-salary/compare')
   })
 
-  it('syncPositionSalary POST /config/position-salary/sync wraps employee_ids (default empty)', async () => {
-    await mod.syncPositionSalary()
+  it('syncPositionSalary POST /config/position-salary/sync 帶必填 adjustment_reason', async () => {
+    // 後端 PositionSalarySyncRequest.adjustment_reason 必填（≥5 字），漏帶一律 422
+    await mod.syncPositionSalary({ employee_ids: [], adjustment_reason: '依職位標準同步' })
     expect(mockPost).toHaveBeenCalledWith('/config/position-salary/sync', {
       employee_ids: [],
+      adjustment_reason: '依職位標準同步',
     })
   })
 
-  it('syncPositionSalary POST /config/position-salary/sync wraps employee_ids', async () => {
-    await mod.syncPositionSalary([1, 2, 3])
+  it('syncPositionSalary 轉送 confirm_grade_default_employee_ids', async () => {
+    await mod.syncPositionSalary({
+      employee_ids: [1, 2, 3],
+      confirm_grade_default_employee_ids: [2],
+      adjustment_reason: '依職位標準同步',
+    })
     expect(mockPost).toHaveBeenCalledWith('/config/position-salary/sync', {
       employee_ids: [1, 2, 3],
+      confirm_grade_default_employee_ids: [2],
+      adjustment_reason: '依職位標準同步',
     })
   })
 })
