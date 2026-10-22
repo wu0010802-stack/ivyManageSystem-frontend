@@ -25,6 +25,7 @@ describe('appraisalYearEnd 標籤單一來源', () => {
       'hire_in_window_missing_employment_period', 'manual_items_missing', 'summaries_not_finalized',
       'qualification', 'missing_class_target', 'missing_head_teacher',
       'unassigned_course', 'unmatched_registrations', 'prereq_not_finalized', 'performance_anomaly',
+      'low_grade_interview',
     ]
     for (const c of codes) expect(EXCEPTION_TYPE_LABEL[c], c).toBeTruthy()
   })
