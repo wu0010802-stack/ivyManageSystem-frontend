@@ -31,7 +31,7 @@ vi.mock('@/api/config', () => ({
 
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
-  ElMessageBox: { confirm: vi.fn() },
+  ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() },
 }))
 
 const ElTableColumnStub = defineComponent({
@@ -110,6 +110,7 @@ beforeEach(() => {
   comparePositionSalary.mockResolvedValue({ data: { employees: [GAO], out_of_sync: 1 } })
   syncPositionSalary.mockResolvedValue({ data: { total_updated: 1, updated: [], needs_confirmation: [] } })
   updatePositionSalary.mockResolvedValue({ data: { below_minimum_wage: [] } })
+  ;(ElMessageBox.prompt as ReturnType<typeof vi.fn>).mockResolvedValue({ value: '  依職位標準同步  ' })
 })
 
 const syncButtonOf = (wrapper: Awaited<ReturnType<typeof mountTab>>) =>
@@ -135,7 +136,11 @@ describe('StandardSalaryTab — #54 預設 C 級同步確認', () => {
     const wrapper = await mountTab()
     await syncButtonOf(wrapper).trigger('click')
     await flush()
-    expect(syncPositionSalary).toHaveBeenCalledWith([27], [27])
+    expect(syncPositionSalary).toHaveBeenCalledWith({
+      employee_ids: [27],
+      confirm_grade_default_employee_ids: [27],
+      adjustment_reason: '依職位標準同步',
+    })
   })
 
   it('批次同步略過者顯示提示', async () => {
@@ -152,8 +157,41 @@ describe('StandardSalaryTab — #54 預設 C 級同步確認', () => {
     const batch = wrapper.findAll('button').find((b) => b.text().startsWith('批次同步全部'))!
     await batch.trigger('click')
     await flush()
-    expect(syncPositionSalary).toHaveBeenCalledWith([])
+    expect(syncPositionSalary).toHaveBeenCalledWith({ employee_ids: [], adjustment_reason: '依職位標準同步' })
     expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('高琦雅'))
+  })
+})
+
+describe('StandardSalaryTab — 同步必填調薪原因（後端 adjustment_reason 必填）', () => {
+  it('取消輸入原因則不送出同步', async () => {
+    ;(ElMessageBox.confirm as ReturnType<typeof vi.fn>).mockResolvedValue('confirm')
+    ;(ElMessageBox.prompt as ReturnType<typeof vi.fn>).mockRejectedValue('cancel')
+    const wrapper = await mountTab()
+    await syncButtonOf(wrapper).trigger('click')
+    await flush()
+    expect(ElMessageBox.prompt).toHaveBeenCalled()
+    expect(syncPositionSalary).not.toHaveBeenCalled()
+  })
+
+  it('批次同步取消輸入原因則不送出', async () => {
+    ;(ElMessageBox.prompt as ReturnType<typeof vi.fn>).mockRejectedValue('cancel')
+    const wrapper = await mountTab()
+    const batch = wrapper.findAll('button').find((b) => b.text().startsWith('批次同步全部'))!
+    await batch.trigger('click')
+    await flush()
+    expect(syncPositionSalary).not.toHaveBeenCalled()
+  })
+
+  it('原因輸入框驗證至少 5 字', async () => {
+    ;(ElMessageBox.confirm as ReturnType<typeof vi.fn>).mockResolvedValue('confirm')
+    const wrapper = await mountTab()
+    await syncButtonOf(wrapper).trigger('click')
+    await flush()
+    const opts = (ElMessageBox.prompt as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
+      inputValidator: (v: string) => boolean | string
+    }
+    expect(opts.inputValidator('  四個字  ')).not.toBe(true)
+    expect(opts.inputValidator('依職位標準同步')).toBe(true)
   })
 })
 

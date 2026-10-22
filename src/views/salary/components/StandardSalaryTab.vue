@@ -89,6 +89,25 @@ const fetchCompare = async () => {
   }
 }
 
+// 後端 finance_guards.MIN_FINANCE_REASON_LENGTH：批次調薪原因至少 5 字（trim 後）
+const MIN_SYNC_REASON_LENGTH = 5
+
+// 同步會直接改員工主檔底薪，後端必填 adjustment_reason；取消回 null。
+const askSyncReason = async (title: string): Promise<string | null> => {
+  try {
+    const { value } = (await ElMessageBox.prompt('請輸入調薪原因（會寫入操作日誌）', title, {
+      confirmButtonText: '確定同步',
+      cancelButtonText: '取消',
+      inputPlaceholder: `至少 ${MIN_SYNC_REASON_LENGTH} 個字，例如：依 115 學年職位標準底薪調整`,
+      inputValidator: (v: string) =>
+        (v ?? '').trim().length >= MIN_SYNC_REASON_LENGTH || `調薪原因至少 ${MIN_SYNC_REASON_LENGTH} 個字`,
+    })) as { value: string }
+    return String(value ?? '').trim()
+  } catch {
+    return null
+  }
+}
+
 const syncOne = async (row: Record<string, unknown>) => {
   const employeeId = row.employee_id as number
   // #54：帶班但職稱與等級皆空白（預設 C 級）且會調降底薪 → 先確認，後端也只在
@@ -105,9 +124,15 @@ const syncOne = async (row: Record<string, unknown>) => {
       return
     }
   }
+  const reason = await askSyncReason(`同步 ${row.name} 底薪`)
+  if (reason === null) return
   syncingIds.value = new Set([...syncingIds.value, employeeId])
   try {
-    await syncPositionSalary([employeeId], needsConfirm ? [employeeId] : [])
+    await syncPositionSalary({
+      employee_ids: [employeeId],
+      ...(needsConfirm ? { confirm_grade_default_employee_ids: [employeeId] } : {}),
+      adjustment_reason: reason,
+    })
     ElMessage.success(`${row.name} 底薪已更新為 $${(row.standard_salary as number).toLocaleString()}`)
     await fetchCompare()
   } catch (e) {
@@ -120,9 +145,11 @@ const syncOne = async (row: Record<string, unknown>) => {
 }
 
 const syncAll = async () => {
+  const reason = await askSyncReason('批次同步全部底薪')
+  if (reason === null) return
   syncingAll.value = true
   try {
-    const res = await syncPositionSalary([])
+    const res = await syncPositionSalary({ employee_ids: [], adjustment_reason: reason })
     ElMessage.success(`已同步 ${res.data.total_updated} 位員工底薪至職位標準`)
     const pending = describeNeedsConfirmation(pickNeedsConfirmation(res.data))
     if (pending) ElMessage.warning(pending)

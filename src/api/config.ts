@@ -60,10 +60,10 @@ export const comparePositionSalary = () => api.get('/config/position-salary/comp
 export const getPositionMapping = (): AxiosResp<'/config/position-mapping', 'get'> =>
   api.get('/config/position-mapping')
 
-// confirmGradeDefaultIds：帶班但職稱與等級皆空白（預設 C 級）而會被調降底薪者，
+// 後端 PositionSalarySyncRequest：adjustment_reason 必填（≥ 5 字，寫入操作日誌與 audit）；
+// confirm_grade_default_employee_ids：帶班但職稱與等級皆空白（預設 C 級）而會被調降底薪者，
 // 須列入才會寫回主檔（義華 2026-10-22 #54）；未列者由後端回傳 needs_confirmation。
-export const syncPositionSalary = (employeeIds: number[] = [], confirmGradeDefaultIds: number[] = []) =>
-  api.post('/config/position-salary/sync', {
-    employee_ids: employeeIds,
-    ...(confirmGradeDefaultIds.length ? { confirm_grade_default_employee_ids: confirmGradeDefaultIds } : {}),
-  })
+// body 以 ApiBody 型別約束，少帶必填欄位時 vue-tsc 會擋下；回傳型別維持未標註
+// （後端此端點尚無 response_model，標 AxiosResp 只會得到 unknown）。
+export const syncPositionSalary = (body: ApiBody<'/config/position-salary/sync', 'post'>) =>
+  api.post('/config/position-salary/sync', body)
