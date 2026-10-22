@@ -370,6 +370,34 @@ describe('GrowthContractView', () => {
         expect(deleteGrowthHourMock).not.toHaveBeenCalled()
     })
 
+    it('④ 後端 full_term gate（聘書期間中途離職）顯示中文短標籤而非原始 code', async () => {
+        getGrowthPreviewMock.mockResolvedValueOnce({
+            data: previewFixture({
+                rows: [
+                    previewRow({
+                        eligible: false,
+                        amount: 0,
+                        gates: [
+                            gate({
+                                code: 'full_term',
+                                status: 'fail',
+                                detail: '聘書期間內離職（離職日 2026-01-31，未做滿至 2026-07-31）',
+                            }),
+                        ],
+                    }),
+                ],
+            }),
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        const [item] = vm.previewTableData[0].gateItems
+        expect(item.code).toBe('full_term')
+        expect(item.label).toBe('做滿聘期')
+        expect(item.cls).toBe('gate-fail')
+    })
+
     it('③ 預覽表格 gate 欄位三種狀態圖示（pass/fail/no_data）彼此可視覺分辨', async () => {
         const wrapper = mountView()
         await flushPromises()

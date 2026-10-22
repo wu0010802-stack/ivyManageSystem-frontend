@@ -273,6 +273,7 @@ const SEMESTER_LABELS: Record<number, string> = { 1: '上學期', 2: '下學期'
 // 資格條件 code → 短標籤（用於資格條件欄的 tag 文字）。
 const GATE_LABELS: Record<string, string> = {
     signed: '簽約',
+    full_term: '做滿聘期',
     returning_rate: '舊生率',
     late_early: '遲到早退',
     leave_days: '請假天數',
