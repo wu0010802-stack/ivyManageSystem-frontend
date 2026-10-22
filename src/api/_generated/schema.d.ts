@@ -34707,6 +34707,11 @@ export interface components {
              * @description 扣薪比例覆蓋（不提供則依假別預設值，0.0=全薪，1.0=全扣）
              */
             deduction_ratio?: number | null;
+            /**
+             * Deduction Ratio Override Reason
+             * @description 扣薪比例人工覆寫原因；有原因時核准保留覆寫值，否則改回假別標準值
+             */
+            deduction_ratio_override_reason?: string | null;
             /** Employee Id */
             employee_id: number;
             /**
@@ -34926,6 +34931,11 @@ export interface components {
              * @description 扣薪比例覆蓋（不提供則依假別預設值，0.0=全薪，1.0=全扣）
              */
             deduction_ratio?: number | null;
+            /**
+             * Deduction Ratio Override Reason
+             * @description 扣薪比例人工覆寫原因；有原因時核准保留覆寫值，否則改回假別標準值
+             */
+            deduction_ratio_override_reason?: string | null;
             /** End Date */
             end_date?: string | null;
             /** End Time */
@@ -35513,8 +35523,17 @@ export interface components {
             absentees: number[];
             /** Attendees */
             attendees: number[];
+            /**
+             * Hours Overrides
+             * @default {}
+             */
+            hours_overrides: {
+                [key: string]: number;
+            };
             /** Meeting Date */
             meeting_date: string;
+            /** Meeting Hours */
+            meeting_hours?: number | null;
             /**
              * Meeting Type
              * @default staff_meeting
