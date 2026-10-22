@@ -41,6 +41,8 @@ type PanelVm = {
   dividendActivityMinSessions: number | null
   teachingExtraUnitPrice: number | null
   teachingExtraSessionsPerUnit: number | null
+  promoterPriceOverrides: Record<number, number | null>
+  afterClassAwardMinSessions: number | null
   clearAllGradeThresholds: () => void
   addAfterClassAwardRow: () => void
   removeAfterClassAwardRow: (i: number) => void
@@ -92,6 +94,8 @@ const FULL_BONUS_CONFIG_RESPONSE = {
   sick_leave_deduction_per_day: 500,
   after_class_award_unit_price: {},
   art_teacher_employee_ids: [],
+  art_teacher_unit_price_overrides: null,
+  after_class_award_min_sessions: 16,
 }
 
 function stubEmployees() {
@@ -575,6 +579,70 @@ describe('YearEndRulesPanel', () => {
       const wrapper = await mountPanel()
 
       expect(wrapper.html()).not.toContain('#2b303b')
+    })
+  })
+
+  // 2026-10-22 義華比對 #31／#32：推動獎門檻（≥16 inclusive）與主管／行政個別單價
+  describe('推動才藝獎：堂數門檻與個別單價', () => {
+    it('load: overrides（字串 id key）→ promoterPriceOverrides；門檻帶入', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: {
+          ...FULL_BONUS_CONFIG_RESPONSE,
+          art_teacher_employee_ids: [7, 9],
+          art_teacher_unit_price_overrides: { '9': 15 },
+          after_class_award_min_sessions: 16,
+        },
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.promoterPriceOverrides[9]).toBe(15)
+      expect(vm.promoterPriceOverrides[7] ?? null).toBeNull()
+      expect(vm.afterClassAwardMinSessions).toBe(16)
+    })
+
+    it('save: 只送仍在收款人名單且有值的個別單價（字串 key），並送門檻', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: {
+          ...FULL_BONUS_CONFIG_RESPONSE,
+          art_teacher_employee_ids: [7, 9],
+          art_teacher_unit_price_overrides: { '9': 15, '42': 20 },
+        },
+      } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '推動獎主管行政分設單價' } as never)
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+      vm.promoterPriceOverrides[7] = 30
+      vm.afterClassAwardMinSessions = 15
+      await nextTick()
+      await vm.saveRules()
+
+      const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
+        string,
+        unknown
+      >
+      // 42 已不在收款人名單 → 不送；7、9 各自單價
+      expect(payload.art_teacher_unit_price_overrides).toEqual({ '7': 30, '9': 15 })
+      expect(payload.after_class_award_min_sessions).toBe(15)
+    })
+
+    it('標籤不再寫「才藝老師」，改為推動獎（主管／行政）', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: { ...FULL_BONUS_CONFIG_RESPONSE },
+      } as never)
+      stubEmployees()
+      const source = readFileSync(
+        path.resolve(__dirname, '../YearEndRulesPanel.vue'),
+        'utf-8',
+      )
+      expect(source).not.toContain('才藝老師單價')
+      expect(source).not.toContain('才藝老師（年終收款人）')
+      expect(source).toContain('推動獎')
     })
   })
 })
