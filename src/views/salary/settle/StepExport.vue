@@ -23,6 +23,9 @@
           {{ label }}名冊
         </el-button>
       </div>
+      <p class="export-hint">
+        勾選「不入轉帳名冊」或沒有銀行帳號的人不會出現在銀行名冊，會列在各名冊的「未列入名冊」工作表；現金發放請匯出領現名冊。
+      </p>
     </el-card>
 
     <el-card shadow="never" class="no-hover export-card">
@@ -81,6 +84,7 @@ const ROSTER_TYPE_LABELS = {
     festival: '節慶獎金',
     surplus: '超額獎金',
     art_teacher: '才藝老師',
+    cash: '領現',
 } as const
 
 const hasExported = ref(false)
@@ -104,7 +108,9 @@ const exportRoster = async (type: keyof typeof ROSTER_TYPE_LABELS) => {
     if (!canExportFullSalary.value || rosterLoading.value) return
     rosterLoading.value = type
     const label = ROSTER_TYPE_LABELS[type]
-    const filename = `${q.year}年${String(q.month).padStart(2, '0')}月_${label}轉帳名冊.xlsx`
+    // 領現名冊不是銀行轉帳檔，檔名不可叫「轉帳名冊」
+    const suffix = type === 'cash' ? '名冊' : '轉帳名冊'
+    const filename = `${q.year}年${String(q.month).padStart(2, '0')}月_${label}${suffix}.xlsx`
     try {
         // 只有下載真的成功才標記完成；downloadFile 內部吞錯後仍 resolve，
         // 不可把「沒 throw」當成功，否則匯出失敗仍誤顯「本月結薪完成」。
@@ -153,6 +159,12 @@ const exportAllPdf = async () => {
 
 .export-title {
   margin: 0 0 var(--space-3);
+}
+
+.export-hint {
+  margin: var(--space-3) 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
 }
 
 .export-buttons {

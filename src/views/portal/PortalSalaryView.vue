@@ -115,6 +115,9 @@ const deductionLines = computed(() => nonZero(salary.value?.deductions))
 // 獨立轉帳（節慶/超額/考核年終）：不併入 gross/net、另行撥款。
 // festival_bonus 已在後端發放月扣除會議缺席扣款，這裡只渲染不可再減。
 const separateLines = computed(() => nonZero(salary.value?.separate_transfer))
+// 雇主負擔（勞退雇主提繳）：不自薪資扣除、不進任何合計，僅依勞退條例告知
+// （2026-10-22 義華比對 #51）。
+const employerLines = computed(() => nonZero(salary.value?.employer_contributions))
 
 const fmt = (n: number | undefined | null) => (n ?? 0).toLocaleString()
 
@@ -206,6 +209,19 @@ onMounted(initialLoad)
             </el-descriptions-item>
             <el-descriptions-item label="獨立轉帳合計">
               <strong>NT$ {{ fmt(salary.separate_subtotal) }}</strong>
+            </el-descriptions-item>
+          </el-descriptions>
+        </template>
+
+        <template v-if="employerLines.length > 0">
+          <h4 style="margin-top: 20px;">雇主負擔（不自薪資扣除）</h4>
+          <el-descriptions :column="isMobile ? 1 : 2" border>
+            <el-descriptions-item
+              v-for="line in employerLines"
+              :key="line.key"
+              :label="line.label"
+            >
+              NT$ {{ fmt(line.amount) }}
             </el-descriptions-item>
           </el-descriptions>
         </template>

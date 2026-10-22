@@ -74,7 +74,7 @@ describe('StepExport', () => {
             button.text().includes('名冊') || button.text().includes('Excel') || button.text().includes('PDF'),
         )
 
-        expect(exportButtons).toHaveLength(6)
+        expect(exportButtons).toHaveLength(7)
         expect(exportButtons.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
         await exportButtons[0].trigger('click')
         expect(downloadFileMock).not.toHaveBeenCalled()
@@ -135,6 +135,24 @@ describe('StepExport', () => {
         // 結束後可再次匯出
         await btn.trigger('click')
         expect(downloadFileMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('領現名冊（2026-10-22 義華 #52）：type=cash、檔名為領現名冊而非轉帳名冊', async () => {
+        downloadFileMock.mockResolvedValueOnce(true)
+        const wrapper = mountStep(makeSettlement([rec()]))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('領現名冊'))
+        expect(btn).toBeTruthy()
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(downloadFileMock).toHaveBeenCalledWith(
+            '/salaries/2026/5/transfer-roster?type=cash',
+            '2026年05月_領現名冊.xlsx',
+        )
+    })
+
+    it('提示被排除者會列在「未列入名冊」工作表', () => {
+        const wrapper = mountStep(makeSettlement([rec()]))
+        expect(wrapper.text()).toContain('未列入名冊')
     })
 
     it('匯出總表 Excel/PDF', async () => {

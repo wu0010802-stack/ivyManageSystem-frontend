@@ -102,7 +102,7 @@ export const getSalaryMonthlyOverview = (
     api.get('/salaries/monthly-overview', { params, signal })
 
 // 銀行轉帳名冊匯出（xlsx）
-// type: 'base' | 'festival' | 'surplus' | 'art_teacher'
+// type: 'base' | 'festival' | 'surplus' | 'art_teacher' | 'cash'（cash＝領現名冊）
 export const exportTransferRoster = (year: number, month: number, type: string) =>
     api.get(`/salaries/${year}/${month}/transfer-roster`, {
         params: { type },

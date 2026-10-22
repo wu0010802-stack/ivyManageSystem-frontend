@@ -17911,6 +17911,9 @@ export interface paths {
         /**
          * Export Transfer Roster
          * @description 匯出指定月份的銀行轉帳名冊 xlsx。
+         *
+         *     銀行名冊另附「未列入名冊」工作表，並以 `X-Roster-Excluded-Count` header
+         *     回報因不薪轉／無帳號被排除的人數；type=cash 匯出領現名冊。
          */
         get: operations["export_transfer_roster_api_salaries__year___month__transfer_roster_get"];
         put?: never;
@@ -40787,6 +40790,8 @@ export interface components {
             deduction_subtotal: number;
             /** Deductions */
             deductions: components["schemas"]["PortalSalaryBreakdownLineOut"][];
+            /** Employer Contributions */
+            employer_contributions: components["schemas"]["PortalSalaryBreakdownLineOut"][];
             /** Income */
             income: components["schemas"]["PortalSalaryBreakdownLineOut"][];
             /** Income Subtotal */
@@ -46066,6 +46071,8 @@ export interface components {
             deduction_subtotal: number;
             /** Deductions */
             deductions: components["schemas"]["SalaryHistoryLineOut"][];
+            /** Employer Contributions */
+            employer_contributions: components["schemas"]["SalaryHistoryLineOut"][];
             /** Income */
             income: components["schemas"]["SalaryHistoryLineOut"][];
             /** Income Subtotal */
@@ -81571,7 +81578,7 @@ export interface operations {
     export_transfer_roster_api_salaries__year___month__transfer_roster_get: {
         parameters: {
             query: {
-                /** @description 名冊類型：base|festival|surplus|art_teacher */
+                /** @description 名冊類型：base|festival|surplus|art_teacher|cash（cash＝領現名冊：不薪轉或無銀行帳號者） */
                 type: string;
             };
             header?: never;
