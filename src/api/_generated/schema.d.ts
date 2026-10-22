@@ -30360,6 +30360,11 @@ export interface components {
             health_exempt: boolean;
             /** Health Insured Salary */
             health_insured_salary?: number | null;
+            /**
+             * Health Self Pay Ratio
+             * @default 1
+             */
+            health_self_pay_ratio: number;
             /** Hire Date */
             hire_date?: string | null;
             /**
@@ -30507,6 +30512,8 @@ export interface components {
             health_exempt: boolean;
             /** Health Insured Salary */
             health_insured_salary?: number | null;
+            /** Health Self Pay Ratio */
+            health_self_pay_ratio?: number | null;
             /** Hire Date */
             hire_date?: string | null;
             /** Hourly Rate */
@@ -30640,6 +30647,8 @@ export interface components {
             health_exempt?: boolean | null;
             /** Health Insured Salary */
             health_insured_salary?: number | null;
+            /** Health Self Pay Ratio */
+            health_self_pay_ratio?: number | null;
             /** Hire Date */
             hire_date?: string | null;
             /** Hourly Rate */
@@ -30670,6 +30679,8 @@ export interface components {
             position?: string | null;
             /** Probation End Date */
             probation_end_date?: string | null;
+            /** Salary Inputs Effective From */
+            salary_inputs_effective_from?: string | null;
             /** Skip Payroll Bonuses */
             skip_payroll_bonuses?: boolean | null;
             /** Skip Payroll Transfer */
@@ -34215,6 +34226,29 @@ export interface components {
             score_item_code?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /** InsuranceAdjustmentItem */
+        InsuranceAdjustmentItem: {
+            /**
+             * Amount
+             * @description 正＝補收（增加扣款）、負＝退回（減少扣款）；不可為 0
+             */
+            amount: number;
+            /**
+             * Label
+             * @description 名目，例：7-8月眷屬健保、退回8月勞保
+             */
+            label: string;
+        };
+        /**
+         * InsuranceAdjustmentItemOut
+         * @description 保費追溯調整明細一筆（義華 115.09 對帳 #37）。
+         */
+        InsuranceAdjustmentItemOut: {
+            /** Amount */
+            amount: number;
+            /** Label */
+            label: string;
         };
         /** InsuranceBracketDeleteRequest */
         InsuranceBracketDeleteRequest: {
@@ -45787,6 +45821,16 @@ export interface components {
             early_leave_deduction: number;
             /** Health Insurance */
             health_insurance: number;
+            /**
+             * Insurance Adjustment
+             * @default 0
+             */
+            insurance_adjustment: number;
+            /**
+             * Insurance Adjustment Items
+             * @default []
+             */
+            insurance_adjustment_items: components["schemas"]["InsuranceAdjustmentItemOut"][];
             /** Labor Insurance */
             labor_insurance: number;
             /** Late Deduction */
@@ -46129,6 +46173,16 @@ export interface components {
             gross_salary: number;
             /** Id */
             id: number;
+            /**
+             * Insurance Adjustment
+             * @default 0
+             */
+            insurance_adjustment: number;
+            /**
+             * Insurance Adjustment Items
+             * @default []
+             */
+            insurance_adjustment_items: components["schemas"]["InsuranceAdjustmentItemOut"][];
             /** Late Deduction */
             late_deduction: number;
             /** Leave Deduction */
@@ -46177,6 +46231,8 @@ export interface components {
             festival_bonus?: number | null;
             /** Health Insurance Employee */
             health_insurance_employee?: number | null;
+            /** Insurance Adjustment Items */
+            insurance_adjustment_items?: components["schemas"]["InsuranceAdjustmentItem"][] | null;
             /** Labor Insurance Employee */
             labor_insurance_employee?: number | null;
             /** Late Deduction */
@@ -46408,6 +46464,16 @@ export interface components {
             health_insurance: number;
             /** Id */
             id: number;
+            /**
+             * Insurance Adjustment
+             * @default 0
+             */
+            insurance_adjustment: number;
+            /**
+             * Insurance Adjustment Items
+             * @default []
+             */
+            insurance_adjustment_items: components["schemas"]["InsuranceAdjustmentItemOut"][];
             /** Is Finalized */
             is_finalized: boolean;
             /** Job Title */
@@ -46723,6 +46789,10 @@ export interface components {
             hourly_total?: number | null;
             /** Id */
             id: number;
+            /** Insurance Adjustment */
+            insurance_adjustment?: number | null;
+            /** Insurance Adjustment Items */
+            insurance_adjustment_items?: components["schemas"]["InsuranceAdjustmentItemOut"][] | null;
             /** Insurance Rate Id */
             insurance_rate_id?: number | null;
             /** Labor Insurance Employee */
