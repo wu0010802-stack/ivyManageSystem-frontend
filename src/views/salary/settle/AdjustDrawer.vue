@@ -37,6 +37,33 @@
           placeholder="額外加給的名目（例：值週、活動加班費、補發）"
         />
       </el-form-item>
+      <el-form-item label="保費追溯調整">
+        <div class="ins-adj">
+          <div class="ins-adj__hint">
+            正數＝補收（增加扣款，例：7-8月眷屬健保 1032）；負數＝退回（減少扣款，例：退回8月健保 -592）。
+            進扣款合計、不進應發，不改當月勞健保欄。
+          </div>
+          <div v-for="(item, idx) in insItems" :key="idx" class="ins-adj__row">
+            <el-input v-model="item.label" maxlength="50" placeholder="名目（例：7-8月眷屬健保）" />
+            <el-input-number
+              v-model="item.amount"
+              :min="-INS_ADJ_ITEM_MAX"
+              :max="INS_ADJ_ITEM_MAX"
+              :step="100"
+              controls-position="right"
+              aria-label="金額（負數＝退回）"
+            />
+            <el-button link type="danger" @click="removeInsItem(idx)">刪除</el-button>
+          </div>
+          <div class="ins-adj__foot">
+            <el-button size="small" @click="addInsItem">新增一筆</el-button>
+            <span v-if="insItems.length" class="ins-adj__total">
+              合計 {{ insTotal > 0 ? '+' : '' }}{{ insTotal.toLocaleString() }}
+              （{{ insTotal >= 0 ? '補收' : '退回' }}）
+            </span>
+          </div>
+        </div>
+      </el-form-item>
       <el-form-item label="調整原因" required>
         <el-input
           v-model="reason"
@@ -58,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { manualAdjustSalary } from '@/api/salary'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -81,6 +108,19 @@ const saving = ref(false)
 const reason = ref('')
 const extraAllowanceLabel = ref('')
 const explicitFestivalBonus = ref(false)
+// #37 保費追溯補收（正）／退回（負）明細；上限與後端 _INSURANCE_ADJUSTMENT_ITEM_MAX 一致
+const INS_ADJ_ITEM_MAX = 50000
+interface InsAdjItem { label: string; amount: number }
+const insItems = ref<InsAdjItem[]>([])
+const originalInsItems = ref<InsAdjItem[]>([])
+const insTotal = computed(() => insItems.value.reduce((sum, it) => sum + Number(it.amount || 0), 0))
+const addInsItem = () => { insItems.value.push({ label: '', amount: 0 }) }
+const removeInsItem = (idx: number) => { insItems.value.splice(idx, 1) }
+const toInsItems = (raw: unknown): InsAdjItem[] =>
+    Array.isArray(raw)
+        ? raw.map((it) => ({ label: String((it as InsAdjItem)?.label ?? ''), amount: Number((it as InsAdjItem)?.amount ?? 0) }))
+        : []
+
 const form = reactive<Record<FieldKey, number>>(
     Object.fromEntries(EDITABLE_FIELDS.map((f) => [f.key, 0])) as Record<FieldKey, number>,
 )
@@ -93,6 +133,8 @@ watch(
         if (!open || !row) return
         reason.value = ''
         extraAllowanceLabel.value = (row.extra_allowance_label as string) || ''
+        originalInsItems.value = toInsItems(row.insurance_adjustment_items)
+        insItems.value = originalInsItems.value.map((it) => ({ ...it }))
         for (const f of EDITABLE_FIELDS) {
             form[f.key] = Number(row[f.key] ?? 0)
         }
@@ -117,8 +159,16 @@ const save = async () => {
         }
         const label = extraAllowanceLabel.value.trim()
         if (label !== String(row.extra_allowance_label ?? '').trim()) payload.extra_allowance_label = label
+        const nextInsItems = insItems.value.map((it) => ({ label: it.label.trim(), amount: Math.round(Number(it.amount || 0)) }))
+        if (nextInsItems.some((it) => !it.label || it.amount === 0)) {
+            ElMessage.warning('保費追溯調整每筆都要填名目，金額不可為 0（負數＝退回）')
+            return
+        }
+        if (JSON.stringify(nextInsItems) !== JSON.stringify(originalInsItems.value)) {
+            payload.insurance_adjustment_items = nextInsItems
+        }
         if (Object.keys(payload).length === 1) {
-            ElMessage.info('尚未修改薪資金額或加給名目')
+            ElMessage.info('尚未修改薪資金額、加給名目或保費追溯調整')
             return
         }
         const festival = Number(form.festival_bonus || 0)
@@ -164,6 +214,36 @@ const save = async () => {
 <style scoped>
 .adjust-mb {
   margin-bottom: var(--space-4);
+}
+
+.ins-adj {
+  width: 100%;
+}
+
+.ins-adj__hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 6px;
+}
+
+.ins-adj__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.ins-adj__foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ins-adj__total {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
 }
 
 .adjust-grid {

@@ -76,6 +76,8 @@ export const SALARY_TAB_FIELDS = Object.freeze([
   // 階段 2-C：特殊投保/獎金狀態旗標
   'no_employment_insurance',
   'health_exempt',
+  // 義華 115.09 對帳 #36：健保本人自付比例
+  'health_self_pay_ratio',
   'skip_payroll_bonuses',
   'skip_payroll_transfer',
   'unreported_for_tax',
