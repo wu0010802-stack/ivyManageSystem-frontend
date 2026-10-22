@@ -110,6 +110,7 @@ export const EXCEPTION_TYPE_LABEL: Record<string, string> = {
   hire_in_window_missing_employment_period: '任職區間缺漏',
   manual_items_missing: '手填事件缺漏',
   summaries_not_finalized: '考核尚未核定',
+  low_grade_interview: '低等第須面談',
   qualification: '年資資格疑義',
   missing_class_target: '班級編制缺漏',
   missing_head_teacher: '班導未指定',
