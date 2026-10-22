@@ -70,6 +70,7 @@ const FINALIZED_RESPONSE = {
       { key: 'late_deduction', label: '遲到扣款', amount: 0 },
     ],
     deduction_subtotal: 1300,
+    employer_contributions: [{ key: 'pension_employer', label: '勞退雇主提繳', amount: 2748 }],
     net_salary: 32200,
     unused_leave_payout: 0,
     base_transfer_amount: 32200,
@@ -127,6 +128,28 @@ describe('PortalSalaryView 三區明細', () => {
     expect(text).toContain('節慶獎金')
     expect(text).toContain('2,000')
     expect(text).not.toContain('超額獎金') // 0 元列不顯示
+  })
+
+  it('雇主負擔區列出勞退雇主提繳（2026-10-22 義華 #51：呂麗珍 45,800×6%＝2,748）', async () => {
+    const wrapper = await mountView()
+    const text = wrapper.text()
+    expect(text).toContain('雇主負擔')
+    expect(text).toContain('勞退雇主提繳')
+    expect(text).toContain('2,748')
+  })
+
+  it('雇主提繳為 0 時不顯示雇主負擔區', async () => {
+    mockPreview.mockResolvedValue({
+      data: {
+        ...FINALIZED_RESPONSE,
+        salary: {
+          ...FINALIZED_RESPONSE.salary,
+          employer_contributions: [{ key: 'pension_employer', label: '勞退雇主提繳', amount: 0 }],
+        },
+      },
+    })
+    const wrapper = await mountView()
+    expect(wrapper.text()).not.toContain('雇主負擔')
   })
 
   it('實發金額取後端 base_transfer_amount', async () => {
