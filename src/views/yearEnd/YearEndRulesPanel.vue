@@ -65,8 +65,14 @@ const RULE_FIELDS = [
 // 課後才藝班年終單價（班名 → 單價），動態 key-value 列
 type AfterClassAwardEntry = { className: string; price: number }
 const afterClassAwardRows = ref<AfterClassAwardEntry[]>([])
-// 才藝老師年終收款人 employee id list
+// 推動才藝獎（主管／行政）收款人 employee id list（後端欄名沿用舊稱 art_teacher_*）
 const artTeacherEmployeeIds = ref<number[]>([])
+// 2026-10-22 義華比對 #32：才藝班公告 A.推動獎「園長/主任 30、行政/會計 15」依人分設。
+// 員工 id → 個別單價；null/未填＝沿用推動獎預設單價（rules.art_teacher_unit_price）。
+const promoterPriceOverrides = ref<Record<number, number | null>>({})
+// 2026-10-22 義華比對 #31：「幼生需上課堂數達16堂,計1人次」——該門課出席 ≥ N 堂才計入
+// （inclusive，與學期紅利「逾 N 堂」不同）；0＝停用。後端預設 16。
+const afterClassAwardMinSessions = ref<number | null>(null)
 
 // G15（園方福利辦法 115.01.01）：紅利才藝人次比率逐年級門檻（顯示用百分比，0~100）。
 // 任一年級留空＝該年級沿用單一門檻 dividend_activity_threshold；四年級皆空 → 送出 null。
@@ -111,6 +117,16 @@ const fetchRules = async () => {
         : []
     const ids = data.art_teacher_employee_ids
     artTeacherEmployeeIds.value = Array.isArray(ids) ? ids.map((i) => Number(i)) : []
+    const overridesRaw = data.art_teacher_unit_price_overrides
+    const overrides: Record<number, number | null> = {}
+    if (overridesRaw && typeof overridesRaw === 'object') {
+      for (const [k, v] of Object.entries(overridesRaw as Record<string, unknown>)) {
+        if (typeof v === 'number') overrides[Number(k)] = v
+      }
+    }
+    promoterPriceOverrides.value = overrides
+    const promoterMinRaw = data.after_class_award_min_sessions
+    afterClassAwardMinSessions.value = typeof promoterMinRaw === 'number' ? promoterMinRaw : null
 
     // G15 兩新欄位：舊後端缺欄位（undefined）與新後端明確 null 皆視為「未設定」，
     // 由 gradeThresholdsFromApi 統一容錯，不炸也不需另外顯示「不支援」提示。
@@ -145,8 +161,13 @@ const fetchEmployeeOptions = async () => {
     employeeOptions.value = (res.data as EmployeeOption[]).filter((e) => e.id != null)
   } catch {
     // 非致命：下拉退化但其餘欄位仍可編輯
-    ElMessage.warning('員工清單載入失敗，才藝老師選擇可能不完整')
+    ElMessage.warning('員工清單載入失敗，推動獎收款人選擇可能不完整')
   }
+}
+
+const promoterName = (id: number): string => {
+  const emp = employeeOptions.value.find((e) => e.id === id)
+  return emp ? String(emp.name) : `員工 #${id}`
 }
 
 const addAfterClassAwardRow = () => {
@@ -179,6 +200,12 @@ const saveRules = async () => {
     const name = row.className.trim()
     if (name) afterClassAwardDict[name] = Number(row.price) || 0
   }
+  // 個別單價只送仍在收款人名單、且有填值者（key 為員工 id 字串）；空 dict＝清除全部覆寫。
+  const overridesPayload: Record<string, number> = {}
+  for (const id of artTeacherEmployeeIds.value) {
+    const price = promoterPriceOverrides.value[id]
+    if (typeof price === 'number') overridesPayload[String(id)] = price
+  }
   // 只送年終欄位；後端 PUT /config/bonus 為部分更新，會保留超額/節慶/底薪等其他設定。
   const payload: ApiBody<'/config/bonus', 'put'> & { reason: string } = {
     ...rules,
@@ -187,6 +214,9 @@ const saveRules = async () => {
     dividend_activity_threshold: percentToFraction(rules.dividend_activity_threshold),
     after_class_award_unit_price: afterClassAwardDict,
     art_teacher_employee_ids: [...artTeacherEmployeeIds.value],
+    art_teacher_unit_price_overrides: overridesPayload,
+    // null＝不變更（後端保留原值）；0＝停用門檻
+    after_class_award_min_sessions: afterClassAwardMinSessions.value,
     // G15：逐年級門檻換算回 fraction dict（全空 → null 回退單一門檻）+ 堂數條件（null＝停用）。
     dividend_activity_grade_thresholds: gradeThresholdsToApi(gradeThresholdPercents),
     dividend_activity_min_sessions: dividendActivityMinSessions.value,
@@ -247,8 +277,8 @@ onMounted(() => {
         <el-col :span="12">
           <el-form-item>
             <template #label>
-              <el-tooltip content="才藝老師年終單價：每位收款人得「全校總人次 × 單價」" placement="top">
-                <span>才藝老師單價</span>
+              <el-tooltip content="推動才藝獎（主管／行政）預設單價：每位收款人得「全校總人次 × 單價」；可在下方逐人設定個別單價" placement="top">
+                <span>推動獎預設單價</span>
               </el-tooltip>
             </template>
             <el-input-number
@@ -257,6 +287,23 @@ onMounted(() => {
               controls-position="right" style="width: 100%"
             />
             <span class="unit-hint">元 / 人次</span>
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item>
+            <template #label>
+              <el-tooltip content="才藝班公告：幼生在該門課出席「達」此堂數（含）才計 1 人次；班導每班獎金與推動獎全校人次都套用。填 0＝停用。點名資料全空時系統自動不套用並提示。" placement="top">
+                <span>出席達 N 堂才計人次</span>
+              </el-tooltip>
+            </template>
+            <el-input-number
+              v-model="afterClassAwardMinSessions"
+              :min="0" :max="200" :step="1"
+              controls-position="right" style="width: 100%"
+              :value-on-clear="null"
+              placeholder="預設 16"
+            />
+            <span class="unit-hint">堂</span>
           </el-form-item>
         </el-col>
       </el-row>
@@ -295,13 +342,13 @@ onMounted(() => {
       <el-button class="mt-2" @click="addAfterClassAwardRow">+ 新增班別</el-button>
 
       <el-divider />
-      <el-form-item label="才藝老師（年終收款人）">
+      <el-form-item label="推動獎收款人（主管／行政）">
         <el-select
           v-model="artTeacherEmployeeIds"
           multiple
           filterable
           clearable
-          placeholder="選擇才藝老師（每位得全校總人次 × 單價）"
+          placeholder="選擇園長／主任／行政（每位得全校總人次 × 單價）"
           style="width: 100%"
         >
           <el-option
@@ -312,6 +359,27 @@ onMounted(() => {
           />
         </el-select>
       </el-form-item>
+      <template v-if="artTeacherEmployeeIds.length > 0">
+        <p class="desc-text">
+          個別單價（選填）：公告為園長／主任每人次 30、行政／會計 15；留空＝沿用預設單價。
+        </p>
+        <div
+          v-for="empId in artTeacherEmployeeIds"
+          :key="empId"
+          class="kv-row"
+        >
+          <span style="flex: 1">{{ promoterName(empId) }}</span>
+          <el-input-number
+            v-model="promoterPriceOverrides[empId]"
+            :min="0" :step="5"
+            controls-position="right"
+            style="width: 160px"
+            :value-on-clear="null"
+            placeholder="沿用預設"
+          />
+          <span class="unit-hint">元 / 人次</span>
+        </div>
+      </template>
     </el-card>
 
     <!-- ⑥ 教課獎勵（②③ 為既有編號跳號留白，避免與其他意涵混淆改用下一個未用序號） -->

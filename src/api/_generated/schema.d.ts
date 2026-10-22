@@ -25006,6 +25006,11 @@ export interface components {
             /** Admin Festival */
             admin_festival?: number | null;
             /**
+             * After Class Award Min Sessions
+             * @description 推動才藝獎人次堂數門檻（該門課出席 ≥ 此值才計 1 人次；0=停用）
+             */
+            after_class_award_min_sessions?: number | null;
+            /**
              * After Class Award Unit Price
              * @description 課後才藝班年終單價 JSON（班名→K 單價）
              */
@@ -25014,13 +25019,20 @@ export interface components {
             } | null;
             /**
              * Art Teacher Employee Ids
-             * @description 才藝老師年終收款人 employee id list（每位得全校總人次×單價）
+             * @description 推動才藝獎（主管／行政）年終收款人 employee id list（每位得全校總人次×單價）
              */
             art_teacher_employee_ids?: number[] | null;
             /** Art Teacher Festival */
             art_teacher_festival?: number | null;
             /** Art Teacher Unit Price */
             art_teacher_unit_price?: number | null;
+            /**
+             * Art Teacher Unit Price Overrides
+             * @description 推動才藝獎個別收款人單價（員工 id→每人次單價，覆寫 art_teacher_unit_price）
+             */
+            art_teacher_unit_price_overrides?: {
+                [key: string]: number;
+            } | null;
             /** Assistant Teacher A */
             assistant_teacher_a?: number | null;
             /** Assistant Teacher B */
