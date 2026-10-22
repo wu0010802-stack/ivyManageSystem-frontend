@@ -7,7 +7,7 @@ const { get } = vi.hoisted(() => ({
 vi.mock('@/api', () => ({ default: { get } }))
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn() } }))
 
-import { downloadFile } from '@/utils/download'
+import { downloadFile, downloadFileWithHeaders } from '@/utils/download'
 import { ElMessage } from 'element-plus'
 
 describe('downloadFile', () => {
@@ -44,5 +44,20 @@ describe('downloadFile', () => {
       '/exports/employees',
       expect.objectContaining({ responseType: 'blob', params: undefined }),
     )
+  })
+})
+
+describe('downloadFileWithHeaders', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('成功回傳 response headers（呼叫端讀自訂 header，如 X-Roster-Excluded-Count）', async () => {
+    get.mockResolvedValueOnce({ data: new Blob(['x']), headers: { 'x-roster-excluded-count': '3' } })
+    const headers = await downloadFileWithHeaders('/salaries/2026/9/transfer-roster?type=base', 'a.xlsx')
+    expect(headers?.['x-roster-excluded-count']).toBe('3')
+  })
+  it('失敗回傳 null 並顯示錯誤', async () => {
+    get.mockRejectedValueOnce(Object.assign(new Error('boom'), { displayMessage: '本月薪資尚未封存' }))
+    expect(await downloadFileWithHeaders('/x')).toBeNull()
+    expect(ElMessage.error).toHaveBeenCalledWith('本月薪資尚未封存')
   })
 })

@@ -61,7 +61,8 @@
 import { ref, computed, inject, watch } from 'vue'
 import SalarySnapshotDialog from '../SalarySnapshotDialog.vue'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
-import { downloadFile } from '@/utils/download'
+import { ElMessage } from 'element-plus'
+import { downloadFile, downloadFileWithHeaders } from '@/utils/download'
 import type { SalarySettlement } from '@/composables/useSalarySettlement'
 
 defineEmits<{ (e: 'next'): void }>()
@@ -114,8 +115,20 @@ const exportRoster = async (type: keyof typeof ROSTER_TYPE_LABELS) => {
     try {
         // 只有下載真的成功才標記完成；downloadFile 內部吞錯後仍 resolve，
         // 不可把「沒 throw」當成功，否則匯出失敗仍誤顯「本月結薪完成」。
-        const ok = await downloadFile(`/salaries/${q.year}/${q.month}/transfer-roster?type=${type}`, filename)
-        if (ok) hasExported.value = true
+        const headers = await downloadFileWithHeaders(
+            `/salaries/${q.year}/${q.month}/transfer-roster?type=${type}`,
+            filename,
+        )
+        if (headers === null) return
+        hasExported.value = true
+        // 後端以 X-Roster-Excluded-Count 回報因不薪轉／無銀行帳號而未列入的人數
+        // （銀行名冊另附「未列入名冊」工作表；這些人應改發領現名冊）。
+        const excluded = Number(headers['x-roster-excluded-count'] ?? 0)
+        if (Number.isFinite(excluded) && excluded > 0) {
+            ElMessage.warning(
+                `有 ${excluded} 人未列入名冊，見第二張工作表／領現名冊`,
+            )
+        }
     } finally {
         rosterLoading.value = null
     }
