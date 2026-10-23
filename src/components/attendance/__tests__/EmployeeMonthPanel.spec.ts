@@ -563,13 +563,24 @@ describe('列印考核表（單人）', () => {
     wrapper.unmount()
   })
 
-  it('產生失敗走 onError 通知，不丟未處理例外', async () => {
+  it('產生失敗（API 錯誤）走 onError 通知，不丟未處理例外', async () => {
     const wrapper = mountPanel({ employeeId: 5 })
     await flushPromises()
     ;(wrapper.get('[data-test="print-appraisal"]').element as HTMLButtonElement).click()
-    const error = new Error('boom')
+    const error = { isAxiosError: true, response: { status: 500, data: {} }, message: 'Request failed with status code 500' }
     mockOpenPdf.mock.calls[0][0].onError(error)
     expect(mockNotify).toHaveBeenCalledWith(error, expect.any(String), null, expect.objectContaining({ prefix: '產生考核表失敗' }))
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('彈出視窗被封鎖（本機 Error）時顯示該訊息，不當成網路錯誤', async () => {
+    const wrapper = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    ;(wrapper.get('[data-test="print-appraisal"]').element as HTMLButtonElement).click()
+    mockOpenPdf.mock.calls[0][0].onError(new Error('瀏覽器封鎖了新分頁，請允許彈出視窗'))
+    expect(ElMessage.error).toHaveBeenCalledWith('瀏覽器封鎖了新分頁，請允許彈出視窗')
+    expect(mockNotify).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

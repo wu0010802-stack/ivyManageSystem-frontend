@@ -62,6 +62,7 @@ import { getAttendanceMonthContext } from '@/api/attendanceMonthContext'
 import { buildAttendanceMonthRows, taipeiDate } from '@/utils/attendanceMonthRows'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
+import { localErrorMessage } from '@/utils/error'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import EmptyState from '@/components/common/EmptyState.vue'
 import RawPunchDetails from './RawPunchDetails.vue'
@@ -172,7 +173,12 @@ async function printAppraisal(): Promise<void> {
     await openPdfInNewTab({
       fetchBlob: async () => (await getAppraisalSheetsPdf({ year, month, employee_ids: [employeeId] })).data,
       loadingText: '考核表產生中…',
-      onError: (err) => notify(err, 'EmployeeMonthPanel.printAppraisal', null, { prefix: '產生考核表失敗' }),
+      onError: (err) => {
+        // 本機錯誤（例：彈出視窗被封鎖）照原訊息顯示；notify 沒有 response 會當成網路錯誤
+        const local = localErrorMessage(err)
+        if (local) ElMessage.error(local)
+        else notify(err, 'EmployeeMonthPanel.printAppraisal', null, { prefix: '產生考核表失敗' })
+      },
     })
   } finally {
     printing.value = false

@@ -79,7 +79,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAppraisalSheetCandidates, getAppraisalSheetsPdf } from '@/api/attendance'
 import type { AppraisalSheetCandidateGroup } from '@/api/attendance'
-import { apiError } from '@/utils/error'
+import { apiError, localErrorMessage } from '@/utils/error'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
 
 const props = defineProps<{
@@ -156,7 +156,8 @@ function isTimeoutError(err: unknown): boolean {
 
 function generateErrorMessage(err: unknown): string {
   if (isTimeoutError(err)) return TIMEOUT_MESSAGE
-  return apiError(err, '產生考核表失敗')
+  // 本機錯誤（例：彈出視窗被封鎖）照原訊息顯示；apiError 只看後端回應，會吞成通用失敗
+  return localErrorMessage(err) ?? apiError(err, '產生考核表失敗')
 }
 
 async function generate(): Promise<void> {

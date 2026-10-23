@@ -204,6 +204,20 @@ describe('AppraisalSheetBatchDialog', () => {
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
 
+  it('彈出視窗被封鎖（本機 Error）時顯示該訊息，不吞成通用失敗', async () => {
+    printWindow.openPdfInNewTab.mockImplementation(async ({ onError }: OpenArgs) => {
+      onError?.(new Error('瀏覽器封鎖了新分頁，請允許彈出視窗'))
+      return null
+    })
+    const wrapper = await mountLoaded()
+    await generateBtn(wrapper).trigger('click')
+    await flushPromises()
+    expect(message.error).toHaveBeenCalledTimes(1)
+    expect(message.error).toHaveBeenCalledWith('瀏覽器封鎖了新分頁，請允許彈出視窗')
+    expect(api.pdf).not.toHaveBeenCalled()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
   describe('人數多時的提示與逾時（Ruling 14）', () => {
     const LARGE_HINT = '人數較多時產生需要較久（約 1 分鐘內）；若逾時請分班列印。'
     const TIMEOUT_MESSAGE = '產生逾時，請減少人數（例如分班）後再試'
