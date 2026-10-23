@@ -132,6 +132,49 @@ describe('SalaryMonthlyOverviewPanel', () => {
     expect(text).toContain('完整人事成本')
   })
 
+  it('scope=all 有補充保費基數時顯示雇主補充保費與基數；fallback>0 提示', async () => {
+    getOverviewMock.mockImplementation(() =>
+      okResponse({
+        summary: {
+          ...makeOverview().summary,
+          total_employer_supplementary_premium: 2110,
+          total_employer_burden: 7710,
+          employer_supplementary_payroll_total: 1100000,
+          employer_supplementary_insured_total: 1000000,
+          employer_supplementary_rate: 0.0211,
+          employer_supplementary_insured_count: 30,
+          employer_supplementary_fallback_count: 2,
+        },
+      }),
+    )
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="summary-employer-supplementary"]').text()).toContain('2,110')
+    expect(wrapper.find('[data-testid="summary-employer-supplementary-base"]').text()).toContain('2.11%')
+    // summary.total_employer_burden 已含補充保費，前端照後端值顯示、不以員工列加總
+    expect(wrapper.find('[data-testid="summary-employer-burden"]').text()).toContain('7,710')
+    expect(wrapper.find('[data-testid="employer-supplementary-fallback"]').text()).toContain('2 人無計薪快照')
+  })
+
+  it('scope=self 不顯示雇主補充保費區', async () => {
+    getOverviewMock.mockImplementation(() =>
+      okResponse({
+        scope: 'self',
+        summary: {
+          ...makeOverview().summary,
+          total_employer_supplementary_premium: 0,
+          employer_supplementary_payroll_total: null,
+          employer_supplementary_insured_total: null,
+          employer_supplementary_rate: null,
+        },
+      }),
+    )
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="summary-employer-supplementary"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="employer-supplementary-note"]').exists()).toBe(false)
+  })
+
   it('scope=self 時對外發出 scope-change 事件', async () => {
     getOverviewMock.mockImplementation(() => okResponse({ scope: 'self' }))
     const wrapper = mountPanel()

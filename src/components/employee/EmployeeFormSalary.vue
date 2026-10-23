@@ -16,6 +16,8 @@ export interface EmployeeFormSalaryData {
   bank_account_name?: string
   no_employment_insurance?: boolean
   health_exempt?: boolean
+  // 義華 R2 #42：不投保（承攬／自行投保）——勞健保、勞退（雇主與自提）一律 0
+  not_insured?: boolean
   // 義華 115.09 對帳 #36：健保本人自付比例（1＝全額、0.5＝中低收入 5 折、0＝本人免繳）
   health_self_pay_ratio?: number | null
   // #41 本次薪資輸入異動生效日（空＝今日）
@@ -215,7 +217,7 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
 
     <!-- 進階特殊投保／獎金狀態（預設摺疊，僅特殊個案需設定）-->
     <FormSection data-test="section-advanced" title="進階特殊狀況" collapsible :default-open="false" style="margin-top: 12px;">
-        <div class="form-hint" style="margin-bottom: 8px;">免就保 / 健保豁免 / 不發紅利 / 分項投保 / 個人合約底薪</div>
+        <div class="form-hint" style="margin-bottom: 8px;">不投保 / 免就保 / 健保豁免 / 不發紅利 / 分項投保 / 個人合約底薪</div>
 
         <!-- 計薪行為旗標 -->
         <el-row :gutter="20">
@@ -242,7 +244,7 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
             <el-col :span="6">
                 <el-form-item>
                     <template #label>
-                        <el-tooltip content="業主指示不發紅利/節慶/超額/生日禮金；保險仍計算" placement="top">
+                        <el-tooltip content="業主指示不發紅利/節慶/超額/主管紅利/績效/特別獎金；生日禮金照發，保險仍計算" placement="top">
                             <span>不發獎金</span>
                         </el-tooltip>
                     </template>
@@ -257,6 +259,23 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
                         </el-tooltip>
                     </template>
                     <el-switch v-model="form.bypass_standard_base" :disabled="isReadonly" />
+                </el-form-item>
+            </el-col>
+        </el-row>
+
+        <!-- 義華 R2 #42：不投保（承攬／自行投保）——整段勞健保、勞退歸 0，與免就保／健保豁免不同 -->
+        <el-row :gutter="20">
+            <el-col :span="24">
+                <el-form-item>
+                    <template #label>
+                        <el-tooltip content="承攬人員或自行在外投保者：公司不投保勞保、健保、勞退" placement="top">
+                            <span>不投保（承攬／自行投保）</span>
+                        </el-tooltip>
+                    </template>
+                    <el-switch v-model="form.not_insured" :disabled="isReadonly" data-test="not-insured" />
+                    <div class="form-hint" style="width: 100%;">
+                        勾選後勞保、健保、勞退（雇主與自提）一律 0；兼職所得單月達 29,500 仍扣二代健保補充保費
+                    </div>
                 </el-form-item>
             </el-col>
         </el-row>

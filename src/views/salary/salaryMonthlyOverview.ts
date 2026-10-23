@@ -143,3 +143,39 @@ export function statusTagsForRow(row: OverviewEmployeeRow): StatusTag[] {
   if (row.has_manual_adjust) tags.push({ label: '人工調整', type: 'info' })
   return tags
 }
+
+// ── 雇主二代健保補充保費（義華 R2 #39，健保法 §34，全園層級）─────────────
+// 後端只在 scope=all 計算並已併入 summary.total_employer_burden／total_employer_cost；
+// 此處只把後端給的基數整理成顯示用資料，金額不在前端重算。
+export interface EmployerSupplementaryInfo {
+  premium: number
+  payrollTotal: number
+  insuredTotal: number
+  /** 計費基數＝支付薪資總額 − 投保金額總額（不足 0 以 0 顯示） */
+  base: number
+  /** 費率百分比文字，如 "2.11%" */
+  ratePercent: string
+  insuredCount: number | null
+  fallbackCount: number
+}
+
+export function employerSupplementaryInfo(
+  overview: Pick<OverviewOut, 'scope' | 'summary'> | null | undefined,
+): EmployerSupplementaryInfo | null {
+  if (!overview || overview.scope !== 'all') return null
+  const s = overview.summary
+  const payroll = s.employer_supplementary_payroll_total
+  const insured = s.employer_supplementary_insured_total
+  const rate = s.employer_supplementary_rate
+  if (payroll == null || insured == null || rate == null) return null
+  const pct = Number((rate * 100).toFixed(4))
+  return {
+    premium: s.total_employer_supplementary_premium ?? 0,
+    payrollTotal: payroll,
+    insuredTotal: insured,
+    base: Math.max(0, payroll - insured),
+    ratePercent: `${pct}%`,
+    insuredCount: s.employer_supplementary_insured_count ?? null,
+    fallbackCount: s.employer_supplementary_fallback_count ?? 0,
+  }
+}

@@ -10,6 +10,7 @@ import {
   filterEmployeeRows,
   columnsForPreset,
   statusTagsForRow,
+  employerSupplementaryInfo,
   type ColumnKey,
   type ColumnPreset,
   type OverviewOut,
@@ -85,6 +86,8 @@ const visibleColumns = computed(() => new Set<ColumnKey>(columnsForPreset(column
 const showCol = (key: ColumnKey) => visibleColumns.value.has(key)
 
 const summary = computed(() => overview.value?.summary ?? null)
+// 雇主二代健保補充保費：僅 scope=all 有基數；self 視野回 null 不顯示
+const supplementary = computed(() => employerSupplementaryInfo(overview.value))
 const failedChecks = computed(() => (overview.value?.checks ?? []).filter(c => !c.ok))
 const nonZeroCategories = computed(() =>
   (overview.value?.transfer_categories ?? []).filter(c => c.amount !== 0),
@@ -189,9 +192,17 @@ const gotoSettle = () => {
           <span class="mo-label">雇主勞退</span>
           <span class="mo-value">{{ money(summary.total_pension_employer) }}</span>
         </div>
+        <div v-if="supplementary" class="mo-cell" data-testid="summary-employer-supplementary">
+          <span class="mo-label">二代健保補充保費（雇主）</span>
+          <span class="mo-value">{{ money(supplementary.premium) }}</span>
+          <span class="mo-sub" data-testid="summary-employer-supplementary-base">
+            ({{ money(supplementary.payrollTotal) }} − {{ money(supplementary.insuredTotal) }}) × {{ supplementary.ratePercent }}
+          </span>
+        </div>
         <div class="mo-cell">
           <span class="mo-label">雇主負擔合計</span>
-          <span class="mo-value">{{ money(summary.total_employer_burden) }}</span>
+          <span class="mo-value" data-testid="summary-employer-burden">{{ money(summary.total_employer_burden) }}</span>
+          <span class="mo-sub">{{ supplementary ? '勞保＋健保＋勞退＋補充保費' : '勞保＋健保＋勞退' }}</span>
         </div>
         <div class="mo-cell mo-cell-primary">
           <span class="mo-label">完整人事成本</span>
@@ -199,6 +210,18 @@ const gotoSettle = () => {
           <span class="mo-sub">薪資面口徑；不含年終 E 化撥款與舊制勞退提撥</span>
         </div>
       </section>
+
+      <!-- 雇主補充保費基數說明（scope=all） -->
+      <p v-if="supplementary" class="mo-supp-note" data-testid="employer-supplementary-note">
+        雇主補充保費＝(支付薪資總額 {{ money(supplementary.payrollTotal) }} − 月底在保受僱者健保投保金額總額
+        {{ money(supplementary.insuredTotal) }}<template v-if="supplementary.insuredCount != null">，{{ supplementary.insuredCount }} 人</template>)
+        × {{ supplementary.ratePercent }}；只計入雇主負擔，不影響員工實領，亦不分攤到各員工列。
+        <template v-if="supplementary.fallbackCount > 0">
+          <br><span class="mo-supp-warn" data-testid="employer-supplementary-fallback">
+            {{ supplementary.fallbackCount }} 人無計薪快照，投保金額取現值
+          </span>
+        </template>
+      </p>
 
       <!-- 發放構成（非零分類） -->
       <section v-if="nonZeroCategories.length" class="mo-composition" aria-label="發放構成">
@@ -352,6 +375,15 @@ const gotoSettle = () => {
 .mo-comp-item strong { font-variant-numeric: tabular-nums; color: var(--el-text-color-primary); }
 
 .mo-status-alert { margin: 0; }
+
+.mo-supp-note {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+.mo-supp-warn { color: var(--el-color-warning); }
 
 .mo-filters {
   display: flex;

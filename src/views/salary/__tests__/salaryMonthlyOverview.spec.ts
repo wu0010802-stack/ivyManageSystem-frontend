@@ -4,7 +4,9 @@ import {
   isAbnormalRow,
   columnsForPreset,
   statusTagsForRow,
+  employerSupplementaryInfo,
   type OverviewEmployeeRow,
+  type OverviewOut,
 } from '../salaryMonthlyOverview'
 
 const row = (over: Partial<OverviewEmployeeRow> = {}): OverviewEmployeeRow => ({
@@ -121,5 +123,57 @@ describe('statusTagsForRow', () => {
     expect(statusTagsForRow(row({ has_salary_record: false }))).toEqual([
       { label: '僅表外獎金', type: 'info' },
     ])
+  })
+})
+
+describe('employerSupplementaryInfo（雇主二代健保補充保費）', () => {
+  const ov = (scope: string, summary: Record<string, unknown>) =>
+    ({ scope, summary } as unknown as Pick<OverviewOut, 'scope' | 'summary'>)
+
+  it('scope=all 且基數齊全：整理基數、費率百分比、fallback 人數', () => {
+    const info = employerSupplementaryInfo(ov('all', {
+      total_employer_supplementary_premium: 2110,
+      employer_supplementary_payroll_total: 1100000,
+      employer_supplementary_insured_total: 1000000,
+      employer_supplementary_rate: 0.0211,
+      employer_supplementary_insured_count: 30,
+      employer_supplementary_fallback_count: 2,
+    }))
+    expect(info).toEqual({
+      premium: 2110,
+      payrollTotal: 1100000,
+      insuredTotal: 1000000,
+      base: 100000,
+      ratePercent: '2.11%',
+      insuredCount: 30,
+      fallbackCount: 2,
+    })
+  })
+
+  it('scope=self 一律回 null（不顯示補充保費區）', () => {
+    expect(employerSupplementaryInfo(ov('self', {
+      total_employer_supplementary_premium: 0,
+      employer_supplementary_payroll_total: null,
+      employer_supplementary_insured_total: null,
+      employer_supplementary_rate: null,
+    }))).toBeNull()
+  })
+
+  it('scope=all 但基數欄缺（舊後端）回 null', () => {
+    expect(employerSupplementaryInfo(ov('all', { total_employer_burden: 100 }))).toBeNull()
+    expect(employerSupplementaryInfo(null)).toBeNull()
+  })
+
+  it('投保總額大於支付總額時基數以 0 顯示；fallback 缺值視為 0', () => {
+    const info = employerSupplementaryInfo(ov('all', {
+      total_employer_supplementary_premium: 0,
+      employer_supplementary_payroll_total: 900000,
+      employer_supplementary_insured_total: 1000000,
+      employer_supplementary_rate: 0.0211,
+    }))
+    expect(info?.base).toBe(0)
+    expect(info?.premium).toBe(0)
+    expect(info?.fallbackCount).toBe(0)
+    expect(info?.insuredCount).toBeNull()
   })
 })

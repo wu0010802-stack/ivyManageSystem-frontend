@@ -104,6 +104,8 @@ interface EmployeeForm {
   work_end_time: string
   no_employment_insurance: boolean
   health_exempt: boolean
+  // 義華 R2 #42：不投保（承攬／自行投保）
+  not_insured: boolean
   // #36 健保本人自付比例（1＝全額、0.5＝中低收入 5 折、0＝本人免繳）；遮罩時後端回 null
   health_self_pay_ratio: number | null
   // #41 本次薪資輸入異動生效日（非員工欄位、不列入 dirty；空字串＝今日）
@@ -156,6 +158,7 @@ const form = reactive<EmployeeForm>({
   // 階段 2-C 特殊狀況旗標（預設 0/false，多數員工不需動）
   no_employment_insurance: false,
   health_exempt: false,
+  not_insured: false,
   health_self_pay_ratio: 1,
   salary_inputs_effective_from: '',
   skip_payroll_bonuses: false,
@@ -218,6 +221,7 @@ const FIELD_LABELS = {
   emergency_contact_phone: '緊急聯絡電話',
   dependents: '眷屬人數',
   health_self_pay_ratio: '健保本人自付比例',
+  not_insured: '不投保（承攬／自行投保）',
   probation_end_date: '試用期截止',
   work_start_time: '上班時間', work_end_time: '下班時間',
   id_number: '身分證字號',
@@ -313,6 +317,8 @@ const populateForm = (row: Record<string, unknown>) => {
   Object.assign(form, row)
   // #36：舊後端未回此欄（undefined）視為全額；遮罩 null 保留
   if (row.health_self_pay_ratio === undefined) form.health_self_pay_ratio = 1
+  // R2 #42：舊後端未回此欄視為一般投保
+  if (row.not_insured == null) form.not_insured = false
   form.salary_inputs_effective_from = ''
   // #9 遮罩薪資（無薪資權限）時後端把金額欄回 null；不可用 Number(null)=0 轉型，否則唯讀端
   // fmtRO 收到 0 會顯示「NT$0」（把「看不到」誤呈現成「0 元」），且 0 帶進 dirty 快照有以 0

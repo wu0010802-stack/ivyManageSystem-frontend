@@ -18455,6 +18455,8 @@ export interface paths {
          *     - admin/hr：全員（scope=all）；其他 SALARY_READ 角色：僅本人（scope=self）。
          *     - 所有金額口徑走 services/salary/amounts.py 共用 helper，不重跑 SalaryEngine。
          *     - 常數查詢數：薪資列 1 查、表外獎金聚合 1 查、僅領獎金員工補查 1 查。
+         *     - 雇主二代健保補充保費（健保法 §34，全園層級）僅 scope=all 計算，併入
+         *       summary.total_employer_burden／total_employer_cost；員工實領不受影響。
          */
         get: operations["get_salary_monthly_overview_api_salaries_monthly_overview_get"];
         put?: never;
@@ -30627,6 +30629,11 @@ export interface components {
              * @default false
              */
             no_employment_insurance: boolean;
+            /**
+             * Not Insured
+             * @default false
+             */
+            not_insured: boolean;
             /** Pension Insured Salary */
             pension_insured_salary?: number | null;
             /**
@@ -30774,6 +30781,11 @@ export interface components {
              * @default false
              */
             no_employment_insurance: boolean;
+            /**
+             * Not Insured
+             * @default false
+             */
+            not_insured: boolean;
             /** Pension Insured Salary */
             pension_insured_salary?: number | null;
             /** Pension Self Rate */
@@ -30902,6 +30914,8 @@ export interface components {
             name?: string | null;
             /** No Employment Insurance */
             no_employment_insurance?: boolean | null;
+            /** Not Insured */
+            not_insured?: boolean | null;
             /** Pension Insured Salary */
             pension_insured_salary?: number | null;
             /** Pension Self Rate */
@@ -46677,6 +46691,16 @@ export interface components {
         SalaryMonthlySummaryOut: {
             /** Employee Count */
             employee_count: number;
+            /** Employer Supplementary Fallback Count */
+            employer_supplementary_fallback_count?: number | null;
+            /** Employer Supplementary Insured Count */
+            employer_supplementary_insured_count?: number | null;
+            /** Employer Supplementary Insured Total */
+            employer_supplementary_insured_total?: number | null;
+            /** Employer Supplementary Payroll Total */
+            employer_supplementary_payroll_total?: number | null;
+            /** Employer Supplementary Rate */
+            employer_supplementary_rate?: number | null;
             /** Finalized Count */
             finalized_count: number;
             /** Hourly Count */
@@ -46693,6 +46717,11 @@ export interface components {
             total_employer_burden: number;
             /** Total Employer Cost */
             total_employer_cost: number;
+            /**
+             * Total Employer Supplementary Premium
+             * @default 0
+             */
+            total_employer_supplementary_premium: number;
             /** Total Extra Bonus Amount */
             total_extra_bonus_amount: number;
             /** Total Gross Salary */
