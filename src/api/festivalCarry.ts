@@ -20,7 +20,7 @@ export const getFestivalPayoutSettings = (): AxiosResp<'/salaries/festival-carry
 
 /**
  * 寫入單一節慶開關。布林開關只接受 "true"/"false"；發放月前移為 YYYY-MM，
- * 傳空字串＝取消前移（回標準 2/6/9/12 發放），格式錯誤後端回 400。
+ * 後端不接受空字串（無法經此介面清除前移），格式錯誤回 400。
  */
 export const updateFestivalConfig = (
     key: FestivalConfigKey,
