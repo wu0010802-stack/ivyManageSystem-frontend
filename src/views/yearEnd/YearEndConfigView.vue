@@ -17,6 +17,8 @@ import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { fmtPct } from '@/utils/format'
 import TargetCrossRef from '@/views/appraisal/components/TargetCrossRef.vue'
+import YearEndCycleRulesCard from './components/YearEndCycleRulesCard.vue'
+import type { CycleRulesState } from './yearEnd0315'
 
 // ---- Derive row types from typed API wrappers — no hand-written `any` ----
 type OrgSettingsRow = Awaited<ReturnType<typeof getOrgSettings>>['data'][number]
@@ -44,6 +46,8 @@ const cycleId = props.cycleId
 // 寧可少擋一次非必要按鈕也不要多擋一次原本允許的操作（比照既有測試多數不 mock
 // listYearEndCycles 的現況，fail-open 才能保持這些既有測試不受影響）。
 const cycleStatus = ref<string | null>(null)
+// yearend2：本週期規則（扣款期間起始月／在職基準日），同樣借 loadCycleTargets 的 listYearEndCycles 取得。
+const cycleRules = ref<CycleRulesState | null>(null)
 const canWrite = computed(
   () => hasPermission('YEAR_END_WRITE') && (cycleStatus.value === null || cycleStatus.value === 'OPEN'),
 )
@@ -180,6 +184,12 @@ async function loadCycleTargets() {
     const { data: yearEndCycles } = await listYearEndCycles()
     const yearEndCycle = yearEndCycles.find((c) => c.id === cycleId)
     cycleStatus.value = yearEndCycle?.status ?? null
+    cycleRules.value = yearEndCycle
+      ? {
+          deduction_period_start_month: yearEndCycle.deduction_period_start_month ?? 1,
+          employment_cutoff_date: yearEndCycle.employment_cutoff_date ?? null,
+        }
+      : null
     if (!yearEndCycle) {
       cycleTargets.value = {}
       return
@@ -347,6 +357,14 @@ onMounted(async () => {
     <header class="toolbar">
       <h2 class="title">本期設定（週期 {{ cycleId }}）</h2>
     </header>
+
+    <!-- yearend2：本週期年終規則（扣款期間起始月／在職基準日） -->
+    <YearEndCycleRulesCard
+      :cycle-id="cycleId"
+      :rules="cycleRules"
+      :can-write="canWrite"
+      @saved="(r) => (cycleRules = r)"
+    />
 
     <!-- ===================== Section 1: 招生與班級 ===================== -->
     <el-card class="section-card">

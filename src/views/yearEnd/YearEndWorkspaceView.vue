@@ -14,6 +14,8 @@ const YearEndConfigView = defineAsyncComponent(() => import('./YearEndConfigView
 const YearEndGridView = defineAsyncComponent(() => import('./YearEndGridView.vue'))
 const YearEndDetailView = defineAsyncComponent(() => import('./YearEndDetailView.vue'))
 const AppraisalPayoutView = defineAsyncComponent(() => import('./AppraisalPayoutView.vue'))
+// yearend2：3/15 重算多退少補（掛在「簽核」步驟下方——差額只針對已核定結算單）
+const YearEnd0315Panel = defineAsyncComponent(() => import('./components/YearEnd0315Panel.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -268,7 +270,10 @@ function reopenToOpen() {
       <YearEndConfigView v-if="step === 'config'" :cycle-id="cycleId" />
       <YearEndGridView v-else-if="step === 'grid'" :cycle-id="cycleId" />
       <AppraisalPayoutView v-else-if="step === 'payout' && canPayout" />
-      <YearEndDetailView v-else :cycle-id="cycleId" />
+      <template v-else>
+        <YearEndDetailView :cycle-id="cycleId" />
+        <YearEnd0315Panel :cycle-id="cycleId" />
+      </template>
     </section>
   </div>
 </template>

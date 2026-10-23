@@ -215,3 +215,34 @@ export const getYearEndCycleExceptions = (
   cycleId: number,
 ): AxiosResp<'/year_end/cycles/{cycle_id}/exceptions', 'get'> =>
   api.get(`/year_end/cycles/${cycleId}/exceptions`)
+
+// ============ 義華第二批（yearend2）：per-cycle 規則、3/15 重算多退少補 ============
+
+/**
+ * 週期規則：扣款期間起始月（1＝曆年、2＝2 月～隔年 1 月）與在職基準日。
+ * 只送有改的欄位；employment_cutoff_date 送 null＝清除。需 YEAR_END_WRITE，週期鎖定時 409。
+ */
+export const updateYearEndCycleRules = (
+  cycleId: number,
+  data: ApiBody<'/year_end/cycles/{cycle_id}/rules', 'put'>,
+): AxiosResp<'/year_end/cycles/{cycle_id}/rules', 'put'> =>
+  api.put(`/year_end/cycles/${cycleId}/rules`, data)
+
+/** 3/15 重算（無 body，需 YEAR_END_FINALIZE；422＝3/15 未到或未落在註冊口徑）。 */
+export const recalcYearEnd0315 = (
+  cycleId: number,
+): AxiosResp<'/year_end/cycles/{cycle_id}/recalc-0315', 'post'> =>
+  api.post(`/year_end/cycles/${cycleId}/recalc-0315`)
+
+/** 3/15 重算差額清單（YEAR_END_READ）。diff 正＝待表外補發、負＝待追回；不經月薪。 */
+export const listYearEndAdjustments = (
+  cycleId: number,
+): AxiosResp<'/year_end/cycles/{cycle_id}/adjustments', 'get'> =>
+  api.get(`/year_end/cycles/${cycleId}/adjustments`)
+
+/** 標記差額處理狀態（PENDING／SETTLED／WAIVED），需 YEAR_END_ACCOUNTING。 */
+export const settleYearEndAdjustment = (
+  adjustmentId: number,
+  data: ApiBody<'/year_end/adjustments/{adjustment_id}', 'patch'>,
+): AxiosResp<'/year_end/adjustments/{adjustment_id}', 'patch'> =>
+  api.patch(`/year_end/adjustments/${adjustmentId}`, data)
