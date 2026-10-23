@@ -33,13 +33,29 @@ export function looksLikeJsonArray(value: string | null | undefined): boolean {
 
 const YEAR_MONTH_RE = /^20\d{2}-(0[1-9]|1[0-2])$/
 
+const DATE_RE = /^(20\d{2})-(\d{2})-(\d{2})$/
+
+/** `YYYY-MM-DD` 且為實際存在的日期（擋 02-30、13 月等），與後端 `date.fromisoformat` 對齊。 */
+function isValidIsoDate(value: string): boolean {
+  const m = DATE_RE.exec(value)
+  if (!m) return false
+  const year = Number(m[1])
+  const month = Number(m[2])
+  const day = Number(m[3])
+  if (month < 1 || month > 12 || day < 1) return false
+  // Date.UTC 的 day=0 取上個月最後一天 → 取得該月天數
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return day <= daysInMonth
+}
+
 /**
- * select／month 型 system_configs 值的前端檢核，條件與後端
- * `api/system_config.require_valid_config_value` 對齊（列舉精確比對、年月 YYYY-MM）。
+ * select／month／date 型 system_configs 值的前端檢核，條件與後端
+ * `api/system_config.require_valid_config_value` 對齊（列舉精確比對、年月 YYYY-MM、
+ * 日期 YYYY-MM-DD 且須為實際存在的日期）。
  * 回傳錯誤訊息；合法或非受檢型別回 null。空字串一律視為不合法（後端 PUT 要求 min_length=1）。
  */
 export function configValueError(
-  type: 'text' | 'select' | 'month',
+  type: 'text' | 'select' | 'month' | 'date',
   value: string | null | undefined,
   allowed: readonly string[] = [],
 ): string | null {
@@ -47,6 +63,7 @@ export function configValueError(
   if (type === 'text') return null
   if (!v) return '尚未選擇'
   if (type === 'month') return YEAR_MONTH_RE.test(v) ? null : '須為 YYYY-MM 格式'
+  if (type === 'date') return isValidIsoDate(v) ? null : '須為 YYYY-MM-DD 格式的有效日期'
   if (allowed.length > 0 && !allowed.includes(v)) return `只接受：${allowed.join('、')}`
   return null
 }

@@ -100,7 +100,7 @@ function findRow(wrapper: ReturnType<typeof mountPanel>, key: string): ConfigRow
   throw new Error(`row not found: ${key}`)
 }
 
-describe('SettingsTenantConfigTab — 15 項（onboarding 非 bank 10 項 + POS 門檻 2 項 + 薪資規則 3 項）', () => {
+describe('SettingsTenantConfigTab — 17 項（onboarding 非 bank 10 項 + POS 門檻 2 項 + 薪資規則 5 項）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     hasPermissionMock.mockReturnValue(true)
@@ -122,7 +122,7 @@ describe('SettingsTenantConfigTab — 15 項（onboarding 非 bank 10 項 + POS 
     expect(row.loadError).toBe(false)
     expect(row._editValue).toBe('')
 
-    // 全部 15 項皆 404，仍不得觸發「載入失敗」錯誤 toast
+    // 全部 17 項皆 404，仍不得觸發「載入失敗」錯誤 toast
     expect(ElMessage.error).not.toHaveBeenCalled()
     // 畫面上要看到「尚未設定」標籤，而非錯誤提示
     expect(wrapper.text()).toContain('尚未設定')
@@ -141,13 +141,14 @@ describe('SettingsTenantConfigTab — 15 項（onboarding 非 bank 10 項 + POS 
     expect(allKeys).not.toContain('bank.payer_name')
     expect(allKeys).not.toContain('bank.payer_account')
     // 凍結清單守衛：維持精確數字（不可放寬成 >=，否則誤刪欄位不會紅）。
-    // 15 ＝ 10 項 onboarding 必填（12 項扣掉留在薪資設定頁的 bank.* 兩項）
+    // 17 ＝ 10 項 onboarding 必填（12 項扣掉留在薪資設定頁的 bank.* 兩項）
     //      ＋ 2 項 POS 現金門檻（選填，2026-08-14 P3-17 借用同一 tab 維護）。
     // ⚠ 後端 KNOWN_DEFAULTS 另有第三個 POS key（pos.operator_daily_refund_threshold），
     //   刻意不進前端 SYSTEM_CONFIG_SECTIONS。
-    // ＋ 3 項「薪資／請假／加班規則」（選填，2026-10-23 義華第二批裁定借用同一 tab）
-    //   ＝ 15。
-    expect(allKeys).toHaveLength(15)
+    // ＋ 5 項「薪資／請假／加班規則」（選填，2026-10-23 義華第二批裁定借用同一 tab；
+    //   含 year_end.exclude_maternity_months／festival.unsigned_cutoff_hire_date）
+    //   ＝ 17。
+    expect(allKeys).toHaveLength(17)
   })
 
   it('GET 單筆非 404 錯誤（如 5xx）標記為載入失敗並提示重新整理', async () => {

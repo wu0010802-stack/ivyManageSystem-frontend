@@ -125,7 +125,7 @@ const isRowDirty = (row: ConfigRow): boolean =>
 const showJsonWarning = (row: ConfigRow): boolean =>
   row.warnJsonArray && looksLikeJsonArray(row._editValue)
 
-/** select／month 欄位的前端格式檢核（與後端 400 條件對齊）；null＝可送出。 */
+/** select／month／date 欄位的前端格式檢核（與後端 400 條件對齊）；null＝可送出。 */
 const rowValueError = (row: ConfigRow): string | null =>
   row.type === 'switch' ? null : configValueError(row.type, row._editValue, row.options.map((o) => o.value))
 
@@ -217,6 +217,18 @@ onMounted(() => {
               type="month"
               value-format="YYYY-MM"
               format="YYYY-MM"
+              :disabled="!canEditRow(row)"
+              :clearable="false"
+              placeholder="尚未設定"
+              style="width: 200px;"
+            />
+          </template>
+          <template v-else-if="row.type === 'date'">
+            <el-date-picker
+              v-model="row._editValue"
+              type="date"
+              value-format="YYYY-MM-DD"
+              format="YYYY-MM-DD"
               :disabled="!canEditRow(row)"
               :clearable="false"
               placeholder="尚未設定"

@@ -16,7 +16,7 @@
  * `pos.cash_deposit_warning_threshold`），只是借用同一個 tab 讓人維護。新增
  * 選填 key 時**不可**同步加進後端 `ONBOARDING_REQUIRED_CONFIG_KEYS`，否則每個
  * 新租戶的 onboarding 進度都永遠不會齊。
- * 2026-10-23 起另收錄「薪資／請假／加班規則」三個選填 key（同理不屬 onboarding）。
+ * 2026-10-23 起另收錄「薪資／請假／加班規則」五個選填 key（同理不屬 onboarding）。
  */
 
 /**
@@ -24,8 +24,9 @@
  * - switch：布林開關（存 "true"/"false"）
  * - select：列舉（`options` 為後端 `_ENUM_CONFIG_VALUES` 的合法值，送非法值後端 400）
  * - month：年月（存 "YYYY-MM"）
+ * - date：日期（存 "YYYY-MM-DD"，後端另驗是否為實際存在的日期）
  */
-export type SystemConfigFieldType = 'text' | 'switch' | 'select' | 'month'
+export type SystemConfigFieldType = 'text' | 'switch' | 'select' | 'month' | 'date'
 
 export interface SystemConfigOption {
   value: string
@@ -138,7 +139,7 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
     ],
   },
   {
-    // 義華第二批裁定（2026-10-23）：三個薪資／請假／加班口徑開關。皆選填，未設定＝舊行為；
+    // 義華第二批裁定（2026-10-23）：五個薪資／請假／加班／年終／節慶口徑設定。皆選填，未設定＝舊行為；
     // 不屬 onboarding 必填，**不可**加進後端 ONBOARDING_REQUIRED_CONFIG_KEYS。
     title: '薪資／請假／加班規則',
     hint:
@@ -173,6 +174,24 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
           '開啟後，員工當天已有部分時段請假時，該日加班不得申請或核准（建立、核准、批次核准、匯入都會擋下並說明原因）。'
           + '未設定＝關閉。',
         type: 'switch',
+      },
+      {
+        key: 'year_end.exclude_maternity_months',
+        label: '產假月份不計入年終到職月數',
+        hint:
+          '開啟後，某曆月內核准的產假達 15 日（含）以上，該月不計入年終到職月數，年終依比例減少。'
+          + '⚠ 此口徑由業主於 2026-10-23 裁定，已知在性別平等工作法 §21（不得因產假給予不利處分）下有風險。'
+          + '開啟後須重建年終結算才會生效。未設定＝關閉。',
+        type: 'switch',
+      },
+      {
+        key: 'festival.unsigned_cutoff_hire_date',
+        label: '未簽約新人節慶截止日',
+        hint:
+          '到職日在此日（含）之後、且未填「自主成長簽約日」的員工，不具節慶獎金資格；'
+          + '到職日早於此日者沿用舊規則。⚠ 設定前請先確認截止日後到職的員工都已補上簽約日，'
+          + '否則會被排除在節慶獎金之外。未設定＝不啟用。',
+        type: 'date',
       },
     ],
   },
