@@ -17757,6 +17757,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/returning-class-bonus/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Config
+         * @description 本租戶設定；未設定＝兩項皆關閉、金額 0（不產生任何獎金）。
+         */
+        get: operations["get_config_api_returning_class_bonus_config_get"];
+        /**
+         * Put Config
+         * @description 整份覆寫本租戶設定（核算日 `MM-DD`、同類別月份不可重複）。
+         */
+        put: operations["put_config_api_returning_class_bonus_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/returning-class-bonus/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preview
+         * @description 唯讀推導：逐班母體、達標與否、班導／副班導應領額（不寫錢）。
+         *
+         *     month 必須是該類別設定的核算月，否則 422。
+         */
+        get: operations["get_preview_api_returning_class_bonus_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/returning-class-bonus/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle
+         * @description 把預覽中可領者寫入表外獎金（冪等：同員工同類別同歸屬月已有列即跳過）。
+         *
+         *     設定未啟用 → 409；本人那筆跳過（職權分離）；已封存月份跳過。
+         */
+        post: operations["settle_api_returning_class_bonus_settle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/roles": {
         parameters: {
             query?: never;
@@ -45540,6 +45608,165 @@ export interface components {
             submitted_by_user_id?: number | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** ReturningBonusClassOut */
+        ReturningBonusClassOut: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Cohort Count */
+            cohort_count: number;
+            /** Payouts */
+            payouts: components["schemas"]["ReturningBonusClassPayoutOut"][];
+            /** Qualified Count */
+            qualified_count?: number | null;
+            /** Qualifies */
+            qualifies: boolean;
+            /** Rate */
+            rate?: number | null;
+        };
+        /** ReturningBonusClassPayoutOut */
+        ReturningBonusClassPayoutOut: {
+            /** Amount */
+            amount: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Role */
+            role: string;
+        };
+        /** ReturningBonusConfig */
+        ReturningBonusConfig: {
+            prepay: components["schemas"]["ReturningBonusKindConfig"];
+            registration: components["schemas"]["ReturningBonusKindConfig"];
+        };
+        /**
+         * ReturningBonusKindConfig
+         * @description 單一類別設定；金額為每位領取人固定額（班級上限＝兩者和）。
+         */
+        ReturningBonusKindConfig: {
+            /**
+             * Assistant Amount
+             * @default 0
+             */
+            assistant_amount: number;
+            /**
+             * Check Dates
+             * @default []
+             */
+            check_dates: string[];
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Head Amount
+             * @default 0
+             */
+            head_amount: number;
+        };
+        /** ReturningBonusPayoutOut */
+        ReturningBonusPayoutOut: {
+            /** Already Paid */
+            already_paid: boolean;
+            /** Amount */
+            amount: number;
+            /** Classrooms */
+            classrooms: string[];
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Roles */
+            roles: string[];
+        };
+        /** ReturningBonusPreviewOut */
+        ReturningBonusPreviewOut: {
+            /** Assistant Amount */
+            assistant_amount: number;
+            /** Category */
+            category: string;
+            /** Category Label */
+            category_label: string;
+            /** Check Date */
+            check_date: string;
+            /** Classes */
+            classes: components["schemas"]["ReturningBonusClassOut"][];
+            /** Cohort Date */
+            cohort_date: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Head Amount */
+            head_amount: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "registration" | "prepay";
+            /** Payout Total */
+            payout_total: number;
+            /** Payouts */
+            payouts: components["schemas"]["ReturningBonusPayoutOut"][];
+            /** Warnings */
+            warnings: string[];
+        };
+        /** ReturningBonusSettleEmployeeOut */
+        ReturningBonusSettleEmployeeOut: {
+            /** Amount */
+            amount?: number | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name?: string | null;
+        };
+        /** ReturningBonusSettleIn */
+        ReturningBonusSettleIn: {
+            /** Employee Ids */
+            employee_ids?: number[] | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "registration" | "prepay";
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /** ReturningBonusSettleOut */
+        ReturningBonusSettleOut: {
+            /** Category */
+            category: string;
+            /** Check Date */
+            check_date: string;
+            /** Created */
+            created: components["schemas"]["ReturningBonusSettleEmployeeOut"][];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "registration" | "prepay";
+            /** Period Month */
+            period_month: number;
+            /** Period Year */
+            period_year: number;
+            /** Skipped Already Paid */
+            skipped_already_paid: components["schemas"]["ReturningBonusSettleEmployeeOut"][];
+            /** Skipped Finalized */
+            skipped_finalized: components["schemas"]["ReturningBonusSettleEmployeeOut"][];
+            /** Skipped Self */
+            skipped_self: components["schemas"]["ReturningBonusSettleEmployeeOut"][];
+            /** Skipped Unselected */
+            skipped_unselected: components["schemas"]["ReturningBonusSettleEmployeeOut"][];
+            /** Total Amount */
+            total_amount: number;
+            /** Warnings */
+            warnings: string[];
         };
         /**
          * RevealPhoneOut
@@ -81677,6 +81904,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportsSalaryContributorsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_config_api_returning_class_bonus_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturningBonusConfig"];
+                };
+            };
+        };
+    };
+    put_config_api_returning_class_bonus_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturningBonusConfig"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturningBonusConfig"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_preview_api_returning_class_bonus_preview_get: {
+        parameters: {
+            query: {
+                kind: "registration" | "prepay";
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturningBonusPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_api_returning_class_bonus_settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturningBonusSettleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturningBonusSettleOut"];
                 };
             };
             /** @description Validation Error */
