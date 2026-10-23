@@ -186,9 +186,16 @@
         <el-table-column label="金額" width="110">
           <template #default="{ row }">{{ formatCurrency(row.amount) }}</template>
         </el-table-column>
-        <el-table-column label="狀態" width="100">
+        <el-table-column label="狀態" width="120">
           <template #default="{ row }">
             <el-tag v-if="row.already_paid" type="info">已發放</el-tag>
+            <el-tooltip
+              v-else-if="hasLegacyOther(row)"
+              :content="`同歸屬月已有「其他」類別表外獎金 ${formatCurrency(row.legacy_other_amount ?? 0)}，可能是改版前手登的同一筆；確認不是後再勾選`"
+              placement="top"
+            >
+              <el-tag type="warning">同月已手登</el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
@@ -278,6 +285,7 @@ import {
     buildSettleBody,
     formatRate,
     skipGroupsOf,
+    hasLegacyOther,
     type ReturningBonusKind,
     type ReturningBonusConfig,
     type ReturningBonusSettleResult,
@@ -427,9 +435,14 @@ const doSettle = async () => {
         ElMessage.warning('請至少勾選一位領取人')
         return
     }
+    const legacySelected = selectedRows.value.filter(hasLegacyOther)
+    const legacyNote =
+        legacySelected.length > 0
+            ? `（本次勾選含 ${legacySelected.length} 位同月已手登：${legacySelected.map((r) => r.employee_name).join('、')}）`
+            : ''
     try {
         await ElMessageBox.confirm(
-            `即將結算 ${year.value} 年 ${month.value} 月${p.category_label}：發給 ${selectedRows.value.length} 位共 ${formatCurrency(selectedTotal.value)}，寫入表外獎金（計入補充保費累計、不進應發薪資）。已發放過的員工會自動跳過、不重複發放。確定結算？`,
+            `即將結算 ${year.value} 年 ${month.value} 月${p.category_label}：發給 ${selectedRows.value.length} 位共 ${formatCurrency(selectedTotal.value)}，寫入表外獎金（計入補充保費累計、不進應發薪資）。本類別已發放過的員工會自動跳過；但改版前以「其他」類別手登的紀錄系統無法判斷是否同一筆，勾選了標示「同月已手登」的員工就會再發一次。${legacyNote}確定結算？`,
             '確認結算',
             { confirmButtonText: '確定結算', cancelButtonText: '取消', type: 'warning' },
         )

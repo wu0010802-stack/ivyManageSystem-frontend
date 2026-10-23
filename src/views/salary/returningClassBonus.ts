@@ -120,9 +120,17 @@ export function validateConfig(cfg: ReturningBonusConfig): string[] {
     ]
 }
 
-/** 預設勾選：所有尚未發放者（副班導也預設勾選，HR 可自行取消）。 */
+/** 同歸屬月已有「其他」類別表外獎金（改版前可能已手登同一筆）。 */
+export function hasLegacyOther(p: Pick<ReturningBonusPayout, 'legacy_other_amount'>): boolean {
+    return (p.legacy_other_amount ?? 0) > 0
+}
+
+/**
+ * 預設勾選：所有尚未發放者（副班導也預設勾選，HR 可自行取消）。
+ * 同歸屬月已有「其他」類別手登者預設不勾，HR 確認不是同一筆才手動勾選。
+ */
 export function defaultSelectedIds(payouts: readonly ReturningBonusPayout[]): number[] {
-    return payouts.filter((p) => !p.already_paid).map((p) => p.employee_id)
+    return payouts.filter((p) => !p.already_paid && !hasLegacyOther(p)).map((p) => p.employee_id)
 }
 
 /** 勾選中、且仍可發放的領取人（排除已發放者，避免 stale 勾選殘留）。 */
@@ -161,7 +169,12 @@ export function formatRate(rate: number | null | undefined): string {
 }
 
 export interface SkipGroup {
-    key: 'skipped_already_paid' | 'skipped_self' | 'skipped_finalized' | 'skipped_unselected'
+    key:
+        | 'skipped_already_paid'
+        | 'skipped_self'
+        | 'skipped_finalized'
+        | 'skipped_unselected'
+        | 'skipped_legacy_other'
     label: string
     hint: string
     names: string[]
@@ -172,13 +185,18 @@ const SKIP_GROUP_DEFS: Omit<SkipGroup, 'names'>[] = [
     { key: 'skipped_self', label: '結算者本人', hint: '職權分離：請由其他有權限的人員再次結算即可補發' },
     { key: 'skipped_finalized', label: '薪資已封存', hint: '歸屬月至年底有已封存月份，未寫入；需先解除封存' },
     { key: 'skipped_unselected', label: '未勾選', hint: '本次未勾選，之後可再勾選結算' },
+    {
+        key: 'skipped_legacy_other',
+        label: '同月已有「其他」手登',
+        hint: '同歸屬月已有「其他」類別表外獎金，可能是改版前手登的同一筆；確認不是後再勾選結算',
+    },
 ]
 
 function displayName(e: ReturningBonusSettleEmployee): string {
     return e.employee_name || `員工 #${e.employee_id}`
 }
 
-/** 結算結果的四類跳過名單；只回傳有人的類別。 */
+/** 結算結果的各類跳過名單；只回傳有人的類別。 */
 export function skipGroupsOf(result: ReturningBonusSettleResult): SkipGroup[] {
     return SKIP_GROUP_DEFS.map((def) => ({
         ...def,

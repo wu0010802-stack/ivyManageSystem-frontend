@@ -13,18 +13,26 @@ import {
     sumAmount,
     formatRate,
     skipGroupsOf,
+    hasLegacyOther,
     roleLabel,
     type ReturningBonusPayout,
     type ReturningBonusSettleResult,
 } from '../returningClassBonus'
 
-const payout = (id: number, amount: number, alreadyPaid = false, roles = ['head']): ReturningBonusPayout => ({
+const payout = (
+    id: number,
+    amount: number,
+    alreadyPaid = false,
+    roles = ['head'],
+    legacyOther = 0,
+): ReturningBonusPayout => ({
     employee_id: id,
     employee_name: `員工${id}`,
     amount,
     roles,
     classrooms: ['大班A'],
     already_paid: alreadyPaid,
+    legacy_other_amount: legacyOther,
 })
 
 describe('核算日解析與檢核', () => {
@@ -80,6 +88,13 @@ describe('勾選與結算 body', () => {
         expect(defaultSelectedIds(payouts)).toEqual([1, 2])
     })
 
+    it('同歸屬月已有「其他」手登者預設不勾，HR 手動勾選後仍可送出', () => {
+        const withLegacy = [...payouts, payout(4, 2667, false, ['head'], 2667)]
+        expect(hasLegacyOther(withLegacy[3])).toBe(true)
+        expect(defaultSelectedIds(withLegacy)).toEqual([1, 2])
+        expect(buildSettleBody('registration', 2026, 9, withLegacy, [1, 4]).employee_ids).toEqual([1, 4])
+    })
+
     it('selectedPayouts 排除已發放者，即使 id 殘留在勾選清單', () => {
         expect(selectedPayouts(payouts, [1, 3]).map((p) => p.employee_id)).toEqual([1])
     })
@@ -125,11 +140,12 @@ describe('顯示 helper', () => {
             skipped_self: [{ employee_id: 2, employee_name: '乙' }],
             skipped_finalized: [{ employee_id: 3, employee_name: null }],
             skipped_unselected: [],
+            skipped_legacy_other: [{ employee_id: 4, employee_name: '丁' }],
             total_amount: 2667,
             warnings: [],
         }
         const groups = skipGroupsOf(result)
-        expect(groups.map((g) => g.key)).toEqual(['skipped_self', 'skipped_finalized'])
+        expect(groups.map((g) => g.key)).toEqual(['skipped_self', 'skipped_finalized', 'skipped_legacy_other'])
         expect(groups[1].names).toEqual(['員工 #3'])
     })
 })
