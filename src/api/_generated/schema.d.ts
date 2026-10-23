@@ -3751,6 +3751,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/appraisal-sheets.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Appraisal Sheets Pdf
+         * @description 月考核表 PDF：每位員工一頁，順序依班級分組而非傳入順序；任一 id 查無或當月未在職 → 404。
+         */
+        get: operations["export_appraisal_sheets_pdf_api_attendance_appraisal_sheets_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/appraisal-sheets/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Appraisal Sheet Candidates
+         * @description 批次列印候選名單：當月在職過的教職員，依班級分組（同後台「排班與出勤」格子的順序）。
+         */
+        get: operations["get_appraisal_sheet_candidates_api_attendance_appraisal_sheets_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/calendar": {
         parameters: {
             query?: never;
@@ -23595,6 +23635,31 @@ export interface components {
             cycle_id: number;
             /** Cycle Name */
             cycle_name: string;
+        };
+        /** AppraisalSheetCandidateEmployeeOut */
+        AppraisalSheetCandidateEmployeeOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Name */
+            name: string;
+            /** Role Label */
+            role_label: string | null;
+            /** Title Name */
+            title_name: string;
+        };
+        /** AppraisalSheetCandidateGroupOut */
+        AppraisalSheetCandidateGroupOut: {
+            /** Employees */
+            employees: components["schemas"]["AppraisalSheetCandidateEmployeeOut"][];
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /** AppraisalSheetCandidatesOut */
+        AppraisalSheetCandidatesOut: {
+            /** Groups */
+            groups: components["schemas"]["AppraisalSheetCandidateGroupOut"][];
         };
         /** AppraisalSyncChange */
         AppraisalSyncChange: {
@@ -58625,6 +58690,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_appraisal_sheets_pdf_api_attendance_appraisal_sheets_pdf_get: {
+        parameters: {
+            query: {
+                employee_ids: number[];
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 月考核表 PDF（每位員工一頁，inline） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_appraisal_sheet_candidates_api_attendance_appraisal_sheets_candidates_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppraisalSheetCandidatesOut"];
                 };
             };
             /** @description Validation Error */

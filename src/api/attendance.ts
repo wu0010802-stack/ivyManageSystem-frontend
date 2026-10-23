@@ -1,5 +1,6 @@
 import api from './index'
 import { withDedupeEscape, type ReadOptions } from '@/utils/apiDedupe'
+import type { components } from './_generated/schema'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 // ── 匯入 ─────────────────────────────────────────────────────────────────────
@@ -83,6 +84,32 @@ export const exportAnomalies = (year: number, month: number, status = 'all') =>
 
 export const exportEmployeeAttendance = (params: ApiQuery<'/exports/employee-attendance', 'get'>) =>
   api.get('/exports/employee-attendance', { params, responseType: 'blob' })
+
+// ── 月考核表（PDF 列印）──────────────────────────────────────────────────────
+
+export type AppraisalSheetCandidatesOut = components['schemas']['AppraisalSheetCandidatesOut']
+export type AppraisalSheetCandidateGroup = AppraisalSheetCandidatesOut['groups'][number]
+
+/** 月考核表可列印員工候選名單（依分組；僅限全員薪資視野角色） */
+export const getAppraisalSheetCandidates = (
+  params: ApiQuery<'/attendance/appraisal-sheets/candidates', 'get'>,
+) => api.get<AppraisalSheetCandidatesOut>('/attendance/appraisal-sheets/candidates', { params })
+
+/**
+ * 月考核表 PDF（每位員工一頁）。
+ * employee_ids 為多值 query（?employee_ids=1&employee_ids=2），axios 預設會加 []，
+ * 比照 fees.ts／studentRecords.ts 以 indexes:null 關掉。
+ */
+export const getAppraisalSheetsPdf = (params: {
+  year: number
+  month: number
+  employee_ids: number[]
+}) =>
+  api.get('/attendance/appraisal-sheets.pdf', {
+    params,
+    responseType: 'blob',
+    paramsSerializer: { indexes: null },
+  })
 
 // ── 單筆維護 ─────────────────────────────────────────────────────────────────
 
