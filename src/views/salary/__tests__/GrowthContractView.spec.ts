@@ -28,6 +28,14 @@ vi.mock('@/api/growthContract', () => ({
     patchSignedOn: (...a: unknown[]) => patchSignedOnMock(...a),
     getGrowthPreview: (...a: unknown[]) => getGrowthPreviewMock(...a),
     settleGrowthContract: (...a: unknown[]) => settleGrowthContractMock(...a),
+    // growth2 子面板（GrowthAdjustmentsPanel）：月額覆寫／扣抵，本 spec 只需回空清單
+    listGrowthPositionRates: () => Promise.resolve({ data: [] }),
+    listGrowthRateSegments: () => Promise.resolve({ data: { items: [] } }),
+    createGrowthRateSegment: vi.fn(),
+    deleteGrowthRateSegment: vi.fn(),
+    listGrowthDeductions: () => Promise.resolve({ data: { items: [] } }),
+    createGrowthDeduction: vi.fn(),
+    deleteGrowthDeduction: vi.fn(),
 }))
 
 // ---- api/extraBonuses mock（已發放明細區塊：GET /extra-bonuses?category=growth_contract）----
@@ -125,6 +133,14 @@ const previewRow = (over: Partial<GrowthPreviewRow> = {}): GrowthPreviewRow => (
     eligible: true,
     amount: 7440,
     pending_festival_carry: 0,
+    rate_overridden: false,
+    subtotal: 7440,
+    credited_hours: 24,
+    semesters: [],
+    deduction_amount: 0,
+    deduction_unapplied: 0,
+    deductions: [],
+    net_amount_if_eligible: 7440,
     gates: [
         gate({ code: 'signed', status: 'pass', detail: '簽約日 2025-09-01' }),
         gate({ code: 'returning_rate', status: 'pass', detail: '全園舊生註冊率 85.0%（門檻 80%）' }),

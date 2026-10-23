@@ -103,11 +103,21 @@
             <span v-if="row.position_unknown" class="badge-unknown">職務未知</span>
           </template>
         </el-table-column>
-        <el-table-column label="職務月額" width="100">
-          <template #default="{ row }">{{ row.monthlyRateLabel }}</template>
+        <el-table-column label="職務月額" width="110">
+          <template #default="{ row }">
+            {{ row.monthlyRateLabel }}
+            <div v-if="row.rate_overridden" class="amount-cell__hint" title="學年中有職務異動月額覆寫，金額依逐月月額小計">
+              有異動覆寫・小計 {{ row.subtotalLabel }}
+            </div>
+          </template>
         </el-table-column>
         <el-table-column prop="required_hours" label="應修時數" width="90" />
-        <el-table-column prop="actual_hours" label="實際時數" width="90" />
+        <el-table-column label="實際時數" width="140">
+          <template #default="{ row }">
+            {{ row.actual_hours }}
+            <div v-for="label in row.semesterLabels" :key="label" class="amount-cell__hint">{{ label }}</div>
+          </template>
+        </el-table-column>
         <el-table-column label="時數比例" width="90">
           <template #default="{ row }">{{ row.hoursRatioLabel }}</template>
         </el-table-column>
@@ -129,6 +139,14 @@
               <strong>{{ row.amountLabel }}</strong>
               <span class="amount-cell__badge">試算</span>
               <div v-if="row.amountHintLabel" class="amount-cell__hint">{{ row.amountHintLabel }}</div>
+              <div
+                v-if="row.deduction_amount > 0"
+                class="amount-cell__hint"
+                :title="row.deductionDetail"
+              >含扣抵 −{{ row.deductionLabel }}</div>
+              <div v-if="row.deduction_unapplied > 0" class="amount-cell__warn">
+                ⚠ 扣不完 {{ row.deductionUnappliedLabel }}
+              </div>
             </div>
           </template>
         </el-table-column>
@@ -160,6 +178,13 @@
         </el-table-column>
       </el-table>
     </section>
+
+    <GrowthAdjustmentsPanel
+      :school-year="schoolYear"
+      :can-write="canWrite"
+      :employee-options="employeeOptions"
+      @changed="fetchPreview"
+    />
 
     <section class="paid-section">
       <h3>已發放明細（表外獎金－自主成長獎勵金）</h3>
@@ -244,6 +269,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import GrowthAdjustmentsPanel from './components/GrowthAdjustmentsPanel.vue'
+import { semesterProgressLabels } from './growthAdjustments'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
@@ -398,6 +425,11 @@ interface GateItem extends GrowthPreviewGate {
 interface PreviewDisplayRow extends GrowthPreviewRow {
     pendingCarryLabel: string
     monthlyRateLabel: string
+    subtotalLabel: string
+    semesterLabels: string[]
+    deductionLabel: string
+    deductionDetail: string
+    deductionUnappliedLabel: string
     hoursRatioLabel: string
     amountLabel: string
     amountHintLabel: string
@@ -419,14 +451,22 @@ const previewTableData = computed<PreviewDisplayRow[]>(() => {
             ...row,
             pendingCarryLabel: formatCurrency(row.pending_festival_carry ?? 0),
             monthlyRateLabel: formatCurrency(row.monthly_rate),
+            subtotalLabel: formatCurrency(row.subtotal ?? 0),
+            semesterLabels: semesterProgressLabels(row.semesters ?? []),
+            deductionLabel: formatCurrency(row.deduction_amount ?? 0),
+            deductionDetail: (row.deductions ?? [])
+                .map((d) => `${d.reason} ${formatCurrency(d.amount)}`)
+                .join('；'),
+            deductionUnappliedLabel: formatCurrency(row.deduction_unapplied ?? 0),
             hoursRatioLabel: `${Math.round(row.hours_ratio * 100)}%`,
             amountLabel: formatCurrency(row.amount),
             // (b) 不符合資格時額外標示「若符合資格可得多少」，避免 HR 誤以為 0 元
             // 是「本來就沒有」而非「gate 沒過」；只有 amount_if_eligible > 0 才顯示，
             // 避免對「本來月額就是 0」這種異常資料多此一舉。
+            // amount 是扣抵後實發；未符合資格時以扣抵後的 net_amount_if_eligible 為「若符合」金額。
             amountHintLabel:
                 !row.eligible && row.amount_if_eligible > 0
-                    ? `若符合資格：${formatCurrency(row.amount_if_eligible)}`
+                    ? `若符合資格：${formatCurrency(row.net_amount_if_eligible ?? row.amount_if_eligible)}`
                     : '',
             eligibleLabel: row.eligible ? '符合資格' : '不符合',
             gateItems,
@@ -466,18 +506,28 @@ const selectedCarryTargets = computed(() =>
 const settleCountsText = (r: GrowthSettleResult): string => {
     const selfCount = (r.skipped_self ?? []).length
     const selfPart = selfCount > 0 ? `、本人須由他人結算 ${selfCount} 位` : ''
+    const finalizedCount = (r.skipped_finalized ?? []).length
+    const finalizedPart = finalizedCount > 0 ? `、發放月薪資已封存跳過 ${finalizedCount} 位` : ''
     const carryTotal = r.created.reduce((sum, c) => sum + (c.carry_offset ?? 0), 0)
     const carryPart = carryTotal > 0 ? `（已扣抵節慶未扣餘額 ${formatCurrency(carryTotal)}）` : ''
-    return `發放 ${r.created.length} 位、跳過（已發過）${r.skipped_already_paid.length} 位${selfPart}，共 ${formatCurrency(r.total_amount)}${carryPart}`
+    return `發放 ${r.created.length} 位、跳過（已發過）${r.skipped_already_paid.length} 位${selfPart}${finalizedPart}，共 ${formatCurrency(r.total_amount)}${carryPart}`
 }
 const settleResultLabel = computed(() => {
     if (!settleResult.value) return ''
     return `本次結算：${settleCountsText(settleResult.value)}`
 })
 const settleSelfSkipDescription = computed(() => {
+    const parts: string[] = []
     const selfRows = settleResult.value?.skipped_self ?? []
-    if (selfRows.length === 0) return ''
-    return `未發放給結算者本人：${selfRows.map((r) => r.employee_name).join('、')}，請由其他有權限的人員再次結算即可補發。`
+    if (selfRows.length > 0) {
+        parts.push(`未發放給結算者本人：${selfRows.map((r) => r.employee_name).join('、')}，請由其他有權限的人員再次結算即可補發。`)
+    }
+    // growth2：發放月起已有封存薪資的員工後端會跳過（補充保費累計無法回寫），需 HR 人工處理。
+    const finalizedRows = settleResult.value?.skipped_finalized ?? []
+    if (finalizedRows.length > 0) {
+        parts.push(`發放月起薪資已封存而未發放：${finalizedRows.map((r) => r.employee_name).join('、')}，請先解除封存或改由人工處理。`)
+    }
+    return parts.join(' ')
 })
 
 const doSettle = async () => {
@@ -492,7 +542,7 @@ const doSettle = async () => {
             : ''
     try {
         await ElMessageBox.confirm(
-            `即將結算 ${schoolYear.value} 學年自主成長獎勵金：將發給 ${settleTargets.value.length} 位員工共 ${formatCurrency(settleTotalAmount.value)}（扣抵前）。${carryNote}已發放過的員工本次會自動跳過、不重複發放；發放後仍可再次結算以補發後續才符合資格的員工。確定結算？`,
+            `即將結算 ${schoolYear.value} 學年自主成長獎勵金：將發給 ${settleTargets.value.length} 位員工共 ${formatCurrency(settleTotalAmount.value)}（扣抵前）。${carryNote}本獎勵金計入二代健保補充保費累計，發放月起的薪資會標記需重算。已發放過的員工本次會自動跳過、不重複發放；發放後仍可再次結算以補發後續才符合資格的員工。確定結算？`,
             '確認結算',
             { confirmButtonText: '確定結算', cancelButtonText: '取消', type: 'warning' },
         )
@@ -797,5 +847,10 @@ onMounted(() => {
 .amount-cell__hint {
   font-size: 11px;
   color: var(--el-text-color-secondary);
+}
+.amount-cell__warn {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--el-color-danger);
 }
 </style>

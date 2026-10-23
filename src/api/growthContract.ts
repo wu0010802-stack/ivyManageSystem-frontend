@@ -49,3 +49,42 @@ export const settleGrowthContract = (
     body: ApiBody<'/growth-contract/settle', 'post'>,
 ): AxiosResp<'/growth-contract/settle', 'post'> =>
     api.post('/growth-contract/settle', body)
+
+// ============ 義華第二批（growth2）：職務異動月額覆寫、扣抵 ============
+// 讀取需 SALARY_READ＋完整薪資檢視；寫入需 SALARY_WRITE＋完整薪資檢視（後端
+// enforce_full_salary_view），且不得設定自己的資料（require_not_self_salary_record）。
+
+/** 職務 key → 月額／每學期應修時數（覆寫區段下拉選項）。 */
+export const listGrowthPositionRates = (): AxiosResp<'/growth-contract/position-rates', 'get'> =>
+    api.get('/growth-contract/position-rates')
+
+export const listGrowthRateSegments = (
+    params: ApiQuery<'/growth-contract/rate-segments', 'get'>,
+): AxiosResp<'/growth-contract/rate-segments', 'get'> =>
+    api.get('/growth-contract/rate-segments', { params })
+
+/** 起訖月（YYYY-MM，含兩端）須落在該學年 8 月～次年 7 月內，否則 422。 */
+export const createGrowthRateSegment = (
+    body: ApiBody<'/growth-contract/rate-segments', 'post'>,
+): AxiosResp<'/growth-contract/rate-segments', 'post'> =>
+    api.post('/growth-contract/rate-segments', body)
+
+export const deleteGrowthRateSegment = (
+    segmentId: number,
+): AxiosResp<'/growth-contract/rate-segments/{segment_id}', 'delete'> =>
+    api.delete(`/growth-contract/rate-segments/${segmentId}`)
+
+export const listGrowthDeductions = (
+    params: ApiQuery<'/growth-contract/deductions', 'get'>,
+): AxiosResp<'/growth-contract/deductions', 'get'> =>
+    api.get('/growth-contract/deductions', { params })
+
+export const createGrowthDeduction = (
+    body: ApiBody<'/growth-contract/deductions', 'post'>,
+): AxiosResp<'/growth-contract/deductions', 'post'> =>
+    api.post('/growth-contract/deductions', body)
+
+export const deleteGrowthDeduction = (
+    deductionId: number,
+): AxiosResp<'/growth-contract/deductions/{deduction_id}', 'delete'> =>
+    api.delete(`/growth-contract/deductions/${deductionId}`)
