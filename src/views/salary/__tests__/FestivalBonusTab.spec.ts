@@ -60,6 +60,9 @@ const makeConfig = () =>
     meeting_default_hours: 2,
     meeting_absence_penalty: 100,
     art_teacher_festival: 2000,
+    warning_deduction: 1000 as number | null,
+    minor_offense_deduction: 3000 as number | null,
+    major_offense_deduction: 0 as number | null,
   })
 
 const mountTab = (bonusConfig: ReturnType<typeof makeConfig>) =>
@@ -98,5 +101,25 @@ describe('FestivalBonusTab 教師節慶獎金基數', () => {
     await inputs[3].setValue('1450')
     expect(bonusConfig.assistant_teacher_a).toBe(1450)
     expect(bonusConfig.assistant_teacher_b).toBe(1200)
+  })
+})
+
+describe('FestivalBonusTab 懲處預設扣款（義華 Q13）', () => {
+  it('警告／小過／大過三格依序綁定各自欄位，可改值', async () => {
+    const bonusConfig = makeConfig()
+    const wrapper = mountTab(bonusConfig)
+    const card = wrapper.find('[data-testid="offense-deduction-card"]')
+    expect(card.exists()).toBe(true)
+    expect(card.text()).toContain('個案未填金額時套用；規章每 1 分＝1,000')
+
+    const labels = card.findAll('label').map((el) => el.attributes('data-label'))
+    expect(labels).toEqual(['警告 預設扣節慶獎金', '小過 預設扣節慶獎金', '大過 預設扣節慶獎金'])
+
+    const inputs = card.findAll('input.num')
+    expect(inputs.map((i) => (i.element as HTMLInputElement).value)).toEqual(['1000', '3000', '0'])
+
+    await inputs[2].setValue('6000')
+    expect(bonusConfig.major_offense_deduction).toBe(6000)
+    expect(bonusConfig.minor_offense_deduction).toBe(3000)
   })
 })

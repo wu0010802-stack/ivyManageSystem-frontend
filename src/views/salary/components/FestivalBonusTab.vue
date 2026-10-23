@@ -28,7 +28,18 @@ interface FestivalBonusConfig {
   meeting_default_hours: number
   meeting_absence_penalty: number
   art_teacher_festival: number
+  // 義華 Q13：懲處預設扣節慶獎金（元）；null＝後端未回傳（沿用後端預設）
+  warning_deduction: number | null
+  minor_offense_deduction: number | null
+  major_offense_deduction: number | null
 }
+
+// 懲處預設扣款三欄（後端 PUT /config/bonus 驗證 0–100000）
+const OFFENSE_DEDUCTION_FIELDS = [
+  { key: 'warning_deduction', label: '警告 預設扣節慶獎金' },
+  { key: 'minor_offense_deduction', label: '小過 預設扣節慶獎金' },
+  { key: 'major_offense_deduction', label: '大過 預設扣節慶獎金' },
+] as const
 
 defineProps<{
   bonusConfig: FestivalBonusConfig
@@ -215,6 +226,24 @@ defineProps<{
             v-model="bonusConfig.art_teacher_festival"
             :min="0" :step="100"
             controls-position="right" style="width: 100%"
+          />
+        </el-form-item>
+      </el-col>
+    </el-row>
+  </el-card>
+
+  <!-- 義華 Q13：懲處預設扣節慶獎金 -->
+  <el-card class="box-card mt-4" shadow="never" data-testid="offense-deduction-card">
+    <template #header><div class="card-header"><span>懲處預設扣款</span></div></template>
+    <p class="desc-text">個案未填金額時套用；規章每 1 分＝1,000 元。扣款由發放月的節慶獎金扣除。</p>
+    <el-row :gutter="20">
+      <el-col v-for="f in OFFENSE_DEDUCTION_FIELDS" :key="f.key" :span="8">
+        <el-form-item :label="f.label">
+          <el-input-number
+            v-model="bonusConfig[f.key]"
+            :min="0" :max="100000" :step="500"
+            controls-position="right" style="width: 100%"
+            :aria-label="f.label"
           />
         </el-form-item>
       </el-col>

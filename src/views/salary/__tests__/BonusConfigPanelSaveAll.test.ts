@@ -191,6 +191,31 @@ describe('BonusConfigPanel — saveAllBonusSettings 儲存閘門', () => {
     expect(payload).not.toHaveProperty('head_teacher_ab')
     expect(payload).not.toHaveProperty('assistant_teacher_ab')
   })
+
+  it('懲處預設扣款三欄（Q13）：GET 帶回的值原樣送回；未帶回時送 null 不覆寫後端', async () => {
+    getBonusConfig.mockResolvedValue({
+      data: {
+        config_year: 2027,
+        warning_deduction: 1000,
+        minor_offense_deduction: 3000,
+      },
+    })
+    ;(ElMessageBox.prompt as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      value: '確認懲處預設扣款欄位隨設定一起送出',
+    })
+
+    const wrapper = mountPanel()
+    await flushPromises()
+    const state = wrapper.vm.$.setupState as unknown as SetupState
+
+    await state.saveAllBonusSettings()
+    await flushPromises()
+
+    const payload = updateBonusConfig.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(payload.warning_deduction).toBe(1000)
+    expect(payload.minor_offense_deduction).toBe(3000)
+    expect(payload.major_offense_deduction).toBeNull()
+  })
 })
 
 // 薪資模組稽核 P2：saveAllBonusSettings 最終送到 PUT /config/bonus，後端除
