@@ -7359,6 +7359,9 @@ export interface paths {
         /**
          * List Categories
          * @description 表外獎金類別清單（前端下拉選項）。
+         *
+         *     「教育訓練獎勵金」已併入「自主成長契約獎勵金」（落差報告 #9），不再列為選項；
+         *     既有舊列仍可讀取、顯示舊標籤。
          */
         get: operations["list_categories_api_extra_bonuses_categories_get"];
         put?: never;
@@ -9304,6 +9307,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/growth-contract/deductions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Deductions
+         * @description 列出某學年的自主成長獎勵金扣抵。
+         */
+        get: operations["list_deductions_api_growth_contract_deductions_get"];
+        put?: never;
+        /**
+         * Create Deduction
+         * @description 新增扣抵（例：節慶獎金不足額的警告款結轉）；preview／settle 以
+         *     「時數比例後金額－扣抵合計」（下限 0）為實發。已結算者不會自動追扣，
+         *     需另行調整既有表外獎金紀錄。
+         */
+        post: operations["create_deduction_api_growth_contract_deductions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/growth-contract/deductions/{deduction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Deduction
+         * @description 刪除扣抵；不存在 → 404。
+         */
+        delete: operations["delete_deduction_api_growth_contract_deductions__deduction_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/growth-contract/employees/{employee_id}/signed-on": {
         parameters: {
             query?: never;
@@ -9379,6 +9428,26 @@ export interface paths {
         patch: operations["update_growth_hour_api_growth_contract_hours__hour_id__patch"];
         trace?: never;
     };
+    "/growth-contract/position-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Position Rates
+         * @description 職務 key → 月額／每學期應修時數（覆寫區段下拉選項用）。
+         */
+        get: operations["list_position_rates_api_growth_contract_position_rates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/growth-contract/preview": {
         parameters: {
             query?: never;
@@ -9397,6 +9466,52 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/growth-contract/rate-segments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Rate Segments
+         * @description 列出某學年的職務異動月額覆寫區段。
+         */
+        get: operations["list_rate_segments_api_growth_contract_rate_segments_get"];
+        put?: never;
+        /**
+         * Create Rate Segment
+         * @description 新增職務異動月額覆寫區段：起訖月（`YYYY-MM`，含兩端）須落在該學年
+         *     8 月～次年 7 月內；區段內月份改用 `position_key` 的月額與應修時數，區段外
+         *     沿用現職。同月多段重疊時後建者優先。
+         */
+        post: operations["create_rate_segment_api_growth_contract_rate_segments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/growth-contract/rate-segments/{segment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Rate Segment
+         * @description 刪除月額覆寫區段；不存在 → 404。
+         */
+        delete: operations["delete_rate_segment_api_growth_contract_rate_segments__segment_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -9424,16 +9539,17 @@ export interface paths {
          *     2. 用 `build_growth_contract_preview` 算出該學年所有列，只挑
          *        `eligible is True` 且 `amount > 0` 者為候選（不符資格／金額為 0 者
          *        不寫列，也不算跳過——它們從未進過候選名單）。
-         *     3. per-employee 冪等：該員工該學年（＝該發放年月）已有
-         *        `category="growth_contract"` 的 `ExtraBonusPayment` → 跳過，列入
-         *        `skipped_already_paid`（支援「時數後來補齊才符合資格」的補發場景，
-         *        不是整批鎖死）。
+         *     3. per-employee 冪等：該員工同學年（發放年的 7／8 月）已有
+         *        `growth_contract` 或舊類別 `education_training`（兩者同類，落差報告 #9）
+         *        的 `ExtraBonusPayment` → 跳過，列入 `skipped_already_paid`（支援「時數
+         *        後來補齊才符合資格」的補發場景，不是整批鎖死）。
          *     4. 對剩餘候選逐筆寫 `ExtraBonusPayment`：`period_year/period_month` 為
          *        該學年「期滿次月」（民國 school_year 學年 → 西元 school_year+1912
-         *        年 8 月，見 `paid_period_for_school_year`）；`counts_for_supplementary
-         *        =False`（業主 2026-08-14 裁定，與同日招生獎金裁定同口徑）。連帶
-         *        **不做** stale 傳播——該機制存在的理由是補充保費 ytd 基數會變，
-         *        `counts_for_supplementary=False` 下基數不變，沒有重算需求。
+         *        年 8 月，見 `paid_period_for_school_year`；歸帳月業主 08-14 裁定不改）；
+         *        金額為扣抵後實發（`amount`）；`counts_for_supplementary=True`（落差報告
+         *        #9：合併教育訓練獎勵金後依健保法 §31 計入 4 倍累計），因此逐員取薪資鎖
+         *        並把發放月起未封存薪資標 stale；發放月起已有封存薪資者跳過列入
+         *        `skipped_finalized`，不整批失敗。
          *     5. 全部寫完才一次 `session.commit()`——單一 DB transaction，任何一步
          *        失敗（含寫入途中的例外）整批回滾，不留孤兒紀錄。
          */
@@ -21094,6 +21210,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/adjustments/{adjustment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Settle Adjustment Endpoint
+         * @description 標記差額處理：SETTLED＝已表外補發／已追回；WAIVED＝不處理；PENDING＝撤回。
+         */
+        patch: operations["settle_adjustment_endpoint_api_year_end_adjustments__adjustment_id__patch"];
+        trace?: never;
+    };
     "/year_end/appraisal-payout": {
         parameters: {
             query?: never;
@@ -21210,6 +21346,26 @@ export interface paths {
          *       不清除（留最後鎖定紀錄）。
          */
         patch: operations["update_cycle_status_api_year_end_cycles__cycle_id__patch"];
+        trace?: never;
+    };
+    "/year_end/cycles/{cycle_id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Adjustments
+         * @description 3/15 重算差額清單（依員工排序）。
+         */
+        get: operations["list_adjustments_api_year_end_cycles__cycle_id__adjustments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/year_end/cycles/{cycle_id}/build-settlements": {
@@ -21349,6 +21505,48 @@ export interface paths {
         /** Get Cycle Progress */
         get: operations["get_cycle_progress_api_year_end_cycles__cycle_id__progress_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/cycles/{cycle_id}/recalc-0315": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recalc 0315 Endpoint
+         * @description 3/15 重算多退少補；422＝基準日未到或 3/15 未落在註冊口徑。
+         */
+        post: operations["recalc_0315_endpoint_api_year_end_cycles__cycle_id__recalc_0315_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/cycles/{cycle_id}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Cycle Rules
+         * @description 設定年終扣款期間起始月與在職基準日（只寫有送出的欄位；送 null 清除基準日）。
+         *
+         *     改完需重新 build 結算單才會生效；已簽核／已核定的結算單不受影響。
+         */
+        put: operations["update_cycle_rules_api_year_end_cycles__cycle_id__rules_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -25269,6 +25467,26 @@ export interface components {
              * @description 在籍人數模式：month_end=月底快照 / daily_weighted=按日加權
              */
             enrollment_count_mode?: string | null;
+            /**
+             * Festival Leader Class Ratio
+             * @description 組長兼帶班時節慶獎金改依班級比例（關閉＝主管全校比例）
+             */
+            festival_leader_class_ratio?: boolean | null;
+            /**
+             * Festival New Class Guarantee
+             * @description 新成立第一學年、新接班第一學期節慶比例保障 80%
+             */
+            festival_new_class_guarantee?: boolean | null;
+            /**
+             * Festival Shared Assistant Simple Avg
+             * @description 兩班共用副班導節慶獎金取兩班比例簡單平均（關閉＝依在籍人數加權）
+             */
+            festival_shared_assistant_simple_avg?: boolean | null;
+            /**
+             * Festival Unassigned Teacher School Ratio
+             * @description 未帶班的教保職節慶獎金依全校目標人數比例（關閉＝不發）
+             */
+            festival_unassigned_teacher_school_ratio?: boolean | null;
             /** Head Teacher A */
             head_teacher_a?: number | null;
             /** Head Teacher B */
@@ -25482,8 +25700,18 @@ export interface components {
         };
         /** BuildResultOut */
         BuildResultOut: {
+            /**
+             * Auto Included Resigned Employee Ids
+             * @default []
+             */
+            auto_included_resigned_employee_ids: number[];
             /** Built */
             built: number;
+            /**
+             * Excluded By Cutoff Employee Ids
+             * @default []
+             */
+            excluded_by_cutoff_employee_ids: number[];
             /**
              * Fallback Classes
              * @default 0
@@ -29905,6 +30133,17 @@ export interface components {
             /** Course Id */
             course_id: number;
         };
+        /** DeductionCreate */
+        DeductionCreate: {
+            /** Amount */
+            amount: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Reason */
+            reason: string;
+            /** School Year */
+            school_year: number;
+        };
         /** DeductionTypeCreate */
         DeductionTypeCreate: {
             /**
@@ -33474,6 +33713,31 @@ export interface components {
             /** Work Date */
             work_date: string;
         };
+        /** GrowthDeductionListOut */
+        GrowthDeductionListOut: {
+            /** Items */
+            items: components["schemas"]["GrowthDeductionOut"][];
+        };
+        /**
+         * GrowthDeductionOut
+         * @description 自主成長獎勵金扣抵（#11 ③）。
+         */
+        GrowthDeductionOut: {
+            /** Amount */
+            amount: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Id */
+            id: number;
+            /** Reason */
+            reason: string;
+            /** School Year */
+            school_year: number;
+            /** Source */
+            source: string;
+        };
         /** GrowthHourCreate */
         GrowthHourCreate: {
             /** Activity Date */
@@ -33539,6 +33803,32 @@ export interface components {
             title?: string | null;
         };
         /**
+         * GrowthPositionRateOut
+         * @description 職務 key 對照（月額／每學期應修基本時數）。
+         */
+        GrowthPositionRateOut: {
+            /** Key */
+            key: string;
+            /** Monthly Rate */
+            monthly_rate: number;
+            /** Required Hours Per Semester */
+            required_hours_per_semester: number;
+        };
+        /**
+         * GrowthPreviewDeductionOut
+         * @description 扣抵明細（懲處不足額結轉，#11 ③）；`id` 為 None 代表來自未扣餘額帳 hook。
+         */
+        GrowthPreviewDeductionOut: {
+            /** Amount */
+            amount: number;
+            /** Id */
+            id?: number | null;
+            /** Reason */
+            reason: string;
+            /** Source */
+            source: string;
+        };
+        /**
          * GrowthPreviewGateOut
          * @description 單一資格條件：`status` 為前端渲染三態（✓pass／✗fail／⚠no_data）的依據，
          *     `detail` 為對應中文說明文字，前端可直接顯示不需自行組字串。
@@ -33576,6 +33866,26 @@ export interface components {
             amount: number;
             /** Amount If Eligible */
             amount_if_eligible: number;
+            /**
+             * Credited Hours
+             * @default 0
+             */
+            credited_hours: number;
+            /**
+             * Deduction Amount
+             * @default 0
+             */
+            deduction_amount: number;
+            /**
+             * Deduction Unapplied
+             * @default 0
+             */
+            deduction_unapplied: number;
+            /**
+             * Deductions
+             * @default []
+             */
+            deductions: components["schemas"]["GrowthPreviewDeductionOut"][];
             /** Eligible */
             eligible: boolean;
             /** Employee Id */
@@ -33589,6 +33899,11 @@ export interface components {
             /** Monthly Rate */
             monthly_rate: number;
             /**
+             * Net Amount If Eligible
+             * @default 0
+             */
+            net_amount_if_eligible: number;
+            /**
              * Pending Festival Carry
              * @default 0
              */
@@ -33597,12 +33912,73 @@ export interface components {
             position_key: string;
             /** Position Unknown */
             position_unknown: boolean;
+            /**
+             * Rate Overridden
+             * @default false
+             */
+            rate_overridden: boolean;
             /** Required Hours */
             required_hours: number;
+            /**
+             * Semesters
+             * @default []
+             */
+            semesters: components["schemas"]["GrowthPreviewSemesterOut"][];
             /** Signed On */
             signed_on?: string | null;
+            /**
+             * Subtotal
+             * @default 0
+             */
+            subtotal: number;
             /** Tenure Months */
             tenure_months: number;
+        };
+        /**
+         * GrowthPreviewSemesterOut
+         * @description 單一學期時數明細：應修＝(12h＋主管加碼)×契約月數/6，實修以應修封頂
+         *     （超修不跨學期，落差報告 2026-10-22 #7）。
+         */
+        GrowthPreviewSemesterOut: {
+            /** Actual Hours */
+            actual_hours: number;
+            /** Contract Months */
+            contract_months: number;
+            /** Credited Hours */
+            credited_hours: number;
+            /** Required Hours */
+            required_hours: number;
+            /** Semester */
+            semester: number;
+        };
+        /** GrowthRateSegmentListOut */
+        GrowthRateSegmentListOut: {
+            /** Items */
+            items: components["schemas"]["GrowthRateSegmentOut"][];
+        };
+        /**
+         * GrowthRateSegmentOut
+         * @description 職務異動月額覆寫區段（#11 ①）；月份為 `YYYY-MM`。
+         */
+        GrowthRateSegmentOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** End Month */
+            end_month: string;
+            /** Id */
+            id: number;
+            /** Monthly Rate */
+            monthly_rate: number;
+            /** Note */
+            note?: string | null;
+            /** Position Key */
+            position_key: string;
+            /** School Year */
+            school_year: number;
+            /** Start Month */
+            start_month: string;
         };
         /**
          * GrowthReportListOut
@@ -33700,6 +34076,11 @@ export interface components {
             school_year: number;
             /** Skipped Already Paid */
             skipped_already_paid: components["schemas"]["GrowthSettleSkippedOut"][];
+            /**
+             * Skipped Finalized
+             * @default []
+             */
+            skipped_finalized: components["schemas"]["GrowthSettleSkippedOut"][];
             /**
              * Skipped Self
              * @default []
@@ -43387,6 +43768,21 @@ export interface components {
             /** Version */
             version?: number | null;
         };
+        /** RateSegmentCreate */
+        RateSegmentCreate: {
+            /** Employee Id */
+            employee_id: number;
+            /** End Month */
+            end_month: string;
+            /** Note */
+            note?: string | null;
+            /** Position Key */
+            position_key: string;
+            /** School Year */
+            school_year: number;
+            /** Start Month */
+            start_month: string;
+        };
         /** ReactPayload */
         ReactPayload: {
             /**
@@ -43418,6 +43814,43 @@ export interface components {
             from_week_start?: string | null;
             /** Pending */
             pending: boolean;
+        };
+        /** Recalc0315ResultOut */
+        Recalc0315ResultOut: {
+            /** Adjustments */
+            adjustments: components["schemas"]["YearEndAdjustmentOut"][];
+            /**
+             * Basis Date
+             * Format: date
+             */
+            basis_date: string;
+            /** School Rate Second New */
+            school_rate_second_new?: string | null;
+            /**
+             * Skipped Not Finalized
+             * @default 0
+             */
+            skipped_not_finalized: number;
+            /**
+             * Skipped Settled
+             * @default 0
+             */
+            skipped_settled: number;
+            /**
+             * Total Payout
+             * @default 0
+             */
+            total_payout: string;
+            /**
+             * Total Recovery
+             * @default 0
+             */
+            total_recovery: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /** ReconcileResponse */
         ReconcileResponse: {
@@ -51922,6 +52355,55 @@ export interface components {
             /** Work Date */
             work_date?: string | null;
         };
+        /**
+         * YearEndAdjustmentOut
+         * @description 年終 3/15 重算差額列。diff_amount＝應領−已領（正＝待表外補發；負＝待追回）。
+         */
+        YearEndAdjustmentOut: {
+            /**
+             * Basis Date
+             * Format: date
+             */
+            basis_date: string;
+            /** Calc Meta */
+            calc_meta?: {
+                [key: string]: unknown;
+            };
+            /** Diff Amount */
+            diff_amount: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** Paid Amount */
+            paid_amount: string;
+            /** Recalculated Amount */
+            recalculated_amount: string;
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled By */
+            settled_by?: number | null;
+            /** Settlement Id */
+            settlement_id: number;
+            /** Status */
+            status: string;
+            /** Year End Cycle Id */
+            year_end_cycle_id: number;
+        };
+        /**
+         * YearEndAdjustmentSettle
+         * @description PATCH /adjustments/{id}：人工標記差額處理（SETTLED／WAIVED／PENDING＝撤回）。
+         */
+        YearEndAdjustmentSettle: {
+            /** Note */
+            note?: string | null;
+            /** Status */
+            status: string;
+        };
         /** YearEndCycleCreate */
         YearEndCycleCreate: {
             /** Academic Year */
@@ -51959,6 +52441,13 @@ export interface components {
              */
             created_at: string;
             /**
+             * Deduction Period Start Month
+             * @default 1
+             */
+            deduction_period_start_month: number;
+            /** Employment Cutoff Date */
+            employment_cutoff_date?: string | null;
+            /**
              * End Date
              * Format: date
              */
@@ -51975,6 +52464,21 @@ export interface components {
              */
             start_date: string;
             status: components["schemas"]["YearEndCycleStatus"];
+        };
+        /**
+         * YearEndCycleRulesUpdate
+         * @description PUT /cycles/{cycle_id}/rules：年終 per-cycle 規則（只寫有送出的欄位）。
+         *
+         *     - deduction_period_start_month：考勤／會議／獎懲扣款期間起始月（1＝曆年
+         *       Jan–Dec，預設；2＝2 月～隔年 1 月，義華實務）。到職月數比例不受影響。
+         *     - employment_cutoff_date：年終「仍在職」判定日（如 1/31）；null＝沿用
+         *       build 當下 is_active。基準日當天離職者照領全額。
+         */
+        YearEndCycleRulesUpdate: {
+            /** Deduction Period Start Month */
+            deduction_period_start_month?: number | null;
+            /** Employment Cutoff Date */
+            employment_cutoff_date?: string | null;
         };
         /**
          * YearEndCycleStatus
@@ -68270,6 +68774,102 @@ export interface operations {
             };
         };
     };
+    list_deductions_api_growth_contract_deductions_get: {
+        parameters: {
+            query: {
+                employee_id?: number | null;
+                school_year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthDeductionListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_deduction_api_growth_contract_deductions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeductionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthDeductionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_deduction_api_growth_contract_deductions__deduction_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deduction_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_signed_on_api_growth_contract_employees__employee_id__signed_on_patch: {
         parameters: {
             query?: never;
@@ -68436,6 +69036,26 @@ export interface operations {
             };
         };
     };
+    list_position_rates_api_growth_contract_position_rates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthPositionRateOut"][];
+                };
+            };
+        };
+    };
     get_growth_contract_preview_api_growth_contract_preview_get: {
         parameters: {
             query: {
@@ -68454,6 +69074,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GrowthPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_rate_segments_api_growth_contract_rate_segments_get: {
+        parameters: {
+            query: {
+                employee_id?: number | null;
+                school_year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthRateSegmentListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_rate_segment_api_growth_contract_rate_segments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RateSegmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthRateSegmentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_rate_segment_api_growth_contract_rate_segments__segment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                segment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -88424,6 +89140,41 @@ export interface operations {
             };
         };
     };
+    settle_adjustment_endpoint_api_year_end_adjustments__adjustment_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                adjustment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YearEndAdjustmentSettle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearEndAdjustmentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_payouts_api_year_end_appraisal_payout_get: {
         parameters: {
             query: {
@@ -88627,6 +89378,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["YearEndCycleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_adjustments_api_year_end_cycles__cycle_id__adjustments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearEndAdjustmentOut"][];
                 };
             };
             /** @description Validation Error */
@@ -88922,6 +89704,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CycleProgressOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recalc_0315_endpoint_api_year_end_cycles__cycle_id__recalc_0315_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recalc0315ResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_cycle_rules_api_year_end_cycles__cycle_id__rules_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YearEndCycleRulesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearEndCycleOut"];
                 };
             };
             /** @description Validation Error */
