@@ -9,6 +9,12 @@ import OvertimeBonusTab from './components/OvertimeBonusTab.vue'
 import FestivalBonusTab from './components/FestivalBonusTab.vue'
 import StandardSalaryTab from './components/StandardSalaryTab.vue'
 import JobTitleGradeTab from './components/JobTitleGradeTab.vue'
+import {
+  emptyFestivalRuleToggles,
+  pickFestivalRuleToggles,
+  newlyEnabledFestivalRules,
+  type FestivalRuleToggleValues,
+} from './festivalRuleToggles'
 
 const loadingBonus = ref(false)
 const activeBonusTab = ref('overtime')
@@ -55,7 +61,11 @@ const bonusConfig = reactive({
   warning_deduction: null as number | null,
   minor_offense_deduction: null as number | null,
   major_offense_deduction: null as number | null,
+  // 義華 Q6–Q9：節慶計算四開關（null＝未載入／不異動，見 festivalRuleToggles.ts）
+  ...emptyFestivalRuleToggles(),
 })
+// 上次載入的開關值：儲存前比對「新開啟」哪些規則，提示會影響未封存月份重算。
+const loadedFestivalToggles = ref<FestivalRuleToggleValues>(emptyFestivalRuleToggles())
 
 const bonusReady = ref(false)
 const gradesReady = ref(false)
@@ -73,6 +83,7 @@ const fetchBonusConfig = async () => {
     const response = await getBonusConfig()
     const data = response.data as Record<string, unknown>
     Object.assign(bonusConfig, data)
+    loadedFestivalToggles.value = pickFestivalRuleToggles(data)
     bonusReady.value = true
   } catch (error) {
     bonusLoadError.value = true
@@ -108,6 +119,19 @@ const fetchGradeTargets = async () => {
 const saveBonusConfig = async (): Promise<boolean> => {
   // bug sweep 2026-05-16 P1-5：BonusConfig 變更影響全員獎金基數，
   // 後端對齊 PUT /insurance/brackets 要求 reason ≥10 字 + ACTIVITY_PAYMENT_APPROVE。
+  const enabled = newlyEnabledFestivalRules(loadedFestivalToggles.value, bonusConfig)
+  if (enabled.length > 0) {
+    try {
+      await ElMessageBox.confirm(
+        `即將開啟節慶規則：${enabled.map((d) => d.label).join('、')}。` +
+          '儲存後未封存的薪資會標記需重算，重算時整年度未封存月份的節慶獎金都會依新規則計算。確定要開啟嗎？',
+        '開啟節慶計算規則',
+        { confirmButtonText: '確定開啟', cancelButtonText: '取消', type: 'warning' },
+      )
+    } catch {
+      return false
+    }
+  }
   let reason
   try {
     const result = await ElMessageBox.prompt(
@@ -162,12 +186,14 @@ const saveBonusConfig = async (): Promise<boolean> => {
     warning_deduction: bonusConfig.warning_deduction,
     minor_offense_deduction: bonusConfig.minor_offense_deduction,
     major_offense_deduction: bonusConfig.major_offense_deduction,
+    ...pickFestivalRuleToggles(bonusConfig),
     reason,
   }
 
   loadingBonus.value = true
   try {
     await updateBonusConfig(payload)
+    loadedFestivalToggles.value = pickFestivalRuleToggles(bonusConfig)
     ElMessage.success('薪資設定已儲存')
     return true
   } catch (error) {
