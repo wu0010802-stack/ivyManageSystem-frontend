@@ -18,6 +18,10 @@ const getCorrectionsMock = vi.fn()
 vi.mock('@/api/leaves', () => ({ getLeaves: (...a: unknown[]) => getLeavesMock(...a) }))
 vi.mock('@/api/overtimes', () => ({ getOvertimes: (...a: unknown[]) => getOvertimesMock(...a) }))
 vi.mock('@/api/punchCorrections', () => ({ getCorrections: (...a: unknown[]) => getCorrectionsMock(...a) }))
+const getPayoutSettingsMock = vi.fn()
+vi.mock('@/api/festivalCarry', () => ({ getFestivalPayoutSettings: () => getPayoutSettingsMock() }))
+vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
+const STANDARD_SETTINGS = { data: { early_payout_from_ym: null, july_leaver_merge_enabled: false, deduction_carryover_enabled: false } }
 
 const pushMock = vi.fn()
 
@@ -46,6 +50,8 @@ describe('StepPrecheck', () => {
         getLeavesMock.mockReset()
         getOvertimesMock.mockReset()
         getCorrectionsMock.mockReset()
+        getPayoutSettingsMock.mockReset()
+        getPayoutSettingsMock.mockResolvedValue(STANDARD_SETTINGS)
     })
 
     it('有 pending 項目：顯示計數與「前往簽核」連結、警告但不擋下一步', async () => {
@@ -88,5 +94,34 @@ describe('StepPrecheck', () => {
         const w5 = mountStep({ year: 2026, month: 5 })
         await flushPromises()
         expect(w5.text()).not.toContain('節慶獎金發放月')
+    })
+
+    it('租戶設定發放月前移（Q10）：5 月為發放月且標示 2～5 月、6 月不再是發放月', async () => {
+        getLeavesMock.mockResolvedValue(paged([]))
+        getOvertimesMock.mockResolvedValue(paged([]))
+        getCorrectionsMock.mockResolvedValue(paged([]))
+        getPayoutSettingsMock.mockResolvedValue({
+            data: { early_payout_from_ym: '2026-01', july_leaver_merge_enabled: false, deduction_carryover_enabled: false },
+        })
+
+        const w5 = mountStep({ year: 2026, month: 5 })
+        await flushPromises()
+        expect(w5.text()).toContain('節慶獎金發放月')
+        expect(w5.text()).toContain('2～5 月')
+
+        const w6 = mountStep({ year: 2026, month: 6 })
+        await flushPromises()
+        expect(w6.text()).not.toContain('節慶獎金發放月')
+    })
+
+    it('發放口徑讀取失敗時退回標準 2/6/9/12', async () => {
+        getLeavesMock.mockResolvedValue(paged([]))
+        getOvertimesMock.mockResolvedValue(paged([]))
+        getCorrectionsMock.mockResolvedValue(paged([]))
+        getPayoutSettingsMock.mockRejectedValue(new Error('boom'))
+
+        const w6 = mountStep({ year: 2026, month: 6 })
+        await flushPromises()
+        expect(w6.text()).toContain('節慶獎金發放月')
     })
 })

@@ -1,12 +1,12 @@
 <template>
   <div>
-    <!-- 節慶獎金發放月提示（涵蓋區間標示待 festivalCoverage 模組（使用者 WIP）落地後接上） -->
+    <!-- 節慶獎金發放月提示（發放月依租戶口徑：標準 2/6/9/12，前移後 1/5/8/11） -->
     <el-alert
       v-if="isFestivalMonth"
       type="info"
       :closable="false"
       class="precheck-mb"
-      title="本月為節慶獎金發放月（2／6／9／12 月），計算時會一併結算本期累積"
+      :title="festivalAlertTitle"
     />
 
     <!-- 發放月：涵蓋月在籍人數快照（產生/核對/手調/確認；計算優先讀快照） -->
@@ -46,6 +46,12 @@ import { getOvertimes } from '@/api/overtimes'
 import { getCorrections } from '@/api/punchCorrections'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import EnrollmentSnapshotPanel from './EnrollmentSnapshotPanel.vue'
+import { useFestivalPayoutSettings } from '@/composables/useFestivalPayoutSettings'
+import {
+    festivalCoverageLabelForSalaryMonth,
+    festivalPayoutMonthsText,
+    isFestivalPayoutMonth,
+} from '../festivalCoverage'
 
 defineEmits<{ (e: 'next'): void }>()
 
@@ -83,7 +89,15 @@ const items = computed(() =>
     ].filter((i) => i.count > 0),
 )
 const totalPending = computed(() => counts.value.leaves + counts.value.overtimes + counts.value.corrections)
-const isFestivalMonth = computed(() => [2, 6, 9, 12].includes(q.month))
+// 發放月依租戶口徑（Q10 前移）；設定載入前／失敗時退回標準 2/6/9/12。
+const { load: loadPayoutSettings, earlyPayoutFromYm } = useFestivalPayoutSettings()
+onMounted(loadPayoutSettings)
+const isFestivalMonth = computed(() => isFestivalPayoutMonth(q.year, q.month, earlyPayoutFromYm.value))
+const festivalAlertTitle = computed(() => {
+    const coverage = festivalCoverageLabelForSalaryMonth(q.year, q.month, earlyPayoutFromYm.value)
+    const months = festivalPayoutMonthsText(q.year, earlyPayoutFromYm.value)
+    return `本月為節慶獎金發放月（${q.year} 年發放月：${months}），計算時會一併結算${coverage ? ` ${coverage}` : '本期'}累積`
+})
 </script>
 
 <style scoped>

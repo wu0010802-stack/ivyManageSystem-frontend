@@ -79,12 +79,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, onMounted, onUnmounted, type Ref } from 'vue'
+import { ref, computed, inject, onMounted, onUnmounted, watch, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { calculateAsync, getSalaryCalcJob, getEnrollmentSnapshot, type SalaryCalcJobStatus } from '@/api/salary'
 import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { SalarySettlement } from '@/composables/useSalarySettlement'
+import { useFestivalPayoutSettings } from '@/composables/useFestivalPayoutSettings'
+import { isFestivalPayoutMonth } from '../festivalCoverage'
 
 const emit = defineEmits<{ (e: 'next'): void }>()
 
@@ -111,9 +113,11 @@ const progressPct = computed(() => {
     return Math.min(100, Math.round((p.done / p.total) * 100))
 })
 
-// 發放月（2/6/9/12）快照 gate（決策2）：涵蓋月在籍人數快照須全部確認才能計算。
+// 發放月快照 gate（決策2）：涵蓋月在籍人數快照須全部確認才能計算。
+// 發放月依租戶口徑（標準 2/6/9/12；Q10 前移後 1/5/8/11），設定載入前／失敗時退回標準。
 // 前端預先禁用按鈕避免白點；後端 calculate 端點 422 為最終強制關卡。
-const isFestivalMonth = computed(() => [2, 6, 9, 12].includes(q.month))
+const { load: loadPayoutSettings, earlyPayoutFromYm } = useFestivalPayoutSettings()
+const isFestivalMonth = computed(() => isFestivalPayoutMonth(q.year, q.month, earlyPayoutFromYm.value))
 const snapshotPending = ref<[number, number][]>([])
 
 interface SnapshotRow { is_confirmed: boolean }
@@ -134,6 +138,12 @@ const checkSnapshotGate = async () => {
     }
 }
 onMounted(checkSnapshotGate)
+onMounted(loadPayoutSettings)
+// 設定載入後若發放月判定改變（前移租戶），重跑快照 gate。
+watch(isFestivalMonth, (now) => {
+    if (now) checkSnapshotGate()
+    else snapshotPending.value = []
+})
 
 const disabledReason = computed(() => {
     if (!hasPermission('SALARY_WRITE')) return '需要薪資寫入權限（目前為唯讀模式）'
