@@ -302,6 +302,12 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '自主成長獎勵金' }
         },
         {
+            path: '/salary/returning-class-bonus',
+            name: 'salary-returning-class-bonus',
+            component: () => import('../views/salary/ReturningClassBonusView.vue'),
+            meta: { title: '舊生註冊／預繳獎金' }
+        },
+        {
             path: '/calendar',
             name: 'calendar',
             component: () => import('../views/CalendarView.vue'),
