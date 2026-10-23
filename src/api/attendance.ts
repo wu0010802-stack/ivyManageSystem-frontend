@@ -99,6 +99,8 @@ export const getAppraisalSheetCandidates = (
  * 月考核表 PDF（每位員工一頁）。
  * employee_ids 為多值 query（?employee_ids=1&employee_ids=2），axios 預設會加 []，
  * 比照 fees.ts／studentRecords.ts 以 indexes:null 關掉。
+ * 後端每人做一次薪資試算，全園一批會超過 axios 預設 30 秒；逾時放寬到 60 秒
+ * （對齊 nginx upstream 上限，再久也會被 nginx 以 504 切斷）。
  */
 export const getAppraisalSheetsPdf = (params: {
   year: number
@@ -109,6 +111,7 @@ export const getAppraisalSheetsPdf = (params: {
     params,
     responseType: 'blob',
     paramsSerializer: { indexes: null },
+    timeout: 60_000,
   })
 
 // ── 單筆維護 ─────────────────────────────────────────────────────────────────
