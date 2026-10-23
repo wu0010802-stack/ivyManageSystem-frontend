@@ -9325,6 +9325,10 @@ export interface paths {
          * @description 新增扣抵（例：節慶獎金不足額的警告款結轉）；preview／settle 以
          *     「時數比例後金額－扣抵合計」（下限 0）為實發。已結算者不會自動追扣，
          *     需另行調整既有表外獎金紀錄。
+         *
+         *     租戶啟用節慶未扣餘額結轉（festival.deduction_carryover_enabled）且該員工
+         *     尚有未扣餘額 → 422：節慶不足額已在結轉帳上，請於結算時勾選「扣抵節慶未扣
+         *     餘額」，另登扣抵會重複扣（整合審查 P1）。
          */
         post: operations["create_deduction_api_growth_contract_deductions_post"];
         delete?: never;
@@ -17931,6 +17935,9 @@ export interface paths {
         /**
          * Settle
          * @description 把預覽中可領者寫入表外獎金（冪等：同員工同類別同歸屬月已有列即跳過）。
+         *
+         *     同歸屬月已有「其他」類別表外獎金者（改版前手登），未在 employee_ids 明確勾選
+         *     時不發、列入 skipped_legacy_other。
          *
          *     設定未啟用 → 409；本人那筆跳過（職權分離）；已封存月份跳過。
          */
@@ -46115,6 +46122,11 @@ export interface components {
             employee_id: number;
             /** Employee Name */
             employee_name: string;
+            /**
+             * Legacy Other Amount
+             * @default 0
+             */
+            legacy_other_amount: number;
             /** Roles */
             roles: string[];
         };
@@ -46192,6 +46204,11 @@ export interface components {
             skipped_already_paid: components["schemas"]["ReturningBonusSettleEmployeeOut"][];
             /** Skipped Finalized */
             skipped_finalized: components["schemas"]["ReturningBonusSettleEmployeeOut"][];
+            /**
+             * Skipped Legacy Other
+             * @default []
+             */
+            skipped_legacy_other: components["schemas"]["ReturningBonusSettleEmployeeOut"][];
             /** Skipped Self */
             skipped_self: components["schemas"]["ReturningBonusSettleEmployeeOut"][];
             /** Skipped Unselected */
