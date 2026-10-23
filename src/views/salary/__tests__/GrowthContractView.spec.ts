@@ -124,6 +124,7 @@ const previewRow = (over: Partial<GrowthPreviewRow> = {}): GrowthPreviewRow => (
     amount_if_eligible: 7440,
     eligible: true,
     amount: 7440,
+    pending_festival_carry: 0,
     gates: [
         gate({ code: 'signed', status: 'pass', detail: '簽約日 2025-09-01' }),
         gate({ code: 'returning_rate', status: 'pass', detail: '全園舊生註冊率 85.0%（門檻 80%）' }),
@@ -218,6 +219,9 @@ interface ViewVm {
     settleResult: GrowthSettleResultOut | null
     doSettle: () => Promise<void>
     extraBonusItems: ExtraBonusRow[]
+    carryOffsetIds: number[]
+    hasPendingCarry: boolean
+    toggleCarryOffset: (employeeId: number, checked: boolean) => void
 }
 
 describe('GrowthContractView', () => {
@@ -726,6 +730,52 @@ describe('GrowthContractView', () => {
         expect(wrapper.text()).toContain('林慧慈')
         expect(wrapper.text()).toContain(formatCurrency(7440))
     })
+    it('⑪ 節慶未扣餘額（Q14）：未勾選不帶 carry_offset_employee_ids；勾選後只送勾選且仍待扣者', async () => {
+        getGrowthPreviewMock.mockResolvedValue({
+            data: previewFixture({
+                rows: [
+                    previewRow({ employee_id: 2, employee_name: '郭碧婷', eligible: true, amount: 7440, pending_festival_carry: 3000 }),
+                    previewRow({ employee_id: 3, employee_name: '無餘額', eligible: true, amount: 3000, pending_festival_carry: 0 }),
+                ],
+            }),
+        })
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        settleGrowthContractMock.mockResolvedValue({
+            data: {
+                school_year: 115,
+                paid_period: '115-08',
+                created: [{ employee_id: 2, employee_name: '郭碧婷', amount: 4440, carry_offset: 3000 }],
+                skipped_already_paid: [],
+                skipped_self: [],
+                total_amount: 4440,
+            },
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        expect(vm.hasPendingCarry).toBe(true)
+
+        await vm.doSettle()
+        await flushPromises()
+        expect(settleGrowthContractMock).toHaveBeenLastCalledWith({ school_year: 115 })
+
+        vm.toggleCarryOffset(2, true)
+        vm.toggleCarryOffset(3, true) // 無餘額者即使被勾也不送
+        await vm.doSettle()
+        await flushPromises()
+        expect(settleGrowthContractMock).toHaveBeenLastCalledWith({ school_year: 115, carry_offset_employee_ids: [2] })
+        const [message] = vi.mocked(ElMessageBox.confirm).mock.calls.at(-1) ?? []
+        expect(String(message)).toContain('郭碧婷 將以本次獎勵金扣抵節慶未扣餘額')
+        const [toast] = vi.mocked(ElMessage.success).mock.calls.at(-1) ?? []
+        expect(String(toast)).toContain(`已扣抵節慶未扣餘額 ${formatCurrency(3000)}`)
+    })
+
+    it('⑫ 預覽無任何未扣餘額時不顯示扣抵欄', async () => {
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        expect(vm.hasPendingCarry).toBe(false)
+    })
 })
 
 describe('GrowthContractView 簽約日帶出來源', () => {
@@ -779,6 +829,7 @@ describe('GrowthContractView 簽約日帶出來源', () => {
 
         expect(vm.signedOnDate).toBeNull()
     })
+
 })
 
 describe('GrowthContractView 頁面文案與現況一致', () => {
