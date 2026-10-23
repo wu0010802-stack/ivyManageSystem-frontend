@@ -473,6 +473,7 @@ describe('GrowthContractView', () => {
                         eligible: false,
                         amount: 0,
                         amount_if_eligible: 6200,
+                        net_amount_if_eligible: 6200,
                         gates: [gate({ code: 'signed', status: 'fail', detail: '尚未簽署自主成長契約' })],
                     }),
                 ],
