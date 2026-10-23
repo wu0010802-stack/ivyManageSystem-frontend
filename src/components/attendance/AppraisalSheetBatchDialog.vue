@@ -2,7 +2,7 @@
   <el-dialog
     :model-value="modelValue"
     :title="`批次列印 ${month} 月考核表`"
-    width="560px"
+    :width="FORM_DIALOG_WIDTH.compact"
     top="6vh"
     append-to-body
     data-test="appraisal-dialog"
@@ -77,6 +77,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { FORM_DIALOG_WIDTH } from '@/constants/formDialog'
 import { getAppraisalSheetCandidates, getAppraisalSheetsPdf } from '@/api/attendance'
 import type { AppraisalSheetCandidateGroup } from '@/api/attendance'
 import { apiError, localErrorMessage } from '@/utils/error'
