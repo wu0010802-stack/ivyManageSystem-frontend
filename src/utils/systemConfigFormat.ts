@@ -30,3 +30,23 @@ export function looksLikeJsonArray(value: string | null | undefined): boolean {
   if (!value) return false
   return value.trim().startsWith('[')
 }
+
+const YEAR_MONTH_RE = /^20\d{2}-(0[1-9]|1[0-2])$/
+
+/**
+ * select／month 型 system_configs 值的前端檢核，條件與後端
+ * `api/system_config.require_valid_config_value` 對齊（列舉精確比對、年月 YYYY-MM）。
+ * 回傳錯誤訊息；合法或非受檢型別回 null。空字串一律視為不合法（後端 PUT 要求 min_length=1）。
+ */
+export function configValueError(
+  type: 'text' | 'select' | 'month',
+  value: string | null | undefined,
+  allowed: readonly string[] = [],
+): string | null {
+  const v = (value ?? '').trim()
+  if (type === 'text') return null
+  if (!v) return '尚未選擇'
+  if (type === 'month') return YEAR_MONTH_RE.test(v) ? null : '須為 YYYY-MM 格式'
+  if (allowed.length > 0 && !allowed.includes(v)) return `只接受：${allowed.join('、')}`
+  return null
+}

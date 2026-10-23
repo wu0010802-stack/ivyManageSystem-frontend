@@ -16,9 +16,21 @@
  * `pos.cash_deposit_warning_threshold`），只是借用同一個 tab 讓人維護。新增
  * 選填 key 時**不可**同步加進後端 `ONBOARDING_REQUIRED_CONFIG_KEYS`，否則每個
  * 新租戶的 onboarding 進度都永遠不會齊。
+ * 2026-10-23 起另收錄「薪資／請假／加班規則」三個選填 key（同理不屬 onboarding）。
  */
 
-export type SystemConfigFieldType = 'text' | 'switch'
+/**
+ * - text：自由字串
+ * - switch：布林開關（存 "true"/"false"）
+ * - select：列舉（`options` 為後端 `_ENUM_CONFIG_VALUES` 的合法值，送非法值後端 400）
+ * - month：年月（存 "YYYY-MM"）
+ */
+export type SystemConfigFieldType = 'text' | 'switch' | 'select' | 'month'
+
+export interface SystemConfigOption {
+  value: string
+  label: string
+}
 
 export interface SystemConfigFieldDef {
   /** 對應 system_configs.config_key，如 `bank.payer_name` */
@@ -33,6 +45,8 @@ export interface SystemConfigFieldDef {
    * 顯示 inline 警示（後端只認逗號分隔字串，JSON 格式會靜默失效）。
    */
   warnJsonArray?: boolean
+  /** type='select' 時的選項（值須與後端 `_ENUM_CONFIG_VALUES` 一致）。 */
+  options?: SystemConfigOption[]
 }
 
 export interface SystemConfigSectionDef {
@@ -120,6 +134,45 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
         label: '抽屜現金存銀行提醒門檻',
         hint: '抽屜現金累積達此金額時於收銀頁提示存入銀行。留空＝使用系統預設 30000',
         type: 'text',
+      },
+    ],
+  },
+  {
+    // 義華第二批裁定（2026-10-23）：三個薪資／請假／加班口徑開關。皆選填，未設定＝舊行為；
+    // 不屬 onboarding 必填，**不可**加進後端 ONBOARDING_REQUIRED_CONFIG_KEYS。
+    title: '薪資／請假／加班規則',
+    hint:
+      '依各園所規章調整的計算口徑，皆為選填；未設定＝沿用系統原本的算法。'
+      + '⚠ 這裡改完不會自動把薪資標記為需重算，請到薪資計算頁重算尚未封存的受影響月份。',
+    fields: [
+      {
+        key: 'festival_target.effective_ym',
+        label: '節慶目標人數生效月',
+        hint:
+          '自該月起節慶獎金目標人數套用當年度設定；同年度、早於此月的薪資月份改用前一年度的目標。'
+          + '未設定＝當年度目標整年回溯套用。',
+        type: 'month',
+      },
+      {
+        key: 'leave_quota_year_basis',
+        label: '請假配額年度計算方式',
+        hint:
+          '事假、病假、家庭照顧假等年度額度與累計上限的加總區間；病假 30 日半薪的累計窗也跟著這個設定。'
+          + '未設定＝曆年。',
+        type: 'select',
+        options: [
+          { value: 'calendar', label: '曆年（1/1–12/31）' },
+          { value: 'academic', label: '學年（8/1–隔年 7/31）' },
+          { value: 'anniversary', label: '到職週年（到職日起算一年）' },
+        ],
+      },
+      {
+        key: 'overtime.block_on_partial_leave_day',
+        label: '請半日假當天不計加班',
+        hint:
+          '開啟後，員工當天已有部分時段請假時，該日加班不得申請或核准（建立、核准、批次核准、匯入都會擋下並說明原因）。'
+          + '未設定＝關閉。',
+        type: 'switch',
       },
     ],
   },

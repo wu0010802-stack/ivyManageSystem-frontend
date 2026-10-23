@@ -11,11 +11,13 @@ import {
   SUPER_ADMIN_ONLY_CONFIG_KEYS,
   type SystemConfigFieldDef,
   type SystemConfigFieldType,
+  type SystemConfigOption,
 } from '@/constants/onboardingSystemConfigs'
 import {
   normalizeConfigBoolean,
   booleanToConfigValue,
   looksLikeJsonArray,
+  configValueError,
 } from '@/utils/systemConfigFormat'
 
 interface ConfigRow {
@@ -24,6 +26,7 @@ interface ConfigRow {
   hint?: string
   type: SystemConfigFieldType
   warnJsonArray: boolean
+  options: SystemConfigOption[]
   /** 目前已存的值（DB 或 404 時視同空字串）；用來比對是否變更。 */
   config_value: string
   /** true = DB 尚未有此 key（含 404），顯示「尚未設定」；非錯誤狀態。 */
@@ -65,6 +68,7 @@ const buildRow = (
     hint: def.hint,
     type: def.type,
     warnJsonArray: !!def.warnJsonArray,
+    options: def.options ?? [],
     config_value: value,
     is_default: data ? !!data.is_default : true,
     loadError,
@@ -121,8 +125,17 @@ const isRowDirty = (row: ConfigRow): boolean =>
 const showJsonWarning = (row: ConfigRow): boolean =>
   row.warnJsonArray && looksLikeJsonArray(row._editValue)
 
+/** select／month 欄位的前端格式檢核（與後端 400 條件對齊）；null＝可送出。 */
+const rowValueError = (row: ConfigRow): string | null =>
+  row.type === 'switch' ? null : configValueError(row.type, row._editValue, row.options.map((o) => o.value))
+
 const saveConfig = async (row: ConfigRow) => {
   if (!canEditRow(row) || !isRowDirty(row)) return
+  const invalid = rowValueError(row)
+  if (invalid) {
+    ElMessage.warning(`「${row.label}」${invalid}`)
+    return
+  }
   savingKey.value = row.key
   try {
     const valueToSend = row.type === 'switch' ? booleanToConfigValue(row._editBool) : row._editValue
@@ -189,6 +202,27 @@ onMounted(() => {
             v-model="row._editBool"
             :disabled="!canEditRow(row)"
           />
+          <el-select
+            v-else-if="row.type === 'select'"
+            v-model="row._editValue"
+            :disabled="!canEditRow(row)"
+            placeholder="尚未設定"
+            style="width: 100%; max-width: 320px;"
+          >
+            <el-option v-for="opt in row.options" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+          <template v-else-if="row.type === 'month'">
+            <el-date-picker
+              v-model="row._editValue"
+              type="month"
+              value-format="YYYY-MM"
+              format="YYYY-MM"
+              :disabled="!canEditRow(row)"
+              :clearable="false"
+              placeholder="尚未設定"
+              style="width: 200px;"
+            />
+          </template>
           <template v-else>
             <el-input
               v-model="row._editValue"
@@ -207,7 +241,7 @@ onMounted(() => {
             type="primary"
             size="small"
             :icon="Check"
-            :disabled="!isRowDirty(row)"
+            :disabled="!isRowDirty(row) || !!rowValueError(row)"
             :loading="savingKey === row.key"
             @click="saveConfig(row)"
           >儲存</el-button>
