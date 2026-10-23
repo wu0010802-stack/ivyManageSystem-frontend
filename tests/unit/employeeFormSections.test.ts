@@ -35,6 +35,9 @@ describe('新欄位納入編輯 dirty 追蹤', () => {
     expect(BASIC_TAB_FIELDS).toContain('gender')
     expect(BASIC_TAB_FIELDS).toContain('email')
   })
+  it('not_insured 在 SALARY_TAB_FIELDS（R2 #42 不投保）', () => {
+    expect(SALARY_TAB_FIELDS).toContain('not_insured')
+  })
   it('insurance_effective_date 在 SALARY_TAB_FIELDS', () => {
     expect(SALARY_TAB_FIELDS).toContain('insurance_effective_date')
   })
