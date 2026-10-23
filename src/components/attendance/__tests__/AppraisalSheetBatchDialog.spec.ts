@@ -204,6 +204,54 @@ describe('AppraisalSheetBatchDialog', () => {
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
 
+  describe('人數多時的提示與逾時（Ruling 14）', () => {
+    const LARGE_HINT = '人數較多時產生需要較久（約 1 分鐘內）；若逾時請分班列印。'
+    const TIMEOUT_MESSAGE = '產生逾時，請減少人數（例如分班）後再試'
+    /** 一組 31 人（id 101–131） */
+    const BIG_GROUPS = [
+      {
+        key: 'big', label: '大班',
+        employees: Array.from({ length: 31 }, (_, i) => ({
+          employee_id: 101 + i, name: `老師${i + 1}`, title_name: '教師', role_label: null,
+        })),
+      },
+    ]
+    const hint = (w: VueWrapper) => w.find('[data-test="appraisal-large-hint"]')
+
+    it('勾選超過 30 人時在人數下方提示可能較久、逾時請分班', async () => {
+      api.candidates.mockResolvedValue({ data: { groups: BIG_GROUPS } })
+      const wrapper = await mountLoaded()
+      expect(countText(wrapper)).toBe('已選 31 人')
+      expect(hint(wrapper).exists()).toBe(true)
+      expect(hint(wrapper).text()).toBe(LARGE_HINT)
+      // 剛好 30 人不提示
+      await empBox(wrapper, 101).setValue(false)
+      expect(countText(wrapper)).toBe('已選 30 人')
+      expect(hint(wrapper).exists()).toBe(false)
+    })
+
+    it('30 人以下不提示', async () => {
+      const wrapper = await mountLoaded()
+      expect(hint(wrapper).exists()).toBe(false)
+    })
+
+    it.each([
+      ['axios 逾時（ECONNABORTED）', { isAxiosError: true, code: 'ECONNABORTED', message: 'timeout of 60000ms exceeded', displayMessage: '伺服器回應逾時，請稍後再試' }],
+      ['nginx 504', { isAxiosError: true, response: { status: 504, data: {} }, displayMessage: '服務暫時無法使用，請稍後再試。若持續發生請聯絡園所' }],
+    ])('%s：改顯示「減少人數（例如分班）」的具體建議', async (_label, err) => {
+      printWindow.openPdfInNewTab.mockImplementation(async ({ onError }: OpenArgs) => {
+        onError?.(err)
+        return null
+      })
+      const wrapper = await mountLoaded()
+      await generateBtn(wrapper).trigger('click')
+      await flushPromises()
+      expect(message.error).toHaveBeenCalledTimes(1)
+      expect(message.error).toHaveBeenCalledWith(TIMEOUT_MESSAGE)
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    })
+  })
+
   it('產生中顯示 loading 並擋住重複點擊', async () => {
     let release: (w: Window | null) => void = () => {}
     printWindow.openPdfInNewTab.mockImplementation(() => new Promise<Window | null>((res) => { release = res }))

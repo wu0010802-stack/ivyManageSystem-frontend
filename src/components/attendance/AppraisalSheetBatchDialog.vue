@@ -31,6 +31,9 @@
           >全選</el-checkbox>
           <span class="appraisal__count" data-test="appraisal-count">已選 {{ selectedCount }} 人</span>
         </div>
+        <p v-if="selectedCount > LARGE_BATCH_THRESHOLD" class="appraisal__hint" data-test="appraisal-large-hint">
+          人數較多時產生需要較久（約 1 分鐘內）；若逾時請分班列印。
+        </p>
 
         <div class="appraisal__list">
           <section v-for="group in groups" :key="group.key" class="appraisal__group">
@@ -95,6 +98,10 @@ interface Group {
   employees: Employee[]
 }
 
+// 每人一次薪資試算：超過這個人數就提示可能要等約 1 分鐘（請求逾時 60 秒，見 getAppraisalSheetsPdf）
+const LARGE_BATCH_THRESHOLD = 30
+const TIMEOUT_MESSAGE = '產生逾時，請減少人數（例如分班）後再試'
+
 const groups = ref<Group[]>([])
 const loading = ref(false)
 const loadError = ref('')
@@ -141,6 +148,17 @@ watch(
   { immediate: true },
 )
 
+/** 前端 60 秒逾時（axios ECONNABORTED）或 nginx 先切斷（504）：都是這批太大，給可操作的建議 */
+function isTimeoutError(err: unknown): boolean {
+  const e = err as { code?: unknown; response?: { status?: unknown } } | null
+  return e?.code === 'ECONNABORTED' || e?.response?.status === 504
+}
+
+function generateErrorMessage(err: unknown): string {
+  if (isTimeoutError(err)) return TIMEOUT_MESSAGE
+  return apiError(err, '產生考核表失敗')
+}
+
 async function generate(): Promise<void> {
   const employeeIds = rows.value.filter((r) => r.selected).map((r) => r.employee_id)
   if (generating.value || employeeIds.length === 0) return
@@ -155,7 +173,7 @@ async function generate(): Promise<void> {
         return res.data
       },
       loadingText: '考核表產生中…',
-      onError: (err) => ElMessage.error(apiError(err, '產生考核表失敗')),
+      onError: (err) => ElMessage.error(generateErrorMessage(err)),
     })
     if (win) emit('update:modelValue', false)
   } finally {
@@ -172,6 +190,7 @@ async function generate(): Promise<void> {
 .appraisal__error { display: grid; justify-items: start; gap: var(--space-2); color: var(--el-color-danger); }
 .appraisal__toolbar { display: flex; align-items: center; justify-content: space-between; }
 .appraisal__count { color: var(--el-text-color-secondary); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.appraisal__hint { color: var(--el-text-color-secondary); font-size: var(--text-xs); line-height: 1.6; text-align: right; }
 .appraisal__list { max-height: 50vh; overflow-y: auto; display: grid; gap: var(--space-3); padding-right: var(--space-1); }
 .appraisal__group { border-top: 1px solid var(--el-border-color-lighter); padding-top: var(--space-2); }
 .appraisal__group-title { font-weight: 600; }
