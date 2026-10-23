@@ -7369,6 +7369,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/extra-bonuses/semester2-excess/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Semester2 Excess
+         * @description 產生／更新下學期超額獎金表外批次（歸屬 7 月，計入補充保費年累計）。
+         *
+         *     冪等：系統產生列重跑即更新金額；人工登錄的同類列不覆寫。操作者本人跳過
+         *     （職權分離）。7 月起薪資已封存者整批拒絕（補充保費基數會變）。
+         */
+        post: operations["apply_semester2_excess_api_extra_bonuses_semester2_excess_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extra-bonuses/semester2-excess/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Semester2 Excess
+         * @description 下學期（2–7 月）超額獎金預覽（義華 Q11：7 月獨立發）。唯讀不寫錢。
+         */
+        get: operations["preview_semester2_excess_api_extra_bonuses_semester2_excess_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fee-due/run-now": {
         parameters: {
             query?: never;
@@ -18220,10 +18263,92 @@ export interface paths {
         /**
          * Get Festival Bonus Period Accrual
          * @description 回傳該月所屬發放期「到目前為止」的節慶獎金、超額獎金、會議缺席扣款累積明細。
-         *     發放月（2/6/9/12）回空 rows + is_distribution_month=True。
+         *     發放月（標準 2/6/9/12；租戶設發放月前移時為 1/5/8/11）回空 rows + is_distribution_month=True。
          *     DB 往返 O(月數)：每月一組共用資料 batch prefetch，與單月 get_festival_bonus 相同策略。
          */
         get: operations["get_festival_bonus_period_accrual_api_salaries_festival_bonus_period_accrual_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/festival-carry/balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Festival Carry Balances
+         * @description 全園目前節慶未扣餘額 > 0 的員工。
+         */
+        get: operations["list_festival_carry_balances_api_salaries_festival_carry_balances_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/festival-carry/employees/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Festival Carry Employee
+         * @description 單一員工的未扣餘額異動明細（依薪資年月排序）。
+         */
+        get: operations["get_festival_carry_employee_api_salaries_festival_carry_employees__employee_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/festival-carry/manual-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Festival Carry Manual Entry
+         * @description 人工登記：未扣餘額改由其他獎金扣抵（offset_other_bonus）或沖銷（waive）。
+         *
+         *     只登記帳、不動任何薪資或表外獎金金額；金額不得超過目前餘額。
+         */
+        post: operations["create_festival_carry_manual_entry_api_salaries_festival_carry_manual_entries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/festival-carry/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Festival Payout Settings
+         * @description 節慶發放開關現況（唯讀；寫入走 PUT /system-configs/{key}）。
+         */
+        get: operations["get_festival_payout_settings_api_salaries_festival_carry_settings_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -25086,10 +25211,20 @@ export interface components {
             leader_dividend?: number | null;
             /** Leader Festival */
             leader_festival?: number | null;
+            /**
+             * Major Offense Deduction
+             * @description 大過一支預設扣節慶獎金（元）
+             */
+            major_offense_deduction?: number | null;
             /** Meeting Absence Penalty */
             meeting_absence_penalty?: number | null;
             /** Meeting Default Hours */
             meeting_default_hours?: number | null;
+            /**
+             * Minor Offense Deduction
+             * @description 小過一支預設扣節慶獎金（元）
+             */
+            minor_offense_deduction?: number | null;
             /** Missing Punch Deduction Per Time */
             missing_punch_deduction_per_time?: number | null;
             /** Overtime Assistant Baby */
@@ -25121,6 +25256,11 @@ export interface components {
             teaching_extra_unit_price?: number | null;
             /** Vice Leader Dividend */
             vice_leader_dividend?: number | null;
+            /**
+             * Warning Deduction
+             * @description 警告一支預設扣節慶獎金（元）
+             */
+            warning_deduction?: number | null;
         };
         /** BonusImpactRequest */
         BonusImpactRequest: {
@@ -26193,6 +26333,84 @@ export interface components {
             prepayment?: components["schemas"]["CandidatePrepayOptionOut"] | null;
             /** Student Id */
             student_id: number;
+        };
+        /** CarryBalanceListOut */
+        CarryBalanceListOut: {
+            /** Items */
+            items: components["schemas"]["CarryBalanceOut"][];
+            /** Total Balance */
+            total_balance: number;
+        };
+        /** CarryBalanceOut */
+        CarryBalanceOut: {
+            /** Balance */
+            balance: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+        };
+        /** CarryEmployeeDetailOut */
+        CarryEmployeeDetailOut: {
+            /** Balance */
+            balance: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Entries */
+            entries: components["schemas"]["CarryEntryOut"][];
+        };
+        /** CarryEntryOut */
+        CarryEntryOut: {
+            /** Amount */
+            amount: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Entry Type */
+            entry_type: string;
+            /** Entry Type Label */
+            entry_type_label: string;
+            /** Extra Bonus Payment Id */
+            extra_bonus_payment_id?: number | null;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** Salary Month */
+            salary_month: number;
+            /** Salary Record Id */
+            salary_record_id?: number | null;
+            /** Salary Year */
+            salary_year: number;
+            /** Source */
+            source: string;
+        };
+        /** CarryManualEntryCreate */
+        CarryManualEntryCreate: {
+            /**
+             * Amount
+             * @description 扣抵／沖銷金額（正數）
+             */
+            amount: number;
+            /** Employee Id */
+            employee_id: number;
+            /**
+             * Entry Type
+             * @enum {string}
+             */
+            entry_type: "offset_other_bonus" | "waive";
+            /**
+             * Note
+             * @description 原因（必填）
+             */
+            note: string;
+            /** Salary Month */
+            salary_month: number;
+            /** Salary Year */
+            salary_year: number;
         };
         /** CashFeeBatchCreateRequest */
         CashFeeBatchCreateRequest: {
@@ -32230,6 +32448,29 @@ export interface components {
             /** Unpaid Count */
             unpaid_count: number;
         };
+        /**
+         * FestivalPayoutSettingsOut
+         * @description 節慶發放相關的 per-tenant 開關（值存 system_configs，經 /system-configs 寫入）。
+         */
+        FestivalPayoutSettingsOut: {
+            /**
+             * Deduction Carryover Enabled
+             * @description festival.deduction_carryover_enabled：懲處／會議缺席不足額結轉下一批
+             * @default false
+             */
+            deduction_carryover_enabled: boolean;
+            /**
+             * Early Payout From Ym
+             * @description festival.early_payout_from_ym：節慶隨前月薪資發放的生效年月（未設＝2/6/9/12 發放）
+             */
+            early_payout_from_ym?: string | null;
+            /**
+             * July Leaver Merge Enabled
+             * @description festival.july_leaver_merge_enabled：7/31 離職者 6、7 月節慶於 7 月合併發放
+             * @default false
+             */
+            july_leaver_merge_enabled: boolean;
+        };
         /** FinalizeMonthRequest */
         FinalizeMonthRequest: {
             /**
@@ -33265,6 +33506,11 @@ export interface components {
             hours_ratio: number;
             /** Monthly Rate */
             monthly_rate: number;
+            /**
+             * Pending Festival Carry
+             * @default 0
+             */
+            pending_festival_carry: number;
             /** Position Key */
             position_key: string;
             /** Position Unknown */
@@ -33339,6 +33585,11 @@ export interface components {
         GrowthSettleCreatedOut: {
             /** Amount */
             amount: number;
+            /**
+             * Carry Offset
+             * @default 0
+             */
+            carry_offset: number;
             /** Employee Id */
             employee_id: number;
             /** Employee Name */
@@ -33346,6 +33597,11 @@ export interface components {
         };
         /** GrowthSettleRequest */
         GrowthSettleRequest: {
+            /**
+             * Carry Offset Employee Ids
+             * @description 以自主成長獎勵金扣抵節慶未扣餘額的員工 id（人工確認；未列者不扣）
+             */
+            carry_offset_employee_ids?: number[];
             /** School Year */
             school_year: number;
         };
@@ -47754,6 +48010,85 @@ export interface components {
          * @enum {string}
          */
         Semester: "FIRST" | "SECOND";
+        /** Semester2ExcessApply */
+        Semester2ExcessApply: {
+            /**
+             * Academic Year
+             * @description 民國學年（下學期＝次年 2–7 月）
+             */
+            academic_year: number;
+        };
+        /** Semester2ExcessApplyOut */
+        Semester2ExcessApplyOut: {
+            /** Academic Year */
+            academic_year: number;
+            /** Created */
+            created: components["schemas"]["Semester2ExcessBriefOut"][];
+            /** Deleted */
+            deleted: components["schemas"]["Semester2ExcessBriefOut"][];
+            /** Period Month */
+            period_month: number;
+            /** Period Year */
+            period_year: number;
+            /** Skipped Manual */
+            skipped_manual: components["schemas"]["Semester2ExcessBriefOut"][];
+            /** Skipped Self */
+            skipped_self: components["schemas"]["Semester2ExcessBriefOut"][];
+            /** Total Amount */
+            total_amount: number;
+            /** Updated */
+            updated: components["schemas"]["Semester2ExcessBriefOut"][];
+        };
+        /** Semester2ExcessBriefOut */
+        Semester2ExcessBriefOut: {
+            /**
+             * Amount
+             * @default 0
+             */
+            amount: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+        };
+        /** Semester2ExcessPreviewOut */
+        Semester2ExcessPreviewOut: {
+            /** Academic Year */
+            academic_year: number;
+            /** Pending Rules */
+            pending_rules: string[];
+            /** Period Month */
+            period_month: number;
+            /** Period Year */
+            period_year: number;
+            /** Rows */
+            rows: components["schemas"]["Semester2ExcessRowOut"][];
+            /** Total Amount */
+            total_amount: number;
+            /** Warnings */
+            warnings: string[];
+        };
+        /** Semester2ExcessRowOut */
+        Semester2ExcessRowOut: {
+            /** Amount */
+            amount: number;
+            /** Eligible */
+            eligible: boolean;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Existing Auto Amount */
+            existing_auto_amount?: number | null;
+            /** Has Manual Payment */
+            has_manual_payment: boolean;
+            /** Ineligible Reason */
+            ineligible_reason?: string | null;
+            /** Months */
+            months: {
+                [key: string]: string;
+            };
+        };
         /** SendLinePayload */
         SendLinePayload: {
             /** Message */
@@ -63984,6 +64319,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExtraBonusCategoryOut"][];
+                };
+            };
+        };
+    };
+    apply_semester2_excess_api_extra_bonuses_semester2_excess_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Semester2ExcessApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Semester2ExcessApplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_semester2_excess_api_extra_bonuses_semester2_excess_preview_get: {
+        parameters: {
+            query: {
+                academic_year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Semester2ExcessPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -82094,6 +82493,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_festival_carry_balances_api_salaries_festival_carry_balances_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarryBalanceListOut"];
+                };
+            };
+        };
+    };
+    get_festival_carry_employee_api_salaries_festival_carry_employees__employee_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarryEmployeeDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_festival_carry_manual_entry_api_salaries_festival_carry_manual_entries_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CarryManualEntryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarryEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_festival_payout_settings_api_salaries_festival_carry_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FestivalPayoutSettingsOut"];
                 };
             };
         };
