@@ -255,7 +255,13 @@ defineProps<{
         <div class="rule-toggle-row__label">{{ t.label }}</div>
         <div class="desc-text rule-toggle-row__hint">{{ t.hint }}</div>
       </div>
-      <el-radio-group v-model="bonusConfig[t.key]" :aria-label="t.label" size="small">
+      <!-- null＝未載入（不送出），el-radio-group 不收 null，以 undefined 呈現「未選」 -->
+      <el-radio-group
+        :model-value="bonusConfig[t.key] ?? undefined"
+        :aria-label="t.label"
+        size="small"
+        @update:model-value="(v) => (bonusConfig[t.key] = v === true)"
+      >
         <el-radio-button :value="true">開啟</el-radio-button>
         <el-radio-button :value="false">關閉</el-radio-button>
       </el-radio-group>
