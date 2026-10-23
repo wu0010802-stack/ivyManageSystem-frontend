@@ -1,7 +1,10 @@
 <template>
   <div v-if="employeeId === null" class="emp-month-panel__no-employee">請選擇員工</div>
   <div v-else ref="panel" v-loading="loading" class="emp-month-panel">
-    <h3>{{ employeeName || '所選員工' }} · {{ year }} 年 {{ month }} 月出勤明細</h3>
+    <div class="emp-month-panel__head">
+      <h3>{{ employeeName || '所選員工' }} · {{ year }} 年 {{ month }} 月出勤明細</h3>
+      <el-button v-if="canPrintAppraisal" size="small" :loading="printing" data-test="print-appraisal" @click="printAppraisal">列印考核表</el-button>
+    </div>
     <p v-if="focusDate" role="status">核對日期：{{ focusDate }}<template v-if="!loading && !loadFailed && !rows.some(row => row.date === focusDate)"> · {{ focusDate }} 尚無打卡紀錄或應出勤班表</template></p>
     <div v-if="loadFailed" role="alert">載入出勤紀錄或班表失敗，無法判定缺卡。<el-button @click="load">重新載入</el-button></div>
     <EmptyState v-else-if="!loading && !rows.length" title="本月沒有應出勤日或打卡紀錄" />
@@ -54,10 +57,11 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getRecords, upsertRecord } from '@/api/attendance'
+import { getAppraisalSheetsPdf, getRecords, upsertRecord } from '@/api/attendance'
 import { getAttendanceMonthContext } from '@/api/attendanceMonthContext'
 import { buildAttendanceMonthRows, taipeiDate } from '@/utils/attendanceMonthRows'
-import { hasPermission } from '@/utils/auth'
+import { hasFullSalaryView, hasPermission } from '@/utils/auth'
+import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import EmptyState from '@/components/common/EmptyState.vue'
 import RawPunchDetails from './RawPunchDetails.vue'
@@ -115,6 +119,9 @@ const visibleRows = computed(() => (
   showFuture.value || (!!props.focusDate && futureRows.value.some(row => row.date === props.focusDate))
 ) ? rows.value : pastRows.value)
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
+// 考核表帶薪資金額與扣款：與後端同一組守衛（ATTENDANCE_READ＋SALARY_READ＋全員薪資視野），缺一不給入口
+const canPrintAppraisal = computed(() => hasPermission('ATTENDANCE_READ') && hasPermission('SALARY_READ') && hasFullSalaryView())
+const printing = ref(false)
 const editing = ref<ReturnType<typeof buildAttendanceMonthRows>[number] | null>(null)
 const punchIn = ref<string | null>(null)
 const punchOut = ref<string | null>(null)
@@ -153,6 +160,24 @@ watch([() => props.focusDate, rows, loading], async () => {
   const target = [...(panel.value?.querySelectorAll<HTMLElement>('[data-attendance-date]') ?? [])].find(element => element.dataset.attendanceDate === props.focusDate)
   target?.scrollIntoView?.({ block: 'center' }); target?.focus({ preventScroll: true })
 }, { flush: 'post' })
+/** 列印這位員工當月的考核表：同一支批次 PDF 端點，只帶一個 employee_id */
+async function printAppraisal(): Promise<void> {
+  const employeeId = props.employeeId
+  if (employeeId === null || printing.value) return
+  const { year, month } = props
+  printing.value = true
+  try {
+    // openPdfInNewTab 要在點擊的同一個 tick 內開新分頁（之前不能 await），否則會被彈出視窗封鎖擋掉；
+    // 它自己吞錯走 onError，成功回 window、失敗或被擋回 null
+    await openPdfInNewTab({
+      fetchBlob: async () => (await getAppraisalSheetsPdf({ year, month, employee_ids: [employeeId] })).data,
+      loadingText: '考核表產生中…',
+      onError: (err) => notify(err, 'EmployeeMonthPanel.printAppraisal', null, { prefix: '產生考核表失敗' }),
+    })
+  } finally {
+    printing.value = false
+  }
+}
 async function openSupplement(row: ReturnType<typeof buildAttendanceMonthRows>[number]): Promise<void> {
   if (!canWrite.value || saving.value || !row.canSupplement) return
   editing.value = row; punchIn.value = row.record?.punch_in ?? null; punchOut.value = row.record?.punch_out ?? null
@@ -185,6 +210,7 @@ async function saveSupplement(): Promise<void> {
 <style scoped>
 .emp-month-panel { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-3); }
 .emp-month-panel h3, .emp-month-panel p { margin: 0; }
+.emp-month-panel__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); }
 .emp-month-panel__no-employee { padding: var(--space-8); color: var(--el-text-color-secondary); }
 .month-record-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--text-sm); }
 .month-record-table th, .month-record-table td { padding: var(--space-2); text-align: left; vertical-align: top; overflow-wrap: anywhere; border-bottom: 1px solid var(--el-border-color-light); }

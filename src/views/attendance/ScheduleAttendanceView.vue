@@ -12,12 +12,14 @@
           :year="query.year"
           :month="query.month"
           :can-payroll-compare="canPayrollCompare"
+          :can-print-appraisal="canPrintAppraisal"
           @update:year="(v) => setMonth(v, query.month)"
           @update:month="(v) => setMonth(query.year, v)"
           @update:period="setMonth"
           @import="openImport"
           @export="onExport"
           @payroll="payrollOpen = true"
+          @appraisal="appraisalOpen = true"
           @recalculate="recalcOpen = true"
         />
       </template>
@@ -39,6 +41,7 @@
       >{{ t.label }}</button>
     </div>
     <PayrollComparisonDialog v-if="payrollOpen && canPayrollCompare" v-model="payrollOpen" :year="query.year" :month="query.month" />
+    <AppraisalSheetBatchDialog v-if="appraisalOpen && canPrintAppraisal" v-model="appraisalOpen" :year="query.year" :month="query.month" />
 
     <!-- 班表核對：首次進入才掛載，之後 v-show 常駐保留編輯中的緩衝與抽屜狀態 -->
     <ScheduleGridPanel
@@ -218,6 +221,7 @@ import ScheduleGridPanel from '@/components/schedule-attendance/ScheduleGridPane
 import type { GridFilter, GridView } from '@/utils/scheduleAttendanceGrid'
 import { hasPermission, hasFullSalaryView } from '@/utils/auth'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
+const AppraisalSheetBatchDialog = defineAsyncComponent(() => import('@/components/attendance/AppraisalSheetBatchDialog.vue'))
 const DutyRotationPanel = defineAsyncComponent(() => import('@/components/schedule/DutyRotationPanel.vue'))
 const SwapHistoryPanel = defineAsyncComponent(() => import('@/components/schedule-attendance/SwapHistoryPanel.vue'))
 const ShiftTypesPanel = defineAsyncComponent(() => import('@/components/schedule-attendance/ShiftTypesPanel.vue'))
@@ -244,6 +248,8 @@ const router = useRouter()
 const canViewAttendance = hasPermission('ATTENDANCE_READ')
 const canSchedule = hasPermission('SCHEDULE')
 const canPayrollCompare = computed(() => hasPermission('ATTENDANCE_READ') && hasPermission('SALARY_READ') && hasFullSalaryView())
+// 月考核表帶薪資金額與扣款：與後端同一組守衛（ATTENDANCE_READ＋SALARY_READ＋全員薪資視野），缺一不給入口
+const canPrintAppraisal = computed(() => hasPermission('ATTENDANCE_READ') && hasPermission('SALARY_READ') && hasFullSalaryView())
 
 const TABS: Array<{ key: WorkspaceTab; label: string; visible: boolean }> = [
   { key: 'grid', label: '班表核對', visible: true },
@@ -391,6 +397,7 @@ const focusDate = ref<string | null>(null)
 const importContext = ref<{ employee_id: number; employee_name: string; date: string } | null>(null)
 function openImport(): void { importContext.value = null; importOpen.value = true }
 const payrollOpen = ref(false)
+const appraisalOpen = ref(false)
 const recalcOpen = ref(false)
 const importRevision = ref(0)
 watch(() => [query.year, query.month], () => {

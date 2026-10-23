@@ -46,11 +46,12 @@ const ElDropdownItem = { props: ['command'], template: `<div class="dd-item" :da
 
 const stubs = { ElButton, ElSelect, ElOption, ElStatistic, ElDropdown, ElDropdownMenu, ElDropdownItem }
 
-function mountHeader(period: { year?: number; month?: number } = {}) {
+function mountHeader(period: { year?: number; month?: number; canPrintAppraisal?: boolean } = {}) {
   return mount(WorkspaceHeader, {
     props: {
       year: period.year ?? 2026,
       month: period.month ?? 6,
+      ...(period.canPrintAppraisal !== undefined ? { canPrintAppraisal: period.canPrintAppraisal } : {}),
       kpis: { fullAttendance: 0, lateCount: 0, missingCount: 0, pendingAnomalies: 0 },
     },
     global: { plugins: [router], stubs },
@@ -104,5 +105,15 @@ describe('WorkspaceHeader — 月結選單', () => {
     perms.set = new Set(['ATTENDANCE_READ'])
     expect(mountHeader().find('[data-command="recalculate"]').exists()).toBe(false)
     perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
+  })
+
+  it('canPrintAppraisal 為真才出現「批次列印考核表」選單項，點選 emit appraisal', () => {
+    const without = mountHeader()
+    expect(without.find('[data-command="appraisal"]').exists()).toBe(false)
+
+    const wrapper = mountHeader({ canPrintAppraisal: true })
+    expect(wrapper.find('[data-command="appraisal"]').text()).toBe('批次列印考核表')
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'appraisal')
+    expect(wrapper.emitted('appraisal')).toHaveLength(1)
   })
 })

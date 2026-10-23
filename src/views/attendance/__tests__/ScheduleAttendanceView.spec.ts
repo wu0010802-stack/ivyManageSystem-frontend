@@ -91,8 +91,8 @@ const ImportPreviewDialogStub = {
 
 const WorkspaceHeaderStub = {
   name: 'WorkspaceHeader',
-  props: ['year', 'month', 'canPayrollCompare'],
-  emits: ['update:year', 'update:month', 'update:period', 'import', 'export', 'payroll', 'recalculate'],
+  props: ['year', 'month', 'canPayrollCompare', 'canPrintAppraisal'],
+  emits: ['update:year', 'update:month', 'update:period', 'import', 'export', 'payroll', 'appraisal', 'recalculate'],
   template: `<div class="workspace-header-stub"><slot /><slot name="month-tools" /></div>`,
 }
 
@@ -124,6 +124,7 @@ const SHELL_STUBS = {
 const STUBS = {
   ElDrawer: { props: ['modelValue'], template: '<section data-test="anomaly-drawer" :data-open="String(modelValue)"><slot /></section>' },
   PayrollComparisonDialog: { name: 'PayrollComparisonDialog', props: ['modelValue'], template: '<div />' },
+  AppraisalSheetBatchDialog: { name: 'AppraisalSheetBatchDialog', props: ['modelValue', 'year', 'month'], emits: ['update:modelValue'], template: '<div class="appraisal-dialog-stub" />' },
   ...SHELL_STUBS,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,
@@ -990,6 +991,49 @@ describe('薪資核對入口權限', () => {
   })
 })
 
+describe('列印考核表入口', () => {
+  const APPRAISAL = { name: 'AppraisalSheetBatchDialog' }
+
+  it('header emit appraisal 後開啟批次對話框並帶當前年月', async () => {
+    mockHasFullSalaryView.mockReturnValue(true)
+    mockHasPermission.mockImplementation(() => true)
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(wrapper.findComponent(WorkspaceHeaderStub).props('canPrintAppraisal')).toBe(true)
+    expect(wrapper.findComponent(APPRAISAL).exists()).toBe(false)
+
+    wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('appraisal')
+    await flushPromises()
+    const dialog = wrapper.findComponent(APPRAISAL)
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.props()).toMatchObject({ modelValue: true, year: 2026, month: 10 })
+
+    // 對話框自己關閉（update:modelValue=false）後不再掛著
+    dialog.vm.$emit('update:modelValue', false)
+    await flushPromises()
+    expect(wrapper.findComponent(APPRAISAL).exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('缺 SALARY_READ 或沒有全員薪資視野：header 不給入口，即使收到 appraisal 事件也不開對話框', async () => {
+    mockHasFullSalaryView.mockReturnValue(true)
+    mockHasPermission.mockImplementation((code: unknown) => code !== 'SALARY_READ')
+    const noSalary = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(noSalary.findComponent(WorkspaceHeaderStub).props('canPrintAppraisal')).toBe(false)
+    noSalary.findComponent(WorkspaceHeaderStub).vm.$emit('appraisal')
+    await flushPromises()
+    expect(noSalary.findComponent(APPRAISAL).exists()).toBe(false)
+    noSalary.unmount()
+
+    mockHasFullSalaryView.mockReturnValue(false)
+    mockHasPermission.mockImplementation(() => true)
+    const noFullView = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(noFullView.findComponent(WorkspaceHeaderStub).props('canPrintAppraisal')).toBe(false)
+    noFullView.unmount()
+  })
+})
 
 describe('明細整體空態', () => {
   it('只有成功且沒有紀錄時合併三欄，提供匯入入口', async () => {

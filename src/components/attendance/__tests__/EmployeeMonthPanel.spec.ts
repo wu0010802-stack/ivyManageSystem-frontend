@@ -1,7 +1,9 @@
 const { mockMonthContext } = vi.hoisted(() => ({ mockMonthContext: vi.fn() }))
 vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: mockMonthContext }))
-const { mockCanWrite } = vi.hoisted(() => ({ mockCanWrite: vi.fn(() => true) }))
-vi.mock('@/utils/auth', () => ({ hasPermission: mockCanWrite }))
+const { mockCanWrite, mockFullSalaryView } = vi.hoisted(() => ({ mockCanWrite: vi.fn((_code?: string) => true), mockFullSalaryView: vi.fn(() => true) }))
+vi.mock('@/utils/auth', () => ({ hasPermission: mockCanWrite, hasFullSalaryView: mockFullSalaryView }))
+const { mockOpenPdf } = vi.hoisted(() => ({ mockOpenPdf: vi.fn() }))
+vi.mock('@/utils/printPdfWindow', () => ({ openPdfInNewTab: mockOpenPdf }))
 // src/components/attendance/__tests__/EmployeeMonthPanel.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -9,16 +11,18 @@ import { computed, nextTick } from 'vue'
 import { GRID_VERDICT_KEY, type GridVerdictLookup } from '@/composables/useGridVerdict'
 
 // ── hoisted mocks (must be defined before vi.mock factories run) ───────────────
-const { mockGetRecords, mockUpsertRecord, mockNotify } = vi.hoisted(() => ({
+const { mockGetRecords, mockUpsertRecord, mockNotify, mockAppraisalPdf } = vi.hoisted(() => ({
   mockGetRecords: vi.fn(),
   mockUpsertRecord: vi.fn(),
   mockNotify: vi.fn(),
+  mockAppraisalPdf: vi.fn(),
 }))
 
 // ── mock api ───────────────────────────────────────────────────────────────────
 vi.mock('@/api/attendance', () => ({
   getRecords: mockGetRecords,
   upsertRecord: mockUpsertRecord,
+  getAppraisalSheetsPdf: mockAppraisalPdf,
 }))
 
 // ── mock useErrorNotify ────────────────────────────────────────────────────────
@@ -367,11 +371,13 @@ it('補卡送出後切換員工，舊儲存完成不重載或覆蓋新員工', a
 
 
 it('唯讀使用者看得到缺卡但不能開補卡表單', async () => {
-  mockCanWrite.mockReturnValueOnce(false)
+  // 依權限代碼回應，而不是 mockReturnValueOnce：列印考核表入口也讀 hasPermission，靠呼叫順序會錯位
+  mockCanWrite.mockImplementation((code?: string) => code !== 'ATTENDANCE_WRITE')
   mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
   mockGetRecords.mockResolvedValue({ data: [recordMissing] })
   const wrapper = mountPanel({})
   await flushPromises()
+  mockCanWrite.mockImplementation(() => true)
   expect(wrapper.text()).toContain('缺卡待確認')
   expect(wrapper.findAll('button').some(button => button.text() === '補打卡')).toBe(false)
   wrapper.unmount()
@@ -524,5 +530,74 @@ describe('並列班表核對的判定（第五輪審查：同一人日兩個頁�
     const wrapper = mountPanel({})
     await flushPromises()
     expect(wrapper.find('[data-test^="grid-verdict-"]').exists()).toBe(false)
+  })
+})
+
+describe('列印考核表（單人）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCanWrite.mockImplementation(() => true)
+    mockFullSalaryView.mockReturnValue(true)
+    mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
+    mockGetRecords.mockResolvedValue({ data: [recordNormal] })
+    mockOpenPdf.mockResolvedValue(null)
+  })
+
+  it('具全員薪資視野才顯示列印考核表，點擊以該員工 id 產 PDF', async () => {
+    const blob = new Blob(['%PDF'])
+    mockAppraisalPdf.mockResolvedValue({ data: blob })
+    const wrapper = mountPanel({ employeeId: 5, year: 2026, month: 6 })
+    await flushPromises()
+    const btn = wrapper.get('[data-test="print-appraisal"]')
+    expect(btn.text()).toBe('列印考核表')
+
+    // 要在點擊的同一個 tick 內呼叫 openPdfInNewTab，否則新分頁會被彈出視窗封鎖擋掉
+    ;(btn.element as HTMLButtonElement).click()
+    expect(mockOpenPdf).toHaveBeenCalledTimes(1)
+    const options = mockOpenPdf.mock.calls[0][0]
+    expect(options.loadingText).toBe('考核表產生中…')
+    expect(mockAppraisalPdf).not.toHaveBeenCalled()
+
+    await expect(options.fetchBlob()).resolves.toBe(blob)
+    expect(mockAppraisalPdf).toHaveBeenCalledWith({ year: 2026, month: 6, employee_ids: [5] })
+    wrapper.unmount()
+  })
+
+  it('產生失敗走 onError 通知，不丟未處理例外', async () => {
+    const wrapper = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    ;(wrapper.get('[data-test="print-appraisal"]').element as HTMLButtonElement).click()
+    const error = new Error('boom')
+    mockOpenPdf.mock.calls[0][0].onError(error)
+    expect(mockNotify).toHaveBeenCalledWith(error, expect.any(String), null, expect.objectContaining({ prefix: '產生考核表失敗' }))
+    wrapper.unmount()
+  })
+
+  it('缺 SALARY_READ 時不顯示', async () => {
+    mockCanWrite.mockImplementation((code?: string) => code !== 'SALARY_READ')
+    const wrapper = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    expect(wrapper.find('[data-test="print-appraisal"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('缺 ATTENDANCE_READ 或沒有全員薪資視野時不顯示', async () => {
+    mockCanWrite.mockImplementation((code?: string) => code !== 'ATTENDANCE_READ')
+    const noAttendance = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    expect(noAttendance.find('[data-test="print-appraisal"]').exists()).toBe(false)
+    noAttendance.unmount()
+
+    mockCanWrite.mockImplementation(() => true)
+    mockFullSalaryView.mockReturnValue(false)
+    const noFullView = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    expect(noFullView.find('[data-test="print-appraisal"]').exists()).toBe(false)
+    noFullView.unmount()
+  })
+
+  it('未選員工時沒有列印鈕', () => {
+    const wrapper = mountPanel({ employeeId: null })
+    expect(wrapper.find('[data-test="print-appraisal"]').exists()).toBe(false)
   })
 })

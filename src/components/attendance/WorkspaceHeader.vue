@@ -32,6 +32,7 @@
           <el-dropdown-menu>
             <el-dropdown-item v-if="canPayrollCompare" command="payroll">薪資扣項核對</el-dropdown-item>
             <el-dropdown-item command="export">匯出月報</el-dropdown-item>
+            <el-dropdown-item v-if="canPrintAppraisal" command="appraisal">批次列印考核表</el-dropdown-item>
             <el-dropdown-item v-if="canWrite" command="recalculate">重算本月出勤…</el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -55,6 +56,8 @@ const props = defineProps<{
   month: number
   /** 可做薪資扣項核對（月結選單才列出） */
   canPayrollCompare?: boolean
+  /** 可批次列印月考核表（月底作業選單才列出；含薪資金額，需全員薪資視野） */
+  canPrintAppraisal?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -65,6 +68,7 @@ const emit = defineEmits<{
   (e: 'import'): void
   (e: 'export'): void
   (e: 'payroll'): void
+  (e: 'appraisal'): void
   /** 依目前班表重算本月已匯入的出勤（改了員工上下班時間或班別時段之後） */
   (e: 'recalculate'): void
 }>()
@@ -81,6 +85,7 @@ function openKiosk() {
 function onMonthTool(command: string | number | object): void {
   if (command === 'payroll') emit('payroll')
   else if (command === 'export') emit('export')
+  else if (command === 'appraisal') emit('appraisal')
   else if (command === 'recalculate') emit('recalculate')
 }
 
