@@ -18,6 +18,9 @@ vi.mock('@/api/salary', () => ({
   getEnrollmentSnapshot: h.getEnrollmentSnapshot,
 }))
 vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
+vi.mock('@/api/festivalCarry', () => ({
+  getFestivalPayoutSettings: () => Promise.resolve({ data: { early_payout_from_ym: null, july_leaver_merge_enabled: false, deduction_carryover_enabled: false } }),
+}))
 vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: h.notify }) }))
 vi.mock('element-plus', () => ({
   ElMessage: { error: h.msgError, success: h.msgSuccess, info: vi.fn(), warning: vi.fn() },

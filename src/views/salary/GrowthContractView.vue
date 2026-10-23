@@ -137,6 +137,22 @@
             <el-tag :type="row.eligible ? 'success' : 'info'">{{ row.eligibleLabel }}</el-tag>
           </template>
         </el-table-column>
+        <!-- 義華 Q14：節慶未扣餘額（不足額結轉）可勾選以本次獎勵金扣抵；不勾不扣 -->
+        <el-table-column v-if="hasPendingCarry" label="節慶未扣餘額" width="150">
+          <template #default="{ row }">
+            <template v-if="row.pending_festival_carry > 0">
+              <div>{{ row.pendingCarryLabel }}</div>
+              <el-checkbox
+                v-if="canWrite && row.eligible && row.amount > 0"
+                :model-value="carryOffsetIds.includes(row.employee_id)"
+                size="small"
+                :aria-label="`${row.employee_name} 結算時扣抵節慶未扣餘額`"
+                @update:model-value="(v: string | number | boolean) => toggleCarryOffset(row.employee_id, v === true)"
+              >結算時扣抵</el-checkbox>
+            </template>
+            <span v-else class="hint">—</span>
+          </template>
+        </el-table-column>
         <el-table-column v-if="canWrite" label="簽約日" width="90" fixed="right">
           <template #default="{ row }">
             <el-button link size="small" @click="openSignedOnDialog(row)">設定</el-button>
@@ -357,6 +373,11 @@ const fetchPreview = async () => {
         const res = await getGrowthPreview(schoolYear.value)
         if (seq !== previewSeq) return
         previewRows.value = res.data.rows
+        // 勾選只保留仍有未扣餘額者（重抓預覽後餘額可能已被扣抵歸零）
+        const stillPending = new Set(
+            res.data.rows.filter((r) => (r.pending_festival_carry ?? 0) > 0).map((r) => r.employee_id),
+        )
+        carryOffsetIds.value = carryOffsetIds.value.filter((id) => stillPending.has(id))
         pendingRule.value = res.data.pending_rule
         paidPeriod.value = res.data.paid_period
         // 不 await：已發放明細是輔助資訊，不必阻塞預覽本身的 loading 狀態。
@@ -375,6 +396,7 @@ interface GateItem extends GrowthPreviewGate {
     label: string
 }
 interface PreviewDisplayRow extends GrowthPreviewRow {
+    pendingCarryLabel: string
     monthlyRateLabel: string
     hoursRatioLabel: string
     amountLabel: string
@@ -395,6 +417,7 @@ const previewTableData = computed<PreviewDisplayRow[]>(() => {
         }))
         return {
             ...row,
+            pendingCarryLabel: formatCurrency(row.pending_festival_carry ?? 0),
             monthlyRateLabel: formatCurrency(row.monthly_rate),
             hoursRatioLabel: `${Math.round(row.hours_ratio * 100)}%`,
             amountLabel: formatCurrency(row.amount),
@@ -426,12 +449,26 @@ const settleResult = ref<GrowthSettleResult | null>(null)
 const settleTargets = computed(() => previewRows.value.filter((r) => r.eligible && r.amount > 0))
 const settleTotalAmount = computed(() => settleTargets.value.reduce((sum, r) => sum + r.amount, 0))
 const settleDisabled = computed(() => settleTargets.value.length === 0)
+
+// ---- 節慶未扣餘額扣抵（義華 Q14）：預覽每列帶 pending_festival_carry，HR 勾選才扣抵；
+// 未開結轉開關時傳入勾選後端回 422。實發 amount 為扣抵後金額。 ----
+const carryOffsetIds = ref<number[]>([])
+const hasPendingCarry = computed(() => previewRows.value.some((r) => (r.pending_festival_carry ?? 0) > 0))
+const toggleCarryOffset = (employeeId: number, checked: boolean) => {
+    const rest = carryOffsetIds.value.filter((id) => id !== employeeId)
+    carryOffsetIds.value = checked ? [...rest, employeeId] : rest
+}
+const selectedCarryTargets = computed(() =>
+    settleTargets.value.filter((r) => carryOffsetIds.value.includes(r.employee_id) && (r.pending_festival_carry ?? 0) > 0),
+)
 // 職權分離（稽核 F08）：結算操作者本人那筆後端會跳過、落在 skipped_self，
 // 須由他人另行結算補發；統計文案一併列出，避免 HR 誤以為已全數發放。
 const settleCountsText = (r: GrowthSettleResult): string => {
     const selfCount = (r.skipped_self ?? []).length
     const selfPart = selfCount > 0 ? `、本人須由他人結算 ${selfCount} 位` : ''
-    return `發放 ${r.created.length} 位、跳過（已發過）${r.skipped_already_paid.length} 位${selfPart}，共 ${formatCurrency(r.total_amount)}`
+    const carryTotal = r.created.reduce((sum, c) => sum + (c.carry_offset ?? 0), 0)
+    const carryPart = carryTotal > 0 ? `（已扣抵節慶未扣餘額 ${formatCurrency(carryTotal)}）` : ''
+    return `發放 ${r.created.length} 位、跳過（已發過）${r.skipped_already_paid.length} 位${selfPart}，共 ${formatCurrency(r.total_amount)}${carryPart}`
 }
 const settleResultLabel = computed(() => {
     if (!settleResult.value) return ''
@@ -448,9 +485,14 @@ const doSettle = async () => {
         ElMessage.warning('目前查無符合資格且金額大於 0 的員工，無需結算')
         return
     }
+    const carryTargets = selectedCarryTargets.value
+    const carryNote =
+        carryTargets.length > 0
+            ? `其中 ${carryTargets.map((r) => r.employee_name).join('、')} 將以本次獎勵金扣抵節慶未扣餘額，實發金額為扣抵後金額。`
+            : ''
     try {
         await ElMessageBox.confirm(
-            `即將結算 ${schoolYear.value} 學年自主成長獎勵金：將發給 ${settleTargets.value.length} 位員工共 ${formatCurrency(settleTotalAmount.value)}。已發放過的員工本次會自動跳過、不重複發放；發放後仍可再次結算以補發後續才符合資格的員工。確定結算？`,
+            `即將結算 ${schoolYear.value} 學年自主成長獎勵金：將發給 ${settleTargets.value.length} 位員工共 ${formatCurrency(settleTotalAmount.value)}（扣抵前）。${carryNote}已發放過的員工本次會自動跳過、不重複發放；發放後仍可再次結算以補發後續才符合資格的員工。確定結算？`,
             '確認結算',
             { confirmButtonText: '確定結算', cancelButtonText: '取消', type: 'warning' },
         )
@@ -460,6 +502,7 @@ const doSettle = async () => {
     settling.value = true
     try {
         const body: SettleBody = { school_year: schoolYear.value }
+        if (carryTargets.length > 0) body.carry_offset_employee_ids = carryTargets.map((r) => r.employee_id)
         const res = await settleGrowthContract(body)
         settleResult.value = res.data
         ElMessage.success(`結算完成：${settleCountsText(res.data)}`)

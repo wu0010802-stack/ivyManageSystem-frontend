@@ -50,6 +50,11 @@ const bonusConfig = reactive({
   meeting_default_hours: 2,
   meeting_absence_penalty: 100,
   art_teacher_festival: 2000,
+  // 義華 Q13：懲處預設扣節慶獎金（個案未填金額時套用）。初值 null＝GET 未帶回時
+  // 原樣送 null（後端不改值），避免前端預設值悄悄覆寫租戶設定。
+  warning_deduction: null as number | null,
+  minor_offense_deduction: null as number | null,
+  major_offense_deduction: null as number | null,
 })
 
 const bonusReady = ref(false)
@@ -154,6 +159,9 @@ const saveBonusConfig = async (): Promise<boolean> => {
     meeting_default_hours: bonusConfig.meeting_default_hours,
     meeting_absence_penalty: bonusConfig.meeting_absence_penalty,
     art_teacher_festival: bonusConfig.art_teacher_festival,
+    warning_deduction: bonusConfig.warning_deduction,
+    minor_offense_deduction: bonusConfig.minor_offense_deduction,
+    major_offense_deduction: bonusConfig.major_offense_deduction,
     reason,
   }
 

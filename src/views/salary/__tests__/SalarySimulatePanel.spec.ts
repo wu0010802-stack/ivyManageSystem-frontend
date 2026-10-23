@@ -17,6 +17,9 @@ vi.mock('@/api/salary', () => ({
   getEmployeeSalaryDebug: (...args: unknown[]) => getEmployeeSalaryDebugMock(...args),
 }))
 
+vi.mock('@/api/festivalCarry', () => ({
+  getFestivalPayoutSettings: () => Promise.resolve({ data: { early_payout_from_ym: null, july_leaver_merge_enabled: false, deduction_carryover_enabled: false } }),
+}))
 vi.mock('@/stores/employee', () => ({
   useEmployeeStore: () => ({ employees: [], fetchEmployees: vi.fn() }),
 }))

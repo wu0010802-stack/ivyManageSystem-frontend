@@ -17,6 +17,9 @@ vi.mock('@/api/salary', () => ({
 
 const hasPermissionMock = vi.fn().mockReturnValue(true)
 vi.mock('@/utils/auth', () => ({ hasPermission: (...a: unknown[]) => hasPermissionMock(...a) }))
+vi.mock('@/api/festivalCarry', () => ({
+    getFestivalPayoutSettings: () => Promise.resolve({ data: { early_payout_from_ym: null, july_leaver_merge_enabled: false, deduction_carryover_enabled: false } }),
+}))
 
 vi.mock('element-plus', async (importOriginal) => {
     const actual = await importOriginal<typeof import('element-plus')>()
