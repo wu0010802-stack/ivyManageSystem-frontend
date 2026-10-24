@@ -484,7 +484,7 @@ const rosterSearch = ref('')
 const gridEmployeeNumbers = computed(() => new Map((monthGrid.data.value?.employees ?? []).flatMap((e) => (e.employee_number ? [[e.employee_id, e.employee_number] as const] : []))))
 // 名冊的待辦數與核對的格子同一個口徑（isIssue：已處理、封存、整天還沒匯入的不算），再扣掉設定問題的格子
 // （整月同一種情形，修好設定才會消失，名冊上另外標「設定問題」）。key＝員工編號。
-// 不能用 roster 的 late_count 等月統計：接受扣款或豁免後它不會減少，處理完的人會一直掛在「有待處理」。
+// 不能用 roster 的 late_count 等月統計：接受扣款或豁免後它不會減少，處理完的人會一直掛在「有待辦」。
 // 格子還沒載到（或載入失敗）時不給數字，名冊退回月統計數，不把所有人都說成沒事。
 const pendingCountsByEmployee = computed<Record<string, number> | undefined>(() => {
   const grid = monthGrid.data.value
@@ -621,7 +621,7 @@ watch([ws.roster, ws.loadedPeriod], () => {
 })
 
 /**
- * 沒點人時預設看的人：換月才重選（名冊畫面上的第一位）。處理完他的待處理後他會移到「無待處理」組，
+ * 沒點人時預設看的人：換月才重選（名冊畫面上的第一位）。處理完他的待處理後他會移到「無待辦」組，
  * 若每次都取當下的第一位，右側整月表會突然換成別人。
  * 待辦數來自整月格子：格子晚於名冊載到時，名冊的分組會跟著變，預設的人也要重選一次（之後才固定），
  * 否則右側看的是月統計的第一位、名冊畫面上的第一位卻是別人。

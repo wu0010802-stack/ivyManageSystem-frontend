@@ -113,6 +113,36 @@ describe('GridToolbar', () => {
   })
 })
 
+describe('GridToolbar 篩選人數的範圍字（R50）', () => {
+  const scope = (wrapper: ReturnType<typeof mountToolbar>) => wrapper.find('[data-test="toolbar-filter-scope"]')
+
+  it('桌機核對：篩選群組前寫範圍字，週檢視是「本週」、月檢視是「本月」', () => {
+    expect(scope(mountToolbar({ filterCounts: COUNTS })).text()).toBe('本週')
+    expect(scope(mountToolbar({ filterCounts: COUNTS, view: 'week' })).text()).toBe('本週')
+    expect(scope(mountToolbar({ filterCounts: COUNTS, view: 'month', date: '2026-09-16' })).text()).toBe('本月')
+  })
+
+  it('排班不加範圍字（只有全部與只看未來可排，沒有人數）', () => {
+    const wrapper = mountToolbar({ mode: 'plan', filterCounts: COUNTS })
+    expect(scope(wrapper).exists()).toBe(false)
+    expect(buttonTexts(wrapper)).toEqual(['全部', '只看未來可排'])
+    const mobile = mountToolbar({ mode: 'plan', compact: true })
+    expect(mobile.findAllComponents({ name: 'ElOption' }).map((o) => o.props('label'))).toEqual(['全部', '只看未來可排'])
+  })
+
+  it('手機核對：下拉每個選項前加同樣的範圍字；桌機不另外把範圍字塞進按鈕文字', () => {
+    const month = mountToolbar({ compact: true, view: 'month', date: '2026-09-16', filterCounts: COUNTS, sealState: 'partial' })
+    expect(month.findAllComponents({ name: 'ElOption' }).map((o) => o.props('label'))).toEqual([
+      '本月・全部（35 人）',
+      '本月・有待辦（14 人）',
+      '本月・設定問題（6 人）',
+      '本月・封存時未處理（4 人）',
+    ])
+    expect(scope(month).exists()).toBe(false) // 手機的範圍字在選項文字裡，不另外畫
+    expect(buttonTexts(mountToolbar({ filterCounts: COUNTS }))).toEqual(['全部（35 人）', '有待辦（14 人）', '設定問題（6 人）'])
+  })
+})
+
 describe('GridToolbar 核對／排班兩種模式', () => {
   it('兩種模式都沒有週／月切換（核對的檢視切換在頁面，排班只有週）', () => {
     expect(mountToolbar({ mode: 'reconcile' }).find('[data-test="toolbar-view"]').exists()).toBe(false)
@@ -162,17 +192,18 @@ describe('GridToolbar 核對／排班兩種模式', () => {
     expect(wrapper.find('[data-test="toolbar-schedule"]').exists()).toBe(true)
   })
 
-  it('手機（compact）：篩選收成單一下拉，選項與桌機相同；選了送出 update:filter，沒有按鈕群組', () => {
+  it('手機（compact）：篩選收成單一下拉，選項是桌機的選項前接範圍字；選了送出 update:filter，沒有按鈕群組', () => {
     const wrapper = mountToolbar({ compact: true, filterCounts: COUNTS, sealState: 'partial', filter: 'issues' })
     expect(wrapper.findComponent({ name: 'ElRadioGroup' }).exists()).toBe(false)
     const select = wrapper.findComponent({ name: 'ElSelect' })
     expect(select.attributes('data-test')).toBe('toolbar-filter')
     expect(select.props('ariaLabel')).toBe('篩選人員')
+    // 選項文字前接範圍字（週檢視＝本週）：人數是這個範圍的人數
     expect(wrapper.findAllComponents({ name: 'ElOption' }).map((o) => o.props('label'))).toEqual([
-      '全部（35 人）',
-      '有待辦（14 人）',
-      '設定問題（6 人）',
-      '封存時未處理（4 人）',
+      '本週・全部（35 人）',
+      '本週・有待辦（14 人）',
+      '本週・設定問題（6 人）',
+      '本週・封存時未處理（4 人）',
     ])
     expect(select.props('modelValue')).toBe('issues')
     select.vm.$emit('update:modelValue', 'leftover')

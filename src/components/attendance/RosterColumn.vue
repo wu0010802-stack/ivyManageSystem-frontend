@@ -104,7 +104,7 @@ const props = defineProps<{
    * 每位員工「尚未處理」的異常日卡數（key＝employee_number），由父層以
    * anomalyQueue 的 confirmed_action 計算。名冊上的 late_count 等欄位來自月統計，
    * **不會**因為管理者接受扣款或豁免而減少；分組若沿用它，處理完的人仍掛在
-   * 「有待處理」底下。未提供時退回月統計數（單元測試等獨立掛載情境）。
+   * 「有待辦」底下。未提供時退回月統計數（單元測試等獨立掛載情境）。
    */
   pendingCounts?: Record<string, number>
   /**
@@ -126,7 +126,7 @@ const hasPattern = (row: RosterRow): boolean => !!row.employee_number && !!props
 
 const sortedFiltered = computed<RosterRow[]>(() => sortRoster(props.roster, searchQuery.value))
 
-// 名冊依「有待處理 → 無異常 → 尚無打卡」分組（UI/UX 改版提案 09-10）；組內沿用
+// 名冊依「有待辦 → 無待辦 → 尚無打卡」分組（UI/UX 改版提案 09-10）；組內沿用
 // sortedFiltered 既有的 anomalyCount 遞減排序，只是按組拆段呈現，不改變排序邏輯。
 // 排序與分組在 utils/attendanceRoster（頁面預設選人也用同一份，才會選到畫面上的第一位）。
 const groupedRows = computed(() => groupRoster(sortedFiltered.value, props.pendingCounts))

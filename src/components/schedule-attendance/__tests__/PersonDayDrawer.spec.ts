@@ -15,9 +15,14 @@ const att = vi.hoisted(() => ({ getAnomalyList: vi.fn(), upsertRecord: vi.fn(), 
 vi.mock('@/api/attendance', () => ({ getAnomalyList: att.getAnomalyList, upsertRecord: att.upsertRecord, batchConfirmAnomalies: att.batchConfirmAnomalies }))
 vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
 vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: vi.fn() }) }))
-const undo = vi.hoisted(() => ({ show: vi.fn() }))
+const undo = vi.hoisted(() => ({ show: vi.fn(), latest: vi.fn() }))
 // 只換掉會真的跳訊息的 showUndoToast；給不給復原的判斷（confirmedFollowUp）用真的
-vi.mock('@/composables/useConfirmUndo', async (orig) => ({ ...(await orig<typeof import('@/composables/useConfirmUndo')>()), showUndoToast: undo.show }))
+vi.mock('@/composables/useConfirmUndo', async (orig) => ({
+  ...(await orig<typeof import('@/composables/useConfirmUndo')>()),
+  showUndoToast: undo.show,
+  undoLatest: undo.latest,
+}))
+import { undoAvailable } from '@/composables/useConfirmUndo'
 const box = vi.hoisted(() => ({ confirm: vi.fn() }))
 const router = vi.hoisted(() => ({ push: vi.fn() }))
 vi.mock('vue-router', () => ({ useRouter: () => router }))
@@ -27,7 +32,7 @@ const CALLER = grid().caller
 
 type DrawerNav = { position: number | null; total: number; label: string; hasPrev: boolean; hasNext: boolean; back?: string | null }
 
-function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]; caller: typeof CALLER; weeklyShiftId: number | null; employee: GridEmployee; importCovered: boolean; nav: DrawerNav | null; attach: boolean; actionsLocked: boolean }> = {}) {
+function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]; caller: typeof CALLER; weeklyShiftId: number | null; employee: GridEmployee; importCovered: boolean; nav: DrawerNav | null; attach: boolean; actionsLocked: boolean; mobile: boolean }> = {}) {
   return mount(PersonDayDrawer, {
     props: {
       modelValue: true,
@@ -43,6 +48,7 @@ function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]
       caller: extra.caller ?? CALLER,
       nav: extra.nav ?? null,
       actionsLocked: extra.actionsLocked ?? false,
+      ...(extra.mobile ? { mobile: true } : {}),
     },
     // 鍵盤事件要從輸入框冒泡到 window，元件得掛在 document 上
     ...(extra.attach ? { attachTo: document.body } : {}),
@@ -71,6 +77,7 @@ function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]
 
 beforeEach(() => {
   vi.resetAllMocks()
+  undoAvailable.value = false
   api.getDaily.mockResolvedValue({ data: [{ id: 77, employee_id: 1, date: W1, shift_type_id: 2 }] })
   api.saveDaily.mockResolvedValue({ data: {} })
   api.deleteDaily.mockResolvedValue({ data: {} })
@@ -990,6 +997,91 @@ describe('PersonDayDrawer 審查修正', () => {
     await wrapper.setProps({ cell: cell(1, '2026-09-15', { edit: { confirm: true }, actual: { status: 'possible_shift_change', punch_in: '2026-09-15T08:31:00', punch_out: '2026-09-15T18:02:00' } }) })
     await flushPromises()
     expect((wrapper.get('textarea[data-test="pdd-confirm-reason"]').element as HTMLTextAreaElement).value).toBe('')
+  })
+})
+
+describe('PersonDayDrawer 鍵盤復原（R50）', () => {
+  const NAV: DrawerNav = { position: 3, total: 12, label: '9 月逐日待辦 3 / 12', hasPrev: true, hasNext: true }
+  const press = (key: string, target: EventTarget = document.body, init: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
+    target.dispatchEvent(event)
+    return event
+  }
+
+  it('按 U（不分大小寫）觸發最近一次仍有效的復原；抽屜不換筆', async () => {
+    undo.latest.mockReturnValue(true)
+    const wrapper = mountDrawer(cell(1, W1, { actual: {} }), { nav: NAV, attach: true })
+    await flushPromises()
+    expect(press('u').defaultPrevented).toBe(true)
+    press('U')
+    expect(undo.latest).toHaveBeenCalledTimes(2)
+    expect(wrapper.emitted('navigate')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('沒有可復原的提示就不做事（也不吃掉按鍵）', async () => {
+    undo.latest.mockReturnValue(false)
+    const wrapper = mountDrawer(cell(1, W1, { actual: {} }), { nav: NAV, attach: true })
+    await flushPromises()
+    expect(press('u').defaultPrevented).toBe(false)
+    expect(undo.latest).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('規則同 J／K：打字中、按住不放、帶修飾鍵、疊在上面的對話框、確認框開著都不算', async () => {
+    undo.latest.mockReturnValue(true)
+    const wrapper = mountDrawer(cell(1, W1, { actual: { status: 'possible_shift_change', punch_in: `${W1}T08:01:00`, punch_out: `${W1}T17:31:00` }, edit: { confirm: true } }), { nav: NAV, attach: true })
+    await flushPromises()
+    press('u', wrapper.get('textarea[data-test="pdd-confirm-reason"]').element)
+    press('u', document.body, { repeat: true })
+    press('u', document.body, { ctrlKey: true })
+    press('u', document.body, { metaKey: true })
+    press('u', document.body, { altKey: true })
+    const overlay = document.createElement('div')
+    overlay.className = 'el-overlay'
+    const tab = document.createElement('button')
+    overlay.appendChild(tab)
+    document.body.appendChild(overlay)
+    press('u', tab)
+    overlay.remove()
+    const messageBox = document.createElement('div')
+    messageBox.className = 'el-overlay-message-box'
+    document.body.appendChild(messageBox)
+    press('u')
+    messageBox.remove()
+    expect(undo.latest).not.toHaveBeenCalled()
+    press('u')
+    expect(undo.latest).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('抽屜關著不聽；沒有逐日待辦導覽（nav 為 null）也能按 U 復原，J／K 仍需要導覽', async () => {
+    undo.latest.mockReturnValue(true)
+    const noNav = mountDrawer(cell(1, W1, { actual: {} }), { attach: true })
+    await flushPromises()
+    press('u')
+    press('j')
+    expect(undo.latest).toHaveBeenCalledTimes(1)
+    expect(noNav.emitted('navigate')).toBeUndefined()
+    await noNav.setProps({ modelValue: false })
+    press('u')
+    expect(undo.latest).toHaveBeenCalledTimes(1)
+    noNav.unmount()
+  })
+
+  it('導覽提示：J K 換一件；有可復原的提示時多一段「・U 復原」，手機不顯示', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { actual: {} }), { nav: NAV })
+    await flushPromises()
+    expect(wrapper.get('[data-test="pdd-keys"]').text()).toBe('J K 換一件')
+    undoAvailable.value = true
+    await flushPromises()
+    expect(wrapper.get('[data-test="pdd-keys"]').text()).toBe('J K 換一件・U 復原')
+    wrapper.unmount()
+
+    const mobile = mountDrawer(cell(1, W1, { actual: {} }), { nav: NAV, mobile: true })
+    await flushPromises()
+    expect(mobile.find('[data-test="pdd-keys"]').exists()).toBe(false)
+    mobile.unmount()
   })
 })
 

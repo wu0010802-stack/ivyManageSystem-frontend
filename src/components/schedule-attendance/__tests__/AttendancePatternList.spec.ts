@@ -38,7 +38,7 @@ describe('AttendancePatternList', () => {
     expect(noPunch.text()).toContain('算曠職扣款')
     const first = wrapper.get('[data-test="pattern-7"]')
     expect(first.text()).toContain('陳瑞玲')
-    expect(first.text()).toContain('待處理 20 格')
+    expect(first.text()).toContain('待辦 20 件')
     expect(first.text()).toContain('匯入的打卡檔裡沒有這位員工')
     expect(first.text()).toContain('卡號對照')
     expect(wrapper.get('[data-test="pattern-8"]').text()).toContain('只有 1 天有打卡')
@@ -48,8 +48,8 @@ describe('AttendancePatternList', () => {
     // 改了設定要重算才會照新時段扣款（存檔的遲到早退不會自己變）
     expect(offset.text()).toContain('按「重算本月出勤」')
     const item = wrapper.get('[data-test="pattern-9"]')
-    // 這個人還有 3 格是別的待處理：分開寫
-    expect(item.text()).toContain('17 格是這個型態（共待處理 20 格）')
+    // 這個人還有 3 件是別的待辦：分開寫
+    expect(item.text()).toContain('17 件是這個型態（共待辦 20 件）')
     expect(item.text()).toContain('20 天遲到（多為 55 分）、20 天早退（多為 315 分）')
     expect(item.text()).toContain('實際多在 08:55 上班、11:45 下班')
     expect(item.text()).toContain('08:00–17:00')

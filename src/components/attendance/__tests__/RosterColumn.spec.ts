@@ -228,17 +228,17 @@ it('搜尋無結果可清除並恢復名冊', async () => {
   wrapper.unmount()
 })
 
-describe('RosterColumn — 分組用真正的待處理數', () => {
-  it('異常已全部處理完的人歸到「無待處理」，不再掛在有待處理', async () => {
+describe('RosterColumn — 分組用真正的待辦數', () => {
+  it('異常已全部處理完的人歸到「無待辦」，不再掛在有待辦', async () => {
     // rowLate 月統計有 3 次異常，但都已接受扣款／豁免 → pending 0
     const wrapper = mountRoster({ pendingCounts: { E002: 0, E003: 2 } })
     await nextTick()
     const text = wrapper.text()
-    const pendingIdx = text.indexOf('有待處理')
-    const cleanIdx = text.indexOf('無待處理')
+    const pendingIdx = text.indexOf('有待辦')
+    const cleanIdx = text.indexOf('無待辦')
     expect(pendingIdx).toBeGreaterThanOrEqual(0)
     expect(cleanIdx).toBeGreaterThan(pendingIdx)
-    // 李缺卡仍有 2 筆待處理 → 落在「有待處理」段；王遲到已處理完 → 落在其後
+    // 李缺卡仍有 2 件待辦 → 落在「有待辦」段；王遲到已處理完 → 落在其後
     expect(text.indexOf('李缺卡')).toBeGreaterThan(pendingIdx)
     expect(text.indexOf('李缺卡')).toBeLessThan(cleanIdx)
     expect(text.indexOf('王遲到')).toBeGreaterThan(cleanIdx)
@@ -249,8 +249,8 @@ describe('RosterColumn — 分組用真正的待處理數', () => {
     const wrapper = mountRoster({})
     await nextTick()
     const text = wrapper.text()
-    const cleanIdx = text.indexOf('無待處理')
-    // 王遲到、李缺卡都有月統計異常 → 仍在「有待處理」段（早於「無待處理」標頭）
+    const cleanIdx = text.indexOf('無待辦')
+    // 王遲到、李缺卡都有月統計異常 → 仍在「有待辦」段（早於「無待辦」標頭）
     expect(text.indexOf('王遲到')).toBeLessThan(cleanIdx)
     expect(text.indexOf('李缺卡')).toBeLessThan(cleanIdx)
     wrapper.unmount()
@@ -280,7 +280,7 @@ describe('RosterColumn — 分組用真正的待處理數', () => {
 
 // ── 鍵盤操作：WAI-ARIA listbox + roving tabindex ─────────────────────────────
 describe('RosterColumn — 鍵盤操作（listbox / roving tabindex）', () => {
-  // 排序後：李缺卡(3)、王遲到(2) 在「有待處理」，陳全勤(1) 在「無待處理」
+  // 排序後：李缺卡(3)、王遲到(2) 在「有待辦」，陳全勤(1) 在「無待辦」
   const mountAttached = (props: Parameters<typeof mountRoster>[0] = {}) => {
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -295,7 +295,7 @@ describe('RosterColumn — 鍵盤操作（listbox / roving tabindex）', () => {
     const list = wrapper.find('[role="listbox"]')
     expect(list.attributes('aria-label')).toBe('人員名冊')
     const groups = wrapper.findAll('[role="group"]')
-    expect(groups.map((g) => g.attributes('aria-label'))).toEqual(['有待處理，2 人', '無待處理，1 人'])
+    expect(groups.map((g) => g.attributes('aria-label'))).toEqual(['有待辦，2 人', '無待辦，1 人'])
     // option 一律在 group 內，listbox 直屬子層沒有裸 option
     expect(wrapper.findAll('.roster-column__list > [role="option"]')).toHaveLength(0)
     wrapper.unmount()
@@ -340,7 +340,7 @@ describe('RosterColumn — 鍵盤操作（listbox / roving tabindex）', () => {
     await opts()[0].trigger('keydown', { key: 'ArrowDown' })
     expect(document.activeElement).toBe(opts()[1].element)
     await opts()[1].trigger('keydown', { key: 'ArrowDown' })
-    // 第三列在另一個分組（無待處理）
+    // 第三列在另一個分組（無待辦）
     expect(document.activeElement).toBe(opts()[2].element)
     expect(opts().map((o) => o.attributes('tabindex'))).toEqual(['-1', '-1', '0'])
     // 到底再按 ↓ 不循環

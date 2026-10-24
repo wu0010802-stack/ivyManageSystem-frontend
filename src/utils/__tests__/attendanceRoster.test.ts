@@ -16,7 +16,7 @@ const row = (id: number, name: string, extra: Partial<RosterRow> = {}): RosterRo
 } as RosterRow)
 
 describe('出勤明細名冊排序與分組（頁面預設選人用同一份）', () => {
-  // 後端原順序：甲（無異常）在最前；畫面上第一位是有待處理且異常最多的丙
+  // 後端原順序：甲（無異常）在最前；畫面上第一位是有待辦且異常最多的丙
   const roster = [row(1, '甲'), row(2, '乙', { late_count: 1 }), row(3, '丙', { late_count: 3 }), row(4, '丁', { has_summary: false } as Partial<RosterRow>)]
 
   it('依異常數遞減、姓名排序；搜尋姓名或工號', () => {
@@ -24,8 +24,10 @@ describe('出勤明細名冊排序與分組（頁面預設選人用同一份）'
     expect(sortRoster(roster, 'e002').map((r) => r.employee_id)).toEqual([2])
   })
 
-  it('分組：有待處理 → 無待處理 → 尚無打卡；有 pendingCounts 時以它判斷（處理完的人回到無待處理）', () => {
+  it('分組：有待辦 → 無待辦 → 尚無打卡；有 pendingCounts 時以它判斷（處理完的人回到無待辦）', () => {
     const groups = groupRoster(sortRoster(roster), { E002: 1 })
+    // 待辦數量一律說「待辦」（不說待處理）
+    expect(groups.map((g) => g.label)).toEqual(['有待辦', '無待辦', '尚無打卡'])
     expect(groups.map((g) => [g.key, g.rows.map((r) => r.employee_id)])).toEqual([
       ['pending', [2]],
       ['clean', [3, 1]],

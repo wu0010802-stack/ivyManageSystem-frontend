@@ -69,7 +69,7 @@ const canImport = hasPermission('ATTENDANCE_WRITE')
 
 /** 符合型態的格數；這個人還有其他待處理（缺卡、疑似換班…）時另外寫出，不混在一起 */
 function countText(p: AttendancePattern): string {
-  return p.matchCount === p.issueCount ? `待處理 ${p.issueCount} 格` : `${p.matchCount} 格是這個型態（共待處理 ${p.issueCount} 格）`
+  return p.matchCount === p.issueCount ? `待辦 ${p.issueCount} 件` : `${p.matchCount} 件是這個型態（共待辦 ${p.issueCount} 件）`
 }
 const canViewEmployees = hasPermission('EMPLOYEES_READ')
 

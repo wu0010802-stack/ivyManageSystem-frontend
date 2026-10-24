@@ -45,17 +45,20 @@
       data-test="toolbar-filter"
       @update:model-value="(v: GridFilter) => emit('update:filter', v)"
     >
-      <el-option v-for="option in filterOptions" :key="option.value" :value="option.value" :label="option.label" />
+      <el-option v-for="option in filterOptions" :key="option.value" :value="option.value" :label="filterScope ? `${filterScope}・${option.label}` : option.label" />
     </el-select>
-    <el-radio-group
-      v-else
-      :model-value="filter"
-      aria-label="篩選人員"
-      data-test="toolbar-filter"
-      @update:model-value="(v: string | number | boolean | undefined) => emit('update:filter', v as GridFilter)"
-    >
-      <el-radio-button v-for="option in filterOptions" :key="option.value" :value="option.value" :title="option.title">{{ option.label }}</el-radio-button>
-    </el-radio-group>
+    <div v-else class="grid-toolbar__filter">
+      <!-- 人數的範圍：週檢視是這一週、月檢視是整月，寫在群組前才不會把「有待辦（14 人）」讀成全校人數 -->
+      <span v-if="filterScope" class="grid-toolbar__label" data-test="toolbar-filter-scope">{{ filterScope }}</span>
+      <el-radio-group
+        :model-value="filter"
+        aria-label="篩選人員"
+        data-test="toolbar-filter"
+        @update:model-value="(v: string | number | boolean | undefined) => emit('update:filter', v as GridFilter)"
+      >
+        <el-radio-button v-for="option in filterOptions" :key="option.value" :value="option.value" :title="option.title">{{ option.label }}</el-radio-button>
+      </el-radio-group>
+    </div>
 
     <el-input
       :model-value="keyword"
@@ -162,6 +165,8 @@ const filterOptions = computed(() =>
     return { value, label: count === undefined ? FILTER_LABELS[value] : `${FILTER_LABELS[value]}（${count} 人）`, title: FILTER_TITLES[value] }
   }),
 )
+/** 篩選人數的範圍字：核對才有人數；週檢視＝本週、月檢視＝本月。排班沒有人數，不加 */
+const filterScope = computed(() => (props.mode === 'reconcile' ? (isMonth.value ? '本月' : '本週') : ''))
 const anchor = computed(() => props.date ?? props.weekStart)
 const monthLabel = computed(() => `${anchor.value.slice(0, 4)} 年 ${Number(anchor.value.slice(5, 7))} 月`)
 
@@ -195,7 +200,7 @@ function onCommand(command: string | number | object): void {
 
 <style scoped>
 .grid-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
-.grid-toolbar__nav, .grid-toolbar__tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.grid-toolbar__nav, .grid-toolbar__tools, .grid-toolbar__filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .grid-toolbar__tools { margin-left: auto; }
 .grid-toolbar__picker { width: 132px; }
 .grid-toolbar__keyword { width: 168px; }

@@ -14,6 +14,8 @@
         <span class="pdd__nav-pos" data-test="pdd-nav-pos">{{ nav.label }}</span>
         <el-button :disabled="!nav.hasNext" title="下一件待辦（J）" aria-keyshortcuts="j" data-test="pdd-next" @click="go(1)">下一件<el-icon class="el-icon--right"><ArrowRight /></el-icon></el-button>
       </nav>
+      <!-- 鍵盤提示（手機沒有鍵盤不顯示）：U 復原只在畫面上有可復原的提示時才寫 -->
+      <p v-if="nav && nav.total > 0 && !mobile" class="pdd__keys" data-test="pdd-keys"><kbd>J</kbd> <kbd>K</kbd> 換一件<template v-if="undoAvailable">・<kbd>U</kbd> 復原</template></p>
       <p v-if="nav?.back" class="pdd__back"><el-button link type="primary" data-test="pdd-back" @click="goBack">回剛才處理的 {{ nav.back }}</el-button></p>
       <p v-if="otherClasses" class="pdd__note" data-test="pdd-other-classes">另兼：{{ otherClasses }}</p>
       <div v-if="patternShown" class="pdd__pattern" role="note" data-test="pdd-pattern">
@@ -51,7 +53,7 @@
             </template>
             <template v-else>
               <p class="pdd__absence-lead">這天沒有任何打卡。正職員工不處理的話，算薪時會算曠職扣款。</p>
-              <p v-if="resolveMode !== 'none'" class="pdd__note">有上班但忘了打卡：在下方補登上下班。有請假：建立請假單。確定是曠職就不必動作，算薪會自動扣（這格會留在待處理）。</p>
+              <p v-if="resolveMode !== 'none'" class="pdd__note">有上班但忘了打卡：在下方補登上下班。有請假：建立請假單。確定是曠職就不必動作，算薪會自動扣（這格會留在待辦）。</p>
             </template>
             <p v-if="resolveMode === 'none' && !isOwnCell && !caller.can_edit_attendance" class="pdd__note">有上班或有請假，要由有出勤寫入權限的行政人員補登或建立請假單。</p>
             <el-button v-if="canCreateLeave" link type="primary" class="pdd__link" data-test="pdd-create-leave" @click="openLeave">建立請假單</el-button>
@@ -190,6 +192,7 @@ import DayResolveSection, { type DayResolveMode } from './DayResolveSection.vue'
 import { deleteDaily, getDaily, saveDaily } from '@/api/shifts'
 import { apiError } from '@/utils/error'
 import { confirmDiscardChanges } from '@/composables/useUnsavedChangesGuard'
+import { undoAvailable, undoLatest } from '@/composables/useConfirmUndo'
 import { KIND_LABELS, STATUS_LABELS } from '@/utils/attendanceConfirm'
 import { hasPermission } from '@/utils/auth'
 import { leaveCreateLink } from '@/utils/leaveDeepLink'
@@ -571,18 +574,25 @@ async function goBack(): Promise<void> {
   emit('back')
 }
 /**
- * J／K 換筆：焦點在這個抽屜裡（或沒有焦點）才算。疊在上面的對話框（例如從抽屜開的匯入打卡）、
- * 打字中、選單展開、確認框開著、按住不放都不算。
+ * J／K 換筆、U 復原最近一次接受扣款／豁免（不分大小寫）：焦點在這個抽屜裡（或沒有焦點）才算。
+ * 疊在上面的對話框（例如從抽屜開的匯入打卡）、打字中、選單展開、確認框開著、按住不放都不算。
+ * J／K 要有逐日待辦導覽才有意義；U 不用（復原提示在自動跳下一件之後仍在，沒有導覽也能復原）。
  */
 function onKeydown(event: KeyboardEvent): void {
-  if (!props.modelValue || !props.nav || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return
+  if (!props.modelValue || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return
   const key = event.key.toLowerCase()
-  if (key !== 'j' && key !== 'k') return
+  const isNavKey = (key === 'j' || key === 'k') && !!props.nav
+  if (!isNavKey && key !== 'u') return
   const target = event.target instanceof Element ? event.target : null
   const inDrawer = !!target?.closest('[data-test="person-day-drawer"]')
   if (!inDrawer && target !== document.body && target !== document.documentElement) return
   if (target?.closest('input, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"]')) return
   if (document.querySelector('.el-overlay-message-box')) return
+  if (key === 'u') {
+    // 沒有可復原的提示就不做事，也不吃掉按鍵
+    if (undoLatest()) event.preventDefault()
+    return
+  }
   event.preventDefault()
   void go(key === 'j' ? 1 : -1)
 }
@@ -725,6 +735,9 @@ async function submitConfirm(): Promise<void> {
 .pdd__nav .el-button { margin-left: 0; }
 .pdd__nav-pos { color: var(--el-text-color-secondary); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 .pdd__back { margin: calc(-1 * var(--space-2)) 0 0; }
+/* 鍵盤提示：貼在導覽列下方的次要說明 */
+.pdd__keys { margin: calc(-1 * var(--space-2)) 0 0; color: var(--el-text-color-secondary); font-size: var(--text-xs); }
+.pdd__keys kbd { display: inline-block; min-width: 1.4em; padding: 0 var(--space-1); border: 1px solid var(--el-border-color); border-radius: var(--radius-sm); background: var(--el-fill-color-light); color: var(--el-text-color-regular); font: inherit; font-weight: 600; text-align: center; }
 .pdd__section h3 { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 .pdd__plan { margin: 0; font-weight: 600; }
 .pdd__fact { margin: 0; }

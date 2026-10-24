@@ -10,6 +10,8 @@
  * 復原後也照 clear 回傳的 processed 實話實說（undoOutcome）。
  *
  * 訊息一關（時間到、手動關、按完復原）就不再能送：按鈕就算還在 DOM 也不動作。
+ * 畫面上只留最新一則復原提示：開新的之前先關掉上一則（連續處理多件時不堆疊）；
+ * 抽屜的 U 鍵走 undoLatest 復原最近一則仍有效的提示，undoAvailable 讓畫面知道現在有沒有。
  */
 import { h, ref } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -60,6 +62,25 @@ export function undoOutcome(processed: number, requested: number): { type: 'succ
   return { type: 'warning', text: `已復原 ${processed} 件，另 ${requested - processed} 件已被其他人改動` }
 }
 
+/** 目前還畫在畫面上的復原提示（只留最新一則）；沒有＝null */
+interface ActiveToast {
+  /** 還能復原：沒關、沒送出過 */
+  usable: () => boolean
+  undo: () => Promise<void>
+  /** 被新提示取代：關掉並讓它的按鈕不再送 */
+  dismiss: () => void
+}
+let active: ActiveToast | null = null
+/** 現在有沒有可復原的提示：畫面據此顯示「U 復原」的快捷鍵說明 */
+export const undoAvailable = ref(false)
+
+/** 復原最近一則仍有效的提示（抽屜的 U 鍵）；沒有可復原的（沒開過、時間到、已復原、送出中）就不做事並回 false */
+export function undoLatest(): boolean {
+  if (!active || !active.usable()) return false
+  void active.undo()
+  return true
+}
+
 const BUTTON_STYLE =
   'margin-left:12px;padding:0;border:0;background:none;font:inherit;font-weight:600;' +
   'color:var(--el-color-primary);text-decoration:underline;cursor:pointer;'
@@ -75,6 +96,23 @@ export function showUndoToast(opts: UndoToastOptions): void {
   const undoing = ref(false)
   let toast: { close: () => void } | undefined
 
+  const entry: ActiveToast = {
+    usable: () => !closed && !sent,
+    undo: () => undo(),
+    dismiss: () => {
+      markClosed()
+      toast?.close()
+    },
+  }
+  /** 這則不再能復原；只在它還是「最新一則」時才清掉全域狀態（被取代的舊提示晚一步關閉，不能把新的一起清掉） */
+  function markClosed(): void {
+    closed = true
+    if (active === entry) {
+      active = null
+      undoAvailable.value = false
+    }
+  }
+
   async function undo(): Promise<void> {
     if (closed || sent) return
     sent = true
@@ -89,10 +127,12 @@ export function showUndoToast(opts: UndoToastOptions): void {
       notify(err, 'useConfirmUndo.undo', null, { prefix: '復原失敗' })
     } finally {
       // 不論成敗都收起：成功就沒東西可復原，失敗已經用錯誤訊息講清楚了，留一顆停用的按鈕沒有意義
-      toast?.close()
+      entry.dismiss()
     }
   }
 
+  // 畫面上只留最新一則：先關掉上一則
+  active?.dismiss()
   toast = ElMessage({
     type: 'success',
     duration: UNDO_WINDOW_MS,
@@ -112,8 +152,8 @@ export function showUndoToast(opts: UndoToastOptions): void {
           '復原',
         ),
       ]),
-    onClose: () => {
-      closed = true
-    },
+    onClose: markClosed,
   })
+  active = entry
+  undoAvailable.value = true
 }

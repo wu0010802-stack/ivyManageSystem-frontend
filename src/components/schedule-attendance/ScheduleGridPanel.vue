@@ -25,7 +25,7 @@
       @save="save"
     />
     <!-- 核對週格子的狀態圖例（月格子自己有含請假的圖例，不重複） -->
-    <VerdictLegend v-if="mode === 'reconcile' && !isMonth" class="schedule-grid-panel__legend" />
+    <VerdictLegend v-if="mode === 'reconcile' && !isMonth" class="schedule-grid-panel__legend" :show-leftover="hasWeekLeftover" />
 
     <el-alert
       v-if="state.warnings.value.length"
@@ -200,6 +200,7 @@ import {
   filterCounts,
   gridSections,
   isIssue,
+  isSealedLeftover,
   mondayOf,
   outerScrollFirst,
   uncoveredDates,
@@ -360,6 +361,13 @@ onBeforeUnmount(() => {
 const NO_CALLER: GridOut['caller'] = { can_view_attendance: false, can_edit_plan: false, can_confirm: false, can_edit_attendance: false }
 const gridData = computed(() => state.grid.value)
 const caller = computed(() => gridData.value?.caller ?? NO_CALLER)
+/** 這一週有封存時沒處理的格子（週格子畫灰色三角）：週圖例才多一項說明 */
+const hasWeekLeftover = computed(() => {
+  const g = gridData.value
+  if (!g) return false
+  const uncovered = uncoveredDates(g.days)
+  return g.cells.some((c) => isSealedLeftover(c, g.today, uncovered))
+})
 const days = computed(() => (gridData.value ? visibleDays(gridData.value.days, gridData.value.cells, gridData.value.caller.can_edit_plan) : []))
 // 月模式的抽屜（疑似換班對象的姓名）取整月人員；週資料的人員一併保留（儲存結果的提示仍是週資料）
 const employeeNames = computed<Record<number, string>>(() =>
@@ -647,7 +655,7 @@ watch(() => {
   backKey.value = pending.key
   lockActions(600)
   // 接受扣款／豁免已經跳了可復原的提示（寫出處理了誰、跳到下一件），不再疊一則
-  if (!pending.undoToast) ElMessage.success(`已處理。下一筆待處理：${keyLabel(target)}`)
+  if (!pending.undoToast) ElMessage.success(`已處理。下一件待辦：${keyLabel(target)}`)
 })
 
 /**

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { defineComponent, type VNode } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -18,14 +18,21 @@ vi.mock('@/api/attendance', () => ({ batchConfirmAnomalies: mockBatch }))
 vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: mockNotify }) }))
 vi.mock('element-plus', () => ({ ElMessage: Object.assign(mockMessage, { success: mockSuccess, warning: mockWarning }) }))
 
-import { confirmedFollowUp, showUndoToast } from '../useConfirmUndo'
+import { confirmedFollowUp, showUndoToast, undoAvailable, undoLatest } from '../useConfirmUndo'
 
 type MessageOptions = { message: () => VNode; duration: number; onClose: () => void }
 
+/** 開過的提示：每個案例結束時都當成時間到關掉，「最新一則」的狀態（module 層級）才不會帶進下一個案例 */
+const opened: MessageOptions[] = []
+afterEach(() => {
+  opened.splice(0).forEach((options) => options.onClose())
+})
+
 /** 取出 showUndoToast 交給 ElMessage 的選項，並把 message 渲染成真的 DOM 以便點按鈕 */
-function openToast(ids = [11, 12, 13], onUndone = vi.fn()) {
-  showUndoToast({ text: '已批次處理 3 件', attendanceIds: ids, onUndone })
+function openToast(ids = [11, 12, 13], onUndone = vi.fn(), text = '已批次處理 3 件') {
+  showUndoToast({ text, attendanceIds: ids, onUndone })
   const options = (mockMessage.mock.calls.at(-1) as unknown as [MessageOptions])[0]
+  opened.push(options)
   const wrapper = mount(defineComponent({ render: () => options.message() }))
   return { options, wrapper, onUndone, button: () => wrapper.get('button') }
 }
@@ -127,6 +134,79 @@ describe('showUndoToast', () => {
       expect(mockSuccess).not.toHaveBeenCalled()
       expect(onUndone).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+describe('只留最新一則復原提示，U 鍵復原最近一則（R50）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockBatch.mockResolvedValue({ data: { processed: 1 } })
+  })
+
+  it('開新的復原提示前先關掉上一則：畫面上只留最新一則，舊的按鈕不再送', async () => {
+    const first = openToast([11], vi.fn(), '已處理 9/16 林班導')
+    expect(mockClose).not.toHaveBeenCalled()
+    const second = openToast([12], vi.fn(), '已處理 9/17 王副導')
+    expect(mockClose).toHaveBeenCalledTimes(1) // 上一則被關掉
+    await first.button().trigger('click')
+    await flushPromises()
+    expect(mockBatch).not.toHaveBeenCalled()
+    expect(first.onUndone).not.toHaveBeenCalled()
+    await second.button().trigger('click')
+    await flushPromises()
+    expect(mockBatch).toHaveBeenCalledTimes(1)
+    expect(mockBatch).toHaveBeenCalledWith({ attendance_ids: [12], action: 'clear' })
+  })
+
+  it('undoLatest：觸發最近一則仍有效的復原（送出該則的 id，成功後呼叫 onUndone）', async () => {
+    openToast([11], vi.fn(), '舊的')
+    const latest = openToast([21, 22], vi.fn(), '新的')
+    mockBatch.mockResolvedValue({ data: { processed: 2 } })
+    expect(undoLatest()).toBe(true)
+    await flushPromises()
+    expect(mockBatch).toHaveBeenCalledTimes(1)
+    expect(mockBatch).toHaveBeenCalledWith({ attendance_ids: [21, 22], action: 'clear' })
+    expect(mockSuccess).toHaveBeenCalledWith('已復原')
+    expect(latest.onUndone).toHaveBeenCalledTimes(1)
+  })
+
+  it('沒有可復原的提示就不做事：從來沒開過、時間到關了、已經復原過、還在送出中', async () => {
+    expect(undoLatest()).toBe(false)
+    const timedOut = openToast()
+    timedOut.options.onClose()
+    expect(undoLatest()).toBe(false)
+
+    let finish: (v: unknown) => void = () => {}
+    mockBatch.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    openToast([31])
+    expect(undoLatest()).toBe(true)
+    expect(undoLatest()).toBe(false) // 還在送出中，不重送
+    finish({ data: { processed: 1 } })
+    await flushPromises()
+    expect(undoLatest()).toBe(false) // 復原過了
+    expect(mockBatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('undoAvailable：有可復原的提示時為 true（畫面據此顯示 U 復原的提示），關掉、時間到、復原完都回到 false', async () => {
+    expect(undoAvailable.value).toBe(false)
+    const first = openToast()
+    expect(undoAvailable.value).toBe(true)
+    first.options.onClose()
+    expect(undoAvailable.value).toBe(false)
+
+    const second = openToast()
+    expect(undoAvailable.value).toBe(true)
+    await second.button().trigger('click')
+    await flushPromises()
+    expect(undoAvailable.value).toBe(false)
+  })
+
+  it('舊提示被新提示取代後才時間到：不能把新提示的可復原狀態一起清掉', () => {
+    const first = openToast()
+    openToast()
+    first.options.onClose() // 舊的 onClose 晚一步到（ElMessage 關閉動畫結束才呼叫）
+    expect(undoAvailable.value).toBe(true)
+    expect(undoLatest()).toBe(true)
   })
 })
 

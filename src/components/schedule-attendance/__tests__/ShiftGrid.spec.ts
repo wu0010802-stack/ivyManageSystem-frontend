@@ -544,7 +544,7 @@ describe('ShiftGrid 第五輪審查', () => {
     expect(daily.find('.verdict-shape--deduct').exists()).toBe(true)
   })
 
-  it('封存格：仍顯示判定文字與形狀，class 帶 sealed（CSS 把字與形狀改中性灰）；未封存格沒有', () => {
+  it('封存格：仍顯示判定文字，class 帶 sealed（CSS 把字改中性灰）；形狀是封存遺留的灰色三角（同月格子），未封存格沒有', () => {
     const cells = cellsFor({
       [`1|${WEEK[0]}`]: { actual: LATE, edit: { locked_reason: 'finalized' } },
       [`1|${WEEK[1]}`]: { actual: { ...LATE, punch_in: `${WEEK[1]}T08:57:00`, punch_out: `${WEEK[1]}T11:18:00` } },
@@ -554,8 +554,35 @@ describe('ShiftGrid 第五輪審查', () => {
     expect(sealed.classes()).toContain('shift-grid__cell--sealed')
     // LATE 的分鐘數和 07:00 班別時段對不上，判定文字退回「出勤異常」（既有行為）；封存不會把判定藏起來
     expect(sealed.text()).toContain('出勤異常')
-    expect(sealed.find('.verdict-shape--deduct').exists()).toBe(true)
+    // 封存時沒處理的格子不再畫會扣款的圓點（那是待辦的形狀），改畫月格子同一個灰色三角
+    expect(sealed.find('.verdict-shape--leftover').exists()).toBe(true)
+    expect(sealed.find('.verdict-shape--deduct').exists()).toBe(false)
     expect(wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).classes()).not.toContain('shift-grid__cell--sealed')
+    expect(wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).find('.verdict-shape--deduct').exists()).toBe(true)
+  })
+
+  it('封存遺留的形狀只給「封存時沒處理」的格子：封存前已處理或本來就沒事的封存格不畫三角；老師確認提示行同樣改畫三角', () => {
+    const SEALED = { locked_reason: 'finalized' as const }
+    const cells = cellsFor({
+      [`1|${WEEK[0]}`]: { actual: { ...LATE, confirmed_action: 'admin_waive' }, edit: SEALED },
+      [`1|${WEEK[1]}`]: { actual: { status: 'matched' }, edit: SEALED },
+      [`2|${WEEK[0]}`]: { actual: {}, confirmation: { item_id: 1, round_id: 1, kind: 'swap', status: 'pending', partner_employee_id: 1 }, edit: SEALED },
+    })
+    const wrapper = mountGrid({ cells })
+    const at = (emp: number, date: string) => wrapper.get(`[data-test="cell-${emp}-${date}"]`)
+    expect(at(1, WEEK[0]).find('.verdict-shape--leftover').exists()).toBe(false)
+    expect(at(1, WEEK[1]).find('.verdict-shape--leftover').exists()).toBe(false)
+    const confirming = at(2, WEEK[0])
+    expect(confirming.get('.shift-grid__confirm').find('.verdict-shape--leftover').exists()).toBe(true)
+    expect(confirming.find('.verdict-shape--confirm').exists()).toBe(false)
+  })
+
+  it('手機卡片：封存遺留的格子同樣畫灰色三角', async () => {
+    const cells = cellsFor({ [`1|${WEEK[0]}`]: { actual: LATE, edit: { locked_reason: 'finalized' } } })
+    const wrapper = mountGrid({ cells, mobile: true })
+    await wrapper.find(`[data-test="mobile-day-${WEEK[0]}"]`).trigger('click')
+    expect(wrapper.find('.verdict-shape--leftover').exists()).toBe(true)
+    expect(wrapper.find('.shift-grid__verdict .verdict-shape--deduct').exists()).toBe(false)
   })
 
   it('狀態形狀依 verdictKind：缺卡＝missing、疑似換班＝confirm、資料待補＝pending_data；已豁免與符合原班表不畫形狀', () => {

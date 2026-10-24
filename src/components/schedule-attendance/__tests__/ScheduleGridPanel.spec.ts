@@ -796,7 +796,7 @@ describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
     expect(drawer(wrapper).props('nav')).toEqual({ position: 1, total: 1, label: '本週逐日待辦 1 / 1', hasPrev: false, hasNext: false, back: null })
   })
 
-  it('處理完這格（重抓後不再是待處理）自動跳下一筆並提示', async () => {
+  it('處理完這格（重抓後不再是待辦）自動跳下一件並提示', async () => {
     const wrapper = mountPanel()
     await flushPromises()
     wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, WEEK[0])
@@ -805,7 +805,7 @@ describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
     drawer(wrapper).vm.$emit('changed')
     await flushPromises()
     expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
-    expect(ui.success).toHaveBeenCalledWith(expect.stringContaining('下一筆待處理：林班導 9/16'))
+    expect(ui.success).toHaveBeenCalledWith(expect.stringContaining('下一件待辦：林班導 9/16'))
     expect(drawer(wrapper).props('modelValue')).toBe(true)
     // 剛跳過來短暫鎖住動作（連點不會落到這一筆），之後解鎖
     expect(drawer(wrapper).props('actionsLocked')).toBe(true)
@@ -1253,6 +1253,25 @@ describe('ScheduleGridPanel 篩選以人為單位（有待辦／設定問題／�
 
   beforeEach(() => {
     api.grid.mockResolvedValue({ data: grid({ employees: people, cells, today: '2026-09-21' }) })
+  })
+
+  it('週圖例：週資料裡有封存遺留的格子才多一項「封存時未處理」（同月格子的灰色三角），沒有就不多', async () => {
+    const withLeftover = mountFilter()
+    await flushPromises()
+    expect(withLeftover.get('[data-test="verdict-legend-leftover"]').text()).toContain('封存時未處理')
+    // 同一份資料沒有封存：不多這一項
+    const unsealed = cells.map((c) => (c.edit.locked_reason === 'finalized' ? { ...c, edit: { ...c.edit, locked_reason: null } } : c))
+    api.grid.mockResolvedValue({ data: grid({ employees: people, cells: unsealed, today: '2026-09-21' }) })
+    const without = mountFilter()
+    await flushPromises()
+    expect(without.find('[data-test="verdict-legend"]').exists()).toBe(true)
+    expect(without.find('[data-test="verdict-legend-leftover"]').exists()).toBe(false)
+    // 封存但封存前就處理完的格子不算遺留
+    const handled = cells.map((c) => (c.edit.locked_reason === 'finalized' ? { ...c, actual: { ...c.actual!, status: 'matched' as const } } : c))
+    api.grid.mockResolvedValue({ data: grid({ employees: people, cells: handled, today: '2026-09-21' }) })
+    const matched = mountFilter()
+    await flushPromises()
+    expect(matched.find('[data-test="verdict-legend-leftover"]').exists()).toBe(false)
   })
 
   it('工具列人數：全部、有待辦（不含只有設定問題格的人）、設定問題、封存時未處理，與表格同一個範圍', async () => {

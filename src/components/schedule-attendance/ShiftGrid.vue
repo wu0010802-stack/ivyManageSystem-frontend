@@ -89,9 +89,9 @@
                 </span>
                 <span v-if="hasResult(emp.employee_id, d.date)" class="shift-grid__result">
                   <span v-if="mode === 'reconcile' && display(emp.employee_id, d.date).actual" class="shift-grid__actual">{{ display(emp.employee_id, d.date).actual }}</span>
-                  <span v-if="mode === 'reconcile' && display(emp.employee_id, d.date).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, d.date) }"><i v-if="isFlagged(emp.employee_id, d.date)" class="verdict-shape" :class="`verdict-shape--${kindOf(emp.employee_id, d.date)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, d.date).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
+                  <span v-if="mode === 'reconcile' && display(emp.employee_id, d.date).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, d.date) }"><i v-if="isFlagged(emp.employee_id, d.date)" class="verdict-shape" :class="`verdict-shape--${shapeOf(emp.employee_id, d.date)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, d.date).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
                   <span v-for="tag in leaveTags(emp.employee_id, d.date)" :key="tag" class="shift-grid__leave">{{ tag }}</span>
-                  <span v-if="mode === 'reconcile' && display(emp.employee_id, d.date).confirmation" class="shift-grid__confirm"><i class="verdict-shape verdict-shape--confirm" aria-hidden="true" />{{ display(emp.employee_id, d.date).confirmation }}</span>
+                  <span v-if="mode === 'reconcile' && display(emp.employee_id, d.date).confirmation" class="shift-grid__confirm"><i class="verdict-shape" :class="`verdict-shape--${isLeftover(emp.employee_id, d.date) ? 'leftover' : 'confirm'}`" aria-hidden="true" />{{ display(emp.employee_id, d.date).confirmation }}</span>
                 </span>
               </button>
             </td>
@@ -146,9 +146,9 @@
             <span class="shift-grid__plan">{{ display(emp.employee_id, mobileDay).source ? `${display(emp.employee_id, mobileDay).source!.short}・` : '' }}{{ display(emp.employee_id, mobileDay).plan }}</span>
             <span v-if="isInactivePlan(emp.employee_id, mobileDay)" class="shift-grid__inactive">已停用</span>
             <span v-if="mode === 'reconcile' && display(emp.employee_id, mobileDay).actual" class="shift-grid__actual">{{ display(emp.employee_id, mobileDay).actual }}</span>
-            <span v-if="mode === 'reconcile' && display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, mobileDay) }"><i v-if="isFlagged(emp.employee_id, mobileDay)" class="verdict-shape" :class="`verdict-shape--${kindOf(emp.employee_id, mobileDay)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, mobileDay).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
+            <span v-if="mode === 'reconcile' && display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, mobileDay) }"><i v-if="isFlagged(emp.employee_id, mobileDay)" class="verdict-shape" :class="`verdict-shape--${shapeOf(emp.employee_id, mobileDay)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, mobileDay).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
             <span v-for="tag in leaveTags(emp.employee_id, mobileDay)" :key="tag" class="shift-grid__leave">{{ tag }}</span>
-            <span v-if="mode === 'reconcile' && display(emp.employee_id, mobileDay).confirmation" class="shift-grid__confirm"><i class="verdict-shape verdict-shape--confirm" aria-hidden="true" />{{ display(emp.employee_id, mobileDay).confirmation }}</span>
+            <span v-if="mode === 'reconcile' && display(emp.employee_id, mobileDay).confirmation" class="shift-grid__confirm"><i class="verdict-shape" :class="`verdict-shape--${isLeftover(emp.employee_id, mobileDay) ? 'leftover' : 'confirm'}`" aria-hidden="true" />{{ display(emp.employee_id, mobileDay).confirmation }}</span>
           </button>
           <el-select
             v-if="mode === 'plan' && canEditPlan"
@@ -302,6 +302,16 @@ const quietKeys = computed(() => {
 const isTodoCell = (cell: GridCell, key: string): boolean => props.mode === 'reconcile' && isFocusCell(cell, key)
 const display = (employeeId: number, date: string): CellDisplay => displays.value.get(cellKey(employeeId, date))!
 const kindOf = (employeeId: number, date: string): VerdictKind | null => kinds.value.get(cellKey(employeeId, date)) ?? null
+/** 封存時沒處理的格子（isSealedLeftover，與月格子的灰色三角、封存時未處理篩選同一個定義） */
+const leftoverKeys = computed(() => {
+  const keys = new Set<string>()
+  for (const [key, cell] of props.cells) if (isSealedLeftover(cell, props.today, uncovered.value)) keys.add(key)
+  return keys
+})
+const isLeftover = (employeeId: number, date: string): boolean => leftoverKeys.value.has(cellKey(employeeId, date))
+/** 格子上狀態形狀的名稱：封存遺留一律是 leftover（灰色三角，封存格不是待辦，不沿用扣款／缺卡等待辦形狀），其餘依 verdictKind */
+const shapeOf = (employeeId: number, date: string): VerdictKind | 'leftover' | null =>
+  isLeftover(employeeId, date) ? 'leftover' : kindOf(employeeId, date)
 /** 判定文字本身是待辦（要畫形狀、加粗）；只有老師確認提示行是待辦的格子，判定（例如符合原班表）維持中性 */
 const isFlagged = (employeeId: number, date: string): boolean => {
   const tone = display(employeeId, date).verdict?.tone

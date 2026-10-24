@@ -36,7 +36,7 @@ export interface RosterGroup {
   rows: RosterRow[]
 }
 
-/** 「有待處理 → 無待處理 → 尚無打卡」分組；組內沿用 sortRoster 的順序 */
+/** 「有待辦 → 無待辦 → 尚無打卡」分組；組內沿用 sortRoster 的順序 */
 export function groupRoster(sorted: readonly RosterRow[], pendingCounts?: Record<string, number>): RosterGroup[] {
   const pending: RosterRow[] = []
   const clean: RosterRow[] = []
@@ -47,9 +47,9 @@ export function groupRoster(sorted: readonly RosterRow[], pendingCounts?: Record
     else clean.push(row)
   }
   return [
-    { key: 'pending', label: '有待處理', rows: pending },
-    // 「無待處理」而非「無異常」：本月有過異常但已接受扣款／豁免的人也歸在這裡
-    { key: 'clean', label: '無待處理', rows: clean },
+    { key: 'pending', label: '有待辦', rows: pending },
+    // 「無待辦」而非「無異常」：本月有過異常但已接受扣款／豁免的人也歸在這裡
+    { key: 'clean', label: '無待辦', rows: clean },
     { key: 'no-summary', label: '尚無打卡', rows: noSummary },
   ]
 }
