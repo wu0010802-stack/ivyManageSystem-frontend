@@ -73,10 +73,12 @@
                 class="shift-grid__cell"
                 :class="cellClasses(emp.employee_id, d.date)"
                 :disabled="!cellOf(emp.employee_id, d.date)!.employed"
+                :tabindex="tabStop === cellKey(emp.employee_id, d.date) ? 0 : -1"
                 :aria-label="cellAria(emp, d)"
                 :data-row="rowIndex.get(emp.employee_id)"
                 :data-col="col"
                 :data-test="`cell-${emp.employee_id}-${d.date}`"
+                @focus="activeKey = cellKey(emp.employee_id, d.date)"
                 @click="emit('select', emp.employee_id, d.date)"
               >
                 <!-- 非應出勤日只畫一槓：欄頭已標週末／假日，五個字會把收窄的週末欄撐成兩行（報讀仍念全文） -->
@@ -370,7 +372,31 @@ function revealSelectedDay(): void {
 onMounted(revealSelectedDay)
 watch([mobileDay, () => props.mobile], revealSelectedDay, { flush: 'post' })
 
-/** 方向鍵在格子間移動（Tab 要走過每一格和每列的班別下拉，整週 35 人走不完）；略過停用的格子 */
+/**
+ * roving tabindex：整張表格只佔一個 Tab 停點（整週 35 人的格子逐顆 Tab 走不完），其餘靠方向鍵。
+ * 停點＝最後取得焦點的格子；還沒有（初始）或那格不在了（換週、篩選讓那列消失）就回到初始停點：
+ * 第一個待辦格（依表格順序，先列後欄），沒有待辦就第一個可用格。
+ */
+const focusableCells = computed(() => {
+  const list: Array<{ key: string; cell: GridCell }> = []
+  for (const emp of visibleRows.value) {
+    for (const d of shownDays.value) {
+      const key = cellKey(emp.employee_id, d.date)
+      const cell = props.cells.get(key)
+      if (cell?.employed) list.push({ key, cell })
+    }
+  }
+  return list
+})
+const initialStop = computed(() => (focusableCells.value.find((f) => isTodoCell(f.cell, f.key)) ?? focusableCells.value[0])?.key ?? null)
+const activeKey = ref<string | null>(null)
+const tabStop = computed(() => (activeKey.value !== null && focusableCells.value.some((f) => f.key === activeKey.value) ? activeKey.value : initialStop.value))
+// 停點的格子不在了就清掉，之後篩選拿掉也不會又跳回舊的那格
+watch(focusableCells, (list) => {
+  if (activeKey.value !== null && !list.some((f) => f.key === activeKey.value)) activeKey.value = null
+})
+
+/** 方向鍵在格子間移動（Tab 只停在上面那一個停點，其餘格子靠方向鍵）；略過停用的格子 */
 const ARROWS: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }
 function onGridKeydown(event: KeyboardEvent): void {
   const step = ARROWS[event.key]
@@ -385,6 +411,7 @@ function onGridKeydown(event: KeyboardEvent): void {
     if (next && !next.disabled) {
       event.preventDefault()
       next.focus()
+      activeKey.value = cellKey(visibleRows.value[row].employee_id, shownDays.value[col].date)
       next.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
       return
     }

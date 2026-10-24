@@ -857,3 +857,88 @@ describe('ShiftGrid 欄頭假日名（第六輪）', () => {
     expect(rule('\\.shift-grid__holiday :deep\\(\\.el-tag__content\\)')).toContain('text-overflow: ellipsis')
   })
 })
+
+// ── 第六輪：週格子 roving tabindex（任務 11）──────────────────────────────
+describe('ShiftGrid 週格子 roving tabindex', () => {
+  const ANOMALY_CELL = { actual: { status: 'anomaly' as const } }
+  const stops = (wrapper: ReturnType<typeof mountGrid>): string[] =>
+    wrapper.findAll('.shift-grid__cell').filter((c) => c.attributes('tabindex') === '0').map((c) => c.attributes('data-test')!)
+  const allHaveTabindex = (wrapper: ReturnType<typeof mountGrid>): boolean =>
+    wrapper.findAll('.shift-grid__cell').every((c) => c.attributes('tabindex') === '0' || c.attributes('tabindex') === '-1')
+
+  it('整張表格同時只有一顆格子 tabindex 0，其餘 -1；沒有待辦時是第一個可用的格子', () => {
+    const wrapper = mountGrid()
+    expect(allHaveTabindex(wrapper)).toBe(true)
+    expect(stops(wrapper)).toEqual([`cell-1-${WEEK[0]}`])
+    expect(wrapper.findAll('.shift-grid__cell[tabindex="-1"]')).toHaveLength(15 - 1)
+  })
+
+  it('有待辦時，初始停點是第一個待辦格（依表格順序：先列後欄）', () => {
+    const wrapper = mountGrid({ cells: cellsFor({ [`3|${WEEK[0]}`]: ANOMALY_CELL, [`2|${WEEK[2]}`]: ANOMALY_CELL, [`2|${WEEK[1]}`]: ANOMALY_CELL }) })
+    expect(stops(wrapper)).toEqual([`cell-2-${WEEK[1]}`])
+  })
+
+  it('第一格不在職（disabled，本來就進不去）時，初始停點跳到下一個可用的格子', () => {
+    const wrapper = mountGrid({ cells: cellsFor({ [`1|${WEEK[0]}`]: { employed: false } }) })
+    expect(stops(wrapper)).toEqual([`cell-1-${WEEK[1]}`])
+  })
+
+  it('排班模式一樣只有一個停點（沒有判定可看，不認待辦）', () => {
+    const wrapper = mountGrid({ mode: 'plan', cells: cellsFor({ [`2|${WEEK[1]}`]: ANOMALY_CELL }) })
+    expect(stops(wrapper)).toEqual([`cell-1-${WEEK[0]}`])
+  })
+
+  it('格子取得焦點（點擊、Tab 進入）後，tabindex 0 跟著移過去', async () => {
+    const wrapper = mountGrid({ attach: true })
+    await wrapper.get(`[data-test="cell-3-${WEEK[2]}"]`).trigger('focus')
+    expect(stops(wrapper)).toEqual([`cell-3-${WEEK[2]}`])
+    wrapper.unmount()
+  })
+
+  it('方向鍵移動後，tabindex 0 跟著移到新的格子（右、下、略過不在職的格）', async () => {
+    const wrapper = mountGrid({ attach: true, cells: cellsFor({ [`2|${WEEK[1]}`]: { employed: false } }) })
+    const first = wrapper.get(`[data-test="cell-1-${WEEK[0]}"]`)
+    ;(first.element as HTMLElement).focus()
+    await first.trigger('keydown', { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).element)
+    expect(stops(wrapper)).toEqual([`cell-1-${WEEK[1]}`])
+    // 往下一列：同欄的 2|WEEK[1] 不在職，會跳過去下一個可用的格子（3|WEEK[1]）
+    await wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).trigger('keydown', { key: 'ArrowDown' })
+    expect(stops(wrapper)).toEqual([`cell-3-${WEEK[1]}`])
+    wrapper.unmount()
+  })
+
+  it('換週後重設成新一週的初始停點（舊停點的格子已不存在）', async () => {
+    const wrapper = mountGrid({ attach: true })
+    await wrapper.get(`[data-test="cell-2-${WEEK[2]}"]`).trigger('focus')
+    expect(stops(wrapper)).toEqual([`cell-2-${WEEK[2]}`])
+
+    const nextWeek = [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysISO(WEEK[0], 7 + i))
+    const g2 = grid({ days: nextWeek.map((d) => day(d)), cells: [1, 2, 3].flatMap((id) => nextWeek.map((d) => cell(id, d, { plan: { expected: day(d).is_workday } }))) })
+    await wrapper.setProps({ days: visibleDays(g2.days, g2.cells), cells: indexCells(g2.cells) })
+    expect(stops(wrapper)).toEqual([`cell-1-${nextWeek[0]}`])
+    wrapper.unmount()
+  })
+
+  it('同一週重抓資料（格子還在）不動目前的停點', async () => {
+    const wrapper = mountGrid({ attach: true })
+    await wrapper.get(`[data-test="cell-2-${WEEK[2]}"]`).trigger('focus')
+    const g = grid({ employees: [employee(1, '林班導'), employee(2, '王副導', { role_label: '副班導' }), employee(3, '李廚工', { group_key: 'other', role_label: '廚工' })], cells: cellsFor() })
+    await wrapper.setProps({ cells: indexCells(g.cells) })
+    expect(stops(wrapper)).toEqual([`cell-2-${WEEK[2]}`])
+    wrapper.unmount()
+  })
+
+  it('篩選讓目前停點的那列消失：重設成初始停點（第一個待辦格）', async () => {
+    const wrapper = mountGrid({ attach: true, cells: cellsFor({ [`2|${WEEK[1]}`]: ANOMALY_CELL }) })
+    await wrapper.get(`[data-test="cell-3-${WEEK[2]}"]`).trigger('focus')
+    expect(stops(wrapper)).toEqual([`cell-3-${WEEK[2]}`])
+    await wrapper.setProps({ filter: 'issues' }) // 只剩有待辦的王，李那列不見了
+    expect(wrapper.find(`[data-test="cell-3-${WEEK[2]}"]`).exists()).toBe(false)
+    expect(stops(wrapper)).toEqual([`cell-2-${WEEK[1]}`])
+    // 篩選拿掉後不會跳回舊停點（已經被重設）
+    await wrapper.setProps({ filter: 'all' })
+    expect(stops(wrapper)).toEqual([`cell-2-${WEEK[1]}`])
+    wrapper.unmount()
+  })
+})
