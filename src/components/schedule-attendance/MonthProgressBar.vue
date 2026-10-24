@@ -22,24 +22,36 @@
     </section>
 
     <template v-else>
-      <!-- 手機：只放一顆膠囊（目前這步＋下一步摘要），要看完整步驟再展開 -->
-      <button
-        v-if="mobile && !loadError"
-        type="button"
-        class="month-progress__capsule"
-        :aria-expanded="expanded"
-        :disabled="!step"
-        data-test="progress-capsule"
-        @click="expanded = !expanded"
-      >
-        <span class="month-progress__capsule-text">
-          <strong class="month-progress__capsule-main" data-test="progress-capsule-main">{{ capsuleMain }}</strong>
-          <span v-if="capsuleSub" class="month-progress__capsule-sub" data-test="progress-capsule-sub">{{ capsuleSub }}</span>
-        </span>
-        <svg class="month-progress__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-      </button>
+      <!-- 手機：一顆膠囊（目前這步＋下一步摘要）。本體＝這一步的主要動作（同頁首 primary）；
+           要看完整步驟由旁邊的「看進度」展開 -->
+      <div v-if="mobile && !loadError" class="month-progress__capsule" :class="{ 'is-idle': !capsuleAction }">
+        <button
+          type="button"
+          class="month-progress__capsule-body"
+          :disabled="!capsuleAction"
+          data-test="progress-capsule"
+          @click="capsuleAction && emit('primary', capsuleAction.action)"
+        >
+          <span class="month-progress__capsule-text">
+            <strong class="month-progress__capsule-main" data-test="progress-capsule-main">{{ capsuleMain }}</strong>
+            <span v-if="capsuleSub" class="month-progress__capsule-sub" data-test="progress-capsule-sub">{{ capsuleSub }}</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          class="month-progress__toggle"
+          :aria-expanded="expanded"
+          :aria-controls="stepsId"
+          :disabled="!step"
+          data-test="progress-toggle"
+          @click="expanded = !expanded"
+        >
+          看進度
+          <svg class="month-progress__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+      </div>
 
-      <ol v-if="showSteps" class="month-progress__steps" :aria-label="`${monthNumber} 月結算進度`">
+      <ol v-if="showSteps" :id="stepsId" class="month-progress__steps" :aria-label="`${monthNumber} 月結算進度`">
         <li v-if="canViewAttendance" class="month-progress__step" :class="{ 'is-current': step === 'import' }" :aria-current="step === 'import' ? 'step' : undefined">
           <!-- 匯入要 ATTENDANCE_WRITE（同頁首匯入鈕）；只有讀取權限時只顯示進度，不給可點的入口 -->
           <button v-if="canWriteAttendance" type="button" class="month-progress__action" data-test="progress-import" @click="emit('import')">
@@ -98,11 +110,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, useId, watch } from 'vue'
 import { getConfirmationRound, listConfirmationRounds, listUnroundedConfirmationItems } from '@/api/attendanceConfirmation'
 import type { MonthGridState } from '@/composables/useMonthGrid'
 import { backdatedPendingCount, pickDisplayRound, roundReplyProgress } from '@/utils/attendanceConfirm'
-import { buildMonthSummary, currentStep, primaryLabel, type MonthStep, type MonthSummary } from '@/utils/attendanceMonthSummary'
+import { buildMonthSummary, currentStep, primaryAction, primaryLabel, type MonthStep, type MonthSummary, type PrimaryAction } from '@/utils/attendanceMonthSummary'
 import { hasPermission } from '@/utils/auth'
 import { todayTaipeiISO } from '@/utils/format'
 import AttendancePatternList from './AttendancePatternList.vue'
@@ -129,6 +141,8 @@ const emit = defineEmits<{
   import: []
   /** 設定檢查清單：重算本月出勤 */
   recalculate: []
+  /** 手機膠囊本體：目前這步的主要動作（同頁首 primary，頁面用同一個處理函式） */
+  primary: [action: PrimaryAction]
 }>()
 
 const range = computed(() => props.month.range.value)
@@ -304,12 +318,20 @@ const payrollValue = computed(() => {
 /** 手機預設只顯示膠囊；展開才看完整步驟列（桌機一律顯示） */
 const expanded = ref(false)
 const showSteps = computed(() => (props.mobile ? expanded.value : true))
+const stepsId = useId()
+/** 膠囊本體的動作：規則與頁首 primary 相同（匯入要出勤寫入、交薪資要薪資讀取；等老師回覆、載入中沒有） */
+const capsuleAction = computed(() => {
+  const s = summary.value
+  return s ? primaryAction(s, step.value, { writeAttendance: canWriteAttendance, viewSalary: canViewSalary }) : null
+})
 const capsuleMain = computed(() => {
   const s = summary.value
   const current = step.value
   if (!s || !current) return loadError.value ? '—' : '載入本月進度…'
   // 等老師回覆沒有行政能按的動作，主文改寫在等什麼
-  return current === 'confirm' ? '等老師回覆換班' : (primaryLabel(s, current) ?? '')
+  if (current === 'confirm') return '等老師回覆換班'
+  // 沒有權限時字照寫（讓人知道下一步是什麼），只是不能點
+  return primaryLabel(s, current) ?? ''
 })
 /** 副文＝下一步摘要 */
 const capsuleSub = computed(() => {
@@ -374,20 +396,30 @@ const capsuleSub = computed(() => {
   color: var(--el-text-color-primary); font: inherit; font-weight: 600; cursor: pointer;
 }
 .month-progress__link { display: inline; padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.month-progress__go:focus-visible, .month-progress__link:focus-visible, .month-progress__capsule:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.month-progress__go:focus-visible, .month-progress__link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.month-progress__capsule-body:focus-visible, .month-progress__toggle:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
 
-/* 手機膠囊：整條可點、至少 60px 高 */
+/* 手機膠囊：本體（主要動作）撐滿、至少 60px 高；右側「看進度」是小鈕，不和本體搶點擊 */
 .month-progress__capsule {
-  display: flex; align-items: center; gap: var(--space-3); box-sizing: border-box; width: 100%; min-height: 60px;
-  padding: var(--space-2) var(--space-4); border: 1px solid var(--color-primary); border-radius: var(--radius-lg);
-  background: var(--color-primary-lighter); color: var(--el-text-color-primary); font: inherit; text-align: left; cursor: pointer;
+  display: flex; align-items: stretch; box-sizing: border-box; width: 100%; min-height: 60px;
+  border: 1px solid var(--color-primary); border-radius: var(--radius-lg); background: var(--color-primary-lighter); color: var(--el-text-color-primary);
 }
-.month-progress__capsule:disabled { border-color: var(--el-border-color); background: var(--el-fill-color-light); color: var(--el-text-color-regular); cursor: default; }
+.month-progress__capsule.is-idle { border-color: var(--el-border-color); background: var(--el-fill-color-light); color: var(--el-text-color-regular); }
+.month-progress__capsule-body {
+  display: flex; flex: 1; align-items: center; min-width: 0; padding: var(--space-2) var(--space-4);
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.month-progress__capsule-body:disabled { cursor: default; }
 .month-progress__capsule-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
 .month-progress__capsule-main { font-size: var(--text-lg); font-weight: 600; }
 .month-progress__capsule-sub { color: var(--el-text-color-regular); font-size: var(--text-sm); }
-.month-progress__chevron { flex: none; width: 18px; height: 18px; transition: transform var(--transition-fast); }
-.month-progress__capsule[aria-expanded='true'] .month-progress__chevron { transform: rotate(180deg); }
+.month-progress__toggle {
+  display: inline-flex; flex: none; align-items: center; gap: var(--space-1); min-height: var(--touch-target-min); align-self: center; margin-right: var(--space-2); padding: 0 var(--space-2);
+  border: 0; background: transparent; color: var(--el-text-color-regular); font: inherit; font-size: var(--text-sm); cursor: pointer;
+}
+.month-progress__toggle:disabled { cursor: default; }
+.month-progress__chevron { flex: none; width: 16px; height: 16px; transition: transform var(--transition-fast); }
+.month-progress__toggle[aria-expanded='true'] .month-progress__chevron { transform: rotate(180deg); }
 
 /* 觸控裝置才把可點區域撐到 44px：桌機也撐的話整列變高、1280 寬把格子推出首屏 */
 @media (pointer: coarse) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildMonthSummary, currentStep, primaryLabel, type MonthSummary } from '@/utils/attendanceMonthSummary'
+import { buildMonthSummary, currentStep, primaryAction, primaryLabel, type MonthSummary } from '@/utils/attendanceMonthSummary'
 import { detectAttendancePatterns, type AttendancePattern } from '@/utils/attendancePatterns'
 import { cell, day, employee, grid, WEEK } from '@/components/schedule-attendance/__tests__/gridFixtures'
 
@@ -203,5 +203,30 @@ describe('primaryLabel：目前步驟的主要動作文字', () => {
   it('confirm（等老師）與 done 沒有主要動作', () => {
     expect(primaryLabel(summaryOf(), 'confirm')).toBeNull()
     expect(primaryLabel(summaryOf(), 'done')).toBeNull()
+  })
+})
+
+describe('primaryAction：頁首主要按鈕與手機膠囊共用的動作（含權限）', () => {
+  const ALL = { writeAttendance: true, viewSalary: true }
+  const s = summaryOf({ patternPeople: 15, patternIssueCount: 266, dailyIssueCount: 169 })
+
+  it('各步驟：文字照 primaryLabel、動作對應步驟', () => {
+    expect(primaryAction(s, 'import', ALL)).toEqual({ label: '匯入打卡', action: 'import' })
+    expect(primaryAction(s, 'patterns', ALL)).toEqual({ label: '先修設定問題・15 人', action: 'patterns' })
+    expect(primaryAction(s, 'daily', ALL)).toEqual({ label: '處理待辦・剩 169 件', action: 'daily' })
+    expect(primaryAction(s, 'payroll', ALL)).toEqual({ label: '交薪資', action: 'payroll' })
+  })
+
+  it('confirm（等老師）、done（已封存）、還在載入（step 為 null）沒有主要動作', () => {
+    expect(primaryAction(s, 'confirm', ALL)).toBeNull()
+    expect(primaryAction(s, 'done', ALL)).toBeNull()
+    expect(primaryAction(s, null, ALL)).toBeNull()
+  })
+
+  it('匯入要 ATTENDANCE_WRITE、交薪資要 SALARY_READ；沒有權限就沒有按鈕（其餘步驟不受影響）', () => {
+    expect(primaryAction(s, 'import', { writeAttendance: false, viewSalary: true })).toBeNull()
+    expect(primaryAction(s, 'payroll', { writeAttendance: true, viewSalary: false })).toBeNull()
+    expect(primaryAction(s, 'patterns', { writeAttendance: false, viewSalary: false })?.action).toBe('patterns')
+    expect(primaryAction(s, 'daily', { writeAttendance: false, viewSalary: false })?.action).toBe('daily')
   })
 })

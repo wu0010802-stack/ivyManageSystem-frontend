@@ -13,10 +13,14 @@
           :month="query.month"
           :can-payroll-compare="canPayrollCompare"
           :can-print-appraisal="canPrintAppraisal"
+          :primary="primaryAction"
+          :seal-state="headerSealState"
+          :mobile="isMobile"
           @update:year="(v) => setMonth(v, query.month)"
           @update:month="(v) => setMonth(query.year, v)"
           @update:period="setMonth"
           @import="openImport"
+          @primary="onPrimary"
           @export="onExport"
           @payroll="payrollOpen = true"
           @appraisal="appraisalOpen = true"
@@ -25,7 +29,7 @@
       </template>
     </PageHeader>
 
-    <MonthProgressBar v-show="monthTabs" ref="progressBar" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" @recalculate="recalcOpen = true" />
+    <MonthProgressBar v-show="monthTabs" ref="progressBar" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" @primary="onPrimary" @recalculate="recalcOpen = true" />
 
     <div class="workspace-mode" role="tablist" aria-label="排班與出勤檢視">
       <button
@@ -193,7 +197,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, toRef, onBeforeUnmount, onMounted, computed, provide, ref, watch, defineAsyncComponent } from 'vue'
+import { reactive, toRef, nextTick, onBeforeUnmount, onMounted, computed, provide, ref, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -218,7 +222,7 @@ import DetailColumn from '@/components/attendance/DetailColumn.vue'
 import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue'
 import MonthProgressBar from '@/components/schedule-attendance/MonthProgressBar.vue'
 import ScheduleGridPanel from '@/components/schedule-attendance/ScheduleGridPanel.vue'
-import type { MonthStep, MonthSummary } from '@/utils/attendanceMonthSummary'
+import { primaryAction as resolvePrimaryAction, type MonthStep, type MonthSummary, type PrimaryAction } from '@/utils/attendanceMonthSummary'
 import type { GridFilter, GridView } from '@/utils/scheduleAttendanceGrid'
 import { hasPermission, hasFullSalaryView } from '@/utils/auth'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
@@ -248,6 +252,9 @@ const router = useRouter()
 // ── 權限（SPEC-027 §8）──────────────────────────────────────────────────────
 const canViewAttendance = hasPermission('ATTENDANCE_READ')
 const canSchedule = hasPermission('SCHEDULE')
+// 頁首主要動作的權限（同手機膠囊）：匯入要出勤寫入，交薪資要薪資讀取
+const canWriteAttendance = hasPermission('ATTENDANCE_WRITE')
+const canViewSalary = hasPermission('SALARY_READ')
 const canPayrollCompare = computed(() => hasPermission('ATTENDANCE_READ') && hasPermission('SALARY_READ') && hasFullSalaryView())
 // 月考核表帶薪資金額與扣款：與後端同一組守衛（ATTENDANCE_READ＋SALARY_READ＋全員薪資視野），缺一不給入口
 const canPrintAppraisal = computed(() => hasPermission('ATTENDANCE_READ') && hasPermission('SALARY_READ') && hasFullSalaryView())
@@ -657,15 +664,45 @@ async function onImported(): Promise<void> {
   ElMessage.success('匯入完成')
 }
 
-// 月報匯出前的提醒：用本月進度那份月摘要（同一個「待處理」定義）；別月或還沒載到就不擋
-const monthSummary = ref<(MonthSummary & { step: MonthStep }) | null>(null)
-/** 摘要要是這個月的才能用：換月後進度條重載前，舊月的摘要不能拿來擋這個月 */
-function summaryOfThisMonth(): (MonthSummary & { step: MonthStep }) | null {
+// 頁首主要動作、月份狀態與匯出月報前的提醒都用本月進度那份月摘要（同一個「待處理」定義）；別月或還沒載到就不用
+const monthSummary = ref<(MonthSummary & { step: MonthStep | null }) | null>(null)
+/** 摘要要是這個月的才能用：換月後進度條重載前，舊月的摘要不能拿來擋這個月、也不能掛在新月上 */
+function summaryOfThisMonth(): (MonthSummary & { step: MonthStep | null }) | null {
   const s = monthSummary.value
   return s && s.year === query.year && s.month === query.month ? s : null
 }
 /** 還沒處理的件數：逐日待辦加上設定問題的件數（封存的人不算） */
 const pendingCount = (s: MonthSummary): number => s.dailyIssueCount + s.patternIssueCount
+
+/** 頁首唯一的主要按鈕：文字與動作隨目前步驟變；沒有（等老師回覆、已封存、還在載入、沒有權限）就是 null */
+const primaryAction = computed(() => {
+  const s = summaryOfThisMonth()
+  return s ? resolvePrimaryAction(s, s.step, { writeAttendance: canWriteAttendance, viewSalary: canViewSalary }) : null
+})
+
+/** 頁首狀態膠囊：這個月的封存狀態；摘要還沒載入（或換月）時是 undefined，頁首不畫 */
+const headerSealState = computed(() => summaryOfThisMonth()?.sealState)
+
+/** 按了主要動作：頁首按鈕與手機膠囊走同一個處理函式 */
+async function onPrimary(action: PrimaryAction): Promise<void> {
+  switch (action) {
+    case 'import':
+      openImport()
+      return
+    case 'patterns':
+      progressBar.value?.openPatterns()
+      return
+    case 'daily':
+      // 切到班表核對再開第一件；看得到的列裡沒有（例如待辦在別週）就退回「只看待處理」，讓人看得到清單
+      if (activeTab.value !== 'grid') selectTab('grid')
+      await nextTick()
+      if (!gridPanel.value?.openFirstIssue()) showIssues()
+      return
+    case 'payroll':
+      void router.push('/salary/settle')
+      return
+  }
+}
 
 /** 出勤明細的清單只是班表核對待處理的一部分：把兩個數字的關係寫出來，不讓 284 與 435 各說各話 */
 const recordsScopeNote = computed(() => {
@@ -683,18 +720,28 @@ async function openGridCell(employeeId: number, date: string): Promise<void> {
   syncQuery({ tab: 'grid', date, emp: String(employeeId), view: undefined })
 }
 
+/** 匯出月報前的提醒文案（逐日待辦件、設定問題人、沒匯入的工作日）；沒有任何沒處理的事就回 null */
+function exportReminder(s: MonthSummary): string | null {
+  const todo = [
+    s.dailyIssueCount > 0 ? `${s.dailyIssueCount} 件逐日待辦` : '',
+    s.patternPeople > 0 ? `${s.patternPeople} 人設定問題` : '',
+  ].filter(Boolean)
+  const missingImportDays = s.importStatus.missingWorkdays.length
+  if (!todo.length && !missingImportDays) return null
+  const lead = todo.length
+    ? `${s.month} 月還有 ${todo.join('、')}沒處理${missingImportDays ? `，另有 ${missingImportDays} 個工作日還沒匯入打卡` : ''}`
+    : `${s.month} 月有 ${missingImportDays} 個工作日還沒匯入打卡`
+  return `${lead}。現在匯出的月報會照系統規則計算。`
+}
+
 async function onExport(): Promise<void> {
   const s = summaryOfThisMonth()
-  const pending = s ? pendingCount(s) : 0
-  const missingImportDays = s ? s.importStatus.missingWorkdays.length : 0
-  if (s && (pending > 0 || missingImportDays > 0)) {
-    const parts = [
-      pending > 0 ? `${pending} 格待處理` : '',
-      missingImportDays > 0 ? `${missingImportDays} 天打卡還沒匯入` : '',
-    ].filter(Boolean)
+  // 封存月不提醒：已經算進薪資，沒有「先去處理」可走
+  const reminder = s && s.sealState !== 'sealed' ? exportReminder(s) : null
+  if (reminder) {
     try {
       await ElMessageBox.confirm(
-        `${query.month} 月還有 ${parts.join('、')}。月報會照目前的資料產出，之後處理完要重新匯出。`,
+        reminder,
         `匯出 ${query.month} 月月報`,
         { type: 'warning', confirmButtonText: '仍要匯出', cancelButtonText: '先去處理', distinguishCancelAndClose: true },
       )
@@ -799,6 +846,15 @@ async function applyWorkingMonth(): Promise<void> {
 @media (--to-sm) {
   .attendance-workspace {
     padding: var(--space-3);
+  }
+  /* 手機頁首只留月份那一列：標題做成 sr-only（仍在 DOM，給輔助科技），不佔一整列 */
+  .attendance-workspace :deep(.page-header__left) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .workspace-mode { gap: var(--space-3); }
   /* 兩段標籤在窄機平均分配寬度 */

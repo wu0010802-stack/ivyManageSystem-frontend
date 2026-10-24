@@ -281,7 +281,7 @@ onBeforeRouteUpdate((to) => {
   return date ? confirmWeekChange(date, { routeGuard: true }) : true
 })
 
-defineExpose({ confirmWeekChange })
+defineExpose({ confirmWeekChange, openFirstIssue })
 
 // ── 表格捲動容器高度 ─────────────────────────────────────────────
 // 工具列在桌機固定於捲動區頂端；它會依寬度換成 1–3 行。表格高度＝捲動區可視高度－工具列實際高度，
@@ -488,6 +488,16 @@ function selectKey(key: string): void {
   const [employeeId, date] = key.split('|')
   if (isMonth.value) void openMonthCell(Number(employeeId), date)
   else openCell(Number(employeeId), date)
+}
+/**
+ * 頁首「處理待辦」：打開佇列順序的第一件待處理（同抽屜的上一筆／下一筆，看得到的列才算）；
+ * 看得到的列裡沒有待處理就回 false，頁面再退回「只看待處理」。
+ */
+function openFirstIssue(): boolean {
+  const key = issueKeys.value[0]
+  if (!key) return false
+  selectKey(key)
+  return true
 }
 function onNavigate(direction: 1 | -1): void {
   const n = navState.value

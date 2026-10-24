@@ -432,22 +432,79 @@ describe('MonthProgressBar 封存與部分封存', () => {
 
 describe('MonthProgressBar 手機膠囊', () => {
   const capsule = '[data-test="progress-capsule"]'
+  const toggle = '[data-test="progress-toggle"]'
 
-  it('只顯示一顆膠囊（主文＝目前步驟、副文＝下一步摘要），點了才展開完整步驟列', async () => {
+  it('只顯示一顆膠囊（主文＝目前步驟、副文＝下一步摘要），按「看進度」才展開完整步驟列', async () => {
     useGrid(fullPatternGrid)
     const wrapper = mountBar({ mobile: true })
     await flushPromises()
     expect(wrapper.find('ol').exists()).toBe(false)
-    const button = wrapper.get(capsule)
-    expect(button.get('[data-test="progress-capsule-main"]').text()).toBe('先修設定問題・1 人')
-    expect(button.get('[data-test="progress-capsule-sub"]').text()).toBe('修好可清掉 3 件，之後還有 1 件逐日待辦')
+    const body = wrapper.get(capsule)
+    expect(body.get('[data-test="progress-capsule-main"]').text()).toBe('先修設定問題・1 人')
+    expect(body.get('[data-test="progress-capsule-sub"]').text()).toBe('修好可清掉 3 件，之後還有 1 件逐日待辦')
+    // 展開狀態屬於「看進度」鈕，膠囊本體是主要動作、不帶 aria-expanded
+    expect(body.attributes('aria-expanded')).toBeUndefined()
+    const button = wrapper.get(toggle)
+    expect(button.text()).toBe('看進度')
     expect(button.attributes('aria-expanded')).toBe('false')
     await button.trigger('click')
     expect(button.attributes('aria-expanded')).toBe('true')
     expect(wrapper.find('ol').exists()).toBe(true)
+    // 按鈕控制的是步驟列
+    expect(button.attributes('aria-controls')).toBe(wrapper.get('ol').attributes('id'))
     await button.trigger('click')
     expect(button.attributes('aria-expanded')).toBe('false')
     expect(wrapper.find('ol').exists()).toBe(false)
+  })
+
+  it('膠囊本體點擊＝觸發目前步驟的主要動作（送 primary），不展開步驟列', async () => {
+    perms.set = new Set(['SCHEDULE', 'ATTENDANCE_READ', 'ATTENDANCE_WRITE', 'SALARY_READ'])
+    const action = async (build: (() => ReturnType<typeof grid>) | null) => {
+      if (build) useGrid(build)
+      const wrapper = mountBar({ mobile: true })
+      await flushPromises()
+      await wrapper.get(capsule).trigger('click')
+      expect(wrapper.find('ol').exists()).toBe(false)
+      return wrapper.emitted('primary')
+    }
+    expect(await action(null)).toEqual([['import']]) // 預設格子缺 2 個工作日
+    expect(await action(fullPatternGrid)).toEqual([['patterns']])
+    expect(await action(dailyGrid)).toEqual([['daily']])
+    useGrid(cleanGrid)
+    expect(await action(null)).toEqual([['payroll']])
+  })
+
+  it('沒有主要動作時膠囊本體不能點：等老師回覆（confirm）、載入中', async () => {
+    api.rounds.mockResolvedValue({ data: [ROUND] })
+    api.round.mockResolvedValue({ data: { round: ROUND, items: [], employees: [progressEmp(1, 2)] } })
+    useGrid(cleanGrid)
+    const confirm = mountBar({ mobile: true })
+    await flushPromises()
+    expect(confirm.get('[data-test="progress-capsule-main"]').text()).toBe('等老師回覆換班')
+    expect(confirm.get(capsule).attributes('disabled')).toBeDefined()
+    await confirm.get(capsule).trigger('click')
+    expect(confirm.emitted('primary')).toBeUndefined()
+    // 等老師回覆時仍可看進度
+    expect(confirm.get(toggle).attributes('disabled')).toBeUndefined()
+  })
+
+  it('權限同頁首：匯入要 ATTENDANCE_WRITE、交薪資要 SALARY_READ，沒有就不能點（字照寫）', async () => {
+    // 預設權限沒有 ATTENDANCE_WRITE：目前步驟是匯入
+    const noWrite = mountBar({ mobile: true })
+    await flushPromises()
+    expect(noWrite.get('[data-test="progress-capsule-main"]').text()).toBe('匯入打卡')
+    expect(noWrite.get(capsule).attributes('disabled')).toBeDefined()
+    await noWrite.get(capsule).trigger('click')
+    expect(noWrite.emitted('primary')).toBeUndefined()
+
+    perms.set = new Set(['SCHEDULE', 'ATTENDANCE_READ'])
+    useGrid(cleanGrid)
+    const noSalary = mountBar({ mobile: true })
+    await flushPromises()
+    expect(noSalary.get('[data-test="progress-capsule-main"]').text()).toBe('交薪資')
+    expect(noSalary.get(capsule).attributes('disabled')).toBeDefined()
+    await noSalary.get(capsule).trigger('click')
+    expect(noSalary.emitted('primary')).toBeUndefined()
   })
 
   it('主文隨步驟：匯入打卡／處理待辦・剩 N 件／等老師回覆換班／交薪資', async () => {
@@ -474,11 +531,12 @@ describe('MonthProgressBar 手機膠囊', () => {
     expect(main(payroll)).toBe('交薪資')
   })
 
-  it('膠囊至少 60px 高、全寬', () => {
+  it('膠囊至少 60px 高、全寬；「看進度」鈕到觸控目標高度', () => {
     const css = readFileSync(resolve(__dirname, '../MonthProgressBar.vue'), 'utf8')
     const rule = css.match(/\.month-progress__capsule \{([^}]*)\}/)![1]
     expect(rule).toMatch(/min-height:\s*60px/)
     expect(rule).toMatch(/width:\s*100%/)
+    expect(css.match(/\.month-progress__toggle \{([^}]*)\}/)![1]).toMatch(/min-height:\s*var\(--touch-target-min\)/)
   })
 
   it('partial：說明那一行跟著展開才出現；sealed：照樣顯示橫幅、沒有膠囊', async () => {
@@ -486,26 +544,29 @@ describe('MonthProgressBar 手機膠囊', () => {
     const partial = mountBar({ mobile: true })
     await flushPromises()
     expect(partial.find('[data-test="progress-partial"]').exists()).toBe(false)
-    await partial.get(capsule).trigger('click')
+    await partial.get(toggle).trigger('click')
     expect(partial.find('[data-test="progress-partial"]').exists()).toBe(true)
 
     useGrid(() => sealedGrid([1, 2]))
     const sealed = mountBar({ mobile: true })
     await flushPromises()
     expect(sealed.find(capsule).exists()).toBe(false)
+    expect(sealed.find(toggle).exists()).toBe(false)
     expect(sealed.get('[data-test="progress-sealed"]').text()).toContain('9 月薪資已封存')
   })
 
-  it('載入中膠囊停用；載入失敗只留錯誤與重試', async () => {
+  it('載入中膠囊與「看進度」都停用；載入失敗只留錯誤與重試', async () => {
     api.grid.mockImplementationOnce(() => new Promise(() => {}))
     const loading = mountBar({ mobile: true })
     await flushPromises()
     expect(loading.get(capsule).attributes('disabled')).toBeDefined()
+    expect(loading.get(toggle).attributes('disabled')).toBeDefined()
 
     api.grid.mockRejectedValueOnce({ displayMessage: '伺服器錯誤' })
     const failed = mountBar({ mobile: true })
     await flushPromises()
     expect(failed.find(capsule).exists()).toBe(false)
+    expect(failed.find(toggle).exists()).toBe(false)
     expect(failed.get('[data-test="progress-error"]').text()).toContain('伺服器錯誤')
   })
 })

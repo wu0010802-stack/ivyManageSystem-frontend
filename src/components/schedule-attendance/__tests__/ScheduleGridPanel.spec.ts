@@ -702,6 +702,35 @@ describe('ScheduleGridPanel 抽屜的待處理佇列', () => {
     expect(at(wrapper)).toBe(`1|${WEEK[2]}`)
   })
 
+  it('openFirstIssue（頁首「處理待辦」）：打開佇列順序的第一件並回 true，抽屜的上一筆／下一筆接著走', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.vm.openFirstIssue()).toBe(true)
+    await flushPromises()
+    expect(drawer(wrapper).props('modelValue')).toBe(true)
+    expect(at(wrapper)).toBe(`1|${WEEK[0]}`)
+    expect(drawer(wrapper).props('nav')).toEqual({ position: 1, total: 3, hasPrev: false, hasNext: true, back: null })
+  })
+
+  it('openFirstIssue：看得到的列裡沒有待處理就回 false，不開抽屜', async () => {
+    api.grid.mockImplementation(async () => ({ data: issueGrid(['1|0', '1|2', '2|1']) }))
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.vm.openFirstIssue()).toBe(false)
+    await flushPromises()
+    expect(drawer(wrapper).props('modelValue')).toBe(false)
+  })
+
+  it('openFirstIssue：搜尋後只找看得到的列（跟抽屜的佇列同一個順序）', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    wrapper.findComponent({ name: 'GridToolbar' }).vm.$emit('update:keyword', '王')
+    await flushPromises()
+    expect(wrapper.vm.openFirstIssue()).toBe(true)
+    await flushPromises()
+    expect(at(wrapper)).toBe(`2|${WEEK[1]}`)
+  })
+
   it('人員搜尋與篩選後只在看得到的列之間跳', async () => {
     const wrapper = mountPanel()
     await flushPromises()

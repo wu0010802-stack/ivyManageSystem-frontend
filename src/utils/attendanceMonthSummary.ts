@@ -114,3 +114,36 @@ export function primaryLabel(s: MonthSummary, step: MonthStep): string | null {
       return null
   }
 }
+
+/** 頁首主要按鈕與手機膠囊能觸發的動作 */
+export type PrimaryAction = 'import' | 'patterns' | 'daily' | 'payroll'
+export interface PrimaryActionSpec {
+  label: string
+  action: PrimaryAction
+}
+
+/**
+ * 目前步驟要按的那個動作（頁首主要按鈕與手機膠囊共用，兩處規則一致）。
+ * 沒有行政能按的（等老師回覆、已封存、還在載入）或沒有權限（匯入要出勤寫入、交薪資要薪資讀取）＝null。
+ */
+export function primaryAction(
+  s: MonthSummary,
+  step: MonthStep | null,
+  can: { writeAttendance: boolean; viewSalary: boolean },
+): PrimaryActionSpec | null {
+  if (!step) return null
+  const label = primaryLabel(s, step)
+  if (label === null) return null
+  switch (step) {
+    case 'import':
+      return can.writeAttendance ? { label, action: 'import' } : null
+    case 'patterns':
+      return { label, action: 'patterns' }
+    case 'daily':
+      return { label, action: 'daily' }
+    case 'payroll':
+      return can.viewSalary ? { label, action: 'payroll' } : null
+    default:
+      return null
+  }
+}

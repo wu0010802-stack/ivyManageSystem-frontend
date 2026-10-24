@@ -4,13 +4,16 @@ vi.mock('@/api/attendanceMonthContext', () => ({
   getAttendanceWorkingMonth: (...args: unknown[]) => workingMonth(...args),
 }))
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount, flushPromises } from '@vue/test-utils'
 import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
 import { downloadFile } from '@/utils/download'
 
 const routerReplace = vi.hoisted(() => vi.fn())
+const routerPush = vi.hoisted(() => vi.fn())
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: routerReplace }),
+  useRouter: () => ({ push: routerPush, replace: routerReplace }),
   useRoute: () => ({ query: {} }),
 }))
 
@@ -91,13 +94,15 @@ const ImportPreviewDialogStub = {
 
 const WorkspaceHeaderStub = {
   name: 'WorkspaceHeader',
-  props: ['year', 'month', 'canPayrollCompare', 'canPrintAppraisal'],
-  emits: ['update:year', 'update:month', 'update:period', 'import', 'export', 'payroll', 'appraisal', 'recalculate'],
+  props: ['year', 'month', 'canPayrollCompare', 'canPrintAppraisal', 'primary', 'sealState', 'mobile'],
+  emits: ['update:year', 'update:month', 'update:period', 'import', 'export', 'payroll', 'appraisal', 'recalculate', 'primary'],
   template: `<div class="workspace-header-stub"><slot /><slot name="month-tools" /></div>`,
 }
 
 /** 格子面板的「換週前確認未儲存變更」；預設放行 */
 const panelConfirmWeekChange = vi.fn(async (_date: string) => true)
+/** 格子面板的「打開第一件待處理」（頁首「處理待辦」用）；預設有件可開 */
+const panelOpenFirstIssue = vi.fn(() => true)
 const AttendanceMonthStatsStub = {
   name: 'AttendanceMonthStats',
   props: ['kpis', 'displayState'],
@@ -108,22 +113,26 @@ const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
   props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision', 'view', 'month', 'headerHasMonth'],
   emits: ['records', 'import', 'import-punches', 'changed', 'update:date', 'update:filter', 'update:view', 'show-patterns', 'recalculate', 'focus-handled'],
-  methods: { confirmWeekChange: (date: string) => panelConfirmWeekChange(date) },
+  methods: { confirmWeekChange: (date: string) => panelConfirmWeekChange(date), openFirstIssue: () => panelOpenFirstIssue() },
   template: '<div class="grid-panel-stub" />',
 }
 const rotationMounts = { count: 0 }
 const openPatternsSpy = vi.fn()
-const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary', 'records', 'import', 'recalculate'], methods: { openPatterns: () => openPatternsSpy() }, template: '<div class="month-progress-stub" />' }
-/** 進度條送出的月摘要（月摘要 util 的形狀）：只給本測試關心的月份、逐日待辦、設定問題件數與缺匯入天數 */
-const monthSummaryOf = (year: number, month: number, o: { daily?: number; patterns?: number; missingImport?: number } = {}) => ({
+const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary', 'records', 'import', 'recalculate', 'primary'], methods: { openPatterns: () => openPatternsSpy() }, template: '<div class="month-progress-stub" />' }
+/** 進度條送出的月摘要（月摘要 util 的形狀）：只給本測試關心的月份、步驟、封存狀態、逐日待辦、設定問題與缺匯入天數 */
+const monthSummaryOf = (
+  year: number,
+  month: number,
+  o: { daily?: number; patterns?: number; people?: number; missingImport?: number; step?: 'import' | 'patterns' | 'daily' | 'confirm' | 'payroll' | 'done'; sealState?: 'open' | 'partial' | 'sealed' } = {},
+) => ({
   year,
   month,
-  step: 'daily' as const,
-  sealState: 'open' as const,
+  step: o.step ?? ('daily' as const),
+  sealState: o.sealState ?? ('open' as const),
   sealedEmployeeIds: new Set<number>(),
   employedCount: 3,
   importStatus: { lastCovered: null, gaps: [], missingWorkdays: Array.from({ length: o.missingImport ?? 0 }, (_, i) => `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`) },
-  patternPeople: o.patterns ? 1 : 0,
+  patternPeople: o.people ?? (o.patterns ? 1 : 0),
   patternIssueCount: o.patterns ?? 0,
   dailyIssueCount: o.daily ?? 0,
   leftoverCount: 0,
@@ -839,7 +848,11 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     msgBoxConfirm.mockRejectedValueOnce('cancel')
     header.vm.$emit('export')
     await flushPromises()
-    expect(msgBoxConfirm).toHaveBeenCalledWith(expect.stringMatching(/3 格待處理.*2 天打卡還沒匯入/), '匯出 10 月月報', expect.objectContaining({ confirmButtonText: '仍要匯出', cancelButtonText: '先去處理' }))
+    expect(msgBoxConfirm).toHaveBeenCalledWith(
+      '10 月還有 2 件逐日待辦、1 人設定問題沒處理，另有 2 個工作日還沒匯入打卡。現在匯出的月報會照系統規則計算。',
+      '匯出 10 月月報',
+      expect.objectContaining({ confirmButtonText: '仍要匯出', cancelButtonText: '先去處理' }),
+    )
     expect(downloadFile).not.toHaveBeenCalled()
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('issues')
 
@@ -1357,5 +1370,229 @@ describe('第五輪審查修正（獨立審查 F1／F4／F5）', () => {
     resolve({ data: { year: 2026, month: 9, previous_unsettled: true } })
     await flushPromises()
     expect(routerReplace).not.toHaveBeenCalled()
+  })
+})
+
+describe('頁首主要動作與匯出提醒（第六輪）', () => {
+  afterEach(() => {
+    mockIsMobile.value = false
+    mockHasPermission.mockReturnValue(true)
+  })
+  beforeEach(() => {
+    routerReplace.mockReset()
+    routerPush.mockReset()
+    openPatternsSpy.mockReset()
+    panelOpenFirstIssue.mockReset().mockReturnValue(true)
+    msgBoxConfirm.mockReset()
+    vi.mocked(downloadFile).mockClear()
+    mockHasPermission.mockReturnValue(true)
+    getSummaryMock.mockReset().mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockReset().mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+  })
+
+  const mountSep = async (props: Record<string, unknown> = {}) => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'grid', date: '2026-09-16', ...props }, global: { stubs: STUBS } })
+    await flushPromises()
+    return wrapper
+  }
+  const bar = (w: Awaited<ReturnType<typeof mountSep>>) => w.findComponent(MonthProgressBarStub)
+  const header = (w: Awaited<ReturnType<typeof mountSep>>) => w.findComponent(WorkspaceHeaderStub)
+  const summarize = async (w: Awaited<ReturnType<typeof mountSep>>, o: Parameters<typeof monthSummaryOf>[2]) => {
+    bar(w).vm.$emit('summary', monthSummaryOf(2026, 9, o))
+    await flushPromises()
+  }
+
+  describe('primary 依月份狀態改變', () => {
+    it('各步驟的文字與動作；confirm（等老師回覆）與 done（已封存）沒有主要動作', async () => {
+      const wrapper = await mountSep()
+      expect(header(wrapper).props('primary')).toBeNull() // 摘要還沒送來
+      await summarize(wrapper, { step: 'import' })
+      expect(header(wrapper).props('primary')).toEqual({ label: '匯入打卡', action: 'import' })
+      await summarize(wrapper, { step: 'patterns', patterns: 266, people: 15, daily: 169 })
+      expect(header(wrapper).props('primary')).toEqual({ label: '先修設定問題・15 人', action: 'patterns' })
+      await summarize(wrapper, { step: 'daily', daily: 169 })
+      expect(header(wrapper).props('primary')).toEqual({ label: '處理待辦・剩 169 件', action: 'daily' })
+      await summarize(wrapper, { step: 'confirm' })
+      expect(header(wrapper).props('primary')).toBeNull()
+      await summarize(wrapper, { step: 'payroll' })
+      expect(header(wrapper).props('primary')).toEqual({ label: '交薪資', action: 'payroll' })
+      await summarize(wrapper, { step: 'done', sealState: 'sealed' })
+      expect(header(wrapper).props('primary')).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('月份狀態傳給頁首膠囊；還沒收到這個月的摘要（或換了月）就沒有主要動作也沒有狀態', async () => {
+      const wrapper = await mountSep()
+      expect(header(wrapper).props('sealState')).toBeUndefined()
+      await summarize(wrapper, { step: 'daily', daily: 3, sealState: 'partial' })
+      expect(header(wrapper).props('sealState')).toBe('partial')
+      await summarize(wrapper, { step: 'done', sealState: 'sealed' })
+      expect(header(wrapper).props('sealState')).toBe('sealed')
+      // 換月：舊月的摘要不能掛在新月上
+      await summarize(wrapper, { step: 'daily', daily: 3 })
+      header(wrapper).vm.$emit('update:period', 2026, 10)
+      await flushPromises()
+      expect(header(wrapper).props('primary')).toBeNull()
+      expect(header(wrapper).props('sealState')).toBeUndefined()
+      wrapper.unmount()
+    })
+
+    it('匯入要 ATTENDANCE_WRITE、交薪資要 SALARY_READ，沒有權限就不給主要動作', async () => {
+      mockHasPermission.mockImplementation((code: unknown) => code !== 'ATTENDANCE_WRITE')
+      const noWrite = await mountSep()
+      await summarize(noWrite, { step: 'import' })
+      expect(header(noWrite).props('primary')).toBeNull()
+      await summarize(noWrite, { step: 'payroll' })
+      expect(header(noWrite).props('primary')).toEqual({ label: '交薪資', action: 'payroll' })
+      noWrite.unmount()
+
+      mockHasPermission.mockImplementation((code: unknown) => code !== 'SALARY_READ')
+      const noSalary = await mountSep()
+      await summarize(noSalary, { step: 'payroll' })
+      expect(header(noSalary).props('primary')).toBeNull()
+      await summarize(noSalary, { step: 'import' })
+      expect(header(noSalary).props('primary')).toEqual({ label: '匯入打卡', action: 'import' })
+      noSalary.unmount()
+    })
+
+    it('手機也把 mobile 傳給頁首（手機頁首收成一列、不放 primary）', async () => {
+      const desktop = await mountSep()
+      expect(header(desktop).props('mobile')).toBe(false)
+      desktop.unmount()
+      mockIsMobile.value = true
+      const wrapper = await mountSep()
+      expect(header(wrapper).props('mobile')).toBe(true)
+      wrapper.unmount()
+    })
+  })
+
+  describe('按主要動作（頁首與手機膠囊同一個處理函式）', () => {
+    const sources: Array<[string, (w: Awaited<ReturnType<typeof mountSep>>, action: string) => void]> = [
+      ['頁首', (w, action) => header(w).vm.$emit('primary', action)],
+      ['手機膠囊', (w, action) => bar(w).vm.$emit('primary', action)],
+    ]
+
+    it.each(sources)('%s：匯入 → 開匯入打卡（整月、不帶人員）', async (_name, press) => {
+      const wrapper = await mountSep()
+      press(wrapper, 'import')
+      await flushPromises()
+      const dialog = wrapper.findComponent(ImportPreviewDialogStub)
+      expect(dialog.props('modelValue')).toBe(true)
+      expect(dialog.props('sourceContext')).toBeNull()
+      wrapper.unmount()
+    })
+
+    it.each(sources)('%s：設定問題 → 開本月設定檢查', async (_name, press) => {
+      const wrapper = await mountSep()
+      press(wrapper, 'patterns')
+      await flushPromises()
+      expect(openPatternsSpy).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it.each(sources)('%s：交薪資 → 前往薪資結算頁', async (_name, press) => {
+      const wrapper = await mountSep()
+      press(wrapper, 'payroll')
+      await flushPromises()
+      expect(routerPush).toHaveBeenCalledWith('/salary/settle')
+      wrapper.unmount()
+    })
+
+    it.each(sources)('%s：處理待辦 → 切到班表核對並請格子面板打開第一件', async (_name, press) => {
+      const wrapper = await mountSep()
+      // 先停在出勤明細：按了要回到班表核對
+      await wrapper.find('[data-test="tab-records"]').trigger('click')
+      expect(wrapper.find('[data-test="tab-grid"]').attributes('aria-selected')).toBe('false')
+      press(wrapper, 'daily')
+      await flushPromises()
+      expect(wrapper.find('[data-test="tab-grid"]').attributes('aria-selected')).toBe('true')
+      expect(panelOpenFirstIssue).toHaveBeenCalledTimes(1)
+      // 有開到第一件：不動篩選
+      expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('all')
+      wrapper.unmount()
+    })
+
+    it('處理待辦：目前畫面上沒有可開的待辦（回 false）就退回「只看待處理」，讓人看得到清單', async () => {
+      panelOpenFirstIssue.mockReturnValue(false)
+      const wrapper = await mountSep()
+      header(wrapper).vm.$emit('primary', 'daily')
+      await flushPromises()
+      expect(panelOpenFirstIssue).toHaveBeenCalledTimes(1)
+      expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('issues')
+      wrapper.unmount()
+    })
+  })
+
+  describe('匯出月報前的提醒', () => {
+    const message = (n: number) => msgBoxConfirm.mock.calls[n][0] as string
+
+    it('逐日待辦、設定問題人數、缺匯入天數照口徑寫出來，結尾說明月報照系統規則計算', async () => {
+      const wrapper = await mountSep()
+      msgBoxConfirm.mockResolvedValue('confirm')
+      await summarize(wrapper, { daily: 169, patterns: 266, people: 15 })
+      header(wrapper).vm.$emit('export')
+      await flushPromises()
+      expect(message(0)).toBe('9 月還有 169 件逐日待辦、15 人設定問題沒處理。現在匯出的月報會照系統規則計算。')
+      expect(msgBoxConfirm).toHaveBeenLastCalledWith(expect.any(String), '匯出 9 月月報', expect.objectContaining({ confirmButtonText: '仍要匯出', cancelButtonText: '先去處理' }))
+
+      await summarize(wrapper, { daily: 169, patterns: 266, people: 15, missingImport: 3 })
+      header(wrapper).vm.$emit('export')
+      await flushPromises()
+      expect(message(1)).toBe('9 月還有 169 件逐日待辦、15 人設定問題沒處理，另有 3 個工作日還沒匯入打卡。現在匯出的月報會照系統規則計算。')
+      wrapper.unmount()
+    })
+
+    it('只有其中一項時只寫那一項，不寫「0 件」或「0 人」', async () => {
+      const wrapper = await mountSep()
+      msgBoxConfirm.mockResolvedValue('confirm')
+      await summarize(wrapper, { daily: 4 })
+      header(wrapper).vm.$emit('export')
+      await flushPromises()
+      expect(message(0)).toBe('9 月還有 4 件逐日待辦沒處理。現在匯出的月報會照系統規則計算。')
+      await summarize(wrapper, { patterns: 20, people: 2 })
+      header(wrapper).vm.$emit('export')
+      await flushPromises()
+      expect(message(1)).toBe('9 月還有 2 人設定問題沒處理。現在匯出的月報會照系統規則計算。')
+      await summarize(wrapper, { missingImport: 2 })
+      header(wrapper).vm.$emit('export')
+      await flushPromises()
+      expect(message(2)).toBe('9 月有 2 個工作日還沒匯入打卡。現在匯出的月報會照系統規則計算。')
+      for (const text of [message(0), message(1), message(2)]) expect(text).not.toMatch(/0 [件人天]|格待處理/)
+      wrapper.unmount()
+    })
+
+    it('封存月不提醒，直接匯出（沒有「先去處理」可走）', async () => {
+      const wrapper = await mountSep()
+      await summarize(wrapper, { step: 'done', sealState: 'sealed', daily: 0 })
+      header(wrapper).vm.$emit('export')
+      await flushPromises()
+      expect(msgBoxConfirm).not.toHaveBeenCalled()
+      expect(downloadFile).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it('都處理完就不提醒；摘要還沒送來也不擋', async () => {
+      const wrapper = await mountSep()
+      header(wrapper).vm.$emit('export')
+      await flushPromises()
+      await summarize(wrapper, { step: 'payroll' })
+      header(wrapper).vm.$emit('export')
+      await flushPromises()
+      expect(msgBoxConfirm).not.toHaveBeenCalled()
+      expect(downloadFile).toHaveBeenCalledTimes(2)
+      wrapper.unmount()
+    })
+  })
+
+  it('手機版頁面標題做成 sr-only（保留標題給輔助科技），頁首只剩一列', () => {
+    const css = readFileSync(resolve(__dirname, '../ScheduleAttendanceView.vue'), 'utf8')
+    const mobile = css.match(/@media \(--to-sm\) \{([\s\S]*)\}\s*<\/style>/)![1]
+    const rule = mobile.match(/:deep\(\.page-header__left\) \{([^}]*)\}/)![1]
+    expect(rule).toMatch(/position:\s*absolute/)
+    expect(rule).toMatch(/width:\s*1px/)
+    expect(rule).toMatch(/clip-path:\s*inset\(50%\)/)
+    // 標題仍在 DOM（不是 display:none）
+    expect(rule).not.toMatch(/display:\s*none/)
   })
 })
