@@ -76,6 +76,58 @@ export function parseNumericConst(source, symbol) {
   return Number(m[1].replace(/_/g, ""));
 }
 
+/** 以頂層逗號切欄（略過巢狀括號內的逗號，如 `date(2026, 1, 1)`）。 */
+function splitTopLevel(text) {
+  const cells = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of text) {
+    if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    if (ch === "," && depth === 0) {
+      cells.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells;
+}
+
+/**
+ * 解析 python `NAME = TABLE[-1][i]`：取 `TABLE … = (` 這張 tuple 表最後一列的第 i 欄。
+ * 後端基本工資 2026-10-22 起改年度表（services/salary/minimum_wage.py），常數取表尾一列。
+ * 只支援 [-1]；表不存在、欄位不是數字一律回 null（呼叫端視為失敗）。
+ */
+export function parseTableLastRowRef(source, symbol) {
+  const ref = source.match(new RegExp(`^${symbol}\\s*=\\s*(\\w+)\\[-1\\]\\[(\\d+)\\]`, "m"));
+  if (!ref) return null;
+  const [, table, col] = ref;
+  const start = source.match(new RegExp(`^${table}\\b[^=\\n]*=\\s*\\(`, "m"));
+  if (!start) return null;
+
+  // 逐字追括號深度，收集表內每一列（深度 2 的 `( … )`）
+  const rows = [];
+  let depth = 1;
+  let rowStart = -1;
+  for (let i = start.index + start[0].length; i < source.length && depth > 0; i++) {
+    const ch = source[i];
+    if (ch === "(") {
+      depth++;
+      if (depth === 2) rowStart = i + 1;
+    } else if (ch === ")") {
+      if (depth === 2 && rowStart >= 0) rows.push(source.slice(rowStart, i));
+      depth--;
+    }
+  }
+  if (!rows.length) return null;
+
+  const cell = splitTopLevel(rows[rows.length - 1])[Number(col)]?.trim();
+  if (!cell || !/^[0-9_]+(?:\.[0-9]+)?$/.test(cell)) return null;
+  return Number(cell.replace(/_/g, ""));
+}
+
 /** 純比對：回傳漂移的 rows（值不等、或任一側解析失敗）。 */
 export function diffConstants(rows) {
   return rows.filter(
@@ -86,7 +138,8 @@ export function diffConstants(rows) {
 function readConstValue(rootDir, fileRel, symbol) {
   const path = resolve(rootDir, fileRel);
   if (!existsSync(path)) return null;
-  return parseNumericConst(readFileSync(path, "utf8"), symbol);
+  const source = readFileSync(path, "utf8");
+  return parseNumericConst(source, symbol) ?? parseTableLastRowRef(source, symbol);
 }
 
 export function main() {
