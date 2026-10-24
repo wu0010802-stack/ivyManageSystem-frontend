@@ -16,6 +16,9 @@ function cellsFor(overrides: Record<string, Parameters<typeof cell>[2]> = {}): G
 }
 
 function mountGrid(opts: {
+  /** 核對（預設）／排班 */
+  mode?: 'reconcile' | 'plan'
+  changedIds?: ReadonlySet<number>
   cells?: GridCell[]
   filter?: GridFilter
   keyword?: string
@@ -43,6 +46,8 @@ function mountGrid(opts: {
   })
   return mount(ShiftGrid, {
     props: {
+      mode: opts.mode ?? 'reconcile',
+      changedIds: opts.changedIds,
       groups: g.groups,
       employees: g.employees,
       days: visibleDays(g.days, g.cells, opts.showAllDays),
@@ -231,19 +236,20 @@ describe('ShiftGrid 桌機', () => {
     expect(wrapper.find(`[data-test="cell-3-${WEEK[0]}"]`).attributes('disabled')).toBeDefined()
   })
 
-  it('本週班別下拉只在可改計畫時出現，改值送出 weekly-change', async () => {
-    const wrapper = mountGrid()
+  it('排班：本週班別下拉只在可改計畫時出現，改值送出 weekly-change', async () => {
+    const wrapper = mountGrid({ mode: 'plan' })
     const select = wrapper.findComponent({ name: 'ElSelect' })
     expect(wrapper.find('[data-test="weekly-1"]').exists()).toBe(true)
     select.vm.$emit('update:modelValue', 2)
     expect(wrapper.emitted('weekly-change')).toEqual([[1, 2]])
     select.vm.$emit('update:modelValue', undefined)
     expect(wrapper.emitted('weekly-change')?.[1]).toEqual([1, null])
-    expect(mountGrid({ canEditPlan: false }).find('[data-test="weekly-1"]').exists()).toBe(false)
+    expect(mountGrid({ mode: 'plan', canEditPlan: false }).find('[data-test="weekly-1"]').exists()).toBe(false)
   })
 
-  it('欄頭顯示空班警示', () => {
+  it('排班：欄頭顯示空班警示', () => {
     const wrapper = mountGrid({
+      mode: 'plan',
       coverage: [{
         date: WEEK[2],
         leaves: [],
@@ -259,6 +265,7 @@ describe('ShiftGrid 標記', () => {
     const g = grid()
     const wrapper = mount(ShiftGrid, {
       props: {
+        mode: 'reconcile',
         groups: g.groups,
         employees: g.employees,
         days: [day(WEEK[0], { import_covered: false }), day(WEEK[1]), day(WEEK[4], { import_covered: false })],
@@ -346,6 +353,7 @@ describe('ShiftGrid 手機預設日與當日標記', () => {
     const g = grid({ cells: cellsFor() })
     const wrapper = mount(ShiftGrid, {
       props: {
+        mode: 'reconcile',
         groups: g.groups,
         employees: g.employees,
         days: visibleDays(g.days, g.cells),
@@ -373,7 +381,7 @@ describe('ShiftGrid 手機預設日與當日標記', () => {
     expect(wrapper.find(`[data-test="mobile-day-${nextWeek[0]}"]`).attributes('aria-selected')).toBe('true')
   })
 
-  it('手機：卡片顯示請假標籤，選定日標出假日、未匯入與空班', async () => {
+  it('手機（排班）：卡片顯示請假標籤，選定日標出假日、未匯入與空班', async () => {
     const coverage = [{
       date: WEEK[3],
       leaves: [],
@@ -384,6 +392,7 @@ describe('ShiftGrid 手機預設日與當日標記', () => {
     const days = g.days.map((d) => (d.date === WEEK[3] ? day(WEEK[3], { is_holiday: true, holiday_name: '補假示例', import_covered: false }) : d))
     const w2 = mount(ShiftGrid, {
       props: {
+        mode: 'plan',
         groups: g.groups,
         employees: g.employees,
         days,
@@ -445,6 +454,7 @@ describe('ShiftGrid 全天假與無障礙標籤', () => {
     const g = grid({ employees: [employee(1, '林班導'), employee(2, '王副導', { role_label: '副班導' })], cells })
     const wrapper = mount(ShiftGrid, {
       props: {
+        mode: 'plan',
         groups: g.groups,
         employees: g.employees,
         days: visibleDays(g.days, g.cells),
@@ -580,5 +590,68 @@ describe('ShiftGrid 第五輪審查', () => {
     const weekend = px(/\.shift-grid__day--off \{ min-width: (\d+)px/)
     // 一個週末欄被內容撐到 106px 時仍要放得下
     expect(person + weekday * 5 + weekend + 106).toBeLessThanOrEqual(924)
+  })
+})
+
+describe('ShiftGrid 核對／排班兩種模式', () => {
+  const GAP = [{
+    date: WEEK[2],
+    leaves: [] as never[],
+    gaps: [{ shiftTypeId: 1, shiftTypeName: '早車', workStart: '07:00', workEnd: '16:30', scheduledCount: 1, absentNames: ['林班導'], severity: 'empty' }],
+  }]
+  const ANOMALY = { status: 'anomaly' as const, punch_in: `${WEEK[0]}T08:30:00`, punch_out: `${WEEK[0]}T18:00:00` }
+  const PENDING_CONFIRM = { item_id: 9, round_id: 2, kind: 'swap' as const, status: 'pending' as const, partner_employee_id: 2 }
+
+  it('核對：可改計畫也不畫本週班別下拉、未儲存標籤與欄頭空班警示（桌機與手機）', () => {
+    const desk = mountGrid({ mode: 'reconcile', canEditPlan: true, changedIds: new Set([1]), coverage: GAP })
+    expect(desk.findComponent({ name: 'ElSelect' }).exists()).toBe(false)
+    expect(desk.find('[data-test="weekly-1"]').exists()).toBe(false)
+    expect(desk.find('[data-test="unsaved-1"]').exists()).toBe(false)
+    expect(desk.find(`[data-test="gap-${WEEK[2]}"]`).exists()).toBe(false)
+    const phone = mountGrid({ mode: 'reconcile', mobile: true, canEditPlan: true, changedIds: new Set([1]), coverage: GAP })
+    expect(phone.find('[data-test="weekly-1"]').exists()).toBe(false)
+    expect(phone.find('[data-test="unsaved-1"]').exists()).toBe(false)
+    expect(phone.find('[data-test="mobile-day-marks"]').text()).not.toContain('無人上班')
+  })
+
+  it('排班：有下拉、未儲存標籤與空班警示', () => {
+    const wrapper = mountGrid({ mode: 'plan', changedIds: new Set([1]), coverage: GAP })
+    expect(wrapper.find('[data-test="weekly-1"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="unsaved-1"]').exists()).toBe(true)
+    expect(wrapper.find(`[data-test="gap-${WEEK[2]}"]`).text()).toBe('早車無人上班')
+  })
+
+  it('排班：格子只有計畫行與假別，不畫打卡、判定、老師確認與狀態形狀', () => {
+    const cells = cellsFor({
+      [`1|${WEEK[0]}`]: { actual: ANOMALY, leaves: [LEAVE_PARTIAL], confirmation: PENDING_CONFIRM },
+      [`1|${WEEK[1]}`]: { actual: {}, leaves: [{ leave_id: 7, leave_type_label: '病假', status: 'approved', is_full_day: true, start_time: '07:00', end_time: '16:30' }] },
+    })
+    const plan = mountGrid({ mode: 'plan', cells, personNotes: { 1: { tag: '本月沒有打卡', detail: '本月都沒有打卡' } } })
+    const busy = plan.get(`[data-test="cell-1-${WEEK[0]}"]`)
+    expect(busy.text()).toContain('週 早車 07:00–16:30')
+    expect(busy.text()).toContain('事假')
+    for (const text of ['08:30–18:00', '出勤異常', '老師確認']) expect(busy.text()).not.toContain(text)
+    expect(busy.find('.shift-grid__verdict').exists()).toBe(false)
+    expect(busy.find('.verdict-shape').exists()).toBe(false)
+    expect(busy.classes().filter((c) => c.startsWith('shift-grid__cell--k-'))).toEqual([])
+    expect(busy.attributes('aria-label')).not.toContain('出勤異常')
+    // 全天假：判定行不見了，假別仍要看得到
+    expect(plan.get(`[data-test="cell-1-${WEEK[1]}"]`).text()).toContain('病假')
+    // 本月型態是核對的事，排班不放
+    expect(plan.find('[data-test="person-note-1"]').exists()).toBe(false)
+    // 同一格在核對照舊有打卡與判定
+    const reconcile = mountGrid({ mode: 'reconcile', cells }).get(`[data-test="cell-1-${WEEK[0]}"]`)
+    expect(reconcile.text()).toContain('08:30–18:00')
+    expect(reconcile.text()).toContain('出勤異常')
+  })
+
+  it('排班手機卡片：只有計畫與假別', async () => {
+    const cells = cellsFor({ [`2|${WEEK[0]}`]: { actual: ANOMALY, leaves: [LEAVE_PARTIAL] } })
+    const wrapper = mountGrid({ mode: 'plan', mobile: true, cells })
+    await wrapper.find(`[data-test="mobile-day-${WEEK[0]}"]`).trigger('click')
+    const card = wrapper.get('[data-test="card-2"]')
+    expect(card.text()).toContain('事假')
+    expect(card.text()).not.toContain('08:30–18:00')
+    expect(card.text()).not.toContain('出勤異常')
   })
 })

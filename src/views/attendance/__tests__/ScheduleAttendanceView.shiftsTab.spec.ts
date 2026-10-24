@@ -1,9 +1,9 @@
 /**
- * 排班與出勤「班別設定」頁籤（2026-10 自「設定 › 輪班別管理」搬入）。
+ * 排班與出勤「排班 › 班別設定」子頁籤（2026-10 自「設定 › 輪班別管理」搬入；2026-10-24 頁籤收成核對／排班兩個後成為排班的子頁籤）。
  *
  * 鎖定：
- * - 只有 SCHEDULE 看得到頁籤；沒有 SCHEDULE 的 ?tab=shifts 退回班表核對、不掛面板
- * - 班別異動後班表核對與本月進度重算：格子面板 v-show 常駐，不 bump revision 就會停在舊班別選單
+ * - 只有 SCHEDULE 看得到排班頁籤；沒有 SCHEDULE 的 ?tab=shifts 退回核對、不掛面板
+ * - 班別異動後核對格子與本月進度重算：格子面板 v-show 常駐，不 bump revision 就會停在舊班別選單
  *
  * 獨立成檔：ScheduleAttendanceView.spec.ts 正由頁面 UI/UX 改版同步修改，分檔避免合併衝突。
  */
@@ -51,12 +51,22 @@ const monthApi = vi.hoisted(() => ({ grid: vi.fn(async () => ({ data: null })) }
 vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: monthApi.grid }))
 
 import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
+import { attendanceRouteProps } from '@/router/attendanceRouteProps'
 
 const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
-  props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
+  props: ['mode', 'date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
   template: '<div class="grid-panel-stub" />',
 }
+/** 排班子頁籤是 el-radio-group（按鈕樣式）：按鈕點了請群組送出 update:modelValue */
+const RadioGroupStub = {
+  name: 'ElRadioGroup',
+  props: ['modelValue'],
+  emits: ['update:modelValue'],
+  provide() { return { pickRadio: (v: string) => (this as unknown as { $emit: (e: string, v: string) => void }).$emit('update:modelValue', v) } },
+  template: '<div role="radiogroup" :data-value="modelValue"><slot /></div>',
+}
+const RadioButtonStub = { props: ['value'], inject: ['pickRadio'], template: '<button type="button" @click="pickRadio(value)"><slot /></button>' }
 const MonthProgressBarStub = {
   name: 'MonthProgressBar',
   props: ['month', 'mobile'],
@@ -84,54 +94,60 @@ const STUBS = {
   'el-tabs': { template: '<div><slot /></div>' },
   'el-tab-pane': { template: '<div><slot /></div>' },
   'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+  'el-radio-group': RadioGroupStub,
+  'el-radio-button': RadioButtonStub,
 }
 
 const mountView = (props: Record<string, unknown> = {}) =>
   mount(ScheduleAttendanceView, { props: { date: '2026-09-14', ...props }, global: { stubs: STUBS } })
 
-describe('排班與出勤：班別設定頁籤', () => {
+describe('排班與出勤：排班 › 班別設定', () => {
   beforeEach(() => {
     routerReplace.mockReset()
     granted.codes = new Set(['ATTENDANCE_READ', 'SCHEDULE'])
   })
 
-  it('有 SCHEDULE：頁籤列最後一個是「班別設定」，點了切過去並寫回 ?tab=shifts', async () => {
+  it('有 SCHEDULE：排班頁籤的子頁籤最後一個是「班別設定」，點了切過去並寫回 ?tab=schedule&sub=shifts', async () => {
     const wrapper = mountView()
     await flushPromises()
-    const tabs = wrapper.findAll('[role="tab"]')
-    expect(tabs.at(-1)!.text()).toBe('班別設定')
+    expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual(['核對', '排班'])
+    await wrapper.find('[data-test="tab-schedule"]').trigger('click')
+    await flushPromises()
+    const subs = wrapper.get('[data-test="schedule-sub"]').findAll('button')
+    expect(subs.at(-1)!.text()).toBe('班別設定')
     expect(wrapper.findComponent(ShiftTypesPanelStub).exists()).toBe(false)
 
-    await wrapper.find('[data-test="tab-shifts"]').trigger('click')
+    await wrapper.find('[data-test="schedule-sub-shifts"]').trigger('click')
     await flushPromises()
-    expect(wrapper.find('[data-test="tab-shifts"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-test="schedule-sub"]').attributes('data-value')).toBe('shifts')
     expect(wrapper.findComponent(ShiftTypesPanelStub).exists()).toBe(true)
-    expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'shifts' } })
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'schedule', sub: 'shifts' } })
     wrapper.unmount()
   })
 
-  it('?tab=shifts 深連結直接開班別設定', async () => {
-    const wrapper = mountView({ tab: 'shifts' })
+  it('?tab=shifts 深連結（含 /settings?tab=shifts 轉來的）直接開排班 › 班別設定', async () => {
+    const wrapper = mountView(attendanceRouteProps({ tab: 'shifts' }))
     await flushPromises()
-    expect(wrapper.find('[data-test="tab-shifts"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('[data-test="tab-schedule"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-test="schedule-sub"]').attributes('data-value')).toBe('shifts')
     expect(wrapper.findComponent(ShiftTypesPanelStub).exists()).toBe(true)
     wrapper.unmount()
   })
 
-  it('沒有 SCHEDULE：看不到頁籤，?tab=shifts 退回班表核對且不掛面板', async () => {
+  it('沒有 SCHEDULE：看不到排班頁籤，?tab=shifts 退回核對且不掛面板', async () => {
     granted.codes = new Set(['ATTENDANCE_READ'])
-    const wrapper = mountView({ tab: 'shifts' })
+    const wrapper = mountView(attendanceRouteProps({ tab: 'shifts' }))
     await flushPromises()
-    expect(wrapper.find('[data-test="tab-shifts"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="tab-schedule"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="tab-grid"]').attributes('aria-selected')).toBe('true')
     expect(wrapper.findComponent(ShiftTypesPanelStub).exists()).toBe(false)
     wrapper.unmount()
   })
 
-  it('班別異動後，常駐的班表核對與本月進度都重算（否則格子的班別選單停在舊資料）', async () => {
+  it('班別異動後，常駐的核對格子與本月進度都重算（否則格子的班別選單停在舊資料）', async () => {
     const wrapper = mountView({ tab: 'grid' })
     await flushPromises()
-    await wrapper.setProps({ tab: 'shifts' })
+    await wrapper.setProps(attendanceRouteProps({ tab: 'shifts' }))
     await flushPromises()
     expect(wrapper.findComponent(ScheduleGridPanelStub).props('revision')).toBe(0)
 

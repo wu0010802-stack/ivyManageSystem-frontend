@@ -61,7 +61,7 @@ const BatchStub = { name: 'BatchConfirmDialog', props: ['modelValue', 'units'], 
 
 function mountPanel(props: Record<string, unknown> = {}) {
   return mount(ScheduleGridPanel, {
-    props: { date: '2026-09-16', filter: 'all', ...props },
+    props: { mode: 'reconcile', date: '2026-09-16', filter: 'all', ...props },
     global: {
       plugins: [ElementPlus],
       stubs: {
@@ -97,7 +97,7 @@ beforeEach(() => {
 })
 
 describe('ScheduleGridPanel', () => {
-  it('月模式：工具列換月送出 update:date（頁面據此先問未儲存的週排班）；週／月切換送出 update:view', async () => {
+  it('核對月模式：工具列換月送出 update:date（頁面據此先問未儲存的週排班）', async () => {
     api.grid.mockResolvedValue({ data: grid() })
     api.getAssignments.mockResolvedValue({ data: [] })
     const month = effectScope().run(() => useMonthGrid(ref('2026-09-16'), ref(0)))!
@@ -106,24 +106,72 @@ describe('ScheduleGridPanel', () => {
     const toolbar = wrapper.findComponent({ name: 'GridToolbar' })
     expect(toolbar.props('view')).toBe('month')
     toolbar.vm.$emit('update:date', '2026-10-01')
-    toolbar.vm.$emit('update:view', 'week')
     expect(wrapper.emitted('update:date')).toEqual([['2026-10-01']])
-    expect(wrapper.emitted('update:view')).toEqual([['week']])
   })
 
-  it('只有桌機且頁面給了整月資料才能切月；手機與沒給 month 都不出現週／月切換', async () => {
+  it('排班只有週檢視：頁面給了 view=month 與整月資料也畫週格子', async () => {
     api.grid.mockResolvedValue({ data: grid() })
     api.getAssignments.mockResolvedValue({ data: [] })
     const month = effectScope().run(() => useMonthGrid(ref('2026-09-16'), ref(0)))!
-    const canMonth = async (props: Record<string, unknown>) => {
-      const wrapper = mountPanel(props)
+    const wrapper = mountPanel({ mode: 'plan', view: 'month', month })
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'MonthGrid' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'ShiftGrid' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'GridToolbar' }).props('view')).toBe('week')
+  })
+
+  it('mode 往下傳給工具列與格子', async () => {
+    for (const mode of ['reconcile', 'plan'] as const) {
+      const wrapper = mountPanel({ mode })
       await flushPromises()
-      return wrapper.findComponent({ name: 'GridToolbar' }).props('canMonth')
+      expect(wrapper.findComponent({ name: 'GridToolbar' }).props('mode')).toBe(mode)
+      expect(wrapper.findComponent({ name: 'ShiftGrid' }).props('mode')).toBe(mode)
     }
-    expect(await canMonth({ month })).toBe(true)
-    expect(await canMonth({})).toBe(false)
-    device.mobile = true
-    expect(await canMonth({ month })).toBe(false)
+  })
+
+  it('核對：沒有本週班別下拉、空班警示、排班工具；工具列下方有狀態圖例', async () => {
+    const wrapper = mountPanel({ mode: 'reconcile' })
+    await flushPromises()
+    expect(wrapper.find('[data-test^="weekly-"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="toolbar-schedule"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test^="gap-"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-test="verdict-legend"]')).toHaveLength(1)
+    // 判定照舊
+    expect(wrapper.get(`[data-test="cell-2-${WEEK[0]}"]`).text()).toContain('出勤異常')
+  })
+
+  it('核對月模式：圖例只出現一次（月格子自己有含請假的圖例）', async () => {
+    api.grid.mockResolvedValue({ data: grid() })
+    api.getAssignments.mockResolvedValue({ data: [] })
+    const month = effectScope().run(() => useMonthGrid(ref('2026-09-16'), ref(0)))!
+    const wrapper = mountPanel({ view: 'month', month })
+    await flushPromises()
+    expect(wrapper.findAll('[data-test="verdict-legend"]')).toHaveLength(1)
+    expect(wrapper.find('[data-test="verdict-legend-leave"]').exists()).toBe(true)
+  })
+
+  it('排班：格子沒有判定字，有本週班別下拉與排班工具，沒有圖例', async () => {
+    const wrapper = mountPanel({ mode: 'plan' })
+    await flushPromises()
+    expect(wrapper.find('[data-test="weekly-1"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="toolbar-schedule"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="verdict-legend"]').exists()).toBe(false)
+    expect(wrapper.get(`[data-test="cell-2-${WEEK[0]}"]`).text()).not.toContain('出勤異常')
+    expect(wrapper.text()).not.toContain('只看待處理')
+  })
+
+  it('排班：抽屜不給待處理佇列導覽，處理完也不自動跳格', async () => {
+    const wrapper = mountPanel({ mode: 'plan' })
+    await flushPromises()
+    await wrapper.find(`[data-test="cell-2-${WEEK[0]}"]`).trigger('click')
+    await flushPromises()
+    const drawer = wrapper.findComponent(DrawerStub)
+    expect(drawer.props('modelValue')).toBe(true)
+    expect(drawer.props('nav')).toBeNull()
+    drawer.vm.$emit('changed')
+    await flushPromises()
+    expect(drawer.props('cell')).toMatchObject({ employee_id: 2, date: WEEK[0] })
+    expect(drawer.props('actionsLocked')).toBe(false)
   })
 
   it('載入錨點所在週，顯示格子與問題數', async () => {
@@ -135,7 +183,7 @@ describe('ScheduleGridPanel', () => {
   })
 
   it('整週改班遇到已打卡日：其餘工作日送每日調整，已打卡日開批次確認', async () => {
-    const wrapper = mountPanel()
+    const wrapper = mountPanel({ mode: 'plan' })
     await flushPromises()
     wrapper.findAllComponents({ name: 'ElSelect' })[1].vm.$emit('update:modelValue', 2) // 王副導
     await flushPromises()
@@ -229,7 +277,7 @@ describe('ScheduleGridPanel', () => {
     ]
     const reader = { can_view_attendance: true, can_edit_plan: false, can_confirm: false, can_edit_attendance: true }
     api.grid.mockResolvedValue({ data: grid({ cells, caller: reader }) })
-    const wrapper = mountPanel()
+    const wrapper = mountPanel({ mode: 'plan' })
     await flushPromises()
     expect(api.getAssignments).not.toHaveBeenCalled()
     expect(wrapper.find(`[data-test="gap-${wed}"]`).exists()).toBe(false)
@@ -243,7 +291,7 @@ describe('ScheduleGridPanel', () => {
       cell(2, wed, { plan: { expected: true, source: 'weekly', shift_type_id: 1 }, leaves: [{ leave_id: 9, leave_type_label: '特休', status: 'approved', is_full_day: true, start_time: null, end_time: null }] }),
     ]
     api.grid.mockResolvedValue({ data: grid({ cells: allOut, caller: reader }) })
-    const missed = mountPanel()
+    const missed = mountPanel({ mode: 'plan' })
     await flushPromises()
     expect(missed.find(`[data-test="gap-${wed}"]`).text()).toContain('早車無人上班')
   })
@@ -277,7 +325,7 @@ describe('ScheduleGridPanel', () => {
   })
 
   it('複製上週遇到已停用班別：略過並提示（QA P3）', async () => {
-    const wrapper = mountPanel()
+    const wrapper = mountPanel({ mode: 'plan' })
     await flushPromises()
     api.getAssignments.mockResolvedValueOnce({ data: [assignment(1, 3), assignment(2, 2)] })
     wrapper.findAllComponents({ name: 'ElDropdown' })[0].vm.$emit('command', 'copy-prev-week')
@@ -287,7 +335,7 @@ describe('ScheduleGridPanel', () => {
   })
 
   it('複製上週只改緩衝；上月整月先試算再確認才寫入', async () => {
-    const wrapper = mountPanel()
+    const wrapper = mountPanel({ mode: 'plan' })
     await flushPromises()
     api.getAssignments.mockResolvedValueOnce({ data: [assignment(1, 2)] })
     const dropdowns = wrapper.findAllComponents({ name: 'ElDropdown' })
@@ -310,7 +358,7 @@ describe('ScheduleGridPanel', () => {
 
   it('匯入班表：上傳後以本週為目標，顯示成功／失敗筆數並重新載入', async () => {
     api.importShifts.mockResolvedValue({ data: { total: 3, saved: 2, failed: 1, errors: ['第 3 行: 找不到班別'] } })
-    const wrapper = mountPanel()
+    const wrapper = mountPanel({ mode: 'plan' })
     await flushPromises()
     wrapper.findAllComponents({ name: 'ElDropdown' })[0].vm.$emit('command', 'import')
     await flushPromises()
@@ -329,7 +377,7 @@ describe('ScheduleGridPanel', () => {
     api.saveAssignments.mockResolvedValue({
       data: { message: 'ok', week_start_date: W1, warnings: [{ code: 'WEEKLY_HOURS', employee_id: 1, employee_name: '林班導', calculated_hours: 45, limit_hours: 40, message: '林班導本週 45 小時，超過 40 小時', week_start: W1 }] },
     })
-    const wrapper = mountPanel()
+    const wrapper = mountPanel({ mode: 'plan' })
     await flushPromises()
     wrapper.findAllComponents({ name: 'ElSelect' })[0].vm.$emit('update:modelValue', 2)
     await flushPromises()
@@ -340,7 +388,7 @@ describe('ScheduleGridPanel', () => {
   })
 
   it('匯出本週與下載範本走共用下載工具', async () => {
-    const wrapper = mountPanel()
+    const wrapper = mountPanel({ mode: 'plan' })
     await flushPromises()
     const io = wrapper.findAllComponents({ name: 'ElDropdown' })[0]
     io.vm.$emit('command', 'export')
@@ -350,7 +398,7 @@ describe('ScheduleGridPanel', () => {
   })
 
   it('儲存途中換週：不開批次確認（舊週的結果不顯示在新週）', async () => {
-    const wrapper = mountPanel()
+    const wrapper = mountPanel({ mode: 'plan' })
     await flushPromises()
     wrapper.findAllComponents({ name: 'ElSelect' })[1].vm.$emit('update:modelValue', 2)
     await flushPromises()
@@ -381,7 +429,7 @@ describe('ScheduleGridPanel', () => {
   })
 
   it('複製指定週：未選來源週時送出鈕停用；選 2026-09-02 後以 8/31 那週為來源', async () => {
-    const wrapper = mountPanel()
+    const wrapper = mountPanel({ mode: 'plan' })
     await flushPromises()
     api.getAssignments.mockResolvedValueOnce({ data: [assignment(1, 2)] })
     wrapper.findAllComponents({ name: 'ElDropdown' })[0].vm.$emit('command', 'copy-week')
@@ -403,7 +451,7 @@ describe('ScheduleGridPanel', () => {
     const saveText = (w: ReturnType<typeof mountPanel>) => w.find('[data-test="toolbar-save"]').text()
 
     async function mountWithPendingEdit() {
-      const wrapper = mountPanel()
+      const wrapper = mountPanel({ mode: 'plan' })
       await flushPromises()
       wrapper.findAllComponents({ name: 'ElSelect' })[1].vm.$emit('update:modelValue', 2) // 王副導
       await flushPromises()
@@ -882,7 +930,7 @@ describe('ScheduleGridPanel 在格子上捲動先收起頁首', () => {
       return { top: y, bottom: y, left: 0, right: 0, width: 0, height: 0, x: 0, y, toJSON: () => ({}) } as DOMRect
     })
     const wrapper = mount(ScheduleGridPanel, {
-      props: { date: '2026-09-16', filter: 'all' },
+      props: { mode: 'reconcile', date: '2026-09-16', filter: 'all' },
       attachTo: main,
       global: { plugins: [ElementPlus], stubs: { PersonDayDrawer: DrawerStub, BatchConfirmDialog: BatchStub, teleport: true } },
     })

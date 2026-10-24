@@ -233,8 +233,9 @@ export const routes: RouteRecordRaw[] = [
             name: 'attendance',
             component: () => import('../views/attendance/ScheduleAttendanceView.vue'),
             // 2026-10 SPEC-027：排班與出勤合併成單一頁（推翻 2026-09-10 拆成兩個側欄項目）。
-            // query：tab=grid|records|rotation|swaps|shifts、date、emp、filter；舊 tab=reconcile 相容。
-            // shifts＝班別設定（2026-10 自 /settings 搬入；舊 /settings?tab=shifts 由 authGuard 轉來）。
+            // query：tab=grid（核對）|schedule（排班）、sub、view、date、emp、filter；
+            // 舊 tab=records|rotation|swaps|shifts|reconcile 由 attendanceRouteProps 對映（2026-10-24 頁籤收成兩個）。
+            // 舊 /settings?tab=shifts 由 authGuard 轉來，落在排班 › 班別設定。
             props: (route) => attendanceRouteProps(route.query),
             meta: { title: '排班與出勤' }
         },

@@ -2,6 +2,7 @@
   <div ref="panelRoot" class="schedule-grid-panel">
     <GridToolbar
       ref="toolbarRef"
+      :mode="mode"
       :week-start="weekStart"
       :filter="filter"
       :keyword="keyword"
@@ -13,10 +14,8 @@
       :pattern-issue-count="patternIssueCount"
       :view="isMonth ? 'month' : 'week'"
       :date="date"
-      :can-month="!isMobile && !!month"
       :compact="isMobile"
       :hide-month-nav="headerHasMonth"
-      @update:view="(v: GridView) => emit('update:view', v)"
       @update:date="(v: string) => emit('update:date', v)"
       @update:week-start="(v: string) => emit('update:date', v)"
       @update:filter="(v: GridFilter) => emit('update:filter', v)"
@@ -25,6 +24,8 @@
       @command="onCommand"
       @save="save"
     />
+    <!-- 核對週格子的狀態圖例（月格子自己有含請假的圖例，不重複） -->
+    <VerdictLegend v-if="mode === 'reconcile' && !isMonth" class="schedule-grid-panel__legend" />
 
     <el-alert
       v-if="state.warnings.value.length"
@@ -69,6 +70,7 @@
 
       <ShiftGrid
         v-if="gridData"
+        :mode="mode"
         :groups="gridData.groups"
         :employees="gridData.employees"
         :days="days"
@@ -175,6 +177,7 @@ import ShiftGrid from './ShiftGrid.vue'
 import MonthGrid from './MonthGrid.vue'
 import PersonDayDrawer from './PersonDayDrawer.vue'
 import BatchConfirmDialog from './BatchConfirmDialog.vue'
+import VerdictLegend from './VerdictLegend.vue'
 import { useScheduleGrid } from '@/composables/useScheduleGrid'
 import { attendanceRouteProps } from '@/router/attendanceRouteProps'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -198,6 +201,7 @@ import {
   type BatchUnit,
   type GridCell,
   type GridFilter,
+  type GridMode,
   type GridOut,
   type GridView,
 } from '@/utils/scheduleAttendanceGrid'
@@ -206,6 +210,11 @@ type ImportResult = ApiResponse<'/shifts/import', 'post'>
 type ImportContext = { employee_id: number; employee_name: string; date: string }
 
 const props = defineProps<{
+  /**
+   * 核對（「核對」頁籤）：打卡、判定、待處理佇列，週／月由頁面切換；不能編週排班。
+   * 排班（「排班 › 週班表」）：只有週，格子只看計畫與假別，有本週班別下拉、空班警示、排班工具與儲存；抽屜沒有待處理佇列。
+   */
+  mode: GridMode
   /** 錨點日期（YYYY-MM-DD）；週模式顯示它所在的週 */
   date: string
   filter: GridFilter
@@ -214,7 +223,7 @@ const props = defineProps<{
   focusDate?: string | null
   /** 格子以外的異動（明細處理異常、匯入打卡、套用輪值表）遞增；變動即重新載入 */
   revision?: number
-  /** 週（預設）／月；月模式唯讀，由頁面依網址與裝置決定 */
+  /** 週（預設）／月；月模式唯讀、只在核對，由頁面依網址與裝置決定 */
   view?: GridView
   /** 頁面建立的整月格子資料（與本月進度共用，D-06） */
   month?: MonthGridState
@@ -253,6 +262,7 @@ watch(() => props.revision, () => { void state.reload() })
 // 換週會清掉緩衝（useScheduleGrid），所以任何換週的入口都要先問：頁內入口（上週／下週／日期／換月）
 // 由頁面在改錨點前呼叫 confirmWeekChange；網址被外部改到別週走 onBeforeRouteUpdate；
 // 離開頁面與關分頁走 useUnsavedChangesGuard。頁籤切換不換週（v-show 保留緩衝），不必問。
+// 只有排班模式會有緩衝（核對不畫本週班別下拉也沒有排班工具），核對模式這裡恆放行。
 const changedIds = computed(() => new Set(state.changedEmployeeIds.value))
 const hasPendingEdits = () => state.pendingCount.value > 0
 useUnsavedChangesGuard(hasPendingEdits)
@@ -343,7 +353,7 @@ const employeeNames = computed<Record<number, string>>(() =>
 const shiftNames = computed<Record<number, string>>(() =>
   Object.fromEntries((gridData.value?.shift_types ?? []).map((s) => [s.shift_type_id, s.name])),
 )
-const isMonth = computed(() => props.view === 'month' && !!props.month)
+const isMonth = computed(() => props.mode === 'reconcile' && props.view === 'month' && !!props.month)
 const monthData = computed(() => (isMonth.value ? props.month!.data.value : null))
 const issueCount = computed(() => {
   const g = isMonth.value ? monthData.value : gridData.value
@@ -445,7 +455,8 @@ const navState = computed(() => {
 })
 const drawerNav = computed(() => {
   const n = navState.value
-  if (!n) return null
+  // 排班看的是計畫，不是逐件處理待辦：抽屜不給上一筆／下一筆
+  if (!n || props.mode === 'plan') return null
   return { position: n.position, total: issueKeys.value.length, hasPrev: n.before.length > 0, hasNext: n.after.length > 0, back: backKey.value ? keyLabel(backKey.value) : null }
 })
 
@@ -610,7 +621,8 @@ async function onDrawerRecalculate(): Promise<void> {
 
 async function onChanged(): Promise<void> {
   const n = navState.value
-  pendingAdvance = drawerOpen.value && n && n.position !== null ? { key: n.key, after: n.after } : null
+  // 處理完自動跳下一筆只在核對（排班沒有待處理佇列）
+  pendingAdvance = props.mode === 'reconcile' && drawerOpen.value && n && n.position !== null ? { key: n.key, after: n.after } : null
   if (pendingAdvance) lockActions(4000)
   await state.reload()
   emit('changed')
@@ -758,6 +770,7 @@ async function save(): Promise<void> {
 
 <style scoped>
 .schedule-grid-panel__alert { margin-bottom: var(--space-3); }
+.schedule-grid-panel__legend { margin-bottom: var(--space-2); }
 .schedule-grid-panel__status { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-6); border: 1px solid var(--el-border-color-light); border-radius: var(--radius-md); }
 .schedule-grid-panel__hint { margin: 0 0 var(--space-3); color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .schedule-grid-panel__drop { padding: var(--space-5) 0; }

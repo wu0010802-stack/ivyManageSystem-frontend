@@ -2,18 +2,35 @@ import { describe, it, expect } from 'vitest'
 import { attendanceRouteProps, isValidDateQuery, legacySettingsShiftsRedirect } from '../attendanceRouteProps'
 
 describe('attendanceRouteProps（SPEC-027 §6.1）', () => {
-  it('未帶 query：全部 undefined，由頁面套預設（班表核對、今天）', () => {
-    expect(attendanceRouteProps({})).toEqual({ tab: undefined, date: undefined, emp: undefined, filter: undefined, view: undefined })
+  it('未帶 query：全部 undefined，由頁面套預設（第一個看得到的頁籤、今天）', () => {
+    expect(attendanceRouteProps({})).toEqual({ tab: undefined, sub: undefined, date: undefined, emp: undefined, filter: undefined, view: undefined })
   })
 
-  it('五個頁籤原樣帶入，未知值忽略', () => {
-    for (const tab of ['grid', 'records', 'rotation', 'swaps', 'shifts']) {
-      expect(attendanceRouteProps({ tab }).tab).toBe(tab)
+  it('兩個頁籤：grid（核對）原樣帶入；schedule（排班）沒帶 sub 就是週班表；未知值忽略', () => {
+    expect(attendanceRouteProps({ tab: 'grid' })).toMatchObject({ tab: 'grid', sub: undefined })
+    expect(attendanceRouteProps({ tab: 'schedule' })).toMatchObject({ tab: 'schedule', sub: 'week' })
+    for (const sub of ['week', 'rotation', 'swaps', 'shifts']) {
+      expect(attendanceRouteProps({ tab: 'schedule', sub })).toMatchObject({ tab: 'schedule', sub })
     }
+    expect(attendanceRouteProps({ tab: 'schedule', sub: 'nope' }).sub).toBe('week')
     expect(attendanceRouteProps({ tab: 'nope' }).tab).toBeUndefined()
+    // sub 只屬於排班頁籤
+    expect(attendanceRouteProps({ tab: 'grid', sub: 'swaps' }).sub).toBeUndefined()
   })
 
-  it('舊連結 tab=reconcile＝班表核對＋只看有問題（覆蓋 filter）', () => {
+  it('舊連結 tab=records（原出勤明細）＝核對頁籤的逐人檢視（覆蓋 view）', () => {
+    expect(attendanceRouteProps({ tab: 'records' })).toMatchObject({ tab: 'grid', view: 'person', sub: undefined })
+    expect(attendanceRouteProps({ tab: 'records', view: 'month' })).toMatchObject({ tab: 'grid', view: 'person' })
+  })
+
+  it('舊連結 tab=rotation／swaps／shifts＝排班頁籤的同名子頁籤（覆蓋 sub）', () => {
+    for (const legacy of ['rotation', 'swaps', 'shifts']) {
+      expect(attendanceRouteProps({ tab: legacy })).toMatchObject({ tab: 'schedule', sub: legacy })
+      expect(attendanceRouteProps({ tab: legacy, sub: 'week' })).toMatchObject({ tab: 'schedule', sub: legacy })
+    }
+  })
+
+  it('舊連結 tab=reconcile＝核對＋只看有問題（覆蓋 filter）', () => {
     expect(attendanceRouteProps({ tab: 'reconcile', filter: 'future' })).toMatchObject({ tab: 'grid', filter: 'issues' })
   })
 
@@ -26,11 +43,13 @@ describe('attendanceRouteProps（SPEC-027 §6.1）', () => {
   })
 })
 
-describe('attendanceRouteProps view（SPEC-027 C 期）', () => {
-  it('view：week／month 原樣帶入，未知值忽略（頁面預設週）', () => {
+describe('attendanceRouteProps view（核對頁籤的檢視：週／月／逐人）', () => {
+  it('view：week／month／person 原樣帶入；沒帶是 undefined（頁面預設週），非法值退回週', () => {
     expect(attendanceRouteProps({ view: 'month' }).view).toBe('month')
+    expect(attendanceRouteProps({ view: 'person' }).view).toBe('person')
     expect(attendanceRouteProps({ view: ['week', 'month'] }).view).toBe('week')
-    expect(attendanceRouteProps({ view: 'year' }).view).toBeUndefined()
+    expect(attendanceRouteProps({ view: 'year' }).view).toBe('week')
+    expect(attendanceRouteProps({ tab: 'grid' }).view).toBeUndefined()
   })
 })
 

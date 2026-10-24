@@ -1,16 +1,6 @@
 <template>
-  <section class="grid-toolbar" aria-label="班表核對工具列">
-    <el-radio-group
-      v-if="canMonth"
-      :model-value="view ?? 'week'"
-      aria-label="週或月檢視"
-      data-test="toolbar-view"
-      @update:model-value="(v: string | number | boolean | undefined) => emit('update:view', v as GridView)"
-    >
-      <el-radio-button value="week">週</el-radio-button>
-      <el-radio-button value="month">月</el-radio-button>
-    </el-radio-group>
-
+  <section class="grid-toolbar" :aria-label="mode === 'plan' ? '週班表工具列' : '核對工具列'">
+    <!-- 核對與排班兩種模式（ScheduleGridPanel 的 mode）：週／月／逐人切換在頁面層（核對頁籤），排班只有週，工具列不放檢視切換 -->
     <!-- 頁首已有年月切換時不再放第二組（月模式曾同時出現三個月份選擇） -->
     <div v-if="isMonth && !hideMonthNav" class="grid-toolbar__nav" role="group" aria-label="選擇月份">
       <el-button :icon="ArrowLeft" data-test="toolbar-prev-month" @click="emit('update:date', shiftMonthISO(anchor, -1))">上個月</el-button>
@@ -53,7 +43,8 @@
       @update:model-value="(v: string | number | boolean | undefined) => emit('update:filter', v as GridFilter)"
     >
       <el-radio-button value="all">全部</el-radio-button>
-      <el-radio-button value="issues" :title="issueTitle">只看待處理{{ issueText }}</el-radio-button>
+      <!-- 排班不畫打卡與判定，沒有待處理可看 -->
+      <el-radio-button v-if="mode === 'reconcile'" value="issues" :title="issueTitle">只看待處理{{ issueText }}</el-radio-button>
       <el-radio-button value="future">只看未來可排</el-radio-button>
     </el-radio-group>
 
@@ -67,8 +58,8 @@
       @update:model-value="(v: string) => emit('update:keyword', v)"
     />
 
-    <!-- 排班工具收成一個選單（核對時用不到，不和篩選搶位置）；手機收起選單，但列上仍能改本週班別，儲存鈕要留著 -->
-    <div v-if="canEditPlan && !isMonth" class="grid-toolbar__tools" role="group" aria-label="排班工具">
+    <!-- 排班工具只在排班頁籤（核對時用不到）；手機收起選單，但列上仍能改本週班別，儲存鈕要留著 -->
+    <div v-if="mode === 'plan' && canEditPlan" class="grid-toolbar__tools" role="group" aria-label="排班工具">
       <el-dropdown v-if="!compact" :disabled="busy" trigger="click" data-test="toolbar-schedule" @command="onCommand">
         <el-button :disabled="busy">排班工具 <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
         <template #dropdown>
@@ -92,20 +83,19 @@
         @click="emit('save')"
       >儲存排班（{{ pendingCount }} 處變更）</el-button>
     </div>
-    <span v-if="isMonth && pendingCount > 0" class="grid-toolbar__pending" data-test="toolbar-month-pending">
-      週模式還有 {{ pendingCount }} 處排班變更未儲存
-    </span>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowDown, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { addDaysISO, shiftMonthISO, type GridFilter, type GridView } from '@/utils/scheduleAttendanceGrid'
+import { addDaysISO, shiftMonthISO, type GridFilter, type GridMode, type GridView } from '@/utils/scheduleAttendanceGrid'
 
 export type ToolbarCommand = 'copy-week' | 'copy-prev-month' | 'import' | 'template' | 'export'
 
 const props = defineProps<{
+  /** 核對（判定、篩選待處理、月檢視）／排班（週排班工具與儲存） */
+  mode: GridMode
   weekStart: string
   filter: GridFilter
   keyword: string
@@ -114,12 +104,10 @@ const props = defineProps<{
   saving?: boolean
   busy?: boolean
   issueCount?: number
-  /** 檢視（預設週）；月模式唯讀，排班工具收起 */
+  /** 檢視（預設週）；月檢視只在核對，由頁面切換 */
   view?: GridView
   /** 錨點日期（月模式的年月與上下月以它為準）；沒給用 weekStart */
   date?: string
-  /** 可切月模式（桌機） */
-  canMonth?: boolean
   /** 待處理中屬於「待修設定」（整月同型態）的格數：篩選鈕拆開寫 */
   patternIssueCount?: number
   /** 手機：收起排班工具選單（儲存排班仍在） */
@@ -131,7 +119,6 @@ const emit = defineEmits<{
   'update:weekStart': [value: string]
   'update:filter': [value: GridFilter]
   'update:keyword': [value: string]
-  'update:view': [value: GridView]
   'update:date': [value: string]
   'copy-prev-week': []
   command: [command: ToolbarCommand]
@@ -186,7 +173,6 @@ function onCommand(command: string | number | object): void {
 .grid-toolbar__tools { margin-left: auto; }
 .grid-toolbar__picker { width: 132px; }
 .grid-toolbar__keyword { width: 168px; }
-.grid-toolbar__pending { margin-left: auto; color: var(--color-warning-darker); font-size: var(--text-sm); }
 .grid-toolbar__label { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 /* 桌機：捲動時工具列（週次、篩選、儲存排班）固定在捲動區頂端，改到第 60 列也按得到儲存 */
 @media (--bp-sm) {

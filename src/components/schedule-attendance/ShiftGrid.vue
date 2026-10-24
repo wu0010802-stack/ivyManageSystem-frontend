@@ -1,15 +1,16 @@
 <template>
   <div class="shift-grid" :class="{ 'shift-grid--mobile': mobile }">
+    <!-- mode：核對（打卡＋判定）／排班（只有計畫與假別，可改本週班別、看空班警示） -->
     <div v-if="!visibleRows.length" class="shift-grid__empty" role="status">
       <p>{{ emptyText }}</p>
       <el-button v-if="showImportHint && canImport" type="primary" data-test="grid-empty-import" @click="emit('import-punches', missingImportDates[0])">匯入打卡紀錄</el-button>
     </div>
 
-    <!-- 桌機：列＝人（依班級分組），欄＝日；每格兩行：計畫／打卡＋判定。
+    <!-- 桌機：列＝人（依班級分組），欄＝日；核對每格兩行：計畫／打卡＋判定，排班每格只有計畫與假別。
          限高的捲動容器讓日期表頭與人員欄在捲動時固定（外層 el-main 捲動時 sticky 不會作用在表格上） -->
     <div v-else-if="!mobile" class="shift-grid__scroller" :style="maxHeight ? { maxHeight: `${maxHeight}px` } : undefined">
     <table class="shift-grid__table" data-test="shift-grid-table" @keydown="onGridKeydown">
-      <caption class="shift-grid__caption">班表核對：列為人員（依班級分組），欄為日期；每格是應上班與實際打卡，按下可看來源與處理；方向鍵可在格子間移動</caption>
+      <caption class="shift-grid__caption">{{ caption }}</caption>
       <thead>
         <tr>
           <th scope="col" class="shift-grid__corner">人員</th>
@@ -39,17 +40,17 @@
                 <span class="shift-grid__name">{{ emp.name }}</span>
                 <span v-if="emp.role_label" class="shift-grid__role">{{ emp.role_label }}</span>
                 <button
-                  v-if="personNotes?.[emp.employee_id]"
+                  v-if="noteOf(emp.employee_id)"
                   type="button"
                   class="shift-grid__note"
-                  :title="personNotes[emp.employee_id].detail"
-                  :aria-label="`${emp.name}：${personNotes[emp.employee_id].tag}，${personNotes[emp.employee_id].detail}。開本月設定檢查`"
+                  :title="noteOf(emp.employee_id)!.detail"
+                  :aria-label="`${emp.name}：${noteOf(emp.employee_id)!.tag}，${noteOf(emp.employee_id)!.detail}。開本月設定檢查`"
                   :data-test="`person-note-${emp.employee_id}`"
                   @click="emit('show-patterns')"
-                >{{ personNotes[emp.employee_id].tag }}</button>
+                >{{ noteOf(emp.employee_id)!.tag }}</button>
               </span>
               <el-select
-                v-if="canEditPlan"
+                v-if="mode === 'plan' && canEditPlan"
                 :model-value="weeklyValue(emp.employee_id) ?? undefined"
                 size="small"
                 clearable
@@ -61,7 +62,7 @@
               >
                 <el-option v-for="s in optionsFor(emp.employee_id)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
               </el-select>
-              <span v-if="changedIds?.has(emp.employee_id)" class="shift-grid__unsaved" :data-test="`unsaved-${emp.employee_id}`">未儲存</span>
+              <span v-if="mode === 'plan' && changedIds?.has(emp.employee_id)" class="shift-grid__unsaved" :data-test="`unsaved-${emp.employee_id}`">未儲存</span>
             </th>
             <td v-for="(d, col) in shownDays" :key="d.date" class="shift-grid__cell-wrap" :class="{ 'shift-grid__cell-wrap--off': !d.is_workday }">
               <button
@@ -77,16 +78,16 @@
                 @click="emit('select', emp.employee_id, d.date)"
               >
                 <!-- 非應出勤日只畫一槓：欄頭已標週末／假日，五個字會把收窄的週末欄撐成兩行（報讀仍念全文） -->
-                <span v-if="isRestCell(display(emp.employee_id, d.date))" class="shift-grid__rest" aria-hidden="true" :title="display(emp.employee_id, d.date).plan">—</span>
+                <span v-if="isRest(emp.employee_id, d.date)" class="shift-grid__rest" aria-hidden="true" :title="display(emp.employee_id, d.date).plan">—</span>
                 <span v-else class="shift-grid__plan">
                   <span v-if="display(emp.employee_id, d.date).source" class="shift-grid__source" :title="display(emp.employee_id, d.date).source!.label">{{ display(emp.employee_id, d.date).source!.short }}</span> <template v-for="(part, i) in planParts(display(emp.employee_id, d.date).plan)" :key="i"><span :class="{ 'shift-grid__plan-time': part.time }">{{ part.text }}</span>{{ ' ' }}</template>
                   <span v-if="isInactivePlan(emp.employee_id, d.date)" class="shift-grid__inactive">已停用</span>
                 </span>
-                <span v-if="hasResult(display(emp.employee_id, d.date))" class="shift-grid__result">
-                  <span v-if="display(emp.employee_id, d.date).actual" class="shift-grid__actual">{{ display(emp.employee_id, d.date).actual }}</span>
-                  <span v-if="display(emp.employee_id, d.date).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, d.date) }"><i v-if="isFlagged(emp.employee_id, d.date)" class="verdict-shape" :class="`verdict-shape--${kindOf(emp.employee_id, d.date)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, d.date).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
-                  <span v-for="tag in display(emp.employee_id, d.date).leaveTags" :key="tag" class="shift-grid__leave">{{ tag }}</span>
-                  <span v-if="display(emp.employee_id, d.date).confirmation" class="shift-grid__confirm"><i class="verdict-shape verdict-shape--confirm" aria-hidden="true" />{{ display(emp.employee_id, d.date).confirmation }}</span>
+                <span v-if="hasResult(emp.employee_id, d.date)" class="shift-grid__result">
+                  <span v-if="mode === 'reconcile' && display(emp.employee_id, d.date).actual" class="shift-grid__actual">{{ display(emp.employee_id, d.date).actual }}</span>
+                  <span v-if="mode === 'reconcile' && display(emp.employee_id, d.date).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, d.date) }"><i v-if="isFlagged(emp.employee_id, d.date)" class="verdict-shape" :class="`verdict-shape--${kindOf(emp.employee_id, d.date)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, d.date).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
+                  <span v-for="tag in leaveTags(emp.employee_id, d.date)" :key="tag" class="shift-grid__leave">{{ tag }}</span>
+                  <span v-if="mode === 'reconcile' && display(emp.employee_id, d.date).confirmation" class="shift-grid__confirm"><i class="verdict-shape verdict-shape--confirm" aria-hidden="true" />{{ display(emp.employee_id, d.date).confirmation }}</span>
                 </span>
               </button>
             </td>
@@ -137,16 +138,16 @@
           >
             <strong>{{ emp.name }}</strong>
             <span v-if="emp.role_label" class="shift-grid__role">{{ emp.role_label }}</span>
-            <span v-if="personNotes?.[emp.employee_id]" class="shift-grid__note" :title="personNotes[emp.employee_id].detail" :data-test="`person-note-${emp.employee_id}`">{{ personNotes[emp.employee_id].tag }}</span>
+            <span v-if="noteOf(emp.employee_id)" class="shift-grid__note" :title="noteOf(emp.employee_id)!.detail" :data-test="`person-note-${emp.employee_id}`">{{ noteOf(emp.employee_id)!.tag }}</span>
             <span class="shift-grid__plan">{{ display(emp.employee_id, mobileDay).source ? `${display(emp.employee_id, mobileDay).source!.short}・` : '' }}{{ display(emp.employee_id, mobileDay).plan }}</span>
             <span v-if="isInactivePlan(emp.employee_id, mobileDay)" class="shift-grid__inactive">已停用</span>
-            <span v-if="display(emp.employee_id, mobileDay).actual" class="shift-grid__actual">{{ display(emp.employee_id, mobileDay).actual }}</span>
-            <span v-if="display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, mobileDay) }"><i v-if="isFlagged(emp.employee_id, mobileDay)" class="verdict-shape" :class="`verdict-shape--${kindOf(emp.employee_id, mobileDay)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, mobileDay).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
-            <span v-for="tag in display(emp.employee_id, mobileDay).leaveTags" :key="tag" class="shift-grid__leave">{{ tag }}</span>
-            <span v-if="display(emp.employee_id, mobileDay).confirmation" class="shift-grid__confirm"><i class="verdict-shape verdict-shape--confirm" aria-hidden="true" />{{ display(emp.employee_id, mobileDay).confirmation }}</span>
+            <span v-if="mode === 'reconcile' && display(emp.employee_id, mobileDay).actual" class="shift-grid__actual">{{ display(emp.employee_id, mobileDay).actual }}</span>
+            <span v-if="mode === 'reconcile' && display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, mobileDay) }"><i v-if="isFlagged(emp.employee_id, mobileDay)" class="verdict-shape" :class="`verdict-shape--${kindOf(emp.employee_id, mobileDay)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, mobileDay).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
+            <span v-for="tag in leaveTags(emp.employee_id, mobileDay)" :key="tag" class="shift-grid__leave">{{ tag }}</span>
+            <span v-if="mode === 'reconcile' && display(emp.employee_id, mobileDay).confirmation" class="shift-grid__confirm"><i class="verdict-shape verdict-shape--confirm" aria-hidden="true" />{{ display(emp.employee_id, mobileDay).confirmation }}</span>
           </button>
           <el-select
-            v-if="canEditPlan"
+            v-if="mode === 'plan' && canEditPlan"
             :model-value="weeklyValue(emp.employee_id) ?? undefined"
             size="small"
             clearable
@@ -157,7 +158,7 @@
           >
             <el-option v-for="s in optionsFor(emp.employee_id)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
           </el-select>
-          <span v-if="changedIds?.has(emp.employee_id)" class="shift-grid__unsaved" :data-test="`unsaved-${emp.employee_id}`">未儲存</span>
+          <span v-if="mode === 'plan' && changedIds?.has(emp.employee_id)" class="shift-grid__unsaved" :data-test="`unsaved-${emp.employee_id}`">未儲存</span>
         </div>
       </section>
     </template>
@@ -178,7 +179,9 @@ import {
   type GridEmployee,
   type GridFilter,
   type GridGroup,
+  type GridMode,
   type GridShiftType,
+  leaveTagLabels,
   uncoveredDates,
   type VerdictKind,
   verdictKind,
@@ -187,6 +190,8 @@ import {
 const WEEKDAY = ['一', '二', '三', '四', '五', '六', '日']
 
 const props = defineProps<{
+  /** 核對：計畫＋打卡＋判定；排班：只有計畫與假別，另有本週班別下拉、未儲存標籤與欄頭空班警示 */
+  mode: GridMode
   groups: GridGroup[]
   employees: GridEmployee[]
   days: GridDay[]
@@ -198,15 +203,16 @@ const props = defineProps<{
   canEditPlan: boolean
   shiftOptions: GridShiftType[]
   weeklyValue: (employeeId: number) => number | null
-  /** 週班別改了但還沒儲存的人（列首標「未儲存」） */
+  /** 週班別改了但還沒儲存的人（列首標「未儲存」；排班才有） */
   changedIds?: ReadonlySet<number>
+  /** 人力缺口（欄頭空班警示；排班才畫） */
   coverage?: DayCoverage[]
   mobile?: boolean
   /** 可匯入打卡（ATTENDANCE_WRITE）：整週都還沒匯入時，空狀態給匯入入口 */
   canImport?: boolean
   /** 捲動容器高度（px）：面板依實際工具列高度量出；沒給就用 CSS 的估算值 */
   maxHeight?: number | null
-  /** 本月型態註記（整月沒打卡、時段可能設錯），key＝員工 id */
+  /** 本月型態註記（整月沒打卡、時段可能設錯），key＝員工 id；是核對的事，排班不畫 */
   personNotes?: Record<number, { tag: string; detail: string }>
   /** 符合本月型態的待處理格（cellKey）：多半是設定問題，狀態是「設定問題」而不是會扣款 */
   patternKeys?: ReadonlySet<string>
@@ -239,6 +245,12 @@ watch(
 const mobileDayInfo = computed(() => shownDays.value.find((d) => d.date === mobileDay.value))
 
 const cellOf = (employeeId: number, date: string) => props.cells.get(cellKey(employeeId, date))
+
+const caption = computed(() => props.mode === 'plan'
+  ? '週班表：列為人員（依班級分組），欄為日期；每格是應上班的班別與時段，按下可看來源與調整；方向鍵可在格子間移動'
+  : '核對：列為人員（依班級分組），欄為日期；每格是應上班與實際打卡，按下可看來源與處理；方向鍵可在格子間移動')
+const noteOf = (employeeId: number): { tag: string; detail: string } | undefined =>
+  props.mode === 'reconcile' ? props.personNotes?.[employeeId] : undefined
 
 // 下拉：現行班別＋所有在用班別；已停用的只留目前正在用的那個（標「已停用」且不可再選）
 function optionsFor(employeeId: number): GridShiftType[] {
@@ -345,7 +357,9 @@ function dayLabel(d: GridDay): string {
   return `${m}/${dd}（${WEEKDAY[d.weekday]}）`
 }
 
+/** 欄頭空班警示：排班時用來補人；核對看的是已發生的打卡，不畫 */
 function gapsOf(date: string): ShiftGap[] {
+  if (props.mode !== 'plan') return []
   return props.coverage?.find((c) => c.date === date)?.gaps ?? []
 }
 
@@ -363,17 +377,36 @@ function verdictParts(label: string): string[] {
   return parts.map((part, i) => (i < parts.length - 1 ? `${part}・` : part))
 }
 
-/** 非應出勤日、沒有打卡也沒有假：格子只畫一槓 */
-function isRestCell(d: CellDisplay): boolean {
-  return d.state !== 'not_employed' && d.source === null && !d.actual && !d.verdict && !d.leaveTags.length && !d.confirmation
+/** 格子的假別：排班沒有判定行，全天假也要在假別標籤看得到（核對時那張假寫在判定裡） */
+function leaveTags(employeeId: number, date: string): string[] {
+  if (props.mode === 'reconcile') return display(employeeId, date).leaveTags
+  const cell = cellOf(employeeId, date)
+  return cell ? leaveTagLabels(cell) : []
 }
 
-function hasResult(d: CellDisplay): boolean {
-  return !!(d.actual || d.verdict || d.leaveTags.length || d.confirmation)
+/** 非應出勤日、沒有打卡也沒有假：格子只畫一槓（排班不看打卡與判定） */
+function isRest(employeeId: number, date: string): boolean {
+  const d = display(employeeId, date)
+  if (d.state === 'not_employed' || d.source !== null || leaveTags(employeeId, date).length) return false
+  return props.mode === 'plan' || (!d.actual && !d.verdict && !d.confirmation)
+}
+
+function hasResult(employeeId: number, date: string): boolean {
+  if (leaveTags(employeeId, date).length) return true
+  const d = display(employeeId, date)
+  return props.mode === 'reconcile' && !!(d.actual || d.verdict || d.confirmation)
 }
 
 function cellClasses(employeeId: number, date: string): Record<string, boolean> {
   const d = display(employeeId, date)
+  // 排班：只分未來（虛線、可排）與已封存；判定的狀態與形狀是核對的事
+  if (props.mode === 'plan') {
+    return {
+      'shift-grid__cell--future': d.state === 'future',
+      'shift-grid__cell--today': date === props.today,
+      'shift-grid__cell--sealed': d.locked,
+    }
+  }
   const kind = kindOf(employeeId, date)
   return {
     [`shift-grid__cell--${d.state}`]: true,
@@ -386,6 +419,9 @@ function cellClasses(employeeId: number, date: string): Record<string, boolean> 
 
 function cellAria(emp: GridEmployee, d: GridDay): string {
   const info = display(emp.employee_id, d.date)
+  if (props.mode === 'plan') {
+    return [emp.name, dayLabel(d), info.source?.label, info.plan, ...leaveTags(emp.employee_id, d.date), info.locked ? '已封存' : null].filter(Boolean).join('，')
+  }
   return [
     emp.name, dayLabel(d), info.source?.label, info.plan, info.actual, info.verdict?.label,
     props.patternKeys?.has(cellKey(emp.employee_id, d.date)) ? '整月同型態，可能是設定問題' : null,

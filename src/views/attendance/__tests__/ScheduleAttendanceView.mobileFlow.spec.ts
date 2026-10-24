@@ -37,6 +37,7 @@ const monthApi = vi.hoisted(() => ({ grid: vi.fn(async () => ({ data: null })) }
 vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: monthApi.grid }))
 
 import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
+import { attendanceRouteProps } from '@/router/attendanceRouteProps'
 
 // el-tabs stub：保留 v-model 契約（modelValue + update:modelValue），
 // 這正是本次要驗的東西——原本的 el-tabs 沒有接 v-model，選取後不會換頁。
@@ -73,12 +74,21 @@ const DetailColumnStub = {
 
 const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
-  props: ['date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
+  props: ['mode', 'date', 'filter', 'focusEmployeeId', 'focusDate', 'revision'],
   emits: ['records', 'import', 'changed', 'update:date', 'update:filter'],
   methods: { confirmWeekChange: async () => true },
   template: '<div class="grid-panel-stub" />',
 }
 const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues'], template: '<div class="month-progress-stub" />' }
+/** 核對檢視與排班子頁籤是 el-radio-group（按鈕樣式）：按鈕點了請群組送出 update:modelValue */
+const RadioGroupStub = {
+  name: 'ElRadioGroup',
+  props: ['modelValue'],
+  emits: ['update:modelValue'],
+  provide() { return { pickRadio: (v: string) => (this as unknown as { $emit: (e: string, v: string) => void }).$emit('update:modelValue', v) } },
+  template: '<div role="radiogroup" :data-value="modelValue"><slot /></div>',
+}
+const RadioButtonStub = { props: ['value'], inject: ['pickRadio'], template: '<button type="button" @click="pickRadio(value)"><slot /></button>' }
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
   MonthProgressBar: MonthProgressBarStub,
@@ -97,6 +107,8 @@ const STUBS = {
   ElTabPane: ElTabPaneStub,
   ElButton: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
   ElIcon: true,
+  ElRadioGroup: RadioGroupStub,
+  ElRadioButton: RadioButtonStub,
 }
 
 const sampleRoster = [
@@ -107,9 +119,10 @@ const sampleAnomalies = [
   { id: 11, employee_name: '李小花', employee_number: 'E002', date: '2026-06-10', weekday: '三', type: 'missing_punch', type_label: '未打卡', detail: '缺出勤打卡', estimated_deduction: 0, confirmed_action: null },
 ]
 
-const mountView = () => mount(ScheduleAttendanceView, { global: { stubs: STUBS } })
+/** 名冊與明細在核對頁籤的「逐人」檢視（舊 ?tab=records 落在這裡） */
+const mountView = () => mount(ScheduleAttendanceView, { props: attendanceRouteProps({ tab: 'records' }), global: { stubs: STUBS } })
 
-describe('ScheduleAttendanceView 手機三段流程', () => {
+describe('ScheduleAttendanceView 手機三段流程（核對 › 逐人）', () => {
   beforeEach(() => {
     mockIsMobile.value = true
     getSummaryMock.mockReset().mockResolvedValue({ data: sampleRoster })
@@ -132,9 +145,11 @@ describe('ScheduleAttendanceView 手機三段流程', () => {
     wrapper.unmount()
   })
 
-  it('手機預設停在名冊分頁', async () => {
+  it('手機預設停在名冊分頁；逐人檢視顯示名冊與明細的分頁殼', async () => {
     const wrapper = mountView()
     await flushPromises()
+    expect(wrapper.get('[data-test="reconcile-view"]').attributes('data-value')).toBe('person')
+    expect(wrapper.get('[data-test="records-panel"]').attributes('style') ?? '').not.toContain('display: none')
     expect(wrapper.get('.el-tabs').attributes('data-active')).toBe('roster')
   })
 

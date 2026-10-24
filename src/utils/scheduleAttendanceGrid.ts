@@ -19,6 +19,8 @@ export type PlanSource = GridCell['plan']['source']
 export type ReconStatus = NonNullable<GridCell['actual']>['status']
 export type GridFilter = 'all' | 'issues' | 'future'
 export type GridView = 'week' | 'month'
+/** 格子面板的用途：核對（打卡、判定、待處理；週／月）或排班（只看計畫與假別、編週排班；只有週） */
+export type GridMode = 'reconcile' | 'plan'
 
 /** 來源標籤（§2.2）：格子上顯示單字，抽屜顯示全名。 */
 export const SOURCE_TAGS: Record<PlanSource, { short: string; label: string }> = {
@@ -382,12 +384,17 @@ const CONFIRMATION_HINTS: Record<string, string> = {
   disputed: '老師確認：轉行政',
 }
 
+/** 格子的假別標籤（待審的加註）；cellDisplay 在全天假時會把寫進判定的那張拿掉，排班格子沒有判定行，用全部 */
+export function leaveTagLabels(cell: GridCell): string[] {
+  return cell.leaves.map((leave) => `${leave.leave_type_label}${leave.status === 'pending' ? '（待審）' : ''}`)
+}
+
 /** §2.2 格子狀態與顯示。 */
 export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): CellDisplay {
   const base = {
     plan: cellPlanText(cell),
     source: !cell.plan.expected && !cell.plan.day_off ? null : SOURCE_TAGS[cell.plan.source],
-    leaveTags: cell.leaves.map((leave) => `${leave.leave_type_label}${leave.status === 'pending' ? '（待審）' : ''}`),
+    leaveTags: leaveTagLabels(cell),
     locked: isSealed(cell),
     confirmation: cell.confirmation ? CONFIRMATION_HINTS[cell.confirmation.status] ?? null : null,
   }

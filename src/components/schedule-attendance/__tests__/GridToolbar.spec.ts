@@ -8,7 +8,7 @@ import { W1 } from './gridFixtures'
 
 function mountToolbar(props: Partial<InstanceType<typeof GridToolbar>['$props']> = {}) {
   return mount(GridToolbar, {
-    props: { weekStart: W1, filter: 'all', keyword: '', canEditPlan: true, pendingCount: 0, ...props },
+    props: { mode: 'reconcile', weekStart: W1, filter: 'all', keyword: '', canEditPlan: true, pendingCount: 0, ...props },
     global: { plugins: [ElementPlus] },
   })
 }
@@ -42,7 +42,7 @@ describe('GridToolbar', () => {
     const wrapper = mountToolbar({ issueCount: 3 })
     // 數字寫出範圍：週檢視是本週，與本月進度的「本月 N 格」分得開
     expect(wrapper.text()).toContain('只看待處理（本週 3）')
-    expect(mountToolbar({ issueCount: 7, view: 'month', canMonth: true }).text()).toContain('只看待處理（本月 7）')
+    expect(mountToolbar({ issueCount: 7, view: 'month' }).text()).toContain('只看待處理（本月 7）')
     // 待修設定（整月同型態）和逐日待處理分開寫
     expect(mountToolbar({ issueCount: 109, patternIssueCount: 60 }).text()).toContain('只看待處理（本週 49＋待修設定 60）')
     wrapper.findComponent({ name: 'ElRadioGroup' }).vm.$emit('update:modelValue', 'issues')
@@ -66,24 +66,24 @@ describe('GridToolbar', () => {
     expect((wrapper.find('[data-test="toolbar-keyword"]').element as HTMLInputElement).value).toBe('王副')
   })
 
-  it('儲存鈕只在有變更時出現並顯示變更數；沒有排班權限或手機就不顯示排班工具', async () => {
+  it('排班頁籤：儲存鈕只在有變更時出現並顯示變更數；沒有排班權限或手機就不顯示排班工具', async () => {
     // 停用的「儲存排班（0 處變更）」是整排最搶眼卻不能按的元素：沒有變更就不畫
-    const none = mountToolbar()
+    const none = mountToolbar({ mode: 'plan' })
     expect(none.find('[data-test="toolbar-save"]').exists()).toBe(false)
     expect(none.find('[data-test="toolbar-schedule"]').exists()).toBe(true)
-    expect(mountToolbar({ compact: true }).find('[data-test="toolbar-schedule"]').exists()).toBe(false)
+    expect(mountToolbar({ mode: 'plan', compact: true }).find('[data-test="toolbar-schedule"]').exists()).toBe(false)
     // 手機列上仍能改本週班別：有變更時儲存鈕要在（審查 F2）
-    expect(mountToolbar({ compact: true, pendingCount: 1 }).find('[data-test="toolbar-save"]').exists()).toBe(true)
-    const some = mountToolbar({ pendingCount: 2 })
+    expect(mountToolbar({ mode: 'plan', compact: true, pendingCount: 1 }).find('[data-test="toolbar-save"]').exists()).toBe(true)
+    const some = mountToolbar({ mode: 'plan', pendingCount: 2 })
     const save = some.find('[data-test="toolbar-save"]')
     expect(save.text()).toBe('儲存排班（2 處變更）')
     await save.trigger('click')
     expect(some.emitted('save')).toHaveLength(1)
-    expect(mountToolbar({ canEditPlan: false }).find('[data-test="toolbar-save"]').exists()).toBe(false)
+    expect(mountToolbar({ mode: 'plan', canEditPlan: false }).find('[data-test="toolbar-save"]').exists()).toBe(false)
   })
 
   it('排班工具收成一個選單：複製上週送 copy-prev-week，其他指令原樣轉出', () => {
-    const wrapper = mountToolbar()
+    const wrapper = mountToolbar({ mode: 'plan' })
     const dropdowns = wrapper.findAllComponents({ name: 'ElDropdown' })
     expect(dropdowns).toHaveLength(1)
     dropdowns[0].vm.$emit('command', 'copy-prev-week')
@@ -104,7 +104,7 @@ describe('GridToolbar', () => {
   })
 
   it('儲存排班出現時是主要按鈕（沒有變更時不出現，見上）', () => {
-    const dirty = mountToolbar({ pendingCount: 2 })
+    const dirty = mountToolbar({ mode: 'plan', pendingCount: 2 })
     expect(dirty.find('[data-test="toolbar-save"]').classes()).toContain('el-button--primary')
   })
 
@@ -114,17 +114,28 @@ describe('GridToolbar', () => {
   })
 })
 
-describe('GridToolbar 週／月（SPEC-027 C 期）', () => {
-  it('桌機才有週／月切換；切換送出 update:view', () => {
-    expect(mountToolbar().find('[data-test="toolbar-view"]').exists()).toBe(false)
-    const wrapper = mountToolbar({ canMonth: true })
-    // 週／月與篩選都是 ElRadioGroup：以 data-test 取週／月那一組，不依賴 DOM 順序
-    wrapper.find('[data-test="toolbar-view"]').findComponent({ name: 'ElRadioGroup' }).vm.$emit('update:modelValue', 'month')
-    expect(wrapper.emitted('update:view')).toEqual([['month']])
+describe('GridToolbar 核對／排班兩種模式', () => {
+  it('兩種模式都沒有週／月切換（核對的檢視切換在頁面，排班只有週）', () => {
+    expect(mountToolbar({ mode: 'reconcile' }).find('[data-test="toolbar-view"]').exists()).toBe(false)
+    expect(mountToolbar({ mode: 'plan' }).find('[data-test="toolbar-view"]').exists()).toBe(false)
   })
 
-  it('月模式：寫年月；上／下個月與月份選擇送出月初；排班工具收起、未儲存週排班有提示', async () => {
-    const wrapper = mountToolbar({ canMonth: true, view: 'month', date: '2026-01-16', pendingCount: 2 })
+  it('核對：篩選三個選項；有排班權限、有變更也不放排班工具與儲存排班', () => {
+    const wrapper = mountToolbar({ mode: 'reconcile', canEditPlan: true, pendingCount: 2 })
+    expect(wrapper.findAllComponents({ name: 'ElRadioButton' }).map((b) => b.text())).toEqual(['全部', '只看待處理', '只看未來可排'])
+    expect(wrapper.find('[data-test="toolbar-schedule"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="toolbar-save"]').exists()).toBe(false)
+  })
+
+  it('排班：篩選只有全部與只看未來可排（沒有待處理可看）；有排班工具', () => {
+    const wrapper = mountToolbar({ mode: 'plan', issueCount: 3 })
+    expect(wrapper.findAllComponents({ name: 'ElRadioButton' }).map((b) => b.text())).toEqual(['全部', '只看未來可排'])
+    expect(wrapper.text()).not.toContain('只看待處理')
+    expect(wrapper.find('[data-test="toolbar-schedule"]').exists()).toBe(true)
+  })
+
+  it('核對的月模式：寫年月；上／下個月與月份選擇送出月初；沒有週導覽與排班工具', async () => {
+    const wrapper = mountToolbar({ view: 'month', date: '2026-01-16', pendingCount: 2 })
     expect(wrapper.text()).toContain('2026 年 1 月')
     await wrapper.find('[data-test="toolbar-prev-month"]').trigger('click')
     await wrapper.find('[data-test="toolbar-next-month"]').trigger('click')
@@ -133,11 +144,10 @@ describe('GridToolbar 週／月（SPEC-027 C 期）', () => {
     expect(wrapper.find('[data-test="toolbar-save"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="toolbar-copy"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="toolbar-prev"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="toolbar-month-pending"]').text()).toContain('2 處')
   })
 
   it('頁首已有年月切換時，月模式不再放第二組月份導覽', () => {
-    const wrapper = mountToolbar({ canMonth: true, view: 'month', date: '2026-01-16', hideMonthNav: true })
+    const wrapper = mountToolbar({ view: 'month', date: '2026-01-16', hideMonthNav: true })
     expect(wrapper.find('[data-test="toolbar-prev-month"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="toolbar-month"]').exists()).toBe(false)
     // 也不能退回顯示週導覽（月模式沒有「上週／下週」）
