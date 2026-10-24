@@ -2,21 +2,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useResolveAnomaly } from '../useResolveAnomaly'
 
 const api = vi.hoisted(() => ({ upsertRecord: vi.fn(), batchConfirmAnomalies: vi.fn() }))
-const ui = vi.hoisted(() => ({ success: vi.fn(), warning: vi.fn(), notify: vi.fn() }))
+const ui = vi.hoisted(() => ({ success: vi.fn(), warning: vi.fn(), notify: vi.fn(), undoToast: vi.fn() }))
 vi.mock('@/api/attendance', () => ({ upsertRecord: api.upsertRecord, batchConfirmAnomalies: api.batchConfirmAnomalies }))
 vi.mock('element-plus', () => ({ ElMessage: { success: ui.success, warning: ui.warning } }))
 vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: ui.notify }) }))
+vi.mock('@/composables/useConfirmUndo', () => ({ showUndoToast: ui.undoToast }))
 
 beforeEach(() => {
   vi.resetAllMocks()
   api.upsertRecord.mockResolvedValue({ data: {} })
-  api.batchConfirmAnomalies.mockResolvedValue({ data: {} })
+  api.batchConfirmAnomalies.mockResolvedValue({ data: { processed: 1 } })
 })
 
 describe('useResolveAnomaly（出勤明細與排班抽屜共用的補卡／接受扣款／豁免送出）', () => {
   const target = { employeeId: 7, date: '2026-09-16', attendanceId: 55 }
 
-  it('補打卡：整列覆寫，帶既有值＋補填值', async () => {
+  it('補打卡：整列覆寫，帶既有值＋補填值；補打卡沒有復原，照舊用一般成功提示', async () => {
     const done = vi.fn()
     const { resolve } = useResolveAnomaly(done, 'test')
     expect(await resolve(target, { action: 'punch', punch_in: '07:52', punch_out: '17:00' })).toBe(true)
@@ -24,25 +25,54 @@ describe('useResolveAnomaly（出勤明細與排班抽屜共用的補卡／接�
     expect(done).toHaveBeenCalledTimes(1)
     // 提示寫出做了什麼（只寫「已處理」看不出是扣了還是豁免了）
     expect(ui.success).toHaveBeenCalledWith('已補打卡並重新計算')
+    expect(ui.undoToast).not.toHaveBeenCalled()
   })
 
-  it('成功提示依動作寫出結果；呼叫端可指定（整天只有缺卡＝已確認缺卡）', async () => {
+  it('接受扣款／豁免成功：跳可復原的提示（帶這筆出勤紀錄 id），不另外跳一般成功提示', async () => {
     const { resolve } = useResolveAnomaly(vi.fn(), 'test')
-    await resolve(target, { action: 'admin_waive' })
-    expect(ui.success).toHaveBeenLastCalledWith('已豁免')
+    await resolve(target, { action: 'admin_waive', remark: '打卡機故障' })
+    expect(ui.undoToast).toHaveBeenLastCalledWith({ text: '已豁免', attendanceIds: [55], onUndone: expect.any(Function) })
     await resolve(target, { action: 'admin_accept' })
-    expect(ui.success).toHaveBeenLastCalledWith('已接受扣款')
+    expect(ui.undoToast).toHaveBeenLastCalledWith(expect.objectContaining({ text: '已接受扣款', attendanceIds: [55] }))
+    // 呼叫端可指定提示文字（整天只有缺卡＝已確認缺卡；抽屜寫出處理了誰哪天）
     await resolve(target, { action: 'admin_accept', doneText: '已確認缺卡' })
-    expect(ui.success).toHaveBeenLastCalledWith('已確認缺卡')
+    expect(ui.undoToast).toHaveBeenLastCalledWith(expect.objectContaining({ text: '已確認缺卡' }))
+    expect(ui.success).not.toHaveBeenCalled()
   })
 
-  it('接受扣款／豁免：以出勤紀錄 id 批次確認', async () => {
+  it('按了復原：呼叫呼叫端給的 onUndone；沒給就用 onDone 重抓', async () => {
+    const done = vi.fn()
+    const undone = vi.fn()
+    const withUndo = useResolveAnomaly(done, 'test', { onUndone: undone })
+    await withUndo.resolve(target, { action: 'admin_accept' })
+    const { onUndone } = ui.undoToast.mock.calls[0][0] as { onUndone: () => void }
+    onUndone()
+    expect(undone).toHaveBeenCalledTimes(1)
+    expect(done).toHaveBeenCalledTimes(1) // 只有處理成功那一次
+
+    const fallback = vi.fn()
+    const plain = useResolveAnomaly(fallback, 'test')
+    await plain.resolve(target, { action: 'admin_waive', remark: '園長同意' })
+    ;(ui.undoToast.mock.calls[1][0] as { onUndone: () => void }).onUndone()
+    expect(fallback).toHaveBeenCalledTimes(2)
+  })
+
+  it('完成回呼拿得到這次的動作（抽屜據此知道有沒有復原提示）', async () => {
+    const done = vi.fn()
+    const { resolve } = useResolveAnomaly(done, 'test')
+    await resolve(target, { action: 'admin_waive', remark: '園方指派外出' })
+    expect(done).toHaveBeenCalledWith(expect.objectContaining({ action: 'admin_waive' }))
+  })
+
+  it('接受扣款／豁免：以出勤紀錄 id 批次確認；豁免理由一併送出', async () => {
     const { resolve } = useResolveAnomaly(vi.fn(), 'test')
-    await resolve(target, { action: 'admin_waive' })
-    expect(api.batchConfirmAnomalies).toHaveBeenCalledWith({ attendance_ids: [55], action: 'admin_waive' })
+    await resolve(target, { action: 'admin_waive', remark: '園長同意晚到' })
+    expect(api.batchConfirmAnomalies).toHaveBeenCalledWith({ attendance_ids: [55], action: 'admin_waive', remark: '園長同意晚到' })
+    await resolve(target, { action: 'admin_accept' })
+    expect(api.batchConfirmAnomalies).toHaveBeenLastCalledWith({ attendance_ids: [55], action: 'admin_accept' })
   })
 
-  it('找不到員工或出勤紀錄：提示且不送；送出中不重複送；失敗通知且不呼叫完成', async () => {
+  it('找不到員工或出勤紀錄：提示且不送；送出中不重複送；失敗通知且不呼叫完成、不跳復原', async () => {
     const done = vi.fn()
     const { resolve, resolving } = useResolveAnomaly(done, 'test')
     expect(await resolve({ ...target, employeeId: null }, { action: 'punch', punch_in: '08:00' })).toBe(false)
@@ -59,5 +89,6 @@ describe('useResolveAnomaly（出勤明細與排班抽屜共用的補卡／接�
     expect(await resolve(target, { action: 'admin_accept' })).toBe(false)
     expect(ui.notify).toHaveBeenCalledTimes(1)
     expect(done).toHaveBeenCalledTimes(1)
+    expect(ui.undoToast).not.toHaveBeenCalled()
   })
 })

@@ -6,11 +6,12 @@ import { GRID_VERDICT_KEY, type GridVerdictLookup } from '@/composables/useGridV
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 // ── hoisted mocks ─────────────────────────────────────────────────────────────
-const { mockUpsertRecord, mockBatchConfirm, mockGetRecords, mockNotify } = vi.hoisted(() => ({
+const { mockUpsertRecord, mockBatchConfirm, mockGetRecords, mockNotify, mockUndoToast } = vi.hoisted(() => ({
   mockUpsertRecord: vi.fn().mockResolvedValue({ data: {} }),
   mockBatchConfirm: vi.fn().mockResolvedValue({ data: {} }),
   mockGetRecords: vi.fn().mockResolvedValue({ data: [] }),
   mockNotify: vi.fn(),
+  mockUndoToast: vi.fn(),
 }))
 
 // ── mock api ───────────────────────────────────────────────────────────────────
@@ -24,6 +25,9 @@ vi.mock('@/api/attendance', () => ({
 vi.mock('@/composables/useErrorNotify', () => ({
   useErrorNotify: () => ({ notify: mockNotify }),
 }))
+
+// ── mock 復原提示（接受扣款／豁免成功後）──────────────────────────────────────────
+vi.mock('@/composables/useConfirmUndo', () => ({ showUndoToast: mockUndoToast }))
 
 // ── mock ElMessage ─────────────────────────────────────────────────────────────
 vi.mock('element-plus', () => ({
@@ -247,13 +251,19 @@ describe('DetailColumn', () => {
       expect(wrapper.emitted('navigate')).toBeFalsy()
     })
 
-    it('shows ElMessage.success on success', async () => {
+    it('成功後跳可復原的提示（寫出接受扣款、帶這筆出勤紀錄 id）；按復原後同樣通知容器重抓', async () => {
+      mockUndoToast.mockClear()
       const wrapper = mountDetail({})
       const card = wrapper.findComponent(ResolveCardStub)
       await card.vm.$emit('resolve', { action: 'admin_accept' })
       await nextTick()
       await nextTick()
-      expect(mockElMessageSuccess).toHaveBeenCalledWith('已接受扣款')
+      expect(mockUndoToast).toHaveBeenCalledWith({ text: '已接受扣款', attendanceIds: [anomalyItem.id], onUndone: expect.any(Function) })
+      expect(mockElMessageSuccess).not.toHaveBeenCalledWith('已接受扣款')
+      const resolvedBefore = wrapper.emitted('resolved')?.length ?? 0
+      ;(mockUndoToast.mock.calls[0][0] as { onUndone: () => void }).onUndone()
+      await nextTick()
+      expect(wrapper.emitted('resolved')).toHaveLength(resolvedBefore + 1)
     })
 
     it('calls notify and does NOT emit navigate on failure', async () => {
@@ -279,12 +289,13 @@ describe('DetailColumn', () => {
     it('calls batchConfirmAnomalies with action admin_waive', async () => {
       const wrapper = mountDetail({})
       const card = wrapper.findComponent(ResolveCardStub)
-      await card.vm.$emit('resolve', { action: 'admin_waive' })
+      await card.vm.$emit('resolve', { action: 'admin_waive', remark: '打卡機故障' })
       await nextTick()
       await nextTick()
       expect(mockBatchConfirm).toHaveBeenCalledWith({
         attendance_ids: [anomalyItem.id],
         action: 'admin_waive',
+        remark: '打卡機故障',
       })
     })
   })

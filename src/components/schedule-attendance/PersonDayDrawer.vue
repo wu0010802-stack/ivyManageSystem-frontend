@@ -9,10 +9,10 @@
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
     <div v-if="cell && employee" class="pdd">
-      <nav v-if="nav && nav.total > 0" class="pdd__nav" aria-label="待處理導覽" data-test="pdd-nav">
-        <el-button :icon="ArrowLeft" :disabled="!nav.hasPrev" title="上一筆待處理（K）" aria-keyshortcuts="k" data-test="pdd-prev" @click="go(-1)">上一筆</el-button>
-        <span class="pdd__nav-pos" data-test="pdd-nav-pos">{{ nav.position ? `待處理 ${nav.position}／${nav.total}` : `共 ${nav.total} 筆待處理` }}</span>
-        <el-button :disabled="!nav.hasNext" title="下一筆待處理（J）" aria-keyshortcuts="j" data-test="pdd-next" @click="go(1)">下一筆 <el-icon class="el-icon--right"><ArrowRight /></el-icon></el-button>
+      <nav v-if="nav && nav.total > 0" class="pdd__nav" aria-label="逐日待辦導覽" data-test="pdd-nav">
+        <el-button :icon="ArrowLeft" :disabled="!nav.hasPrev" title="上一件待辦（K）" aria-keyshortcuts="k" data-test="pdd-prev" @click="go(-1)">上一件</el-button>
+        <span class="pdd__nav-pos" data-test="pdd-nav-pos">{{ nav.label }}</span>
+        <el-button :disabled="!nav.hasNext" title="下一件待辦（J）" aria-keyshortcuts="j" data-test="pdd-next" @click="go(1)">下一件<el-icon class="el-icon--right"><ArrowRight /></el-icon></el-button>
       </nav>
       <p v-if="nav?.back" class="pdd__back"><el-button link type="primary" data-test="pdd-back" @click="goBack">回剛才處理的 {{ nav.back }}</el-button></p>
       <p v-if="otherClasses" class="pdd__note" data-test="pdd-other-classes">另兼：{{ otherClasses }}</p>
@@ -25,13 +25,15 @@
           <el-button v-if="pattern!.kind === 'fixed_offset' && caller.can_edit_attendance" link type="primary" data-test="pdd-pattern-recalc" @click="emit('recalculate')">重算本月出勤</el-button>
         </div>
       </div>
-      <section class="pdd__section">
+      <!-- 決策卡優先（缺卡、出勤異常）：應上班、打卡與判定都寫在決策卡裡，這裡不重複 -->
+      <section v-if="!decisionFirst" class="pdd__section">
         <h3>應上班</h3>
         <p class="pdd__plan" data-test="pdd-plan">{{ planLine }}</p>
-        <p v-if="cell.edit.locked_reason === 'finalized'" class="pdd__note">已封存：{{ LOCKED_REASON_LABELS.finalized }}</p>
+        <!-- 已封存只寫這一次（底部的鎖定說明略過封存） -->
+        <p v-if="cell.edit.locked_reason === 'finalized'" class="pdd__note" data-test="pdd-sealed">{{ LOCKED_REASON_LABELS.finalized }}</p>
       </section>
 
-      <section class="pdd__section">
+      <section v-if="!decisionFirst" class="pdd__section">
         <h3>打卡與判定</h3>
         <p v-if="!caller.can_view_attendance" class="pdd__note">沒有查看打卡紀錄的權限。</p>
         <p v-else-if="!cell.actual" class="pdd__note">{{ cell.date > today ? '尚未到這一天。' : '這天不在核對範圍內。' }}</p>
@@ -54,15 +56,16 @@
             <p v-if="resolveMode === 'none' && !isOwnCell && !caller.can_edit_attendance" class="pdd__note">有上班或有請假，要由有出勤寫入權限的行政人員補登或建立請假單。</p>
             <el-button v-if="canCreateLeave" link type="primary" class="pdd__link" data-test="pdd-create-leave" @click="openLeave">建立請假單</el-button>
           </div>
-          <p v-if="cell.actual.candidates.length" data-test="pdd-candidates">
-            系統推測：{{ cell.actual.candidates.map((c) => `${c.name} ${c.work_start}–${c.work_end}`).join('、') }}
-            <template v-if="suggestedPair">（疑似和 {{ employeeNames[suggestedPair.employee_id] }} 對調）</template>
-          </p>
-          <p v-if="cell.confirmation" data-test="pdd-confirmation">
-            老師確認：{{ confirmationLabel }}
-          </p>
         </template>
       </section>
+      <!-- 系統推測與老師確認不在決策卡裡：決策卡優先時也照樣寫出 -->
+      <p v-if="caller.can_view_attendance && cell.actual?.candidates.length" class="pdd__fact" data-test="pdd-candidates">
+        系統推測：{{ cell.actual.candidates.map((c) => `${c.name} ${c.work_start}–${c.work_end}`).join('、') }}
+        <template v-if="suggestedPair">（疑似和 {{ employeeNames[suggestedPair.employee_id] }} 對調）</template>
+      </p>
+      <p v-if="caller.can_view_attendance && cell.actual && cell.confirmation" class="pdd__fact" data-test="pdd-confirmation">
+        老師確認：{{ confirmationLabel }}
+      </p>
 
       <p v-if="selfBlocked" class="pdd__note" data-test="pdd-self-note">本人出勤需由其他行政人員補登</p>
 
@@ -76,9 +79,18 @@
         :employee-name="employee.name"
         :employee-number="employee.employee_number ?? ''"
         :weekday="weekdayLabel"
-        @changed="emit('changed')"
+        :will-advance="willAdvance"
+        @changed="(opts: ChangedOptions) => emit('changed', opts)"
+        @undone="emit('undone')"
       />
 
+      <!-- 決策卡優先時，改這天與確認當日班別是判定本身錯了才用的次要動作：收進預設收合的「其他處理」 -->
+      <component
+        :is="otherCollapsed ? 'details' : 'div'"
+        :class="otherCollapsed ? 'pdd__more' : 'pdd__group'"
+        :data-test="otherCollapsed ? 'pdd-more' : undefined"
+      >
+      <summary v-if="otherCollapsed">{{ otherSummary }}</summary>
       <section v-if="cell.edit.plan" class="pdd__section" data-test="pdd-edit-day">
         <h3>改這天</h3>
         <p v-if="swapLocked" class="pdd__note" data-test="pdd-swap-locked">{{ swapLockedNote }}</p>
@@ -87,7 +99,7 @@
           <el-option v-for="s in optionsWith(initialDayChoice)" :key="s.shift_type_id" :value="s.shift_type_id" :disabled="!s.is_active" :label="`${s.name} ${s.work_start}–${s.work_end}${s.is_active ? '' : '（已停用）'}`" />
           <el-option :value="DAY_OFF" label="排休（明確不上班）" />
         </el-select>
-        <el-button :type="resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="savingDay" :disabled="swapLocked || dayChoice === initialDayChoice || loadingDaily || actionsLocked" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
+        <el-button :type="resolveMode === 'side-by-side' || decisionFirst ? 'default' : 'primary'" :loading="savingDay" :disabled="swapLocked || dayChoice === initialDayChoice || loadingDaily || actionsLocked" data-test="pdd-day-apply" @click="applyDay">套用</el-button>
       </section>
 
       <section v-if="cell.edit.confirm && cell.actual" class="pdd__section" data-test="pdd-confirm">
@@ -121,6 +133,7 @@
         </el-form>
         <el-button v-if="confirmExpanded" :type="resolveMode === 'resolve-first' || resolveMode === 'side-by-side' ? 'default' : 'primary'" :loading="confirming" :disabled="confirmChoice === null || !confirmReason.trim() || actionsLocked" data-test="pdd-confirm-submit" @click="submitConfirm">確認並重算</el-button>
       </section>
+      </component>
 
       <DayResolveSection
         v-if="resolveMode === 'confirm-first'"
@@ -132,10 +145,12 @@
         :employee-name="employee.name"
         :employee-number="employee.employee_number ?? ''"
         :weekday="weekdayLabel"
-        @changed="emit('changed')"
+        :will-advance="willAdvance"
+        @changed="(opts: ChangedOptions) => emit('changed', opts)"
+        @undone="emit('undone')"
       />
 
-      <p v-if="!cell.edit.plan && !cell.edit.confirm && cell.edit.locked_reason" class="pdd__note" data-test="pdd-locked">
+      <p v-if="!cell.edit.plan && !cell.edit.confirm && cell.edit.locked_reason && cell.edit.locked_reason !== 'finalized'" class="pdd__note" data-test="pdd-locked">
         {{ lockedNote }}
       </p>
 
@@ -196,6 +211,8 @@ import {
 const INHERIT = -2
 const DAY_OFF = -1
 const WEEKDAY = ['一', '二', '三', '四', '五', '六', '日']
+/** 處理成功的附帶說明：undoToast＝已跳了可復原的提示（接受扣款／豁免），面板跳下一件時不必再提示 */
+type ChangedOptions = { undoToast: boolean }
 
 const props = defineProps<{
   modelValue: boolean
@@ -211,8 +228,11 @@ const props = defineProps<{
   today: string
   caller: GridOut['caller']
   mobile?: boolean
-  /** 上一筆／下一筆待處理（面板依畫面上的列與篩選排好）；back＝剛自動跳走的那格（可回去）；null＝不顯示 */
-  nav?: { position: number | null; total: number; hasPrev: boolean; hasNext: boolean; back?: string | null } | null
+  /**
+   * 上一件／下一件逐日待辦（面板依整月的列與篩選排好）；label＝面板寫好的位置文字（「9 月逐日待辦 3 / 12」）；
+   * back＝剛自動跳走的那格（可回去）；null＝不顯示
+   */
+  nav?: { position: number | null; total: number; label: string; hasPrev: boolean; hasNext: boolean; back?: string | null } | null
   /** 剛自動跳到這格：短暫鎖住動作，連點不會落到這一筆 */
   actionsLocked?: boolean
   /** 這位員工本月的型態（整月沒打卡／時段可能設錯）；patternMatchesDay＝這格就是那個型態的一格 */
@@ -225,7 +245,10 @@ const emit = defineEmits<{
   navigate: [direction: 1 | -1]
   /** 回剛才自動跳走的那格 */
   back: []
-  changed: []
+  /** 這格有異動（格子要重抓）；opts 見 ChangedOptions，改這天、確認當日班別不帶 */
+  changed: [opts?: ChangedOptions]
+  /** 接受扣款／豁免後按了復原（格子要重抓，但不是新的處理，不自動跳格） */
+  undone: []
   records: [employeeId: number, date: string]
   /** 沒有任何打卡的人日：帶人員與日期開匯入（沿用原打卡核對清單的「匯入打卡」） */
   import: [context: { employee_id: number; employee_name: string; date: string }]
@@ -283,6 +306,17 @@ const missingFromImport = computed(() => {
 const isOwnCell = computed(() => props.caller.employee_id != null && props.cell?.employee_id === props.caller.employee_id)
 const selfBlocked = computed(() => isOwnCell.value && actionableMode.value !== 'none')
 const resolveMode = computed<DayResolveMode | 'none'>(() => (isOwnCell.value ? 'none' : actionableMode.value))
+/** 決策卡優先（缺卡、出勤異常）：判定與事實只寫在決策卡，改這天與確認當日班別收進「其他處理」 */
+const decisionFirst = computed(() => resolveMode.value === 'resolve-first')
+const otherParts = computed(() => {
+  const cell = props.cell
+  if (!cell) return []
+  return [cell.edit.plan ? '改這天班別' : '', cell.edit.confirm && cell.actual ? '確認是換班' : ''].filter(Boolean)
+})
+const otherCollapsed = computed(() => decisionFirst.value && otherParts.value.length > 0)
+const otherSummary = computed(() => `其他處理：${otherParts.value.join('・')}`)
+/** 這格在佇列裡、佇列還有別件：處理完面板會自動跳下一件（復原提示據此寫「跳到下一件」） */
+const willAdvance = computed(() => !!props.nav && props.nav.position !== null && props.nav.total > 1)
 /**
  * 「確認當日班別」只在它就是要做的事時展開：疑似換班、非原排班出勤。其他判定（全天請假、符合班表、
  * 補卡為主的缺卡）收起來，需要時再按「改確認當日班別」——否則全天病假也會出現必填的班別與原因。
@@ -691,6 +725,15 @@ async function submitConfirm(): Promise<void> {
 .pdd__back { margin: calc(-1 * var(--space-2)) 0 0; }
 .pdd__section h3 { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 .pdd__plan { margin: 0; font-weight: 600; }
+.pdd__fact { margin: 0; }
+/* 不收合時只是分組殼：子區塊照樣排進 .pdd 的格線間距 */
+.pdd__group { display: contents; }
+/* details 不吃 grid／flex 排版（各瀏覽器不一），子區塊間距用 margin */
+.pdd__more { border-top: 1px solid var(--el-border-color-lighter); padding-top: var(--space-3); }
+.pdd__more > summary { cursor: pointer; color: var(--el-text-color-regular); font-size: var(--text-sm); font-weight: 600; }
+.pdd__more[open] > summary { margin-bottom: var(--space-3); }
+.pdd__more > section + section { margin-top: var(--space-4); }
+.pdd__more > summary:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .pdd__note { margin: 0; color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .pdd__source summary { cursor: pointer; color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .pdd__source summary:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }

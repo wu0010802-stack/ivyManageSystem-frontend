@@ -30,13 +30,15 @@
  * - confirm-first（疑似換班）：確認當日班別是主要動作，這裡只給接受扣款／豁免（兩側都有打卡，不必補卡）
  * - side-by-side（疑似缺勤）：整天沒打卡，只能補登上下班，與「改這天」並列、都不是主要按鈕；不抓異常清單
  * 成功後 emit changed 讓格子重抓；格子版本或處理結果變了就重抓異常卡。
+ * 接受扣款／豁免成功後跳可復原的提示（寫出處理了誰哪天），changed 帶 undoToast 讓面板不再另外提示；
+ * 按了復原 emit undone，面板重抓。
  */
 import { computed, ref, watch } from 'vue'
 import ResolveCard from '@/components/attendance/ResolveCard.vue'
 import { getAnomalyList } from '@/api/attendance'
 import { groupAnomalies, type AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useResolveAnomaly, type ResolveAction, type ResolvePayload } from '@/composables/useResolveAnomaly'
-import { confirmedActionLabel, type GridCell } from '@/utils/scheduleAttendanceGrid'
+import { SOURCE_TAGS, confirmedActionLabel, planText, type GridCell } from '@/utils/scheduleAttendanceGrid'
 
 export type DayResolveMode = 'resolve-first' | 'confirm-first' | 'side-by-side'
 
@@ -51,11 +53,16 @@ const props = defineProps<{
   locked?: boolean
   /** 這格符合整月固定型態（多半是設定問題）：按「接受扣款」前先提醒（見 ResolveCard） */
   acceptWarning?: string | null
+  /** 處理完抽屜會自動跳下一件（這格在佇列裡、佇列還有別件）：復原提示寫「跳到下一件」 */
+  willAdvance?: boolean
   /**
    * 處理成功（父層以 @changed 綁定）。刻意用函式 prop 而不是 emit：送出途中抽屜換到另一格、本元件換位置被卸載時，
    * Vue 會丟掉已卸載元件的 emit，格子就不會重抓；函式 prop 仍會被呼叫。
+   * undoToast＝已經跳了可復原的提示（接受扣款／豁免），面板跳下一件時不必再提示。
    */
-  onChanged?: () => void
+  onChanged?: (opts: { undoToast: boolean }) => void
+  /** 按了復原（父層以 @undone 綁定）；提示停留 10 秒，抽屜早已換格，同樣用函式 prop */
+  onUndone?: () => void
 }>()
 
 const card = ref<AnomalyDayCard | null>(null)
@@ -113,6 +120,7 @@ const context = computed(() => {
     punch_out: hhmm(actual?.punch_out),
     has_leave: props.cell.leaves.some((leave) => leave.status === 'approved' && leave.is_full_day),
     estimated_deduction: (card.value?.items ?? []).reduce((sum, item) => sum + (item.estimated_deduction ?? 0), 0),
+    plan: `${planText(props.cell)}（${SOURCE_TAGS[props.cell.plan.source].label}）`,
   }
 })
 
@@ -131,10 +139,20 @@ const cardRef = ref<InstanceType<typeof ResolveCard> | null>(null)
 /** 補卡時間填了還沒送出（抽屜關閉、換筆前問） */
 defineExpose({ isDirty: (): boolean => cardRef.value?.isDirty() ?? false })
 
-const { resolving, resolve } = useResolveAnomaly(() => props.onChanged?.(), 'DayResolveSection.resolve')
+const { resolving, resolve } = useResolveAnomaly(
+  (payload) => props.onChanged?.({ undoToast: payload.action !== 'punch' }),
+  'DayResolveSection.resolve',
+  { onUndone: () => props.onUndone?.() },
+)
+/** 復原提示：「已處理 9/17（四）蔡宜庭，跳到下一件」（提示停留時抽屜已換到下一件，要寫出是哪一件） */
+function undoText(): string {
+  const [, m, d] = props.cell.date.split('-').map(Number)
+  return `已處理 ${m}/${d}（${props.weekday}）${props.employeeName}${props.willAdvance ? '，跳到下一件' : ''}`
+}
 function onResolve(payload: ResolvePayload): void {
   const id = props.cell.actual?.attendance_id ?? null
-  void resolve({ employeeId: props.cell.employee_id, date: props.cell.date, attendanceId: id }, payload)
+  const sent = payload.action === 'punch' ? payload : { ...payload, doneText: undoText() }
+  void resolve({ employeeId: props.cell.employee_id, date: props.cell.date, attendanceId: id }, sent)
 }
 </script>
 

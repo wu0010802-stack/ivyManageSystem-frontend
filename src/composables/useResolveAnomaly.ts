@@ -3,10 +3,14 @@
  *
  * 出勤明細（DetailColumn）與排班與出勤抽屜（PersonDayDrawer）共用，兩邊送出的端點、payload、
  * 錯誤處理與防重複送出一致。成功後呼叫 onDone（由呼叫端決定刷新哪些資料）。
+ *
+ * 接受扣款／豁免會動到薪資，成功後跳 10 秒內可「復原」的提示（showUndoToast，清回未處理）；
+ * 補打卡不經批次確認、沒有復原，照舊用一般成功提示。
  */
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { batchConfirmAnomalies, upsertRecord } from '@/api/attendance'
+import { showUndoToast } from '@/composables/useConfirmUndo'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 
 export type ResolveAction = 'punch' | 'admin_accept' | 'admin_waive'
@@ -14,7 +18,9 @@ export interface ResolvePayload {
   action: ResolveAction
   punch_in?: string
   punch_out?: string
-  /** 成功提示（例如整天只有缺卡時「已確認缺卡」）；沒給用動作的預設說法 */
+  /** 豁免理由（寫進這天出勤紀錄的備註） */
+  remark?: string
+  /** 成功提示（例如整天只有缺卡時「已確認缺卡」、抽屜寫出處理了誰哪天）；沒給用動作的預設說法 */
   doneText?: string
 }
 
@@ -32,7 +38,16 @@ export interface ResolveTarget {
   attendanceId: number | null
 }
 
-export function useResolveAnomaly(onDone: () => void | Promise<void>, source: string) {
+export interface ResolveOptions {
+  /** 按了復原、清回未處理之後（呼叫端重抓資料）；沒給＝同 onDone */
+  onUndone?: () => void
+}
+
+export function useResolveAnomaly(
+  onDone: (payload: ResolvePayload) => void | Promise<void>,
+  source: string,
+  options: ResolveOptions = {},
+) {
   const resolving = ref(false)
   const { notify } = useErrorNotify()
 
@@ -48,6 +63,7 @@ export function useResolveAnomaly(onDone: () => void | Promise<void>, source: st
     }
     resolving.value = true
     try {
+      const text = payload.doneText ?? DONE_TEXT[payload.action]
       if (payload.action === 'punch') {
         await upsertRecord({
           employee_id: target.employeeId!,
@@ -55,11 +71,21 @@ export function useResolveAnomaly(onDone: () => void | Promise<void>, source: st
           ...(payload.punch_in !== undefined ? { punch_in: payload.punch_in } : {}),
           ...(payload.punch_out !== undefined ? { punch_out: payload.punch_out } : {}),
         })
+        ElMessage.success(text)
       } else {
-        await batchConfirmAnomalies({ attendance_ids: [target.attendanceId!], action: payload.action })
+        const attendanceId = target.attendanceId!
+        await batchConfirmAnomalies({
+          attendance_ids: [attendanceId],
+          action: payload.action,
+          ...(payload.remark ? { remark: payload.remark } : {}),
+        })
+        showUndoToast({
+          text,
+          attendanceIds: [attendanceId],
+          onUndone: options.onUndone ?? (() => { void onDone(payload) }),
+        })
       }
-      ElMessage.success(payload.doneText ?? DONE_TEXT[payload.action])
-      await onDone()
+      await onDone(payload)
       return true
     } catch (err) {
       notify(err, source, null, { prefix: '處理失敗' })

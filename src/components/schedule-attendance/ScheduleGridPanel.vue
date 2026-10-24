@@ -116,7 +116,8 @@
       :pattern-matches-day="selectedMatchesPattern"
       @navigate="onNavigate"
       @back="onBack"
-      @changed="onChanged"
+      @changed="onDrawerChanged"
+      @undone="onUndone"
       @records="onRecords"
       @import="(ctx: ImportContext) => emit('import', ctx)"
       @patterns="onDrawerPatterns"
@@ -128,7 +129,7 @@
       :units="batchUnits"
       :employee-names="employeeNames"
       :shift-names="shiftNames"
-      @done="onChanged"
+      @done="() => onChanged()"
     />
 
     <FormDialog
@@ -200,6 +201,7 @@ import {
   visibleDays,
   type BatchUnit,
   type GridCell,
+  type GridDay,
   type GridFilter,
   type GridMode,
   type GridOut,
@@ -405,9 +407,25 @@ const coverage = computed(() => {
 // ── 抽屜 ───────────────────────────────────────────────────────
 const drawerOpen = ref(false)
 const selected = ref<{ employeeId: number; date: string } | null>(null)
-// 月模式點格用整月資料（D-06：唯讀總覽，抽屜內動作照舊）；週模式用該週資料
-const drawerGrid = computed(() => (isMonth.value ? monthData.value : gridData.value))
-const drawerCells = computed(() => (isMonth.value ? monthCells.value : state.cells.value))
+const selectedKey = computed(() => (selected.value ? cellKey(selected.value.employeeId, selected.value.date) : null))
+/** 核對的整月資料：抽屜的逐日待辦佇列一律跨整月（週檢視也是）；排班或整月還沒載到＝null */
+const queueMonth = computed(() => (props.mode === 'reconcile' ? props.month?.data.value ?? null : null))
+const queueMonthCells = computed(() => (queueMonth.value ? props.month!.cells.value : EMPTY_CELLS))
+/**
+ * 抽屜這格的資料：月模式點格用整月資料（D-06：唯讀總覽，抽屜內動作照舊）；週模式用該週資料。
+ * 佇列跨整月：週模式跳到別週的格子（或正在換週重抓）時，那格不在這週的資料裡，先用整月的那一格，
+ * 週資料到了再換回來（週排班層要那一週的，見 drawerWeeklyShiftId）。
+ */
+const drawerSource = computed<{ grid: GridOut; cells: ReadonlyMap<string, GridCell>; week: boolean } | null>(() => {
+  if (isMonth.value) return monthData.value ? { grid: monthData.value, cells: monthCells.value, week: false } : null
+  const key = selectedKey.value
+  const week = gridData.value
+  if (week && (key === null || state.cells.value.has(key))) return { grid: week, cells: state.cells.value, week: true }
+  if (queueMonth.value && key !== null && queueMonthCells.value.has(key)) return { grid: queueMonth.value, cells: queueMonthCells.value, week: false }
+  return week ? { grid: week, cells: state.cells.value, week: true } : null
+})
+const drawerGrid = computed(() => drawerSource.value?.grid ?? null)
+const drawerCells = computed<ReadonlyMap<string, GridCell>>(() => drawerSource.value?.cells ?? EMPTY_CELLS)
 const selectedCell = computed(() => (selected.value ? drawerCells.value.get(cellKey(selected.value.employeeId, selected.value.date)) ?? null : null))
 const selectedEmployee = computed(() => drawerGrid.value?.employees.find((e) => e.employee_id === selected.value?.employeeId) ?? null)
 const selectedDay = computed(() => drawerGrid.value?.days.find((d) => d.date === selected.value?.date) ?? null)
@@ -423,28 +441,41 @@ function openCell(employeeId: number, date: string): void {
   drawerOpen.value = true
 }
 
-// ── 抽屜的待處理佇列：上一筆／下一筆、處理完自動跳下一筆 ─────────────────
-/** 畫面上看得到的格子，順序與格子相同：列（班級分組、篩選與搜尋後）由上而下，每人由左而右 */
+// ── 抽屜的逐日待辦佇列：上一件／下一件、處理完自動跳下一件 ─────────────────
+/**
+ * 佇列的資料：核對且整月已載入＝整月（週檢視也一樣，待辦不只在這週）；整月還沒到就退回畫面上這週。
+ * 欄是月格子同一套可見日（平日＋有人上班的週末）。
+ */
+const queueSource = computed<{ grid: GridOut; cells: ReadonlyMap<string, GridCell>; days: GridDay[]; month: number | null } | null>(() => {
+  const month = queueMonth.value
+  if (month) return { grid: month, cells: queueMonthCells.value, days: visibleDays(month.days, month.cells), month: Number(month.start_date.slice(5, 7)) }
+  if (isMonth.value || !gridData.value) return null
+  return { grid: gridData.value, cells: state.cells.value, days: days.value, month: null }
+})
+/** 佇列裡的格子，順序與格子相同：列（班級分組、篩選與搜尋後）由上而下，每人由左而右（整月） */
 const navOrder = computed<GridCell[]>(() => {
-  const g = drawerGrid.value
-  if (!g) return []
-  const navDays = isMonth.value ? monthDays.value : days.value
-  const cells = drawerCells.value
+  const src = queueSource.value
+  if (!src) return []
+  const { grid: g, cells, days: navDays } = src
   const sections = gridSections({ groups: g.groups, employees: g.employees, days: navDays, cells, filter: props.filter, today: g.today, keyword: keyword.value, uncovered: uncoveredDates(g.days) })
   return sections
     .flatMap((section) => section.employees)
     .flatMap((emp) => navDays.map((d) => cells.get(cellKey(emp.employee_id, d.date))).filter((c): c is GridCell => c !== undefined))
 })
+/** 逐日待辦：待處理格，排除符合整月型態的格子（設定問題另外處理，不逐格接受扣款） */
 const issueKeys = computed<string[]>(() => {
-  const g = drawerGrid.value
-  if (!g) return []
-  const uncovered = uncoveredDates(g.days)
-  return navOrder.value.filter((c) => isIssue(c, g.today, uncovered)).map((c) => cellKey(c.employee_id, c.date))
+  const src = queueSource.value
+  if (!src) return []
+  const uncovered = uncoveredDates(src.grid.days)
+  const patterns = patternKeys.value
+  return navOrder.value
+    .filter((c) => isIssue(c, src.grid.today, uncovered) && !patterns.has(cellKey(c.employee_id, c.date)))
+    .map((c) => cellKey(c.employee_id, c.date))
 })
-/** 目前這格在佇列裡的位置：前後的待處理（不在畫面上的格子＝從頭開始） */
+/** 目前這格在佇列裡的位置：前後的待處理（不在佇列順序裡的格子＝從頭開始） */
 const navState = computed(() => {
   const sel = selected.value
-  if (!sel || !drawerGrid.value) return null
+  if (!sel || !queueSource.value) return null
   const key = cellKey(sel.employeeId, sel.date)
   const issues = new Set(issueKeys.value)
   const keys = navOrder.value.map((c) => cellKey(c.employee_id, c.date))
@@ -458,7 +489,10 @@ const drawerNav = computed(() => {
   const n = navState.value
   // 排班看的是計畫，不是逐件處理待辦：抽屜不給上一筆／下一筆
   if (!n || props.mode === 'plan') return null
-  return { position: n.position, total: issueKeys.value.length, hasPrev: n.before.length > 0, hasNext: n.after.length > 0, back: backKey.value ? keyLabel(backKey.value) : null }
+  const total = issueKeys.value.length
+  const scope = queueSource.value?.month ? `${queueSource.value.month} 月` : '本週'
+  const label = n.position !== null ? `${scope}逐日待辦 ${n.position} / ${total}` : `共 ${total} 件逐日待辦`
+  return { position: n.position, total, label, hasPrev: n.before.length > 0, hasNext: n.after.length > 0, back: backKey.value ? keyLabel(backKey.value) : null }
 })
 
 /** 「林班導 9/16」 */
@@ -498,12 +532,17 @@ onBeforeUnmount(() => { if (lockTimer) clearTimeout(lockTimer) })
 
 function selectKey(key: string): void {
   const [employeeId, date] = key.split('|')
-  if (isMonth.value) void openMonthCell(Number(employeeId), date)
-  else openCell(Number(employeeId), date)
+  if (isMonth.value) {
+    void openMonthCell(Number(employeeId), date)
+    return
+  }
+  openCell(Number(employeeId), date)
+  // 佇列跨整月：跳到別週的格子時請頁面把錨點移到該格日期，格子跟過去（抽屜先用整月那一格）
+  if (mondayOf(date) !== weekStartRef.value) emit('update:date', date)
 }
 /**
- * 頁首「處理待辦」：打開佇列順序的第一件待處理（同抽屜的上一筆／下一筆，看得到的列才算）；
- * 看得到的列裡沒有待處理就回 false，頁面再退回「只看待處理」。
+ * 頁首「處理待辦」：打開整月逐日待辦佇列的第一件（同抽屜的上一件／下一件，篩選與搜尋後的列才算；
+ * 在別週就讓格子跟過去）；佇列是空的就回 false，頁面再退回「只看待處理」。
  */
 function openFirstIssue(): boolean {
   const key = issueKeys.value[0]
@@ -522,7 +561,7 @@ function onNavigate(direction: 1 | -1): void {
  * 還沒處理的（到底了就回到最前面）。月模式要等整月資料重抓（頁面遞增 revision）才看得到結果，
  * 所以等「這格的新資料」到了才判斷，不在 onChanged 裡直接判斷。
  */
-let pendingAdvance: { key: string; after: string[] } | null = null
+let pendingAdvance: { key: string; after: string[]; undoToast: boolean } | null = null
 watch(drawerOpen, (open) => {
   if (open) return
   pendingAdvance = null
@@ -544,13 +583,14 @@ watch(() => (selected.value ? drawerCells.value.get(cellKey(selected.value.emplo
   const target = pending.after.find((k) => remaining.has(k)) ?? issueKeys.value.find((k) => k !== pending.key) ?? null
   if (!target) {
     unlockActions()
-    ElMessage.success(isMonth.value ? '這個月的待處理都處理完了' : '這週的待處理都處理完了')
+    ElMessage.success(queueSource.value?.month ? '這個月的逐日待辦都處理完了' : '這週的逐日待辦都處理完了')
     return
   }
   selectKey(target)
   backKey.value = pending.key
   lockActions(600)
-  ElMessage.success(`已處理。下一筆待處理：${keyLabel(target)}`)
+  // 接受扣款／豁免已經跳了可復原的提示（寫出處理了誰、跳到下一件），不再疊一則
+  if (!pending.undoToast) ElMessage.success(`已處理。下一筆待處理：${keyLabel(target)}`)
 })
 
 /**
@@ -574,7 +614,9 @@ async function openMonthCell(employeeId: number, date: string): Promise<void> {
 }
 const drawerWeeklyShiftId = computed(() => {
   if (!selected.value) return null
-  return isMonth.value ? monthWeekly.value : state.assignments.value[selected.value.employeeId]?.shift_type_id ?? null
+  if (isMonth.value) return monthWeekly.value
+  // 週模式暫用整月那一格（佇列跳到別週、週資料還沒到）：手上的週排班是這週的，不能拿來當那一週的
+  return drawerSource.value?.week ? state.assignments.value[selected.value.employeeId]?.shift_type_id ?? null : null
 })
 
 let focusHandled = false
@@ -620,11 +662,21 @@ async function onDrawerRecalculate(): Promise<void> {
   if (await closeDrawerFirst()) emit('recalculate')
 }
 
-async function onChanged(): Promise<void> {
+async function onChanged(opts: { undoToast?: boolean } = {}): Promise<void> {
   const n = navState.value
-  // 處理完自動跳下一筆只在核對（排班沒有待處理佇列）
-  pendingAdvance = props.mode === 'reconcile' && drawerOpen.value && n && n.position !== null ? { key: n.key, after: n.after } : null
+  // 處理完自動跳下一件只在核對（排班沒有待處理佇列）
+  pendingAdvance = props.mode === 'reconcile' && drawerOpen.value && n && n.position !== null
+    ? { key: n.key, after: n.after, undoToast: !!opts.undoToast }
+    : null
   if (pendingAdvance) lockActions(4000)
+  await state.reload()
+  emit('changed')
+}
+function onDrawerChanged(opts?: { undoToast: boolean }): void {
+  void onChanged(opts)
+}
+/** 抽屜的「復原」（接受扣款／豁免後 10 秒內）：清回未處理後重抓並通知頁面（另一個面板與整月資料同步）；不是新的處理，不自動跳格 */
+async function onUndone(): Promise<void> {
   await state.reload()
   emit('changed')
 }

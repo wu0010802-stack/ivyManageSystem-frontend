@@ -15,6 +15,8 @@ const att = vi.hoisted(() => ({ getAnomalyList: vi.fn(), upsertRecord: vi.fn(), 
 vi.mock('@/api/attendance', () => ({ getAnomalyList: att.getAnomalyList, upsertRecord: att.upsertRecord, batchConfirmAnomalies: att.batchConfirmAnomalies }))
 vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
 vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: vi.fn() }) }))
+const undo = vi.hoisted(() => ({ show: vi.fn() }))
+vi.mock('@/composables/useConfirmUndo', () => ({ showUndoToast: undo.show }))
 const box = vi.hoisted(() => ({ confirm: vi.fn() }))
 const router = vi.hoisted(() => ({ push: vi.fn() }))
 vi.mock('vue-router', () => ({ useRouter: () => router }))
@@ -22,7 +24,7 @@ vi.mock('element-plus', async (orig) => ({ ...(await orig<typeof import('element
 
 const CALLER = grid().caller
 
-type DrawerNav = { position: number | null; total: number; hasPrev: boolean; hasNext: boolean; back?: string | null }
+type DrawerNav = { position: number | null; total: number; label: string; hasPrev: boolean; hasNext: boolean; back?: string | null }
 
 function mountDrawer(target: GridCell, extra: Partial<{ sameDayCells: GridCell[]; caller: typeof CALLER; weeklyShiftId: number | null; employee: GridEmployee; importCovered: boolean; nav: DrawerNav | null; attach: boolean; actionsLocked: boolean }> = {}) {
   return mount(PersonDayDrawer, {
@@ -309,13 +311,23 @@ describe('PersonDayDrawer', () => {
     expect(noWeekly.findAllComponents({ name: 'ElOption' })[0].props('label')).toBe('不另外調整（沿用預設工時）')
   })
 
-  it('已在出勤明細豁免的異常：判定寫出處理結果（與格子一致）', async () => {
+  it('已在出勤明細豁免的異常：決策卡寫出處理結果，判定只寫一次', async () => {
+    att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 0, confirmed: 1, items: [
+      { id: 101, employee_name: '林班導', employee_number: 'E001', date: W1, weekday: '一', type: 'late', type_label: '遲到', detail: '遲到 12 分鐘', estimated_deduction: 40, confirmed_action: 'admin_waive' },
+    ] } })
     const wrapper = mountDrawer(cell(1, W1, { plan: { work_start: '08:00', work_end: '17:00' }, actual: { status: 'anomaly', confirmed_action: 'admin_waive', late_minutes: 12, punch_in: `${W1}T08:12:00`, punch_out: `${W1}T17:00:00` } }))
     await flushPromises()
-    const text = wrapper.find('[data-test="pdd-actual"]').text()
-    expect(text).toContain('遲到 12 分・已豁免')
-    // 分鐘數只寫一次
-    expect(text.match(/遲到 12 分/g)).toHaveLength(1)
+    const resolve = wrapper.get('[data-test="pdd-resolve"]')
+    expect(resolve.text()).toContain('已豁免')
+    expect(resolve.get('[data-test="resolve-verdict"]').text()).toBe('遲到 12 分')
+    // 分鐘數只寫一次（抽屜自己的判定區塊在決策卡優先時不畫）
+    expect(wrapper.text().match(/遲到 12 分/g)).toHaveLength(1)
+  })
+
+  it('已封存的格子：「已封存」只寫一次', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { edit: { plan: false, confirm: false, recorded: true, locked_reason: 'finalized' }, actual: { status: 'missing_punch', attendance_id: 55 } }))
+    await flushPromises()
+    expect(wrapper.text().match(/封存/g)).toHaveLength(1)
   })
 
   it('本人的已打卡格子：沒有可用動作並說明原因；「看他整月」帶出人與日', async () => {
@@ -453,7 +465,66 @@ describe('PersonDayDrawer 審查修正', () => {
       w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'admin_accept' })
       await flushPromises()
       expect(att.batchConfirmAnomalies).toHaveBeenCalledWith({ attendance_ids: [55], action: 'admin_accept' })
-      expect(w.emitted('changed')).toHaveLength(2)
+      // 接受／豁免有復原提示：告訴面板不必再跳「已處理。下一筆…」；補打卡沒有復原，照舊
+      expect(w.emitted('changed')).toEqual([[{ undoToast: false }], [{ undoToast: true }]])
+      // 沒有佇列（不會自動跳）就不寫「跳到下一件」
+      expect(undo.show).toHaveBeenCalledWith({ text: '已處理 9/14（一）林班導', attendanceIds: [55], onUndone: expect.any(Function) })
+    })
+
+    it('豁免帶理由送出；有佇列時復原提示寫出處理了誰哪天、跳到下一件；按復原後通知面板', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      const w = mountDrawer(missing(), { nav: { position: 3, total: 12, label: '9 月逐日待辦 3 / 12', hasPrev: true, hasNext: true } })
+      await flushPromises()
+      w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'admin_waive', remark: '打卡機故障' })
+      await flushPromises()
+      expect(att.batchConfirmAnomalies).toHaveBeenCalledWith({ attendance_ids: [55], action: 'admin_waive', remark: '打卡機故障' })
+      expect(undo.show).toHaveBeenCalledWith(expect.objectContaining({ text: '已處理 9/14（一）林班導，跳到下一件', attendanceIds: [55] }))
+      ;(undo.show.mock.calls[0][0] as { onUndone: () => void }).onUndone()
+      expect(w.emitted('undone')).toHaveLength(1)
+    })
+
+    it('決策卡優先（缺卡、出勤異常）：不再畫抽屜自己的應上班與打卡判定（決策卡已有）', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      const w = mountDrawer(missing())
+      await flushPromises()
+      expect(w.find('[data-test="pdd-plan"]').exists()).toBe(false)
+      expect(w.find('[data-test="pdd-actual"]').exists()).toBe(false)
+      expect(w.findAll('h3').map((h) => h.text())).not.toEqual(expect.arrayContaining(['應上班', '打卡與判定']))
+      // 應上班與實際打卡改由決策卡寫一次
+      const facts = w.get('[data-test="resolve-facts"]').text()
+      expect(facts).toContain('早車 07:00–16:30（週排班）')
+      expect(facts).toContain('07:52 – 無紀錄')
+      expect(w.text().match(/07:52/g)).toHaveLength(1)
+    })
+
+    it('決策卡優先時，改這天與確認當日班別收進預設收合的「其他處理」', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      const w = mountDrawer(cell(1, W1, {
+        edit: { plan: true, confirm: true, recorded: true, locked_reason: null },
+        actual: { status: 'missing_punch', punch_in: `${W1}T07:52:00`, punch_out: null, attendance_id: 55 },
+      }))
+      await flushPromises()
+      const more = w.get('[data-test="pdd-more"]')
+      expect(more.element.tagName).toBe('DETAILS')
+      expect(more.attributes('open')).toBeUndefined()
+      expect(more.get('summary').text()).toBe('其他處理：改這天班別・確認是換班')
+      expect(more.find('[data-test="pdd-edit-day"]').exists()).toBe(true)
+      expect(more.find('[data-test="pdd-confirm"]').exists()).toBe(true)
+      // 收起來的次要動作不搶主色
+      expect(w.get('[data-test="pdd-day-apply"]').classes()).not.toContain('el-button--primary')
+      // 只有確認當日班別時，標題只寫那一項
+      const confirmOnly = mountDrawer(missing())
+      await flushPromises()
+      expect(confirmOnly.get('[data-test="pdd-more"] summary').text()).toBe('其他處理：確認是換班')
+    })
+
+    it('不是決策卡優先（疑似換班、疑似缺勤）：改這天與確認當日班別照舊攤開，不收進「其他處理」', async () => {
+      const swap = mountDrawer(cell(1, W1, { edit: RECORDED, actual: { status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00`, attendance_id: 55 } }))
+      const absent = mountDrawer(cell(1, W1, { edit: { plan: true, confirm: false, recorded: false, locked_reason: null }, actual: { status: 'suspected_absence', attendance_id: null } }))
+      await flushPromises()
+      for (const w of [swap, absent]) expect(w.find('[data-test="pdd-more"]').exists()).toBe(false)
+      expect(swap.find('[data-test="pdd-actual"]').exists()).toBe(true)
+      expect(absent.find('[data-test="pdd-edit-day"]').exists()).toBe(true)
     })
 
     it('後端還沒支援人／日篩選（回傳整月）時，只取該人該天的卡，不會顯示別人的異常', async () => {
@@ -495,7 +566,7 @@ describe('PersonDayDrawer 審查修正', () => {
       await w.find('[data-test="pdd-candidate-2"]').trigger('click')
       expect(w.findAllComponents({ name: 'ElSelect' })[0].props('modelValue')).toBe(2)
       expect(buttons(w)).not.toContain('補打卡並重算')
-      expect(buttons(w)).toEqual(expect.arrayContaining(['接受扣款', '豁免']))
+      expect(buttons(w)).toEqual(expect.arrayContaining(['接受扣款', '豁免…']))
     })
 
     it('疑似缺勤（沒有出勤紀錄列）：補登上下班與改這天並列、都不是主要按鈕；不抓異常清單', async () => {
@@ -621,34 +692,36 @@ describe('PersonDayDrawer 審查修正', () => {
 })
 
 describe('PersonDayDrawer 上一筆／下一筆待處理', () => {
-  const NAV: DrawerNav = { position: 3, total: 12, hasPrev: true, hasNext: true }
+  const NAV: DrawerNav = { position: 3, total: 12, label: '9 月逐日待辦 3 / 12', hasPrev: true, hasNext: true }
   const press = (key: string, target: EventTarget = document.body) => {
     target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
   }
 
-  it('寫出第幾筆與共幾筆；上一筆、下一筆送出 navigate；到頭到尾就停用', async () => {
+  it('寫出面板給的佇列標籤（整月逐日待辦第幾件）；上一件、下一件送出 navigate；到頭到尾就停用', async () => {
     const wrapper = mountDrawer(cell(1, W1, { actual: { status: 'anomaly', late_minutes: 20, punch_in: `${W1}T07:20:00`, punch_out: `${W1}T16:30:00` } }), { nav: NAV })
     await flushPromises()
-    expect(wrapper.get('[data-test="pdd-nav-pos"]').text()).toBe('待處理 3／12')
+    expect(wrapper.get('[data-test="pdd-nav-pos"]').text()).toBe('9 月逐日待辦 3 / 12')
+    expect(wrapper.get('[data-test="pdd-prev"]').text()).toBe('上一件')
+    expect(wrapper.get('[data-test="pdd-next"]').text()).toBe('下一件')
     await wrapper.get('[data-test="pdd-next"]').trigger('click')
     await flushPromises()
     await wrapper.get('[data-test="pdd-prev"]').trigger('click')
     await flushPromises()
     expect(wrapper.emitted('navigate')).toEqual([[1], [-1]])
-    await wrapper.setProps({ nav: { position: 12, total: 12, hasPrev: true, hasNext: false } })
+    await wrapper.setProps({ nav: { position: 12, total: 12, label: '9 月逐日待辦 12 / 12', hasPrev: true, hasNext: false } })
     expect(wrapper.get('[data-test="pdd-next"]').attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
 
-  it('開的是不用處理的格子：寫共幾筆待處理，仍可跳到下一筆', async () => {
-    const wrapper = mountDrawer(cell(1, W1, { actual: {} }), { nav: { position: null, total: 5, hasPrev: false, hasNext: true } })
+  it('開的是不在佇列裡的格子：寫共幾件逐日待辦，仍可跳到下一件', async () => {
+    const wrapper = mountDrawer(cell(1, W1, { actual: {} }), { nav: { position: null, total: 5, label: '共 5 件逐日待辦', hasPrev: false, hasNext: true } })
     await flushPromises()
-    expect(wrapper.get('[data-test="pdd-nav-pos"]').text()).toBe('共 5 筆待處理')
+    expect(wrapper.get('[data-test="pdd-nav-pos"]').text()).toBe('共 5 件逐日待辦')
     wrapper.unmount()
   })
 
   it('沒有待處理（或沒有導覽）就不顯示導覽列', async () => {
-    expect(mountDrawer(cell(1, W1, { actual: {} }), { nav: { position: null, total: 0, hasPrev: false, hasNext: false } }).find('[data-test="pdd-nav"]').exists()).toBe(false)
+    expect(mountDrawer(cell(1, W1, { actual: {} }), { nav: { position: null, total: 0, label: '共 0 件逐日待辦', hasPrev: false, hasNext: false } }).find('[data-test="pdd-nav"]').exists()).toBe(false)
     expect(mountDrawer(cell(1, W1, { actual: {} })).find('[data-test="pdd-nav"]').exists()).toBe(false)
   })
 
@@ -794,7 +867,7 @@ describe('PersonDayDrawer 版面順序', () => {
 })
 
 describe('PersonDayDrawer 審查修正', () => {
-  const NAV: DrawerNav = { position: 3, total: 12, hasPrev: true, hasNext: true }
+  const NAV: DrawerNav = { position: 3, total: 12, label: '9 月逐日待辦 3 / 12', hasPrev: true, hasNext: true }
   const press = (target: EventTarget, init: KeyboardEventInit = {}) => target.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, ...init }))
 
   it('焦點在疊在上面的其他對話框（例如匯入打卡）時，J／K 不換筆；按住不放不連續換', async () => {
