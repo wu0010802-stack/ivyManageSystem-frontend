@@ -87,8 +87,16 @@
     </el-tabs>
 
     <!-- 新增覆寫區段 -->
-    <el-dialog v-model="segmentDialogVisible" title="新增職務異動月額覆寫" width="480px">
-      <el-form label-width="100px">
+    <FormDialog
+      v-model="segmentDialogVisible"
+      title="新增職務異動月額覆寫"
+      size="compact"
+      submit-text="新增"
+      :loading="saving"
+      :enter-submit="false"
+      @submit="submitSegment"
+    >
+      <el-form label-position="top" @submit.prevent>
         <el-form-item label="員工">
           <el-select v-model="segmentForm.employee_id" filterable style="width: 100%">
             <el-option v-for="emp in employeeOptions" :key="emp.id" :value="emp.id" :label="emp.name" />
@@ -129,15 +137,19 @@
         </el-form-item>
       </el-form>
       <p class="hint">起訖月含兩端，須在 {{ bounds.first }}～{{ bounds.last }} 之間。</p>
-      <template #footer>
-        <el-button @click="segmentDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitSegment">新增</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
 
     <!-- 新增扣抵 -->
-    <el-dialog v-model="deductionDialogVisible" title="新增自主成長獎勵金扣抵" width="440px">
-      <el-form label-width="90px">
+    <FormDialog
+      v-model="deductionDialogVisible"
+      title="新增自主成長獎勵金扣抵"
+      size="compact"
+      submit-text="新增"
+      :loading="saving"
+      :enter-submit="false"
+      @submit="submitDeduction"
+    >
+      <el-form label-position="top" @submit.prevent>
         <el-form-item label="員工">
           <el-select v-model="deductionForm.employee_id" filterable style="width: 100%">
             <el-option v-for="emp in employeeOptions" :key="emp.id" :value="emp.id" :label="emp.name" />
@@ -157,11 +169,7 @@
           <el-input v-model="deductionForm.reason" maxlength="200" show-word-limit placeholder="例：115.02 警告款節慶不足額結轉" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="deductionDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitDeduction">新增</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </section>
 </template>
 
@@ -170,6 +178,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
 import {

@@ -8,6 +8,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
+import FormDialog from '@/components/common/FormDialog.vue'
 import {
   FESTIVAL_CONFIG_KEYS,
   createFestivalCarryManualEntry,
@@ -340,10 +341,18 @@ onMounted(() => {
       </div>
     </el-drawer>
 
-    <el-dialog v-model="entryDialogVisible" title="未扣餘額人工登記" width="480px">
+    <FormDialog
+      v-model="entryDialogVisible"
+      title="未扣餘額人工登記"
+      size="compact"
+      submit-text="登記"
+      :loading="entrySubmitting"
+      :enter-submit="false"
+      @submit="submitEntry"
+    >
       <template v-if="entryTarget">
         <p class="hint">{{ entryTarget.employee_name }}，目前餘額 {{ formatCurrency(entryTarget.balance) }}</p>
-        <el-form label-width="110px">
+        <el-form label-position="top" @submit.prevent>
           <el-form-item label="登記類型">
             <el-radio-group v-model="entryForm.entry_type">
               <el-radio v-for="o in MANUAL_ENTRY_TYPE_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
@@ -368,11 +377,7 @@ onMounted(() => {
           </el-form-item>
         </el-form>
       </template>
-      <template #footer>
-        <el-button @click="entryDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="entrySubmitting" @click="submitEntry">登記</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </div>
 </template>
 
