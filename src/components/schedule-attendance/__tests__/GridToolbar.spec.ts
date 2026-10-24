@@ -6,6 +6,9 @@ import ElementPlus from 'element-plus'
 import GridToolbar from '../GridToolbar.vue'
 import { W1 } from './gridFixtures'
 
+const COUNTS = { all: 35, issues: 14, patterns: 6, leftover: 4 }
+const buttonTexts = (wrapper: ReturnType<typeof mountToolbar>) => wrapper.findAllComponents({ name: 'ElRadioButton' }).map((b) => b.text())
+
 function mountToolbar(props: Partial<InstanceType<typeof GridToolbar>['$props']> = {}) {
   return mount(GridToolbar, {
     props: { mode: 'reconcile', weekStart: W1, filter: 'all', keyword: '', canEditPlan: true, pendingCount: 0, ...props },
@@ -38,15 +41,11 @@ describe('GridToolbar', () => {
     expect(sep.emitted('update:weekStart')).toEqual([['2026-09-28']])
   })
 
-  it('篩選切換與問題數', () => {
-    const wrapper = mountToolbar({ issueCount: 3 })
-    // 數字寫出範圍：週檢視是本週，與本月進度的「本月 N 格」分得開
-    expect(wrapper.text()).toContain('只看待處理（本週 3）')
-    expect(mountToolbar({ issueCount: 7, view: 'month' }).text()).toContain('只看待處理（本月 7）')
-    // 待修設定（整月同型態）和逐日待處理分開寫
-    expect(mountToolbar({ issueCount: 109, patternIssueCount: 60 }).text()).toContain('只看待處理（本週 49＋待修設定 60）')
-    wrapper.findComponent({ name: 'ElRadioGroup' }).vm.$emit('update:modelValue', 'issues')
-    expect(wrapper.emitted('update:filter')).toEqual([['issues']])
+  it('篩選切換送出 update:filter', () => {
+    const wrapper = mountToolbar({ filterCounts: COUNTS, sealState: 'partial' })
+    const group = wrapper.findComponent({ name: 'ElRadioGroup' })
+    for (const value of ['issues', 'patterns', 'leftover', 'all']) group.vm.$emit('update:modelValue', value)
+    expect(wrapper.emitted('update:filter')).toEqual([['issues'], ['patterns'], ['leftover'], ['all']])
   })
 
   it('人員搜尋框（姓名或工號）：輸入與清除都送出 update:keyword', async () => {
@@ -120,18 +119,70 @@ describe('GridToolbar 核對／排班兩種模式', () => {
     expect(mountToolbar({ mode: 'plan' }).find('[data-test="toolbar-view"]').exists()).toBe(false)
   })
 
-  it('核對：篩選三個選項；有排班權限、有變更也不放排班工具與儲存排班', () => {
-    const wrapper = mountToolbar({ mode: 'reconcile', canEditPlan: true, pendingCount: 2 })
-    expect(wrapper.findAllComponents({ name: 'ElRadioButton' }).map((b) => b.text())).toEqual(['全部', '只看待處理', '只看未來可排'])
+  it('核對（未封存）：全部、有待辦、設定問題，後面接人數（以人為單位）；有排班權限、有變更也不放排班工具與儲存排班', () => {
+    const wrapper = mountToolbar({ mode: 'reconcile', canEditPlan: true, pendingCount: 2, filterCounts: COUNTS, sealState: 'open' })
+    expect(buttonTexts(wrapper)).toEqual(['全部（35 人）', '有待辦（14 人）', '設定問題（6 人）'])
+    expect(wrapper.text()).not.toContain('只看待處理')
     expect(wrapper.find('[data-test="toolbar-schedule"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="toolbar-save"]').exists()).toBe(false)
   })
 
-  it('排班：篩選只有全部與只看未來可排（沒有待處理可看）；有排班工具', () => {
-    const wrapper = mountToolbar({ mode: 'plan', issueCount: 3 })
-    expect(wrapper.findAllComponents({ name: 'ElRadioButton' }).map((b) => b.text())).toEqual(['全部', '只看未來可排'])
-    expect(wrapper.text()).not.toContain('只看待處理')
+  it('核對（部分員工已封存）：多一個封存時未處理；其餘照舊', () => {
+    expect(buttonTexts(mountToolbar({ filterCounts: COUNTS, sealState: 'partial' }))).toEqual([
+      '全部（35 人）',
+      '有待辦（14 人）',
+      '設定問題（6 人）',
+      '封存時未處理（4 人）',
+    ])
+  })
+
+  it('核對（整月已封存）：沒有待辦可做，只剩全部與封存時未處理', () => {
+    const wrapper = mountToolbar({ filterCounts: { ...COUNTS, issues: 0, patterns: 0, leftover: 14 }, sealState: 'sealed' })
+    expect(buttonTexts(wrapper)).toEqual(['全部（35 人）', '封存時未處理（14 人）'])
+    expect(wrapper.text()).not.toContain('有待辦')
+    expect(wrapper.text()).not.toContain('設定問題')
+  })
+
+  it('封存狀態還沒載到當作未封存；人數還沒算出來就不寫人數（不寫成 0 人）', () => {
+    expect(buttonTexts(mountToolbar({ filterCounts: COUNTS }))).toEqual(['全部（35 人）', '有待辦（14 人）', '設定問題（6 人）'])
+    expect(buttonTexts(mountToolbar({ sealState: 'open' }))).toEqual(['全部', '有待辦', '設定問題'])
+    // 網址指定了封存時未處理、月摘要還沒到：先留著這個選項，才有東西可選回去
+    expect(buttonTexts(mountToolbar({ filter: 'leftover', filterCounts: COUNTS }))).toEqual([
+      '全部（35 人）',
+      '有待辦（14 人）',
+      '設定問題（6 人）',
+      '封存時未處理（4 人）',
+    ])
+  })
+
+  it('排班：篩選只有全部與只看未來可排（沒有待辦、沒有人數）；有排班工具', () => {
+    const wrapper = mountToolbar({ mode: 'plan', filterCounts: COUNTS, sealState: 'sealed' })
+    expect(buttonTexts(wrapper)).toEqual(['全部', '只看未來可排'])
+    expect(wrapper.text()).not.toContain('有待辦')
     expect(wrapper.find('[data-test="toolbar-schedule"]').exists()).toBe(true)
+  })
+
+  it('手機（compact）：篩選收成單一下拉，選項與桌機相同；選了送出 update:filter，沒有按鈕群組', () => {
+    const wrapper = mountToolbar({ compact: true, filterCounts: COUNTS, sealState: 'partial', filter: 'issues' })
+    expect(wrapper.findComponent({ name: 'ElRadioGroup' }).exists()).toBe(false)
+    const select = wrapper.findComponent({ name: 'ElSelect' })
+    expect(select.attributes('data-test')).toBe('toolbar-filter')
+    expect(select.props('ariaLabel')).toBe('篩選人員')
+    expect(wrapper.findAllComponents({ name: 'ElOption' }).map((o) => o.props('label'))).toEqual([
+      '全部（35 人）',
+      '有待辦（14 人）',
+      '設定問題（6 人）',
+      '封存時未處理（4 人）',
+    ])
+    expect(select.props('modelValue')).toBe('issues')
+    select.vm.$emit('update:modelValue', 'leftover')
+    expect(wrapper.emitted('update:filter')).toEqual([['leftover']])
+  })
+
+  it('手機的排班工具列也是單一下拉（全部／只看未來可排）', () => {
+    const wrapper = mountToolbar({ mode: 'plan', compact: true })
+    expect(wrapper.findComponent({ name: 'ElRadioGroup' }).exists()).toBe(false)
+    expect(wrapper.findAllComponents({ name: 'ElOption' }).map((o) => o.props('label'))).toEqual(['全部', '只看未來可排'])
   })
 
   it('核對的月模式：寫年月；上／下個月與月份選擇送出月初；沒有週導覽與排班工具', async () => {

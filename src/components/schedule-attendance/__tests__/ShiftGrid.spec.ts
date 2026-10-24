@@ -33,6 +33,7 @@ function mountGrid(opts: {
   maxHeight?: number
   personNotes?: Record<number, { tag: string; detail: string }>
   patternKeys?: ReadonlySet<string>
+  patternEmployeeIds?: ReadonlySet<number>
   attach?: boolean
 } = {}) {
   const g = grid({
@@ -64,6 +65,7 @@ function mountGrid(opts: {
       maxHeight: opts.maxHeight,
       personNotes: opts.personNotes,
       patternKeys: opts.patternKeys,
+      patternEmployeeIds: opts.patternEmployeeIds,
     },
     ...(opts.attach ? { attachTo: document.body } : {}),
     global: { plugins: [ElementPlus] },
@@ -105,6 +107,36 @@ describe('ShiftGrid 桌機', () => {
     expect(wrapper.find('[data-test="row-1"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="row-2"]').exists()).toBe(true)
     expect(wrapper.find(`[data-test="cell-2-${WEEK[0]}"]`).classes()).toContain('shift-grid__cell--k-deduct')
+  })
+
+  it('列篩選以人為單位：有待辦不含只有設定問題格的人；設定問題看型態名單；封存時未處理看封存遺留', () => {
+    const ANOMALY = { status: 'anomaly' as const }
+    // 林：唯一的待辦是型態格；王：一筆逐日待辦；李：封存時沒處理
+    const cells = cellsFor({
+      [`1|${WEEK[0]}`]: { actual: ANOMALY },
+      [`2|${WEEK[1]}`]: { actual: ANOMALY },
+      [`3|${WEEK[2]}`]: { actual: ANOMALY, edit: { locked_reason: 'finalized' } },
+    })
+    const patternProps = { patternKeys: new Set([`1|${WEEK[0]}`]), patternEmployeeIds: new Set([1]) }
+    const rows = (filter: GridFilter) => mountGrid({ cells, filter, ...patternProps }).findAll('[data-test^="row-"]').map((r) => r.attributes('data-test'))
+    expect(rows('all')).toEqual(['row-1', 'row-2', 'row-3'])
+    expect(rows('issues')).toEqual(['row-2'])
+    expect(rows('patterns')).toEqual(['row-1'])
+    expect(rows('leftover')).toEqual(['row-3'])
+  })
+
+  it('封存時未處理：同一列裡不是封存遺留的格子退到背景；沒有符合的人時各自說明', () => {
+    const ANOMALY = { status: 'anomaly' as const }
+    const cells = cellsFor({
+      [`3|${WEEK[2]}`]: { actual: ANOMALY, edit: { locked_reason: 'finalized' } },
+      [`3|${WEEK[3]}`]: { actual: { status: 'matched' }, edit: { locked_reason: 'finalized' } },
+    })
+    const leftover = mountGrid({ cells, filter: 'leftover' })
+    expect(leftover.get(`[data-test="cell-3-${WEEK[2]}"]`).classes()).not.toContain('shift-grid__cell--quiet')
+    expect(leftover.get(`[data-test="cell-3-${WEEK[3]}"]`).classes()).toContain('shift-grid__cell--quiet')
+    expect(mountGrid({ filter: 'issues' }).get('.shift-grid__empty').text()).toBe('這段期間沒有人有待辦')
+    expect(mountGrid({ filter: 'patterns' }).get('.shift-grid__empty').text()).toBe('這段期間沒有設定問題的人')
+    expect(mountGrid({ filter: 'leftover' }).get('.shift-grid__empty').text()).toBe('這段期間沒有封存時未處理的人')
   })
 
   it('整天未匯入的日子：格子寫「未匯入」、不算待處理；整週都被篩掉時說明要先匯入並給入口', async () => {

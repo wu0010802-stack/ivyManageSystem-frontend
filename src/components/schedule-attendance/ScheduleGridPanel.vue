@@ -10,8 +10,8 @@
       :pending-count="state.pendingCount.value"
       :saving="state.saving.value"
       :busy="busy || state.loading.value"
-      :issue-count="issueCount"
-      :pattern-issue-count="patternIssueCount"
+      :filter-counts="filterCountsOfScope"
+      :seal-state="sealState"
       :view="isMonth ? 'month' : 'week'"
       :date="date"
       :compact="isMobile"
@@ -56,6 +56,7 @@
         :max-height="gridMaxHeight"
         :person-notes="personNotes"
         :pattern-keys="patternKeys"
+        :pattern-employee-ids="patternEmployeeIds"
         @select="openMonthCell"
         @show-patterns="emit('show-patterns')"
         @open-week="openWeek"
@@ -88,6 +89,7 @@
         :max-height="gridMaxHeight"
         :person-notes="personNotes"
         :pattern-keys="patternKeys"
+        :pattern-employee-ids="patternEmployeeIds"
         @select="openCell"
         @show-patterns="emit('show-patterns')"
         @weekly-change="state.setWeekly"
@@ -183,6 +185,7 @@ import { useScheduleGrid } from '@/composables/useScheduleGrid'
 import { attendanceRouteProps } from '@/router/attendanceRouteProps'
 import { useIsMobile } from '@/composables/useIsMobile'
 import type { MonthGridState } from '@/composables/useMonthGrid'
+import type { SealState } from '@/utils/attendanceMonthSummary'
 import { copyMonthAssignments, getAssignments, importShifts } from '@/api/shifts'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { downloadFile } from '@/utils/download'
@@ -191,8 +194,10 @@ import { computeWeekCoverage } from '@/utils/scheduleCoverage'
 import { patternCellKeys, patternSummary, patternTag } from '@/utils/attendancePatterns'
 import {
   addDaysISO,
+  availableFilters,
   cellKey,
   coverageInputs,
+  filterCounts,
   gridSections,
   isIssue,
   mondayOf,
@@ -231,6 +236,13 @@ const props = defineProps<{
   month?: MonthGridState
   /** 頁首已有年月切換：月模式工具列不再放第二組 */
   headerHasMonth?: boolean
+  /**
+   * 這個月的封存狀態（月摘要的單一來源，頁面傳入）：決定核對提供哪些篩選（整月封存沒有待辦可做、非未封存才有「封存時未處理」）。
+   * 還沒載到（undefined）時當作未封存。
+   */
+  sealState?: SealState
+  /** 這個月薪資已封存的員工 id：他們的殘留算封存時未處理，不算設定問題 */
+  sealedEmployeeIds?: ReadonlySet<number>
 }>()
 const emit = defineEmits<{
   'update:date': [value: string]
@@ -358,25 +370,16 @@ const shiftNames = computed<Record<number, string>>(() =>
 )
 const isMonth = computed(() => props.mode === 'reconcile' && props.view === 'month' && !!props.month)
 const monthData = computed(() => (isMonth.value ? props.month!.data.value : null))
-const issueCount = computed(() => {
-  const g = isMonth.value ? monthData.value : gridData.value
-  if (!g) return 0
-  const uncovered = uncoveredDates(g.days)
-  return g.cells.filter((c) => isIssue(c, g.today, uncovered)).length
-})
 /** 本月型態（整月資料算的）：人員欄註記，週、月格子共用 */
 const personNotes = computed<Record<number, { tag: string; detail: string }>>(() =>
   Object.fromEntries((props.month?.patterns.value ?? []).map((p) => [p.employeeId, { tag: patternTag(p), detail: patternSummary(p) }])),
 )
 /** 符合型態的待處理格（cellKey）：格子顯示為「待修設定」的橘色，不和逐日異常同一種紅 */
 const patternKeys = computed(() => patternCellKeys(props.month?.patterns.value ?? []))
-/** 目前這週／月的待處理中，有幾格屬於待修設定（工具列「只看待處理」的拆分數字） */
-const patternIssueCount = computed(() => {
-  const g = isMonth.value ? monthData.value : gridData.value
-  if (!g) return 0
-  const uncovered = uncoveredDates(g.days)
-  const keys = patternKeys.value
-  return g.cells.filter((c) => keys.has(cellKey(c.employee_id, c.date)) && isIssue(c, g.today, uncovered)).length
+/** 本月被判成設定問題的人（只算未封存者）：「設定問題」篩選的列條件 */
+const patternEmployeeIds = computed<ReadonlySet<number>>(() => {
+  const sealed = props.sealedEmployeeIds
+  return new Set((props.month?.patterns.value ?? []).filter((p) => !sealed?.has(p.employeeId)).map((p) => p.employeeId))
 })
 const EMPTY_CELLS: Map<string, GridCell> = new Map()
 const monthLoading = computed(() => (isMonth.value ? props.month!.loading.value : false))
@@ -384,6 +387,30 @@ const monthError = computed(() => (isMonth.value ? props.month!.loadError.value 
 const monthCells = computed(() => (isMonth.value ? props.month!.cells.value : EMPTY_CELLS))
 /** 月格子欄：平日＋有人上班的週末（SPEC-027 §2「當月平日欄」） */
 const monthDays = computed(() => (monthData.value ? visibleDays(monthData.value.days, monthData.value.cells) : []))
+/**
+ * 核對工具列各篩選的人數：用表格同一份資料與同一個範圍（顯示中的那週或那月）數，數字和點進去的列數一致。
+ * 資料還沒載到、或在排班（沒有待辦可看）時是 undefined，工具列就不寫人數。
+ */
+const filterCountsOfScope = computed(() => {
+  if (props.mode !== 'reconcile') return undefined
+  const g = isMonth.value ? monthData.value : gridData.value
+  if (!g) return undefined
+  return filterCounts({
+    groups: g.groups,
+    employees: g.employees,
+    days: isMonth.value ? monthDays.value : days.value,
+    cells: isMonth.value ? monthCells.value : state.cells.value,
+    today: g.today,
+    uncovered: uncoveredDates(g.days),
+    patternKeys: patternKeys.value,
+    patternEmployeeIds: patternEmployeeIds.value,
+  })
+})
+
+// 選到這個情境沒有的篩選（封存月的有待辦、未封存月的封存時未處理、排班帶了核對專用的值、核對沒有的只看未來可排）：
+// 退回全部並通知頁面同步網址，不留下一個沒有任何可見選項能取消的空表格。月摘要還沒載到時 availableFilters 不洗掉網址帶的值。
+const filterUnavailable = computed(() => !availableFilters(props.mode, props.sealState, props.filter).includes(props.filter))
+watch(filterUnavailable, (unavailable) => { if (unavailable) emit('update:filter', 'all') }, { immediate: true })
 function reloadMonth(): void {
   void props.month?.reload()
 }
@@ -457,7 +484,18 @@ const navOrder = computed<GridCell[]>(() => {
   const src = queueSource.value
   if (!src) return []
   const { grid: g, cells, days: navDays } = src
-  const sections = gridSections({ groups: g.groups, employees: g.employees, days: navDays, cells, filter: props.filter, today: g.today, keyword: keyword.value, uncovered: uncoveredDates(g.days) })
+  const sections = gridSections({
+    groups: g.groups,
+    employees: g.employees,
+    days: navDays,
+    cells,
+    filter: props.filter,
+    today: g.today,
+    keyword: keyword.value,
+    uncovered: uncoveredDates(g.days),
+    patternKeys: patternKeys.value,
+    patternEmployeeIds: patternEmployeeIds.value,
+  })
   return sections
     .flatMap((section) => section.employees)
     .flatMap((emp) => navDays.map((d) => cells.get(cellKey(emp.employee_id, d.date))).filter((c): c is GridCell => c !== undefined))

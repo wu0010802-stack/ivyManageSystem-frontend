@@ -118,6 +118,8 @@ const props = defineProps<{
   personNotes?: Record<number, { tag: string; detail: string }>
   /** 符合本月型態的待處理格（cellKey）：多半是設定問題，狀態點是「設定問題」而不是會扣款 */
   patternKeys?: ReadonlySet<string>
+  /** 本月被判成設定問題的人（員工 id）：「設定問題」篩選的列條件 */
+  patternEmployeeIds?: ReadonlySet<number>
 }>()
 const emit = defineEmits<{
   select: [employeeId: number, date: string]
@@ -151,6 +153,8 @@ const sections = computed(() =>
     today: props.today,
     keyword: props.keyword,
     uncovered: uncovered.value,
+    patternKeys: props.patternKeys,
+    patternEmployeeIds: props.patternEmployeeIds,
   }),
 )
 
@@ -161,7 +165,9 @@ function weekLabel(w: MonthWeek): string {
 }
 const emptyText = computed(() => {
   if ((props.keyword ?? '').trim()) return '找不到符合的人員'
-  if (props.filter === 'issues') return '這個月沒有待處理的格子'
+  if (props.filter === 'issues') return '這個月沒有人有待辦'
+  if (props.filter === 'patterns') return '這個月沒有設定問題的人'
+  if (props.filter === 'leftover') return '這個月沒有封存時未處理的人'
   if (props.filter === 'future') return '這個月沒有可排的未來日'
   return '這個月沒有在職人員'
 })

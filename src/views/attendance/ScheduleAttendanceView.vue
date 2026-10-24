@@ -29,7 +29,7 @@
       </template>
     </PageHeader>
 
-    <MonthProgressBar v-show="monthTabs" ref="progressBar" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" @primary="onPrimary" @recalculate="recalcOpen = true" />
+    <MonthProgressBar v-show="monthTabs" ref="progressBar" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @show-leftover="showLeftover" @go-month="goMonth" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" @primary="onPrimary" @recalculate="recalcOpen = true" />
 
     <div class="workspace-mode" role="tablist" aria-label="排班與出勤">
       <button
@@ -75,6 +75,8 @@
       :view="gridView"
       :month="monthGrid"
       :header-has-month="canViewAttendance"
+      :seal-state="headerSealState"
+      :sealed-employee-ids="sealedEmployeeIds"
       @update:date="setAnchorDate"
       @update:filter="setFilter"
       @update:view="setReconcileView"
@@ -384,10 +386,24 @@ function setFilter(filter: GridFilter): void {
 
 /** 本月進度③與匯入完成：看整月的待處理。桌機切到月格子，看到的數字才會和本月進度的待處理件數相同；手機（沒有月格子）切到週 */
 function showIssues(): void {
+  showGridFilter('issues')
+}
+
+/** 封存橫幅「看這 N 件」：同上切到核對的月格子（手機週），只看封存時沒處理的人 */
+function showLeftover(): void {
+  showGridFilter('leftover')
+}
+
+function showGridFilter(filter: GridFilter): void {
   activeTab.value = 'grid'
-  gridFilter.value = 'issues'
+  gridFilter.value = filter
   reconcileView.value = isDesktop.value ? 'month' : 'week'
-  syncQuery({ tab: 'grid', filter: 'issues', view: viewQuery(reconcileView.value) })
+  syncQuery({ tab: 'grid', filter, view: viewQuery(reconcileView.value) })
+}
+
+/** 封存橫幅「前往 N 月」：走頁首換月同一個入口（先問排班頁籤未儲存的週排班） */
+function goMonth({ year, month }: { year: number; month: number }): void {
+  setMonth(year, month)
 }
 
 // ── getRecords 回傳列（OpenAPI 契約型別）────────────────────────────────────

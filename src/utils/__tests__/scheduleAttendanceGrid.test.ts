@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
   addDaysISO,
+  availableFilters,
   cellDisplay,
   cellKey,
   chunk,
   confirmUnits,
   coverageInputs,
+  filterCounts,
   findPairCell,
   gridSections,
   groupDaysByWeek,
@@ -582,5 +584,104 @@ describe('verdictKind（格子狀態語意：形狀＋顏色五類）', () => {
       setting: '設定問題（先修設定）',
       pending_data: '資料待補',
     })
+  })
+})
+
+describe('核對篩選以人為單位（issues／patterns／leftover）', () => {
+  const SEALED = { locked_reason: 'finalized' as const }
+  const D1 = '2026-09-14'
+  const D2 = '2026-09-15'
+  const issueCell = (id: number, date: string) => cell(id, date, { actual: { status: 'anomaly' } })
+  const sealedIssue = (id: number, date: string) => cell(id, date, { actual: { status: 'anomaly' }, edit: SEALED })
+  const ok = (id: number, date: string) => cell(id, date, { actual: {} })
+
+  it('issues：至少一格是待辦且不是型態格；只有型態格的人不算有待辦', () => {
+    const patternKeys = new Set([cellKey(1, D1), cellKey(1, D2)])
+    // 林：兩格待辦都是型態格 → 不算
+    expect(rowMatchesFilter([issueCell(1, D1), issueCell(1, D2)], 'issues', TODAY, undefined, { patternKeys })).toBe(false)
+    // 王：一格型態、一格逐日待辦 → 算
+    const mixed = new Set([cellKey(2, D1)])
+    expect(rowMatchesFilter([issueCell(2, D1), issueCell(2, D2)], 'issues', TODAY, undefined, { patternKeys: mixed })).toBe(true)
+    // 沒有待辦 → 不算
+    expect(rowMatchesFilter([ok(3, D1)], 'issues', TODAY, undefined, { patternKeys })).toBe(false)
+  })
+
+  it('issues：沒給型態資料（舊呼叫端）時行為不變；封存格仍不算', () => {
+    expect(rowMatchesFilter([issueCell(1, D1)], 'issues', TODAY)).toBe(true)
+    expect(rowMatchesFilter([sealedIssue(1, D1)], 'issues', TODAY)).toBe(false)
+  })
+
+  it('patterns：員工 id 在型態名單裡；沒給名單就沒有人', () => {
+    const ids = new Set([4])
+    expect(rowMatchesFilter([ok(4, D1)], 'patterns', TODAY, undefined, { patternEmployeeIds: ids })).toBe(true)
+    expect(rowMatchesFilter([ok(5, D1)], 'patterns', TODAY, undefined, { patternEmployeeIds: ids })).toBe(false)
+    expect(rowMatchesFilter([ok(4, D1)], 'patterns', TODAY)).toBe(false)
+  })
+
+  it('leftover：至少一格是封存時沒處理的待辦；未封存的待辦與封存時已處理的格子不算', () => {
+    expect(rowMatchesFilter([ok(1, D1), sealedIssue(1, D2)], 'leftover', TODAY)).toBe(true)
+    expect(rowMatchesFilter([issueCell(1, D1)], 'leftover', TODAY)).toBe(false)
+    expect(rowMatchesFilter([cell(1, D1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive' }, edit: SEALED })], 'leftover', TODAY)).toBe(false)
+    expect(rowMatchesFilter([cell(1, D1, { actual: { status: 'matched' }, edit: SEALED })], 'leftover', TODAY)).toBe(false)
+    // 整天還沒匯入的資料待補不是遺留（與 isSealedLeftover 同一套規則）
+    const uncovered = uncoveredDates([day(D1, { import_covered: false })])
+    expect(rowMatchesFilter([cell(1, D1, { actual: { status: 'data_incomplete' }, edit: SEALED })], 'leftover', TODAY, uncovered)).toBe(false)
+  })
+
+  const base = () => {
+    const g = grid({
+      employees: [employee(1, '林班導'), employee(2, '王副導'), employee(3, '陳行政', { group_key: 'other' }), employee(4, '黃保育')],
+      cells: [
+        issueCell(1, D1), issueCell(1, D2), // 林：兩格都是型態格
+        issueCell(2, D1), ok(2, D2), // 王：一格逐日待辦
+        sealedIssue(3, D1), // 陳：封存時沒處理
+        ok(4, D1), // 黃：沒事
+      ],
+    })
+    return {
+      groups: g.groups,
+      employees: g.employees,
+      days: g.days,
+      cells: indexCells(g.cells),
+      today: g.today,
+      patternKeys: new Set([cellKey(1, D1), cellKey(1, D2)]),
+      patternEmployeeIds: new Set([1]),
+    }
+  }
+  const ids = (sections: ReturnType<typeof gridSections>) => sections.flatMap((s) => s.employees.map((e) => e.employee_id))
+
+  it('gridSections：帶型態資料時四種列條件各留對的人，依組分段', () => {
+    const input = base()
+    expect(ids(gridSections({ ...input, filter: 'all' }))).toEqual([1, 2, 4, 3])
+    expect(ids(gridSections({ ...input, filter: 'issues' }))).toEqual([2])
+    expect(ids(gridSections({ ...input, filter: 'patterns' }))).toEqual([1])
+    expect(ids(gridSections({ ...input, filter: 'leftover' }))).toEqual([3])
+    // 人員搜尋照樣疊在篩選上
+    expect(ids(gridSections({ ...input, filter: 'all', keyword: '黃' }))).toEqual([4])
+    expect(ids(gridSections({ ...input, filter: 'issues', keyword: '林' }))).toEqual([])
+  })
+
+  it('filterCounts：人數與同條件的 gridSections 完全一致（工具列的數字與點進去的列數不會差）', () => {
+    const input = base()
+    const counts = filterCounts(input)
+    expect(counts).toEqual({ all: 4, issues: 1, patterns: 1, leftover: 1 })
+    for (const f of ['all', 'issues', 'patterns', 'leftover'] as const) {
+      expect(counts[f]).toBe(ids(gridSections({ ...input, filter: f })).length)
+    }
+  })
+
+  it('availableFilters：核對依封存狀態給選項；排班只有全部與只看未來可排', () => {
+    expect(availableFilters('reconcile', 'open')).toEqual(['all', 'issues', 'patterns'])
+    expect(availableFilters('reconcile', 'partial')).toEqual(['all', 'issues', 'patterns', 'leftover'])
+    expect(availableFilters('reconcile', 'sealed')).toEqual(['all', 'leftover'])
+    expect(availableFilters('plan', 'sealed')).toEqual(['all', 'future'])
+    expect(availableFilters('plan', undefined)).toEqual(['all', 'future'])
+  })
+
+  it('availableFilters：封存狀態還沒載到時當作未封存；但網址已經指定封存時未處理就先留著，不讓人卡在沒有出口的空表格', () => {
+    expect(availableFilters('reconcile', undefined)).toEqual(['all', 'issues', 'patterns'])
+    expect(availableFilters('reconcile', undefined, 'leftover')).toEqual(['all', 'issues', 'patterns', 'leftover'])
+    // 確定是未封存月之後，封存時未處理就不再提供
+    expect(availableFilters('reconcile', 'open', 'leftover')).toEqual(['all', 'issues', 'patterns'])
   })
 })

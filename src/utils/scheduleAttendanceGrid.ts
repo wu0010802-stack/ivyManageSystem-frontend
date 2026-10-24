@@ -6,6 +6,7 @@
  * useScheduleGrid 共用並可單獨測試。
  */
 import type { ApiResponse } from '@/api/_generated/typed'
+import type { SealState } from '@/utils/attendanceMonthSummary'
 import type { CoverageShiftType, DailyOverrideLike, LeaveContextItem } from '@/utils/scheduleCoverage'
 import { dateToLocalISO } from '@/utils/format'
 
@@ -17,7 +18,12 @@ export type GridGroup = GridOut['groups'][number]
 export type GridShiftType = GridOut['shift_types'][number]
 export type PlanSource = GridCell['plan']['source']
 export type ReconStatus = NonNullable<GridCell['actual']>['status']
-export type GridFilter = 'all' | 'issues' | 'future'
+/**
+ * 列篩選（以「人」為單位，範圍是目前顯示的週或月）：
+ * issues＝有待辦（至少一格待辦，且不是設定問題的格）；patterns＝設定問題（本月型態名單裡的人）；
+ * leftover＝封存時未處理（至少一格封存前沒處理完的待辦）；future＝只看未來可排（排班用）。
+ */
+export type GridFilter = 'all' | 'issues' | 'patterns' | 'future' | 'leftover'
 export type GridView = 'week' | 'month'
 /** 格子面板的用途：核對（打卡、判定、待處理；週／月）或排班（只看計畫與假別、編週排班；只有週） */
 export type GridMode = 'reconcile' | 'plan'
@@ -227,15 +233,53 @@ export function isFutureEditable(cell: GridCell, today: string): boolean {
   return cell.date > today && cell.edit.plan
 }
 
+/** 列篩選要用的整月型態資料；沒給（舊呼叫端）時，issues 不排除型態格、patterns 沒有人 */
+export interface RowFilterContext {
+  /** 符合本月型態的待處理格（cellKey）：這些格是設定問題，不單獨算這個人「有待辦」 */
+  patternKeys?: ReadonlySet<string>
+  /** 本月被判成設定問題的人（員工 id） */
+  patternEmployeeIds?: ReadonlySet<number>
+}
+
 export function rowMatchesFilter(
   cells: readonly GridCell[],
   filter: GridFilter,
   today: string,
   uncovered: ReadonlySet<string> = NO_DATES,
+  context: RowFilterContext = {},
 ): boolean {
-  if (filter === 'issues') return cells.some((cell) => isIssue(cell, today, uncovered))
-  if (filter === 'future') return cells.some((cell) => isFutureEditable(cell, today))
-  return true
+  switch (filter) {
+    case 'issues': {
+      const patternKeys = context.patternKeys
+      return cells.some((cell) => isIssue(cell, today, uncovered) && !patternKeys?.has(cellKey(cell.employee_id, cell.date)))
+    }
+    case 'patterns': {
+      const ids = context.patternEmployeeIds
+      return !!ids && cells.some((cell) => ids.has(cell.employee_id))
+    }
+    case 'leftover':
+      return cells.some((cell) => isSealedLeftover(cell, today, uncovered))
+    case 'future':
+      return cells.some((cell) => isFutureEditable(cell, today))
+    default:
+      return true
+  }
+}
+
+/**
+ * 目前這個情境提供哪些篩選選項（工具列的按鈕與「選到不存在的選項要退回全部」共用，兩邊不會分叉）。
+ * 核對：全部、有待辦、設定問題；整月或部分員工已封存時多一個「封存時未處理」；整月都封存時沒有待辦可做，
+ * 只留全部與封存時未處理。排班：全部、只看未來可排。
+ * `sealState` 還沒載到（undefined）時當作未封存，但目前已選封存時未處理就先留著，否則網址帶 `filter=leftover`
+ * 開頁會在月摘要載入前被洗掉。
+ */
+export function availableFilters(mode: GridMode, sealState: SealState | undefined, current?: GridFilter): GridFilter[] {
+  if (mode === 'plan') return ['all', 'future']
+  const state = sealState ?? 'open'
+  const filters: GridFilter[] = ['all']
+  if (state !== 'sealed') filters.push('issues', 'patterns')
+  if (state !== 'open' || (sealState === undefined && current === 'leftover')) filters.push('leftover')
+  return filters
 }
 
 /**
@@ -320,8 +364,7 @@ export interface GridSection {
   employees: GridEmployee[]
 }
 
-/** 列篩選（rowMatchesFilter）＋人員搜尋（姓名或工號，不分大小寫）＋依組分段；空組不出現。月格子用。 */
-export function gridSections(input: {
+export interface GridSectionsInput extends RowFilterContext {
   groups: readonly GridGroup[]
   employees: readonly GridEmployee[]
   days: readonly GridDay[]
@@ -330,18 +373,40 @@ export function gridSections(input: {
   today: string
   keyword?: string
   uncovered?: ReadonlySet<string>
-}): GridSection[] {
+}
+
+/** 列篩選（rowMatchesFilter）＋人員搜尋（姓名或工號，不分大小寫）＋依組分段；空組不出現。週、月格子與抽屜佇列共用。 */
+export function gridSections(input: GridSectionsInput): GridSection[] {
   const needle = (input.keyword ?? '').trim().toLowerCase()
+  const context: RowFilterContext = { patternKeys: input.patternKeys, patternEmployeeIds: input.patternEmployeeIds }
   const rows = input.employees.filter((emp) => {
     const cells = input.days
       .map((d) => input.cells.get(cellKey(emp.employee_id, d.date)))
       .filter((c): c is GridCell => c !== undefined)
-    if (!rowMatchesFilter(cells, input.filter, input.today, input.uncovered ?? NO_DATES)) return false
+    if (!rowMatchesFilter(cells, input.filter, input.today, input.uncovered ?? NO_DATES, context)) return false
     return !needle || emp.name.toLowerCase().includes(needle) || (emp.employee_number ?? '').toLowerCase().includes(needle)
   })
   return input.groups
     .map((group) => ({ group, employees: rows.filter((emp) => emp.group_key === group.key) }))
     .filter((section) => section.employees.length > 0)
+}
+
+/** 各篩選有幾個人（工具列按鈕上的數字） */
+export interface FilterCounts {
+  all: number
+  issues: number
+  patterns: number
+  leftover: number
+}
+
+/**
+ * 工具列各選項的人數：直接用 gridSections 數，和表格同一個範圍、同一套條件（數字與點進去看到的列數不會差），
+ * 不受人員搜尋影響（搜尋是在篩選之上再縮小）。
+ */
+export function filterCounts(input: Omit<GridSectionsInput, 'filter' | 'keyword'>): FilterCounts {
+  const count = (filter: GridFilter): number =>
+    gridSections({ ...input, filter, keyword: '' }).reduce((total, section) => total + section.employees.length, 0)
+  return { all: count('all'), issues: count('issues'), patterns: count('patterns'), leftover: count('leftover') }
 }
 
 export function planText(cell: GridCell): string {

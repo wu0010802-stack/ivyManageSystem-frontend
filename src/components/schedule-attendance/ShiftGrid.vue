@@ -173,6 +173,7 @@ import {
   cellKey,
   gridSections,
   isIssue,
+  isSealedLeftover,
   type CellDisplay,
   type GridCell,
   type GridDay,
@@ -216,6 +217,8 @@ const props = defineProps<{
   personNotes?: Record<number, { tag: string; detail: string }>
   /** 符合本月型態的待處理格（cellKey）：多半是設定問題，狀態是「設定問題」而不是會扣款 */
   patternKeys?: ReadonlySet<string>
+  /** 本月被判成設定問題的人（員工 id）：「設定問題」篩選的列條件 */
+  patternEmployeeIds?: ReadonlySet<number>
 }>()
 const emit = defineEmits<{
   select: [employeeId: number, date: string]
@@ -289,11 +292,12 @@ const kinds = computed(() => {
   }
   return map
 })
-/** 「只看待處理」時，留下的列裡不是待處理的格子退到背景 */
+/** 有待辦／設定問題／封存時未處理：留下的列裡，不是這個篩選要看的格子（待辦格或封存遺留格）退到背景 */
 const quietKeys = computed(() => {
-  if (props.filter !== 'issues') return new Set<string>()
+  const focus = props.filter === 'issues' || props.filter === 'patterns' ? isIssue : props.filter === 'leftover' ? isSealedLeftover : null
   const keys = new Set<string>()
-  for (const [key, cell] of props.cells) if (!isIssue(cell, props.today, uncovered.value)) keys.add(key)
+  if (!focus) return keys
+  for (const [key, cell] of props.cells) if (!focus(cell, props.today, uncovered.value)) keys.add(key)
   return keys
 })
 const display = (employeeId: number, date: string): CellDisplay => displays.value.get(cellKey(employeeId, date))!
@@ -317,6 +321,8 @@ const sections = computed(() =>
     today: props.today,
     keyword: props.keyword,
     uncovered: uncovered.value,
+    patternKeys: props.patternKeys,
+    patternEmployeeIds: props.patternEmployeeIds,
   }),
 )
 const visibleRows = computed(() => sections.value.flatMap((section) => section.employees))
@@ -348,8 +354,11 @@ function onGridKeydown(event: KeyboardEvent): void {
 const showImportHint = computed(() => !needle.value && props.filter === 'issues' && missingImportDays.value > 0)
 const emptyText = computed(() => {
   if (needle.value) return '找不到符合的人員'
-  if (showImportHint.value) return `這週沒有待處理的格子，但有 ${missingImportDays.value} 天打卡還沒匯入，匯入後才能核對這幾天。`
-  return props.filter === 'issues' ? '這段期間沒有待處理的格子' : props.filter === 'future' ? '這段期間沒有可排的未來日' : '這段期間沒有在職人員'
+  if (showImportHint.value) return `這週沒有人有待辦，但有 ${missingImportDays.value} 天打卡還沒匯入，匯入後才能核對這幾天。`
+  if (props.filter === 'issues') return '這段期間沒有人有待辦'
+  if (props.filter === 'patterns') return '這段期間沒有設定問題的人'
+  if (props.filter === 'leftover') return '這段期間沒有封存時未處理的人'
+  return props.filter === 'future' ? '這段期間沒有可排的未來日' : '這段期間沒有在職人員'
 })
 
 function dayLabel(d: GridDay): string {

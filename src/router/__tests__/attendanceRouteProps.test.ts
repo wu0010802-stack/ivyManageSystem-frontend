@@ -53,6 +53,17 @@ describe('attendanceRouteProps view（核對頁籤的檢視：週／月／逐人
   })
 })
 
+describe('attendanceRouteProps filter（核對的列篩選）', () => {
+  it('all／issues／patterns／future／leftover 原樣帶入；未知值與沒帶都是 undefined', () => {
+    for (const filter of ['all', 'issues', 'patterns', 'future', 'leftover']) {
+      expect(attendanceRouteProps({ filter }).filter).toBe(filter)
+    }
+    expect(attendanceRouteProps({ filter: 'nope' }).filter).toBeUndefined()
+    expect(attendanceRouteProps({}).filter).toBeUndefined()
+    expect(attendanceRouteProps({ filter: ['leftover', 'issues'] }).filter).toBe('leftover')
+  })
+})
+
 describe('legacySettingsShiftsRedirect（班別設定自 /settings 搬進排班與出勤）', () => {
   it('/settings?tab=shifts → /attendance?tab=shifts（只帶 tab，不夾帶其他 query）', () => {
     expect(legacySettingsShiftsRedirect({ path: '/settings', query: { tab: 'shifts', view: 'x' } })).toEqual({

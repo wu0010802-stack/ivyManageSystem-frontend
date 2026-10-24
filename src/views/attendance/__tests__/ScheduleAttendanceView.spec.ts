@@ -109,7 +109,7 @@ const panelOpenFirstIssue = vi.fn(() => true)
 // 兩個實例：核對（mode=reconcile）與排班週班表（mode=plan）。頁面只能問排班面板有沒有未儲存的週排班、只能請核對面板開第一件待辦
 const ScheduleGridPanelStub = {
   name: 'ScheduleGridPanel',
-  props: ['mode', 'date', 'filter', 'focusEmployeeId', 'focusDate', 'revision', 'view', 'month', 'headerHasMonth'],
+  props: ['mode', 'date', 'filter', 'focusEmployeeId', 'focusDate', 'revision', 'view', 'month', 'headerHasMonth', 'sealState', 'sealedEmployeeIds'],
   emits: ['records', 'import', 'import-punches', 'changed', 'update:date', 'update:filter', 'update:view', 'show-patterns', 'recalculate', 'focus-handled'],
   methods: {
     confirmWeekChange(this: { mode: string }, date: string) {
@@ -134,7 +134,7 @@ const RadioGroupStub = {
 const RadioButtonStub = { props: ['value'], inject: ['pickRadio'], template: '<button type="button" :data-value="value" @click="pickRadio(value)"><slot /></button>' }
 const rotationMounts = { count: 0 }
 const openPatternsSpy = vi.fn()
-const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary', 'records', 'import', 'recalculate', 'primary'], methods: { openPatterns: () => openPatternsSpy() }, template: '<div class="month-progress-stub" />' }
+const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'show-leftover', 'go-month', 'changed', 'summary', 'records', 'import', 'recalculate', 'primary'], methods: { openPatterns: () => openPatternsSpy() }, template: '<div class="month-progress-stub" />' }
 /** 進度條送出的月摘要（月摘要 util 的形狀）：只給本測試關心的月份、步驟、封存狀態、逐日待辦、設定問題與缺匯入天數 */
 const monthSummaryOf = (
   year: number,
@@ -2000,5 +2000,100 @@ describe('逐人檢視整併（第六輪 Task 6）', () => {
       expect([...wrapper.findComponent(DetailColumnStub).props('uncoveredDates') as Set<string>]).toEqual([])
       wrapper.unmount()
     })
+  })
+})
+
+describe('封存月：封存時未處理與前往下個月（第六輪）', () => {
+  beforeEach(() => {
+    routerReplace.mockReset()
+    panelConfirmWeekChange.mockReset().mockResolvedValue(true)
+    mockHasPermission.mockReturnValue(true)
+    getSummaryMock.mockReset().mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockReset().mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+  })
+  afterEach(() => { mockIsMobile.value = false })
+
+  const mountSealed = async (props: Record<string, unknown> = {}) => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'grid', date: '2026-09-16', ...props }, global: { stubs: STUBS } })
+    await flushPromises()
+    return wrapper
+  }
+  const bar = (w: Awaited<ReturnType<typeof mountSealed>>) => w.findComponent(MonthProgressBarStub)
+
+  it('核對面板拿到這個月的封存狀態與已封存員工；還沒收到這個月的摘要或換了月就沒有', async () => {
+    const wrapper = await mountSealed()
+    const panel = () => panelOf(wrapper, 'reconcile')!
+    expect(panel().props('sealState')).toBeUndefined()
+    bar(wrapper).vm.$emit('summary', monthSummaryOf(2026, 9, { step: 'daily', daily: 3, sealState: 'partial', sealedIds: [2, 3] }))
+    await flushPromises()
+    expect(panel().props('sealState')).toBe('partial')
+    expect([...(panel().props('sealedEmployeeIds') as Set<number>)]).toEqual([2, 3])
+    wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('update:period', 2026, 10)
+    await flushPromises()
+    expect(panel().props('sealState')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('進度條「看這 N 件」：切到核對的月格子並只看封存時未處理（從排班頁籤、逐人都一樣）', async () => {
+    const wrapper = await mountSealed({ tab: 'schedule' })
+    expect(wrapper.find('[data-test="tab-schedule"]').attributes('aria-selected')).toBe('true')
+    bar(wrapper).vm.$emit('show-leftover')
+    await flushPromises()
+    expect(wrapper.find('[data-test="tab-grid"]').attributes('aria-selected')).toBe('true')
+    expect(reconcileView(wrapper)).toBe('month')
+    expect(panelOf(wrapper, 'reconcile')!.props('filter')).toBe('leftover')
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'grid', filter: 'leftover', view: 'month' } })
+    wrapper.unmount()
+  })
+
+  it('手機沒有月格子：看封存時未處理停在週檢視', async () => {
+    mockIsMobile.value = true
+    const wrapper = await mountSealed({ view: 'person' })
+    bar(wrapper).vm.$emit('show-leftover')
+    await flushPromises()
+    expect(reconcileView(wrapper)).toBe('week')
+    expect(panelOf(wrapper, 'reconcile')!.props('filter')).toBe('leftover')
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'grid', filter: 'leftover' } })
+    wrapper.unmount()
+  })
+
+  it('進度條「前往 N 月」：換年月，先問排班頁籤未儲存的週排班，不放行就留在原月', async () => {
+    const wrapper = await mountSealed()
+    await visitPlan(wrapper)
+    routerReplace.mockClear()
+    panelConfirmWeekChange.mockClear()
+    panelConfirmWeekChange.mockResolvedValueOnce(false)
+    bar(wrapper).vm.$emit('go-month', { year: 2026, month: 10 })
+    await flushPromises()
+    expect(panelConfirmWeekChange).toHaveBeenLastCalledWith('2026-10-01')
+    expect(panelOf(wrapper, 'reconcile')!.props('date')).toBe('2026-09-16')
+    expect(routerReplace).not.toHaveBeenCalled()
+
+    bar(wrapper).vm.$emit('go-month', { year: 2026, month: 10 })
+    await flushPromises()
+    expect(panelOf(wrapper, 'reconcile')!.props('date')).toBe('2026-10-01')
+    expect(wrapper.findComponent(WorkspaceHeaderStub).props('month')).toBe(10)
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: { date: '2026-10-01' } })
+    wrapper.unmount()
+  })
+
+  it('跨年前往：12 月封存後前往隔年 1 月', async () => {
+    const wrapper = await mountSealed({ date: '2026-12-10' })
+    bar(wrapper).vm.$emit('go-month', { year: 2027, month: 1 })
+    await flushPromises()
+    expect(panelOf(wrapper, 'reconcile')!.props('date')).toBe('2027-01-01')
+    expect(wrapper.findComponent(WorkspaceHeaderStub).props('year')).toBe(2027)
+    wrapper.unmount()
+  })
+
+  it('面板選到這個月沒有的篩選而退回全部：網址的 filter 一併拿掉', async () => {
+    const wrapper = await mountSealed({ filter: 'issues' })
+    expect(panelOf(wrapper, 'reconcile')!.props('filter')).toBe('issues')
+    panelOf(wrapper, 'reconcile')!.vm.$emit('update:filter', 'all')
+    await flushPromises()
+    expect(panelOf(wrapper, 'reconcile')!.props('filter')).toBe('all')
+    expect(routerReplace).toHaveBeenLastCalledWith({ query: {} })
+    wrapper.unmount()
   })
 })

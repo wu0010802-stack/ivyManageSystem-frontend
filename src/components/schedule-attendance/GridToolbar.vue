@@ -36,16 +36,25 @@
       <span class="grid-toolbar__label">{{ weekLabel }}</span>
     </div>
 
-    <el-radio-group
+    <!-- 篩選以人為單位（人數與表格同一個範圍）；手機收成單一下拉。選項依封存狀態而定（availableFilters） -->
+    <el-select
+      v-if="compact"
       :model-value="filter"
-      aria-label="篩選格子"
+      aria-label="篩選人員"
+      class="grid-toolbar__filter-select"
+      data-test="toolbar-filter"
+      @update:model-value="(v: GridFilter) => emit('update:filter', v)"
+    >
+      <el-option v-for="option in filterOptions" :key="option.value" :value="option.value" :label="option.label" />
+    </el-select>
+    <el-radio-group
+      v-else
+      :model-value="filter"
+      aria-label="篩選人員"
       data-test="toolbar-filter"
       @update:model-value="(v: string | number | boolean | undefined) => emit('update:filter', v as GridFilter)"
     >
-      <el-radio-button value="all">全部</el-radio-button>
-      <!-- 排班不畫打卡與判定，沒有待處理可看 -->
-      <el-radio-button v-if="mode === 'reconcile'" value="issues" :title="issueTitle">只看待處理{{ issueText }}</el-radio-button>
-      <el-radio-button value="future">只看未來可排</el-radio-button>
+      <el-radio-button v-for="option in filterOptions" :key="option.value" :value="option.value" :title="option.title">{{ option.label }}</el-radio-button>
     </el-radio-group>
 
     <el-input
@@ -89,7 +98,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowDown, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { addDaysISO, shiftMonthISO, type GridFilter, type GridMode, type GridView } from '@/utils/scheduleAttendanceGrid'
+import type { SealState } from '@/utils/attendanceMonthSummary'
+import {
+  addDaysISO,
+  availableFilters,
+  shiftMonthISO,
+  type FilterCounts,
+  type GridFilter,
+  type GridMode,
+  type GridView,
+} from '@/utils/scheduleAttendanceGrid'
 
 export type ToolbarCommand = 'copy-week' | 'copy-prev-month' | 'import' | 'template' | 'export'
 
@@ -103,13 +121,14 @@ const props = defineProps<{
   pendingCount: number
   saving?: boolean
   busy?: boolean
-  issueCount?: number
+  /** 各篩選有幾個人（核對）：與表格同一個範圍；還沒算出來（資料載入中）就不寫人數 */
+  filterCounts?: FilterCounts
+  /** 這個月的封存狀態（核對）：決定提供哪些篩選；還沒載到當作未封存 */
+  sealState?: SealState
   /** 檢視（預設週）；月檢視只在核對，由頁面切換 */
   view?: GridView
   /** 錨點日期（月模式的年月與上下月以它為準）；沒給用 weekStart */
   date?: string
-  /** 待處理中屬於「待修設定」（整月同型態）的格數：篩選鈕拆開寫 */
-  patternIssueCount?: number
   /** 手機：收起排班工具選單（儲存排班仍在） */
   compact?: boolean
   /** 頁首已有月份切換（有出勤讀取權限時）：月模式不再顯示工具列的月份導覽 */
@@ -126,16 +145,23 @@ const emit = defineEmits<{
 }>()
 
 const isMonth = computed(() => props.view === 'month')
-/** 「（本週 49＋待修設定 60）」：待修設定是整月同型態、修好設定會一起消失的格子，和逐日異常分開寫 */
-const issueText = computed(() => {
-  const total = props.issueCount ?? 0
-  if (!total) return ''
-  const scope = isMonth.value ? '本月' : '本週'
-  const pattern = Math.min(props.patternIssueCount ?? 0, total)
-  return pattern ? `（${scope} ${total - pattern}＋待修設定 ${pattern}）` : `（${scope} ${total}）`
-})
-const issueTitle = computed(() =>
-  props.patternIssueCount ? '待修設定：整月同一種情形的格子，多半是員工時段或卡號設定問題，修好設定後重算或重新匯入會一起消失' : undefined)
+const FILTER_LABELS: Record<GridFilter, string> = {
+  all: '全部',
+  issues: '有待辦',
+  patterns: '設定問題',
+  leftover: '封存時未處理',
+  future: '只看未來可排',
+}
+const FILTER_TITLES: Partial<Record<GridFilter, string>> = {
+  patterns: '設定問題：整月同一種情形的人，多半是員工時段或卡號設定有誤，修好設定後重算或重新匯入會一起消失',
+}
+/** 篩選選項與文字：核對在名稱後接人數（以人為單位），排班不畫待辦所以沒有人數 */
+const filterOptions = computed(() =>
+  availableFilters(props.mode, props.sealState, props.filter).map((value) => {
+    const count = props.mode === 'reconcile' && value !== 'future' ? props.filterCounts?.[value] : undefined
+    return { value, label: count === undefined ? FILTER_LABELS[value] : `${FILTER_LABELS[value]}（${count} 人）`, title: FILTER_TITLES[value] }
+  }),
+)
 const anchor = computed(() => props.date ?? props.weekStart)
 const monthLabel = computed(() => `${anchor.value.slice(0, 4)} 年 ${Number(anchor.value.slice(5, 7))} 月`)
 
@@ -173,6 +199,7 @@ function onCommand(command: string | number | object): void {
 .grid-toolbar__tools { margin-left: auto; }
 .grid-toolbar__picker { width: 132px; }
 .grid-toolbar__keyword { width: 168px; }
+.grid-toolbar__filter-select { width: 200px; }
 .grid-toolbar__label { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 /* 桌機：捲動時工具列（週次、篩選、儲存排班）固定在捲動區頂端，改到第 60 列也按得到儲存 */
 @media (--bp-sm) {
@@ -180,5 +207,6 @@ function onCommand(command: string | number | object): void {
 }
 @media (--to-sm) {
   .grid-toolbar__tools { margin-left: 0; }
+  .grid-toolbar__filter-select { flex: 1 1 200px; }
 }
 </style>

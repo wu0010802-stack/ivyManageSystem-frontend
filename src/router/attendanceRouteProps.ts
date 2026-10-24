@@ -10,13 +10,14 @@
  *   tab=reconcile（原「打卡核對」）＝ tab=grid＋filter=issues；
  *   /settings?tab=shifts（原「設定 › 輪班別管理」）＝ tab=shifts（legacySettingsShiftsRedirect）
  * - date：YYYY-MM-DD；emp：員工 id（開頁即開該人 date 那天的格子抽屜）
- * - filter：all／issues／future（核對頁籤）
+ * - filter：all／issues（有待辦）／patterns（設定問題）／leftover（封存時未處理）／future（排班用）；
+ *   選到這個情境沒有的選項（例如封存月的 issues）由格子面板退回 all 並改寫網址
  */
 import type { LocationQuery } from 'vue-router'
 
 const TABS = ['grid', 'schedule'] as const
 const SUBS = ['week', 'rotation', 'swaps', 'shifts'] as const
-const FILTERS = ['all', 'issues', 'future'] as const
+const FILTERS = ['all', 'issues', 'patterns', 'future', 'leftover'] as const
 const VIEWS = ['week', 'month', 'person'] as const
 /** 舊頁籤值（rotation／swaps／shifts）直接是排班頁籤的子頁籤 */
 const LEGACY_SCHEDULE_TABS: readonly string[] = ['rotation', 'swaps', 'shifts']

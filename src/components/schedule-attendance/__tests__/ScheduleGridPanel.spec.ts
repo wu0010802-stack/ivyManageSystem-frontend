@@ -5,6 +5,8 @@ import ElementPlus from 'element-plus'
 import ScheduleGridPanel from '../ScheduleGridPanel.vue'
 import { useMonthGrid } from '@/composables/useMonthGrid'
 import { monthRange } from '@/utils/scheduleAttendanceGrid'
+import type { AttendancePattern } from '@/utils/attendancePatterns'
+import type { MonthGridState } from '@/composables/useMonthGrid'
 import { cell, day, employee, grid, W1, WEEK } from './gridFixtures'
 
 const api = vi.hoisted(() => ({
@@ -157,7 +159,7 @@ describe('ScheduleGridPanel', () => {
     expect(wrapper.find('[data-test="toolbar-schedule"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="verdict-legend"]').exists()).toBe(false)
     expect(wrapper.get(`[data-test="cell-2-${WEEK[0]}"]`).text()).not.toContain('出勤異常')
-    expect(wrapper.text()).not.toContain('只看待處理')
+    expect(wrapper.text()).not.toContain('有待辦')
   })
 
   it('排班：抽屜不給待處理佇列導覽，處理完也不自動跳格', async () => {
@@ -174,12 +176,14 @@ describe('ScheduleGridPanel', () => {
     expect(drawer.props('actionsLocked')).toBe(false)
   })
 
-  it('載入錨點所在週，顯示格子與問題數', async () => {
+  it('載入錨點所在週，顯示格子與各篩選的人數（以人為單位）', async () => {
     const wrapper = mountPanel()
     await flushPromises()
     expect(api.grid).toHaveBeenCalledWith({ start_date: W1, end_date: WEEK[6] })
     expect(wrapper.find('[data-test="shift-grid-table"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('只看待處理（本週 1）')
+    expect(wrapper.text()).toContain('全部（2 人）')
+    expect(wrapper.text()).toContain('有待辦（1 人）')
+    expect(wrapper.text()).toContain('設定問題（0 人）')
   })
 
   it('整週改班遇到已打卡日：其餘工作日送每日調整，已打卡日開批次確認', async () => {
@@ -558,7 +562,7 @@ describe('ScheduleGridPanel 月模式（SPEC-027 C 期）', () => {
     expect(month.findComponent({ name: 'MonthGrid' }).props('personNotes')).toHaveProperty('1')
   })
 
-  it('型態的格子傳給格子（降為待修設定）、工具列（拆數字）與抽屜（提醒）；抽屜的設定檢查與重算往上送', async () => {
+  it('型態的格子與人傳給格子（降為待修設定）、工具列（設定問題的人數）與抽屜（提醒）；抽屜的設定檢查與重算往上送', async () => {
     api.grid.mockImplementation(async ({ start_date }: { start_date: string }) =>
       start_date === monthRange('2026-10-05').start
         ? { data: grid({ start_date, days: OCT, today: '2026-10-08', cells: OCT.filter((d) => d.is_workday).slice(0, 3).map((d) => cell(1, d.date, { actual: { status: 'data_incomplete' } })) }) }
@@ -568,7 +572,9 @@ describe('ScheduleGridPanel 月模式（SPEC-027 C 期）', () => {
     await flushPromises()
     const keys = wrapper.findComponent({ name: 'MonthGrid' }).props('patternKeys') as Set<string>
     expect([...keys].sort()).toEqual(['1|2026-10-01', '1|2026-10-02', '1|2026-10-05'])
-    expect(wrapper.findComponent({ name: 'GridToolbar' }).props('patternIssueCount')).toBe(3)
+    expect([...(wrapper.findComponent({ name: 'MonthGrid' }).props('patternEmployeeIds') as Set<number>)]).toEqual([1])
+    // 林班導的三格待辦全是型態格：他是「設定問題」，不算「有待辦」
+    expect(wrapper.findComponent({ name: 'GridToolbar' }).props('filterCounts')).toEqual({ all: 2, issues: 0, patterns: 1, leftover: 0 })
     wrapper.findComponent({ name: 'MonthGrid' }).vm.$emit('select', 1, '2026-10-01')
     await flushPromises()
     const drawer = wrapper.findComponent(DrawerStub)
@@ -1216,5 +1222,149 @@ describe('ScheduleGridPanel 在格子上捲動先收起頁首', () => {
     expect(event.defaultPrevented).toBe(false)
     expect(main.scrollTop).toBe(0)
     cleanup()
+  })
+})
+
+describe('ScheduleGridPanel 篩選以人為單位（有待辦／設定問題／封存時未處理）', () => {
+  const SEALED = { locked_reason: 'finalized' as const }
+  const ANOMALY = { status: 'anomaly' as const }
+  const people = [employee(1, '林班導'), employee(2, '王副導'), employee(3, '李廚工', { group_key: 'other' })]
+  // 林：兩格待辦都是設定問題（型態格）；王：一筆逐日待辦；李：封存時沒處理的一筆
+  const cells = people.flatMap((e) =>
+    WEEK.map((d) => {
+      const base = { plan: { expected: day(d).is_workday } }
+      if (e.employee_id === 1 && (d === WEEK[0] || d === WEEK[1])) return cell(1, d, { actual: ANOMALY })
+      if (e.employee_id === 2 && d === WEEK[1]) return cell(2, d, { actual: ANOMALY })
+      if (e.employee_id === 3 && d === WEEK[2]) return cell(3, d, { actual: ANOMALY, edit: SEALED })
+      return cell(e.employee_id, d, base)
+    }),
+  )
+  const noPunches: AttendancePattern = {
+    kind: 'no_punches', employeeId: 1, name: '林班導', roleLabel: '班導', issueCount: 2, matchCount: 2, matchDates: [WEEK[0], WEEK[1]],
+    expectedDays: 5, punchedDays: 0, firstDate: WEEK[0], notInImport: false,
+  }
+  // 面板只讀 patterns 與（月檢視才用的）資料；週檢視用最小的假整月狀態即可
+  const monthWith = (patterns: AttendancePattern[]) =>
+    ({ data: ref(null), cells: ref(new Map()), patterns: ref(patterns), range: ref(monthRange('2026-09-16')), loading: ref(false), loadError: ref(''), reload: vi.fn() }) as unknown as MonthGridState
+  const mountFilter = (props: Record<string, unknown> = {}) =>
+    mountPanel({ month: monthWith([noPunches]), sealState: 'partial', ...props })
+  const rows = (w: ReturnType<typeof mountPanel>) => w.findAll('[data-test^="row-"]').map((r) => r.attributes('data-test'))
+  const buttons = (w: ReturnType<typeof mountPanel>) => w.findAllComponents({ name: 'ElRadioButton' }).map((b) => b.text())
+
+  beforeEach(() => {
+    api.grid.mockResolvedValue({ data: grid({ employees: people, cells, today: '2026-09-21' }) })
+  })
+
+  it('工具列人數：全部、有待辦（不含只有設定問題格的人）、設定問題、封存時未處理，與表格同一個範圍', async () => {
+    const wrapper = mountFilter()
+    await flushPromises()
+    expect(buttons(wrapper)).toEqual(['全部（3 人）', '有待辦（1 人）', '設定問題（1 人）', '封存時未處理（1 人）'])
+    expect(wrapper.findComponent({ name: 'GridToolbar' }).props('filterCounts')).toEqual({ all: 3, issues: 1, patterns: 1, leftover: 1 })
+  })
+
+  it('各篩選的列條件：有待辦＝王；設定問題＝林；封存時未處理＝李', async () => {
+    const all = mountFilter({ filter: 'all' })
+    const issues = mountFilter({ filter: 'issues' })
+    const patterns = mountFilter({ filter: 'patterns' })
+    const leftover = mountFilter({ filter: 'leftover' })
+    await flushPromises()
+    expect(rows(all)).toEqual(['row-1', 'row-2', 'row-3'])
+    expect(rows(issues)).toEqual(['row-2'])
+    expect(rows(patterns)).toEqual(['row-1'])
+    expect(rows(leftover)).toEqual(['row-3'])
+    // 人數就是列數
+    expect(issues.findComponent({ name: 'GridToolbar' }).props('filterCounts')).toMatchObject({ issues: 1, patterns: 1, leftover: 1 })
+  })
+
+  it('整月已封存：只剩全部與封存時未處理', async () => {
+    const wrapper = mountFilter({ sealState: 'sealed' })
+    await flushPromises()
+    expect(buttons(wrapper)).toEqual(['全部（3 人）', '封存時未處理（1 人）'])
+  })
+
+  it('未封存的月份沒有封存時未處理；月摘要還沒載到時當作未封存', async () => {
+    const open = mountFilter({ sealState: 'open' })
+    const unknown = mountFilter({ sealState: undefined })
+    await flushPromises()
+    expect(buttons(open)).toEqual(['全部（3 人）', '有待辦（1 人）', '設定問題（1 人）'])
+    expect(buttons(unknown)).toEqual(['全部（3 人）', '有待辦（1 人）', '設定問題（1 人）'])
+  })
+
+  it('型態名單只算未封存的員工（封存員工的殘留算封存時未處理）', async () => {
+    const wrapper = mountFilter({ filter: 'patterns', sealedEmployeeIds: new Set([1]) })
+    await flushPromises()
+    expect(rows(wrapper)).toEqual([])
+    expect(wrapper.findComponent({ name: 'GridToolbar' }).props('filterCounts')).toMatchObject({ patterns: 0 })
+  })
+
+  it('沒有整月資料（沒有型態名單）時沒有人是設定問題，有待辦照舊逐格算', async () => {
+    const wrapper = mountPanel({ sealState: 'open', filter: 'issues' })
+    await flushPromises()
+    expect(rows(wrapper)).toEqual(['row-1', 'row-2'])
+    expect(wrapper.findComponent({ name: 'GridToolbar' }).props('filterCounts')).toMatchObject({ issues: 2, patterns: 0 })
+  })
+
+  it('手機：篩選是單一下拉（選項文字見 GridToolbar.spec）', async () => {
+    device.mobile = true
+    const wrapper = mountFilter({ filter: 'patterns' })
+    await flushPromises()
+    const toolbar = wrapper.findComponent({ name: 'GridToolbar' })
+    expect(toolbar.props('compact')).toBe(true)
+    expect(toolbar.findComponent({ name: 'ElRadioGroup' }).exists()).toBe(false)
+    expect(toolbar.findComponent({ name: 'ElSelect' }).props('modelValue')).toBe('patterns')
+  })
+
+  it('工具列選了篩選就往上送 update:filter', async () => {
+    const wrapper = mountFilter()
+    await flushPromises()
+    wrapper.findComponent({ name: 'GridToolbar' }).vm.$emit('update:filter', 'patterns')
+    expect(wrapper.emitted('update:filter')).toEqual([['patterns']])
+  })
+
+  describe('選到這個情境沒有的選項：退回全部（不留下沒有出口的空表格）', () => {
+    const fellBack = async (props: Record<string, unknown>) => {
+      const wrapper = mountFilter(props)
+      await flushPromises()
+      return wrapper.emitted('update:filter')
+    }
+
+    it('封存月的有待辦與設定問題、未封存月的封存時未處理、核對沒有的只看未來可排', async () => {
+      expect(await fellBack({ sealState: 'sealed', filter: 'issues' })).toEqual([['all']])
+      expect(await fellBack({ sealState: 'sealed', filter: 'patterns' })).toEqual([['all']])
+      expect(await fellBack({ sealState: 'open', filter: 'leftover' })).toEqual([['all']])
+      expect(await fellBack({ sealState: 'open', filter: 'future' })).toEqual([['all']])
+    })
+
+    it('排班帶了核對專用的值也退回全部；排班自己的選項不動', async () => {
+      expect(await fellBack({ mode: 'plan', filter: 'issues' })).toEqual([['all']])
+      expect(await fellBack({ mode: 'plan', filter: 'leftover' })).toEqual([['all']])
+      expect(await fellBack({ mode: 'plan', filter: 'future' })).toBeUndefined()
+    })
+
+    it('這個情境有的選項不動', async () => {
+      expect(await fellBack({ sealState: 'sealed', filter: 'leftover' })).toBeUndefined()
+      expect(await fellBack({ sealState: 'partial', filter: 'leftover' })).toBeUndefined()
+      expect(await fellBack({ sealState: 'open', filter: 'issues' })).toBeUndefined()
+      expect(await fellBack({ sealState: 'open', filter: 'patterns' })).toBeUndefined()
+      expect(await fellBack({ sealState: 'sealed', filter: 'all' })).toBeUndefined()
+    })
+
+    it('月摘要還沒載到時不洗掉網址帶的值；載到之後才判斷', async () => {
+      const wrapper = mountFilter({ sealState: undefined, filter: 'leftover' })
+      await flushPromises()
+      expect(wrapper.emitted('update:filter')).toBeUndefined()
+      await wrapper.setProps({ sealState: 'open' })
+      await flushPromises()
+      expect(wrapper.emitted('update:filter')).toEqual([['all']])
+    })
+
+    it('換到封存月才發現原本選的有待辦不能用，也退回全部', async () => {
+      const wrapper = mountFilter({ sealState: 'open', filter: 'issues' })
+      await flushPromises()
+      expect(wrapper.emitted('update:filter')).toBeUndefined()
+      await wrapper.setProps({ sealState: 'sealed' })
+      await flushPromises()
+      expect(wrapper.emitted('update:filter')).toEqual([['all']])
+    })
   })
 })

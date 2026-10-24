@@ -81,6 +81,31 @@ describe('MonthGrid（SPEC-027 C 期，唯讀）', () => {
   })
 })
 
+describe('MonthGrid 列篩選以人為單位', () => {
+  // 林：唯一的待辦就是型態格（設定問題）；王：封存時沒處理的待辦
+  const CELLS = [
+    cell(1, '2026-10-01', { actual: { status: 'anomaly' } }),
+    cell(1, '2026-10-02', { actual: {} }),
+    cell(2, '2026-10-01', { actual: { status: 'anomaly' }, edit: { locked_reason: 'finalized' } }),
+    cell(2, '2026-10-02', { actual: {} }),
+  ]
+  const patternProps = { patternKeys: new Set(['1|2026-10-01']), patternEmployeeIds: new Set([1]) }
+  const rows = (props: Record<string, unknown>) => mountMonth(CELLS, { ...patternProps, ...props }).findAll('[data-test^="mrow-"]').map((r) => r.attributes('data-test'))
+
+  it('有待辦不含只有設定問題格的人；設定問題看型態名單；封存時未處理看封存遺留', () => {
+    expect(rows({ filter: 'all' })).toEqual(['mrow-1', 'mrow-2'])
+    expect(rows({ filter: 'issues' })).toEqual([])
+    expect(rows({ filter: 'patterns' })).toEqual(['mrow-1'])
+    expect(rows({ filter: 'leftover' })).toEqual(['mrow-2'])
+  })
+
+  it('沒有符合的人時各自說明，不留空白', () => {
+    expect(mountMonth(CELLS, { ...patternProps, filter: 'issues' }).get('.month-grid__empty').text()).toBe('這個月沒有人有待辦')
+    expect(mountMonth(CELLS, { filter: 'patterns' }).get('.month-grid__empty').text()).toBe('這個月沒有設定問題的人')
+    expect(mountMonth([cell(1, '2026-10-01', { actual: {} })], { filter: 'leftover' }).get('.month-grid__empty').text()).toBe('這個月沒有封存時未處理的人')
+  })
+})
+
 describe('MonthGrid 狀態點不只靠顏色', () => {
   // 形狀是共用的全域 class（src/assets/main.css 的 .verdict-shape--*）：週格子、月格子、圖例同一套
   const css = readFileSync(resolve(__dirname, '../../../assets/main.css'), 'utf8')
