@@ -188,10 +188,10 @@ describe('ScheduleAttendanceView 手機三段流程（核對 › 逐人）', () 
     expect(wrapper.get('.el-tabs').attributes('data-active')).toBe('roster')
   })
 
-  it('異常清單按鈕寫出範圍與待處理筆數（一人一天一筆）', async () => {
+  it('批次處理按鈕寫出待處理件數（一人一天一件）', async () => {
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.findAll('button').find(button => button.text() === '遲到・早退・缺卡清單（2 筆待處理）')).toBeDefined()
+    expect(wrapper.findAll('button').find(button => button.text() === '批次處理遲到・早退・缺卡（2 件）')).toBeDefined()
   })
 
   it('桌機：仍走三欄，不渲染分頁殼', async () => {

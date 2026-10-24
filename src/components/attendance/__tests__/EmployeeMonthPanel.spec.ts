@@ -112,6 +112,8 @@ function mountPanel(overrides: {
   year?: number
   month?: number
   revision?: number
+  sealed?: boolean
+  uncoveredDates?: ReadonlySet<string>
 }) {
   return mount(EmployeeMonthPanel, {
     props: {
@@ -119,6 +121,8 @@ function mountPanel(overrides: {
       year: overrides.year ?? 2026,
       month: overrides.month ?? 6,
       ...(overrides.revision !== undefined ? { revision: overrides.revision } : {}),
+      ...(overrides.sealed !== undefined ? { sealed: overrides.sealed } : {}),
+      ...(overrides.uncoveredDates !== undefined ? { uncoveredDates: overrides.uncoveredDates } : {}),
     },
     global: {
       stubs,
@@ -522,7 +526,7 @@ describe('並列班表核對的判定（第五輪審查：同一人日兩個頁�
       global: { stubs, directives: { loading: { mounted() {}, updated() {} } }, provide: { [GRID_VERDICT_KEY as symbol]: computed(() => lookup) } },
     })
     await flushPromises()
-    expect(wrapper.get('[data-test="grid-verdict-2026-06-03"]').text()).toBe('班表核對：疑似缺勤')
+    expect(wrapper.get('[data-test="grid-verdict-2026-06-03"]').text()).toBe('核對：疑似缺勤')
     expect(wrapper.find('[data-test="grid-verdict-2026-06-02"]').exists()).toBe(false)
   })
 
@@ -610,5 +614,93 @@ describe('列印考核表（單人）', () => {
   it('未選員工時沒有列印鈕', () => {
     const wrapper = mountPanel({ employeeId: null })
     expect(wrapper.find('[data-test="print-appraisal"]').exists()).toBe(false)
+  })
+})
+
+
+// ── 封存月唯讀、整天還沒匯入的日子不催補卡（第六輪）─────────────────────────────────
+describe('封存月與尚未匯入', () => {
+  /** 6/3 是已結束的應出勤日 */
+  const pastWorkday = (date: string) => ({ date, is_expected_workday: true, schedule_known: true, expected_start_at: `${date}T08:00:00+08:00`, expected_end_at: `${date}T17:00:00+08:00`, full_day_leave: false, approved_leaves: [] })
+  const buttons = (wrapper: ReturnType<typeof mountPanel>) => wrapper.findAll('button').map(button => button.text())
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCanWrite.mockImplementation(() => true)
+    mockMonthContext.mockResolvedValue({ data: { roster: [], days: [pastWorkday('2026-06-03')] } })
+  })
+
+  it('整天還沒匯入、這個人也沒有打卡的日子：狀態寫「尚未匯入」（次要灰字），不標異常、不給補打卡', async () => {
+    mockGetRecords.mockResolvedValue({ data: [] })
+    const wrapper = mountPanel({ uncoveredDates: new Set(['2026-06-03']) })
+    await flushPromises()
+    const row = wrapper.get('[data-attendance-date="2026-06-03"]')
+    expect(row.get('.month-record-row__status').text()).toContain('尚未匯入')
+    expect(row.get('[data-test="not-imported-2026-06-03"]').classes()).toContain('month-record-row__not-imported')
+    expect(row.text()).not.toContain('缺卡待確認')
+    expect(row.classes()).not.toContain('month-record-row--anomaly')
+    expect(buttons(wrapper)).not.toContain('補打卡')
+    wrapper.unmount()
+  })
+
+  it('同一天已匯入（不在 uncoveredDates）照舊顯示缺卡並可補打卡', async () => {
+    mockGetRecords.mockResolvedValue({ data: [] })
+    const wrapper = mountPanel({ uncoveredDates: new Set(['2026-06-04']) })
+    await flushPromises()
+    expect(wrapper.get('[data-attendance-date="2026-06-03"]').text()).toContain('缺卡待確認')
+    expect(wrapper.find('[data-test="not-imported-2026-06-03"]').exists()).toBe(false)
+    expect(buttons(wrapper)).toContain('補打卡')
+    wrapper.unmount()
+  })
+
+  it('那天這個人已經有打卡（例如手動補的）就不寫尚未匯入', async () => {
+    mockMonthContext.mockResolvedValue({ data: { roster: [], days: [pastWorkday('2026-06-02')] } })
+    mockGetRecords.mockResolvedValue({ data: [recordNormal] })
+    const wrapper = mountPanel({ uncoveredDates: new Set(['2026-06-02']) })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('尚未匯入')
+    expect(wrapper.get('[data-attendance-date="2026-06-02"]').text()).toContain('正常')
+    wrapper.unmount()
+  })
+
+  it('核准請假的日子仍寫請假，不被尚未匯入蓋掉', async () => {
+    mockMonthContext.mockResolvedValue({ data: { roster: [], days: [{ ...pastWorkday('2026-06-03'), full_day_leave: true, approved_leaves: [{ leave_type: 'annual', is_full_day: true, start_time: null, end_time: null }] }] } })
+    mockGetRecords.mockResolvedValue({ data: [] })
+    const wrapper = mountPanel({ uncoveredDates: new Set(['2026-06-03']) })
+    await flushPromises()
+    expect(wrapper.text()).toContain('已核准請假')
+    expect(wrapper.text()).not.toContain('尚未匯入')
+    wrapper.unmount()
+  })
+
+  it('封存月：頂端寫「這個月薪資已封存，只能看。」，缺卡仍看得到但沒有補打卡與補卡表單', async () => {
+    mockGetRecords.mockResolvedValue({ data: [recordMissing] })
+    const wrapper = mountPanel({ sealed: true })
+    await flushPromises()
+    expect(wrapper.get('[data-test="sealed-note"]').text()).toBe('這個月薪資已封存，只能看。')
+    expect(wrapper.text()).toContain('缺卡待確認')
+    expect(buttons(wrapper)).not.toContain('補打卡')
+    expect(wrapper.find('section[aria-label="補打卡"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('沒封存：沒有封存提示，補打卡照常', async () => {
+    mockGetRecords.mockResolvedValue({ data: [recordMissing] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+    expect(wrapper.find('[data-test="sealed-note"]').exists()).toBe(false)
+    expect(buttons(wrapper)).toContain('補打卡')
+    wrapper.unmount()
+  })
+
+  it('補卡表單開著時月份變成封存（資料重載後）：表單收起，不能再存', async () => {
+    mockGetRecords.mockResolvedValue({ data: [recordMissing] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === '補打卡')!.trigger('click')
+    expect(wrapper.find('section[aria-label="補打卡"]').exists()).toBe(true)
+    await wrapper.setProps({ sealed: true })
+    expect(wrapper.find('section[aria-label="補打卡"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 })

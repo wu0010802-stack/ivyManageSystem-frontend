@@ -83,7 +83,7 @@ const ResolveCardStub = {
 
 const EmployeeMonthPanelStub = {
   name: 'EmployeeMonthPanel',
-  props: ['employeeId', 'year', 'month'],
+  props: ['employeeId', 'year', 'month', 'sealed', 'uncoveredDates'],
   emits: ['updated'],
   template: `<div class="emp-month-panel-stub"><button class="btn-updated" @click="$emit('updated')">updated</button></div>`,
 }
@@ -110,6 +110,8 @@ function mountDetail(overrides: {
   employeeId?: number | null
   year?: number
   month?: number
+  sealed?: boolean
+  uncoveredDates?: ReadonlySet<string>
 }) {
   return mount(DetailColumn, {
     props: {
@@ -121,6 +123,8 @@ function mountDetail(overrides: {
       employeeId: overrides.employeeId !== undefined ? overrides.employeeId : 99,
       year: overrides.year ?? 2026,
       month: overrides.month ?? 6,
+      ...(overrides.sealed !== undefined ? { sealed: overrides.sealed } : {}),
+      ...(overrides.uncoveredDates !== undefined ? { uncoveredDates: overrides.uncoveredDates } : {}),
     },
     global: {
       stubs,
@@ -197,13 +201,25 @@ describe('DetailColumn', () => {
       expect(wrapper.find('.resolve-card-stub').exists()).toBe(false)
     })
 
-    it('整月模式可要求開啟異常清單', async () => {
+    it('整月模式不再有「開啟異常清單」（批次處理的入口只剩逐人頁頂那一顆）', () => {
       const wrapper = mountDetail({ mode: 'month' })
-      const btns = wrapper.findAll('button')
-      const btn = btns.find((b) => b.text().includes('開啟異常清單'))
-      expect(btn).toBeTruthy()
-      await btn!.trigger('click')
-      expect(wrapper.emitted('anomalies')).toHaveLength(1)
+      expect(wrapper.text()).not.toContain('開啟異常清單')
+      expect(wrapper.findAll('button').map((b) => b.text())).not.toContain('開啟異常清單')
+      expect(wrapper.find('.detail-column__toolbar').exists()).toBe(false)
+    })
+
+    it('封存與尚未匯入的日子交給整月明細', () => {
+      const uncovered = new Set(['2026-06-03'])
+      const wrapper = mountDetail({ mode: 'month', sealed: true, uncoveredDates: uncovered })
+      const panel = wrapper.findComponent(EmployeeMonthPanelStub)
+      expect(panel.props('sealed')).toBe(true)
+      expect([...(panel.props('uncoveredDates') as ReadonlySet<string>)]).toEqual(['2026-06-03'])
+    })
+
+    it('沒帶時：不是封存、沒有未匯入的日子', () => {
+      const panel = mountDetail({ mode: 'month' }).findComponent(EmployeeMonthPanelStub)
+      expect(panel.props('sealed')).toBe(false)
+      expect([...(panel.props('uncoveredDates') as ReadonlySet<string>)]).toEqual([])
     })
   })
 

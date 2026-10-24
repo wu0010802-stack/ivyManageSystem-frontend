@@ -56,6 +56,8 @@
                 <span v-if="row.employee_number" class="roster-item__number">
                   {{ row.employee_number }}
                 </span>
+                <!-- 整月同一種情形（多半是設定問題）：待辦數已排除這些格，標出來才不會讓人以為他沒事 -->
+                <span v-if="hasPattern(row)" class="roster-item__pattern" data-test="roster-pattern">設定問題</span>
               </div>
               <div class="roster-item__badges">
                 <el-tag v-if="row.has_summary === false" type="info" size="small">尚無統計</el-tag>
@@ -105,6 +107,11 @@ const props = defineProps<{
    * 「有待處理」底下。未提供時退回月統計數（單元測試等獨立掛載情境）。
    */
   pendingCounts?: Record<string, number>
+  /**
+   * 本月被判成「設定問題」的人（整月沒打卡、每天固定遲到早退等，key＝employee_number）。
+   * 他們的設定問題格不算在 pendingCounts 裡（修好設定才會消失，不是逐日處理），名冊上補一個小標。
+   */
+  patternEmployeeNumbers?: ReadonlySet<string>
 }>()
 
 const emit = defineEmits<{
@@ -114,6 +121,8 @@ const emit = defineEmits<{
 const searchQuery = defineModel<string>('search', { default: '' })
 
 const anomalyCount = rosterAnomalyCount
+
+const hasPattern = (row: RosterRow): boolean => !!row.employee_number && !!props.patternEmployeeNumbers?.has(row.employee_number)
 
 const sortedFiltered = computed<RosterRow[]>(() => sortRoster(props.roster, searchQuery.value))
 
@@ -272,6 +281,12 @@ function onListFocusOut(e: FocusEvent): void {
 .roster-item__number {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+.roster-item__pattern {
+  font-size: var(--text-xs);
+  color: var(--color-warning-darker);
   margin-top: 1px;
 }
 

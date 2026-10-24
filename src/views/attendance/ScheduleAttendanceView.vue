@@ -2,7 +2,7 @@
   <div class="attendance-workspace">
     <!-- 無獨立頁面層級權限閘（本站慣例＝側欄隱藏＋後端 403）；SCHEDULE 或 ATTENDANCE_READ 任一可進頁，
          各頁籤與動作再依權限顯示（SPEC-027 §8）。頁籤只有兩個：核對（ATTENDANCE_READ）與排班（SCHEDULE）。
-         頁首只放月份與動作，出勤統計在核對的逐人檢視，讓核對的格子盡量進首屏。 -->
+         頁首只放月份與動作，讓核對的格子盡量進首屏；逐人檢視沒有另一套統計，數字都跟格子同一個口徑。 -->
     <PageHeader title="排班與出勤">
       <template #actions>
         <!-- 年月與動作只管核對頁籤；排班頁籤（週班表、輪值表、換班紀錄、班別設定）不受它控制，不顯示以免誤會 -->
@@ -88,7 +88,6 @@
     />
 
     <div v-show="activeTab === 'grid' && shownView === 'person'" data-test="records-panel">
-    <AttendanceMonthStats :kpis="kpis" :display-state="statsDisplayState" />
     <p v-if="ws.loading.value" role="status">正在載入 {{ query.year }} 年 {{ query.month }} 月出勤紀錄…</p>
     <div v-if="ws.loadState.value === 'error'" class="workspace-status" role="alert">
       <p>{{ query.year }} 年 {{ query.month }} 月出勤資料載入失敗。{{ ws.hasCurrentData.value ? '目前顯示此月份上次成功載入的資料。' : '目前尚無此月份可顯示的資料。' }}</p>
@@ -100,7 +99,8 @@
       <el-button v-if="hasPermission('ATTENDANCE_WRITE')" type="primary" @click="openImport">匯入打卡紀錄</el-button>
     </section>
     <template v-else-if="ws.hasCurrentData.value">
-    <div class="workspace-record-actions"><el-button @click="anomalyDrawerOpen = true">遲到・早退・缺卡清單（{{ ws.kpis.value.pendingAnomalies }} 筆待處理）</el-button><span data-test="records-scope-note">{{ recordsScopeNote }}</span></div>
+    <!-- 逐人只留這一顆動作：批次處理有打卡紀錄的遲到、早退、缺卡（疑似缺勤、疑似換班與資料待補在格子處理） -->
+    <div class="workspace-record-actions"><el-button @click="anomalyDrawerOpen = true">批次處理遲到・早退・缺卡（{{ batchableCount }} 件）</el-button></div>
     <!-- 桌機名冊與整月明細 -->
     <div v-if="isDesktop" class="workspace-cols">
       <div class="col-roster">
@@ -109,6 +109,7 @@
           :roster="ws.roster.value"
           :selected-employee-id="currentEmployeeId"
           :pending-counts="pendingCountsByEmployee"
+          :pattern-employee-numbers="patternEmployeeNumbers"
           :loading="ws.loading.value"
           @select="onRosterSelect"
         />
@@ -116,7 +117,6 @@
       <div class="col-detail">
         <DetailColumn
           :mode="detailMode"
-          @anomalies="anomalyDrawerOpen = true"
           :anomaly="currentAnomaly"
           :anomaly-index="selectedAnomalyIndex"
           :anomaly-total="ws.anomalyQueue.value.length"
@@ -128,6 +128,8 @@
           @import="openImport"
           :year="query.year"
           :month="query.month"
+          :sealed="currentEmployeeSealed"
+          :uncovered-dates="pastUncoveredDates"
           @resolved="onDetailResolved"
           @navigate="onNavigate"
           @switch-mode="switchDetailMode"
@@ -146,7 +148,8 @@
             v-model:search="rosterSearch"
             :roster="ws.roster.value"
             :selected-employee-id="currentEmployeeId"
-          :pending-counts="pendingCountsByEmployee"
+            :pending-counts="pendingCountsByEmployee"
+            :pattern-employee-numbers="patternEmployeeNumbers"
             :loading="ws.loading.value"
             @select="onRosterSelect"
           />
@@ -165,7 +168,6 @@
           </el-button>
           <DetailColumn
             :mode="detailMode"
-            @anomalies="anomalyDrawerOpen = true"
             :anomaly="currentAnomaly"
             :anomaly-index="selectedAnomalyIndex"
             :anomaly-total="ws.anomalyQueue.value.length"
@@ -177,6 +179,8 @@
             @import="openImport"
             :year="query.year"
             :month="query.month"
+            :sealed="currentEmployeeSealed"
+            :uncovered-dates="pastUncoveredDates"
             @resolved="onDetailResolved"
             @navigate="onNavigate"
             @switch-mode="switchDetailMode"
@@ -227,7 +231,7 @@
     </template>
 
     <el-drawer v-if="canViewAttendance && ws.hasCurrentData.value" v-model="anomalyDrawerOpen" title="全月出勤異常（全體人員）" :size="isMobile ? '100%' : '480px'" append-to-body>
-      <AnomalyQueueColumn :items="ws.anomalyQueue.value" :selected-index="selectedAnomalyIndex" :loading="ws.loading.value" @select="onAnomalySelect" @filter-change="onFilterChange" @resolved="onDetailResolved" />
+      <AnomalyQueueColumn :items="ws.anomalyQueue.value" :selected-index="selectedAnomalyIndex" :loading="ws.loading.value" :sealed-employee-ids="sealedEmployeeIds" :employee-id-by-number="employeeIdByNumber" @select="onAnomalySelect" @filter-change="onFilterChange" @resolved="onDetailResolved" />
     </el-drawer>
     <!-- 重算本月出勤（改了員工上下班時間或班別時段之後）：試算後確認，完成後整頁重抓 -->
     <RecalculateAttendanceDrawer v-if="canViewAttendance" v-model="recalcOpen" :year="query.year" :month="query.month" :mobile="isMobile" @done="onDetailResolved" />
@@ -262,7 +266,6 @@ import { getAttendanceWorkingMonth } from '@/api/attendanceMonthContext'
 import type { ApiResponse } from '@/api/_generated/typed'
 import PageHeader from '@/components/common/PageHeader.vue'
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
-import AttendanceMonthStats from '@/components/attendance/AttendanceMonthStats.vue'
 import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
 import DetailColumn from '@/components/attendance/DetailColumn.vue'
@@ -270,7 +273,8 @@ import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue
 import MonthProgressBar from '@/components/schedule-attendance/MonthProgressBar.vue'
 import ScheduleGridPanel from '@/components/schedule-attendance/ScheduleGridPanel.vue'
 import { primaryAction as resolvePrimaryAction, type MonthStep, type MonthSummary, type PrimaryAction } from '@/utils/attendanceMonthSummary'
-import type { GridFilter, GridMode, GridView } from '@/utils/scheduleAttendanceGrid'
+import { patternCellKeys } from '@/utils/attendancePatterns'
+import { cellKey, isIssue, uncoveredDates, type GridFilter, type GridMode, type GridView } from '@/utils/scheduleAttendanceGrid'
 import { hasPermission, hasFullSalaryView } from '@/utils/auth'
 import type { AttendanceSub, AttendanceTab, AttendanceView } from '@/router/attendanceRouteProps'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
@@ -437,19 +441,41 @@ const progressBar = ref<InstanceType<typeof MonthProgressBar> | null>(null)
 
 // ── workspace composable ───────────────────────────────────────────────────
 const ws = useAttendanceWorkspace(toRef(query, 'year'), toRef(query, 'month'))
-const kpis = computed(() => ws.kpis.value)
 const rosterSearch = ref('')
-// 名冊分組要用「還沒處理完的」異常數：roster 的 late_count 等來自月統計，不會因為
-// 管理者接受扣款或豁免而減少，直接拿來分組會讓處理完的人一直掛在「有待處理」。
-const pendingCountsByEmployee = computed<Record<string, number>>(() => {
+/** 整月格子的員工 id → 員工編號（格子的 cell 只有 id；名冊與異常日卡用編號） */
+const gridEmployeeNumbers = computed(() => new Map((monthGrid.data.value?.employees ?? []).flatMap((e) => (e.employee_number ? [[e.employee_id, e.employee_number] as const] : []))))
+// 名冊的待辦數與核對的格子同一個口徑（isIssue：已處理、封存、整天還沒匯入的不算），再扣掉設定問題的格子
+// （整月同一種情形，修好設定才會消失，名冊上另外標「設定問題」）。key＝員工編號。
+// 不能用 roster 的 late_count 等月統計：接受扣款或豁免後它不會減少，處理完的人會一直掛在「有待處理」。
+// 格子還沒載到（或載入失敗）時不給數字，名冊退回月統計數，不把所有人都說成沒事。
+const pendingCountsByEmployee = computed<Record<string, number> | undefined>(() => {
+  const grid = monthGrid.data.value
+  if (!grid) return undefined
+  const uncovered = uncoveredDates(grid.days)
+  const patternKeys = patternCellKeys(monthGrid.patterns.value)
   const counts: Record<string, number> = {}
-  for (const card of ws.anomalyQueue.value) {
-    if (card.confirmed_action !== null) continue
-    counts[card.employee_number] = (counts[card.employee_number] ?? 0) + 1
+  for (const cell of grid.cells) {
+    if (!isIssue(cell, grid.today, uncovered) || patternKeys.has(cellKey(cell.employee_id, cell.date))) continue
+    const number = gridEmployeeNumbers.value.get(cell.employee_id)
+    if (number) counts[number] = (counts[number] ?? 0) + 1
   }
   return counts
 })
-const statsDisplayState = computed(() => ws.hasCurrentData.value ? (ws.loadState.value === 'success' ? 'ready' : 'stale') : (ws.loading.value ? 'loading' : 'unavailable'))
+/** 本月被判成設定問題的人（員工編號）：名冊上補小標，他們的設定問題格不在待辦數裡 */
+const patternEmployeeNumbers = computed<ReadonlySet<string>>(
+  () => new Set(monthGrid.patterns.value.flatMap((p) => { const number = gridEmployeeNumbers.value.get(p.employeeId); return number ? [number] : [] })),
+)
+const NO_DATES: ReadonlySet<string> = new Set()
+/**
+ * 整天還沒匯入打卡的過去工作日：整月明細這些日子沒打卡不是缺卡，寫「尚未匯入」、不催補卡。
+ * 沒有打卡權限的 import_covered 是 null＝不知道，不算（uncoveredDates 只認 false）。
+ */
+const pastUncoveredDates = computed<ReadonlySet<string>>(() => {
+  const grid = monthGrid.data.value
+  if (!grid) return NO_DATES
+  const today = todayTaipeiISO()
+  return new Set([...uncoveredDates(grid.days)].filter((date) => date < today))
+})
 const showEmptyRecords = computed(() => !focusDate.value && !rosterSearch.value.trim() && ws.loadState.value === 'success' && ws.hasCurrentData.value && ws.roster.value.length === 0 && ws.anomalyQueue.value.length === 0)
 
 // ── 錯誤通知 ────────────────────────────────────────────────────────────────
@@ -559,14 +585,18 @@ watch([ws.roster, ws.loadedPeriod], () => {
 /**
  * 沒點人時預設看的人：換月才重選（名冊畫面上的第一位）。處理完他的待處理後他會移到「無待處理」組，
  * 若每次都取當下的第一位，右側整月表會突然換成別人。
+ * 待辦數來自整月格子：格子晚於名冊載到時，名冊的分組會跟著變，預設的人也要重選一次（之後才固定），
+ * 否則右側看的是月統計的第一位、名冊畫面上的第一位卻是別人。
  */
 const defaultEmployeeId = ref<number | null>(null)
-let defaultPeriod: string | null = null
-watch([ws.roster, ws.loadedPeriod], () => {
+let defaultBasis: string | null = null
+const gridReady = computed(() => monthGrid.data.value !== null)
+watch([ws.roster, ws.loadedPeriod, gridReady], () => {
   if (!ws.hasCurrentData.value) return
   const stillThere = ws.roster.value.some((row) => row.employee_id === defaultEmployeeId.value)
-  if (ws.loadedPeriod.value !== defaultPeriod || !stillThere) {
-    defaultPeriod = ws.loadedPeriod.value
+  const basis = `${ws.loadedPeriod.value}|${gridReady.value}`
+  if (basis !== defaultBasis || !stillThere) {
+    defaultBasis = basis
     defaultEmployeeId.value = firstRosterEmployeeId(ws.roster.value, pendingCountsByEmployee.value)
   }
 }, { immediate: true })
@@ -774,8 +804,6 @@ function summaryOfThisMonth(): (MonthSummary & { step: MonthStep | null }) | nul
   const s = monthSummary.value
   return s && s.year === query.year && s.month === query.month ? s : null
 }
-/** 還沒處理的件數：逐日待辦加上設定問題的件數（封存的人不算） */
-const pendingCount = (s: MonthSummary): number => s.dailyIssueCount + s.patternIssueCount
 
 /** 頁首唯一的主要按鈕：文字與動作隨目前步驟變；沒有（等老師回覆、已封存、還在載入、沒有權限）就是 null */
 const primaryAction = computed(() => {
@@ -785,6 +813,25 @@ const primaryAction = computed(() => {
 
 /** 頁首狀態膠囊：這個月的封存狀態；摘要還沒載入（或換月）時是 undefined，頁首不畫 */
 const headerSealState = computed(() => summaryOfThisMonth()?.sealState)
+
+// ── 封存（只能看）────────────────────────────────────────────────────────────
+const NO_IDS: ReadonlySet<number> = new Set()
+/** 這個月薪資已封存的員工 id（月摘要算的；別月或還沒載到＝沒有人） */
+const sealedEmployeeIds = computed<ReadonlySet<number>>(() => summaryOfThisMonth()?.sealedEmployeeIds ?? NO_IDS)
+/** 員工編號 → 員工 id（異常日卡只有編號；封存名單是 id） */
+const employeeIdByNumber = computed<ReadonlyMap<string, number>>(
+  () => new Map(ws.roster.value.flatMap((row) => (row.employee_number ? [[row.employee_number, row.employee_id] as const] : []))),
+)
+/** 目前看的這個人整月薪資已封存：整月明細不給補打卡 */
+const currentEmployeeSealed = computed(() => currentEmployeeId.value !== null && sealedEmployeeIds.value.has(currentEmployeeId.value))
+/** 逐人頁頂批次處理按鈕的件數：還沒處理的日卡（一人一天＝1 件）；封存員工的只能看，不算 */
+const batchableCount = computed(() =>
+  ws.anomalyQueue.value.filter((card) => {
+    if (card.confirmed_action !== null) return false
+    const employeeId = employeeIdByNumber.value.get(card.employee_number)
+    return employeeId === undefined || !sealedEmployeeIds.value.has(employeeId)
+  }).length,
+)
 
 /** 按了主要動作：頁首按鈕與手機膠囊走同一個處理函式 */
 async function onPrimary(action: PrimaryAction): Promise<void> {
@@ -807,14 +854,6 @@ async function onPrimary(action: PrimaryAction): Promise<void> {
       return
   }
 }
-
-/** 出勤明細的清單只是班表核對待處理的一部分：把兩個數字的關係寫出來，不讓 284 與 435 各說各話 */
-const recordsScopeNote = computed(() => {
-  const s = summaryOfThisMonth()
-  const pending = s ? pendingCount(s) : 0
-  const scope = pending > 0 ? `班表核對本月 ${pending} 格待處理中，` : ''
-  return `${scope}有打卡紀錄的遲到、早退、缺卡在這裡處理（一人一天算一筆）；疑似缺勤、疑似換班與資料待補要在「班表核對」處理。`
-})
 
 /** 逐人「到班表核對處理」：切到核對的週格子並開這個人這天的抽屜（疑似換班要在那裡確認當日班別） */
 async function openGridCell(employeeId: number, date: string): Promise<void> {
@@ -929,7 +968,6 @@ async function applyWorkingMonth(): Promise<void> {
 .workspace-subnav { margin-bottom: var(--space-3); }
 
 .workspace-record-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
-.workspace-record-actions > span { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .workspace-cols {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);

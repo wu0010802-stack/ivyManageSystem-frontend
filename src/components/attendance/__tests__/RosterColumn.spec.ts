@@ -84,6 +84,7 @@ function mountRoster(props: {
   selectedEmployeeId?: number | null
   loading?: boolean
   pendingCounts?: Record<string, number>
+  patternEmployeeNumbers?: ReadonlySet<string>
 }) {
   return mount(RosterColumn, {
     props: {
@@ -91,6 +92,7 @@ function mountRoster(props: {
       selectedEmployeeId: props.selectedEmployeeId ?? null,
       loading: props.loading ?? false,
       ...(props.pendingCounts ? { pendingCounts: props.pendingCounts } : {}),
+      ...(props.patternEmployeeNumbers ? { patternEmployeeNumbers: props.patternEmployeeNumbers } : {}),
     },
     global: {
       stubs,
@@ -377,6 +379,31 @@ describe('RosterColumn — 鍵盤操作（listbox / roving tabindex）', () => {
     const evt = new KeyboardEvent('keydown', { key: 'Home', ctrlKey: true, bubbles: true, cancelable: true })
     options(wrapper)[1].element.dispatchEvent(evt)
     expect(evt.defaultPrevented).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+
+describe('RosterColumn — 設定問題小標', () => {
+  it('編號在 patternEmployeeNumbers 的人名字下面標「設定問題」，其他人沒有', () => {
+    const wrapper = mountRoster({ pendingCounts: { E002: 3 }, patternEmployeeNumbers: new Set(['E002']) })
+    const items = wrapper.findAll('.roster-item')
+    const late = items.find((i) => i.text().includes('王遲到'))!
+    expect(late.get('[data-test="roster-pattern"]').text()).toBe('設定問題')
+    expect(items.filter((i) => i.find('[data-test="roster-pattern"]').exists())).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('沒帶 patternEmployeeNumbers（單獨掛載）時沒有小標', () => {
+    const wrapper = mountRoster({})
+    expect(wrapper.find('[data-test="roster-pattern"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('小標掛在選項的可存取名稱裡（螢幕閱讀器唸得到）', () => {
+    const wrapper = mountRoster({ patternEmployeeNumbers: new Set(['E001']) })
+    const full = wrapper.findAll('.roster-item').find((i) => i.text().includes('陳全勤'))!
+    expect(full.text()).toContain('設定問題')
     wrapper.unmount()
   })
 })

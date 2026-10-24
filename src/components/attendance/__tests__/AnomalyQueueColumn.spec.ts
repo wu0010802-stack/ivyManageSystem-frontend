@@ -5,11 +5,15 @@ import { nextTick } from 'vue'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 // ── hoisted mocks（多選批次處理：直接呼叫 API，需 mock）─────────────────────────
-const { mockBatchConfirm, mockNotify, mockConfirm } = vi.hoisted(() => ({
+const { mockBatchConfirm, mockNotify, mockConfirm, mockShowUndo } = vi.hoisted(() => ({
   mockBatchConfirm: vi.fn().mockResolvedValue({ data: { processed: 0 } }),
   mockNotify: vi.fn(),
   mockConfirm: vi.fn().mockResolvedValue(undefined),
+  mockShowUndo: vi.fn(),
 }))
+
+// 批次成功後的「復原」提示（useConfirmUndo 自己有測試）：這裡只看交給它的文字與 id
+vi.mock('@/composables/useConfirmUndo', () => ({ showUndoToast: (...args: unknown[]) => mockShowUndo(...args) }))
 
 vi.mock('@/api/attendance', () => ({
   batchConfirmAnomalies: mockBatchConfirm,
@@ -95,9 +99,9 @@ const EmptyStateStub = {
 }
 
 const ElCheckbox = {
-  props: ['modelValue', 'indeterminate'],
+  props: ['modelValue', 'indeterminate', 'disabled'],
   emits: ['update:modelValue'],
-  template: `<label class="el-checkbox-stub"><input type="checkbox" :checked="modelValue" @change="$emit('update:modelValue', $event.target.checked)" /><slot /></label>`,
+  template: `<label class="el-checkbox-stub"><input type="checkbox" :checked="modelValue" :disabled="disabled" @change="$emit('update:modelValue', $event.target.checked)" /><slot /></label>`,
 }
 
 const ElButton = {
@@ -121,16 +125,21 @@ const stubs = {
   ElInput,
 }
 
+/** 員工編號對應員工 id（異常日卡只有編號；封存名單是員工 id） */
+const idByNumber = new Map([['E001', 1], ['E002', 2], ['E003', 3]])
+
 function mountQueue(overrides: {
   items?: AnomalyDayCard[]
   selectedIndex?: number
   loading?: boolean
+  sealedEmployeeIds?: ReadonlySet<number>
 }) {
   return mount(AnomalyQueueColumn, {
     props: {
       items: overrides.items ?? defaultItems,
       selectedIndex: overrides.selectedIndex ?? -1,
       loading: overrides.loading ?? false,
+      ...(overrides.sealedEmployeeIds ? { sealedEmployeeIds: overrides.sealedEmployeeIds, employeeIdByNumber: idByNumber } : {}),
     },
     global: {
       stubs,
@@ -140,6 +149,15 @@ function mountQueue(overrides: {
     },
   })
 }
+
+/** 確認框的內文：可能是字串，也可能是分行的 VNode；攤平成一段文字（行與行以換行隔開）供斷言 */
+function confirmText(message: unknown): string {
+  if (typeof message === 'string') return message
+  if (Array.isArray(message)) return message.map(confirmText).join('\n')
+  const node = message as { children?: unknown } | null
+  return node && typeof node === 'object' && 'children' in node ? confirmText(node.children) : ''
+}
+const lastConfirmText = () => confirmText(mockConfirm.mock.calls.at(-1)![0])
 
 // ── tests ──────────────────────────────────────────────────────────────────────
 describe('AnomalyQueueColumn — 寫入權限', () => {
@@ -352,7 +370,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     await flushPromises()
 
     expect(mockConfirm).toHaveBeenCalledTimes(1)
-    expect(mockConfirm.mock.calls[0][0]).toContain('接受扣款仍依原規則計算扣款')
+    expect(lastConfirmText()).toContain('接受扣款仍依原規則計算扣款')
     expect(mockBatchConfirm).toHaveBeenCalledWith({
       attendance_ids: expect.arrayContaining([cardLate.id, cardMulti.id]),
       action: 'admin_accept',
@@ -360,24 +378,65 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     })
   })
 
-  it('批次豁免：不填 remark 時 payload 不帶 remark 欄位', async () => {
+  it('批次接受：不填 remark 時 payload 不帶 remark 欄位', async () => {
     const wrapper = mountQueue({})
-    const boxes = checkboxesOf(wrapper)
-    await boxes[0].setValue(true)
+    await checkboxesOf(wrapper)[0].setValue(true)
 
-    const waiveBtn = wrapper
+    const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次豁免'))
-    await waiveBtn!.trigger('click')
+      .find((b) => b.text().includes('批次接受扣款'))
+    await acceptBtn!.trigger('click')
     await flushPromises()
 
     expect(mockBatchConfirm).toHaveBeenCalledWith({
       attendance_ids: [cardLate.id],
-      action: 'admin_waive',
+      action: 'admin_accept',
     })
   })
 
-  it('成功後顯示 ElMessage.success、清空選取並 emit resolved', async () => {
+  it('批次豁免要填理由：備註是空的（或只有空白）不開確認框、不呼叫 API，欄位下方寫「豁免要填理由」', async () => {
+    const wrapper = mountQueue({})
+    await checkboxesOf(wrapper)[0].setValue(true)
+    expect(wrapper.text()).not.toContain('豁免要填理由')
+
+    const waive = () => wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次豁免'))!
+    await waive().trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="batch-remark-error"]').text()).toBe('豁免要填理由')
+    expect(mockConfirm).not.toHaveBeenCalled()
+    expect(mockBatchConfirm).not.toHaveBeenCalled()
+
+    await wrapper.find('.anomaly-queue-column__batch-remark').setValue('   ')
+    await waive().trigger('click')
+    await flushPromises()
+    expect(mockConfirm).not.toHaveBeenCalled()
+    expect(mockBatchConfirm).not.toHaveBeenCalled()
+  })
+
+  it('填了理由就消去提示；豁免照常帶 remark 送出', async () => {
+    const wrapper = mountQueue({})
+    await checkboxesOf(wrapper)[0].setValue(true)
+    const waive = () => wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次豁免'))!
+    await waive().trigger('click')
+    expect(wrapper.find('[data-test="batch-remark-error"]').exists()).toBe(true)
+
+    await wrapper.find('.anomaly-queue-column__batch-remark').setValue('颱風天')
+    expect(wrapper.find('[data-test="batch-remark-error"]').exists()).toBe(false)
+    await waive().trigger('click')
+    await flushPromises()
+    expect(mockBatchConfirm).toHaveBeenCalledWith({ attendance_ids: [cardLate.id], action: 'admin_waive', remark: '颱風天' })
+  })
+
+  it('批次接受不需要理由，空備註也不顯示提示', async () => {
+    const wrapper = mountQueue({})
+    await checkboxesOf(wrapper)[0].setValue(true)
+    await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="batch-remark-error"]').exists()).toBe(false)
+    expect(mockBatchConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('成功後改用可復原的提示（寫處理件數與 id）、清空選取並 emit resolved', async () => {
     const wrapper = mountQueue({})
     const boxes = checkboxesOf(wrapper)
     await boxes[0].setValue(true)
@@ -388,9 +447,43 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     await acceptBtn!.trigger('click')
     await flushPromises()
 
-    expect(ElMessage.success).toHaveBeenCalledWith('已批次處理 2 筆')
+    expect(mockShowUndo).toHaveBeenCalledTimes(1)
+    expect(mockShowUndo).toHaveBeenCalledWith({ text: '已批次處理 2 件', attendanceIds: [cardLate.id], onUndone: expect.any(Function) })
+    expect(ElMessage.success).not.toHaveBeenCalled()
     expect(wrapper.emitted('resolved')).toBeTruthy()
     expect(wrapper.find('.anomaly-queue-column__batch-bar').exists()).toBe(false)
+  })
+
+  it('復原成功（onUndone）後 emit resolved 讓父層重抓', async () => {
+    const wrapper = mountQueue({})
+    await checkboxesOf(wrapper)[0].setValue(true)
+    await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
+    await flushPromises()
+    const afterBatch = wrapper.emitted('resolved')!.length
+    ;(mockShowUndo.mock.calls[0][0] as { onUndone: () => void }).onUndone()
+    expect(wrapper.emitted('resolved')!.length).toBe(afterBatch + 1)
+  })
+
+  it('復原只帶這次批次真的改成已處理的日卡：原本就已處理的卡不列入（復原會把它清成未處理）', async () => {
+    const wrapper = mountQueue({})
+    // 狀態改「全部」，全選會連已處理的卡一起選
+    await wrapper.findAll('select')[1].setValue('all')
+    await wrapper.find('.anomaly-queue-column__select-all input[type="checkbox"]').setValue(true)
+    expect(wrapper.find('.anomaly-queue-column__selected-count').text()).toContain('已選 3 筆')
+    await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
+    await flushPromises()
+    const call = mockShowUndo.mock.calls[0][0] as { attendanceIds: number[] }
+    expect(call.attendanceIds.sort()).toEqual([cardLate.id, cardMulti.id].sort())
+  })
+
+  it('選的全是原本就已處理的卡：沒有東西可復原，改用一般成功訊息', async () => {
+    const wrapper = mountQueue({})
+    await wrapper.findAll('select')[1].setValue('confirmed')
+    await wrapper.find('.anomaly-queue-column__select-all input[type="checkbox"]').setValue(true)
+    await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
+    await flushPromises()
+    expect(mockShowUndo).not.toHaveBeenCalled()
+    expect(ElMessage.success).toHaveBeenCalledWith('已批次處理 2 件')
   })
 
   it('使用者取消確認對話框（reject）不呼叫 API', async () => {
@@ -611,13 +704,103 @@ describe('批次接受扣款也寫出班表核對看得到的風險（獨立審�
       const boxes = wrapper.findAll('.anomaly-item__checkbox-wrap input[type="checkbox"]')
       await boxes[0].setValue(true)
       await boxes[1].setValue(true)
+      // 豁免要填理由才會開確認框
+      await wrapper.find('.anomaly-queue-column__batch-remark').setValue('測試理由')
       await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes(label))!.trigger('click')
       await flushPromises()
-      return mockConfirm.mock.calls.at(-1)![0] as string
+      return lastConfirmText()
     }
     const accept = await clickBatch('批次接受扣款')
     expect(accept).toContain('1 筆是整月同型態')
-    expect(accept).toContain('1 筆班表核對判定為疑似換班')
+    expect(accept).toContain('1 筆核對判定為疑似換班')
+    expect(accept).not.toContain('班表核對')
     expect(await clickBatch('批次豁免')).not.toContain('整月同型態')
+  })
+})
+
+
+describe('AnomalyQueueColumn — 批次接受的合計與封存員工', () => {
+  beforeEach(() => {
+    mockBatchConfirm.mockReset().mockResolvedValue({ data: { processed: 2 } })
+    mockConfirm.mockReset().mockResolvedValue(undefined)
+    mockShowUndo.mockReset()
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  const boxesOf = (wrapper: ReturnType<typeof mountQueue>) => wrapper.findAll('.anomaly-item__checkbox-wrap input[type="checkbox"]')
+  const clickBatch = async (wrapper: ReturnType<typeof mountQueue>, label: string) => {
+    await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes(label))!.trigger('click')
+    await flushPromises()
+  }
+
+  it('接受確認框加一行合計：選取日卡預估扣款加總，人數是不同員工數', async () => {
+    const wrapper = mountQueue({})
+    await boxesOf(wrapper)[0].setValue(true) // E002 300
+    await boxesOf(wrapper)[1].setValue(true) // E003 100
+    await clickBatch(wrapper, '批次接受扣款')
+    const lines = lastConfirmText().split('\n')
+    expect(lines.at(-1)).toBe('合計 NT$400（2 人）')
+  })
+
+  it('同一個人多天只算一人；金額千分位', async () => {
+    const big = (id: number, date: string): AnomalyDayCard => ({ ...cardLate, id, date, items: [{ type: 'late', type_label: '遲到', detail: 'x', estimated_deduction: 600 }, { type: 'early_leave', type_label: '早退', detail: 'y', estimated_deduction: 400 }] })
+    const wrapper = mountQueue({ items: [big(1, '2026-06-01'), big(2, '2026-06-02')] })
+    await wrapper.find('.anomaly-queue-column__select-all input[type="checkbox"]').setValue(true)
+    await clickBatch(wrapper, '批次接受扣款')
+    expect(lastConfirmText()).toContain('合計 NT$2,000（1 人）')
+  })
+
+  it('合計是 0（或遮罩 null）就省略整行；豁免不寫合計', async () => {
+    const zero: AnomalyDayCard = { ...cardLate, items: [{ type: 'late', type_label: '遲到', detail: 'x', estimated_deduction: 0 }, { type: 'early_leave', type_label: '早退', detail: 'y', estimated_deduction: null }] }
+    const wrapper = mountQueue({ items: [zero] })
+    await boxesOf(wrapper)[0].setValue(true)
+    await clickBatch(wrapper, '批次接受扣款')
+    expect(lastConfirmText()).not.toContain('合計')
+
+    mockConfirm.mockClear()
+    const paid = mountQueue({})
+    await boxesOf(paid)[0].setValue(true)
+    await paid.find('.anomaly-queue-column__batch-remark').setValue('颱風天')
+    await clickBatch(paid, '批次豁免')
+    expect(lastConfirmText()).not.toContain('合計')
+  })
+
+  describe('封存月的員工只能看', () => {
+    const sealed = new Set([2]) // E002（王遲到）薪資已封存
+
+    it('封存員工的核取框停用；其他人照常', () => {
+      const wrapper = mountQueue({ sealedEmployeeIds: sealed })
+      const boxes = boxesOf(wrapper)
+      expect(boxes[0].attributes('disabled')).toBeDefined() // cardLate E002
+      expect(boxes[1].attributes('disabled')).toBeUndefined() // cardMulti E003
+    })
+
+    it('全選不含封存項，全選列與已選數只算能處理的', async () => {
+      const wrapper = mountQueue({ sealedEmployeeIds: sealed })
+      expect(wrapper.find('.anomaly-queue-column__select-all').text()).toContain('全選目前篩選結果（1）')
+      await wrapper.find('.anomaly-queue-column__select-all input[type="checkbox"]').setValue(true)
+      expect(wrapper.find('.anomaly-queue-column__selected-count').text()).toContain('已選 1 筆')
+      await clickBatch(wrapper, '批次接受扣款')
+      expect(mockBatchConfirm).toHaveBeenCalledWith({ attendance_ids: [cardMulti.id], action: 'admin_accept' })
+    })
+
+    it('清單上方寫「已封存的 k 件只能看」；沒有封存項時不顯示', () => {
+      const wrapper = mountQueue({ sealedEmployeeIds: sealed })
+      expect(wrapper.get('[data-test="sealed-note"]').text()).toBe('已封存的 1 件只能看')
+      expect(mountQueue({}).find('[data-test="sealed-note"]').exists()).toBe(false)
+    })
+
+    it('封存項仍列在清單上（看得到、點得開）', async () => {
+      const wrapper = mountQueue({ sealedEmployeeIds: sealed })
+      expect(wrapper.text()).toContain('王遲到')
+      await wrapper.findAll('.anomaly-item__option')[0].trigger('click')
+      expect(wrapper.emitted('select')).toEqual([[0]])
+    })
+
+    it('全部都封存：不顯示全選列', () => {
+      const wrapper = mountQueue({ items: [cardLate], sealedEmployeeIds: sealed })
+      expect(wrapper.find('.anomaly-queue-column__select-all').exists()).toBe(false)
+      expect(wrapper.get('[data-test="sealed-note"]').text()).toBe('已封存的 1 件只能看')
+    })
   })
 })

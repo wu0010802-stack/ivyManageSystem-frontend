@@ -10,6 +10,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import ScheduleAttendanceView from '../ScheduleAttendanceView.vue'
 import { downloadFile } from '@/utils/download'
 import { attendanceRouteProps } from '@/router/attendanceRouteProps'
+import { cell, day, employee, grid as gridFixture, WEEK } from '@/components/schedule-attendance/__tests__/gridFixtures'
 
 const routerReplace = vi.hoisted(() => vi.fn())
 const routerPush = vi.hoisted(() => vi.fn())
@@ -61,27 +62,27 @@ vi.mock('element-plus', () => ({
 }))
 
 // 頁面建立的整月格子（useMonthGrid）走這支 API；用呼叫次數斷言「資料異動後整月資料重抓」
-const monthApi = vi.hoisted(() => ({ grid: vi.fn(async () => ({ data: null })) }))
+const monthApi = vi.hoisted(() => ({ grid: vi.fn(async (): Promise<{ data: unknown }> => ({ data: null })) }))
 vi.mock('@/api/scheduleAttendance', () => ({ getScheduleAttendanceGrid: monthApi.grid }))
 
 // ── stub component factories ────────────────────────────────────────────────────
 const RosterColumnStub = {
   name: 'RosterColumn',
-  props: ['roster', 'selectedEmployeeId', 'loading'],
+  props: ['roster', 'selectedEmployeeId', 'loading', 'pendingCounts', 'patternEmployeeNumbers'],
   emits: ['select'],
   template: `<div class="roster-column-stub"><slot /></div>`,
 }
 
 const AnomalyQueueColumnStub = {
   name: 'AnomalyQueueColumn',
-  props: ['items', 'selectedIndex', 'loading'],
+  props: ['items', 'selectedIndex', 'loading', 'sealedEmployeeIds', 'employeeIdByNumber'],
   emits: ['select', 'filterChange', 'resolved'],
   template: `<div class="anomaly-queue-column-stub"><slot /></div>`,
 }
 
 const DetailColumnStub = {
   name: 'DetailColumn',
-  props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month', 'focusDate', 'revision'],
+  props: ['mode', 'anomaly', 'anomalyIndex', 'anomalyTotal', 'context', 'employeeId', 'year', 'month', 'focusDate', 'revision', 'sealed', 'uncoveredDates'],
   emits: ['resolved', 'navigate', 'switchMode', 'retryRecords', 'openGrid'],
   template: `<div class="detail-column-stub"><slot /></div>`,
 }
@@ -143,13 +144,13 @@ const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobil
 const monthSummaryOf = (
   year: number,
   month: number,
-  o: { daily?: number; patterns?: number; people?: number; missingImport?: number; step?: 'import' | 'patterns' | 'daily' | 'confirm' | 'payroll' | 'done'; sealState?: 'open' | 'partial' | 'sealed' } = {},
+  o: { daily?: number; patterns?: number; people?: number; missingImport?: number; step?: 'import' | 'patterns' | 'daily' | 'confirm' | 'payroll' | 'done'; sealState?: 'open' | 'partial' | 'sealed'; sealedIds?: number[] } = {},
 ) => ({
   year,
   month,
   step: o.step ?? ('daily' as const),
   sealState: o.sealState ?? ('open' as const),
-  sealedEmployeeIds: new Set<number>(),
+  sealedEmployeeIds: new Set<number>(o.sealedIds ?? []),
   employedCount: 3,
   importStatus: { lastCovered: null, gaps: [], missingWorkdays: Array.from({ length: o.missingImport ?? 0 }, (_, i) => `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`) },
   patternPeople: o.people ?? (o.patterns ? 1 : 0),
@@ -1053,13 +1054,14 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     wrapper.unmount()
   })
 
-  it('版面：月份與動作在頁首列，出勤統計只在核對的逐人檢視（不壓在格子上方）', async () => {
+  it('版面：月份與動作在頁首列，出勤統計卡已移除（不壓在格子上方）', async () => {
     mockHasFullSalaryView.mockReturnValue(true)
     const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
     await flushPromises()
     expect(wrapper.find('.page-header .header-actions').findComponent(WorkspaceHeaderStub).exists()).toBe(true)
     expect(wrapper.findComponent(WorkspaceHeaderStub).props('canPayrollCompare')).toBe(true)
-    expect(wrapper.find('[data-test="records-panel"]').findComponent(AttendanceMonthStatsStub).exists()).toBe(true)
+    // 逐人檢視不再有出勤統計卡（數字改由核對的格子與頁首進度說，不在這裡並列第二套）
+    expect(wrapper.find('[data-test="records-panel"]').findComponent(AttendanceMonthStatsStub).exists()).toBe(false)
     expect(wrapper.find('.page-header__subtitle').exists()).toBe(false)
     wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('payroll')
     await flushPromises()
@@ -1286,23 +1288,21 @@ describe('明細整體空態', () => {
 })
 
 
-it('跨月失敗隱藏前月三欄與統計，重試成功後恢復', async () => {
+it('跨月失敗隱藏前月兩欄，重試成功後恢復', async () => {
   getSummaryMock.mockResolvedValue({ data: sampleRoster })
   getAnomalyListMock.mockResolvedValue({ data: { items: sampleAnomalies, total: 2, pending: 2, confirmed: 0 } })
   const wrapper = mountView()
   await flushPromises()
   const header = wrapper.findComponent(WorkspaceHeaderStub)
-  const stats = () => wrapper.findComponent(AttendanceMonthStatsStub)
-  expect(stats().props('displayState')).toBe('ready')
+  expect(wrapper.find('.workspace-cols').exists()).toBe(true)
   getSummaryMock.mockRejectedValueOnce(new Error('測試失敗'))
   await header.vm.$emit('update:month', header.props('month') === 9 ? 8 : 9)
   await flushPromises()
   expect(wrapper.find('.workspace-cols').exists()).toBe(false)
-  expect(stats().props('displayState')).toBe('unavailable')
+  expect(wrapper.findAll('button').some(button => button.text().includes('批次處理遲到・早退・缺卡'))).toBe(false)
   await wrapper.findAll('button').find(button => button.text() === '重新載入')!.trigger('click')
   await flushPromises()
   expect(wrapper.find('.workspace-cols').exists()).toBe(true)
-  expect(stats().props('displayState')).toBe('ready')
   wrapper.unmount()
 })
 
@@ -1346,7 +1346,7 @@ it('預設整月明細，異常清單收進抽屜且點選後關閉', async () =
   expect(wrapper.findComponent(DetailColumnStub).props('mode')).toBe('month')
   expect(wrapper.findComponent(RosterColumnStub).props('selectedEmployeeId')).toBe(wrapper.findComponent(DetailColumnStub).props('employeeId'))
   expect(wrapper.find('.workspace-cols .col-anomaly').exists()).toBe(false)
-  await wrapper.findAll('button').find(button => button.text().includes('遲到・早退・缺卡清單'))!.trigger('click')
+  await wrapper.findAll('button').find(button => button.text().includes('批次處理遲到・早退・缺卡'))!.trigger('click')
   expect(wrapper.find('[data-test="anomaly-drawer"]').attributes('data-open')).toBe('true')
   await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 1)
   await flushPromises()
@@ -1516,12 +1516,14 @@ describe('第五輪審查：預設月份、頁首範圍、兩頁籤互通', () =
     wrapper.unmount()
   })
 
-  it('出勤明細寫出清單與班表核對待處理的關係（不讓兩個數字各說各話）', async () => {
+  it('逐人檢視不再寫「清單與核對待處理的關係」那段說明（兩套數字已併成同一個口徑）', async () => {
     const wrapper = mount(ScheduleAttendanceView, { props: { ...attendanceRouteProps({ tab: 'records' }), date: '2026-09-16' }, global: { stubs: STUBS } })
     await flushPromises()
     wrapper.findComponent(MonthProgressBarStub).vm.$emit('summary', monthSummaryOf(2026, 9, { daily: 169, patterns: 266 }))
     await flushPromises()
-    expect(wrapper.get('[data-test="records-scope-note"]').text()).toContain('班表核對本月 435 格待處理中，有打卡紀錄的遲到、早退、缺卡在這裡處理')
+    expect(wrapper.find('[data-test="records-scope-note"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('格待處理')
+    expect(wrapper.text()).not.toContain('一人一天算一筆')
     wrapper.unmount()
   })
 })
@@ -1547,20 +1549,23 @@ describe('第五輪審查修正（獨立審查 F1／F4／F5）', () => {
   })
 
   it('出勤明細預設看的人在處理完他的待處理後不會換成別人（換月才重選）', async () => {
-    // 李小花月統計異常較多（排序在前）但沒有待處理；王小明有 1 筆待處理 → 分組後王小明是第一位
+    // 李小花月統計異常較多（排序在前）但格子上沒有待處理；王小明格子上有 1 件待處理 → 分組後王小明是第一位
     const roster = [sampleRoster[0], { ...sampleRoster[1], late_count: 3 }]
     getSummaryMock.mockResolvedValue({ data: roster })
-    getAnomalyListMock.mockResolvedValue({ data: { items: [sampleAnomalies[0]], pending: 1, total: 1, confirmed: 0 } })
-    const wrapper = mount(ScheduleAttendanceView, { props: { ...attendanceRouteProps({ tab: 'records' }), date: '2026-06-16' }, global: { stubs: STUBS } })
+    const people = [employee(1, '王小明'), employee(2, '李小花')]
+    const issue = (confirmed: string | null) => gridFixture({ employees: people, cells: [cell(1, WEEK[0], { actual: { status: 'anomaly', confirmed_action: confirmed } }), cell(2, WEEK[0], { actual: {} })] })
+    monthApi.grid.mockResolvedValue({ data: issue(null) })
+    const wrapper = mount(ScheduleAttendanceView, { props: { ...attendanceRouteProps({ tab: 'records' }), date: '2026-09-16' }, global: { stubs: STUBS } })
     await flushPromises()
-    // 王小明（E001）有 1 筆待處理 → 畫面第一位、預設看他
+    // 王小明（E001）有 1 件待處理 → 畫面第一位、預設看他
     expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(1)
     // 處理完：他的待處理變 0，名冊把他移到「無待處理」；預設的人不跟著換
-    getAnomalyListMock.mockResolvedValue({ data: { items: [{ ...sampleAnomalies[0], confirmed_action: 'admin_accept' }], pending: 0, total: 1, confirmed: 1 } })
-    getSummaryMock.mockResolvedValue({ data: roster.map((r) => ({ ...r })) })
+    monthApi.grid.mockResolvedValue({ data: issue('admin_accept') })
     wrapper.findComponent(DetailColumnStub).vm.$emit('resolved')
     await flushPromises()
+    expect(wrapper.findComponent(RosterColumnStub).props('pendingCounts')).toEqual({})
     expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(1)
+    monthApi.grid.mockResolvedValue({ data: null })
     wrapper.unmount()
   })
 
@@ -1860,5 +1865,153 @@ describe('頁首主要動作與匯出提醒（第六輪）', () => {
     expect(rule).toMatch(/clip-path:\s*inset\(50%\)/)
     // 標題仍在 DOM（不是 display:none）
     expect(rule).not.toMatch(/display:\s*none/)
+  })
+})
+
+
+describe('逐人檢視整併（第六輪 Task 6）', () => {
+  beforeEach(() => {
+    routerReplace.mockReset()
+    mockHasPermission.mockReturnValue(true)
+    mockIsMobile.value = false
+    getSummaryMock.mockReset().mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockReset().mockResolvedValue({ data: { items: sampleAnomalies, pending: 2, total: 2, confirmed: 0 } })
+    getRecordsMock.mockReset().mockResolvedValue({ data: [] })
+    monthApi.grid.mockReset().mockResolvedValue({ data: null })
+  })
+  afterEach(() => {
+    monthApi.grid.mockReset().mockResolvedValue({ data: null })
+  })
+
+  const mountPerson = async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { ...attendanceRouteProps({ tab: 'records' }), date: '2026-09-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    return wrapper
+  }
+  const sealedSummary = (ids: number[]) => monthSummaryOf(2026, 9, { sealedIds: ids })
+
+  it('逐人檢視沒有出勤統計卡、沒有範圍說明，動作列只有一顆批次處理按鈕（件數＝未處理日卡）', async () => {
+    const wrapper = await mountPerson()
+    const panel = wrapper.get('[data-test="records-panel"]')
+    expect(panel.findComponent(AttendanceMonthStatsStub).exists()).toBe(false)
+    expect(panel.find('[data-test="records-scope-note"]').exists()).toBe(false)
+    const actions = panel.get('.workspace-record-actions')
+    expect(actions.findAll('button').map((b) => b.text())).toEqual(['批次處理遲到・早退・缺卡（2 件）'])
+    expect(actions.findAll('span')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('批次處理按鈕打開異常清單抽屜', async () => {
+    const wrapper = await mountPerson()
+    expect(wrapper.get('[data-test="anomaly-drawer"]').attributes('data-open')).toBe('false')
+    await wrapper.get('.workspace-record-actions button').trigger('click')
+    expect(wrapper.get('[data-test="anomaly-drawer"]').attributes('data-open')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('件數不算已處理的日卡，也不算薪資已封存員工的日卡', async () => {
+    getAnomalyListMock.mockResolvedValue({ data: { items: [...sampleAnomalies, { ...sampleAnomalies[0], id: 12, date: '2026-06-06', confirmed_action: 'admin_waive' }], pending: 2, total: 3, confirmed: 1 } })
+    const wrapper = await mountPerson()
+    expect(wrapper.get('.workspace-record-actions button').text()).toBe('批次處理遲到・早退・缺卡（2 件）')
+    // 李小花（id 2）整月封存：她那一件只能看，不算待處理
+    wrapper.findComponent(MonthProgressBarStub).vm.$emit('summary', sealedSummary([2]))
+    await flushPromises()
+    expect(wrapper.get('.workspace-record-actions button').text()).toBe('批次處理遲到・早退・缺卡（1 件）')
+    wrapper.unmount()
+  })
+
+  it('別月的月摘要不能拿來算這個月的封存', async () => {
+    const wrapper = await mountPerson()
+    wrapper.findComponent(MonthProgressBarStub).vm.$emit('summary', monthSummaryOf(2026, 8, { sealedIds: [1, 2] }))
+    await flushPromises()
+    expect(wrapper.get('.workspace-record-actions button').text()).toBe('批次處理遲到・早退・缺卡（2 件）')
+    expect([...wrapper.findComponent(AnomalyQueueColumnStub).props('sealedEmployeeIds') as Set<number>]).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('封存名單與員工編號對照一併交給異常清單；封存的人整月明細是唯讀', async () => {
+    const wrapper = await mountPerson()
+    wrapper.findComponent(MonthProgressBarStub).vm.$emit('summary', sealedSummary([2]))
+    await flushPromises()
+    const queue = wrapper.findComponent(AnomalyQueueColumnStub)
+    expect([...queue.props('sealedEmployeeIds') as Set<number>]).toEqual([2])
+    expect(Object.fromEntries(queue.props('employeeIdByNumber') as Map<string, number>)).toEqual({ E001: 1, E002: 2 })
+    await wrapper.findComponent(RosterColumnStub).vm.$emit('select', 2)
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('sealed')).toBe(true)
+    await wrapper.findComponent(RosterColumnStub).vm.$emit('select', 1)
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('sealed')).toBe(false)
+    wrapper.unmount()
+  })
+
+  describe('名冊的待辦數來自整月格子', () => {
+    const days = WEEK.map((d) => day(d))
+    const people = [employee(1, '王小明'), employee(2, '李小花'), employee(3, '陳設定')]
+    const punched = (date: string) => ({ actual: { punch_in: `${date}T07:00:00`, punch_out: `${date}T16:30:00` } })
+    const cells = [
+      // 王小明：兩件逐日待辦（沒打卡的兩天）＋三天正常打卡（有打卡就不是「整月沒打卡」型態）
+      cell(1, WEEK[0], { actual: { status: 'anomaly' } }),
+      cell(1, WEEK[1], { actual: { status: 'anomaly' } }),
+      ...WEEK.slice(2, 5).map((d) => cell(1, d, punched(d))),
+      // 李小花：只有一格封存的異常（封存不算待辦）
+      cell(2, WEEK[0], { actual: { status: 'anomaly' }, edit: { locked_reason: 'finalized', plan: false } }),
+      // 陳設定：整段都沒打卡（型態＝設定問題），不是逐日待辦
+      ...WEEK.slice(0, 5).map((d) => cell(3, d, { actual: { status: 'suspected_absence' } })),
+    ]
+
+    it('只算 isIssue 且不是型態格；key 是員工編號；型態員工帶「設定問題」編號', async () => {
+      monthApi.grid.mockResolvedValue({ data: gridFixture({ days, employees: people, cells }) })
+      const wrapper = await mountPerson()
+      const roster = wrapper.findComponent(RosterColumnStub)
+      expect(roster.props('pendingCounts')).toEqual({ E001: 2 })
+      expect([...roster.props('patternEmployeeNumbers') as Set<string>]).toEqual(['E003'])
+      wrapper.unmount()
+    })
+
+    it('格子還沒載到：不交計數（名冊退回月統計），也沒有設定問題標示', async () => {
+      const wrapper = await mountPerson()
+      const roster = wrapper.findComponent(RosterColumnStub)
+      expect(roster.props('pendingCounts')).toBeUndefined()
+      expect([...roster.props('patternEmployeeNumbers') as Set<string>]).toEqual([])
+      wrapper.unmount()
+    })
+
+    it('格子載到後，預設看的人改成名冊畫面上的第一位（不是月統計的第一位）', async () => {
+      // 月統計：李小花異常最多；格子上有待辦的是王小明
+      getSummaryMock.mockResolvedValue({ data: [sampleRoster[0], { ...sampleRoster[1], late_count: 3 }] })
+      let release!: (v: { data: unknown }) => void
+      monthApi.grid.mockReturnValue(new Promise((resolve) => { release = resolve }))
+      const wrapper = await mountPerson()
+      expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(2)
+      release({ data: gridFixture({ days, employees: people, cells }) })
+      await flushPromises()
+      expect(wrapper.findComponent(DetailColumnStub).props('employeeId')).toBe(1)
+      wrapper.unmount()
+    })
+  })
+
+  describe('整天還沒匯入的日子交給整月明細', () => {
+    it('只給「已過去、工作日、整天沒人被匯入」的日期；未來日、假日、沒有打卡權限（null）都不算', async () => {
+      const days = [
+        day('2026-09-14', { import_covered: false }), // 過去的工作日，沒匯入 → 算
+        day('2026-09-15', { import_covered: true }), // 有匯入
+        day('2026-09-16', { import_covered: null }), // 沒有打卡權限：不知道
+        day('2026-09-19', { import_covered: false }), // 週六
+        day('2099-01-05', { import_covered: false }), // 還沒到的工作日
+      ]
+      monthApi.grid.mockResolvedValue({ data: gridFixture({ days, employees: [employee(1, '王小明')], cells: [] }) })
+      const wrapper = await mountPerson()
+      await wrapper.findComponent(RosterColumnStub).vm.$emit('select', 1)
+      await flushPromises()
+      expect([...wrapper.findComponent(DetailColumnStub).props('uncoveredDates') as Set<string>]).toEqual(['2026-09-14'])
+      wrapper.unmount()
+    })
+
+    it('格子還沒載到：沒有未匯入的日子', async () => {
+      const wrapper = await mountPerson()
+      expect([...wrapper.findComponent(DetailColumnStub).props('uncoveredDates') as Set<string>]).toEqual([])
+      wrapper.unmount()
+    })
   })
 })

@@ -32,9 +32,6 @@
 
     <!-- month mode -->
     <template v-else>
-      <div class="detail-column__toolbar">
-        <el-button size="small" @click="emit('anomalies')">開啟異常清單</el-button>
-      </div>
       <EmployeeMonthPanel
         :employee-id="employeeId"
         :employee-name="employeeName"
@@ -42,6 +39,8 @@
         :month="month"
         :focus-date="focusDate"
         :revision="revision"
+        :sealed="sealed"
+        :uncovered-dates="uncoveredDates"
         @updated="emit('resolved')"
       />
     </template>
@@ -58,7 +57,7 @@ import { useResolveAnomaly, type ResolvePayload } from '@/composables/useResolve
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 // ── props & emits ──────────────────────────────────────────────────────────────
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   mode: 'resolve' | 'month'
   anomaly: AnomalyDayCard | null
   anomalyIndex: number
@@ -77,10 +76,13 @@ const props = defineProps<{
   focusDate?: string | null
   /** 匯入／補卡等寫入後遞增，供整月明細重新載入（同員工同月時三個 key 都沒變） */
   revision?: number
-}>()
+  /** 整月明細：這個人這個月薪資已封存（只能看） */
+  sealed?: boolean
+  /** 整月明細：整天還沒匯入的過去工作日（沒打卡不算缺卡，不催補卡） */
+  uncoveredDates?: ReadonlySet<string>
+}>(), { sealed: false, uncoveredDates: () => new Set<string>() })
 
 const emit = defineEmits<{
-  (e: 'anomalies'): void
   (e: 'import'): void
   (e: 'resolved'): void
   (e: 'navigate', delta: number): void

@@ -27,16 +27,19 @@
     </div>
 
     <!-- 全選列（多選批次處理，P?-batch-ux-tail）；唯讀帳號無批次動作可用，整列不顯示 -->
-    <div v-if="canWrite && filteredWithIndex.length > 0" class="anomaly-queue-column__select-all">
+    <div v-if="canWrite && selectableRows.length > 0" class="anomaly-queue-column__select-all">
       <el-checkbox
         :model-value="allVisibleSelected"
         :indeterminate="someVisibleSelected"
         @update:model-value="toggleSelectAll"
-      >全選目前篩選結果（{{ filteredWithIndex.length }}）</el-checkbox>
+      >全選目前篩選結果（{{ selectableRows.length }}）</el-checkbox>
       <span v-if="selectedIds.size > 0" class="anomaly-queue-column__selected-count">
         已選 {{ selectedIds.size }} 筆
       </span>
     </div>
+
+    <!-- 薪資已封存的員工：項目還看得到、點得開，但不能批次處理（後端會整批 409） -->
+    <p v-if="sealedCount > 0" class="anomaly-queue-column__sealed" role="note" data-test="sealed-note">已封存的 {{ sealedCount }} 件只能看</p>
 
     <!-- 空狀態 -->
     <div
@@ -77,6 +80,7 @@
           <el-checkbox
             class="anomaly-item__checkbox"
             :model-value="selectedIds.has(item.id)"
+            :disabled="isSealedCard(item)"
             :aria-label="`選取 ${item.employee_name} ${item.date} 的異常`"
             @update:model-value="(v) => toggleSelectOne(item.id, v)"
           />
@@ -123,12 +127,15 @@
 
     <!-- 批次動作列：選取 >0 時顯示；與 ResolveCard 的單筆動作一致，需 ATTENDANCE_WRITE -->
     <div v-if="canWrite && selectedIds.size > 0" class="anomaly-queue-column__batch-bar">
-      <el-input
-        v-model="batchRemark"
-        placeholder="備註（選填）"
-        size="small"
-        class="anomaly-queue-column__batch-remark"
-      />
+      <div class="anomaly-queue-column__batch-remark-field">
+        <el-input
+          v-model="batchRemark"
+          placeholder="備註（豁免必填）"
+          size="small"
+          class="anomaly-queue-column__batch-remark"
+        />
+        <p v-if="remarkMissing" class="anomaly-queue-column__batch-remark-error" role="alert" data-test="batch-remark-error">豁免要填理由</p>
+      </div>
       <el-button
         size="small"
         :loading="batchBusy"
@@ -150,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, h } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { batchConfirmAnomalies } from '@/api/attendance'
@@ -158,12 +165,17 @@ import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useGridVerdict } from '@/composables/useGridVerdict'
+import { showUndoToast } from '@/composables/useConfirmUndo'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   items: AnomalyDayCard[]
   selectedIndex: number
   loading: boolean
-}>()
+  /** 薪資已封存的員工 id：他們的項目只能看（核取框停用、不進全選、不送批次） */
+  sealedEmployeeIds?: ReadonlySet<number>
+  /** 員工編號 → 員工 id（異常日卡只有編號，封存名單是 id） */
+  employeeIdByNumber?: ReadonlyMap<string, number>
+}>(), { sealedEmployeeIds: () => new Set<number>(), employeeIdByNumber: () => new Map<string, number>() })
 
 const emit = defineEmits<{
   (e: 'select', index: number): void
@@ -211,6 +223,15 @@ const filteredWithIndex = computed<{ item: AnomalyDayCard; origIndex: number }[]
       return true
     })
 })
+
+/** 這張日卡的員工薪資已封存（編號對不到 id 就當作沒封存：批次時後端會擋，不會誤改） */
+function isSealedCard(card: AnomalyDayCard): boolean {
+  const employeeId = props.employeeIdByNumber.get(card.employee_number)
+  return employeeId !== undefined && props.sealedEmployeeIds.has(employeeId)
+}
+/** 目前篩選結果裡能處理的（不含封存）：全選與全選列的數字都只算這些 */
+const selectableRows = computed(() => filteredWithIndex.value.filter(({ item }) => !isSealedCard(item)))
+const sealedCount = computed(() => filteredWithIndex.value.length - selectableRows.value.length)
 
 // ── 鍵盤操作（listbox + roving tabindex）────────────────────────────────────────
 const listRef = ref<HTMLElement | null>(null)
@@ -282,6 +303,9 @@ const ACTION_LABELS: Record<'admin_accept' | 'admin_waive', string> = {
 const selectedIds = reactive(new Set<number>())
 watch([searchTerm, typeFilter, statusFilter], () => selectedIds.clear())
 const batchRemark = ref('')
+/** 豁免沒填理由：欄位下方顯示提示，填了就消去 */
+const remarkMissing = ref(false)
+watch(batchRemark, (value) => { if (value.trim()) remarkMissing.value = false })
 const batchBusy = ref(false)
 
 // 資料刷新（items 參考變動）後清空選取，避免殘留已處理過的舊 id 被誤重送
@@ -290,28 +314,30 @@ watch(
   () => {
     selectedIds.clear()
     batchRemark.value = ''
+    remarkMissing.value = false
   },
 )
 
 const allVisibleSelected = computed<boolean>(
   () =>
-    filteredWithIndex.value.length > 0 &&
-    filteredWithIndex.value.every(({ item }) => selectedIds.has(item.id)),
+    selectableRows.value.length > 0 &&
+    selectableRows.value.every(({ item }) => selectedIds.has(item.id)),
 )
 
 const someVisibleSelected = computed<boolean>(
   () =>
     !allVisibleSelected.value &&
-    filteredWithIndex.value.some(({ item }) => selectedIds.has(item.id)),
+    selectableRows.value.some(({ item }) => selectedIds.has(item.id)),
 )
 
 // el-checkbox 的 update:modelValue 型別為 CheckboxValueType（string | number | boolean）；
 // 此元件語意上一律是布林開關，收到即強制轉 boolean。
 function toggleSelectAll(checked: string | number | boolean): void {
+  // 封存員工的項目不進全選
   if (checked) {
-    for (const { item } of filteredWithIndex.value) selectedIds.add(item.id)
+    for (const { item } of selectableRows.value) selectedIds.add(item.id)
   } else {
-    for (const { item } of filteredWithIndex.value) selectedIds.delete(item.id)
+    for (const { item } of selectableRows.value) selectedIds.delete(item.id)
   }
 }
 
@@ -323,6 +349,7 @@ function toggleSelectOne(id: number, checked: string | number | boolean): void {
 function clearSelection(): void {
   selectedIds.clear()
   batchRemark.value = ''
+  remarkMissing.value = false
 }
 
 /**
@@ -342,23 +369,40 @@ function batchAcceptRisk(ids: number[]): string {
   }
   const parts = [
     pattern ? `${pattern} 筆是整月同型態（多半是設定問題，會照目前的應上班時段扣薪）` : '',
-    shift ? `${shift} 筆班表核對判定為疑似換班（應先確認當日班別）` : '',
+    shift ? `${shift} 筆核對判定為疑似換班（應先確認當日班別）` : '',
   ].filter(Boolean)
   return parts.length ? `注意：其中 ${parts.join('、')}。` : ''
 }
 
 async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promise<void> {
   if (batchBusy.value) return
-  const ids = [...selectedIds]
+  // 以日卡為準（順序跟清單一致），並再擋一次封存員工：任何一筆封存的 id 都會讓整批 409
+  const chosen = props.items.filter((card) => selectedIds.has(card.id) && !isSealedCard(card))
+  const ids = chosen.map((card) => card.id)
   if (ids.length === 0) return
+  const remark = batchRemark.value.trim()
+  // 豁免會讓這幾天不扣款，事後要查得到為什麼：沒有理由不開確認框
+  if (action === 'admin_waive' && !remark) {
+    remarkMissing.value = true
+    return
+  }
   if (ids.length > MAX_BATCH_IDS) {
     ElMessage.warning(`一次最多批次處理 ${MAX_BATCH_IDS} 筆，請分批選取`)
     return
   }
 
+  const lines = [
+    `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？此操作套用選取日期的整日異常。${action === 'admin_accept' ? `接受扣款仍依原規則計算扣款，並非豁免。${batchAcceptRisk(ids)}` : ''}`,
+  ]
+  if (action === 'admin_accept') {
+    // 接受＝照扣：把這批會扣多少、牽涉幾個人寫在確認框（遮罩 null 與 0 不列入；合計是 0 就整行省略）
+    const sum = chosen.reduce((total, card) => total + deductionOf(card), 0)
+    if (sum > 0) lines.push(`合計 NT$${sum.toLocaleString()}（${new Set(chosen.map((card) => card.employee_number)).size} 人）`)
+  }
+
   try {
     await ElMessageBox.confirm(
-      `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？此操作套用選取日期的整日異常。${action === 'admin_accept' ? `接受扣款仍依原規則計算扣款，並非豁免。${batchAcceptRisk(ids)}` : ''}`,
+      h('div', lines.map((line, i) => h('p', { style: i ? 'margin:var(--space-2) 0 0;font-weight:600' : 'margin:0' }, line))),
       '批次處理',
       { type: 'warning', confirmButtonText: '確認', cancelButtonText: '取消' },
     )
@@ -368,13 +412,16 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 
   batchBusy.value = true
   try {
-    const remark = batchRemark.value.trim()
     const res = await batchConfirmAnomalies({
       attendance_ids: ids,
       action,
       ...(remark ? { remark } : {}),
     })
-    ElMessage.success(`已批次處理 ${res.data.processed} 筆`)
+    const text = `已批次處理 ${res.data.processed} 件`
+    // 復原只清這次真的改成已處理的日卡：原本就已處理的卡（可能是員工自己或之前的處理）不能被一起清回未處理
+    const undoable = chosen.filter((card) => card.confirmed_action === null).map((card) => card.id)
+    if (undoable.length > 0) showUndoToast({ text, attendanceIds: undoable, onUndone: () => emit('resolved') })
+    else ElMessage.success(text)
     clearSelection()
     emit('resolved')
   } catch (err) {
@@ -437,9 +484,24 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   flex-wrap: wrap;
 }
 
-.anomaly-queue-column__batch-remark {
+.anomaly-queue-column__batch-remark-field {
   flex: 1;
   min-width: 120px;
+}
+
+.anomaly-queue-column__batch-remark-error {
+  margin: var(--space-1) 0 0;
+  color: var(--color-danger-darker);
+  font-size: var(--text-xs);
+}
+
+.anomaly-queue-column__sealed {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color-light);
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
 }
 
 .anomaly-queue-column__list {
