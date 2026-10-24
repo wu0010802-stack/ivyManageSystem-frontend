@@ -132,14 +132,30 @@ describe('MonthProgressBar 步驟列', () => {
     expect(wrapper.find('[data-test="progress-sealed"]').exists()).toBe(false)
   })
 
-  it('點擊：打卡匯入→import、逐日待辦→show-issues、交薪資連往 /salary/settle', async () => {
+  it('點擊：打卡匯入→import（要 ATTENDANCE_WRITE）、逐日待辦→show-issues、交薪資連往 /salary/settle', async () => {
+    perms.set = new Set(['SCHEDULE', 'ATTENDANCE_READ', 'ATTENDANCE_WRITE', 'SALARY_READ'])
     const wrapper = mountBar()
     await flushPromises()
+    expect(wrapper.get('[data-test="progress-import"]').element.tagName).toBe('BUTTON')
     await wrapper.get('[data-test="progress-import"]').trigger('click')
     expect(wrapper.emitted('import')).toHaveLength(1)
     await wrapper.get('[data-test="progress-issues"]').trigger('click')
     expect(wrapper.emitted('show-issues')).toHaveLength(1)
     expect(wrapper.findComponent(RouterLinkStub).props('to')).toBe('/salary/settle')
+  })
+
+  it('沒有 ATTENDANCE_WRITE：打卡匯入只顯示進度，不是按鈕、點了也不開匯入（頁首匯入鈕同條件）', async () => {
+    // 預設權限集合只有讀取
+    const wrapper = mountBar()
+    await flushPromises()
+    const step = wrapper.get('[data-test="progress-import"]')
+    expect(step.element.tagName).not.toBe('BUTTON')
+    expect(step.text()).toContain('缺 2 個工作日')
+    expect(wrapper.find('[data-test="progress-import"] button').exists()).toBe(false)
+    await step.trigger('click')
+    expect(wrapper.emitted('import')).toBeUndefined()
+    // 目前步驟的強調照常（只是不給入口）
+    expect(wrapper.get('[aria-current="step"]').text()).toContain('打卡匯入')
   })
 
   it('summary 事件送出整份月摘要與目前步驟（頁首、匯出提醒共用）', async () => {
@@ -541,12 +557,67 @@ describe('MonthProgressBar ④老師確認狀態（D-07）', () => {
     expect(none.find('[data-test="progress-rounds-status"]').text()).toBe('沒有進行中')
   })
 
-  it('讀輪次失敗：寫沒有進行中（不殘留舊進度），按鈕照常可開抽屜', async () => {
+  it('讀輪次失敗：狀態未知，步驟 4 寫「—」，按鈕照常可開抽屜', async () => {
     api.rounds.mockRejectedValueOnce(new Error('x'))
     const wrapper = mountBar()
     await flushPromises()
-    expect(wrapper.find('[data-test="progress-rounds-status"]').text()).toBe('沒有進行中')
+    expect(wrapper.find('[data-test="progress-rounds-status"]').text()).toBe('—')
     expect(wrapper.find('[data-test="progress-rounds"]').exists()).toBe(true)
+  })
+
+  describe('讀輪次失敗不能暗示可以交薪資（狀態未知＝仍需確認）', () => {
+    it('前面都乾淨：目前步驟停在老師確認，不是交薪資；summary 也是 confirm', async () => {
+      useGrid(cleanGrid)
+      api.rounds.mockRejectedValue(new Error('x'))
+      const wrapper = mountBar()
+      await flushPromises()
+      expect(wrapper.get('[aria-current="step"]').text()).toContain('老師確認換班')
+      expect(wrapper.find('[data-test="progress-rounds-status"]').text()).toBe('—')
+      expect(text(wrapper, '[data-test="progress-salary"]')).toContain('前面完成後開放')
+      expect(wrapper.text()).not.toContain('可以交了')
+      expect(wrapper.emitted('summary')!.at(-1)![0]).toMatchObject({ step: 'confirm' })
+    })
+
+    it('輪次讀到了但讀明細失敗，一樣算未知', async () => {
+      useGrid(cleanGrid)
+      api.rounds.mockResolvedValue({ data: [ROUND] })
+      api.round.mockRejectedValue(new Error('x'))
+      const wrapper = mountBar()
+      await flushPromises()
+      expect(wrapper.find('[data-test="progress-rounds-status"]').text()).toBe('—')
+      expect(wrapper.get('[aria-current="step"]').text()).toContain('老師確認換班')
+      expect(wrapper.text()).not.toContain('可以交了')
+    })
+
+    it('前面的步驟照常優先：還有逐日待辦就停在逐日待辦', async () => {
+      useGrid(dailyGrid)
+      api.rounds.mockRejectedValue(new Error('x'))
+      const wrapper = mountBar()
+      await flushPromises()
+      expect(wrapper.get('[aria-current="step"]').text()).toContain('逐日待辦')
+      expect(wrapper.emitted('summary')!.at(-1)![0]).toMatchObject({ step: 'daily' })
+    })
+
+    it('手機膠囊：不寫交薪資，副文說讀不到狀態', async () => {
+      useGrid(cleanGrid)
+      api.rounds.mockRejectedValue(new Error('x'))
+      const wrapper = mountBar({ mobile: true })
+      await flushPromises()
+      expect(wrapper.get('[data-test="progress-capsule-main"]').text()).toBe('等老師回覆換班')
+      expect(wrapper.get('[data-test="progress-capsule-sub"]').text()).toBe('讀不到老師確認的狀態，先確認再交薪資')
+    })
+
+    it('下次重抓讀成功就恢復：沒有進行中且沒有待回覆＝可以交了', async () => {
+      useGrid(cleanGrid)
+      api.rounds.mockRejectedValueOnce(new Error('x'))
+      const wrapper = mountBar()
+      await flushPromises()
+      expect(wrapper.find('[data-test="progress-rounds-status"]').text()).toBe('—')
+      revision.value += 1
+      await flushPromises()
+      expect(wrapper.find('[data-test="progress-rounds-status"]').text()).toBe('沒有進行中')
+      expect(wrapper.get('[aria-current="step"]').text()).toContain('交薪資')
+    })
   })
 
   it('整月資料重抓（revision）後狀態一起重讀', async () => {

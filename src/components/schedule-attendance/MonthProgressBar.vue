@@ -41,10 +41,15 @@
 
       <ol v-if="showSteps" class="month-progress__steps" :aria-label="`${monthNumber} 月結算進度`">
         <li v-if="canViewAttendance" class="month-progress__step" :class="{ 'is-current': step === 'import' }" :aria-current="step === 'import' ? 'step' : undefined">
-          <button type="button" class="month-progress__action" data-test="progress-import" @click="emit('import')">
+          <!-- 匯入要 ATTENDANCE_WRITE（同頁首匯入鈕）；只有讀取權限時只顯示進度，不給可點的入口 -->
+          <button v-if="canWriteAttendance" type="button" class="month-progress__action" data-test="progress-import" @click="emit('import')">
             <span class="month-progress__name">打卡匯入</span>
             <span class="month-progress__value">{{ importValue }}</span>
           </button>
+          <div v-else class="month-progress__action is-static" data-test="progress-import">
+            <span class="month-progress__name">打卡匯入</span>
+            <span class="month-progress__value">{{ importValue }}</span>
+          </div>
         </li>
         <li v-if="canViewAttendance" class="month-progress__step" :class="{ 'is-current': step === 'patterns' }" :aria-current="step === 'patterns' ? 'step' : undefined">
           <!-- 設定問題：整月同型態的人，修好設定才會一次消失（點開設定檢查） -->
@@ -130,6 +135,8 @@ const range = computed(() => props.month.range.value)
 const data = computed(() => props.month.data.value)
 const loadError = computed(() => props.month.loadError.value)
 const canViewAttendance = hasPermission('ATTENDANCE_READ')
+// 匯入打卡需要寫入權限（頁首匯入鈕同條件）；沒有就不能把步驟 1 做成可點的入口
+const canWriteAttendance = hasPermission('ATTENDANCE_WRITE')
 // 薪資結算頁需要 SALARY_READ，沒有就只顯示步驟名稱（連過去會被路由守衛擋下）
 const canViewSalary = hasPermission('SALARY_READ')
 // 確認輪次端點掛在 SCHEDULE 路由下，讀取還要 ATTENDANCE_READ（同原打卡核對頁籤條件）
@@ -162,6 +169,8 @@ const roundProgress = ref<{ replied: number; total: number } | null>(null)
 const backdatedPending = ref(0)
 /** 這個月的老師確認狀態讀完了沒：沒讀完時目前步驟不下判斷（不然會先閃過「交薪資」） */
 const roundsReady = ref(false)
+/** 讀輪次失敗：狀態未知，不能當成「沒有進行中」而暗示可以交薪資 */
+const roundsFailed = ref(false)
 let roundSeq = 0
 
 /** 老師自行補登中行政要動手的筆數（SPEC-026 3-3）。補登清單讀不到只是少了這段，不影響輪次進度。 */
@@ -179,6 +188,7 @@ async function loadRoundStatus(): Promise<void> {
   const { start, end } = range.value
   let progress: { replied: number; total: number } | null = null
   let pending = 0
+  let failed = false
   try {
     const backdated = loadBackdatedPending(start, end)
     const round = pickDisplayRound((await listConfirmationRounds({ start_date: start, end_date: end })).data)
@@ -188,10 +198,12 @@ async function loadRoundStatus(): Promise<void> {
   } catch {
     progress = null
     pending = 0
+    failed = true
   }
   if (current !== roundSeq) return
   roundProgress.value = progress
   backdatedPending.value = pending
+  roundsFailed.value = failed
   roundsReady.value = true
 }
 // data 變 null＝換月載入中或整月請求失敗：先作廢在飛的舊請求並清掉狀態，不殘留上個月的進度
@@ -202,6 +214,7 @@ watch(data, (g) => {
     roundSeq += 1
     roundProgress.value = null
     backdatedPending.value = 0
+    roundsFailed.value = false
     roundsReady.value = false
   }
 }, { immediate: true })
@@ -220,7 +233,9 @@ const step = computed<MonthStep | null>(() => {
   if (s.sealState === 'sealed') return 'done'
   if (!canViewAttendance) return 'payroll'
   if (canConfirmRounds && !roundsReady.value) return null
-  return currentStep(s, confirmOutstanding.value)
+  const next = currentStep(s, confirmOutstanding.value)
+  // 老師確認狀態讀不到＝未知，視為仍需確認：停在這一步，絕不在未知時暗示可以交薪資
+  return next === 'payroll' && roundsFailed.value ? 'confirm' : next
 })
 
 // 頁首主要動作與匯出月報前的提醒用同一份摘要；載入失敗不送（避免拿 0 當「都處理完了」）
@@ -275,6 +290,7 @@ const dailyValue = computed(() => {
 })
 const roundsValue = computed(() => {
   if (!summary.value || !roundsReady.value) return placeholder.value
+  if (roundsFailed.value) return '—'
   const progress = roundProgress.value
   const base = progress ? `已回覆 ${progress.replied} / ${progress.total}` : '沒有進行中'
   return backdatedPending.value > 0 ? `${base}・補登待處理 ${backdatedPending.value}` : base
@@ -308,6 +324,7 @@ const capsuleSub = computed(() => {
     case 'daily':
       return confirmOutstanding.value > 0 ? '處理完後，等老師回覆換班再交薪資' : '處理完就可以交薪資'
     case 'confirm':
+      if (roundsFailed.value) return '讀不到老師確認的狀態，先確認再交薪資'
       return roundProgress.value ? `已回覆 ${roundProgress.value.replied} / ${roundProgress.value.total}，回覆完就可以交薪資` : ''
     case 'payroll':
       return '前面的步驟都完成了'
