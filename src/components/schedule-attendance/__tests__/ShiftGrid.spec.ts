@@ -99,7 +99,7 @@ describe('ShiftGrid 桌機', () => {
     })
     expect(wrapper.find('[data-test="row-1"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="row-2"]').exists()).toBe(true)
-    expect(wrapper.find(`[data-test="cell-2-${WEEK[0]}"]`).classes()).toContain('shift-grid__cell--danger')
+    expect(wrapper.find(`[data-test="cell-2-${WEEK[0]}"]`).classes()).toContain('shift-grid__cell--k-deduct')
   })
 
   it('整天未匯入的日子：格子寫「未匯入」、不算待處理；整週都被篩掉時說明要先匯入並給入口', async () => {
@@ -131,8 +131,18 @@ describe('ShiftGrid 桌機', () => {
     // 判定只在「・」之間換行（每段不拆）：整串不換行會把欄寬撐開，1440 寬時週末欄被擠出畫面
     expect(css).toMatch(/\.shift-grid__verdict-part \{[^}]*white-space: nowrap/)
     expect(css).not.toMatch(/\.shift-grid__plan-time, \.shift-grid__verdict \{[^}]*white-space: nowrap/)
-    expect(css).toMatch(/\.shift-grid__cell--danger \.shift-grid__verdict \{[^}]*color: var\(--color-danger-darker\)/)
-    expect(css).toMatch(/\.shift-grid__cell--warning \.shift-grid__verdict \{[^}]*color: var\(--color-warning-darker\)/)
+    // 判定字色依 verdictKind（形狀＋顏色五類）；扣款＝danger、缺卡＝warning、等老師＝青、設定問題＝紫、資料待補＝次要灰
+    expect(css).toMatch(/\.shift-grid__cell--k-deduct \{[^}]*--verdict-color: var\(--color-danger-darker\)/)
+    expect(css).toMatch(/\.shift-grid__cell--k-missing \{[^}]*--verdict-color: var\(--color-warning-darker\)/)
+    expect(css).toMatch(/\.shift-grid__cell--k-confirm \{[^}]*--verdict-color: var\(--color-verdict-confirm\)/)
+    expect(css).toMatch(/\.shift-grid__cell--k-setting \{[^}]*--verdict-color: var\(--color-verdict-setting\)/)
+    expect(css).toMatch(/\.shift-grid__cell--k-pending_data \{[^}]*--verdict-color: var\(--el-text-color-secondary\)/)
+    // 封存格的判定字與形狀一律中性灰，且規則排在各 kind 之後才蓋得過
+    expect(css).toMatch(/\.shift-grid__cell--sealed \{[^}]*--verdict-color: var\(--el-text-color-secondary\)/)
+    expect(css.indexOf('.shift-grid__cell--sealed {')).toBeGreaterThan(css.indexOf('.shift-grid__cell--k-pending_data {'))
+    expect(css).toMatch(/\.shift-grid__cell--sealed \.verdict-shape \{[^}]*--verdict-shape-color: var\(--el-text-color-secondary\)/)
+    // 舊的紅／橘 tone class 與降色已移除
+    expect(css).not.toMatch(/shift-grid__cell--(danger|warning)/)
     expect(css).not.toMatch(/color: var\(--el-color-warning\)/)
     expect(css).not.toMatch(/\.shift-grid__cell--future \{[^}]*color: var\(--el-text-color-secondary\)/)
   })
@@ -461,13 +471,65 @@ describe('ShiftGrid 全天假與無障礙標籤', () => {
 describe('ShiftGrid 第五輪審查', () => {
   const LATE = { status: 'anomaly' as const, late_minutes: 57, early_leave_minutes: 342, punch_in: `${WEEK[0]}T08:57:00`, punch_out: `${WEEK[0]}T11:18:00` }
 
-  it('符合整月型態的格子：紅色降為橘色（待修設定），報讀寫出可能是設定問題；同列其他異常照舊是紅色', () => {
+  it('符合整月型態的格子是「設定問題」：k-setting（不是扣款色），報讀寫出可能是設定問題；同列其他異常照舊是會扣款', () => {
     const cells = cellsFor({ [`1|${WEEK[0]}`]: { actual: LATE }, [`1|${WEEK[1]}`]: { actual: { ...LATE, punch_in: `${WEEK[1]}T08:57:00`, punch_out: `${WEEK[1]}T11:18:00` } } })
     const wrapper = mountGrid({ cells, patternKeys: new Set([`1|${WEEK[0]}`]) })
     const pattern = wrapper.get(`[data-test="cell-1-${WEEK[0]}"]`)
-    expect(pattern.classes()).toContain('shift-grid__cell--warning')
+    expect(pattern.classes()).toContain('shift-grid__cell--k-setting')
+    expect(pattern.classes().filter((c) => /--(danger|warning|k-deduct)$/.test(c))).toEqual([])
     expect(pattern.attributes('aria-label')).toContain('整月同型態，可能是設定問題')
-    expect(wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).classes()).toContain('shift-grid__cell--danger')
+    expect(pattern.find('.verdict-shape--setting').exists()).toBe(true)
+    const daily = wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`)
+    expect(daily.classes()).toContain('shift-grid__cell--k-deduct')
+    expect(daily.find('.verdict-shape--deduct').exists()).toBe(true)
+  })
+
+  it('封存格：仍顯示判定文字與形狀，class 帶 sealed（CSS 把字與形狀改中性灰）；未封存格沒有', () => {
+    const cells = cellsFor({
+      [`1|${WEEK[0]}`]: { actual: LATE, edit: { locked_reason: 'finalized' } },
+      [`1|${WEEK[1]}`]: { actual: { ...LATE, punch_in: `${WEEK[1]}T08:57:00`, punch_out: `${WEEK[1]}T11:18:00` } },
+    })
+    const wrapper = mountGrid({ cells })
+    const sealed = wrapper.get(`[data-test="cell-1-${WEEK[0]}"]`)
+    expect(sealed.classes()).toContain('shift-grid__cell--sealed')
+    // LATE 的分鐘數和 07:00 班別時段對不上，判定文字退回「出勤異常」（既有行為）；封存不會把判定藏起來
+    expect(sealed.text()).toContain('出勤異常')
+    expect(sealed.find('.verdict-shape--deduct').exists()).toBe(true)
+    expect(wrapper.get(`[data-test="cell-1-${WEEK[1]}"]`).classes()).not.toContain('shift-grid__cell--sealed')
+  })
+
+  it('狀態形狀依 verdictKind：缺卡＝missing、疑似換班＝confirm、資料待補＝pending_data；已豁免與符合原班表不畫形狀', () => {
+    const cells = cellsFor({
+      [`1|${WEEK[0]}`]: { actual: { status: 'missing_punch', punch_in: `${WEEK[0]}T07:00:00` } },
+      [`1|${WEEK[1]}`]: { actual: { status: 'possible_shift_change' } },
+      [`1|${WEEK[2]}`]: { actual: { status: 'data_incomplete', punch_in: `${WEEK[2]}T07:00:00` } },
+      [`2|${WEEK[0]}`]: { actual: { ...LATE, confirmed_action: 'admin_waive' } },
+      [`2|${WEEK[1]}`]: { actual: { status: 'matched' } },
+    })
+    const wrapper = mountGrid({ cells })
+    const at = (emp: number, date: string) => wrapper.get(`[data-test="cell-${emp}-${date}"]`)
+    expect(at(1, WEEK[0]).classes()).toContain('shift-grid__cell--k-missing')
+    expect(at(1, WEEK[0]).find('.verdict-shape--missing').exists()).toBe(true)
+    expect(at(1, WEEK[1]).classes()).toContain('shift-grid__cell--k-confirm')
+    expect(at(1, WEEK[1]).find('.verdict-shape--confirm').exists()).toBe(true)
+    expect(at(1, WEEK[2]).classes()).toContain('shift-grid__cell--k-pending_data')
+    expect(at(1, WEEK[2]).find('.verdict-shape--pending_data').exists()).toBe(true)
+    for (const waivedOrMatched of [at(2, WEEK[0]), at(2, WEEK[1])]) {
+      expect(waivedOrMatched.classes().some((c) => c.includes('--k-'))).toBe(false)
+      expect(waivedOrMatched.find('.verdict-shape').exists()).toBe(false)
+    }
+  })
+
+  it('老師確認進行中：格子是 k-confirm，確認提示前面畫菱形；符合原班表的判定文字不跟著變色', () => {
+    const cells = cellsFor({
+      [`1|${WEEK[0]}`]: { actual: {}, confirmation: { item_id: 1, round_id: 1, kind: 'swap', status: 'pending', partner_employee_id: 2 } },
+    })
+    const wrapper = mountGrid({ cells })
+    const confirming = wrapper.get(`[data-test="cell-1-${WEEK[0]}"]`)
+    expect(confirming.classes()).toContain('shift-grid__cell--k-confirm')
+    expect(confirming.get('.shift-grid__confirm').find('.verdict-shape--confirm').exists()).toBe(true)
+    expect(confirming.get('.shift-grid__verdict').find('.verdict-shape').exists()).toBe(false)
+    expect(confirming.get('.shift-grid__verdict').classes()).not.toContain('shift-grid__verdict--flag')
   })
 
   it('列首型態註記是按鈕：點了開本月設定檢查，報讀含型態說明', async () => {

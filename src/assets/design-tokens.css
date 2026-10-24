@@ -103,6 +103,12 @@
   --color-info-hover: #2563eb;
   --color-info-darker: #1d4ed8;
 
+  /* ===== 排班與出勤格子狀態語意（形狀＋顏色五類，utils/scheduleAttendanceGrid verdictKind）=====
+   * 會扣款＝danger-darker、缺卡＝warning-darker、請假＝info-darker、資料待補＝--el-text-color-secondary；
+   * 以下兩類是專用色（白底對比 5.4:1／7.1:1），暗色值在 a11y.css 的 html.dark。 */
+  --color-verdict-confirm: #0e7490;   /* 換班待確認（青） */
+  --color-verdict-setting: #6d28d9;   /* 設定問題（紫） */
+
   /* ===== Tint palette（分類底色/前景成對，canonical raw）=====
    * 原僅存在於 soft-ui.css 的 --pt-tint-*（deprecated prefix）；升格 canonical
    * 供新元件直接引用，--pt-tint-* 改為指向此處的 alias（TOKENS.md 階段 2 方向）。 */

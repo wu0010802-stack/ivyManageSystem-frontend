@@ -145,16 +145,16 @@ describe('ResolveCard', () => {
     expect(tag.text()).toContain('遲到')
   })
 
-  it('missing_punch 的 el-tag type 為 danger', () => {
+  it('missing_punch 的 el-tag type 為 warning（缺卡不扣款，只記次數）', () => {
     const wrapper = mountCard({ item: itemMissingPunch, context: missingOutContext })
     const tag = wrapper.find('.el-tag')
-    expect(tag.attributes('data-type')).toBe('danger')
+    expect(tag.attributes('data-type')).toBe('warning')
   })
 
-  it('late/early_leave 的 el-tag type 為 warning', () => {
+  it('late/early_leave 的 el-tag type 為 danger（會扣款）', () => {
     const wrapper = mountCard({ item: itemLate })
     const tag = wrapper.find('.el-tag')
-    expect(tag.attributes('data-type')).toBe('warning')
+    expect(tag.attributes('data-type')).toBe('danger')
   })
 
   it('點「接受扣款」→ emit resolve payload { action: admin_accept }', async () => {

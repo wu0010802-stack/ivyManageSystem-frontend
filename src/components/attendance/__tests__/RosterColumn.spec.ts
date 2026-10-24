@@ -183,12 +183,19 @@ describe('RosterColumn', () => {
     expect(tag).toBeTruthy()
   })
 
-  it('shows warning/danger badges for rowMissing (missing punches)', () => {
+  it('缺卡 badge 是 warning（缺卡不扣款，只記次數）；遲／早 badge 是 danger（會扣款）', () => {
     const wrapper = mountRoster({})
     const items = wrapper.findAll('.roster-item')
-    const missingItem = items.find((i) => i.text().includes('李缺卡'))
-    const dangerTag = missingItem?.find('[data-type="danger"]')
-    expect(dangerTag).toBeTruthy()
+    const missingItem = items.find((i) => i.text().includes('李缺卡'))!
+    const missingTag = missingItem.find('[data-type="warning"]')
+    expect(missingTag.exists()).toBe(true)
+    expect(missingTag.text()).toBe('缺5')
+    expect(missingItem.find('[data-type="danger"]').exists()).toBe(false)
+
+    const lateItem = items.find((i) => i.text().includes('王遲到'))!
+    const lateTags = lateItem.findAll('[data-type="danger"]').map((t) => t.text())
+    expect(lateTags).toEqual(['遲2', '早1'])
+    expect(lateItem.find('[data-type="warning"]').exists()).toBe(false)
   })
 
   it('shows empty state when roster is empty and not loading', async () => {

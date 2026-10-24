@@ -146,6 +146,10 @@ html.dark {
   --color-danger-darker: #fca5a5;
   --color-info-darker: #93c5fd;
 
+  /* 排班與出勤格子狀態語意的專用色（亮色值見 design-tokens.css）：深底改用亮階 */
+  --color-verdict-confirm: #67e8f9;
+  --color-verdict-setting: #c4b5fd;
+
   /* brand 在深底用淺一階確保對比。
    * 此處 indigo 僅適用 portal（portal light 品牌即 indigo，見 soft-ui.css）；
    * admin 品牌是青藍 #0284c7（design-tokens.css html.ivy-admin），dark 下由

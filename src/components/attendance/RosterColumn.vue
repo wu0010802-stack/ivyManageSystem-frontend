@@ -64,15 +64,16 @@
                   <el-tag type="success" size="small">紀錄無異常</el-tag>
                 </template>
                 <template v-else>
-                  <el-tag v-if="row.late_count > 0" type="warning" size="small">
+                  <!-- 與排班與出勤格子同一套語意：遲到／早退會扣款＝danger，缺卡不扣款只記次數＝warning -->
+                  <el-tag v-if="row.late_count > 0" type="danger" size="small">
                     遲{{ row.late_count }}
                   </el-tag>
-                  <el-tag v-if="row.early_leave_count > 0" type="warning" size="small">
+                  <el-tag v-if="row.early_leave_count > 0" type="danger" size="small">
                     早{{ row.early_leave_count }}
                   </el-tag>
                   <el-tag
                     v-if="row.missing_punch_in > 0 || row.missing_punch_out > 0"
-                    type="danger"
+                    type="warning"
                     size="small"
                   >
                     缺{{ row.missing_punch_in + row.missing_punch_out }}

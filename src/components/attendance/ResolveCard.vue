@@ -221,8 +221,9 @@ async function handleAccept(): Promise<void> {
 }
 
 // ── tag 顏色 ───────────────────────────────────────────────────────────────────
+// 與排班與出勤格子同一套語意：遲到／早退會扣款＝danger，缺卡不扣款只記次數＝warning
 function tagTypeOf(entry: AnomalyEntry): 'warning' | 'danger' {
-  return entry.type === 'missing_punch' ? 'danger' : 'warning'
+  return entry.type === 'missing_punch' ? 'warning' : 'danger'
 }
 
 // ── 補打卡邏輯 ────────────────────────────────────────────────────────────────

@@ -46,7 +46,8 @@ export const RECON_STATUS_LABELS: Record<ReconStatus, string> = {
 
 export type Tone = 'info' | 'warning' | 'danger'
 
-// 資料待補是待處理（isIssue）：警示色才看得出要處理；整天未匯入的「未匯入」另有自己的灰色顯示
+// tone 只分「判定本身有待處理含意」與「中性」（info）；格子上的顏色與形狀由 verdictKind 決定。
+// 缺卡不扣款只記次數，與會扣款的遲到／早退／缺勤分開（danger 只留給會扣款的判定）。
 const STATUS_TONES: Record<ReconStatus, Tone> = {
   matched: 'info',
   off_day: 'info',
@@ -54,7 +55,7 @@ const STATUS_TONES: Record<ReconStatus, Tone> = {
   data_incomplete: 'warning',
   possible_shift_change: 'warning',
   unscheduled_attendance: 'warning',
-  missing_punch: 'danger',
+  missing_punch: 'warning',
   suspected_absence: 'danger',
   anomaly: 'danger',
 }
@@ -144,14 +145,61 @@ function isAwaitingImport(cell: GridCell, uncovered: ReadonlySet<string>): boole
   return !!actual && actual.status === 'data_incomplete' && !actual.punch_in && !actual.punch_out && uncovered.has(cell.date)
 }
 
-export function isIssue(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): boolean {
-  if (cell.confirmation && ACTIVE_CONFIRMATION_STATUSES.has(cell.confirmation.status)) return true
+/** 該月薪資已封存（後端 grid.py 封存優先於已打卡）：改不了，也不再是待辦。 */
+export function isSealed(cell: GridCell): boolean {
+  return cell.edit?.locked_reason === 'finalized'
+}
+
+const hasActiveConfirmation = (cell: GridCell): boolean =>
+  !!cell.confirmation && ACTIVE_CONFIRMATION_STATUSES.has(cell.confirmation.status)
+
+/** 「若不看封存」這格是不是待辦：isIssue 與 isSealedLeftover 共用同一套規則，兩邊不會分叉。 */
+function isIssueIgnoringSeal(cell: GridCell, today: string, uncovered: ReadonlySet<string>): boolean {
+  if (hasActiveConfirmation(cell)) return true
   // 當日尚未結束不判（09-11 規則）；未來日沒有 actual
   if (!cell.actual || cell.date >= today) return false
   if (isAwaitingImport(cell, uncovered)) return false
   // 已在出勤明細接受扣款或豁免：後端核對是即時重算、不讀 confirmed_action，狀態仍是異常，但事情已處理完
   if (isHandled(cell.actual)) return false
   return !NON_ISSUE_STATUSES.has(cell.actual.status)
+}
+
+/** 待辦：封存格一律不算（點進去只會 409，留在待辦裡是要人做做不了的事）。 */
+export function isIssue(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): boolean {
+  return !isSealed(cell) && isIssueIgnoringSeal(cell, today, uncovered)
+}
+
+/** 封存遺留：封存前沒處理完的待辦（只能稽核，不能再改）。 */
+export function isSealedLeftover(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): boolean {
+  return isSealed(cell) && isIssueIgnoringSeal(cell, today, uncovered)
+}
+
+/** 格子狀態語意（形狀＋顏色五類）：週格子、月格子、圖例共用，順序即圖例順序。 */
+export const VERDICT_KINDS = ['deduct', 'missing', 'confirm', 'setting', 'pending_data'] as const
+export type VerdictKind = (typeof VERDICT_KINDS)[number]
+
+export const VERDICT_KIND_LABELS: Record<VerdictKind, string> = {
+  deduct: '會扣款',
+  missing: '缺卡（不扣款，記次數）',
+  confirm: '換班待確認',
+  setting: '設定問題（先修設定）',
+  pending_data: '資料待補',
+}
+
+/**
+ * 這格的判定屬於哪一類（只看判定本身；是否還算待辦由 isIssue 決定，已處理／封存的呼叫端自己再判）。
+ * 優先序：老師確認進行中或疑似換班／非原排班出勤 → confirm；整月同型態（pattern）且判定有待辦含意 → setting；
+ * 異常／疑似缺勤 → deduct；缺卡 → missing；資料待補 → pending_data；其餘（符合、非應出勤日、請假、無打卡資料）null。
+ */
+export function verdictKind(cell: GridCell, opts: { pattern: boolean }): VerdictKind | null {
+  const status = cell.actual?.status
+  if (hasActiveConfirmation(cell) || status === 'possible_shift_change' || status === 'unscheduled_attendance') return 'confirm'
+  if (!status) return null
+  if (opts.pattern && !NON_ISSUE_STATUSES.has(status)) return 'setting'
+  if (status === 'anomaly' || status === 'suspected_absence') return 'deduct'
+  if (status === 'missing_punch') return 'missing'
+  if (status === 'data_incomplete') return 'pending_data'
+  return null
 }
 
 export interface ImportProgress {
@@ -230,21 +278,25 @@ export function groupDaysByWeek(days: readonly GridDay[]): MonthWeek[] {
   return weeks
 }
 
-export type MonthDot = 'red' | 'orange' | 'blue'
+export type MonthDot = VerdictKind | 'leave'
 
 /**
- * 月格子狀態點（SPEC-027 §2 月模式）。紅／橘只給「待處理」（與 isIssue、只看待處理同一定義，D14）：
- * 判定為 danger（遲到／早退／缺卡／疑似缺勤）＝紅；老師確認處理中、疑似換班、非原排班出勤、資料待補＝橘。
- * 不是待處理但當天有假（含待審、含未來日）＝藍；其餘不畫點。
+ * 月格子狀態點（SPEC-027 §2 月模式）。判定類別只給「待處理」（與 isIssue、只看待處理同一定義，D14；封存格不算）：
+ * 回傳 verdictKind（會扣款／缺卡／換班待確認／設定問題／資料待補）。`opts.pattern`＝這格符合本月型態（整月同型態）。
+ * 不是待處理但當天有假（含待審、含未來日）＝leave；其餘不畫點。
  */
-export function monthDot(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): MonthDot | null {
+export function monthDot(
+  cell: GridCell,
+  today: string,
+  uncovered: ReadonlySet<string> = NO_DATES,
+  opts: { pattern?: boolean } = {},
+): MonthDot | null {
   if (!cell.employed) return null
   if (isIssue(cell, today, uncovered)) {
-    // 與 isIssue 共用同一個進行中確認集合：兩處日後只會一起改，月格子顏色不會和「只看待處理」分叉（D14）
-    if (cell.confirmation && ACTIVE_CONFIRMATION_STATUSES.has(cell.confirmation.status)) return 'orange'
-    return cell.actual && STATUS_TONES[cell.actual.status] === 'danger' ? 'red' : 'orange'
+    const kind = verdictKind(cell, { pattern: opts.pattern ?? false })
+    if (kind) return kind
   }
-  return cell.leaves.length > 0 ? 'blue' : null
+  return cell.leaves.length > 0 ? 'leave' : null
 }
 
 /**
@@ -336,7 +388,7 @@ export function cellDisplay(cell: GridCell, today: string, uncovered: ReadonlySe
     plan: cellPlanText(cell),
     source: !cell.plan.expected && !cell.plan.day_off ? null : SOURCE_TAGS[cell.plan.source],
     leaveTags: cell.leaves.map((leave) => `${leave.leave_type_label}${leave.status === 'pending' ? '（待審）' : ''}`),
-    locked: cell.edit.locked_reason === 'finalized',
+    locked: isSealed(cell),
     confirmation: cell.confirmation ? CONFIRMATION_HINTS[cell.confirmation.status] ?? null : null,
   }
   if (!cell.employed) return { ...base, state: 'not_employed', actual: null, verdict: null }

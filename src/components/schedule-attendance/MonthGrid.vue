@@ -1,11 +1,9 @@
 <template>
   <div class="month-grid">
-    <p class="month-grid__legend" data-test="month-legend">
-      <span><i class="month-grid__dot month-grid__dot--red" aria-hidden="true" />遲到／早退／缺卡／疑似缺勤</span>
-      <span><i class="month-grid__dot month-grid__dot--orange" aria-hidden="true" />疑似換班／資料待補／待老師確認／待修設定等其他待處理</span>
-      <span><i class="month-grid__dot month-grid__dot--blue" aria-hidden="true" />請假</span>
+    <div class="month-grid__legend" data-test="month-legend">
+      <VerdictLegend show-leave />
       <span class="month-grid__legend-hint">月總覽唯讀；點週次可切回該週排班</span>
-    </p>
+    </div>
     <div v-if="!sections.length" class="month-grid__empty" role="status">{{ emptyText }}</div>
     <div v-else class="month-grid__scroller" :style="maxHeight ? { maxHeight: `${maxHeight}px` } : undefined">
       <table class="month-grid__table" data-test="month-grid-table">
@@ -68,8 +66,8 @@
                   <span class="month-grid__abbr">{{ monthCellText(cellOf(emp.employee_id, d.date)!) }}</span>
                   <span
                     v-if="dotOf(emp.employee_id, d.date)"
-                    class="month-grid__dot"
-                    :class="`month-grid__dot--${dotOf(emp.employee_id, d.date)}`"
+                    class="month-grid__dot verdict-shape"
+                    :class="[`verdict-shape--${dotOf(emp.employee_id, d.date)}`, `month-grid__dot--${dotOf(emp.employee_id, d.date)}`]"
                     :data-test="`mdot-${emp.employee_id}-${d.date}`"
                     aria-hidden="true"
                   />
@@ -86,6 +84,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { formatMonthDay } from '@/utils/attendanceConfirm'
+import VerdictLegend from './VerdictLegend.vue'
 import {
   cellDisplay,
   cellKey,
@@ -117,7 +116,7 @@ const props = defineProps<{
   maxHeight?: number | null
   /** 本月型態註記（整月沒打卡、時段可能設錯），key＝員工 id */
   personNotes?: Record<number, { tag: string; detail: string }>
-  /** 符合本月型態的待處理格（cellKey）：多半是設定問題，紅點降為橘點（待修設定） */
+  /** 符合本月型態的待處理格（cellKey）：多半是設定問題，狀態點是「設定問題」而不是會扣款 */
   patternKeys?: ReadonlySet<string>
 }>()
 const emit = defineEmits<{
@@ -136,9 +135,8 @@ const cellOf = (employeeId: number, date: string) => props.cells.get(cellKey(emp
 const dots = computed(() => {
   const map = new Map<string, MonthDot | null>()
   for (const [key, cell] of props.cells) {
-    const dot = monthDot(cell, props.today, uncovered.value)
-    // 整月同型態的格子：不和逐日異常同一種紅（一整排紅點多半只是一個設定錯）
-    map.set(key, dot === 'red' && props.patternKeys?.has(key) ? 'orange' : dot)
+    // 整月同型態的格子是「設定問題」，不和逐日異常同一類（一整排扣款點多半只是一個設定錯）
+    map.set(key, monthDot(cell, props.today, uncovered.value, { pattern: props.patternKeys?.has(key) ?? false }))
   }
   return map
 })
@@ -178,11 +176,9 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 </script>
 
 <style scoped>
-/* 藍點（請假）：用 info 色票的 darker 階（白底約 6.7:1，非文字元件只需 ≥3:1；暗色模式自動換成淺藍）。
-   紅／橘點同樣取 -darker，三色同一套明暗切換 */
-.month-grid { --month-grid-leave: var(--color-info-darker); }
+/* 狀態點的形狀與顏色是全域共用的 .verdict-shape--*（assets/main.css；顏色 token 在 design-tokens.css，暗色在 a11y.css），
+   圖例是 VerdictLegend，兩邊同一組 class 才不會分叉 */
 .month-grid__legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--el-text-color-secondary); }
-.month-grid__legend .month-grid__dot { margin-right: var(--space-1); }
 .month-grid__legend-hint { margin-left: auto; }
 .month-grid__scroller { max-height: max(320px, calc(100vh - 170px)); max-height: max(320px, calc(100dvh - 170px)); overflow: auto; border-top: 1px solid var(--el-border-color-lighter); }
 .month-grid__caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -212,9 +208,4 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .month-grid__cell--off { background: var(--el-fill-color-lighter); }
 .month-grid__cell--future { color: var(--el-text-color-secondary); }
 .month-grid__week-btn:focus-visible, .month-grid__cell:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
-/* 狀態點用形狀區分（紅、橘兩色彼此對比只有約 1.3:1，不能只靠顏色）：紅＝實心圓、橘＝空心圈、藍＝方塊 */
-.month-grid__dot { display: inline-block; box-sizing: border-box; width: 8px; height: 8px; border-radius: 50%; }
-.month-grid__dot--red { background: var(--color-danger-darker); }
-.month-grid__dot--orange { background: transparent; border: 2px solid var(--color-warning-darker); }
-.month-grid__dot--blue { background: var(--month-grid-leave); border-radius: 1px; }
 </style>

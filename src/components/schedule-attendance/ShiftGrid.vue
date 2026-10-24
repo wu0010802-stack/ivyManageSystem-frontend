@@ -84,9 +84,9 @@
                 </span>
                 <span v-if="hasResult(display(emp.employee_id, d.date))" class="shift-grid__result">
                   <span v-if="display(emp.employee_id, d.date).actual" class="shift-grid__actual">{{ display(emp.employee_id, d.date).actual }}</span>
-                  <span v-if="display(emp.employee_id, d.date).verdict" class="shift-grid__verdict"><span v-for="(part, i) in verdictParts(display(emp.employee_id, d.date).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
+                  <span v-if="display(emp.employee_id, d.date).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, d.date) }"><i v-if="isFlagged(emp.employee_id, d.date)" class="verdict-shape" :class="`verdict-shape--${kindOf(emp.employee_id, d.date)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, d.date).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
                   <span v-for="tag in display(emp.employee_id, d.date).leaveTags" :key="tag" class="shift-grid__leave">{{ tag }}</span>
-                  <span v-if="display(emp.employee_id, d.date).confirmation" class="shift-grid__confirm">{{ display(emp.employee_id, d.date).confirmation }}</span>
+                  <span v-if="display(emp.employee_id, d.date).confirmation" class="shift-grid__confirm"><i class="verdict-shape verdict-shape--confirm" aria-hidden="true" />{{ display(emp.employee_id, d.date).confirmation }}</span>
                 </span>
               </button>
             </td>
@@ -141,9 +141,9 @@
             <span class="shift-grid__plan">{{ display(emp.employee_id, mobileDay).source ? `${display(emp.employee_id, mobileDay).source!.short}・` : '' }}{{ display(emp.employee_id, mobileDay).plan }}</span>
             <span v-if="isInactivePlan(emp.employee_id, mobileDay)" class="shift-grid__inactive">已停用</span>
             <span v-if="display(emp.employee_id, mobileDay).actual" class="shift-grid__actual">{{ display(emp.employee_id, mobileDay).actual }}</span>
-            <span v-if="display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict"><span v-for="(part, i) in verdictParts(display(emp.employee_id, mobileDay).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
+            <span v-if="display(emp.employee_id, mobileDay).verdict" class="shift-grid__verdict" :class="{ 'shift-grid__verdict--flag': isFlagged(emp.employee_id, mobileDay) }"><i v-if="isFlagged(emp.employee_id, mobileDay)" class="verdict-shape" :class="`verdict-shape--${kindOf(emp.employee_id, mobileDay)}`" aria-hidden="true" /><span v-for="(part, i) in verdictParts(display(emp.employee_id, mobileDay).verdict!.label)" :key="i" class="shift-grid__verdict-part">{{ part }}</span></span>
             <span v-for="tag in display(emp.employee_id, mobileDay).leaveTags" :key="tag" class="shift-grid__leave">{{ tag }}</span>
-            <span v-if="display(emp.employee_id, mobileDay).confirmation" class="shift-grid__confirm">{{ display(emp.employee_id, mobileDay).confirmation }}</span>
+            <span v-if="display(emp.employee_id, mobileDay).confirmation" class="shift-grid__confirm"><i class="verdict-shape verdict-shape--confirm" aria-hidden="true" />{{ display(emp.employee_id, mobileDay).confirmation }}</span>
           </button>
           <el-select
             v-if="canEditPlan"
@@ -180,6 +180,8 @@ import {
   type GridGroup,
   type GridShiftType,
   uncoveredDates,
+  type VerdictKind,
+  verdictKind,
 } from '@/utils/scheduleAttendanceGrid'
 
 const WEEKDAY = ['一', '二', '三', '四', '五', '六', '日']
@@ -206,7 +208,7 @@ const props = defineProps<{
   maxHeight?: number | null
   /** 本月型態註記（整月沒打卡、時段可能設錯），key＝員工 id */
   personNotes?: Record<number, { tag: string; detail: string }>
-  /** 符合本月型態的待處理格（cellKey）：多半是設定問題，紅色降為橘色「待修設定」 */
+  /** 符合本月型態的待處理格（cellKey）：多半是設定問題，狀態是「設定問題」而不是會扣款 */
   patternKeys?: ReadonlySet<string>
 }>()
 const emit = defineEmits<{
@@ -257,11 +259,21 @@ const missingImportDays = computed(() => missingImportDates.value.length)
 
 const displays = computed(() => {
   const map = new Map<string, CellDisplay>()
+  for (const [key, cell] of props.cells) map.set(key, cellDisplay(cell, props.today, uncovered.value))
+  return map
+})
+/**
+ * 格子狀態類別（形狀＋顏色五類，verdictKind）；null＝不畫形狀。
+ * 整月同型態（patternKeys）的格子多半是設定問題，是「設定問題」而不是會扣款（仍留在待處理）。
+ * 判定本身是中性的（已豁免／已接受、請假、未匯入、符合原班表）不算：老師確認進行中除外，
+ * 那條提示行本身就是待辦。
+ */
+const kinds = computed(() => {
+  const map = new Map<string, VerdictKind | null>()
   for (const [key, cell] of props.cells) {
-    const shown = cellDisplay(cell, props.today, uncovered.value)
-    // 整月同型態的格子多半是設定問題：不和逐日異常同一種紅（D：提示＋防呆，仍留在待處理）
-    if (shown.verdict?.tone === 'danger' && props.patternKeys?.has(key)) shown.verdict = { ...shown.verdict, tone: 'warning' }
-    map.set(key, shown)
+    const kind = verdictKind(cell, { pattern: props.patternKeys?.has(key) ?? false })
+    const shown = displays.value.get(key)!
+    map.set(key, kind && (shown.confirmation || (shown.verdict && shown.verdict.tone !== 'info')) ? kind : null)
   }
   return map
 })
@@ -273,6 +285,12 @@ const quietKeys = computed(() => {
   return keys
 })
 const display = (employeeId: number, date: string): CellDisplay => displays.value.get(cellKey(employeeId, date))!
+const kindOf = (employeeId: number, date: string): VerdictKind | null => kinds.value.get(cellKey(employeeId, date)) ?? null
+/** 判定文字本身是待辦（要畫形狀、加粗）；只有老師確認提示行是待辦的格子，判定（例如符合原班表）維持中性 */
+const isFlagged = (employeeId: number, date: string): boolean => {
+  const tone = display(employeeId, date).verdict?.tone
+  return kindOf(employeeId, date) !== null && tone !== undefined && tone !== 'info'
+}
 
 const needle = computed(() => (props.keyword ?? '').trim().toLowerCase())
 
@@ -356,11 +374,12 @@ function hasResult(d: CellDisplay): boolean {
 
 function cellClasses(employeeId: number, date: string): Record<string, boolean> {
   const d = display(employeeId, date)
+  const kind = kindOf(employeeId, date)
   return {
     [`shift-grid__cell--${d.state}`]: true,
-    [`shift-grid__cell--${d.verdict?.tone ?? 'none'}`]: true,
+    ...(kind ? { [`shift-grid__cell--k-${kind}`]: true } : {}),
     'shift-grid__cell--today': date === props.today,
-    'shift-grid__cell--locked': d.locked,
+    'shift-grid__cell--sealed': d.locked,
     'shift-grid__cell--quiet': quietKeys.value.has(cellKey(employeeId, date)),
   }
 }
@@ -436,10 +455,17 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__cell--quiet { border-color: transparent; background: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); }
 .shift-grid__cell--quiet .shift-grid__actual { color: var(--el-text-color-secondary); }
 .shift-grid__rest { color: var(--el-text-color-secondary); }
-/* 待處理格：判定文字前的狀態點＋加粗深色字，不用側邊色條或整格染色（一週全紅時會變成警報牆） */
-.shift-grid__cell--danger .shift-grid__verdict::before,
-.shift-grid__cell--warning .shift-grid__verdict::before { content: ''; display: inline-block; width: 0.5em; height: 0.5em; margin-right: var(--space-1); border-radius: 50%; background: currentColor; vertical-align: 0.1em; }
-.shift-grid__cell--locked { background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--el-fill-color-light) 6px 8px); }
+/* 待處理格：判定文字前的狀態形狀（共用 .verdict-shape，assets/main.css）＋加粗深色字，不用側邊色條或整格染色（一週全紅時會變成警報牆）。
+   字色依 verdictKind 取 --verdict-color：扣款＝danger、缺卡＝warning、等老師＝青、設定問題＝紫、資料待補＝次要灰 */
+.shift-grid__cell--k-deduct { --verdict-color: var(--color-danger-darker); }
+.shift-grid__cell--k-missing { --verdict-color: var(--color-warning-darker); }
+.shift-grid__cell--k-confirm { --verdict-color: var(--color-verdict-confirm); }
+.shift-grid__cell--k-setting { --verdict-color: var(--color-verdict-setting); }
+.shift-grid__cell--k-pending_data { --verdict-color: var(--el-text-color-secondary); }
+/* 封存格：判定文字與形狀仍留著（看得到當時是什麼狀況），但一律中性灰，不再是要處理的事；規則排在各 kind 之後才蓋得過 */
+.shift-grid__cell--sealed { --verdict-color: var(--el-text-color-secondary); background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--el-fill-color-light) 6px 8px); }
+.shift-grid__cell--sealed .verdict-shape { --verdict-shape-color: var(--el-text-color-secondary); }
+.shift-grid__verdict .verdict-shape, .shift-grid__confirm .verdict-shape { margin-right: var(--space-1); }
 .shift-grid__source { display: inline-block; min-width: 1.4em; margin-right: var(--space-1); padding: 0 calc(var(--space-1) / 2); border-radius: var(--radius-sm); background: var(--el-fill-color); text-align: center; font-size: var(--text-xs); }
 .shift-grid__result { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
 .shift-grid__actual { color: var(--el-text-color-regular); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -448,13 +474,11 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 /* 判定只在「・」之間換行，每段（「遲到 57 分」）不拆；整串不換行會把欄寬撐開，1440 寬時週末欄被擠出畫面 */
 .shift-grid__verdict-part { white-space: nowrap; }
 .shift-grid__verdict { font-size: var(--text-xs); color: var(--el-text-color-secondary); }
-.shift-grid__cell--danger .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--color-danger-darker); }
-.shift-grid__cell--warning .shift-grid__verdict { font-size: var(--text-sm); font-weight: 600; color: var(--color-warning-darker); }
+.shift-grid__verdict--flag { font-size: var(--text-sm); font-weight: 600; color: var(--verdict-color); }
 /* 已判定的過去日：重點是打卡與判定，計畫退為次要 */
 .shift-grid__cell--judged .shift-grid__plan { font-size: var(--text-xs); color: var(--el-text-color-secondary); }
 .shift-grid__leave { font-size: var(--text-xs); color: var(--el-text-color-regular); }
-.shift-grid__confirm { font-size: var(--text-xs); color: var(--color-warning-darker); }
-.shift-grid__confirm::before { content: '●'; margin-right: calc(var(--space-1) / 2); }
+.shift-grid__confirm { font-size: var(--text-xs); color: var(--verdict-color, var(--el-text-color-secondary)); }
 .shift-grid__day-picker { display: flex; gap: var(--space-1); overflow-x: auto; margin-bottom: var(--space-3); }
 .shift-grid__day-tab { min-height: var(--touch-target-min); padding: 0 var(--space-2); border: 1px solid var(--el-border-color); border-radius: var(--radius-md); background: var(--el-bg-color); font: inherit; white-space: nowrap; }
 .shift-grid__day-tab--active { border-color: var(--el-color-primary); color: var(--el-color-primary); font-weight: 600; }

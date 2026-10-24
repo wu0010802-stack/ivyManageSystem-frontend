@@ -13,6 +13,8 @@ import {
   indexCells,
   importProgress,
   isIssue,
+  isSealed,
+  isSealedLeftover,
   mondayOf,
   monthCellText,
   monthDot,
@@ -22,6 +24,8 @@ import {
   rowMatchesFilter,
   shiftMonthISO,
   uncoveredDates,
+  VERDICT_KIND_LABELS,
+  verdictKind,
   visibleDays,
 } from '../scheduleAttendanceGrid'
 import { cell, day, employee, grid, W1, WEEK } from '@/components/schedule-attendance/__tests__/gridFixtures'
@@ -423,20 +427,30 @@ describe('月格子（SPEC-027 C 期）', () => {
     expect(monthCellText(cell(1, W1, { employed: false }))).toBe('')
   })
 
-  it('monthDot：待處理才給紅／橘（與只看待處理同一定義）；非待處理有假＝藍', () => {
+  it('monthDot：待處理才回 verdictKind；非待處理有假＝leave', () => {
     const today = '2026-09-21'
-    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' } }), today)).toBe('red')
-    expect(monthDot(cell(1, W1, { actual: { status: 'missing_punch' } }), today)).toBe('red')
-    expect(monthDot(cell(1, W1, { actual: { status: 'suspected_absence' } }), today)).toBe('red')
-    expect(monthDot(cell(1, W1, { actual: { status: 'possible_shift_change' } }), today)).toBe('orange')
-    expect(monthDot(cell(1, W1, { actual: {}, confirmation: { item_id: 1, kind: 'swap', status: 'pending' } }), today)).toBe('orange')
-    // 已豁免＝已處理，不再是紅點
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' } }), today)).toBe('deduct')
+    expect(monthDot(cell(1, W1, { actual: { status: 'missing_punch' } }), today)).toBe('missing')
+    expect(monthDot(cell(1, W1, { actual: { status: 'suspected_absence' } }), today)).toBe('deduct')
+    expect(monthDot(cell(1, W1, { actual: { status: 'possible_shift_change' } }), today)).toBe('confirm')
+    expect(monthDot(cell(1, W1, { actual: { status: 'data_incomplete', punch_in: `${W1}T07:00:00` } }), today)).toBe('pending_data')
+    expect(monthDot(cell(1, W1, { actual: {}, confirmation: { item_id: 1, kind: 'swap', status: 'pending' } }), today)).toBe('confirm')
+    // 整月同型態（pattern）的待處理格＝設定問題
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' } }), today, undefined, { pattern: true })).toBe('setting')
+    // 已豁免＝已處理，不再有狀態點
     expect(monthDot(cell(1, W1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive' } }), today)).toBeNull()
-    expect(monthDot(cell(1, W1, { actual: { status: 'leave' }, leaves: [LEAVE] }), today)).toBe('blue')
-    // 未來日的已排假也標藍
-    expect(monthDot(cell(1, '2026-09-25', { leaves: [{ ...LEAVE, status: 'pending' }] }), today)).toBe('blue')
+    expect(monthDot(cell(1, W1, { actual: { status: 'leave' }, leaves: [LEAVE] }), today)).toBe('leave')
+    // 未來日的已排假也標請假
+    expect(monthDot(cell(1, '2026-09-25', { leaves: [{ ...LEAVE, status: 'pending' }] }), today)).toBe('leave')
     expect(monthDot(cell(1, W1, { actual: {} }), today)).toBeNull()
     expect(monthDot(cell(1, W1, { employed: false, leaves: [LEAVE] }), today)).toBeNull()
+  })
+
+  it('monthDot：封存格不是待辦，不畫狀態點（仍可顯示請假）', () => {
+    const today = '2026-09-21'
+    const sealed = { locked_reason: 'finalized' as const }
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' }, edit: sealed }), today)).toBeNull()
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' }, edit: sealed, leaves: [LEAVE] }), today)).toBe('leave')
   })
 
   it('gridSections：依篩選與關鍵字留列、依組分段、空組不出現', () => {
@@ -480,5 +494,93 @@ describe('全天請假格不重複假別（第五輪審查：格子曾顯示「�
     expect(shown.state).toBe('full_leave')
     expect(shown.verdict?.label).toBe('病假')
     expect(shown.leaveTags).toEqual(['特休（待審）'])
+  })
+})
+
+describe('封存格（locked_reason=finalized）不算待辦', () => {
+  const SEALED = { locked_reason: 'finalized' as const }
+  const pendingConfirmation = { item_id: 1, round_id: 1, kind: 'swap', status: 'pending', partner_employee_id: 2 } as const
+
+  it('isSealed：只看 locked_reason 是否為 finalized（其他鎖定原因不算封存）', () => {
+    expect(isSealed(cell(1, W1, { edit: SEALED }))).toBe(true)
+    expect(isSealed(cell(1, W1, { edit: { locked_reason: 'recorded' } }))).toBe(false)
+    expect(isSealed(cell(1, W1))).toBe(false)
+  })
+
+  it('isIssue：封存格一律 false（異常、老師確認進行中都不算）；未封存照舊', () => {
+    const sealedAnomaly = cell(1, W1, { actual: { status: 'anomaly' }, edit: SEALED })
+    expect(isIssue(sealedAnomaly, TODAY)).toBe(false)
+    expect(isIssue(cell(1, W1, { actual: {}, confirmation: pendingConfirmation, edit: SEALED }), TODAY)).toBe(false)
+    expect(isIssue(cell(1, W1, { actual: { status: 'anomaly' } }), TODAY)).toBe(true)
+    // 封存格不進「只看待處理」的列篩選
+    expect(rowMatchesFilter([sealedAnomaly], 'issues', TODAY)).toBe(false)
+  })
+
+  it('isSealedLeftover：封存且「不看封存會是待辦」才是 true', () => {
+    expect(isSealedLeftover(cell(1, W1, { actual: { status: 'anomaly' }, edit: SEALED }), TODAY)).toBe(true)
+    expect(isSealedLeftover(cell(1, W1, { actual: {}, confirmation: pendingConfirmation, edit: SEALED }), TODAY)).toBe(true)
+    expect(isSealedLeftover(cell(1, W1, { actual: { status: 'matched' }, edit: SEALED }), TODAY)).toBe(false)
+    // 已豁免＝已處理，封存後也不是遺留
+    expect(isSealedLeftover(cell(1, W1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive' }, edit: SEALED }), TODAY)).toBe(false)
+    // 沒封存的待辦不是「封存遺留」
+    expect(isSealedLeftover(cell(1, W1, { actual: { status: 'anomaly' } }), TODAY)).toBe(false)
+    // 當天不判、整天未匯入的資料待補也不判：與 isIssue 同一套規則
+    expect(isSealedLeftover(cell(1, TODAY, { actual: { status: 'anomaly' }, edit: SEALED }), TODAY)).toBe(false)
+    const uncovered = uncoveredDates([day(W1, { import_covered: false })])
+    expect(isSealedLeftover(cell(1, W1, { actual: { status: 'data_incomplete' }, edit: SEALED }), TODAY, uncovered)).toBe(false)
+  })
+})
+
+describe('verdictKind（格子狀態語意：形狀＋顏色五類）', () => {
+  const noPattern = { pattern: false }
+  const activeConfirmation = (status: 'pending' | 'agreed' | 'disputed') =>
+    ({ item_id: 1, round_id: 1, kind: 'swap', status, partner_employee_id: 2 }) as const
+
+  it('對照表：扣款／缺卡／換班待確認／資料待補', () => {
+    expect(verdictKind(cell(1, W1, { actual: { status: 'anomaly' } }), noPattern)).toBe('deduct')
+    expect(verdictKind(cell(1, W1, { actual: { status: 'suspected_absence' } }), noPattern)).toBe('deduct')
+    expect(verdictKind(cell(1, W1, { actual: { status: 'missing_punch' } }), noPattern)).toBe('missing')
+    expect(verdictKind(cell(1, W1, { actual: { status: 'possible_shift_change' } }), noPattern)).toBe('confirm')
+    expect(verdictKind(cell(1, W1, { actual: { status: 'unscheduled_attendance' } }), noPattern)).toBe('confirm')
+    expect(verdictKind(cell(1, W1, { actual: { status: 'data_incomplete' } }), noPattern)).toBe('pending_data')
+  })
+
+  it('沒有待辦的判定回 null：符合、非應出勤日、請假、沒有打卡資料', () => {
+    expect(verdictKind(cell(1, W1, { actual: { status: 'matched' } }), noPattern)).toBeNull()
+    expect(verdictKind(cell(1, W1, { actual: { status: 'off_day' } }), noPattern)).toBeNull()
+    expect(verdictKind(cell(1, W1, { actual: { status: 'leave' }, leaves: [] }), noPattern)).toBeNull()
+    expect(verdictKind(cell(1, W1), noPattern)).toBeNull()
+    expect(verdictKind(cell(1, W1), { pattern: true })).toBeNull()
+  })
+
+  it('老師確認進行中（pending／agreed／disputed）＝confirm，即使判定是符合或異常', () => {
+    for (const status of ['pending', 'agreed', 'disputed'] as const) {
+      expect(verdictKind(cell(1, W1, { actual: {}, confirmation: activeConfirmation(status) }), noPattern)).toBe('confirm')
+      expect(verdictKind(cell(1, W1, { actual: { status: 'anomaly' }, confirmation: activeConfirmation(status) }), noPattern)).toBe('confirm')
+    }
+    // 已套用的確認不是進行中
+    expect(verdictKind(cell(1, W1, { actual: {}, confirmation: { ...activeConfirmation('pending'), status: 'applied' } }), noPattern)).toBeNull()
+  })
+
+  it('pattern（整月同型態）：非 matched／off_day／leave 的判定＝setting；confirm 優先於 setting', () => {
+    const pattern = { pattern: true }
+    expect(verdictKind(cell(1, W1, { actual: { status: 'anomaly' } }), pattern)).toBe('setting')
+    expect(verdictKind(cell(1, W1, { actual: { status: 'missing_punch' } }), pattern)).toBe('setting')
+    expect(verdictKind(cell(1, W1, { actual: { status: 'data_incomplete' } }), pattern)).toBe('setting')
+    expect(verdictKind(cell(1, W1, { actual: { status: 'matched' } }), pattern)).toBeNull()
+    expect(verdictKind(cell(1, W1, { actual: { status: 'off_day' } }), pattern)).toBeNull()
+    expect(verdictKind(cell(1, W1, { actual: { status: 'leave' } }), pattern)).toBeNull()
+    expect(verdictKind(cell(1, W1, { actual: { status: 'possible_shift_change' } }), pattern)).toBe('confirm')
+    expect(verdictKind(cell(1, W1, { actual: {}, confirmation: activeConfirmation('pending') }), pattern)).toBe('confirm')
+  })
+
+  it('VERDICT_KIND_LABELS：五類圖例文字', () => {
+    expect(VERDICT_KIND_LABELS).toEqual({
+      deduct: '會扣款',
+      missing: '缺卡（不扣款，記次數）',
+      confirm: '換班待確認',
+      setting: '設定問題（先修設定）',
+      pending_data: '資料待補',
+    })
   })
 })
