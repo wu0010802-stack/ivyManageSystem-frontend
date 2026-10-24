@@ -407,3 +407,26 @@ describe('RosterColumn — 設定問題小標', () => {
     wrapper.unmount()
   })
 })
+
+
+describe('RosterColumn — 設定問題與「紀錄無異常」不並存（R27）', () => {
+  it('有設定問題小標的人不再同時顯示綠色「紀錄無異常」；沒有設定問題的人照舊', () => {
+    const wrapper = mountRoster({ patternEmployeeNumbers: new Set(['E001']) })
+    const items = wrapper.findAll('.roster-item')
+    const flagged = items.find((i) => i.text().includes('陳全勤'))!
+    expect(flagged.text()).toContain('設定問題')
+    expect(flagged.text()).not.toContain('紀錄無異常')
+    expect(flagged.find('[data-type="success"]').exists()).toBe(false)
+    // 另一位月統計也沒有異常、但不是設定問題：不在這份名冊（rowFull 只有一位），改用獨立的乾淨列驗證
+    const other = mountRoster({ roster: [{ ...rowFull, employee_id: 9, employee_name: '林乾淨', employee_number: 'E009' }], patternEmployeeNumbers: new Set(['E001']) })
+    expect(other.text()).toContain('紀錄無異常')
+    expect(other.text()).not.toContain('設定問題')
+  })
+
+  it('設定問題的人如果月統計有遲到早退，那些標籤照常顯示', () => {
+    const wrapper = mountRoster({ patternEmployeeNumbers: new Set(['E002']) })
+    const late = wrapper.findAll('.roster-item').find((i) => i.text().includes('王遲到'))!
+    expect(late.text()).toContain('設定問題')
+    expect(late.findAll('[data-type="danger"]').map((t) => t.text())).toEqual(['遲2', '早1'])
+  })
+})

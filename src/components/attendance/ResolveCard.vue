@@ -58,26 +58,26 @@
       <div class="resolve-card__row">
         <span class="resolve-card__label">上班時間</span>
         <el-time-picker
-          v-if="context.punch_in === null"
+          v-if="context.punch_in === null && !sealed"
           v-model="localPunchIn"
           format="HH:mm"
           value-format="HH:mm"
           placeholder="補填上班時間"
           class="resolve-card__time-picker"
         />
-        <span v-else class="resolve-card__value">{{ context.punch_in }}</span>
+        <span v-else class="resolve-card__value">{{ context.punch_in ?? '—' }}</span>
       </div>
       <div class="resolve-card__row">
         <span class="resolve-card__label">下班時間</span>
         <el-time-picker
-          v-if="context.punch_out === null"
+          v-if="context.punch_out === null && !sealed"
           v-model="localPunchOut"
           format="HH:mm"
           value-format="HH:mm"
           placeholder="補填下班時間"
           class="resolve-card__time-picker"
         />
-        <span v-else class="resolve-card__value">{{ context.punch_out }}</span>
+        <span v-else class="resolve-card__value">{{ context.punch_out ?? '—' }}</span>
       </div>
       </template>
       <div v-if="context.has_leave" class="resolve-card__row">
@@ -92,7 +92,7 @@
     </div>
 
     <!-- 動作列 -->
-    <div v-if="canWrite" class="resolve-card__actions-block">
+    <div v-if="canWrite && !sealed" class="resolve-card__actions-block">
       <p v-if="allows('admin_accept') || allows('admin_waive')" class="resolve-card__whole-day-hint" data-test="resolve-whole-day-hint">
         <template v-if="missingOnly">缺卡不扣薪，但會記入缺卡次數；豁免只讓本月薪資不記入，年終與考核仍照次計。會套用到<strong>整天</strong>。</template>
         <template v-else>{{ acceptLabel }}／豁免會套用到<strong>整天</strong>的所有異常項目</template>
@@ -119,6 +119,10 @@
           @click="emit('resolve', { action: 'admin_waive' })"
         >豁免</el-button>
       </div>
+    </div>
+    <!-- 薪資已封存：補卡、接受、豁免都會被後端 409 擋下，不給按鈕，直接說明原因 -->
+    <div v-else-if="sealed" class="resolve-card__readonly-hint" data-test="resolve-sealed-note">
+      這個月薪資已封存，只能看。
     </div>
     <div v-else class="resolve-card__readonly-hint">
       您無權限執行操作
@@ -161,7 +165,10 @@ const props = withDefaults(defineProps<{
    * 免得照錯的應上班時段逐格扣薪。null／未給＝直接送出。
    */
   acceptWarning?: string | null
+  /** 這個人這個月薪資已封存：只能看，不給補打卡、接受扣款、豁免 */
+  sealed?: boolean
 }>(), {
+  sealed: false,
   busy: false,
   showNav: true,
   actions: () => ['punch', 'admin_accept', 'admin_waive'],
@@ -243,7 +250,7 @@ const canPunch = computed(() => {
 
 /** 缺的那側已填了時間還沒送出：外層（排班與出勤抽屜）關閉或換筆前要先問 */
 function isDirty(): boolean {
-  if (recordsState.value !== 'loaded') return false
+  if (props.sealed || recordsState.value !== 'loaded') return false
   return (props.context.punch_in === null && !!localPunchIn.value) || (props.context.punch_out === null && !!localPunchOut.value)
 }
 defineExpose({ isDirty })

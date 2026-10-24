@@ -73,7 +73,7 @@
 <script setup lang="ts">
 /**
  * 排班與出勤頁首列：月份切換＋月份狀態膠囊＋動作（匯入打卡紀錄、月底作業選單、電子打卡台連結、
- * 隨月份狀態變的主要動作）。本月出勤統計在出勤明細頁籤（AttendanceMonthStats），不在這裡。
+ * 隨月份狀態變的主要動作）。
  */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'

@@ -106,6 +106,7 @@ function mountCard(overrides: {
   actions?: Array<'punch' | 'admin_accept' | 'admin_waive'>
   primaryAction?: boolean
   acceptWarning?: string | null
+  sealed?: boolean
 }) {
   return mount(ResolveCard, {
     props: {
@@ -118,6 +119,7 @@ function mountCard(overrides: {
       ...(overrides.actions ? { actions: overrides.actions } : {}),
       ...(overrides.primaryAction !== undefined ? { primaryAction: overrides.primaryAction } : {}),
       ...(overrides.acceptWarning !== undefined ? { acceptWarning: overrides.acceptWarning } : {}),
+      ...(overrides.sealed !== undefined ? { sealed: overrides.sealed } : {}),
     },
     global: { stubs },
   })
@@ -435,5 +437,50 @@ describe('ResolveCard — 只有缺卡的日子與設定問題提醒（第五輪
     await warned.findAll('button').find((b) => b.text() === '豁免')!.trigger('click')
     expect(box.confirm).not.toHaveBeenCalled()
     expect(warned.emitted('resolve')![0][0]).toEqual({ action: 'admin_waive' })
+  })
+})
+
+
+describe('ResolveCard — 薪資已封存只能看（R26）', () => {
+  beforeEach(() => {
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  it('封存：不顯示補打卡、接受扣款、豁免，改寫「這個月薪資已封存，只能看。」', () => {
+    const wrapper = mountCard({ sealed: true })
+    expect(wrapper.get('[data-test="resolve-sealed-note"]').text()).toBe('這個月薪資已封存，只能看。')
+    const labels = wrapper.findAll('button').map((b) => b.text())
+    expect(labels).not.toContain('補打卡並重算')
+    expect(labels).not.toContain('接受扣款')
+    expect(labels).not.toContain('豁免')
+    expect(wrapper.find('[data-test="resolve-whole-day-hint"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('您無權限執行操作')
+  })
+
+  it('封存：缺的那側打卡不給時間欄，寫「—」；異常明細與上下筆照常看得到', () => {
+    const wrapper = mountCard({ sealed: true, context: missingOutContext })
+    expect(wrapper.find('.el-time-picker').exists()).toBe(false)
+    expect(wrapper.text()).toContain('—')
+    expect(wrapper.text()).toContain('遲到 15 分')
+    expect(wrapper.find('[data-test="resolve-next"]').exists()).toBe(true)
+  })
+
+  it('沒封存：動作鈕與時間欄照舊，沒有封存提示', () => {
+    const wrapper = mountCard({ sealed: false, context: missingOutContext })
+    expect(wrapper.find('[data-test="resolve-sealed-note"]').exists()).toBe(false)
+    expect(wrapper.find('.el-time-picker').exists()).toBe(true)
+    expect(wrapper.findAll('button').map((b) => b.text())).toContain('接受扣款')
+  })
+
+  it('封存：沒有可以送出的補卡，isDirty 恆為 false', async () => {
+    const wrapper = mountCard({ sealed: true, context: missingOutContext })
+    expect((wrapper.vm as unknown as { isDirty: () => boolean }).isDirty()).toBe(false)
+  })
+
+  it('沒有寫入權限仍寫無權限（不是封存）', () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mountCard({})
+    expect(wrapper.text()).toContain('您無權限執行操作')
+    expect(wrapper.find('[data-test="resolve-sealed-note"]').exists()).toBe(false)
   })
 })

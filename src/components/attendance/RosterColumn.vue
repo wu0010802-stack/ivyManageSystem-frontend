@@ -62,8 +62,8 @@
               <div class="roster-item__badges">
                 <el-tag v-if="row.has_summary === false" type="info" size="small">尚無統計</el-tag>
                 <template v-else-if="anomalyCount(row) === 0">
-                  <!-- P1-3：expected workdays 未定義前不宣稱「全勤」（待業主裁定） -->
-                  <el-tag type="success" size="small">紀錄無異常</el-tag>
+                  <!-- P1-3：expected workdays 未定義前不宣稱「全勤」（待業主裁定）；有設定問題小標的人不說「無異常」，兩個說法會打架 -->
+                  <el-tag v-if="!hasPattern(row)" type="success" size="small">紀錄無異常</el-tag>
                 </template>
                 <template v-else>
                   <!-- 與排班與出勤格子同一套語意：遲到／早退會扣款＝danger，缺卡不扣款只記次數＝warning -->

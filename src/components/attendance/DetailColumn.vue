@@ -7,11 +7,12 @@
       </div>
       <template v-if="anomaly !== null">
         <!-- 班表核對的判定和這裡不同時並列寫出：疑似換班的日子在這裡只會看到「遲到」，接受下去就扣錯了 -->
-        <div v-if="gridVerdict && gridVerdict.status === 'possible_shift_change'" class="detail-column__grid-note" role="note" data-test="detail-grid-shift-change">
-          <p>班表核對判定這天是「{{ gridVerdict.label }}」：若是換了班，先到班表核對確認當日班別，遲到早退會照新班別重算；不要在這裡接受扣款。</p>
-          <el-button link type="primary" data-test="detail-open-grid" @click="emit('openGrid', employeeId!, anomaly.date)">到班表核對處理</el-button>
+        <!-- 封存月格子也改不了：只留一行判定，不叫人去格子確認班別 -->
+        <div v-if="!sealed && gridVerdict && gridVerdict.status === 'possible_shift_change'" class="detail-column__grid-note" role="note" data-test="detail-grid-shift-change">
+          <p>核對判定這天是「{{ gridVerdict.label }}」：若是換了班，先到核對的週格子確認當日班別，遲到早退會照新班別重算；不要在這裡接受扣款。</p>
+          <el-button link type="primary" data-test="detail-open-grid" @click="emit('openGrid', employeeId!, anomaly.date)">到核對的週格子處理</el-button>
         </div>
-        <p v-else-if="gridVerdict && isRecordsBlind(gridVerdict.status)" class="detail-column__grid-verdict" data-test="detail-grid-verdict">班表核對：{{ gridVerdict.label }}</p>
+        <p v-else-if="gridVerdict && isRecordsBlind(gridVerdict.status)" class="detail-column__grid-verdict" data-test="detail-grid-verdict">核對：{{ gridVerdict.label }}</p>
         <ResolveCard
           :item="anomaly"
           :index="anomalyIndex"
@@ -19,6 +20,7 @@
           :context="context"
           :busy="resolving"
           :accept-warning="acceptWarning"
+          :sealed="sealed"
           @resolve="onResolve"
           @navigate="(d: number) => emit('navigate', d)"
           @retry="emit('retryRecords')"
@@ -76,7 +78,7 @@ const props = withDefaults(defineProps<{
   focusDate?: string | null
   /** 匯入／補卡等寫入後遞增，供整月明細重新載入（同員工同月時三個 key 都沒變） */
   revision?: number
-  /** 整月明細：這個人這個月薪資已封存（只能看） */
+  /** 這個人這個月薪資已封存（只能看）：整月明細不給補打卡，處理卡不給補打卡、接受、豁免 */
   sealed?: boolean
   /** 整月明細：整天還沒匯入的過去工作日（沒打卡不算缺卡，不催補卡） */
   uncoveredDates?: ReadonlySet<string>
@@ -102,7 +104,7 @@ const acceptWarning = computed(() => {
   if (!verdict) return null
   if (verdict.acceptWarning) return verdict.acceptWarning
   return verdict.status === 'possible_shift_change'
-    ? `班表核對判定這天是「${verdict.label}」。若是換了班，應先到班表核對確認當日班別，遲到早退會照新班別重算；現在接受扣款會照原班別扣薪。`
+    ? `核對判定這天是「${verdict.label}」。若是換了班，應先到核對的週格子確認當日班別，遲到早退會照新班別重算；現在接受扣款會照原班別扣薪。`
     : null
 })
 

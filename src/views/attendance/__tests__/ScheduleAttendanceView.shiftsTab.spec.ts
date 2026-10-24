@@ -84,7 +84,6 @@ const STUBS = {
   DutyRotationPanel: { template: '<div />' },
   SwapHistoryPanel: { template: '<div />' },
   WorkspaceHeader: { template: '<div />' },
-  AttendanceMonthStats: { template: '<div />' },
   RosterColumn: { template: '<div />' },
   DetailColumn: { template: '<div />' },
   AnomalyQueueColumn: { template: '<div />' },

@@ -105,11 +105,6 @@ const WorkspaceHeaderStub = {
 const panelConfirmWeekChange = vi.fn(async (_date: string) => true)
 /** 核對面板的「打開第一件待處理」（頁首「處理待辦」用）；預設有件可開 */
 const panelOpenFirstIssue = vi.fn(() => true)
-const AttendanceMonthStatsStub = {
-  name: 'AttendanceMonthStats',
-  props: ['kpis', 'displayState'],
-  template: '<div class="month-stats-stub" />',
-}
 
 // 兩個實例：核對（mode=reconcile）與排班週班表（mode=plan）。頁面只能問排班面板有沒有未儲存的週排班、只能請核對面板開第一件待辦
 const ScheduleGridPanelStub = {
@@ -176,7 +171,6 @@ const STUBS = {
   ImportPreviewDialog: ImportPreviewDialogStub,
   RecalculateAttendanceDrawer: RecalcDrawerStub,
   WorkspaceHeader: WorkspaceHeaderStub,
-  AttendanceMonthStats: AttendanceMonthStatsStub,
   'el-tabs': { template: '<div class="el-tabs"><slot /></div>' },
   'el-tab-pane': { template: '<div class="el-tab-pane"><slot /></div>', props: ['label'] },
   'el-radio-group': RadioGroupStub,
@@ -484,7 +478,6 @@ describe('ScheduleAttendanceView', () => {
 // WorkspaceHeader 單元測試
 // ──────────────────────────────────────────────────────────────────────────────
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
-import AttendanceMonthStats from '@/components/attendance/AttendanceMonthStats.vue'
 
 const WH_STUBS = {
   'el-select': {
@@ -547,17 +540,6 @@ describe('WorkspaceHeader', () => {
     expect(wrapper.findAll('button').find((b) => b.text().includes('匯入'))).toBeUndefined()
     expect(wrapper.find('[aria-label="月底作業"]').exists()).toBe(true)
     mockHasPermission.mockReturnValue(true)
-  })
-})
-
-describe('AttendanceMonthStats', () => {
-  it('渲染四個統計與範圍說明', () => {
-    const wrapper = mount(AttendanceMonthStats, {
-      props: { displayState: 'ready', kpis: { fullAttendance: 5, lateCount: 3, missingCount: 1, pendingAnomalies: 2 } },
-      global: { stubs: WH_STUBS },
-    })
-    expect(wrapper.text()).toContain('待處理遲到／早退／缺卡')
-    expect(wrapper.text()).toContain('0 筆異常不代表打卡資料已齊全')
   })
 })
 
@@ -848,7 +830,6 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     expect(panelOf(wrapper, 'reconcile')).toBeUndefined()
     expect(wrapper.find('[data-test="reconcile-view"]').exists()).toBe(false)
     expect(wrapper.findComponent(WorkspaceHeaderStub).exists()).toBe(false)
-    expect(wrapper.findComponent(AttendanceMonthStatsStub).exists()).toBe(false)
     expect(getSummaryMock).not.toHaveBeenCalled()
     mockHasPermission.mockReturnValue(true)
     wrapper.unmount()
@@ -1061,7 +1042,7 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     expect(wrapper.find('.page-header .header-actions').findComponent(WorkspaceHeaderStub).exists()).toBe(true)
     expect(wrapper.findComponent(WorkspaceHeaderStub).props('canPayrollCompare')).toBe(true)
     // 逐人檢視不再有出勤統計卡（數字改由核對的格子與頁首進度說，不在這裡並列第二套）
-    expect(wrapper.find('[data-test="records-panel"]').findComponent(AttendanceMonthStatsStub).exists()).toBe(false)
+    expect(wrapper.find('[aria-label="本月出勤統計"]').exists()).toBe(false)
     expect(wrapper.find('.page-header__subtitle').exists()).toBe(false)
     wrapper.findComponent(WorkspaceHeaderStub).vm.$emit('payroll')
     await flushPromises()
@@ -1305,17 +1286,6 @@ it('跨月失敗隱藏前月兩欄，重試成功後恢復', async () => {
   expect(wrapper.find('.workspace-cols').exists()).toBe(true)
   wrapper.unmount()
 })
-
-it('沒有當月資料時統計不顯示舊月數字', () => {
-  const wrapper = mount(AttendanceMonthStats, {
-    props: { displayState: 'unavailable', kpis: { fullAttendance: 9876, lateCount: 0, missingCount: 0, pendingAnomalies: 0 } },
-    global: { stubs: WH_STUBS },
-  })
-  expect(wrapper.text()).toContain('出勤統計尚未載入成功')
-  expect(wrapper.text()).not.toContain('9876')
-  wrapper.unmount()
-})
-
 
 it('整月無出勤紀錄仍保留從格子進入的指定人日明細', async () => {
   mockHasPermission.mockReturnValue(true)
@@ -1893,7 +1863,8 @@ describe('逐人檢視整併（第六輪 Task 6）', () => {
   it('逐人檢視沒有出勤統計卡、沒有範圍說明，動作列只有一顆批次處理按鈕（件數＝未處理日卡）', async () => {
     const wrapper = await mountPerson()
     const panel = wrapper.get('[data-test="records-panel"]')
-    expect(panel.findComponent(AttendanceMonthStatsStub).exists()).toBe(false)
+    expect(panel.find('[aria-label="本月出勤統計"]').exists()).toBe(false)
+    expect(panel.text()).not.toContain('待處理遲到／早退／缺卡')
     expect(panel.find('[data-test="records-scope-note"]').exists()).toBe(false)
     const actions = panel.get('.workspace-record-actions')
     expect(actions.findAll('button').map((b) => b.text())).toEqual(['批次處理遲到・早退・缺卡（2 件）'])
@@ -1942,6 +1913,22 @@ describe('逐人檢視整併（第六輪 Task 6）', () => {
     await wrapper.findComponent(RosterColumnStub).vm.$emit('select', 1)
     await flushPromises()
     expect(wrapper.findComponent(DetailColumnStub).props('sealed')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('從異常清單點進封存員工的那一件（resolve 模式）：DetailColumn 也是唯讀', async () => {
+    const wrapper = await mountPerson()
+    wrapper.findComponent(MonthProgressBarStub).vm.$emit('summary', sealedSummary([2]))
+    await flushPromises()
+    // 第 0 件是王小明（id 1，沒封存）、第 1 件是李小花（id 2，已封存）
+    await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 0)
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('mode')).toBe('resolve')
+    expect(wrapper.findComponent(DetailColumnStub).props('sealed')).toBe(false)
+    await wrapper.findComponent(AnomalyQueueColumnStub).vm.$emit('select', 1)
+    await flushPromises()
+    expect(wrapper.findComponent(DetailColumnStub).props('mode')).toBe('resolve')
+    expect(wrapper.findComponent(DetailColumnStub).props('sealed')).toBe(true)
     wrapper.unmount()
   })
 

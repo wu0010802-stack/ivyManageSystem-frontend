@@ -34,7 +34,7 @@
         @update:model-value="toggleSelectAll"
       >全選目前篩選結果（{{ selectableRows.length }}）</el-checkbox>
       <span v-if="selectedIds.size > 0" class="anomaly-queue-column__selected-count">
-        已選 {{ selectedIds.size }} 筆
+        已選 {{ selectedIds.size }} 件
       </span>
     </div>
 
@@ -308,6 +308,17 @@ const remarkMissing = ref(false)
 watch(batchRemark, (value) => { if (value.trim()) remarkMissing.value = false })
 const batchBusy = ref(false)
 
+// 封存名單或編號對照晚到（月摘要比異常清單慢載入）：已勾選、現在屬於封存員工的項目移出選取，
+// 計數與送出的 id 才只含能處理的（封存的任何一件都會讓整批被後端 409）
+watch(
+  () => [props.sealedEmployeeIds, props.employeeIdByNumber],
+  () => {
+    for (const card of props.items) {
+      if (selectedIds.has(card.id) && isSealedCard(card)) selectedIds.delete(card.id)
+    }
+  },
+)
+
 // 資料刷新（items 參考變動）後清空選取，避免殘留已處理過的舊 id 被誤重送
 watch(
   () => props.items,
@@ -368,8 +379,8 @@ function batchAcceptRisk(ids: number[]): string {
     else if (verdict?.status === 'possible_shift_change') shift += 1
   }
   const parts = [
-    pattern ? `${pattern} 筆是整月同型態（多半是設定問題，會照目前的應上班時段扣薪）` : '',
-    shift ? `${shift} 筆核對判定為疑似換班（應先確認當日班別）` : '',
+    pattern ? `${pattern} 件是整月同型態（多半是設定問題，會照目前的應上班時段扣薪）` : '',
+    shift ? `${shift} 件核對判定為疑似換班（應先確認當日班別）` : '',
   ].filter(Boolean)
   return parts.length ? `注意：其中 ${parts.join('、')}。` : ''
 }
@@ -387,12 +398,12 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
     return
   }
   if (ids.length > MAX_BATCH_IDS) {
-    ElMessage.warning(`一次最多批次處理 ${MAX_BATCH_IDS} 筆，請分批選取`)
+    ElMessage.warning(`一次最多批次處理 ${MAX_BATCH_IDS} 件，請分批選取`)
     return
   }
 
   const lines = [
-    `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？此操作套用選取日期的整日異常。${action === 'admin_accept' ? `接受扣款仍依原規則計算扣款，並非豁免。${batchAcceptRisk(ids)}` : ''}`,
+    `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 件考勤異常？此操作套用選取日期的整日異常。${action === 'admin_accept' ? `接受扣款仍依原規則計算扣款，並非豁免。${batchAcceptRisk(ids)}` : ''}`,
   ]
   if (action === 'admin_accept') {
     // 接受＝照扣：把這批會扣多少、牽涉幾個人寫在確認框（遮罩 null 與 0 不列入；合計是 0 就整行省略）
@@ -420,7 +431,8 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
     const text = `已批次處理 ${res.data.processed} 件`
     // 復原只清這次真的改成已處理的日卡：原本就已處理的卡（可能是員工自己或之前的處理）不能被一起清回未處理
     const undoable = chosen.filter((card) => card.confirmed_action === null).map((card) => card.id)
-    if (undoable.length > 0) showUndoToast({ text, attendanceIds: undoable, onUndone: () => emit('resolved') })
+    // 實際處理 0 件（例如都已被別人處理）：沒有東西可復原，只給一般訊息
+    if (undoable.length > 0 && res.data.processed > 0) showUndoToast({ text, attendanceIds: undoable, onUndone: () => emit('resolved') })
     else ElMessage.success(text)
     clearSelection()
     emit('resolved')

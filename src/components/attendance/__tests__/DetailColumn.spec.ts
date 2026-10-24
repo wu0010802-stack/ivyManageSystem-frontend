@@ -69,7 +69,7 @@ const missingContext = {
 // ResolveCard stub that exposes a way to emit 'resolve' and 'navigate'
 const ResolveCardStub = {
   name: 'ResolveCard',
-  props: ['item', 'index', 'total', 'context', 'acceptWarning'],
+  props: ['item', 'index', 'total', 'context', 'acceptWarning', 'sealed'],
   emits: ['resolve', 'navigate'],
   template: `
     <div class="resolve-card-stub">
@@ -419,10 +419,17 @@ describe('DetailColumn — 並列班表核對的判定（第五輪審查）', ()
     const w = mountWith(() => ({ label: '疑似換班', status: 'possible_shift_change', acceptWarning: null }))
     const note = w.get('[data-test="detail-grid-shift-change"]')
     expect(note.text()).toContain('不要在這裡接受扣款')
-    await note.get('[data-test="detail-open-grid"]').trigger('click')
+    // 文案用現在的頁籤名：不再說「班表核對」
+    expect(note.text()).toContain('核對判定這天是「疑似換班」')
+    expect(note.text()).toContain('先到核對的週格子確認當日班別')
+    expect(note.text()).not.toContain('班表核對')
+    const open = note.get('[data-test="detail-open-grid"]')
+    expect(open.text()).toBe('到核對的週格子處理')
+    await open.trigger('click')
     expect(w.emitted('openGrid')![0]).toEqual([99, anomalyItem.date])
     // 卡片的接受扣款也先問（文字提醒之外，一鍵送出擋一下）
     expect(w.findComponent(ResolveCardStub).props('acceptWarning')).toContain('現在接受扣款會照原班別扣薪')
+    expect(w.findComponent(ResolveCardStub).props('acceptWarning')).not.toContain('班表核對')
   })
 
   it('遲到早退兩邊說的是同一件事：不重複寫；符合型態的格子把接受扣款前的提醒交給卡片', () => {
@@ -434,12 +441,39 @@ describe('DetailColumn — 並列班表核對的判定（第五輪審查）', ()
 
   it('明細看不出的判定（例如資料待補）並列一行', () => {
     const w = mountWith(() => ({ label: '資料待補', status: 'data_incomplete', acceptWarning: null }))
-    expect(w.get('[data-test="detail-grid-verdict"]').text()).toBe('班表核對：資料待補')
+    expect(w.get('[data-test="detail-grid-verdict"]').text()).toBe('核對：資料待補')
   })
 
   it('沒有提供班表核對時不顯示，提醒為 null', () => {
     const w = mountDetail({})
     expect(w.find('[data-test="detail-grid-verdict"]').exists()).toBe(false)
     expect(w.findComponent(ResolveCardStub).props('acceptWarning')).toBeNull()
+  })
+})
+
+
+describe('DetailColumn — 薪資已封存只能看（R26）', () => {
+  const mountSealed = (sealed: boolean, lookup?: GridVerdictLookup) => mount(DetailColumn, {
+    props: { mode: 'resolve', anomaly: anomalyItem, anomalyIndex: 0, anomalyTotal: 1, context: defaultContext, employeeId: 99, year: 2026, month: 6, sealed },
+    global: { stubs, ...(lookup ? { provide: { [GRID_VERDICT_KEY as symbol]: computed(() => lookup) } } : {}) },
+  })
+
+  it('resolve 模式把 sealed 交給 ResolveCard（由它收掉補打卡、接受扣款、豁免）', () => {
+    expect(mountSealed(true).findComponent(ResolveCardStub).props('sealed')).toBe(true)
+    expect(mountSealed(false).findComponent(ResolveCardStub).props('sealed')).toBe(false)
+  })
+
+  it('沒帶 sealed 時不是封存', () => {
+    expect(mountDetail({}).findComponent(ResolveCardStub).props('sealed')).toBe(false)
+  })
+
+  it('疑似換班的日子在封存月只寫一行判定：沒有「到核對的週格子處理」可去（格子改不了）', () => {
+    const lookup: GridVerdictLookup = () => ({ label: '疑似換班', status: 'possible_shift_change', acceptWarning: null })
+    const sealed = mountSealed(true, lookup)
+    expect(sealed.find('[data-test="detail-grid-shift-change"]').exists()).toBe(false)
+    expect(sealed.find('[data-test="detail-open-grid"]').exists()).toBe(false)
+    expect(sealed.get('[data-test="detail-grid-verdict"]').text()).toBe('核對：疑似換班')
+    // 沒封存仍是原本的提醒
+    expect(mountSealed(false, lookup).find('[data-test="detail-grid-shift-change"]').exists()).toBe(true)
   })
 })
