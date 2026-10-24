@@ -5,20 +5,26 @@
       <button type="button" class="month-progress__link" data-test="progress-retry" @click="month.reload()">重試</button>
     </p>
 
-    <!-- 整月封存：只能看、不能改，沒有下一步可走，整條換成說明（不畫步驟列） -->
-    <section v-if="sealed" class="month-progress__sealed" aria-label="封存狀態" data-test="progress-sealed">
+    <!-- 整月封存：只能看、不能改，沒有下一步可走，整條換成說明（不畫步驟列）。
+         手機是精簡版（R55）：頁首膠囊已寫「已封存・唯讀」，標題句拿掉；說明那句後面直接接兩個文字連結，
+         不再有一顆獨佔一列的「前往」大按鈕（封存月首屏要看得到第一張員工卡） -->
+    <section v-if="sealed" class="month-progress__sealed" :class="{ 'is-compact': mobile }" aria-label="封存狀態" data-test="progress-sealed">
       <div class="month-progress__sealed-text">
-        <strong>{{ sealed.month }} 月薪資已封存，這個月的出勤只能看、不能改。</strong>
+        <!-- 手機沒有出勤讀取權限時說明那句不存在，標題是橫幅唯一的字，留著 -->
+        <strong v-if="!mobile || !canViewAttendance">{{ sealed.month }} 月薪資已封存，這個月的出勤只能看、不能改。</strong>
         <!-- 沒有出勤讀取權限就看不到打卡，無從判斷封存時有沒有沒處理的件，只留標題 -->
-        <span v-if="canViewAttendance">
-          <template v-if="sealed.leftoverCount > 0">
-            封存時還有 {{ sealed.leftoverCount }} 件沒處理，已照系統規則算進薪資。
-            <button type="button" class="month-progress__link" data-test="progress-show-leftover" @click="emit('show-leftover')">看這 {{ sealed.leftoverCount }} 件</button>
+        <span v-if="canViewAttendance || (mobile && nextMonth)">
+          <template v-if="canViewAttendance">
+            <template v-if="sealed.leftoverCount > 0">
+              封存時還有 {{ sealed.leftoverCount }} 件沒處理，已照系統規則算進薪資。
+              <button type="button" class="month-progress__link" data-test="progress-show-leftover" @click="emit('show-leftover')">看這 {{ sealed.leftoverCount }} 件</button>
+            </template>
+            <template v-else>封存時沒有未處理的件。</template>
           </template>
-          <template v-else>封存時沒有未處理的件。</template>
+          <button v-if="mobile && nextMonth" type="button" class="month-progress__link" data-test="progress-go-month" @click="emit('go-month', nextMonth)">前往 {{ nextMonth.month }} 月</button>
         </span>
       </div>
-      <button v-if="nextMonth" type="button" class="month-progress__go" data-test="progress-go-month" @click="emit('go-month', nextMonth)">前往 {{ nextMonth.month }} 月</button>
+      <button v-if="!mobile && nextMonth" type="button" class="month-progress__go" data-test="progress-go-month" @click="emit('go-month', nextMonth)">前往 {{ nextMonth.month }} 月</button>
     </section>
 
     <template v-else>
@@ -408,6 +414,8 @@ const capsuleSub = computed(() => {
   color: var(--el-text-color-primary); font: inherit; font-weight: 600; cursor: pointer;
 }
 .month-progress__link { display: inline; padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+/* 手機精簡橫幅：說明後面接兩個文字連結，連結之間留空（margin-right：換行時行首不縮排） */
+.month-progress__sealed.is-compact .month-progress__link { margin-right: var(--space-3); }
 .month-progress__go:focus-visible, .month-progress__link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .month-progress__capsule-body:focus-visible, .month-progress__toggle:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
 

@@ -566,7 +566,8 @@ describe('MonthProgressBar 手機膠囊', () => {
     await flushPromises()
     expect(sealed.find(capsule).exists()).toBe(false)
     expect(sealed.find(toggle).exists()).toBe(false)
-    expect(sealed.get('[data-test="progress-sealed"]').text()).toContain('9 月薪資已封存')
+    // 手機封存橫幅是精簡版（R55）：標題句拿掉，頁首膠囊已寫「已封存・唯讀」；細節見下方「手機封存橫幅」
+    expect(sealed.get('[data-test="progress-sealed"]').text()).toContain('封存時沒有未處理的件。')
   })
 
   it('載入中膠囊與「看進度」都停用；載入失敗只留錯誤與重試', async () => {
@@ -582,6 +583,81 @@ describe('MonthProgressBar 手機膠囊', () => {
     expect(failed.find(capsule).exists()).toBe(false)
     expect(failed.find(toggle).exists()).toBe(false)
     expect(failed.get('[data-test="progress-error"]').text()).toContain('伺服器錯誤')
+  })
+})
+
+describe('MonthProgressBar 手機封存橫幅（R55：390 寬封存月首屏要看得到第一張員工卡）', () => {
+  const banner = (wrapper: ReturnType<typeof mountBar>) => wrapper.get('[data-test="progress-sealed"]')
+
+  it('沒有標題句；留一句說明，後面接兩個文字連結（仍是 button），點了照常送出', async () => {
+    useGrid(() => sealedGrid([1, 2], 2))
+    const wrapper = mountBar({ mobile: true })
+    await flushPromises()
+    expect(banner(wrapper).find('strong').exists()).toBe(false)
+    expect(banner(wrapper).text()).not.toContain('月薪資已封存')
+    expect(banner(wrapper).text()).toContain('封存時還有 4 件沒處理，已照系統規則算進薪資。')
+    const leftover = wrapper.get('[data-test="progress-show-leftover"]')
+    const go = wrapper.get('[data-test="progress-go-month"]')
+    for (const link of [leftover, go]) {
+      expect(link.element.tagName).toBe('BUTTON')
+      expect(link.attributes('type')).toBe('button')
+      // 文字連結樣式，不是桌機那顆有框的大按鈕
+      expect(link.classes()).toContain('month-progress__link')
+      expect(link.classes()).not.toContain('month-progress__go')
+    }
+    expect(leftover.text()).toBe('看這 4 件')
+    expect(go.text()).toBe('前往 10 月')
+    // 兩個連結都在說明那一句所在的文字區塊裡（同一段流動，不各佔一列）
+    expect(banner(wrapper).get('.month-progress__sealed-text').findAll('button')).toHaveLength(2)
+    await leftover.trigger('click')
+    await go.trigger('click')
+    expect(wrapper.emitted('show-leftover')).toHaveLength(1)
+    expect(wrapper.emitted('go-month')).toEqual([[{ year: 2026, month: 10 }]])
+  })
+
+  it('封存時沒有未處理的件：照舊那句話，只留「前往 10 月」連結', async () => {
+    useGrid(() => sealedGrid([1, 2], 0))
+    const wrapper = mountBar({ mobile: true })
+    await flushPromises()
+    expect(banner(wrapper).find('strong').exists()).toBe(false)
+    expect(banner(wrapper).text()).toContain('封存時沒有未處理的件。')
+    expect(wrapper.find('[data-test="progress-show-leftover"]').exists()).toBe(false)
+    const go = wrapper.get('[data-test="progress-go-month"]')
+    expect(go.text()).toBe('前往 10 月')
+    expect(go.classes()).toContain('month-progress__link')
+    await go.trigger('click')
+    expect(wrapper.emitted('go-month')).toEqual([[{ year: 2026, month: 10 }]])
+  })
+
+  it('封存月沒有下一個月要去（同月或更晚）：只有說明與看這 N 件，沒有前往連結', async () => {
+    vi.setSystemTime(new Date('2026-09-25T04:00:00Z')) // 台北 9/25：9 月就是今天所在月份
+    useGrid(() => sealedGrid([1, 2], 2))
+    const wrapper = mountBar({ mobile: true })
+    await flushPromises()
+    expect(wrapper.find('[data-test="progress-go-month"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="progress-show-leftover"]').exists()).toBe(true)
+  })
+
+  it('沒有出勤讀取權限：沒有說明那一句可留，標題句照舊保留（不然橫幅整個是空的）', async () => {
+    perms.set = new Set(['SCHEDULE', 'SALARY_READ'])
+    useGrid(() => sealedGrid([1, 2]))
+    const wrapper = mountBar({ mobile: true })
+    await flushPromises()
+    expect(banner(wrapper).text()).toContain('9 月薪資已封存，這個月的出勤只能看、不能改。')
+    expect(banner(wrapper).text()).not.toContain('封存時')
+  })
+
+  it('桌機完全不變：標題句、說明、看這 N 件，加一顆有框的「前往 10 月」大按鈕', async () => {
+    useGrid(() => sealedGrid([1, 2], 2))
+    const wrapper = mountBar()
+    await flushPromises()
+    expect(banner(wrapper).get('strong').text()).toBe('9 月薪資已封存，這個月的出勤只能看、不能改。')
+    expect(banner(wrapper).text()).toContain('封存時還有 4 件沒處理，已照系統規則算進薪資。')
+    const go = wrapper.get('[data-test="progress-go-month"]')
+    expect(go.classes()).toContain('month-progress__go')
+    expect(go.classes()).not.toContain('month-progress__link')
+    // 大按鈕在文字區塊外（橫幅右側），不是說明那句裡的連結
+    expect(banner(wrapper).get('.month-progress__sealed-text').find('[data-test="progress-go-month"]').exists()).toBe(false)
   })
 })
 

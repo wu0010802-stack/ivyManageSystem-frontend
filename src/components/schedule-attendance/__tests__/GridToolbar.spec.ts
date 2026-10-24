@@ -228,6 +228,62 @@ describe('GridToolbar 核對／排班兩種模式', () => {
     expect(wrapper.find('[data-test="toolbar-prev"]').exists()).toBe(false)
   })
 
+  it('手機（compact）週切換收成一列：上週／下週只有圖示，aria-label 照寫、沒有可見文字；順序＝上週、日期、下週、範圍字', async () => {
+    const wrapper = mountToolbar({ compact: true })
+    const prev = wrapper.get('[data-test="toolbar-prev"]')
+    const next = wrapper.get('[data-test="toolbar-next"]')
+    expect(prev.attributes('aria-label')).toBe('上週')
+    expect(next.attributes('aria-label')).toBe('下週')
+    // 沒有可見文字：只剩圖示
+    expect(prev.text()).toBe('')
+    expect(next.text()).toBe('')
+    expect(prev.find('.el-icon').exists()).toBe(true)
+    expect(next.find('.el-icon').exists()).toBe(true)
+    const nav = wrapper.get('[aria-label="選擇週次"]')
+    expect(nav.text()).not.toContain('上週')
+    expect(nav.text()).not.toContain('下週')
+    expect(nav.text()).toContain('9/14～9/20')
+    // 同一個群組內的先後順序：‹ 日期 › 範圍字（整個群組只有這一組，不拆兩列）
+    // （日期選擇器的 data-test 掛在內層輸入框，所以用它根節點的 el-date-editor 認）
+    const order = Array.from(nav.element.children).map(
+      (el) => el.getAttribute('data-test') ?? (el.classList.contains('el-date-editor') ? 'date' : el.classList.contains('grid-toolbar__label') ? 'label' : 'other'),
+    )
+    expect(order).toEqual(['toolbar-prev', 'date', 'toolbar-next', 'label'])
+    // 照常換週
+    await prev.trigger('click')
+    await next.trigger('click')
+    expect(wrapper.emitted('update:weekStart')).toEqual([['2026-09-07'], ['2026-09-21']])
+  })
+
+  it('手機週切換：儲存中兩顆圖示鈕一樣停用', () => {
+    const wrapper = mountToolbar({ compact: true, pendingCount: 2, saving: true })
+    expect(wrapper.get('[data-test="toolbar-prev"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="toolbar-next"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('桌機不變：上週／下週還是帶文字的按鈕，沒有另外覆寫 aria-label', () => {
+    const wrapper = mountToolbar()
+    const prev = wrapper.get('[data-test="toolbar-prev"]')
+    const next = wrapper.get('[data-test="toolbar-next"]')
+    expect(prev.text()).toBe('上週')
+    expect(next.text()).toBe('下週')
+    expect(prev.attributes('aria-label')).toBeUndefined()
+    expect(next.attributes('aria-label')).toBeUndefined()
+  })
+
+  it('手機週切換的版面：群組不換行、圖示鈕至少 44×44、日期框可縮、範圍字不折行', () => {
+    const css = readFileSync(resolve(__dirname, '../GridToolbar.vue'), 'utf8')
+    const nav = css.match(/\.grid-toolbar__nav--compact \{([^}]*)\}/)![1]
+    expect(nav).toMatch(/flex-wrap:\s*nowrap/)
+    // 群組撐滿工具列寬：不然它照內容寬（日期框 EP 預設 220px），整列被推出螢幕
+    expect(nav).toMatch(/width:\s*100%/)
+    const step = css.match(/\.grid-toolbar__step \{([^}]*)\}/)![1]
+    expect(step).toMatch(/min-width:\s*var\(--touch-target-min\)/)
+    expect(step).toMatch(/min-height:\s*var\(--touch-target-min\)/)
+    expect(css.match(/\.grid-toolbar__nav--compact \.grid-toolbar__picker \{([^}]*)\}/)![1]).toMatch(/min-width:\s*0/)
+    expect(css.match(/\.grid-toolbar__nav--compact \.grid-toolbar__label \{([^}]*)\}/)![1]).toMatch(/white-space:\s*nowrap/)
+  })
+
   it('頁首已有年月切換時，月模式不再放第二組月份導覽', () => {
     const wrapper = mountToolbar({ view: 'month', date: '2026-01-16', hideMonthNav: true })
     expect(wrapper.find('[data-test="toolbar-prev-month"]').exists()).toBe(false)

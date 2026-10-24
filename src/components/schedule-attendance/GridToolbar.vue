@@ -18,8 +18,19 @@
       <el-button data-test="toolbar-next-month" @click="emit('update:date', shiftMonthISO(anchor, 1))">下個月 <el-icon><ArrowRight /></el-icon></el-button>
       <span class="grid-toolbar__label">{{ monthLabel }}</span>
     </div>
-    <div v-else-if="!isMonth" class="grid-toolbar__nav" role="group" aria-label="選擇週次">
-      <el-button :icon="ArrowLeft" data-test="toolbar-prev" :disabled="saving" @click="go(-7)">上週</el-button>
+    <!-- 手機（compact）收成一列：上週／下週只留圖示（aria-label 照寫），與日期、範圍字排在同一排。
+         上週鈕手機不給預設插槽：EP 有插槽就會畫一個空的文字 span，並給它 6px 左邊距，圖示就偏了 -->
+    <div v-else-if="!isMonth" class="grid-toolbar__nav" :class="{ 'grid-toolbar__nav--compact': compact }" role="group" aria-label="選擇週次">
+      <el-button
+        :icon="ArrowLeft"
+        :class="{ 'grid-toolbar__step': compact }"
+        :aria-label="compact ? '上週' : undefined"
+        data-test="toolbar-prev"
+        :disabled="saving"
+        @click="go(-7)"
+      >
+        <template v-if="!compact" #default>上週</template>
+      </el-button>
       <el-date-picker
         :model-value="anchor"
         type="date"
@@ -32,7 +43,15 @@
         data-test="toolbar-date"
         @update:model-value="(v: string | null) => v && emit('update:weekStart', v)"
       />
-      <el-button data-test="toolbar-next" :disabled="saving" @click="go(7)">下週 <el-icon><ArrowRight /></el-icon></el-button>
+      <el-button
+        :class="{ 'grid-toolbar__step': compact }"
+        :aria-label="compact ? '下週' : undefined"
+        data-test="toolbar-next"
+        :disabled="saving"
+        @click="go(7)"
+      >
+        <template v-if="!compact">下週 </template><el-icon><ArrowRight /></el-icon>
+      </el-button>
       <span class="grid-toolbar__label">{{ weekLabel }}</span>
     </div>
 
@@ -206,6 +225,12 @@ function onCommand(command: string | number | object): void {
 .grid-toolbar__keyword { width: 168px; }
 .grid-toolbar__filter-select { width: 200px; }
 .grid-toolbar__label { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
+/* 手機週切換（compact）：‹ 日期 › 範圍字 排成一列。群組撐滿工具列寬（不然它照內容寬，日期框 EP 預設 220px 會把整列推出螢幕）；
+   圖示鈕 44×44；日期框可縮、範圍字不折行，放不下時縮的是日期框 */
+.grid-toolbar__nav--compact { flex-wrap: nowrap; width: 100%; }
+.grid-toolbar__nav--compact .grid-toolbar__picker { flex: 1 1 0; width: auto; min-width: 0; }
+.grid-toolbar__nav--compact .grid-toolbar__label { flex: none; white-space: nowrap; }
+.grid-toolbar__step { flex: none; min-width: var(--touch-target-min); min-height: var(--touch-target-min); padding: 0; }
 /* 桌機：捲動時工具列（週次、篩選、儲存排班）固定在捲動區頂端，改到第 60 列也按得到儲存 */
 @media (--bp-sm) {
   .grid-toolbar { position: sticky; top: 0; z-index: var(--z-sticky); margin-bottom: 0; padding: var(--space-2) 0 var(--space-3); background: var(--bg-color); }
