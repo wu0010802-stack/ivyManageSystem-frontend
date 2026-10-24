@@ -37,7 +37,7 @@
       <el-button circle :icon="MoreFilled" aria-label="更多動作" data-test="header-more" />
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item v-if="canWrite" command="import">匯入打卡紀錄</el-dropdown-item>
+          <el-dropdown-item v-if="canImport" command="import">匯入打卡紀錄</el-dropdown-item>
           <el-dropdown-item command="kiosk">開電子打卡台</el-dropdown-item>
           <el-dropdown-item v-if="canPayrollCompare" command="payroll" divided>薪資扣項核對</el-dropdown-item>
           <el-dropdown-item command="export" :divided="!canPayrollCompare">匯出月報</el-dropdown-item>
@@ -51,7 +51,7 @@
       <!-- 電子打卡台是給打卡用的平板開的，行政很少從這裡開：退成文字連結，不和匯入同級 -->
       <el-button link :icon="Monitor" class="workspace-header__kiosk" data-test="header-kiosk" @click="openKiosk">開電子打卡台</el-button>
       <!-- 主要動作是匯入時，匯入鈕自己就是那顆 primary（整列只有一顆） -->
-      <el-button v-if="canWrite" :type="importIsPrimary ? 'primary' : undefined" data-test="header-import" @click="onImport">{{ importLabel }}</el-button>
+      <el-button v-if="canImport" :type="importIsPrimary ? 'primary' : undefined" data-test="header-import" @click="onImport">{{ importLabel }}</el-button>
       <!-- 選單裡是月底要做的事（核對扣項、匯出、重算），封存在薪資結算：叫「月結」會以為按了就結帳 -->
       <el-dropdown trigger="click" aria-label="月底作業" @command="onMenuCommand">
         <el-button data-test="header-month-tools">月底作業 <el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
@@ -118,6 +118,8 @@ const STATUS_TEXT: Record<SealState, string> = {
 }
 
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
+/** 匯入入口：要出勤寫入權限，且月份還沒整月封存（後端本來就拒收已封存月份的匯入） */
+const canImport = computed(() => canWrite.value && props.sealState !== 'sealed')
 const importIsPrimary = computed(() => props.primary?.action === 'import')
 const importLabel = computed(() => (props.primary?.action === 'import' ? props.primary.label : '匯入打卡紀錄'))
 

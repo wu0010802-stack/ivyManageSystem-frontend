@@ -260,3 +260,32 @@ describe('WorkspaceHeader 手機一列', () => {
     openSpy.mockRestore()
   })
 })
+
+describe('WorkspaceHeader 封存月不給匯入（後端本來就拒收已封存月份的匯入）', () => {
+  const commands = (w: ReturnType<typeof mountHeader>) => w.findAll('.dd-item').map((i) => i.attributes('data-command'))
+
+  it('桌機：sealed 沒有「匯入打卡紀錄」鈕，月底作業選單與電子打卡台連結保留；open／partial 照舊', () => {
+    perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
+    const sealed = mountHeader({ sealState: 'sealed', canPayrollCompare: true, canPrintAppraisal: true })
+    expect(sealed.find('[data-test="header-import"]').exists()).toBe(false)
+    expect(sealed.findAll('button').some((b) => b.text().includes('匯入'))).toBe(false)
+    expect(sealed.find('[data-test="header-month-tools"]').exists()).toBe(true)
+    expect(commands(sealed)).toContain('export')
+    expect(sealed.find('[data-test="header-kiosk"]').exists()).toBe(true)
+    for (const state of ['open', 'partial'] as const) {
+      const wrapper = mountHeader({ sealState: state })
+      expect(wrapper.get('[data-test="header-import"]').text()).toBe('匯入打卡紀錄')
+    }
+    // 還不知道月份狀態（沒給 sealState）也照舊
+    expect(mountHeader().find('[data-test="header-import"]').exists()).toBe(true)
+  })
+
+  it('手機：sealed 的 ⋯ 選單沒有匯入項目，其餘（電子打卡台、月底作業各項）保留；open／partial 照舊', () => {
+    perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
+    const props = { mobile: true, canPayrollCompare: true, canPrintAppraisal: true }
+    expect(commands(mountHeader({ ...props, sealState: 'sealed' }))).toEqual(['kiosk', 'payroll', 'export', 'appraisal', 'recalculate'])
+    for (const state of ['open', 'partial'] as const) {
+      expect(commands(mountHeader({ ...props, sealState: state }))).toEqual(['import', 'kiosk', 'payroll', 'export', 'appraisal', 'recalculate'])
+    }
+  })
+})

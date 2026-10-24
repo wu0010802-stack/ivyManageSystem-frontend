@@ -746,7 +746,11 @@ async function onExport(): Promise<void> {
         { type: 'warning', confirmButtonText: '仍要匯出', cancelButtonText: '先去處理', distinguishCancelAndClose: true },
       )
     } catch (action) {
-      if (action === 'cancel') showIssues()
+      // 「先去處理」＝按目前的主要動作（提醒可能只列設定問題或缺匯入，固定去只看待處理會導錯地方）；沒有主要動作才退回只看待處理
+      if (action === 'cancel') {
+        if (primaryAction.value) void onPrimary(primaryAction.value.action)
+        else showIssues()
+      }
       return
     }
   }

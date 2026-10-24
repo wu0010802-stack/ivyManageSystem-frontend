@@ -837,7 +837,7 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     wrapper.unmount()
   })
 
-  it('匯出月報：本月還有待處理或未匯入時先提醒；選「先去處理」就切到只看待處理，不匯出', async () => {
+  it('匯出月報：本月還有待處理或未匯入時先提醒；選「先去處理」就走目前的主要動作，不匯出', async () => {
     const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-10-07' }, global: { stubs: STUBS } })
     await flushPromises()
     const bar = wrapper.findComponent(MonthProgressBarStub)
@@ -854,7 +854,9 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
       expect.objectContaining({ confirmButtonText: '仍要匯出', cancelButtonText: '先去處理' }),
     )
     expect(downloadFile).not.toHaveBeenCalled()
-    expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('issues')
+    // 目前步驟是逐日待辦：「先去處理」＝按下頁首的主要動作（開第一件待辦），不是固定去只看待處理
+    expect(panelOpenFirstIssue).toHaveBeenCalledTimes(1)
+    expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('all')
 
     msgBoxConfirm.mockResolvedValueOnce('confirm')
     header.vm.$emit('export')
@@ -1560,6 +1562,65 @@ describe('頁首主要動作與匯出提醒（第六輪）', () => {
       expect(message(2)).toBe('9 月有 2 個工作日還沒匯入打卡。現在匯出的月報會照系統規則計算。')
       for (const text of [message(0), message(1), message(2)]) expect(text).not.toMatch(/0 [件人天]|格待處理/)
       wrapper.unmount()
+    })
+
+    describe('「先去處理」走目前的主要動作；沒有主要動作才退回只看待處理', () => {
+      const cancelExport = async (wrapper: Awaited<ReturnType<typeof mountSep>>) => {
+        msgBoxConfirm.mockRejectedValueOnce('cancel')
+        header(wrapper).vm.$emit('export')
+        await flushPromises()
+        expect(downloadFile).not.toHaveBeenCalled()
+      }
+
+      it('主要動作是先修設定問題（提醒只列設定問題）：開本月設定檢查，不動篩選', async () => {
+        const wrapper = await mountSep()
+        await summarize(wrapper, { step: 'patterns', patterns: 20, people: 2 })
+        await cancelExport(wrapper)
+        expect(openPatternsSpy).toHaveBeenCalledTimes(1)
+        expect(panelOpenFirstIssue).not.toHaveBeenCalled()
+        expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('all')
+        wrapper.unmount()
+      })
+
+      it('主要動作是匯入（提醒列缺匯入）：開匯入打卡', async () => {
+        const wrapper = await mountSep()
+        await summarize(wrapper, { step: 'import', missingImport: 2 })
+        await cancelExport(wrapper)
+        expect(wrapper.findComponent(ImportPreviewDialogStub).props('modelValue')).toBe(true)
+        expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('all')
+        wrapper.unmount()
+      })
+
+      it('主要動作是處理待辦：開第一件待辦', async () => {
+        const wrapper = await mountSep()
+        await summarize(wrapper, { step: 'daily', daily: 4 })
+        await cancelExport(wrapper)
+        expect(panelOpenFirstIssue).toHaveBeenCalledTimes(1)
+        wrapper.unmount()
+      })
+
+      it('沒有主要動作（例如沒有匯入權限）：退回只看待處理', async () => {
+        mockHasPermission.mockImplementation((code: unknown) => code !== 'ATTENDANCE_WRITE')
+        const wrapper = await mountSep()
+        await summarize(wrapper, { step: 'import', missingImport: 2 })
+        expect(header(wrapper).props('primary')).toBeNull()
+        await cancelExport(wrapper)
+        expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('issues')
+        expect(wrapper.findComponent(ImportPreviewDialogStub).props('modelValue')).toBe(false)
+        wrapper.unmount()
+      })
+
+      it('按右上角關閉（不是「先去處理」）：什麼都不做', async () => {
+        const wrapper = await mountSep()
+        await summarize(wrapper, { step: 'patterns', patterns: 20, people: 2 })
+        msgBoxConfirm.mockRejectedValueOnce('close')
+        header(wrapper).vm.$emit('export')
+        await flushPromises()
+        expect(downloadFile).not.toHaveBeenCalled()
+        expect(openPatternsSpy).not.toHaveBeenCalled()
+        expect(wrapper.findComponent(ScheduleGridPanelStub).props('filter')).toBe('all')
+        wrapper.unmount()
+      })
     })
 
     it('封存月不提醒，直接匯出（沒有「先去處理」可走）', async () => {
