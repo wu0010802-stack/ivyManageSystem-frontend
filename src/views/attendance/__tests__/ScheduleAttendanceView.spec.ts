@@ -139,7 +139,7 @@ const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobil
 const monthSummaryOf = (
   year: number,
   month: number,
-  o: { daily?: number; patterns?: number; people?: number; missingImport?: number; step?: 'import' | 'patterns' | 'daily' | 'confirm' | 'payroll' | 'done'; sealState?: 'open' | 'partial' | 'sealed'; sealedIds?: number[] } = {},
+  o: { daily?: number; patterns?: number; people?: number; missingImport?: number; step?: 'import' | 'patterns' | 'daily' | 'confirm' | 'payroll' | 'waiting' | 'done'; sealState?: 'open' | 'partial' | 'sealed'; sealedIds?: number[] } = {},
 ) => ({
   year,
   month,
@@ -152,6 +152,8 @@ const monthSummaryOf = (
   patternIssueCount: o.patterns ?? 0,
   dailyIssueCount: o.daily ?? 0,
   leftoverCount: 0,
+  monthEnded: o.step !== 'waiting',
+  importedThrough: `${year}-${String(month).padStart(2, '0')}-20`,
 })
 const RecalcDrawerStub = { name: 'RecalculateAttendanceDrawer', props: ['modelValue', 'year', 'month', 'mobile'], emits: ['update:modelValue', 'done'], template: '<div class="recalc-stub" />' }
 const SHELL_STUBS = {
@@ -1593,6 +1595,9 @@ describe('頁首主要動作與匯出提醒（第六輪）', () => {
       await summarize(wrapper, { step: 'daily', daily: 169 })
       expect(header(wrapper).props('primary')).toEqual({ label: '處理待辦・剩 169 件', action: 'daily' })
       await summarize(wrapper, { step: 'confirm' })
+      expect(header(wrapper).props('primary')).toBeNull()
+      // 月份還沒過完、前面都做完了：等月底，頁首不給任何主要按鈕（尤其不是交薪資）
+      await summarize(wrapper, { step: 'waiting' })
       expect(header(wrapper).props('primary')).toBeNull()
       await summarize(wrapper, { step: 'payroll' })
       expect(header(wrapper).props('primary')).toEqual({ label: '交薪資', action: 'payroll' })

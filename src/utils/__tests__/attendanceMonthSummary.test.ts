@@ -163,6 +163,9 @@ function summaryOf(overrides: Partial<MonthSummary> = {}): MonthSummary {
     patternIssueCount: 0,
     dailyIssueCount: 0,
     leftoverCount: 0,
+    // 預設是已過完的月份（今天晚於 9/30）；月中情境由案例自己覆寫
+    monthEnded: true,
+    importedThrough: '2026-09-20',
     ...overrides,
   }
 }
@@ -228,5 +231,61 @@ describe('primaryAction：頁首主要按鈕與手機膠囊共用的動作（含
     expect(primaryAction(s, 'payroll', { writeAttendance: true, viewSalary: false })).toBeNull()
     expect(primaryAction(s, 'patterns', { writeAttendance: false, viewSalary: false })?.action).toBe('patterns')
     expect(primaryAction(s, 'daily', { writeAttendance: false, viewSalary: false })?.action).toBe('daily')
+  })
+})
+
+describe('月中（月份還沒結束）：不把交薪資當成下一步（R47）', () => {
+  const ALL = { writeAttendance: true, viewSalary: true }
+  const OCT = Array.from({ length: 31 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`)
+  /** 10 月整月：today 之前的日子都已匯入、沒有待辦（每人每個已匯入的工作日都符合班表） */
+  function octGrid(today: string) {
+    const days = OCT.map((d) => day(d, { import_covered: d < today }))
+    const employees = [employee(1, '林班導'), employee(2, '王副導')]
+    const cells = employees.flatMap((e) =>
+      days.filter((d) => d.is_workday && d.date < today).map((d) => cell(e.employee_id, d.date, { actual: { status: 'matched' } })),
+    )
+    return grid({ today, days, employees, cells })
+  }
+
+  it('今天是 10/24、10/1–10/23 都已匯入、沒有待辦也沒有輪次：還沒過完，目前步驟是等月底，不是交薪資', () => {
+    const s = buildMonthSummary(octGrid('2026-10-24'), [], '2026-10-24')
+    expect(s.monthEnded).toBe(false)
+    expect(s.importStatus.missingWorkdays).toEqual([])
+    expect(s.dailyIssueCount).toBe(0)
+    expect(s.importedThrough).toBe('2026-10-23')
+    const step = currentStep(s, 0)
+    expect(step).toBe('waiting')
+    expect(step).not.toBe('payroll')
+    expect(primaryLabel(s, step)).toBeNull()
+    expect(primaryAction(s, step, ALL)).toBeNull()
+  })
+
+  it('月底最後一天還沒過完；隔天（下個月 1 號）才算過完，回到原本的交薪資', () => {
+    expect(buildMonthSummary(octGrid('2026-10-31'), [], '2026-10-31').monthEnded).toBe(false)
+    const ended = buildMonthSummary(octGrid('2026-11-01'), [], '2026-11-01')
+    expect(ended.monthEnded).toBe(true)
+    expect(currentStep(ended, 0)).toBe('payroll')
+    expect(primaryAction(ended, 'payroll', ALL)).toEqual({ label: '交薪資', action: 'payroll' })
+  })
+
+  it('月中前面的步驟照常優先：缺匯入工作日→匯入、設定問題、逐日待辦；有進行中的輪次→等老師回覆', () => {
+    const s = summaryOf({ monthEnded: false })
+    expect(currentStep({ ...s, importStatus: { lastCovered: '2026-09-16', gaps: [], missingWorkdays: ['2026-09-17'] } }, 0)).toBe('import')
+    expect(currentStep({ ...s, patternPeople: 1 }, 0)).toBe('patterns')
+    expect(currentStep({ ...s, dailyIssueCount: 2 }, 0)).toBe('daily')
+    expect(currentStep(s, 3)).toBe('confirm') // 已有進行中的輪次、還有人沒回覆：維持 confirm
+    expect(currentStep(s, 0)).toBe('waiting') // 沒有輪次（或都回覆了）：等月底
+  })
+
+  it('封存優先於一切：sealed 仍是 done', () => {
+    expect(currentStep(summaryOf({ sealState: 'sealed', monthEnded: false }), 0)).toBe('done')
+  })
+
+  it('importedThrough＝已涵蓋的最後一個工作日（週末有涵蓋不算）；一個工作日都沒涵蓋就用昨天', () => {
+    // 今天週一 10/26：10/24（週六）、10/25（週日）也標已匯入，但最後一個工作日是 10/23（週五）
+    const weekend = buildMonthSummary(octGrid('2026-10-26'), [], '2026-10-26')
+    expect(weekend.importedThrough).toBe('2026-10-23')
+    const none = buildMonthSummary(grid({ today: '2026-10-24', days: OCT.map((d) => day(d, { import_covered: false })), employees: [employee(1, '林班導')], cells: [] }), [], '2026-10-24')
+    expect(none.importedThrough).toBe('2026-10-23')
   })
 })

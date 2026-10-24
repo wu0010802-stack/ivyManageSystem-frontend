@@ -6,6 +6,7 @@
  */
 import { patternCellKeys, patternIssueTotal, type AttendancePattern } from '@/utils/attendancePatterns'
 import {
+  addDaysISO,
   cellKey,
   importProgress,
   isIssue,
@@ -18,8 +19,11 @@ import {
 
 /** 月份的封存狀態：在職者全部封存＝sealed、部分＝partial、都沒有＝open */
 export type SealState = 'open' | 'partial' | 'sealed'
-/** 結算的步驟（目前輪到哪一步）；done＝整月已封存，沒有下一步 */
-export type MonthStep = 'import' | 'patterns' | 'daily' | 'confirm' | 'payroll' | 'done'
+/**
+ * 結算的步驟（目前輪到哪一步）；done＝整月已封存，沒有下一步；
+ * waiting＝月份還沒結束、前面都做完了：只能等月底再匯入、再交薪資（沒有行政能按的動作，進度列落在步驟 1）。
+ */
+export type MonthStep = 'import' | 'patterns' | 'daily' | 'confirm' | 'payroll' | 'waiting' | 'done'
 
 export interface MonthSummary {
   year: number
@@ -37,6 +41,10 @@ export interface MonthSummary {
   dailyIssueCount: number
   /** 封存者在封存時沒處理的件數（只能稽核） */
   leftoverCount: number
+  /** 這個月已經過完（今天晚於該月最後一天）。沒過完時還有天數沒發生，打卡匯入不完整、也還不能交薪資 */
+  monthEnded: boolean
+  /** 「已匯入至 X」要寫的日子：已涵蓋的最後一個工作日；一個工作日都沒涵蓋就用昨天 */
+  importedThrough: string
 }
 
 /**
@@ -55,6 +63,7 @@ export function buildMonthSummary(data: GridOut, patterns: AttendancePattern[], 
   const sealState: SealState =
     sealedEmployeeIds.size === 0 ? 'open' : sealedEmployeeIds.size >= employed.size ? 'sealed' : 'partial'
 
+  const coveredWorkdays = data.days.filter((d) => d.is_workday && d.import_covered === true)
   const unsealedPatterns = patterns.filter((p) => !sealedEmployeeIds.has(p.employeeId))
   const patternKeys = patternCellKeys(unsealedPatterns)
   const uncovered = uncoveredDates(data.days)
@@ -80,12 +89,16 @@ export function buildMonthSummary(data: GridOut, patterns: AttendancePattern[], 
     patternIssueCount: patternIssueTotal(unsealedPatterns),
     dailyIssueCount,
     leftoverCount,
+    // 月份字串（YYYY-MM）比較＝今天晚於該月最後一天；today 是台北日期（data.today）
+    monthEnded: today.slice(0, 7) > data.start_date.slice(0, 7),
+    importedThrough: coveredWorkdays.length ? coveredWorkdays[coveredWorkdays.length - 1].date : addDaysISO(today, -1),
   }
 }
 
 /**
  * 目前輪到哪一步：封存＝done；一天都沒匯入或有缺漏工作日＝import；
  * 之後依序 設定問題 → 逐日待辦 → 老師確認（confirmOutstanding＝還沒回覆的人數）→ 交薪資。
+ * 月份還沒結束時走到最後一步不是交薪資而是 waiting（等月底）；已有進行中的輪次（還有人沒回覆）照樣停在 confirm。
  */
 export function currentStep(s: MonthSummary, confirmOutstanding: number): MonthStep {
   if (s.sealState === 'sealed') return 'done'
@@ -93,12 +106,12 @@ export function currentStep(s: MonthSummary, confirmOutstanding: number): MonthS
   if (s.patternPeople > 0) return 'patterns'
   if (s.dailyIssueCount > 0) return 'daily'
   if (confirmOutstanding > 0) return 'confirm'
-  return 'payroll'
+  return s.monthEnded ? 'payroll' : 'waiting'
 }
 
 /**
  * 目前步驟的主要動作文字（頁首主要按鈕與手機膠囊共用）。
- * confirm（等老師回覆）與 done 沒有行政能按的動作，回 null。
+ * confirm（等老師回覆）、waiting（等月底）與 done 沒有行政能按的動作，回 null。
  */
 export function primaryLabel(s: MonthSummary, step: MonthStep): string | null {
   switch (step) {
@@ -124,7 +137,7 @@ export interface PrimaryActionSpec {
 
 /**
  * 目前步驟要按的那個動作（頁首主要按鈕與手機膠囊共用，兩處規則一致）。
- * 沒有行政能按的（等老師回覆、已封存、還在載入）或沒有權限（匯入要出勤寫入、交薪資要薪資讀取）＝null。
+ * 沒有行政能按的（等老師回覆、等月底、已封存、還在載入）或沒有權限（匯入要出勤寫入、交薪資要薪資讀取）＝null。
  */
 export function primaryAction(
   s: MonthSummary,

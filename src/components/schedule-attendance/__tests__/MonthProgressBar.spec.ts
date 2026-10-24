@@ -67,8 +67,20 @@ const MATCHED = { status: 'matched' as const }
 const ANOMALY = { status: 'anomaly' as const }
 const SEALED = { locked_reason: 'finalized' as const, plan: false }
 
-/** 匯入齊、沒有待辦、沒有型態：下一步是老師確認或交薪資 */
+/**
+ * 匯入齊、沒有待辦、沒有型態：下一步是老師確認或交薪資。
+ * today 在 9 月之後＝這個月已經過完（月中還沒過完時下一步是等月底，見 midMonthCleanGrid）。
+ */
 function cleanGrid() {
+  return grid({
+    today: '2026-10-05',
+    days: WEEK.map((d) => day(d)),
+    cells: [cell(1, WEEK[0], { actual: MATCHED }), cell(2, WEEK[0], { actual: MATCHED })],
+  })
+}
+
+/** 同 cleanGrid，但今天在 9 月中（9/21）：月份還沒過完 */
+function midMonthCleanGrid() {
   return grid({
     today: '2026-09-21',
     days: WEEK.map((d) => day(d)),
@@ -259,6 +271,8 @@ describe('MonthProgressBar 步驟列', () => {
 
   it('只有排班與薪資讀取權限：只看得到交薪資一步，且不被「還沒匯入」卡住', async () => {
     perms.set = new Set(['SCHEDULE', 'SALARY_READ'])
+    // 月份已過完（today 在 9 月之後）：沒有匯入涵蓋資料也輪到交薪資
+    useGrid(() => ({ ...monthGrid(), today: '2026-10-05' }))
     const wrapper = mountBar()
     await flushPromises()
     for (const sel of ['progress-import', 'progress-patterns', 'progress-issues', 'progress-rounds', 'progress-schedule']) {
@@ -882,5 +896,107 @@ describe('MonthProgressBar 本月設定檢查', () => {
     const noRead = mountBar()
     await flushPromises()
     expect(noRead.find('[data-test="progress-patterns"]').exists()).toBe(false)
+  })
+})
+
+describe('MonthProgressBar 月中：月份還沒結束時不把交薪資當下一步（R47）', () => {
+  const OCT = Array.from({ length: 31 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`)
+  const CAPSULE_MAIN = '[data-test="progress-capsule-main"]'
+  const CAPSULE_SUB = '[data-test="progress-capsule-sub"]'
+  /** 10 月整月、today 之前的日子都已匯入；工作日預設都符合班表，extra 另加格子（例如一件異常） */
+  function octGrid(today: string, extra: ReturnType<typeof cell>[] = []) {
+    const days = OCT.map((d) => day(d, { import_covered: d < today }))
+    // 有打卡（不然整月沒打卡會被判成設定問題）
+    const punched = (date: string) => ({ ...MATCHED, punch_in: `${date}T07:00:00`, punch_out: `${date}T16:30:00` })
+    const cells = [1, 2].flatMap((id) => days.filter((d) => d.is_workday && d.date < today).map((d) => cell(id, d.date, { actual: punched(d.date) })))
+    return grid({ today, days, cells: [...cells.filter((c) => !extra.some((e) => e.employee_id === c.employee_id && e.date === c.date)), ...extra] })
+  }
+
+  beforeEach(() => {
+    anchor.value = '2026-10-16'
+    useGrid(() => octGrid('2026-10-24'))
+  })
+
+  it('桌機：今天 10/24、10/1–10/23 都已匯入、沒有待辦也沒有輪次：目前步驟落在步驟 1，步驟 5 寫月底後開放', async () => {
+    const wrapper = mountBar()
+    await flushPromises()
+    expect(api.grid).toHaveBeenCalledWith({ start_date: '2026-10-01', end_date: '2026-10-31' })
+    const current = wrapper.findAll('[aria-current="step"]')
+    expect(current).toHaveLength(1)
+    expect(current[0].text()).toContain('打卡匯入')
+    expect(text(wrapper, '[data-test="progress-import"]')).toContain('已匯入至 10/23，月底後再匯入')
+    expect(text(wrapper, '[data-test="progress-salary"]')).toContain('月底後開放')
+    expect(wrapper.text()).not.toContain('可以交了')
+    expect(wrapper.emitted('summary')!.at(-1)![0]).toMatchObject({ step: 'waiting', monthEnded: false })
+  })
+
+  it('手機膠囊：沒有主要動作（按了也不送 primary），主文不是交薪資', async () => {
+    perms.set = new Set(['SCHEDULE', 'ATTENDANCE_READ', 'ATTENDANCE_WRITE', 'SALARY_READ'])
+    const wrapper = mountBar({ mobile: true })
+    await flushPromises()
+    expect(wrapper.get(CAPSULE_MAIN).text()).toBe('已匯入至 10/23，月底後再匯入')
+    expect(wrapper.get(CAPSULE_SUB).text()).toBe('交薪資月底後開放')
+    expect(wrapper.get('[data-test="progress-capsule"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-test="progress-capsule"]').trigger('click')
+    expect(wrapper.emitted('primary')).toBeUndefined()
+    // 展開看進度時，目前步驟同樣落在步驟 1
+    await wrapper.get('[data-test="progress-toggle"]').trigger('click')
+    expect(wrapper.get('[aria-current="step"]').text()).toContain('打卡匯入')
+  })
+
+  it('已有進行中的輪次（還有人沒回覆）：維持老師確認；副文不說回覆完就能交薪資', async () => {
+    api.rounds.mockResolvedValue({ data: [ROUND] })
+    api.round.mockResolvedValue({ data: { round: ROUND, items: [], employees: [progressEmp(1, 0), progressEmp(2, 1)] } })
+    const desktop = mountBar()
+    await flushPromises()
+    expect(desktop.get('[aria-current="step"]').text()).toContain('老師確認換班')
+    expect(desktop.emitted('summary')!.at(-1)![0]).toMatchObject({ step: 'confirm' })
+    const mobile = mountBar({ mobile: true })
+    await flushPromises()
+    expect(mobile.get(CAPSULE_MAIN).text()).toBe('等老師回覆換班')
+    expect(mobile.get(CAPSULE_SUB).text()).toBe('已回覆 1 / 2，月底後才能交薪資')
+  })
+
+  it('月中還有逐日待辦：照常停在逐日待辦、給處理待辦的按鈕；副文說處理完月底再交薪資', async () => {
+    useGrid(() => octGrid('2026-10-24', [cell(1, '2026-10-20', { actual: { ...ANOMALY, punch_in: '2026-10-20T07:00:00' } })]))
+    const wrapper = mountBar({ mobile: true })
+    await flushPromises()
+    expect(wrapper.get(CAPSULE_MAIN).text()).toBe('處理待辦・剩 1 件')
+    expect(wrapper.get(CAPSULE_SUB).text()).toBe('處理完後，月底再交薪資')
+    expect(wrapper.emitted('summary')!.at(-1)![0]).toMatchObject({ step: 'daily' })
+  })
+
+  it('沒有出勤讀取權限的人月中也不給交薪資：步驟 5 寫月底後開放，膠囊也不能點', async () => {
+    perms.set = new Set(['SCHEDULE', 'SALARY_READ'])
+    const desktop = mountBar()
+    await flushPromises()
+    expect(desktop.findAll('li')).toHaveLength(1)
+    expect(text(desktop, '[data-test="progress-salary"]')).toContain('月底後開放')
+    expect(desktop.emitted('summary')!.at(-1)![0]).toMatchObject({ step: 'waiting' })
+    const mobile = mountBar({ mobile: true })
+    await flushPromises()
+    expect(mobile.get(CAPSULE_MAIN).text()).toBe('交薪資月底後開放')
+    expect(mobile.get('[data-test="progress-capsule"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('月份過完（今天 11/1）回到原本：目前步驟是交薪資、可以交了', async () => {
+    useGrid(() => octGrid('2026-11-01'))
+    const wrapper = mountBar()
+    await flushPromises()
+    expect(wrapper.get('[aria-current="step"]').text()).toContain('交薪資')
+    expect(text(wrapper, '[data-test="progress-salary"]')).toContain('可以交了')
+    expect(wrapper.emitted('summary')!.at(-1)![0]).toMatchObject({ step: 'payroll', monthEnded: true })
+  })
+
+  it('讀輪次失敗：月中不暗示可以交薪資（等月底）；月底後才停在老師確認', async () => {
+    api.rounds.mockRejectedValue(new Error('x'))
+    const mid = mountBar()
+    await flushPromises()
+    expect(mid.get('[aria-current="step"]').text()).toContain('打卡匯入')
+    expect(mid.text()).not.toContain('可以交了')
+    useGrid(() => octGrid('2026-11-01'))
+    const ended = mountBar()
+    await flushPromises()
+    expect(ended.get('[aria-current="step"]').text()).toContain('老師確認換班')
   })
 })

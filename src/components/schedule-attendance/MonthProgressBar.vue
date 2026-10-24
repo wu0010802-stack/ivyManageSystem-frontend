@@ -52,7 +52,7 @@
       </div>
 
       <ol v-if="showSteps" :id="stepsId" class="month-progress__steps" :aria-label="`${monthNumber} 月結算進度`">
-        <li v-if="canViewAttendance" class="month-progress__step" :class="{ 'is-current': step === 'import' }" :aria-current="step === 'import' ? 'step' : undefined">
+        <li v-if="canViewAttendance" class="month-progress__step" :class="{ 'is-current': importIsCurrent }" :aria-current="importIsCurrent ? 'step' : undefined">
           <!-- 匯入要 ATTENDANCE_WRITE（同頁首匯入鈕）；只有讀取權限時只顯示進度，不給可點的入口 -->
           <button v-if="canWriteAttendance" type="button" class="month-progress__action" data-test="progress-import" @click="emit('import')">
             <span class="month-progress__name">打卡匯入</span>
@@ -245,12 +245,16 @@ const step = computed<MonthStep | null>(() => {
   const s = summary.value
   if (!s) return null
   if (s.sealState === 'sealed') return 'done'
-  if (!canViewAttendance) return 'payroll'
+  // 月份還沒過完不論有沒有匯入資料可看，都還不能交薪資
+  if (!canViewAttendance) return s.monthEnded ? 'payroll' : 'waiting'
   if (canConfirmRounds && !roundsReady.value) return null
   const next = currentStep(s, confirmOutstanding.value)
   // 老師確認狀態讀不到＝未知，視為仍需確認：停在這一步，絕不在未知時暗示可以交薪資
+  // （月中是 waiting、本來就不暗示可以交薪資，不在此列）
   return next === 'payroll' && roundsFailed.value ? 'confirm' : next
 })
+/** 步驟 1 是目前這步：該匯入，或前面都做完了、只剩等月底再匯入 */
+const importIsCurrent = computed(() => step.value === 'import' || step.value === 'waiting')
 
 // 頁首主要動作與匯出月報前的提醒用同一份摘要；載入失敗不送（避免拿 0 當「都處理完了」）
 const emittedSummary = computed(() => (summary.value && step.value ? { ...summary.value, step: step.value } : null))
@@ -280,6 +284,7 @@ const md = (iso: string) => {
 const importValue = computed(() => {
   const s = summary.value
   if (!s) return placeholder.value
+  if (step.value === 'waiting') return `已匯入至 ${md(s.importedThrough)}，月底後再匯入`
   const { lastCovered, missingWorkdays } = s.importStatus
   if (!lastCovered) return '還沒匯入'
   if (missingWorkdays.length) return `缺 ${missingWorkdays.length} 個工作日`
@@ -311,7 +316,8 @@ const roundsValue = computed(() => {
 })
 const payrollValue = computed(() => {
   if (!summary.value) return placeholder.value
-  return step.value === 'payroll' ? '可以交了' : '前面完成後開放'
+  if (step.value === 'payroll') return '可以交了'
+  return step.value === 'waiting' ? '月底後開放' : '前面完成後開放'
 })
 
 // ── 手機膠囊 ────────────────────────────────────────────────────────────────
@@ -330,6 +336,8 @@ const capsuleMain = computed(() => {
   if (!s || !current) return loadError.value ? '—' : '載入本月進度…'
   // 等老師回覆沒有行政能按的動作，主文改寫在等什麼
   if (current === 'confirm') return '等老師回覆換班'
+  // 月份還沒過完、前面都做完了：沒有動作可按。看得到匯入進度的人寫匯入到哪天；看不到的只剩交薪資一步
+  if (current === 'waiting') return canViewAttendance ? importValue.value : '交薪資月底後開放'
   // 沒有權限時字照寫（讓人知道下一步是什麼），只是不能點
   return primaryLabel(s, current) ?? ''
 })
@@ -344,10 +352,14 @@ const capsuleSub = computed(() => {
     case 'patterns':
       return `修好可清掉 ${s.patternIssueCount} 件${s.dailyIssueCount > 0 ? `，之後還有 ${s.dailyIssueCount} 件逐日待辦` : ''}`
     case 'daily':
-      return confirmOutstanding.value > 0 ? '處理完後，等老師回覆換班再交薪資' : '處理完就可以交薪資'
+      if (confirmOutstanding.value > 0) return '處理完後，等老師回覆換班再交薪資'
+      return s.monthEnded ? '處理完就可以交薪資' : '處理完後，月底再交薪資'
     case 'confirm':
       if (roundsFailed.value) return '讀不到老師確認的狀態，先確認再交薪資'
-      return roundProgress.value ? `已回覆 ${roundProgress.value.replied} / ${roundProgress.value.total}，回覆完就可以交薪資` : ''
+      if (!roundProgress.value) return ''
+      return `已回覆 ${roundProgress.value.replied} / ${roundProgress.value.total}，${s.monthEnded ? '回覆完就可以交薪資' : '月底後才能交薪資'}`
+    case 'waiting':
+      return canViewAttendance ? '交薪資月底後開放' : ''
     case 'payroll':
       return '前面的步驟都完成了'
     default:
