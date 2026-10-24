@@ -235,3 +235,74 @@ describe('MonthGrid 第五輪審查', () => {
     expect(wrapper.emitted('show-patterns')).toHaveLength(1)
   })
 })
+
+describe('MonthGrid 1280 寬放得下整月（第六輪）', () => {
+  // 10/2 週五、10/3 週六、10/4 週日、10/9 週五（放假）、10/12 週一
+  const MIX_DAYS = [
+    day('2026-10-02'),
+    day('2026-10-03'),
+    day('2026-10-04'),
+    day('2026-10-09', { is_holiday: true, is_workday: false, holiday_name: '國慶日補假' }),
+    day('2026-10-12'),
+  ]
+  const MIX_CELLS = [
+    cell(1, '2026-10-02', { plan: { name: '早車' } }),
+    // 週六有人上班且當天異常：欄很窄，格內只放點，不放縮寫
+    cell(1, '2026-10-03', { plan: { name: '早車', expected: true }, actual: { status: 'anomaly' } }),
+    cell(1, '2026-10-04', { plan: { expected: false } }),
+    cell(1, '2026-10-09', { plan: { expected: false }, leaves: [LEAVE] }),
+    cell(1, '2026-10-12', { plan: { name: '早車' } }),
+  ]
+  const mountMix = () => {
+    const g = grid({ days: MIX_DAYS, cells: MIX_CELLS, today: '2026-10-12', employees: [employee(1, '林班導')] })
+    return mount(MonthGrid, { props: { groups: g.groups, employees: g.employees, days: g.days, cells: indexCells(g.cells), today: g.today, filter: 'all' } })
+  }
+  const css = readFileSync(resolve(__dirname, '../MonthGrid.vue'), 'utf8')
+
+  it('非工作日（週末、假日）的欄頭與格子都加 month-grid__day--off；工作日不加', () => {
+    const wrapper = mountMix()
+    const heads = wrapper.findAll('thead th.month-grid__day').map((th) => th.classes().includes('month-grid__day--off'))
+    expect(heads).toEqual([false, true, true, true, false])
+    const cellWrap = (date: string) => wrapper.get(`[data-test="mcell-1-${date}"]`).element.parentElement!
+    expect(['2026-10-03', '2026-10-04', '2026-10-09'].map((d) => cellWrap(d).classList.contains('month-grid__day--off'))).toEqual([true, true, true])
+    expect(['2026-10-02', '2026-10-12'].map((d) => cellWrap(d).classList.contains('month-grid__day--off'))).toEqual([false, false])
+    // 假日名仍在欄頭 title
+    expect(wrapper.findAll('thead th.month-grid__day')[3].attributes('title')).toBe('國慶日補假')
+  })
+
+  it('非工作日的格子不放文字只放點（欄只有 20px 寬）；工作日的格子照舊放縮寫', () => {
+    const wrapper = mountMix()
+    const sat = wrapper.get('[data-test="mcell-1-2026-10-03"]')
+    expect(sat.find('.month-grid__abbr').exists()).toBe(false)
+    expect(sat.text()).toBe('')
+    expect(wrapper.find('[data-test="mdot-1-2026-10-03"]').classes()).toContain('month-grid__dot--deduct')
+    // 放假日請假的點也在
+    expect(wrapper.find('[data-test="mdot-1-2026-10-09"]').classes()).toContain('month-grid__dot--leave')
+    // 報讀仍念得到計畫（不靠格內文字）
+    expect(sat.attributes('aria-label')).toContain('早車')
+    expect(wrapper.get('[data-test="mcell-1-2026-10-02"]').text()).toBe('早車')
+  })
+
+  it('人員欄：姓名單行省略（title 為全名）、職稱在第二行', () => {
+    const th = mountMix().get('th.month-grid__person')
+    const name = th.get('.month-grid__name')
+    expect(name.text()).toBe('林班導')
+    expect(name.attributes('title')).toBe('林班導')
+    expect(th.get('.month-grid__role').text()).toBe('班導')
+    const rule = (cls: string) => css.match(new RegExp(`\\.${cls} \\{([^}]*)\\}`))?.[1] ?? ''
+    expect(rule('month-grid__name')).toContain('text-overflow: ellipsis')
+    expect(rule('month-grid__name')).toContain('white-space: nowrap')
+    expect(rule('month-grid__role')).toContain('display: block')
+    expect(rule('month-grid__role')).toContain('font-size: var(--text-xs)') // 12px
+  })
+
+  it('欄寬下限：人員 88、工作日 30、非工作日 20、格高 36；30 欄（20 工作日＋10 非工作日）合計放得進 1280 寬的內容區（約 924px）', () => {
+    const px = (re: RegExp) => Number(css.match(re)![1])
+    const person = px(/\.month-grid__person \{[^}]*min-width: (\d+)px/)
+    const weekday = px(/\.month-grid__day \{[^}]*min-width: (\d+)px/)
+    const off = px(/\.month-grid__day--off \{[^}]*min-width: (\d+)px/)
+    expect([person, weekday, off]).toEqual([88, 30, 20])
+    expect(px(/\.month-grid__cell \{[^}]*min-height: (\d+)px/)).toBe(36)
+    expect(person + weekday * 20 + off * 10).toBeLessThanOrEqual(924)
+  })
+})

@@ -41,7 +41,8 @@
             </tr>
             <tr v-for="emp in section.employees" :key="emp.employee_id" :data-test="`mrow-${emp.employee_id}`">
               <th scope="row" class="month-grid__person">
-                {{ emp.name }}<span v-if="emp.role_label" class="month-grid__role">{{ emp.role_label }}</span>
+                <span class="month-grid__name" :title="emp.name">{{ emp.name }}</span>
+                <span v-if="emp.role_label" class="month-grid__role">{{ emp.role_label }}</span>
                 <button
                   v-if="personNotes?.[emp.employee_id]"
                   type="button"
@@ -52,7 +53,7 @@
                   @click="emit('show-patterns')"
                 >{{ personNotes[emp.employee_id].tag }}</button>
               </th>
-              <td v-for="d in shownDays" :key="d.date" class="month-grid__cell-wrap">
+              <td v-for="d in shownDays" :key="d.date" class="month-grid__cell-wrap" :class="{ 'month-grid__day--off': !d.is_workday }">
                 <button
                   v-if="cellOf(emp.employee_id, d.date)"
                   type="button"
@@ -63,7 +64,8 @@
                   :data-test="`mcell-${emp.employee_id}-${d.date}`"
                   @click="emit('select', emp.employee_id, d.date)"
                 >
-                  <span class="month-grid__abbr">{{ monthCellText(cellOf(emp.employee_id, d.date)!) }}</span>
+                  <!-- 非工作日的欄只有 20px 寬放不下縮寫：只放點（報讀仍念得到計畫） -->
+                  <span v-if="d.is_workday" class="month-grid__abbr">{{ monthCellText(cellOf(emp.employee_id, d.date)!) }}</span>
                   <span
                     v-if="dotOf(emp.employee_id, d.date)"
                     class="month-grid__dot verdict-shape"
@@ -215,20 +217,25 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .month-grid__table thead { position: sticky; top: 0; z-index: var(--z-sticky); }
 .month-grid__table thead th { background: var(--el-bg-color); font-weight: 600; }
 /* 下面 corner／person／day／group 一律帶 .month-grid__table 前綴：通用規則 `.month-grid__table th` 優先序較高，不加前綴 padding／text-align 會被它蓋掉 */
-.month-grid__table .month-grid__corner, .month-grid__table .month-grid__person { position: sticky; left: 0; min-width: 120px; padding: var(--space-1) var(--space-2); background: var(--el-bg-color); text-align: left; }
+/* 1280 寬的內容區約 924px，要放得下 30 欄：人員 88＋工作日 30×20＋非工作日 20×10＝888 */
+.month-grid__table .month-grid__corner, .month-grid__table .month-grid__person { position: sticky; left: 0; min-width: 88px; padding: var(--space-1) var(--space-2); background: var(--el-bg-color); text-align: left; }
 .month-grid__table .month-grid__person { z-index: calc(var(--z-sticky) - 1); font-weight: 400; }
 .month-grid__table thead .month-grid__corner { z-index: calc(var(--z-sticky) + 1); }
-.month-grid__role { margin-left: var(--space-1); font-size: var(--text-xs); color: var(--el-text-color-secondary); }
+/* 姓名單行省略（title 看全名）、職稱獨立第二行；max-width＝欄寬下限 88px 扣左右 padding 各 8px，長名字才不會把人員欄撐寬 */
+.month-grid__name { display: block; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.month-grid__role { display: block; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--el-text-color-secondary); }
 .month-grid__note { display: block; padding: 0; border: 0; background: transparent; font: inherit; color: var(--color-warning-darker); font-size: var(--text-xs); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .month-grid__note:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .month-grid__week-btn { width: 100%; min-height: var(--touch-target-min); border: 0; border-bottom: 1px solid var(--el-border-color-light); background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; }
 .month-grid__week-btn:hover { background: var(--el-fill-color-light); }
-.month-grid__table .month-grid__day { min-width: 40px; padding: var(--space-1) 0; }
+.month-grid__table .month-grid__day { min-width: 30px; padding: var(--space-1) 0; }
+/* 非工作日（週末、假日）的欄收窄到只放得下日期與一個點：格內不放縮寫（欄頭與格子都帶這個 class） */
+.month-grid__table .month-grid__day--off { min-width: 20px; }
 .month-grid__weekday { display: block; font-size: var(--text-xs); font-weight: 400; color: var(--el-text-color-secondary); }
 .month-grid__day--off { color: var(--el-text-color-secondary); }
 .month-grid__day--today { box-shadow: inset 0 -2px 0 var(--el-color-primary); }
 .month-grid__table .month-grid__group th { padding: var(--space-1) var(--space-2); background: var(--el-fill-color-light); text-align: left; font-weight: 600; }
-.month-grid__cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; min-height: 40px; padding: var(--space-1) 0; border: 0; background: transparent; color: var(--el-text-color-primary); font: inherit; cursor: pointer; }
+.month-grid__cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; min-height: 36px; padding: var(--space-1) 0; border: 0; background: transparent; color: var(--el-text-color-primary); font: inherit; cursor: pointer; }
 .month-grid__cell:hover:not(:disabled) { background: var(--el-fill-color-light); }
 .month-grid__cell:disabled { cursor: default; }
 .month-grid__cell--off { background: var(--el-fill-color-lighter); }

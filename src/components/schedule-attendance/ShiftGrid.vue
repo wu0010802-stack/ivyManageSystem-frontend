@@ -16,7 +16,9 @@
           <th scope="col" class="shift-grid__corner">人員</th>
           <th v-for="d in shownDays" :key="d.date" scope="col" class="shift-grid__day" :class="{ 'shift-grid__day--off': !d.is_workday, 'shift-grid__day--today': d.date === today }" :data-test="`day-${d.date}`">
             <span class="shift-grid__date">{{ dayLabel(d) }}<span v-if="d.date === today" class="shift-grid__today">今天</span></span>
-            <el-tag v-if="d.is_holiday" size="small" type="info">{{ d.holiday_name || '假日' }}</el-tag>
+            <!-- 假日名可能很長（「中華民國開國紀念日補假」）：外層不計入欄的內容寬，tag 最寬到欄寬、超出省略，外層 title 看全名
+                 （title 放外層：el-tag 根是 transition，屬性落點隨環境不同） -->
+            <span v-if="d.is_holiday" class="shift-grid__holiday" :title="d.holiday_name || '假日'"><el-tag size="small" type="info">{{ d.holiday_name || '假日' }}</el-tag></span>
             <el-tag v-else-if="d.is_makeup_workday" size="small" type="warning">補班</el-tag>
             <el-tag v-if="d.is_workday && d.import_covered === false && d.date < today" size="small" type="info" :data-test="`not-imported-${d.date}`">未匯入</el-tag>
             <span
@@ -502,6 +504,10 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__table thead .shift-grid__day--off { min-width: 72px; width: 72px; }
 .shift-grid__day .shift-grid__date { white-space: nowrap; }
 .shift-grid__day .el-tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* width 0＋min-width 100%：欄寬算內容時這層是 0，排好版又撐滿欄寬；沒有它，nowrap 的假日名會把表格欄撐到比下限還寬 */
+.shift-grid__holiday { display: block; width: 0; min-width: 100%; }
+.shift-grid__holiday .el-tag { max-width: 100%; }
+.shift-grid__holiday :deep(.el-tag__content) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shift-grid__day--today { color: var(--el-color-primary); }
 .shift-grid__today { margin-left: var(--space-1); padding: 0 var(--space-1); border-radius: var(--radius-sm); background: var(--el-color-primary); color: var(--el-color-white); font-size: var(--text-xs); font-weight: 600; }
 .shift-grid__group-label { position: sticky; left: var(--space-2); }

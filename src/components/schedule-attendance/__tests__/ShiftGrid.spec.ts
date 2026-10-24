@@ -830,3 +830,30 @@ describe('ShiftGrid 手機預設選取日（第六輪）', () => {
     expect(rule).toMatch(/background: var\(--bg-color\)/)
   })
 })
+
+describe('ShiftGrid 欄頭假日名（第六輪）', () => {
+  const NAME = '中華民國開國紀念日補假'
+  const holidayDays = () => WEEK.map((d) => (d === WEEK[1] ? day(d, { is_holiday: true, holiday_name: NAME }) : day(d)))
+
+  it('假日 tag 的 title 是完整名稱（欄窄時 tag 內文會省略）', () => {
+    const wrapper = mountGrid({ days: holidayDays() })
+    const holiday = wrapper.get(`[data-test="day-${WEEK[1]}"] .shift-grid__holiday`)
+    expect(holiday.get('.el-tag').text()).toBe(NAME)
+    expect(holiday.attributes('title')).toBe(NAME)
+  })
+
+  it('沒有假日名時 tag 寫「假日」，title 也是「假日」', () => {
+    const wrapper = mountGrid({ days: WEEK.map((d) => (d === WEEK[1] ? day(d, { is_holiday: true }) : day(d))) })
+    const holiday = wrapper.get(`[data-test="day-${WEEK[1]}"] .shift-grid__holiday`)
+    expect([holiday.get('.el-tag').text(), holiday.attributes('title')]).toEqual(['假日', '假日'])
+  })
+
+  it('假日 tag 不撐寬欄：外層不計入欄的內容寬（width 0、min-width 100%），tag 最寬到欄寬並以省略號收尾', () => {
+    const css = readFileSync(resolve(__dirname, '../ShiftGrid.vue'), 'utf8')
+    const rule = (selector: string) => css.match(new RegExp(`${selector} \\{([^}]*)\\}`))?.[1] ?? ''
+    expect(rule('\\.shift-grid__holiday')).toContain('width: 0')
+    expect(rule('\\.shift-grid__holiday')).toContain('min-width: 100%')
+    expect(rule('\\.shift-grid__holiday \\.el-tag')).toContain('max-width: 100%')
+    expect(rule('\\.shift-grid__holiday :deep\\(\\.el-tag__content\\)')).toContain('text-overflow: ellipsis')
+  })
+})
