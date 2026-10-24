@@ -99,7 +99,7 @@
 
     <!-- 手機：只有週模式，選一天 → 人員卡片 -->
     <template v-else>
-      <div class="shift-grid__day-picker" role="tablist" aria-label="選擇日期">
+      <div ref="dayPicker" class="shift-grid__day-picker" role="tablist" aria-label="選擇日期">
         <button
           v-for="d in shownDays"
           :key="d.date"
@@ -166,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { DayCoverage, ShiftGap } from '@/utils/scheduleCoverage'
 import {
   cellDisplay,
@@ -232,21 +232,6 @@ const emit = defineEmits<{
 /** 桌機欄與手機日期頁籤：「只看未來可排」只留今天以後（過去的格子不能排） */
 const shownDays = computed(() => (props.filter === 'future' ? props.days.filter((d) => d.date > props.today) : props.days))
 
-function pickDay(): string {
-  return shownDays.value.find((d) => d.date === props.today)?.date ?? shownDays.value[0]?.date ?? ''
-}
-
-const mobileDay = ref(pickDay())
-watch(
-  () => shownDays.value.map((d) => d.date).join(','),
-  () => {
-    if (!shownDays.value.some((d) => d.date === mobileDay.value)) {
-      mobileDay.value = pickDay()
-    }
-  },
-)
-const mobileDayInfo = computed(() => shownDays.value.find((d) => d.date === mobileDay.value))
-
 const cellOf = (employeeId: number, date: string) => props.cells.get(cellKey(employeeId, date))
 
 const caption = computed(() => props.mode === 'plan'
@@ -293,21 +278,24 @@ const kinds = computed(() => {
   return map
 })
 /**
- * 退到背景的格子跟著篩選走，眼睛只停在這個篩選要看的格子：
- * 有待辦＝非型態的待辦格才不退（型態格算設定問題）；設定問題＝只有型態格不退；封存時未處理＝只有封存遺留不退；
- * 全部、只看未來可排不退任何格子。
+ * 這個篩選要看的格子：有待辦＝非型態的待辦格（型態格算設定問題）；設定問題＝型態格；封存時未處理＝封存遺留；
+ * 全部、只看未來可排＝待辦。退背景（quietKeys）與手機預設選取日共用同一個判斷。
  */
+function isFocusCell(cell: GridCell, key: string): boolean {
+  if (props.filter === 'patterns') return !!props.patternKeys?.has(key)
+  if (props.filter === 'leftover') return isSealedLeftover(cell, props.today, uncovered.value)
+  if (props.filter === 'issues') return isIssue(cell, props.today, uncovered.value) && !props.patternKeys?.has(key)
+  return isIssue(cell, props.today, uncovered.value)
+}
+/** 退到背景的格子跟著篩選走，眼睛只停在這個篩選要看的格子；全部、只看未來可排不退任何格子 */
 const quietKeys = computed(() => {
   const keys = new Set<string>()
-  const focus = (cell: GridCell, key: string): boolean => {
-    if (props.filter === 'issues') return isIssue(cell, props.today, uncovered.value) && !props.patternKeys?.has(key)
-    if (props.filter === 'patterns') return !!props.patternKeys?.has(key)
-    return isSealedLeftover(cell, props.today, uncovered.value)
-  }
   if (props.filter !== 'issues' && props.filter !== 'patterns' && props.filter !== 'leftover') return keys
-  for (const [key, cell] of props.cells) if (!focus(cell, key)) keys.add(key)
+  for (const [key, cell] of props.cells) if (!isFocusCell(cell, key)) keys.add(key)
   return keys
 })
+/** 待辦格（被突出的格子）：排班沒有判定可看，不算 */
+const isTodoCell = (cell: GridCell, key: string): boolean => props.mode === 'reconcile' && isFocusCell(cell, key)
 const display = (employeeId: number, date: string): CellDisplay => displays.value.get(cellKey(employeeId, date))!
 const kindOf = (employeeId: number, date: string): VerdictKind | null => kinds.value.get(cellKey(employeeId, date)) ?? null
 /** 判定文字本身是待辦（要畫形狀、加粗）；只有老師確認提示行是待辦的格子，判定（例如符合原班表）維持中性 */
@@ -335,6 +323,50 @@ const sections = computed(() =>
 )
 const visibleRows = computed(() => sections.value.flatMap((section) => section.employees))
 const rowIndex = computed(() => new Map(visibleRows.value.map((emp, i) => [emp.employee_id, i])))
+
+/**
+ * 手機預設選取日：本週 ≤ 今天且有待辦的最晚一天；沒有就 ≤ 今天的最晚工作日；再沒有（整週在今天之後）就第一個工作日。
+ * 「有待辦」＝畫面上看得到的那些人在這天有被這個篩選突出的格子（isTodoCell），所以從「看這 N 件（封存時未處理）」
+ * 跳過來會落在有遺留的那天。
+ */
+function pickDay(): string {
+  const days = shownDays.value
+  // 由晚到早（tsconfig lib 是 ES2020，沒有 findLast）
+  const upToToday = days.filter((d) => d.date <= props.today).reverse()
+  const hasTodo = (date: string): boolean =>
+    visibleRows.value.some((emp) => {
+      const key = cellKey(emp.employee_id, date)
+      const cell = props.cells.get(key)
+      return !!cell && isTodoCell(cell, key)
+    })
+  return (
+    upToToday.find((d) => hasTodo(d.date))?.date ??
+    upToToday.find((d) => d.is_workday)?.date ??
+    days.find((d) => d.is_workday)?.date ??
+    days[0]?.date ??
+    ''
+  )
+}
+
+const mobileDay = ref(pickDay())
+// 換週（選的那天不在新的日子裡）才重算；同一週重抓資料時不動使用者自己選的日子
+watch(
+  () => shownDays.value.map((d) => d.date).join(','),
+  () => {
+    if (!shownDays.value.some((d) => d.date === mobileDay.value)) {
+      mobileDay.value = pickDay()
+    }
+  },
+)
+const mobileDayInfo = computed(() => shownDays.value.find((d) => d.date === mobileDay.value))
+
+/** 選取的日期 chip 捲到橫向置中（一週 7 顆在窄螢幕放不下）；block nearest 不拉動頁面垂直捲動 */
+const dayPicker = ref<HTMLElement | null>(null)
+function revealSelectedDay(): void {
+  dayPicker.value?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView?.({ inline: 'center', block: 'nearest' })
+}
+onMounted(revealSelectedDay)
+watch([mobileDay, () => props.mobile], revealSelectedDay, { flush: 'post' })
 
 /** 方向鍵在格子間移動（Tab 要走過每一格和每列的班別下拉，整週 35 人走不完）；略過停用的格子 */
 const ARROWS: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }
@@ -533,6 +565,10 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .shift-grid__leave { font-size: var(--text-xs); color: var(--el-text-color-regular); }
 .shift-grid__confirm { font-size: var(--text-xs); color: var(--verdict-color, var(--el-text-color-secondary)); }
 .shift-grid__day-picker { display: flex; gap: var(--space-1); overflow-x: auto; margin-bottom: var(--space-3); }
+/* 手機：往下捲人員卡片時日期列固定在捲動區（main.el-main）頂端，不用捲回去才能換天；要不透明底，卡片從底下捲過才不透字 */
+@media (--to-sm) {
+  .shift-grid__day-picker { position: sticky; top: 0; z-index: var(--z-sticky); padding: var(--space-1) 0; background: var(--bg-color); }
+}
 .shift-grid__day-tab { min-height: var(--touch-target-min); padding: 0 var(--space-2); border: 1px solid var(--el-border-color); border-radius: var(--radius-md); background: var(--el-bg-color); font: inherit; white-space: nowrap; }
 .shift-grid__day-tab--active { border-color: var(--el-color-primary); color: var(--el-color-primary); font-weight: 600; }
 .shift-grid__mobile-group h3 { margin: var(--space-3) 0 var(--space-2); font-size: var(--text-sm); }

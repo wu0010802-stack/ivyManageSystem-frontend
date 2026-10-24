@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
@@ -703,5 +703,130 @@ describe('ShiftGrid 核對／排班兩種模式', () => {
     expect(card.text()).toContain('事假')
     expect(card.text()).not.toContain('08:30–18:00')
     expect(card.text()).not.toContain('出勤異常')
+  })
+})
+
+// ── 第六輪：手機預設日與日期列固定（任務 9）──────────────────────────────
+// 2026-10-24 是週六（今天）；本週一到日＝10/19–10/25
+const OCT = [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysISO('2026-10-19', i))
+const OCT_TODAY = '2026-10-24'
+const OCT_ANOMALY = { status: 'anomaly' as const }
+
+function octCells(overrides: Record<string, Parameters<typeof cell>[2]> = {}, dates: string[] = OCT): GridCell[] {
+  return [1, 2, 3].flatMap((id) =>
+    dates.map((date) => cell(id, date, overrides[`${id}|${date}`] ?? { plan: { expected: day(date).is_workday } })),
+  )
+}
+
+function mountOct(opts: Parameters<typeof mountGrid>[0] & { overrides?: Record<string, Parameters<typeof cell>[2]> } = {}) {
+  const { overrides, ...rest } = opts
+  return mountGrid({ mobile: true, today: OCT_TODAY, days: OCT.map((d) => day(d)), cells: octCells(overrides), ...rest })
+}
+
+const selectedDay = (wrapper: ReturnType<typeof mountGrid>): string | undefined =>
+  wrapper.findAll('[role="tab"]').find((tab) => tab.attributes('aria-selected') === 'true')?.attributes('data-test')?.replace('mobile-day-', '')
+
+describe('ShiftGrid 手機預設選取日（第六輪）', () => {
+  const scrolled: Array<{ el: HTMLElement; arg: unknown }> = []
+  beforeEach(() => {
+    scrolled.length = 0
+    // happy-dom 沒有 scrollIntoView
+    Element.prototype.scrollIntoView = vi.fn(function (this: HTMLElement, arg?: unknown) { scrolled.push({ el: this, arg }) }) as never
+  })
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+  })
+
+  it('今天是週六、週四有待辦：選週四（≤ 今天且有待辦的最晚一天，不選更早的週二）', () => {
+    const wrapper = mountOct({ overrides: { [`2|${OCT[1]}`]: { actual: OCT_ANOMALY }, [`2|${OCT[3]}`]: { actual: OCT_ANOMALY } } })
+    expect(selectedDay(wrapper)).toBe(OCT[3])
+  })
+
+  it('沒有待辦：選 ≤ 今天的最晚工作日（週五），不選週六那種非工作日', () => {
+    expect(selectedDay(mountOct())).toBe(OCT[4])
+    expect(selectedDay(mountOct({ showAllDays: true }))).toBe(OCT[4])
+  })
+
+  it('封存格不算待辦（點進去只會 409）：週四只有封存遺留時，預設選週五', () => {
+    const wrapper = mountOct({ overrides: { [`2|${OCT[3]}`]: { actual: OCT_ANOMALY, edit: { locked_reason: 'finalized' } } } })
+    expect(selectedDay(wrapper)).toBe(OCT[4])
+  })
+
+  it('不選今天以後的日子：今天是週三，只有週五有進行中的老師確認時選週三', () => {
+    const confirmation = { item_id: 9, round_id: 2, kind: 'swap' as const, status: 'pending' as const, partner_employee_id: 2 }
+    const wrapper = mountOct({ today: OCT[2], overrides: { [`1|${OCT[4]}`]: { actual: {}, confirmation } } })
+    expect(selectedDay(wrapper)).toBe(OCT[2])
+  })
+
+  it('今天以前的工作日都沒有（整週在未來）：選本週第一個工作日', () => {
+    const wrapper = mountOct({ today: addDaysISO(OCT[0], -3) })
+    expect(selectedDay(wrapper)).toBe(OCT[0])
+  })
+
+  it('有待辦的判斷跟著篩選走：封存時未處理＝只認封存遺留；有待辦＝逐日待辦；型態格（設定問題）不算有待辦', () => {
+    // 王：週三封存時沒處理、週四逐日待辦（同一個人，兩種遺留並存）
+    const overrides = {
+      [`2|${OCT[2]}`]: { actual: OCT_ANOMALY, edit: { locked_reason: 'finalized' as const } },
+      [`2|${OCT[3]}`]: { actual: OCT_ANOMALY },
+    }
+    expect(selectedDay(mountOct({ overrides, filter: 'leftover' }))).toBe(OCT[2])
+    expect(selectedDay(mountOct({ overrides, filter: 'issues' }))).toBe(OCT[3])
+    // 週四那格是整月同型態（設定問題）→「有待辦」篩選下它退背景，不算被突出的格子，改選週二的逐日待辦
+    const withPattern = { [`2|${OCT[1]}`]: { actual: OCT_ANOMALY }, [`2|${OCT[3]}`]: { actual: OCT_ANOMALY } }
+    const patternKeys = new Set([`2|${OCT[3]}`])
+    expect(selectedDay(mountOct({ overrides: withPattern, filter: 'issues', patternKeys, patternEmployeeIds: new Set([2]) }))).toBe(OCT[1])
+    // 設定問題篩選：反過來只認型態格
+    expect(selectedDay(mountOct({ overrides: withPattern, filter: 'patterns', patternKeys, patternEmployeeIds: new Set([2]) }))).toBe(OCT[3])
+  })
+
+  it('排班模式不看判定（格子裡沒有待辦可看）：不會因為看不到的異常跳走，選 ≤ 今天的最晚工作日', () => {
+    const wrapper = mountOct({ mode: 'plan', overrides: { [`2|${OCT[1]}`]: { actual: OCT_ANOMALY } } })
+    expect(selectedDay(wrapper)).toBe(OCT[4])
+  })
+
+  it('換週時重算（有待辦的那天／沒有就最晚工作日／整週在未來就第一個工作日）；同一週重抓資料不動使用者選的日子', async () => {
+    const wrapper = mountOct({ overrides: { [`2|${OCT[3]}`]: { actual: OCT_ANOMALY } } })
+    expect(selectedDay(wrapper)).toBe(OCT[3])
+
+    const rangeProps = (dates: string[], overrides: Record<string, Parameters<typeof cell>[2]> = {}) => {
+      const g = grid({ days: dates.map((d) => day(d)), employees: [employee(1, '林班導'), employee(2, '王副導', { role_label: '副班導' }), employee(3, '李廚工', { group_key: 'other', role_label: '廚工' })], cells: octCells(overrides, dates) })
+      return { days: visibleDays(g.days, g.cells), cells: indexCells(g.cells) }
+    }
+    // 上一週：週三有待辦 → 週三
+    const prevWeek = OCT.map((d) => addDaysISO(d, -7))
+    await wrapper.setProps(rangeProps(prevWeek, { [`1|${prevWeek[2]}`]: { actual: OCT_ANOMALY } }))
+    expect(selectedDay(wrapper)).toBe(prevWeek[2])
+    // 下一週：全在今天之後 → 第一個工作日
+    const nextWeek = OCT.map((d) => addDaysISO(d, 7))
+    await wrapper.setProps(rangeProps(nextWeek))
+    expect(selectedDay(wrapper)).toBe(nextWeek[0])
+
+    // 同一週重抓（處理完一件後資料重載）：使用者手動選的日子保留
+    await wrapper.setProps(rangeProps(OCT, { [`2|${OCT[3]}`]: { actual: OCT_ANOMALY } }))
+    expect(selectedDay(wrapper)).toBe(OCT[3])
+    await wrapper.get(`[data-test="mobile-day-${OCT[1]}"]`).trigger('click')
+    await wrapper.setProps(rangeProps(OCT))
+    expect(selectedDay(wrapper)).toBe(OCT[1])
+  })
+
+  it('選取的日期 chip 在掛載與改變時捲到橫向置中（block nearest 不拉動頁面垂直捲動）', async () => {
+    const wrapper = mountOct({ attach: true })
+    const chip = (date: string) => wrapper.get(`[data-test="mobile-day-${date}"]`).element
+    expect(scrolled.map((s) => s.el)).toEqual([chip(OCT[4])])
+    expect(scrolled[0].arg).toEqual({ inline: 'center', block: 'nearest' })
+
+    await wrapper.get(`[data-test="mobile-day-${OCT[1]}"]`).trigger('click')
+    expect(scrolled.map((s) => s.el)).toEqual([chip(OCT[4]), chip(OCT[1])])
+    expect(scrolled[1].arg).toEqual({ inline: 'center', block: 'nearest' })
+    wrapper.unmount()
+  })
+
+  it('日期列在手機寬度（--to-sm）固定在捲動區頂端，且有不透明背景（卡片從底下捲過去不透字）', () => {
+    const css = readFileSync(resolve(__dirname, '../ShiftGrid.vue'), 'utf8')
+    const mobileBlock = css.match(/@media \(--to-sm\) \{([\s\S]*?)\n\}/)?.[1] ?? ''
+    const rule = mobileBlock.match(/\.shift-grid__day-picker \{([^}]*)\}/)?.[1] ?? ''
+    expect(rule).toContain('position: sticky')
+    expect(rule).toContain('top: 0')
+    expect(rule).toMatch(/background: var\(--bg-color\)/)
   })
 })
