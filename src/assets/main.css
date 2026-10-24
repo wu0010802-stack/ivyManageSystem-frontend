@@ -287,16 +287,31 @@ body {
  * 硬蓋背景會讓文字與背景同色（隱形）。
  * 一律排除 .is-disabled：否則 !important 蓋掉 EP 的停用底色，停用鈕看起來跟
  * 可按時一模一樣（守衛：tests/unit/styles/primaryButtonDisabled.spec.ts）。
- * 底色走 --el-color-primary 而非 --color-primary（＝--brand-primary）：實心鈕配白字要 4.5:1，
- * 後台品牌色 #0284c7 只有 4.10:1；--el-color-primary 在後台是深一階的 #0277b5（4.87:1，見上方 html.ivy-admin 區塊），
- * portal／暗色與品牌色同值，租戶換主題時也跟著 EP 的主色走。hover／focus 用 --brand-primary-hover（後台 #0369a1）。 */
+ * 這兩條是所有頁面的基底（底色＝品牌色 --color-primary）；後台的對比修正在下面另一組，只套在 html.ivy-admin。 */
 .el-button--primary:not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled) {
-  background-color: var(--el-color-primary) !important;
-  border-color: var(--el-color-primary) !important;
+  background-color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
 }
 
 .el-button--primary:not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled):hover,
 .el-button--primary:not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled):focus {
+  background-color: var(--color-primary-soft) !important;
+  border-color: var(--color-primary-soft) !important;
+}
+
+/* 後台實心鈕對比：品牌色 #0284c7 配白字只有 4.10:1（AA 要 4.5:1），後台的 --el-color-primary 是深一階的 #0277b5（4.87:1，
+ * 見上方 html.ivy-admin 區塊），hover／focus 用 --brand-primary-hover（#0369a1）。
+ * 只能套在 html.ivy-admin：這個 class 只在 AdminLayout 掛載時才加到 html 上，登入頁、打卡機頁、錯誤頁等 layout 外的頁面
+ * 淺色模式的 --el-color-primary 是 Element Plus 預設 #409eff（白字約 3:1），這組規則帶 !important，沒限範圍會蓋掉它們原本的按鈕色。
+ * 暗色後台與品牌色同值（a11y.css），視覺不變；portal 不在這組內，維持上面的基底。
+ * 守衛：tests/unit/styles/primaryButtonScope.spec.ts。 */
+html.ivy-admin .el-button--primary:not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled) {
+  background-color: var(--el-color-primary) !important;
+  border-color: var(--el-color-primary) !important;
+}
+
+html.ivy-admin .el-button--primary:not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled):hover,
+html.ivy-admin .el-button--primary:not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled):focus {
   background-color: var(--brand-primary-hover) !important;
   border-color: var(--brand-primary-hover) !important;
 }
