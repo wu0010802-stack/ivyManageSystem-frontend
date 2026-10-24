@@ -1,47 +1,88 @@
 <template>
   <nav class="month-progress" aria-label="本月進度" data-test="month-progress">
-    <span class="month-progress__title">{{ monthLabel }}進度</span>
-    <ol class="month-progress__steps">
-      <li class="month-progress__step" data-test="progress-schedule">
-        <span class="month-progress__index">①</span>
-        <span>排班</span>
-        <!-- 用預設工時不是錯（不排班的園所本來就這樣），只是告知：不用警示色 -->
-        <strong :title="unscheduled > 0 ? '這些人日沒有輪值表、週排班或每日調整，核對時用員工預設工時（沒設就用系統預設）' : undefined">{{ loading ? '…' : loadError ? '—' : unscheduled > 0 ? `${unscheduled} 人日用預設工時` : '已排滿' }}</strong>
-      </li>
-      <li v-if="canViewAttendance" class="month-progress__step" data-test="progress-import">
-        <span class="month-progress__index">②</span>
-        <span>匯入打卡</span>
-        <strong :class="{ 'month-progress__warn': imports.missingWorkdays.length > 0 && !loadError }">{{ loading ? '…' : loadError ? '—' : importText }}</strong>
-      </li>
-      <li v-if="canViewAttendance" class="month-progress__step">
-        <span class="month-progress__index">③</span>
-        <button type="button" class="month-progress__link" data-test="progress-issues" @click="emit('show-issues')">
-          核對 <strong :class="{ 'month-progress__warn': dailyIssues > 0 && !loadError && !notImported }">{{ issuesText }}</strong>
-        </button>
-        <!-- 待修設定：整月同型態的格子另外寫，不混在逐日待處理的數字裡（點開設定檢查） -->
-        <button
-          v-if="patterns.length && !loading && !loadError"
-          type="button"
-          class="month-progress__link month-progress__patterns"
-          data-test="progress-patterns"
-          @click="patternsOpen = true"
-        >＋{{ patternIssues }} 格待修設定（{{ patterns.length }} 人）</button>
-      </li>
-      <li v-if="canConfirmRounds" class="month-progress__step">
-        <span class="month-progress__index">④</span>
-        <button type="button" class="month-progress__link" data-test="progress-rounds" @click="roundsOpen = true">老師確認</button>
-        <span v-if="roundStatus" class="month-progress__status" data-test="progress-rounds-status">{{ roundStatus }}</span>
-      </li>
-      <li class="month-progress__step">
-        <span class="month-progress__index">⑤</span>
-        <router-link v-if="canViewSalary" to="/salary/settle" class="month-progress__link" data-test="progress-salary">交薪資</router-link>
-        <span v-else data-test="progress-salary-text">交薪資</span>
-      </li>
-    </ol>
     <p v-if="loadError" class="month-progress__error" role="alert" data-test="progress-error">
       {{ loadError }}
       <button type="button" class="month-progress__link" data-test="progress-retry" @click="month.reload()">重試</button>
     </p>
+
+    <!-- 整月封存：只能看、不能改，沒有下一步可走，整條換成說明（不畫步驟列） -->
+    <section v-if="sealed" class="month-progress__sealed" aria-label="封存狀態" data-test="progress-sealed">
+      <div class="month-progress__sealed-text">
+        <strong>{{ sealed.month }} 月薪資已封存，這個月的出勤只能看、不能改。</strong>
+        <!-- 沒有出勤讀取權限就看不到打卡，無從判斷封存時有沒有沒處理的件，只留標題 -->
+        <span v-if="canViewAttendance">
+          <template v-if="sealed.leftoverCount > 0">
+            封存時還有 {{ sealed.leftoverCount }} 件沒處理，已照系統規則算進薪資。
+            <button type="button" class="month-progress__link" data-test="progress-show-leftover" @click="emit('show-leftover')">看這 {{ sealed.leftoverCount }} 件</button>
+          </template>
+          <template v-else>封存時沒有未處理的件。</template>
+        </span>
+      </div>
+      <button v-if="nextMonth" type="button" class="month-progress__go" data-test="progress-go-month" @click="emit('go-month', nextMonth)">前往 {{ nextMonth.month }} 月</button>
+    </section>
+
+    <template v-else>
+      <!-- 手機：只放一顆膠囊（目前這步＋下一步摘要），要看完整步驟再展開 -->
+      <button
+        v-if="mobile && !loadError"
+        type="button"
+        class="month-progress__capsule"
+        :aria-expanded="expanded"
+        :disabled="!step"
+        data-test="progress-capsule"
+        @click="expanded = !expanded"
+      >
+        <span class="month-progress__capsule-text">
+          <strong class="month-progress__capsule-main" data-test="progress-capsule-main">{{ capsuleMain }}</strong>
+          <span v-if="capsuleSub" class="month-progress__capsule-sub" data-test="progress-capsule-sub">{{ capsuleSub }}</span>
+        </span>
+        <svg class="month-progress__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+
+      <ol v-if="showSteps" class="month-progress__steps" :aria-label="`${monthNumber} 月結算進度`">
+        <li v-if="canViewAttendance" class="month-progress__step" :class="{ 'is-current': step === 'import' }" :aria-current="step === 'import' ? 'step' : undefined">
+          <button type="button" class="month-progress__action" data-test="progress-import" @click="emit('import')">
+            <span class="month-progress__name">打卡匯入</span>
+            <span class="month-progress__value">{{ importValue }}</span>
+          </button>
+        </li>
+        <li v-if="canViewAttendance" class="month-progress__step" :class="{ 'is-current': step === 'patterns' }" :aria-current="step === 'patterns' ? 'step' : undefined">
+          <!-- 設定問題：整月同型態的人，修好設定才會一次消失（點開設定檢查） -->
+          <button type="button" class="month-progress__action" :disabled="!patterns.length" data-test="progress-patterns" @click="patternsOpen = true">
+            <span class="month-progress__name">先修設定</span>
+            <span class="month-progress__value">{{ patternsValue }}</span>
+          </button>
+        </li>
+        <li v-if="canViewAttendance" class="month-progress__step" :class="{ 'is-current': step === 'daily' }" :aria-current="step === 'daily' ? 'step' : undefined">
+          <button type="button" class="month-progress__action" data-test="progress-issues" @click="emit('show-issues')">
+            <span class="month-progress__name">逐日待辦</span>
+            <span class="month-progress__value">{{ dailyValue }}</span>
+          </button>
+        </li>
+        <li v-if="canConfirmRounds" class="month-progress__step" :class="{ 'is-current': step === 'confirm' }" :aria-current="step === 'confirm' ? 'step' : undefined">
+          <button type="button" class="month-progress__action" data-test="progress-rounds" @click="roundsOpen = true">
+            <span class="month-progress__name">老師確認換班</span>
+            <span class="month-progress__value" data-test="progress-rounds-status">{{ roundsValue }}</span>
+          </button>
+        </li>
+        <li class="month-progress__step" :class="{ 'is-current': step === 'payroll' }" :aria-current="step === 'payroll' ? 'step' : undefined">
+          <!-- 薪資結算頁需要 SALARY_READ，沒有就只顯示步驟（連過去會被路由守衛擋下） -->
+          <router-link v-if="canViewSalary" to="/salary/settle" class="month-progress__action" data-test="progress-salary">
+            <span class="month-progress__name">交薪資</span>
+            <span class="month-progress__value" :class="{ 'is-muted': step !== 'payroll' }">{{ payrollValue }}</span>
+          </router-link>
+          <div v-else class="month-progress__action is-static" data-test="progress-salary-text">
+            <span class="month-progress__name">交薪資</span>
+            <span class="month-progress__value" :class="{ 'is-muted': step !== 'payroll' }">{{ payrollValue }}</span>
+          </div>
+        </li>
+      </ol>
+
+      <p v-if="summary?.sealState === 'partial' && showSteps" class="month-progress__partial" data-test="progress-partial">
+        已有 {{ summary.sealedEmployeeIds.size }} 人的薪資封存，他們的出勤只能看；其餘 {{ summary.employedCount - summary.sealedEmployeeIds.size }} 人照常核對。
+      </p>
+    </template>
+
     <el-drawer v-if="canViewAttendance" v-model="patternsOpen" title="本月設定檢查" :size="mobile ? '100%' : '520px'" append-to-body>
       <AttendancePatternList v-if="patternsOpen" :patterns="patterns" @records="onPatternRecords" @import="onPatternImport" @recalculate="onPatternRecalculate" />
     </el-drawer>
@@ -55,10 +96,10 @@
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { getConfirmationRound, listConfirmationRounds, listUnroundedConfirmationItems } from '@/api/attendanceConfirmation'
 import type { MonthGridState } from '@/composables/useMonthGrid'
-import { backdatedPendingCount, pickDisplayRound, roundStatusText, withBackdatedPending } from '@/utils/attendanceConfirm'
+import { backdatedPendingCount, pickDisplayRound, roundReplyProgress } from '@/utils/attendanceConfirm'
+import { buildMonthSummary, currentStep, primaryLabel, type MonthStep, type MonthSummary } from '@/utils/attendanceMonthSummary'
 import { hasPermission } from '@/utils/auth'
-import { importProgress, isIssue, uncoveredDates } from '@/utils/scheduleAttendanceGrid'
-import { patternIssueTotal } from '@/utils/attendancePatterns'
+import { todayTaipeiISO } from '@/utils/format'
 import AttendancePatternList from './AttendancePatternList.vue'
 
 const ConfirmationRoundBar = defineAsyncComponent(() => import('@/components/attendance/ConfirmationRoundBar.vue'))
@@ -68,21 +109,18 @@ const props = defineProps<{
   month: MonthGridState
   mobile?: boolean
 }>()
-export interface MonthSummary {
-  /** 統計的是哪個月（月初 YYYY-MM-01）；頁面拿它比對，別月的統計不能拿來擋這個月 */
-  month: string
-  /** 本月待處理格數（與「只看待處理」同一個定義） */
-  issues: number
-  /** 到昨天為止還沒匯入打卡的工作日數 */
-  missingImportDays: number
-}
 const emit = defineEmits<{
   'show-issues': []
+  /** 封存月：看封存前沒處理完的那幾件（只能稽核） */
+  'show-leftover': []
+  /** 封存月：前往下一個要核對的月份 */
+  'go-month': [payload: { year: number; month: number }]
   changed: []
-  summary: [value: MonthSummary]
+  /** 整月摘要（含目前步驟）：頁首主要動作、匯出提醒共用。載入失敗或換月載入中不送 */
+  summary: [value: MonthSummary & { step: MonthStep }]
   /** 設定檢查清單：看某人整月出勤（帶第一個應上班日） */
   records: [employeeId: number, date: string]
-  /** 設定檢查清單：開匯入打卡（重新匯入時把卡號對上） */
+  /** 打卡匯入／設定檢查清單：開匯入打卡（重新匯入時把卡號對上） */
   import: []
   /** 設定檢查清單：重算本月出勤 */
   recalculate: []
@@ -90,10 +128,7 @@ const emit = defineEmits<{
 
 const range = computed(() => props.month.range.value)
 const data = computed(() => props.month.data.value)
-const loading = computed(() => props.month.loading.value)
 const loadError = computed(() => props.month.loadError.value)
-// 年份已在頁首月份選單上，這裡只寫月份
-const monthLabel = computed(() => `${Number(range.value.start.slice(5, 7))} 月`)
 const canViewAttendance = hasPermission('ATTENDANCE_READ')
 // 薪資結算頁需要 SALARY_READ，沒有就只顯示步驟名稱（連過去會被路由守衛擋下）
 const canViewSalary = hasPermission('SALARY_READ')
@@ -102,11 +137,10 @@ const canConfirmRounds = hasPermission('SCHEDULE') && canViewAttendance
 
 const roundsOpen = ref(false)
 
-// ③旁的本月設定檢查（型態診斷）：沒有出勤讀取權限時格子沒有打卡資料，本來就判斷不出型態
+// 設定檢查（型態診斷）：沒有出勤讀取權限時格子沒有打卡資料，本來就判斷不出型態
 const patterns = computed(() => (canViewAttendance ? props.month.patterns.value : []))
-const patternIssues = computed(() => patternIssueTotal(patterns.value))
 const patternsOpen = ref(false)
-/** 頁面（格子列首註記、抽屜型態提醒）也能開設定檢查 */
+/** 頁面（格子列首註記、抽屜型態提醒、頁首主要動作）也能開設定檢查 */
 defineExpose({ openPatterns: () => { if (canViewAttendance && patterns.value.length) patternsOpen.value = true } })
 function onPatternRecords(employeeId: number, date: string): void {
   patternsOpen.value = false
@@ -121,12 +155,16 @@ function onPatternRecalculate(): void {
   emit('recalculate')
 }
 
-// ④：最新輪次狀態（D-07）。狀態只是輔助，讀不到就不顯示，按鈕照常可開抽屜。
+// 老師確認：進行中輪次的回覆進度（D-07）與老師自行補登的待處理數（SPEC-026 3-3）。
+// 狀態只是輔助，讀不到就當沒有進行中，按鈕照常可開抽屜。
 // 跟著整月資料重讀：換月、明細處理、關閉確認抽屜（頁面遞增 revision）後都會更新。
-const roundStatus = ref('')
+const roundProgress = ref<{ replied: number; total: number } | null>(null)
+const backdatedPending = ref(0)
+/** 這個月的老師確認狀態讀完了沒：沒讀完時目前步驟不下判斷（不然會先閃過「交薪資」） */
+const roundsReady = ref(false)
 let roundSeq = 0
 
-/** 老師自行補登中行政要動手的筆數（SPEC-026 3-3）。補登清單讀不到只是少了這段，不影響輪次狀態。 */
+/** 老師自行補登中行政要動手的筆數（SPEC-026 3-3）。補登清單讀不到只是少了這段，不影響輪次進度。 */
 async function loadBackdatedPending(start: string, end: string): Promise<number> {
   try {
     return backdatedPendingCount((await listUnroundedConfirmationItems({ start_date: start, end_date: end })).data)
@@ -139,91 +177,209 @@ async function loadRoundStatus(): Promise<void> {
   if (!canConfirmRounds) return
   const current = ++roundSeq
   const { start, end } = range.value
+  let progress: { replied: number; total: number } | null = null
+  let pending = 0
   try {
     const backdated = loadBackdatedPending(start, end)
     const round = pickDisplayRound((await listConfirmationRounds({ start_date: start, end_date: end })).data)
     const employees = round?.status === 'open' ? (await getConfirmationRound(round.id)).data.employees : null
-    const text = withBackdatedPending(roundStatusText(round, employees), await backdated)
-    if (current === roundSeq) roundStatus.value = text
+    progress = roundReplyProgress(round, employees)
+    pending = await backdated
   } catch {
-    if (current === roundSeq) roundStatus.value = ''
+    progress = null
+    pending = 0
   }
+  if (current !== roundSeq) return
+  roundProgress.value = progress
+  backdatedPending.value = pending
+  roundsReady.value = true
 }
-// data 變 null＝換月載入中或整月請求失敗：先作廢在飛的舊請求並清掉狀態，不殘留上個月的文字
+// data 變 null＝換月載入中或整月請求失敗：先作廢在飛的舊請求並清掉狀態，不殘留上個月的進度
 watch(data, (g) => {
   if (g) {
     void loadRoundStatus()
   } else {
     roundSeq += 1
-    roundStatus.value = ''
+    roundProgress.value = null
+    backdatedPending.value = 0
+    roundsReady.value = false
   }
 }, { immediate: true })
 
-/** ①：在職、應出勤的工作日中，班別只靠員工預設或系統預設（沒有任何排班資料）的人日數 */
-const unscheduled = computed(() => {
-  const g = data.value
-  if (!g) return 0
-  const workdays = new Set(g.days.filter((d) => d.is_workday).map((d) => d.date))
-  return g.cells.filter(
-    (c) => c.employed && workdays.has(c.date) && c.plan.expected && (c.plan.source === 'employee' || c.plan.source === 'default'),
-  ).length
+/** 整月摘要：所有計數與封存狀態的唯一來源（utils/attendanceMonthSummary） */
+const summary = computed(() => (data.value ? buildMonthSummary(data.value, patterns.value, data.value.today) : null))
+/** 還沒回覆確認的人數 */
+const confirmOutstanding = computed(() => (roundProgress.value ? roundProgress.value.total - roundProgress.value.replied : 0))
+/**
+ * 目前輪到哪一步；還在載入（整月資料或老師確認狀態）時為 null。
+ * 沒有出勤讀取權限的人看不到匯入／核對，也沒有匯入涵蓋資料可判斷，直接輪到交薪資。
+ */
+const step = computed<MonthStep | null>(() => {
+  const s = summary.value
+  if (!s) return null
+  if (s.sealState === 'sealed') return 'done'
+  if (!canViewAttendance) return 'payroll'
+  if (canConfirmRounds && !roundsReady.value) return null
+  return currentStep(s, confirmOutstanding.value)
 })
 
+// 頁首主要動作與匯出月報前的提醒用同一份摘要；載入失敗不送（避免拿 0 當「都處理完了」）
+const emittedSummary = computed(() => (summary.value && step.value ? { ...summary.value, step: step.value } : null))
+watch(emittedSummary, (value) => {
+  if (value) emit('summary', value)
+}, { immediate: true })
+
+// ── 封存 ────────────────────────────────────────────────────────────────────
+const sealed = computed(() => (summary.value?.sealState === 'sealed' ? summary.value : null))
+/** 封存月早於今天（台北）所在月份才有「下一個要核對的月份」 */
+const nextMonth = computed(() => {
+  const s = sealed.value
+  if (!s) return null
+  if (`${s.year}-${String(s.month).padStart(2, '0')}` >= todayTaipeiISO().slice(0, 7)) return null
+  return s.month === 12 ? { year: s.year + 1, month: 1 } : { year: s.year, month: s.month + 1 }
+})
+
+// ── 步驟列文字 ──────────────────────────────────────────────────────────────
+const monthNumber = computed(() => summary.value?.month ?? Number(range.value.start.slice(5, 7)))
+/** 還沒有數字可寫時的占位：載入中「…」、載入失敗「—」（不能寫 0 或「沒有」，會被讀成都處理完了） */
+const placeholder = computed(() => (loadError.value ? '—' : '…'))
 const md = (iso: string) => {
   const [, m, d] = iso.split('-').map(Number)
   return `${m}/${d}`
 }
-const imports = computed(() => (data.value ? importProgress(data.value.days, data.value.today) : { lastCovered: null, gaps: [], missingWorkdays: [] }))
-/** 「已匯入至 X」只看最後一天會掩蓋中間漏匯的日子，缺口要寫出來 */
-const importText = computed(() => {
-  const { lastCovered, gaps } = imports.value
-  if (!lastCovered) return '尚未匯入'
-  if (!gaps.length) return `已匯入至 ${md(lastCovered)}`
-  return `已匯入至 ${md(lastCovered)}，缺 ${gaps.length > 2 ? `${gaps.length} 天` : gaps.map(md).join('、')}`
+
+const importValue = computed(() => {
+  const s = summary.value
+  if (!s) return placeholder.value
+  const { lastCovered, missingWorkdays } = s.importStatus
+  if (!lastCovered) return '還沒匯入'
+  if (missingWorkdays.length) return `缺 ${missingWorkdays.length} 個工作日`
+  return `已匯入至 ${md(lastCovered)}`
+})
+/** 一天都還沒匯入：設定問題與逐日待辦都還判斷不出來，「沒有」會被讀成都處理完了 */
+const notImported = computed(() => {
+  const s = summary.value
+  return !!s && !s.importStatus.lastCovered && s.importStatus.missingWorkdays.length > 0
+})
+const patternsValue = computed(() => {
+  const s = summary.value
+  if (!s) return placeholder.value
+  if (notImported.value) return '等匯入後才能核對'
+  return s.patternPeople > 0 ? `${s.patternPeople} 人，修好可清掉 ${s.patternIssueCount} 件` : '沒有'
+})
+const dailyValue = computed(() => {
+  const s = summary.value
+  if (!s) return placeholder.value
+  if (notImported.value) return '等匯入後才能核對'
+  return s.dailyIssueCount > 0 ? `${s.dailyIssueCount} 件` : '沒有'
+})
+const roundsValue = computed(() => {
+  if (!summary.value || !roundsReady.value) return placeholder.value
+  const progress = roundProgress.value
+  const base = progress ? `已回覆 ${progress.replied} / ${progress.total}` : '沒有進行中'
+  return backdatedPending.value > 0 ? `${base}・補登待處理 ${backdatedPending.value}` : base
+})
+const payrollValue = computed(() => {
+  if (!summary.value) return placeholder.value
+  return step.value === 'payroll' ? '可以交了' : '前面完成後開放'
 })
 
-const issues = computed(() => {
-  const g = data.value
-  if (!g) return 0
-  const uncovered = uncoveredDates(g.days)
-  return g.cells.filter((c) => isIssue(c, g.today, uncovered)).length
+// ── 手機膠囊 ────────────────────────────────────────────────────────────────
+/** 手機預設只顯示膠囊；展開才看完整步驟列（桌機一律顯示） */
+const expanded = ref(false)
+const showSteps = computed(() => (props.mobile ? expanded.value : true))
+const capsuleMain = computed(() => {
+  const s = summary.value
+  const current = step.value
+  if (!s || !current) return loadError.value ? '—' : '載入本月進度…'
+  // 等老師回覆沒有行政能按的動作，主文改寫在等什麼
+  return current === 'confirm' ? '等老師回覆換班' : (primaryLabel(s, current) ?? '')
 })
-/** 逐日要處理的（待處理扣掉待修設定） */
-const dailyIssues = computed(() => Math.max(0, issues.value - patternIssues.value))
-/** 一天都還沒匯入：「0 格待處理」會被讀成「都處理完了」，改說還不能核對 */
-const notImported = computed(() => !!data.value && !imports.value.lastCovered && imports.value.missingWorkdays.length > 0)
-const issuesText = computed(() => {
-  if (loading.value) return '…'
-  if (loadError.value) return '—'
-  if (notImported.value) return '等匯入打卡後才能核對'
-  return `本月 ${dailyIssues.value} 格待處理`
-})
-
-// 匯出月報前的提醒用同一份數字；載入失敗不送（避免拿 0 當「都處理完了」）
-watch(data, (g) => {
-  if (g) emit('summary', { month: range.value.start, issues: issues.value, missingImportDays: imports.value.missingWorkdays.length })
+/** 副文＝下一步摘要 */
+const capsuleSub = computed(() => {
+  const s = summary.value
+  const current = step.value
+  if (!s || !current) return ''
+  switch (current) {
+    case 'import':
+      return `${importValue.value}，匯入後才能核對`
+    case 'patterns':
+      return `修好可清掉 ${s.patternIssueCount} 件${s.dailyIssueCount > 0 ? `，之後還有 ${s.dailyIssueCount} 件逐日待辦` : ''}`
+    case 'daily':
+      return confirmOutstanding.value > 0 ? '處理完後，等老師回覆換班再交薪資' : '處理完就可以交薪資'
+    case 'confirm':
+      return roundProgress.value ? `已回覆 ${roundProgress.value.replied} / ${roundProgress.value.total}，回覆完就可以交薪資` : ''
+    case 'payroll':
+      return '前面的步驟都完成了'
+    default:
+      return ''
+  }
 })
 </script>
 
 <style scoped>
-.month-progress { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); margin-bottom: var(--space-2); font-size: var(--text-sm); }
-.month-progress__title { flex: none; color: var(--el-text-color-secondary); }
-/* 步驟跟標題同一列、在自己的欄裡換行：整條 ol 不會掉到標題下一列，1280 寬兩行收完（原本三行約 80px） */
-.month-progress__steps { display: flex; flex: 1 1 0; flex-wrap: wrap; gap: var(--space-1) var(--space-4); min-width: 240px; margin: 0; padding: 0; list-style: none; }
-.month-progress__step { display: flex; align-items: center; gap: var(--space-1); }
-.month-progress__index { color: var(--el-text-color-secondary); }
-.month-progress__status { color: var(--el-text-color-secondary); }
-.month-progress__warn { color: var(--color-warning-darker); }
-.month-progress__patterns { color: var(--color-warning-darker); text-decoration: underline; text-underline-offset: 2px; }
-.month-progress__link { padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-1); }
-.month-progress__error { flex-basis: 100%; margin: 0; color: var(--el-color-danger); font-size: var(--text-sm); }
-.month-progress__link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
-/* 觸控裝置才把連結撐到 44px：桌機也撐的話整列變高、1280 寬折成三行，把格子推出首屏 */
-@media (pointer: coarse) {
-  .month-progress__link { min-height: var(--touch-target-min); }
+.month-progress { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-2); font-size: var(--text-sm); }
+.month-progress__error { margin: 0; color: var(--el-color-danger); font-size: var(--text-sm); }
+
+/* 五步驟：一格一步，目前這步用淺底強調（不用側邊色條）；格線用 1px gap 露出容器底色，換行也不會斷線 */
+.month-progress__steps {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; counter-reset: month-step;
+  margin: 0; padding: 0; list-style: none; overflow: hidden;
+  border: 1px solid var(--el-border-color-lighter); border-radius: var(--radius-md); background: var(--el-border-color-lighter);
 }
-/* 手機：步驟換行時連結已有 44px 觸控高度，不再額外加列距 */
+.month-progress__step { display: flex; counter-increment: month-step; background: var(--el-bg-color); }
+.month-progress__step.is-current { background: var(--color-primary-lighter); }
+.month-progress__action {
+  display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0;
+  padding: var(--space-2) var(--space-3); border: 0; background: transparent; color: inherit; font: inherit;
+  text-align: left; text-decoration: none; cursor: pointer;
+}
+.month-progress__action:disabled, .month-progress__action.is-static { cursor: default; }
+.month-progress__action:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
+.month-progress__name { color: var(--el-text-color-regular); font-size: var(--text-xs); font-weight: 600; }
+.month-progress__name::before { content: counter(month-step) ' '; }
+.month-progress__step.is-current .month-progress__name { color: var(--el-text-color-primary); }
+.month-progress__value { color: var(--el-text-color-primary); font-size: var(--text-base); font-weight: 600; font-variant-numeric: tabular-nums; }
+.month-progress__value.is-muted { color: var(--el-text-color-regular); font-weight: 400; }
+.month-progress__partial { margin: 0; color: var(--el-text-color-regular); }
+
+/* 封存橫幅：灰底中性（封存不是警告，是狀態） */
+.month-progress__sealed {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--el-border-color); border-radius: var(--radius-md); background: var(--el-fill-color-light);
+}
+.month-progress__sealed-text { display: flex; flex: 1 1 320px; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.month-progress__sealed-text strong { color: var(--el-text-color-primary); font-size: var(--text-base); }
+.month-progress__sealed-text span { color: var(--el-text-color-regular); }
+.month-progress__go {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--space-3);
+  border: 1px solid var(--color-primary); border-radius: var(--radius-md); background: var(--el-bg-color);
+  color: var(--el-text-color-primary); font: inherit; font-weight: 600; cursor: pointer;
+}
+.month-progress__link { display: inline; padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.month-progress__go:focus-visible, .month-progress__link:focus-visible, .month-progress__capsule:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+
+/* 手機膠囊：整條可點、至少 60px 高 */
+.month-progress__capsule {
+  display: flex; align-items: center; gap: var(--space-3); box-sizing: border-box; width: 100%; min-height: 60px;
+  padding: var(--space-2) var(--space-4); border: 1px solid var(--color-primary); border-radius: var(--radius-lg);
+  background: var(--color-primary-lighter); color: var(--el-text-color-primary); font: inherit; text-align: left; cursor: pointer;
+}
+.month-progress__capsule:disabled { border-color: var(--el-border-color); background: var(--el-fill-color-light); color: var(--el-text-color-regular); cursor: default; }
+.month-progress__capsule-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.month-progress__capsule-main { font-size: var(--text-lg); font-weight: 600; }
+.month-progress__capsule-sub { color: var(--el-text-color-regular); font-size: var(--text-sm); }
+.month-progress__chevron { flex: none; width: 18px; height: 18px; transition: transform var(--transition-fast); }
+.month-progress__capsule[aria-expanded='true'] .month-progress__chevron { transform: rotate(180deg); }
+
+/* 觸控裝置才把可點區域撐到 44px：桌機也撐的話整列變高、1280 寬把格子推出首屏 */
+@media (pointer: coarse) {
+  .month-progress__action { min-height: var(--touch-target-min); }
+  .month-progress__link { min-height: var(--touch-target-min); }
+  .month-progress__go { min-height: var(--touch-target-min); }
+}
+/* 手機：步驟一列一格 */
 @media (--to-sm) {
-  .month-progress__steps { row-gap: 0; }
+  .month-progress__steps { grid-template-columns: 1fr; }
 }
 </style>

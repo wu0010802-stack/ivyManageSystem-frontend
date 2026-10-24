@@ -216,8 +216,9 @@ import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
 import DetailColumn from '@/components/attendance/DetailColumn.vue'
 import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue'
-import MonthProgressBar, { type MonthSummary } from '@/components/schedule-attendance/MonthProgressBar.vue'
+import MonthProgressBar from '@/components/schedule-attendance/MonthProgressBar.vue'
 import ScheduleGridPanel from '@/components/schedule-attendance/ScheduleGridPanel.vue'
+import type { MonthStep, MonthSummary } from '@/utils/attendanceMonthSummary'
 import type { GridFilter, GridView } from '@/utils/scheduleAttendanceGrid'
 import { hasPermission, hasFullSalaryView } from '@/utils/auth'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
@@ -656,14 +657,21 @@ async function onImported(): Promise<void> {
   ElMessage.success('匯入完成')
 }
 
-// 月報匯出前的提醒：用本月進度那份統計（同一個「待處理」定義）；別月或還沒載到就不擋
-const monthSummary = ref<MonthSummary | null>(null)
+// 月報匯出前的提醒：用本月進度那份月摘要（同一個「待處理」定義）；別月或還沒載到就不擋
+const monthSummary = ref<(MonthSummary & { step: MonthStep }) | null>(null)
+/** 摘要要是這個月的才能用：換月後進度條重載前，舊月的摘要不能拿來擋這個月 */
+function summaryOfThisMonth(): (MonthSummary & { step: MonthStep }) | null {
+  const s = monthSummary.value
+  return s && s.year === query.year && s.month === query.month ? s : null
+}
+/** 還沒處理的件數：逐日待辦加上設定問題的件數（封存的人不算） */
+const pendingCount = (s: MonthSummary): number => s.dailyIssueCount + s.patternIssueCount
 
 /** 出勤明細的清單只是班表核對待處理的一部分：把兩個數字的關係寫出來，不讓 284 與 435 各說各話 */
 const recordsScopeNote = computed(() => {
-  const monthStart = `${query.year}-${String(query.month).padStart(2, '0')}-01`
-  const s = monthSummary.value
-  const scope = s && s.month === monthStart && s.issues > 0 ? `班表核對本月 ${s.issues} 格待處理中，` : ''
+  const s = summaryOfThisMonth()
+  const pending = s ? pendingCount(s) : 0
+  const scope = pending > 0 ? `班表核對本月 ${pending} 格待處理中，` : ''
   return `${scope}有打卡紀錄的遲到、早退、缺卡在這裡處理（一人一天算一筆）；疑似缺勤、疑似換班與資料待補要在「班表核對」處理。`
 })
 
@@ -676,12 +684,13 @@ async function openGridCell(employeeId: number, date: string): Promise<void> {
 }
 
 async function onExport(): Promise<void> {
-  const monthStart = `${query.year}-${String(query.month).padStart(2, '0')}-01`
-  const s = monthSummary.value
-  if (s && s.month === monthStart && (s.issues > 0 || s.missingImportDays > 0)) {
+  const s = summaryOfThisMonth()
+  const pending = s ? pendingCount(s) : 0
+  const missingImportDays = s ? s.importStatus.missingWorkdays.length : 0
+  if (s && (pending > 0 || missingImportDays > 0)) {
     const parts = [
-      s.issues > 0 ? `${s.issues} 格待處理` : '',
-      s.missingImportDays > 0 ? `${s.missingImportDays} 天打卡還沒匯入` : '',
+      pending > 0 ? `${pending} 格待處理` : '',
+      missingImportDays > 0 ? `${missingImportDays} 天打卡還沒匯入` : '',
     ].filter(Boolean)
     try {
       await ElMessageBox.confirm(

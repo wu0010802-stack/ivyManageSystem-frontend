@@ -114,6 +114,20 @@ const ScheduleGridPanelStub = {
 const rotationMounts = { count: 0 }
 const openPatternsSpy = vi.fn()
 const MonthProgressBarStub = { name: 'MonthProgressBar', props: ['month', 'mobile'], emits: ['show-issues', 'changed', 'summary', 'records', 'import', 'recalculate'], methods: { openPatterns: () => openPatternsSpy() }, template: '<div class="month-progress-stub" />' }
+/** 進度條送出的月摘要（月摘要 util 的形狀）：只給本測試關心的月份、逐日待辦、設定問題件數與缺匯入天數 */
+const monthSummaryOf = (year: number, month: number, o: { daily?: number; patterns?: number; missingImport?: number } = {}) => ({
+  year,
+  month,
+  step: 'daily' as const,
+  sealState: 'open' as const,
+  sealedEmployeeIds: new Set<number>(),
+  employedCount: 3,
+  importStatus: { lastCovered: null, gaps: [], missingWorkdays: Array.from({ length: o.missingImport ?? 0 }, (_, i) => `${year}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`) },
+  patternPeople: o.patterns ? 1 : 0,
+  patternIssueCount: o.patterns ?? 0,
+  dailyIssueCount: o.daily ?? 0,
+  leftoverCount: 0,
+})
 const RecalcDrawerStub = { name: 'RecalculateAttendanceDrawer', props: ['modelValue', 'year', 'month', 'mobile'], emits: ['update:modelValue', 'done'], template: '<div class="recalc-stub" />' }
 const SHELL_STUBS = {
   ScheduleGridPanel: ScheduleGridPanelStub,
@@ -821,7 +835,7 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
     const header = wrapper.findComponent(WorkspaceHeaderStub)
     vi.mocked(downloadFile).mockClear()
 
-    bar.vm.$emit('summary', { month: '2026-10-01', issues: 3, missingImportDays: 2 })
+    bar.vm.$emit('summary', monthSummaryOf(2026, 10, { daily: 2, patterns: 1, missingImport: 2 }))
     msgBoxConfirm.mockRejectedValueOnce('cancel')
     header.vm.$emit('export')
     await flushPromises()
@@ -836,10 +850,10 @@ describe('頁籤與權限（SPEC-027 §8）', () => {
 
     // 都處理完：直接匯出不提醒；別月的統計不拿來當這個月的
     msgBoxConfirm.mockClear()
-    bar.vm.$emit('summary', { month: '2026-10-01', issues: 0, missingImportDays: 0 })
+    bar.vm.$emit('summary', monthSummaryOf(2026, 10))
     header.vm.$emit('export')
     await flushPromises()
-    bar.vm.$emit('summary', { month: '2026-09-01', issues: 9, missingImportDays: 0 })
+    bar.vm.$emit('summary', monthSummaryOf(2026, 9, { daily: 9 }))
     header.vm.$emit('export')
     await flushPromises()
     expect(msgBoxConfirm).not.toHaveBeenCalled()
@@ -1288,7 +1302,7 @@ describe('第五輪審查：預設月份、頁首範圍、兩頁籤互通', () =
   it('出勤明細寫出清單與班表核對待處理的關係（不讓兩個數字各說各話）', async () => {
     const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'records', date: '2026-09-16' }, global: { stubs: STUBS } })
     await flushPromises()
-    wrapper.findComponent(MonthProgressBarStub).vm.$emit('summary', { month: '2026-09-01', issues: 435, missingImportDays: 0 })
+    wrapper.findComponent(MonthProgressBarStub).vm.$emit('summary', monthSummaryOf(2026, 9, { daily: 169, patterns: 266 }))
     await flushPromises()
     expect(wrapper.get('[data-test="records-scope-note"]').text()).toContain('班表核對本月 435 格待處理中，有打卡紀錄的遲到、早退、缺卡在這裡處理')
     wrapper.unmount()

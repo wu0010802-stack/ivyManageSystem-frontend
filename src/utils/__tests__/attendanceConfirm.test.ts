@@ -16,6 +16,7 @@ import {
   partnerChoices,
   pickDisplayRound,
   resolutionTooltip,
+  roundReplyProgress,
   roundStatusText,
   STATUS_LABELS,
   withBackdatedPending,
@@ -232,6 +233,14 @@ describe('進度條④輪次狀態（D-07）', () => {
     expect(roundStatusText(round(1, 'closed'), null)).toBe('已結束')
     expect(roundStatusText(round(1, 'open'), [emp(1, 0), emp(2, 2), emp(3, 0)])).toBe('確認中・已回覆 2/3')
     expect(roundStatusText(round(1, 'open'), [])).toBe('確認中')
+  })
+
+  it('roundReplyProgress：只有進行中且有名單才有進度；已回覆＝沒有待回覆項目的人（與 roundStatusText 同一口徑）', () => {
+    expect(roundReplyProgress(round(1, 'open'), [emp(1, 0), emp(2, 2), emp(3, 0)])).toEqual({ replied: 2, total: 3 })
+    expect(roundReplyProgress(round(1, 'open'), [])).toBeNull()
+    expect(roundReplyProgress(round(1, 'open'), null)).toBeNull()
+    expect(roundReplyProgress(round(1, 'closed'), [emp(1, 0)])).toBeNull()
+    expect(roundReplyProgress(null, null)).toBeNull()
   })
 })
 

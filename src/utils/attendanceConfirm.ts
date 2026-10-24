@@ -279,9 +279,20 @@ export function pickDisplayRound(rounds: readonly ConfirmationRoundSummary[]): C
 }
 
 /**
+ * 進行中輪次的回覆進度：已回覆人數／應確認人數。已回覆＝沒有待回覆項目的人
+ * （與 ConfirmationRoundBar「待回覆 N 人」同一口徑）。沒有輪次、已關閉或沒有名單＝null。
+ */
+export function roundReplyProgress(
+  round: ConfirmationRoundSummary | null,
+  employees: readonly RoundEmployeeProgress[] | null,
+): { replied: number; total: number } | null {
+  if (!round || round.status !== 'open' || !employees?.length) return null
+  return { replied: employees.filter((e) => e.awaiting_response === 0).length, total: employees.length }
+}
+
+/**
  * 進度條④的輪次狀態（D-07）：沒有輪次＝尚未發送；已關閉＝已結束；
- * 進行中＝「確認中・已回覆 已回覆人數/應確認人數」。已回覆＝沒有待回覆項目的人
- * （與 ConfirmationRoundBar「待回覆 N 人」同一口徑）。
+ * 進行中＝「確認中・已回覆 已回覆人數/應確認人數」。
  */
 export function roundStatusText(
   round: ConfirmationRoundSummary | null,
@@ -289,10 +300,9 @@ export function roundStatusText(
 ): string {
   if (!round) return '尚未發送'
   if (round.status === 'closed') return '已結束'
-  const list = employees ?? []
-  if (!list.length) return '確認中'
-  const replied = list.filter((e) => e.awaiting_response === 0).length
-  return `確認中・已回覆 ${replied}/${list.length}`
+  const progress = roundReplyProgress(round, employees)
+  if (!progress) return '確認中'
+  return `確認中・已回覆 ${progress.replied}/${progress.total}`
 }
 
 /**
