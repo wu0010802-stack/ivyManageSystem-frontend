@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { ref } from 'vue'
 import { useScheduleCalendar } from '@/composables/useScheduleCalendar'
 
@@ -49,29 +49,39 @@ describe('useScheduleCalendar', () => {
     expect(lastWeek[1]).toBe(null)
   })
 
-  it('isToday returns true for today day', () => {
-    const data = ref(null)
-    const year = ref(2026)
-    const month = ref(5)
-    const { isToday } = useScheduleCalendar(data, year, month)
+  describe('「今天」以台北日期為準', () => {
+    // UTC 2026-05-10 20:00 ＝ 台北 2026-05-11 04:00：UTC 機器（CI）上本機日期與台北日期不同
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-10T20:00:00Z'))
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
 
-    const t = new Date()
-    const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
-    expect(isToday({ date: todayStr })).toBe(true)
-    expect(isToday({ date: '1990-01-01' })).toBe(false)
-    expect(isToday(null)).toBe(false)
-  })
+    it('isToday returns true for today day', () => {
+      const data = ref(null)
+      const year = ref(2026)
+      const month = ref(5)
+      const { isToday } = useScheduleCalendar(data, year, month)
 
-  it('isFutureDate returns true for today and after', () => {
-    const data = ref(null)
-    const year = ref(2026)
-    const month = ref(5)
-    const { isFutureDate } = useScheduleCalendar(data, year, month)
+      expect(isToday({ date: '2026-05-11' })).toBe(true)
+      expect(isToday({ date: '2026-05-10' })).toBe(false) // UTC 日期不算今天
+      expect(isToday({ date: '1990-01-01' })).toBe(false)
+      expect(isToday(null)).toBe(false)
+    })
 
-    const t = new Date()
-    const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
-    expect(isFutureDate(todayStr)).toBe(true)
-    expect(isFutureDate('1990-01-01')).toBe(false)
+    it('isFutureDate returns true for today and after', () => {
+      const data = ref(null)
+      const year = ref(2026)
+      const month = ref(5)
+      const { isFutureDate } = useScheduleCalendar(data, year, month)
+
+      expect(isFutureDate('2026-05-11')).toBe(true)
+      expect(isFutureDate('2026-05-12')).toBe(true)
+      expect(isFutureDate('2026-05-10')).toBe(false) // 台北已跨日，UTC 日期算過去
+      expect(isFutureDate('1990-01-01')).toBe(false)
+    })
   })
 
   it('calendarWeeks reactive to data changes', () => {
