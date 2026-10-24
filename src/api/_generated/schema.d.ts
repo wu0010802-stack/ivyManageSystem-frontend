@@ -24705,6 +24705,11 @@ export interface components {
         BatchConfirmResultOut: {
             /** Processed */
             processed: number;
+            /**
+             * Undoable Ids
+             * @description 這次被 admin_accept／admin_waive 改動、且處理前（取鎖後重讀）為未確認的考勤 id；前端只能用這份清單呼叫 clear 復原。clear 動作回空清單。
+             */
+            undoable_ids?: number[];
         };
         /**
          * BatchFeePayItem
