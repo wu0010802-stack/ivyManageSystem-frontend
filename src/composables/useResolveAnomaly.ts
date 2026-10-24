@@ -4,13 +4,14 @@
  * 出勤明細（DetailColumn）與排班與出勤抽屜（PersonDayDrawer）共用，兩邊送出的端點、payload、
  * 錯誤處理與防重複送出一致。成功後呼叫 onDone（由呼叫端決定刷新哪些資料）。
  *
- * 接受扣款／豁免會動到薪資，成功後跳 10 秒內可「復原」的提示（showUndoToast，清回未處理）；
+ * 接受扣款／豁免會動到薪資，成功後若後端回的 undoable_ids 涵蓋這次全部處理的列，跳 10 秒內可「復原」的提示
+ * （showUndoToast，清回未處理）；這筆原本已有處理（例如員工自己的申訴被覆蓋）就不給復原，只用一般成功訊息說明。
  * 補打卡不經批次確認、沒有復原，照舊用一般成功提示。
  */
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { batchConfirmAnomalies, upsertRecord } from '@/api/attendance'
-import { showUndoToast } from '@/composables/useConfirmUndo'
+import { confirmedFollowUp, showUndoToast } from '@/composables/useConfirmUndo'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 
 export type ResolveAction = 'punch' | 'admin_accept' | 'admin_waive'
@@ -38,13 +39,19 @@ export interface ResolveTarget {
   attendanceId: number | null
 }
 
+/** 這次處理的結果（完成回呼的第二個參數） */
+export interface ResolveOutcome {
+  /** 實際有沒有跳出可復原的提示：呼叫端（例如抽屜自動跳下一件）據此決定要不要另外提示 */
+  undoToast: boolean
+}
+
 export interface ResolveOptions {
   /** 按了復原、清回未處理之後（呼叫端重抓資料）；沒給＝同 onDone */
   onUndone?: () => void
 }
 
 export function useResolveAnomaly(
-  onDone: (payload: ResolvePayload) => void | Promise<void>,
+  onDone: (payload: ResolvePayload, outcome: ResolveOutcome) => void | Promise<void>,
   source: string,
   options: ResolveOptions = {},
 ) {
@@ -64,6 +71,7 @@ export function useResolveAnomaly(
     resolving.value = true
     try {
       const text = payload.doneText ?? DONE_TEXT[payload.action]
+      let undoToast = false
       if (payload.action === 'punch') {
         await upsertRecord({
           employee_id: target.employeeId!,
@@ -73,19 +81,25 @@ export function useResolveAnomaly(
         })
         ElMessage.success(text)
       } else {
-        const attendanceId = target.attendanceId!
-        await batchConfirmAnomalies({
-          attendance_ids: [attendanceId],
+        const res = await batchConfirmAnomalies({
+          attendance_ids: [target.attendanceId!],
           action: payload.action,
           ...(payload.remark ? { remark: payload.remark } : {}),
         })
-        showUndoToast({
-          text,
-          attendanceIds: [attendanceId],
-          onUndone: options.onUndone ?? (() => { void onDone(payload) }),
-        })
+        // 能不能復原只看後端回的 undoable_ids，不用呼叫端手上的 confirmed_action 快照猜
+        const followUp = confirmedFollowUp(res.data)
+        if (followUp.undoIds) {
+          showUndoToast({
+            text,
+            attendanceIds: followUp.undoIds,
+            onUndone: options.onUndone ?? (() => { void onDone(payload, { undoToast: false }) }),
+          })
+          undoToast = true
+        } else {
+          ElMessage.success(`${text}${followUp.note}`)
+        }
       }
-      await onDone(payload)
+      await onDone(payload, { undoToast })
       return true
     } catch (err) {
       notify(err, source, null, { prefix: '處理失敗' })

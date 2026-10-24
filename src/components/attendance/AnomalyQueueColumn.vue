@@ -165,7 +165,7 @@ import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useGridVerdict } from '@/composables/useGridVerdict'
-import { showUndoToast } from '@/composables/useConfirmUndo'
+import { confirmedFollowUp, showUndoToast } from '@/composables/useConfirmUndo'
 
 const props = withDefaults(defineProps<{
   items: AnomalyDayCard[]
@@ -429,11 +429,11 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
       ...(remark ? { remark } : {}),
     })
     const text = `已批次處理 ${res.data.processed} 件`
-    // 復原只清這次真的改成已處理的日卡：原本就已處理的卡（可能是員工自己或之前的處理）不能被一起清回未處理
-    const undoable = chosen.filter((card) => card.confirmed_action === null).map((card) => card.id)
-    // 實際處理 0 件（例如都已被別人處理）：沒有東西可復原，只給一般訊息
-    if (undoable.length > 0 && res.data.processed > 0) showUndoToast({ text, attendanceIds: undoable, onUndone: () => emit('resolved') })
-    else ElMessage.success(text)
+    // 能不能復原只看後端回的 undoable_ids（取鎖後重讀、處理前為未確認的列）：原本就已處理的卡（員工自己或
+    // 之前的處理）會被這次動作覆蓋，clear 清不回來，所以只要有一件如此就整批不給復原，只說明有幾件無法復原
+    const followUp = confirmedFollowUp(res.data)
+    if (followUp.undoIds) showUndoToast({ text, attendanceIds: followUp.undoIds, onUndone: () => emit('resolved') })
+    else ElMessage.success(`${text}${followUp.note}`)
     clearSelection()
     emit('resolved')
   } catch (err) {

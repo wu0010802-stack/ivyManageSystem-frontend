@@ -16,7 +16,8 @@ vi.mock('@/api/attendance', () => ({ getAnomalyList: att.getAnomalyList, upsertR
 vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
 vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: vi.fn() }) }))
 const undo = vi.hoisted(() => ({ show: vi.fn() }))
-vi.mock('@/composables/useConfirmUndo', () => ({ showUndoToast: undo.show }))
+// 只換掉會真的跳訊息的 showUndoToast；給不給復原的判斷（confirmedFollowUp）用真的
+vi.mock('@/composables/useConfirmUndo', async (orig) => ({ ...(await orig<typeof import('@/composables/useConfirmUndo')>()), showUndoToast: undo.show }))
 const box = vi.hoisted(() => ({ confirm: vi.fn() }))
 const router = vi.hoisted(() => ({ push: vi.fn() }))
 vi.mock('vue-router', () => ({ useRouter: () => router }))
@@ -76,7 +77,8 @@ beforeEach(() => {
   api.confirm.mockResolvedValue({ data: { message: 'ok', updated_count: 1 } })
   att.getAnomalyList.mockResolvedValue({ data: { total: 0, pending: 0, confirmed: 0, items: [] } })
   att.upsertRecord.mockResolvedValue({ data: {} })
-  att.batchConfirmAnomalies.mockResolvedValue({ data: {} })
+  // 後端回應：下面的案例處理的是出勤紀錄 55，由未確認改成已處理，所以可復原
+  att.batchConfirmAnomalies.mockResolvedValue({ data: { processed: 1, undoable_ids: [55] } })
 })
 
 describe('PersonDayDrawer', () => {
@@ -481,6 +483,31 @@ describe('PersonDayDrawer 審查修正', () => {
       expect(undo.show).toHaveBeenCalledWith(expect.objectContaining({ text: '已處理 9/14（一）林班導，跳到下一件', attendanceIds: [55] }))
       ;(undo.show.mock.calls[0][0] as { onUndone: () => void }).onUndone()
       expect(w.emitted('undone')).toHaveLength(1)
+    })
+
+    it('後端回的 undoable_ids 少於 processed（這筆原本已有處理）：沒有復原鈕，成功訊息說明無法復原；面板照常提示下一件', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      att.batchConfirmAnomalies.mockResolvedValue({ data: { processed: 1, undoable_ids: [] } })
+      const w = mountDrawer(missing(), { nav: { position: 3, total: 12, label: '9 月逐日待辦 3 / 12', hasPrev: true, hasNext: true } })
+      await flushPromises()
+      w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'admin_accept' })
+      await flushPromises()
+      expect(undo.show).not.toHaveBeenCalled()
+      expect(message.success).toHaveBeenCalledWith('已處理 9/14（一）林班導，跳到下一件。其中 1 件原本已有處理，無法復原')
+      // undoToast 反映實際有沒有跳出復原提示：沒有，所以面板要自己提示下一件
+      expect(w.emitted('changed')).toEqual([[{ undoToast: false }]])
+    })
+
+    it('全部可復原：復原送出的是後端回的 undoable_ids', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      att.batchConfirmAnomalies.mockResolvedValue({ data: { processed: 1, undoable_ids: [901] } })
+      const w = mountDrawer(missing())
+      await flushPromises()
+      w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'admin_waive', remark: '打卡機故障' })
+      await flushPromises()
+      expect(undo.show).toHaveBeenCalledWith(expect.objectContaining({ attendanceIds: [901] }))
+      expect(message.success).not.toHaveBeenCalled()
+      expect(w.emitted('changed')).toEqual([[{ undoToast: true }]])
     })
 
     it('決策卡優先（缺卡、出勤異常）：不再畫抽屜自己的應上班與打卡判定（決策卡已有）', async () => {

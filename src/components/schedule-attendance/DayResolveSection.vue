@@ -39,8 +39,9 @@
  * - side-by-side（疑似缺勤）：整天沒打卡，只能補登上下班，與「改這天」並列、都不是主要按鈕；不抓異常清單
  * 成功後 emit changed 讓格子重抓；格子版本或處理結果變了就重抓異常卡。
  * 只有 resolve-first 由決策卡寫應上班與實際（抽屜不畫自己的那兩區）；confirm-first、side-by-side 抽屜已寫，卡片不重複。
- * 接受扣款／豁免成功後跳可復原的提示（寫出處理了誰哪天），changed 帶 undoToast 讓面板不再另外提示；
- * 按了復原 emit undone，面板重抓。
+ * 接受扣款／豁免成功後，後端回的 undoable_ids 涵蓋這次全部處理的列才跳可復原的提示（寫出處理了誰哪天）；
+ * 這格原本已有處理（被覆蓋）就只給一般成功訊息並說明無法復原。changed 帶 undoToast＝實際有沒有跳出復原提示，
+ * 讓面板決定要不要另外提示下一件；按了復原 emit undone，面板重抓。
  */
 import { computed, ref, watch } from 'vue'
 import ResolveCard from '@/components/attendance/ResolveCard.vue'
@@ -69,7 +70,7 @@ const props = defineProps<{
   /**
    * 處理成功（父層以 @changed 綁定）。刻意用函式 prop 而不是 emit：送出途中抽屜換到另一格、本元件換位置被卸載時，
    * Vue 會丟掉已卸載元件的 emit，格子就不會重抓；函式 prop 仍會被呼叫。
-   * undoToast＝已經跳了可復原的提示（接受扣款／豁免），面板跳下一件時不必再提示。
+   * undoToast＝實際跳了可復原的提示（接受扣款／豁免且全部可復原），面板跳下一件時不必再提示。
    */
   onChanged?: (opts: { undoToast: boolean }) => void
   /** 按了復原（父層以 @undone 綁定）；提示停留 10 秒，抽屜早已換格，同樣用函式 prop */
@@ -151,7 +152,8 @@ const cardRef = ref<InstanceType<typeof ResolveCard> | null>(null)
 defineExpose({ isDirty: (): boolean => cardRef.value?.isDirty() ?? false })
 
 const { resolving, resolve } = useResolveAnomaly(
-  (payload) => props.onChanged?.({ undoToast: payload.action !== 'punch' }),
+  // undoToast＝實際有沒有跳出可復原的提示（後端回的 undoable_ids 涵蓋全部才有），不是看動作種類猜
+  (_payload, outcome) => props.onChanged?.({ undoToast: outcome.undoToast }),
   'DayResolveSection.resolve',
   { onUndone: () => props.onUndone?.() },
 )

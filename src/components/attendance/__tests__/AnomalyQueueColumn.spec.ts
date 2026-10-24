@@ -12,8 +12,12 @@ const { mockBatchConfirm, mockNotify, mockConfirm, mockShowUndo } = vi.hoisted((
   mockShowUndo: vi.fn(),
 }))
 
-// 批次成功後的「復原」提示（useConfirmUndo 自己有測試）：這裡只看交給它的文字與 id
-vi.mock('@/composables/useConfirmUndo', () => ({ showUndoToast: (...args: unknown[]) => mockShowUndo(...args) }))
+// 批次成功後的「復原」提示（showUndoToast 自己有測試）：這裡只看交給它的文字與 id；
+// 給不給復原的判斷（confirmedFollowUp）用真的，因為那是這個元件要驗證的行為
+vi.mock('@/composables/useConfirmUndo', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/composables/useConfirmUndo')>()),
+  showUndoToast: (...args: unknown[]) => mockShowUndo(...args),
+}))
 
 vi.mock('@/api/attendance', () => ({
   batchConfirmAnomalies: mockBatchConfirm,
@@ -437,6 +441,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
   })
 
   it('成功後改用可復原的提示（寫處理件數與 id）、清空選取並 emit resolved', async () => {
+    mockBatchConfirm.mockResolvedValue({ data: { processed: 1, undoable_ids: [cardLate.id] } })
     const wrapper = mountQueue({})
     const boxes = checkboxesOf(wrapper)
     await boxes[0].setValue(true)
@@ -448,13 +453,14 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     await flushPromises()
 
     expect(mockShowUndo).toHaveBeenCalledTimes(1)
-    expect(mockShowUndo).toHaveBeenCalledWith({ text: '已批次處理 2 件', attendanceIds: [cardLate.id], onUndone: expect.any(Function) })
+    expect(mockShowUndo).toHaveBeenCalledWith({ text: '已批次處理 1 件', attendanceIds: [cardLate.id], onUndone: expect.any(Function) })
     expect(ElMessage.success).not.toHaveBeenCalled()
     expect(wrapper.emitted('resolved')).toBeTruthy()
     expect(wrapper.find('.anomaly-queue-column__batch-bar').exists()).toBe(false)
   })
 
   it('復原成功（onUndone）後 emit resolved 讓父層重抓', async () => {
+    mockBatchConfirm.mockResolvedValue({ data: { processed: 1, undoable_ids: [cardLate.id] } })
     const wrapper = mountQueue({})
     await checkboxesOf(wrapper)[0].setValue(true)
     await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
@@ -464,26 +470,41 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     expect(wrapper.emitted('resolved')!.length).toBe(afterBatch + 1)
   })
 
-  it('復原只帶這次批次真的改成已處理的日卡：原本就已處理的卡不列入（復原會把它清成未處理）', async () => {
+  it('全部可復原：復原送出的是後端回的 undoable_ids（不是前端選取的清單）', async () => {
+    mockBatchConfirm.mockResolvedValue({ data: { processed: 2, undoable_ids: [cardMulti.id, cardLate.id] } })
     const wrapper = mountQueue({})
-    // 狀態改「全部」，全選會連已處理的卡一起選
+    await wrapper.find('.anomaly-queue-column__select-all input[type="checkbox"]').setValue(true)
+    expect(wrapper.find('.anomaly-queue-column__selected-count').text()).toContain('已選 2 件')
+    await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
+    await flushPromises()
+    expect(mockShowUndo).toHaveBeenCalledTimes(1)
+    expect(mockShowUndo).toHaveBeenCalledWith({ text: '已批次處理 2 件', attendanceIds: [cardMulti.id, cardLate.id], onUndone: expect.any(Function) })
+    expect(ElMessage.success).not.toHaveBeenCalled()
+  })
+
+  it('後端回的 undoable_ids 少於 processed（其中有原本已有處理的）：沒有復原鈕，訊息說明幾件無法復原', async () => {
+    // 選了 3 件（含一件原本就已處理），後端 processed 3 但只有 2 件可復原
+    mockBatchConfirm.mockResolvedValue({ data: { processed: 3, undoable_ids: [cardLate.id, cardMulti.id] } })
+    const wrapper = mountQueue({})
     await wrapper.findAll('select')[1].setValue('all')
     await wrapper.find('.anomaly-queue-column__select-all input[type="checkbox"]').setValue(true)
     expect(wrapper.find('.anomaly-queue-column__selected-count').text()).toContain('已選 3 件')
     await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
     await flushPromises()
-    const call = mockShowUndo.mock.calls[0][0] as { attendanceIds: number[] }
-    expect(call.attendanceIds.sort()).toEqual([cardLate.id, cardMulti.id].sort())
+    expect(mockShowUndo).not.toHaveBeenCalled()
+    expect(ElMessage.success).toHaveBeenCalledWith('已批次處理 3 件。其中 1 件原本已有處理，無法復原')
+    expect(wrapper.emitted('resolved')).toBeTruthy()
   })
 
-  it('選的全是原本就已處理的卡：沒有東西可復原，改用一般成功訊息', async () => {
+  it('不再用前端的 confirmed_action 快照判斷：選的卡看起來未處理，但後端說都不能復原就不給復原', async () => {
+    // 員工在這之間自己處理過（前端清單還沒更新，confirmed_action 仍是 null）
+    mockBatchConfirm.mockResolvedValue({ data: { processed: 2, undoable_ids: [] } })
     const wrapper = mountQueue({})
-    await wrapper.findAll('select')[1].setValue('confirmed')
     await wrapper.find('.anomaly-queue-column__select-all input[type="checkbox"]').setValue(true)
     await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
     await flushPromises()
     expect(mockShowUndo).not.toHaveBeenCalled()
-    expect(ElMessage.success).toHaveBeenCalledWith('已批次處理 2 件')
+    expect(ElMessage.success).toHaveBeenCalledWith('已批次處理 2 件。其中 2 件原本已有處理，無法復原')
   })
 
   it('使用者取消確認對話框（reject）不呼叫 API', async () => {

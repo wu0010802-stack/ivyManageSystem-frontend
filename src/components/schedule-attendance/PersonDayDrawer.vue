@@ -213,7 +213,7 @@ import {
 const INHERIT = -2
 const DAY_OFF = -1
 const WEEKDAY = ['一', '二', '三', '四', '五', '六', '日']
-/** 處理成功的附帶說明：undoToast＝已跳了可復原的提示（接受扣款／豁免），面板跳下一件時不必再提示 */
+/** 處理成功的附帶說明：undoToast＝實際跳了可復原的提示（接受扣款／豁免且全部可復原），面板跳下一件時不必再提示 */
 type ChangedOptions = { undoToast: boolean }
 
 const props = defineProps<{

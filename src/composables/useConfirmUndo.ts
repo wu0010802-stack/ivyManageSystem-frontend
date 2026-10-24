@@ -5,6 +5,10 @@
  * 跳一則停留 10 秒的訊息，裡面有「復原」按鈕，按下去用 action=clear 把這批清回未處理
  * （後端只清管理員代確認的列，員工自己的處理、未處理列靜默跳過）。
  *
+ * 能不能復原、復原哪些，一律看後端回傳的 undoable_ids（confirmedFollowUp）：這次被改動、且處理前
+ * 為未確認的列。前端不再用自己手上的快照猜，因為取鎖後重讀時那幾列可能已被員工或別的管理員改過。
+ * 復原後也照 clear 回傳的 processed 實話實說（undoOutcome）。
+ *
  * 訊息一關（時間到、手動關、按完復原）就不再能送：按鈕就算還在 DOM 也不動作。
  */
 import { h, ref } from 'vue'
@@ -18,10 +22,42 @@ const UNDO_WINDOW_MS = 10000
 export interface UndoToastOptions {
   /** 訊息文字，例如「已批次處理 3 件」 */
   text: string
-  /** 這次批次真的改變的出勤紀錄 id（復原只會清這些） */
+  /** 後端回傳的 undoable_ids：這次真的由未確認改成已處理的出勤紀錄 id（復原只會清這些） */
   attendanceIds: number[]
   /** 復原成功之後（呼叫端重抓資料） */
   onUndone: () => void
+}
+
+/** batch-confirm 回應中提示要用的部分（BatchConfirmResultOut；undoable_ids 在 OpenAPI 是選填） */
+export interface ConfirmedResult {
+  processed: number
+  undoable_ids?: number[]
+}
+
+export interface ConfirmedFollowUp {
+  /** 可以給復原提示時，復原要送的 id（後端的 undoable_ids）；null＝不給復原，只顯示一般成功訊息 */
+  undoIds: number[] | null
+  /** 不給復原時接在成功訊息後面的說明（其中幾件原本已有處理）；給復原或沒有這種件時是空字串 */
+  note: string
+}
+
+/**
+ * 接受扣款／豁免成功後給不給復原：undoable_ids 涵蓋這次全部 processed（數量相等）才給，
+ * 復原送出的就是 undoable_ids。部分已有處理（員工自己的處理被覆蓋）時整批都不給復原，
+ * 因為 clear 只清得回管理員代確認的列，給了也只能復原一部分。
+ */
+export function confirmedFollowUp(result: ConfirmedResult): ConfirmedFollowUp {
+  const undoable = result.undoable_ids ?? []
+  if (result.processed > 0 && undoable.length === result.processed) return { undoIds: undoable, note: '' }
+  const already = result.processed - undoable.length
+  return { undoIds: null, note: already > 0 ? `。其中 ${already} 件原本已有處理，無法復原` : '' }
+}
+
+/** 復原（clear）之後的提示：processed 與送出的件數相等才寫已復原，少的那幾件是被其他人改動了 */
+export function undoOutcome(processed: number, requested: number): { type: 'success' | 'warning'; text: string } {
+  if (processed >= requested) return { type: 'success', text: '已復原' }
+  if (processed <= 0) return { type: 'warning', text: '沒有復原任何一件，都已被其他人改動' }
+  return { type: 'warning', text: `已復原 ${processed} 件，另 ${requested - processed} 件已被其他人改動` }
 }
 
 const BUTTON_STYLE =
@@ -44,8 +80,10 @@ export function showUndoToast(opts: UndoToastOptions): void {
     sent = true
     undoing.value = true
     try {
-      await batchConfirmAnomalies({ attendance_ids: opts.attendanceIds, action: 'clear' })
-      ElMessage.success('已復原')
+      const res = await batchConfirmAnomalies({ attendance_ids: opts.attendanceIds, action: 'clear' })
+      const outcome = undoOutcome(res.data.processed, opts.attendanceIds.length)
+      ElMessage[outcome.type](outcome.text)
+      // 沒復原完也要重抓：那幾件已被別人改過，畫面上的狀態不是最新的
       opts.onUndone()
     } catch (err) {
       notify(err, 'useConfirmUndo.undo', null, { prefix: '復原失敗' })

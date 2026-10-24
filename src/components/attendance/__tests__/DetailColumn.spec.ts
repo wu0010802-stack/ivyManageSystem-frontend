@@ -27,7 +27,11 @@ vi.mock('@/composables/useErrorNotify', () => ({
 }))
 
 // ── mock 復原提示（接受扣款／豁免成功後）──────────────────────────────────────────
-vi.mock('@/composables/useConfirmUndo', () => ({ showUndoToast: mockUndoToast }))
+// 只換掉會真的跳訊息的 showUndoToast；給不給復原的判斷（confirmedFollowUp）用真的
+vi.mock('@/composables/useConfirmUndo', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/composables/useConfirmUndo')>()),
+  showUndoToast: mockUndoToast,
+}))
 
 // ── mock ElMessage ─────────────────────────────────────────────────────────────
 vi.mock('element-plus', () => ({
@@ -141,7 +145,8 @@ describe('DetailColumn', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUpsertRecord.mockResolvedValue({ data: {} })
-    mockBatchConfirm.mockResolvedValue({ data: {} })
+    // 後端回應：這筆由未確認改成已處理，所以可復原
+    mockBatchConfirm.mockResolvedValue({ data: { processed: 1, undoable_ids: [anomalyItem.id] } })
   })
 
   // ── mode=resolve + anomaly 非 null ──────────────────────────────────────────
@@ -264,6 +269,29 @@ describe('DetailColumn', () => {
       ;(mockUndoToast.mock.calls[0][0] as { onUndone: () => void }).onUndone()
       await nextTick()
       expect(wrapper.emitted('resolved')).toHaveLength(resolvedBefore + 1)
+    })
+
+    it('後端回的 undoable_ids 少於 processed（這筆原本已有處理）：沒有復原提示，成功訊息說明無法復原，仍通知容器重抓', async () => {
+      mockUndoToast.mockClear()
+      mockElMessageSuccess.mockClear()
+      mockBatchConfirm.mockResolvedValue({ data: { processed: 1, undoable_ids: [] } })
+      const wrapper = mountDetail({})
+      await wrapper.findComponent(ResolveCardStub).vm.$emit('resolve', { action: 'admin_accept' })
+      await nextTick()
+      await nextTick()
+      expect(mockUndoToast).not.toHaveBeenCalled()
+      expect(mockElMessageSuccess).toHaveBeenCalledWith('已接受扣款。其中 1 件原本已有處理，無法復原')
+      expect(wrapper.emitted('resolved')).toBeTruthy()
+    })
+
+    it('全部可復原：復原送出的是後端回的 undoable_ids', async () => {
+      mockUndoToast.mockClear()
+      mockBatchConfirm.mockResolvedValue({ data: { processed: 1, undoable_ids: [777] } })
+      const wrapper = mountDetail({})
+      await wrapper.findComponent(ResolveCardStub).vm.$emit('resolve', { action: 'admin_waive', remark: '打卡機故障' })
+      await nextTick()
+      await nextTick()
+      expect(mockUndoToast).toHaveBeenCalledWith({ text: '已豁免', attendanceIds: [777], onUndone: expect.any(Function) })
     })
 
     it('calls notify and does NOT emit navigate on failure', async () => {
