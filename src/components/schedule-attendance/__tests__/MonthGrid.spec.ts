@@ -83,7 +83,7 @@ describe('MonthGrid 狀態點不只靠顏色', () => {
   // 形狀是共用的全域 class（src/assets/main.css 的 .verdict-shape--*）：週格子、月格子、圖例同一套
   const css = readFileSync(resolve(__dirname, '../../../assets/main.css'), 'utf8')
   const rule = (cls: string) => css.match(new RegExp(`\\.${cls} \\{([^}]*)\\}`))?.[1] ?? ''
-  it('扣款＝實心圓、缺卡＝空心圓（2px 邊）、換班待確認＝空心菱形、設定問題＝空心方形、資料待補＝虛線方形、請假＝實心小方塊', () => {
+  it('扣款＝實心圓、缺卡＝空心圓（2px 邊）、換班待確認＝空心菱形、設定問題＝空心方形、資料待補＝實心橫條、請假＝實心小方塊', () => {
     expect(rule('verdict-shape')).toMatch(/width: 8px/)
     expect(rule('verdict-shape')).toMatch(/height: 8px/)
     expect(rule('verdict-shape--deduct')).toMatch(/border-radius: 50%/)
@@ -97,8 +97,18 @@ describe('MonthGrid 狀態點不只靠顏色', () => {
     expect(rule('verdict-shape--confirm')).toMatch(/--verdict-shape-color: var\(--color-verdict-confirm\)/)
     expect(rule('verdict-shape--setting')).toMatch(/border: 2px solid var\(--verdict-shape-color\)/)
     expect(rule('verdict-shape--setting')).toMatch(/--verdict-shape-color: var\(--color-verdict-setting\)/)
-    expect(rule('verdict-shape--pending_data')).toMatch(/border: 2px dashed var\(--verdict-shape-color\)/)
-    expect(rule('verdict-shape--pending_data')).toMatch(/--verdict-shape-color: var\(--el-text-color-secondary\)/)
+    // 資料待補：實心橫條（寬 8px 沿用基底、高 3px、圓角 1.5px），與設定問題的方形一眼分得出來；不是虛線、沒有邊框
+    const pending = rule('verdict-shape--pending_data')
+    expect(pending).toMatch(/height: 3px/)
+    expect(pending).toMatch(/border-radius: 1\.5px/)
+    expect(pending).toMatch(/background: var\(--verdict-shape-color\)/)
+    expect(pending).toMatch(/--verdict-shape-color: var\(--el-text-color-secondary\)/)
+    expect(pending).not.toMatch(/dashed|border:/)
+    // 上下各留 2.5px：3px 橫條加起來仍佔 8px 行高，不改變週格子與圖例的排版
+    expect(pending).toMatch(/margin-block: 2\.5px/)
+    // 與設定問題（方形）形狀不同：方形是 8px 高的空心框，橫條只有 3px 高的實心
+    expect(rule('verdict-shape--setting')).not.toMatch(/height:/)
+    expect(rule('verdict-shape--setting')).toMatch(/border: 2px solid/)
     expect(rule('verdict-shape--leave')).toMatch(/background: var\(--verdict-shape-color\)/)
     expect(rule('verdict-shape--leave')).toMatch(/--verdict-shape-color: var\(--color-info-darker\)/)
   })

@@ -176,9 +176,14 @@ body {
   border: 2px solid var(--verdict-shape-color);
   border-radius: 1px;
 }
+/* 資料待補＝實心橫條：8px 下虛線方形與設定問題的實線方形幾乎分不出來（封存格再統一成灰色就完全相同）。
+   高 3px、上下各留 2.5px，整體仍佔 8px 行高，不改變排版 */
 .verdict-shape--pending_data {
   --verdict-shape-color: var(--el-text-color-secondary);
-  border: 2px dashed var(--verdict-shape-color);
+  height: 3px;
+  margin-block: 2.5px;
+  border-radius: 1.5px;
+  background: var(--verdict-shape-color);
 }
 .verdict-shape--leave {
   --verdict-shape-color: var(--color-info-darker);
