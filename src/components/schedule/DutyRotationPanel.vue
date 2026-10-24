@@ -445,14 +445,14 @@ onMounted(async () => {
           <tbody>
             <tr v-for="row in state.rows" :key="row.uid">
               <td>
-                <el-select v-model="row.teacher_role" size="small">
+                <el-select v-model="row.teacher_role" size="small" class="drp-role-select">
                   <el-option label="班導" value="head" />
                   <el-option label="副班導" value="assistant" />
                 </el-select>
               </td>
               <td><el-input v-model="row.label" size="small" maxlength="20" /></td>
               <td>
-                <el-select v-model="row.shift_type_id" size="small" placeholder="選擇班別">
+                <el-select v-model="row.shift_type_id" size="small" placeholder="選擇班別" class="drp-shift-select">
                   <el-option v-for="t in shiftTypes" :key="t.id" :label="`${t.name} ${t.work_start}–${t.work_end}`" :value="t.id" />
                 </el-select>
               </td>
@@ -574,8 +574,12 @@ onMounted(async () => {
 .drp-defaults { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 8px; }
 .drp-defaults label { display: flex; gap: 8px; align-items: center; }
 .drp-name { width: 220px; }
+/* 下拉要放得下選項全文：班別是「班別名 時段」（例如「早車 07:00–16:30」）用 180px，角色（班導／副班導）用 104px；預設寬度會截字 */
+.drp-defaults .el-select { width: 180px; }
 .drp-rows { border-collapse: collapse; margin-bottom: 8px; }
 .drp-rows td, .drp-rows th { padding: 4px 8px; text-align: left; }
+.drp-rows .drp-role-select { width: 104px; }
+.drp-rows .drp-shift-select { width: 180px; }
 .drp-grid-wrap { overflow-x: auto; }
 .drp-grid { border-collapse: collapse; min-width: max-content; }
 .drp-grid th, .drp-grid td { border: 1px solid var(--el-border-color); padding: 4px; text-align: center; white-space: nowrap; }

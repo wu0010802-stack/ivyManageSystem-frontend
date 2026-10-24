@@ -286,16 +286,19 @@ body {
  * 只蓋實心 primary；plain/link/text 變體的前景色 = --el-color-primary，
  * 硬蓋背景會讓文字與背景同色（隱形）。
  * 一律排除 .is-disabled：否則 !important 蓋掉 EP 的停用底色，停用鈕看起來跟
- * 可按時一模一樣（守衛：tests/unit/styles/primaryButtonDisabled.spec.ts）。 */
+ * 可按時一模一樣（守衛：tests/unit/styles/primaryButtonDisabled.spec.ts）。
+ * 底色走 --el-color-primary 而非 --color-primary（＝--brand-primary）：實心鈕配白字要 4.5:1，
+ * 後台品牌色 #0284c7 只有 4.10:1；--el-color-primary 在後台是深一階的 #0277b5（4.87:1，見上方 html.ivy-admin 區塊），
+ * portal／暗色與品牌色同值，租戶換主題時也跟著 EP 的主色走。hover／focus 用 --brand-primary-hover（後台 #0369a1）。 */
 .el-button--primary:not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled) {
-  background-color: var(--color-primary) !important;
-  border-color: var(--color-primary) !important;
+  background-color: var(--el-color-primary) !important;
+  border-color: var(--el-color-primary) !important;
 }
 
 .el-button--primary:not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled):hover,
 .el-button--primary:not(.is-plain):not(.is-link):not(.is-text):not(.is-disabled):focus {
-  background-color: var(--color-primary-soft) !important;
-  border-color: var(--color-primary-soft) !important;
+  background-color: var(--brand-primary-hover) !important;
+  border-color: var(--brand-primary-hover) !important;
 }
 
 /* 停用的實心 primary 退成中性（與停用的一般鈕同一種樣子）：EP 預設的淡主色底仍是整排最飽和的元素，
