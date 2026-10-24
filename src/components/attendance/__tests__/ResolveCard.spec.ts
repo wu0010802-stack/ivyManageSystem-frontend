@@ -121,6 +121,8 @@ function mountCard(overrides: {
   primaryAction?: boolean
   acceptWarning?: string | null
   sealed?: boolean
+  showFacts?: boolean
+  fallbackVerdict?: string | null
 }) {
   return mount(ResolveCard, {
     props: {
@@ -134,6 +136,8 @@ function mountCard(overrides: {
       ...(overrides.primaryAction !== undefined ? { primaryAction: overrides.primaryAction } : {}),
       ...(overrides.acceptWarning !== undefined ? { acceptWarning: overrides.acceptWarning } : {}),
       ...(overrides.sealed !== undefined ? { sealed: overrides.sealed } : {}),
+      ...(overrides.showFacts !== undefined ? { showFacts: overrides.showFacts } : {}),
+      ...(overrides.fallbackVerdict !== undefined ? { fallbackVerdict: overrides.fallbackVerdict } : {}),
     },
     global: { stubs },
   })
@@ -397,6 +401,27 @@ describe('ResolveCard — 嵌在排班與出勤抽屜', () => {
     const confirmOnly = mountCard({ actions: ['admin_accept', 'admin_waive'] })
     expect(labels(confirmOnly)).not.toContain('補打卡並重算')
     expect(confirmOnly.find('[data-test="resolve-punch"]').exists()).toBe(false)
+  })
+
+  it('showFacts=false：抽屜自己已寫應上班與打卡（疑似換班、疑似缺勤），卡片不再畫事實欄；判定與動作照舊', () => {
+    const w = mountCard({ showNav: false, showFacts: false, context: { ...defaultContext, plan: '早車 07:00–16:30（週排班）' } })
+    expect(w.find('[data-test="resolve-facts"]').exists()).toBe(false)
+    expect(w.text()).not.toContain('08:15')
+    expect(w.text()).not.toContain('早車')
+    expect(w.get('[data-test="resolve-verdict"]').text()).toBe('遲到 15 分')
+    expect(w.find('[data-test="resolve-accept"]').exists()).toBe(true)
+  })
+
+  it('showFacts=false 但打卡紀錄還在讀或讀失敗：仍寫出狀態（補卡為何停用）', () => {
+    const w = mountCard({ showFacts: false, context: { punch_in: null, punch_out: null, has_leave: false, estimated_deduction: 0, records: 'failed' } })
+    expect(w.get('[data-test="resolve-facts"]').text()).toContain('打卡紀錄載入失敗')
+  })
+
+  it('沒有異常明細（空卡）時，標頭用呼叫端給的格子判定；有明細就以明細為準', () => {
+    const empty = mountCard({ item: { ...itemLate, items: [] }, context: missingOutContext, fallbackVerdict: '缺卡待確認' })
+    expect(empty.get('[data-test="resolve-verdict"]').text()).toBe('缺卡待確認')
+    expect(mountCard({ fallbackVerdict: '缺卡待確認' }).get('[data-test="resolve-verdict"]').text()).toBe('遲到 15 分')
+    expect(mountCard({ item: { ...itemLate, items: [] }, context: missingOutContext }).find('[data-test="resolve-verdict"]').exists()).toBe(false)
   })
 
   it('primaryAction=false：接受不是主要按鈕（同一抽屜另有主要動作時不得兩顆主色鈕）', () => {

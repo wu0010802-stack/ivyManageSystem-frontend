@@ -2,6 +2,12 @@
   <section class="pdd-resolve" data-test="pdd-resolve">
     <h3>{{ mode === 'side-by-side' ? '補登上下班' : '處理打卡' }}</h3>
     <p v-if="handledNote" class="pdd-resolve__note">{{ handledNote }}</p>
+    <!-- 決策卡優先時抽屜不畫自己的應上班與打卡判定：異常明細還在讀或讀失敗、決策卡畫不出來時，先用格子資料寫出這天的狀況 -->
+    <dl v-if="mode === 'resolve-first' && loadState !== 'idle'" class="pdd-resolve__facts" data-test="pdd-resolve-facts">
+      <dt>應上班</dt><dd>{{ context.plan }}</dd>
+      <dt>實際</dt><dd>{{ context.punch_in ?? '無紀錄' }} – {{ context.punch_out ?? '無紀錄' }}</dd>
+      <dt>判定</dt><dd>{{ verdict }}</dd>
+    </dl>
     <p v-if="loadState === 'loading'" class="pdd-resolve__note" role="status">正在讀取這天的異常…</p>
     <p v-else-if="loadState === 'error'" class="pdd-resolve__note" role="alert">讀取異常資料失敗，可按「看他整月」到逐人檢視處理。</p>
     <ResolveCard
@@ -16,6 +22,8 @@
       :actions="actions"
       :primary-action="mode === 'resolve-first'"
       :accept-warning="acceptWarning"
+      :show-facts="mode === 'resolve-first'"
+      :fallback-verdict="mode === 'resolve-first' ? verdict : null"
       @resolve="onResolve"
     />
   </section>
@@ -30,6 +38,7 @@
  * - confirm-first（疑似換班）：確認當日班別是主要動作，這裡只給接受扣款／豁免（兩側都有打卡，不必補卡）
  * - side-by-side（疑似缺勤）：整天沒打卡，只能補登上下班，與「改這天」並列、都不是主要按鈕；不抓異常清單
  * 成功後 emit changed 讓格子重抓；格子版本或處理結果變了就重抓異常卡。
+ * 只有 resolve-first 由決策卡寫應上班與實際（抽屜不畫自己的那兩區）；confirm-first、side-by-side 抽屜已寫，卡片不重複。
  * 接受扣款／豁免成功後跳可復原的提示（寫出處理了誰哪天），changed 帶 undoToast 讓面板不再另外提示；
  * 按了復原 emit undone，面板重抓。
  */
@@ -49,6 +58,8 @@ const props = defineProps<{
   employeeNumber: string
   /** 「一」…「日」 */
   weekday: string
+  /** 格子上的判定（抽屜算好的同一句）：決策卡畫不出來或沒有異常明細時用 */
+  verdict: string
   /** 抽屜剛自動跳到這格：短暫鎖住動作（連點不會落到這一筆） */
   locked?: boolean
   /** 這格符合整月固定型態（多半是設定問題）：按「接受扣款」前先提醒（見 ResolveCard） */
@@ -159,5 +170,8 @@ function onResolve(payload: ResolvePayload): void {
 <style scoped>
 .pdd-resolve h3 { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 .pdd-resolve__note { margin: 0 0 var(--space-2); color: var(--el-text-color-secondary); font-size: var(--text-sm); }
+.pdd-resolve__facts { display: grid; grid-template-columns: 4.5em 1fr; gap: var(--space-1) var(--space-2); margin: 0 0 var(--space-2); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.pdd-resolve__facts dt { color: var(--el-text-color-secondary); }
+.pdd-resolve__facts dd { margin: 0; }
 .pdd-resolve :deep(.resolve-card) { padding: 0; }
 </style>

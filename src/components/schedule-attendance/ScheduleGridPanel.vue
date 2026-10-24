@@ -462,15 +462,26 @@ const navOrder = computed<GridCell[]>(() => {
     .flatMap((section) => section.employees)
     .flatMap((emp) => navDays.map((d) => cells.get(cellKey(emp.employee_id, d.date))).filter((c): c is GridCell => c !== undefined))
 })
-/** 逐日待辦：待處理格，排除符合整月型態的格子（設定問題另外處理，不逐格接受扣款） */
+/**
+ * 週檢視剛處理完、整月資料還沒重抓回來的格子：佇列用整月資料，要等頁面遞增 revision 重抓（同月重抓時保留舊值），
+ * 這段時間剛處理的格子仍會被算成待辦（n / N 不減、「上一件」回到它、最後一件處理完會跳回它）。
+ * 週資料重抓後確定不再是待辦就先排除；整月資料換新（已含這次處理）或按了復原就清掉，回到以整月資料為準。
+ */
+const handledKeys = ref<ReadonlySet<string>>(new Set())
+watch(() => props.month?.data.value, () => {
+  if (handledKeys.value.size) handledKeys.value = new Set()
+})
+/** 逐日待辦：待處理格，排除符合整月型態的格子（設定問題另外處理，不逐格接受扣款）與剛處理完的格子 */
 const issueKeys = computed<string[]>(() => {
   const src = queueSource.value
   if (!src) return []
   const uncovered = uncoveredDates(src.grid.days)
   const patterns = patternKeys.value
+  const handled = handledKeys.value
   return navOrder.value
-    .filter((c) => isIssue(c, src.grid.today, uncovered) && !patterns.has(cellKey(c.employee_id, c.date)))
+    .filter((c) => isIssue(c, src.grid.today, uncovered))
     .map((c) => cellKey(c.employee_id, c.date))
+    .filter((key) => !patterns.has(key) && !handled.has(key))
 })
 /** 目前這格在佇列裡的位置：前後的待處理（不在佇列順序裡的格子＝從頭開始） */
 const navState = computed(() => {
@@ -557,11 +568,13 @@ function onNavigate(direction: 1 | -1): void {
 }
 
 /**
- * 處理完自動跳下一筆：送出前記下這格與它後面的待處理，重抓後這格不再是待處理就跳到後面第一筆
+ * 處理完自動跳下一件：送出前記下這格與它後面的待處理，重抓後這格不再是待處理就跳到後面第一件
  * 還沒處理的（到底了就回到最前面）。月模式要等整月資料重抓（頁面遞增 revision）才看得到結果，
  * 所以等「這格的新資料」到了才判斷，不在 onChanged 裡直接判斷。
+ * fromMonth＝送出時抽屜用的是整月那一格（月模式，或週模式佇列剛跳到別週、週資料還沒到）：只認整月資料的新版本。
+ * 換週途中領到的週資料可能是送出前就在途的舊快照（換週後第一次抓不繞過 apiDedupe），拿它判斷會誤以為還沒處理而停下。
  */
-let pendingAdvance: { key: string; after: string[]; undoToast: boolean } | null = null
+let pendingAdvance: { key: string; after: string[]; undoToast: boolean; fromMonth: boolean } | null = null
 watch(drawerOpen, (open) => {
   if (open) return
   pendingAdvance = null
@@ -570,15 +583,21 @@ watch(drawerOpen, (open) => {
 })
 // 整月資料重抓失敗（data 變 null）時抽屜跟著卸載：一併收起，重新載入後才不會自己彈回來跳格
 watch(drawerGrid, (g) => { if (!g && drawerOpen.value) drawerOpen.value = false })
-watch(() => (selected.value ? drawerCells.value.get(cellKey(selected.value.employeeId, selected.value.date)) : undefined), (cell) => {
+watch(() => {
+  const key = selectedKey.value
+  if (!key) return undefined
+  return pendingAdvance?.fromMonth ? queueMonthCells.value.get(key) : drawerCells.value.get(key)
+}, (cell) => {
   const pending = pendingAdvance
-  const g = drawerGrid.value
+  const g = pending?.fromMonth ? queueMonth.value : drawerGrid.value
   if (!pending || !cell || !g || cellKey(cell.employee_id, cell.date) !== pending.key) return
   pendingAdvance = null
   if (isIssue(cell, g.today, uncoveredDates(g.days))) {
     unlockActions()
     return
   }
+  // 新資料來自週資料、佇列卻是整月的（還沒重抓回來）：先把這格排出佇列，計數、上一件與「都處理完了」才對
+  if (!pending.fromMonth && queueMonth.value) handledKeys.value = new Set([...handledKeys.value, pending.key])
   const remaining = new Set(issueKeys.value)
   const target = pending.after.find((k) => remaining.has(k)) ?? issueKeys.value.find((k) => k !== pending.key) ?? null
   if (!target) {
@@ -666,7 +685,7 @@ async function onChanged(opts: { undoToast?: boolean } = {}): Promise<void> {
   const n = navState.value
   // 處理完自動跳下一件只在核對（排班沒有待處理佇列）
   pendingAdvance = props.mode === 'reconcile' && drawerOpen.value && n && n.position !== null
-    ? { key: n.key, after: n.after, undoToast: !!opts.undoToast }
+    ? { key: n.key, after: n.after, undoToast: !!opts.undoToast, fromMonth: drawerSource.value?.week === false }
     : null
   if (pendingAdvance) lockActions(4000)
   await state.reload()
@@ -677,6 +696,8 @@ function onDrawerChanged(opts?: { undoToast: boolean }): void {
 }
 /** 抽屜的「復原」（接受扣款／豁免後 10 秒內）：清回未處理後重抓並通知頁面（另一個面板與整月資料同步）；不是新的處理，不自動跳格 */
 async function onUndone(): Promise<void> {
+  // 復原的那格又是待辦了：不再當「剛處理」排除（整月資料還沒重抓前，以它的舊值為準）
+  handledKeys.value = new Set()
   await state.reload()
   emit('changed')
 }

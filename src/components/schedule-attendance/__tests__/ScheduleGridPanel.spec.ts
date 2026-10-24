@@ -961,13 +961,22 @@ describe('ScheduleGridPanel 抽屜佇列跨整月（核對週檢視也一樣）'
       ]
     })
   }
-  function mockGrids(resolved: () => string[] = () => []) {
+  type GridMockOptions = {
+    /** 週資料看到的已處理清單（不給＝同整月）：模擬換週途中領到送出前就在途的舊快照 */
+    weekResolved?: () => string[]
+    /** 頁面重抓整月（第一次之後）先不回來，呼叫 release() 才回（同月重抓時整月資料保留舊值） */
+    holdMonthReload?: { release: () => void }
+  }
+  function mockGrids(resolved: () => string[] = () => [], opts: GridMockOptions = {}) {
+    let monthCalls = 0
     api.grid.mockImplementation(async ({ start_date }: { start_date: string }) => {
-      const cells = monthCells(resolved())
       if (start_date === '2026-09-01') {
-        return { data: grid({ start_date, days: [...WEEK, ...NEXT].map((d) => day(d)), today: TODAY, employees: people, cells }) }
+        const hold = opts.holdMonthReload
+        if (monthCalls++ > 0 && hold) await new Promise<void>((r) => { hold.release = r })
+        return { data: grid({ start_date, days: [...WEEK, ...NEXT].map((d) => day(d)), today: TODAY, employees: people, cells: monthCells(resolved()) }) }
       }
       const week = start_date === NEXT[0] ? NEXT : WEEK
+      const cells = monthCells((opts.weekResolved ?? resolved)())
       return { data: grid({ start_date: week[0], days: week.map((d) => day(d)), today: TODAY, employees: people, cells: cells.filter((c) => week.includes(c.date)) }) }
     })
   }
@@ -1052,6 +1061,88 @@ describe('ScheduleGridPanel 抽屜佇列跨整月（核對週檢視也一樣）'
     revision.value += 1
     await flushPromises()
     expect(drawer(wrapper).props('nav')).toMatchObject({ position: 1, total: 2, label: '9 月逐日待辦 1 / 2' })
+  })
+
+  it('整月資料還沒重抓回來：剛處理的那件立即從佇列扣掉；最後一件處理完說「都處理完了」，不跳回已處理的格子', async () => {
+    // 9/22 那件先當已處理：剩下的 1|9/14、2|9/15 都在這週
+    const resolved = ['1|2026-09-22']
+    const hold = { release: () => {} }
+    mockGrids(() => resolved, { holdMonthReload: hold })
+    const revision = ref(0)
+    const wrapper = mountWeek('2026-09-16', revision)
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, '2026-09-14')
+    await flushPromises()
+    expect(drawer(wrapper).props('nav')).toMatchObject({ position: 1, total: 2 })
+
+    resolved.push('1|2026-09-14')
+    drawer(wrapper).vm.$emit('changed', { undoToast: true })
+    revision.value += 1 // 頁面收到 changed 重抓整月，一直沒回來
+    await flushPromises()
+    expect(at(wrapper)).toBe('2|2026-09-15')
+    // 標籤總數立即扣掉剛處理的那件；「上一件」不會回到它
+    expect(drawer(wrapper).props('nav')).toMatchObject({ position: 1, total: 1, label: '9 月逐日待辦 1 / 1', hasPrev: false, hasNext: false })
+
+    await new Promise((r) => setTimeout(r, 650)) // 跳格後的短暫鎖定
+    resolved.push('2|2026-09-15')
+    drawer(wrapper).vm.$emit('changed', { undoToast: true })
+    revision.value += 1
+    await flushPromises()
+    expect(at(wrapper)).toBe('2|2026-09-15')
+    expect(ui.success).toHaveBeenLastCalledWith('這個月的逐日待辦都處理完了')
+    expect(drawer(wrapper).props('actionsLocked')).toBe(false)
+
+    // 整月資料終於回來（已含這兩次處理）：佇列和新資料一致
+    hold.release()
+    await flushPromises()
+    expect(drawer(wrapper).props('nav')).toMatchObject({ position: null, total: 0 })
+  })
+
+  it('送出時用的是整月那一格（週資料還沒到）：換週領到的舊快照不算數，等整月新資料到了才判斷、照樣自動前進', async () => {
+    const resolved: string[] = []
+    const weekSnapshot: string[] = []
+    mockGrids(() => resolved, { weekResolved: () => weekSnapshot })
+    const revision = ref(0)
+    const wrapper = mountWeek('2026-09-16', revision)
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, '2026-09-14')
+    await flushPromises()
+    drawer(wrapper).vm.$emit('navigate', 1)
+    await flushPromises()
+    expect(at(wrapper)).toBe('1|2026-09-22') // 下週那件，抽屜先用整月那一格
+
+    resolved.push('1|2026-09-22')
+    drawer(wrapper).vm.$emit('changed', { undoToast: true })
+    await flushPromises()
+    // 頁面把錨點移到下週：週資料是送出前的舊快照（那件仍是待辦）
+    await wrapper.setProps({ date: '2026-09-22' })
+    await flushPromises()
+    expect(at(wrapper)).toBe('1|2026-09-22')
+    expect(drawer(wrapper).props('actionsLocked')).toBe(true)
+
+    // 整月新資料到了：那件已處理，跳到下一件（在上週，格子跟過去）
+    revision.value += 1
+    await flushPromises()
+    expect(at(wrapper)).toBe('2|2026-09-15')
+    expect(wrapper.emitted('update:date')).toEqual([['2026-09-22'], ['2026-09-15']])
+  })
+
+  it('按了復原：先前排除的「剛處理」格子回到佇列', async () => {
+    const resolved = ['1|2026-09-22']
+    mockGrids(() => resolved, { holdMonthReload: { release: () => {} } })
+    const revision = ref(0)
+    const wrapper = mountWeek('2026-09-16', revision)
+    await flushPromises()
+    wrapper.findComponent({ name: 'ShiftGrid' }).vm.$emit('select', 1, '2026-09-14')
+    await flushPromises()
+    resolved.push('1|2026-09-14')
+    drawer(wrapper).vm.$emit('changed', { undoToast: true })
+    await flushPromises()
+    expect(drawer(wrapper).props('nav')).toMatchObject({ total: 1 })
+    resolved.pop()
+    drawer(wrapper).vm.$emit('undone')
+    await flushPromises()
+    expect(drawer(wrapper).props('nav')).toMatchObject({ total: 2 })
   })
 
   it('沒有整月資料：退回這週的佇列（也就認不出型態格，這週的待辦全算）', async () => {

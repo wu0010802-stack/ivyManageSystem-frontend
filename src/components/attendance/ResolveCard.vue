@@ -38,8 +38,9 @@
         <span v-if="amount > 0" class="resolve-card__amount" data-test="resolve-amount">−NT${{ amountText }}</span>
       </div>
 
-      <dl class="resolve-card__facts" data-test="resolve-facts">
-        <template v-if="context.plan">
+      <!-- 事實欄：外層已寫應上班與打卡時（showFacts=false）不重複；但打卡紀錄還在讀或讀失敗仍要說，補卡才知道為何停用 -->
+      <dl v-if="showFacts || recordsState !== 'loaded'" class="resolve-card__facts" data-test="resolve-facts">
+        <template v-if="showFacts && context.plan">
           <dt>應上班</dt>
           <dd>{{ context.plan }}</dd>
         </template>
@@ -193,8 +194,14 @@ const props = withDefaults(defineProps<{
   acceptWarning?: string | null
   /** 這個人這個月薪資已封存：只能看，不給補打卡、接受扣款、豁免 */
   sealed?: boolean
+  /** 事實欄（應上班、實際）；外層已經寫了同樣的事實時傳 false，每個事實只出現一次 */
+  showFacts?: boolean
+  /** 沒有異常明細（例如異常清單查無這天、只能用空卡）時標頭改寫的判定（格子上的判定）；有明細就以明細為準 */
+  fallbackVerdict?: string | null
 }>(), {
   sealed: false,
+  showFacts: true,
+  fallbackVerdict: null,
   busy: false,
   showNav: true,
   actions: () => ['punch', 'admin_accept', 'admin_waive'],
@@ -235,7 +242,11 @@ const severity = computed<'deduct' | 'missing' | 'neutral'>(() => {
 function shortDetail(detail: string): string {
   return detail.replace(/（[^（）]*）$/, '').replace(/分鐘$/, '分').trim()
 }
-const verdictText = computed(() => props.item.items.map((entry) => shortDetail(entry.detail)).join('・'))
+const verdictText = computed(() =>
+  props.item.items.length > 0
+    ? props.item.items.map((entry) => shortDetail(entry.detail)).join('・')
+    : props.fallbackVerdict ?? '',
+)
 
 const amount = computed(() => props.context.estimated_deduction)
 const amountText = computed(() => amount.value.toLocaleString())

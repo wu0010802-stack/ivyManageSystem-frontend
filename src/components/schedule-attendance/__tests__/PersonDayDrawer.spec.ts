@@ -518,6 +518,49 @@ describe('PersonDayDrawer 審查修正', () => {
       expect(confirmOnly.get('[data-test="pdd-more"] summary').text()).toBe('其他處理：確認是換班')
     })
 
+    it('異常清單讀取失敗或還在讀：決策卡畫不出來，仍用格子資料寫出應上班、打卡時間與判定', async () => {
+      att.getAnomalyList.mockRejectedValue(new Error('boom'))
+      const failed = mountDrawer(missing())
+      await flushPromises()
+      const facts = failed.get('[data-test="pdd-resolve-facts"]').text()
+      expect(facts).toContain('早車 07:00–16:30（週排班）')
+      expect(facts).toContain('07:52 – 無紀錄')
+      expect(facts).toContain('缺卡待確認')
+      expect(failed.text()).toContain('讀取異常資料失敗')
+
+      att.getAnomalyList.mockReturnValue(new Promise(() => {}))
+      const loading = mountDrawer(missing())
+      await flushPromises()
+      expect(loading.get('[data-test="pdd-resolve-facts"]').text()).toContain('07:52 – 無紀錄')
+    })
+
+    it('異常清單查無這天（只能用空卡）：決策卡標頭改用格子的判定；讀到卡之後就不再另寫一份事實', async () => {
+      const empty = mountDrawer(missing())
+      await flushPromises()
+      expect(empty.get('[data-test="resolve-verdict"]').text()).toBe('缺卡待確認')
+      expect(empty.find('[data-test="pdd-resolve-facts"]').exists()).toBe(false)
+      expect(empty.get('[data-test="resolve-facts"]').text()).toContain('07:52 – 無紀錄')
+    })
+
+    it('疑似換班、疑似缺勤：抽屜自己的應上班與打卡判定已經寫了，決策卡不再畫應上班與實際（每個事實只出現一次）', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [{ ...anomalyRow, type: 'late', type_label: '遲到', detail: '遲到 91 分鐘' }] } })
+      const swap = mountDrawer(cell(1, W1, { edit: RECORDED, actual: { status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00`, attendance_id: 55 } }))
+      const absent = mountDrawer(cell(1, W1, { edit: { plan: true, confirm: false, recorded: false, locked_reason: null }, actual: { status: 'suspected_absence', attendance_id: null } }))
+      await flushPromises()
+      for (const w of [swap, absent]) {
+        expect(w.find('[data-test="pdd-actual"]').exists()).toBe(true)
+        expect(w.find('[data-test="pdd-resolve"] [data-test="resolve-facts"]').exists()).toBe(false)
+        expect(w.find('[data-test="pdd-resolve-facts"]').exists()).toBe(false)
+        // 應上班只寫在抽屜自己的區塊（確認當日班別下拉的選中值是表單控制項，不算重複事實）
+        expect(w.get('[data-test="pdd-plan"]').text()).toContain('早車 07:00–16:30')
+        expect(w.get('[data-test="pdd-resolve"]').text()).not.toContain('07:00–16:30')
+        expect(w.get('[data-test="pdd-resolve"]').text()).not.toContain('實際')
+      }
+      expect(swap.text().match(/08:31/g)).toHaveLength(1)
+      // 決策本身（判定與金額、接受／豁免）照舊
+      expect(swap.get('[data-test="resolve-verdict"]').text()).toBe('遲到 91 分')
+    })
+
     it('不是決策卡優先（疑似換班、疑似缺勤）：改這天與確認當日班別照舊攤開，不收進「其他處理」', async () => {
       const swap = mountDrawer(cell(1, W1, { edit: RECORDED, actual: { status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00`, attendance_id: 55 } }))
       const absent = mountDrawer(cell(1, W1, { edit: { plan: true, confirm: false, recorded: false, locked_reason: null }, actual: { status: 'suspected_absence', attendance_id: null } }))
