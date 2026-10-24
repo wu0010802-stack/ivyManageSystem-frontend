@@ -277,7 +277,8 @@ async function confirmWeekChange(date: string, opts: { routeGuard?: boolean } = 
   if (!hasPendingEdits()) return true
   const ok = await confirmDiscardChanges({
     title: '未儲存的排班',
-    message: `這週有 ${state.pendingCount.value} 處排班變更還沒儲存，切換週次會捨棄這些變更。`,
+    // 核對頁籤換週也會問到這裡（兩個面板共用錨點）：寫明變更在排班頁籤
+    message: `排班頁籤這週有 ${state.pendingCount.value} 處排班變更還沒儲存，切換週次會捨棄這些變更。`,
     cancelText: '留在這週',
     routeGuard: opts.routeGuard,
   })

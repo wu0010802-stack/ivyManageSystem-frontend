@@ -1,7 +1,8 @@
 /**
  * 舊「排班管理」入口 /schedule → /attendance（SPEC-027 §9.3）。
  *
- * 書籤與外部連結保留 date，並固定落在班表核對（tab=grid）；date 不合法時丟掉 date。
+ * 書籤與外部連結保留 date，並固定落在排班頁籤的週班表（tab=schedule&sub=week，2026-10-24 頁籤收成兩個後
+ * 週班別編輯在那裡）；date 不合法時丟掉 date。
  * 照 governanceRedirects.spec.ts 用 follow() 取 matched[-1].redirect 二次 resolve。
  */
 import { describe, it, expect } from 'vitest'
@@ -20,21 +21,21 @@ function follow(from: string) {
 }
 
 describe('/schedule → /attendance redirect（SPEC-027 §9.3）', () => {
-  it('/schedule?date=2026-09-14 落在 /attendance，保留 date 並帶 tab=grid', () => {
+  it('/schedule?date=2026-09-14 落在 /attendance 的排班 › 週班表，保留 date', () => {
     const r = follow('/schedule?date=2026-09-14')
     expect(r.path).toBe('/attendance')
-    expect(r.query).toEqual({ date: '2026-09-14', tab: 'grid' })
+    expect(r.query).toEqual({ date: '2026-09-14', tab: 'schedule', sub: 'week' })
   })
 
   it('/schedule?date=not-a-date 落在 /attendance，丟掉不合法的 date', () => {
     const r = follow('/schedule?date=not-a-date')
     expect(r.path).toBe('/attendance')
-    expect(r.query).toEqual({ tab: 'grid' })
+    expect(r.query).toEqual({ tab: 'schedule', sub: 'week' })
   })
 
-  it('/schedule 落在 /attendance，只帶 tab=grid', () => {
+  it('/schedule 落在 /attendance，只帶排班 › 週班表', () => {
     const r = follow('/schedule')
     expect(r.path).toBe('/attendance')
-    expect(r.query).toEqual({ tab: 'grid' })
+    expect(r.query).toEqual({ tab: 'schedule', sub: 'week' })
   })
 })

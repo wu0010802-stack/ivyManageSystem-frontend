@@ -464,6 +464,8 @@ describe('ScheduleGridPanel', () => {
       ui.confirm.mockRejectedValueOnce('cancel')
       expect(await (wrapper.vm as unknown as PanelApi).confirmWeekChange('2026-09-23')).toBe(false)
       expect(ui.confirm).toHaveBeenCalledWith(expect.stringContaining('1 處'), '未儲存的排班', expect.anything())
+      // 在核對頁籤換週時也是問這個面板：寫明變更在排班頁籤
+      expect(ui.confirm.mock.calls[0][0]).toContain('排班頁籤這週有 1 處排班變更還沒儲存')
       expect(saveText(wrapper)).toBe('儲存排班（1 處變更）')
     })
 

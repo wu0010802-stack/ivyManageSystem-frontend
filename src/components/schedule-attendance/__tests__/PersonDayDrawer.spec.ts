@@ -613,7 +613,7 @@ describe('PersonDayDrawer 審查修正', () => {
       att.getAnomalyList.mockRejectedValue(new Error('boom'))
       const w = mountDrawer(missing())
       await flushPromises()
-      expect(w.find('[data-test="pdd-resolve"]').text()).toContain('讀取異常資料失敗')
+      expect(w.find('[data-test="pdd-resolve"]').text()).toContain('讀取異常資料失敗，可按「看他整月」到逐人檢視處理')
       expect(w.findComponent(ResolveCard).exists()).toBe(false)
       expect(w.find('[data-test="pdd-records"]').exists()).toBe(true)
     })

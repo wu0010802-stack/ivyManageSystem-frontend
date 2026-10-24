@@ -2,7 +2,7 @@
   <div class="month-grid">
     <div class="month-grid__legend" data-test="month-legend">
       <VerdictLegend show-leave />
-      <span class="month-grid__legend-hint">月總覽唯讀；點週次可切回該週排班</span>
+      <span class="month-grid__legend-hint">月總覽唯讀；點週次看該週</span>
     </div>
     <div v-if="!sections.length" class="month-grid__empty" role="status">{{ emptyText }}</div>
     <div v-else class="month-grid__scroller" :style="maxHeight ? { maxHeight: `${maxHeight}px` } : undefined">
@@ -15,7 +15,7 @@
               <button
                 type="button"
                 class="month-grid__week-btn"
-                :aria-label="`切到 ${weekLabel(w)} 這週排班`"
+                :aria-label="`看 ${weekLabel(w)} 這週`"
                 :data-test="`month-week-${w.monday}`"
                 @click="emit('open-week', w.monday)"
               >{{ weekLabel(w) }}</button>

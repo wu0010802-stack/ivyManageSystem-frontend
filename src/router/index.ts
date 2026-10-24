@@ -252,12 +252,12 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: PAGE_TERMS.overtime }
         },
         {
-            // 舊「排班管理」入口（書籤／外部連結相容）：併入排班與出勤的班表核對，保留 date。
+            // 舊「排班管理」入口（書籤／外部連結相容）：落在排班與出勤的排班 › 週班表（週班別編輯在那裡），保留 date。
             // 刻意不掛 name 與 meta.title：全域搜尋掃 meta.title，同名會讓結果重複。
             path: '/schedule',
             redirect: (to) => ({
                 path: '/attendance',
-                query: { ...(isValidDateQuery(to.query.date) ? { date: to.query.date } : {}), tab: 'grid' },
+                query: { ...(isValidDateQuery(to.query.date) ? { date: to.query.date } : {}), tab: 'schedule', sub: 'week' },
             }),
         },
         {

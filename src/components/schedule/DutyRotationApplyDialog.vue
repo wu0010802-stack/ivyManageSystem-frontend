@@ -210,7 +210,7 @@ const confirm = async () => {
               :data-test="`followup-${c.employee_id}-${c.week_start_date}`"
               @click="openFollowUp(c)"
             >後續處理</el-button>
-            <span v-else class="drad-reason">輪值表這週沒有指定班別，請到班表核對調整</span>
+            <span v-else class="drad-reason">輪值表這週沒有指定班別，請到排班頁籤的週班表調整</span>
           </li>
         </ul>
         <div class="drad-actions">

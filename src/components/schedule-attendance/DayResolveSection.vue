@@ -3,7 +3,7 @@
     <h3>{{ mode === 'side-by-side' ? '補登上下班' : '處理打卡' }}</h3>
     <p v-if="handledNote" class="pdd-resolve__note">{{ handledNote }}</p>
     <p v-if="loadState === 'loading'" class="pdd-resolve__note" role="status">正在讀取這天的異常…</p>
-    <p v-else-if="loadState === 'error'" class="pdd-resolve__note" role="alert">讀取異常資料失敗，可按「看他整月」到出勤明細處理。</p>
+    <p v-else-if="loadState === 'error'" class="pdd-resolve__note" role="alert">讀取異常資料失敗，可按「看他整月」到逐人檢視處理。</p>
     <ResolveCard
       v-else-if="displayCard"
       ref="cardRef"

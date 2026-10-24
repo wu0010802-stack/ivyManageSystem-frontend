@@ -42,6 +42,8 @@ describe('MonthGrid（SPEC-027 C 期，唯讀）', () => {
   it('週次欄頭依週一分組；點欄頭送出該週週一（跨月週是 9/28）', async () => {
     const wrapper = mountMonth(ALL)
     expect(wrapper.find('[data-test="month-week-2026-09-28"]').text()).toBe('10/1–10/2')
+    // 報讀不寫「排班」（排班是另一個頁籤；點了是回核對的週檢視）
+    expect(wrapper.find('[data-test="month-week-2026-09-28"]').attributes('aria-label')).toBe('看 10/1–10/2 這週')
     await wrapper.find('[data-test="month-week-2026-09-28"]').trigger('click')
     await wrapper.find('[data-test="month-week-2026-10-05"]').trigger('click')
     expect(wrapper.emitted('open-week')).toEqual([['2026-09-28'], ['2026-10-05']])
@@ -139,7 +141,8 @@ describe('MonthGrid 第五輪審查', () => {
     for (const label of Object.values(VERDICT_KIND_LABELS)) expect(legend.text()).toContain(label)
     expect(legend.text()).toContain('請假')
     expect(legend.find('.verdict-shape--leave').exists()).toBe(true)
-    expect(legend.text()).toContain('月總覽唯讀；點週次可切回該週排班')
+    expect(legend.text()).toContain('月總覽唯讀；點週次看該週')
+    expect(legend.text()).not.toContain('排班')
   })
 
   it('封存月：待辦不畫狀態點（只剩請假點）', () => {

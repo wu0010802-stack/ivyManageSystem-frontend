@@ -209,6 +209,8 @@ describe('DutyRotationApplyDialog', () => {
     expect(list.text()).toContain('陳老師')
     expect(list.text()).toContain('已打卡 9/15、9/16')
     expect(wrapper.find('[data-test="followup-4-2026-09-14"]').exists()).toBe(false) // 輪值表沒指定班別的週不給後續處理
+    // 指向現有的頁籤名（班表核對已不存在；週班別在排班頁籤的週班表）
+    expect(list.text()).toContain('請到排班頁籤的週班表調整')
     await wrapper.find('[data-test="followup-3-2026-09-14"]').trigger('click')
     const rfu = wrapper.findComponent({ name: 'RecordedFollowUpDialog' })
     expect(rfu.props('modelValue')).toBe(true)

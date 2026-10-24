@@ -630,6 +630,27 @@ describe('班表核對與明細互通', () => {
     wrapper.unmount()
   })
 
+  it('一個格子面板改了資料，另一個常駐的面板要重載；發出者自己已重載，revision 不動', async () => {
+    const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-16' }, global: { stubs: STUBS } })
+    await flushPromises()
+    await visitPlan(wrapper)
+    const revisions = () => [panelOf(wrapper, 'reconcile')!.props('revision'), panelOf(wrapper, 'plan')!.props('revision')]
+    expect(revisions()).toEqual([0, 0])
+    // 排班頁籤儲存週排班：核對的判定要跟著新班別
+    panelOf(wrapper, 'plan')!.vm.$emit('changed')
+    await flushPromises()
+    expect(revisions()).toEqual([1, 0])
+    // 核對抽屜改當日班別／確認換班：排班的計畫格要跟著
+    panelOf(wrapper, 'reconcile')!.vm.$emit('changed')
+    await flushPromises()
+    expect(revisions()).toEqual([1, 1])
+    // 格子以外的異動（輪值表、班別設定、逐人處理、匯入）兩個都要重載
+    wrapper.findComponent(DetailColumnStub).vm.$emit('resolved')
+    await flushPromises()
+    expect(revisions()).toEqual([2, 2])
+    wrapper.unmount()
+  })
+
   it('格子異動（確認／改班）後，出勤明細的整月表也要刷新（importRevision 遞增）', async () => {
     const wrapper = mount(ScheduleAttendanceView, { props: { date: '2026-09-06' }, global: { stubs: STUBS } })
     await flushPromises()

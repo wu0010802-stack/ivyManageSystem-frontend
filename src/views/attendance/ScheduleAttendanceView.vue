@@ -71,7 +71,7 @@
       :filter="gridFilter"
       :focus-employee-id="props.emp ?? null"
       :focus-date="props.emp ? props.date ?? null : null"
-      :revision="externalRevision"
+      :revision="reconcileRevision"
       :view="gridView"
       :month="monthGrid"
       :header-has-month="canViewAttendance"
@@ -81,7 +81,7 @@
       @records="openRecords"
       @import="onGridImport"
       @import-punches="onGridImportMonth"
-      @changed="onGridChanged"
+      @changed="onGridChanged('reconcile')"
       @show-patterns="progressBar?.openPatterns()"
       @focus-handled="syncQuery({ emp: undefined })"
       @recalculate="recalcOpen = true"
@@ -211,13 +211,13 @@
       mode="plan"
       :date="anchorDate"
       :filter="planFilter"
-      :revision="externalRevision"
+      :revision="planRevision"
       :month="monthGrid"
       @update:date="setAnchorDate"
       @update:filter="(f: GridFilter) => (planFilter = f)"
       @records="openRecords"
       @import="onGridImport"
-      @changed="onGridChanged"
+      @changed="onGridChanged('plan')"
       @show-patterns="progressBar?.openPatterns()"
       @recalculate="recalcOpen = true"
     />
@@ -270,7 +270,7 @@ import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue
 import MonthProgressBar from '@/components/schedule-attendance/MonthProgressBar.vue'
 import ScheduleGridPanel from '@/components/schedule-attendance/ScheduleGridPanel.vue'
 import { primaryAction as resolvePrimaryAction, type MonthStep, type MonthSummary, type PrimaryAction } from '@/utils/attendanceMonthSummary'
-import type { GridFilter, GridView } from '@/utils/scheduleAttendanceGrid'
+import type { GridFilter, GridMode, GridView } from '@/utils/scheduleAttendanceGrid'
 import { hasPermission, hasFullSalaryView } from '@/utils/auth'
 import type { AttendanceSub, AttendanceTab, AttendanceView } from '@/router/attendanceRouteProps'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
@@ -421,8 +421,14 @@ function setMonth(year: number, month: number): void {
 
 // 資料異動計數：格子編輯、匯入、明細處理後遞增，本月進度據此重算
 const dataRevision = ref(0)
-// 格子以外的異動（明細處理、匯入、輪值表套用）：格子據此重新載入；格子自己的編輯不經這裡，避免重複載入
-const externalRevision = ref(0)
+// 兩個格子面板各自的重新載入計數（各自持有一份 useScheduleGrid，常駐時不會自己重抓）：
+// 格子以外的異動（逐人處理、匯入、輪值表套用、班別設定）兩個都遞增；一個面板自己的編輯只遞增另一個（發出者已自行重載）
+const reconcileRevision = ref(0)
+const planRevision = ref(0)
+function reloadGrids(except?: GridMode): void {
+  if (except !== 'reconcile') reconcileRevision.value += 1
+  if (except !== 'plan') planRevision.value += 1
+}
 // 本月整月格子：進度條與月格子共用同一份（D-06）；換月或資料異動（dataRevision）時重抓
 const monthGrid = useMonthGrid(anchorDate, dataRevision)
 // 出勤明細借用班表核對的判定（同一人日兩個頁籤的判定並列，防止在疑似換班的日子接受遲到扣款）
@@ -691,7 +697,7 @@ async function onDetailResolved(): Promise<void> {
   await onResolved()
   importRevision.value += 1
   dataRevision.value += 1
-  externalRevision.value += 1
+  reloadGrids()
 }
 
 function onNavigate(delta: number): void {
@@ -731,27 +737,29 @@ function onGridImportMonth(date: string): void {
   importOpen.value = true
 }
 
-async function onGridChanged(): Promise<void> {
+/** 格子面板（source）改了資料：排班存了週排班，核對的判定要跟著新班別；核對抽屜改了當日班別，排班的計畫格要跟著 */
+async function onGridChanged(source: GridMode): Promise<void> {
   dataRevision.value += 1
+  reloadGrids(source)
   importRevision.value += 1 // 逐人檢視常駐，格子確認／改班後它的整月表也要刷新
   if (canViewAttendance) await onResolved()
 }
 
 function onRotationApplied(): void {
   dataRevision.value += 1
-  externalRevision.value += 1
+  reloadGrids()
 }
 
 // 班別的時段、名稱、啟用狀態變了：兩個格子的班別選單與應上班時段判定都要重抓（格子 v-show 常駐，不會自己重載）
 function onShiftTypesChanged(): void {
   dataRevision.value += 1
-  externalRevision.value += 1
+  reloadGrids()
 }
 
 async function onImported(): Promise<void> {
   importRevision.value += 1
   dataRevision.value += 1
-  externalRevision.value += 1
+  reloadGrids()
   // 匯入完成 → 直接看有問題的格子（SPEC-027 §6.3 #22）
   showIssues()
   await Promise.all([ws.refresh(), invalidateRecordsCache()])
