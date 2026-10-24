@@ -296,13 +296,35 @@ describe('MonthGrid 1280 寬放得下整月（第六輪）', () => {
     expect(rule('month-grid__role')).toContain('font-size: var(--text-xs)') // 12px
   })
 
-  it('欄寬下限：人員 88、工作日 30、非工作日 20、格高 36；30 欄（20 工作日＋10 非工作日）合計放得進 1280 寬的內容區（約 924px）', () => {
+  it('欄寬下限：人員 88、工作日 29、非工作日 20、格高 36；最壞的月份（31 天＝23 個工作日＋8 個非工作日，例如 2026 年 7 月）合計 915px，放得進 1280 寬的內容區（約 924px）', () => {
     const px = (re: RegExp) => Number(css.match(re)![1])
     const person = px(/\.month-grid__person \{[^}]*min-width: (\d+)px/)
     const weekday = px(/\.month-grid__day \{[^}]*min-width: (\d+)px/)
     const off = px(/\.month-grid__day--off \{[^}]*min-width: (\d+)px/)
-    expect([person, weekday, off]).toEqual([88, 30, 20])
+    expect([person, weekday, off]).toEqual([88, 29, 20])
     expect(px(/\.month-grid__cell \{[^}]*min-height: (\d+)px/)).toBe(36)
-    expect(person + weekday * 20 + off * 10).toBeLessThanOrEqual(924)
+    // 工作日欄比非工作日欄寬，所以最壞情況是工作日最多的月份：31 天最多 23 個工作日（其餘 8 個週末）
+    expect(person + weekday * 23 + off * 8).toBe(915)
+    expect(person + weekday * 23 + off * 8).toBeLessThanOrEqual(924)
+    // 其他 31 天的月份（週末 9 或 10 天）只會更窄
+    expect(person + weekday * 22 + off * 9).toBeLessThanOrEqual(924)
+    expect(person + weekday * 21 + off * 10).toBeLessThanOrEqual(924)
+  })
+
+  it('列首型態註記：欄寬 88px 內單行省略（max-width＋省略號），title 是「標籤：整句說明」完整文字', () => {
+    const tag = '本月沒有打卡'
+    const detail = '本月 20 個應出勤日都沒有打卡紀錄，多半是打卡機或卡號對照沒設好'
+    const g = grid({ days: MIX_DAYS, cells: MIX_CELLS, today: '2026-10-12', employees: [employee(1, '林班導')] })
+    const wrapper = mount(MonthGrid, {
+      props: { groups: g.groups, employees: g.employees, days: g.days, cells: indexCells(g.cells), today: g.today, filter: 'all', personNotes: { 1: { tag, detail } } },
+    })
+    const note = wrapper.get('[data-test="mperson-note-1"]')
+    expect(note.text()).toBe(tag)
+    expect(note.attributes('title')).toBe(`${tag}：${detail}`)
+    const rule = css.match(/\.month-grid__note \{([^}]*)\}/)?.[1] ?? ''
+    expect(rule).toContain('max-width: 72px') // 與姓名、職稱同寬：88 扣左右 padding 各 8
+    expect(rule).toContain('overflow: hidden')
+    expect(rule).toContain('text-overflow: ellipsis')
+    expect(rule).toContain('white-space: nowrap')
   })
 })

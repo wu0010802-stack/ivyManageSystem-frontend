@@ -47,7 +47,7 @@
                   v-if="personNotes?.[emp.employee_id]"
                   type="button"
                   class="month-grid__note"
-                  :title="personNotes[emp.employee_id].detail"
+                  :title="`${personNotes[emp.employee_id].tag}：${personNotes[emp.employee_id].detail}`"
                   :aria-label="`${emp.name}：${personNotes[emp.employee_id].tag}，${personNotes[emp.employee_id].detail}。開本月設定檢查`"
                   :data-test="`mperson-note-${emp.employee_id}`"
                   @click="emit('show-patterns')"
@@ -217,18 +217,20 @@ function cellAria(emp: GridEmployee, d: GridDay): string {
 .month-grid__table thead { position: sticky; top: 0; z-index: var(--z-sticky); }
 .month-grid__table thead th { background: var(--el-bg-color); font-weight: 600; }
 /* 下面 corner／person／day／group 一律帶 .month-grid__table 前綴：通用規則 `.month-grid__table th` 優先序較高，不加前綴 padding／text-align 會被它蓋掉 */
-/* 1280 寬的內容區約 924px，要放得下 30 欄：人員 88＋工作日 30×20＋非工作日 20×10＝888 */
+/* 1280 寬的內容區約 924px，要放得下最壞的月份：31 天＝23 個工作日＋8 個非工作日（例如 2026 年 7 月）。
+   人員 88＋工作日 29×23＋非工作日 20×8＝915；工作日欄比較寬，所以工作日最多的月份才是最壞情況（工作日 30px 會是 938，超過） */
 .month-grid__table .month-grid__corner, .month-grid__table .month-grid__person { position: sticky; left: 0; min-width: 88px; padding: var(--space-1) var(--space-2); background: var(--el-bg-color); text-align: left; }
 .month-grid__table .month-grid__person { z-index: calc(var(--z-sticky) - 1); font-weight: 400; }
 .month-grid__table thead .month-grid__corner { z-index: calc(var(--z-sticky) + 1); }
 /* 姓名單行省略（title 看全名）、職稱獨立第二行；max-width＝欄寬下限 88px 扣左右 padding 各 8px，長名字才不會把人員欄撐寬 */
 .month-grid__name { display: block; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .month-grid__role { display: block; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--el-text-color-secondary); }
-.month-grid__note { display: block; padding: 0; border: 0; background: transparent; font: inherit; color: var(--color-warning-darker); font-size: var(--text-xs); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+/* 型態註記跟姓名、職稱同寬單行省略，長標籤不撐寬 88px 的人員欄；完整文字在 title */
+.month-grid__note { display: block; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; background: transparent; font: inherit; color: var(--color-warning-darker); font-size: var(--text-xs); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .month-grid__note:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .month-grid__week-btn { width: 100%; min-height: var(--touch-target-min); border: 0; border-bottom: 1px solid var(--el-border-color-light); background: transparent; color: var(--el-color-primary); font: inherit; cursor: pointer; }
 .month-grid__week-btn:hover { background: var(--el-fill-color-light); }
-.month-grid__table .month-grid__day { min-width: 30px; padding: var(--space-1) 0; }
+.month-grid__table .month-grid__day { min-width: 29px; padding: var(--space-1) 0; }
 /* 非工作日（週末、假日）的欄收窄到只放得下日期與一個點：格內不放縮寫（欄頭與格子都帶這個 class） */
 .month-grid__table .month-grid__day--off { min-width: 20px; }
 .month-grid__weekday { display: block; font-size: var(--text-xs); font-weight: 400; color: var(--el-text-color-secondary); }
