@@ -140,6 +140,14 @@ describe('MonthGrid 狀態點不只靠顏色', () => {
     expect(rule('verdict-shape--leave')).toMatch(/--verdict-shape-color: var\(--color-info-darker\)/)
   })
 
+  it('封存時未處理＝中性灰的實心三角（形狀與其他六種都不同），只用既有的灰階 token，不用紅或待辦色', () => {
+    const leftover = rule('verdict-shape--leftover')
+    expect(leftover).toMatch(/--verdict-shape-color: var\(--el-text-color-secondary\)/)
+    expect(leftover).toMatch(/background: var\(--verdict-shape-color\)/)
+    expect(leftover).toMatch(/clip-path: polygon\(/)
+    expect(leftover).not.toMatch(/danger|warning|verdict-confirm|verdict-setting|#[0-9a-f]{3,8}/i)
+  })
+
   it('新 token 有亮色與暗色值（design-tokens.css／a11y.css 的 html.dark）', () => {
     const light = readFileSync(resolve(__dirname, '../../../assets/design-tokens.css'), 'utf8')
     const dark = readFileSync(resolve(__dirname, '../../../assets/a11y.css'), 'utf8')
@@ -170,15 +178,53 @@ describe('MonthGrid 第五輪審查', () => {
     expect(legend.text()).not.toContain('排班')
   })
 
-  it('封存月：待辦不畫狀態點（只剩請假點）', () => {
+  it('封存月：封存時沒處理的格子畫中性的 leftover 點，標明是封存時未處理；封存時沒事的格子沒有點', () => {
     const sealed = { locked_reason: 'finalized' as const }
     const cells = [
       cell(1, '2026-10-01', { actual: { status: 'anomaly' }, edit: sealed }),
-      cell(1, '2026-10-02', { actual: { status: 'anomaly' }, edit: sealed, leaves: [LEAVE] }),
+      cell(1, '2026-10-02', { actual: { status: 'matched' }, edit: sealed }),
+      cell(1, '2026-10-05', { actual: { status: 'matched' }, edit: sealed, leaves: [LEAVE] }),
     ]
     const wrapper = mountMonth(cells)
-    expect(wrapper.find('[data-test="mdot-1-2026-10-01"]').exists()).toBe(false)
-    expect(wrapper.get('[data-test="mdot-1-2026-10-02"]').classes()).toContain('month-grid__dot--leave')
+    const dot = wrapper.get('[data-test="mdot-1-2026-10-01"]')
+    expect(dot.classes()).toContain('month-grid__dot--leftover')
+    expect(dot.classes()).toContain('verdict-shape--leftover')
+    // 不是任何一類待辦的點
+    for (const kind of ['deduct', 'missing', 'confirm', 'setting', 'pending_data']) expect(dot.classes()).not.toContain(`month-grid__dot--${kind}`)
+    expect(dot.attributes('title')).toBe('封存時未處理：出勤異常')
+    // 色點以外要有文字：整格的報讀也寫出
+    expect(wrapper.get('[data-test="mcell-1-2026-10-01"]').attributes('aria-label')).toContain('封存時未處理：出勤異常')
+    expect(wrapper.get('[data-test="mcell-1-2026-10-01"]').attributes('aria-label')).not.toContain('，出勤異常')
+    expect(wrapper.find('[data-test="mdot-1-2026-10-02"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="mdot-1-2026-10-05"]').classes()).toContain('month-grid__dot--leave')
+    expect(wrapper.get('[data-test="mcell-1-2026-10-02"]').attributes('aria-label')).not.toContain('封存時未處理')
+  })
+
+  it('封存時未處理的點只因老師確認未處理而來：說明寫老師確認的狀態', () => {
+    const sealed = { locked_reason: 'finalized' as const }
+    const pending = { item_id: 1, round_id: 1, kind: 'swap', status: 'pending', partner_employee_id: 2 } as const
+    const wrapper = mountMonth([cell(1, '2026-10-01', { actual: {}, confirmation: pending, edit: sealed })])
+    expect(wrapper.get('[data-test="mdot-1-2026-10-01"]').attributes('title')).toBe('封存時未處理：老師確認：待回覆')
+  })
+
+  it('leftover 篩選的月檢視：留下的人，遺留的那幾天有點', () => {
+    const sealed = { locked_reason: 'finalized' as const }
+    const cells = [
+      cell(1, '2026-10-01', { actual: {} }),
+      cell(1, '2026-10-02', { actual: { status: 'missing_punch' }, edit: sealed }),
+      cell(2, '2026-10-01', { actual: {} }),
+    ]
+    const wrapper = mountMonth(cells, { filter: 'leftover' })
+    expect(wrapper.findAll('[data-test^="mrow-"]').map((r) => r.attributes('data-test'))).toEqual(['mrow-1'])
+    expect(wrapper.findAll('[data-test^="mdot-"]').map((d) => d.attributes('data-test'))).toEqual(['mdot-1-2026-10-02'])
+    expect(wrapper.get('[data-test="mdot-1-2026-10-02"]').attributes('title')).toBe('封存時未處理：缺卡待確認')
+  })
+
+  it('圖例：有封存時未處理的點才多一項說明，沒有就不出現', () => {
+    const sealed = { locked_reason: 'finalized' as const }
+    const withLeftover = mountMonth([cell(1, '2026-10-01', { actual: { status: 'anomaly' }, edit: sealed })])
+    expect(withLeftover.get('[data-test="month-legend"]').text()).toContain('封存時未處理（只能看）')
+    expect(mountMonth(ALL).get('[data-test="month-legend"]').text()).not.toContain('封存時未處理')
   })
 
   it('列首型態註記是按鈕，點了開本月設定檢查', async () => {

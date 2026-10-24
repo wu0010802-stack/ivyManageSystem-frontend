@@ -21,6 +21,7 @@ import {
   monthCellText,
   monthDot,
   monthRange,
+  nextWeekWithMatch,
   planText,
   planWeekChange,
   rowMatchesFilter,
@@ -448,11 +449,24 @@ describe('月格子（SPEC-027 C 期）', () => {
     expect(monthDot(cell(1, W1, { employed: false, leaves: [LEAVE] }), today)).toBeNull()
   })
 
-  it('monthDot：封存格不是待辦，不畫狀態點（仍可顯示請假）', () => {
+  it('monthDot：封存時沒處理的格子畫中性的 leftover 點（不是待辦的任何一類）；封存時沒事的格子不畫，仍可顯示請假', () => {
     const today = '2026-09-21'
     const sealed = { locked_reason: 'finalized' as const }
-    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' }, edit: sealed }), today)).toBeNull()
-    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' }, edit: sealed, leaves: [LEAVE] }), today)).toBe('leave')
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' }, edit: sealed }), today)).toBe('leftover')
+    // 型態（設定問題）只對未封存的待辦有意義；封存遺留一律是 leftover
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' }, edit: sealed }), today, undefined, { pattern: true })).toBe('leftover')
+    expect(monthDot(cell(1, W1, { actual: {}, confirmation: { item_id: 1, kind: 'swap', status: 'pending' }, edit: sealed }), today)).toBe('leftover')
+    // 與待辦點同一順位：遺留比請假重要（沒處理過的事不能被請假點蓋掉）
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' }, edit: sealed, leaves: [LEAVE] }), today)).toBe('leftover')
+    // 封存時沒事、已處理、當天不判、整天未匯入：不是遺留，不畫點（請假照畫）
+    expect(monthDot(cell(1, W1, { actual: { status: 'matched' }, edit: sealed }), today)).toBeNull()
+    expect(monthDot(cell(1, W1, { actual: { status: 'matched' }, edit: sealed, leaves: [LEAVE] }), today)).toBe('leave')
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly', confirmed_action: 'admin_waive' }, edit: sealed }), today)).toBeNull()
+    expect(monthDot(cell(1, today, { actual: { status: 'anomaly' }, edit: sealed }), today)).toBeNull()
+    const uncovered = uncoveredDates([day(W1, { import_covered: false })])
+    expect(monthDot(cell(1, W1, { actual: { status: 'data_incomplete' }, edit: sealed }), today, uncovered)).toBeNull()
+    // 沒封存的待辦仍是待辦的點
+    expect(monthDot(cell(1, W1, { actual: { status: 'anomaly' } }), today)).toBe('deduct')
   })
 
   it('gridSections：依篩選與關鍵字留列、依組分段、空組不出現', () => {
@@ -683,5 +697,40 @@ describe('核對篩選以人為單位（issues／patterns／leftover）', () => 
     expect(availableFilters('reconcile', undefined, 'leftover')).toEqual(['all', 'issues', 'patterns', 'leftover'])
     // 確定是未封存月之後，封存時未處理就不再提供
     expect(availableFilters('reconcile', 'open', 'leftover')).toEqual(['all', 'issues', 'patterns'])
+  })
+})
+
+describe('nextWeekWithMatch（手機沒有月格子：橫幅「看這 N 件」要落在有該件的那週）', () => {
+  const SEALED = { locked_reason: 'finalized' as const }
+  const MONDAY = '2026-09-14' // 目前這週 9/14–9/20
+  const issue = (id: number, date: string) => cell(id, date, { actual: { status: 'anomaly' } })
+  const leftover = (id: number, date: string) => cell(id, date, { actual: { status: 'anomaly' }, edit: SEALED })
+  const base = { today: '2026-09-30', currentWeekStart: MONDAY }
+
+  it('目前這週已有符合的格子：不用跳（null）', () => {
+    const cells = [issue(1, '2026-09-16'), issue(1, '2026-09-24')]
+    expect(nextWeekWithMatch({ ...base, cells, filter: 'issues' })).toBeNull()
+    expect(nextWeekWithMatch({ ...base, cells: [leftover(1, '2026-09-20'), leftover(1, '2026-09-25')], filter: 'leftover' })).toBeNull()
+  })
+
+  it('目前這週沒有：回整月最早的符合格子日期（不是離目前最近的）', () => {
+    const cells = [issue(2, '2026-09-24'), issue(1, '2026-09-08'), issue(3, '2026-09-29')]
+    expect(nextWeekWithMatch({ ...base, cells, filter: 'issues' })).toBe('2026-09-08')
+    expect(nextWeekWithMatch({ ...base, cells: [leftover(2, '2026-09-25'), leftover(1, '2026-09-22')], filter: 'leftover' })).toBe('2026-09-22')
+  })
+
+  it('issues 不把型態格（設定問題）當目標；leftover 只認封存遺留，issues 不認封存格', () => {
+    const cells = [issue(1, '2026-09-01'), issue(1, '2026-09-02'), issue(2, '2026-09-24')]
+    const patternKeys = new Set([cellKey(1, '2026-09-01'), cellKey(1, '2026-09-02')])
+    expect(nextWeekWithMatch({ ...base, cells, filter: 'issues', patternKeys })).toBe('2026-09-24')
+    expect(nextWeekWithMatch({ ...base, cells, filter: 'issues' })).toBe('2026-09-01')
+    expect(nextWeekWithMatch({ ...base, cells: [leftover(1, '2026-09-24')], filter: 'issues' })).toBeNull()
+    expect(nextWeekWithMatch({ ...base, cells: [issue(1, '2026-09-24')], filter: 'leftover' })).toBeNull()
+  })
+
+  it('整月都沒有符合的格子：null；整天未匯入的資料待補不算', () => {
+    expect(nextWeekWithMatch({ ...base, cells: [cell(1, '2026-09-24', { actual: {} })], filter: 'issues' })).toBeNull()
+    const uncovered = uncoveredDates([day('2026-09-24', { import_covered: false })])
+    expect(nextWeekWithMatch({ ...base, cells: [cell(1, '2026-09-24', { actual: { status: 'data_incomplete' } })], filter: 'issues', uncovered })).toBeNull()
   })
 })

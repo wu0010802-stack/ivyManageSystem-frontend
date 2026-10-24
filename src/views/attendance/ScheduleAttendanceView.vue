@@ -276,7 +276,7 @@ import MonthProgressBar from '@/components/schedule-attendance/MonthProgressBar.
 import ScheduleGridPanel from '@/components/schedule-attendance/ScheduleGridPanel.vue'
 import { primaryAction as resolvePrimaryAction, type MonthStep, type MonthSummary, type PrimaryAction } from '@/utils/attendanceMonthSummary'
 import { patternCellKeys } from '@/utils/attendancePatterns'
-import { cellKey, isIssue, uncoveredDates, type GridFilter, type GridMode, type GridView } from '@/utils/scheduleAttendanceGrid'
+import { cellKey, isIssue, mondayOf, nextWeekWithMatch, uncoveredDates, type GridFilter, type GridMode, type GridView } from '@/utils/scheduleAttendanceGrid'
 import { hasPermission, hasFullSalaryView } from '@/utils/auth'
 import type { AttendanceSub, AttendanceTab, AttendanceView } from '@/router/attendanceRouteProps'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
@@ -385,20 +385,42 @@ function setFilter(filter: GridFilter): void {
 }
 
 /** 本月進度③與匯入完成：看整月的待處理。桌機切到月格子，看到的數字才會和本月進度的待處理件數相同；手機（沒有月格子）切到週 */
-function showIssues(): void {
-  showGridFilter('issues')
+function showIssues(): Promise<void> {
+  return showGridFilter('issues')
 }
 
 /** 封存橫幅「看這 N 件」：同上切到核對的月格子（手機週），只看封存時沒處理的人 */
-function showLeftover(): void {
-  showGridFilter('leftover')
+function showLeftover(): Promise<void> {
+  return showGridFilter('leftover')
 }
 
-function showGridFilter(filter: GridFilter): void {
+/**
+ * 手機沒有月格子，橫幅寫的卻是整月的件數：目前這週沒有符合的格子就把錨點移到整月第一個符合的格子所在的那週，
+ * 不落在空的週（死路）。換週先問排班頁籤未儲存的週排班，不放行就整個不動。桌機看月格子，不用跳。
+ */
+async function showGridFilter(filter: 'issues' | 'leftover'): Promise<void> {
+  const desktop = isDesktop.value
+  const target = desktop ? null : firstMatchDate(filter)
+  if (target && !(await confirmAnchorChange(target))) return
   activeTab.value = 'grid'
   gridFilter.value = filter
-  reconcileView.value = isDesktop.value ? 'month' : 'week'
-  syncQuery({ tab: 'grid', filter, view: viewQuery(reconcileView.value) })
+  reconcileView.value = desktop ? 'month' : 'week'
+  if (target) anchorDate.value = target
+  syncQuery({ tab: 'grid', filter, view: viewQuery(reconcileView.value), ...(target ? { date: target } : {}) })
+}
+
+/** 整月最早的符合格子日期（目前這週已有、整月資料還沒載到、整月沒有＝null） */
+function firstMatchDate(filter: 'issues' | 'leftover'): string | null {
+  const grid = monthGrid.data.value
+  if (!grid) return null
+  return nextWeekWithMatch({
+    cells: grid.cells,
+    filter,
+    today: grid.today,
+    currentWeekStart: mondayOf(anchorDate.value),
+    uncovered: uncoveredDates(grid.days),
+    patternKeys: patternCellKeys(monthGrid.patterns.value),
+  })
 }
 
 /** 封存橫幅「前往 N 月」：走頁首換月同一個入口（先問排班頁籤未儲存的週排班） */
@@ -807,7 +829,7 @@ async function onImported(): Promise<void> {
   dataRevision.value += 1
   reloadGrids()
   // 匯入完成 → 直接看有問題的格子（SPEC-027 §6.3 #22）
-  showIssues()
+  void showIssues()
   await Promise.all([ws.refresh(), invalidateRecordsCache()])
   clampSelectedIndex()
   ElMessage.success('匯入完成')
@@ -863,7 +885,7 @@ async function onPrimary(action: PrimaryAction): Promise<void> {
       if (activeTab.value !== 'grid') selectTab('grid')
       if (shownView.value === 'person') void setReconcileView('week')
       await nextTick()
-      if (!reconcilePanel.value?.openFirstIssue()) showIssues()
+      if (!reconcilePanel.value?.openFirstIssue()) void showIssues()
       return
     case 'payroll':
       void router.push('/salary/settle')
@@ -909,7 +931,7 @@ async function onExport(): Promise<void> {
       // 「先去處理」＝按目前的主要動作（提醒可能只列設定問題或缺匯入，固定去只看待處理會導錯地方）；沒有主要動作才退回只看待處理
       if (action === 'cancel') {
         if (primaryAction.value) void onPrimary(primaryAction.value.action)
-        else showIssues()
+        else void showIssues()
       }
       return
     }

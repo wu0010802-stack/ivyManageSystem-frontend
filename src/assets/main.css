@@ -190,6 +190,13 @@ body {
   background: var(--verdict-shape-color);
   border-radius: 1px;
 }
+/* 封存時未處理（月格子）＝中性灰的實心三角：封存格不是待辦，不用紅或待辦色；三角與其他六種形狀都不同，
+   灰色在亮暗色都跟著 Element Plus 的次要文字色走 */
+.verdict-shape--leftover {
+  --verdict-shape-color: var(--el-text-color-secondary);
+  background: var(--verdict-shape-color);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
 
 /* ========== Page Layout Utilities ========== */
 .page-header {

@@ -1,7 +1,7 @@
 <template>
   <div class="month-grid">
     <div class="month-grid__legend" data-test="month-legend">
-      <VerdictLegend show-leave />
+      <VerdictLegend show-leave :show-leftover="hasLeftoverDot" />
       <span class="month-grid__legend-hint">月總覽唯讀；點週次看該週</span>
     </div>
     <div v-if="!sections.length" class="month-grid__empty" role="status">{{ emptyText }}</div>
@@ -69,6 +69,7 @@
                     class="month-grid__dot verdict-shape"
                     :class="[`verdict-shape--${dotOf(emp.employee_id, d.date)}`, `month-grid__dot--${dotOf(emp.employee_id, d.date)}`]"
                     :data-test="`mdot-${emp.employee_id}-${d.date}`"
+                    :title="dotTitle(emp.employee_id, d.date)"
                     aria-hidden="true"
                   />
                 </button>
@@ -93,6 +94,7 @@ import {
   monthCellText,
   monthDot,
   uncoveredDates,
+  type CellDisplay,
   type GridCell,
   type GridDay,
   type GridEmployee,
@@ -143,6 +145,20 @@ const dots = computed(() => {
   return map
 })
 const dotOf = (employeeId: number, date: string): MonthDot | null => dots.value.get(cellKey(employeeId, date)) ?? null
+/** 有封存時沒處理的點：圖例才多一項說明 */
+const hasLeftoverDot = computed(() => [...dots.value.values()].includes('leftover'))
+/**
+ * 封存時沒處理的格子說明：「封存時未處理：出勤異常」。判定本身是待辦才寫判定（符合原班表等中性判定不寫），
+ * 老師確認仍在處理中就寫確認狀態；兩者都沒有只寫「封存時未處理」。
+ */
+function leftoverText(info: CellDisplay): string {
+  const parts = [info.verdict && info.verdict.tone !== 'info' ? info.verdict.label : null, info.confirmation].filter(Boolean)
+  return parts.length ? `封存時未處理：${parts.join('，')}` : '封存時未處理'
+}
+function dotTitle(employeeId: number, date: string): string | undefined {
+  if (dotOf(employeeId, date) !== 'leftover') return undefined
+  return leftoverText(cellDisplay(cellOf(employeeId, date)!, props.today, uncovered.value))
+}
 const sections = computed(() =>
   gridSections({
     groups: props.groups,
@@ -175,6 +191,10 @@ const emptyText = computed(() => {
 function cellAria(emp: GridEmployee, d: GridDay): string {
   const info = cellDisplay(cellOf(emp.employee_id, d.date)!, props.today, uncovered.value)
   const pattern = props.patternKeys?.has(cellKey(emp.employee_id, d.date)) ? '整月同型態，可能是設定問題' : null
+  // 封存時沒處理的格子：判定與老師確認併進「封存時未處理：…」一句，不分開念成像是還能處理的待辦
+  if (dotOf(emp.employee_id, d.date) === 'leftover') {
+    return [emp.name, `${formatMonthDay(d.date)}（${WEEKDAY[d.weekday]}）`, info.plan, leftoverText(info), ...info.leaveTags].filter(Boolean).join('，')
+  }
   return [emp.name, `${formatMonthDay(d.date)}（${WEEKDAY[d.weekday]}）`, info.plan, info.verdict?.label, pattern, ...info.leaveTags, info.confirmation]
     .filter(Boolean)
     .join('，')

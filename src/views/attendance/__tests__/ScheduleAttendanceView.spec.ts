@@ -2096,4 +2096,122 @@ describe('封存月：封存時未處理與前往下個月（第六輪）', () =
     expect(routerReplace).toHaveBeenLastCalledWith({ query: {} })
     wrapper.unmount()
   })
+
+  describe('手機沒有月格子：看待辦／封存時未處理要落在有該件的那週（R34）', () => {
+    const SEPT = Array.from({ length: 30 }, (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`)
+    const SEALED = { locked_reason: 'finalized' as const }
+    const ANOMALY = { status: 'anomaly' as const }
+    // 林：9/1–9/4 整週沒打卡（型態＝設定問題，不當目標）；王：9/24 逐日待辦；陳：9/25 封存時沒處理、9/10 另一筆封存遺留
+    const people = [employee(1, '林班導'), employee(2, '王副導'), employee(3, '陳行政')]
+    const SEPT_CELLS = [
+      ...['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04'].map((d) => cell(1, d, { actual: { status: 'data_incomplete' } })),
+      cell(2, '2026-09-24', { actual: ANOMALY }),
+      cell(3, '2026-09-25', { actual: ANOMALY, edit: SEALED }),
+      cell(3, '2026-09-10', { actual: ANOMALY, edit: SEALED }),
+    ]
+    const loadMonth = (cells = SEPT_CELLS) =>
+      monthApi.grid.mockResolvedValue({ data: gridFixture({ days: SEPT.map((d) => day(d)), employees: people, cells, today: '2026-09-30' }) })
+    afterEach(() => { monthApi.grid.mockReset().mockImplementation(async () => ({ data: null })) })
+
+    const mountMobile = async (props: Record<string, unknown> = {}) => {
+      mockIsMobile.value = true
+      const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'grid', date: '2026-09-16', ...props }, global: { stubs: STUBS } })
+      await flushPromises()
+      return wrapper
+    }
+    const bar = (w: Awaited<ReturnType<typeof mountMobile>>) => w.findComponent(MonthProgressBarStub)
+    const reconcile = (w: Awaited<ReturnType<typeof mountMobile>>) => panelOf(w, 'reconcile')!
+
+    it('show-issues：目前這週沒有待辦就把錨點移到整月第一個待辦所在的那週（型態格不算）', async () => {
+      loadMonth()
+      const wrapper = await mountMobile()
+      routerReplace.mockClear()
+      bar(wrapper).vm.$emit('show-issues')
+      await flushPromises()
+      expect(reconcile(wrapper).props('filter')).toBe('issues')
+      expect(reconcile(wrapper).props('date')).toBe('2026-09-24')
+      expect(reconcileView(wrapper)).toBe('week')
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'grid', filter: 'issues', date: '2026-09-24' } })
+      wrapper.unmount()
+    })
+
+    it('show-leftover：同樣移到整月第一個封存時未處理所在的那週', async () => {
+      loadMonth()
+      const wrapper = await mountMobile({ view: 'person' })
+      routerReplace.mockClear()
+      bar(wrapper).vm.$emit('show-leftover')
+      await flushPromises()
+      expect(reconcile(wrapper).props('filter')).toBe('leftover')
+      expect(reconcile(wrapper).props('date')).toBe('2026-09-10')
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'grid', filter: 'leftover', date: '2026-09-10' } })
+      wrapper.unmount()
+    })
+
+    it('目前這週已有符合的格子：不動錨點，網址不帶 date', async () => {
+      loadMonth()
+      const wrapper = await mountMobile({ date: '2026-09-23' })
+      routerReplace.mockClear()
+      bar(wrapper).vm.$emit('show-issues')
+      await flushPromises()
+      expect(reconcile(wrapper).props('date')).toBe('2026-09-23')
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'grid', filter: 'issues' } })
+      wrapper.unmount()
+    })
+
+    it('整月資料還沒載到、或整月沒有符合的格子：不動錨點', async () => {
+      const notLoaded = await mountMobile()
+      routerReplace.mockClear()
+      bar(notLoaded).vm.$emit('show-leftover')
+      await flushPromises()
+      expect(reconcile(notLoaded).props('date')).toBe('2026-09-16')
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'grid', filter: 'leftover' } })
+      notLoaded.unmount()
+
+      loadMonth([cell(2, '2026-09-24', { actual: ANOMALY })])
+      const none = await mountMobile()
+      routerReplace.mockClear()
+      bar(none).vm.$emit('show-leftover')
+      await flushPromises()
+      expect(reconcile(none).props('date')).toBe('2026-09-16')
+      none.unmount()
+    })
+
+    it('換週要先問排班頁籤未儲存的週排班：不放行就整個不動（篩選、檢視、網址都不變）', async () => {
+      loadMonth()
+      const wrapper = await mountMobile()
+      await visitPlan(wrapper)
+      routerReplace.mockClear()
+      panelConfirmWeekChange.mockClear()
+      panelConfirmWeekChange.mockResolvedValueOnce(false)
+      bar(wrapper).vm.$emit('show-issues')
+      await flushPromises()
+      expect(panelConfirmWeekChange).toHaveBeenLastCalledWith('2026-09-24')
+      expect(reconcile(wrapper).props('date')).toBe('2026-09-16')
+      expect(reconcile(wrapper).props('filter')).toBe('all')
+      expect(routerReplace).not.toHaveBeenCalled()
+      // 放行後才換
+      bar(wrapper).vm.$emit('show-issues')
+      await flushPromises()
+      expect(reconcile(wrapper).props('date')).toBe('2026-09-24')
+      expect(reconcile(wrapper).props('filter')).toBe('issues')
+      wrapper.unmount()
+    })
+
+    it('桌機行為不變：切到月格子，錨點不動，也不問排班頁籤', async () => {
+      loadMonth()
+      mockIsMobile.value = false
+      const wrapper = mount(ScheduleAttendanceView, { props: { tab: 'grid', date: '2026-09-16' }, global: { stubs: STUBS } })
+      await flushPromises()
+      await visitPlan(wrapper)
+      routerReplace.mockClear()
+      panelConfirmWeekChange.mockClear()
+      bar(wrapper).vm.$emit('show-issues')
+      await flushPromises()
+      expect(reconcileView(wrapper)).toBe('month')
+      expect(reconcile(wrapper).props('date')).toBe('2026-09-16')
+      expect(panelConfirmWeekChange).not.toHaveBeenCalled()
+      expect(routerReplace).toHaveBeenLastCalledWith({ query: { tab: 'grid', filter: 'issues', view: 'month' } })
+      wrapper.unmount()
+    })
+  })
 })

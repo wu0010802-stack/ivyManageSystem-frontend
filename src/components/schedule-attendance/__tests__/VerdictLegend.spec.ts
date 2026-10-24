@@ -29,6 +29,16 @@ describe('VerdictLegend 圖例', () => {
     expect(items[5].get('.verdict-shape').classes()).toContain('verdict-shape--leave')
   })
 
+  it('showLeftover：多一項「封存時未處理（只能看）」，形狀是中性的 leftover；沒開時不出現', () => {
+    expect(mount(VerdictLegend).find('[data-test="verdict-legend-leftover"]').exists()).toBe(false)
+    const wrapper = mount(VerdictLegend, { props: { showLeave: true, showLeftover: true } })
+    const items = wrapper.findAll('[data-test^="verdict-legend-"]')
+    expect(items.map((item) => item.attributes('data-test'))).toEqual([...ORDER, 'leave', 'leftover'].map((kind) => `verdict-legend-${kind}`))
+    expect(items[6].text()).toBe('封存時未處理（只能看）')
+    expect(items[6].get('.verdict-shape').classes()).toContain('verdict-shape--leftover')
+    expect(items[6].get('.verdict-shape').attributes('aria-hidden')).toBe('true')
+  })
+
   it('圖例是一個有名稱的清單，報讀才知道這組是什麼', () => {
     const wrapper = mount(VerdictLegend)
     expect(wrapper.get('ul').attributes('aria-label')).toBe('圖例')

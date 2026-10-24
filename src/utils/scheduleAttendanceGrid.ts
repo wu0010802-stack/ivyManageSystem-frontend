@@ -324,11 +324,16 @@ export function groupDaysByWeek(days: readonly GridDay[]): MonthWeek[] {
   return weeks
 }
 
-export type MonthDot = VerdictKind | 'leave'
+/** `leftover`＝封存時沒處理的格子：中性灰的點，不是任何一類待辦（封存格不可呈現成待處理），只讓「封存時未處理」篩選看得出是哪天 */
+export type MonthDot = VerdictKind | 'leave' | 'leftover'
+
+/** 月格子圖例裡「封存時未處理」那項的文字 */
+export const LEFTOVER_DOT_LABEL = '封存時未處理（只能看）'
 
 /**
  * 月格子狀態點（SPEC-027 §2 月模式）。判定類別只給「待處理」（與 isIssue、只看待處理同一定義，D14；封存格不算）：
  * 回傳 verdictKind（會扣款／缺卡／換班待確認／設定問題／資料待補）。`opts.pattern`＝這格符合本月型態（整月同型態）。
+ * 封存時沒處理的格子（isSealedLeftover）＝leftover（中性，順位同待辦點、在請假之前）。
  * 不是待處理但當天有假（含待審、含未來日）＝leave；其餘不畫點。
  */
 export function monthDot(
@@ -342,7 +347,37 @@ export function monthDot(
     const kind = verdictKind(cell, { pattern: opts.pattern ?? false })
     if (kind) return kind
   }
+  if (isSealedLeftover(cell, today, uncovered)) return 'leftover'
   return cell.leaves.length > 0 ? 'leave' : null
+}
+
+/**
+ * 手機沒有月格子，橫幅「看這 N 件」是整月的數字：目前這週沒有符合的格子就回整月最早那格的日期（頁面把錨點移過去），
+ * 目前這週已有（不用跳）或整月都沒有時回 null。issues 的目標格＝待辦且不是設定問題的格（與「有待辦」的列條件相同），
+ * leftover 的目標格＝封存遺留。
+ */
+export function nextWeekWithMatch(input: {
+  cells: readonly GridCell[]
+  filter: 'issues' | 'leftover'
+  today: string
+  /** 目前顯示的那週的週一 */
+  currentWeekStart: string
+  uncovered?: ReadonlySet<string>
+  patternKeys?: ReadonlySet<string>
+}): string | null {
+  const uncovered = input.uncovered ?? NO_DATES
+  const weekEnd = addDaysISO(input.currentWeekStart, 6)
+  let first: string | null = null
+  for (const cell of input.cells) {
+    const matches =
+      input.filter === 'leftover'
+        ? isSealedLeftover(cell, input.today, uncovered)
+        : isIssue(cell, input.today, uncovered) && !input.patternKeys?.has(cellKey(cell.employee_id, cell.date))
+    if (!matches) continue
+    if (cell.date >= input.currentWeekStart && cell.date <= weekEnd) return null
+    if (first === null || cell.date < first) first = cell.date
+  }
+  return first
 }
 
 /**

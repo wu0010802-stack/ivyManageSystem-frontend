@@ -292,12 +292,20 @@ const kinds = computed(() => {
   }
   return map
 })
-/** 有待辦／設定問題／封存時未處理：留下的列裡，不是這個篩選要看的格子（待辦格或封存遺留格）退到背景 */
+/**
+ * 退到背景的格子跟著篩選走，眼睛只停在這個篩選要看的格子：
+ * 有待辦＝非型態的待辦格才不退（型態格算設定問題）；設定問題＝只有型態格不退；封存時未處理＝只有封存遺留不退；
+ * 全部、只看未來可排不退任何格子。
+ */
 const quietKeys = computed(() => {
-  const focus = props.filter === 'issues' || props.filter === 'patterns' ? isIssue : props.filter === 'leftover' ? isSealedLeftover : null
   const keys = new Set<string>()
-  if (!focus) return keys
-  for (const [key, cell] of props.cells) if (!focus(cell, props.today, uncovered.value)) keys.add(key)
+  const focus = (cell: GridCell, key: string): boolean => {
+    if (props.filter === 'issues') return isIssue(cell, props.today, uncovered.value) && !props.patternKeys?.has(key)
+    if (props.filter === 'patterns') return !!props.patternKeys?.has(key)
+    return isSealedLeftover(cell, props.today, uncovered.value)
+  }
+  if (props.filter !== 'issues' && props.filter !== 'patterns' && props.filter !== 'leftover') return keys
+  for (const [key, cell] of props.cells) if (!focus(cell, key)) keys.add(key)
   return keys
 })
 const display = (employeeId: number, date: string): CellDisplay => displays.value.get(cellKey(employeeId, date))!

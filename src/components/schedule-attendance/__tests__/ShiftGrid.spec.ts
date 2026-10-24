@@ -125,15 +125,33 @@ describe('ShiftGrid 桌機', () => {
     expect(rows('leftover')).toEqual(['row-3'])
   })
 
-  it('封存時未處理：同一列裡不是封存遺留的格子退到背景；沒有符合的人時各自說明', () => {
+  it('退到背景的格子跟著篩選走：有待辦＝非型態的待辦格才不退；設定問題＝只有型態格不退；封存時未處理＝只有封存遺留不退；全部不退', () => {
     const ANOMALY = { status: 'anomaly' as const }
+    const SEALED = { locked_reason: 'finalized' as const }
+    // 林：9/14 型態格、9/15 逐日待辦、9/16 沒事；李（封存）：9/14 封存時沒處理、9/15 封存時沒事
     const cells = cellsFor({
-      [`3|${WEEK[2]}`]: { actual: ANOMALY, edit: { locked_reason: 'finalized' } },
-      [`3|${WEEK[3]}`]: { actual: { status: 'matched' }, edit: { locked_reason: 'finalized' } },
+      [`1|${WEEK[0]}`]: { actual: ANOMALY },
+      [`1|${WEEK[1]}`]: { actual: ANOMALY },
+      [`1|${WEEK[2]}`]: { actual: { status: 'matched' } },
+      [`3|${WEEK[0]}`]: { actual: ANOMALY, edit: SEALED },
+      [`3|${WEEK[1]}`]: { actual: { status: 'matched' }, edit: SEALED },
     })
-    const leftover = mountGrid({ cells, filter: 'leftover' })
-    expect(leftover.get(`[data-test="cell-3-${WEEK[2]}"]`).classes()).not.toContain('shift-grid__cell--quiet')
-    expect(leftover.get(`[data-test="cell-3-${WEEK[3]}"]`).classes()).toContain('shift-grid__cell--quiet')
+    const patternProps = { patternKeys: new Set([`1|${WEEK[0]}`]), patternEmployeeIds: new Set([1]) }
+    const quiet = (filter: GridFilter, emp: number, date: string) =>
+      mountGrid({ cells, filter, ...patternProps }).get(`[data-test="cell-${emp}-${date}"]`).classes().includes('shift-grid__cell--quiet')
+
+    // 有待辦：型態格退背景（它算設定問題），逐日待辦不退，沒事的退
+    expect([quiet('issues', 1, WEEK[0]), quiet('issues', 1, WEEK[1]), quiet('issues', 1, WEEK[2])]).toEqual([true, false, true])
+    // 設定問題：只有型態格不退，同列的逐日待辦也退
+    expect([quiet('patterns', 1, WEEK[0]), quiet('patterns', 1, WEEK[1]), quiet('patterns', 1, WEEK[2])]).toEqual([false, true, true])
+    // 封存時未處理：只有封存遺留不退，封存時沒事的退
+    expect([quiet('leftover', 3, WEEK[0]), quiet('leftover', 3, WEEK[1])]).toEqual([false, true])
+    // 全部、只看未來可排：維持原樣，沒有格子退背景
+    expect(quiet('all', 1, WEEK[2])).toBe(false)
+    expect(quiet('future', 1, WEEK[4])).toBe(false)
+  })
+
+  it('沒有符合的人時各自說明', () => {
     expect(mountGrid({ filter: 'issues' }).get('.shift-grid__empty').text()).toBe('這段期間沒有人有待辦')
     expect(mountGrid({ filter: 'patterns' }).get('.shift-grid__empty').text()).toBe('這段期間沒有設定問題的人')
     expect(mountGrid({ filter: 'leftover' }).get('.shift-grid__empty').text()).toBe('這段期間沒有封存時未處理的人')
