@@ -3698,7 +3698,7 @@ export interface paths {
         put?: never;
         /**
          * Batch Confirm Anomalies
-         * @description 批次確認異常處理方式（管理員代確認）
+         * @description 批次確認異常處理方式（管理員代確認）；action=clear 則為復原管理員的處理。
          */
         post: operations["batch_confirm_anomalies_api_attendance_anomalies_batch_confirm_post"];
         delete?: never;
@@ -24684,6 +24684,14 @@ export interface components {
          *     attendance_ids 契約（2026-08-17）：空集合 422（無意義請求）、上限 500
          *     （防超大批次撐爆單一 transaction）；**不存在／跨租戶的 id 靜默跳過**，
          *     僅計入實際處理的 processed。
+         *
+         *     action 三種值（型別維持 str，無效值由端點回 400，保留既有契約）：
+         *     - admin_accept：管理員代為「接受扣款」
+         *     - admin_waive：管理員「豁免」（薪資端視為不扣）
+         *     - clear：復原——只處理目前 confirmed_action 為 admin_accept／admin_waive 的列，
+         *       清空 confirmed_action／confirmed_by／confirmed_at 並於 remark 追加復原註記；
+         *       其他列（未處理、員工自己的 accept／use_pto／dispute）靜默跳過、不計 processed。
+         *       clear 不使用 remark 欄位。
          */
         BatchConfirmRequest: {
             /** Action */
