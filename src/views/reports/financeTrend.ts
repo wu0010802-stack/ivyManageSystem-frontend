@@ -117,3 +117,16 @@ export function deltaKind(v: number | null): DeltaKind | null {
   if (Math.abs(v) < 0.1) return 'flat'
   return v > 0 ? 'up' : 'down'
 }
+
+/**
+ * 年度內第一個有收支紀錄的月份（四欄任一非 0）；整年皆 0 回傳 null。
+ * 用來把「系統開始記帳前」的月份畫成「無紀錄」而非 0（改版提案 F3）。
+ */
+export function firstMonthWithData(trend: FinanceTrendRow[]): number | null {
+  let first: number | null = null
+  for (const r of trend) {
+    const has = (r.revenue || 0) !== 0 || (r.refund || 0) !== 0 || (r.expense || 0) !== 0 || (r.net || 0) !== 0
+    if (has && (first == null || r.month < first)) first = r.month
+  }
+  return first
+}

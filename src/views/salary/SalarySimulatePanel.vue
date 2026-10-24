@@ -6,6 +6,8 @@ import { useEmployeeStore } from '@/stores/employee'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { money } from '@/utils/format'
+import { useFestivalPayoutSettings } from '@/composables/useFestivalPayoutSettings'
+import { festivalPayoutMonthsText, isFestivalPayoutMonth } from './festivalCoverage'
 import {
   SALARY_SIMULATION_CACHE_KEY as STORAGE_KEY_CACHE,
   SALARY_SIMULATION_LAST_KEY as STORAGE_KEY_LAST,
@@ -329,9 +331,15 @@ const dbgLeaveDeductionTotal = computed(() => debugResult.value?.leave_deduction
 const dbgOvertimePay = computed(() => debugResult.value?.overtime_pay)
 const dbgSupervisorDividend = computed(() => debugResult.value?.supervisor_dividend)
 
+// 發放月依租戶口徑（Q10 前移後 1/5/8/11），設定載入前／失敗時退回標準 2/6/9/12。
+const { load: loadPayoutSettings, earlyPayoutFromYm } = useFestivalPayoutSettings()
+const isPayoutMonth = computed(() => isFestivalPayoutMonth(form.year, form.month, earlyPayoutFromYm.value))
+const payoutMonthsText = computed(() => festivalPayoutMonthsText(form.year, earlyPayoutFromYm.value))
+
 onMounted(() => {
   employeeStore.fetchEmployees()
   restoreLast()
+  loadPayoutSettings()
 })
 </script>
 
@@ -700,8 +708,8 @@ onMounted(() => {
                     </strong>
                   </el-descriptions-item>
                   <el-descriptions-item label="發放月份">
-                    <el-tag :type="[2,6,9,12].includes(form.month) ? 'success' : 'info'" size="small">
-                      {{ [2,6,9,12].includes(form.month) ? '本月發放' : '非發放月（2/6/9/12月發放）' }}
+                    <el-tag :type="isPayoutMonth ? 'success' : 'info'" size="small">
+                      {{ isPayoutMonth ? '本月發放' : `非發放月（${payoutMonthsText}發放）` }}
                     </el-tag>
                   </el-descriptions-item>
                 </el-descriptions>

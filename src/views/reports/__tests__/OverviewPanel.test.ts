@@ -3,322 +3,313 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { invalidateCachedAsync } from '@/composables/useCachedAsync'
+import type { FixedCostStatus } from '../closeStatus'
+
+const { state } = vi.hoisted(() => ({
+  state: {
+    trend: [] as Array<{ month: number; revenue: number; refund: number; expense: number; net: number }>,
+    prevTrend: [] as Array<{ month: number; revenue: number; refund: number; expense: number; net: number }>,
+    dashboard: {} as Record<string, unknown>,
+    dashboardFails: false,
+    financeFails: false,
+    prevFails: false,
+    monthCats: [] as Array<{ category: string; amount: number }>,
+    canRead: false,
+  },
+}))
 
 vi.mock('@/utils/auth', () => ({
-  hasPermission: () => false, // 略過固定支出/簽收待辦分支，聚焦 KPI/圖表
+  hasPermission: () => state.canRead,
   getUserInfo: () => ({ username: 'admin' }),
 }))
-
-// 1–6 月實際收支各 100/50；7–12 月僅預登錄固定支出 500000
-const monthlyTrend = Array.from({ length: 12 }, (_, i) => {
-  const m = i + 1
-  return m <= 6
-    ? { month: m, revenue: 100, refund: 10, expense: 50, net: 40 }
-    : { month: m, revenue: 0, refund: 0, expense: 500000, net: -500000 }
-})
-
-// 去年（2025）：上下半年金額不同——1–6 月 revenue 各 50／expense 各 25；
-// 7–12 月 revenue 各 200／expense 各 100。用來與今年 YTD（截至 cutoff=7）對齊比較
-// （F1）：若誤用「去年全年」當分母，會把 7–12 月的較大值也算進去，數字明顯不同於
-// 「去年同期（1–7 月）」。
-const prevYearTrend = Array.from({ length: 12 }, (_, i) => {
-  const m = i + 1
-  return m <= 6
-    ? { month: m, revenue: 50, refund: 0, expense: 25, net: 25 }
-    : { month: m, revenue: 200, refund: 0, expense: 100, net: 100 }
-})
-
 vi.mock('@/api/reports', () => ({
-  getDashboard: vi.fn().mockResolvedValue({
-    data: {
-      attendance_monthly: [
-        { month: 5, rate: 90, total_records: 100 },
-        { month: 6, rate: 95, total_records: 100 },
-      ],
-      salary_monthly: [],
-    },
-  }),
-  getFinanceSummary: vi.fn().mockImplementation((year: number) => {
-    if (year === 2026) {
-      return Promise.resolve({
-        data: {
-          summary: {
-            total_revenue: 600, total_refund: 60, net_revenue: 540,
-            total_expense: 50 * 6 + 500000 * 6, // 全年口徑（含預登錄）
-            net_cashflow: 540 - (50 * 6 + 500000 * 6),
-          },
-          monthly_trend: monthlyTrend,
-        },
-      })
-    }
-    if (year === 2025) {
-      return Promise.resolve({
-        data: {
-          summary: {
-            total_revenue: 50 * 6 + 200 * 6, total_refund: 0, net_revenue: 50 * 6 + 200 * 6,
-            total_expense: 25 * 6 + 100 * 6, // 全年口徑（去年）
-            net_cashflow: (50 * 6 + 200 * 6) - (25 * 6 + 100 * 6),
-          },
-          monthly_trend: prevYearTrend,
-        },
-      })
-    }
-    return Promise.resolve({
-      data: {
-        summary: { total_revenue: 0, total_refund: 0, net_revenue: 0, total_expense: 0, net_cashflow: 0 },
-        monthly_trend: [],
-      },
-    })
+  getDashboard: vi.fn(() => (state.dashboardFails
+    ? Promise.reject(new Error('boom'))
+    : Promise.resolve({ data: state.dashboard }))),
+  getFinanceSummary: vi.fn((year: number, month?: number) => {
+    if (state.financeFails && year === 2026 && month == null) return Promise.reject(new Error('boom'))
+    if (state.prevFails && year === 2025) return Promise.reject(new Error('boom'))
+    if (month != null) return Promise.resolve({ data: { expense_by_category: state.monthCats } })
+    return Promise.resolve({ data: { monthly_trend: year === 2026 ? state.trend : state.prevTrend } })
   }),
 }))
-vi.mock('@/api/monthlyFixedCost', () => ({ getMonthlyFixedCosts: vi.fn().mockResolvedValue([]) }))
-vi.mock('@/api/vendorPayment', () => ({ getVendorPaymentSummary: vi.fn().mockResolvedValue({ data: {} }) }))
-vi.mock('@/api/miscReceipt', () => ({ getMiscReceiptSummary: vi.fn().mockResolvedValue({ data: {} }) }))
+vi.mock('@/views/reports/chartSetup', () => ({
+  BarChart: { name: 'BarChart', props: ['data', 'options', 'plugins'], template: '<div class="chart-stub" />' },
+}))
+vi.mock('@/api/vendorPayment', () => ({ getVendorPaymentSummary: vi.fn().mockResolvedValue({ data: { pending_count: 0, pending_amount: 0 } }) }))
+vi.mock('@/api/miscReceipt', () => ({ getMiscReceiptSummary: vi.fn().mockResolvedValue({ data: { pending_count: 0, pending_amount: 0 } }) }))
 
-import { getFinanceSummary, getDashboard } from '@/api/reports'
+vi.mock('@/api/historicalPnl', () => ({
+  getHistoricalPnl: vi.fn().mockResolvedValue({ data: { year: 2026, actual_status: 'unverified', months: [], totals: { revenue: '0.00', expense: '0.00', profit: '0.00' } } }),
+  previewHistoricalPnl: vi.fn(),
+  importHistoricalPnl: vi.fn(),
+}))
+
+import { getHistoricalPnl } from '@/api/historicalPnl'
+import { getFinanceSummary } from '@/api/reports'
 import OverviewPanel from '@/views/reports/OverviewPanel.vue'
 
-// fake timers 用畢還原：無 afterEach 還原時，本檔收尾（auto-unmount、後續 hook）
-// 仍在假時鐘下執行，EP 元件的 debounce/transition timer 掛著不走，是並行
-// timeout flaky 的已知放大器（2026-08-11 測試架構稽核；比照 MonthlyFixedCostPanel）
-afterEach(() => {
-  vi.useRealTimers()
-})
+const zero = (m: number) => ({ month: m, revenue: 0, refund: 0, expense: 0, net: 0 })
 
-beforeEach(() => {
-  invalidateCachedAsync('reports/')
-  vi.useFakeTimers()
-  vi.setSystemTime(new Date(2026, 6, 10)) // 2026-07-10 → cutoff=7
-})
+/** staging 形狀：8 月才開始記帳，9 月有退款，支出只有代收手續費 */
+function stagingTrend() {
+  return Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1
+    if (m === 8) return { month: 8, revenue: 90396, refund: 0, expense: 4, net: 90392 }
+    if (m === 9) return { month: 9, revenue: 1965811, refund: 23000, expense: 94, net: 1942717 }
+    return zero(m)
+  })
+}
+function stagingDashboard() {
+  return {
+    salary_monthly: Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1, employee_count: 0, employee_count_pending: i === 0 ? 33 : 0,
+    })),
+    attendance_monthly: Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1
+      if (m === 1) return { month: 1, total_records: 110, rate: 25.5, late: 57 }
+      if (m === 9) return { month: 9, total_records: 414, rate: 41.8, late: 173 }
+      return { month: m, total_records: 0, rate: 0, late: 0 }
+    }),
+  }
+}
 
-function mountPanel() {
+const NOTHING_REGISTERED: FixedCostStatus = { state: 'ok', registered: [] }
+
+function mountPanel(props: Partial<{ focusMonth: number; fixedCost: FixedCostStatus }> = {}) {
   return mount(OverviewPanel, {
-    props: { year: 2026 },
-    global: {
-      plugins: [ElementPlus],
-      stubs: { LineChart: true, RouterLink: true },
-    },
+    props: { year: 2026, focusMonth: 9, fixedCost: NOTHING_REGISTERED, ...props },
+    global: { plugins: [ElementPlus], stubs: { RouterLink: { template: '<a><slot /></a>' } } },
   })
 }
 
-describe('OverviewPanel KPI 雙口徑（spec §4）', () => {
-  it('主數字 = 截至 cutoff 實際發生（7 月預登錄 500000 計入、8–12 月不計入）', async () => {
-    const w = mountPanel()
-    await flushPromises()
-    // 截至 7 月：支出 = 50*6 + 500000（7 月預登錄在 cutoff 內屬「本月已登錄」計入）
-    expect(w.find('[data-test="kpi-total-expense"]').text()).toContain('500,300')
-    expect(w.find('[data-test="kpi-total-revenue"]').text()).toContain('600')
-  })
-  it('兩口徑不同時顯示「全年含預登錄」副行', async () => {
-    const w = mountPanel()
-    await flushPromises()
-    expect(w.find('[data-test="kpi-expense-note"]').text()).toContain('全年含預登錄')
-  })
+const cellState = (w: ReturnType<typeof mountPanel>, row: string, m: number) =>
+  w.find(`[data-test="cell-${row}-${m}"]`).attributes('data-state')
+
+beforeEach(() => {
+  invalidateCachedAsync('reports/')
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 9, 12)) // 2026-10-12：10 月進行中
+  state.trend = stagingTrend()
+  state.prevTrend = []
+  state.dashboard = stagingDashboard()
+  state.dashboardFails = false
+  state.financeFails = false
+  state.prevFails = false
+  state.monthCats = []
+  state.canRead = false
+  vi.mocked(getFinanceSummary).mockClear()
 })
+afterEach(() => { vi.useRealTimers() })
 
-describe('OverviewPanel YoY 對齊 actuals cutoff（F1 修正：去年同期，非去年全年）', () => {
-  it('YoY 用「今年 YTD vs 去年同期（同一 cutoffMonth）」，不是「今年全年 vs 去年全年」', async () => {
+describe('收支等式（焦點月）', () => {
+  it('歷史參考尚在載入時，現金收支數字仍獨立顯示', async () => {
+    vi.mocked(getHistoricalPnl).mockReturnValueOnce(new Promise(() => {}))
     const w = mountPanel()
     await flushPromises()
-
-    // 今年 YTD（截至 cutoff=7）：revenue=600（1–6 月各 100，7 月僅預登錄支出無 revenue）；
-    // 去年同期（1–7 月）：revenue = 6*50 + 200 = 500。
-    // 正確：pctChange(600, 500) = +20.0%
-    // 若誤用「去年全年」(6*50+6*200=1500) 當分母：pctChange(600, 1500) = -60.0%（錯誤方向）
-    const yoyRevenue = w.find('[data-test="yoy-revenue"]')
-    expect(yoyRevenue.text()).toContain('20.0%')
-    expect(yoyRevenue.text()).not.toContain('60.0%')
-    expect(yoyRevenue.text()).toContain('vs 去年同期')
-
-    // 支出 YoY 分子不含今年 8–12 月預登錄：今年 YTD 支出 = 6*50 + 500000（7 月預登錄
-    // 在 cutoff 內）= 500,300；若含 8–12 月未來預登錄（舊 summary 全年口徑）會是
-    // 6*50 + 500000*6 = 3,000,300。去年同期支出 = 6*25 + 100 = 250。
-    // 正確：pctChange(500300, 250) = +200020.0%
-    // 若誤用全年兩側：pctChange(3000300, 750) = +399940.0%
-    const yoyExpense = w.find('[data-test="yoy-expense"]')
-    expect(yoyExpense.text()).toContain('200020.0%')
-    expect(yoyExpense.text()).not.toContain('399940.0%')
-
-    // 淨現金 YoY 同理對齊 cutoff：今年 YTD net = 6*40 - 500000 = -499,760；
-    // 去年同期 net = 6*25 + 100 = 250。正確：pctChange(-499760, 250) = -200004.0%
-    // 若誤用全年兩側：pctChange(-2999760, 750) = -400068.0%
-    const yoyNet = w.find('[data-test="yoy-net"]')
-    expect(yoyNet.text()).toContain('200004.0%')
-    expect(yoyNet.text()).not.toContain('400068.0%')
+    expect(w.text()).toContain('歷史損益參考')
+    expect(w.find('[data-test="value-revenue"]').text()).toBe('1,965,811')
+    expect(w.find('[data-test="value-net"]').text()).toBe('1,942,717')
   })
-})
 
-describe('OverviewPanel MoM 錨點（回歸：不再 0.0%）', () => {
-  it('錨定最後完整月（6 月 vs 5 月），兩月相同 → 顯示持平而非 ↑0.0%', async () => {
+  it('主數字是焦點月、第二行是年初至今', async () => {
     const w = mountPanel()
     await flushPromises()
-    const mom = w.find('[data-test="mom-revenue"]')
-    expect(mom.exists()).toBe(true)
-    expect(mom.text()).toContain('— 持平')
-    expect(mom.text()).not.toContain('↑')
+    expect(w.find('[data-test="equation-title"]').text()).toBe('9 月收支')
+    expect(w.find('[data-test="value-revenue"]').text()).toBe('1,965,811')
+    expect(w.find('[data-test="value-refund"]').text()).toBe('23,000')
+    expect(w.find('[data-test="value-expense"]').text()).toBe('94')
+    expect(w.find('[data-test="value-net"]').text()).toBe('1,942,717')
+    expect(w.find('[data-test="term-revenue"]').text()).toContain('1–9 月累計 2,056,207')
+    expect(w.find('[data-test="term-net"]').text()).toContain('1–9 月累計 2,033,109')
   })
-})
 
-describe('OverviewPanel 下鑽導覽', () => {
-  it('出勤摘要卡點擊 emit navigate attendance', async () => {
+  it('上月是年度第一個有收支的月份（可能不完整）時不算百分比，寫原因', async () => {
     const w = mountPanel()
     await flushPromises()
-    await w.find('[data-test="attendance-summary-card"]').trigger('click')
-    expect(w.emitted('navigate')?.[0]).toEqual([{ tab: 'attendance' }])
+    expect(w.find('[data-test="compare-hint"]').text()).toContain('8 月是今年第一個有收支的月份')
+    expect(w.find('[data-test="cmp-revenue"]').exists()).toBe(false)
+    expect(w.find('[data-test="cmp-net"]').exists()).toBe(false)
+    expect(w.find('[data-test="equation"]').text()).not.toContain('%') // 不再出現 +2049.2% 這類誤導百分比
   })
-  it('薪資摘要卡點擊 emit navigate salary', async () => {
-    const w = mountPanel()
-    await flushPromises()
-    await w.find('[data-test="salary-summary-card"]').trigger('click')
-    expect(w.emitted('navigate')?.[0]).toEqual([{ tab: 'salary' }])
-  })
-  it('鍵盤可及性：出勤摘要卡可聚焦（role=button + tabindex=0）且 Enter 觸發 navigate', async () => {
-    const w = mountPanel()
-    await flushPromises()
-    const card = w.find('[data-test="attendance-summary-card"]')
-    expect(card.attributes('role')).toBe('button')
-    expect(card.attributes('tabindex')).toBe('0')
-    await card.trigger('keydown.enter')
-    expect(w.emitted('navigate')?.[0]).toEqual([{ tab: 'attendance' }])
-  })
-})
 
-describe('OverviewPanel 異常與待辦卡獨立於 finance 可用性（F2 修正）', () => {
-  it('finance 載入失敗、dashboard 正常時，異常與待辦卡仍渲染（資料源獨立於 finance）', async () => {
-    // 只讓第一次呼叫（本年 finance）reject；第二次（prevYearFinance）沿用預設
-    // mock 正常解析，避免污染共用的 getFinanceSummary mock 影響同檔後續測試。
-    vi.mocked(getFinanceSummary).mockRejectedValueOnce(new Error('finance service down'))
+  it('支出缺項就地點名：固定支出未登錄、薪資未封存，並提醒淨現金偏高', async () => {
     const w = mountPanel()
     await flushPromises()
-
-    // finance 不可用 → 錯誤區塊仍顯示（KPI 卡不渲染，避免偽造 0）
-    expect(w.find('[data-test="finance-error"]').exists()).toBe(true)
-    expect(w.find('[data-test="kpi-total-revenue"]').exists()).toBe(false)
-    // 但待辦卡不應連坐消失——資料源是 dashboard/fixedCost/signoff，與 finance 無關
-    expect(w.find('[data-test="todo-list"]').exists()).toBe(true)
+    expect(w.find('[data-test="expense-incomplete"]').exists()).toBe(true)
+    const gaps = w.find('[data-test="expense-gaps"]').text()
+    expect(gaps).toContain('固定支出 9 月未登錄')
+    expect(gaps).toContain('薪資 9 月未封存')
+    expect(w.find('[data-test="term-net"]').text()).toContain('淨現金會偏高')
   })
-})
 
-describe('OverviewPanel 方向A版面（行動指揮塔，2026-08-24 改版）', () => {
-  it('KPI 為單一壓縮帶：kpi-band 容器存在且四個 KPI 值都在帶內', async () => {
-    const w = mountPanel()
-    await flushPromises()
-    const band = w.find('[data-test="kpi-band"]')
-    expect(band.exists()).toBe(true)
-    for (const sel of ['kpi-net-cashflow', 'kpi-total-revenue', 'kpi-total-expense', 'kpi-total-refund']) {
-      expect(band.find(`[data-test="${sel}"]`).exists()).toBe(true)
+  it('資料齊全時：收入用百分比比較、淨現金用金額差，且不標不完整', async () => {
+    state.trend = Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1
+      return m <= 9 ? { month: m, revenue: 2_000_000, refund: 20_000, expense: 1_700_000, net: 280_000 } : zero(m)
+    })
+    state.trend[7] = { month: 8, revenue: 1_600_000, refund: 0, expense: 1_600_000, net: 0 }
+    state.dashboard = {
+      ...stagingDashboard(),
+      salary_monthly: Array.from({ length: 12 }, (_, i) => ({ month: i + 1, employee_count: i < 9 ? 30 : 0, employee_count_pending: 0 })),
     }
-  })
-
-  it('右欄 rail 常駐：overview-rail 內同時含待辦卡與資料說明', async () => {
-    const w = mountPanel()
+    const w = mountPanel({ fixedCost: { state: 'ok', registered: [1, 2, 3, 4, 5, 6, 7, 8, 9] } })
     await flushPromises()
-    const rail = w.find('[data-test="overview-rail"]')
-    expect(rail.exists()).toBe(true)
-    expect(rail.find('[data-test="todo-list"]').exists()).toBe(true)
-    expect(rail.find('[data-test="data-notes"]').exists()).toBe(true)
-  })
-
-  it('趨勢圖與三張摘要卡同在左欄 overview-main', async () => {
-    const w = mountPanel()
-    await flushPromises()
-    const main = w.find('[data-test="overview-main"]')
-    expect(main.exists()).toBe(true)
-    expect(main.find('[data-test="attendance-summary-card"]').exists()).toBe(true)
-    expect(main.find('[data-test="salary-summary-card"]').exists()).toBe(true)
-    // 摘要卡不應再出現在右欄
-    expect(w.find('[data-test="overview-rail"]').find('[data-test="attendance-summary-card"]').exists()).toBe(false)
-  })
-
-  it('無待辦時不顯示計數 badge', async () => {
-    const w = mountPanel()
-    await flushPromises()
-    expect(w.find('[data-test="todo-empty"]').exists()).toBe(true)
-    expect(w.find('[data-test="todo-count"]').exists()).toBe(false)
-  })
-
-  it('有待辦時標題旁顯示計數 badge，且薪資未封存項帶 danger 圓點', async () => {
-    vi.mocked(getDashboard).mockResolvedValueOnce({
-      data: {
-        attendance_monthly: [
-          { month: 5, rate: 90, total_records: 100 },
-        ],
-        salary_monthly: [{ month: 6, employee_count_pending: 3 }],
-      },
-    })
-    const w = mountPanel()
-    await flushPromises()
-    expect(w.find('[data-test="todo-count"]').text()).toBe('1')
-    const item = w.find('[data-test="todo-item-salary-pending"]')
-    expect(item.exists()).toBe(true)
-    expect(item.find('.todo-dot--danger').exists()).toBe(true)
+    expect(w.find('[data-test="cmp-revenue"]').text()).toContain('vs 8 月')
+    expect(w.find('[data-test="cmp-revenue"]').text()).toContain('25.0%')
+    // 8 月淨現金為 0：百分比無意義，改金額差
+    expect(w.find('[data-test="cmp-net"]').text()).toContain('+280,000')
+    expect(w.find('[data-test="expense-incomplete"]').exists()).toBe(false)
+    expect(w.find('[data-test="kpi-ratio"]').text()).toContain('1.16')
   })
 })
 
-describe('OverviewPanel 稽核修正（2026-08-25）', () => {
-  it('無待辦時待辦卡為中性底：不帶 todo-card--active（M4 平靜狀態不穿警示色）', async () => {
+describe('結帳狀態矩陣', () => {
+  it('收入：上線前無紀錄、有資料完成、本月進行中、未來月；固定支出未登錄；1 月薪資草稿', async () => {
     const w = mountPanel()
     await flushPromises()
-    const card = w.find('[data-test="todo-card"]')
-    expect(card.exists()).toBe(true)
-    expect(card.classes()).not.toContain('todo-card--active')
+    expect(cellState(w, 'revenue', 7)).toBe('none')
+    expect(cellState(w, 'revenue', 9)).toBe('ok')
+    expect(cellState(w, 'revenue', 10)).toBe('prog')
+    expect(cellState(w, 'revenue', 11)).toBe('future')
+    expect(cellState(w, 'fixed', 3)).toBe('miss')
+    expect(cellState(w, 'fixed', 10)).toBe('miss')
+    expect(cellState(w, 'salary', 1)).toBe('draft')
+    expect(cellState(w, 'salary', 2)).toBe('miss')
+    expect(cellState(w, 'salary', 10)).toBe('prog')
   })
 
-  it('有待辦時待辦卡帶 todo-card--active（琥珀警示底只在真有事時出現）', async () => {
-    vi.mocked(getDashboard).mockResolvedValueOnce({
-      data: {
-        attendance_monthly: [],
-        salary_monthly: [{ month: 6, employee_count_pending: 3 }],
-      },
-    })
+  it('每類一行摘要取代逐月重複待辦；固定支出動作就地切到登錄分頁', async () => {
     const w = mountPanel()
     await flushPromises()
-    expect(w.find('[data-test="todo-card"]').classes()).toContain('todo-card--active')
+    expect(w.find('[data-test="act-fixed"]').text()).toContain('1–10 月未登錄')
+    expect(w.find('[data-test="act-salary"]').text()).toContain('1 月草稿 33 人 · 2–9 月未結算')
+    await w.find('[data-test="act-fixed-go"]').trigger('click')
+    expect(w.emitted('navigate')?.[0]).toEqual([{ tab: 'fixed-cost' }])
   })
 
-  it('趨勢圖卡 header 提供鍵盤可及的收支彙總入口（m10 不再滑鼠限定）', async () => {
-    const w = mountPanel()
+  it('沒有固定支出讀取權限：整列無法確認，不出現登錄按鈕也不顯示完成', async () => {
+    const w = mountPanel({ fixedCost: { state: 'forbidden' } })
     await flushPromises()
-    const link = w.find('[data-test="chart-detail-link"]')
-    expect(link.exists()).toBe(true)
-    expect(link.element.tagName).toBe('BUTTON')
-    await link.trigger('click')
-    expect(w.emitted('navigate')?.[0]).toEqual([{ tab: 'finance' }])
+    expect(cellState(w, 'fixed', 3)).toBe('unknown')
+    expect(w.find('[data-test="act-fixed"]').text()).toContain('需要廠商付款讀取權限')
+    expect(w.find('[data-test="act-fixed-go"]').exists()).toBe(false)
+    expect(w.find('[data-test="act-fixed"]').text()).not.toContain('完成')
   })
 
-  it('雙欄與摘要卡列帶 row-gap 類名（M3 堆疊斷點垂直間距）', async () => {
+  it('出勤／薪資資料讀取失敗：薪資列無法確認、出勤指標寫無法確認（不給假的全清）', async () => {
+    state.dashboardFails = true
     const w = mountPanel()
     await flushPromises()
-    expect(w.find('.overview-grid').exists()).toBe(true)
-    expect(w.find('.summary-row').exists()).toBe(true)
+    expect(cellState(w, 'salary', 3)).toBe('unknown')
+    expect(w.find('[data-test="act-salary"]').text()).toContain('無法確認')
+    expect(w.find('[data-test="kpi-attendance"]').text()).toContain('無法確認')
+  })
+
+  it('憑證：兩來源皆確知 0 筆才顯示完成', async () => {
+    state.canRead = true
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.find('[data-test="act-signoff"]').text()).toContain('憑證皆已補齊')
   })
 })
 
-describe('OverviewPanel/ReportKpiCard 樣式 token 紀律（design.md 硬規則；M5/M6/m7）', () => {
-  // vitest css:false 無法斷言 computed style，比照 ReportKpiCard.test.ts
-  // 既有慣例改斷言 SFC 原始碼的 style 段。
-  it('scoped style 不得出現裸 px 字級／裸 4px 圓角／裸秒數 transition', () => {
-    for (const f of ['src/views/reports/OverviewPanel.vue', 'src/views/reports/ReportKpiCard.vue']) {
+describe('查不到 ≠ 已完整（審查 P2）', () => {
+  it('薪資已封存但固定支出無讀取權限：支出標「未確認」、收支比無法確認', async () => {
+    state.dashboard = {
+      ...stagingDashboard(),
+      salary_monthly: Array.from({ length: 12 }, (_, i) => ({ month: i + 1, employee_count: 30, employee_count_pending: 0 })),
+    }
+    const w = mountPanel({ fixedCost: { state: 'forbidden' } })
+    await flushPromises()
+    expect(w.find('[data-test="expense-incomplete"]').exists()).toBe(false)
+    expect(w.find('[data-test="expense-unknown"]').exists()).toBe(true)
+    expect(w.find('[data-test="expense-unknowns"]').text()).toContain('固定支出登錄狀態查不到')
+    expect(w.find('[data-test="kpi-ratio"]').text()).toContain('無法確認')
+  })
+
+  it('焦點選在未來月：年初至今只算到截止月，不把預登錄當已發生', async () => {
+    const w = mountPanel({ focusMonth: 12 })
+    await flushPromises()
+    expect(w.find('[data-test="term-revenue"]').text()).toContain('1–10 月累計 2,056,207')
+    expect(w.find('[data-test="compare-hint"]').text()).toContain('12 月尚未開始')
+  })
+
+  it('1 月焦點、去年資料讀取失敗：寫讀取失敗，不說「去年 12 月沒有紀錄」', async () => {
+    state.prevFails = true
+    state.trend = stagingTrend().map(r => (r.month === 1 ? { month: 1, revenue: 100, refund: 0, expense: 10, net: 90 } : r))
+    const w = mountPanel({ focusMonth: 1 })
+    await flushPromises()
+    const hint = w.find('[data-test="compare-hint"]').text()
+    expect(hint).toContain('去年資料讀取失敗')
+    expect(hint).not.toContain('沒有收支紀錄')
+  })
+})
+
+describe('其他指標與圖表', () => {
+  it('人事成本未封存、出勤率帶筆數、收支比在支出不完整時不計算', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.find('[data-test="kpi-personnel"]').text()).toContain('尚未封存')
+    expect(w.find('[data-test="kpi-attendance"]').text()).toContain('41.8%')
+    expect(w.find('[data-test="kpi-attendance"]').text()).toContain('414 筆打卡')
+    expect(w.find('[data-test="kpi-ratio"]').text()).toContain('暫不計算')
+  })
+
+  it('點圖上的月份會切換焦點；圖表資料上線前月份為 null 不是 0', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    const chart = w.findComponent({ name: 'BarChart' })
+    const props = chart.props() as {
+      data: { datasets: Array<{ data: Array<number | null> }> }
+      options: { onClick: (e: unknown, els: Array<{ index: number }>) => void }
+    }
+    expect(props.data.datasets[0].data[6]).toBeNull()
+    expect(props.data.datasets[0].data[8]).toBe(1965811)
+    props.options.onClick(null, [{ index: 7 }])
+    expect(w.emitted('update:focusMonth')?.[0]).toEqual([8])
+  })
+
+  it('焦點月改變：標題更新並抓該月分類（不重掛）', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    await w.setProps({ focusMonth: 8 })
+    await flushPromises()
+    expect(w.find('[data-test="equation-title"]').text()).toBe('8 月收支')
+    expect(vi.mocked(getFinanceSummary)).toHaveBeenCalledWith(2026, 8)
+  })
+
+  it('收支資料讀取失敗：顯示錯誤與重新載入，收入列標無法確認', async () => {
+    state.financeFails = true
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.find('[data-test="finance-error"]').exists()).toBe(true)
+    expect(cellState(w, 'revenue', 9)).toBe('unknown')
+  })
+})
+
+describe('報表模組樣式 token 紀律（DESIGN.md 硬規則）', () => {
+  // vitest css:false 無法斷言 computed style，改斷言 SFC 原始碼的 style 段。
+  const FILES = [
+    'src/views/ReportsView.vue',
+    'src/views/reports/OverviewPanel.vue',
+    'src/views/reports/HistoricalPnlPanel.vue',
+    'src/views/reports/FinanceSummaryPanel.vue',
+    'src/views/reports/FinanceDetailDrawer.vue',
+    'src/views/reports/ReportNotesDrawer.vue',
+  ]
+  it('不得出現裸 px 字級／裸 4px 圓角／裸秒數 transition／EP 預設色 hex', () => {
+    for (const f of FILES) {
       const src = readFileSync(f, 'utf8')
       expect(src, `${f} 仍有裸 font-size px`).not.toMatch(/font-size:\s*\d+px/)
       expect(src, `${f} 仍有裸 border-radius: 4px`).not.toMatch(/border-radius:\s*4px/)
       expect(src, `${f} 仍有裸 transition 時長`).not.toMatch(/transition:[^;]*\d+(\.\d+)?s/)
+      expect(src, `${f} 仍含 EP 預設 hex`).not.toMatch(/#(409eff|67c23a|f56c6c|e6a23c)/i)
     }
   })
-
-  it('summary-value 與 kpi-value 一致使用 tabular-nums', () => {
-    const src = readFileSync('src/views/reports/OverviewPanel.vue', 'utf8')
-    expect(src).toMatch(/\.summary-value\s*\{[^}]*tabular-nums/s)
-  })
-
-  it('row-gap 規則存在（.overview-grid／.summary-row）', () => {
-    const src = readFileSync('src/views/reports/OverviewPanel.vue', 'utf8')
-    expect(src).toMatch(/\.overview-grid[^{]*\{[^}]*row-gap/s)
-  })
-
-  it('待辦計數徽章不再以白字壓 warning 主色（M5 AA 對比：改 warning-darker 底）', () => {
-    const src = readFileSync('src/views/reports/OverviewPanel.vue', 'utf8')
-    const badge = /\.todo-count\s*\{[^}]*\}/s.exec(src)?.[0] ?? ''
+  it('分頁計數徽章以 warning-darker 底壓白字（AA 對比）', () => {
+    const src = readFileSync('src/views/ReportsView.vue', 'utf8')
+    const badge = /\.tab-entry__count\s*\{[^}]*\}/s.exec(src)?.[0] ?? ''
     expect(badge).toContain('var(--color-warning-darker)')
   })
 })

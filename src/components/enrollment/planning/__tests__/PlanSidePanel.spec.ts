@@ -96,6 +96,30 @@ describe('PlanSidePanel', () => {
     expect(exclude.text()).toContain('轉學')
   })
 
+  it('畢業／排除名單可勾選（大班留級、取消排除的入口）：逐筆 emit set-selected', async () => {
+    const w = mountPanel()
+    const gradRow = w.find('.graduate-bucket .bucket-row[data-student-id="3"]')
+    expect(gradRow.exists()).toBe(true)
+    await gradRow.find('input[type="checkbox"]').setValue(true)
+    expect(w.emitted('set-selected')!.at(-1)).toEqual([[3], true])
+
+    const exclRow = w.find('.exclude-bucket .bucket-row[data-student-id="4"]')
+    await exclRow.find('input[type="checkbox"]').setValue(true)
+    expect(w.emitted('set-selected')!.at(-1)).toEqual([[4], true])
+  })
+
+  it('畢業／排除段落各自全選，只作用於該段', async () => {
+    const w = mountPanel()
+    await w.find('.graduate-bucket .bucket-select-all input[type="checkbox"]').setValue(true)
+    expect(w.emitted('set-selected')!.at(-1)).toEqual([[3], true])
+  })
+
+  it('editable=false：畢業／排除名單不出現勾選', () => {
+    const w = mountPanel({}, false)
+    expect(w.find('.graduate-bucket .bucket-row input[type="checkbox"]').exists()).toBe(false)
+    expect(w.find('.bucket-select-all').exists()).toBe(false)
+  })
+
   it('內嵌 PlanIssuesSummary 並轉發 locate-issue', async () => {
     const w = mountPanel()
     await w.find('.group-toggle').trigger('click')

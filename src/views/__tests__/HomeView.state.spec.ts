@@ -81,6 +81,21 @@ function mountHome(state: ReturnType<typeof makeState>) {
 }
 
 describe('HomeView 狀態層（孤兒標題 / 週末 / 假零）', () => {
+  it('補打卡待審列入首頁，不顯示全站工作已清空', () => {
+    const wrapper = mountHome(makeState({
+      approvalSummary: ref({ pending_leaves: 0, pending_overtimes: 0, pending_punch_corrections: 2 }),
+    }))
+    expect(wrapper.text()).toContain('待審補打卡')
+    expect(wrapper.find('.todo-empty').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('零筆僅宣告出勤與簽核摘要，不代表其他模組清空', () => {
+    const wrapper = mountHome(makeState())
+    expect(wrapper.find('.todo-empty').text()).toContain('出勤與簽核摘要沒有待辦')
+    expect(wrapper.text()).not.toContain('今天沒有待處理的工作')
+    wrapper.unmount()
+  })
   afterEach(() => {
     vi.clearAllMocks()
   })

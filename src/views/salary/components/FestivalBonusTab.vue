@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { FESTIVAL_RULE_TOGGLES } from '../festivalRuleToggles'
 // BonusConfigPanel「節慶獎金」tab（2026-07-12 體檢 F2 拆分）：
 // 同 OvertimeBonusTab，state 與儲存流程留在父元件 BonusConfigPanel
 // （與「超額獎金」tab 共用同一份 bonusConfig / gradeTargets reactive 物件，
@@ -28,7 +29,23 @@ interface FestivalBonusConfig {
   meeting_default_hours: number
   meeting_absence_penalty: number
   art_teacher_festival: number
+  // 義華 Q13：懲處預設扣節慶獎金（元）；null＝後端未回傳（沿用後端預設）
+  warning_deduction: number | null
+  minor_offense_deduction: number | null
+  major_offense_deduction: number | null
+  // 義華 Q6–Q9：節慶計算四開關；null＝未載入（不異動）
+  festival_leader_class_ratio: boolean | null
+  festival_unassigned_teacher_school_ratio: boolean | null
+  festival_new_class_guarantee: boolean | null
+  festival_shared_assistant_simple_avg: boolean | null
 }
+
+// 懲處預設扣款三欄（後端 PUT /config/bonus 驗證 0–100000）
+const OFFENSE_DEDUCTION_FIELDS = [
+  { key: 'warning_deduction', label: '警告 預設扣節慶獎金' },
+  { key: 'minor_offense_deduction', label: '小過 預設扣節慶獎金' },
+  { key: 'major_offense_deduction', label: '大過 預設扣節慶獎金' },
+] as const
 
 defineProps<{
   bonusConfig: FestivalBonusConfig
@@ -220,6 +237,54 @@ defineProps<{
       </el-col>
     </el-row>
   </el-card>
+
+  <!-- 義華 Q6–Q9：節慶計算規則開關（per-tenant，預設關＝舊行為） -->
+  <el-card class="box-card mt-4" shadow="never" data-testid="festival-rule-toggles-card">
+    <template #header><div class="card-header"><span>節慶計算規則</span></div></template>
+    <p class="desc-text">
+      各園所依自己的規章開啟；預設全部關閉（維持原計算）。⚠ 開啟後，未封存的薪資會標記需重算，
+      重算時整年度未封存月份的節慶獎金都會套用新規則。
+    </p>
+    <div
+      v-for="t in FESTIVAL_RULE_TOGGLES"
+      :key="t.key"
+      class="rule-toggle-row"
+      :data-testid="`festival-rule-${t.key}`"
+    >
+      <div class="rule-toggle-row__text">
+        <div class="rule-toggle-row__label">{{ t.label }}</div>
+        <div class="desc-text rule-toggle-row__hint">{{ t.hint }}</div>
+      </div>
+      <!-- null＝未載入（不送出），el-radio-group 不收 null，以 undefined 呈現「未選」 -->
+      <el-radio-group
+        :model-value="bonusConfig[t.key] ?? undefined"
+        :aria-label="t.label"
+        size="small"
+        @update:model-value="(v) => (bonusConfig[t.key] = v === true)"
+      >
+        <el-radio-button :value="true">開啟</el-radio-button>
+        <el-radio-button :value="false">關閉</el-radio-button>
+      </el-radio-group>
+    </div>
+  </el-card>
+
+  <!-- 義華 Q13：懲處預設扣節慶獎金 -->
+  <el-card class="box-card mt-4" shadow="never" data-testid="offense-deduction-card">
+    <template #header><div class="card-header"><span>懲處預設扣款</span></div></template>
+    <p class="desc-text">個案未填金額時套用；規章每 1 分＝1,000 元。扣款由發放月的節慶獎金扣除。</p>
+    <el-row :gutter="20">
+      <el-col v-for="f in OFFENSE_DEDUCTION_FIELDS" :key="f.key" :span="8">
+        <el-form-item :label="f.label">
+          <el-input-number
+            v-model="bonusConfig[f.key]"
+            :min="0" :max="100000" :step="500"
+            controls-position="right" style="width: 100%"
+            :aria-label="f.label"
+          />
+        </el-form-item>
+      </el-col>
+    </el-row>
+  </el-card>
 </template>
 
 <style scoped>
@@ -250,6 +315,18 @@ defineProps<{
   margin-bottom: 15px;
 }
 .mt-4 { margin-top: var(--space-4); }
+.rule-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2, 8px) 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.rule-toggle-row:last-child { border-bottom: none; }
+.rule-toggle-row__text { flex: 1 1 auto; min-width: 0; }
+.rule-toggle-row__label { font-weight: 600; }
+.rule-toggle-row__hint { margin-bottom: 0; }
 .mb-2 { margin-bottom: var(--space-2, 8px); }
 .mb-6 { margin-bottom: var(--space-6); }
 </style>

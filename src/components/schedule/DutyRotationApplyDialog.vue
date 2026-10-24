@@ -1,0 +1,363 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { applyDutyRotation } from '@/api/dutyRotations'
+import { useShiftStore } from '@/stores/shift'
+import { formatMonthDay } from '@/utils/attendanceConfirm'
+import { friendlyError } from '@/utils/errorMessages'
+import {
+  ACTION_LABELS,
+  ALL_WEEKS,
+  SKIP_REASON_LABELS,
+  countChangesInGroups,
+  groupChangesByWeek,
+  isCollapsedSkip,
+  partitionWeekGroups,
+  rotationWeekText,
+  shiftTypeLabel,
+  summarizeChanges,
+  thisWeekMonday,
+  type ApplyChange,
+  type ApplyResult,
+  type EditableWeek,
+} from '@/utils/dutyRotationGrid'
+import RecordedFollowUpDialog from './RecordedFollowUpDialog.vue'
+
+const props = defineProps<{
+  modelValue: boolean
+  rotationId: number
+  fromWeekStart: string | null
+  weeks: EditableWeek[]
+}>()
+const emit = defineEmits<{ 'update:modelValue': [value: boolean]; applied: [result: ApplyResult]; changed: [] }>()
+
+const shiftStore = useShiftStore()
+// 完整班別清單（含停用）：手動列可能是很久以前指到一個已停用的班別，用
+// activeShiftTypes 會查不到（Final fix FE-1）。
+const shiftTypes = computed(() => shiftStore.shiftTypes as unknown as { id: number; name: string }[])
+const shiftTypeName = (id: number | null | undefined) => shiftTypeLabel(shiftTypes.value, id ?? null)
+const shiftNameMap = computed<Record<number, string>>(() => Object.fromEntries(shiftTypes.value.map((s) => [s.id, s.name])))
+
+const loading = ref(false)
+const applying = ref(false)
+const changes = ref<ApplyChange[]>([])
+const selected = ref<Set<string>>(new Set())
+const errorText = ref('')
+// 選單一律用 ALL_WEEKS 哨兵值代表「全部週」，只在組 API payload 時轉回 null
+// （Final re-review R2）。
+const selectedFromWeekStart = ref<string>(props.fromWeekStart ?? ALL_WEEKS)
+// 目前畫面所顯示預覽對應的起始週；null＝尚未有任何預覽抵達。用來擋過期
+// dry-run 解鎖確認鈕（Final re-review R1）。
+const previewedFrom = ref<string | null>(null)
+const showCollapsedSkips = ref(false)
+const toApiFromWeekStart = (v: string): string | null => (v === ALL_WEEKS ? null : v)
+
+/** 實際套用後，「該週已有打卡」而略過的員工週；有值時對話框改顯示後續處理清單（D-08） */
+const appliedRecorded = ref<ApplyChange[]>([])
+const followTarget = ref<ApplyChange | null>(null)
+const followOpen = ref(false)
+const openFollowUp = (c: ApplyChange): void => {
+  followTarget.value = c
+  followOpen.value = true
+}
+
+const keyOf = (c: ApplyChange) => `${c.employee_id}|${c.week_start_date}`
+const summary = computed(() => summarizeChanges(changes.value))
+const allGroups = computed(() => groupChangesByWeek(changes.value))
+const todayMonday = thisWeekMonday()
+const partitioned = computed(() => partitionWeekGroups(allGroups.value, todayMonday))
+const pastGroups = computed(() => partitioned.value.past)
+const upcomingGroups = computed(() => partitioned.value.upcoming)
+const pastCount = computed(() => countChangesInGroups(pastGroups.value))
+const collapsedSkipItems = computed(() => changes.value.filter(isCollapsedSkip))
+/** 被擋彙總各段（封存／已有打卡／本人排班），只列出筆數 > 0 的段落，以「、」串接 */
+const collapsedSkipParts = computed(() =>
+  [
+    { n: summary.value.finalized, label: '已封存略過' },
+    { n: summary.value.recorded, label: '已有打卡略過' },
+    { n: summary.value.self, label: '本人排班略過' },
+  ]
+    .filter((p) => p.n > 0)
+    .map((p) => `${p.label} ${p.n} 筆`)
+)
+
+// 每次呼叫給一個遞增序號；只有「目前最新一次」的請求可以寫 changes／
+// errorText／selected／loading——先送出但後回來的舊請求（或舊請求的錯誤）
+// 一律忽略，不覆寫畫面、也不解鎖確認鈕（Final re-review R1：起始週選單快速
+// 改選會讓兩個 dry-run 重疊，先回來的一個原本會把 loading 設回 false）。
+let requestSeq = 0
+
+const loadPreview = async () => {
+  requestSeq += 1
+  const myRequestId = requestSeq
+  const requestedFrom = selectedFromWeekStart.value
+  loading.value = true
+  errorText.value = ''
+  try {
+    const res = await applyDutyRotation(props.rotationId, {
+      dry_run: true,
+      from_week_start: toApiFromWeekStart(requestedFrom),
+      overwrite_manual: [],
+    })
+    if (myRequestId !== requestSeq) return // 過期回應：已有更新的請求接手，忽略
+    changes.value = res.data.changes
+    selected.value = new Set()
+    previewedFrom.value = requestedFrom
+  } catch (e) {
+    if (myRequestId !== requestSeq) return // 過期錯誤：不可覆寫較新請求的結果
+    changes.value = []
+    errorText.value = friendlyError('預覽套用結果失敗', e)
+  } finally {
+    if (myRequestId === requestSeq) loading.value = false
+  }
+}
+
+// 每次開啟對話框：起始週回到父元件傳入的值（主按鈕＝全部週／重新套用＝提示
+// 週），清掉上一次的預覽對應紀錄，並收合上一次展開的略過明細。
+watch(
+  () => props.modelValue,
+  (open) => {
+    if (open) {
+      selectedFromWeekStart.value = props.fromWeekStart ?? ALL_WEEKS
+      previewedFrom.value = null
+      showCollapsedSkips.value = false
+      appliedRecorded.value = []
+    }
+  },
+  { immediate: true }
+)
+
+// 開啟中或起始週被使用者改選都要重新 dry-run；兩個來源合併成一個 watch 避免
+// 開啟當下重複呼叫兩次。
+watch(
+  [() => props.modelValue, selectedFromWeekStart],
+  ([open]) => {
+    if (open) loadPreview()
+  },
+  { immediate: true }
+)
+
+const toggle = (c: ApplyChange, checked: boolean) => {
+  const next = new Set(selected.value)
+  if (checked) next.add(keyOf(c))
+  else next.delete(keyOf(c))
+  selected.value = next
+}
+
+const onCheckboxChange = (c: ApplyChange, event: Event) => {
+  toggle(c, (event.target as HTMLInputElement).checked)
+}
+
+// confirm 的按鈕已鎖到 previewedFrom === selectedFromWeekStart 才可點擊，這裡
+// 仍以 previewedFrom 為準送出（而非 selectedFromWeekStart）：確保送出的值一律
+// 是「畫面上這份預覽算給哪個起始週」，不會是選了但還沒 dry-run 過的值
+// （Final re-review R1）。
+const confirm = async () => {
+  const previewedForApply = previewedFrom.value
+  if (previewedForApply === null) return // 理論上到不了：按鈕在此之前已鎖
+  applying.value = true
+  try {
+    const overwrite = changes.value
+      .filter((c) => c.skip_reason === 'manual' && selected.value.has(keyOf(c)))
+      .map((c) => ({ employee_id: c.employee_id, week_start_date: c.week_start_date }))
+    const res = await applyDutyRotation(props.rotationId, {
+      dry_run: false,
+      from_week_start: toApiFromWeekStart(previewedForApply),
+      overwrite_manual: overwrite,
+    })
+    // 後端對套用者本人的週一律略過（skip_reason='self'），即使該手動列已勾選覆寫；
+    // 只顯示「已套用」會讓行政誤以為本人班表也寫進去了。
+    const selfSkipped = res.data.changes.filter((c) => c.action === 'skip' && c.skip_reason === 'self').length
+    if (selfSkipped > 0) {
+      ElMessage.warning(`已套用到週班表；本人 ${selfSkipped} 筆未寫入，須由他人套用`)
+    } else {
+      ElMessage.success('已套用到週班表')
+    }
+    emit('applied', res.data)
+    const recorded = res.data.changes.filter((c) => c.action === 'skip' && c.skip_reason === 'recorded')
+    if (recorded.length) {
+      appliedRecorded.value = recorded // 留在對話框，列出待後續處理的員工週（D-08）
+      return
+    }
+    emit('update:modelValue', false)
+  } catch (e) {
+    ElMessage.error(friendlyError('套用輪值表失敗', e))
+  } finally {
+    applying.value = false
+  }
+}
+</script>
+
+<template>
+  <el-dialog
+    :model-value="modelValue"
+    title="套用到週班表"
+    width="720px"
+    @update:model-value="(v: boolean) => emit('update:modelValue', v)"
+  >
+    <div class="drad-body">
+      <template v-if="appliedRecorded.length">
+        <p class="drad-summary" data-test="followup-intro">
+          已套用到週班表。以下 {{ appliedRecorded.length }} 個員工週已有打卡，週班表沒有改動，可逐日補做：
+        </p>
+        <ul class="drad-followups" data-test="followup-list">
+          <li v-for="c in appliedRecorded" :key="keyOf(c)">
+            <span class="drad-name">{{ c.employee_name }}</span>
+            <span>{{ c.week_start_date }} 週 → {{ shiftTypeName(c.to_shift_type_id) }}（已打卡 {{ (c.recorded_dates ?? []).map(formatMonthDay).join('、') || '—' }}）</span>
+            <el-button
+              v-if="c.to_shift_type_id != null"
+              size="small"
+              :data-test="`followup-${c.employee_id}-${c.week_start_date}`"
+              @click="openFollowUp(c)"
+            >後續處理</el-button>
+            <span v-else class="drad-reason">輪值表這週沒有指定班別，請到班表核對調整</span>
+          </li>
+        </ul>
+        <div class="drad-actions">
+          <el-button type="primary" data-test="followup-done" @click="emit('update:modelValue', false)">完成</el-button>
+        </div>
+      </template>
+      <template v-else>
+      <label class="drad-from-week">
+        從哪一週開始
+        <el-select
+          v-model="selectedFromWeekStart"
+          data-test="from-week-select"
+          size="small"
+          :disabled="loading"
+        >
+          <el-option label="全部週" :value="ALL_WEEKS" />
+          <el-option
+            v-for="w in weeks"
+            :key="w.week_start_date"
+            :label="rotationWeekText(w.label)"
+            :value="w.week_start_date"
+          />
+        </el-select>
+      </label>
+
+      <p v-if="loading">正在計算差異…</p>
+      <p v-else-if="errorText" class="drad-error">{{ errorText }}</p>
+      <template v-else>
+        <p class="drad-summary" data-test="summary">
+          新增 {{ summary.create }}・更新 {{ summary.update }}・移除 {{ summary.removed }}・不變 {{ summary.unchanged }}
+        </p>
+        <p
+          v-if="collapsedSkipParts.length"
+          class="drad-collapsed-skips"
+          data-test="collapsed-skips"
+        >
+          {{ collapsedSkipParts.join('、') }}
+          <el-button
+            link
+            size="small"
+            data-test="toggle-collapsed-skips"
+            @click="showCollapsedSkips = !showCollapsedSkips"
+          >
+            {{ showCollapsedSkips ? '收合明細' : '展開明細' }}
+          </el-button>
+        </p>
+        <ul v-if="showCollapsedSkips" class="drad-collapsed-list" data-test="collapsed-skip-list">
+          <li v-for="c in collapsedSkipItems" :key="`${c.employee_id}-${c.week_start_date}`">
+            {{ c.employee_name }}（{{ c.week_start_date }}）：{{ SKIP_REASON_LABELS[c.skip_reason ?? ''] }}
+          </li>
+        </ul>
+
+        <template v-if="pastGroups.length">
+          <p class="drad-warning" data-test="before-this-week-warning">
+            將改動 {{ pastCount }} 筆本週以前的週班表，會以目前的班級老師展開
+          </p>
+          <section v-for="group in pastGroups" :key="group.week" class="drad-week is-past">
+            <h4>{{ group.week }} 週</h4>
+            <ul>
+              <li v-for="c in group.items" :key="`${c.employee_id}-${c.week_start_date}`">
+                <span class="drad-name">{{ c.employee_name }}</span>
+                <span>
+                  {{ ACTION_LABELS[c.action] }}：目前 {{ shiftTypeName(c.from_shift_type_id) }} → 輪值表 {{ shiftTypeName(c.to_shift_type_id) }}
+                </span>
+                <template v-if="c.action === 'skip'">
+                  <span class="drad-reason">（{{ SKIP_REASON_LABELS[c.skip_reason ?? ''] }}）</span>
+                  <label v-if="c.skip_reason === 'manual'" class="drad-overwrite">
+                    <input
+                      type="checkbox"
+                      data-test="overwrite-checkbox"
+                      :checked="selected.has(keyOf(c))"
+                      @change="onCheckboxChange(c, $event)"
+                    />
+                    改用輪值表
+                  </label>
+                </template>
+              </li>
+            </ul>
+          </section>
+        </template>
+
+        <section v-for="group in upcomingGroups" :key="group.week" class="drad-week">
+          <h4>{{ group.week }} 週</h4>
+          <ul>
+            <li v-for="c in group.items" :key="`${c.employee_id}-${c.week_start_date}`">
+              <span class="drad-name">{{ c.employee_name }}</span>
+              <span>
+                {{ ACTION_LABELS[c.action] }}：目前 {{ shiftTypeName(c.from_shift_type_id) }} → 輪值表 {{ shiftTypeName(c.to_shift_type_id) }}
+              </span>
+              <template v-if="c.action === 'skip'">
+                <span class="drad-reason">（{{ SKIP_REASON_LABELS[c.skip_reason ?? ''] }}）</span>
+                <label v-if="c.skip_reason === 'manual'" class="drad-overwrite">
+                  <input
+                    type="checkbox"
+                    data-test="overwrite-checkbox"
+                    :checked="selected.has(keyOf(c))"
+                    @change="onCheckboxChange(c, $event)"
+                  />
+                  改用輪值表
+                </label>
+              </template>
+            </li>
+          </ul>
+        </section>
+        <p v-if="!pastGroups.length && !upcomingGroups.length" class="drad-hint">
+          週班表已與輪值表一致，沒有需要變動的地方。
+        </p>
+      </template>
+      <div class="drad-actions">
+        <el-button @click="emit('update:modelValue', false)">取消</el-button>
+        <el-button
+          type="primary"
+          data-test="confirm-apply"
+          :loading="applying"
+          :disabled="
+            loading ||
+            !!errorText ||
+            previewedFrom !== selectedFromWeekStart ||
+            (!pastGroups.length && !upcomingGroups.length)
+          "
+          @click="confirm"
+        >
+          確認套用
+        </el-button>
+      </div>
+      </template>
+    </div>
+    <RecordedFollowUpDialog v-model="followOpen" :change="followTarget" :shift-names="shiftNameMap" @changed="emit('changed')" />
+  </el-dialog>
+</template>
+
+<style scoped>
+.drad-from-week { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.drad-summary { font-weight: 600; margin: 0 0 8px; }
+.drad-collapsed-skips { color: var(--el-text-color-secondary); margin: 4px 0; }
+.drad-collapsed-list { margin: 4px 0 8px; padding-left: 16px; color: var(--el-text-color-secondary); }
+.drad-warning { color: var(--el-color-warning); font-weight: 600; margin: 8px 0 4px; }
+.drad-hint { color: var(--el-text-color-secondary); margin: 4px 0; }
+.drad-error { color: var(--el-color-danger); }
+.drad-week h4 { margin: 12px 0 4px; }
+.drad-week ul { margin: 0; padding-left: 16px; }
+.drad-week li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 2px 0; }
+.drad-week.is-past { background: var(--el-color-warning-light-9); border-radius: 4px; padding: 4px 8px; }
+.drad-name { min-width: 72px; }
+.drad-reason { color: var(--el-text-color-secondary); }
+.drad-overwrite { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.drad-followups { margin: 0; padding-left: 16px; }
+.drad-followups li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 2px 0; }
+.drad-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+</style>

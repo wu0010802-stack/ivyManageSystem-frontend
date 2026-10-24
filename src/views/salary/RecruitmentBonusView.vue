@@ -80,7 +80,13 @@
       </div>
 
       <p v-if="unassignedCount > 0" class="unassigned-banner">
-        {{ unassignedCount }} 筆招生人待指定，請於下表「招生人」欄手動選擇（比對不到唯一員工姓名時系統不會自動猜）。
+        {{ unassignedCount }} 筆招生人待指定，請於下表「招生人」欄手動選擇（比對不到唯一員工姓名或英文名時系統不會自動猜）。
+      </p>
+      <p v-if="gradeUnconfirmedCount > 0" class="unassigned-banner">
+        {{ gradeUnconfirmedCount }} 筆班別倍數待確認：幼生班別缺值或無法辨識，倍數暫以 1.0 帶入；請於「班別倍數」欄修正或按「確認倍數」後才能確認。
+      </p>
+      <p v-if="splitIncompleteCount > 0" class="unassigned-banner">
+        {{ splitIncompleteCount }} 筆拆分未完成（邀約原招生人 0.4／兄姊均分 0.5 的另一位老師），請以「新增歸屬列」補上，詳見該列備註。
       </p>
 
       <el-table :data="pagedAttributionRows" stripe style="width: 100%" :row-class-name="attributionRowClass">
@@ -128,6 +134,12 @@
               controls-position="right"
               @change="(v?: number) => v != null && patchRow(row, { grade_multiplier: v })"
             />
+            <div v-if="hasGradeFlag(row)" class="grade-flag">
+              <el-tag type="warning" size="small">班別待確認</el-tag>
+              <el-button v-if="!readOnly" link type="primary" size="small" @click="confirmGradeMultiplier(row)">
+                確認倍數
+              </el-button>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="招生人" min-width="160">
@@ -256,8 +268,29 @@
     <!-- ============ 新增歸屬列 dialog ============ -->
     <el-dialog v-model="addDialogVisible" title="新增歸屬列" width="480px">
       <el-form :model="addForm" label-width="90px">
-        <el-form-item label="幼生 visit id">
-          <el-input-number v-model="addForm.recruitment_visit_id" :min="1" controls-position="right" style="width: 100%" />
+        <!-- 2026-09-06：原本要手打裸的 visit id，招生人員得自己去記或另開分頁查。
+             改成用姓名搜尋招生訪視，選到誰就帶哪個 id。 -->
+        <el-form-item label="幼生">
+          <el-select
+            v-model="addForm.recruitment_visit_id"
+            filterable
+            remote
+            clearable
+            reserve-keyword
+            placeholder="輸入幼生姓名搜尋"
+            :remote-method="searchVisits"
+            :loading="visitSearchLoading"
+            style="width: 100%"
+            data-test="bonus-visit-search"
+          >
+            <el-option
+              v-for="v in visitOptions"
+              :key="v.id"
+              :value="v.id"
+              :label="v.label"
+            />
+          </el-select>
+          <div class="hint">找不到人時，先確認該筆訪視已建立在「招生入學 → 訪視明細」。</div>
         </el-form-item>
         <el-form-item label="來源點數">
           <el-select v-model="addForm.point_code" style="width: 100%">
@@ -303,6 +336,7 @@ import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
 import { useEmployeeStore } from '@/stores/employee'
+import { getRecruitmentRecords } from '@/api/recruitment'
 import {
     listCampaigns,
     createCampaign,
@@ -506,6 +540,19 @@ const pagedAttributionRows = computed<AttributionDisplayRow[]>(() =>
     })),
 )
 const unassignedCount = computed(() => attributions.value.filter((a) => a.employee_id == null).length)
+
+// 2026-10-22 義華比對 #82／#80：後端 sync 寫入 notes 的標記（字串須與
+// ivy-backend services/recruitment_bonus/sync.py 的 GRADE_MISSING_NOTE／拆分警示一致）。
+const GRADE_FLAG_TEXT = '班別缺值或無法辨識'
+const SPLIT_FLAG_TEXTS = ['邀約拆分未完成', '兄姊二人均分 0.5']
+const hasGradeFlag = (row: { notes?: string | null }): boolean =>
+    (row.notes ?? '').includes(GRADE_FLAG_TEXT)
+const hasSplitFlag = (row: { notes?: string | null; status?: string }): boolean =>
+    row.status !== 'excluded' && SPLIT_FLAG_TEXTS.some((t) => (row.notes ?? '').includes(t))
+const gradeUnconfirmedCount = computed(
+    () => attributions.value.filter((a) => a.status !== 'excluded' && hasGradeFlag(a)).length,
+)
+const splitIncompleteCount = computed(() => attributions.value.filter((a) => hasSplitFlag(a)).length)
 const attributionRowClass = ({ row }: { row: AttributionDisplayRow }) => (row.unassigned ? 'row-unassigned' : '')
 
 // ---- 同步候選 ----
@@ -541,7 +588,17 @@ const patchRow = async (row: AttributionRow, patch: AttributionUpdateBody) => {
     }
 }
 
+// 值不變也要送：el-input-number 同值不觸發 change，HR 確認「維持 1.0」須走此鈕。
+const confirmGradeMultiplier = (row: AttributionRow) => {
+    patchRow(row, { grade_multiplier: Number(row.grade_multiplier) })
+}
+
 const onStatusChange = (row: AttributionRow, status: string) => {
+    if (status === 'confirmed' && hasGradeFlag(row)) {
+        ElMessage.warning('此列班別缺值或無法辨識，請先修正「班別倍數」或按「確認倍數」後再確認')
+        if (selectedCampaignId.value != null) fetchDetail(selectedCampaignId.value)
+        return
+    }
     if (status === 'confirmed' && row.employee_id == null) {
         ElMessage.warning('招生人未指定，無法確認（錢無人可歸）；請先於本列選擇招生人')
         // el-select 的 v-model 已樂觀更新成 'confirmed'，不送 PATCH（後端本來就會 422）；
@@ -550,6 +607,40 @@ const onStatusChange = (row: AttributionRow, status: string) => {
         return
     }
     patchRow(row, { status })
+}
+
+// ---- 招生訪視搜尋（2026-09-06）----
+// 原本要手打裸的 visit id，招生人員得自己去記或另開分頁查訪視編號。
+interface VisitOption { id: number; label: string }
+const visitOptions = ref<VisitOption[]>([])
+const visitSearchLoading = ref(false)
+
+const searchVisits = async (keyword: string) => {
+    const kw = keyword.trim()
+    if (!kw) {
+        visitOptions.value = []
+        return
+    }
+    visitSearchLoading.value = true
+    try {
+        const resp = await getRecruitmentRecords({ keyword: kw, page_size: 20 })
+        const rows = (resp.data as { records?: Record<string, unknown>[] } | undefined)?.records ?? []
+        visitOptions.value = rows.map((r) => {
+            const term = r.target_school_year != null && r.target_semester != null
+                ? ` · ${r.target_school_year}-${r.target_semester}`
+                : ''
+            const grade = r.grade ? ` · ${String(r.grade)}` : ''
+            return {
+                id: Number(r.id),
+                label: `${String(r.child_name ?? '')}${grade}${term}（#${Number(r.id)}）`,
+            }
+        })
+    } catch (e) {
+        ElMessage.error(friendlyError('搜尋招生訪視失敗', e))
+        visitOptions.value = []
+    } finally {
+        visitSearchLoading.value = false
+    }
 }
 
 // ---- 手動新增歸屬列 ----
@@ -574,6 +665,7 @@ const addForm = reactive<{
     notes: '',
 })
 const openAddDialog = () => {
+    visitOptions.value = []
     addForm.recruitment_visit_id = null
     addForm.employee_id = null
     addForm.point_code = pointCatalogOptions.value[0]?.value || ''
@@ -701,6 +793,12 @@ onMounted(() => {
   padding: var(--space-2) var(--space-3);
   border-radius: 4px;
   margin-bottom: var(--space-3);
+}
+.grade-flag {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
 }
 .summary-title {
   margin: var(--space-4) 0 var(--space-2);

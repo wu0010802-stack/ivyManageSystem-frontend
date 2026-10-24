@@ -1,5 +1,5 @@
 <script setup lang="ts">
-interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; [key: string]: unknown }
+interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; is_holiday?: boolean; holiday_name?: string | null; [key: string]: unknown }
 
 defineProps<{
   weeks: (DayObj | null)[][]
@@ -45,17 +45,21 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
       >
         <template v-if="day">
           <div class="cell-day">{{ day.day }}</div>
+          <div v-if="day.is_holiday" class="cell-holiday" data-test="cell-holiday">{{ day.holiday_name || '國定假日' }}</div>
           <div v-if="day.shift_name" class="cell-shift">{{ day.shift_name }}</div>
+          <!-- 手機一格只剩約 45px：起訖拆兩行、隱藏「~」，避免撐破七欄（10-12 實測週六整欄被裁） -->
           <div v-if="day.work_start" class="cell-time">
-            {{ day.work_start }}~{{ day.work_end }}
+            <span>{{ day.work_start }}</span><span class="cell-time-sep">~</span><span>{{ day.work_end }}</span>
           </div>
           <div v-if="day.is_override" class="cell-override">
             <el-tag size="small" type="warning" effect="plain">調班</el-tag>
           </div>
           <!-- 換班按鈕：desktop only；mobile 改走 cell-click BottomSheet -->
           <!-- 用 div 攔截 click 冒泡，避免同時觸發 cell-click -->
+          <!-- 過去日期也開放（SPEC-026 3-3）：後端改建「補登」確認項目，鈕文字改為「補登換班」 -->
+          <!-- 國定假日後端拒絕換班，不給按鈕 -->
           <div
-            v-if="day.shift_name && isFutureDate(day.date ?? '') && !day.is_weekend"
+            v-if="day.shift_name && !day.is_weekend && !day.is_holiday"
             class="cell-swap-btn-wrap"
             @click.stop
           >
@@ -65,7 +69,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
               link
               class="cell-swap-btn"
               @click="emit('swap-click', day)"
-            >換班</el-button>
+            >{{ isFutureDate(day.date ?? '') ? '換班' : '補登換班' }}</el-button>
           </div>
         </template>
       </div>
@@ -80,7 +84,8 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
 .calendar-header {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  /* minmax(0,1fr)：1fr 的最小值是內容寬，長時間字串會把欄撐開造成橫捲 */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
   margin-bottom: 1px;
 }
@@ -96,7 +101,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
 .calendar-row {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
 }
 
@@ -146,6 +151,13 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
   color: var(--text-secondary);
 }
 
+.cell-holiday {
+  font-size: var(--text-xs, 12px);
+  color: var(--el-color-danger);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
 .cell-override {
   margin-top: 2px;
 }
@@ -159,6 +171,14 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
   padding: 0 !important;
 }
 
+/* 觸控平板（≥768px 仍顯示格內「換班」鈕）：原本 26×14，撐出觸控高度 */
+@media (pointer: coarse) {
+  .cell-swap-btn {
+    min-height: 32px;
+    padding: 0 var(--space-2) !important;
+  }
+}
+
 .calendar-cell.is-tappable {
   cursor: pointer;
   -webkit-tap-highlight-color: rgba(64, 158, 255, 0.15);
@@ -169,15 +189,41 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
   outline-offset: -2px;
 }
 
+/* 1024 以下（平板直式一格約 80px、手機約 45px）：「08:30~18:00」單行放不下，
+   起訖拆兩行、隱藏「~」，班別過長省略（2026-10-12 平板驗收：原本被截成「16:3」） */
+@media (--to-md) {
+  .cell-time {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cell-time-sep {
+    display: none;
+  }
+
+  .cell-shift {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 @media (--to-sm) {
   .calendar-cell {
     min-height: 65px;
-    padding: 4px;
+    /* 390px 寬一格約 45px：左右只留 2px，三字班別（無值週）才放得下不被截斷 */
+    padding: 4px 2px;
+    font-size: 12px;
+  }
+
+  .cell-shift {
     font-size: 12px;
   }
 
   .cell-time {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .cell-swap-btn-wrap {

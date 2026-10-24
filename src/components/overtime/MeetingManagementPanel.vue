@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { money } from '@/utils/format'
 import { useEmployeeStore } from '@/stores/employee'
+import { buildMeetingBatchPayload, type MeetingBatchAttendance } from '@/utils/meetingBatch'
 
 withDefaults(defineProps<{
   embedded?: boolean
@@ -33,7 +34,9 @@ const batchForm = reactive({
   remark: '',
   selectAll: true,
 })
-const employeeAttendance = ref<{ id: number; name: string; attended: boolean }[]>([])
+// 本場會議實際時數；null＝沿用系統預設（獎金設定的會議預設時數）
+const batchMeetingHours = ref<number | null>(null)
+const employeeAttendance = ref<(MeetingBatchAttendance & { name: string })[]>([])
 
 const editDialogVisible = ref<boolean>(false)
 const editForm = reactive<{
@@ -98,10 +101,12 @@ const handleBatchCreate = () => {
   batchForm.meeting_type = 'staff_meeting'
   batchForm.remark = ''
   batchForm.selectAll = true
+  batchMeetingHours.value = null
   employeeAttendance.value = (employees.value as { id: number; name: string }[]).map(employee => ({
     id: employee.id,
     name: employee.name,
     attended: true,
+    hours: null,
   }))
   batchDialogVisible.value = true
 }
@@ -129,23 +134,16 @@ const submitBatch = async () => {
     return
   }
 
-  const attendees = employeeAttendance.value.filter(employee => employee.attended).map(employee => employee.id)
-  const absentees = employeeAttendance.value.filter(employee => !employee.attended).map(employee => employee.id)
+  const payload = buildMeetingBatchPayload(batchForm, batchMeetingHours.value, employeeAttendance.value)
 
-  if (attendees.length === 0 && absentees.length === 0) {
+  if (payload.attendees.length === 0 && (payload.absentees?.length ?? 0) === 0) {
     ElMessage.warning('請至少選擇一位員工')
     return
   }
 
   loading.value = true
   try {
-    await createBatch({
-      meeting_date: batchForm.meeting_date,
-      meeting_type: batchForm.meeting_type,
-      attendees,
-      absentees,
-      remark: batchForm.remark,
-    })
+    await createBatch(payload)
     ElMessage.success('批次建立完成')
     batchDialogVisible.value = false
     fetchRecords()
@@ -321,8 +319,20 @@ onMounted(() => {
         <el-form-item label="會議日期">
           <el-date-picker v-model="batchForm.meeting_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" />
         </el-form-item>
+        <el-form-item label="會議時數">
+          <el-input-number
+            v-model="batchMeetingHours"
+            :min="0.5"
+            :max="12"
+            :step="0.5"
+            :precision="1"
+            placeholder="系統預設"
+            controls-position="right"
+          />
+          <span class="dialog-hint">留空沿用系統預設時數；遲到／早退者可在下方逐人填實際時數</span>
+        </el-form-item>
         <el-form-item label="加班費">
-          <span class="dialog-hint">依勞基法平日加班費公式（時薪 × 1 小時 × 1.34）自動計算</span>
+          <span class="dialog-hint">依平日加班費公式（時薪 × 1.34 × 會議時數，逐步進位）自動計算</span>
         </el-form-item>
         <el-form-item label="備註">
           <el-input v-model="batchForm.remark" type="textarea" :rows="2" />
@@ -335,11 +345,26 @@ onMounted(() => {
         <div class="employee-list">
           <div v-for="employee in employeeAttendance" :key="employee.id" class="employee-item">
             <span>{{ employee.name }}</span>
-            <el-switch
-              v-model="employee.attended"
-              active-text="出席"
-              inactive-text="缺席"
-            />
+            <div class="employee-item-controls">
+              <el-input-number
+                v-if="employee.attended"
+                v-model="employee.hours"
+                :min="0.5"
+                :max="12"
+                :step="0.5"
+                :precision="1"
+                size="small"
+                placeholder="同場次"
+                controls-position="right"
+                :aria-label="`${employee.name} 實際會議時數`"
+                class="employee-hours-input"
+              />
+              <el-switch
+                v-model="employee.attended"
+                active-text="出席"
+                inactive-text="缺席"
+              />
+            </div>
           </div>
         </div>
       </el-form>
@@ -441,6 +466,16 @@ onMounted(() => {
   padding: 10px 12px;
   border: 1px solid #ebeef5;
   border-radius: 10px;
+}
+
+.employee-item-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-hours-input {
+  width: 96px;
 }
 
 .summary-attended {

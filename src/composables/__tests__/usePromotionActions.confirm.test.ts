@@ -13,6 +13,7 @@ import { mount } from '@vue/test-utils'
  */
 
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ query: {} }),
   useRouter: () => ({ push: vi.fn() }),
 }))

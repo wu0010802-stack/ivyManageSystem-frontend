@@ -118,13 +118,13 @@ watch(() => props.studentId, load)
 }
 .empty-title {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--pt-text-strong, #392a1c);
 }
 .empty-desc {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
 }
 </style>

@@ -1,4 +1,6 @@
 import api from './index'
+import { withDedupeEscape, type ReadOptions } from '@/utils/apiDedupe'
+import type { components } from './_generated/schema'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 // ── 匯入 ─────────────────────────────────────────────────────────────────────
@@ -28,6 +30,16 @@ export const previewExcel = (
     params,
   })
 
+/** 打卡鐘報表（txt）逐列預覽（唯讀；confirm 走 uploadCsv） */
+export const previewClockReport = (
+  formData: FormData,
+  params: ApiQuery<'/attendance/upload/preview-clock-report', 'post'>,
+): AxiosResp<'/attendance/upload/preview-clock-report', 'post'> =>
+  api.post('/attendance/upload/preview-clock-report', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    params,
+  })
+
 // ── 查詢 ─────────────────────────────────────────────────────────────────────
 
 export const getRecords = (
@@ -36,7 +48,8 @@ export const getRecords = (
 
 export const getSummary = (
   params: ApiQuery<'/attendance/summary', 'get'>,
-): AxiosResp<'/attendance/summary', 'get'> => api.get('/attendance/summary', { params })
+  opts?: ReadOptions,
+): AxiosResp<'/attendance/summary', 'get'> => api.get('/attendance/summary', withDedupeEscape({ params }, opts))
 
 export const getToday = (): AxiosResp<'/attendance/today', 'get'> =>
   api.get('/attendance/today')
@@ -46,7 +59,8 @@ export const getTodayAnomalies = (): AxiosResp<'/attendance/today-anomalies', 'g
 
 export const getAnomalyList = (
   params: ApiQuery<'/attendance/anomalies', 'get'>,
-): AxiosResp<'/attendance/anomalies', 'get'> => api.get('/attendance/anomalies', { params })
+  opts?: ReadOptions,
+): AxiosResp<'/attendance/anomalies', 'get'> => api.get('/attendance/anomalies', withDedupeEscape({ params }, opts))
 
 export const getCalendar = (
   params: ApiQuery<'/attendance/calendar', 'get'>,
@@ -59,11 +73,46 @@ export const batchConfirmAnomalies = (
 ): AxiosResp<'/attendance/anomalies/batch-confirm', 'post'> =>
   api.post('/attendance/anomalies/batch-confirm', payload)
 
+// 依目前的班表、員工上下班時間與員工類型重算一個月已匯入的出勤（預設 dry_run 只試算）
+export const recalculateAttendance = (
+  payload: ApiBody<'/attendance/recalculate', 'post'>,
+): AxiosResp<'/attendance/recalculate', 'post'> =>
+  api.post('/attendance/recalculate', payload)
+
 export const exportAnomalies = (year: number, month: number, status = 'all') =>
   api.get('/attendance/anomalies/export', { params: { year, month, status }, responseType: 'blob' })
 
 export const exportEmployeeAttendance = (params: ApiQuery<'/exports/employee-attendance', 'get'>) =>
   api.get('/exports/employee-attendance', { params, responseType: 'blob' })
+
+// ── 月考核表（PDF 列印）──────────────────────────────────────────────────────
+
+export type AppraisalSheetCandidatesOut = components['schemas']['AppraisalSheetCandidatesOut']
+export type AppraisalSheetCandidateGroup = AppraisalSheetCandidatesOut['groups'][number]
+
+/** 月考核表可列印員工候選名單（依分組；僅限全員薪資視野角色） */
+export const getAppraisalSheetCandidates = (
+  params: ApiQuery<'/attendance/appraisal-sheets/candidates', 'get'>,
+) => api.get<AppraisalSheetCandidatesOut>('/attendance/appraisal-sheets/candidates', { params })
+
+/**
+ * 月考核表 PDF（每位員工一頁）。
+ * employee_ids 為多值 query（?employee_ids=1&employee_ids=2），axios 預設會加 []，
+ * 比照 fees.ts／studentRecords.ts 以 indexes:null 關掉。
+ * 後端每人做一次薪資試算，全園一批會超過 axios 預設 30 秒；逾時放寬到 60 秒
+ * （對齊 nginx upstream 上限，再久也會被 nginx 以 504 切斷）。
+ */
+export const getAppraisalSheetsPdf = (params: {
+  year: number
+  month: number
+  employee_ids: number[]
+}) =>
+  api.get('/attendance/appraisal-sheets.pdf', {
+    params,
+    responseType: 'blob',
+    paramsSerializer: { indexes: null },
+    timeout: 60_000,
+  })
 
 // ── 單筆維護 ─────────────────────────────────────────────────────────────────
 
@@ -84,3 +133,22 @@ export const deleteEmployeeDateRecord = (
   date: string,
 ): AxiosResp<'/attendance/records/{employee_id}/{date_str}', 'delete'> =>
   api.delete(`/attendance/records/${employeeId}/${date}`)
+
+
+/** 目前分校的打卡設備格式與人工工號對照。 */
+export const getImportSettings = (
+  params?: ApiQuery<'/attendance/import-settings', 'get'>,
+): AxiosResp<'/attendance/import-settings', 'get'> => api.get('/attendance/import-settings', { params })
+
+export const saveImportSettings = (
+  payload: ApiBody<'/attendance/import-settings', 'put'>,
+): AxiosResp<'/attendance/import-settings', 'put'> => api.put('/attendance/import-settings', payload)
+
+
+/** 外部薪資表扣項唯讀預覽，不寫入出勤或薪資。 */
+export const previewPayrollComparison = (
+  formData: FormData,
+): AxiosResp<'/attendance/payroll-comparison/preview-excel', 'post'> =>
+  api.post('/attendance/payroll-comparison/preview-excel', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })

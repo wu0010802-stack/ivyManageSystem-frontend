@@ -69,19 +69,54 @@ describe('PickupCreateView', () => {
     expect((submitBtn!.element as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('loads saved persons for first selected child and allows picking one', async () => {
+  it('預設勾選目前的孩子，並直接載入他的常用接送人', async () => {
     mockListPersons.mockResolvedValue({
       data: { items: [{ id: 10, person_name: '王阿嬤', person_relation: '祖母', person_phone: '0912' }] },
     })
     const wrapper = await mountView()
 
-    const childRows = wrapper.findAll('.child-row')
-    await childRows[0].trigger('click')
-    await flushPromises()
-
+    // 不必再手動勾選：目前孩子（無記憶時為第一位）已預設選中
     // F1：改走 useAbortableFetch，呼叫會多帶 AbortSignal config
     expect(mockListPersons).toHaveBeenCalledWith(1, expect.objectContaining({ signal: expect.anything() }))
     expect(wrapper.text()).toContain('王阿嬤')
+    // 有常用接送人時停在「常用接送人」模式
+    expect(wrapper.find('.mode-btn.active').text()).toBe('常用接送人')
+  })
+
+  it('單孩家庭直接帶入唯一的孩子', async () => {
+    mockGetMyChildren.mockResolvedValue({ data: { items: [{ student_id: 5, name: '小安' }] } })
+    await mountView()
+    expect(mockListPersons).toHaveBeenCalledWith(5, expect.anything())
+  })
+
+  it('沒有常用接送人時自動切到「臨時填寫」，不停在空清單', async () => {
+    mockListPersons.mockResolvedValue({ data: { items: [] } })
+    const wrapper = await mountView()
+    expect(wrapper.find('.mode-btn.active').text()).toBe('臨時填寫')
+    expect(wrapper.find('#pickup-person-name').exists()).toBe(true)
+  })
+
+  it('沒選孩子時不說「尚無常用接送人」，而是請家長先選孩子', async () => {
+    mockListPersons.mockResolvedValue({
+      data: { items: [{ id: 10, person_name: '王阿嬤', person_relation: '祖母', person_phone: '0912' }] },
+    })
+    const wrapper = await mountView()
+    await wrapper.findAll('.child-row')[0].trigger('click') // 取消預設的孩子
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('尚無常用接送人')
+    expect(wrapper.text()).not.toContain('還沒有常用接送人')
+    expect(wrapper.text()).toContain('先在上方選擇孩子')
+  })
+
+  it('送出鈕停用時在上方列出還缺哪些欄位', async () => {
+    mockListPersons.mockResolvedValue({ data: { items: [] } })
+    const wrapper = await mountView()
+    // 自動切到臨時填寫：缺姓名、關係、電話
+    expect(wrapper.find('[data-testid="missing-fields"]').text()).toBe('還差：接送人姓名、與孩子關係、聯絡電話')
+    await wrapper.find('#pickup-person-name').setValue('李叔叔')
+    await wrapper.find('#pickup-person-relation').setValue('其他')
+    await wrapper.find('#pickup-person-phone').setValue('0987654321')
+    expect(wrapper.find('[data-testid="missing-fields"]').exists()).toBe(false)
   })
 
   it('F1 — 快速切換孩子（1 選中又取消，改選 2）時，舊孩子姍姍來遲的回應不可覆寫新孩子的常用接送人清單', async () => {
@@ -93,10 +128,9 @@ describe('PickupCreateView', () => {
         data: { items: [{ id: 20, person_name: '陳阿姨', person_relation: '阿姨', person_phone: '0922' }] },
       })
     })
-    const wrapper = await mountView()
+    const wrapper = await mountView() // 預設選中小明(1)：觸發 load(1)，回應尚未到
     const rows = wrapper.findAll('.child-row')
 
-    await rows[0].trigger('click') // 選小明(1)：觸發 load(1)，回應尚未到
     await rows[1].trigger('click') // 再選小美(2)：selectedStudentIds=[1,2]，first 仍是 1，不觸發新 load
     await rows[0].trigger('click') // 取消小明：selectedStudentIds=[2]，first 變成 2 → 觸發 load(2)
     await flushPromises()
@@ -125,20 +159,18 @@ describe('PickupCreateView', () => {
       }
       return Promise.reject({ displayMessage: '網路錯誤' })
     })
-    const wrapper = await mountView()
+    const wrapper = await mountView() // 預設選中小明(1)：成功，顯示王阿嬤
     const rows = wrapper.findAll('.child-row')
-
-    await rows[0].trigger('click') // 選小明(1)：成功，顯示王阿嬤
-    await flushPromises()
     expect(wrapper.text()).toContain('王阿嬤')
 
     await rows[1].trigger('click') // 再選小美(2)：first 仍是 1，不觸發新 load
     await rows[0].trigger('click') // 取消小明：first 變成 2 → 觸發 load(2)，真的失敗（非 abort）
     await flushPromises()
 
-    // 不可靜默沿用小明（1）的常用接送人清單
+    // 不可靜默沿用小明（1）的常用接送人清單；失敗也不得說成「還沒有常用接送人」
     expect(wrapper.text()).not.toContain('王阿嬤')
-    expect(wrapper.text()).toContain('尚無常用接送人')
+    expect(wrapper.text()).not.toContain('還沒有常用接送人')
+    expect(wrapper.text()).toContain('常用接送人載入失敗')
     // 有錯誤提示，不是靜默失敗
     expect(mockToastError).toHaveBeenCalledTimes(1)
   })
@@ -156,10 +188,7 @@ describe('PickupCreateView', () => {
     mockCreate.mockResolvedValue({
       data: { code: '123456', items: [{ person_name: '李叔叔' }] },
     })
-    const wrapper = await mountView()
-
-    await wrapper.findAll('.child-row')[0].trigger('click')
-    await flushPromises()
+    const wrapper = await mountView() // 預設已選中小明(1)
 
     const manualBtn = wrapper.findAll('.mode-btn').find((b) => b.text().includes('臨時填寫'))
     await manualBtn!.trigger('click')

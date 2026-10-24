@@ -9,6 +9,10 @@ import {
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { isNotFoundError, loadErrorMessage } from '../utils/loadError'
+import { MEDICATION_PHOTO_MAX } from '../utils/medicationForm'
 
 interface MedPhoto {
   id: number
@@ -37,7 +41,11 @@ interface MedOrder {
 
 const route = useRoute()
 const order = ref<MedOrder | null>(null)
-const loading = ref(false)
+// 初值 true：首屏就是骨架；先前失敗時整頁空白，家長不知道該等還是該重試
+const loading = ref(true)
+// 連線／伺服器失敗 ≠ 找不到：失敗給可重試錯誤態，只有 404 才說找不到
+const loadError = ref<unknown>(null)
+const notFound = ref(false)
 const uploading = ref(false)
 const removeTarget = ref<MedPhoto | null>(null)
 
@@ -57,12 +65,20 @@ const STATUS_LABEL: Record<string, string> = {
 
 async function fetchOrder() {
   loading.value = true
+  loadError.value = null
+  notFound.value = false
   try {
     const { data } = await getMedicationOrder(Number(route.params.id))
     order.value = data as MedOrder
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    if (order.value) {
+      // 上傳／刪除照片後重新整理失敗：保留畫面上的用藥單，只用 toast 告知
+      toast.error(loadErrorMessage(err, '重新整理失敗'))
+    } else if (isNotFoundError(err)) {
+      notFound.value = true
+    } else {
+      loadError.value = err
+    }
   } finally {
     loading.value = false
   }
@@ -109,9 +125,20 @@ onMounted(fetchOrder)
 
 <template>
   <div class="med-detail">
-    <template v-if="loading">
+    <template v-if="loading && !order">
       <SkeletonBlock variant="card" :count="2" />
     </template>
+    <MobileErrorRetry
+      v-else-if="loadError"
+      :error="loadErrorMessage(loadError, '用藥單載入失敗，請檢查網路後重試')"
+      @retry="fetchOrder"
+    />
+    <EmptyState
+      v-else-if="notFound"
+      variant="mobile"
+      title="找不到這張用藥單"
+      description="可能已被刪除，請回到用藥紀錄確認。"
+    />
     <template v-else-if="order">
       <header class="pt-page-hero">
         <p class="pt-page-hero-eyebrow">用藥單</p>
@@ -121,7 +148,7 @@ onMounted(fetchOrder)
 
       <section v-if="order.note" class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">sticky_note_2</span>
+          <span class="material-symbols-rounded" aria-hidden="true">sticky_note_2</span>
           備註
         </h2>
         <p class="note">{{ order.note }}</p>
@@ -129,7 +156,7 @@ onMounted(fetchOrder)
 
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">schedule</span>
+          <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
           餵藥時段
           <span class="pt-card-title-count">{{ order.logs?.length || 0 }}</span>
         </h2>
@@ -155,9 +182,9 @@ onMounted(fetchOrder)
 
       <section class="pt-card">
         <h2 class="pt-card-title">
-          <span class="material-symbols-rounded">photo_library</span>
+          <span class="material-symbols-rounded" aria-hidden="true">photo_library</span>
           藥袋／處方照
-          <span class="pt-card-title-count">{{ order.photos.length }} / 5</span>
+          <span class="pt-card-title-count">{{ order.photos.length }} / {{ MEDICATION_PHOTO_MAX }}</span>
         </h2>
         <div v-if="order.photos.length === 0" class="hint">尚未上傳</div>
         <div v-else class="photos">
@@ -171,9 +198,9 @@ onMounted(fetchOrder)
             >×</button>
           </div>
         </div>
-        <label v-if="order.photos.length < 5" class="pt-action-btn upload-btn">
+        <label v-if="order.photos.length < MEDICATION_PHOTO_MAX" class="pt-action-btn upload-btn">
           <input type="file" accept="image/*,application/pdf" @change="onPhotoPick" hidden :disabled="uploading" />
-          <span class="material-symbols-rounded">add_photo_alternate</span>
+          <span class="material-symbols-rounded" aria-hidden="true">add_photo_alternate</span>
           {{ uploading ? '上傳中…' : '加照片' }}
         </label>
       </section>
@@ -200,14 +227,14 @@ onMounted(fetchOrder)
   background: var(--pt-surface-note);
   padding: 10px 12px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-strong);
 }
 
 .pt-list-row .time { font-weight: 700; min-width: 56px; color: var(--pt-text-strong); }
-.pt-list-row .sub-meta { color: var(--pt-text-faint); font-size: 12px; }
+.pt-list-row .sub-meta { color: var(--pt-text-faint); font-size: 0.75rem; }
 
-.hint { color: var(--pt-text-placeholder); padding: 4px 0; font-size: 13px; }
+.hint { color: var(--pt-text-muted); padding: 4px 0; font-size: 0.8125rem; }
 .photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .photo { position: relative; }
 .photo img { width: 80px; height: 80px; object-fit: cover; border-radius: 10px; }
@@ -221,7 +248,7 @@ onMounted(fetchOrder)
   width: 24px;
   height: 24px;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1;
   cursor: pointer;
 }

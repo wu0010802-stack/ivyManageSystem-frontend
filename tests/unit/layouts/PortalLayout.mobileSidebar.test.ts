@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMenu } from 'element-plus'
 
 vi.mock('vue-router', () => ({
   RouterView: { template: '<div />' },
@@ -56,7 +56,7 @@ const SEL = '[data-test="portal-sidebar-toggle"]'
 
 describe('PortalLayout — 手機漢堡鍵恢復側欄可達（P0）', () => {
   beforeEach(() => {
-    localStorage.setItem('portal_layout_v', '2') // 防 onboarding setTimeout 干擾
+    localStorage.setItem('portal_layout_v', '4') // 防 onboarding setTimeout 干擾
     userInfoData = { name: '陳老師', role: 'teacher', impersonation_mode: null }
   })
   // RWD P0 後 PortalLayout 的 isMobile 來自 useIsMobile()（matchMedia 驅動，
@@ -91,11 +91,120 @@ describe('PortalLayout — 手機漢堡鍵恢復側欄可達（P0）', () => {
     wrapper.unmount()
   })
 
+  // 2026-10-12：收起的側欄只是 translateX 推出畫面，鍵盤 Tab 與讀屏仍會走進 23 個看不見的項目
+  it('手機側欄收起時為 inert，打開後解除', async () => {
+    setMobileViewport(true)
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    expect(wrapper.find('#portal-sidebar').attributes('inert')).toBeDefined()
+    await wrapper.find(SEL).trigger('click')
+    expect(wrapper.find('#portal-sidebar').attributes('inert')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('桌機側欄永遠不是 inert', async () => {
+    setMobileViewport(false)
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    expect(wrapper.find('#portal-sidebar').attributes('inert')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('桌機寬度不顯示漢堡鍵', async () => {
     setMobileViewport(false)
     const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
     await flushPromises()
     expect(wrapper.find(SEL).exists()).toBe(false)
     wrapper.unmount()
+  })
+})
+
+
+describe('PortalLayout — 桌機側邊欄收合', () => {
+  function prepareViewport(mobile = false) {
+    const listeners: Array<(event: { matches: boolean }) => void> = []
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: mobile,
+      addEventListener: (_: string, listener: (event: { matches: boolean }) => void) => listeners.push(listener),
+      removeEventListener: vi.fn(),
+    })
+    localStorage.setItem('portal_layout_v', '4')
+    userInfoData = { role: 'teacher' }
+    return listeners
+  }
+
+  it('桌機可收合成圖示導覽並再次展開', async () => {
+    prepareViewport()
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    try {
+      const button = wrapper.get('button[aria-label="收合側邊欄"]')
+      expect(button.attributes('aria-expanded')).toBe('true')
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('200px')
+      await button.trigger('click')
+      expect(button.attributes('aria-label')).toBe('展開側邊欄')
+      expect(button.attributes('aria-expanded')).toBe('false')
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('64px')
+      expect(wrapper.getComponent(ElMenu).props('collapse')).toBe(true)
+      expect(wrapper.get('.portal-logo').text()).not.toContain('教師專區')
+      await button.trigger('click')
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('200px')
+      expect(wrapper.getComponent(ElMenu).props('collapse')).toBe(false)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('桌機收合後切至手機仍為完整抽屜，回桌機保留收合狀態', async () => {
+    const listeners = prepareViewport()
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    try {
+      await wrapper.get('button[aria-label="收合側邊欄"]').trigger('click')
+      listeners.forEach(listener => listener({ matches: true }))
+      await flushPromises()
+      expect(wrapper.find('button[aria-label="展開側邊欄"]').exists()).toBe(false)
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('220px')
+      expect(wrapper.getComponent(ElMenu).props('collapse')).toBe(false)
+      await wrapper.get(SEL).trigger('click')
+      expect(wrapper.get('#portal-sidebar').classes()).toContain('sidebar-open')
+      await wrapper.get('.sidebar-overlay').trigger('click')
+      expect(wrapper.get('#portal-sidebar').classes()).toContain('sidebar-hidden')
+      listeners.forEach(listener => listener({ matches: false }))
+      await flushPromises()
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('64px')
+      expect(wrapper.getComponent(ElMenu).props('collapse')).toBe(true)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+})
+
+// 2026-10-12 業主裁定平板列為正式裝置：直式 iPad（810px）常駐 200px 側欄吃掉四分之一寬，
+// 頁首也擠到搜尋鈕折行、姓名直排。平板寬度（768–1023）側欄預設收成圖示列。
+describe('PortalLayout — 平板寬度側欄預設收合', () => {
+  function tabletViewport() {
+    window.matchMedia = vi.fn((q: string) => ({
+      // 手機判斷（max-width: 767.98px）為 false；平板區間（768–1023）為 true
+      matches: q.includes('min-width: 768px') && q.includes('max-width: 1023.98px'),
+      media: q,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia
+    localStorage.setItem('portal_layout_v', '4')
+    userInfoData = { role: 'teacher' }
+  }
+
+  it('平板寬度一進來就是 64px 圖示列，按鈕可展開', async () => {
+    tabletViewport()
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    try {
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('64px')
+      await wrapper.get('button[aria-label="展開側邊欄"]').trigger('click')
+      expect(wrapper.get('#portal-sidebar').attributes('style')).toContain('200px')
+    } finally {
+      wrapper.unmount()
+    }
   })
 })

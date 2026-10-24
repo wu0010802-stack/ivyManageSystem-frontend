@@ -70,10 +70,10 @@ defineProps<{ items: StatStripItem[] }>()
  * *-hover 是互動態 token、dark 未覆寫，當文字色在深底只有 2.5–3.6:1（P3-10）。 */
 .stat-strip__value--em {
   font-weight: var(--font-weight-bold);
-  color: var(--brand-primary);
+  color: var(--color-primary);
 }
 
-.stat-strip__value--primary { color: var(--brand-primary); }
+.stat-strip__value--primary { color: var(--color-primary); }
 .stat-strip__value--success { color: var(--color-success-darker); }
 .stat-strip__value--warning { color: var(--color-warning-darker); }
 .stat-strip__value--danger { color: var(--color-danger-darker); }

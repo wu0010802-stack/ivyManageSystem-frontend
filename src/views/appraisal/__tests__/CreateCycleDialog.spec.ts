@@ -93,7 +93,7 @@ const GLOBAL_STUBS = {
   },
 }
 
-function mountDialog(props: Partial<{ visible: boolean; canWrite: boolean }> = {}) {
+function mountDialog(props: Partial<{ visible: boolean; canWrite: boolean; registeredMode: boolean }> = {}) {
   return mount(CreateCycleDialog, {
     props: { visible: true, canWrite: true, ...props },
     global: { stubs: GLOBAL_STUBS },
@@ -115,6 +115,22 @@ describe('CreateCycleDialog', () => {
     expect(wrapper.find('[data-test="create-cycle-semester"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="create-cycle-target"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="create-cycle-actual"]').exists()).toBe(true)
+  })
+
+  it('實際註冊欄附註冊口徑說明：可留空待自動帶入，手填不同於註冊數會標為手動覆寫（spec C7）', async () => {
+    const wrapper = mountDialog({ registeredMode: true })
+    await flushPromises()
+
+    const hint = wrapper.find('[data-test="create-cycle-actual-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('留空')
+    expect(hint.text()).toContain('手動覆寫')
+  })
+
+  it('未使用註冊口徑（registeredMode 未傳／false）：不顯示註冊口徑說明（舊租戶畫面不變）', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.find('[data-test="create-cycle-actual-hint"]').exists()).toBe(false)
   })
 
   it('開啟時（visible false→true）重置為當前學年學期，target/actual 留空', async () => {

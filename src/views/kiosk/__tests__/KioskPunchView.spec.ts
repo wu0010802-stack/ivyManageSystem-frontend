@@ -8,6 +8,9 @@ const ElButton = {
   template: `<button class="el-button" :disabled="disabled || loading" @click="$emit('click')"><slot /></button>`,
 }
 
+const msg = vi.hoisted(() => ({ success: vi.fn(), warning: vi.fn(), error: vi.fn() }))
+vi.mock('element-plus', async (orig) => ({ ...(await orig<typeof import('element-plus')>()), ElMessage: msg }))
+
 vi.mock('@/api/kiosk', () => ({
   getKioskRoster: vi.fn(() =>
     Promise.resolve({ data: [{ employee_id: 1, name: '王老師', has_pin: true, today_state: 'none' }] })),
@@ -98,5 +101,102 @@ describe('KioskPunchView', () => {
     expect(wrapper.find('.success-stage').exists()).toBe(true)
     expect(wrapper.text()).toContain('打卡成功')
     expect(wrapper.text()).not.toContain('打卡失敗')
+  })
+
+  describe('閒置逾時與成功頁計時器（QA #24）', () => {
+    afterEach(() => { vi.useRealTimers() })
+
+    async function toConfirm() {
+      const wrapper = mount(KioskPunchView, { global: { stubs: { NumPad: true, ElButton } } })
+      await flushPromises()
+      await wrapper.find('.roster-item').trigger('click')
+      const numPad = wrapper.findComponent({ name: 'NumPad' })
+      await numPad.vm.$emit('update:modelValue', '1234')
+      return { wrapper, numPad }
+    }
+
+    it('PIN 階段閒置 30 秒自動回名單並清掉 PIN', async () => {
+      vi.useFakeTimers()
+      const { wrapper } = await toConfirm()
+      vi.advanceTimersByTime(29_000)
+      await flushPromises()
+      expect(wrapper.find('.pin-stage').exists()).toBe(true)
+      vi.advanceTimersByTime(1_500)
+      await flushPromises()
+      expect(wrapper.find('.roster').exists()).toBe(true)
+      // 再進 PIN 階段：上一位的 PIN 不能留著
+      await wrapper.find('.roster-item').trigger('click')
+      expect(wrapper.find('.pin-dots').text()).toBe('')
+      wrapper.unmount()
+    })
+
+    it('確認頁閒置 30 秒自動回名單：下一位不能替前一位按確認', async () => {
+      vi.useFakeTimers()
+      const { wrapper, numPad } = await toConfirm()
+      await numPad.vm.$emit('submit')
+      await flushPromises()
+      expect(wrapper.find('.confirm-stage').exists()).toBe(true)
+      vi.advanceTimersByTime(30_500)
+      await flushPromises()
+      expect(wrapper.find('.confirm-stage').exists()).toBe(false)
+      expect(wrapper.find('.roster').exists()).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('成功頁手動返回後，舊的 3 秒計時器不會清掉下一位正在輸的 PIN', async () => {
+      vi.useFakeTimers()
+      const { wrapper, numPad } = await toConfirm()
+      await numPad.vm.$emit('submit')
+      await flushPromises()
+      await wrapper.find('.confirm-stage .el-button').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('.success-stage').exists()).toBe(true)
+      // 手動返回 → 下一位選人輸 PIN
+      await wrapper.find('.success-stage .el-button').trigger('click')
+      await wrapper.find('.roster-item').trigger('click')
+      await wrapper.findComponent({ name: 'NumPad' }).vm.$emit('update:modelValue', '56')
+      vi.advanceTimersByTime(3_500)
+      await flushPromises()
+      expect(wrapper.find('.pin-stage').exists()).toBe(true)
+      expect(wrapper.find('.pin-dots').text()).toBe('●●')
+      wrapper.unmount()
+    })
+  })
+
+  describe('expected_action 與 409（QA #18 前端）', () => {
+    async function toConfirmStage() {
+      const wrapper = mount(KioskPunchView, { global: { stubs: { NumPad: true, ElButton } } })
+      await flushPromises()
+      await wrapper.find('.roster-item').trigger('click')
+      const numPad = wrapper.findComponent({ name: 'NumPad' })
+      await numPad.vm.$emit('update:modelValue', '1234')
+      await numPad.vm.$emit('submit')
+      await flushPromises()
+      return wrapper
+    }
+
+    it('確認打卡送出確認頁顯示的動作 expected_action', async () => {
+      const { kioskPunch } = await import('@/api/kiosk')
+      const wrapper = await toConfirmStage()
+      await wrapper.find('.confirm-stage .el-button').trigger('click')
+      await flushPromises()
+      expect(kioskPunch).toHaveBeenCalledWith({ employee_id: 1, pin: '1234', expected_action: 'punch_in' })
+    })
+
+    it('後端回 409（動作已變）：提示重新確認、重抓預覽留在確認頁，不丟掉選人', async () => {
+      const { kioskPunch, kioskPreview } = await import('@/api/kiosk')
+      ;(kioskPunch as ReturnType<typeof vi.fn>).mockRejectedValueOnce({ response: { status: 409 } })
+      const wrapper = await toConfirmStage()
+      ;(kioskPreview as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        data: { employee_name: '王老師', action: 'punch_out', will_overwrite: false, current_punch_out: null, server_time: '2026-06-30T17:05:00' },
+      })
+      await wrapper.find('.confirm-stage .el-button').trigger('click')
+      await flushPromises()
+      expect(msg.warning).toHaveBeenCalledWith('打卡狀態已變更，請重新確認')
+      expect(msg.error).not.toHaveBeenCalled()
+      expect(kioskPreview).toHaveBeenCalledTimes(2)
+      expect(wrapper.find('.confirm-stage').exists()).toBe(true)
+      expect(wrapper.text()).toContain('即將記為【下班】')
+    })
   })
 })

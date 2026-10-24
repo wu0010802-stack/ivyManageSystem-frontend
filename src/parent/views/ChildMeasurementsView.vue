@@ -203,7 +203,7 @@ onMounted(load)
 <template>
   <div class="meas-view">
     <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">成長量測</p>
+      <p class="pt-page-hero-eyebrow">健康紀錄</p>
       <h1 class="pt-page-hero-title">{{ currentMetric?.label }}曲線</h1>
       <p v-if="latestValue != null" class="pt-page-hero-note">
         最新 <strong>{{ latestValue }} {{ currentMetric?.unit }}</strong>
@@ -312,7 +312,7 @@ onMounted(load)
   background: var(--pt-surface-card, #fff);
   border: 1px solid var(--pt-border-light, #ecf5f9);
   border-radius: 14px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--pt-text-muted);
   cursor: pointer;
@@ -344,7 +344,7 @@ onMounted(load)
   padding: 20px 16px;
   text-align: center;
   color: var(--pt-text-faint);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .records-card {
@@ -355,7 +355,7 @@ onMounted(load)
 }
 .records-title {
   margin: 0 16px 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--pt-text-muted);
@@ -374,7 +374,7 @@ onMounted(load)
 }
 .record-date {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--pt-text-strong);
 }
@@ -393,19 +393,19 @@ onMounted(load)
   border: 1px solid rgba(13, 144, 83, 0.10);
 }
 .record-chip-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--pt-text-muted);
 }
 .record-chip-value {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--pt-text-strong);
 }
 .record-note {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--pt-text-soft);
 }

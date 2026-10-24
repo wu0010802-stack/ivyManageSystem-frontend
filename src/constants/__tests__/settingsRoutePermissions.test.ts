@@ -18,9 +18,10 @@ describe('系統設定路由拆分權限規則', () => {
     expect(rules.some((r) => 'prefix' in r && r.prefix)).toBe(false)
   })
 
-  it('/settings 維持 SETTINGS_READ 且非 prefix（不可外溢到子路由）', () => {
+  it('/settings 對頁內兩個獨立權限域採 OR，且非 prefix（不可外溢到子路由）', () => {
+    // SCHEDULE 已不借道：班別設定 2026-10 搬到排班與出勤（/attendance?tab=shifts）
     const rules = rulesFor('/settings')
-    expect(rules.map((r) => r.permission)).toEqual(['SETTINGS_READ'])
+    expect(rules.map((r) => r.permission)).toEqual(['SETTINGS_READ', 'DSR_MANAGE'])
     expect(rules.some((r) => 'prefix' in r && r.prefix)).toBe(false)
   })
 })
@@ -49,6 +50,19 @@ describe('canAccessRoute 三路由獨立放行', () => {
     expect(canAccessRoute('/settings')).toBe(true)
     expect(canAccessRoute('/settings/accounts')).toBe(false)
     expect(canAccessRoute('/settings/roles')).toBe(false)
+  })
+
+  it('只有 SCHEDULE：班別設定在排班與出勤，三個設定頁都不可進（側欄不出現空白設定頁）', () => {
+    setUserInfo({ role: 'supervisor', permission_names: ['SCHEDULE'] })
+    expect(canAccessRoute('/attendance')).toBe(true)
+    expect(canAccessRoute('/settings')).toBe(false)
+    expect(canAccessRoute('/settings/accounts')).toBe(false)
+    expect(canAccessRoute('/settings/roles')).toBe(false)
+  })
+
+  it('只有 DSR_MANAGE：可進一般設定的個資治理頁', () => {
+    setUserInfo({ role: 'hr', permission_names: ['DSR_MANAGE'] })
+    expect(canAccessRoute('/settings')).toBe(true)
   })
 
   it('wildcard：三頁全可進', () => {

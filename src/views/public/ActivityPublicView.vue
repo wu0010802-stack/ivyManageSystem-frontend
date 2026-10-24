@@ -670,7 +670,6 @@ import { parseBoldSegments } from '@/utils/publicCopy'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import { useTenantBranding } from '@/composables/useTenantBranding'
-import { tenantSlug } from '@/utils/tenant'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
 import DmPreviewModal from './components/DmPreviewModal.vue'
@@ -986,19 +985,11 @@ function openCourseDm(course: CourseOption) {
 }
 
 // ===== 聯絡模態 =====（A1-P3 抽至 ContactInquiryModal，本檔只保留 visible ref）
-// 仁武暫不開放「與承辦人員聯繫」（2026-08-07 業主指示，開通後移除整段）。
-//
-// ⚠ 為什麼要 hostname 兜底：prod 前端 build 目前是**單租戶模式**
-// （`VITE_TENANT_BASE_DOMAIN` / `VITE_TENANT_DOMAIN_MAP` 皆為空），`tenantSlug()`
-// 一律回 null，`branding.slug` 也 fallback 到 yihua——兩者在 prod 都認不出仁武
-// （2026-08-07 實測：只靠 slug 的版本上 prod 後按鈕依然顯示）。hostname 是這個
-// 部署形態下唯一可靠的租戶訊號。日後租戶 env 補齊，slug 分支會自動接手。
-const CONTACT_HIDDEN_SLUGS = new Set(['renwu'])
-const CONTACT_HIDDEN_HOSTS = new Set(['renwu.ivypreschool.tw'])
-const _tenantSlug = tenantSlug()
-const contactEnabled = _tenantSlug
-  ? !CONTACT_HIDDEN_SLUGS.has(_tenantSlug)
-  : !CONTACT_HIDDEN_HOSTS.has(window.location.hostname.toLowerCase())
+// 「與承辦人員聯繫」2026-10-12 全租戶關閉：後台「家長提問」收件匣整個功能下架，
+// 留言不再有人看。元件與後端端點保留，恢復時改回租戶閘——仁武自 2026-08-07 起
+// 不開放，且 prod 單租戶 build 的 tenantSlug() 恆為 null、須以 hostname 兜底
+// （原實作見 git 歷史 ActivityPublicView.vue 的 CONTACT_HIDDEN_HOSTS）。
+const contactEnabled = false
 const contactModalVisible = ref(false)
 function openContactModal() {
   contactModalVisible.value = true
@@ -1300,9 +1291,21 @@ onUnmounted(() => {
   line-height: 1.6;
   color: var(--color-text);
   background-color: var(--color-bg);
-  background-image: linear-gradient(180deg, #fff1ee 0%, #fffce8 55%, #fffce8 100%);
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
+  /* 讓下方 ::before 漸層層疊在本頁底色之上、內容之下 */
+  isolation: isolate;
+}
+
+/* 固定漸層背景：原本用 background-attachment: fixed，Android Chrome 每捲一幀都要
+   重繪整頁背景（捲動改走主執行緒，明顯卡頓）。改成 position: fixed 的獨立圖層，
+   視覺相同但捲動時由 compositor 直接合成。 */
+.public-activity-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: linear-gradient(180deg, #fff1ee 0%, #fffce8 55%, #fffce8 100%);
 }
 
 .public-activity-page *,

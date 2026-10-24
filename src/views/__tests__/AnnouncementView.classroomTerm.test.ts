@@ -49,6 +49,13 @@ vi.mock('@/api/announcements', () => ({
   deleteAnnouncementAttachment: vi.fn(),
 }))
 
+vi.mock('@/api/announcementCategories', () => ({
+  getAnnouncementCategories: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  createAnnouncementCategory: vi.fn(),
+  updateAnnouncementCategory: vi.fn(),
+  deleteAnnouncementCategory: vi.fn(),
+}))
+
 vi.mock('element-plus', async (orig) => {
   const actual = (await orig()) as Record<string, unknown>
   return {

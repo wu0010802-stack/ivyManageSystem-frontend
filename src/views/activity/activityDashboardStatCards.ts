@@ -78,11 +78,7 @@ export function buildStatCards(
       value: st.todayNewRegistrations ?? '-',
       hint: '今天（台北時間）新建立的報名單筆數。',
     },
-    {
-      label: '未讀提問',
-      value: st.unreadInquiries ?? '-',
-      hint: '家長端提問中尚未標示已讀的則數。此為全域收件匣，不分學期。',
-    },
+    // 「未讀提問」卡 2026-10-12 隨家長提問功能下架移除（後端 unreadInquiries 仍回傳）。
     {
       label: '報名率',
       value: st.enrollmentRate != null ? `${st.enrollmentRate}%` : '-',

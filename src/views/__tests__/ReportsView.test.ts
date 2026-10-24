@@ -34,6 +34,16 @@ vi.mock('vue-router', () => ({
 const financeSummaryMock = vi.fn()
 vi.mock('@/api/reports', () => ({
   getFinanceSummary: (...a: unknown[]) => financeSummaryMock(...a),
+  financeSummaryExportUrl: (y: number, m?: number | null) => `/reports/finance-summary/export?year=${y}${m ? `&month=${m}` : ''}`,
+  monthlyPnlExportUrl: (y: number) => `/reports/monthly-pnl/export?year=${y}`,
+}))
+const fixedCostsMock = vi.fn()
+vi.mock('@/api/monthlyFixedCost', () => ({
+  getMonthlyFixedCosts: (...a: unknown[]) => fixedCostsMock(...a),
+}))
+const downloadMock = vi.fn()
+vi.mock('@/utils/download', () => ({
+  downloadFile: (...a: unknown[]) => downloadMock(...a),
 }))
 
 function twoMonthTrendResp() {
@@ -55,6 +65,10 @@ import ReportsView from '@/views/ReportsView.vue'
 // 函式（onYearChange, onTabBeforeLeave）透過 exposeProxy 拿到原始 function，不 unwrap
 type ExposedVm = {
   selectedYear: number
+  selectedMonth: number | null
+  focusMonth: number
+  setFocusMonth: (m: number) => void
+  onExport: (kind: 'finance-year' | 'finance-month' | 'pnl') => Promise<void>
   activeTab: string
   fixedCostDirty: boolean
   onYearChange: (y: number) => Promise<void>
@@ -67,6 +81,10 @@ beforeEach(() => {
   replaceMock.mockReset()
   financeSummaryMock.mockReset()
   financeSummaryMock.mockResolvedValue(twoMonthTrendResp())
+  fixedCostsMock.mockReset()
+  fixedCostsMock.mockResolvedValue([])
+  downloadMock.mockReset()
+  downloadMock.mockResolvedValue(undefined)
 })
 
 function mountView() {
@@ -83,12 +101,13 @@ function mountView() {
         MonthlyPnLPanel: true,
         AttendancePanel: true,
         SalaryPanel: true,
+        ReportNotesDrawer: true,
         // Element Plus 元件也 stub（el-tabs/el-select/el-option/el-tab-pane）
         ElSelect: { template: '<div><slot /></div>', props: ['modelValue'], emits: ['change'] },
         ElOption: true,
         ElTabs: { name: 'ElTabs', template: '<div><slot /></div>', props: ['modelValue', 'type', 'beforeLeave'], emits: ['update:modelValue'] },
         // 顯式 name（findAllComponents({name:...}) 依此比對，stub key 本身不會自動當 name）
-        ElTabPane: { name: 'ElTabPane', template: '<div><slot /></div>', props: ['label', 'name'] },
+        ElTabPane: { name: 'ElTabPane', template: '<div><slot name="label" /><slot /></div>', props: ['label', 'name'] },
       },
     },
     attachTo: document.body,
@@ -271,15 +290,85 @@ describe('URL query 同步（spec §3）', () => {
   })
 })
 
-describe('tab 重組（spec §3）', () => {
-  it('tab 順序：overview → finance → monthly-pnl → attendance → salary → fixed-cost（登錄殿後）', () => {
+describe('分頁改名與順序（2026-10-12 改版 Q2；tab key 不變，舊網址可用）', () => {
+  it('總覽 → 收支分析 → 現金收支表 → 人事成本 → 教職員出勤 → 固定支出登錄（靠右）', () => {
     const w = mountView()
     const panes = w.findAllComponents({ name: 'ElTabPane' })
     expect(panes.map(p => p.props('name'))).toEqual(
-      ['overview', 'finance', 'monthly-pnl', 'attendance', 'salary', 'fixed-cost'],
+      ['overview', 'finance', 'monthly-pnl', 'salary', 'attendance', 'fixed-cost'],
     )
-    expect(panes[0].props('label')).toBe('經營總覽')
-    expect(panes[2].props('label')).toBe('現金收支表')
+    expect(panes.slice(0, 5).map(p => p.props('label'))).toEqual(
+      ['總覽', '收支分析', '現金收支表', '人事成本', '教職員出勤'],
+    )
+  })
+
+  it('固定支出登錄顯示截止月以內的未登錄月數', async () => {
+    routeQuery.value = { year: '2020' } // 過去年 → 截止月 12
+    fixedCostsMock.mockResolvedValue([
+      { month: 1, category: 'rent', amount: 500000 },
+      { month: 2, category: 'rent', amount: 500000 },
+      { month: 3, category: 'rent', amount: 0 }, // 金額 0 不算登錄
+    ])
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-test="fixed-cost-missing-count"]').text()).toBe('10')
+  })
+})
+
+describe('月份焦點（2026-10-12 改版 Q1）', () => {
+  it('URL 有 month 就用，並寫回 query', async () => {
+    routeQuery.value = { year: '2020', month: '3' }
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as unknown as ExposedVm
+    expect(vm.focusMonth).toBe(3)
+    expect(replaceMock).toHaveBeenCalledWith({ query: expect.objectContaining({ month: '3' }) })
+  })
+
+  it('沒指定時跟著預設（最近完整月），不寫進網址', async () => {
+    routeQuery.value = { year: '2020' } // 過去年、mock 只有 1–2 月資料 → 預設 2 月
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as unknown as ExposedVm
+    expect(vm.focusMonth).toBe(2)
+    const last = replaceMock.mock.calls.at(-1)?.[0] as { query: Record<string, string> }
+    expect(last.query.month).toBeUndefined()
+  })
+
+  it('換年度回到該年的預設月份', async () => {
+    routeQuery.value = { year: '2020', month: '7' }
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as unknown as ExposedVm
+    await vm.onYearChange(2021)
+    await flushPromises()
+    expect(vm.selectedMonth).toBeNull()
+  })
+
+  it('無效月份忽略', async () => {
+    routeQuery.value = { year: '2020', month: '13' }
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as unknown as ExposedVm
+    vm.setFocusMonth(0)
+    expect(vm.selectedMonth).toBeNull()
+  })
+})
+
+describe('匯出集中在頁首', () => {
+  it('收支彙總（焦點月含明細）／全年／現金收支表各自帶對的網址與檔名', async () => {
+    routeQuery.value = { year: '2020', month: '9' }
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as unknown as ExposedVm
+    await vm.onExport('finance-month')
+    await vm.onExport('finance-year')
+    await vm.onExport('pnl')
+    expect(downloadMock.mock.calls).toEqual([
+      ['/reports/finance-summary/export?year=2020&month=9', '收支彙總_2020-09.xlsx'],
+      ['/reports/finance-summary/export?year=2020', '收支彙總_2020-全年.xlsx'],
+      ['/reports/monthly-pnl/export?year=2020', '現金收支表_2020.xlsx'],
+    ])
   })
 })
 
@@ -336,13 +425,38 @@ describe('資料截至 badge', () => {
   })
 })
 
-describe('ReportsView 頁首檢視者標籤（2026-08-25 稽核 m9：不與標題複讀）', () => {
-  it('viewer-tag 顯示「檢視者：<名>」而非「<名> 的經營報表」', async () => {
+describe('頁首說明列', () => {
+  it('寫出口徑（含年終撥款與代收手續費）並提供口徑說明入口', async () => {
     const w = mountView()
     await flushPromises()
-    const tag = w.find('.viewer-tag')
-    expect(tag.exists()).toBe(true)
-    expect(tag.text()).toBe('檢視者：測試管理員')
-    expect(tag.text()).not.toContain('的經營報表')
+    const sub = w.find('.reports-sub').text()
+    expect(sub).toContain('現金收付實現制')
+    expect(sub).toContain('年終撥款')
+    expect(sub).toContain('代收手續費')
+    expect(sub).not.toContain('不含年終') // 舊版文案與後端口徑矛盾（年終自 2026-07-09 起已計入）
+    expect(w.find('[data-test="open-notes"]').exists()).toBe(true)
+  })
+})
+
+describe('月份預設值算出前不渲染依賴焦點的分頁（審查 P3：避免先打一輪本月再跳回）', () => {
+  it('網址沒指定月份：截止月回來前不掛總覽，回來後才掛', async () => {
+    let resolve: ((v: unknown) => void) | undefined
+    financeSummaryMock.mockImplementationOnce(() => new Promise((r) => { resolve = r }))
+    routeQuery.value = { year: '2020' }
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent({ name: 'OverviewPanel' }).exists()).toBe(false)
+    expect(w.find('[data-test="period-loading"]').exists()).toBe(true)
+    resolve?.(twoMonthTrendResp())
+    await flushPromises()
+    expect(w.findComponent({ name: 'OverviewPanel' }).exists()).toBe(true)
+  })
+
+  it('網址已指定月份：不必等', async () => {
+    financeSummaryMock.mockImplementationOnce(() => new Promise(() => {}))
+    routeQuery.value = { year: '2020', month: '5' }
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent({ name: 'OverviewPanel' }).exists()).toBe(true)
   })
 })

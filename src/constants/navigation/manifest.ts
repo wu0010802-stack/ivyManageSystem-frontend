@@ -47,6 +47,7 @@ const SIDEBAR_ICONS = {
   Clock: safeIcon(() => ElementPlusIcons.Clock),
   Coin: safeIcon(() => ElementPlusIcons.Coin),
   Collection: safeIcon(() => ElementPlusIcons.Collection),
+  CollectionTag: safeIcon(() => ElementPlusIcons.CollectionTag),
   CreditCard: safeIcon(() => ElementPlusIcons.CreditCard),
   DataAnalysis: safeIcon(() => ElementPlusIcons.DataAnalysis),
   DataBoard: safeIcon(() => ElementPlusIcons.DataBoard),
@@ -189,6 +190,9 @@ export const NAVIGATION_MANIFEST = {
         { path: '/governance/high-risk', permission: 'HIGH_RISK_READ' },
         { path: '/governance/audit-logs', permission: 'AUDIT_LOGS' },
         { path: '/governance/data-quality', permission: 'DATA_QUALITY_READ' },
+        // 家長端服務監控（SPEC-023）：沿用 AUDIT_LOGS，不新增權限碼。
+        // ⚠ 一律 exact，禁用 routePrefix（prefix 會讓三碼互相外溢）。
+        { path: '/governance/parent-monitor', permission: 'AUDIT_LOGS' },
         // 三條舊路徑已 redirect 至上面三個分頁；規則保留供 redirect 解析。
         { path: '/workbench/high-risk', permission: 'HIGH_RISK_READ' },
         { path: '/audit-logs', permission: 'AUDIT_LOGS' },
@@ -253,16 +257,22 @@ export const NAVIGATION_MANIFEST = {
             { path: '/appraisal-year-end/rules/bonus-rates', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/rules/catalog', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/rules/enrollment-targets', permission: 'APPRAISAL_READ' },
+            // 節慶人數（月度共用人數）沿用薪資權限；SALARY_READ 已在本群組 sharedViews 內。
+            { path: '/appraisal-year-end/rules/festival-headcount', permission: 'SALARY_READ' },
             { path: '/appraisal-year-end/rules/year-end-rules', permission: 'SETTINGS_READ' },
             { path: '/appraisal-year-end/exceptions', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/exceptions', permission: 'YEAR_END_READ' },
           ],
         },
         {
-          key: 'attendance', title: MODULE_TERMS.attendance, routePath: '/attendance',
-          views: [{ code: 'ATTENDANCE_READ' }],
+          // 2026-10 SPEC-027：排班與出勤合併成單一側欄項目（推翻 2026-09-10 拆分）。
+          // SCHEDULE 或 ATTENDANCE_READ 任一即可開頁；頁籤與動作再依權限顯示。
+          // SCHEDULE 原屬已退場的 /schedule 頁，改由本頁主屬（views），不用 sharedViews
+          //（sharedViews 只能借道「別處已主屬」的碼，否則 M3 不變式紅）。
+          key: 'attendance', title: '排班與出勤', routePath: '/attendance',
+          views: [{ code: 'ATTENDANCE_READ' }, { code: 'SCHEDULE' }],
           actions: [{ code: 'ATTENDANCE_WRITE' }],
-          menu: { icon: icon('Clock') },
+          menu: { icon: icon('Calendar') },
         },
         {
           key: 'leaves', title: '請假管理', routePath: '/leaves',
@@ -280,11 +290,6 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('Watch') },
           // /meetings 舊獨立路由規則保留（原手寫陣列既有，redirect/直連解析用）。
           extraRoutes: [{ path: '/meetings', permission: 'MEETINGS' }],
-        },
-        {
-          key: 'schedule', title: MODULE_TERMS.schedule, routePath: '/schedule',
-          views: [{ code: 'SCHEDULE' }],
-          menu: { icon: icon('Timer') },
         },
       ],
     },
@@ -385,30 +390,51 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('User') },
         },
         {
-          // 娃娃車管理（2026-08-13 三頁整合單一入口＋頁內分頁，比照 workbench）：
+          // 娃娃車管理（2026-08-13 三頁整合單一入口＋頁內分頁，比照 workbench；
+          // 2026-08-26 班次排程再加今日調度與設定，共五分頁）：
           // 即時監看／乘車歷史＝BUS_READ（後端 GET /bus/trips/today 與 /bus/trips(/{id})
-          // 守衛）、路線管理＝BUS_WRITE（三個寫端點守衛；該分頁「能進入」與「能寫入」
+          // 守衛）、今日調度＝BUS_READ 進頁（寫入鎖在頁內，見下方 actions 註解）、
+          // 路線管理／設定＝BUS_WRITE（寫端點守衛；這兩個分頁「能進入」與「能寫入」
           // 同一碼，沒有唯讀模式）。主路由 /bus 承載兩碼 OR（只持其中一碼也進得來，
           // 落點由 router redirect 依權限決定、分頁可見性由 BusLayout 各自判斷）。
           //
-          // **不可 routePrefix**：三個分頁子路由權限不同，prefix 會讓 /bus 的
-          // BUS_WRITE 外溢到監看／歷史（或 BUS_READ 外溢到路線管理），故子路由
-          // 一律走 extraRoutes 各自 exact。
+          // **不可 routePrefix**：五個分頁子路由權限不同，prefix 會讓 /bus 的
+          // BUS_WRITE 外溢到監看／歷史／今日調度（或 BUS_READ 外溢到路線管理／
+          // 設定），故子路由一律走 extraRoutes 各自 exact。
           //
-          // ⚠ 授權路線管理時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起給：
-          // 該分頁進頁後還會打 GET /bus/routes（後端 BUS_READ）與 GET /students
-          // （後端 STUDENTS_READ）。route gate 是 OR 語意、寫不出 AND，所以只授
-          // BUS_WRITE 的角色進得了頁，但兩支載入全 403（畫面退化成錯誤卡）。
+          // ⚠ 授權路線管理／設定時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起
+          // 給：route gate 是 OR 語意、寫不出 AND，所以只授 BUS_WRITE 的角色進得了
+          // 頁，但進頁後的載入全 403（畫面退化成錯誤卡）。兩頁各自的讀端點——
+          // 路線管理：GET /bus/routes（後端 BUS_READ）＋ GET /students（STUDENTS_READ）；
+          // 設定：GET /bus/settings（後端 BUS_READ；只有 PUT 才是 BUS_WRITE）。
           key: 'bus', title: '娃娃車管理', routePath: '/bus',
           views: [
             { code: 'BUS_READ', label: '娃娃車檢視' },
-            { code: 'BUS_WRITE', label: '娃娃車路線管理' },
+            // 2026-08-26 起本碼同時開通 /bus/settings（園所座標＋車輛數，寫
+            // system_configs），label 要講得出來——否則授權者在權限編輯器只看到
+            // 「路線管理」，勾下去卻一併授出設定頁。
+            // ⚠ 必須與後端 utils/permissions.py 的 PERMISSION_LABELS['BUS_WRITE']
+            // **逐字相同**：picker 顯示以後端為準，而設定頁的唯讀提示走
+            // busWriteLabel() 讀這裡——兩邊不一致會讓同一個權限在畫面上有兩個名字。
+            // 後端同步已隨 alembic buswrlbl01 落地（連既有 DB 列一起改）。
+            { code: 'BUS_WRITE', label: '娃娃車追蹤 (路線與設定管理)' },
           ],
+          // 今日調度（/bus/dispatch）發車後編輯的寫入碼：頁面進入權限仍為
+          // BUS_READ，本碼只控制 in_progress 階段的操作可見性（後端 handler 內
+          // status 分流強制）。刻意**不**進 extraRoutes——掛成 route 規則會讓
+          // 「只想看今日名單」的行政被擋在門外。
+          actions: [{ code: 'BUS_IN_PROGRESS_WRITE', label: '娃娃車追蹤 (發車後調整)' }],
           menu: { icon: icon('MapLocation') },
           extraRoutes: [
             { path: '/bus/monitor', permission: 'BUS_READ' },
             { path: '/bus/history', permission: 'BUS_READ' },
             { path: '/bus/routes', permission: 'BUS_WRITE' },
+            // 2026-08-26 班次排程新增兩分頁（dispatch 取 BUS_READ 的理由見上方
+            // actions 註解；settings 取 BUS_WRITE ——該頁存在的目的是改設定，比照
+            // 路線管理「能進入＝能寫入、無唯讀模式」。⚠ 它的 GET 是 BUS_READ，
+            // 只授 BUS_WRITE 會進得去但載入 403，見上方 ⚠ 段）。
+            { path: '/bus/dispatch', permission: 'BUS_READ' },
+            { path: '/bus/settings', permission: 'BUS_WRITE' },
             // 舊路徑 redirect 保留規則（比照 /approvals → /workbench/approvals）。
             { path: '/bus-monitor', permission: 'BUS_READ' },
             { path: '/bus-history', permission: 'BUS_READ' },
@@ -424,9 +450,10 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('CreditCard') },
         },
         {
-          // 統計圖表：資料同源於在籍統計 API，權限借道學生模組 STUDENTS_READ（owned 於 studentsMain）。
+          // 在籍統計：現值統計與異動帳同一頁（2026-09-07 整合），資料同源於在籍統計 API，
+          // 權限借道學生模組 STUDENTS_READ（owned 於 studentsMain）。
           // 依業主指示置於本群組最下方（2026-07-31）。
-          key: 'enrollmentStats', title: '統計圖表', routePath: '/enrollment-stats',
+          key: 'enrollmentStats', title: '在籍統計', routePath: '/enrollment-stats',
           views: [], sharedViews: ['STUDENTS_READ'],
           menu: { icon: icon('PieChart') },
         },
@@ -438,8 +465,24 @@ export const NAVIGATION_MANIFEST = {
         {
           key: 'announcements', title: '公告管理', routePath: '/announcements',
           views: [{ code: 'ANNOUNCEMENTS_READ' }],
-          actions: [{ code: 'ANNOUNCEMENTS_WRITE' }],
+          // SCHOOL_WRITE／CLASS_WRITE（2026-09-08 anncat01）：公告受眾範圍獨立碼，
+          // 與 ANNOUNCEMENTS_WRITE 平行、互不隱含，主屬本頁（見 utils/permissions.py 同段註解）。
+          actions: [
+            { code: 'ANNOUNCEMENTS_WRITE' },
+            { code: 'ANNOUNCEMENTS_SCHOOL_WRITE', label: '校園發布' },
+            { code: 'ANNOUNCEMENTS_CLASS_WRITE', label: '班級發布' },
+          ],
           menu: { icon: icon('Bell') },
+        },
+        {
+          // 公告分類管理（2026-09-08 anncat01）：權限沿用公告管理本身的
+          // ANNOUNCEMENTS_READ/WRITE，不另外新增管理權限碼——views 借道
+          // sharedViews（該碼已由上面 announcements 頁 owned），本頁不重複 own。
+          // 寫入操作（新增/編輯/刪除/設預設）由元件內 hasPermission('ANNOUNCEMENTS_WRITE')
+          // 控制，manifest 層不需要（也不可）再掛一次同碼的 actions。
+          key: 'announcementCategories', title: '公告分類管理', routePath: '/announcement-categories',
+          views: [], sharedViews: ['ANNOUNCEMENTS_READ'],
+          menu: { icon: icon('CollectionTag') },
         },
         {
           key: 'calendar', title: PAGE_TERMS.calendar, routePath: '/calendar',
@@ -489,33 +532,31 @@ export const NAVIGATION_MANIFEST = {
         },
         // 政府報表五頁自「報表」群組移入本群組（業主指示，2026-08-01）；
         // 權限碼主屬與路由不動，僅選單歸屬變更。
+        // 2026-10-12 業主指示暫時自側欄下架：五頁皆拿掉 menu，路由、權限規則、權限編輯器
+        // 節點與後端 API 全數保留（深連結仍受原權限碼守衛）。恢復時把 menu 加回即可，
+        // 原圖示依序為 Histogram／Document／Document／Document／Files（見 govReportsNav.test.ts）。
         {
           key: 'govMonthly', title: PAGE_TERMS.govMonthly, routePath: '/admin/gov-reports/monthly',
           views: [{ code: 'GOV_REPORTS_VIEW' }],
-          menu: { icon: icon('Histogram') },
           // /admin/gov-reports/{monthly,certificates,subsidies,iep} 由此 prefix 規則涵蓋。
           extraRoutes: [{ path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true }],
         },
         {
           key: 'govCertificates', title: PAGE_TERMS.govCertificates, routePath: '/admin/gov-reports/certificates',
           views: [], sharedViews: ['GOV_REPORTS_VIEW'],
-          menu: { icon: icon('Document') },
         },
         {
           key: 'govSubsidies', title: PAGE_TERMS.govSubsidies, routePath: '/admin/gov-reports/subsidies',
           views: [], sharedViews: ['GOV_REPORTS_VIEW'],
-          menu: { icon: icon('Document') },
         },
         {
           key: 'govIep', title: 'IEP 個別化教育計畫', routePath: '/admin/gov-reports/iep',
           views: [], sharedViews: ['GOV_REPORTS_VIEW'],
-          menu: { icon: icon('Document') },
         },
         {
           // 勞健保與稅務申報：對齊後端 api/gov_reports.py 的 GOV_REPORTS_EXPORT 守衛。
           key: 'govExport', title: PAGE_TERMS.govExport, routePath: '/gov-reports',
           views: [{ code: 'GOV_REPORTS_EXPORT' }],
-          menu: { icon: icon('Files') },
         },
       ],
     },
@@ -572,9 +613,12 @@ export const NAVIGATION_MANIFEST = {
           extraRoutes: [{ path: '/activity/audit/pos-unlock', permission: 'ACTIVITY_PAYMENT_APPROVE' }],
         },
         {
+          // 2026-10-12 業主指示整個功能下架：拿掉 menu（連同未讀 badge）；公開報名頁的
+          // 「與承辦人員聯繫」入口、通知鈴項目（後端）與儀表板「未讀提問」卡一併拿掉。
+          // 路由、權限規則與後端 API／資料全數保留；恢復時 menu 加回
+          // { icon: icon('ChatDotRound'), badgeKey: 'activityInquiries' }（見 activityInquiriesNav.test.ts）。
           key: 'activityInquiries', title: '家長提問', routePath: '/activity/inquiries',
           views: [], sharedViews: ['ACTIVITY_READ'],
-          menu: { icon: icon('ChatDotRound'), badgeKey: 'activityInquiries' },
         },
         {
           key: 'activityAttendance', title: '點名管理', routePath: '/activity/attendance', routePrefix: true,
@@ -616,7 +660,10 @@ export const NAVIGATION_MANIFEST = {
         {
           // ⚠ /settings 不可改 routePrefix（子路由權限不同，外溢 = SETTINGS_READ 就能進帳號/角色頁）。
           key: 'settingsGeneral', title: PAGE_TERMS.settingsGeneral, routePath: '/settings',
+          // 同頁承載兩個獨立權限域；route 採 OR，頁內 tab 再各自 fail-closed。
+          // SCHEDULE 已不借道：班別設定 2026-10 搬到 /attendance，借道會讓只有 SCHEDULE 的園長／主任看到空白設定頁。
           views: [{ code: 'SETTINGS_READ' }],
+          sharedViews: ['DSR_MANAGE'],
           actions: [{ code: 'SETTINGS_WRITE' }],
           menu: { icon: icon('Tools') },
         },
@@ -675,6 +722,12 @@ export const NAVIGATION_MANIFEST = {
           key: 'platformAudit', title: '跨分校稽核', routePath: '/platform/audit',
           views: [{ code: 'PLATFORM_AUDIT_VIEW' }],
           menu: { icon: icon('List') },
+        },
+        {
+          key: 'platformObservability', title: '排程監控', routePath: '/platform/observability',
+          views: [],
+          sharedViews: ['PLATFORM_TENANTS_MANAGE'],
+          menu: { icon: icon('DataBoard') },
         },
         {
           // 勞健保級距／費率是 GLOBAL 表（無 tenant_id），一改對全平台生效，

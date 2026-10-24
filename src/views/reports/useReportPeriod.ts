@@ -39,3 +39,22 @@ export function computeReportPeriod(
 
   return { isCurrentYear, cutoffMonth, lastActualMonth, lastCompleteMonth }
 }
+
+/** 某月相對於資料截止月的位置：已過／本月（進行中）／未來。 */
+export type MonthState = 'past' | 'current' | 'future'
+
+export function monthState(period: ReportPeriod, month: number): MonthState {
+  if (month > period.cutoffMonth) return 'future'
+  if (period.isCurrentYear && month === period.cutoffMonth) return 'current'
+  return 'past'
+}
+
+/**
+ * 月份焦點預設值（2026-10-12 報表改版）：最近一個完整月 → 最後有資料的月 →
+ * 截止月（今年＝當月、過去年＝12）→ 1。全模組共用，URL 未指定 month 時採用。
+ */
+export function defaultFocusMonth(period: ReportPeriod): number {
+  return period.lastCompleteMonth
+    ?? period.lastActualMonth
+    ?? (period.cutoffMonth >= 1 ? period.cutoffMonth : 1)
+}

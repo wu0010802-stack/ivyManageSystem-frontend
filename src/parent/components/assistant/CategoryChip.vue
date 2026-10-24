@@ -20,7 +20,7 @@ defineEmits<{
     :style="{ '--chip-color': category.color }"
     @click="$emit('click', category)"
   >
-    <span class="material-symbols-rounded">{{ category.icon }}</span>
+    <span class="material-symbols-rounded" aria-hidden="true">{{ category.icon }}</span>
     <span>{{ category.label }}</span>
   </button>
 </template>
@@ -33,7 +33,7 @@ defineEmits<{
   border-radius: 999px;
   background: var(--pt-surface-card, #fff);
   color: var(--chip-color);
-  font-size: 14px; font-weight: 500;
+  font-size: 0.875rem; font-weight: 500;
   cursor: pointer;
   transition: background 0.15s;
 }

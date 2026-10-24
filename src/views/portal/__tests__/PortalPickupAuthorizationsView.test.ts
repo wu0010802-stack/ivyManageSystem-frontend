@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 
 const { mockList, mockPendingCount, mockVerify, mockOverride } = vi.hoisted(() => ({
   mockList: vi.fn(),
@@ -67,7 +67,7 @@ describe('PortalPickupAuthorizationsView', () => {
     const wrapper = await mountView()
     expect(wrapper.text()).toContain('小明')
     expect(wrapper.text()).toContain('王阿嬤')
-    expect(wrapper.text()).toContain('1 筆進行中')
+    expect(wrapper.text()).toContain('1 筆待交接')
   })
 
   it('does not expose code_hash or code fields to the DOM', async () => {
@@ -79,18 +79,19 @@ describe('PortalPickupAuthorizationsView', () => {
     mockVerify.mockResolvedValue({ data: { ...SAMPLE_ITEM, status: 'completed' } })
     await mountView()
 
-    await body().find('.el-button--primary').trigger('click') // 開核銷 dialog
+    await body().find('.el-button--primary').trigger('click') // 開確認交接 dialog
     await flushPromises()
 
     const codeInput = body().find('.code-input input')
     await codeInput.setValue('123456')
 
-    const verifyBtn = body().findAll('.dialog-actions button').find((b) => b.text().includes('驗證核銷'))
+    const verifyBtn = body().findAll('.dialog-actions button').find((b) => b.text().includes('確認交接'))
     await verifyBtn!.trigger('click')
     await flushPromises()
 
     expect(mockVerify).toHaveBeenCalledWith(1, { code: '123456' })
-    expect(mockList).toHaveBeenCalledTimes(2) // 初次 + 核銷後重抓
+    expect(mockList).toHaveBeenCalledTimes(2) // 初次 + 交接後重抓
+    expect(ElMessage.success).toHaveBeenCalledWith('已完成交接')
   })
 
   it('code_locked error switches to override mode', async () => {
@@ -102,7 +103,7 @@ describe('PortalPickupAuthorizationsView', () => {
     await body().find('.el-button--primary').trigger('click')
     await flushPromises()
     await body().find('.code-input input').setValue('000000')
-    const verifyBtn = body().findAll('.dialog-actions button').find((b) => b.text().includes('驗證核銷'))
+    const verifyBtn = body().findAll('.dialog-actions button').find((b) => b.text().includes('確認交接'))
     await verifyBtn!.trigger('click')
     await flushPromises()
 
@@ -116,11 +117,44 @@ describe('PortalPickupAuthorizationsView', () => {
     await body().find('.switch-override-link').trigger('click')
     await flushPromises()
 
-    const overrideBtn = body().findAll('.dialog-actions button').find((b) => b.text().includes('人工核銷'))
+    const overrideBtn = body().findAll('.dialog-actions button').find((b) => b.text().includes('人工核對後交接'))
     expect(overrideBtn!.attributes('disabled')).toBe('')
 
     await body().find('.override-note textarea').setValue('已核對身分證')
     await flushPromises()
     expect(overrideBtn!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('語彙與管理端、POS 一致：卡片鈕「確認交接」、狀態「待交接／已交接」，不出現「核銷」', async () => {
+    mockList.mockResolvedValue({ data: { items: [
+      SAMPLE_ITEM,
+      { ...SAMPLE_ITEM, id: 2, student_name: '小美', status: 'completed', effective_status: 'completed' },
+    ] } })
+    const wrapper = await mountView()
+    expect(wrapper.find('.auth-actions .el-button--primary').text()).toBe('確認交接')
+    expect(wrapper.text()).toContain('待交接')
+    expect(wrapper.text()).toContain('已交接')
+    await body().find('.el-button--primary').trigger('click')
+    await flushPromises()
+    expect(body().find('.el-dialog__title').text()).toBe('確認交接')
+    expect(body().text()).not.toContain('核銷')
+  })
+
+  it('人工核對：二次確認與成功提示都用交接語彙', async () => {
+    mockOverride.mockResolvedValue({ data: { ...SAMPLE_ITEM, status: 'completed' } })
+    await mountView()
+    await body().find('.el-button--primary').trigger('click')
+    await flushPromises()
+    await body().find('.switch-override-link').trigger('click')
+    await flushPromises()
+    await body().find('.override-note textarea').setValue('已核對身分證')
+    await flushPromises()
+    await body().findAll('.dialog-actions button').find((b) => b.text().includes('人工核對後交接'))!.trigger('click')
+    await flushPromises()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      expect.any(String), '人工核對後交接', expect.objectContaining({ confirmButtonText: '確認交接' }),
+    )
+    expect(ElMessage.success).toHaveBeenCalledWith('已完成交接')
   })
 })

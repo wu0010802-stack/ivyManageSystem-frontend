@@ -231,7 +231,7 @@ function isPendingReview(reg: Registration): boolean {
   color: var(--pt-info-text, #2d6f8e);
   padding: 1px 8px;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .review-pending-hint {
@@ -240,7 +240,7 @@ function isPendingReview(reg: Registration): boolean {
   border-radius: 8px;
   background: var(--color-info-soft, #e0f2fe);
   color: var(--pt-info-text, #2d6f8e);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -252,7 +252,7 @@ function isPendingReview(reg: Registration): boolean {
 .reg-refunded {
   padding: 1px 8px;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   background: var(--m3-surface-container-highest, #e7edf3);
   color: var(--pt-text-muted, var(--pt-text-soft));
 }
@@ -267,7 +267,7 @@ function isPendingReview(reg: Registration): boolean {
 
 .course-name {
   flex: 1;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
@@ -277,7 +277,7 @@ function isPendingReview(reg: Registration): boolean {
   color: var(--m3-on-primary, var(--neutral-0));
   border: none;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 
@@ -288,7 +288,7 @@ function isPendingReview(reg: Registration): boolean {
   color: var(--m3-error, #ba1a1a);
   border: 1px solid var(--m3-error, #ba1a1a);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 
@@ -302,7 +302,7 @@ function isPendingReview(reg: Registration): boolean {
 .confirm-deadline,
 .confirm-expired {
   flex-basis: 100%;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 

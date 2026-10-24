@@ -16,12 +16,34 @@ map "${TENANT_HOST_GUARD}:$tb_known_host" $tb_reject_host {
     "on:0"  1;
 }
 
+# ─── access log 不記 query string（F16）────────────────────────────────────
+# nginx:alpine 預設 `access_log … main` 的 "$request" 含完整 query：離職包 magic-link
+# `/api/offboarding/download?token=<明文>` 經本層反代，token 會先於後端
+# MagicLinkLogScrubMiddleware（只遮 uvicorn）寫進 Railway 前端 log，30 天／3 次內
+# 可直接重放下載；職員查詢的 PII 參數（student_name=、payer_name=、q=）同理。
+# 改記 $request_method + $uri（不含 args），Referer 也去掉 query。
+# 欄位順序沿用官方 main，既有 log 解析不受影響。
+# ⛔ 勿加回 $request／$request_uri／$args／$query_string／$arg_*／原樣 $http_referer
+#    （tests/unit/build/nginxAccessLogPrivacy.test.ts 把關）。
+map $http_referer $ivy_log_referer {
+    default                     "";
+    "~^(?<ivy_ref_noq>[^?]*)"   $ivy_ref_noq;
+}
+
+log_format ivy_noquery '$remote_addr - $remote_user [$time_local] '
+                       '"$request_method $uri $server_protocol" $status $body_bytes_sent '
+                       '"$ivy_log_referer" "$http_user_agent" "$http_x_forwarded_for"';
+
 server {
     listen 8080;
     server_name _;
 
     root /usr/share/nginx/html;
     index index.html;
+
+    # 覆寫 nginx.conf 預設的 `access_log … main`（見檔首 F16 說明）；
+    # /var/log/nginx/access.log 在官方 image 是指向 /dev/stdout 的 symlink。
+    access_log /var/log/nginx/access.log ivy_noquery;
 
     # 本檔在 Zeabur 上是「container 內部埠 8080」被外層反代終止 TLS 後轉發進來，
     # 對外實際埠是 443（或根本不露埠）。nginx 對「本地 URI」的 redirect（如下方
@@ -99,6 +121,18 @@ server {
     resolver_timeout 5s;
     set $backend_upstream ${BACKEND_URL};
 
+    # ── error_log 的 query 殘餘風險（已評估、刻意不改設定）──────────────────
+    # 上游出錯時（upstream timed out／connect() failed／prematurely closed），nginx
+    # 以 error 等級寫一行固定格式的 error_log，結尾附 `request: "GET /api/...?<query>
+    # HTTP/1.1"`——含完整 query（例：離職包 magic-link 的 ?token=、職員查詢的 PII 參數）。
+    # error_log 沒有 log_format 可套（格式寫死在 nginx 原始碼），也無法逐 location
+    # 改寫 request 欄位；唯一能擋的是把等級拉到 crit 以上，但會一併吞掉 502/504 的
+    # 上游診斷訊息，維運代價高於風險，故不採用。（access log 去 query 由 F16 另案處理。）
+    # 接受的殘餘：只在「上游失敗」的那幾筆請求出現；magic-link token 有效期與使用
+    # 次數皆有上限；Railway 前端 log 僅部署管理者可讀。
+    # 日後要收斂時，優先讓敏感 token 改走 POST body／header（不進 request line），
+    # 而不是調高 error_log 等級。
+
     location /api/ws/ {
         proxy_pass $backend_upstream;
         proxy_http_version 1.1;
@@ -129,6 +163,13 @@ server {
     }
 
     # ── 必須每次 revalidate 的檔案（PWA 推不下去就是這幾個快取太兇） ──
+    # 每次部署的 build provenance 必須直達目前 artifact，代理、瀏覽器與 SW 都不可快取。
+    location = /build-metadata.json {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-store" always;
+        types { } default_type application/json;
+        try_files /build-metadata.json =404;
+    }
     location = /index.html {
         include /etc/nginx/security-headers.conf;
         add_header Cache-Control "no-cache" always;
@@ -195,7 +236,7 @@ server {
     # ── L3 品牌資產 overlay：URL 不變，per-tenant 檔案優先、缺檔 fallback 預設檔 ──
     # /LOGO.png 等被 HTML、Vue template、SW precache、manifest 四處引用；讓 nginx 依
     # $host 換檔案內容，所有引用點零改動。租戶可以只覆蓋 logo，其餘自動吃預設檔。
-    location ~ ^/(LOGO\.png|logo\.svg|favicon\.ico|apple-touch-icon-180x180\.png|pwa-(64x64|192x192|512x512)\.png|maskable-icon-512x512\.png|parent-(pwa-(192x192|512x512)|maskable-512x512)\.png|images/(activity-poster\.jpg|login-logo\.png|ivy-kids-loading\.png))$ {
+    location ~ ^/(LOGO\.png|logo\.svg|favicon\.ico|apple-touch-icon-180x180\.png|pwa-(64x64|192x192|512x512)\.png|maskable-icon-512x512\.png|parent-(pwa-(192x192|512x512)|maskable-512x512)\.png|images/(activity-poster\.jpg|login-logo(-512)?\.png|ivy-kids-loading\.png))$ {
         include /etc/nginx/security-headers.conf;
         # CT-F-09：短快取而非 no-cache——SW 的 StaleWhileRevalidate 仍能拿到更新，
         # 而首訪公開報名頁的訪客不必為每張圖多一次 revalidate。

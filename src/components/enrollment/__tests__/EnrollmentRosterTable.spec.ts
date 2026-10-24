@@ -70,4 +70,40 @@ describe('EnrollmentRosterTable', () => {
     expect(w.find('th.class-num-cell').attributes('scope')).toBe('col')
     expect(w.find('tbody th.seq-cell').attributes('scope')).toBe('row')
   })
+
+  describe('年級列的班級代號', () => {
+    const withCodes = (codes: Array<string | null | undefined>): Roster => ({
+      ...roster,
+      classes: codes.map((code, i) => ({
+        ...roster.classes[0],
+        classroom_id: i + 1,
+        class_number: i + 1,
+        class_name: `幼幼${i + 1}`,
+        class_code: code,
+      })),
+      grade_summaries: [
+        { grade_name: '幼幼', class_numbers: codes.map((_, i) => i + 1), total: 2, old_count: 1, new_count: 1 },
+      ],
+    })
+
+    it('有 class_code 時年級列顯示真實代號', () => {
+      const w = mount(EnrollmentRosterTable, { props: { roster: withCodes(['幼A', '幼B']) } })
+      expect(w.findAll('.grade-cell').map(c => c.text())).toEqual(['幼A', '幼B'])
+    })
+
+    it('class_code 為 null、空字串或未提供時退回「年級首字＋年級內序號」', () => {
+      const w = mount(EnrollmentRosterTable, { props: { roster: withCodes([null, undefined, '']) } })
+      expect(w.findAll('.grade-cell').map(c => c.text())).toEqual(['幼1', '幼2', '幼3'])
+    })
+
+    it('同一張表可混合：有代號的班顯示代號、沒有的退回推算值', () => {
+      const w = mount(EnrollmentRosterTable, { props: { roster: withCodes(['幼A', null]) } })
+      expect(w.findAll('.grade-cell').map(c => c.text())).toEqual(['幼A', '幼2'])
+    })
+
+    it('列標籤維持「年級」', () => {
+      const w = mount(EnrollmentRosterTable, { props: { roster: withCodes(['幼A']) } })
+      expect(w.find('.sticky-grade-row th.row-label').text()).toBe('年級')
+    })
+  })
 })

@@ -121,12 +121,19 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(changesItem.text()).toContain('修改紀錄')
   })
 
-  it('「報表」含月度幼生在園統計 /admin/gov-reports/monthly', async () => {
+  it('政府報表五頁不在側欄（2026-10-12 業主指示暫時下架，路由保留）', async () => {
     const wrapper = await mountSidebar()
-    const item = wrapper.find('[data-index="/admin/gov-reports/monthly"]')
-    expect(item.exists()).toBe(true)
-    // 原「月度月報」疊詞且未說是什麼月報（實為教育部幼生通報），2026-07-28 命名稽核改名
-    expect(item.text()).toContain('月度幼生在園統計')
+    for (const path of [
+      '/admin/gov-reports/monthly',
+      '/admin/gov-reports/certificates',
+      '/admin/gov-reports/subsidies',
+      '/admin/gov-reports/iep',
+      '/gov-reports',
+    ]) {
+      expect(wrapper.find(`[data-index="${path}"]`).exists()).toBe(false)
+    }
+    expect(wrapper.text()).not.toContain('月度幼生在園統計')
+    expect(wrapper.text()).not.toContain('勞健保與稅務申報')
   })
 
   it('「系統設定」不再含考核管理（已整併至人事薪資「考核與年終」）', async () => {
@@ -184,12 +191,13 @@ describe('AdminSidebar workbenchBadge', () => {
     expect(badges.filter((b) => b.text() === '0').length).toBe(0)
   })
 
-  it('pendingHighRiskAudit 預設 0 且不影響 pendingActivityInquiries badge', async () => {
+  it('家長提問已下架（2026-10-12）：pendingActivityInquiries > 0 也不出現選單與 badge', async () => {
     const wrapper = await mountSidebar({ pendingApprovals: 0, pendingHighRiskAudit: 0, pendingActivityInquiries: 4 })
-    const badges = wrapper.findAll('.mock-badge')
-    const badgeValues = badges.map((b) => b.text())
-    // pendingActivityInquiries badge still shows
-    expect(badgeValues).toContain('4')
+    // 「才藝」群組仍在（防整組沒渲染的假綠）
+    expect(wrapper.find('[data-index="/activity/registrations"]').exists()).toBe(true)
+    expect(wrapper.find('[data-index="/activity/inquiries"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('家長提問')
+    expect(wrapper.findAll('.mock-badge').map((b) => b.text())).not.toContain('4')
   })
 })
 

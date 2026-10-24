@@ -16,6 +16,12 @@ export interface EmployeeFormSalaryData {
   bank_account_name?: string
   no_employment_insurance?: boolean
   health_exempt?: boolean
+  // 義華 R2 #42：不投保（承攬／自行投保）——勞健保、勞退（雇主與自提）一律 0
+  not_insured?: boolean
+  // 義華 115.09 對帳 #36：健保本人自付比例（1＝全額、0.5＝中低收入 5 折、0＝本人免繳）
+  health_self_pay_ratio?: number | null
+  // #41 本次薪資輸入異動生效日（空＝今日）
+  salary_inputs_effective_from?: string
   skip_payroll_bonuses?: boolean
   bypass_standard_base?: boolean
   skip_payroll_transfer?: boolean
@@ -35,7 +41,9 @@ const props = withDefaults(defineProps<{
   pendingSuggestion?: boolean
   suggestedSalary?: number | null
   insuranceError?: string | null
+  showEffectiveFrom?: boolean
 }>(), {
+  showEffectiveFrom: false,
   isReadonly: false,
   readonlyReason: '',
   pendingSuggestion: false,
@@ -49,6 +57,27 @@ const emit = defineEmits<{
 }>()
 
 const fmtNTD = (n: number | null | undefined) => formatCurrency(n)
+
+// #41 生效日不可晚於今天（當月計薪讀現值，未來生效會被提前套用）
+const isFutureDate = (d: Date) => d.getTime() > Date.now()
+
+// #36 健保本人自付比例常用值（自訂比例仍可由後端接受 0～1）
+const HEALTH_SELF_RATIO_OPTIONS = [
+    { label: '全額', value: 1 },
+    { label: '5 折（中低收入）', value: 0.5 },
+    { label: '本人免繳', value: 0 },
+] as const
+// el-radio-group 不收 null：遮罩（null）只會出現在唯讀模式，可編輯時以 1 顯示
+const healthSelfRatioModel = computed({
+    get: () => props.form.health_self_pay_ratio ?? 1,
+    set: (v: number) => { props.form.health_self_pay_ratio = v },
+})
+const healthSelfRatioText = computed(() => {
+    const v = props.form.health_self_pay_ratio
+    if (v == null) return '—'
+    const hit = HEALTH_SELF_RATIO_OPTIONS.find((o) => o.value === v)
+    return hit ? hit.label : `${Math.round(v * 100)}%`
+})
 
 // 勞退百分比雙向綁定（0-0.06 ↔ 0-6%）
 const pensionPercent = computed({
@@ -152,6 +181,21 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
       <div class="hint" style="text-align:left">僅作記錄，不影響薪資計算</div>
     </el-form-item>
 
+    <!-- #41 異動生效日（可回溯）：投保級距／分項投保／眷屬／健保身分等異動自此日起套用 -->
+    <el-form-item v-if="showEffectiveFrom && !isReadonly" label="本次異動生效日（選填）">
+      <el-date-picker
+        v-model="form.salary_inputs_effective_from" type="date"
+        placeholder="空白＝今天" style="width:100%"
+        value-format="YYYY-MM-DD" clearable
+        :disabled-date="isFutureDate"
+        data-test="salary-inputs-effective-from"
+      />
+      <div class="hint" style="text-align:left">
+        投保級距、眷屬人數、健保身分等若從過去某月就該生效（例：眷屬 115.07 起），填該日；
+        重算未封存的過去月份會依此套用，已封存月份請用薪資「保費追溯調整」補收／退回。
+      </div>
+    </el-form-item>
+
     <!-- 勞退自提 -->
     <el-form-item label="勞退自提（%）" prop="pension_self_rate">
         <template v-if="isReadonly">
@@ -173,7 +217,7 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
 
     <!-- 進階特殊投保／獎金狀態（預設摺疊，僅特殊個案需設定）-->
     <FormSection data-test="section-advanced" title="進階特殊狀況" collapsible :default-open="false" style="margin-top: 12px;">
-        <div class="form-hint" style="margin-bottom: 8px;">免就保 / 健保豁免 / 不發紅利 / 分項投保 / 個人合約底薪</div>
+        <div class="form-hint" style="margin-bottom: 8px;">不投保 / 免就保 / 健保豁免 / 不發紅利 / 分項投保 / 個人合約底薪</div>
 
         <!-- 計薪行為旗標 -->
         <el-row :gutter="20">
@@ -200,7 +244,7 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
             <el-col :span="6">
                 <el-form-item>
                     <template #label>
-                        <el-tooltip content="業主指示不發紅利/節慶/超額/生日禮金；保險仍計算" placement="top">
+                        <el-tooltip content="業主指示不發紅利/節慶/超額/主管紅利/績效/特別獎金；生日禮金照發，保險仍計算" placement="top">
                             <span>不發獎金</span>
                         </el-tooltip>
                     </template>
@@ -215,6 +259,45 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
                         </el-tooltip>
                     </template>
                     <el-switch v-model="form.bypass_standard_base" :disabled="isReadonly" />
+                </el-form-item>
+            </el-col>
+        </el-row>
+
+        <!-- 義華 R2 #42：不投保（承攬／自行投保）——整段勞健保、勞退歸 0，與免就保／健保豁免不同 -->
+        <el-row :gutter="20">
+            <el-col :span="24">
+                <el-form-item>
+                    <template #label>
+                        <el-tooltip content="承攬人員或自行在外投保者：公司不投保勞保、健保、勞退" placement="top">
+                            <span>不投保（承攬／自行投保）</span>
+                        </el-tooltip>
+                    </template>
+                    <el-switch v-model="form.not_insured" :disabled="isReadonly" data-test="not-insured" />
+                    <div class="form-hint" style="width: 100%;">
+                        勾選後勞保、健保、勞退（雇主與自提）一律 0；兼職所得單月達 29,500 仍扣二代健保補充保費
+                    </div>
+                </el-form-item>
+            </el-col>
+        </el-row>
+
+        <!-- #36 健保本人自付比例：只縮放本人份，眷屬份與雇主負擔照計（與健保豁免不同） -->
+        <el-row :gutter="20">
+            <el-col :span="24">
+                <el-form-item>
+                    <template #label>
+                        <el-tooltip
+                            content="中低收入等本人自付補助：只減本人那一份，眷屬照人數計、雇主負擔照計。眷屬免繳請把眷屬人數設 0。"
+                            placement="top"
+                        >
+                            <span>健保本人自付</span>
+                        </el-tooltip>
+                    </template>
+                    <span v-if="isReadonly" class="readonly-text">{{ healthSelfRatioText }}</span>
+                    <el-radio-group v-else v-model="healthSelfRatioModel" data-test="health-self-pay-ratio">
+                        <el-radio-button v-for="opt in HEALTH_SELF_RATIO_OPTIONS" :key="opt.value" :value="opt.value">
+                            {{ opt.label }}
+                        </el-radio-button>
+                    </el-radio-group>
                 </el-form-item>
             </el-col>
         </el-row>

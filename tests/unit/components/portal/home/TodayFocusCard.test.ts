@@ -72,20 +72,22 @@ describe('TodayFocusCard — 現在該做', () => {
     expect(wrapper.find('.today-focus__strip').exists()).toBe(true)
   })
 
-  it('(c) counts 計數列只列 >0 類別，點擊 emit open-hub', async () => {
+  it('(c) counts 計數列只列 >0 類別，每個晶片直接 emit open-task(該類別)', async () => {
     const wrapper = doMount()
     const strip = wrapper.find('.today-focus__strip')
     expect(strip.exists()).toBe(true)
     const stripText = strip.text()
-    expect(stripText).toContain('到園點名')
+    expect(stripText).toContain('學生點名')
     expect(stripText).toContain('4')
     expect(stripText).toContain('用藥')
     expect(stripText).toContain('聯絡簿')
     expect(stripText).toContain('17')
     expect(stripText).not.toContain('課堂觀察')
 
-    await strip.trigger('click')
-    expect(wrapper.emitted('open-hub')).toBeTruthy()
+    // 2026-10-12 業主裁定：晶片是捷徑，點了直接進該頁（不再只是捲到功能格）
+    await wrapper.get('[data-test="focus-chip-contact_books_pending"]').trigger('click')
+    expect(wrapper.emitted('open-task')).toEqual([['contact_books_pending']])
+    expect(wrapper.find('[data-test="focus-chip-observations_pending"]').exists()).toBe(false)
 
     const allZero = doMount({
       counts: {
@@ -105,5 +107,22 @@ describe('TodayFocusCard — 現在該做', () => {
     expect(done.text()).not.toMatch(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/u)
     const pending = doMount({ next: null })
     expect(pending.text()).not.toMatch(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/u)
+  })
+
+  // 2026-10-12 業主裁定：過敏與連續缺席提醒原本排在補休結餘之後（手機約 1650px），
+  // 第一屏看不到；有提醒時在「現在該做」加一行摘要，點了捲到班級提醒。
+  it('(d) 有過敏或連續缺席時多一行安全摘要，點擊 emit open-safety；沒有就不出現', async () => {
+    const wrapper = doMount({ safety: { allergies: 3, absences: 1 } })
+    const line = wrapper.get('[data-test="focus-safety"]')
+    expect(line.text()).toContain('過敏注意 3 位')
+    expect(line.text()).toContain('連續缺席 1 位')
+    await line.trigger('click')
+    expect(wrapper.emitted('open-safety')).toBeTruthy()
+
+    const onlyAllergy = doMount({ safety: { allergies: 2, absences: 0 } })
+    expect(onlyAllergy.get('[data-test="focus-safety"]').text()).not.toContain('連續缺席')
+
+    expect(doMount({ safety: { allergies: 0, absences: 0 } }).find('[data-test="focus-safety"]').exists()).toBe(false)
+    expect(doMount().find('[data-test="focus-safety"]').exists()).toBe(false)
   })
 })

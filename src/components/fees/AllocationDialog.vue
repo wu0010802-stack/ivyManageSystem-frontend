@@ -213,14 +213,18 @@ function addPart() {
 
 watch(
   () => [props.visible, props.txn?.id] as const,
-  async ([visible, txnId]) => {
-    if (!visible || !txnId) return
+  async ([visible, txnId], _previous, onCleanup) => {
+    let active = true
+    onCleanup(() => { active = false })
     parts.value = []
     candidates.value = null
+    if (!visible || !txnId) return
     try {
-      candidates.value = (await getTransactionCandidates(txnId)) as Candidates
+      const result = await getTransactionCandidates(txnId)
+      if (!active) return
+      candidates.value = result as Candidates
     } catch (e) {
-      ElMessage.error(friendlyError('載入媒合候選失敗', e))
+      if (active) ElMessage.error(friendlyError('載入媒合候選失敗', e))
     }
   },
   { immediate: true },

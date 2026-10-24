@@ -79,7 +79,7 @@
 
         <el-dropdown trigger="click" @command="handleCommand">
           <button type="button" class="user-profile" aria-label="開啟帳號選單">
-            <el-avatar :size="36" class="user-avatar" icon="UserFilled" />
+            <el-avatar :size="36" class="user-avatar" :icon="UserFilled" />
             <div class="user-info">
               <span class="user-name">{{ displayName }}</span>
               <span class="user-role">
@@ -168,7 +168,7 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Monitor, Search, Setting, SwitchButton, User, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
+import { Monitor, Search, Setting, SwitchButton, User, UserFilled, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo, hasPermission } from '@/utils/auth'
@@ -464,6 +464,8 @@ const handleCommand = (command: string) => {
   gap: 5px;
   width: var(--touch-target-min);
   height: var(--touch-target-min);
+  /* 長頁名會把 header-left 擠滿，不鎖住會被壓到 21–34px 寬 */
+  flex: 0 0 auto;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -557,6 +559,16 @@ const handleCommand = (command: string) => {
   .page-title {
     font-size: var(--text-lg);
     padding: 2px 4px;
+  }
+
+  /* 漢堡鍵本身已有留白，間距收窄把寬度還給頁名 */
+  .header-left {
+    gap: var(--space-1);
+  }
+
+  /* 返回上層連結：文字只有 24px 高，撐滿觸控高度（header 64px 容得下） */
+  .page-title__parent {
+    min-height: var(--touch-target-min);
   }
 
   .page-title__parent-text {

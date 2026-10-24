@@ -4,17 +4,20 @@ import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { Check, Refresh } from '@element-plus/icons-vue'
 import { getSystemConfig, updateSystemConfig } from '@/api/systemConfig'
-import { hasPermission } from '@/utils/auth'
+import { hasPermission, isSuperAdmin } from '@/utils/auth'
 import {
   SYSTEM_CONFIG_SECTIONS,
   ALL_SYSTEM_CONFIG_FIELDS,
+  SUPER_ADMIN_ONLY_CONFIG_KEYS,
   type SystemConfigFieldDef,
   type SystemConfigFieldType,
+  type SystemConfigOption,
 } from '@/constants/onboardingSystemConfigs'
 import {
   normalizeConfigBoolean,
   booleanToConfigValue,
   looksLikeJsonArray,
+  configValueError,
 } from '@/utils/systemConfigFormat'
 
 interface ConfigRow {
@@ -23,6 +26,7 @@ interface ConfigRow {
   hint?: string
   type: SystemConfigFieldType
   warnJsonArray: boolean
+  options: SystemConfigOption[]
   /** 目前已存的值（DB 或 404 時視同空字串）；用來比對是否變更。 */
   config_value: string
   /** true = DB 尚未有此 key（含 404），顯示「尚未設定」；非錯誤狀態。 */
@@ -41,6 +45,12 @@ interface ConfigSectionRows {
 }
 
 const canEdit = ref(hasPermission('SETTINGS_WRITE'))
+const superAdmin = ref(isSuperAdmin())
+
+/** 內控／安全邊界 key（後端 INTERNAL_CONTROL_CONFIG_KEYS）寫入另需超級管理員，否則後端 403。 */
+const requiresSuperAdmin = (row: ConfigRow): boolean => SUPER_ADMIN_ONLY_CONFIG_KEYS.has(row.key)
+const isLockedBySuperAdmin = (row: ConfigRow): boolean => requiresSuperAdmin(row) && !superAdmin.value
+const canEditRow = (row: ConfigRow): boolean => canEdit.value && !isLockedBySuperAdmin(row)
 
 const sections = ref<ConfigSectionRows[]>([])
 const loading = ref(false)
@@ -58,6 +68,7 @@ const buildRow = (
     hint: def.hint,
     type: def.type,
     warnJsonArray: !!def.warnJsonArray,
+    options: def.options ?? [],
     config_value: value,
     is_default: data ? !!data.is_default : true,
     loadError,
@@ -114,8 +125,17 @@ const isRowDirty = (row: ConfigRow): boolean =>
 const showJsonWarning = (row: ConfigRow): boolean =>
   row.warnJsonArray && looksLikeJsonArray(row._editValue)
 
+/** select／month／date 欄位的前端格式檢核（與後端 400 條件對齊）；null＝可送出。 */
+const rowValueError = (row: ConfigRow): string | null =>
+  row.type === 'switch' ? null : configValueError(row.type, row._editValue, row.options.map((o) => o.value))
+
 const saveConfig = async (row: ConfigRow) => {
-  if (!isRowDirty(row)) return
+  if (!canEditRow(row) || !isRowDirty(row)) return
+  const invalid = rowValueError(row)
+  if (invalid) {
+    ElMessage.warning(`「${row.label}」${invalid}`)
+    return
+  }
   savingKey.value = row.key
   try {
     const valueToSend = row.type === 'switch' ? booleanToConfigValue(row._editBool) : row._editValue
@@ -155,7 +175,7 @@ onMounted(() => {
         </div>
       </template>
 
-      <div v-for="row in section.rows" :key="row.key" class="config-row">
+      <div v-for="row in section.rows" :key="row.key" class="config-row" :data-test="`config-row-${row.key}`">
         <div class="config-row__label">
           <b>{{ row.label }}</b>
           <div class="config-row__meta">
@@ -166,20 +186,59 @@ onMounted(() => {
             <el-tag v-if="row.loadError" type="danger" size="small" style="margin-left: 6px;">
               載入失敗
             </el-tag>
+            <el-tag v-if="canEdit && isLockedBySuperAdmin(row)" type="warning" size="small" style="margin-left: 6px;">
+              需超級管理員
+            </el-tag>
           </div>
           <div v-if="row.hint" class="config-row__hint">{{ row.hint }}</div>
+          <div v-if="canEdit && isLockedBySuperAdmin(row)" class="config-row__hint">
+            此項為內控／安全邊界設定，需超級管理員才能調整；目前僅供檢視。
+          </div>
         </div>
 
         <div class="config-row__input">
           <el-switch
             v-if="row.type === 'switch'"
             v-model="row._editBool"
-            :disabled="!canEdit"
+            :disabled="!canEditRow(row)"
           />
+          <el-select
+            v-else-if="row.type === 'select'"
+            v-model="row._editValue"
+            :disabled="!canEditRow(row)"
+            placeholder="尚未設定"
+            style="width: 100%; max-width: 320px;"
+          >
+            <el-option v-for="opt in row.options" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+          <template v-else-if="row.type === 'month'">
+            <el-date-picker
+              v-model="row._editValue"
+              type="month"
+              value-format="YYYY-MM"
+              format="YYYY-MM"
+              :disabled="!canEditRow(row)"
+              :clearable="false"
+              placeholder="尚未設定"
+              style="width: 200px;"
+            />
+          </template>
+          <template v-else-if="row.type === 'date'">
+            <el-date-picker
+              v-model="row._editValue"
+              type="date"
+              value-format="YYYY-MM-DD"
+              format="YYYY-MM-DD"
+              :disabled="!canEditRow(row)"
+              :clearable="false"
+              placeholder="尚未設定"
+              style="width: 200px;"
+            />
+          </template>
           <template v-else>
             <el-input
               v-model="row._editValue"
-              :disabled="!canEdit"
+              :disabled="!canEditRow(row)"
               placeholder="尚未設定"
             />
             <div v-if="showJsonWarning(row)" class="json-warning">
@@ -190,16 +249,16 @@ onMounted(() => {
 
         <div class="config-row__actions">
           <el-button
-            v-if="canEdit"
+            v-if="canEditRow(row)"
             type="primary"
             size="small"
             :icon="Check"
-            :disabled="!isRowDirty(row)"
+            :disabled="!isRowDirty(row) || !!rowValueError(row)"
             :loading="savingKey === row.key"
             @click="saveConfig(row)"
           >儲存</el-button>
           <el-button
-            v-if="canEdit && isRowDirty(row)"
+            v-if="canEditRow(row) && isRowDirty(row)"
             size="small"
             :icon="Refresh"
             @click="resetConfig(row)"

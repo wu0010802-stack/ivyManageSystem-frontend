@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import ElementPlus, { ElMessageBox } from "element-plus";
+import ElementPlus, { ElMessage, ElMessageBox } from "element-plus";
 
 vi.spyOn(ElMessageBox, "confirm").mockResolvedValue("confirm" as any);
+vi.spyOn(ElMessage, "error").mockReturnValue({ close: vi.fn() } as never);
 
 vi.mock("@/api/audit", () => ({
   getHighRiskAudits: vi.fn(),
@@ -15,6 +16,7 @@ import GovernanceHighRiskView from "@/views/governance/GovernanceHighRiskView.vu
 
 describe("GovernanceHighRiskView", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(getHighRiskAudits).mockResolvedValue({
       data: {
         items: [
@@ -56,6 +58,26 @@ describe("GovernanceHighRiskView", () => {
     // ElMessageBox.confirm is mocked or auto-confirmed
     await flushPromises();
     expect(ackAllAudits).toHaveBeenCalled();
+  });
+
+  it("單筆 ack 失敗時顯示錯誤且不留下未處理 rejection", async () => {
+    vi.mocked(ackAudit).mockRejectedValueOnce(new Error("network"));
+    const wrapper = mount(GovernanceHighRiskView, { global: { plugins: [ElementPlus] } });
+    await flushPromises();
+    const vm = wrapper.vm as unknown as { onAck: (id: number) => Promise<void> };
+
+    await expect(vm.onAck(1)).resolves.toBeUndefined();
+    expect(ElMessage.error).toHaveBeenCalled();
+  });
+
+  it("全部 ack API 失敗時與使用者取消有別，必須顯示錯誤", async () => {
+    vi.mocked(ackAllAudits).mockRejectedValueOnce(new Error("network"));
+    const wrapper = mount(GovernanceHighRiskView, { global: { plugins: [ElementPlus] } });
+    await flushPromises();
+    const vm = wrapper.vm as unknown as { onAckAll: () => Promise<void> };
+
+    await vm.onAckAll();
+    expect(ElMessage.error).toHaveBeenCalled();
   });
 
   it("empty state 顯示", async () => {

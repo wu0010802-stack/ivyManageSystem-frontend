@@ -55,6 +55,7 @@ const STUBS = {
   YearEndGridView: { template: '<div data-test="stub-grid" />' },
   YearEndDetailView: { template: '<div data-test="stub-detail" />' },
   AppraisalPayoutView: { template: '<div data-test="stub-payout" />' },
+  YearEnd0315Panel: { template: '<div data-test="stub-0315" />' },
 }
 
 async function mountShell() {

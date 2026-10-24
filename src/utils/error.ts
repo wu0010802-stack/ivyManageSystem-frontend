@@ -27,6 +27,22 @@ export function apiError(error: unknown, fallback = '操作失敗') {
 }
 
 /**
+ * 非 axios 的本機錯誤訊息（例：openPdfInNewTab 被彈出視窗封鎖時丟的
+ * `Error('瀏覽器封鎖了新分頁，請允許彈出視窗')`）。
+ *
+ * apiError 只讀 interceptor 的 displayMessage 與 response，會把這類訊息吞成 fallback；
+ * notify 則因為沒有 response 把它當成網路錯誤。axios 錯誤（有 response 或
+ * isAxiosError）或沒有可顯示的訊息時回 null，讓呼叫端照原本的流程處理。
+ */
+export function localErrorMessage(error: unknown): string | null {
+    if (!error || typeof error !== 'object') return null
+    const e = error as { response?: unknown; isAxiosError?: unknown; message?: unknown }
+    if (e.response !== undefined || e.isAxiosError === true) return null
+    const message = typeof e.message === 'string' ? e.message.trim() : ''
+    return message || null
+}
+
+/**
  * 提取結構化 detail 的 error_code（後端 pickup 授權家族回
  * `detail: {error_code, detail}`，與 BusinessError 的 `{code, message}` 形狀不同）。
  * 供呼叫端做錯誤分支判斷（例如 code_locked 切人工核對模式）。

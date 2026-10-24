@@ -49,6 +49,8 @@ const GLOBAL_STUBS = {
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-input': { template: '<input v-bind="$attrs" />' },
   'el-date-picker': { template: '<input v-bind="$attrs" />' },
+  'el-select': { template: '<div v-bind="$attrs"><slot /></div>' },
+  'el-option': { props: ['label'], template: '<span>{{ label }}</span>' },
   'el-descriptions': { template: '<div v-bind="$attrs"><slot /></div>' },
   'el-descriptions-item': {
     props: ['label'],
@@ -59,6 +61,7 @@ const GLOBAL_STUBS = {
   'el-pagination': { template: '<div />' },
   'el-dialog': { template: '<div v-bind="$attrs"><slot /><slot name="footer" /></div>' },
   CollectionAllocationDialog: true,
+  CollectionBatchDrawer: true,
   EmptyState: {
     props: ['title', 'description'],
     template:
@@ -75,10 +78,15 @@ const PAYMENT = {
   net_amount: 10798,
   fee_amount: 2,
   collection_suffix: '1104',
+  full_collection_number: null as string | null,
+  match_level: null as string | null,
+  match_reasons: [] as string[],
   bill_year: 2026,
   bill_month: 8,
   posting_date: '2026-08-10',
   expected_posting_date: '2026-08-10',
+  is_pending: false,
+  overdue_pending: false,
   occurrence_index: 0,
   reconciliation_status: 'imported',
   status_note: null,
@@ -86,7 +94,7 @@ const PAYMENT = {
   unallocated: 10800,
 }
 
-async function mountTab(payments = [PAYMENT]) {
+async function mountTab(payments = [PAYMENT], renderRows = false) {
   apiMocks.getCollectionPayments.mockResolvedValue({
     total: payments.length,
     page: 1,
@@ -94,7 +102,26 @@ async function mountTab(payments = [PAYMENT]) {
     items: payments,
   })
   const CollectionReconTab = (await import('../CollectionReconTab.vue')).default
-  const wrapper = mount(CollectionReconTab, { global: { stubs: GLOBAL_STUBS } })
+  const wrapper = mount(CollectionReconTab, {
+    global: {
+      directives: { loading: () => {} },
+      stubs: {
+        ...GLOBAL_STUBS,
+        ...(renderRows
+          ? {
+              'el-table-column': defineComponent({
+                props: ['label'],
+                setup(props, { slots }) {
+                  return () => h('section', { 'data-column': props.label },
+                    payments.map((row) => slots.default?.({ row })),
+                  )
+                },
+              }),
+            }
+          : {}),
+      },
+    },
+  })
   await nextTick()
   await nextTick()
   return wrapper
@@ -142,9 +169,12 @@ describe('CollectionReconTab 匯入', () => {
       decoded_count: 144,
       old_period_count: 2,
       duplicate_count: 0,
+      pending_count: 0,
+      backfill_count: 0,
       error_count: 0,
+      errors: [],
       already_imported: false,
-      parser_version: 'sinopac-collection-csv-v1',
+      parser_version: 'sinopac-collection-csv-v2',
     })
     const wrapper = await mountTab()
     const vm = wrapper.vm as unknown as {
@@ -203,5 +233,233 @@ describe('CollectionReconTab 存摺勾稽', () => {
     const vm = wrapper.vm as unknown as { runCoverage: (dry: boolean) => Promise<void> }
     await vm.runCoverage(true)
     expect(apiMocks.reconcileCollectionCoverage).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * 在途列（超商已收、銀行未撥）：舊版把「入帳日期」留白的列當錯誤丟掉，
+ * 2026-09-07 實檔 66 列中丟了 28 列（306,820 元）。
+ */
+describe('CollectionReconTab 在途列與錯誤列明細', () => {
+  const PREVIEW_BASE = {
+    statement_start: '2026-08-31',
+    statement_end: '2026-09-06',
+    row_count: 66,
+    gross_total: 728284,
+    net_total: 728224,
+    fee_total: 60,
+    decoded_count: 66,
+    old_period_count: 1,
+    duplicate_count: 0,
+    pending_count: 28,
+    backfill_count: 0,
+    error_count: 0,
+    errors: [] as { row_number: number; reason: string }[],
+    already_imported: false,
+    parser_version: 'sinopac-collection-csv-v2',
+  }
+
+  async function previewWith(overrides: Partial<typeof PREVIEW_BASE>) {
+    apiMocks.previewCollectionImport.mockResolvedValue({ ...PREVIEW_BASE, ...overrides })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      runPreview: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'CS_1.csv')
+    await vm.runPreview()
+    await nextTick()
+    return wrapper
+  }
+
+  it('預覽顯示尚未入帳筆數並提示會一併匯入', async () => {
+    const wrapper = await previewWith({})
+    expect(wrapper.find('[data-test="preview-pending-count"]').text()).toBe('28')
+    const hint = wrapper.find('[data-test="pending-rows-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.attributes('title')).toContain('28 筆')
+  })
+
+  it('沒有在途列時不顯示提示', async () => {
+    const wrapper = await previewWith({ pending_count: 0 })
+    expect(wrapper.find('[data-test="pending-rows-hint"]').exists()).toBe(false)
+  })
+
+  it('錯誤列可展開看原因（後端早就回 errors，只是沒畫出來）', async () => {
+    const wrapper = await previewWith({
+      error_count: 2,
+      errors: [
+        { row_number: 5, reason: '入帳日期格式錯誤' },
+        { row_number: 9, reason: '金額勾稽不符（金額 ≠ 入帳金額＋手續費）' },
+      ],
+    })
+    expect(wrapper.find('[data-test="error-rows"]').exists()).toBe(false)
+
+    await wrapper.find('[data-test="toggle-error-rows"]').trigger('click')
+    await nextTick()
+    const rows = wrapper.find('[data-test="error-rows"]')
+    expect(rows.exists()).toBe(true)
+    expect(rows.text()).toContain('入帳日期格式錯誤')
+  })
+
+  it('沒有錯誤列時不顯示展開按鈕', async () => {
+    const wrapper = await previewWith({})
+    expect(wrapper.find('[data-test="toggle-error-rows"]').exists()).toBe(false)
+  })
+
+  it('錯誤列超過 50 筆時說明只顯示前 50 列', async () => {
+    const errors = Array.from({ length: 50 }, (_, i) => ({
+      row_number: i + 2,
+      reason: '入帳日期格式錯誤',
+    }))
+    const wrapper = await previewWith({ error_count: 80, errors })
+    await wrapper.find('[data-test="toggle-error-rows"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="error-rows"]').text()).toContain('共 80 列')
+  })
+
+  it('preview 缺 errors 欄位（舊快取）不炸整頁', async () => {
+    const { errors: _drop, ...noErrors } = PREVIEW_BASE
+    apiMocks.previewCollectionImport.mockResolvedValue(noErrors)
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      runPreview: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'CS_1.csv')
+    await vm.runPreview()
+    await nextTick()
+    expect(wrapper.find('[data-test="import-preview"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="toggle-error-rows"]').exists()).toBe(false)
+  })
+
+  it('入帳狀態篩選帶進查詢參數', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      filters: { posting_state: string | null }
+      refetch: () => void
+    }
+    vm.filters.posting_state = 'overdue'
+    vm.refetch()
+    await nextTick()
+    const last = apiMocks.getCollectionPayments.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >
+    expect(last.posting_state).toBe('overdue')
+  })
+
+  it('清空入帳狀態就不帶該參數', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      filters: { posting_state: string | null }
+      refetch: () => void
+    }
+    vm.filters.posting_state = null
+    vm.refetch()
+    await nextTick()
+    const last = apiMocks.getCollectionPayments.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >
+    expect(last.posting_state).toBeUndefined()
+  })
+
+  it('已匯入過但仍有未收下的列時，提示會補進來而非「重送沒用」', async () => {
+    const wrapper = await previewWith({
+      already_imported: true,
+      row_count: 66,
+      duplicate_count: 38,
+    })
+    const alert = wrapper.find('[data-test="dup-import-alert"]')
+    expect(alert.attributes('title')).toContain('28 筆先前沒被收下')
+    expect(alert.attributes('type')).toBe('success')
+  })
+
+  it('已匯入且沒有新列時維持原本的「不會重複入帳」提示', async () => {
+    const wrapper = await previewWith({
+      already_imported: true,
+      row_count: 38,
+      duplicate_count: 38,
+    })
+    const alert = wrapper.find('[data-test="dup-import-alert"]')
+    expect(alert.attributes('title')).toContain('不會重複入帳')
+    expect(alert.attributes('type')).toBe('warning')
+  })
+
+  it('在途列標籤附預計入帳日，無預計日則只顯示未入帳', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pendingLabel: (row: { expected_posting_date: string | null }) => string
+    }
+    expect(vm.pendingLabel({ expected_posting_date: '2026-09-10' })).toBe(
+      '未入帳（預計 09-10）',
+    )
+    expect(vm.pendingLabel({ expected_posting_date: null })).toBe('未入帳')
+  })
+})
+
+
+describe('CollectionReconTab 完整銷帳碼與未媒合原因', () => {
+  it('列表一次取得媒合結果，保留完整銷帳碼的前導零', async () => {
+    const wrapper = await mountTab([{ ...PAYMENT, full_collection_number: '00998172001206' }], true)
+    expect(wrapper.get('[data-column="銷帳碼"]').text()).toBe('00998172001206')
+    expect(apiMocks.getCollectionPayments).toHaveBeenCalledWith(
+      expect.objectContaining({ include_match_details: true }),
+    )
+    expect(apiMocks.getCollectionCandidates).not.toHaveBeenCalled()
+  })
+
+  it('缺少完整碼明示未提供，不將末四碼當成完整碼', async () => {
+    const wrapper = await mountTab([PAYMENT], true)
+    expect(wrapper.get('[data-column="銷帳碼"]').text()).toContain('未提供')
+    expect(wrapper.get('[data-column="銷帳碼"]').text()).toContain('末四碼 1104')
+  })
+
+  it('逐條呈現後端原因，不用匯入備註冒充媒合結果', async () => {
+    const wrapper = await mountTab([{
+      ...PAYMENT,
+      match_level: 'manual',
+      match_reasons: ['找不到未繳帳單', '請確認帳單期別'],
+      status_note: '匯入備註',
+    }], true)
+    const cell = wrapper.get('[data-column="未媒合原因"]')
+    expect(cell.text()).toContain('找不到未繳帳單')
+    expect(cell.text()).toContain('請確認帳單期別')
+    expect(cell.text()).not.toContain('匯入備註')
+    expect(cell.findAll('[data-test="match-reason"]')).toHaveLength(2)
+  })
+
+  it('高信心候選標示可自動媒合，沒有結果不冒稱媒合失敗', async () => {
+    const auto = await mountTab([{ ...PAYMENT, match_level: 'auto_high', match_reasons: ['金額符合'] }], true)
+    expect(auto.get('[data-column="未媒合原因"]').text()).toContain('可自動媒合／待確認')
+    const unknown = await mountTab([PAYMENT], true)
+    expect(unknown.get('[data-column="未媒合原因"]').text()).toBe('尚未取得媒合結果')
+  })
+
+  it.each(['allocated', 'reversed'])('完成狀態 %s 不顯示失敗原因', async (status) => {
+    const wrapper = await mountTab([{ ...PAYMENT, reconciliation_status: status, match_reasons: ['先前原因'] }], true)
+    expect(wrapper.get('[data-column="未媒合原因"]').text()).toBe('—')
+  })
+
+  it('部分分配仍呈現目前剩餘款項的媒合原因', async () => {
+    const wrapper = await mountTab([{
+      ...PAYMENT,
+      reconciliation_status: 'partially_allocated',
+      match_level: 'manual',
+      match_reasons: ['剩餘金額與候選帳單不符'],
+    }], true)
+    expect(wrapper.get('[data-column="未媒合原因"]').text()).toBe('剩餘金額與候選帳單不符')
+  })
+
+  it('保留末四碼篩選並持續要求列表媒合結果', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as { filters: { suffix: string }; refetch: () => void }
+    vm.filters.suffix = '1206'
+    vm.refetch()
+    await nextTick()
+    expect(apiMocks.getCollectionPayments).toHaveBeenLastCalledWith(
+      expect.objectContaining({ suffix: '1206', include_match_details: true }),
+    )
   })
 })

@@ -46,10 +46,10 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm
@@ -76,10 +76,10 @@ jobs:
         shard: [1, 2]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm
@@ -94,12 +94,13 @@ jobs:
         # 供 --merge-reports 重算整體覆蓋率（本地已實證兩端行為）。
         run: |
           npx vitest run --shard=${{ matrix.shard }}/2 \
-            --reporter=blob --coverage --coverage.reporter=text-summary \
+            --reporter=default --reporter=blob --coverage --coverage.reporter=text-summary \
             --coverage.thresholds.statements=0 --coverage.thresholds.branches=0 \
             --coverage.thresholds.functions=0 --coverage.thresholds.lines=0
 
       - name: Upload blob report（分片 ${{ matrix.shard }}）
-        uses: actions/upload-artifact@v7
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2（原 @v7）
         with:
           name: vitest-blob-${{ matrix.shard }}
           path: .vitest-reports/
@@ -114,10 +115,10 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm
@@ -126,7 +127,7 @@ jobs:
         run: npm ci
 
       - name: Download all blob reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0（原 @v4）
         with:
           pattern: vitest-blob-*
           path: .vitest-reports
@@ -145,10 +146,10 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm
@@ -170,6 +171,11 @@ jobs:
 
       - name: 錯誤處理棘輪（直讀 response.data.detail 只准降不准升）
         run: npm run check:error-detail
+
+      # 表單 dialog 棘輪：裸 el-dialog 表單／label-width／硬寫 px 寬度／新增鈕誤用 success 或「＋」
+      # 只准降不准升；新表單一律 FormDialog（spec 2026-09-06-admin-form-dialog-defaults）。
+      - name: 表單 dialog 棘輪（FormDialog 採用、label-width、px 寬度、按鈕誤用）
+        run: npm run check:form-dialogs
 
       # 可點擊但 Tab 不到的元素（div/li @click 沒補 role/tabindex/keydown）。
       # 存量分三類、修法各不同，見腳本頂部註解。
@@ -202,12 +208,21 @@ jobs:
 
     steps:
       - name: Checkout ivy-frontend
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
         with:
           path: ivy-frontend
 
+      - name: 檢查後端 repo 唯讀憑證
+        env:
+          BACKEND_REPO_TOKEN: ${{ secrets.BACKEND_REPO_TOKEN }}
+        run: |
+          if ! test -n "$BACKEND_REPO_TOKEN"; then
+            echo "::error::請設定 BACKEND_REPO_TOKEN：僅授予 ivyManageSystem-backend Contents: Read 的 fine-grained PAT，存入前端 repository Actions secret。"
+            exit 1
+          fi
+
       - name: Checkout ivy-backend (sibling)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1（原 @v7）
         with:
           repository: ${{ github.repository_owner }}/ivyManageSystem-backend
           path: ivy-backend
@@ -215,25 +230,32 @@ jobs:
           # repo——這一步從設定之初就一直失敗，後面 8 個步驟全被 skip，等於這個
           # gate 從未真正跑過。需要一顆對 ivyManageSystem-backend 有 Contents:
           # Read 的 fine-grained PAT，存成本 repo 的 BACKEND_REPO_TOKEN secret。
-          # 尚未設定時回退到預設 token，行為與現況相同（不會更糟）。
-          token: ${{ secrets.BACKEND_REPO_TOKEN || github.token }}
+          token: ${{ secrets.BACKEND_REPO_TOKEN }}
 
+      # 後端版本選擇順序：同名分支 → PR 的 base 分支 → 後端 main。
+      # 前端 feature 分支打進 staging 時，後端通常沒有同名分支；若直接退回後端 main，
+      # 會拿 main 的 API 去比對依後端 staging 產生的 schema.d.ts，必定漂移
+      # （2026-10 feat/mobile-ux-phase3、feat/parent-uiux-optimization 皆因此紅燈）。
+      # push 事件沒有 base_ref，行為與改動前相同。
       - name: Prefer companion backend ref when it exists
         working-directory: ivy-backend
         env:
           CANDIDATE_REF: ${{ github.head_ref || github.ref_name }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          if [ -n "${CANDIDATE_REF:-}" ] && \
-             git fetch --no-tags origin "refs/heads/${CANDIDATE_REF}:refs/remotes/origin/companion"; then
-            git checkout --detach refs/remotes/origin/companion
-            echo "Using companion backend ref: ${CANDIDATE_REF}"
-          else
-            echo "Companion backend ref unavailable; using backend main"
-          fi
+          for ref in "${CANDIDATE_REF:-}" "${BASE_REF:-}"; do
+            if [ -n "$ref" ] && \
+               git fetch --no-tags origin "refs/heads/${ref}:refs/remotes/origin/companion"; then
+              git checkout --detach refs/remotes/origin/companion
+              echo "Using companion backend ref: ${ref}"
+              exit 0
+            fi
+          done
+          echo "Companion backend ref unavailable; using backend main"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0（原 @v6）
         with:
           python-version: "3.13"
           cache: pip
@@ -252,7 +274,7 @@ jobs:
         run: python scripts/dump_openapi.py
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0（原 @v6）
         with:
           node-version: "24"
           cache: npm

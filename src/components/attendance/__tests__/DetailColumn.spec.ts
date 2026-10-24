@@ -1,7 +1,8 @@
 // src/components/attendance/__tests__/DetailColumn.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { mount, flushPromises } from '@vue/test-utils'
+import { computed, nextTick } from 'vue'
+import { GRID_VERDICT_KEY, type GridVerdictLookup } from '@/composables/useGridVerdict'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 // ── hoisted mocks ─────────────────────────────────────────────────────────────
@@ -29,6 +30,8 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }))
 
+vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn(() => true) }))
+import { hasPermission } from '@/utils/auth'
 import { ElMessage } from 'element-plus'
 import DetailColumn from '../DetailColumn.vue'
 
@@ -66,7 +69,7 @@ const missingContext = {
 // ResolveCard stub that exposes a way to emit 'resolve' and 'navigate'
 const ResolveCardStub = {
   name: 'ResolveCard',
-  props: ['item', 'index', 'total', 'context'],
+  props: ['item', 'index', 'total', 'context', 'acceptWarning'],
   emits: ['resolve', 'navigate'],
   template: `
     <div class="resolve-card-stub">
@@ -159,15 +162,27 @@ describe('DetailColumn', () => {
 
   // ── mode=resolve + anomaly=null → 空狀態 ────────────────────────────────────
   describe('mode=resolve, anomaly=null', () => {
-    it('shows 異常已清空 empty state', () => {
+    it('無異常不代表資料已完整核對', () => {
       const wrapper = mountDetail({ anomaly: null })
-      expect(wrapper.text()).toContain('異常已清空')
+      expect(wrapper.text()).not.toContain('異常已清空')
+      expect(wrapper.text()).toContain('不代表整月打卡資料已齊全')
     })
 
     it('does NOT render ResolveCard when anomaly is null', () => {
       const wrapper = mountDetail({ anomaly: null })
       expect(wrapper.find('.resolve-card-stub').exists()).toBe(false)
     })
+  })
+
+  it('空態提供匯入入口並沿用出勤寫入權限', async () => {
+    const wrapper = mountDetail({ anomaly: null })
+    await wrapper.findAll('button').find(button => button.text() === '匯入打卡紀錄')!.trigger('click')
+    expect(wrapper.emitted('import')).toHaveLength(1)
+    wrapper.unmount()
+    vi.mocked(hasPermission).mockReturnValueOnce(false)
+    const readOnly = mountDetail({ anomaly: null })
+    expect(readOnly.text()).not.toContain('匯入打卡紀錄')
+    readOnly.unmount()
   })
 
   // ── mode=month ────────────────────────────────────────────────────────────────
@@ -182,15 +197,13 @@ describe('DetailColumn', () => {
       expect(wrapper.find('.resolve-card-stub').exists()).toBe(false)
     })
 
-    it('has a "回佇列" button that emits switchMode("resolve")', async () => {
+    it('整月模式可要求開啟異常清單', async () => {
       const wrapper = mountDetail({ mode: 'month' })
       const btns = wrapper.findAll('button')
-      const btn = btns.find((b) => b.text().includes('回佇列'))
+      const btn = btns.find((b) => b.text().includes('開啟異常清單'))
       expect(btn).toBeTruthy()
       await btn!.trigger('click')
-      const emitted = wrapper.emitted('switchMode')
-      expect(emitted).toBeTruthy()
-      expect(emitted![0][0]).toBe('resolve')
+      expect(wrapper.emitted('anomalies')).toHaveLength(1)
     })
   })
 
@@ -224,7 +237,7 @@ describe('DetailColumn', () => {
       await card.vm.$emit('resolve', { action: 'admin_accept' })
       await nextTick()
       await nextTick()
-      expect(mockElMessageSuccess).toHaveBeenCalledWith('已處理')
+      expect(mockElMessageSuccess).toHaveBeenCalledWith('已接受扣款')
     })
 
     it('calls notify and does NOT emit navigate on failure', async () => {
@@ -366,8 +379,51 @@ describe('DetailColumn — mutation in-flight（P1-4）', () => {
     expect(probe.attributes('data-busy')).toBe('true')
 
     release({ data: {} })
-    await nextTick()
-    await nextTick()
+    await flushPromises() // 送出完成後還要等呼叫端的刷新（useResolveAnomaly 的 onDone）
     expect(probe.attributes('data-busy')).toBe('false')
+  })
+})
+
+describe('DetailColumn — 打卡紀錄重試（QA #22）', () => {
+  it('ResolveCard 要求重試時往上送 retryRecords', async () => {
+    const w = mountDetail({})
+    w.findComponent({ name: 'ResolveCard' }).vm.$emit('retry')
+    await w.vm.$nextTick()
+    expect(w.emitted('retryRecords')).toHaveLength(1)
+  })
+})
+
+describe('DetailColumn — 並列班表核對的判定（第五輪審查）', () => {
+  const mountWith = (lookup: GridVerdictLookup) => mount(DetailColumn, {
+    props: { mode: 'resolve', anomaly: anomalyItem, anomalyIndex: 0, anomalyTotal: 1, context: defaultContext, employeeId: 99, year: 2026, month: 6 },
+    global: { stubs, provide: { [GRID_VERDICT_KEY as symbol]: computed(() => lookup) } },
+  })
+
+  it('班表核對判定是疑似換班：提醒先去確認當日班別、不要在這裡接受扣款，並可跳過去', async () => {
+    const w = mountWith(() => ({ label: '疑似換班', status: 'possible_shift_change', acceptWarning: null }))
+    const note = w.get('[data-test="detail-grid-shift-change"]')
+    expect(note.text()).toContain('不要在這裡接受扣款')
+    await note.get('[data-test="detail-open-grid"]').trigger('click')
+    expect(w.emitted('openGrid')![0]).toEqual([99, anomalyItem.date])
+    // 卡片的接受扣款也先問（文字提醒之外，一鍵送出擋一下）
+    expect(w.findComponent(ResolveCardStub).props('acceptWarning')).toContain('現在接受扣款會照原班別扣薪')
+  })
+
+  it('遲到早退兩邊說的是同一件事：不重複寫；符合型態的格子把接受扣款前的提醒交給卡片', () => {
+    const w = mountWith(() => ({ label: '遲到 57 分・早退 342 分', status: 'anomaly', acceptWarning: '可能是設定問題' }))
+    expect(w.find('[data-test="detail-grid-verdict"]').exists()).toBe(false)
+    expect(w.find('[data-test="detail-grid-shift-change"]').exists()).toBe(false)
+    expect(w.findComponent(ResolveCardStub).props('acceptWarning')).toBe('可能是設定問題')
+  })
+
+  it('明細看不出的判定（例如資料待補）並列一行', () => {
+    const w = mountWith(() => ({ label: '資料待補', status: 'data_incomplete', acceptWarning: null }))
+    expect(w.get('[data-test="detail-grid-verdict"]').text()).toBe('班表核對：資料待補')
+  })
+
+  it('沒有提供班表核對時不顯示，提醒為 null', () => {
+    const w = mountDetail({})
+    expect(w.find('[data-test="detail-grid-verdict"]').exists()).toBe(false)
+    expect(w.findComponent(ResolveCardStub).props('acceptWarning')).toBeNull()
   })
 })

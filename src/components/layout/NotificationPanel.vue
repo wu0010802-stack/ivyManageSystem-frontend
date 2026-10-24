@@ -12,7 +12,7 @@
           <span class="nf-hero__num">{{ badgeCount }}</span>
           <span class="nf-hero__unit">項待處理</span>
         </div>
-        <div class="nf-hero__hint">審核、家長提問與提醒都會集中在這裡。</div>
+        <div class="nf-hero__hint">審核、待辦與提醒都會集中在這裡。</div>
       </div>
 
       <div v-if="actionItems.length" class="nf-section">
@@ -80,7 +80,7 @@
 import { computed, markRaw } from 'vue'
 import {
   ArrowRight, Bell,
-  Document, Message, Calendar, User,
+  Document, Message, Calendar, User, Switch,
 } from '@element-plus/icons-vue'
 
 export interface NotificationItem {
@@ -121,6 +121,7 @@ const itemMeta: Record<string, { icon: object; tone: string }> = {
   activity_inquiry: { icon: markRaw(Message), tone: 'warning' },
   calendar: { icon: markRaw(Calendar), tone: 'primary' },
   probation: { icon: markRaw(User), tone: 'success' },
+  swap_recent: { icon: markRaw(Switch), tone: 'primary' },
 }
 
 const priorityLabel: Record<string, string> = {

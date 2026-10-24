@@ -37,6 +37,9 @@ interface ExistingRule {
     warning_delta?: number
     minor_delta?: number
     major_delta?: number
+    commend_delta?: number
+    minor_merit_delta?: number
+    major_merit_delta?: number
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -109,6 +112,9 @@ interface RuleForm {
   warning_delta: number
   minor_delta: number
   major_delta: number
+  commend_delta: number
+  minor_merit_delta: number
+  major_merit_delta: number
   notes: string
 }
 
@@ -124,6 +130,9 @@ const DEFAULT_FORM = (): RuleForm => ({
   warning_delta: 0,
   minor_delta: 0,
   major_delta: 0,
+  commend_delta: 0,
+  minor_merit_delta: 0,
+  major_merit_delta: 0,
   notes: '',
 })
 
@@ -156,6 +165,9 @@ watch(
       form.value.warning_delta = Number(r.rule_config?.warning_delta ?? 0)
       form.value.minor_delta = Number(r.rule_config?.minor_delta ?? 0)
       form.value.major_delta = Number(r.rule_config?.major_delta ?? 0)
+      form.value.commend_delta = Number(r.rule_config?.commend_delta ?? 0)
+      form.value.minor_merit_delta = Number(r.rule_config?.minor_merit_delta ?? 0)
+      form.value.major_merit_delta = Number(r.rule_config?.major_merit_delta ?? 0)
     }
   },
 )
@@ -197,6 +209,9 @@ function buildPayload() {
       warning_delta: form.value.warning_delta,
       minor_delta: form.value.minor_delta,
       major_delta: form.value.major_delta,
+      commend_delta: form.value.commend_delta,
+      minor_merit_delta: form.value.minor_merit_delta,
+      major_merit_delta: form.value.major_merit_delta,
     }
   }
   return base
@@ -395,6 +410,16 @@ defineExpose({ disablePastDates, validateTiersMonotonic })
       </template>
 
       <template v-if="form.rule_type === 'DISCIPLINARY_TIERED'">
+        <el-form-item label="嘉獎">
+          <el-input-number v-model="form.commend_delta" :step="0.5" :precision="2" data-test="commend-delta-input" />
+        </el-form-item>
+        <el-form-item label="小功">
+          <el-input-number v-model="form.minor_merit_delta" :step="0.5" :precision="2" data-test="minor-merit-delta-input" />
+        </el-form-item>
+        <el-form-item label="大功">
+          <el-input-number v-model="form.major_merit_delta" :step="0.5" :precision="2" data-test="major-merit-delta-input" />
+        </el-form-item>
+
         <el-form-item label="警告" data-test="disciplinary-section">
           <el-input-number
             v-model="form.warning_delta"

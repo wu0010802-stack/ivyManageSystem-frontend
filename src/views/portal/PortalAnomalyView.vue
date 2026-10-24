@@ -5,6 +5,9 @@ import { ElMessage } from 'element-plus'
 import { CircleCheck } from '@element-plus/icons-vue'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
 import { apiError } from '@/utils/error'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { usePortalDashboardStore } from '@/stores/portalDashboard'
 
 interface AnomalyEntry { id: number; type?: string; confirmed?: boolean; date?: string; weekday?: string; type_label?: string; detail?: string; estimated_deduction?: number | string; selected_action?: string; remark?: string; submitting?: boolean; [key: string]: unknown }
 const loading = ref(false)
@@ -22,6 +25,42 @@ const query = reactive({
   year: _queryInt(route.query.year, now.getFullYear()),
   month: _queryInt(route.query.month, now.getMonth() + 1),
 })
+const hasQueryMonth = route.query.year != null && route.query.month != null
+
+// 側欄與「我要申請」選單直連本頁不帶年月；只有首頁格子會帶最早待確認月份。
+// 為了讓三個入口落點一致，沒帶年月時自己去讀首頁摘要（store 有 60s 快取，
+// 從首頁點進來不會多打一次）決定落在哪個月。
+interface PendingMonth { year: number; month: number }
+const dashboardStore = usePortalDashboardStore()
+const pendingTotal = ref(0)
+const earliestPending = ref<PendingMonth | null>(null)
+
+async function loadPendingSummary() {
+  try {
+    const summary = (await dashboardStore.fetchSummary()) as { actions?: Record<string, unknown> } | null
+    const actions = summary?.actions ?? {}
+    pendingTotal.value = Number(actions.pending_anomaly_confirms) || 0
+    const e = actions.pending_anomaly_earliest as Partial<PendingMonth> | null | undefined
+    earliestPending.value = e && Number.isInteger(e.year) && Number.isInteger(e.month)
+      ? { year: e.year as number, month: e.month as number }
+      : null
+  } catch {
+    // 摘要讀不到不影響本頁：維持網址或當月
+  }
+}
+
+const showJumpToEarliest = computed(() => {
+  const e = earliestPending.value
+  return pendingTotal.value > 0 && !!e && (e.year !== query.year || e.month !== query.month)
+})
+
+function jumpToEarliest() {
+  const e = earliestPending.value
+  if (!e) return
+  query.year = e.year
+  query.month = e.month
+  fetchAnomalies()
+}
 // 動態年份（避免硬編 [2024..2027] 於 2028 斷頭）
 const yearOptions = computed(() => {
   const y = now.getFullYear()
@@ -73,22 +112,30 @@ const confirmAnomaly = async (anomaly: AnomalyEntry) => {
 
 const pendingCount = computed(() => anomalies.value.filter(a => !a.confirmed).length)
 
-onMounted(fetchAnomalies)
+onMounted(async () => {
+  await loadPendingSummary()
+  if (!hasQueryMonth && pendingTotal.value > 0 && earliestPending.value) {
+    query.year = earliestPending.value.year
+    query.month = earliestPending.value.month
+  }
+  await fetchAnomalies()
+})
 </script>
 
 <template>
   <div class="portal-anomaly">
-    <div class="page-header">
-      <h2>出勤異常確認</h2>
-      <div class="query-row">
-        <el-select v-model="query.year" style="width: 100px;" @change="fetchAnomalies">
-          <el-option v-for="y in yearOptions" :key="y" :label="`${y}年`" :value="y" />
-        </el-select>
-        <el-select v-model="query.month" style="width: 100px;" @change="fetchAnomalies">
-          <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
-        </el-select>
-      </div>
-    </div>
+    <PortalPageHeader title="出勤異常確認">
+      <template #actions>
+        <div class="query-row">
+          <el-select v-model="query.year" style="width: 100px;" @change="fetchAnomalies">
+            <el-option v-for="y in yearOptions" :key="y" :label="`${y}年`" :value="y" />
+          </el-select>
+          <el-select v-model="query.month" style="width: 100px;" @change="fetchAnomalies">
+            <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
+          </el-select>
+        </div>
+      </template>
+    </PortalPageHeader>
 
     <el-alert
       v-if="pendingCount > 0"
@@ -159,11 +206,25 @@ onMounted(fetchAnomalies)
         </div>
       </el-card>
 
-      <el-empty v-if="!loading && anomalies.length === 0" description="本月無出勤異常">
-        <template #image>
-          <el-icon :size="60" style="color: #67c23a;"><CircleCheck /></el-icon>
+      <EmptyState
+        v-if="!loading && anomalies.length === 0 && showJumpToEarliest"
+        variant="mobile"
+        :icon="CircleCheck"
+        :title="`${query.month} 月沒有出勤異常`"
+        :description="`其他月份還有 ${pendingTotal} 筆待確認`"
+      >
+        <template #action>
+          <el-button type="primary" data-test="anomaly-jump-earliest" @click="jumpToEarliest">
+            前往 {{ earliestPending?.year }} 年 {{ earliestPending?.month }} 月
+          </el-button>
         </template>
-      </el-empty>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!loading && anomalies.length === 0"
+        variant="mobile"
+        :icon="CircleCheck"
+        :title="`${query.month} 月沒有出勤異常`"
+      />
     </div>
   </div>
 </template>

@@ -8,7 +8,12 @@
  *    登出改登 B 之後，舊分頁仍顯示 A 的畫面並拿 B 的共享 Cookie continue 打 API。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { adminSessionRevisionKey, getAdminSessionGeneration, getAdminSessionSignal } from '@/utils/adminSession'
+import {
+  adminSessionRevisionKey,
+  getAdminSessionGeneration,
+  getAdminSessionSignal,
+  resetAdminSessionLocally,
+} from '@/utils/adminSession'
 import { clearAuth, getUserInfo, setUserInfo, USER_INFO_KEY, waitForAdminSessionCleanup } from '@/utils/auth'
 
 const clearAllSpy = vi.fn(() => Promise.resolve())
@@ -137,6 +142,23 @@ describe('管理端跨分頁 session 隔離', () => {
 
       expect(getUserInfo()).toMatchObject({ id: 'admin-A' })
       expect(window.location.hash).toBe('#/employees')
+    })
+  })
+
+  describe('acting tenant 的本分頁 runtime reset', () => {
+    it('中止舊 IO 並推進世代，但不廣播或清除本分頁登入身分', () => {
+      setUserInfo({ id: 'platform-admin', role: 'platform_admin', permission_names: ['*'] })
+      const beforeGeneration = getAdminSessionGeneration()
+      const inflightSignal = getAdminSessionSignal()
+      const beforeRevision = localStorage.getItem(adminSessionRevisionKey())
+
+      resetAdminSessionLocally()
+
+      expect(getAdminSessionGeneration()).toBeGreaterThan(beforeGeneration)
+      expect(inflightSignal.aborted).toBe(true)
+      expect(localStorage.getItem(adminSessionRevisionKey())).toBe(beforeRevision)
+      expect(getUserInfo()).toMatchObject({ id: 'platform-admin' })
+      expect(sessionStorage.getItem(USER_INFO_KEY)).toContain('platform-admin')
     })
   })
 })

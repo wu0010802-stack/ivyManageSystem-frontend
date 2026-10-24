@@ -24,6 +24,7 @@
       @convert="openConvertDialog"
       @reserve="openReserveDialog"
       @journey="openJourney"
+      @withdraw="openWithdrawDialog"
     />
 
     <!-- ==================== 管理月份 Dialog ==================== -->
@@ -60,7 +61,7 @@
       @reserved="onReserved"
     />
 
-    <el-drawer v-model="journeyDrawerVisible" title="參觀→入學 歷程" direction="rtl" size="460px">
+    <el-drawer v-model="journeyDrawerVisible" title="參觀→入學 歷程" direction="rtl" size="min(460px, 92vw)">
       <JourneyTimeline :visit-id="journeyVisitId" />
     </el-drawer>
   </div>
@@ -76,6 +77,7 @@ import {
   updateRecruitmentRecord,
   deleteRecruitmentRecord,
 } from '@/api/recruitment'
+import { transitionVisit } from '@/api/recruitmentFunnel'
 import { apiError } from '@/utils/error'
 import { hasPermission, getUserInfo } from '@/utils/auth'
 import { useFormDraft } from '@/composables/useFormDraft'
@@ -121,6 +123,47 @@ async function loadTeacherOptionsOnce() {
 // -------- 權限 --------
 const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
 const canConvert = computed(() => hasPermission('RECRUITMENT_CONVERT'))
+
+// -------- 退預繳／退註冊（2026-09-06）--------
+// 原本唯一入口是漏斗看板拖曳，只看列表的人根本找不到退費功能在哪。
+// 一律走 transition（與看板同一支 API），原因必填，後端會寫事件紀錄。
+const openWithdrawDialog = async (row: Record<string, unknown>) => {
+  const isEnrolled = Boolean(row.enrolled)
+  const warning = isEnrolled
+    ? '將刪除已建立的學生檔案（含家長聯絡資料），招生紀錄保留。'
+    : '將標記退預繳。若已實際收款，退款要另外到「學費管理」處理。'
+  let reason = ''
+  try {
+    const result = await ElMessageBox.prompt(warning, isEnrolled ? '退註冊' : '退預繳', {
+      confirmButtonText: '確認退出',
+      cancelButtonText: '取消',
+      inputPlaceholder: '請說明原因（必填）',
+      inputValidator: (v: string) => (v && v.trim() ? true : '請填寫原因'),
+      type: 'warning',
+    })
+    // ElMessageBox.prompt 的回傳型別是聯集（含 'cancel'），prompt 成功一定是物件
+    reason = String((result as { value?: string }).value ?? '').trim()
+  } catch {
+    return
+  }
+  try {
+    const resp = await transitionVisit(Number(row.id), { to_stage: 'withdrawn', reason })
+    const warnings = (resp.data as { warnings?: string[] } | undefined)?.warnings ?? []
+    if (warnings.includes('active_prepayment_needs_refund')) {
+      ElMessageBox.alert(
+        '已標記退出，但這筆在「學費管理」還有未處理的預繳金，請另外走退款流程。',
+        '還有一件事要處理',
+        { type: 'warning' },
+      )
+    } else {
+      ElMessage.success(isEnrolled ? '已退註冊' : '已退預繳')
+    }
+    await fetchDetail()
+    emit('changed')
+  } catch (e) {
+    ElMessage.error(apiError(e, '退出失敗'))
+  }
+}
 
 // -------- 轉化為學生 --------
 const router = useRouter()
@@ -344,6 +387,7 @@ const openEditDialog = async (row: Record<string, unknown>) => {
     birthday: (row.birthday ?? null) as string | null,
     grade: (row.grade ?? null) as string | null,
     phone: String(row.phone ?? ''),
+    contact_name: String(row.contact_name ?? ''),
     address: String(row.address ?? ''),
     source: String(row.source ?? ''),
     source_category: (row.source_category ?? null) as string | null,
@@ -361,6 +405,9 @@ const openEditDialog = async (row: Record<string, unknown>) => {
     notes: String(row.notes ?? ''),
     parent_response: String(row.parent_response ?? ''),
     geocoding_consent: Boolean(row.geocoding_consent ?? false),
+    // 唯讀對帳結果（後端算好），只用於在表單顯示落差提示
+    deposit_mismatch: (row.deposit_mismatch ?? null) as string | null,
+    prepayment_state: (row.prepayment_state ?? null) as string | null,
   }
   dialogMode.value = 'edit'
   editingId.value = row.id as number | null
@@ -372,8 +419,8 @@ const openEditDialog = async (row: Record<string, unknown>) => {
 const handleSave = async () => {
   // Dialog 內部已經驗證過表單（RecruitmentRecordDialog 的 handleSave）
   saving.value = true
-  // 排除前端內部用的 month_raw，不送到後端
-  const { month_raw: _mr, ...payload } = form.value
+  // 排除前端內部用的 month_raw 與後端算好的唯讀對帳欄，不回送
+  const { month_raw: _mr, deposit_mismatch: _dm, prepayment_state: _ps, ...payload } = form.value
   try {
     if (dialogMode.value === 'add') {
       await createRecruitmentRecord(payload)

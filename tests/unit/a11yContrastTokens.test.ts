@@ -64,7 +64,8 @@ function aliasOf(css: string, name: string): string {
 
 // 全站兩個主要底色：白卡片與 --bg-color 頁面底
 const PAPER_WHITE = '#ffffff'
-const PAPER_APP = literal(tokensCss, 'neutral-50') // --bg-color 指向它
+// --bg-color 指向 --neutral-50；10-08 升格後它是 --color-neutral-50 的別名，hex 字面值在 canonical 那一層
+const PAPER_APP = literal(tokensCss, 'color-neutral-50')
 const AA_TEXT = 4.5
 
 describe('a11y.css 的 token 覆寫必須贏過 Element Plus 原廠值', () => {

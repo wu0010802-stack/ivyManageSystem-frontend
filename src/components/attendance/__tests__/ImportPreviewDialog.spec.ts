@@ -1,23 +1,32 @@
 // src/components/attendance/__tests__/ImportPreviewDialog.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 // ── hoisted mocks ──────────────────────────────────────────────────────────────
-const { mockPreviewImport, mockPreviewExcel, mockUploadCsv, mockUploadFile, mockNotify } = vi.hoisted(() => ({
+const { mockPreviewImport, mockPreviewExcel, mockPreviewClockReport, mockUploadCsv, mockUploadFile, mockNotify, mockGetImportSettings, mockSaveImportSettings } = vi.hoisted(() => ({
   mockPreviewImport: vi.fn(),
   mockPreviewExcel: vi.fn(),
+  mockPreviewClockReport: vi.fn(),
   mockUploadCsv: vi.fn(),
   mockUploadFile: vi.fn(),
   mockNotify: vi.fn(),
+  mockGetImportSettings: vi.fn().mockResolvedValue({ data: { default_format: 'auto', device_id: 'default', version: 0, employee_mappings: [], employees: [] } }),
+  mockSaveImportSettings: vi.fn(),
 }))
+
+const { mockMonthContext } = vi.hoisted(() => ({ mockMonthContext: vi.fn() }))
+vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: mockMonthContext }))
 
 // ── mock api ───────────────────────────────────────────────────────────────────
 vi.mock('@/api/attendance', () => ({
   previewImport: mockPreviewImport,
   previewExcel: mockPreviewExcel,
+  previewClockReport: mockPreviewClockReport,
   uploadCsv: mockUploadCsv,
   uploadFile: mockUploadFile,
+  getImportSettings: mockGetImportSettings,
+  saveImportSettings: mockSaveImportSettings,
 }))
 
 // ── mock useErrorNotify ────────────────────────────────────────────────────────
@@ -92,7 +101,7 @@ const previewFixture = {
 
 // ── stubs ──────────────────────────────────────────────────────────────────────
 const ElDialog = {
-  props: ['modelValue', 'title'],
+  props: ['modelValue', 'title', 'width'],
   emits: ['update:modelValue'],
   template: `<div class="el-dialog-stub" v-if="modelValue"><slot /><slot name="footer" /></div>`,
 }
@@ -108,14 +117,40 @@ const ElTabPane = {
   template: `<div class="el-tab-pane-stub" :data-label="label"><slot /></div>`,
 }
 
+// 貼上頁籤是 type="textarea"；設備代號是單行 el-input（aria-label 由 prop 帶到 input，與真實 EP 一致）
 const ElInput = {
-  props: ['modelValue', 'type', 'rows', 'placeholder'],
-  emits: ['update:modelValue'],
+  props: ['modelValue', 'type', 'rows', 'placeholder', 'ariaLabel', 'disabled'],
+  emits: ['update:modelValue', 'change'],
   template: `<textarea
+    v-if="type === 'textarea'"
     class="el-input-stub"
     :value="modelValue ?? ''"
     @input="$emit('update:modelValue', $event.target.value)"
+  /><input
+    v-else
+    class="el-input-stub"
+    :value="modelValue ?? ''"
+    :aria-label="ariaLabel"
+    :disabled="disabled"
+    @input="$emit('update:modelValue', $event.target.value)"
+    @change="$emit('change', $event.target.value)"
   />`,
+}
+
+// 打卡格式是 el-select：stub 成原生 select，維持 setValue 驅動 update:modelValue／change 的測法
+const ElSelect = {
+  props: ['modelValue', 'disabled', 'ariaLabel'],
+  emits: ['update:modelValue', 'change'],
+  template: `<select
+    :aria-label="ariaLabel"
+    :value="modelValue"
+    :disabled="disabled"
+    @change="$emit('update:modelValue', $event.target.value); $emit('change', $event.target.value)"
+  ><slot /></select>`,
+}
+const ElOption = {
+  props: ['label', 'value'],
+  template: `<option :value="value">{{ label }}</option>`,
 }
 
 const ElButton = {
@@ -164,11 +199,14 @@ const ElIcon = {
 }
 
 const stubs = {
+  'el-alert': { props: ['title', 'description'], template: '<div role="status">{{ title }} {{ description }}</div>' },
   teleport: true,
   'el-dialog': ElDialog,
   'el-tabs': ElTabs,
   'el-tab-pane': ElTabPane,
   'el-input': ElInput,
+  'el-select': ElSelect,
+  'el-option': ElOption,
   'el-button': ElButton,
   'el-table': ElTable,
   'el-table-column': ElTableColumn,
@@ -197,6 +235,16 @@ describe('ImportPreviewDialog', () => {
     mockHasPermission.mockReturnValue(true)
   })
 
+  it('顯示待補人日並明確提醒實際匯入以完整預覽清單為準', async () => {
+    const wrapper = mountDialog()
+    await wrapper.setProps({ sourceContext: { employee_id: 7, employee_name: '測試員工', date: '2026-06-03' } })
+    expect(wrapper.text()).toContain('待補資料：測試員工 · 2026-06-03')
+    expect(wrapper.text()).toContain('不會自動限制匯入範圍，實際匯入以預覽清單為準')
+    await wrapper.setProps({ sourceContext: null })
+    expect(wrapper.text()).not.toContain('待補資料：')
+    wrapper.unmount()
+  })
+
   // ── basic rendering ──────────────────────────────────────────────────────────
   it('顯示對話框 title 含年月', () => {
     const wrapper = mountDialog()
@@ -213,12 +261,22 @@ describe('ImportPreviewDialog', () => {
     expect(wrapper.find('.el-dialog-stub').exists()).toBe(false)
   })
 
+  it('開啟時先在「上傳檔案」頁籤（打卡鐘 txt 與 Excel 都在這裡），標題用「紀錄」與頁首一致', async () => {
+    const wrapper = mountDialog()
+    await nextTick()
+    const tabs = wrapper.findComponent(ElTabs)
+    expect(tabs.props('modelValue')).toBe('excel')
+    const labels = wrapper.findAll('.el-tab-pane-stub').map((p) => p.attributes('data-label'))
+    expect(labels).toEqual(['上傳檔案（打卡鐘 txt／Excel）', '貼上 / CSV 文字'])
+    expect(wrapper.findComponent(ElDialog).props('title')).toContain('匯入打卡紀錄')
+  })
+
   // ── Tab A: 貼上 / CSV 文字流程 ────────────────────────────────────────────────
   it('Tab A: 點「預覽核對」→ 呼叫 previewImport', async () => {
     mockPreviewImport.mockResolvedValue({ data: previewFixture })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('部門,員工編號,姓名,日期\nA,E001,王小明,2026-06-01')
     await nextTick()
 
@@ -238,7 +296,7 @@ describe('ImportPreviewDialog', () => {
     mockPreviewImport.mockResolvedValue({ data: previewFixture })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('raw csv text')
     await nextTick()
 
@@ -257,7 +315,7 @@ describe('ImportPreviewDialog', () => {
     mockPreviewImport.mockResolvedValue({ data: previewFixture })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('raw csv')
     await nextTick()
 
@@ -303,7 +361,7 @@ describe('ImportPreviewDialog', () => {
     mockUploadCsv.mockResolvedValue({ data: { message: '匯入完成' } })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -330,7 +388,7 @@ describe('ImportPreviewDialog', () => {
     mockUploadCsv.mockResolvedValue({ data: { message: '匯入完成', imported: 2 } })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -355,7 +413,7 @@ describe('ImportPreviewDialog', () => {
     mockUploadCsv.mockResolvedValue({ data: { message: '匯入完成' } })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -383,7 +441,7 @@ describe('ImportPreviewDialog', () => {
     })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -410,7 +468,7 @@ describe('ImportPreviewDialog', () => {
     mockPreviewImport.mockResolvedValue({ data: previewFixture })
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -488,7 +546,7 @@ describe('ImportPreviewDialog', () => {
 
     const legacyBtn = wrapper
       .findAll('.el-button-stub')
-      .find((b) => b.text().includes('legacy 格式直接匯入'))
+      .find((b) => b.text().includes('舊版格式直接匯入'))
     expect(legacyBtn).toBeTruthy()
     await legacyBtn!.trigger('click')
     await nextTick()
@@ -515,7 +573,7 @@ describe('ImportPreviewDialog', () => {
     mockPreviewImport.mockRejectedValue(err)
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('bad data')
     await nextTick()
 
@@ -533,7 +591,7 @@ describe('ImportPreviewDialog', () => {
     mockUploadCsv.mockRejectedValue(err)
 
     const wrapper = mountDialog()
-    const textarea = wrapper.find('.el-input-stub')
+    const textarea = wrapper.find('textarea.el-input-stub')
     await textarea.setValue('csv data')
     await nextTick()
 
@@ -548,5 +606,879 @@ describe('ImportPreviewDialog', () => {
     await nextTick()
 
     expect(mockNotify).toHaveBeenCalledWith(err, expect.stringContaining('ImportPreviewDialog'), null, expect.objectContaining({ prefix: expect.any(String) }))
+  })
+})
+
+
+describe('匯入預覽請求一致性', () => {
+  it('選定月份改變後，不採用舊 Excel 預覽', async () => {
+    let resolvePreview!: (value: { data: typeof previewFixture }) => void
+    mockPreviewExcel.mockReturnValueOnce(new Promise(resolve => { resolvePreview = resolve }))
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as {
+      handleExcelUpload: (options: { file: File }) => Promise<void>
+      previewResult: unknown
+    }
+    const pending = vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    await wrapper.setProps({ month: 7 })
+    resolvePreview({ data: previewFixture })
+    await pending
+    expect(vm.previewResult).toBeNull()
+  })
+
+  it('較新的 Excel 預覽完成後，不被前一檔的回應覆蓋', async () => {
+    let resolvePreview!: (value: { data: typeof previewFixture }) => void
+    mockPreviewExcel.mockReturnValueOnce(new Promise(resolve => { resolvePreview = resolve }))
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as {
+      handleExcelUpload: (options: { file: File }) => Promise<void>
+      previewResult: typeof previewFixture | null
+    }
+    const pending = vm.handleExcelUpload({ file: new File(['old'], 'old.xls') })
+    const latest = { ...previewFixture, normalized: [] }
+    mockPreviewExcel.mockResolvedValueOnce({ data: latest })
+    await vm.handleExcelUpload({ file: new File(['new'], 'new.xls') })
+    resolvePreview({ data: previewFixture })
+    await pending
+    expect(vm.previewResult?.normalized).toEqual([])
+  })
+})
+
+
+describe('逐筆打卡預覽', () => {
+  it('顯示辨識格式、原始筆數及日期範圍', async () => {
+    mockPreviewExcel.mockResolvedValueOnce({ data: {
+      ...previewFixture, import_format: 'punch_events', device_id: 'default',
+      source_count: 12, date_start: '2026-06-01', date_end: '2026-06-30',
+    } })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as { handleExcelUpload: (options: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('逐筆刷卡')
+    expect(wrapper.text()).toContain('原始刷卡 12 筆')
+    expect(wrapper.text()).toContain('2026-06-30')
+  })
+
+  it('待人工確認的單卡不可直接視為可匯入', async () => {
+    mockPreviewExcel.mockResolvedValueOnce({ data: {
+      ...previewFixture, import_format: 'punch_events',
+      summary: { importable: 0, problems: 1, overwrites: 0 }, normalized: [],
+      rows: [{ ...previewFixture.rows[0], check: 'review_required',
+        import_format: 'punch_events', source_employee_number: '101',
+        punches: ['2026-06-01T08:00:00'], review_required: true, review_confirmed: false,
+      }],
+    } })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as { handleExcelUpload: (options: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('單筆卡 1 人日')
+    const confirm = wrapper.findAll('button').find(b => b.text().includes('確認匯入'))
+    expect(confirm?.attributes('disabled')).toBeDefined()
+  })
+})
+
+
+describe('人工工號與刷卡核對契約', () => {
+  it('明確儲存人工工號對照，不以姓名推定員工', async () => {
+    mockSaveImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 1, employee_mappings: [], employees: [] } })
+    const wrapper = mountDialog()
+    await nextTick()
+    const vm = wrapper.vm as unknown as { mappings: Record<string, number>; handleSaveSettings: () => Promise<void> }
+    expect(vm.mappings).toEqual({})
+    vm.mappings['101'] = 7
+    await vm.handleSaveSettings()
+    expect(mockSaveImportSettings).toHaveBeenCalledWith(expect.objectContaining({
+      device_id: 'default', version: 0, employee_mappings: [{ source_employee_number: '101', employee_id: 7 }],
+    }))
+  })
+
+  it('人工選擇缺下班卡後，重送預覽仍保留完整原始紀錄', async () => {
+    const row = { ...previewFixture.rows[0], import_format: 'punch_events', device_id: 'default',
+      source_employee_number: '101', source_rows: [2], punches: ['2026-06-01T08:00:00'],
+      review_required: true, review_confirmed: false, punch_out: null, check: 'review_required',
+    }
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, rows: [row], normalized: [], import_format: 'punch_events' } })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...previewFixture, rows: [row], normalized: [] } })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as {
+      handleExcelUpload: (options: { file: File }) => Promise<void>
+      reviewEdits: Record<number, { punch_in: string; punch_out: string; confirmed: boolean }>
+      handleReviewPreview: () => Promise<void>
+    }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    vm.reviewEdits[2] = { punch_in: '08:00', punch_out: '', confirmed: true }
+    await vm.handleReviewPreview()
+    expect(mockPreviewImport).toHaveBeenLastCalledWith(expect.objectContaining({ records: [expect.objectContaining({
+      source_employee_number: '101', punches: ['2026-06-01T08:00:00'], source_rows: [2],
+      punch_in: '08:00', punch_out: null, review_confirmed: true,
+    })] }))
+  })
+})
+
+
+describe('審查回歸', () => {
+  it('兩筆同分鐘刷卡也提供人工核對入口', async () => {
+    const row = { ...previewFixture.rows[0], import_format: 'punch_events', device_id: 'default',
+      source_employee_number: '101', source_rows: [2, 3], punches: ['2026-06-01T08:00:00', '2026-06-01T08:00:20'],
+      review_required: true, review_confirmed: false, check: 'review_required',
+    }
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, rows: [row], normalized: [], import_format: 'punch_events' } })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as { handleExcelUpload: (options: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('依人工核對結果重新預覽')
+  })
+
+  it('匯入只包含可匯入列時，明示略過問題數', async () => {
+    mockPreviewExcel.mockResolvedValueOnce({ data: previewFixture })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as { handleExcelUpload: (options: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('2 筆問題資料不會匯入')
+  })
+
+  it('舊匯入成功回應不關閉重新開啟的對話框', async () => {
+    let resolveImport!: (value: { data: { message: string } }) => void
+    mockUploadCsv.mockReturnValueOnce(new Promise(resolve => { resolveImport = resolve }))
+    mockPreviewExcel.mockResolvedValueOnce({ data: previewFixture })
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as {
+      handleExcelUpload: (options: { file: File }) => Promise<void>
+      handleConfirmImport: () => Promise<void>
+    }
+    await vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    const pending = vm.handleConfirmImport()
+    await wrapper.setProps({ modelValue: false })
+    await wrapper.setProps({ modelValue: true })
+    resolveImport({ data: { message: '成功' } })
+    await pending
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.emitted('imported')).toHaveLength(1)
+  })
+
+  it('無效設備代號保留可修正輸入並阻止匯入', async () => {
+    const wrapper = mountDialog()
+    await nextTick()
+    const input = wrapper.find('input[aria-label="設備代號"]')
+    await input.setValue('中文')
+    await input.trigger('change')
+    await nextTick()
+    expect(wrapper.find('input[aria-label="設備代號"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('設備代號限 1～40 個英文字母、數字、底線或連字號')
+  })
+})
+
+
+describe('設備工號配對引導', () => {
+  const employees = [
+    { id: 11, name: '測試甲', employee_number: 'T011' },
+    { id: 12, name: '測試乙', employee_number: 'T012' },
+    { id: 13, name: '同名', employee_number: 'T013' },
+    { id: 14, name: '同名', employee_number: 'T014' },
+  ]
+  function punchRow(number: string, name: string, index = 0) {
+    return { ...previewFixture.rows[0], row_num: index + 2, employee_name: name, employee_number: '',
+      matched_employee_id: null, source_employee_number: number, import_format: 'punch_events',
+      check: 'employee_not_found', punches: ['2026-06-01T08:00:00', '2026-06-01T17:00:00'] }
+  }
+  async function openMapping(rows = [punchRow('101', '測試甲')], employeeMappings: { source_employee_number: string; employee_id: number }[] = []) {
+    mockGetImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 0, employee_mappings: employeeMappings, employees } })
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, import_format: 'punch_events', rows,
+      summary: { importable: 0, overwrites: 0, problems: rows.length }, normalized: [] } })
+    // 表格以實際 scoped slot 渲染每列，驗證使用者可見文案。
+    const wrapper = mount(ImportPreviewDialog, { props: { modelValue: true, year: 2026, month: 6 }, global: { stubs: { ...stubs,
+      'el-table': { template: '<div><slot /></div>' },
+      'el-table-column': { data: () => ({ rows }), template: '<div><slot v-for="row in rows" :row="row" /></div>' },
+    } } })
+    await flushPromises()
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    return wrapper
+  }
+  beforeEach(() => { vi.clearAllMocks(); mockHasPermission.mockReturnValue(true) })
+
+  it('未對照時展開並提示人數，指引先完成對照', async () => {
+    const wrapper = await openMapping()
+    expect(wrapper.find('details').attributes('open')).toBeDefined()
+    expect(wrapper.text()).toContain('請先完成 1 人的員工對照')
+    expect(wrapper.text()).toContain('設備工號 101')
+    expect(wrapper.text()).toContain('尚未設定設備工號對照')
+    expect(wrapper.text()).not.toContain('測試甲（）')
+    expect(wrapper.text()).toContain('先完成工號對照與刷卡核對')
+    expect(wrapper.text()).not.toContain('請先下載問題清單')
+  })
+
+  it('唯一同名建議需明確採用、儲存與後端重新預覽', async () => {
+    const wrapper = await openMapping()
+    expect(wrapper.vm.mappings).toEqual({})
+    wrapper.vm.previewResult = {
+      ...wrapper.vm.previewResult!,
+      summary: { importable: 1, overwrites: 0, problems: 1 },
+      rows: [...wrapper.vm.previewResult!.rows, { ...previewFixture.rows[0], row_num: 3 }],
+      normalized: [normalizedRows[0]!],
+    }
+    await nextTick()
+    expect(wrapper.findAll('button').find(b => b.text().includes('確認匯入'))!.attributes('disabled')).toBeUndefined()
+    const adopt = wrapper.findAll('button').find(button => button.text().includes('採用 1 筆同名建議'))
+    expect(adopt).toBeTruthy()
+    await adopt!.trigger('click')
+    expect(wrapper.vm.mappings).toEqual({ '101': 11 })
+    expect(mockSaveImportSettings).not.toHaveBeenCalled()
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('對照尚未儲存')
+    expect(wrapper.findAll('button').find(b => b.text().includes('確認匯入'))!.attributes('disabled')).toBeDefined()
+    mockSaveImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 1,
+      employee_mappings: [{ source_employee_number: '101', employee_id: 11 }], employees } })
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, import_format: 'punch_events', rows: [], normalized: [] } })
+    await wrapper.vm.handleSaveSettings()
+    expect(mockSaveImportSettings).toHaveBeenCalledWith(expect.objectContaining({ employee_mappings: [{ source_employee_number: '101', employee_id: 11 }] }))
+    expect(mockPreviewExcel).toHaveBeenCalledTimes(2)
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+  })
+
+  it('同名歧義、來源重名、已佔用員工與同工號姓名衝突均不建議', async () => {
+    const wrapper = await openMapping([
+      punchRow('101', '測試甲'), punchRow('102', '同名', 1),
+      punchRow('103', '測試乙', 2), punchRow('104', '測試乙', 3),
+      punchRow('105', '測試甲', 4), punchRow('105', '不同姓名', 5),
+    ], [{ source_employee_number: '900', employee_id: 11 }])
+    expect(wrapper.findAll('button').some(b => /採用 \d+ 筆同名建議/.test(b.text()))).toBe(false)
+    expect(wrapper.vm.mappings).toEqual({ '900': 11 })
+  })
+
+  it('設定省略員工候選時不產生建議或拋錯', async () => {
+    mockGetImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 0 } })
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...previewFixture, import_format: 'punch_events', rows: [punchRow('101', '測試甲')] } })
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'punch.xls') })
+    expect(wrapper.text()).toContain('請先完成 1 人的員工對照')
+    expect(wrapper.findAll('button').some(b => b.text().includes('同名建議'))).toBe(false)
+  })
+
+  it('已儲存對照仍找不到員工時提示重新選擇' , async () => {
+    const wrapper = await openMapping(undefined, [{ source_employee_number: '101', employee_id: 11 }])
+    expect(wrapper.text()).toContain('已設定對照但找不到員工，請重新選擇')
+  })
+
+  it('唯讀權限無法採用建議，切換設備清除預覽與舊候選', async () => {
+    const wrapper = await openMapping()
+    mockHasPermission.mockReturnValue(false)
+    mockGetImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'default', version: 0, employee_mappings: [], employees } })
+    const readonly = mountDialog()
+    await flushPromises()
+    expect(readonly.vm.canWrite).toBe(false)
+    readonly.vm.previewResult = wrapper.vm.previewResult
+    await nextTick()
+    const adopt = readonly.findAll('button').find(b => b.text().includes('採用 1 筆同名建議'))
+    expect(adopt?.attributes('disabled')).toBeDefined()
+    await adopt!.trigger('click')
+    expect(readonly.vm.mappings).toEqual({})
+    expect(mockSaveImportSettings).not.toHaveBeenCalled()
+    mockHasPermission.mockReturnValue(true)
+    mockGetImportSettings.mockResolvedValueOnce({ data: { default_format: 'auto', device_id: 'other', version: 0, employee_mappings: [], employees: [] } })
+    await wrapper.find('input[aria-label="設備代號"]').setValue('other')
+    await flushPromises()
+    expect(wrapper.find('#mapping-101').exists()).toBe(false)
+    expect(wrapper.findAll('button').some(b => b.text().includes('同名建議'))).toBe(false)
+  })
+
+  it('手動清除的對照不被批次建議重新填入', async () => {
+    const wrapper = await openMapping([punchRow('101', '測試甲'), punchRow('102', '測試乙', 1)])
+    await wrapper.find('#mapping-101').setValue('11')
+    await wrapper.find('#mapping-101').setValue('')
+    const adopt = wrapper.findAll('button').find(b => b.text().includes('採用 1 筆同名建議'))
+    expect(adopt).toBeTruthy()
+    await adopt!.trigger('click')
+    expect(wrapper.vm.mappings['101']).toBeUndefined()
+    expect(wrapper.vm.mappings['102']).toBe(12)
+  })
+
+  it('手動選擇保留，其他建議不得佔用該員工'  , async () => {
+    const wrapper = await openMapping([punchRow('101', '測試甲'), punchRow('102', '測試乙', 1)])
+    await wrapper.find('#mapping-101').setValue('12')
+    expect(wrapper.vm.mappings['101']).toBe(12)
+    expect(wrapper.findAll('button').some(b => /採用 \d+ 筆同名建議/.test(b.text()))).toBe(false)
+  })
+})
+
+describe('批次核對操作', () => {
+  const rows = [
+    { ...previewFixture.rows[0], row_num: 2, employee_name: '測試甲', import_format: 'punch_events', source_rows: [2, 3, 4], punches: ['2026-06-01T08:00:00', '2026-06-01T08:01:00', '2026-06-01T17:00:00'], review_required: true, review_confirmed: false },
+    { ...previewFixture.rows[0], row_num: 5, employee_name: '測試乙', import_format: 'punch_events', source_rows: [5], punches: ['2026-06-01T09:00:00'], punch_in: '09:00', punch_out: null, review_required: true, review_confirmed: false },
+    { ...previewFixture.rows[0], row_num: 6, employee_name: '測試丙', import_format: 'punch_events', source_rows: [6, 7], punches: ['2026-06-01T08:00:00', '2026-06-01T08:00:20'], punch_in: '08:00', punch_out: '08:00', review_required: true, review_confirmed: false },
+  ]
+  const batchFixture = { ...previewFixture, import_format: 'punch_events', rows }
+  async function openBatch() {
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.vm.handleExcelUpload({ file: new File(['synthetic'], 'batch.xls') })
+    return wrapper
+  }
+  beforeEach(() => { vi.clearAllMocks(); mockHasPermission.mockReturnValue(true) })
+
+  it('只全選目前篩選結果，切換篩選清空選取', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('multi')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(1)
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    expect(wrapper.text()).toContain('已選 1 個人日')
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('single')
+    expect(wrapper.text()).toContain('已選 0 個人日')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(1)
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('duplicate')
+    expect(wrapper.get('[data-review-row]').text()).toContain('測試丙')
+  })
+
+  it('先看摘要可取消，採用目前結果保留手改，無效相同時間明示略過', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="測試甲 2026-06-01 上班"]').setValue('08:01')
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="current"]').trigger('click')
+    expect(wrapper.get('[aria-label="批次核對確認"]').text()).toContain('將套用 2 個人日，略過 1 個人日')
+    expect(wrapper.text()).toContain('下班須晚於上班')
+    expect(wrapper.vm.reviewEdits[2]?.confirmed).toBe(false)
+    await wrapper.get('[data-batch-cancel]').trigger('click')
+    expect(wrapper.vm.reviewEdits[2]?.confirmed).toBe(false)
+    await wrapper.get('[data-batch-action="current"]').trigger('click')
+    await wrapper.get('[data-batch-confirm]').trigger('click')
+    expect(wrapper.vm.reviewEdits[2]).toEqual({ punch_in: '08:01', punch_out: '17:00', confirmed: true })
+    expect(wrapper.vm.reviewEdits[6]?.confirmed).toBe(false)
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('核對結果已變更')
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('unconfirmed')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(1)
+  })
+
+  it.each([['in', '08:00', ''], ['out', '', '17:00']])('單側批次 %s 保留缺卡且送原始紀錄重新驗證', async (action, punchIn, punchOut) => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('multi')
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get(`[data-batch-action="${action}"]`).trigger('click')
+    await wrapper.get('[data-batch-confirm]').trigger('click')
+    expect(wrapper.vm.reviewEdits[2]).toEqual({ punch_in: punchIn, punch_out: punchOut, confirmed: true })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...batchFixture, rows: rows.map(row => ({ ...row, review_confirmed: true })) } })
+    await wrapper.vm.handleReviewPreview()
+    expect(mockPreviewImport).toHaveBeenLastCalledWith(expect.objectContaining({ records: expect.arrayContaining([expect.objectContaining({ punches: rows[0]!.punches, source_rows: [2, 3, 4], punch_in: punchIn || null, punch_out: punchOut || null, review_confirmed: true })]) }))
+    expect(wrapper.text()).not.toContain('核對結果已變更')
+  })
+
+  it('重新預覽失敗保留批次結果可重試，匯入持續停用', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="in"]').trigger('click')
+    await wrapper.get('[data-batch-confirm]').trigger('click')
+    mockPreviewImport.mockRejectedValueOnce(new Error('測試失敗'))
+    await wrapper.vm.handleReviewPreview()
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(3)
+    expect(wrapper.vm.reviewEdits[2]).toEqual({ punch_in: '08:00', punch_out: '', confirmed: true })
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+    mockPreviewImport.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleReviewPreview()
+    expect(mockPreviewImport).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['resolve', 'reject'])('重核對舊請求 %s 不覆蓋新檔，換檔清除摘要與選取', async outcome => {
+    const wrapper = await openBatch()
+    let resolve!: (value: unknown) => void
+    let reject!: (reason: Error) => void
+    mockPreviewImport.mockReturnValueOnce(new Promise((res, rej) => { resolve = res; reject = rej }))
+    const pending = wrapper.vm.handleReviewPreview()
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['new'], 'new.xls') })
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="out"]').trigger('click')
+    if (outcome === 'resolve') resolve({ data: { ...batchFixture, rows: [] } })
+    else reject(new Error('舊請求'))
+    await pending
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(3)
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['newer'], 'newer.xls') })
+    expect(wrapper.find('[aria-label="批次核對確認"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('已選 0 個人日')
+    expect(wrapper.vm.reviewEdits[2]?.confirmed).toBe(false)
+  })
+
+  it('改月份、設備、格式與工號對照清空選取，不能套用舊摘要', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    wrapper.vm.mappings['101'] = 12
+    await nextTick()
+    expect(wrapper.text()).toContain('已選 0 個人日')
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.setProps({ month: 7 })
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(0)
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'again.xls') })
+    expect(wrapper.text()).toContain('已選 0 個人日')
+    await wrapper.get('[aria-label="打卡格式"]').setValue('daily_columns')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(0)
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'again.xls') })
+    await wrapper.get('[aria-label="設備代號"]').setValue('other')
+    expect(wrapper.findAll('[data-review-row]')).toHaveLength(0)
+  })
+  it('未核對篩選中勾選核對後移除已隱藏選取', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('unconfirmed')
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-review-row="2"] td:last-child input').setValue(true)
+    expect(wrapper.text()).toContain('已選 2 個人日')
+  })
+
+  it('重新上傳不解除未儲存工號對照的匯入阻擋', async () => {
+    const wrapper = await openBatch()
+    await wrapper.get('[aria-label="設備代號"]').trigger('change')
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...batchFixture, rows: rows.map(row => ({ ...row, source_employee_number: '101' })) } })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'mapped.xls') })
+    await wrapper.get('#mapping-101').trigger('change')
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'new.xls') })
+    expect(wrapper.text()).toContain('對照尚未儲存')
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+  })
+
+  it.each(['csv', 'format'])('未儲存對照跨 %s 預覽重設與再上傳仍阻擋', async route => {
+    const wrapper = await openBatch()
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...batchFixture, rows: rows.map(row => ({ ...row, source_employee_number: '101' })) } })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'mapped.xls') })
+    await wrapper.get('#mapping-101').trigger('change')
+    if (route === 'csv') {
+      mockPreviewImport.mockResolvedValueOnce({ data: previewFixture })
+      await wrapper.get('textarea').setValue('synthetic csv')
+      await wrapper.findAll('button').find(button => button.text() === '預覽核對')!.trigger('click')
+      await flushPromises()
+    } else await wrapper.get('[aria-label="打卡格式"]').setValue('daily_columns')
+    mockPreviewExcel.mockResolvedValueOnce({ data: batchFixture })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'new.xls') })
+    expect(wrapper.text()).toContain('對照尚未儲存')
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).not.toHaveBeenCalled()
+  })
+
+})
+
+describe('班表輔助核對', () => {
+  const day = { date: '2026-06-01', is_expected_workday: true, schedule_known: true, expected_start_at: '2026-06-01T08:00:00+08:00', expected_end_at: '2026-06-01T17:00:00+08:00', approved_leaves: [], full_day_leave: false }
+  const normal = { ...previewFixture.rows[0]!, employee_name: '班表測試', row_num: 2, import_format: 'punch_events', device_id: 'default', source_employee_number: '101', source_rows: [2, 3], punches: ['2026-06-01T08:00:00', '2026-06-01T08:05:00'], punch_in: '08:00', punch_out: '08:05', review_required: false, review_confirmed: false }
+  const multi = { ...normal, punches: ['2026-06-01T08:00:00', '2026-06-01T08:05:00', '2026-06-01T17:00:00'], source_rows: [2, 3, 4], punch_out: '17:00', review_required: true }
+  function fixture(row = normal) { return { ...previewFixture, import_format: 'punch_events', rows: [row], summary: { importable: 1, overwrites: 0, problems: 0 } } }
+  async function openSchedule(row = normal) {
+    mockPreviewExcel.mockResolvedValueOnce({ data: fixture(row) })
+    mockMonthContext.mockResolvedValue({ data: { days: [day], roster: [] } })
+    const wrapper = mountDialog(); await flushPromises()
+    await wrapper.vm.handleExcelUpload({ file: new File(['synthetic'], 'schedule.xls') })
+    return wrapper
+  }
+  beforeEach(() => { vi.clearAllMocks(); mockHasPermission.mockReturnValue(true) })
+  async function load(wrapper: ReturnType<typeof mountDialog>) { await wrapper.get('[data-load-schedule]').trigger('click'); await flushPromises() }
+
+  it('可選載入，原本兩筆同側也列人工並阻止直接匯入', async () => {
+    const wrapper = await openSchedule()
+    expect(mockMonthContext).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-review-row]').exists()).toBe(false)
+    await load(wrapper)
+    expect(wrapper.text()).toContain('各前後 60 分鐘')
+    expect(wrapper.get('[data-review-row]').text()).toContain('疑似缺下班卡')
+    await wrapper.vm.handleConfirmImport(); expect(mockUploadCsv).not.toHaveBeenCalled()
+  })
+
+  it('重預覽不得消除已發現的同側gate，明確確認後才可送預覽解鎖', async () => {
+    const wrapper = await openSchedule(); await load(wrapper)
+    mockPreviewImport.mockResolvedValueOnce({ data: fixture() })
+    await wrapper.vm.handleReviewPreview()
+    expect(wrapper.find('[data-review-row]').exists()).toBe(true)
+    await wrapper.vm.handleConfirmImport(); expect(mockUploadCsv).not.toHaveBeenCalled()
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="in"]').trigger('click')
+    await wrapper.get('[data-batch-confirm]').trigger('click')
+    mockPreviewImport.mockResolvedValueOnce({ data: fixture({ ...normal, punch_out: '', review_confirmed: true, review_required: true }) })
+    await wrapper.vm.handleReviewPreview()
+    expect(mockPreviewImport).toHaveBeenLastCalledWith(expect.objectContaining({ records: [expect.objectContaining({ review_required: true, review_confirmed: true, punch_out: null })] }))
+    expect(wrapper.findAll('button').find(button => button.text().includes('確認匯入'))!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('班表建議批次先摘要才確認，且須重新預覽', async () => {
+    const wrapper = await openSchedule(multi); await load(wrapper)
+    await wrapper.get('[aria-label="篩選核對紀錄"]').setValue('schedule_eligible')
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="schedule"]').trigger('click')
+    expect(wrapper.vm.reviewEdits[2]?.confirmed).toBe(false)
+    expect(wrapper.get('[aria-label="批次核對確認"]').text()).toContain('上班 08:00／下班 17:00')
+    await wrapper.get('[data-batch-confirm]').trigger('click')
+    expect(wrapper.vm.reviewEdits[2]?.confirmed).toBe(true)
+    await wrapper.vm.handleConfirmImport(); expect(mockUploadCsv).not.toHaveBeenCalled()
+  })
+
+  it('手改時間跨重新預覽後仍不得被班表建議覆蓋', async () => {
+    const wrapper = await openSchedule(multi)
+    await wrapper.get('[aria-label="班表測試 2026-06-01 上班"]').setValue('08:05')
+    mockPreviewImport.mockResolvedValueOnce({ data: fixture({ ...multi, punch_in: '08:05' }) })
+    await wrapper.vm.handleReviewPreview(); await load(wrapper)
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="schedule"]').trigger('click')
+    expect(wrapper.get('[aria-label="批次核對確認"]').text()).toContain('已個別調整時間')
+    expect(wrapper.get('[data-batch-confirm]').attributes('disabled')).toBeDefined()
+    expect(wrapper.vm.reviewEdits[2]?.punch_in).toBe('08:05')
+  })
+
+  it('讀取失敗可重試，保留人工時間與安全gate', async () => {
+    const wrapper = await openSchedule(multi)
+    await wrapper.get('[aria-label="班表測試 2026-06-01 上班"]').setValue('08:05')
+    mockMonthContext.mockRejectedValueOnce(new Error('失敗'))
+    await load(wrapper)
+    expect(wrapper.text()).toContain('班表讀取失敗')
+    expect(wrapper.vm.reviewEdits[2]?.punch_in).toBe('08:05')
+    await wrapper.get('[data-retry-schedule]').trigger('click'); await flushPromises()
+    expect(mockMonthContext).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).not.toContain('班表讀取失敗')
+  })
+
+  it('換月份後舊班表回應不改新預覽，未儲存對照不得讀班表', async () => {
+    const wrapper = await openSchedule()
+    let resolve!: (value: unknown) => void
+    mockMonthContext.mockReturnValueOnce(new Promise(res => { resolve = res }))
+    await wrapper.get('[data-load-schedule]').trigger('click')
+    await wrapper.setProps({ month: 7 })
+    resolve({ data: { days: [day], roster: [] } }); await flushPromises()
+    expect(wrapper.find('[data-review-row]').exists()).toBe(false)
+    mockPreviewExcel.mockResolvedValueOnce({ data: fixture(multi) })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'new.xls') })
+    await wrapper.get('#mapping-101').trigger('change')
+    expect(wrapper.get('[data-load-schedule]').attributes('disabled')).toBeDefined()
+  })
+  it('載入期間直接呼叫確認匯入也被阻擋', async () => {
+    const wrapper = await openSchedule()
+    let resolve!: (value: unknown) => void
+    mockMonthContext.mockReturnValueOnce(new Promise(res => { resolve = res }))
+    await wrapper.get('[data-load-schedule]').trigger('click')
+    expect(wrapper.text()).toContain('完成前暫停匯入')
+    await wrapper.vm.handleConfirmImport(); expect(mockUploadCsv).not.toHaveBeenCalled()
+    resolve({ data: { days: [day], roster: [] } }); await flushPromises()
+    expect(wrapper.text()).not.toContain('完成前暫停匯入')
+  })
+
+  it('第一階段單側批次跨重新預覽後也保留選擇', async () => {
+    const wrapper = await openSchedule(multi)
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="out"]').trigger('click')
+    await wrapper.get('[data-batch-confirm]').trigger('click')
+    mockPreviewImport.mockResolvedValueOnce({ data: fixture({ ...multi, punch_in: '', review_confirmed: true }) })
+    await wrapper.vm.handleReviewPreview(); await load(wrapper)
+    await wrapper.get('[aria-label="全選目前篩選結果"]').setValue(true)
+    await wrapper.get('[data-batch-action="schedule"]').trigger('click')
+    expect(wrapper.get('[aria-label="批次核對確認"]').text()).toContain('已個別調整時間')
+    expect(wrapper.vm.reviewEdits[2]?.punch_in).toBe('')
+  })
+
+  it('卸載取消排隊員工查詢，舊回應不得再派下一筆', async () => {
+    const wrapper = await openSchedule(multi)
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...fixture(multi), rows: [1, 2, 3].map(id => ({ ...multi, row_num: id, matched_employee_id: id })) } })
+    await wrapper.vm.handleExcelUpload({ file: new File(['test'], 'queue.xls') })
+    const resolve: ((value: unknown) => void)[] = []
+    mockMonthContext.mockImplementation(() => new Promise(res => resolve.push(res)))
+    await wrapper.get('[data-load-schedule]').trigger('click')
+    expect(mockMonthContext).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+    resolve.forEach(res => res({ data: { days: [day], roster: [] } })); await flushPromises()
+    expect(mockMonthContext).toHaveBeenCalledTimes(2)
+  })
+
+  it('後端已排除的無效或未對照問題列不鎖住其他可匯入紀錄', async () => {
+    const valid = { ...normal, punches: ['2026-06-01T08:00:00', '2026-06-01T17:00:00'], punch_out: '17:00' }
+    const wrapper = await openSchedule(valid)
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...fixture(valid), rows: [valid,
+      { ...normal, row_num: 8, matched_employee_id: null, check: 'employee_not_found', punches: [] },
+      { ...normal, row_num: 9, date: null, check: 'invalid_date', punches: [] },
+    ], normalized: [normalizedRows[0]], summary: { importable: 1, overwrites: 0, problems: 2 } } })
+    await wrapper.vm.handleExcelUpload({ file: new File(['synthetic'], 'partial.xls') })
+    await load(wrapper)
+    expect(wrapper.text()).toContain('2 筆問題資料不會匯入')
+    expect(wrapper.findAll('button').find(button => button.text().includes('確認匯入'))!.attributes('disabled')).toBeUndefined()
+    mockUploadCsv.mockResolvedValueOnce({ data: { message: '完成', imported: 1 } })
+    await wrapper.vm.handleConfirmImport()
+    expect(mockUploadCsv).toHaveBeenLastCalledWith(expect.objectContaining({ records: [normalizedRows[0]] }))
+  })
+
+  it('原可匯入疑似同側列清空兩側未確認後，後端改為待核對仍阻擋混批', async () => {
+    const other = { ...normal, row_num: 4, matched_employee_id: 2, source_employee_number: '102', source_rows: [4, 5], punches: ['2026-06-01T08:00:00', '2026-06-01T17:00:00'], punch_out: '17:00' }
+    const wrapper = await openSchedule()
+    mockPreviewExcel.mockResolvedValueOnce({ data: { ...fixture(), rows: [normal, other], summary: { importable: 2, overwrites: 0, problems: 0 } } })
+    await wrapper.vm.handleExcelUpload({ file: new File(['synthetic'], 'mixed.xls') })
+    await load(wrapper)
+    await wrapper.get('[aria-label="班表測試 2026-06-01 上班"]').setValue('')
+    await wrapper.get('[aria-label="班表測試 2026-06-01 下班"]').setValue('')
+    expect(wrapper.vm.reviewEdits[2]?.confirmed).toBe(false)
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...fixture(), rows: [{ ...normal, punch_in: null, punch_out: null, check: 'review_required', review_required: true }, other], normalized: [normalizedRows[1]], summary: { importable: 1, overwrites: 0, problems: 1 } } })
+    await wrapper.vm.handleReviewPreview()
+    expect(wrapper.text()).toContain('1 個人日尚待班表人工核對')
+    expect(wrapper.findAll('button').find(button => button.text().includes('確認匯入'))!.attributes('disabled')).toBeDefined()
+    await wrapper.vm.handleConfirmImport(); expect(mockUploadCsv).not.toHaveBeenCalled()
+  })
+
+})
+
+
+describe('打卡鐘報表預覽', () => {
+  const block = {
+    block_id: '901:21', source_employee_number: '901', source_name: '測試甲', department: '教師',
+    first_day: 21, layout: 'grid', date_line: '21 一', raw_lines: ['  15:52-17:13'],
+    proposals: [{ date: '2026-06-23', punch_in: '15:52', punch_out: '17:13' }],
+  }
+  function clockRow(over: Record<string, unknown> = {}) {
+    return { ...previewFixture.rows[0], row_num: 2, employee_name: '測試甲', employee_number: '', matched_employee_id: 7,
+      date: '2026-06-23', punch_in: '15:52', punch_out: '17:13', import_format: 'clock_report', device_id: 'default',
+      source_employee_number: '901', source_rows: [], punches: ['2026-06-23T15:52:00', '2026-06-23T17:13:00'],
+      source_tokens: ['15:52-17:13'], block_id: '901:21', block_layout: 'grid', block_confirmed: false,
+      review_required: false, review_confirmed: false, check: 'review_required', ...over }
+  }
+  const sibling = () => clockRow({ row_num: 3, date: '2026-06-22', block_id: null, block_layout: null, source_tokens: ['08:00-17:00'] })
+  function clockFixture(over: Record<string, unknown> = {}) {
+    return { ...previewFixture, import_format: 'clock_report', device_id: 'default', source_count: 2,
+      date_start: '2026-06-22', date_end: '2026-06-23', summary: { importable: 0, problems: 2, overwrites: 0 },
+      normalized: [], rows: [clockRow(), sibling()], blocks: [block], ...over }
+  }
+  type Vm = { handleExcelUpload: (options: { file: File }) => Promise<void> }
+  async function uploadTxt(wrapper: ReturnType<typeof mountDialog>, name = '2026-06.txt') {
+    await flushPromises()
+    await (wrapper.vm as unknown as Vm).handleExcelUpload({ file: new File(['x'], name) })
+  }
+  beforeEach(() => { vi.clearAllMocks(); mockHasPermission.mockReturnValue(true) })
+
+  it('.txt 走打卡鐘報表預覽，並顯示推估區塊與人數統計', async () => {
+    mockPreviewClockReport.mockResolvedValueOnce({ data: clockFixture() })
+    const wrapper = mountDialog()
+    await uploadTxt(wrapper)
+    expect(mockPreviewClockReport).toHaveBeenCalledWith(expect.any(FormData), { year: 2026, month: 6, device_id: 'default' })
+    expect(mockPreviewExcel).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('已辨識：打卡鐘報表')
+    expect(wrapper.text()).toContain('打卡人日 2 個')
+    expect(wrapper.text()).toContain('推估區塊 1 個')
+    expect(wrapper.text()).toContain('推估區塊確認')
+  })
+
+  it('.txt 搭配不相容的打卡格式時提醒並且不呼叫 API', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('select[aria-label="打卡格式"]').setValue('daily_columns')
+    await uploadTxt(wrapper)
+    expect(mockElMessageWarning).toHaveBeenCalledWith(expect.stringContaining('.txt'))
+    expect(mockPreviewClockReport).not.toHaveBeenCalled()
+    expect(mockPreviewExcel).not.toHaveBeenCalled()
+  })
+
+  it('Excel 搭配「打卡鐘報表」格式時提醒並且不呼叫 API', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('select[aria-label="打卡格式"]').setValue('clock_report')
+    await uploadTxt(wrapper, '2026-06.xlsx')
+    expect(mockElMessageWarning).toHaveBeenCalledWith(expect.stringContaining('.txt'))
+    expect(mockPreviewExcel).not.toHaveBeenCalled()
+    expect(mockPreviewClockReport).not.toHaveBeenCalled()
+  })
+
+  it('勾選區塊後重新預覽，帶上原文與確認狀態並保留區塊清單', async () => {
+    mockPreviewClockReport.mockResolvedValueOnce({ data: clockFixture() })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...clockFixture(), blocks: [], summary: { importable: 2, problems: 0, overwrites: 0 },
+      rows: [clockRow({ check: 'importable', block_confirmed: true }), { ...sibling(), check: 'importable' }],
+      normalized: [{ employee_number: 'T901', date: '2026-06-23', punch_in: '15:52', punch_out: '17:13' }] } })
+    const wrapper = mountDialog()
+    await uploadTxt(wrapper)
+    await wrapper.find('[data-block-id="901:21"] input[type="checkbox"]').setValue(true)
+    await wrapper.find('[data-reapply]').trigger('click')
+    await flushPromises()
+    expect(mockPreviewImport).toHaveBeenLastCalledWith(expect.objectContaining({ year: 2026, month: 6, records: [
+      expect.objectContaining({ import_format: 'clock_report', source_employee_number: '901', source_tokens: ['15:52-17:13'],
+        block_id: '901:21', block_layout: 'grid', block_confirmed: true }),
+      expect.objectContaining({ import_format: 'clock_report', source_tokens: ['08:00-17:00'], block_id: null, block_confirmed: false }),
+    ] }))
+    expect(wrapper.text()).toContain('推估區塊確認')
+    expect(wrapper.text()).toContain('所有區塊皆已確認')
+  })
+
+  // 2026-10-16 staging 實測：推估日期排錯時原本只能整月不匯入
+  it('改推估日期後重新預覽，送出的列與區塊推估都改到新日期', async () => {
+    const junBlock = { ...block, date_line: '21 日        22 一     23 二    24 三     25 四     26 五     27 六     28 日     29 一     30 二' }
+    mockPreviewClockReport.mockResolvedValueOnce({ data: clockFixture({ blocks: [junBlock] }) })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...clockFixture(), blocks: [], summary: { importable: 2, problems: 0, overwrites: 0 },
+      rows: [clockRow({ date: '2026-06-24', check: 'importable', block_confirmed: true }), { ...sibling(), check: 'importable' }],
+      normalized: [{ employee_number: 'T901', date: '2026-06-24', punch_in: '15:52', punch_out: '17:13' }] } })
+    const wrapper = mountDialog()
+    await uploadTxt(wrapper)
+    await wrapper.find('[data-block-id="901:21"] tbody select').setValue('2026-06-24')
+    await wrapper.find('[data-block-id="901:21"] input[type="checkbox"]').setValue(true)
+    await wrapper.find('[data-reapply]').trigger('click')
+    await flushPromises()
+    expect(mockPreviewImport).toHaveBeenLastCalledWith(expect.objectContaining({ records: [
+      expect.objectContaining({ block_id: '901:21', date: '2026-06-24', block_confirmed: true,
+        punches: ['2026-06-24T15:52:00', '2026-06-24T17:13:00'] }),
+      expect.objectContaining({ block_id: null, date: '2026-06-22' }),
+    ] }))
+    const select = wrapper.find('[data-block-id="901:21"] tbody select')
+    expect((select.element as HTMLSelectElement).value).toBe('2026-06-24')
+    expect(wrapper.find('[data-block-id="901:21"] tbody').text()).not.toContain('已改')
+  })
+
+  it('區塊確認變更後必須重新預覽才能匯入', async () => {
+    const ready = clockFixture({ summary: { importable: 1, problems: 0, overwrites: 0 }, rows: [sibling()],
+      normalized: [{ employee_number: 'T902', date: '2026-06-22', punch_in: '08:00', punch_out: '17:00' }] })
+    mockPreviewClockReport.mockResolvedValueOnce({ data: ready })
+    mockPreviewImport.mockResolvedValueOnce({ data: { ...ready, blocks: [] } })
+    const wrapper = mountDialog()
+    await uploadTxt(wrapper)
+    const confirm = () => wrapper.findAll('button').find(b => b.text().includes('確認匯入'))
+    expect(confirm()?.attributes('disabled')).toBeUndefined()
+    await wrapper.find('[data-block-id="901:21"] input[type="checkbox"]').setValue(true)
+    expect(confirm()?.attributes('disabled')).toBeDefined()
+    await wrapper.find('[data-reapply]').trigger('click')
+    await flushPromises()
+    expect(confirm()?.attributes('disabled')).toBeUndefined()
+  })
+
+  it('區塊列與同員工其他列各自顯示不同的待確認原因', async () => {
+    const rows = [clockRow(), { ...sibling(), source_employee_number: '901' }]
+    mockPreviewClockReport.mockResolvedValueOnce({ data: clockFixture({ rows }) })
+    const wrapper = mount(ImportPreviewDialog, { props: { modelValue: true, year: 2026, month: 6 }, global: { stubs: { ...stubs,
+      'el-table': { template: '<div><slot /></div>' },
+      'el-table-column': { data: () => ({ rows }), template: '<div><slot v-for="row in rows" :row="row" /></div>' },
+    } } })
+    await uploadTxt(wrapper as unknown as ReturnType<typeof mountDialog>)
+    expect(wrapper.text()).toContain('推估區塊待確認')
+    expect(wrapper.text()).toContain('同員工尚有推估區塊未確認')
+  })
+})
+
+describe('ImportPreviewDialog 保護既有紀錄與 legacy 未對到姓名（QA #1 #8）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  async function previewWith(summary: Record<string, number>) {
+    mockPreviewImport.mockResolvedValue({ data: { ...previewFixture, summary } })
+    const wrapper = mountDialog()
+    await wrapper.find('textarea.el-input-stub').setValue('raw csv text')
+    await nextTick()
+    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('預覽核對'))!.trigger('click')
+    await flushPromises()
+    return wrapper
+  }
+
+  it('protected_overwrites > 0：摘要提示保留既有補卡／手動／打卡機紀錄', async () => {
+    const wrapper = await previewWith({ importable: 1, problems: 0, overwrites: 2, protected_overwrites: 2 })
+    expect(wrapper.find('[data-test="import-protected-overwrites"]').text()).toContain('2 筆')
+    const none = await previewWith({ importable: 1, problems: 0, overwrites: 1, protected_overwrites: 0 })
+    expect(none.find('[data-test="import-protected-overwrites"]').exists()).toBe(false)
+  })
+
+  it('legacy 直接匯入回 unmatched_names：列出未對到的姓名', async () => {
+    const mockFile = new File(['data'], 'legacy.xls', { type: 'application/vnd.ms-excel' })
+    mockPreviewExcel.mockRejectedValue({ response: { data: { detail: '此檔非新格式考勤表…legacy 月統計格式請走原 Excel 匯入' } } })
+    mockUploadFile.mockResolvedValue({ data: { message: '上傳完成', anomalies: [], anomaly_count: 0, summary: [], unmatched_names: ['王小明', '李小花'] } })
+    const wrapper = mountDialog()
+    await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: mockFile })
+    await nextTick()
+    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('舊版格式直接匯入'))!.trigger('click')
+    await flushPromises()
+    expect(mockElMessageWarning).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('王小明、李小花'), duration: 0 }))
+  })
+
+  it('legacy 直接匯入回 row_errors：用不自動消失的警告列出', async () => {
+    const mockFile = new File(['data'], 'legacy.xls', { type: 'application/vnd.ms-excel' })
+    mockPreviewExcel.mockRejectedValue({ response: { data: { detail: '此檔非新格式考勤表…legacy 月統計格式請走原 Excel 匯入' } } })
+    mockUploadFile.mockResolvedValue({ data: { message: '上傳完成', anomalies: [], anomaly_count: 0, summary: [], unmatched_names: [], row_errors: ['第 3 列時間格式錯誤'] } })
+    const wrapper = mountDialog()
+    await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: mockFile })
+    await nextTick()
+    await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('舊版格式直接匯入'))!.trigger('click')
+    await flushPromises()
+    expect(mockElMessageWarning).toHaveBeenCalledWith(expect.objectContaining({ message: '1 列未匯入：第 3 列時間格式錯誤', duration: 0 }))
+    expect(mockElMessageWarning).not.toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('姓名未對到') }))
+  })
+})
+
+// 2026-10 排班與出勤 UI 收斂：畫面文字白話化、寬度走常數、打卡格式／設備代號改 Element Plus 元件。
+describe('ImportPreviewDialog UI 收斂', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  it('對話框寬度用 FORM_DIALOG_WIDTH.standard，不再手寫 860px', () => {
+    const wrapper = mountDialog()
+    expect(wrapper.findComponent(ElDialog).props('width')).toBe('860px')
+  })
+
+  it('打卡格式是 el-select（四個選項），設備代號是 el-input；沒有原生 select／input 的設定列', () => {
+    const wrapper = mountDialog()
+    const select = wrapper.findComponent(ElSelect)
+    expect(select.exists()).toBe(true)
+    expect(select.props('ariaLabel')).toBe('打卡格式')
+    expect(wrapper.findAllComponents(ElOption).map((o) => o.text())).toEqual([
+      '自動辨識', '每日上下班欄位', '逐筆刷卡', '打卡鐘報表（txt）',
+    ])
+    const device = wrapper.findAllComponents(ElInput).find((c) => c.props('ariaLabel') === '設備代號')
+    expect(device).toBeTruthy()
+    expect(wrapper.find('.el-icon-stub').text()).not.toContain('⬆')
+    expect(wrapper.find('.el-icon-stub svg').exists()).toBe(true)
+  })
+
+  it('沒有出勤寫入權限：用中文權限名，不露出權限碼', () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mountDialog()
+    expect(wrapper.text()).toContain('您沒有「出勤寫入」權限，僅可檢視')
+    expect(wrapper.text()).not.toContain('ATTENDANCE_WRITE')
+  })
+
+  it('舊版月統計格式：提示與退路按鈕都不出現 legacy', async () => {
+    const mockFile = new File(['data'], 'old.xls', { type: 'application/vnd.ms-excel' })
+    mockPreviewExcel.mockRejectedValue({ response: { data: { detail: '此檔非新格式考勤表…legacy 月統計格式請走原 Excel 匯入' } } })
+    const wrapper = mountDialog()
+    await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: mockFile })
+    await nextTick()
+    expect(wrapper.text()).toContain('「old.xls」為舊版月統計格式，無逐列預覽。')
+    expect(wrapper.text()).toContain('以舊版格式直接匯入')
+    expect(wrapper.text()).not.toMatch(/legacy/i)
+    expect(mockElMessageWarning).toHaveBeenCalledWith('此檔為舊版月統計格式，無法逐列預覽；可改用直接匯入')
+  })
+
+  it('預覽列「狀態」的後端代碼轉白話（含 + 串接與未知代碼）', () => {
+    const wrapper = mountDialog()
+    const { statusLabel } = wrapper.vm as unknown as { statusLabel: (s: string | null | undefined) => string }
+    expect(statusLabel('normal')).toBe('正常')
+    expect(statusLabel('late')).toBe('遲到')
+    expect(statusLabel('early_leave')).toBe('早退')
+    expect(statusLabel('late+early_leave')).toBe('遲到、早退')
+    expect(statusLabel('late+missing_out')).toBe('遲到、缺下班卡')
+    expect(statusLabel('missing')).toBe('缺卡')
+    expect(statusLabel('something_new')).toBe('something_new')
+    expect(statusLabel(null)).toBe('')
+  })
+
+  it('下載問題清單：「問題類型」欄是中文檢核標籤，不是英文代碼', async () => {
+    mockPreviewExcel.mockResolvedValueOnce({ data: previewFixture })
+    const createUrl = vi.fn(() => 'blob:problems')
+    const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL }
+    URL.createObjectURL = createUrl
+    URL.revokeObjectURL = vi.fn()
+    try {
+      const wrapper = mountDialog()
+      await (wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }).handleExcelUpload({ file: new File(['t'], 'p.xlsx') })
+      await nextTick()
+      await wrapper.findAll('.el-button-stub').find((b) => b.text().includes('下載問題清單'))!.trigger('click')
+      const blob = createUrl.mock.calls[0]?.[0] as unknown as Blob
+      const csv = await blob.text()
+      expect(csv).toContain('找不到員工')
+      expect(csv).toContain('日期無效')
+      expect(csv).not.toContain('employee_not_found')
+      expect(csv).not.toContain('invalid_date')
+    } finally {
+      URL.createObjectURL = original.create
+      URL.revokeObjectURL = original.revoke
+    }
   })
 })

@@ -104,6 +104,12 @@ interface EmployeeForm {
   work_end_time: string
   no_employment_insurance: boolean
   health_exempt: boolean
+  // 義華 R2 #42：不投保（承攬／自行投保）
+  not_insured: boolean
+  // #36 健保本人自付比例（1＝全額、0.5＝中低收入 5 折、0＝本人免繳）；遮罩時後端回 null
+  health_self_pay_ratio: number | null
+  // #41 本次薪資輸入異動生效日（非員工欄位、不列入 dirty；空字串＝今日）
+  salary_inputs_effective_from: string
   skip_payroll_bonuses: boolean
   skip_payroll_transfer: boolean
   unreported_for_tax: boolean
@@ -152,6 +158,9 @@ const form = reactive<EmployeeForm>({
   // 階段 2-C 特殊狀況旗標（預設 0/false，多數員工不需動）
   no_employment_insurance: false,
   health_exempt: false,
+  not_insured: false,
+  health_self_pay_ratio: 1,
+  salary_inputs_effective_from: '',
   skip_payroll_bonuses: false,
   skip_payroll_transfer: false,
   unreported_for_tax: false,
@@ -211,6 +220,8 @@ const FIELD_LABELS = {
   emergency_contact_name: '緊急聯絡人',
   emergency_contact_phone: '緊急聯絡電話',
   dependents: '眷屬人數',
+  health_self_pay_ratio: '健保本人自付比例',
+  not_insured: '不投保（承攬／自行投保）',
   probation_end_date: '試用期截止',
   work_start_time: '上班時間', work_end_time: '下班時間',
   id_number: '身分證字號',
@@ -297,11 +308,18 @@ const resetForm = () => {
   form.labor_insured_salary = null
   form.health_insured_salary = null
   form.pension_insured_salary = null
+  form.health_self_pay_ratio = 1
+  form.salary_inputs_effective_from = ''
   suggestedSalary.value = null
 }
 
 const populateForm = (row: Record<string, unknown>) => {
   Object.assign(form, row)
+  // #36：舊後端未回此欄（undefined）視為全額；遮罩 null 保留
+  if (row.health_self_pay_ratio === undefined) form.health_self_pay_ratio = 1
+  // R2 #42：舊後端未回此欄視為一般投保
+  if (row.not_insured == null) form.not_insured = false
+  form.salary_inputs_effective_from = ''
   // #9 遮罩薪資（無薪資權限）時後端把金額欄回 null；不可用 Number(null)=0 轉型，否則唯讀端
   // fmtRO 收到 0 會顯示「NT$0」（把「看不到」誤呈現成「0 元」），且 0 帶進 dirty 快照有以 0
   // 覆寫真實薪資的風險。保留 null，唯讀端才會顯示「—」。
@@ -330,7 +348,7 @@ const EMPLOYEE_DRAFT_EXCLUDE = [
   'base_salary', 'hourly_rate', 'insurance_salary_level', 'pension_self_rate',
   'labor_insured_salary', 'health_insured_salary', 'pension_insured_salary',
   'insurance_salary_override_reason', 'bypass_standard_base',
-  'dependents',
+  'dependents', 'health_self_pay_ratio', 'salary_inputs_effective_from',
   'bank_code', 'bank_account', 'bank_account_name',
   'teacher_cert_no',
 ]
@@ -459,8 +477,10 @@ const saveCreate = async () => {
       }
       // 建立新員工的薪資欄一律有值（初始 0；無薪資權限者也停在 0，不會是遮罩 null，
       // 遮罩 null 只發生在編輯既有遮罩列）。此處 ?? 0 僅為滿足 API 型別的邊界收斂。
+      const { salary_inputs_effective_from: _ignoredEffectiveFrom, ...createForm } = form
       const res = await createEmployee({
-        ...form,
+        ...createForm,
+        health_self_pay_ratio: form.health_self_pay_ratio ?? 1,
         base_salary: form.base_salary ?? 0,
         hourly_rate: form.hourly_rate ?? 0,
         insurance_salary_level: form.insurance_salary_level ?? 0,
@@ -483,15 +503,25 @@ const saveCreate = async () => {
   })
 }
 
+// #41：有「薪資輸入歷史欄」異動時才帶生效日（單填日期不算變更；後端對非歷史欄忽略）
+const SALARY_HISTORY_FIELDS_IN_BASIC_TAB = ['dependents']
+const withEffectiveFrom = (payload: Record<string, unknown>, historyKeys: readonly string[] | null) => {
+  const eff = form.salary_inputs_effective_from
+  if (!eff) return payload
+  if (historyKeys && !historyKeys.some((k) => k in payload)) return payload
+  return { ...payload, salary_inputs_effective_from: eff }
+}
+
 // ── 基本資料更新（只送 dirty fields）────────────────
 const saveBasic = async () => {
-  const payload = dirtyToPayload(basicDirty.value)
+  const payload = withEffectiveFrom(dirtyToPayload(basicDirty.value), SALARY_HISTORY_FIELDS_IN_BASIC_TAB)
   if (Object.keys(payload).length === 0) {
     ElMessage.info('無變動')
     return
   }
   try {
     await updateEmployeeBasic(form.id!, payload)
+    form.salary_inputs_effective_from = ''
     ElMessage.success(`基本資料已更新（${Object.keys(payload).length} 個欄位）`)
     emit('saved')
     resetDirty(form)
@@ -503,14 +533,16 @@ const saveBasic = async () => {
 
 // ── 薪資更新（強制預覽確認 modal）────────────────────
 const submitSalary = async (adjustmentReason: string | null = null) => {
-  const payload = dirtyToPayload(salaryDirty.value)
-  if (Object.keys(payload).length === 0) {
+  const dirtyPayload = dirtyToPayload(salaryDirty.value)
+  if (Object.keys(dirtyPayload).length === 0) {
     ElMessage.info('無變動')
     return
   }
+  const payload = withEffectiveFrom(dirtyPayload, null)
   if (adjustmentReason) payload.adjustment_reason = adjustmentReason
   try {
     await updateEmployeeSalary(form.id!, payload)
+    form.salary_inputs_effective_from = ''
     ElMessage.success(`薪資資料已更新（${Object.keys(payload).length} 個欄位）`)
     emit('saved')
     resetDirty(form)
@@ -606,6 +638,7 @@ onMounted(async () => {
           <EmployeeFormSalary
             v-else
             :form="form"
+            :show-effective-from="isEdit"
             :is-readonly="isEdit ? isSalaryReadonly : false"
             :readonly-reason="salaryReadonlyReason"
             :pending-suggestion="pendingSuggestion"

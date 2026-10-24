@@ -4,6 +4,9 @@ import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import WorkspaceHeader from '../WorkspaceHeader.vue'
 
+const perms = vi.hoisted(() => ({ set: new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE']) }))
+vi.mock('@/utils/auth', () => ({ hasPermission: (code: string) => perms.set.has(code) }))
+
 // 真實 router（memory history）：讓組件內 useRouter().resolve 產生真實 href，
 // 少 mock、更貼近實際行為。註冊 kiosk-punch 路由即可。
 const router = createRouter({
@@ -33,13 +36,22 @@ const ElStatistic = {
   template: `<div class="el-statistic-stub">{{ title }}</div>`,
 }
 
-const stubs = { ElButton, ElSelect, ElOption, ElStatistic }
+const ElDropdown = {
+  name: 'ElDropdown',
+  emits: ['command'],
+  template: `<div class="el-dropdown-stub"><slot /><slot name="dropdown" /></div>`,
+}
+const ElDropdownMenu = { template: `<div><slot /></div>` }
+const ElDropdownItem = { props: ['command'], template: `<div class="dd-item" :data-command="command"><slot /></div>` }
 
-function mountHeader() {
+const stubs = { ElButton, ElSelect, ElOption, ElStatistic, ElDropdown, ElDropdownMenu, ElDropdownItem }
+
+function mountHeader(period: { year?: number; month?: number; canPrintAppraisal?: boolean } = {}) {
   return mount(WorkspaceHeader, {
     props: {
-      year: 2026,
-      month: 6,
+      year: period.year ?? 2026,
+      month: period.month ?? 6,
+      ...(period.canPrintAppraisal !== undefined ? { canPrintAppraisal: period.canPrintAppraisal } : {}),
       kpis: { fullAttendance: 0, lateCount: 0, missingCount: 0, pendingAnomalies: 0 },
     },
     global: { plugins: [router], stubs },
@@ -51,6 +63,16 @@ describe('WorkspaceHeader — 電子打卡入口', () => {
     const wrapper = mountHeader()
     expect(wrapper.get('button[aria-label="上個月"]').exists()).toBe(true)
     expect(wrapper.get('button[aria-label="下個月"]').exists()).toBe(true)
+  })
+
+  it('上／下個月以單一事件送出年月（跨年不會先換年再用舊年份換月）', async () => {
+    const jan = mountHeader({ year: 2026, month: 1 })
+    await jan.get('button[aria-label="上個月"]').trigger('click')
+    expect(jan.emitted('update:period')).toEqual([[2025, 12]])
+    expect(jan.emitted('update:year')).toBeUndefined()
+    const dec = mountHeader({ year: 2026, month: 12 })
+    await dec.get('button[aria-label="下個月"]').trigger('click')
+    expect(dec.emitted('update:period')).toEqual([[2027, 1]])
   })
 
   it('工具列渲染「電子打卡」按鈕', () => {
@@ -67,5 +89,31 @@ describe('WorkspaceHeader — 電子打卡入口', () => {
     expect(openSpy).toHaveBeenCalledTimes(1)
     expect(openSpy).toHaveBeenCalledWith('/kiosk/punch', '_blank')
     openSpy.mockRestore()
+  })
+})
+
+describe('WorkspaceHeader — 月結選單', () => {
+  it('有出勤寫入權限：列出「重算本月出勤」，選了送出 recalculate', async () => {
+    perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
+    const wrapper = mountHeader()
+    expect(wrapper.find('[data-command="recalculate"]').text()).toBe('重算本月出勤…')
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'recalculate')
+    expect(wrapper.emitted('recalculate')).toHaveLength(1)
+  })
+
+  it('沒有出勤寫入權限：不列重算', () => {
+    perms.set = new Set(['ATTENDANCE_READ'])
+    expect(mountHeader().find('[data-command="recalculate"]').exists()).toBe(false)
+    perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
+  })
+
+  it('canPrintAppraisal 為真才出現「批次列印考核表」選單項，點選 emit appraisal', () => {
+    const without = mountHeader()
+    expect(without.find('[data-command="appraisal"]').exists()).toBe(false)
+
+    const wrapper = mountHeader({ canPrintAppraisal: true })
+    expect(wrapper.find('[data-command="appraisal"]').text()).toBe('批次列印考核表')
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'appraisal')
+    expect(wrapper.emitted('appraisal')).toHaveLength(1)
   })
 })

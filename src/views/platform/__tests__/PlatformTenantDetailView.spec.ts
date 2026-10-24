@@ -4,6 +4,15 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { nextTick, reactive } from 'vue'
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
 
 const h = vi.hoisted(() => ({
   getTenant: vi.fn(),
@@ -52,7 +61,10 @@ const DETAIL = {
 }
 
 const stubs = {
-  PageHeader: { template: '<div><slot name="title-extra" /><slot name="actions" /></div>' },
+  PageHeader: {
+    props: ['title'],
+    template: '<div>{{ title }}<slot name="title-extra" /><slot name="actions" /></div>',
+  },
   TenantBasicTab: { template: '<div class="basic-tab" />' },
   TenantBrandTab: { template: '<div class="brand-tab" />' },
   TenantLineTab: { template: '<div class="line-tab" />' },
@@ -67,7 +79,7 @@ const stubs = {
 describe('PlatformTenantDetailView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    h.routeParams = { id: '2' }
+    h.routeParams = reactive({ id: '2' })
     h.getTenant.mockResolvedValue({ data: DETAIL })
   })
 
@@ -123,5 +135,51 @@ describe('PlatformTenantDetailView', () => {
     await flushPromises()
     expect(w.find('[data-testid="back-to-list"]').exists()).toBe(false)
     expect(w.text()).not.toContain('回清單')
+  })
+
+  it('切到 B 校載入期間立即卸載 A 校表單', async () => {
+    const w = mount(PlatformTenantDetailView, { global: { stubs } })
+    await flushPromises()
+    expect(w.find('[data-testid="detail-tabs"]').exists()).toBe(true)
+
+    const bLoad = deferred<{ data: typeof DETAIL }>()
+    h.getTenant.mockReturnValueOnce(bLoad.promise)
+    h.routeParams.id = '3'
+    await nextTick()
+
+    expect(w.find('[data-testid="detail-tabs"]').exists()).toBe(false)
+  })
+
+  it('A 校較晚回覆時不會覆蓋 B 校詳情或切回 A acting tenant', async () => {
+    const aLoad = deferred<{ data: typeof DETAIL }>()
+    h.getTenant.mockReturnValueOnce(aLoad.promise).mockResolvedValueOnce({
+      data: { ...DETAIL, id: 3, slug: 'branch-b', name: 'B 校', display_name: 'B 分校' },
+    })
+    const w = mount(PlatformTenantDetailView, { global: { stubs } })
+
+    h.routeParams.id = '3'
+    await flushPromises()
+    expect(w.text()).toContain('B 分校')
+
+    aLoad.resolve({ data: DETAIL })
+    await flushPromises()
+    expect(w.text()).toContain('B 分校')
+    expect(h.setActingTenant).toHaveBeenLastCalledWith({
+      id: 3,
+      slug: 'branch-b',
+      name: 'B 分校',
+      public_origin: 'https://a.example.tw',
+    })
+  })
+
+  it('分校詳情回覆晚於離頁時不會再切 acting tenant', async () => {
+    const pendingLoad = deferred<{ data: typeof DETAIL }>()
+    h.getTenant.mockReturnValueOnce(pendingLoad.promise)
+    const w = mount(PlatformTenantDetailView, { global: { stubs } })
+
+    w.unmount()
+    pendingLoad.resolve({ data: DETAIL })
+    await flushPromises()
+    expect(h.setActingTenant).not.toHaveBeenCalled()
   })
 })

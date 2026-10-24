@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeReportPeriod } from '../useReportPeriod'
+import { computeReportPeriod, monthState, defaultFocusMonth } from '../useReportPeriod'
 import type { FinanceTrendRow } from '../financeTrend'
 
 const TODAY = new Date(2026, 6, 10) // 2026-07-10（月為 0-based）
@@ -59,5 +59,28 @@ describe('computeReportPeriod — lastCompleteMonth（MoM 錨點）', () => {
   })
   it('無資料 → null', () => {
     expect(computeReportPeriod(2026, [], TODAY).lastCompleteMonth).toBeNull()
+  })
+})
+
+describe('monthState／defaultFocusMonth（2026-10-12 月份焦點）', () => {
+  const OCT = new Date(2026, 9, 12)
+  const trend: FinanceTrendRow[] = Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1, revenue: i + 1 <= 9 && i + 1 >= 8 ? 100 : 0, refund: 0, expense: 0, net: 0,
+  }))
+  it('今年：截止月以前 past、本月 current、之後 future', () => {
+    const p = computeReportPeriod(2026, trend, OCT)
+    expect(monthState(p, 9)).toBe('past')
+    expect(monthState(p, 10)).toBe('current')
+    expect(monthState(p, 11)).toBe('future')
+  })
+  it('過去年整年 past；未來年整年 future', () => {
+    expect(monthState(computeReportPeriod(2025, trend, OCT), 12)).toBe('past')
+    expect(monthState(computeReportPeriod(2027, trend, OCT), 1)).toBe('future')
+  })
+  it('預設焦點＝最近完整月；沒資料時今年退回本月、過去年退回 12、未來年 1', () => {
+    expect(defaultFocusMonth(computeReportPeriod(2026, trend, OCT))).toBe(9)
+    expect(defaultFocusMonth(computeReportPeriod(2026, [], OCT))).toBe(10)
+    expect(defaultFocusMonth(computeReportPeriod(2025, [], OCT))).toBe(12)
+    expect(defaultFocusMonth(computeReportPeriod(2027, [], OCT))).toBe(1)
   })
 })

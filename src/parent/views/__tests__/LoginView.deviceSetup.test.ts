@@ -114,7 +114,10 @@ describe('LoginView — 設定碼登入入口', () => {
     await wrapper.find('[data-testid="device-setup-submit"]').trigger('click')
     await flushPromises()
 
-    expect(mockDeviceSetup).toHaveBeenCalledWith('ABCD1234EFGH')
+    expect(mockDeviceSetup).toHaveBeenCalledWith(
+      'ABCD1234EFGH',
+      expect.stringMatching(/^[0-9a-f]{64}$/),
+    )
     expect(router.currentRoute.value.path).toBe('/home')
   })
 
@@ -195,6 +198,27 @@ describe('LoginView — 設定碼登入入口', () => {
     expect(err.exists()).toBe(true)
     expect(err.text()).not.toContain('設定碼無效')
     expect(err.text()).toContain('連線中斷')
+  })
+
+  it('傳輸失敗後重送同一設定碼時沿用同一 nonce', async () => {
+    mockConsentNotRequired()
+    mockDeviceSetup
+      .mockRejectedValueOnce(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))
+      .mockResolvedValueOnce({
+        data: { status: 'ok', user: { user_id: 1, name: '陳媽媽', role: 'parent' } },
+      })
+
+    const { wrapper } = await mountLoginView()
+    await flushPromises()
+    await wrapper.find('[data-testid="device-setup-toggle"]').trigger('click')
+    await wrapper.find('[data-testid="device-setup-input"]').setValue('ABCD1234EFGH')
+    await wrapper.find('[data-testid="device-setup-submit"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-testid="device-setup-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(mockDeviceSetup).toHaveBeenCalledTimes(2)
+    expect(mockDeviceSetup.mock.calls[1]?.[1]).toBe(mockDeviceSetup.mock.calls[0]?.[1])
   })
 
   it('逾時（ECONNABORTED，同樣沒有 response）→ 走連線錯誤分支', async () => {

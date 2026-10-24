@@ -23,6 +23,9 @@
           {{ label }}名冊
         </el-button>
       </div>
+      <p class="export-hint">
+        勾選「不入轉帳名冊」或沒有銀行帳號的人不會出現在銀行名冊，會列在各名冊的「未列入名冊」工作表；現金發放請匯出領現名冊。
+      </p>
     </el-card>
 
     <el-card shadow="never" class="no-hover export-card">
@@ -55,10 +58,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, watch } from 'vue'
 import SalarySnapshotDialog from '../SalarySnapshotDialog.vue'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
-import { downloadFile } from '@/utils/download'
+import { ElMessage } from 'element-plus'
+import { downloadFile, downloadFileWithHeaders } from '@/utils/download'
 import type { SalarySettlement } from '@/composables/useSalarySettlement'
 
 defineEmits<{ (e: 'next'): void }>()
@@ -81,10 +85,19 @@ const ROSTER_TYPE_LABELS = {
     festival: '節慶獎金',
     surplus: '超額獎金',
     art_teacher: '才藝老師',
+    cash: '領現',
 } as const
 
 const hasExported = ref(false)
 const showSnapshotDialog = ref(false)
+
+watch(
+    () => [q.year, q.month],
+    () => {
+        hasExported.value = false
+        showSnapshotDialog.value = false
+    },
+)
 
 // 重型匯出（薪資全員 Excel/PDF、逐筆轉帳名冊）慢且原本無回饋，易誤判沒點到而重複點擊。
 // 改 await + per-action loading：按鈕顯示忙碌、進行中防重送（並發另有 api dedupe 兜底）。
@@ -96,12 +109,26 @@ const exportRoster = async (type: keyof typeof ROSTER_TYPE_LABELS) => {
     if (!canExportFullSalary.value || rosterLoading.value) return
     rosterLoading.value = type
     const label = ROSTER_TYPE_LABELS[type]
-    const filename = `${q.year}年${String(q.month).padStart(2, '0')}月_${label}轉帳名冊.xlsx`
+    // 領現名冊不是銀行轉帳檔，檔名不可叫「轉帳名冊」
+    const suffix = type === 'cash' ? '名冊' : '轉帳名冊'
+    const filename = `${q.year}年${String(q.month).padStart(2, '0')}月_${label}${suffix}.xlsx`
     try {
         // 只有下載真的成功才標記完成；downloadFile 內部吞錯後仍 resolve，
         // 不可把「沒 throw」當成功，否則匯出失敗仍誤顯「本月結薪完成」。
-        const ok = await downloadFile(`/salaries/${q.year}/${q.month}/transfer-roster?type=${type}`, filename)
-        if (ok) hasExported.value = true
+        const headers = await downloadFileWithHeaders(
+            `/salaries/${q.year}/${q.month}/transfer-roster?type=${type}`,
+            filename,
+        )
+        if (headers === null) return
+        hasExported.value = true
+        // 後端以 X-Roster-Excluded-Count 回報因不薪轉／無銀行帳號而未列入的人數
+        // （銀行名冊另附「未列入名冊」工作表；這些人應改發領現名冊）。
+        const excluded = Number(headers['x-roster-excluded-count'] ?? 0)
+        if (Number.isFinite(excluded) && excluded > 0) {
+            ElMessage.warning(
+                `有 ${excluded} 人未列入名冊，見第二張工作表／領現名冊`,
+            )
+        }
     } finally {
         rosterLoading.value = null
     }
@@ -145,6 +172,12 @@ const exportAllPdf = async () => {
 
 .export-title {
   margin: 0 0 var(--space-3);
+}
+
+.export-hint {
+  margin: var(--space-3) 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
 }
 
 .export-buttons {

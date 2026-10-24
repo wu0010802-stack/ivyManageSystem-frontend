@@ -43,15 +43,28 @@ export async function downloadFile(
   fallbackName = 'download.xlsx',
   params?: Record<string, unknown>,
 ): Promise<boolean> {
+  return (await downloadFileWithHeaders(url, fallbackName, params)) !== null
+}
+
+/**
+ * 同 downloadFile，但成功時回傳 response headers（key 為小寫，如
+ * `x-roster-excluded-count`），供呼叫端讀後端自訂 header；失敗回 null（錯誤已顯示）。
+ * 跨網域部署時 header 須在後端 CORS `expose_headers` 登記才讀得到。
+ */
+export async function downloadFileWithHeaders(
+  url: string,
+  fallbackName = 'download.xlsx',
+  params?: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
   try {
     const response = await api.get(url, { responseType: 'blob', timeout: 30000, params })
     saveBlobResponse(response, fallbackName)
-    return true
+    return (response.headers ?? {}) as Record<string, unknown>
   } catch (error) {
     // interceptor 已把 blob/JSON 錯誤正規化進 displayMessage（如「本月薪資尚未封存」）；
     // 優先顯示真實原因，無則退回通用文案。
     const e = error as { displayMessage?: string | null; message?: string }
     ElMessage.error(e.displayMessage || '下載失敗: ' + (e.message || '未知錯誤'))
-    return false
+    return null
   }
 }

@@ -16,6 +16,11 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
   }
 })
 
+// yearend2：試算 dialog 開啟時載入離職員工選項（例外納入名單）
+vi.mock('@/api/employees', () => ({
+  getEmployees: vi.fn().mockResolvedValue({ data: [] }),
+}))
+
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal<typeof import('element-plus')>()
   return {

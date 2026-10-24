@@ -12,6 +12,8 @@ export interface RosterClass {
   class_number: number
   grade_name: string
   class_name: string
+  /** 班級真實代號（classrooms.class_code）；未設定或舊資料為空，表頭退回推算的「年級首字＋序號」。 */
+  class_code?: string | null
   head_teacher_name?: string | null
   assistant_teacher_name?: string | null
   art_teacher_name?: string | null

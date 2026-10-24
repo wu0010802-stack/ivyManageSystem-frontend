@@ -69,3 +69,31 @@ describe('BindAdditionalView — 加綁成功後導回原頁', () => {
     expect(router.currentRoute.value.path).toBe('/home')
   })
 })
+
+describe('BindAdditionalView 文案', () => {
+  it('標題不寫死「第二個小孩」（第三、第四個孩子也走這頁）', async () => {
+    const { wrapper } = await mountViewAt('/bind-additional')
+    expect(wrapper.find('.title').text()).toBe('加綁子女')
+    expect(wrapper.text()).not.toContain('第二個')
+  })
+})
+
+describe('BindAdditionalView — 錯誤下一步', () => {
+  it('加綁失敗：顯示 message 與 nextStep，nextStep 不帶 💡 裝飾 emoji', async () => {
+    mockBindAdditional.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 400, data: { detail: { code: 'BIND_CODE_INVALID', message: '綁定碼無效或已過期' } } },
+      errorDetail: { code: 'BIND_CODE_INVALID', message: '綁定碼無效或已過期' },
+      displayMessage: '綁定碼無效或已過期',
+    })
+    const { wrapper } = await mountViewAt('/bind-additional')
+    await wrapper.find('input').setValue('AAAA1111')
+    await wrapper.find('button.submit-btn').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bind-add-error"]').text()).toContain('綁定碼無效或已過期')
+    const nextStep = wrapper.find('[data-testid="bind-add-error-next-step"]')
+    expect(nextStep.exists()).toBe(true)
+    expect(nextStep.text()).not.toContain('💡')
+    expect(nextStep.text().length).toBeGreaterThan(0)
+  })
+})

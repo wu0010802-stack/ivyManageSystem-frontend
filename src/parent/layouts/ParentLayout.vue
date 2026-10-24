@@ -10,6 +10,8 @@ import ConnectionBanner from '../components/ConnectionBanner.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 import ParentOfflineIndicator from '../components/ParentOfflineIndicator.vue'
 import { useTenantBranding } from '@/composables/useTenantBranding'
+import { isInLineClient } from '../utils/lineClient'
+import { resolveBackAction } from '../utils/backNavigation'
 
 interface TabItem {
   key: string
@@ -18,6 +20,8 @@ interface TabItem {
   activeIcon: string
   path: string
   badge?: number
+  /** 永久隆起的圓形主按鈕（見 M3NavigationBar `prominent`），一列只能有一顆 */
+  prominent?: boolean
 }
 
 const route = useRoute()
@@ -34,6 +38,33 @@ const currentTab = computed(() => (route.meta?.tab as string) || '')
  * 故用 route.name 精準比對，不能只看 currentTab === 'home'。
  */
 const isHomeRoute = computed(() => route.name === 'parent-home')
+
+/**
+ * 不畫自己那條 top bar 的情況（SPEC-020 CT-M-01）：
+ *
+ * 1. 首頁——logo 已併入 HomeHeroHeader 的問候語 chip（見上）。
+ * 2. **在 LINE App 內的主分頁**——LINE 的內建 header 不可隱藏，已提供標題
+ *    （取自 document.title）與關閉鈕；我們這條的標題與 `/me` 入口都重複，
+ *    而 `/me` 更已是底部 tab 之一。兩條疊起來吃掉近 120px 的首屏。
+ *
+ * **深層頁（`showBack`）在 LINE 內仍要保留**：LINE 內建 header 的返回鈕不是
+ * 通用的「上一頁」——LIFF browser 只在 LIFF 之間轉場時才顯示它，MINI App 的
+ * Return button 也未保證在所有情境出現。整條隱藏會讓深層頁只剩底部 tab 可逃，
+ * 從「繳費明細」按不回「繳費」。保留時只留返回鈕，標題交給 LINE 的 header。
+ *
+ * 版面補償沿用既有的 `no-topbar` class，不另開一套。
+ */
+const headerShowBack = computed(() => route.meta?.showBack === true)
+
+const hideOwnTopBar = computed(
+  () => isHomeRoute.value || (isInLineClient() && !headerShowBack.value),
+)
+
+/**
+ * LINE 內不重複顯示標題——內建 header 已經在顯示 document.title，
+ * 同一串字上下相鄰出現兩次比沒有標題更糟。
+ */
+const showOwnTitle = computed(() => !isInLineClient())
 
 /**
  * 點再次點 active tab → scroll-to-top。
@@ -59,13 +90,13 @@ function onTabSelect(_key: string, item: { key: string; icon: string; label: str
  * 這裡原本另外打 announcements/unread-count 與 messages/unread-count 兩支，
  * 但 summary 早就回傳 unread_announcements，等於每次換頁都多送請求拿
  * 已經有的數字。改走共用 composable 後，同 key 的
- * useCachedAsync 會與首頁 / 事務頁共用 cache 並 dedupe in-flight 請求，
+ * useCachedAsync 會與首頁 / 待辦頁共用 cache 並 dedupe in-flight 請求，
  * 節流也由它的 60s TTL 負責（原本的 unreadThrottle 因此退場）。
  *
  * immediate: false —— 這個 layout 在 /login、/bind 等公開頁也會掛載，
  * 未登入就打 summary 會拿到 401。
  */
-const { refresh: refreshSummary, contactBookTabBadge, adminTabBadge } = useHomeSummary({
+const { refresh: refreshSummary, adminTabBadge } = useHomeSummary({
   immediate: false,
 })
 
@@ -88,14 +119,20 @@ const TABS = computed<TabItem[]>(() => [
     // 2026-08-28：親師訊息自家長端下架，這一格改放聯絡簿（公告併為其第二分頁）。
     key: 'contact-book',
     label: '聯絡簿',
+    // 與首頁狀態卡、孩子 hub 的聯絡簿入口同一個 icon（parentServices.contactBook）
     icon: 'menu_book',
     activeIcon: 'menu_book',
     path: '/contact-book',
-    badge: contactBookTabBadge.value,
+    // 2026-09-26：不掛徽章。原本是未讀公告數，但聯絡簿頁已無公告分頁，家長點進來
+    // 找不到紅點來源；未讀公告由首頁鈴鐺呈現。待後端 summary 補「未讀聯絡簿」再掛。
+    // 2026-09-08：正中央改為永久隆起的圓形主按鈕（bottom-app-bar 凹槽造型）。
+    prominent: true,
   },
   {
+    // 2026-10-08：「事務」改名「待辦」——頁面改為待處理清單（與首頁同源）＋所有服務；
+    // key／路由維持 admin，既有深連結與 meta.tab 不受影響。
     key: 'admin',
-    label: '事務',
+    label: '待辦',
     icon: 'assignment',
     activeIcon: 'assignment',
     path: '/admin',
@@ -119,22 +156,37 @@ onMounted(() => refreshBadges())
 watch(() => route.fullPath, () => refreshBadges())
 
 const { branding } = useTenantBranding()
-const headerTitle = computed(() => (route.meta?.title as string) || branding.value.titles.parent_short)
-const headerShowBack = computed(() => route.meta?.showBack === true)
+const headerTitle = computed(() =>
+  showOwnTitle.value ? (route.meta?.title as string) || branding.value.titles.parent_short : '',
+)
+
+/**
+ * 返回鍵：有站內上一頁才 router.back()，否則回到同分頁的上一層／分頁根頁
+ * （或 meta.backTo）。不看 window.history.length——它會把 LIFF／LINE OAuth 的
+ * 站外紀錄算進去，從推播深連結進來的詳情頁按返回會退出 App 或循環。
+ * 判斷細節見 utils/backNavigation.ts。
+ */
+function lookupRoute(path: string) {
+  const resolved = router.resolve(path)
+  // catch-all 與 redirect 記錄沒有 name：視為「沒有這一頁」
+  return resolved.name == null ? null : resolved.meta
+}
 
 function onBack() {
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    router.replace('/home')
-  }
+  const action = resolveBackAction(
+    router.options.history.state,
+    { path: route.path, meta: route.meta },
+    lookupRoute,
+  )
+  if (action.type === 'back') router.back()
+  else router.replace(action.path)
 }
 </script>
 
 <template>
   <div class="parent-layout">
     <M3TopAppBar
-      v-if="!isPublic && !isHomeRoute"
+      v-if="!isPublic && !hideOwnTopBar"
       :title="headerTitle"
       :show-back="headerShowBack"
       :on-back="onBack"
@@ -161,7 +213,7 @@ function onBack() {
     <div
       v-if="!isPublic"
       class="parent-conn-slot"
-      :class="{ 'no-topbar': isHomeRoute }"
+      :class="{ 'no-topbar': hideOwnTopBar }"
     >
       <ConnectionBanner />
     </div>
@@ -171,7 +223,7 @@ function onBack() {
       :class="{
         'is-public': isPublic,
         'with-tabbar': !hideTabBar && !isPublic,
-        'no-topbar': isHomeRoute && !isPublic,
+        'no-topbar': hideOwnTopBar && !isPublic,
       }"
     >
       <slot />

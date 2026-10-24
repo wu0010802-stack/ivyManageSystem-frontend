@@ -39,3 +39,66 @@ export function summarizeCsvImportResult(data: unknown): ImportResultSummary {
   }
   return { ok: false, text }
 }
+
+// ── 匯入預覽逐列判讀 ──────────────────────────────────────────────────────────
+
+/** 預覽列判讀需要的欄位（對齊 schema PreviewRow） */
+export interface PreviewRowNoteInput {
+  check: string
+  problem_reason?: 'ambiguous_name' | 'not_employed' | 'protected_span_exceeded' | null
+  overwrite_mode?: 'replace' | 'fill_empty' | null
+  existing_source?: string | null
+}
+
+const PROBLEM_REASON_LABELS: Record<Exclude<NonNullable<PreviewRowNoteInput['problem_reason']>, 'protected_span_exceeded'>, string> = {
+  ambiguous_name: '同名員工，請填寫工號',
+  not_employed: '打卡日不在任職期間',
+}
+
+/** 既有出勤列的來源：補卡核准、手動補登、打卡機（kiosk）會被保護，匯入只補空白側 */
+const PROTECTED_SOURCE_LABELS: Record<string, string> = {
+  correction: '補卡',
+  manual: '手動',
+  kiosk: '打卡機',
+}
+
+/**
+ * 比 check 更具體的說明：找不到員工的原因（同名、不在任職期間），或覆蓋列只補空白側。
+ * 沒有更具體的說明回 null（照用 check 的標籤）。
+ */
+export function previewRowNote(row: PreviewRowNoteInput): string | null {
+  const source = row.existing_source ? PROTECTED_SOURCE_LABELS[row.existing_source] ?? '' : ''
+  // 只補空白側時，匯入那側與既有補卡／手動／打卡機那側湊成的工時不合理（例如跨日、超長），後端不補入
+  if (row.problem_reason === 'protected_span_exceeded') return `與既有${source}紀錄合併後工時不合理，未補入`
+  if (row.problem_reason) return PROBLEM_REASON_LABELS[row.problem_reason] ?? null
+  if (row.overwrite_mode === 'fill_empty') return `保留既有${source}紀錄，只補空白側`
+  return null
+}
+
+/** 摘要：有幾筆既有補卡／手動／打卡機紀錄會被保留（只補空白側）；0 筆回空字串 */
+export function protectedOverwritesText(count: number | null | undefined): string {
+  if (!count || count <= 0) return ''
+  return `其中 ${count} 筆既有補卡／手動／打卡機紀錄會保留，只補空白側。`
+}
+
+const MAX_ROW_ERRORS_SHOWN = 10
+
+/** legacy 直接匯入：逐列錯誤（後端跳過的列）；最多列前 10 筆，其餘寫「另 N 筆」；沒有回空字串 */
+export function rowErrorsText(data: unknown): string {
+  const errors = (data as { row_errors?: unknown } | null)?.row_errors
+  if (!Array.isArray(errors)) return ''
+  const list = errors.filter((e): e is string => typeof e === 'string' && e !== '')
+  if (!list.length) return ''
+  const shown = list.slice(0, MAX_ROW_ERRORS_SHOWN).join('；')
+  const rest = list.length > MAX_ROW_ERRORS_SHOWN ? `；另 ${list.length - MAX_ROW_ERRORS_SHOWN} 筆` : ''
+  return `${list.length} 列未匯入：${shown}${rest}`
+}
+
+/** legacy 直接匯入：姓名對不到員工的列會被跳過，列出姓名讓人補對照；沒有回空字串 */
+export function unmatchedNamesText(data: unknown): string {
+  const names = (data as { unmatched_names?: unknown } | null)?.unmatched_names
+  if (!Array.isArray(names)) return ''
+  const list = names.filter((n): n is string => typeof n === 'string' && n !== '')
+  if (!list.length) return ''
+  return `${list.length} 位姓名未對到員工、未匯入：${list.join('、')}`
+}

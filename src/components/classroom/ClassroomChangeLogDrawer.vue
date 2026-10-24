@@ -20,6 +20,8 @@ const { notify } = useErrorNotify()
 interface ClassroomProp {
   id?: number
   name?: string
+  // 父層傳的是班級「列表列」：有 current_count、沒有 students
+  current_count?: number | null
   students?: { length?: number }[]
 }
 
@@ -155,8 +157,13 @@ const statsCards = computed(() => {
   const s = summary.value || {}
   const enter = (s['入學'] || 0) + (s['復學'] || 0) + (s['轉入'] || 0)
   const leave = (s['退學'] || 0) + (s['轉出'] || 0) + (s['畢業'] || 0) + (s['休學'] || 0)
-  const base = props.classroom?.students?.length ?? 0
-  const retention = base > 0 ? Math.round(((base - leave) / base) * 100) : null
+  // 保留率分母是「期初人數」：目前在籍 + 本學期離班 − 本學期入班。
+  // 若直接用目前在籍當分母，畢業季（離班 > 現有人數）會算出負值。
+  const current = props.classroom?.current_count ?? props.classroom?.students?.length ?? 0
+  const start = current + leave - enter
+  const retention = start > 0
+    ? Math.min(100, Math.max(0, Math.round(((start - leave) / start) * 100)))
+    : null
   return { enter, leave, net: enter - leave, retention }
 })
 
@@ -335,13 +342,13 @@ watch(activeTab, (tab) => {
           <el-col :span="6">
             <div class="stat-card stat-enter">
               <div class="stat-value">{{ statsCards.enter }}</div>
-              <div class="stat-label">收 入</div>
+              <div class="stat-label">入班</div>
             </div>
           </el-col>
           <el-col :span="6">
             <div class="stat-card stat-leave">
               <div class="stat-value">{{ statsCards.leave }}</div>
-              <div class="stat-label">離 班</div>
+              <div class="stat-label">離班</div>
             </div>
           </el-col>
           <el-col :span="6">
@@ -461,17 +468,20 @@ watch(activeTab, (tab) => {
 .stats-row { margin-bottom: 12px; }
 .stat-card {
   text-align: center;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-neutral-200);
   border-radius: 6px;
   padding: 8px 4px;
-  background: #fff;
+  background: var(--surface-color);
 }
 .stat-value { font-size: 20px; font-weight: 700; line-height: 1.2; }
 .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 .stat-enter .stat-value { color: var(--color-success-hover); }
 .stat-leave .stat-value { color: var(--color-danger-hover); }
 .stat-net .stat-value { color: var(--color-info-hover); }
-.stat-ratio .stat-value { color: #7c3aed; }
+/* 紫色數值：以文字色調和，深色模式（--text-primary 翻亮）下自動變亮、維持對比 */
+.stat-ratio .stat-value {
+  color: color-mix(in srgb, var(--color-tint-event-fg) 70%, var(--text-primary));
+}
 
 .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .timeline-wrap { min-height: 120px; }

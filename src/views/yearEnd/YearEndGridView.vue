@@ -9,6 +9,8 @@ import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER, exceptionTypeLab
 import api from '@/api/index'
 import { BONUS_COL_KEYS, SPECIAL_BONUS_LABELS, loadVisibleBonusCols, saveVisibleBonusCols } from './gridColumns'
 import GridRowDetailDrawer from './components/GridRowDetailDrawer.vue'
+import { getEmployees } from '@/api/employees'
+import { employeeNames } from './yearEnd0315'
 
 // Derive row type from the typed API wrapper — no hand-written `any`.
 type GridRow = Awaited<ReturnType<typeof getYearEndGrid>>['data'][number]
@@ -58,11 +60,51 @@ interface BuildSummary {
   unmatched_count: number
   fallback_classes: number
   warnings: string[]
+  // yearend2（Q19 在職基準日）：舊後端未回時視為空清單
+  auto_included_resigned_employee_ids?: number[]
+  excluded_by_cutoff_employee_ids?: number[]
 }
 const buildResult = ref<BuildSummary | null>(null)
 
 // ---- 重新試算 dialog ----
 const buildDialogVisible = ref(false)
+
+// yearend2：基準日前已離職、需例外納入的人改由使用者手動勾選（原本寫死空陣列）。
+// 基準日（週期設定）後才離職者後端會自動納入，不必勾。
+const includedResignedIds = ref<number[]>([])
+const resignedOptions = ref<{ id: number; name: string }[]>([])
+const resignedLoading = ref(false)
+async function loadResignedOptions() {
+  if (resignedOptions.value.length > 0 || resignedLoading.value) return
+  resignedLoading.value = true
+  try {
+    const res = await getEmployees({ is_active: false, limit: 500 })
+    resignedOptions.value = (res.data ?? []).map((e) => ({ id: e.id, name: e.name }))
+  } catch {
+    // 選項載入失敗不阻擋試算（仍可不納入任何離職者照常試算）
+    resignedOptions.value = []
+  } finally {
+    resignedLoading.value = false
+  }
+}
+function openBuildDialog() {
+  buildDialogVisible.value = true
+  loadResignedOptions()
+}
+
+// build 結果名單：id → 姓名（總表列＋離職選項），查無顯示 #id
+const nameById = computed(() => {
+  const m = new Map<number, string>()
+  for (const e of resignedOptions.value) m.set(e.id, e.name)
+  for (const r of rows.value) m.set(r.employee_id, r.employee_name)
+  return m
+})
+const autoIncludedNames = computed(() =>
+  employeeNames(buildResult.value?.auto_included_resigned_employee_ids ?? [], nameById.value),
+)
+const excludedByCutoffNames = computed(() =>
+  employeeNames(buildResult.value?.excluded_by_cutoff_employee_ids ?? [], nameById.value),
+)
 
 // ---- 明細抽屜（Task 4：取代舊手改 dialog，見 GridRowDetailDrawer.vue）----
 const drawerVisible = ref(false)
@@ -283,7 +325,7 @@ async function initGrid() {
 
 async function onBuild() {
   try {
-    const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
+    const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [...includedResignedIds.value] })
     const { built, skipped_finalized, unmatched_count, fallback_classes, warnings } = res.data
     // Task 12②：手動「開始試算」的成功結果也套用同一套「常駐摘要列」語意
     // （原本只彈一次 ElMessage.success，看過就沒了；現在頁頂多一列可回顧的摘要）。
@@ -348,7 +390,7 @@ onMounted(initGrid)
           type="primary"
           :disabled="buildGated"
           data-test="build-button"
-          @click="buildDialogVisible = true"
+          @click="openBuildDialog"
         >
           開始試算
         </el-button>
@@ -435,6 +477,18 @@ onMounted(initGrid)
       class="grid-alert"
       @close="buildResult = null"
     />
+    <div
+      v-if="buildResult && (autoIncludedNames.length || excludedByCutoffNames.length)"
+      class="build-cutoff-lists"
+      data-test="build-cutoff-lists"
+    >
+      <div v-if="autoIncludedNames.length">
+        <b>基準日後才離職、系統已自動納入：</b>{{ autoIncludedNames.join('、') }}
+      </div>
+      <div v-if="excludedByCutoffNames.length">
+        <b>因在職基準日排除：</b>{{ excludedByCutoffNames.join('、') }}
+      </div>
+    </div>
 
     <!-- 載入失敗 → 顯式錯誤卡＋重試，不得落入下方「尚未試算」提示（比照 Batch 9
          CurrentSemesterOverview.vue 的 cycleFetchFailed 既有作法：API 失敗與
@@ -471,7 +525,10 @@ onMounted(initGrid)
       <el-tag
         v-for="key in BONUS_COL_KEYS"
         :key="key"
-        class="bonus-col-chip"
+        class="bonus-col-chip" role="button" tabindex="0"
+        :aria-pressed="visibleBonusCols.has(key)"
+        @keydown.enter.prevent="toggleBonusCol(key)"
+        @keydown.space.prevent="toggleBonusCol(key)"
         :data-test="`bonus-col-chip-${key}`"
         :type="visibleBonusCols.has(key) ? 'primary' : 'info'"
         :effect="visibleBonusCols.has(key) ? 'dark' : 'plain'"
@@ -593,9 +650,23 @@ onMounted(initGrid)
       width="480px"
       data-test="build-dialog"
     >
-      <p>將為所有在職員工試算年終結算單（idempotent）。</p>
-      <p class="build-note">注意：已完成簽核（非 DRAFT）的結算不會被覆寫。</p>
-      <p class="build-note">若需納入離職員工，請聯絡系統管理員透過 API 指定 <code>included_resigned_employee_ids</code>。</p>
+      <p>將建立或更新在職員工的年終草稿結算；重複試算不會新增重複結算單。</p>
+      <p class="build-note">已進入簽核流程的結算資料會保留。</p>
+      <p class="build-note">
+        在職基準日（「設定」步驟的年終規則）後才離職者會自動納入；基準日前已離職、但需例外納入的人請在下方勾選。
+      </p>
+      <el-select
+        v-model="includedResignedIds"
+        multiple
+        filterable
+        clearable
+        :loading="resignedLoading"
+        placeholder="例外納入的離職員工（可不選）"
+        style="width: 100%"
+        data-test="build-included-resigned"
+      >
+        <el-option v-for="e in resignedOptions" :key="e.id" :value="e.id" :label="e.name" />
+      </el-select>
       <template #footer>
         <el-button @click="buildDialogVisible = false">取消</el-button>
         <el-button type="primary" data-test="build-confirm-button" @click="onBuild">確認試算</el-button>
@@ -701,9 +772,18 @@ onMounted(initGrid)
   background: #fefce8;
   display: block;
 }
+.build-cutoff-lists {
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0 0 var(--space-3, 12px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-radius: 4px;
+  background: var(--el-fill-color-light);
+}
 .build-note {
   color: var(--el-text-color-secondary);
   font-size: 13px;
   margin: var(--space-1) 0;
 }
+.bonus-col-chip:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 3px; }
 </style>

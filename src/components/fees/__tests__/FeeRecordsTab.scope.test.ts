@@ -7,15 +7,21 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { shallowMount, flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
+import FeeBillingWorkspace from '@/components/fees/workspace/FeeBillingWorkspace.vue'
 
 const getFeeRecords = vi.fn()
 const getFeeSummary = vi.fn()
 const payFeeRecord = vi.fn()
 vi.mock('@/api/fees', () => ({
+  getFeePeriods: () => Promise.resolve(['115-1', '114-2']),
   getFeeRecords: (...args: unknown[]) => getFeeRecords(...args),
   getFeeSummary: (...args: unknown[]) => getFeeSummary(...args),
   payFeeRecord: (...args: unknown[]) => payFeeRecord(...args),
 }))
+
+vi.mock('@/stores/classroomAll', () => ({ useAllClassroomStore: () => ({ classrooms: [], fetchClassrooms: vi.fn() }) }))
+vi.mock('@/components/fees/workspace/useFeeOverview', () => ({ useFeeOverview: () => ({ actionItems: ref([]), pendingBillSlips: ref(0), pendingBillSlipAmount: ref(0), refresh: vi.fn() }) }))
 
 vi.mock('element-plus', async (orig) => {
   const actual = (await orig()) as Record<string, unknown>
@@ -40,6 +46,7 @@ const SUMMARY = {
 interface TabVm {
   fetchRecords: () => Promise<void>
   resetRecordFilters: () => Promise<void>
+  applySearch: (name: string) => void
   recordFilter: { period: string; classroom_name: string; status: string; student_name: string }
 }
 
@@ -106,6 +113,31 @@ describe('FeeRecordsTab 預設範圍（autoLoad 模式）', () => {
     }
   })
 
+  // 回歸：月表明細面板「到逐筆明細處理（部分繳費／退款）」對已繳清學生會落在
+  // 預設鎖住的「未繳」上 → 顯示「目前篩選沒有結果」，而退款正需要已繳的單。
+  // applySearch 是「帶入指定學生」的唯一入口，語意必須與 initialSearch 進場一致。
+  it('applySearch（月表帶入學生）改看該生全部帳款，不受預設「未繳」鎖住，且只發一輪查詢', async () => {
+    vi.useFakeTimers()
+    try {
+      const w = mountTab({ autoLoad: true, defaultPeriod: '115-1' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(vmOf(w).recordFilter.status).toBe('unpaid')
+      getFeeRecords.mockClear()
+      getFeeSummary.mockClear()
+
+      vmOf(w).applySearch('薛安雅')
+      await vi.advanceTimersByTimeAsync(350)
+
+      expect(vmOf(w).recordFilter.status).toBe('')
+      expect(getFeeRecords).toHaveBeenCalledTimes(1)
+      const params = getFeeRecords.mock.calls[0][0] as Record<string, unknown>
+      expect(params).not.toHaveProperty('status')
+      expect(params).toMatchObject({ student_name: '薛安雅', page: 1 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('清除篩選後回到全部（不帶 period/status），仍只發一輪查詢', async () => {
     const w = mountTab({ autoLoad: true, defaultPeriod: '115-1' })
     await flushPromises()
@@ -125,4 +157,32 @@ describe('FeeRecordsTab 預設範圍（autoLoad 模式）', () => {
     expect(w.text()).toContain('目前篩選沒有結果')
     expect(w.find('[data-test="fee-empty-clear-filters"]').exists()).toBe(true)
   })
+})
+
+it('真實逐筆檢視返回保留學期、班級、姓名與繳費狀態，刷新請求使用保留條件', async () => {
+  vi.useFakeTimers()
+  try {
+    const wrapper = shallowMount(FeeBillingWorkspace, {
+      props: { view: 'receivable', recordsMode: 'list' },
+      global: { stubs: { FeeRecordsTab: false, KeepAlive: false, 'el-table-column': { template: '<span />' } } },
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    const records = wrapper.findComponent(FeeRecordsTab)
+    const filters = (records.vm as unknown as TabVm).recordFilter
+    Object.assign(filters, { period: '114-2', classroom_name: '測試班', student_name: '測試', status: 'partial' })
+    await vi.advanceTimersByTimeAsync(350)
+    const previousCalls = getFeeRecords.mock.calls.length
+    await wrapper.setProps({ view: 'matching' })
+    await wrapper.setProps({ view: 'receivable' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(wrapper.get('[data-test="records-scope"]').text()).toContain('114-2 學期')
+    expect((wrapper.findComponent(FeeRecordsTab).vm as unknown as TabVm).recordFilter).toEqual(filters)
+    expect(getFeeRecords.mock.calls.length).toBe(previousCalls + 1)
+    expect(getFeeRecords).toHaveBeenLastCalledWith(expect.objectContaining({
+      period: '114-2', classroom_name: '測試班', student_name: '測試', status: 'partial',
+    }))
+    wrapper.unmount()
+  } finally {
+    vi.useRealTimers()
+  }
 })

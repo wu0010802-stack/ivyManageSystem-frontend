@@ -184,6 +184,47 @@ describe('CashHandoverTab', () => {
     // draft 批仍可由會計提交
     expect(wrapper.find('[data-test="submit-handover"]').exists()).toBe(true)
   })
+
+  it('回應中斷後相同收款重試沿用 idempotency key，改變勾選內容才換 key', async () => {
+    apiMocks.createCashReceipt.mockRejectedValue(new Error('回應中斷'))
+    const wrapper = await mountTab()
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      selectedRecords: Array<{
+        id: number
+        student_name: string
+        fee_item_name: string
+        period: string
+        amount_due: number
+        amount_paid: number
+      }>
+      submitCash: () => Promise<void>
+    }
+    vm.selectedRecords = [{
+      id: 11,
+      student_name: '王小明',
+      fee_item_name: '學費',
+      period: '115-1',
+      amount_due: 1000,
+      amount_paid: 0,
+    }]
+
+    await vm.submitCash()
+    await vm.submitCash()
+    const calls = apiMocks.createCashReceipt.mock.calls
+    expect(calls[0]?.[0].idempotency_key).toBe(calls[1]?.[0].idempotency_key)
+
+    vm.selectedRecords = [{
+      id: 12,
+      student_name: '陳小華',
+      fee_item_name: '月費',
+      period: '115-1',
+      amount_due: 900,
+      amount_paid: 0,
+    }]
+    await vm.submitCash()
+    expect(calls[2]?.[0].idempotency_key).not.toBe(calls[1]?.[0].idempotency_key)
+  })
 })
 
 describe('PrepaymentDrawer（預繳併入帳款後的額度管理抽屜）', () => {
@@ -258,6 +299,31 @@ describe('PrepaymentDrawer（預繳併入帳款後的額度管理抽屜）', () 
     expect(apiMocks.getPrepaymentMovements).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toContain('收到預繳')
     expect(wrapper.text()).toContain('套用註冊費')
+  })
+
+  it('套用選單包含部分已繳註冊費，且不漏掉第二頁的費用單', async () => {
+    const monthly = Array.from({ length: 50 }, (_, i) => ({
+      id: i + 1, fee_item_name: '月費', period: '115-1',
+      amount_due: 9000, amount_paid: 0, fee_type: 'monthly',
+    }))
+    apiMocks.getFeeRecords.mockResolvedValueOnce({ total: 53, items: monthly })
+    apiMocks.getFeeRecords.mockResolvedValueOnce({ total: 53, items: [{
+      id: 51, fee_item_name: '部分已繳註冊費', period: '115-1',
+      amount_due: 12000, amount_paid: 2000, fee_type: 'registration',
+    }, {
+      id: 52, fee_item_name: '已繳清註冊費', period: '115-1',
+      amount_due: 12000, amount_paid: 12000, fee_type: 'registration',
+    }, {
+      id: 53, fee_item_name: '其他學期註冊費', period: '114-1',
+      amount_due: 12000, amount_paid: 0, fee_type: 'registration',
+    }] })
+    const wrapper = await mountDrawer([CREDITS[0]])
+    await wrapper.find('[data-test="apply-btn"]').trigger('click')
+    await flushPromises()
+    expect(apiMocks.getFeeRecords).toHaveBeenCalledTimes(2)
+    expect(apiMocks.getFeeRecords).toHaveBeenLastCalledWith(expect.objectContaining({ student_id: 5, period: '115-1', page: 2 }))
+    expect(apiMocks.getFeeRecords.mock.calls[0]?.[0]).not.toHaveProperty('status', 'unpaid')
+    expect(wrapper.findAllComponents(ElTableStub).at(-1)?.props('data')).toEqual([expect.objectContaining({ id: 51, amount_paid: 2000 })])
   })
 
   it('套用註冊費：只列學期相符的註冊費費用單，確認後 emit refresh', async () => {
@@ -444,7 +510,8 @@ describe('CloseTab', () => {
   const baseSummary = {
     close_year: 2026, close_month: 8,
     period: { start: '2026-08-01', end: '2026-08-31' },
-    bank: { credit_total: 2052479, unallocated: 0, unclassified_count: 0, status_summary: {}, allocated_net: 2052479, by_type: {} },
+    collection: { gross_total: 0, net_total: 0, fee_total: 0, unallocated: 0 },
+    bank: { ignored_amount: 0, credit_total: 2052479, unallocated: 0, unclassified_count: 0, status_summary: {}, allocated_net: 2052479, by_type: {} },
     cash: {
       receipts_total: 100000, handover_expected: 100000,
       handover_actual: 100000, handover_variance: 0, handover_unconfirmed: 0,
@@ -479,7 +546,7 @@ describe('CloseTab', () => {
     const wrapper = await mountTab()
     await flushPromises()
     expect(wrapper.find('[data-test="close-cards"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('✓ 平衡')
+    expect(wrapper.text()).toContain('收款等式平衡')
     const btn = wrapper.find('[data-test="close-btn"]')
     expect(btn.text()).toContain('關帳')
     expect(btn.text()).not.toContain('帶例外')
@@ -499,9 +566,12 @@ describe('CloseTab', () => {
     const wrapper = await mountTab()
     await flushPromises()
     const btn = wrapper.find('[data-test="close-btn"]')
-    expect(btn.text()).toContain('帶例外關帳')
+    expect(btn.text()).toContain('確認關帳')
     expect(btn.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-test="exception-note"]').exists()).toBe(false)
+    await wrapper.get('[data-test="exception-toggle"]').trigger('click')
     expect(wrapper.find('[data-test="exception-note"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="exception-close-btn"]').attributes('disabled')).toBeDefined()
   })
 
   it('預繳三向與老闆退款分開顯示', async () => {

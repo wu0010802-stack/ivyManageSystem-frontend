@@ -3,6 +3,8 @@
  */
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../LoginView.vue'
@@ -61,9 +63,33 @@ describe('LoginView — 品牌 logo', () => {
     expect(logo.attributes('src')).toBe('/images/login-logo-512.png')
     expect(logo.attributes('alt')).toBe('常春藤教育機構')
   })
+
+  // D-24（2026-10-14）：logo 在 375px 手機上不再佔掉半個首屏，登入卡與主要動作要在不捲動時可見。
+  it('logo 寬度縮為 min(120px, 36vw)', () => {
+    const sfc = readFileSync(resolve(__dirname, '../LoginView.vue'), 'utf-8')
+    const rule = sfc.match(/\.welcome-mark\s*\{([^}]*)\}/s)?.[1] ?? ''
+    expect(rule).toMatch(/width:\s*min\(120px,\s*36vw\)/)
+  })
 })
 
 describe('LoginView — friendly error', () => {
+  // D-24：登入錯誤的「下一步」不得出現工程字眼 LIFF，也不帶 💡 裝飾 emoji。
+  it('LINE_PROFILE_FETCH_FAILED → nextStep 不含「LIFF」字樣、不帶 💡', async () => {
+    mockLiffLogin.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 502, data: { detail: { code: 'LINE_PROFILE_FETCH_FAILED', message: '無法取得 LINE 個人資料' } } },
+      errorDetail: { code: 'LINE_PROFILE_FETCH_FAILED', message: '無法取得 LINE 個人資料' },
+      displayMessage: '無法取得 LINE 個人資料',
+    })
+    const w = mountLoginView()
+    await flushPromises()
+    const nextStep = w.find('[data-testid="login-error-next-step"]')
+    expect(nextStep.exists()).toBe(true)
+    expect(nextStep.text()).not.toMatch(/LIFF/)
+    expect(nextStep.text()).not.toContain('💡')
+    expect(nextStep.text()).toContain('LINE')
+  })
+
   it('LINE_BINDING_EXPIRED → 顯示 message + nextStep（重新綁定）', async () => {
     mockLiffLogin.mockRejectedValueOnce({
       isAxiosError: true,
@@ -102,13 +128,19 @@ describe('LoginView — friendly error', () => {
     expect(w.find('[data-testid="login-error-next-step"]').exists()).toBe(false)
   })
 
-  it('LIFF 初始化失敗 → 顯示自製 nextStep（重新開啟 LIFF）', async () => {
-    mockInitLiff.mockRejectedValueOnce(new Error('liff sdk init failed'))
+  it('LIFF 初始化失敗 → 家長看得懂的文案與下一步；SDK 原始錯誤只留在 console', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sdkError = new Error('liff sdk init failed')
+    mockInitLiff.mockRejectedValueOnce(sdkError)
     const w = mountLoginView()
     await flushPromises()
     const errorBox = w.find('[data-testid="login-error"]')
     expect(errorBox.exists()).toBe(true)
-    expect(errorBox.text()).toContain('liff sdk init failed')
-    expect(w.find('[data-testid="login-error-next-step"]').text()).toMatch(/重新開啟 LIFF/)
+    expect(errorBox.text()).toContain('LINE 登入暫時無法啟動')
+    expect(errorBox.text()).not.toContain('liff sdk init failed')
+    expect(errorBox.text()).not.toMatch(/LIFF/)
+    expect(w.find('[data-testid="login-error-next-step"]').text()).toMatch(/回到 LINE 重新點開連結/)
+    expect(warn).toHaveBeenCalledWith(expect.any(String), sdkError)
+    warn.mockRestore()
   })
 })

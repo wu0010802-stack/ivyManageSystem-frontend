@@ -69,15 +69,111 @@ describe('DismissalPosStudentCard', () => {
     expect(w.emitted('quick-dispatch')).toBeUndefined()
   })
 
-  it('more-icon 兩個選單項目皆 disabled', () => {
+  function menuItems(w: ReturnType<typeof mount>) {
+    return w.findAllComponents({ name: 'ElDropdownItem' }).map(item => ({
+      text: item.text(),
+      disabled: item.props('disabled') as boolean,
+      command: item.props('command') as string | undefined,
+    }))
+  }
+
+  async function runCommand(w: ReturnType<typeof mount>, command: string) {
+    const dropdown = w.findComponent({ name: 'ElDropdown' })
+    dropdown.vm.$emit('command', command)
+    await w.vm.$nextTick()
+  }
+
+  it('待接送：選單提供娃娃車接走與病假／事假三個可用項目', () => {
     const w = mount(DismissalPosStudentCard, {
       props: { student: STUDENT, status: 'unpicked' },
     })
-    const items = w.findAllComponents({ name: 'ElDropdownItem' })
-    expect(items.length).toBe(2)
-    items.forEach(item => {
-      expect(item.props('disabled')).toBe(true)
+    const items = menuItems(w)
+    expect(items.map(i => i.command)).toEqual(['mark-bus', 'mark-leave:病假', 'mark-leave:事假'])
+    expect(items.every(i => !i.disabled)).toBe(true)
+    expect(items[0].text).toContain('標記已被娃娃車接走')
+    expect(w.text()).not.toContain('功能開發中')
+  })
+
+  it('待接送：選單指令 emit 對應事件', async () => {
+    const w = mount(DismissalPosStudentCard, {
+      props: { student: STUDENT, status: 'unpicked' },
     })
+    await runCommand(w, 'mark-bus')
+    await runCommand(w, 'mark-leave:事假')
+    expect(w.emitted('mark-bus')).toEqual([[STUDENT]])
+    expect(w.emitted('mark-leave')).toEqual([[STUDENT, '事假']])
+    expect(w.emitted('quick-dispatch')).toBeUndefined()
+  })
+
+  it('接送台補登的娃娃車：可撤銷，emit unmark-bus(student, callId)', async () => {
+    const w = mount(DismissalPosStudentCard, {
+      props: { student: STUDENT, status: 'bus_picked', detail: { busManualCallId: 55 } },
+    })
+    const items = menuItems(w)
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ command: 'unmark-bus', disabled: false })
+    await runCommand(w, 'unmark-bus')
+    expect(w.emitted('unmark-bus')).toEqual([[STUDENT, 55]])
+  })
+
+  it('隨車老師打卡帶入的娃娃車：不可從 POS 撤銷，顯示路線', () => {
+    const w = mount(DismissalPosStudentCard, {
+      props: { student: STUDENT, status: 'bus_picked', detail: { busRouteName: '放學一號車' } },
+    })
+    const items = menuItems(w)
+    expect(items).toHaveLength(1)
+    expect(items[0].disabled).toBe(true)
+    expect(items[0].text).toContain('隨車老師')
+    expect(items[0].text).toContain('放學一號車')
+  })
+
+  it('接送台補登的請假：可撤銷，emit unmark-leave(student)', async () => {
+    const w = mount(DismissalPosStudentCard, {
+      props: {
+        student: STUDENT,
+        status: 'on_leave',
+        detail: { leaveType: '病假', leaveMarkedByPos: true },
+      },
+    })
+    expect(menuItems(w)[0]).toMatchObject({ command: 'unmark-leave', disabled: false })
+    await runCommand(w, 'unmark-leave')
+    expect(w.emitted('unmark-leave')).toEqual([[STUDENT]])
+  })
+
+  it('家長請假或點名寫入的請假：不可從 POS 撤銷', () => {
+    const w = mount(DismissalPosStudentCard, {
+      props: {
+        student: STUDENT,
+        status: 'on_leave',
+        detail: { leaveType: '事假', leaveMarkedByPos: false },
+      },
+    })
+    const items = menuItems(w)
+    expect(items).toHaveLength(1)
+    expect(items[0].disabled).toBe(true)
+    expect(items[0].text).toContain('點名頁')
+  })
+
+  it('請假徽章帶出假別', () => {
+    const w = mount(DismissalPosStudentCard, {
+      props: { student: STUDENT, status: 'on_leave', detail: { leaveType: '病假' } },
+    })
+    expect(w.find('.pos-student-card__status--leave').text()).toContain('病假')
+  })
+
+  it('已被家長接走：選單只有說明、無可用項目', () => {
+    const w = mount(DismissalPosStudentCard, {
+      props: { student: STUDENT, status: 'guardian_picked' },
+    })
+    const items = menuItems(w)
+    expect(items.every(i => i.disabled)).toBe(true)
+  })
+
+  it('busy 時整個選單停用（避免送出重複補登）', () => {
+    const w = mount(DismissalPosStudentCard, {
+      props: { student: STUDENT, status: 'unpicked', busy: true },
+    })
+    expect(w.findComponent({ name: 'ElDropdown' }).props('disabled')).toBe(true)
   })
 
   it('aria-label 依狀態描述姓名＋狀態', () => {

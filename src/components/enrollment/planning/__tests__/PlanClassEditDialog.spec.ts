@@ -158,12 +158,62 @@ describe('PlanClassEditDialog', () => {
     expect(events![0][0]).toBe(10)
   })
 
+  it('刪除確認文案用「待分班」（與工作台用詞一致）', async () => {
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    const w = mountDialog({ mode: 'edit', planClass })
+    await flushPromises()
+    await vmOf(w).onDelete()
+    expect(String(confirmSpy.mock.calls[0][0])).toContain('待分班')
+    expect(String(confirmSpy.mock.calls[0][0])).not.toContain('未分班')
+  })
+
   it('edit 模式：取消刪除確認時不 emit delete', async () => {
     vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
     const w = mountDialog({ mode: 'edit', planClass })
     await flushPromises()
     await vmOf(w).onDelete()
     expect(w.emitted('delete')).toBeFalsy()
+  })
+
+  it('使用 FormDialog 標準殼層；新增用 compact、編輯用 standardNarrow', async () => {
+    const wCreate = mountDialog({ mode: 'create' })
+    await flushPromises()
+    expect(wCreate.findComponent({ name: 'FormDialog' }).props('size')).toBe('compact')
+    const wEdit = mountDialog({ mode: 'edit', planClass })
+    await flushPromises()
+    expect(wEdit.findComponent({ name: 'FormDialog' }).props('size')).toBe('standardNarrow')
+  })
+
+  it('班級代號欄位可編輯並帶入 payload；清空送 null', async () => {
+    const w = mountDialog({ mode: 'edit', planClass })
+    await flushPromises()
+    const input = w.find('.field-class-code input')
+    expect((input.element as HTMLInputElement).value).toBe('K1A')
+    await input.setValue(' 大2 ')
+    vmOf(w).onSubmit()
+    expect((w.emitted('update')![0][1] as Record<string, unknown>).class_code).toBe('大2')
+
+    await input.setValue('  ')
+    vmOf(w).onSubmit()
+    expect((w.emitted('update')![1][1] as Record<string, unknown>).class_code).toBeNull()
+  })
+
+  it('用詞統一為「班導」，不出現「班導師」', async () => {
+    const w = mountDialog({ mode: 'edit', planClass })
+    await flushPromises()
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('班導')
+    expect(text).not.toContain('班導師')
+    w.unmount()
+  })
+
+  it('改過欄位後關閉會走未儲存確認（dirty）', async () => {
+    const w = mountDialog({ mode: 'edit', planClass })
+    await flushPromises()
+    const dirty = w.findComponent({ name: 'FormDialog' }).props('dirty') as () => boolean
+    expect(dirty()).toBe(false)
+    vmOf(w).form.capacity = 25
+    expect(dirty()).toBe(true)
   })
 
   it('開啟時載入年級與教師選項', async () => {

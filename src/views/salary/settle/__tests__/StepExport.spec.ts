@@ -1,11 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import StepExport from '../StepExport.vue'
 import type { SettlementRecord } from '@/composables/useSalarySettlement'
 
 const downloadFileMock = vi.fn()
-vi.mock('@/utils/download', () => ({ downloadFile: (...a: unknown[]) => downloadFileMock(...a) }))
+const downloadFileWithHeadersMock = vi.fn()
+vi.mock('@/utils/download', () => ({
+    downloadFile: (...a: unknown[]) => downloadFileMock(...a),
+    downloadFileWithHeaders: (...a: unknown[]) => downloadFileWithHeadersMock(...a),
+}))
+const messageWarningMock = vi.fn()
+vi.mock('element-plus', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('element-plus')>()),
+    ElMessage: { warning: (...a: unknown[]) => messageWarningMock(...a) },
+}))
 const hasFullSalaryViewMock = vi.fn()
 vi.mock('@/utils/auth', () => ({
     hasPermission: vi.fn().mockReturnValue(true),
@@ -49,11 +58,14 @@ const STUBS = {
     SalarySnapshotDialog: true,
 }
 
-const mountStep = (settlement: ReturnType<typeof makeSettlement>) =>
+const mountStep = (
+    settlement: ReturnType<typeof makeSettlement>,
+    query = reactive({ year: 2026, month: 5 }),
+) =>
     mount(StepExport, {
         global: {
             stubs: STUBS,
-            provide: { settlement, settleQuery: { year: 2026, month: 5 } },
+            provide: { settlement, settleQuery: query },
             mocks: { $router: { push: vi.fn() } },
         },
     })
@@ -61,6 +73,8 @@ const mountStep = (settlement: ReturnType<typeof makeSettlement>) =>
 describe('StepExport', () => {
     beforeEach(() => {
         downloadFileMock.mockReset()
+        downloadFileWithHeadersMock.mockReset()
+        messageWarningMock.mockReset()
         hasFullSalaryViewMock.mockReset().mockReturnValue(true)
     })
 
@@ -71,7 +85,7 @@ describe('StepExport', () => {
             button.text().includes('名冊') || button.text().includes('Excel') || button.text().includes('PDF'),
         )
 
-        expect(exportButtons).toHaveLength(6)
+        expect(exportButtons).toHaveLength(7)
         expect(exportButtons.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
         await exportButtons[0].trigger('click')
         expect(downloadFileMock).not.toHaveBeenCalled()
@@ -82,25 +96,40 @@ describe('StepExport', () => {
         expect(wrapper.text()).toContain('尚有 1 筆未封存')
     })
 
-    it('匯出轉帳名冊成功 → downloadFile 帶 type 與檔名；匯出後顯示完成卡', async () => {
-        downloadFileMock.mockResolvedValueOnce(true)
+    it('匯出轉帳名冊成功 → downloadFileWithHeaders 帶 type 與檔名；匯出後顯示完成卡', async () => {
+        downloadFileWithHeadersMock.mockResolvedValueOnce({})
         const wrapper = mountStep(makeSettlement([rec()]))
         const btn = wrapper.findAll('button').find((b) => b.text().includes('節慶獎金名冊'))
         await btn!.trigger('click')
         await flushPromises()
-        expect(downloadFileMock).toHaveBeenCalledWith(
+        expect(downloadFileWithHeadersMock).toHaveBeenCalledWith(
             '/salaries/2026/5/transfer-roster?type=festival',
             '2026年05月_節慶獎金轉帳名冊.xlsx',
         )
         expect(wrapper.text()).toContain('本月結薪完成')
     })
 
-    it('匯出轉帳名冊失敗（downloadFile 回 false）→ 不顯示完成卡（避免誤判結薪完成）', async () => {
-        downloadFileMock.mockResolvedValueOnce(false)
+    it('匯出轉帳名冊失敗（downloadFileWithHeaders 回 null）→ 不顯示完成卡（避免誤判結薪完成）', async () => {
+        downloadFileWithHeadersMock.mockResolvedValueOnce(null)
         const wrapper = mountStep(makeSettlement([rec()]))
         const btn = wrapper.findAll('button').find((b) => b.text().includes('節慶獎金名冊'))
         await btn!.trigger('click')
         await flushPromises()
+        expect(wrapper.text()).not.toContain('本月結薪完成')
+    })
+
+    it('切換月份後不沿用前一月份的匯出完成狀態', async () => {
+        downloadFileWithHeadersMock.mockResolvedValueOnce({})
+        const query = reactive({ year: 2026, month: 5 })
+        const wrapper = mountStep(makeSettlement([rec()]), query)
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('節慶獎金名冊'))!
+        await btn.trigger('click')
+        await flushPromises()
+        expect(wrapper.text()).toContain('本月結薪完成')
+
+        query.month = 6
+        await flushPromises()
+
         expect(wrapper.text()).not.toContain('本月結薪完成')
     })
 
@@ -117,6 +146,48 @@ describe('StepExport', () => {
         // 結束後可再次匯出
         await btn.trigger('click')
         expect(downloadFileMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('領現名冊（2026-10-22 義華 #52）：type=cash、檔名為領現名冊而非轉帳名冊', async () => {
+        downloadFileWithHeadersMock.mockResolvedValueOnce({})
+        const wrapper = mountStep(makeSettlement([rec()]))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('領現名冊'))
+        expect(btn).toBeTruthy()
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(downloadFileWithHeadersMock).toHaveBeenCalledWith(
+            '/salaries/2026/5/transfer-roster?type=cash',
+            '2026年05月_領現名冊.xlsx',
+        )
+    })
+
+    it('名冊 header X-Roster-Excluded-Count > 0 → 警示有 N 人未列入名冊', async () => {
+        downloadFileWithHeadersMock.mockResolvedValueOnce({ 'x-roster-excluded-count': '2' })
+        const wrapper = mountStep(makeSettlement([rec()]))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('薪資本薪名冊'))
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(messageWarningMock).toHaveBeenCalledTimes(1)
+        expect(messageWarningMock.mock.calls[0][0]).toContain('有 2 人未列入名冊')
+        expect(messageWarningMock.mock.calls[0][0]).toContain('領現名冊')
+    })
+
+    it('名冊 header 為 0 或缺 → 不警示', async () => {
+        downloadFileWithHeadersMock.mockResolvedValueOnce({ 'x-roster-excluded-count': '0' })
+        downloadFileWithHeadersMock.mockResolvedValueOnce({})
+        const wrapper = mountStep(makeSettlement([rec()]))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('薪資本薪名冊'))!
+        await btn.trigger('click')
+        await flushPromises()
+        await btn.trigger('click')
+        await flushPromises()
+        expect(downloadFileWithHeadersMock).toHaveBeenCalledTimes(2)
+        expect(messageWarningMock).not.toHaveBeenCalled()
+    })
+
+    it('提示被排除者會列在「未列入名冊」工作表', () => {
+        const wrapper = mountStep(makeSettlement([rec()]))
+        expect(wrapper.text()).toContain('未列入名冊')
     })
 
     it('匯出總表 Excel/PDF', async () => {

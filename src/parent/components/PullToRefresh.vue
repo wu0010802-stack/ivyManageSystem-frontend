@@ -75,8 +75,11 @@ const indicatorOpacity = computed<number>(() => {
   return Math.min(1, pullDistance.value / props.threshold)
 })
 
+// 靜止時 transform 設 none：常駐 translate3d 會把整頁內容升成一張巨大合成層
+// （長頁面吃 GPU 記憶體、捲動時容易破圖），且會讓內部 position: fixed 元素改成
+// 相對此容器定位、跟著內容一起捲。只在下拉／回彈期間才加 transform。
 const contentStyle = computed<Record<string, string>>(() => ({
-  transform: `translate3d(0, ${pullDistance.value}px, 0)`,
+  transform: pullDistance.value > 0 ? `translate3d(0, ${pullDistance.value}px, 0)` : 'none',
   transition: dragging.value ? 'none' : 'transform 240ms cubic-bezier(0.4, 0, 0.2, 1)',
 }))
 
@@ -190,8 +193,10 @@ defineExpose({ _triggerRefresh })
   .ptr-arrow { transition: none; }
 }
 
-.ptr-content {
-  /* 由 inline style 控 transform + transition */
+/* .ptr-content 由 inline style 控 transform + transition；
+   will-change 只在拖曳／刷新期間開，避免整頁內容常駐合成層 */
+.is-dragging .ptr-content,
+.is-refreshing .ptr-content {
   will-change: transform;
 }
 </style>

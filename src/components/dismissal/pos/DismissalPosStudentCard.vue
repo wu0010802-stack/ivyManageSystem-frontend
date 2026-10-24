@@ -1,9 +1,14 @@
 <script setup lang="ts">
 /**
  * 中欄單一學生卡片（T-006，2026-08-22 密度調整）：姓名（大字）＋狀態徽章＋3-dots
- * more-icon 選單。status 由父層傳入（吃 T-002 useStudentPosStatus 的輸出），本
- * 元件不自己判斷學生狀態。more-icon 的「已被娃娃車接走」「請假」兩項本輪皆
- * disabled 且不綁任何 handler（對齊 D3/D4：本輪不開發後端，只留視覺 placeholder）。
+ * more-icon 選單。status／detail 由父層傳入（吃 useStudentPosStatus 的輸出），本
+ * 元件不自己判斷學生狀態。
+ *
+ * more-icon 選單（posbus01）只 emit 意圖，API 呼叫由 DismissalPosBoard 負責：
+ * - 待接送：標記已被娃娃車接走／標記請假（病假、事假）
+ * - 接送台補登的娃娃車或請假：撤銷
+ * - 系統帶入（隨車老師打卡、家長請假、老師點名）：只顯示來源說明，POS 不能撤，
+ *   避免辦公室從這裡蓋掉別處的正式紀錄。
  *
  * 對照 docs/mockups/2026-08-22-dismissal-pos-card-density.html：卡片縮小、姓名放大，
  * 拿掉「👆 點卡片＝現場接送」「👆 點卡片可再次通知」等操作提示文字——只留姓名＋⋮，
@@ -14,20 +19,32 @@
  */
 import { computed } from 'vue'
 import { ElDropdown, ElDropdownMenu, ElDropdownItem } from 'element-plus'
-import type { PosStudentStatus } from '@/types/dismissalPos'
+import type { PosStudentStatus, PosStudentStatusDetail } from '@/types/dismissalPos'
 
 export interface DismissalPosStudentCardStudent {
   id: number
   name: string
 }
 
-const props = defineProps<{
-  student: DismissalPosStudentCardStudent
-  status: PosStudentStatus
-}>()
+export type PosLeaveType = '病假' | '事假'
+
+const props = withDefaults(
+  defineProps<{
+    student: DismissalPosStudentCardStudent
+    status: PosStudentStatus
+    detail?: PosStudentStatusDetail
+    /** 補登／撤銷請求進行中：停用選單避免重複送出 */
+    busy?: boolean
+  }>(),
+  { detail: () => ({}), busy: false },
+)
 
 const emit = defineEmits<{
   'quick-dispatch': [student: DismissalPosStudentCardStudent]
+  'mark-bus': [student: DismissalPosStudentCardStudent]
+  'mark-leave': [student: DismissalPosStudentCardStudent, leaveType: PosLeaveType]
+  'unmark-bus': [student: DismissalPosStudentCardStudent, callId: number]
+  'unmark-leave': [student: DismissalPosStudentCardStudent]
 }>()
 
 interface StatusMeta {
@@ -49,14 +66,71 @@ const STATUS_META: Record<Exclude<PosStudentStatus, 'unpicked'>, StatusMeta> = {
 }
 
 const isUnpicked = computed(() => props.status === 'unpicked')
-const statusMeta = computed<StatusMeta | null>(() =>
-  isUnpicked.value ? null : STATUS_META[props.status as Exclude<PosStudentStatus, 'unpicked'>],
-)
+const statusMeta = computed<StatusMeta | null>(() => {
+  if (isUnpicked.value) return null
+  const meta = STATUS_META[props.status as Exclude<PosStudentStatus, 'unpicked'>]
+  if (props.status === 'on_leave' && props.detail.leaveType) {
+    return { ...meta, label: `請假（${props.detail.leaveType}）` }
+  }
+  return meta
+})
+
+interface MenuItem {
+  key: string
+  label: string
+  note?: string
+  /** 無 command＝純說明、disabled */
+  command?: string
+}
+
+const menuItems = computed<MenuItem[]>(() => {
+  const d = props.detail
+  switch (props.status) {
+    case 'unpicked':
+      return [
+        { key: 'bus', label: '🚌 標記已被娃娃車接走', command: 'mark-bus' },
+        { key: 'sick', label: '🌙 標記請假（病假）', command: 'mark-leave:病假' },
+        { key: 'personal', label: '🌙 標記請假（事假）', command: 'mark-leave:事假' },
+      ]
+    case 'bus_picked':
+      if (d.busManualCallId != null) {
+        return [{ key: 'unbus', label: '↩︎ 撤銷娃娃車接走標記', command: 'unmark-bus' }]
+      }
+      return [{
+        key: 'bus-auto',
+        label: '🚌 由隨車老師端記錄上車',
+        note: d.busRouteName ? `${d.busRouteName}，如有誤請隨車老師修正` : '如有誤請隨車老師修正',
+      }]
+    case 'on_leave':
+      if (d.leaveMarkedByPos) {
+        return [{ key: 'unleave', label: '↩︎ 撤銷請假標記', command: 'unmark-leave' }]
+      }
+      return [{
+        key: 'leave-auto',
+        label: '🌙 家長請假或老師點名的紀錄',
+        note: '如有誤請到點名頁修改',
+      }]
+    default:
+      return [{ key: 'picked', label: '學生今天已被接走', note: '不需要再標記' }]
+  }
+})
+
+function handleCommand(command: string) {
+  if (props.busy) return
+  if (command === 'mark-bus') emit('mark-bus', props.student)
+  else if (command === 'mark-leave:病假') emit('mark-leave', props.student, '病假')
+  else if (command === 'mark-leave:事假') emit('mark-leave', props.student, '事假')
+  else if (command === 'unmark-leave') emit('unmark-leave', props.student)
+  else if (command === 'unmark-bus' && props.detail.busManualCallId != null) {
+    emit('unmark-bus', props.student, props.detail.busManualCallId)
+  }
+}
 
 /**
  * 家長已接送後仍可再次點擊發起（家長折返／誤標完成等情境）；重複發起防線在
  * useDismissalPosQueue.addToQueue（staging 倒數中或已有 active 通知會被忽略）。
- * on_leave / bus_picked 維持不可點（本輪無資料來源，純視覺 placeholder）。
+ * on_leave / bus_picked 維持不可點（孩子不在園內等人接，不該再發通知）；
+ * 家長臨時改來接時，辦公室先撤銷補登再點卡片。
  */
 const canDispatch = computed(
   () => props.status === 'unpicked' || props.status === 'guardian_picked',
@@ -86,25 +160,30 @@ function handleDispatch() {
     @keydown.enter.prevent="handleDispatch"
     @keydown.space.prevent="handleDispatch"
   >
-    <el-dropdown class="pos-student-card__more" trigger="click">
+    <el-dropdown
+      class="pos-student-card__more"
+      trigger="click"
+      :disabled="busy"
+      @command="handleCommand"
+    >
       <button
         type="button"
         class="pos-student-card__more-trigger"
         aria-label="更多動作"
+        :disabled="busy"
         @click.stop
       >⋮</button>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item disabled>
+          <el-dropdown-item
+            v-for="item in menuItems"
+            :key="item.key"
+            :command="item.command"
+            :disabled="!item.command"
+          >
             <div class="pos-student-card__menu-item">
-              <span>🚌 標記已被娃娃車接走</span>
-              <span class="pos-student-card__menu-note">功能開發中，尚未串接娃娃車資料</span>
-            </div>
-          </el-dropdown-item>
-          <el-dropdown-item disabled>
-            <div class="pos-student-card__menu-item">
-              <span>🌙 標記請假</span>
-              <span class="pos-student-card__menu-note">功能開發中，尚未串接請假資料</span>
+              <span>{{ item.label }}</span>
+              <span v-if="item.note" class="pos-student-card__menu-note">{{ item.note }}</span>
             </div>
           </el-dropdown-item>
         </el-dropdown-menu>

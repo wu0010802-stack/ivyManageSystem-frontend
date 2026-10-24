@@ -11,6 +11,7 @@ export const RECRUITMENT_FIELD_SECTION: Record<string, RecruitmentFormSection> =
   grade: 'core',
   birthday: 'core',
   phone: 'core',
+  contact_name: 'core',
   rides_bus: 'core',
   // 聯絡與來源（district 已於 2026-08-28 自表單移除，改由後端從 address 解析）
   address: 'contact',

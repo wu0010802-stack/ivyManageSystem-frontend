@@ -15,6 +15,8 @@ vi.mock('@/api/salary', () => ({
     confirmEnrollmentSnapshot: (...a: unknown[]) => confirmMock(...a),
 }))
 
+// 2026-08-21 薄殼化：本元件改為委派 @/components/enrollment/FestivalHeadcountPanel，
+// 並依 SALARY_WRITE 推導 readonly（readonly 時按鈕以 v-if 隱藏，非 disabled）。
 vi.mock('@/utils/auth', () => ({
     hasPermission: (...a: unknown[]) => hasPermissionMock(...a),
 }))
@@ -116,8 +118,9 @@ describe('EnrollmentSnapshotPanel — 發放月涵蓋月人數快照', () => {
         await flushPromises()
 
         expect(generateMock).toHaveBeenCalledTimes(2)
-        expect(generateMock).toHaveBeenCalledWith({ year: 2026, month: 2, force: false })
-        expect(generateMock).toHaveBeenCalledWith({ year: 2026, month: 3, force: false })
+        // 2026-08-20 起後端刻意不提供 force：覆寫已確認月份的唯一途徑是 /reopen。
+        expect(generateMock).toHaveBeenCalledWith({ year: 2026, month: 2 })
+        expect(generateMock).toHaveBeenCalledWith({ year: 2026, month: 3 })
         expect(getMock).toHaveBeenCalled() // refresh
     })
 
@@ -128,7 +131,7 @@ describe('EnrollmentSnapshotPanel — 發放月涵蓋月人數快照', () => {
         expect(wrapper.find('.snap-card').exists()).toBe(false)
     })
 
-    it('沒有 SALARY_WRITE 時產生與確認按鈕皆停用，且不能呼叫寫入 API', async () => {
+    it('沒有 SALARY_WRITE 時看不到寫入按鈕，也不會呼叫寫入 API', async () => {
         hasPermissionMock.mockReturnValue(false)
         getMock.mockImplementation((_y: number, month: number) =>
             Promise.resolve(
@@ -151,11 +154,12 @@ describe('EnrollmentSnapshotPanel — 發放月涵蓋月人數快照', () => {
             button.text().includes('產生') || button.text().includes('確認本月'),
         )
 
-        expect(writeButtons).toHaveLength(2)
-        expect(writeButtons.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
-        await writeButtons[0].trigger('click')
-        await writeButtons[1].trigger('click')
+        // 薄殼委派的 FestivalHeadcountPanel 以 v-if 隱藏寫入按鈕（非 disabled），
+        // 故 readonly 下這批按鈕根本不存在；守衛意圖（不得寫入）不變。
+        expect(writeButtons).toHaveLength(0)
+        for (const button of wrapper.findAll('button')) await button.trigger('click')
         expect(generateMock).not.toHaveBeenCalled()
         expect(confirmMock).not.toHaveBeenCalled()
+        expect(patchMock).not.toHaveBeenCalled()
     })
 })

@@ -75,4 +75,20 @@ describe('LeaveAttachments', () => {
     expect(wrapper.find('input[type="file"]').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('上傳中')
   })
+
+  it('不可編輯的預設說明符合實際規則（不再說「已成立」就不能傳）', () => {
+    const wrapper = mount(LeaveAttachments, {
+      props: { attachments: [], editable: false, urlResolver: resolver },
+    })
+    const hint = wrapper.find('.detail-hint').text()
+    expect(hint).not.toContain('已成立')
+    expect(hint).toContain('含當天')
+  })
+
+  it('呼叫端給的 lockedReason 優先顯示', () => {
+    const wrapper = mount(LeaveAttachments, {
+      props: { attachments: [], editable: false, lockedReason: '這筆請假已取消', urlResolver: resolver },
+    })
+    expect(wrapper.find('.detail-hint').text()).toBe('這筆請假已取消')
+  })
 })

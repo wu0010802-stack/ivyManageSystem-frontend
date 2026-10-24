@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import OfflineQueueBadge from '@/components/portal/OfflineQueueBadge.vue'
+import { WarningFilled } from '@element-plus/icons-vue'
 
 defineProps({
   isOnline: { type: Boolean, required: true },
@@ -19,7 +20,8 @@ defineEmits(['sync-now'])
   >
     <div class="offline-panel__status">
       <span v-if="!isOnline" class="status-text status-text--offline">
-        ⚠ 目前離線，操作將存入佇列
+        <el-icon aria-hidden="true"><WarningFilled /></el-icon>
+        目前離線，操作將存入佇列
       </span>
       <OfflineQueueBadge
         v-else-if="pendingCount > 0"
@@ -59,6 +61,9 @@ defineEmits(['sync-now'])
 }
 
 .status-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-size: var(--text-sm);
   color: var(--pt-text-strong);
 }

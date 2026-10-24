@@ -57,13 +57,21 @@ const emit = defineEmits<{ 'locate-issue': [issue: IssueOut] }>()
 // 與後端 services/classroom_year_plan/issues.py 的 code 對齊；未知 code fallback
 // 用該組首筆 message 當標題（後端新增 code 時前端不壞版）。
 const GROUP_TITLES: Record<string, string> = {
-  student_unassigned: '學生尚未分派班級',
+  student_unassigned: '待分班學生',
   retain_wrong_grade: '留級學生年級不符',
+  graduate_needs_retain: '畢業生要續讀須標記留級',
+  cross_grade_assignment: '學生分到不同年級的班',
   capacity_exceeded: '班級人數超過容量',
-  head_teacher_missing: '班級尚未指派導師',
-  teacher_duplicate: '教師重複指派多班',
-  student_missing_from_plan: '在籍生不在草稿中，需重新產生',
+  head_teacher_missing: '班級尚未指派班導',
+  teacher_duplicate: '老師重複指派多班',
+  teacher_invalid: '老師已停用或不屬於本園',
+  class_code_duplicate: '班級代號重複',
+  target_grade_invalid: '班級年級已停用',
+  student_source_classroom_changed: '學生已換班，需重新產生建議',
+  student_missing_from_plan: '在籍生不在草稿中，需重新產生建議',
   plan_student_inactive: '學生已非在籍，套用時將跳過',
+  plan_student_invalid: '草稿學生資料異常',
+  graduate_grade_unresolved: '年級設定無法判斷升級',
   assistant_teacher_missing: '班級尚未指派副班導',
   art_teacher_missing: '班級尚未指派美語老師',
 }
@@ -190,7 +198,7 @@ function toggleGroup(key: string): void {
 }
 
 .group-toggle:hover {
-  background: var(--neutral-100);
+  background: var(--color-neutral-100);
 }
 
 .group-arrow {

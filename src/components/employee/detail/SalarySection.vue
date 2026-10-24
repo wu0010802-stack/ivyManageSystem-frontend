@@ -17,6 +17,7 @@ const baseSalaryNum = computed(() => {
 })
 
 const FLAG_LABELS: ReadonlyArray<readonly [string, string]> = [
+  ['not_insured', '不投保（承攬／自行投保）'],
   ['no_employment_insurance', '免就保'],
   ['health_exempt', '健保豁免'],
   ['skip_payroll_bonuses', '不發獎金'],
@@ -24,9 +25,15 @@ const FLAG_LABELS: ReadonlyArray<readonly [string, string]> = [
   ['unreported_for_tax', '不入稅報'],
   ['bypass_standard_base', '個人合約底薪'],
 ]
-const activeFlags = computed(() =>
-  FLAG_LABELS.filter(([key]) => Boolean(props.employee[key])).map(([, label]) => label)
-)
+const activeFlags = computed(() => {
+  const flags = FLAG_LABELS.filter(([key]) => Boolean(props.employee[key])).map(([, label]) => label)
+  // #36 健保本人自付比例 < 1（中低收入等）也列為特殊狀況
+  const ratio = props.employee.health_self_pay_ratio
+  if (typeof ratio === 'number' && ratio < 1) {
+    flags.push(ratio === 0 ? '健保本人免繳' : `健保本人自付 ${Math.round(ratio * 100)}%`)
+  }
+  return flags
+})
 
 const hasSplitInsurance = computed(() =>
   props.employee.labor_insured_salary != null

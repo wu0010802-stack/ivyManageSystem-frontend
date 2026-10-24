@@ -24,7 +24,7 @@ import CreateCycleDialog from './components/CreateCycleDialog.vue'
 import type { CreatedCycle } from './composables/useCreateCycle'
 import type { UploadRawFile } from 'element-plus'
 
-interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; enrollment_actual?: number | null; enrollment_target?: number | null; status?: string }
+interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; enrollment_actual?: number | null; enrollment_target?: number | null; enrollment_actual_auto?: number | null; status?: string }
 
 const route = useRoute()
 const router = useRouter()
@@ -35,6 +35,8 @@ const cycles = ref<Cycle[]>([])
 // （Permission.APPRAISAL_FINALIZE）。
 const createDialogVisible = ref(false)
 const canCreateCycle = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+// 建週期 dialog 的註冊口徑說明：已有週期帶 enrollment_actual_auto 才顯示
+const registeredModeInUse = computed(() => cycles.value.some((c) => c.enrollment_actual_auto != null))
 const importDialog = ref(false)
 const submitting = ref(false)
 const importFallbackNotice = '系統已支援進頁重算與手動事件維護；Excel 匯入僅供例外對稿或歷史資料修復。'
@@ -193,6 +195,7 @@ onMounted(load)
     <CreateCycleDialog
       v-model:visible="createDialogVisible"
       :can-write="canCreateCycle"
+      :registered-mode="registeredModeInUse"
       @created="handleCycleCreated"
     />
 

@@ -117,6 +117,7 @@ async function onInheritPrevious() {
             <div v-if="row.participant_id" class="cell-with-orig">
               <el-input-number
                 :model-value="getCount(row.participant_id, code)"
+                :aria-label="`${row.employee_name ?? '員工'}：${LABEL[code]}`"
                 :step="1"
                 :min="minFor(code)"
                 :max="maxFor(code)"

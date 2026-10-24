@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ClassroomView from '@/views/ClassroomView.vue'
+import { tenantRemoveItem } from '@/utils/tenantStorage'
 
 const push = vi.fn(() => Promise.resolve())
 const getClassrooms = vi.fn(() => Promise.resolve({
@@ -35,6 +36,8 @@ vi.mock('vue-router', () => ({
   // ClassroomView 以 route.query.selected 還原「返回班級」深連結（e08b108d），
   // 未 mock useRoute 會讓元件 setup 直接拋錯。
   useRoute: () => ({ query: {} }),
+  onBeforeRouteLeave: vi.fn(),
+  onBeforeRouteUpdate: vi.fn(),
 }))
 
 vi.mock('@/api/classrooms', () => ({
@@ -120,6 +123,7 @@ function mountView() {
 describe('ClassroomView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    tenantRemoveItem('classrooms_view_mode')
   })
 
   it('renders classroom card with class info and teacher assignments', async () => {
@@ -135,12 +139,38 @@ describe('ClassroomView', () => {
     expect(wrapper.text()).toContain('林老師')
     expect(wrapper.text()).toContain('向日葵班')
   })
+
+  // 2026-10-08：預設檢視是年級分組表；卡片是次要檢視。兩種檢視都要有同樣的班級資訊。
+  it('預設渲染年級分組表；切到卡片檢視仍有同樣的班級與師資資訊', async () => {
+    const wrapper = mountView()
+
+    await flushPromises()
+    await nextTick()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="classroom-table"]').exists()).toBe(true)
+    expect(wrapper.findAll('.classroom-card').length).toBe(0)
+    expect(wrapper.find('[data-test="classroom-row"]').text()).toContain('向日葵班')
+    expect(wrapper.find('[data-test="classroom-row"]').text()).toContain('陳老師')
+
+    wrapper.vm.$.setupState.viewMode = 'card'
+    await nextTick()
+
+    expect(wrapper.find('[data-test="classroom-table"]').exists()).toBe(false)
+    const card = wrapper.find('.classroom-card')
+    expect(card.exists()).toBe(true)
+    expect(card.text()).toContain('SUN-01')
+    expect(card.text()).toContain('王老師')
+    expect(card.text()).toContain('林老師')
+    expect(card.text()).toContain('向日葵班')
+  })
 })
 
 // ── 班級卡片格關鍵字搜尋（客端過濾）─────────────────────────────────────────
 describe('ClassroomView 班級搜尋', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    tenantRemoveItem('classrooms_view_mode')
   })
 
   const classrooms = [
@@ -197,6 +227,19 @@ describe('ClassroomView 班級搜尋', () => {
     const state = wrapper.vm.$.setupState
 
     state.classroomSearch = '林老師'
+    await nextTick()
+
+    expect(state.filteredClassrooms).toEqual([classrooms[1]])
+  })
+
+  it('依班級代號也可命中（僅關鍵字語意，不含年級/統計篩選）', async () => {
+    getClassrooms.mockResolvedValueOnce({ data: classrooms })
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    const state = wrapper.vm.$.setupState
+
+    state.classroomSearch = 'rose-01'
     await nextTick()
 
     expect(state.filteredClassrooms).toEqual([classrooms[1]])

@@ -76,14 +76,23 @@ function onSegmentClick(value: string): void {
 </template>
 
 <style scoped>
+/*
+ * inline-grid + 1fr 欄：M3 規格各 segment 等寬。
+ * - 自然寬度（shrink-to-fit）時，1fr 以最寬 segment 的內容為準，全部拉齊；
+ * - 被父層撐滿（width:100% / flex stretch）時平均分配，選中底色填滿整格。
+ * 原本 inline-flex 下各 segment 依文字寬度各自長，撐滿時右側留白、選中底色填不滿。
+ */
 .m3-segmented-button {
-  display: inline-flex;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  box-sizing: border-box;
   height: 40px;
   border: 1px solid var(--m3-outline, #727970);
   border-radius: 9999px;
-  overflow: hidden;
+  /* 不用 overflow:hidden 裁圓角：會把 segment 的命中區 ::after 一起裁掉。
+     圓角改由首尾 segment 自己帶（見下方 :first-child／:last-child）。 */
   background: var(--m3-surface, #f7fbf3);
-  font-family: var(--m3-font-body, 'Roboto', sans-serif);
 }
 
 .m3-segment {
@@ -92,6 +101,7 @@ function onSegmentClick(value: string): void {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-width: 0;
   padding: 0 16px;
   height: 100%;
   border: none;
@@ -104,6 +114,20 @@ function onSegmentClick(value: string): void {
 }
 .m3-segment:first-child {
   border-left: none;
+  border-radius: 9999px 0 0 9999px;
+}
+.m3-segment:last-child {
+  border-radius: 0 9999px 9999px 0;
+}
+.m3-segment:only-child {
+  border-radius: 9999px;
+}
+
+/* 容器不再 overflow:hidden，過長標籤改在自身截斷，不溢出外框 */
+.m3-segment-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .m3-segment.is-selected {
@@ -115,10 +139,21 @@ function onSegmentClick(value: string): void {
   content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background: currentColor;
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--m3-dur-short-2, 100ms) var(--m3-easing-standard, ease);
+}
+/* 命中區擴張：視覺高 40px 不變，透明 ::after 上下撐到 ≥48px 觸控熱區（寬度已是整格）。 */
+.m3-segment::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: max(100%, var(--touch-target-m3, 48px));
+  transform: translateY(-50%);
 }
 .m3-segment:hover::before        { opacity: var(--m3-state-hover, 0.08); }
 .m3-segment:focus-visible::before{ opacity: var(--m3-state-focus, 0.12); }

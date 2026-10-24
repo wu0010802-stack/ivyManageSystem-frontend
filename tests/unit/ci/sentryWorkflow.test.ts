@@ -44,3 +44,16 @@ describe('CI dependency audit coverage', () => {
     expect(auditBlock).not.toContain('--production')
   })
 })
+
+
+describe('OpenAPI 跨 repo 憑證前置檢查', () => {
+  it('缺少後端唯讀憑證時明確阻擋，不回退到無跨 repo 權限的 token', () => {
+    const workflow = read('.github/workflows/ci.yml')
+    const job = workflow.slice(workflow.indexOf('  openapi-drift:'))
+    expect(job).toContain('BACKEND_REPO_TOKEN: ${{ secrets.BACKEND_REPO_TOKEN }}')
+    expect(job).toContain('test -n "$BACKEND_REPO_TOKEN"')
+    expect(job).toContain('::error::請設定 BACKEND_REPO_TOKEN')
+    expect(job).not.toContain('secrets.BACKEND_REPO_TOKEN || github.token')
+    expect(job.indexOf('test -n "$BACKEND_REPO_TOKEN"')).toBeLessThan(job.indexOf('Checkout ivy-backend (sibling)'))
+  })
+})

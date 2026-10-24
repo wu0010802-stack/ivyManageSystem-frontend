@@ -8,8 +8,11 @@ import {
 } from '../api/medications'
 import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
+import { MEDICATION_PHOTO_MAX, MEDICATION_PHOTO_MAX_BYTES, nextMedicationSlot } from '../utils/medicationForm'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useLeaveConfirm } from '../composables/useUnsavedGuard'
 
 interface AllergyWarning {
   code?: string
@@ -24,6 +27,7 @@ const allergyTitleId = useId()
 const allergyDescId = useId()
 
 const submitting = ref(false)
+const createdOrderId = ref<number | null>(null)
 const allergyWarning = ref<AllergyWarning | null>(null)
 const photoFiles = ref<File[]>([])
 
@@ -43,6 +47,24 @@ const form = ref<{
   note: '',
 })
 
+const INITIAL_ORDER_DATE = form.value.order_date
+const INITIAL_SLOTS = form.value.time_slots.join(',')
+
+/** 還沒送出、且家長已經填了東西：離開前要確認 */
+function isFormDirty(): boolean {
+  if (createdOrderId.value !== null) return false
+  const f = form.value
+  return (
+    !!f.medication_name.trim()
+    || !!f.dose.trim()
+    || !!f.note.trim()
+    || photoFiles.value.length > 0
+    || f.order_date !== INITIAL_ORDER_DATE
+    || f.time_slots.join(',') !== INITIAL_SLOTS
+  )
+}
+const { dialogOpen: leaveConfirmOpen, confirmLeave } = useLeaveConfirm(isFormDirty)
+
 const studentOptions = computed(() => (childrenStore.items || []) as { student_id: number; name?: string }[])
 
 const allergyModalOpen = computed({
@@ -61,7 +83,8 @@ onMounted(async () => {
 
 function addSlot() {
   if (form.value.time_slots.length >= 10) return
-  form.value.time_slots.push('12:00')
+  // 依上一個時段推算（08:00 → 12:00 → 16:00），不再每次都塞 12:00 讓家長逐一改
+  form.value.time_slots.push(nextMedicationSlot(form.value.time_slots))
 }
 
 function removeSlot(i: number) {
@@ -72,16 +95,21 @@ function removeSlot(i: number) {
 function onPick(e: Event) {
   const input = e.target as HTMLInputElement
   const incoming = Array.from(input.files || [])
-  // 簡單前置檢查：max 3、size < 10MB
+  // 簡單前置檢查：張數上限與詳情頁共用 MEDICATION_PHOTO_MAX、單檔 < 10MB
   const valid: File[] = []
+  let overflow = 0
   for (const f of incoming) {
-    if (valid.length + photoFiles.value.length >= 3) break
-    if (f.size > 10 * 1024 * 1024) {
+    if (valid.length + photoFiles.value.length >= MEDICATION_PHOTO_MAX) {
+      overflow += 1
+      continue
+    }
+    if (f.size > MEDICATION_PHOTO_MAX_BYTES) {
       toast.warn(`${f.name} 超過 10MB，已略過`)
       continue
     }
     valid.push(f)
   }
+  if (overflow > 0) toast.warn(`最多 ${MEDICATION_PHOTO_MAX} 張，已略過 ${overflow} 張`)
   photoFiles.value = [...photoFiles.value, ...valid]
   input.value = ''
 }
@@ -91,6 +119,7 @@ function removePhoto(i: number) {
 }
 
 async function submit(forceAcknowledge = false) {
+  if (submitting.value || createdOrderId.value !== null) return
   if (!form.value.student_id) {
     toast.warn('請先選擇子女')
     return
@@ -107,17 +136,8 @@ async function submit(forceAcknowledge = false) {
     }
     const { data } = await createMedicationOrder(payload)
     const createdId = Number((data as { id: number | string }).id)
-    // 連續上傳照片
-    for (const f of photoFiles.value) {
-      try {
-        await uploadMedicationPhoto(createdId, f)
-      } catch (err) {
-        const e = err as Record<string, unknown>
-        toast.warn(`${f.name} 上傳失敗：${String(e?.displayMessage || '')}`)
-      }
-    }
-    toast.success('已送出')
-    router.replace({ path: `/medications/${createdId}` })
+    createdOrderId.value = createdId
+    await uploadRemainingPhotos(createdId)
   } catch (err) {
     const e = err as Record<string, unknown>
     const errData = (e?.response as Record<string, unknown>)?.data as Record<string, unknown> | undefined
@@ -127,6 +147,31 @@ async function submit(forceAcknowledge = false) {
     } else {
       toast.error(String(e?.displayMessage || '送出失敗'))
     }
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function uploadRemainingPhotos(orderId: number) {
+  const failed: File[] = []
+  for (const file of photoFiles.value) {
+    try {
+      await uploadMedicationPhoto(orderId, file)
+    } catch {
+      failed.push(file)
+    }
+  }
+  photoFiles.value = failed
+  if (failed.length > 0) return
+  toast.success('用藥單已送出，所選附件已上傳完成')
+  router.replace({ path: `/medications/${orderId}` })
+}
+
+async function retryPhotos() {
+  if (submitting.value || createdOrderId.value === null) return
+  submitting.value = true
+  try {
+    await uploadRemainingPhotos(createdOrderId.value)
   } finally {
     submitting.value = false
   }
@@ -150,104 +195,114 @@ function cancelAllergy() {
       <p class="pt-page-hero-note">老師收到後會依時段協助餵藥</p>
     </header>
 
-    <section class="pt-card">
-      <h2 class="pt-card-title">
-        <span class="material-symbols-rounded">child_care</span>
-        基本資料
-      </h2>
+    <fieldset class="med-fields" :disabled="submitting || createdOrderId !== null">
+      <section class="pt-card">
+        <h2 class="pt-card-title">
+          <span class="material-symbols-rounded" aria-hidden="true">child_care</span>
+          基本資料
+        </h2>
 
-      <label for="med-student">子女</label>
-      <select id="med-student" v-model="form.student_id">
-        <option v-for="c in studentOptions" :key="c.student_id" :value="c.student_id">{{ c.name }}</option>
-      </select>
+        <label for="med-student">子女</label>
+        <select id="med-student" v-model="form.student_id">
+          <option v-for="c in studentOptions" :key="c.student_id" :value="c.student_id">{{ c.name }}</option>
+        </select>
 
-      <label for="med-date">用藥日期</label>
-      <input id="med-date" type="date" v-model="form.order_date" />
+        <label for="med-date">用藥日期</label>
+        <input id="med-date" type="date" v-model="form.order_date" />
 
-      <label for="med-name">藥名</label>
-      <input
-        id="med-name"
-        v-model="form.medication_name"
-        placeholder="例：退燒藥 / Amoxicillin 250mg"
-        maxlength="100"
-        autocomplete="off"
-      />
+        <label for="med-name">藥名</label>
+        <input
+          id="med-name"
+          v-model="form.medication_name"
+          placeholder="例：退燒藥 / Amoxicillin 250mg"
+          maxlength="100"
+          autocomplete="off"
+        />
 
-      <label for="med-dose">劑量</label>
-      <input
-        id="med-dose"
-        v-model="form.dose"
-        placeholder="例：5ml / 1顆"
-        maxlength="50"
-        autocomplete="off"
-      />
-    </section>
+        <label for="med-dose">劑量</label>
+        <input
+          id="med-dose"
+          v-model="form.dose"
+          placeholder="例：5ml / 1顆"
+          maxlength="50"
+          autocomplete="off"
+        />
+      </section>
 
-    <section class="pt-card">
-      <h2 class="pt-card-title">
-        <span class="material-symbols-rounded">schedule</span>
-        用藥時段
-        <span class="pt-card-title-count">{{ form.time_slots.length }} / 10</span>
-      </h2>
-      <div class="slots">
-        <div v-for="(_, i) in form.time_slots" :key="i" class="slot-row">
-          <input :id="`med-time-${i}`" type="time" v-model="form.time_slots[i]" />
+      <section class="pt-card">
+        <h2 class="pt-card-title">
+          <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
+          用藥時段
+          <span class="pt-card-title-count">{{ form.time_slots.length }} / 10</span>
+        </h2>
+        <div class="slots">
+          <div v-for="(_, i) in form.time_slots" :key="i" class="slot-row">
+            <input :id="`med-time-${i}`" type="time" v-model="form.time_slots[i]" />
+            <button
+              type="button"
+              class="pt-icon-btn del-btn"
+              :aria-label="`移除第 ${i + 1} 個時段`"
+              @click="removeSlot(i)"
+              :disabled="form.time_slots.length === 1"
+            >
+              <ParentIcon name="close" size="sm" />
+            </button>
+          </div>
           <button
             type="button"
-            class="pt-icon-btn del-btn"
-            :aria-label="`移除第 ${i + 1} 個時段`"
-            @click="removeSlot(i)"
-            :disabled="form.time_slots.length === 1"
+            class="add-slot"
+            @click="addSlot"
+            :disabled="form.time_slots.length >= 10"
           >
-            <ParentIcon name="close" size="sm" />
+            <ParentIcon name="plus" size="sm" />
+            新增時段
           </button>
         </div>
-        <button
-          type="button"
-          class="add-slot"
-          @click="addSlot"
-          :disabled="form.time_slots.length >= 10"
-        >
-          <ParentIcon name="plus" size="sm" />
-          新增時段
-        </button>
-      </div>
+      </section>
+
+      <section class="pt-card">
+        <h2 class="pt-card-title">
+          <span class="material-symbols-rounded" aria-hidden="true">attach_file</span>
+          備註與照片
+        </h2>
+
+        <label for="med-note">備註</label>
+        <textarea
+          id="med-note"
+          v-model="form.note"
+          placeholder="飯後服用 / 冷藏…"
+          rows="2"
+          maxlength="500"
+        />
+
+        <label for="med-files">藥袋／處方照（最多 {{ MEDICATION_PHOTO_MAX }} 張，已選 {{ photoFiles.length }} 張）</label>
+        <input id="med-files" type="file" accept="image/*,application/pdf" multiple @change="onPick" />
+        <ul class="files">
+          <li v-for="(f, i) in photoFiles" :key="i">
+            <span>{{ f.name }} ({{ Math.round(f.size / 1024) }}KB)</span>
+            <button
+              type="button"
+              class="pt-ghost-btn"
+              :aria-label="`移除 ${f.name}`"
+              @click="removePhoto(i)"
+            >
+              移除
+            </button>
+          </li>
+        </ul>
+      </section>
+
+    </fieldset>
+    <section v-if="createdOrderId !== null && photoFiles.length" class="pt-card" role="status">
+      <p v-if="submitting">用藥單已成立，正在上傳照片…</p>
+      <p v-else>用藥單已成立，{{ photoFiles.length }} 張照片未上傳</p>
+      <p>請重新上傳，或到用藥單詳情稍後補傳。</p>
+      <button type="button" class="pt-action-btn" data-testid="retry-photos" :disabled="submitting" @click="retryPhotos">{{ submitting ? '上傳中…' : '重新上傳照片' }}</button>
+      <button type="button" class="pt-ghost-btn" :disabled="submitting" @click="router.replace({ path: `/medications/${createdOrderId}` })">查看已成立的用藥單</button>
     </section>
 
-    <section class="pt-card">
-      <h2 class="pt-card-title">
-        <span class="material-symbols-rounded">attach_file</span>
-        備註與照片
-      </h2>
-
-      <label for="med-note">備註</label>
-      <textarea
-        id="med-note"
-        v-model="form.note"
-        placeholder="飯後服用 / 冷藏…"
-        rows="2"
-        maxlength="500"
-      />
-
-      <label for="med-files">藥袋／處方照（最多 3 張）</label>
-      <input id="med-files" type="file" accept="image/*,application/pdf" multiple @change="onPick" />
-      <ul class="files">
-        <li v-for="(f, i) in photoFiles" :key="i">
-          <span>{{ f.name }} ({{ Math.round(f.size / 1024) }}KB)</span>
-          <button
-            type="button"
-            class="pt-ghost-btn"
-            :aria-label="`移除 ${f.name}`"
-            @click="removePhoto(i)"
-          >
-            移除
-          </button>
-        </li>
-      </ul>
-    </section>
-
-    <div class="actions">
-      <button type="button" class="pt-ghost-btn cancel-btn" @click="router.back()">取消</button>
+    <div v-if="createdOrderId === null" class="actions">
+      <button type="button" class="pt-ghost-btn cancel-btn" :disabled="submitting" @click="router.back()">取消</button>
       <button
         type="button"
         class="pt-action-btn submit-btn"
@@ -257,6 +312,17 @@ function cancelAllergy() {
         {{ submitting ? '送出中…' : '送出' }}
       </button>
     </div>
+
+    <!-- 有未送出的修改時離開前確認（返回鍵／LINE 返回／底部導覽） -->
+    <ConfirmDialog
+      v-model:open="leaveConfirmOpen"
+      title="要放棄這張用藥單嗎？"
+      message="剛剛填寫的內容還沒送出，離開後不會保留。"
+      confirm-label="離開"
+      cancel-label="繼續填寫"
+      destructive
+      @confirm="confirmLeave"
+    />
 
     <!-- 過敏軟警告彈框（已套 AppModal：focus trap + esc + a11y） -->
     <AppModal
@@ -289,8 +355,8 @@ function cancelAllergy() {
 
 <style scoped>
 .med-form { padding-bottom: 24px; }
-.med-form > .pt-page-hero + .pt-card { margin-top: 12px; }
-.med-form > .pt-card + .pt-card { margin-top: 12px; }
+.med-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.med-fields > .pt-card { margin-top: var(--space-3, 12px); }
 
 .pt-card label {
   display: block;
@@ -310,7 +376,7 @@ function cancelAllergy() {
   min-height: var(--touch-target-min, 44px);
   border: 1px solid var(--pt-border-strong);
   border-radius: var(--radius-md, 8px);
-  font-size: var(--text-base, 14px);
+  font-size: max(16px, 1rem); /* <16px 會讓 iOS/LIFF 聚焦時整頁放大，見 inputFontSize.spec.ts */
   font-family: inherit;
   background: var(--pt-surface-card, #fff);
 }
@@ -419,7 +485,7 @@ function cancelAllergy() {
 }
 
 .allergy-modal .hint {
-  color: var(--pt-text-placeholder);
+  color: var(--pt-text-muted);
   font-size: var(--text-sm, 13px);
 }
 

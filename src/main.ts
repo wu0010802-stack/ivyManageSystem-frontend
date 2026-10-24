@@ -22,6 +22,19 @@ import './styles/portal/soft-ui.css'
 import './styles/form-hint.css'
 import './assets/crisp.css'
 
+/**
+ * 娃娃車 GPS 模擬器（測試用）：必須在任何 `watchPosition` 呼叫之前接管
+ * `navigator.geolocation`，因此 mount 要等它完成——司機端一進頁就可能開始追蹤，
+ * 晚一步接管就會抓到真實定位而不是模擬路徑。
+ *
+ * 未設 `VITE_BUS_GPS_SIMULATOR=1` 時這裡是 `Promise.resolve()`，模組不會被載入，
+ * 對正式 build 只多一個 microtask。正式部署不設這個變數即可，
+ * 見 `utils/busGpsSimulator.ts` 的啟用說明。
+ */
+const gpsSimulatorReady: Promise<unknown> = import.meta.env.VITE_BUS_GPS_SIMULATOR === '1'
+  ? import('@/utils/busGpsSimulator').then((m) => m.installBusGpsSimulator())
+  : Promise.resolve()
+
 const app: VueApp = createApp(App)
 
 // 多租戶 boot 檢查（frontend-core §2.1）。單租戶模式（未設 tenant build 變數）
@@ -48,5 +61,7 @@ if (tenantBoot.proceed) {
   // 等 router 解析首次 navigation 再 mount，避免 START_LOCATION race
   // 造成的 title 一閃「儀表板｜常春藤管理系統」與 AdminLayout 在 /public 路由
   // 短暫掛載而打 /api/notifications/summary。
-  router.isReady().finally(() => app.mount('#app'))
+  router.isReady().finally(() => {
+    void gpsSimulatorReady.finally(() => app.mount('#app'))
+  })
 }

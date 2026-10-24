@@ -37,3 +37,19 @@ describe('studentAttachments api', () => {
     })
   })
 })
+
+describe('isWallDeletable（照片牆刪除白名單，對齊後端 MODIFIABLE_ATTACHMENT_OWNER_TYPES）', () => {
+  it.each([
+    ['observation', true],
+    ['contact_book_entry', true],
+    ['work_sample', true],
+    ['class_album', true],
+    ['medication_order', false],
+    ['report', false],
+    ['unknown_new_type', false],
+    [undefined, false],
+  ])('%s → %s', async (ownerType, expected) => {
+    const { isWallDeletable } = await import('@/api/studentAttachments')
+    expect(isWallDeletable(ownerType)).toBe(expected)
+  })
+})

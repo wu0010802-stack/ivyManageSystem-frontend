@@ -31,8 +31,14 @@
     <el-card class="table-card" v-loading="loadingTable" style="margin-top: 16px;">
       <template #header>
         <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
-          <span>課後才藝統計表</span>
-          <el-button size="small" type="success" :loading="exportingTable" @click="handleExportTable">匯出 Excel</el-button>
+          <span>
+            課後才藝統計表
+            <span v-if="belowTargetCount > 0" class="below-target-count">未達標 {{ belowTargetCount }} 班</span>
+          </span>
+          <span class="card-header-actions">
+            <el-checkbox v-model="onlyBelowTarget" size="small">只看未達標班級</el-checkbox>
+            <el-button size="small" type="success" :loading="exportingTable" @click="handleExportTable">匯出 Excel</el-button>
+          </span>
         </div>
       </template>
       <el-table
@@ -42,10 +48,11 @@
         stripe
         style="width: 100%"
         :span-method="objectSpanMethod"
+        :row-class-name="rowClassName"
       >
         <el-table-column prop="classroom_name" label="班級" width="100" align="center" fixed="left" />
         <el-table-column prop="teacher_name" label="班級老師" width="100" align="center" fixed="left" />
-        <el-table-column prop="student_count" label="在籍人數" width="90" align="center" />
+        <el-table-column prop="student_count" :label="denominatorLabels.header" width="110" align="center" />
         
         <!-- 動態課程欄位：報名數 +（待審核）。待審核不進任何比率，僅此處與待審核人次欄呈現 -->
         <el-table-column
@@ -90,30 +97,65 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="ratio" label="比率" width="80" align="center">
+        <!-- 人次比率＝達標判定依據（2026-10-19 業主裁定）：報名人次 ÷ 在籍，可 >100%。
+             紅綠著色直接讀後端 meets_target（未取整比率對年級門檻），前端不自行比較。 -->
+        <el-table-column prop="enrollment_ratio" label="人次比率" width="95" align="center">
             <template #header>
-              <el-tooltip content="參與率＝有參加才藝的學生數 ÷ 在籍人數；同一學生報多門只計一次，故不超過 100%" placement="top">
-                <span>比率</span>
-              </el-tooltip>
-            </template>
-            <template #default="scope">
-                <span v-if="scope.row.ratio !== undefined" :class="{'text-danger': scope.row.rowType !== 'grand_total' && scope.row.targetPercent > 0 && scope.row.ratio < scope.row.targetPercent, 'text-success': scope.row.rowType !== 'grand_total' && scope.row.targetPercent > 0 && scope.row.ratio >= scope.row.targetPercent}">
-                    {{ scope.row.ratio }}%
-                </span>
-            </template>
-        </el-table-column>
-        <!-- 人次比率：分子為可重複的人次，刻意允許 >100%，不參與達標判定（無紅綠著色） -->
-        <el-table-column prop="enrollment_ratio" label="人次比率" width="90" align="center">
-            <template #header>
-              <el-tooltip content="人次比率＝報名人次 ÷ 在籍人數；每人平均報越多門越高，可超過 100%" placement="top">
+              <el-tooltip :content="`人次比率＝報名人次 ÷ ${denominatorLabels.noun}（一生報兩門算 2，可超過 100%）。達標判定看這一欄：大班 100%／中班 90%／小班 80%／幼幼班 70%`" placement="top">
                 <span>人次比率</span>
               </el-tooltip>
             </template>
             <template #default="scope">
-                <span v-if="scope.row.enrollment_ratio !== undefined">{{ scope.row.enrollment_ratio }}%</span>
+                <span
+                  v-if="scope.row.enrollment_ratio !== undefined"
+                  :class="ratioClass(scope.row)"
+                >{{ scope.row.enrollment_ratio }}%</span>
             </template>
         </el-table-column>
-        <el-table-column prop="bonus" label="達成獎金 +1000" width="140" align="center" />
+        <el-table-column label="距達標" width="95" align="center">
+            <template #header>
+              <el-tooltip content="還要再多幾個報名人次，人次比率才會達到該年級門檻" placement="top">
+                <span>距達標</span>
+              </el-tooltip>
+            </template>
+            <template #default="scope">
+                <span v-if="shortfallText(scope.row)" class="text-danger">{{ shortfallText(scope.row) }}</span>
+                <span v-else-if="scope.row.meets_target === true" class="met-mark">達標</span>
+            </template>
+        </el-table-column>
+        <!-- 同比（去年同學期）／環比（上一學期）：年級小計與全園的人次比率差值（百分點）；前期無資料顯示「—」 -->
+        <el-table-column label="與前期比較" width="130" align="center">
+            <template #header>
+              <el-tooltip :content="`年級小計與全園的人次比率，與上一學期、去年同學期相比增減幾個百分點；前期無資料時顯示「—」${denominatorLabels.priorBasisNote ? `。${denominatorLabels.priorBasisNote}` : ''}`" placement="top">
+                <span>與前期比較<span v-if="denominatorLabels.priorBasisNote" class="basis-mark">＊</span></span>
+              </el-tooltip>
+            </template>
+            <template #default="scope">
+                <!-- 同比／環比只做年級小計與全園（2026-10-19 使用者裁定），班級列不顯示 -->
+                <div v-if="scope.row.rowType !== 'class'" class="trend-cell">
+                  <span>比上學期 <span :class="trendClass(scope.row.enrollment_ratio, scope.row.qoq_enrollment_ratio)">{{ trendText(scope.row.enrollment_ratio, scope.row.qoq_enrollment_ratio) }}</span></span>
+                  <span>比去年同期 <span :class="trendClass(scope.row.enrollment_ratio, scope.row.yoy_enrollment_ratio)">{{ trendText(scope.row.enrollment_ratio, scope.row.yoy_enrollment_ratio) }}</span></span>
+                </div>
+            </template>
+        </el-table-column>
+        <!-- 參與率（不重複學生）：僅供參考，不參與達標判定，故不著色 -->
+        <el-table-column prop="ratio" label="參與率（參考）" width="110" align="center">
+            <template #header>
+              <el-tooltip :content="`參與率＝有參加才藝的學生數 ÷ ${denominatorLabels.noun}；同一學生報多門只計一次，不超過 100%。僅供參考，不用於達標判定`" placement="top">
+                <span>參與率（參考）</span>
+              </el-tooltip>
+            </template>
+            <template #default="scope">
+                <span v-if="scope.row.ratio !== undefined" class="secondary-ratio">{{ scope.row.ratio }}%</span>
+            </template>
+        </el-table-column>
+        <el-table-column prop="bonus" label="達成獎金 +1000" width="140" align="center">
+            <template #header>
+              <el-tooltip :content="`年級人次比率（年級報名人次 ÷ 年級${denominatorLabels.noun}）達到該年級門檻時發給的獎金`" placement="top">
+                <span>達成獎金 +1000</span>
+              </el-tooltip>
+            </template>
+        </el-table-column>
         <el-table-column prop="points" label="達成積分" width="100" align="center">
             <template #default="scope">
                 <span v-if="scope.row.points">{{ scope.row.points }}%</span>
@@ -192,6 +234,15 @@ import { useActivityStore } from '@/stores/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { exportDashboardTable } from '@/api/activity'
 import { buildBonusLabel, buildCourseCell } from './activityDashboardTable'
+import {
+  buildDashboardRows,
+  buildDenominatorLabels,
+  buildShortfallLabel,
+  buildTrendLabel,
+  isBelowTarget,
+  type DashboardTable,
+  type DashboardTableRow,
+} from './activityDashboardRows'
 import { buildStatCards } from './activityDashboardStatCards'
 import { ElMessage } from 'element-plus'
 import { InfoFilled } from '@element-plus/icons-vue'
@@ -199,19 +250,6 @@ import { friendlyError } from '@/utils/errorMessages'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
-
-interface DashboardClassroom { courses?: Record<number, number>; [key: string]: unknown }
-interface DashboardGrade {
-  grade_name: string
-  target_percent: number
-  classrooms: DashboardClassroom[]
-  subtotal: { bonus?: number; points?: string | number; [key: string]: unknown }
-}
-interface DashboardData {
-  grades: DashboardGrade[]
-  courses: { id: number; name: string }[]
-  grand_total: Record<string, unknown>
-}
 
 const activityStore = useActivityStore()
 const termStore = useAcademicTermStore()
@@ -249,7 +287,7 @@ const currentAttendance = computed(() =>
 // 新學期尚在載入或載入失敗時回 null，避免舊學期數字被誤認為新學期。
 const dashboardData = computed(() =>
   dashboardTableTermKey.value === currentTermKey.value
-    ? dashboardTable.value as DashboardData | null
+    ? dashboardTable.value as DashboardTable | null
     : null,
 )
 const _statsAny = computed(() => {
@@ -282,65 +320,48 @@ const statCards = computed(() =>
 )
 
 // Why: 後端回傳 grades > classrooms 的樹狀結構，但 el-table 只接受平面陣列。
-// 透過此 computed 將每個年級的「各班列 + 小計列」展開，並標記 rowSpan / isFirstOfGrade
-// 給 objectSpanMethod 用來合併「獎金」「積分」這兩欄（同年級共用一個值）。
-const flattenedTableData = computed(() => {
+// buildDashboardRows 將每個年級展開成「各班列 + 小計列」（未達標班排前），並標記
+// rowSpan / isFirstOfGrade 給 objectSpanMethod 合併「獎金」「積分」兩欄。
+const onlyBelowTarget = ref(false)
+// 分母口徑（spec C10）：註冊口徑為學期基準日註冊數（未到基準日＝今天，暫估），舊口徑為在籍
+const denominatorLabels = computed(() => buildDenominatorLabels(dashboardData.value ?? {}))
+
+const flattenedTableData = computed<DashboardTableRow[]>(() => {
     if (!dashboardData.value) return []
-    const data: Record<string, unknown>[] = []
-    for (const grade of dashboardData.value.grades) {
-        const classCount = grade.classrooms.length
-        if (classCount === 0) continue
-        const rowSpan = classCount + 1 // +1 給該年級的小計列
-        const bonusLabel = buildBonusLabel(grade.subtotal.bonus)
-        const pointsLabel = grade.subtotal.points || ''
-
-        grade.classrooms.forEach((cls, idx) => {
-            data.push({
-                ...cls,
-                rowType: 'class',
-                gradeName: grade.grade_name,
-                targetPercent: grade.target_percent,
-                isFirstOfGrade: idx === 0,
-                rowSpan,
-                bonus: bonusLabel,
-                points: pointsLabel,
-            })
-        })
-
-        data.push({
-            ...grade.subtotal,
-            rowType: 'subtotal',
-            classroom_name: '小計',
-            teacher_name: '',
-            gradeName: grade.grade_name,
-            targetPercent: grade.target_percent,
-            isFirstOfGrade: false,
-            rowSpan: 0,
-            bonus: bonusLabel,
-            points: pointsLabel,
-        })
-    }
-
-    data.push({
-        ...dashboardData.value.grand_total,
-        rowType: 'grand_total',
-        classroom_name: '總計',
-        teacher_name: '',
-        gradeName: '',
-        bonus: '',
-        points: '',
+    return buildDashboardRows(dashboardData.value, {
+        onlyBelowTarget: onlyBelowTarget.value,
+        bonusLabel: buildBonusLabel,
     })
-
-    return data
 })
+const belowTargetCount = computed(() =>
+    (dashboardData.value?.grades ?? []).reduce(
+        (n, g) => n + g.classrooms.filter(isBelowTarget).length,
+        0,
+    ),
+)
 
-const getCourseCell = (row: Record<string, unknown>, courseId: number): { count: string; pending: string } => {
+const rowClassName = ({ row }: { row: DashboardTableRow }) =>
+    row.rowType === 'class' && isBelowTarget(row) ? 'row-below-target' : ''
+
+// 全園不做達標判定（門檻依年級而異），只有班級與年級小計著色
+const ratioClass = (row: DashboardTableRow) => {
+    if (row.rowType === 'grand_total' || row.meets_target === undefined) return ''
+    return row.meets_target ? 'text-success' : 'text-danger'
+}
+const shortfallText = (row: DashboardTableRow) =>
+    row.rowType === 'grand_total' ? '' : buildShortfallLabel(row)
+const trendText = (current?: number | null, previous?: number | null) =>
+    buildTrendLabel(current, previous).text
+const trendClass = (current?: number | null, previous?: number | null) =>
+    `trend-${buildTrendLabel(current, previous).direction}`
+
+const getCourseCell = (row: DashboardTableRow, courseId: number): { count: string; pending: string } => {
     const courses = row.courses as Record<number, number> | undefined || {}
     const pendingCourses = row.pending_review_courses as Record<number, number> | undefined || {}
     return buildCourseCell(courses[courseId], pendingCourses[courseId])
 }
 
-const objectSpanMethod = ({ row, column }: { row: Record<string, unknown>; column: { property?: string }; rowIndex: number; columnIndex: number }) => {
+const objectSpanMethod = ({ row, column }: { row: DashboardTableRow; column: { property?: string }; rowIndex: number; columnIndex: number }) => {
     // Columns: bonus is property "bonus", points is "points"
     if (column.property === 'bonus' || column.property === 'points') {
         if (row.rowType === 'grand_total') {
@@ -348,7 +369,7 @@ const objectSpanMethod = ({ row, column }: { row: Record<string, unknown>; colum
         }
         if (row.isFirstOfGrade) {
             return {
-                rowspan: row.rowSpan as number,
+                rowspan: row.rowSpan,
                 colspan: 1
             }
         } else {
@@ -463,6 +484,22 @@ async function handleExportTable() {
 
 .text-danger { color: #e11d48; font-weight: bold; }
 .text-success { color: var(--color-success-hover); font-weight: bold; }
+
+.card-header-actions { display: inline-flex; align-items: center; gap: 12px; }
+.below-target-count { margin-left: 8px; font-size: 13px; font-weight: 600; color: #e11d48; }
+/* 未達標班整列淡紅底：一眼找出要去推的班。選擇器多帶 .el-table 以壓過 stripe 底色 */
+.table-card :deep(.el-table .el-table__body tr.row-below-target > td.el-table__cell) {
+  background-color: var(--el-color-danger-light-9);
+}
+.met-mark { color: var(--color-success-hover); font-size: 12px; }
+.secondary-ratio { color: var(--text-secondary); }
+/* 同比／環比為次要資訊：小字灰底，不搶主比率版面 */
+/* 前期分母口徑與本期不同（在籍 vs 註冊）的提示星號，說明在表頭 tooltip */
+.basis-mark { margin-left: 2px; color: var(--color-warning-darker); }
+.trend-cell { display: flex; flex-direction: column; font-size: 12px; line-height: 1.5; color: var(--text-secondary); }
+.trend-up { color: var(--color-success-hover); font-weight: 600; }
+.trend-down { color: #e11d48; font-weight: 600; }
+.trend-flat, .trend-none { color: var(--text-tertiary); }
 
 /* 待審核：用品牌橙與正式報名的黑字區隔，避免「12 (+3)」被讀成單一數字。
    刻意不用紅色——待審核是待辦不是錯誤。 */

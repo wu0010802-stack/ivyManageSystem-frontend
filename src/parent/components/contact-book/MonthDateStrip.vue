@@ -146,6 +146,8 @@ function onPick(d: DateChip): void {
       }"
       :aria-current="d.isToday ? 'date' : undefined"
       :aria-label="`${d.day} 日 星期${d.weekday}${d.hasEntry ? '（有紀錄）' : ''}`"
+      :aria-disabled="!d.hasEntry && !d.isToday ? 'true' : undefined"
+      :tabindex="!d.hasEntry && !d.isToday ? -1 : undefined"
       @click="onPick(d)"
     >
       <span class="weekday">{{ d.weekday }}</span>
@@ -188,12 +190,12 @@ function onPick(d: DateChip): void {
 .chip:disabled { cursor: not-allowed; }
 
 .weekday {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
 .day {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   line-height: 1;
   color: var(--pt-text-muted);

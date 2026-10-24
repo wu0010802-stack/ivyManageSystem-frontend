@@ -24,6 +24,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../LoginView.vue'
 import { useChildrenStore } from '@/parent/stores/children'
+import { useParentAuthStore } from '@/parent/stores/parentAuth'
 import { useCachedAsync, _resetCacheForTesting } from '@/composables/useCachedAsync'
 
 const { mockInitLiff, mockLiffLogin, mockDeviceSetup, mockLiff, mockGetCurrentPolicy, mockGetMyConsents } = vi.hoisted(() => ({
@@ -129,6 +130,39 @@ describe('LoginView — 共用裝置換家庭登入清除殘留個人化快取',
 
     expect(sessionStorage.getItem(TODAY_STATUS_CACHE_KEY)).toBeNull()
     // 同一 key 的 useCachedAsync 消費者應被清空，不得繼續拿家庭 A 的舊資料
+    expect(cachedA.data.value).toBeNull()
+    expect(children.items).toEqual([])
+    expect(children.loaded).toBe(false)
+  })
+
+  it('LINE 登入轉 need_binding：前一位家長的身分與個人化資料在導向 /bind 前即清除（F02）', async () => {
+    // 2026-10-04 家長端深掃 F02：need_binding 代表此瀏覽器的身分已是「尚未綁定的
+    // LINE 使用者 B」。舊版直接導向 /bind，A 的 auth sessionStorage 仍在，公開頁
+    // layout 與後續首頁可據此重新暖出 A 的摘要。
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const auth = useParentAuthStore()
+    auth.setUser({ user_id: 101, name: '家庭A家長', role: 'parent' })
+    sessionStorage.setItem(
+      TODAY_STATUS_CACHE_KEY,
+      JSON.stringify({ payload: { student_id: 11, name: '家庭A的小孩' }, cachedAt: Date.now() }),
+    )
+    const cachedA = useCachedAsync('parent/some-widget', async () => ({ owner: 'A' }))
+    await flushPromises()
+    const children = useChildrenStore()
+    children.items = [{ student_id: 11, name: '家庭A的小孩' }]
+    children.loaded = true
+
+    mockInitLiff.mockReset().mockResolvedValue(undefined)
+    mockLiffLogin.mockResolvedValueOnce({ data: { status: 'need_binding', name_hint: '家庭B' } })
+
+    const { router } = await mountLoginView(pinia)
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/bind')
+    expect(auth.user).toBeNull()
+    expect(sessionStorage.getItem('parent_user_v1')).toBeNull()
+    expect(sessionStorage.getItem(TODAY_STATUS_CACHE_KEY)).toBeNull()
     expect(cachedA.data.value).toBeNull()
     expect(children.items).toEqual([])
     expect(children.loaded).toBe(false)

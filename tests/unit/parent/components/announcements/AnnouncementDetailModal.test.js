@@ -76,4 +76,30 @@ describe('AnnouncementDetailModal', () => {
       expect(w.text(), `priority ${p}`).toContain(label)
     }
   })
+
+  // 2026-09-08 首頁改版：公告新增分類（後端 AnnouncementCategoryBriefOut：
+  // id/name/icon/color），詳情彈窗一併顯示分類徽章。
+  describe('分類徽章（2026-09-08）', () => {
+    it('有分類時顯示分類名稱與 icon', () => {
+      const w = mount(AnnouncementDetailModal, {
+        props: {
+          modelValue: true,
+          announcement: { ...SAMPLE, category: { id: 1, name: '行政', icon: 'campaign', color: '#0d9053' } },
+        },
+        global: { stubs },
+      })
+      const badge = w.find('.detail-cat')
+      expect(badge.exists()).toBe(true)
+      expect(badge.text()).toContain('行政')
+      expect(badge.text()).toContain('campaign')
+    })
+
+    it('無分類（category 為 null/undefined）時不渲染分類徽章', () => {
+      const w = mount(AnnouncementDetailModal, {
+        props: { modelValue: true, announcement: { ...SAMPLE, category: null } },
+        global: { stubs },
+      })
+      expect(w.find('.detail-cat').exists()).toBe(false)
+    })
+  })
 })

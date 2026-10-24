@@ -198,6 +198,9 @@ interface ViewVm {
     settleDisabled: boolean
     settleDisabledReason: string
     unassignedCount: number
+    gradeUnconfirmedCount: number
+    splitIncompleteCount: number
+    confirmGradeMultiplier: (row: AttributionRow) => void
     attrPage: number
     pagedAttributions: AttributionRow[]
     attributions: AttributionRow[]
@@ -632,5 +635,65 @@ describe('RecruitmentBonusView 幼生欄顯示', () => {
         await flushPromises()
 
         expect(wrapper.text()).toContain('（手動加列）')
+    })
+
+    // 2026-10-22 義華比對 #82／#80：班別缺值與拆分未完成要明確警示，班別缺值列不可直接確認
+    it('班別缺值列：顯示警示計數，改確認時先擋下不送 PATCH', async () => {
+        const flagged = attributionRow({ id: 5, visit_grade: null, grade_multiplier: 1.0,
+            notes: '[同步] 班別缺值或無法辨識，倍數暫以 1.0 帶入，請先確認班別倍數' })
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock.mockResolvedValue({ data: detailFixture({ pending_count: 1, attributions: [flagged] }) })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        await vm.openDetail(campaignRow())
+        await flushPromises()
+
+        expect(vm.gradeUnconfirmedCount).toBe(1)
+        expect(wrapper.text()).toContain('班別倍數待確認')
+
+        vm.onStatusChange(flagged, 'confirmed')
+        await flushPromises()
+        expect(patchAttributionMock).not.toHaveBeenCalled()
+        expect(ElMessage.warning).toHaveBeenCalled()
+    })
+
+    it('確認倍數（值不變也要送）→ PATCH 帶 grade_multiplier', async () => {
+        const flagged = attributionRow({ id: 6, grade_multiplier: 1.0, notes: '[同步] 班別缺值或無法辨識，倍數暫以 1.0 帶入，請先確認班別倍數' })
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock.mockResolvedValue({ data: detailFixture({ pending_count: 1, attributions: [flagged] }) })
+        patchAttributionMock.mockResolvedValue({ data: flagged })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        await vm.openDetail(campaignRow())
+        await flushPromises()
+
+        vm.confirmGradeMultiplier(flagged)
+        await flushPromises()
+        expect(patchAttributionMock).toHaveBeenCalledWith(1, 6, { grade_multiplier: 1.0 })
+    })
+
+    it('拆分未完成（邀約原招生人／兄姊均分）顯示警示計數', async () => {
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock.mockResolvedValue({
+            data: detailFixture({
+                attributions: [
+                    attributionRow({ id: 7, point_code: 'invite_success',
+                        notes: '[同步] 邀約拆分未完成：原招生人 0.4 列未自動建立（介紹者比對不到另一位員工），請以「新增歸屬列」補上' }),
+                    attributionRow({ id: 8, point_code: 'sibling_split',
+                        notes: '[同步] 兄姊二人均分 0.5：本列只歸一位老師，另一位兄姊的主教老師請以「新增歸屬列」補 0.5' }),
+                    attributionRow({ id: 9 }),
+                ],
+            }),
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        await vm.openDetail(campaignRow())
+        await flushPromises()
+
+        expect(vm.splitIncompleteCount).toBe(2)
+        expect(wrapper.text()).toContain('拆分')
     })
 })

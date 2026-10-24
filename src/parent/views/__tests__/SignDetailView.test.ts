@@ -80,6 +80,28 @@ const pendingDoc = {
 describe('SignDetailView', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('載入失敗（非 404）顯示可重試錯誤態，不得說「找不到」；重試成功後顯示文件', async () => {
+    mockGet.mockRejectedValueOnce({ displayMessage: '網路連線異常' })
+    const w = await mountAt('7')
+    await flushPromises()
+    expect(w.text()).not.toContain('找不到')
+    expect(w.find('[role="alert"]').text()).toContain('網路連線異常')
+
+    mockGet.mockResolvedValueOnce({ data: pendingDoc })
+    await w.find('.mobile-error-retry__btn').trigger('click')
+    await flushPromises()
+    expect(w.find('[role="alert"]').exists()).toBe(false)
+    expect(w.text()).toContain('入學契約')
+  })
+
+  it('後端 404 才顯示「找不到這份文件」', async () => {
+    mockGet.mockRejectedValueOnce({ response: { status: 404 }, displayMessage: 'Not Found' })
+    const w = await mountAt('7')
+    await flushPromises()
+    expect(w.text()).toContain('找不到這份文件')
+    expect(w.find('[role="alert"]').exists()).toBe(false)
+  })
+
   it('已簽署文件顯示完成狀態，不顯示簽名區', async () => {
     mockGet.mockResolvedValue({
       data: { ...pendingDoc, status: 'signed', signed_at: '2026-08-11T12:00:00' },
@@ -109,6 +131,29 @@ describe('SignDetailView', () => {
     expect((checkbox.element as HTMLInputElement).disabled).toBe(true)
     scrollHeightSpy.mockRestore()
     clientHeightSpy.mockRestore()
+  })
+
+  it('內容超出一屏時提示「請先閱讀至底」，按「捲到文件底部」後勾選框可用、提示消失', async () => {
+    let top = 0
+    const spies = [
+      vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(2000),
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400),
+      vi.spyOn(HTMLElement.prototype, 'scrollTop', 'get').mockImplementation(() => top),
+      vi.spyOn(HTMLElement.prototype, 'scrollTop', 'set').mockImplementation((v: number) => { top = v }),
+    ]
+    mockGet.mockResolvedValue({ data: pendingDoc })
+    const w = await mountAt('7')
+    await flushPromises()
+
+    expect(w.find('[data-testid="read-hint"]').text()).toContain('請先把上方文件捲動閱讀到最底')
+    const checkbox = () => w.find('input[type="checkbox"]').element as HTMLInputElement
+    expect(checkbox().disabled).toBe(true)
+    expect(checkbox().getAttribute('aria-describedby')).toBe('sign-read-hint')
+
+    await w.find('[data-testid="scroll-to-bottom"]').trigger('click')
+    expect(checkbox().disabled).toBe(false)
+    expect(w.find('[data-testid="read-hint"]').exists()).toBe(false)
+    spies.forEach((sp) => sp.mockRestore())
   })
 
   it('確認簽署按鈕在未滿足三條件前 disabled', async () => {

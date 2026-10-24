@@ -1,5 +1,7 @@
 <template>
   <div class="anomaly-queue-column" v-loading="loading">
+    <el-input v-model="searchTerm" aria-label="搜尋異常人員" placeholder="搜尋異常人員姓名或工號" clearable />
+    <p class="anomaly-queue-column__scope">搜尋僅套用此異常清單；全選限目前篩選結果，變更篩選會清除選取。</p>
     <!-- 頂部篩選 -->
     <div class="anomaly-queue-column__filters">
       <el-select
@@ -24,13 +26,13 @@
       </el-select>
     </div>
 
-    <!-- 全選列（多選批次處理，P?-batch-ux-tail）-->
-    <div v-if="filteredWithIndex.length > 0" class="anomaly-queue-column__select-all">
+    <!-- 全選列（多選批次處理，P?-batch-ux-tail）；唯讀帳號無批次動作可用，整列不顯示 -->
+    <div v-if="canWrite && filteredWithIndex.length > 0" class="anomaly-queue-column__select-all">
       <el-checkbox
         :model-value="allVisibleSelected"
         :indeterminate="someVisibleSelected"
         @update:model-value="toggleSelectAll"
-      >全選（{{ filteredWithIndex.length }}）</el-checkbox>
+      >全選目前篩選結果（{{ filteredWithIndex.length }}）</el-checkbox>
       <span v-if="selectedIds.size > 0" class="anomaly-queue-column__selected-count">
         已選 {{ selectedIds.size }} 筆
       </span>
@@ -48,56 +50,79 @@
       />
     </div>
 
-    <!-- 列表：一天一張卡（同 attendance id 的異常收在同卡） -->
-    <ul v-else class="anomaly-queue-column__list" role="listbox" aria-label="異常佇列">
+    <!-- 列表：一天一張卡（同 attendance id 的異常收在同卡）。
+         WAI-ARIA listbox + roving tabindex：option 是卡片內容區（.anomaly-item__option），
+         ↑↓／Home／End 移動焦點、Enter／Space 選取（與點擊同一個 select 事件）。
+         批次勾選用的 checkbox 是獨立的可聚焦控制項，option 的子層必須是純展示，所以它放在 option
+         **外面**（同一個 li 之內的兄弟）、保有自己的 Tab 停點；li 本身 role="presentation"，
+         只保留「點整列都能選」的滑鼠便利，鍵盤路徑是內層 option。 -->
+    <ul
+      v-else
+      ref="listRef"
+      class="anomaly-queue-column__list"
+      role="listbox"
+      aria-label="異常佇列"
+      @focusout="onListFocusOut"
+    >
       <li
         v-for="{ item, origIndex } in filteredWithIndex"
         :key="item.id"
         class="anomaly-item"
         :class="{ 'anomaly-item--selected': origIndex === props.selectedIndex }"
-        role="option"
-        :aria-selected="origIndex === props.selectedIndex"
+        role="presentation"
         @click="emit('select', origIndex)"
       >
-        <!-- 多選 checkbox：click.stop 避免連動觸發單選/切換明細 -->
+        <!-- 多選 checkbox：click.stop 避免連動觸發單選/切換明細；32×32 點擊區（見 style） -->
         <span class="anomaly-item__checkbox-wrap" @click.stop>
           <el-checkbox
             class="anomaly-item__checkbox"
             :model-value="selectedIds.has(item.id)"
-            aria-label="選取此筆異常"
+            :aria-label="`選取 ${item.employee_name} ${item.date} 的異常`"
             @update:model-value="(v) => toggleSelectOne(item.id, v)"
           />
         </span>
 
-        <!-- 未處理紅點 -->
-        <span
-          v-if="item.confirmed_action === null"
-          class="anomaly-item__pending"
-          aria-label="未處理"
-        />
+        <div
+          class="anomaly-item__option"
+          role="option"
+          :data-card-id="item.id"
+          :tabindex="item.id === tabStopId ? 0 : -1"
+          :aria-selected="origIndex === props.selectedIndex"
+          @focus="focusedId = item.id"
+          @keydown="onOptionKeydown($event, origIndex, item.id)"
+        >
+          <!-- 未處理紅點：role="img" 才能帶 aria-label（無角色的 span 不可命名），
+               並讓 option 的可存取名稱帶上「未處理」；點本身仍是純視覺 8px，不加可見文字以維持列密度 -->
+          <span
+            v-if="item.confirmed_action === null"
+            class="anomaly-item__pending"
+            role="img"
+            aria-label="未處理"
+          />
 
-        <div class="anomaly-item__main">
-          <div class="anomaly-item__header">
-            <span class="anomaly-item__name">{{ item.employee_name }}</span>
-            <span class="anomaly-item__type-label">{{ typeLabels(item) }}</span>
-          </div>
-          <div class="anomaly-item__sub">
-            <span class="anomaly-item__date">
-              {{ item.date }}（{{ item.weekday }}）
-            </span>
-            <span
-              v-if="deductionOf(item) > 0"
-              class="anomaly-item__deduction"
-            >
-              -NT${{ deductionOf(item).toLocaleString() }}
-            </span>
+          <div class="anomaly-item__main">
+            <div class="anomaly-item__header">
+              <span class="anomaly-item__name">{{ item.employee_name }}</span>
+              <span class="anomaly-item__type-label">{{ typeLabels(item) }}</span>
+            </div>
+            <div class="anomaly-item__sub">
+              <span class="anomaly-item__date">
+                {{ item.date }}（{{ item.weekday }}）
+              </span>
+              <span
+                v-if="deductionOf(item) > 0"
+                class="anomaly-item__deduction"
+              >
+                -NT${{ deductionOf(item).toLocaleString() }}
+              </span>
+            </div>
           </div>
         </div>
       </li>
     </ul>
 
-    <!-- 批次動作列：選取 >0 時顯示 -->
-    <div v-if="selectedIds.size > 0" class="anomaly-queue-column__batch-bar">
+    <!-- 批次動作列：選取 >0 時顯示；與 ResolveCard 的單筆動作一致，需 ATTENDANCE_WRITE -->
+    <div v-if="canWrite && selectedIds.size > 0" class="anomaly-queue-column__batch-bar">
       <el-input
         v-model="batchRemark"
         placeholder="備註（選填）"
@@ -106,13 +131,11 @@
       />
       <el-button
         size="small"
-        type="success"
         :loading="batchBusy"
         @click="confirmBatchAction('admin_accept')"
-      >批次視為正常（{{ selectedIds.size }}）</el-button>
+      >批次接受扣款（{{ selectedIds.size }}）</el-button>
       <el-button
         size="small"
-        type="warning"
         :loading="batchBusy"
         @click="confirmBatchAction('admin_waive')"
       >批次豁免（{{ selectedIds.size }}）</el-button>
@@ -131,8 +154,10 @@ import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { batchConfirmAnomalies } from '@/api/attendance'
+import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
+import { useGridVerdict } from '@/composables/useGridVerdict'
 
 const props = defineProps<{
   items: AnomalyDayCard[]
@@ -148,6 +173,11 @@ const emit = defineEmits<{
 
 const { notify } = useErrorNotify()
 
+// 唯讀帳號（有 ATTENDANCE_READ 無 ATTENDANCE_WRITE）不該看到批次接受／豁免——
+// 單筆動作的 ResolveCard 一向有這道檢查，此處漏了，按下去才被後端 403。
+const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
+
+const searchTerm = ref('')
 const typeFilter = ref<string>('all')
 // 預設只看未處理（沿用舊佇列語意）；已處理／全部由使用者切換
 const statusFilter = ref<string>('pending')
@@ -170,6 +200,7 @@ function deductionOf(card: AnomalyDayCard): number {
 const filteredWithIndex = computed<{ item: AnomalyDayCard; origIndex: number }[]>(() => {
   return props.items
     .map((it, i) => ({ item: it, origIndex: i }))
+    .filter(({ item }) => !searchTerm.value.trim() || `${item.employee_name} ${item.employee_number}`.toLowerCase().includes(searchTerm.value.trim().toLowerCase()))
     .filter(
       ({ item }) =>
         typeFilter.value === 'all' || item.items.some((x) => x.type === typeFilter.value),
@@ -181,17 +212,75 @@ const filteredWithIndex = computed<{ item: AnomalyDayCard; origIndex: number }[]
     })
 })
 
+// ── 鍵盤操作（listbox + roving tabindex）────────────────────────────────────────
+const listRef = ref<HTMLElement | null>(null)
+/** 目前持有焦點的卡（焦點離開清單後清掉，Tab 停點回到選取卡） */
+const focusedId = ref<number | null>(null)
+
+/** roving tabindex 的唯一 Tab 停點：持有焦點的卡 → 選取卡 → 第一張（皆須在目前篩選結果內） */
+const tabStopId = computed<number | null>(() => {
+  const rows = filteredWithIndex.value
+  if (focusedId.value !== null && rows.some(({ item }) => item.id === focusedId.value)) {
+    return focusedId.value
+  }
+  const selected = rows.find(({ origIndex }) => origIndex === props.selectedIndex)
+  return (selected ?? rows[0])?.item.id ?? null
+})
+
+function focusCard(cardId: number): void {
+  focusedId.value = cardId
+  listRef.value?.querySelector<HTMLElement>(`[data-card-id="${cardId}"]`)?.focus()
+}
+
+function onOptionKeydown(e: KeyboardEvent, origIndex: number, cardId: number): void {
+  if (e.altKey || e.ctrlKey || e.metaKey) return
+  const rows = filteredWithIndex.value
+  const index = rows.findIndex(({ item }) => item.id === cardId)
+  let nextIndex: number
+  switch (e.key) {
+    case 'ArrowDown':
+      nextIndex = Math.min(index + 1, rows.length - 1)
+      break
+    case 'ArrowUp':
+      nextIndex = Math.max(index - 1, 0)
+      break
+    case 'Home':
+      nextIndex = 0
+      break
+    case 'End':
+      nextIndex = rows.length - 1
+      break
+    case 'Enter':
+    case ' ':
+      // 與點擊同一路徑；Space 預設會捲動容器，必須擋掉
+      e.preventDefault()
+      emit('select', origIndex)
+      return
+    default:
+      return
+  }
+  e.preventDefault()
+  const target = rows[nextIndex]
+  if (target) focusCard(target.item.id)
+}
+
+function onListFocusOut(e: FocusEvent): void {
+  const next = e.relatedTarget as Node | null
+  if (!next || !listRef.value?.contains(next)) focusedId.value = null
+}
+
 // ── 多選批次處理（P?-batch-ux-tail）──────────────────────────────────────────
 // 後端 attendance_ids 契約上限 500（BatchConfirmRequest.max_length）；此處同步防呆，
 // 避免使用者在超大月份全選後送出必然 422 卻沒有清楚提示。
 const MAX_BATCH_IDS = 500
 
 const ACTION_LABELS: Record<'admin_accept' | 'admin_waive', string> = {
-  admin_accept: '視為正常',
+  admin_accept: '接受扣款',
   admin_waive: '豁免',
 }
 
 const selectedIds = reactive(new Set<number>())
+watch([searchTerm, typeFilter, statusFilter], () => selectedIds.clear())
 const batchRemark = ref('')
 const batchBusy = ref(false)
 
@@ -236,6 +325,28 @@ function clearSelection(): void {
   batchRemark.value = ''
 }
 
+/**
+ * 批次接受扣款前把班表核對看得到的風險寫進確認文字（單筆在 ResolveCard 會另外問，批次不能繞過）：
+ * 整月同型態＝多半是設定問題、會照錯的時段扣薪；疑似換班＝該先確認當日班別。
+ */
+const verdictOf = useGridVerdict()
+function batchAcceptRisk(ids: number[]): string {
+  const chosen = new Set(ids)
+  let pattern = 0
+  let shift = 0
+  for (const card of props.items) {
+    if (!chosen.has(card.id)) continue
+    const verdict = verdictOf.value(null, card.date, card.employee_number)
+    if (verdict?.acceptWarning) pattern += 1
+    else if (verdict?.status === 'possible_shift_change') shift += 1
+  }
+  const parts = [
+    pattern ? `${pattern} 筆是整月同型態（多半是設定問題，會照目前的應上班時段扣薪）` : '',
+    shift ? `${shift} 筆班表核對判定為疑似換班（應先確認當日班別）` : '',
+  ].filter(Boolean)
+  return parts.length ? `注意：其中 ${parts.join('、')}。` : ''
+}
+
 async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promise<void> {
   if (batchBusy.value) return
   const ids = [...selectedIds]
@@ -247,7 +358,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 
   try {
     await ElMessageBox.confirm(
-      `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？`,
+      `確認批次「${ACTION_LABELS[action]}」選取的 ${ids.length} 筆考勤異常？此操作套用選取日期的整日異常。${action === 'admin_accept' ? `接受扣款仍依原規則計算扣款，並非豁免。${batchAcceptRisk(ids)}` : ''}`,
       '批次處理',
       { type: 'warning', confirmButtonText: '確認', cancelButtonText: '取消' },
     )
@@ -277,6 +388,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 </script>
 
 <style scoped>
+.anomaly-queue-column__scope { color: var(--el-text-color-secondary); font-size: var(--text-sm); }
 .anomaly-queue-column {
   display: flex;
   flex-direction: column;
@@ -305,13 +417,13 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border-color-light, #f1f5f9);
+  border-bottom: 1px solid var(--border-color-light);
   flex-shrink: 0;
-  font-size: var(--text-sm, 0.875rem);
+  font-size: var(--text-sm);
 }
 
 .anomaly-queue-column__selected-count {
-  color: var(--brand-primary, #0284c7);
+  color: var(--color-primary);
   font-weight: 500;
 }
 
@@ -320,7 +432,7 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  border-top: 1px solid var(--border-color-light, #f1f5f9);
+  border-top: 1px solid var(--border-color-light);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -343,26 +455,49 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   align-items: flex-start;
   padding: var(--space-3);
   cursor: pointer;
-  border-bottom: 1px solid var(--border-color-light, #f1f5f9);
-  transition: background-color 0.15s;
+  border-bottom: 1px solid var(--border-color-light);
+  transition: background-color var(--transition-fast);
   gap: var(--space-2);
 }
 
 .anomaly-item:hover {
-  background-color: var(--fill-color-light, #f9fafb);
+  background-color: var(--el-fill-color-light);
 }
 
 .anomaly-item--selected {
-  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin） */
-  background-color: var(--brand-primary-soft, #e0f2fe);
-  border-left: 3px solid var(--brand-primary, #0284c7);
+  /* 2026-09-10 改版移除側邊色條（impeccable AI-slop 偵測命中），與 RosterColumn 選取態一致。 */
+  background-color: var(--color-primary-lighter);
 }
 
+/* 可點範圍 32×32（原本只有 14×32）。視覺上方塊仍是 14px，靠左右負 margin 把多出來的
+   點擊區吃進列的 padding／gap，列的版面幾乎不變（誤差 2px）。 */
 .anomaly-item__checkbox-wrap {
   display: flex;
   align-items: flex-start;
   padding-top: 2px;
+  margin-inline: calc(var(--space-2) * -1);
   flex-shrink: 0;
+}
+
+.anomaly-item__checkbox {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  justify-content: center;
+}
+
+/* option 本體：鍵盤焦點停在這裡；點擊事件由外層 li 處理（含 padding 區） */
+.anomaly-item__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.anomaly-item__option:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .anomaly-item__pending {
@@ -370,7 +505,8 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--danger, #ef4444);
+  /* 圖形元件對白底需 ≥3:1；--color-danger（#ef4444）在選取列底色上只有約 3.2:1，用 darker */
+  background-color: var(--color-danger-darker);
   flex-shrink: 0;
   margin-top: 6px;
 }
@@ -389,15 +525,15 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
 .anomaly-item__name {
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .anomaly-item__type-label {
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--text-secondary, #475569);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
@@ -408,14 +544,16 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
   margin-top: 2px;
 }
 
+/* 日期與金額在選取列（--brand-primary-soft）上要 ≥4.5:1：
+   tertiary（#64748b）只有 4.15:1、--danger 系（#ef4444）只有 3.28:1，各升一階 */
 .anomaly-item__date {
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .anomaly-item__deduction {
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--danger, #ef4444);
+  font-size: var(--text-xs);
+  color: var(--color-danger-darker);
   font-weight: 500;
   flex-shrink: 0;
 }

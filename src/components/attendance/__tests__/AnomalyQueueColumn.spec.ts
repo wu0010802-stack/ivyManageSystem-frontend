@@ -19,6 +19,11 @@ vi.mock('@/composables/useErrorNotify', () => ({
   useErrorNotify: () => ({ notify: mockNotify }),
 }))
 
+// 批次接受／豁免需 ATTENDANCE_WRITE（與單筆的 ResolveCard 同一把尺）；
+// 預設給有權限，唯讀情境由專屬案例覆寫。
+const { mockHasPermission } = vi.hoisted(() => ({ mockHasPermission: vi.fn(() => true) }))
+vi.mock('@/utils/auth', () => ({ hasPermission: (name: string) => mockHasPermission(name) }))
+
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
   ElMessageBox: { confirm: (...args: unknown[]) => mockConfirm(...args) },
@@ -26,6 +31,8 @@ vi.mock('element-plus', () => ({
 
 import { ElMessage } from 'element-plus'
 import AnomalyQueueColumn from '../AnomalyQueueColumn.vue'
+import { computed } from 'vue'
+import { GRID_VERDICT_KEY, type GridVerdictLookup } from '@/composables/useGridVerdict'
 
 // ── fixture data（P1-4：一天一張卡）────────────────────────────────────────────
 const cardLate: AnomalyDayCard = {
@@ -135,6 +142,25 @@ function mountQueue(overrides: {
 }
 
 // ── tests ──────────────────────────────────────────────────────────────────────
+describe('AnomalyQueueColumn — 寫入權限', () => {
+  it('唯讀帳號不顯示全選列與批次動作（過去是按下去才被後端 403）', async () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mountQueue({})
+    await nextTick()
+    expect(wrapper.find('.anomaly-queue-column__select-all').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('批次接受扣款')
+    expect(wrapper.text()).not.toContain('批次豁免')
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  it('有 ATTENDANCE_WRITE 時全選列照常顯示', async () => {
+    const wrapper = mountQueue({})
+    await nextTick()
+    expect(wrapper.find('.anomaly-queue-column__select-all').exists()).toBe(true)
+    expect(mockHasPermission).toHaveBeenCalledWith('ATTENDANCE_WRITE')
+  })
+})
+
 describe('AnomalyQueueColumn', () => {
   it('預設只顯示未處理卡（statusFilter=pending）', () => {
     const wrapper = mountQueue({})
@@ -296,7 +322,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     await boxes[0].setValue(true)
     const bar = wrapper.find('.anomaly-queue-column__batch-bar')
     expect(bar.exists()).toBe(true)
-    expect(bar.text()).toContain('批次視為正常（1）')
+    expect(bar.text()).toContain('批次接受扣款（1）')
     expect(bar.text()).toContain('批次豁免（1）')
   })
 
@@ -310,7 +336,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     expect(wrapper.find('.anomaly-queue-column__batch-bar').exists()).toBe(false)
   })
 
-  it('批次視為正常：先跳確認對話框，確認後帶 attendance_ids/action/remark 呼叫 API', async () => {
+  it('批次接受扣款：先跳確認對話框，確認後帶 attendance_ids/action/remark 呼叫 API', async () => {
     const wrapper = mountQueue({})
     const boxes = checkboxesOf(wrapper)
     await boxes[0].setValue(true)
@@ -321,11 +347,12 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 
     expect(mockConfirm).toHaveBeenCalledTimes(1)
+    expect(mockConfirm.mock.calls[0][0]).toContain('接受扣款仍依原規則計算扣款')
     expect(mockBatchConfirm).toHaveBeenCalledWith({
       attendance_ids: expect.arrayContaining([cardLate.id, cardMulti.id]),
       action: 'admin_accept',
@@ -357,7 +384,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 
@@ -374,7 +401,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 
@@ -394,7 +421,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 
@@ -425,7 +452,7 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
 
     const acceptBtn = wrapper
       .findAll('.anomaly-queue-column__batch-bar button')
-      .find((b) => b.text().includes('批次視為正常'))
+      .find((b) => b.text().includes('批次接受扣款'))
     await acceptBtn!.trigger('click')
     await flushPromises()
 
@@ -443,5 +470,154 @@ describe('AnomalyQueueColumn — 多選批次處理', () => {
     await wrapper.setProps({ items: [...defaultItems] })
     await nextTick()
     expect(wrapper.find('.anomaly-queue-column__batch-bar').exists()).toBe(false)
+  })
+})
+
+// ── 鍵盤操作：WAI-ARIA listbox + roving tabindex ─────────────────────────────
+describe('AnomalyQueueColumn — 鍵盤操作（listbox / roving tabindex）', () => {
+  const mountAttached = (overrides: Parameters<typeof mountQueue>[0] = {}) => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const wrapper = mountQueue(overrides)
+    host.appendChild(wrapper.element)
+    return { wrapper, host }
+  }
+  const options = (wrapper: ReturnType<typeof mountQueue>) => wrapper.findAll('[role="option"]')
+
+  it('容器是 listbox 且有名稱；option 是卡片內容區，li 為純展示', () => {
+    const wrapper = mountQueue({})
+    expect(wrapper.find('[role="listbox"]').attributes('aria-label')).toBe('異常佇列')
+    expect(wrapper.findAll('.anomaly-item').every((li) => li.attributes('role') === 'presentation')).toBe(true)
+    expect(options(wrapper)).toHaveLength(2) // 預設只顯示未處理的兩張
+    wrapper.unmount()
+  })
+
+  it('checkbox 在 option 之外，仍是獨立的可 Tab 控制項（不被 roving 吃掉）', () => {
+    const wrapper = mountQueue({})
+    for (const li of wrapper.findAll('.anomaly-item')) {
+      const box = li.find('input[type="checkbox"]')
+      expect(box.exists()).toBe(true)
+      // option 內不可有可聚焦子孫（ARIA：option 的子層是純展示）
+      expect(li.find('[role="option"] input').exists()).toBe(false)
+      // checkbox 沒被設 tabindex=-1，維持預設可 Tab
+      expect(box.attributes('tabindex')).toBeUndefined()
+    }
+    wrapper.unmount()
+  })
+
+  it('checkbox 的可存取名稱帶出員工與日期（不再是千篇一律的「選取此筆異常」）', () => {
+    const wrapper = mountQueue({})
+    const labels = wrapper
+      .findAll('.anomaly-item__checkbox-wrap > *')
+      .map((el) => el.attributes('aria-label'))
+    expect(labels).toEqual(['選取 王遲到 2026-06-01 的異常', '選取 李缺卡 2026-06-02 的異常'])
+    wrapper.unmount()
+  })
+
+  it('roving tabindex：沒有選取時第一張 tabindex=0，其餘 -1', () => {
+    const wrapper = mountQueue({})
+    expect(options(wrapper).map((o) => o.attributes('tabindex'))).toEqual(['0', '-1'])
+    wrapper.unmount()
+  })
+
+  it('roving tabindex：Tab 停點落在選取卡（以原始 index 對應），aria-selected 同步', () => {
+    const wrapper = mountQueue({ selectedIndex: 1 })
+    const opts = options(wrapper)
+    expect(opts.map((o) => o.attributes('tabindex'))).toEqual(['-1', '0'])
+    expect(opts.map((o) => o.attributes('aria-selected'))).toEqual(['false', 'true'])
+    wrapper.unmount()
+  })
+
+  it('Enter / Space 以原始 index emit select（篩選後也不偏移）', async () => {
+    const wrapper = mountQueue({})
+    const selects = wrapper.findAll('select')
+    await selects[0].setValue('missing_punch') // 只剩 cardMulti（原始 index=1）
+    await nextTick()
+    const opt = options(wrapper)[0]
+    await opt.trigger('keydown', { key: 'Enter' })
+    await opt.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('select')).toEqual([[1], [1]])
+    wrapper.unmount()
+  })
+
+  it('Space 的預設捲動行為被擋下', () => {
+    const wrapper = mountQueue({})
+    const evt = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })
+    options(wrapper)[0].element.dispatchEvent(evt)
+    expect(evt.defaultPrevented).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('↓／↑／Home／End 移動焦點與 Tab 停點，且不誤觸 select', async () => {
+    const { wrapper, host } = mountAttached()
+    const opts = () => options(wrapper)
+    ;(opts()[0].element as HTMLElement).focus()
+    await opts()[0].trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(opts()[1].element)
+    expect(opts().map((o) => o.attributes('tabindex'))).toEqual(['-1', '0'])
+    // 到底不循環
+    await opts()[1].trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(opts()[1].element)
+    await opts()[1].trigger('keydown', { key: 'Home' })
+    expect(document.activeElement).toBe(opts()[0].element)
+    await opts()[0].trigger('keydown', { key: 'End' })
+    expect(document.activeElement).toBe(opts()[1].element)
+    await opts()[1].trigger('keydown', { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(opts()[0].element)
+    expect(wrapper.emitted('select')).toBeFalsy()
+    wrapper.unmount()
+    host.remove()
+  })
+
+  it('點 option 本身只 emit 一次 select（冒泡到 li 的單一 handler）', async () => {
+    const wrapper = mountQueue({})
+    await options(wrapper)[1].trigger('click')
+    expect(wrapper.emitted('select')).toEqual([[1]])
+    wrapper.unmount()
+  })
+
+  it('未處理紅點是 role=img 並帶「未處理」名稱，已處理卡沒有', async () => {
+    const wrapper = mountQueue({})
+    await wrapper.findAll('select')[1].setValue('all')
+    await nextTick()
+    const dots = wrapper.findAll('.anomaly-item__pending')
+    expect(dots).toHaveLength(2)
+    for (const dot of dots) {
+      expect(dot.attributes('role')).toBe('img')
+      expect(dot.attributes('aria-label')).toBe('未處理')
+    }
+    wrapper.unmount()
+  })
+})
+
+describe('批次接受扣款也寫出班表核對看得到的風險（獨立審查 F6）', () => {
+  beforeEach(() => {
+    mockConfirm.mockReset()
+    mockConfirm.mockResolvedValue('confirm')
+  })
+
+  it('選取裡有整月同型態或疑似換班的日卡：確認文字寫出筆數；豁免不寫', async () => {
+    const lookup: GridVerdictLookup = (_id, date, number) => {
+      if (number === 'E002' && date === cardLate.date) return { label: '遲到 57 分', status: 'anomaly', acceptWarning: '設定問題' }
+      if (number === 'E003' && date === cardMulti.date) return { label: '疑似換班', status: 'possible_shift_change', acceptWarning: null }
+      return null
+    }
+    const mountWithVerdict = () => mount(AnomalyQueueColumn, {
+      props: { items: defaultItems, selectedIndex: -1, loading: false },
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } }, provide: { [GRID_VERDICT_KEY as symbol]: computed(() => lookup) } },
+    })
+    const clickBatch = async (label: string) => {
+      const wrapper = mountWithVerdict()
+      const boxes = wrapper.findAll('.anomaly-item__checkbox-wrap input[type="checkbox"]')
+      await boxes[0].setValue(true)
+      await boxes[1].setValue(true)
+      await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes(label))!.trigger('click')
+      await flushPromises()
+      return mockConfirm.mock.calls.at(-1)![0] as string
+    }
+    const accept = await clickBatch('批次接受扣款')
+    expect(accept).toContain('1 筆是整月同型態')
+    expect(accept).toContain('1 筆班表核對判定為疑似換班')
+    expect(await clickBatch('批次豁免')).not.toContain('整月同型態')
   })
 })

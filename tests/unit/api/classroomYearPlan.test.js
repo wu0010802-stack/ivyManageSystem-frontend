@@ -105,4 +105,10 @@ describe('classroomYearPlan api', () => {
     await mod.cancelClassroomYearPlan(42, payload)
     expect(mockPost).toHaveBeenCalledWith('/classroom-year-plans/42/cancel', payload)
   })
+
+  it('carryOverClassroomYearPlanTeachers POST /classroom-year-plans/:id/carry-over-teachers', async () => {
+    const payload = { base_version: 3 }
+    await mod.carryOverClassroomYearPlanTeachers(42, payload)
+    expect(mockPost).toHaveBeenCalledWith('/classroom-year-plans/42/carry-over-teachers', payload)
+  })
 })

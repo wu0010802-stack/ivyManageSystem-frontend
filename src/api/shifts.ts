@@ -1,4 +1,5 @@
 import api from './index'
+import { withDedupeEscape, type ReadOptions } from '@/utils/apiDedupe'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 // ── 班別模板 ────────────────────────────────────────────────────────────────
@@ -31,8 +32,9 @@ export const getScheduleRoster = (
 // ── 每週排班 ────────────────────────────────────────────────────────────────
 
 export const getAssignments = (
-  params: ApiQuery<'/shifts/assignments', 'get'>
-): AxiosResp<'/shifts/assignments', 'get'> => api.get('/shifts/assignments', { params })
+  params: ApiQuery<'/shifts/assignments', 'get'>,
+  opts?: ReadOptions,
+): AxiosResp<'/shifts/assignments', 'get'> => api.get('/shifts/assignments', withDedupeEscape({ params }, opts))
 
 export const saveAssignments = (
   data: ApiBody<'/shifts/assignments', 'post'>

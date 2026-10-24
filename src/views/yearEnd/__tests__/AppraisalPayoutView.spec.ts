@@ -445,3 +445,42 @@ describe('AppraisalPayoutView', () => {
     expect(api.listAppraisalPayouts).toHaveBeenCalledTimes(2)
   })
 })
+
+
+it('切換發放年後，較舊的預覽回應不得覆蓋新年度', async () => {
+  vi.mocked(api.previewAppraisalPayout).mockResolvedValue({ data: [] } as never)
+  const wrapper = await mountView()
+  const vm = wrapper.vm as unknown as { year: number; rows: { employee_id: number }[]; loadPreview: () => Promise<void> }
+  let finish!: () => void
+  vi.mocked(api.previewAppraisalPayout).mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({ data: [mockPreviewRow({ employee_id: 91 })] } as never) }))
+  const old = vm.loadPreview()
+  vi.mocked(api.previewAppraisalPayout).mockResolvedValue({ data: [mockPreviewRow({ employee_id: 92 })] } as never)
+  vm.year += 1
+  await flushPromises()
+  finish()
+  await old
+  expect(vm.rows.map(row => row.employee_id)).toEqual([92])
+})
+
+
+it('確認建立期間避免重送，送出確認時的年度與離職名單', async () => {
+  vi.clearAllMocks()
+  vi.mocked(api.previewAppraisalPayout).mockResolvedValue({ data: [mockPreviewRow(), mockPreviewRow({ employee_id: 3, is_inactive: true })] } as never)
+  vi.mocked(api.listAppraisalPayouts).mockResolvedValue({ data: [] } as never)
+  vi.mocked(api.generateAppraisalPayout).mockResolvedValue({ data: { generated_count: 2, warnings: [] } } as never)
+  const wrapper = await mountView()
+  const vm = wrapper.vm as unknown as { year: number; selected: Set<number>; onGenerate: () => Promise<void>; toggleSelect: (id: number, value: boolean) => void }
+  vm.toggleSelect(3, true)
+  const submittedYear = vm.year
+  let confirm!: () => void
+  vi.mocked(ElMessageBox.confirm).mockImplementationOnce(() => new Promise(resolve => { confirm = () => resolve('confirm') }))
+  const first = vm.onGenerate()
+  await vm.onGenerate()
+  vm.toggleSelect(3, false)
+  expect(vm.selected.has(3)).toBe(true)
+  expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
+  confirm()
+  await first
+  expect(api.generateAppraisalPayout).toHaveBeenCalledTimes(1)
+  expect(api.generateAppraisalPayout).toHaveBeenCalledWith({ year: submittedYear, included_inactive_employee_ids: [3] })
+})

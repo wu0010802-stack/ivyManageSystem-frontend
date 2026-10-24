@@ -32,3 +32,11 @@ export function eventTypeDef(type: string | undefined): EventTypeDef | undefined
 export function eventTypeColor(type: string | undefined): string {
   return eventTypeDef(type)?.color ?? '#909399'
 }
+
+/**
+ * 給家長／教師看的事件類型中文名稱。未知或缺省的 event_type 一律回 fallback，
+ * 不把 `meeting` 這類內部代碼直接顯示在畫面上。
+ */
+export function eventTypeLabel(type: string | undefined, fallback = '其他'): string {
+  return eventTypeDef(type)?.label ?? fallback
+}

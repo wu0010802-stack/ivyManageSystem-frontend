@@ -5,6 +5,10 @@ import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
+import { PARENT_SERVICES } from '../utils/parentServices'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -41,35 +45,36 @@ const items = computed<HubItem[]>(() => {
       key: 'contact-book',
       headline: '今日聯絡簿',
       supportingText: '出席、餐點、午睡、老師留言',
-      leadingIcon: 'auto_stories',
+      leadingIcon: PARENT_SERVICES.contactBook.icon,
       path: id ? '/contact-book' : null,
     },
     {
       key: 'photos',
-      headline: '照片牆',
+      headline: PARENT_SERVICES.childPhotos.label,
       supportingText: '在園日常隨手拍',
-      leadingIcon: 'photo_library',
+      leadingIcon: PARENT_SERVICES.childPhotos.icon,
       path: id ? `/children/${id}/photos` : null,
     },
     {
       key: 'reports',
-      headline: '成長報告',
+      headline: PARENT_SERVICES.childReports.label,
       supportingText: '歷次評量與發展紀錄',
-      leadingIcon: 'insights',
+      leadingIcon: PARENT_SERVICES.childReports.icon,
       path: id ? `/children/${id}/reports` : null,
     },
     {
       key: 'measurements',
-      headline: '健康紀錄',
-      supportingText: '身高體重、疫苗、過敏資訊',
-      leadingIcon: 'monitor_heart',
+      headline: PARENT_SERVICES.childMeasurements.label,
+      // 過敏與用藥提醒在孩子檔案頁，不在這裡（舊文案寫「疫苗、過敏」但頁面沒有）
+      supportingText: '身高體重紀錄',
+      leadingIcon: PARENT_SERVICES.childMeasurements.icon,
       path: id ? `/children/${id}/measurements` : null,
     },
     {
       key: 'profile',
-      headline: '孩子檔案',
+      headline: PARENT_SERVICES.childProfile.label,
       supportingText: childSupporting.value,
-      leadingIcon: 'folder_shared',
+      leadingIcon: PARENT_SERVICES.childProfile.icon,
       path: id ? `/children/${id}` : null,
     },
   ]
@@ -79,6 +84,22 @@ function go(item: HubItem) {
   if (item.path) router.push(item.path)
 }
 
+// S07：冷啟動子女 API 失敗時 store 只記 error、items 為空；若照常渲染會是「尚未綁定」
+// 狀態的五個 disabled 入口，與真的沒綁定無法區分。顯示可重試的錯誤態。
+const loadFailed = computed(() => !!childrenStore.error && children.value.length === 0)
+
+async function retryLoad() {
+  await childrenStore.load(true)
+  ensureSelected(children.value)
+}
+
+/**
+ * 主分頁下拉刷新（2026-10-14）：body 設了 overscroll-behavior-y: contain 擋掉
+ * 原生下拉刷新，主分頁若不自己接 PullToRefresh，家長往下拉毫無反應。
+ * 這頁的資料只有子女清單（加綁／班級異動後重抓）。
+ */
+const pullRefresh = retryLoad
+
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(children.value)
@@ -86,8 +107,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="child-hub-view">
-    <M3List>
+  <PullToRefresh :on-refresh="pullRefresh" class="child-hub-view">
+    <ChildContextHeader />
+    <MobileErrorRetry v-if="loadFailed" :error="childrenStore.error" @retry="retryLoad" />
+    <M3List v-else>
       <M3ListItem
         v-for="item in items"
         :key="item.key"
@@ -100,7 +123,7 @@ onMounted(async () => {
         @click="go(item)"
       />
     </M3List>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>

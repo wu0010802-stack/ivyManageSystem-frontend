@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { ref, reactive, computed, toRef, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getMySchedule, getSwapRequests, getSwapCandidates, createSwapRequest, respondToSwap, cancelSwapRequest } from '@/api/portal'
+import { getMySchedule, getSwapRequests, createSwapRequest, respondToSwap, cancelSwapRequest } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import { useScheduleCalendar } from '@/composables/useScheduleCalendar'
+import { useSwapCandidates } from '@/composables/useSwapCandidates'
 import { useIsMobile } from '@/composables/useIsMobile'
 import ScheduleMonthHeader from './components/schedule/ScheduleMonthHeader.vue'
 import ScheduleCalendarGrid from './components/schedule/ScheduleCalendarGrid.vue'
 import ScheduleSwapTable from './components/schedule/ScheduleSwapTable.vue'
 import ScheduleSwapDialog from './components/schedule/ScheduleSwapDialog.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 const loading = ref(false)
 
@@ -18,9 +20,8 @@ const query = reactive({
   month: now.getMonth() + 1,
 })
 
-interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; [key: string]: unknown }
+interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; is_holiday?: boolean; holiday_name?: string | null; [key: string]: unknown }
 interface SwapRequest { is_mine?: boolean; id?: number; [key: string]: unknown }
-interface SwapCandidate { employee_id?: number; name?: string; shift_name?: string; work_start?: string; work_end?: string; has_pending_swap?: boolean; [key: string]: unknown }
 
 // Schedule data
 const scheduleData = ref<{ days: { date: string; day: number; weekday?: string }[] } | null>(null)
@@ -33,10 +34,14 @@ const swapLoading = ref(false)
 const showSwapDialog = ref(false)
 const swapInitialDate = ref('')
 const swapSubmitLoading = ref(false)
-const candidates = ref<SwapCandidate[]>([])
-const candidatesLoading = ref(false)
+const { candidates, loading: candidatesLoading, load: loadCandidates, clear: clearCandidates } = useSwapCandidates()
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六']
+
+// 過去日期（或今天已打卡）不直接改班表，而是建「補登」確認項目，對方同意後由行政套用（SPEC-026 3-3）
+const SWAP_SENT_MESSAGE = '換班申請已送出'
+const BACKDATED_SENT_MESSAGE = '已送出補登，等對方同意後由行政套用；可在「出勤確認」查看'
+const BACKDATED_SHEET_HINT = '過去日期會以補登方式送出'
 
 // ============ Calendar (composable) ============
 const { calendarWeeks, isToday, isFutureDate } = useScheduleCalendar(
@@ -73,15 +78,17 @@ const selectedDayLabel = computed(() => {
 const canSwapSelected = computed(() => {
   const d = selectedDay.value
   if (!d) return false
-  return !!d.shift_name && isFutureDate(d.date ?? '') && !d.is_weekend
+  return !!d.shift_name && !d.is_weekend && !d.is_holiday
 })
 
-const swapDisabledReason = computed(() => {
+// 抽屜底下的說明：不能換的原因；能換但日期已過則提醒會走補登
+const swapSheetHint = computed(() => {
   const d = selectedDay.value
   if (!d) return ''
+  if (d.is_holiday) return `${d.holiday_name || '國定假日'}：國定假日不需申請換班`
   if (!d.shift_name) return '此日無排班，不需申請換班'
   if (d.is_weekend) return '週末無排班，不需申請換班'
-  if (!isFutureDate(d.date ?? '')) return '換班僅限今日（含）之後的日期'
+  if (!isFutureDate(d.date ?? '')) return BACKDATED_SHEET_HINT
   return ''
 })
 
@@ -92,15 +99,21 @@ const swapFromSheet = () => {
 }
 
 // ============ Fetch Schedule ============
+// request-sequence guard（比照 PortalAttendanceView）：換月後在途的舊月回應晚到不得蓋掉目前月份，
+// 否則日期錯位、換班鈕送出舊月日期（QA #23）
+let fetchSeq = 0
 const fetchSchedule = async () => {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const res = await getMySchedule({ year: query.year, month: query.month })
+    if (seq !== fetchSeq) return
     scheduleData.value = res.data as { days: { date: string; day: number; weekday?: string }[] }
   } catch (error) {
+    if (seq !== fetchSeq) return
     ElMessage.error('載入排班失敗')
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
@@ -127,7 +140,7 @@ const sentRequests = computed(() =>
 // ============ Create Swap ============
 const openSwapDialog = (dateStr: string) => {
   swapInitialDate.value = dateStr || ''
-  candidates.value = []
+  clearCandidates()
   showSwapDialog.value = true
   if (dateStr) {
     fetchCandidates(dateStr)
@@ -135,16 +148,9 @@ const openSwapDialog = (dateStr: string) => {
 }
 
 const fetchCandidates = async (dateStr: string) => {
-  candidatesLoading.value = true
-  try {
-    const res = await getSwapCandidates({ date: dateStr })
-    // codegen 型別 work_start/work_end 為 string | null，本元件 SwapCandidate 用 ?: string；narrow 對齊。
-    candidates.value = res.data as SwapCandidate[]
-  } catch {
-    ElMessage.error('載入候選老師失敗')
-  } finally {
-    candidatesLoading.value = false
-  }
+  // 候選與同事當日職務一起抓（SPEC-026 T5）；職務名單失敗只是少了加註，候選失敗才提示。
+  const ok = await loadCandidates(dateStr)
+  if (!ok) ElMessage.error('載入候選老師失敗')
 }
 
 const submitSwap = async (payload: { swap_date: string; target_id: number | null; reason: string }) => {
@@ -155,12 +161,13 @@ const submitSwap = async (payload: { swap_date: string; target_id: number | null
   }
   swapSubmitLoading.value = true
   try {
-    await createSwapRequest({
+    const res = await createSwapRequest({
       target_id: payload.target_id,
       swap_date: payload.swap_date,
       reason: payload.reason,
     })
-    ElMessage.success('換班申請已送出')
+    // 是否改走補登由後端判斷（含「今天已打卡」），以 response.mode 為準
+    ElMessage.success(res.data.mode === 'backdated' ? BACKDATED_SENT_MESSAGE : SWAP_SENT_MESSAGE)
     showSwapDialog.value = false
     fetchSwapRequests()
   } catch (error) {
@@ -171,33 +178,37 @@ const submitSwap = async (payload: { swap_date: string; target_id: number | null
 }
 
 // ============ Respond / Cancel ============
+// 確認框被取消／關閉不是錯誤；API 失敗才提示。失敗後一律重抓列表：
+// 例如接受時換班日已過（409），後端已把申請轉「已取消」，列表要跟著更新。
+const confirmed = (message: string) =>
+  ElMessageBox.confirm(message, '確認', { type: 'warning' }).then(
+    () => true,
+    () => false,
+  )
+
 const respondSwap = async (id: number, action: string) => {
   const label = action === 'accept' ? '接受' : '拒絕'
+  if (!(await confirmed(`確定要${label}此換班申請？`))) return
   try {
-    await ElMessageBox.confirm(`確定要${label}此換班申請？`, '確認', { type: 'warning' })
     await respondToSwap(id, action)
     ElMessage.success(`已${label}換班申請`)
     fetchSwapRequests()
     fetchSchedule()
-  } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    if (e !== 'cancel') {
-      ElMessage.error(err.response?.data?.detail || `${label}失敗`)
-    }
+  } catch (error) {
+    ElMessage.error(apiError(error, `${label}失敗`))
+    fetchSwapRequests()
   }
 }
 
 const cancelSwap = async (id: number) => {
+  if (!(await confirmed('確定要撤銷此換班申請？'))) return
   try {
-    await ElMessageBox.confirm('確定要撤銷此換班申請？', '確認', { type: 'warning' })
     await cancelSwapRequest(id)
     ElMessage.success('已撤銷')
     fetchSwapRequests()
-  } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    if (e !== 'cancel') {
-      ElMessage.error(err.response?.data?.detail || '撤銷失敗')
-    }
+  } catch (error) {
+    ElMessage.error(apiError(error, '撤銷失敗'))
+    fetchSwapRequests()
   }
 }
 
@@ -209,6 +220,8 @@ const changeMonth = (offset: number) => {
   if (m < 1) { m = 12; y-- }
   query.year = y
   query.month = m
+  // 換月先清空：新月還沒到之前不顯示舊月的格子（點了會拿舊月日期去換班）
+  scheduleData.value = null
   fetchSchedule()
 }
 
@@ -220,7 +233,7 @@ onMounted(() => {
 
 <template>
   <div class="schedule-page">
-    <h2>我的排班</h2>
+    <PortalPageHeader title="我的排班" />
 
     <!-- Month Navigation + CTA -->
     <el-card class="control-panel">
@@ -294,7 +307,7 @@ onMounted(() => {
             :disabled="!canSwapSelected"
             @click="swapFromSheet"
           >申請換班</el-button>
-          <p v-if="!canSwapSelected" class="day-sheet__hint">{{ swapDisabledReason }}</p>
+          <p v-if="swapSheetHint" class="day-sheet__hint">{{ swapSheetHint }}</p>
         </div>
       </div>
     </el-drawer>
@@ -314,10 +327,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.schedule-page h2 {
-  margin-bottom: var(--space-4);
-}
-
 .control-panel {
   margin-bottom: var(--space-4);
 }

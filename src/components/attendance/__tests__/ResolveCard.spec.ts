@@ -5,6 +5,13 @@ import { nextTick } from 'vue'
 import ResolveCard from '../ResolveCard.vue'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
+// ── mock ElMessageBox（設定問題提醒的二次確認）─────────────────────────────────
+const box = vi.hoisted(() => ({ confirm: vi.fn() }))
+vi.mock('element-plus', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('element-plus')>()),
+  ElMessageBox: { confirm: box.confirm },
+}))
+
 // ── mock hasPermission ─────────────────────────────────────────────────────────
 vi.mock('@/utils/auth', () => ({
   hasPermission: vi.fn(() => true),
@@ -95,6 +102,10 @@ function mountCard(overrides: {
   total?: number
   context?: typeof defaultContext | typeof missingOutContext
   busy?: boolean
+  showNav?: boolean
+  actions?: Array<'punch' | 'admin_accept' | 'admin_waive'>
+  primaryAction?: boolean
+  acceptWarning?: string | null
 }) {
   return mount(ResolveCard, {
     props: {
@@ -103,6 +114,10 @@ function mountCard(overrides: {
       total: overrides.total ?? 3,
       context: overrides.context ?? defaultContext,
       busy: overrides.busy ?? false,
+      ...(overrides.showNav !== undefined ? { showNav: overrides.showNav } : {}),
+      ...(overrides.actions ? { actions: overrides.actions } : {}),
+      ...(overrides.primaryAction !== undefined ? { primaryAction: overrides.primaryAction } : {}),
+      ...(overrides.acceptWarning !== undefined ? { acceptWarning: overrides.acceptWarning } : {}),
     },
     global: { stubs },
   })
@@ -192,42 +207,38 @@ describe('ResolveCard', () => {
     expect(payload.punch_out).toBe('18:00')
   })
 
-  it('點 ▶ → emit navigate(1)', async () => {
+  it('點「下一筆」→ emit navigate(1)', async () => {
     const wrapper = mountCard({ index: 1, total: 3 })
-    const btns = wrapper.findAll('button')
-    const nextBtn = btns.find((b) => b.text().includes('▶'))
-    expect(nextBtn).toBeTruthy()
+    const nextBtn = wrapper.find('[data-test="resolve-next"]')
+    expect(nextBtn.exists()).toBe(true)
+    expect(nextBtn.text()).toContain('下一筆')
     await nextBtn!.trigger('click')
     const emitted = wrapper.emitted('navigate')
     expect(emitted).toBeTruthy()
     expect(emitted![0][0]).toBe(1)
   })
 
-  it('點 ◀ → emit navigate(-1)', async () => {
+  it('點「上一筆」→ emit navigate(-1)', async () => {
     const wrapper = mountCard({ index: 1, total: 3 })
-    const btns = wrapper.findAll('button')
-    const prevBtn = btns.find((b) => b.text().includes('◀'))
-    expect(prevBtn).toBeTruthy()
+    const prevBtn = wrapper.find('[data-test="resolve-prev"]')
+    expect(prevBtn.exists()).toBe(true)
+    expect(prevBtn.text()).toContain('上一筆')
     await prevBtn!.trigger('click')
     const emitted = wrapper.emitted('navigate')
     expect(emitted).toBeTruthy()
     expect(emitted![0][0]).toBe(-1)
   })
 
-  it('index=0 時 ◀ 按鈕 disabled', () => {
+  it('index=0 時「上一筆」disabled', () => {
     const wrapper = mountCard({ index: 0, total: 3 })
-    const btns = wrapper.findAll('button')
-    const prevBtn = btns.find((b) => b.text().includes('◀'))
-    expect(prevBtn).toBeTruthy()
-    expect(prevBtn!.attributes('disabled')).toBeDefined()
+    const prevBtn = wrapper.find('[data-test="resolve-prev"]')
+    expect(prevBtn.attributes('disabled')).toBeDefined()
   })
 
-  it('index=total-1 時 ▶ 按鈕 disabled', () => {
+  it('index=total-1 時「下一筆」disabled', () => {
     const wrapper = mountCard({ index: 2, total: 3 })
-    const btns = wrapper.findAll('button')
-    const nextBtn = btns.find((b) => b.text().includes('▶'))
-    expect(nextBtn).toBeTruthy()
-    expect(nextBtn!.attributes('disabled')).toBeDefined()
+    const nextBtn = wrapper.find('[data-test="resolve-next"]')
+    expect(nextBtn.attributes('disabled')).toBeDefined()
   })
 
   it('hasPermission 回 false 時三動作鈕不顯示', () => {
@@ -324,5 +335,105 @@ describe('ResolveCard', () => {
     const pickersAfter = wrapper.findAll('.el-time-picker')
     const outPickerAfter = pickersAfter[pickersAfter.length - 1]
     expect(outPickerAfter.element.value).toBe('')
+  })
+})
+
+describe('ResolveCard — 嵌在排班與出勤抽屜', () => {
+  it('showNav=false 不顯示「第 N / M 筆」與上下筆（抽屜只有一天）', () => {
+    const w = mountCard({ showNav: false, total: 1 })
+    expect(w.text()).not.toContain('第 1 / 1 筆')
+    expect(w.findAll('button').map((b) => b.text())).not.toContain('◀')
+  })
+
+  it('actions 只列允許的動作；沒有接受扣款／豁免時也不顯示「套用到整天」提示', () => {
+    const punchOnly = mountCard({ item: itemMissingPunch, context: missingOutContext, actions: ['punch'] })
+    const labels = punchOnly.findAll('button').map((b) => b.text())
+    expect(labels).toContain('補打卡並重算')
+    expect(labels).not.toContain('接受扣款')
+    expect(labels).not.toContain('豁免')
+    expect(punchOnly.text()).not.toContain('整天')
+    const confirmOnly = mountCard({ actions: ['admin_accept', 'admin_waive'] })
+    expect(confirmOnly.findAll('button').map((b) => b.text())).not.toContain('補打卡並重算')
+  })
+
+  it('primaryAction=false：補打卡不是主要按鈕（同一抽屜不得兩顆主色鈕）', () => {
+    const w = mountCard({ item: itemMissingPunch, context: missingOutContext, primaryAction: false })
+    expect(w.findAll('button').find((b) => b.text() === '補打卡並重算')!.attributes('data-type')).not.toBe('primary')
+    expect(mountCard({ item: itemMissingPunch, context: missingOutContext }).findAll('button').find((b) => b.text() === '補打卡並重算')!.attributes('data-type')).toBe('primary')
+  })
+})
+
+describe('ResolveCard — 打卡紀錄未載入／載入失敗（QA #22）', () => {
+  const unknownContext = (records: 'loading' | 'failed') => ({ punch_in: null, punch_out: null, has_leave: false, estimated_deduction: 0, records })
+
+  it('載入中：不把「不知道」顯示成缺卡，不出補卡時間欄，補打卡停用；接受扣款／豁免仍可用', () => {
+    const w = mountCard({ item: itemMissingPunch, context: unknownContext('loading') as never })
+    expect(w.findAll('.el-time-picker')).toHaveLength(0)
+    expect(w.text()).toContain('打卡紀錄載入中')
+    const buttons = w.findAll('button')
+    expect(buttons.find((b) => b.text() === '補打卡並重算')!.attributes('disabled')).toBeDefined()
+    expect(buttons.find((b) => b.text() === '確認缺卡')!.attributes('disabled')).toBeUndefined()
+    expect(buttons.find((b) => b.text() === '豁免')!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('載入失敗：寫出失敗並可重試，補打卡停用', async () => {
+    const w = mountCard({ item: itemMissingPunch, context: unknownContext('failed') as never })
+    expect(w.findAll('.el-time-picker')).toHaveLength(0)
+    expect(w.text()).toContain('打卡紀錄載入失敗')
+    expect(w.findAll('button').find((b) => b.text() === '補打卡並重算')!.attributes('disabled')).toBeDefined()
+    await w.findAll('button').find((b) => b.text() === '重試')!.trigger('click')
+    expect(w.emitted('retry')).toHaveLength(1)
+  })
+})
+
+describe('ResolveCard — 只有缺卡的日子與設定問題提醒（第五輪審查）', () => {
+  beforeEach(() => {
+    mockHasPermission.mockReturnValue(true)
+    box.confirm.mockReset()
+  })
+
+  it('整天只有缺卡（不扣薪）：按鈕寫「確認缺卡」不寫「接受扣款」，提示說明會記入缺卡次數；送出帶「已確認缺卡」提示', async () => {
+    const w = mountCard({ item: itemMissingPunch, context: missingOutContext })
+    const accept = w.find('[data-test="resolve-accept"]')
+    expect(accept.text()).toBe('確認缺卡')
+    expect(w.text()).not.toContain('接受扣款')
+    // 豁免只影響本月薪資：年終缺卡照扣（業主 2026-07-02 裁示）、考核也照次計
+    expect(w.find('[data-test="resolve-whole-day-hint"]').text()).toContain('豁免只讓本月薪資不記入，年終與考核仍照次計')
+    await accept.trigger('click')
+    await nextTick()
+    expect(w.emitted('resolve')![0][0]).toEqual({ action: 'admin_accept', doneText: '已確認缺卡' })
+  })
+
+  it('有遲到的日子仍是「接受扣款」', () => {
+    const w = mountCard({ item: itemLate })
+    expect(w.find('[data-test="resolve-accept"]').text()).toBe('接受扣款')
+  })
+
+  it('有設定問題提醒時，接受扣款先問一次；取消就不送出，確認才送', async () => {
+    box.confirm.mockRejectedValueOnce('cancel')
+    const w = mountCard({ item: itemLate, acceptWarning: '黃老師本月每天遲到約 57 分，多半是時段設錯' })
+    await w.find('[data-test="resolve-accept"]').trigger('click')
+    await nextTick()
+    await nextTick()
+    expect(box.confirm).toHaveBeenCalledWith('黃老師本月每天遲到約 57 分，多半是時段設錯', '可能是設定問題', expect.objectContaining({ confirmButtonText: '仍要接受扣款', cancelButtonText: '先不要' }))
+    expect(w.emitted('resolve')).toBeFalsy()
+
+    box.confirm.mockResolvedValueOnce('confirm')
+    await w.find('[data-test="resolve-accept"]').trigger('click')
+    await nextTick()
+    await nextTick()
+    expect(w.emitted('resolve')![0][0]).toEqual({ action: 'admin_accept' })
+  })
+
+  it('沒有提醒時直接送出、不問；豁免永遠不問', async () => {
+    const w = mountCard({ item: itemLate })
+    await w.find('[data-test="resolve-accept"]').trigger('click')
+    await nextTick()
+    expect(box.confirm).not.toHaveBeenCalled()
+    expect(w.emitted('resolve')![0][0]).toEqual({ action: 'admin_accept' })
+    const warned = mountCard({ item: itemLate, acceptWarning: '設定問題' })
+    await warned.findAll('button').find((b) => b.text() === '豁免')!.trigger('click')
+    expect(box.confirm).not.toHaveBeenCalled()
+    expect(warned.emitted('resolve')![0][0]).toEqual({ action: 'admin_waive' })
   })
 })

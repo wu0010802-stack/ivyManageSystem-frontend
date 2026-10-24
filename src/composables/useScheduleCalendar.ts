@@ -1,9 +1,5 @@
 import { computed, type Ref } from 'vue'
-
-const _todayStr = (() => {
-  const t = new Date()
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
-})()
+import { todayTaipeiISO } from '@/utils/format'
 
 /**
  * 排班月曆計算 helper。
@@ -22,7 +18,9 @@ export function useScheduleCalendar(scheduleData: Ref<{ days: { date: string; da
   const calendarWeeks = computed(() => {
     if (!scheduleData.value) return []
     const days = scheduleData.value.days
-    const firstDate = new Date(year.value, month.value - 1, 1)
+    // 開頭空格以資料本身的月份算：換月時 query 先變、資料還是舊月，不能用 query 的年月錯位
+    const [y, m] = days[0]?.date ? days[0].date.split('-').map(Number) : [year.value, month.value]
+    const firstDate = new Date(y, m - 1, 1)
     const startWeekday = firstDate.getDay() // 0=Sun
 
     const padded = []
@@ -37,8 +35,9 @@ export function useScheduleCalendar(scheduleData: Ref<{ days: { date: string; da
     return weeks
   })
 
-  const isToday = (day: { date: string } | null) => !!day && day.date === _todayStr
-  const isFutureDate = (dateStr: string) => dateStr >= _todayStr
+  // 「今天」在呼叫當下算（台北日期）：頁面開過午夜不能還停在載入那天
+  const isToday = (day: { date: string } | null) => !!day && day.date === todayTaipeiISO()
+  const isFutureDate = (dateStr: string) => dateStr >= todayTaipeiISO()
 
   return { calendarWeeks, isToday, isFutureDate }
 }

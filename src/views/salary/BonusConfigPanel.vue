@@ -9,6 +9,12 @@ import OvertimeBonusTab from './components/OvertimeBonusTab.vue'
 import FestivalBonusTab from './components/FestivalBonusTab.vue'
 import StandardSalaryTab from './components/StandardSalaryTab.vue'
 import JobTitleGradeTab from './components/JobTitleGradeTab.vue'
+import {
+  emptyFestivalRuleToggles,
+  pickFestivalRuleToggles,
+  newlyEnabledFestivalRules,
+  type FestivalRuleToggleValues,
+} from './festivalRuleToggles'
 
 const loadingBonus = ref(false)
 const activeBonusTab = ref('overtime')
@@ -50,17 +56,37 @@ const bonusConfig = reactive({
   meeting_default_hours: 2,
   meeting_absence_penalty: 100,
   art_teacher_festival: 2000,
+  // 義華 Q13：懲處預設扣節慶獎金（個案未填金額時套用）。初值 null＝GET 未帶回時
+  // 原樣送 null（後端不改值），避免前端預設值悄悄覆寫租戶設定。
+  warning_deduction: null as number | null,
+  minor_offense_deduction: null as number | null,
+  major_offense_deduction: null as number | null,
+  // 義華 Q6–Q9：節慶計算四開關（null＝未載入／不異動，見 festivalRuleToggles.ts）
+  ...emptyFestivalRuleToggles(),
 })
+// 上次載入的開關值：儲存前比對「新開啟」哪些規則，提示會影響未封存月份重算。
+const loadedFestivalToggles = ref<FestivalRuleToggleValues>(emptyFestivalRuleToggles())
 
+const bonusReady = ref(false)
+const gradesReady = ref(false)
+const bonusLoadError = ref(false)
+const gradesLoadError = ref(false)
+const loadingGrades = ref(false)
 const gradeTargets = ref<Record<string, unknown>[]>([])
 
 const fetchBonusConfig = async () => {
+  if (loadingBonus.value) return
+  bonusReady.value = false
+  bonusLoadError.value = false
   loadingBonus.value = true
   try {
     const response = await getBonusConfig()
     const data = response.data as Record<string, unknown>
     Object.assign(bonusConfig, data)
+    loadedFestivalToggles.value = pickFestivalRuleToggles(data)
+    bonusReady.value = true
   } catch (error) {
+    bonusLoadError.value = true
     ElMessage.error(friendlyError('薪資設定載入失敗', error))
   } finally {
     loadingBonus.value = false
@@ -68,14 +94,22 @@ const fetchBonusConfig = async () => {
 }
 
 const fetchGradeTargets = async () => {
+  if (loadingGrades.value) return
+  loadingGrades.value = true
+  gradesReady.value = false
+  gradesLoadError.value = false
   try {
     const response = await getGradeTargets()
     gradeTargets.value = Object.entries(response.data as Record<string, Record<string, unknown>>).map(([name, data]) => ({
       name,
       ...data,
     }))
+    gradesReady.value = true
   } catch (error) {
+    gradesLoadError.value = true
     ElMessage.error(friendlyError('年級目標載入失敗', error))
+  } finally {
+    loadingGrades.value = false
   }
 }
 
@@ -85,6 +119,19 @@ const fetchGradeTargets = async () => {
 const saveBonusConfig = async (): Promise<boolean> => {
   // bug sweep 2026-05-16 P1-5：BonusConfig 變更影響全員獎金基數，
   // 後端對齊 PUT /insurance/brackets 要求 reason ≥10 字 + ACTIVITY_PAYMENT_APPROVE。
+  const enabled = newlyEnabledFestivalRules(loadedFestivalToggles.value, bonusConfig)
+  if (enabled.length > 0) {
+    try {
+      await ElMessageBox.confirm(
+        `即將開啟節慶規則：${enabled.map((d) => d.label).join('、')}。` +
+          '儲存後未封存的薪資會標記需重算，重算時整年度未封存月份的節慶獎金都會依新規則計算。確定要開啟嗎？',
+        '開啟節慶計算規則',
+        { confirmButtonText: '確定開啟', cancelButtonText: '取消', type: 'warning' },
+      )
+    } catch {
+      return false
+    }
+  }
   let reason
   try {
     const result = await ElMessageBox.prompt(
@@ -136,12 +183,17 @@ const saveBonusConfig = async (): Promise<boolean> => {
     meeting_default_hours: bonusConfig.meeting_default_hours,
     meeting_absence_penalty: bonusConfig.meeting_absence_penalty,
     art_teacher_festival: bonusConfig.art_teacher_festival,
+    warning_deduction: bonusConfig.warning_deduction,
+    minor_offense_deduction: bonusConfig.minor_offense_deduction,
+    major_offense_deduction: bonusConfig.major_offense_deduction,
+    ...pickFestivalRuleToggles(bonusConfig),
     reason,
   }
 
   loadingBonus.value = true
   try {
     await updateBonusConfig(payload)
+    loadedFestivalToggles.value = pickFestivalRuleToggles(bonusConfig)
     ElMessage.success('薪資設定已儲存')
     return true
   } catch (error) {
@@ -182,6 +234,10 @@ const saveAllBonusSettings = async () => {
     ElMessage.warning('您沒有權限儲存薪資設定（需 SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE）')
     return
   }
+  if (!bonusReady.value || !gradesReady.value || loadingBonus.value || loadingGrades.value) {
+    ElMessage.warning('請先成功載入薪資設定及年級目標後再儲存')
+    return
+  }
   loadingBonus.value = true
   try {
     // 費率是稽核閘門（需異動原因）：取消或失敗就不得續存年級目標、也不得謊報全部成功
@@ -203,6 +259,8 @@ onMounted(() => {
 
 <template>
   <div v-if="canReadSalarySettings" v-loading="loadingBonus">
+    <div v-if="bonusLoadError" role="alert">薪資設定載入失敗。<el-button @click="fetchBonusConfig">重試薪資設定</el-button></div>
+    <div v-if="gradesLoadError" role="alert">年級目標載入失敗。<el-button @click="fetchGradeTargets">重試年級目標</el-button></div>
     <div class="bonus-actions">
       <el-tooltip
         content="需要「系統設定寫入」與「金流簽核」權限（SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE）"
@@ -213,7 +271,7 @@ onMounted(() => {
           <el-button
             type="primary"
             size="large"
-            :disabled="!canSaveBonusSettings"
+            :disabled="!canSaveBonusSettings || !bonusReady || !gradesReady || loadingBonus || loadingGrades"
             @click="saveAllBonusSettings"
           >儲存所有薪資設定</el-button>
         </span>

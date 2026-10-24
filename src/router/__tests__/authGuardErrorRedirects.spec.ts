@@ -150,3 +150,24 @@ describe('既有行為回歸鎖', () => {
     await expect(authGuard(resolveTo('/employees'))).resolves.toBe(true)
   })
 })
+
+describe('舊書籤 /settings?tab=shifts（班別設定已搬進排班與出勤）', () => {
+  it('在權限檢查之前轉到 /attendance?tab=shifts：只有 SCHEDULE 的園長／主任不會被 /settings 擋成 403', async () => {
+    vi.mocked(getUserInfo).mockReturnValue(ADMIN)
+    vi.mocked(canAccessRoute).mockImplementation((path: string) => path === '/attendance')
+
+    const result = await authGuard(resolveTo('/settings?tab=shifts'))
+
+    expect(result).toEqual({ path: '/attendance', query: { tab: 'shifts' } })
+    expect(captureException).not.toHaveBeenCalled()
+  })
+
+  it('其他設定頁籤照常走權限檢查', async () => {
+    vi.mocked(getUserInfo).mockReturnValue(ADMIN)
+    vi.mocked(canAccessRoute).mockReturnValue(false)
+
+    const result = await authGuard(resolveTo('/settings?tab=line'))
+
+    expect(result).toMatchObject({ path: '/error', query: { type: 'forbidden' } })
+  })
+})

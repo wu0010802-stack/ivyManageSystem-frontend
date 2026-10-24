@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import ElementPlus from 'element-plus'
 import PlanRosterTable from '../PlanRosterTable.vue'
+import PlanTeacherCell from '../PlanTeacherCell.vue'
 import type { Schema } from '@/api/_generated/typed'
 
 type PlanDetail = Schema<'PlanDetailOut'>
@@ -105,16 +106,75 @@ describe('PlanRosterTable', () => {
     expect(w.find('.side-collapse').exists()).toBe(false)
   })
 
-  it('教師未指派顯示「待確認」tag，hover 顯示原班三師姓名（None 顯「—」）', () => {
+  it('三師格改用 PlanTeacherCell：未指派顯示「未指派」與原班老師（不再藏在 hover）', () => {
     const w = mountTable()
-    const unassignedTags = w.findAll('.teacher-unassigned')
-    // 小班A：副班導、美語老師未指派 → 2 個「待確認」；中班A 三教師皆已指派 → 0
-    expect(unassignedTags.length).toBe(2)
-    expect(unassignedTags[0].text()).toBe('待確認')
-    // 副班導未指派：source_assistant_teacher_name 為 null → 顯示「—」
-    expect(unassignedTags[0].attributes('title')).toBe('原班副班導：—')
-    // 美語老師未指派：source_art_teacher_name 有值 → 顯示原班美語老師姓名
-    expect(unassignedTags[1].attributes('title')).toBe('原班美語老師：舊美語老師')
+    const cells = w.findAllComponents(PlanTeacherCell)
+    expect(cells.length).toBe(6) // 2 班 × 3 職務
+    const smallA = cells.filter(c => c.props('className') === '小班A')
+    expect(smallA.map(c => [c.props('role'), c.props('teacherName'), c.props('sourceTeacherName')])).toEqual([
+      ['head', '王老師', '舊班導'],
+      ['assistant', null, null],
+      ['art', null, '舊美語老師'],
+    ])
+    expect(w.text()).not.toContain('待確認')
+  })
+
+  it('老師格 change → emit teacher-change(班 id, 欄位, 老師 id)', () => {
+    const w = mountTable()
+    const cell = w.findAllComponents(PlanTeacherCell)
+      .find(c => c.props('className') === '中班A' && c.props('role') === 'assistant')!
+    cell.vm.$emit('change', null)
+    expect(w.emitted('teacher-change')![0]).toEqual([11, 'assistant_teacher_id', null])
+  })
+
+  it('老師格的選項依班級與職務產生（他班班導停用並註明）', () => {
+    const w = mount(PlanRosterTable, {
+      global: { plugins: [ElementPlus] },
+      props: {
+        plan: buildPlan(),
+        editable: true,
+        selectedIds: new Set<number>(),
+        teacherOptions: [{ id: 200, name: '李老師' }, { id: 300, name: '新老師' }],
+      },
+    })
+    const cell = w.findAllComponents(PlanTeacherCell)
+      .find(c => c.props('className') === '小班A' && c.props('role') === 'head')!
+    expect(cell.props('options')).toEqual([
+      { id: 200, label: '李老師', disabled: true, note: '中班A班導' },
+      { id: 300, label: '新老師', disabled: false, note: '' },
+    ])
+  })
+
+  it('學生格單行：原班名只在「從別班搬進來」時顯示', () => {
+    const w = mountTable()
+    const entry = (id: number) => w.find(`.student-entry[data-student-id="${id}"]`)
+    // 小班A 的來源班是 幼幼A：同班升上來的不重複顯示原班
+    expect(entry(1).find('.student-moved').exists()).toBe(false)
+    // 小華來自 幼幼B → 標出來源
+    expect(entry(2).find('.student-moved').text()).toContain('幼幼B')
+  })
+
+  it('手動調整過的學生有標記（重新產生時會被保留的就是這些）', () => {
+    const w = mountTable()
+    expect(w.find('.student-entry[data-student-id="2"] .manual-mark').attributes('title')).toBe('手動調整過')
+    expect(w.find('.student-entry[data-student-id="1"] .manual-mark').exists()).toBe(false)
+  })
+
+  it('整班勾選：班名格 checkbox emit 該班全部學生', async () => {
+    const w = mountTable()
+    await w.find('.class-name-cell[data-plan-class-id="10"] .class-select-all input[type="checkbox"]').setValue(true)
+    expect(w.emitted('set-selected')!.at(-1)).toEqual([[1, 2, 3], true])
+  })
+
+  it('總計列：分班人數、待分班、畢業、排除一次講清楚', () => {
+    const plan = buildPlan()
+    plan.students.push({ id: 6, student_id: 'S006', name: '小新', source_classroom_name: '幼幼C', plan_class_id: null, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' })
+    const w = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    const text = w.find('.grand-total-row').text()
+    expect(text).toContain('已分班 4 人')
+    expect(text).toContain('待分班 1 人')
+    expect(text).toContain('畢業 1')
+    expect(text).toContain('排除 1')
   })
 
   it('勾選學生 checkbox emit set-selected([id], checked)；勾選狀態由 selectedIds prop 決定', async () => {
@@ -123,8 +183,8 @@ describe('PlanRosterTable', () => {
     // 學生 2（小華，selectedIds 內）應為勾選狀態
     const checkedBox = checkboxes.find(c => (c.props('modelValue') as boolean) === true)
     expect(checkedBox).toBeTruthy()
-    // 勾學生 1 → emit set-selected([1], true)
-    await checkboxes[0].find('input[type="checkbox"]').setValue(true)
+    // 勾學生 1 → emit set-selected([1], true)（班名格另有整班勾選，這裡明確指定學生格）
+    await w.find('.student-entry[data-student-id="1"] .student-checkbox input[type="checkbox"]').setValue(true)
     expect(w.emitted('set-selected')![0]).toEqual([[1], true])
   })
 
@@ -198,6 +258,22 @@ describe('PlanRosterTable', () => {
   })
 
   // ── 外部拖入（側欄待分班學生拖入，無內部 dragstart）──
+  it('拖曳留級生到別班 → op=retain（不可靜默變回一般分派、丟掉留級標記）', async () => {
+    const w = mountTable()
+    // 小華（id=2）是 class 10 的留級生
+    await w.find('.student-entry[data-student-id="2"]').trigger('dragstart')
+    await w.findAll('.student-cell')[1].trigger('drop')
+    expect(w.emitted('student-move')![0][0]).toEqual({ studentIds: [2], op: 'retain', planClassId: 11 })
+  })
+
+  it('外部拖入的待分班留級生 → op=retain', async () => {
+    const plan = buildPlan()
+    plan.students.push({ id: 7, student_id: 'S007', name: '小留', source_classroom_name: '中班B', plan_class_id: null, disposition: 'retain', exclude_reason: null, manually_adjusted: true, current_grade_name: '中班' })
+    const w = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    await w.findAll('.student-cell')[1].trigger('drop', { dataTransfer: { getData: () => '7' } })
+    expect(w.emitted('student-move')![0][0]).toEqual({ studentIds: [7], op: 'retain', planClassId: 11 })
+  })
+
   it('外部拖入（無內部 dragstart）：drop 帶 dataTransfer student id → emit student-move', async () => {
     const w = mountTable()
     await w.findAll('.student-cell')[1].trigger('drop', {

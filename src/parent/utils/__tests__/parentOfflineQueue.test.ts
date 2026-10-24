@@ -13,7 +13,7 @@ import {
   enqueueParent,
   flushParentQueue,
 } from '../parentOfflineQueue'
-import { OP_KINDS, clearAll } from '@/utils/offlineQueue'
+import { OP_KINDS, clearAll, listOps } from '@/utils/offlineQueue'
 import { useParentAuthStore } from '@/parent/stores/parentAuth'
 
 describe('parentOfflineQueue', () => {
@@ -94,17 +94,38 @@ describe('parentOfflineQueue', () => {
     expect(result.kept).toBe(1)
   })
 
-  it('flushParentQueue 409 視同成功（dedupe replay）', async () => {
+  // F15：後端各佇列端點的冪等重播回 2xx；409 一律是衝突（leaves client_request_id 已用於
+  // 不同請假＝永久、「請求衝突，請重試」＝可重試），不可當成已送達而刪除待送資料。
+  it('flushParentQueue 409 是衝突：保留待送、attempts+1、記錄 detail，不計成功', async () => {
     vi.mocked(useParentAuthStore).mockReturnValue({ user: { user_id: 7 } } as ReturnType<typeof useParentAuthStore>)
     const saveFn = vi.fn().mockRejectedValue({
-      response: { status: 409 },
+      response: { status: 409, data: { detail: '請求衝突，請重試' } },
     })
-    await enqueueParent({
-      kind: OP_KINDS.PARENT_MESSAGE,
-      payload: { content: 'hi' },
+    const op = await enqueueParent({
+      kind: OP_KINDS.CONTACT_BOOK_REPLY,
+      payload: { entry_id: 9001, body: '合成測試回覆' },
     })
-    const result = await flushParentQueue(OP_KINDS.PARENT_MESSAGE, saveFn)
-    expect(result.succeeded).toBe(1)
+    const result = await flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY, saveFn)
+    expect(result.succeeded).toBe(0)
+    expect(result.kept).toBe(1)
+    const remaining = await listOps({ kind: OP_KINDS.CONTACT_BOOK_REPLY, userId: 7 })
+    const kept = remaining.find((item) => item.id === op.id) as Record<string, unknown>
+    expect(kept).toBeTruthy()
+    expect(kept.attempts).toBe(1)
+    expect(kept.last_error).toBe('請求衝突，請重試')
+  })
+
+  it('flushParentQueue 409 累積 5 次轉 needs_review 並保留 last_error', async () => {
+    vi.mocked(useParentAuthStore).mockReturnValue({ user: { user_id: 7 } } as ReturnType<typeof useParentAuthStore>)
+    const saveFn = vi.fn().mockRejectedValue({
+      response: { status: 409, data: { detail: 'client_request_id 已用於不同的請假' } },
+    })
+    await enqueueParent({ kind: OP_KINDS.PARENT_LEAVE_REQUEST, payload: { reason: 'x' } })
+    let result = await flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST, saveFn)
+    for (let i = 0; i < 4; i += 1) result = await flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST, saveFn)
+    expect(result.needs_review).toBe(1)
+    const ops = await listOps({ kind: OP_KINDS.PARENT_LEAVE_REQUEST, userId: 7, status: null })
+    expect((ops[0] as Record<string, unknown>).last_error).toBe('client_request_id 已用於不同的請假')
   })
 
   it('flushParentQueue 401 → auth_failed + break', async () => {

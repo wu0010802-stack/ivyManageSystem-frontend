@@ -52,6 +52,12 @@ describe('buildStatCards：說明文字', () => {
     }
   })
 
+  it('家長提問 2026-10-12 下架：不再有「未讀提問」卡（後端仍回 unreadInquiries）', () => {
+    const labels = cardsOf({ ...STATS, unreadInquiries: 5 }).map((c) => c.label)
+    expect(labels).toContain('今日新增')
+    expect(labels).not.toContain('未讀提問')
+  })
+
   it('一律用「人次」，不得出現「席次」', () => {
     for (const card of cardsOf()) {
       expect(card.hint, `卡片「${card.label}」用了「席次」`).not.toContain('席次')

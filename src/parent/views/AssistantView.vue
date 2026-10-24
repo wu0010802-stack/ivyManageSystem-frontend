@@ -107,7 +107,7 @@ onMounted(load)
           @click="toggleQuestion(item)"
         >
           <span>{{ item.question }}</span>
-          <span class="material-symbols-rounded chev">expand_more</span>
+          <span class="material-symbols-rounded chev" aria-hidden="true">expand_more</span>
         </button>
         <div v-if="expandedKey === itemKey(item)" class="faq-body">
           <FaqAnswer :item="item" />
@@ -122,7 +122,7 @@ onMounted(load)
 
     <div class="bottom-bar">
       <button class="pt-action-btn contact-btn" @click="goContactTeacher">
-        <span class="material-symbols-rounded">chat</span>
+        <span class="material-symbols-rounded" aria-hidden="true">chat</span>
         找不到答案？聯絡老師
       </button>
     </div>
@@ -185,7 +185,7 @@ onMounted(load)
   border: none;
   cursor: pointer;
   text-align: left;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 500;
   color: var(--pt-text, #1f2937);
 }
@@ -202,7 +202,7 @@ onMounted(load)
 }
 .faq-meta {
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint, #6b7280);
   margin: 8px 0 80px;
 }
@@ -212,6 +212,8 @@ onMounted(load)
   bottom: 0;
   left: 0;
   right: 0;
+  /* 路由 hideTabBar 後這裡就是頁底唯一的固定列；仍給層級，避免被頁內 sticky 元素蓋過 */
+  z-index: var(--z-sticky, 10);
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background: var(--pt-surface-card, #fff);
   border-top: 1px solid var(--pt-border-light, #ecf5f9);

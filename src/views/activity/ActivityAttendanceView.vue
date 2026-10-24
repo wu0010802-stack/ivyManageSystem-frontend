@@ -258,16 +258,12 @@
                 size="small"
               >
                 <el-table-column label="姓名" prop="student_name" min-width="90" />
-                <el-table-column label="出席" width="100" align="center">
+                <el-table-column label="出席" width="150" align="center">
                   <template #default="{ row }">
-                    <el-switch
+                    <AttendanceMarkControl
                       v-model="row.is_present"
-                      :active-value="true"
-                      :inactive-value="false"
                       :disabled="!canWrite"
-                      active-text="出席"
-                      inactive-text="缺席"
-                      inline-prompt
+                      :aria-label="String(row.student_name ?? '')"
                     />
                   </template>
                 </el-table-column>
@@ -292,16 +288,12 @@
           >
             <el-table-column label="班級" prop="class_name" width="80" align="center" />
             <el-table-column label="姓名" prop="student_name" min-width="90" />
-            <el-table-column label="出席" width="100" align="center">
+            <el-table-column label="出席" width="150" align="center">
               <template #default="{ row }">
-                <el-switch
+                <AttendanceMarkControl
                   v-model="row.is_present"
-                  :active-value="true"
-                  :inactive-value="false"
                   :disabled="!canWrite"
-                  active-text="出席"
-                  inactive-text="缺席"
-                  inline-prompt
+                  :aria-label="String(row.student_name ?? '')"
                 />
               </template>
             </el-table-column>
@@ -353,6 +345,7 @@ import {
 } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
+import AttendanceMarkControl from '@/components/activity/AttendanceMarkControl.vue'
 import SessionBatchDialog from './components/SessionBatchDialog.vue'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'

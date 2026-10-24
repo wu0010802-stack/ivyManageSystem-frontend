@@ -1,19 +1,28 @@
+const { mockMonthContext } = vi.hoisted(() => ({ mockMonthContext: vi.fn() }))
+vi.mock('@/api/attendanceMonthContext', () => ({ getAttendanceMonthContext: mockMonthContext }))
+const { mockCanWrite, mockFullSalaryView } = vi.hoisted(() => ({ mockCanWrite: vi.fn((_code?: string) => true), mockFullSalaryView: vi.fn(() => true) }))
+vi.mock('@/utils/auth', () => ({ hasPermission: mockCanWrite, hasFullSalaryView: mockFullSalaryView }))
+const { mockOpenPdf } = vi.hoisted(() => ({ mockOpenPdf: vi.fn() }))
+vi.mock('@/utils/printPdfWindow', () => ({ openPdfInNewTab: mockOpenPdf }))
 // src/components/attendance/__tests__/EmployeeMonthPanel.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { mount, flushPromises } from '@vue/test-utils'
+import { computed, nextTick } from 'vue'
+import { GRID_VERDICT_KEY, type GridVerdictLookup } from '@/composables/useGridVerdict'
 
 // ── hoisted mocks (must be defined before vi.mock factories run) ───────────────
-const { mockGetRecords, mockUpsertRecord, mockNotify } = vi.hoisted(() => ({
+const { mockGetRecords, mockUpsertRecord, mockNotify, mockAppraisalPdf } = vi.hoisted(() => ({
   mockGetRecords: vi.fn(),
   mockUpsertRecord: vi.fn(),
   mockNotify: vi.fn(),
+  mockAppraisalPdf: vi.fn(),
 }))
 
 // ── mock api ───────────────────────────────────────────────────────────────────
 vi.mock('@/api/attendance', () => ({
   getRecords: mockGetRecords,
   upsertRecord: mockUpsertRecord,
+  getAppraisalSheetsPdf: mockAppraisalPdf,
 }))
 
 // ── mock useErrorNotify ────────────────────────────────────────────────────────
@@ -102,12 +111,14 @@ function mountPanel(overrides: {
   employeeId?: number | null
   year?: number
   month?: number
+  revision?: number
 }) {
   return mount(EmployeeMonthPanel, {
     props: {
       employeeId: overrides.employeeId !== undefined ? overrides.employeeId : 5,
       year: overrides.year ?? 2026,
       month: overrides.month ?? 6,
+      ...(overrides.revision !== undefined ? { revision: overrides.revision } : {}),
     },
     global: {
       stubs,
@@ -122,6 +133,7 @@ function mountPanel(overrides: {
 describe('EmployeeMonthPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
     mockUpsertRecord.mockResolvedValue({ data: {} })
   })
 
@@ -205,19 +217,10 @@ describe('EmployeeMonthPanel', () => {
     await nextTick()
     await nextTick()
 
-    // Fill in punch time via the time picker
-    const timePicker = wrapper.find('.el-time-picker')
-    if (timePicker.exists()) {
-      await timePicker.setValue('09:00')
-      await nextTick()
-    }
-
-    const btns = wrapper.findAll('button')
-    const punchBtn = btns.find((b) => b.text().includes('補打卡'))
-    expect(punchBtn).toBeTruthy()
-    await punchBtn!.trigger('click')
-    await nextTick()
-    await nextTick()
+    await wrapper.findAll('button').find(button => button.text() === '補打卡')!.trigger('click')
+    await wrapper.find('.el-time-picker').setValue('09:00')
+    await wrapper.findAll('button').find(button => button.text() === '儲存補卡')!.trigger('click')
+    await flushPromises()
 
     expect(mockUpsertRecord).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -233,18 +236,10 @@ describe('EmployeeMonthPanel', () => {
     await nextTick()
     await nextTick()
 
-    const timePicker = wrapper.find('.el-time-picker')
-    if (timePicker.exists()) {
-      await timePicker.setValue('09:00')
-      await nextTick()
-    }
-
-    const btns = wrapper.findAll('button')
-    const punchBtn = btns.find((b) => b.text().includes('補打卡'))
-    expect(punchBtn).toBeTruthy()
-    await punchBtn!.trigger('click')
-    await nextTick()
-    await nextTick()
+    await wrapper.findAll('button').find(button => button.text() === '補打卡')!.trigger('click')
+    await wrapper.find('.el-time-picker').setValue('09:00')
+    await wrapper.findAll('button').find(button => button.text() === '儲存補卡')!.trigger('click')
+    await flushPromises()
 
     expect(ElMessage.success as ReturnType<typeof vi.fn>).toHaveBeenCalled()
     expect(wrapper.emitted('updated')).toBeTruthy()
@@ -258,20 +253,12 @@ describe('EmployeeMonthPanel', () => {
     await nextTick()
     await nextTick()
 
-    const timePicker = wrapper.find('.el-time-picker')
-    if (timePicker.exists()) {
-      await timePicker.setValue('09:00')
-      await nextTick()
-    }
+    await wrapper.findAll('button').find(button => button.text() === '補打卡')!.trigger('click')
+    await wrapper.find('.el-time-picker').setValue('09:00')
+    await wrapper.findAll('button').find(button => button.text() === '儲存補卡')!.trigger('click')
+    await flushPromises()
+    expect(mockNotify).toHaveBeenCalled()
 
-    const btns = wrapper.findAll('button')
-    const punchBtn = btns.find((b) => b.text().includes('補打卡'))
-    if (punchBtn) {
-      await punchBtn.trigger('click')
-      await nextTick()
-      await nextTick()
-      expect(mockNotify).toHaveBeenCalled()
-    }
   })
 
   // ── watch: props 改變重新載入 ───────────────────────────────────────────────
@@ -287,5 +274,341 @@ describe('EmployeeMonthPanel', () => {
     expect(mockGetRecords).toHaveBeenLastCalledWith(
       expect.objectContaining({ month: 7 }),
     )
+  })
+})
+
+
+describe('核對日期定位', () => {
+  it('定位指定日期，該日無紀錄時明確說明', async () => {
+    mockGetRecords.mockResolvedValue({ data: [recordNormal, recordMissing] })
+    const wrapper = mountPanel({})
+    await wrapper.setProps({ focusDate: '2026-06-03' })
+    await flushPromises()
+    expect(wrapper.find('[data-attendance-date="2026-06-03"]').attributes('aria-current')).toBe('date')
+    await wrapper.setProps({ focusDate: '2026-06-04' })
+    expect(wrapper.text()).toContain('2026-06-04 尚無打卡紀錄')
+    wrapper.unmount()
+  })
+  it('快速切換人員時，舊請求不得覆蓋新目標紀錄', async () => {
+    let release!: (value: unknown) => void
+    mockGetRecords.mockReturnValueOnce(new Promise(resolve => { release = resolve }))
+    const wrapper = mountPanel({ employeeId: 5 })
+    mockGetRecords.mockResolvedValueOnce({ data: [{ ...recordNormal, employee_id: 6, date: '2026-06-04' }] })
+    await wrapper.setProps({ employeeId: 6, focusDate: '2026-06-04' })
+    await flushPromises()
+    release({ data: [recordNormal] })
+    await flushPromises()
+    expect(wrapper.find('[data-attendance-date="2026-06-04"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('2026-06-02')
+    wrapper.unmount()
+  })
+})
+
+
+it('沒有Attendance列仍依已結束班表顯示缺卡日，不直接攤開補卡欄位', async () => {
+  mockGetRecords.mockResolvedValue({ data: [] })
+  mockMonthContext.mockResolvedValue({ data: { roster: [], days: [{ date: '2026-06-03', is_expected_workday: true, schedule_known: true, expected_start_at: '2026-06-03T08:00:00+08:00', expected_end_at: '2026-06-03T17:00:00+08:00', full_day_leave: false, approved_leaves: [] }] } })
+  const wrapper = mountPanel({})
+  await flushPromises()
+  expect(wrapper.find('[data-attendance-date="2026-06-03"]').exists()).toBe(true)
+  expect(wrapper.text()).toContain('缺卡待確認')
+  expect(wrapper.find('.el-time-picker').exists()).toBe(false)
+  wrapper.unmount()
+})
+
+
+it('兩張卡都有的遲到紀錄仍可更正時間，未修改不得送出', async () => {
+  mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
+  mockGetRecords.mockResolvedValue({ data: [{ ...recordNormal, is_late: true, punch_in: '09:00' }] })
+  mockUpsertRecord.mockClear()
+  const wrapper = mountPanel({})
+  await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === '補打卡')!.trigger('click')
+  const save = wrapper.findAll('button').find(button => button.text() === '儲存補卡')!
+  expect(save.attributes('disabled')).toBeDefined()
+  await wrapper.find('.el-time-picker').setValue('08:00')
+  await save.trigger('click')
+  await flushPromises()
+  expect(mockUpsertRecord).toHaveBeenCalledWith({ employee_id: 5, date: '2026-06-02', punch_in: '08:00', punch_out: '17:00' })
+  wrapper.unmount()
+})
+
+it('班表載入失敗不得合成缺卡，提供重新載入', async () => {
+  mockGetRecords.mockResolvedValue({ data: [] })
+  mockMonthContext.mockRejectedValueOnce(new Error('context unavailable'))
+  const wrapper = mountPanel({})
+  await flushPromises()
+  expect(wrapper.find('[role="alert"]').text()).toContain('無法判定缺卡')
+  expect(wrapper.findAll('.month-record-row')).toHaveLength(0)
+  expect(wrapper.text()).toContain('重新載入')
+  wrapper.unmount()
+})
+
+it('補卡送出後切換員工，舊儲存完成不重載或覆蓋新員工', async () => {
+  let release!: () => void
+  mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
+  mockGetRecords.mockResolvedValue({ data: [recordMissing] })
+  mockUpsertRecord.mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve }))
+  const wrapper = mountPanel({})
+  await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === '補打卡')!.trigger('click')
+  const save = wrapper.findAll('button').find(button => button.text() === '儲存補卡')!
+  expect(save.attributes('disabled')).toBeDefined()
+  await wrapper.find('.el-time-picker').setValue('08:00')
+  await save.trigger('click')
+  expect(mockUpsertRecord).toHaveBeenLastCalledWith({ employee_id: 5, date: '2026-06-03', punch_in: '08:00' })
+  mockGetRecords.mockResolvedValue({ data: [{ ...recordNormal, employee_id: 6 }] })
+  await wrapper.setProps({ employeeId: 6 })
+  await flushPromises()
+  const requests = mockGetRecords.mock.calls.length
+  release()
+  await flushPromises()
+  expect(mockGetRecords).toHaveBeenCalledTimes(requests)
+  expect(wrapper.text()).toContain('2026-06-02')
+  expect(wrapper.text()).not.toContain('2026-06-03')
+  wrapper.unmount()
+})
+
+
+it('唯讀使用者看得到缺卡但不能開補卡表單', async () => {
+  // 依權限代碼回應，而不是 mockReturnValueOnce：列印考核表入口也讀 hasPermission，靠呼叫順序會錯位
+  mockCanWrite.mockImplementation((code?: string) => code !== 'ATTENDANCE_WRITE')
+  mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
+  mockGetRecords.mockResolvedValue({ data: [recordMissing] })
+  const wrapper = mountPanel({})
+  await flushPromises()
+  mockCanWrite.mockImplementation(() => true)
+  expect(wrapper.text()).toContain('缺卡待確認')
+  expect(wrapper.findAll('button').some(button => button.text() === '補打卡')).toBe(false)
+  wrapper.unmount()
+})
+
+it('點補卡後表單捲入畫面並聚焦時間欄位', async () => {
+  mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
+  mockGetRecords.mockResolvedValue({ data: [recordMissing] })
+  const scroll = vi.fn()
+  const previousScroll = HTMLElement.prototype.scrollIntoView
+  HTMLElement.prototype.scrollIntoView = scroll
+  const wrapper = mount(EmployeeMonthPanel, { props: { employeeId: 5, year: 2026, month: 6 }, attachTo: document.body, global: { stubs, directives: { loading: {} } } })
+  await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === '補打卡')!.trigger('click')
+  await flushPromises()
+  expect(scroll).toHaveBeenCalledWith({ block: 'center' })
+  expect(document.activeElement).toBe(wrapper.find('.el-time-picker').element)
+  wrapper.unmount()
+  HTMLElement.prototype.scrollIntoView = previousScroll
+})
+
+
+describe('整月明細在匯入後重新載入', () => {
+  it('revision 遞增即重抓（同員工同月匯入時 employeeId/year/month 都沒變）', async () => {
+    const wrapper = mountPanel({ revision: 0 })
+    await flushPromises()
+    const before = mockGetRecords.mock.calls.length
+    expect(before).toBeGreaterThan(0)
+
+    await wrapper.setProps({ revision: 1 })
+    await flushPromises()
+    // 少了這條，匯入完成後回到整月明細仍顯示匯入前的缺卡與舊時間
+    expect(mockGetRecords.mock.calls.length).toBe(before + 1)
+    wrapper.unmount()
+  })
+
+  it('revision 沒變則不重抓，避免無謂請求', async () => {
+    const wrapper = mountPanel({ revision: 3 })
+    await flushPromises()
+    const before = mockGetRecords.mock.calls.length
+
+    await wrapper.setProps({ revision: 3 })
+    await flushPromises()
+    expect(mockGetRecords.mock.calls.length).toBe(before)
+    wrapper.unmount()
+  })
+})
+
+// ── 月合計列 ──────────────────────────────────────────────────────────────────
+// 次數以 is_late / is_early_leave 旗標為準（與後端扣款判定同口徑），分鐘數取
+// late_minutes / early_leave_minutes。缺卡列的狀態文字會蓋過「遲到」，但分鐘數仍
+// 須計入合計，否則合計數字在明細表上數不出來。
+const makeRecord = (overrides: Record<string, unknown>) => ({
+  ...recordNormal, ...overrides,
+})
+
+describe('月合計列', () => {
+  it('依旗標統計次數與總分鐘，超過一小時改寫成時分', async () => {
+    mockGetRecords.mockResolvedValue({ data: [
+      makeRecord({ id: 11, date: '2026-06-02', punch_in: '08:12', status: 'late', is_late: true, late_minutes: 12 }),
+      makeRecord({ id: 12, date: '2026-06-04', punch_in: '08:50', status: 'late', is_late: true, late_minutes: 50 }),
+      makeRecord({ id: 13, date: '2026-06-05', punch_out: '16:40', status: 'early_leave', is_early_leave: true, early_leave_minutes: 20 }),
+      makeRecord({ id: 14, date: '2026-06-09' }),
+    ] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    const total = wrapper.find('.month-record-total')
+    expect(total.exists()).toBe(true)
+    expect(total.text()).toContain('本月合計')
+    expect(total.text()).toContain('遲到 2 次')
+    expect(total.text()).toContain('1 小時 2 分鐘')
+    expect(total.text()).toContain('早退 1 次')
+    expect(total.text()).toContain('20 分鐘')
+    wrapper.unmount()
+  })
+
+  it('缺卡列的遲到也計入，且逐列標出分鐘數讓合計可核對', async () => {
+    mockGetRecords.mockResolvedValue({ data: [
+      makeRecord({ id: 21, date: '2026-06-02', punch_in: '08:12', status: 'late', is_late: true, late_minutes: 12 }),
+      // 只打上班卡又遲到：狀態顯示「缺卡待確認」，但資料上 is_late 為真
+      makeRecord({ id: 22, date: '2026-06-03', punch_in: '08:08', punch_out: null, status: 'missing_punch', is_late: true, is_missing_punch_out: true, late_minutes: 8 }),
+    ] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    const total = wrapper.find('.month-record-total')
+    expect(total.text()).toContain('遲到 2 次')
+    expect(total.text()).toContain('20 分鐘')
+    // 對帳：合計說 2 次，明細表上就要看得到 2 列標了遲到分鐘
+    const statuses = wrapper.findAll('.month-record-row__status').map(cell => cell.text())
+    expect(statuses.filter(text => /12 分鐘|遲到 8 分/.test(text)).length).toBe(2)
+    wrapper.unmount()
+  })
+
+  it('整月沒有遲到早退時明說，不顯示 0 次 0 分', async () => {
+    mockGetRecords.mockResolvedValue({ data: [recordNormal, recordMissing] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    const total = wrapper.find('.month-record-total')
+    expect(total.text()).toContain('本月無遲到、早退')
+    expect(total.text()).not.toContain('0 次')
+    wrapper.unmount()
+  })
+
+  it('旗標為 false 的殘留分鐘數不計入', async () => {
+    mockGetRecords.mockResolvedValue({ data: [
+      makeRecord({ id: 31, date: '2026-06-02', late_minutes: 30, early_leave_minutes: 15 }),
+    ] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    expect(wrapper.find('.month-record-total').text()).toContain('本月無遲到、早退')
+    wrapper.unmount()
+  })
+
+  it('沒有任何列時不渲染合計列', async () => {
+    mockGetRecords.mockResolvedValue({ data: [] })
+    const wrapper = mountPanel({})
+    await flushPromises()
+
+    expect(wrapper.find('.month-record-total').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('並列班表核對的判定（第五輪審查：同一人日兩個頁籤兩套判定）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
+    mockGetRecords.mockResolvedValue({ data: [recordNormal, recordMissing] })
+  })
+
+  it('班表核對看到明細看不出的情形（疑似缺勤／換班／資料待補）才寫在狀態欄下；遲到早退、缺卡、符合班表不重複寫', async () => {
+    const lookup: GridVerdictLookup = (_id, date) =>
+      date === '2026-06-03'
+        ? { label: '疑似缺勤', status: 'suspected_absence', acceptWarning: null }
+        : { label: '遲到 53 分・早退 300 分', status: 'anomaly', acceptWarning: null }
+    const wrapper = mount(EmployeeMonthPanel, {
+      props: { employeeId: 5, year: 2026, month: 6 },
+      global: { stubs, directives: { loading: { mounted() {}, updated() {} } }, provide: { [GRID_VERDICT_KEY as symbol]: computed(() => lookup) } },
+    })
+    await flushPromises()
+    expect(wrapper.get('[data-test="grid-verdict-2026-06-03"]').text()).toBe('班表核對：疑似缺勤')
+    expect(wrapper.find('[data-test="grid-verdict-2026-06-02"]').exists()).toBe(false)
+  })
+
+  it('沒有提供班表核對（單獨掛載）時照原本顯示', async () => {
+    const wrapper = mountPanel({})
+    await flushPromises()
+    expect(wrapper.find('[data-test^="grid-verdict-"]').exists()).toBe(false)
+  })
+})
+
+describe('列印考核表（單人）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCanWrite.mockImplementation(() => true)
+    mockFullSalaryView.mockReturnValue(true)
+    mockMonthContext.mockResolvedValue({ data: { roster: [], days: [] } })
+    mockGetRecords.mockResolvedValue({ data: [recordNormal] })
+    mockOpenPdf.mockResolvedValue(null)
+  })
+
+  it('具全員薪資視野才顯示列印考核表，點擊以該員工 id 產 PDF', async () => {
+    const blob = new Blob(['%PDF'])
+    mockAppraisalPdf.mockResolvedValue({ data: blob })
+    const wrapper = mountPanel({ employeeId: 5, year: 2026, month: 6 })
+    await flushPromises()
+    const btn = wrapper.get('[data-test="print-appraisal"]')
+    expect(btn.text()).toBe('列印考核表')
+
+    // 要在點擊的同一個 tick 內呼叫 openPdfInNewTab，否則新分頁會被彈出視窗封鎖擋掉
+    ;(btn.element as HTMLButtonElement).click()
+    expect(mockOpenPdf).toHaveBeenCalledTimes(1)
+    const options = mockOpenPdf.mock.calls[0][0]
+    expect(options.loadingText).toBe('考核表產生中…')
+    expect(mockAppraisalPdf).not.toHaveBeenCalled()
+
+    await expect(options.fetchBlob()).resolves.toBe(blob)
+    expect(mockAppraisalPdf).toHaveBeenCalledWith({ year: 2026, month: 6, employee_ids: [5] })
+    wrapper.unmount()
+  })
+
+  it('產生失敗（API 錯誤）走 onError 通知，不丟未處理例外', async () => {
+    const wrapper = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    ;(wrapper.get('[data-test="print-appraisal"]').element as HTMLButtonElement).click()
+    const error = { isAxiosError: true, response: { status: 500, data: {} }, message: 'Request failed with status code 500' }
+    mockOpenPdf.mock.calls[0][0].onError(error)
+    expect(mockNotify).toHaveBeenCalledWith(error, expect.any(String), null, expect.objectContaining({ prefix: '產生考核表失敗' }))
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('彈出視窗被封鎖（本機 Error）時顯示該訊息，不當成網路錯誤', async () => {
+    const wrapper = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    ;(wrapper.get('[data-test="print-appraisal"]').element as HTMLButtonElement).click()
+    mockOpenPdf.mock.calls[0][0].onError(new Error('瀏覽器封鎖了新分頁，請允許彈出視窗'))
+    expect(ElMessage.error).toHaveBeenCalledWith('瀏覽器封鎖了新分頁，請允許彈出視窗')
+    expect(mockNotify).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('缺 SALARY_READ 時不顯示', async () => {
+    mockCanWrite.mockImplementation((code?: string) => code !== 'SALARY_READ')
+    const wrapper = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    expect(wrapper.find('[data-test="print-appraisal"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('缺 ATTENDANCE_READ 或沒有全員薪資視野時不顯示', async () => {
+    mockCanWrite.mockImplementation((code?: string) => code !== 'ATTENDANCE_READ')
+    const noAttendance = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    expect(noAttendance.find('[data-test="print-appraisal"]').exists()).toBe(false)
+    noAttendance.unmount()
+
+    mockCanWrite.mockImplementation(() => true)
+    mockFullSalaryView.mockReturnValue(false)
+    const noFullView = mountPanel({ employeeId: 5 })
+    await flushPromises()
+    expect(noFullView.find('[data-test="print-appraisal"]').exists()).toBe(false)
+    noFullView.unmount()
+  })
+
+  it('未選員工時沒有列印鈕', () => {
+    const wrapper = mountPanel({ employeeId: null })
+    expect(wrapper.find('[data-test="print-appraisal"]').exists()).toBe(false)
   })
 })

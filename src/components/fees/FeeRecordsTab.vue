@@ -1,5 +1,6 @@
 <template>
   <div class="fee-records-tab">
+    <p class="records-scope" data-test="records-scope">學期費用明細・{{ recordFilter.period ? `${recordFilter.period} 學期` : '全部學期' }}・每張費用單一列，數量以筆計</p>
     <!-- ================================================================
          統計摘要（先看結論再篩選：置於 filters 與 table 之前）
          paid/partial/unpaid count 是 fee record 數 → 單位「筆」，不是「人」
@@ -49,7 +50,7 @@
             data-test="fee-batch-pay-open"
             :disabled="selectedRows.length === 0"
             @click="openBatchPayDialog"
-          >批次登記繳費（{{ selectedRows.length }}）</el-button>
+          >批次收款（{{ selectedRows.length }}）</el-button>
           <el-button data-test="fee-reset-filters" @click="resetRecordFilters">清除篩選</el-button>
         </template>
       </AdminListToolbar>
@@ -71,25 +72,16 @@
             />
           </el-select>
         </label>
-        <label class="context-filter">
-          <span class="context-filter__label">班級</span>
-          <el-select
-            v-model="recordFilter.classroom_name"
-            aria-label="班級"
-            placeholder="全部班級"
-            clearable
-            class="context-filter__control context-filter__control--classroom"
-          >
-            <el-option
-              v-for="cls in classroomNameOptions"
-              :key="cls.id"
-              :label="cls.name"
-              :value="cls.name"
-              data-testid="fee-classroom-option"
-            />
-          </el-select>
-        </label>
       </div>
+      <!-- 班級：與月表同一個導覽列元件（2026-09-03）。逐筆走伺服器分頁，
+           算不出整月未收人數、也無法一次查整個年段，故計數與年段選取都關閉 -->
+      <FeeClassRail
+        :groups="classGroups"
+        :selected-class="recordFilter.classroom_name || null"
+        :show-counts="false"
+        :grade-selectable="false"
+        @select="onRailSelect"
+      />
     </div>
 
     <!-- ================================================================
@@ -123,7 +115,7 @@
         <EmptyState
           v-else
           title="尚無費用紀錄"
-          description="可先到右上「費用設定」維護費用範本，系統將於每日依啟用範本自動產生費用單"
+          description="費用單來自右上「匯入」的銀行檢核檔（發單批次）與「現金項目」批次；零散的額外應收可用「新增單筆費用」補登"
         />
       </template>
 
@@ -140,6 +132,14 @@
           <el-table-column label="班級" prop="classroom_name" min-width="80" />
           <el-table-column label="費用項目" prop="fee_item_name" min-width="110" />
           <el-table-column label="學期" prop="period" width="85" />
+          <el-table-column label="銷帳碼" width="90" align="center">
+            <template #default="{ row }">
+              <BillingCodeCell
+                :suffix="row.billing_code_suffix"
+                :full-number="row.full_collection_number"
+              />
+            </template>
+          </el-table-column>
           <el-table-column label="應繳" width="110" align="right" class-name="num-cell">
             <template #default="{ row }">{{ formatCurrency(row.amount_due) }}</template>
           </el-table-column>
@@ -159,6 +159,27 @@
           <el-table-column label="繳費方式" width="90">
             <template #default="{ row }">{{ row.payment_method || '—' }}</template>
           </el-table-column>
+          <el-table-column label="收款確認" min-width="150">
+            <template #default="{ row }">
+              <template v-if="activeSettlementTags(row.settlement).length">
+                <el-tag
+                  v-for="tag in activeSettlementTags(row.settlement)"
+                  :key="tag.key"
+                  :type="tag.tagType"
+                  size="small"
+                  class="settlement-tag"
+                  :class="{ 'settlement-tag--link': tag.jump }"
+                  :title="`${tag.label} ${formatCurrency(tag.amount)}`"
+                  data-test="settlement-tag"
+                  :data-bucket="tag.key"
+                  @click="tag.jump && jumpToWorkspace(tag.jump)"
+                >
+                  {{ tag.label }}
+                </el-tag>
+              </template>
+              <span v-else class="cell-empty">—</span>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="150" align="center" fixed="right">
             <template #default="{ row }">
               <el-button
@@ -166,7 +187,7 @@
                 link
                 type="primary"
                 @click="openPayDialog(row, $event)"
-              >{{ row.status === 'partial' ? '更新繳費' : '登記繳費' }}</el-button>
+              >{{ row.status === 'partial' ? '更新收款' : '收款' }}</el-button>
               <el-button
                 v-if="(row.amount_paid || 0) > 0"
                 link
@@ -192,7 +213,7 @@
     </div>
 
     <!-- ================================================================
-         Dialog：登記／更新繳費
+         Dialog：收款／更新收款
          鐵律：amount_paid 是「入帳後累計已繳」，payload 契約不可改成本次收款
     ================================================================ -->
     <el-dialog
@@ -266,12 +287,22 @@
             description="送出後將以此金額「更正」原繳費紀錄，請確認是要修正先前登記的金額。"
           />
 
-          <el-form-item label="繳費方式" prop="payment_method">
-            <el-select v-model="payForm.payment_method" aria-label="繳費方式" style="width: 100%">
-              <el-option label="現金" value="現金" />
-              <el-option label="轉帳" value="轉帳" />
-              <el-option label="其他" value="其他" />
-            </el-select>
+          <!-- 帳單頁限現金（業主裁定 2026-09-01）：轉帳一律走入帳媒合
+               由網銀資料銷帳回寫，此處不再提供轉帳／其他選項 -->
+          <el-form-item label="繳費方式">
+            <div class="pay-method-fixed" data-test="pay-method-cash-only">
+              <el-tag size="small">現金</el-tag>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                data-test="pay-method-recon-link"
+                @click="jumpToWorkspace({ ws: 'billing', view: 'matching' })"
+              >轉帳請至「入帳媒合」銷帳</el-button>
+            </div>
+            <p class="cash-handover-hint" data-test="cash-handover-hint">
+              現金會計入 {{ payForm.payment_date || '繳費日' }} 的現金交接批；該日交接送出後需先請老闆重新開啟才能再收款。
+            </p>
           </el-form-item>
           <el-form-item label="備註">
             <el-input v-model="payForm.notes" type="textarea" :rows="2" aria-label="備註" />
@@ -295,7 +326,7 @@
     />
 
     <!-- ================================================================
-         Dialog：批次登記繳費（多選、繳清全額）
+         Dialog：批次收款（多選、繳清全額）
     ================================================================ -->
     <BatchPayDialog
       v-if="batchPayDialogVisible"
@@ -308,10 +339,19 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import type { FormInstance } from 'element-plus'
 import { getFeeRecords, payFeeRecord, getFeeSummary } from '@/api/fees'
+import {
+  activeSettlementTags,
+  type FeeSettlement,
+} from '@/components/fees/settlementDisplay'
+import type { FeeWorkspaceKey } from '@/components/fees/workspace/feesNavigation'
+import BillingCodeCell from '@/components/fees/BillingCodeCell.vue'
+import FeeClassRail from '@/components/fees/FeeClassRail.vue'
+import { buildClassGroupsFromClassrooms } from '@/components/fees/feeClassGrouping'
 import { todayISO } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
 import { downloadFile } from '@/utils/download'
@@ -325,6 +365,9 @@ import BatchPayDialog from '@/components/fees/BatchPayDialog.vue'
 interface Classroom {
   id: number
   name: string
+  grade_name?: string | null
+  /** 班級代號（`小2`）；班級導覽列的年段內班序依它排 */
+  class_code?: string | null
 }
 
 interface FeeRow {
@@ -340,6 +383,10 @@ interface FeeRow {
   payment_method?: string
   notes?: string
   fee_type?: string
+  // SPEC-014 §16 帳單×對帳打通
+  billing_code_suffix?: string | null
+  full_collection_number?: string | null
+  settlement?: FeeSettlement
 }
 
 interface FeeSummary {
@@ -370,15 +417,12 @@ const props = withDefaults(defineProps<{
 })
 
 // 這個篩選的值是 classroom_name（後端按班名比對），而班級清單是跨學期的，
-// 114-2 與 115-1 的同名班會變成兩個同名同值的選項 → 按班名去重，保留先出現者。
-const classroomNameOptions = computed(() => {
-  const seen = new Set<string>()
-  return props.classrooms.filter(c => {
-    if (seen.has(c.name)) return false
-    seen.add(c.name)
-    return true
-  })
-})
+// 114-2 與 115-1 的同名班會是兩個同名同值的項目 → 按班名去重（在分組函式內處理）。
+const classGroups = computed(() => buildClassGroupsFromClassrooms(props.classrooms))
+
+function onRailSelect(payload: { cls: string | null; grade: string | null }) {
+  recordFilter.value.classroom_name = payload.cls ?? ''
+}
 
 // ─── 繳費記錄 ─────────────────────────────────────────────────────────────────
 const feeRecords = ref<FeeRow[]>([])
@@ -485,9 +529,22 @@ function searchRecords() {
   return fetchRecords()
 }
 
-// 父層（全域搜尋導航）帶入學生姓名預篩。
+// 父層帶入學生姓名預篩（全域搜尋導航、月表明細面板「到逐筆明細處理」）。
 // 只設 student_name → 觸發既有 watcher（page 歸 1 + 300ms debounce fetch），不重複呼叫 fetch。
+//
+// 一併解除預設鎖住的「未繳」：帶著某位學生進來就是要看他的**全部**帳款，
+// 尤其「到逐筆明細處理（部分繳費／退款）」要處理的正是已繳的單——沿用未繳
+// 篩選會讓已繳清的學生落地後顯示「目前篩選沒有結果」。與 initialSearch 進場
+// 的預設同軸（見 recordFilter 初始化）。status 的 watcher 在此靜默，讓那唯一
+// 一次查詢仍由 student_name 的 debounce 發出。
 function applySearch(name: string) {
+  if (recordFilter.value.status) {
+    _suppressStatusWatch = true
+    recordFilter.value.status = ''
+    nextTick(() => {
+      _suppressStatusWatch = false
+    })
+  }
   recordFilter.value.student_name = name
 }
 
@@ -512,6 +569,8 @@ function flushSearchNow() {
 
 // reset 一次改四個欄位，靠 suppress 旗標讓個別 watcher 靜默，只發出這裡的單一 fetch
 let _suppressFilterWatch = false
+// applySearch 專用：只靜默 status watcher（student_name 的 debounce 仍要照常發查詢）
+let _suppressStatusWatch = false
 function resetRecordFilters() {
   _suppressFilterWatch = true
   if (_feeSearchTimer) {
@@ -538,7 +597,7 @@ function getRecordStatusType(status: string): 'success' | 'warning' | 'info' {
   return 'info'
 }
 
-// ─── 登記／更新繳費 ──────────────────────────────────────────────────────────
+// ─── 收款／更新收款 ────────────────────────────────────────────────────────
 const payDialogVisible = ref<boolean>(false)
 const payingRecord = ref<FeeRow | null>(null)
 const payFormRef = ref<FormInstance | null>(null)
@@ -549,13 +608,20 @@ const payForm = ref({
   payment_method: '現金',
   notes: '',
 })
+// 帳單頁限現金：payment_method 固定「現金」不再由使用者選擇，僅日期需驗證
 const payRules = {
   payment_date: [{ required: true, message: '請選擇繳費日期', trigger: 'change' }],
-  payment_method: [{ required: true, message: '請選擇繳費方式', trigger: 'change' }],
+}
+
+// 收款確認 tag／轉帳改道提示的跳轉（帳單↔結算/對帳互相跳轉）。
+// 測試環境可能未掛 router：useRouter 回 undefined 時跳轉靜默略過。
+const router = useRouter()
+function jumpToWorkspace(target: { ws: FeeWorkspaceKey; view: string }) {
+  router?.push({ path: '/fees', query: { ws: target.ws, view: target.view } })
 }
 
 const payDialogTitle = computed(() =>
-  payingRecord.value?.status === 'partial' ? '更新繳費' : '登記繳費',
+  payingRecord.value?.status === 'partial' ? '更新收款' : '收款',
 )
 const payCurrentPaid = computed(() => payingRecord.value?.amount_paid || 0)
 // 差額／尚欠僅為呈現用試算；amount_paid payload 仍是「入帳後累計」，計算規則不變
@@ -573,7 +639,8 @@ function openPayDialog(row: FeeRow, evt?: Event) {
   payForm.value = {
     payment_date: todayISO(),
     amount_paid: row.status === 'partial' ? row.amount_paid : row.amount_due,
-    payment_method: row.payment_method || '現金',
+    // 限現金：不沿用列上的歷史快照（存量「轉帳」會被後端 422 擋下）
+    payment_method: '現金',
     notes: row.notes || '',
   }
   _payFormSnapshot = JSON.stringify(payForm.value)
@@ -607,7 +674,7 @@ async function submitPay() {
     nextTick(() => el?.focus?.())
   } catch (err: unknown) {
     const e = err as { response?: { data?: { detail?: string } } }
-    ElMessage.error(e?.response?.data?.detail || '登記繳費失敗')
+    ElMessage.error(e?.response?.data?.detail || '收款登記失敗')
   } finally {
     saving.value = false
   }
@@ -631,7 +698,7 @@ function openRefundModal(row: FeeRow) {
   refundModalVisible.value = true
 }
 
-// ─── 批次登記繳費（多選，消除逐筆開對話框的痛） ──────────────────────────────
+// ─── 批次收款（多選，消除逐筆開對話框的痛） ─────────────────────────────────
 interface ElTableInstance {
   clearSelection?: () => void
 }
@@ -671,6 +738,7 @@ async function exportRecords() {
     if (recordFilter.value.period) params.period = recordFilter.value.period
     if (recordFilter.value.classroom_name) params.classroom_name = recordFilter.value.classroom_name
     if (recordFilter.value.status) params.status = recordFilter.value.status
+    if (recordFilter.value.student_name) params.student_name = recordFilter.value.student_name
     await downloadFile('/exports/fees', '學費繳費記錄.xlsx', Object.keys(params).length ? params : undefined)
   } finally {
     exporting.value = false
@@ -682,7 +750,7 @@ watch(() => recordFilter.value.period, () => {
   if (!_suppressFilterWatch) searchRecords()
 })
 watch(() => recordFilter.value.status, () => {
-  if (!_suppressFilterWatch) searchRecords()
+  if (!_suppressFilterWatch && !_suppressStatusWatch) searchRecords()
 })
 watch(() => recordFilter.value.classroom_name, () => {
   if (!_suppressFilterWatch) searchRecords()
@@ -713,7 +781,7 @@ defineExpose({
   openPayDialog,
   submitPay,
   resetRecordFilters,
-  // 批次登記繳費／匯出（測試用白盒存取）
+  // 批次收款／匯出（測試用白盒存取）
   selectedRows,
   rowSelectable,
   onSelectionChange,
@@ -726,6 +794,39 @@ defineExpose({
 </script>
 
 <style scoped>
+.records-scope {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.cash-handover-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
+/* 收款確認 tags（可點者游標提示，跳結算/對帳工作區） */
+.settlement-tag {
+  margin: 1px 4px 1px 0;
+}
+
+.settlement-tag--link {
+  cursor: pointer;
+}
+
+.cell-empty {
+  color: var(--el-text-color-placeholder);
+}
+
+/* 限現金：固定顯示現金＋轉帳改道入口 */
+.pay-method-fixed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .fee-records-tab {
   width: 100%;
 }

@@ -29,7 +29,7 @@ export const CONSENT_SCOPES = [
 export type ConsentScope = (typeof CONSENT_SCOPES)[number]
 
 export const SCOPE_LABELS: Record<ConsentScope, string> = {
-  service_essential: '服務必要（必同意才能使用 portal）',
+  service_essential: '服務必要（必須同意才能使用家長 App）',
   photo_publish: '兒童照片公開於家長端',
   line_push: 'LINE 推播通知',
   cross_border_transfer: '跨境傳輸（雲端服務位於美國）',

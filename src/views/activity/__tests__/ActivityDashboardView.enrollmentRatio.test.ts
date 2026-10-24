@@ -9,7 +9,8 @@
  * 本測試釘住三件事：
  * 1. 欄名正名為「班級人次」，不得回退成「班級人數」。
  * 2. 新增「人次比率」欄並綁定後端 enrollment_ratio。
- * 3. 該欄不套參與率的紅綠達標著色——人次比率可 >100%，不參與達標判定。
+ * 3. （2026-10-19 業主裁定改向）達標改以人次比率判定，紅綠著色移到人次比率欄，
+ *    參與率降為參考欄、不著色。
  *
  * ⚠ 測試策略：本 view 無法在 happy-dom 下掛載（含 shallowMount）——動態課程欄位
  * 的 `<template #default="scope">{{ getCourseCount(scope.row, …) }}</template>`
@@ -39,21 +40,53 @@ describe('才藝儀表板欄位定義', () => {
     expect(SFC_SOURCE).toContain('label="人次比率"')
   })
 
-  it('人次比率欄不套達標紅綠著色（達標一律看參與率）', () => {
+  it('達標著色改套在人次比率欄、讀後端 meets_target（2026-10-19 業主裁定）', () => {
     const start = SFC_SOURCE.indexOf('prop="enrollment_ratio"')
+    const end = SFC_SOURCE.indexOf('</el-table-column>', start)
+    expect(SFC_SOURCE.slice(start, end)).toContain('ratioClass(scope.row)')
+    expect(SFC_SOURCE).toMatch(/row\.meets_target \? 'text-success' : 'text-danger'/)
+  })
+
+  it('同比／環比只在年級小計與全園顯示，班級列不顯示（2026-10-19 使用者裁定）', () => {
+    expect(SFC_SOURCE).toContain(`<div v-if="scope.row.rowType !== 'class'" class="trend-cell">`)
+  })
+
+  it('參與率欄降為參考、不著色', () => {
+    const start = SFC_SOURCE.indexOf('prop="ratio"')
     const end = SFC_SOURCE.indexOf('</el-table-column>', start)
     const columnBlock = SFC_SOURCE.slice(start, end)
 
+    expect(columnBlock).toContain('參與率（參考）')
     expect(columnBlock).not.toContain('text-danger')
     expect(columnBlock).not.toContain('text-success')
+  })
+})
+
+describe('分母口徑（spec C10，2026-10-19）', () => {
+  it('分母欄（student_count）欄名跟後端口徑走，不再寫死「在籍人數」', () => {
+    const start = SFC_SOURCE.indexOf('prop="student_count"')
+    const end = SFC_SOURCE.indexOf('/>', start)
+    expect(SFC_SOURCE.slice(start, end)).toContain(':label="denominatorLabels.header"')
+    expect(SFC_SOURCE).toContain('buildDenominatorLabels(')
+  })
+
+  it('比率說明的分母名詞與前期口徑附註來自 denominatorLabels', () => {
+    expect(SFC_SOURCE).toContain('denominatorLabels.noun')
+    expect(SFC_SOURCE).toContain('denominatorLabels.priorBasisNote')
+    expect(SFC_SOURCE).not.toContain('÷ 在籍人數')
   })
 })
 
 describe('表格列組裝不做欄位白名單', () => {
   it('班級／小計／總計三種列皆以 spread 帶入後端欄位', () => {
     // 若日後改成逐欄挑選，新增的後端欄位會靜默消失在畫面上——釘住 spread 寫法。
-    expect(SFC_SOURCE).toContain('...cls,')
-    expect(SFC_SOURCE).toContain('...grade.subtotal,')
-    expect(SFC_SOURCE).toContain('...dashboardData.value.grand_total,')
+    // 列組裝 2026-10-19 自 SFC 抽到 activityDashboardRows.ts。
+    const rowsSource = readFileSync(
+      resolve(process.cwd(), 'src/views/activity/activityDashboardRows.ts'),
+      'utf-8',
+    )
+    expect(rowsSource).toContain('...cls,')
+    expect(rowsSource).toContain('...grade.subtotal,')
+    expect(rowsSource).toContain('...table.grand_total,')
   })
 })

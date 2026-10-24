@@ -99,57 +99,11 @@ npm run test:coverage  # 含覆蓋率報告
 
 ---
 
-### 跨端權限與認證（2026-05-21 起，str enum）
+### 跨端權限與認證／權限與選單工作指針
 
-2026-05-21 後端 Permission 從 IntFlag 改 `str Enum`（spec 代號 `permtxt01`），決策見 workspace `docs/adr/ADR-002_permission-intflag-to-str-enum.md`、介面 As-Is 見 `docs/spec/SPEC-002_permission-and-auth.md`。**無 64-bit 上限、無 BigInt 需求**。
+`hasPermission` 四段比對（teacher 短路→wildcard→bare→scope-qualified 白名單）、`hasPortalPermission` 限 Portal、新增 Permission 跨端 SOP、選單樹單一來源 `src/constants/navigation/manifest.ts`、`PLATFORM_*` 三碼與總部 console 三守則，全文見 **`.claude/rules/permissions-auth.md`**（碰 `src/utils/auth.ts`／`src/constants/permissions.ts`／`navigation/**`／`router/**`／`views/platform/**` 時自動載入）。
 
-**前端使用方式（`src/utils/auth.ts`）：**
-
-```ts
-import { hasPermission } from '@/utils/auth'
-
-// 單一檢查
-if (hasPermission('SALARY_READ')) { ... }
-
-// 多項任一（route guard / sidebar）
-const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
-```
-
-**`hasPermission` 比對順序（非純 `includes`）**：
-1. `role === 'teacher'` 短路回 `false`（教師只走 Portal；**勿移除，否則提權**）。短路條件現為 `role === 'teacher' || flags 含 portal_only`（OR 語意只會更嚴不會更鬆；flags 缺失時 `'teacher'` 字面 fallback 仍生效）
-2. wildcard：`permission_names` 含 `'*'` → true
-3. bare：`includes(name)` → true
-4. scope-qualified：`startsWith('<name>:')` → true（row-level scoping `<CODE>:own_class/all`，用 `getPermissionScope(name)` 取 scope，與後端 `resolve_grant` 對齊）。**僅對 `SCOPE_AWARE_CODES`（`src/utils/auth.ts`，15 碼白名單，需與後端 scope-aware 集合手動同步）生效**；非白名單 code 帶 scope 後綴一律 fail-closed
-
-**教師專屬 Portal 功能**（如家園溝通收發）用 `hasPortalPermission`——跳過 teacher 短路、其餘比對相同；**僅限 Portal 端使用**，admin 端一律 `hasPermission`。
-
-**資料來源**：
-- `userInfo.permission_names: string[]`（透過 `getUserInfo()` 從 localStorage 讀；響應式於 refresh / setUserInfo 後更新）
-- `null` 或 `undefined` 視為「無權限」，`hasPermission` 一律回 `false`（fail-safe）
-
-**新增 Permission 的跨端 SOP**：
-1. 後端 `utils/permissions.Permission` 加 enum 值（如 `Permission.NEW_FEATURE_READ = "NEW_FEATURE_READ"`）+ `PERMISSION_LABELS` 中文（僅供 alembic seed）
-2. 前端 `src/constants/permissions.ts` 同步加常數（與後端 enum 名稱字面一致，CI 漂移將造成所有檢查 fail-safe 不通過）
-3. 角色→權限映射以 **DB `roles` 表為單一來源**（`rolesdb01` 起，`GET /auth/permissions` 回傳、前端純渲染）；runtime 不得退回 in-code `ROLE_TEMPLATES`。session 或 DB seed 缺失時必須 fail-closed 並回報錯誤，新權限的角色授予要落在 DB seed
-4. 兩端各自補測試
-
-**禁止**：
-- `: any` 或 `as any` 處理 permission（用 `string` 即可）
-- 自建 BigInt / 位元運算 helper（舊 `permissionMaskHas` / `permissionMaskAdd` 等已移除）
-- 直接讀 `userInfo.permission_names.includes(...)`（繞過 wildcard 與 fail-safe）；一律走 `hasPermission`
-
-**家長端**（`role='parent'`）：`permission_names=[]`，所有資源存取由後端 `Guardian.user_id` 過濾；前端只需依 `role` 判斷可否進 `/portal/*` 路由（詳見 `docs/spec/SPEC-003_parent-pii-retention.md`）。
-
----
-
-### 權限／選單工作指針（2026-07-31 manifest 化）
-
-- 新增/移除後台頁面、選單項或頁面權限：Codex 先讀本 repo skill `.agents/skills/ivy-admin-page-change/SKILL.md`。
-- 新增/刪除權限碼（跨 repo 含 seed migration）：Codex 先讀後端 `../ivy-backend/.agents/skills/ivy-permission-change/SKILL.md`。
-- 權限模型 mental model（三層語意/scope/守衛選擇/防線地圖）：`../ivy-backend/docs/sop/permission-model.md`——跨 repo 權限工作先讀這份。
-- 選單樹唯一事實來源 `src/constants/navigation/manifest.ts`：側邊欄、`ROUTE_PERMISSION_RULES`、權限編輯器樹皆由它衍生，勿再手寫。
-- **`PLATFORM_*` 三碼（`PLATFORM_TENANTS_MANAGE` / `PLATFORM_REPORTS_VIEW` / `PLATFORM_AUDIT_VIEW`）已於 2026-08-04（4e）主屬 manifest 的「總部管理」群組**（分校管理／跨分校報表／跨分校稽核三頁；總覽與角色同步以 `sharedViews` 借道）——**不再是 `standalonePermissions` 孤兒，不要加回豁免表**。`src/constants/permissions.ts` 的 `PLATFORM_ONLY_CODES` 由後端 `tests/test_platform_admin_flag.py::TestFrontendParity` 以 regex 讀取比對，**改寫該宣告的格式（`new Set([...])` 內只放字面字串）會讓 parity 守衛靜默 skip**。
-- **總部（platform）console**：頁面在 `src/views/platform/`，client 在 `src/api/platform.ts`，acting tenant 在 `src/composables/useActingTenant.ts`。三條守則：(1) acting tenant 只走 `tenant_id` 參數，**不得**新增任何 acting header（CT-A-06）；(2) 切換 acting tenant 必經 `setActingTenant()`（內含 `advanceAdminSession()`）；(3) 總部頁的 `useCachedAsync` key 一律用 `platformCacheKey()`（Host 租戶 + acting tenant 兩層），既有分校頁 call site 不動。選單可見性由 `AdminSidebar` 的雙向過濾把關（見 contracts §16 **DEV-20**）。
+常駐三條：① 權限檢查一律走 `@/utils/auth` 的 `hasPermission(name)`，禁止直接 `permission_names.includes` 或任何 BigInt／mask 寫法；② 新增／移除後台頁面先讀 `.agents/skills/ivy-admin-page-change/SKILL.md`（Claude 相容入口 `.claude/skills/admin-page-lifecycle`），新增／刪除權限碼先讀後端 `.agents/skills/ivy-permission-change/SKILL.md`；③ 家長端 `role='parent'` 的 `permission_names=[]`，資源存取由後端過濾。
 
 ---
 
@@ -198,47 +152,7 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
 
 ### OpenAPI codegen（跨端契約管道）
 
-後端 FastAPI 的 Pydantic schema 是事實上的契約 single source of truth；前端 TS 型別由 codegen 自動衍生。**禁止手寫前端對應型別**（會與後端漂移）。
-
-決策見 workspace `docs/adr/ADR-001_openapi-typescript-codegen.md`，運維手冊見 `docs/infra/INFRA-001_cross-repo-contract-sync.md`。
-
-**跨端變更 SOP**（後端 schema 改動時）：
-
-```bash
-# 後端先行：改 router + Pydantic + pytest
-cd ~/Desktop/ivy-backend
-python scripts/dump_openapi.py       # 產 openapi.json（local-only，.gitignore 擋）
-
-# 前端 codegen
-cd ~/Desktop/ivy-frontend
-npm run gen:api                       # 跑 openapi-typescript → src/api/_generated/schema.d.ts
-# 只 commit schema.d.ts；不 commit openapi.json
-```
-
-**型別 helper**（`src/api/_generated/typed.d.ts`）：
-
-```ts
-import type { ApiBody, ApiQuery, AxiosResp, Schema } from '@/api/_generated/typed'
-
-// Request body 型別
-const body: ApiBody<'/employees', 'post'> = { ... }
-
-// Query 型別
-const params: ApiQuery<'/salaries/records', 'get'> = { year: 2026, month: 5 }
-
-// Response 型別（注意：用 AxiosResp，因 axios wrapper 不解包 .data）
-const resp: AxiosResp<'/employees', 'get'> = await api.get('/employees')
-```
-
-**重要慣例**：
-- **dispatch path 不帶 `/api`**：`api.get('/employees')` 而非 `api.get('/api/employees')`；後端 `dump_openapi.py` 預設剝掉 `/api` prefix
-- **`AxiosResp` 而非 `Schema`**：axios wrapper 不自動解包 `.data`，return type 必須含 `AxiosResp`；少數例外（如 `fees.ts` / `portalClassHub.ts` / `reports.ts` / `monthlyFixedCost.ts` 等內部自己解包）保留手動處理
-- **缺 `response_model=` 過渡寫法**：後端 router 未標 `response_model=` 時前端會收到 `unknown`，用 `as Shape // TODO(ts-strict): waiting on backend response_model`；後端補上後型別自動下放
-- **不換 `src/api/index.ts` axios wrapper**：dedupe / refresh / displayMessage / PII 過濾邏輯保留
-
-**漂移檢查**：
-- 本地：`npm run gen:api:check`（regen + porcelain check，含 untracked）
-- CI：兩 repo 的 `openapi-drift` job 跑 dump + check；schema.d.ts 漂移即 fail（公開 repo 用 default `GITHUB_TOKEN`，若改 private 需建 PAT）
+後端 Pydantic 為契約唯一來源，前端型別由 `npm run gen:api` 產 `src/api/_generated/schema.d.ts`，**禁止手寫對應型別**；`ApiBody`／`ApiQuery`／`AxiosResp` helper 用法、dispatch path 不帶 `/api`、缺 `response_model=` 的過渡寫法、`gen:api:check` 漂移檢查見 **`.claude/rules/openapi-codegen.md`**（碰 `src/api/**` 時自動載入；跨 repo 流程另見 workspace `/openapi-sync`）。
 
 ---
 
@@ -303,13 +217,7 @@ npm run test -- --run src/parent tests/unit/parent tests/parent
 
 ## 重點頁面範例：報表模組
 
-> `src/views/` 底下有 30+ 個 view（`portal/` / `salary/` / `leave/` / `activity/` 等），不一一列舉，依檔名語義即可定位；家長端為獨立 entry，見 `src/parent/views/`，非本目錄子集。下面只記錄「跨多檔協作 + 跨權限 + 帶 composable」的代表性區塊作為新增類似功能時的範本。
-
-> ⚠ 舊版「經營分析」（`views/analytics/`、路由 `/analytics`）已於 2026-06-03（commit `4a3b4b29`）業主裁定整塊移除；`Permission.BUSINESS_ANALYTICS` 刻意保留為孤兒權限（角色管理 UI 仍列出但無對應功能），`src/composables/useAnalyticsTimeRange.ts` 孤兒檔已於 2026-07-28 清理移除。
-
-### views/reports/
-
-報表模組（路由 `/reports`，入口 `src/views/ReportsView.vue`）。`src/views/reports/` 下為分頁 panel：`OverviewPanel.vue`（總覽 KPI）、`AttendancePanel.vue`、`SalaryPanel.vue`、`FinanceSummaryPanel.vue`、`MonthlyPnLPanel.vue`、`MonthlyFixedCostPanel.vue` 等，共用 `chartSetup.ts`（vue-chartjs 初始化）與 `useReportPeriod.ts`（期間 composable）。
+`src/views/reports/` 各 panel 與共用 `chartSetup.ts`／`useReportPeriod.ts` 的協作範本，以及「經營分析」已於 2026-06-03 業主裁定移除（`Permission.BUSINESS_ANALYTICS` 刻意保留為孤兒）的說明，見 **`.claude/rules/reports.md`**（碰 `src/views/reports/**` 時自動載入）。
 
 ---
 
@@ -323,14 +231,4 @@ npm run test -- --run src/parent tests/unit/parent tests/parent
 
 ## 錯誤監控（Sentry）
 
-`src/utils/sentry.ts` 提供 `initSentry(app, { entry })` 與 `captureException(err, context)`。
-
-- **啟用條件**：`VITE_SENTRY_DSN` 設定才生效；缺值時整支模組 no-op，三 entry boot 不受影響
-- **三 entry 都接上**：`src/main.ts`（admin）/ `src/parent/main.ts` / `src/public/main.ts`；每個 entry 用 `entry: 'admin'|'parent'|'public'` tag 區分
-- **axios 攔截器**：`src/api/index.ts` 對 `>=500` 與 network error 顯式上報；4xx（401/403/404/422 等）視為預期路徑由 UI errorHandler 處理，**不**送 Sentry
-- **PII 過濾**：55（現值，見 `PII_KEY_SUBSTRINGS`）欄位 denylist + URL path id sanitize + **query string PII 遮罩**（`?phone=0912 / ?email=x / ?id_number=A1` 等 value 自動 `[Filtered]`）+ **`event.user.id` FNV-1a hash**（擬個資去識別）；與後端 `_PII_KEY_SUBSTRINGS` 對齊。新增欄位同步前後端與測試（`tests/unit/utils/sentry.test.js`），backend 的 `tests/test_pii_denylist_parity.py` 在 CI enforce parity（讀前端 `sentry.ts` 比對 denylist + exempt list）
-- **`captureException` 內部 cache `_SentryRef`**：避免每次呼叫重複 dynamic import；init 前呼叫 → no-op（不再讀 env，純看 ref 是否存在）
-- **axios 攔截器使用 `sanitizeUrl(error.config?.url)` 才送 Sentry extra**：path id 去識別 + query PII 遮罩；不要直接送原始 url
-- **source map**：vite build 預設不產 .map（避免外洩程式結構）；需要 source map 給 Sentry 解 stack 時，在 build env 設 `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`，plugin 會用 `sourcemap: 'hidden'` 產 map → 上傳 Sentry → 從 dist 刪除。**`postbuild` npm script 額外 `find dist -name '*.map' -delete` 兜底**，即便 Sentry upload 失敗 .map 也不會留在 dist 進 CDN
-- **`sentryVitePlugin` 排在 plugins array 最末**（VitePWA 之後），避免 SW precache manifest 把 .map 收進去
-- **不要在元件 catch 內手動呼叫 `captureException`**：Vue errorHandler / global onerror / unhandledrejection 已被 SDK 自動 hook；axios 攔截器也已涵蓋。重複手動上報會雙報炸 quota
+`src/utils/sentry.ts`（`VITE_SENTRY_DSN` 缺即 no-op）：三 entry 皆接、axios 只報 ≥500／network error、PII denylist 與後端 `_PII_KEY_SUBSTRINGS` 必同步（後端 `tests/test_pii_denylist_parity.py` CI enforce）、source map 流程、勿在元件 catch 手動 `captureException`——細則見 **`.claude/rules/sentry.md`**（碰 `src/utils/sentry.ts`／`vite.config.js` 時自動載入）。

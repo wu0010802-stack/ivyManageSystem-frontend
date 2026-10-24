@@ -18,7 +18,9 @@
  *   - /dismissal-queue        側欄 STUDENTS_READ → 規則要 DISMISSAL_CALLS_READ
  *   - /admin/gov-reports/...  側欄 SALARY_READ   → 規則要 GOV_REPORTS_VIEW
  *   - /gov-reports            側欄 SALARY_READ   → 規則要 REPORTS
- * 這三個路徑續留為防假綠釘子。
+ * 這三個路徑續留為防假綠釘子；其中兩個政府報表路徑已於 2026-10-12 自側欄下架
+ * （深連結守衛改由 src/constants/navigation/__tests__/govReportsNav.test.ts 釘住），
+ * 釘子改用 /finance-signoffs（多檢視碼 OR）與 /fees 頂替。
  */
 
 import { describe, expect, it } from 'vitest'
@@ -66,11 +68,11 @@ describe('AdminSidebar（manifest 選單頁）權限 gate 與 route guard 規則
   it('抽得到足夠的選單頁（避免 manifest 結構改動造成假綠）', () => {
     const gates = sidebarGates()
     expect(gates.length).toBeGreaterThan(20)
-    // 釘住三個曾漂移的路徑，重構改名時直接紅而非靜默略過
+    // 釘住代表性選單頁，重構改名時直接紅而非靜默略過
     const paths = gates.map((g) => g.path)
     expect(paths).toContain('/dismissal-queue')
-    expect(paths).toContain('/gov-reports')
-    expect(paths).toContain('/admin/gov-reports/monthly')
+    expect(paths).toContain('/finance-signoffs')
+    expect(paths).toContain('/fees')
   })
 
   it('每個選單頁的 (views ∪ sharedViews) 都必須被該路由規則接受', () => {

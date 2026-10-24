@@ -42,7 +42,7 @@ const buttonLabel = computed(() => `批次${(STAGE_LABEL as Record<string, strin
 async function submit() {
   const selectedList = props.selectedIds ?? []
   if (selectedList.length === 0) {
-    ElMessage.warning('請先勾選 summary')
+    ElMessage.warning('請先勾選要簽核的員工')
     return
   }
   const stageLabel = (STAGE_LABEL as Record<string, string>)[props.stage] ?? props.stage

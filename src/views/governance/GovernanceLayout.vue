@@ -16,6 +16,8 @@ const { unackCount } = useHighRiskAuditCount()
 const canSeeHighRisk = computed(() => hasPermission('HIGH_RISK_READ'))
 const canSeeAuditLogs = computed(() => hasPermission('AUDIT_LOGS'))
 const canSeeDataQuality = computed(() => hasPermission('DATA_QUALITY_READ'))
+// 家長端監控沿用操作紀錄的 AUDIT_LOGS 碼（SPEC-023 決議：不新增權限碼）。
+const canSeeParentMonitor = computed(() => hasPermission('AUDIT_LOGS'))
 
 const tabFromPath = (path: string): string => path.split('/')[2] ?? ''
 
@@ -41,6 +43,7 @@ watch(() => route.path, (p) => {
       </el-tab-pane>
       <el-tab-pane v-if="canSeeAuditLogs" label="操作紀錄" name="audit-logs" />
       <el-tab-pane v-if="canSeeDataQuality" label="資料異常待辦" name="data-quality" />
+      <el-tab-pane v-if="canSeeParentMonitor" label="家長端監控" name="parent-monitor" />
     </el-tabs>
     <RouterView />
   </div>

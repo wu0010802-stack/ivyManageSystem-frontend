@@ -1,11 +1,12 @@
 <template>
   <div class="portal-survey-detail" v-loading="loading">
-    <div class="header">
-      <h2>{{ classStatus?.survey.title }}</h2>
-      <el-tag :type="classStatus?.survey.status === 'published' ? 'success' : 'warning'">
-        {{ classStatus?.survey.status === 'published' ? '進行中' : '已結束' }}
-      </el-tag>
-    </div>
+    <PortalPageHeader :title="classStatus?.survey.title || ''">
+      <template #actions>
+        <el-tag :type="classStatus?.survey.status === 'published' ? 'success' : 'warning'">
+          {{ classStatus?.survey.status === 'published' ? '進行中' : '已結束' }}
+        </el-tag>
+      </template>
+    </PortalPageHeader>
 
     <div class="summary" v-if="classStatus">
       <span class="summary__text">已回覆 {{ classStatus.replied.length }} / 未回覆 {{ classStatus.not_replied.length }}</span>
@@ -21,7 +22,7 @@
       </el-tooltip>
     </div>
     <el-table :data="classStatus?.not_replied ?? []" border>
-      <template #empty><el-empty description="全部已回覆" /></template>
+      <template #empty><EmptyState variant="inline" title="全部已回覆" /></template>
       <el-table-column label="班級" prop="classroom_name" width="140" />
       <el-table-column label="姓名" prop="name" min-width="120" />
       <el-table-column label="操作" width="100" fixed="right">
@@ -33,7 +34,7 @@
 
     <h3>已回覆列表</h3>
     <el-table :data="classStatus?.replied ?? []" border>
-      <template #empty><el-empty description="尚無回覆" /></template>
+      <template #empty><EmptyState variant="inline" title="尚無回覆" /></template>
       <el-table-column type="expand">
         <template #default="{ row }">
           <div class="answers">
@@ -124,6 +125,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getPortalSurveyClassStatus, portalFillResponse, portalRemindSurvey } from '@/api/surveys'
 import { friendlyError } from '@/utils/errorMessages'
 import { SURVEY_QUESTION_TYPES, firstUnansweredRequiredQuestion, type SurveyQuestionType } from '@/constants/surveyQuestionTypes'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface QuestionOut {
   id: number
@@ -272,11 +275,6 @@ onMounted(fetchAll)
 </script>
 
 <style scoped>
-.header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
 .summary {
   display: flex;
   align-items: center;

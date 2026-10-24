@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import NumPad from '@/components/kiosk/NumPad.vue'
 import { getKioskRoster, kioskPreview, kioskPunch } from '@/api/kiosk'
@@ -12,7 +12,7 @@ interface RosterEntry {
 }
 interface Preview {
   employee_name: string
-  action: string
+  action: 'punch_in' | 'punch_out'
   will_overwrite: boolean
   current_punch_out: string | null
   server_time: string
@@ -28,6 +28,52 @@ const preview = ref<Preview | null>(null)
 const successText = ref('')
 const loading = ref(false)
 const noPinWarning = ref(false)
+
+/**
+ * 共用平板：PIN／確認頁閒置過久要自動回名單並清掉 PIN，否則下一位可以替前一位按確認（QA #24）。
+ * 有操作（點擊、按鍵、PIN 變動）就重新計時；送出中不打斷。
+ */
+const IDLE_TIMEOUT_MS = 30_000
+const SUCCESS_RESET_MS = 3_000
+let idleTimer: ReturnType<typeof setTimeout> | null = null
+let successTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearIdle() {
+  if (idleTimer !== null) clearTimeout(idleTimer)
+  idleTimer = null
+}
+function clearSuccess() {
+  if (successTimer !== null) clearTimeout(successTimer)
+  successTimer = null
+}
+function armIdle() {
+  clearIdle()
+  if (stage.value !== 'pin' && stage.value !== 'confirm') return
+  idleTimer = setTimeout(() => {
+    idleTimer = null
+    if (loading.value) armIdle()
+    else reset()
+  }, IDLE_TIMEOUT_MS)
+}
+function onActivity() {
+  if (idleTimer !== null) armIdle()
+}
+watch(stage, (next) => {
+  // 換階段一律清掉成功頁計時器（手動返回後不能再清到下一位的 PIN）
+  if (next !== 'success') clearSuccess()
+  armIdle()
+})
+watch(pin, onActivity)
+onMounted(() => {
+  window.addEventListener('pointerdown', onActivity)
+  window.addEventListener('keydown', onActivity)
+})
+onBeforeUnmount(() => {
+  clearIdle()
+  clearSuccess()
+  window.removeEventListener('pointerdown', onActivity)
+  window.removeEventListener('keydown', onActivity)
+})
 
 async function loadRoster() {
   const res = await getKioskRoster()
@@ -66,21 +112,54 @@ async function submitPin() {
   }
 }
 
+/** 動作已變（例如別台裝置剛打過）：重抓預覽留在確認頁，讓本人看清楚新的動作再按；重抓失敗才回輸入 PIN */
+async function refreshPreview() {
+  if (!selected.value) return
+  try {
+    const res = await kioskPreview({ employee_id: selected.value.employee_id, pin: pin.value })
+    preview.value = res.data as Preview
+  } catch {
+    ElMessage.error('PIN 錯誤或暫時無法打卡')
+    pin.value = ''
+    preview.value = null
+    stage.value = 'pin'
+  }
+}
+
 async function confirmPunch() {
   if (!selected.value) return
   loading.value = true
+  let actionChanged = false
   try {
-    const res = await kioskPunch({ employee_id: selected.value.employee_id, pin: pin.value })
+    // 帶確認頁顯示的動作：伺服器判定不同（回應遺失後重試、別台剛打過）就回 409，不會把上班卡記成下班卡
+    const res = await kioskPunch({
+      employee_id: selected.value.employee_id,
+      pin: pin.value,
+      ...(preview.value ? { expected_action: preview.value.action } : {}),
+    })
     const d = res.data as { employee_name: string; action: string; punch_time: string }
     successText.value = `${d.employee_name}　${actionLabel(d.action)}　${d.punch_time.slice(11, 16)}`
     stage.value = 'success'
-    // 打卡已成功：立即排程 reset，不受後續刷新名單影響
-    setTimeout(reset, 3000)
-  } catch {
-    // 僅 kioskPunch 本身失敗才顯示錯誤
-    ElMessage.error('打卡失敗，請重試')
+    // 打卡已成功：立即排程 reset，不受後續刷新名單影響；記下 handle，手動返回或換階段時清掉
+    clearSuccess()
+    successTimer = setTimeout(() => {
+      successTimer = null
+      reset()
+    }, SUCCESS_RESET_MS)
+  } catch (err) {
+    if ((err as { response?: { status?: number } })?.response?.status === 409) {
+      actionChanged = true
+      ElMessage.warning('打卡狀態已變更，請重新確認')
+    } else {
+      // 僅 kioskPunch 本身失敗才顯示錯誤
+      ElMessage.error('打卡失敗，請重試')
+    }
   } finally {
     loading.value = false
+  }
+  if (actionChanged) {
+    await refreshPreview()
+    return
   }
   // 刷新名單為裝飾性動作，失敗不影響已完成的打卡記錄，不可誤報失敗
   if (stage.value === 'success') {
@@ -93,6 +172,8 @@ async function confirmPunch() {
 }
 
 function reset() {
+  clearIdle()
+  clearSuccess()
   stage.value = 'roster'
   selected.value = null
   pin.value = ''

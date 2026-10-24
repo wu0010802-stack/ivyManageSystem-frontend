@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+// 2026-09-03 UI 收斂：教師端不再選 emoji 圖示（原「圖示（選填）」區塊已移除，
+// `icon` 欄位不再送入 payload）；家長端 MilestoneCard 依 milestone_type 自行對應 Material icon。
+import { ref, watch, computed, type Component } from 'vue'
 import { todayISO } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 import { createMilestone } from '@/api/portalMilestones'
 import { apiError } from '@/utils/error'
+import {
+  Present,
+  Flag,
+  Medal,
+  Star,
+  Aim,
+  Brush,
+  School,
+  MagicStick,
+  CircleCheck,
+} from '@element-plus/icons-vue'
 
 interface MilestoneType {
   value: string
-  emoji: string
+  icon: Component
   label: string
 }
 
@@ -16,7 +29,6 @@ interface MilestoneForm {
   achieved_on: string
   title: string
   description: string
-  icon: string | null
 }
 
 const props = defineProps<{
@@ -31,16 +43,15 @@ const emit = defineEmits<{
 }>()
 
 const TYPES: MilestoneType[] = [
-  { value: 'birthday', emoji: '🎂', label: '生日' },
-  { value: 'first_day', emoji: '🌱', label: '入學第一天' },
-  { value: 'perfect_attendance_month', emoji: '🏆', label: '全勤月' },
-  { value: 'first_solo_event', emoji: '⭐', label: '首次獨立完成' },
-  { value: 'assessment_excellence', emoji: '🎯', label: '評估優異' },
-  { value: 'activity_first_join', emoji: '🎨', label: '首次參加才藝' },
-  { value: 'graduation', emoji: '🎓', label: '畢業' },
-  { value: 'custom', emoji: '✨', label: '自訂' },
+  { value: 'birthday', icon: Present, label: '生日' },
+  { value: 'first_day', icon: Flag, label: '入學第一天' },
+  { value: 'perfect_attendance_month', icon: Medal, label: '全勤月' },
+  { value: 'first_solo_event', icon: Star, label: '首次獨立完成' },
+  { value: 'assessment_excellence', icon: Aim, label: '評估優異' },
+  { value: 'activity_first_join', icon: Brush, label: '首次參加才藝' },
+  { value: 'graduation', icon: School, label: '畢業' },
+  { value: 'custom', icon: MagicStick, label: '自訂' },
 ]
-const ICON_OPTIONS: string[] = ['🎂', '🌟', '🏆', '🎓', '🎨', '🎵']
 
 const today = () => todayISO()
 
@@ -49,7 +60,6 @@ const form = ref<MilestoneForm>({
   achieved_on: today(),
   title: '',
   description: '',
-  icon: null,
 })
 const submitting = ref(false)
 const recorded = ref(false)
@@ -63,7 +73,6 @@ watch(
         achieved_on: today(),
         title: '',
         description: '',
-        icon: null,
       }
       recorded.value = false
     }
@@ -84,7 +93,6 @@ async function submit() {
       title: form.value.title.trim(),
     }
     if (form.value.description) payload.description = form.value.description
-    if (form.value.icon) payload.icon = form.value.icon
     await createMilestone(Number(props.studentId), payload)
     recorded.value = true
     emit('done')
@@ -102,7 +110,6 @@ function recordAnother() {
     achieved_on: form.value.achieved_on, // keep date
     title: '',
     description: '',
-    icon: null,
   }
   recorded.value = false
   emit('next')
@@ -134,7 +141,7 @@ function close() {
               :data-test="`type-${t.value}`"
               @click="form.milestone_type = t.value"
             >
-              <span class="chip-emoji">{{ t.emoji }}</span>
+              <el-icon class="chip-icon" aria-hidden="true"><component :is="t.icon" /></el-icon>
               <span>{{ t.label }}</span>
             </button>
           </div>
@@ -162,20 +169,6 @@ function close() {
           <textarea rows="3" aria-label="里程碑描述" v-model="form.description" />
         </div>
 
-        <div class="section">
-          <label class="section-label">圖示（選填）</label>
-          <div class="chips">
-            <button
-              v-for="i in ICON_OPTIONS"
-              :key="i"
-              :class="['chip', 'icon-chip', { active: form.icon === i }]"
-              @click="form.icon = form.icon === i ? null : i"
-            >
-              {{ i }}
-            </button>
-          </div>
-        </div>
-
         <div class="actions">
           <button @click="close">取消</button>
           <button
@@ -191,7 +184,7 @@ function close() {
 
       <template v-else>
         <div class="recorded">
-          <div class="ok">⭐ 已記</div>
+          <div class="ok"><el-icon aria-hidden="true"><CircleCheck /></el-icon> 已記</div>
           <div class="actions">
             <button class="primary" @click="recordAnother">再記一個</button>
             <button @click="close">完成</button>
@@ -236,9 +229,8 @@ function close() {
   border-color: var(--el-color-primary);
   color: var(--el-color-primary);
 }
-.icon-chip {
-  font-size: 22px;
-  padding: 4px 10px;
+.chip-icon {
+  font-size: 16px;
 }
 .row {
   display: flex;
@@ -288,7 +280,15 @@ function close() {
   padding: 24px;
 }
 .recorded .ok {
-  font-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 20px;
   margin-bottom: 16px;
+}
+.recorded .ok .el-icon {
+  font-size: 28px;
+  color: var(--el-color-success);
 }
 </style>

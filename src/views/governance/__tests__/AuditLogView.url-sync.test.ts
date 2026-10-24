@@ -12,6 +12,14 @@ vi.mock('@/api/audit', () => ({ getAuditLogs, getAuditLogsMeta, exportAuditLogs 
 
 import AuditLogView from '../AuditLogView.vue'
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 const makeRouter = (): Router =>
   createRouter({
     history: createMemoryHistory(),
@@ -25,7 +33,13 @@ const mountWithQuery = async (query: Record<string, string>) => {
   const wrapper = mount(AuditLogView, {
     global: {
       plugins: [ElementPlus, router],
-      stubs: { 'el-table': true, 'el-table-column': true },
+      stubs: {
+        'el-table': {
+          props: ['data'],
+          template: '<div data-test="audit-rows">{{ data.map((row) => row.username).join(",") }}</div>',
+        },
+        'el-table-column': true,
+      },
     },
   })
   await flushPromises()
@@ -62,5 +76,29 @@ describe('AuditLogView 篩選同步 URL', () => {
     const { wrapper } = await mountWithQuery({ risk_tag: 'large_amount', risk: 'large_amount' })
     const btn = wrapper.findAll('button').find((b) => b.text() === '大額金流')
     expect(btn!.classes()).toContain('el-button--primary')
+  })
+
+  it('連續查詢時只顯示最新條件的結果，忽略較晚完成的舊請求', async () => {
+    const { wrapper, router } = await mountWithQuery({})
+    const requestA = deferred<{ data: { items: Array<Record<string, unknown>>; total: number } }>()
+    const requestB = deferred<{ data: { items: Array<Record<string, unknown>>; total: number } }>()
+    getAuditLogs
+      .mockImplementationOnce(() => requestA.promise)
+      .mockImplementationOnce(() => requestB.promise)
+    const input = wrapper.find('input[placeholder="使用者名稱"]')
+    const search = wrapper.findAll('button').find((b) => b.text().includes('查詢'))!
+
+    await input.setValue('alice')
+    await search.trigger('click')
+    await input.setValue('bob')
+    await search.trigger('click')
+
+    requestB.resolve({ data: { items: [{ id: 2, username: '最新 bob' }], total: 1 } })
+    await flushPromises()
+    requestA.resolve({ data: { items: [{ id: 1, username: '過期 alice' }], total: 1 } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="audit-rows"]').text()).toBe('最新 bob')
+    expect(router.currentRoute.value.query.username).toBe('bob')
   })
 })

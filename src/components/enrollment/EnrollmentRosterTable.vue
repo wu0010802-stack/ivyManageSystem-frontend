@@ -24,7 +24,7 @@
                 :class="{ 'grade-border-right': gradeLastClassNumbers.has(cls.class_number) }"
               >{{ cls.class_number }}</th>
             </tr>
-            <!-- 年級（垂直捲動時釘住） -->
+            <!-- 年級／班級代號（垂直捲動時釘住）：優先顯示班級真實代號，沒有才退回推算值 -->
             <tr class="sticky-grade-row">
               <th scope="row" class="row-label">年級</th>
               <td
@@ -32,7 +32,7 @@
                 :key="cls.classroom_id"
                 class="grade-cell"
                 :class="{ 'grade-border-right': gradeLastClassNumbers.has(cls.class_number) }"
-              >{{ shortGrade(cls.grade_name, cls.class_number) }}</td>
+              >{{ cls.class_code || shortGrade(cls.grade_name, cls.class_number) }}</td>
               <td class="corner-cell"></td>
             </tr>
             <!-- 班名（垂直捲動時釘住） -->
@@ -240,7 +240,7 @@ const gradeLastClassNumbers = computed(() => {
   return set
 })
 
-// 年級簡稱：取年級名稱首字 + 班在年級內的序號
+// 年級簡稱（班級未設定 class_code 時的退回值）：取年級名稱首字 + 班在年級內的序號
 const gradeClassIndex = computed(() => {
   const map: Record<string, number> = {}
   for (const cls of props.roster.classes) {

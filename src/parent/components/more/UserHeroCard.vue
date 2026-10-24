@@ -84,10 +84,12 @@ withDefaults(defineProps<{
 }
 
 .user-card-laurel {
+  /* 靠右垂直置中：置中會壓在姓名／子女列的文字後面，logo 線條干擾閱讀；
+     內容靠左排，右側是卡片的天然留白 */
   position: absolute;
-  left: 50%;
+  right: -12px;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
   z-index: 0;
   pointer-events: none;
 }

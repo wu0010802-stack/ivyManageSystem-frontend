@@ -16,11 +16,15 @@ vi.mock('@/utils/auth', () => ({
   hasPermission: (...a: unknown[]) => hasPermissionMock(...a),
 }))
 
-const { routeParams } = vi.hoisted(() => ({ routeParams: {} as Record<string, string> }))
+const { routeParams, routeQuery } = vi.hoisted(() => ({
+  routeParams: {} as Record<string, string>,
+  routeQuery: {} as Record<string, string>,
+}))
 const replaceMock = vi.fn()
 const pushMock = vi.fn()
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: routeParams }),
+  onBeforeRouteLeave: vi.fn(),
+  useRoute: () => ({ params: routeParams, query: routeQuery }),
   useRouter: () => ({ replace: replaceMock, push: pushMock, back: vi.fn() }),
 }))
 
@@ -70,6 +74,7 @@ describe('SurveyFormView（whole-branch review 第 6 項）', () => {
     hasPermissionMock.mockReturnValue(true)
     getClassroomsMock.mockResolvedValue({ data: [] })
     for (const k of Object.keys(routeParams)) delete routeParams[k]
+    for (const k of Object.keys(routeQuery)) delete routeQuery[k]
   })
 
   it('無 SURVEYS_WRITE：不渲染表單、導回列表、不發任何 api 請求', async () => {
@@ -120,5 +125,72 @@ describe('SurveyFormView（whole-branch review 第 6 項）', () => {
 
     expect(w.find('.add-question-bar').exists()).toBe(true)
     w.unmount()
+  })
+
+  describe('複製調查（/surveys/new?copy=<id>）', () => {
+    function inputValue(w: ReturnType<typeof mountView>, placeholder: string): string {
+      const el = w.findAll('input').find((i) => i.attributes('placeholder') === placeholder)
+      return (el!.element as HTMLInputElement).value
+    }
+
+    it('載入來源調查預填：標題加「（複本）」、日期清空、仍是建立模式', async () => {
+      routeQuery.copy = '9'
+      getSurveyMock.mockResolvedValue(surveyFixture({ status: 'closed' }))
+
+      const w = mountView()
+      await flushPromises()
+
+      expect(getSurveyMock).toHaveBeenCalledWith(9)
+      expect(inputValue(w, '例如：秋季戶外教學參加調查')).toBe('秋季戶外教學（複本）')
+      expect(inputValue(w, '例如：宜蘭綠色博覽會園區')).toBe('動物園')
+      expect(w.findAll('input').filter((i) => i.attributes('placeholder') === '選擇日期')
+        .map((i) => (i.element as HTMLInputElement).value)).toEqual(['', ''])
+      // 來源是 closed 也不能把複本鎖住：建立模式、可新增題目、送出鈕是「建立草稿」
+      expect(w.find('.add-question-bar').exists()).toBe(true)
+      expect(w.find('[data-test="submit"]').text()).toBe('建立草稿')
+      expect(w.find('.page-header').text()).toContain('複製自「秋季戶外教學」')
+      w.unmount()
+    })
+
+    it('送出走建立（POST）而非更新來源調查', async () => {
+      routeQuery.copy = '9'
+      getSurveyMock.mockResolvedValue(surveyFixture({ reply_deadline: '2099-09-20' }))
+      createSurveyMock.mockResolvedValue({ data: { id: 31 } })
+
+      const w = mountView()
+      await flushPromises()
+      // 複本截止日已清空：直接送出會被擋
+      await w.find('[data-test="submit"]').trigger('click')
+      await flushPromises()
+      expect(createSurveyMock).not.toHaveBeenCalled()
+      expect(w.find('[data-test="form-errors"]').text()).toContain('請填寫回覆截止日')
+
+      const deadline = w.findAll('input').filter((i) => i.attributes('placeholder') === '選擇日期')[1]
+      await deadline.setValue('2099-12-01')
+      await deadline.trigger('change')
+      await flushPromises()
+      await w.find('[data-test="submit"]').trigger('click')
+      await flushPromises()
+      expect(updateSurveyMock).not.toHaveBeenCalled()
+      expect(createSurveyMock).toHaveBeenCalledTimes(1)
+      expect(createSurveyMock.mock.calls[0][0]).toMatchObject({
+        title: '秋季戶外教學（複本）', event_date: null, reply_deadline: '2099-12-01',
+      })
+      expect(pushMock).toHaveBeenCalledWith({ name: 'survey-detail', params: { id: 31 } })
+      w.unmount()
+    })
+
+    it('來源載入失敗：提示錯誤、留在空白建立表單，不導走', async () => {
+      routeQuery.copy = '9'
+      getSurveyMock.mockRejectedValue(new Error('404'))
+
+      const w = mountView()
+      await flushPromises()
+
+      expect(w.find('.survey-form').exists()).toBe(true)
+      expect(replaceMock).not.toHaveBeenCalled()
+      expect(inputValue(w, '例如：秋季戶外教學參加調查')).toBe('')
+      w.unmount()
+    })
   })
 })

@@ -10,6 +10,7 @@
  *  - copy-no(receiptNo): 父層呼叫 copyText
  */
 import { computed } from 'vue'
+import { formatSemesterLabel } from '@/parent/utils/semesterLabel'
 import ParentBottomSheet from '@/parent/components/ParentBottomSheet.vue'
 import ParentIcon from '@/parent/components/ParentIcon.vue'
 
@@ -40,17 +41,20 @@ const props = withDefaults(defineProps<{
   payments?: Payment[]
   refunds?: Refund[]
   loading?: boolean
+  error?: boolean
 }>(), {
   record: null,
   payments: () => [],
   refunds: () => [],
   loading: false,
+  error: false,
 })
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'copy-info': [record: FeeRecord, payments: Payment[]]
   'copy-no': [receiptNo: string]
+  retry: []
 }>()
 
 function fmt(n: number | undefined): string { return Number(n ?? 0).toLocaleString('en-US') }
@@ -68,8 +72,12 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
   >
     <template v-if="record">
       <div class="detail-name">{{ record.fee_item_name }}</div>
-      <div class="detail-period">{{ record.period }}</div>
+      <div class="detail-period">{{ formatSemesterLabel(record.period) }}</div>
       <div v-if="loading" class="detail-loading">載入中...</div>
+      <div v-else-if="error" role="alert">
+        <p>收據載入失敗，請重新載入以確認繳費紀錄。</p>
+        <button type="button" class="action-btn" data-testid="receipt-retry" @click="emit('retry')">重新載入</button>
+      </div>
       <template v-else>
         <h4 class="section-h">繳費紀錄</h4>
         <div v-if="payments.length === 0" class="section-empty">尚無繳費</div>
@@ -94,7 +102,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
       </template>
     </template>
 
-    <template v-if="record && !loading" #footer>
+    <template v-if="record && !loading && !error" #footer>
       <div class="receipt-actions">
         <button
           type="button"
@@ -122,14 +130,14 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 
 <style scoped>
 .detail-name {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .detail-period {
-  color: var(--pt-text-placeholder);
-  font-size: 13px;
+  color: var(--pt-text-muted);
+  font-size: 0.8125rem;
   margin-top: 2px;
 }
 
@@ -137,14 +145,14 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 .section-empty {
   text-align: center;
   padding: 12px;
-  color: var(--pt-text-placeholder);
-  font-size: 13px;
+  color: var(--pt-text-muted);
+  font-size: 0.8125rem;
 }
 
 .section-h {
   margin: 16px 0 6px;
-  font-size: 13px;
-  color: var(--pt-text-placeholder);
+  font-size: 0.8125rem;
+  color: var(--pt-text-muted);
 }
 
 .pay-row {
@@ -155,7 +163,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .pay-row.refund .pay-amount {
@@ -170,7 +178,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 .pay-receipt {
   grid-column: 1 / -1;
   color: var(--pt-text-disabled);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: ui-monospace, monospace;
 }
 
@@ -186,7 +194,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
   background: var(--neutral-0);
   border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--m3-on-surface, var(--pt-text-strong));
   cursor: pointer;
   display: inline-flex;
@@ -201,8 +209,8 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
 
 .receipt-hint {
   margin: 10px 0 0;
-  font-size: 12px;
-  color: var(--pt-text-placeholder);
+  font-size: 0.75rem;
+  color: var(--pt-text-muted);
   text-align: center;
 }
 </style>

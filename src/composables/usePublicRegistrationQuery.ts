@@ -253,6 +253,19 @@ export function usePublicRegistrationQuery({
     }
   }
 
+  // F20：三欄救援（view 層）與 token 查詢共用同一個請求序號。救援送出前
+  // beginQueryRequest() 作廢仍在飛的 token 查詢；回應抵達時以 isLatestQueryRequest()
+  // 判斷自己是否仍是最新，較舊者一律丟棄，不得覆寫較新結果或觸發 hydrate／唯讀切換。
+  function beginQueryRequest(): number {
+    const requestId = ++latestQueryRequestId
+    // 被作廢的 token 查詢不會再走到自己的 finally 收尾 loading
+    queryLoading.value = false
+    return requestId
+  }
+  function isLatestQueryRequest(requestId: number): boolean {
+    return !disposed && requestId === latestQueryRequestId
+  }
+
   function hydrateResult(
     data: QueryResult,
     credentials?: QueryCredentials,
@@ -376,6 +389,8 @@ export function usePublicRegistrationQuery({
     classEditable,
     identityEditable,
     handleQuery,
+    beginQueryRequest,
+    isLatestQueryRequest,
     createHydrationGuard,
     hydrateResult,
     refetchCurrent,

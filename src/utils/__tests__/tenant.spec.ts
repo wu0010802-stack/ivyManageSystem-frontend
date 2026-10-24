@@ -148,11 +148,40 @@ describe('tenantErrorCodeOf：三態租戶錯誤', () => {
     // 一般業務錯誤不得被誤判成租戶錯誤，否則整站被遮罩擋住
     [404, { detail: { code: 'STUDENT_NOT_FOUND' } }, null],
     [503, { detail: { code: 'MAINTENANCE_MODE' } }, null],
+    // 解析負載削減是暫時性、可重試，不是租戶三態（整合審查 R5）
+    [503, { detail: { code: 'TENANT_RESOLUTION_BUSY' } }, null],
     [500, { detail: { code: 'TENANT_NOT_FOUND' } }, null],
     [404, { detail: '找不到' }, null],
     [404, undefined, null],
   ])('status=%s → %s', async (status, body, expected) => {
     const m = await loadTenant({})
     expect(m.tenantErrorCodeOf(status as number, body)).toBe(expected)
+  })
+})
+
+describe('TENANT_RESOLUTION_BUSY：解析負載削減（整合審查 R5）', () => {
+  it.each([
+    [503, { detail: { code: 'TENANT_RESOLUTION_BUSY' } }, true],
+    [503, { detail: { code: 'TENANT_PROVISIONING' } }, false],
+    [500, { detail: { code: 'TENANT_RESOLUTION_BUSY' } }, false],
+    [503, { detail: 'TENANT_RESOLUTION_BUSY' }, false],
+    [503, undefined, false],
+  ])('status=%s body=%j → %s', async (status, body, expected) => {
+    const m = await loadTenant({})
+    expect(m.isTenantResolutionBusy(status as number, body)).toBe(expected)
+  })
+
+  it.each([
+    ['1', 1000],
+    ['0', 0],
+    [' 2 ', 2000],
+    ['60', 5000], // 上限 5 秒：不讓一個標頭把畫面卡住太久
+    [undefined, 1000], // 沒帶 Retry-After → 預設 1 秒
+    ['', 1000],
+    ['-1', 1000],
+    ['Wed, 21 Oct 2026 07:28:00 GMT', 1000], // HTTP-date 格式不支援 → 預設
+  ])('Retry-After=%j → 延遲 %i ms', async (header, expected) => {
+    const m = await loadTenant({})
+    expect(m.tenantBusyRetryDelayMs(header)).toBe(expected)
   })
 })

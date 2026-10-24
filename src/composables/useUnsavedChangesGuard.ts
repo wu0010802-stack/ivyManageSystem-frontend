@@ -11,17 +11,31 @@ import { ElMessageBox } from 'element-plus'
  * 詢問是否捨棄未儲存變更；回傳 true 代表可以繼續（使用者選擇捨棄）。
  *
  * 獨立於 composable 匯出，供「元件內部切換分頁／切換選取項」這類不經路由的離開點共用，
- * 免得各處自己刻一套文案不一致的對話框。
+ * 免得各處自己刻一套文案不一致的對話框。不是「離開」的情境（如切換週次）可換掉標題與內文，
+ * 按鈕維持一致。
  */
-export async function confirmDiscardChanges(): Promise<boolean> {
+export async function confirmDiscardChanges(
+  copy: {
+    title?: string
+    message?: string
+    cancelText?: string
+    /**
+     * 由路由守衛開的框：hash 路由下返回鍵／改網址是 popstate（觸發 guard、開這個框）緊接 hashchange，
+     * EP 預設 hashchange 就關框＝當成取消，使用者什麼都沒看到導覽就被擋掉，所以這種框不跟著 hashchange 關。
+     * 頁內的確認（關對話框、換週）維持預設：使用者按返回鍵時框跟著關，不會遺留在下一頁。
+     */
+    routeGuard?: boolean
+  } = {},
+): Promise<boolean> {
   try {
     // 「捨棄變更」是破壞性動作（改動無法復原），故標成 danger 而非預設 primary——
     // 原本它以主色出現在視覺主位，等於把不可逆的那一邊做成建議選項。
-    await ElMessageBox.confirm('尚有未儲存的變更，確定離開並捨棄？', '未儲存變更', {
+    await ElMessageBox.confirm(copy.message ?? '尚有未儲存的變更，確定離開並捨棄？', copy.title ?? '未儲存變更', {
       type: 'warning',
       confirmButtonText: '捨棄變更',
       confirmButtonClass: 'el-button--danger',
-      cancelButtonText: '留在此頁',
+      cancelButtonText: copy.cancelText ?? '留在此頁',
+      closeOnHashChange: !copy.routeGuard,
     })
     return true
   } catch {
@@ -37,7 +51,7 @@ export function useUnsavedChangesGuard(isDirty: () => boolean): {
     return confirmDiscardChanges()
   }
 
-  onBeforeRouteLeave(async () => confirmDiscard())
+  onBeforeRouteLeave(async () => (isDirty() ? confirmDiscardChanges({ routeGuard: true }) : true))
 
   function onBeforeUnload(e: BeforeUnloadEvent): void {
     if (isDirty()) {

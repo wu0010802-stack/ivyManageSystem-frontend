@@ -2,7 +2,7 @@
 // PickupAuthorizationsView 與 PortalPickupAuthorizationsView 各複製一份，
 // 上移到 utils/error.ts（棘輪 EXEMPT 檔）共用。行為必須與原 View 內版本逐字相同。
 import { describe, it, expect } from 'vitest'
-import { extractErrorCode, extractErrorDetail } from '../error'
+import { extractErrorCode, extractErrorDetail, localErrorMessage } from '../error'
 
 describe('extractErrorCode', () => {
   it('取出 {error_code, detail} 形狀的 error_code', () => {
@@ -35,5 +35,24 @@ describe('extractErrorDetail', () => {
     expect(extractErrorDetail({ response: { data: {} } })).toBe('操作失敗')
     expect(extractErrorDetail(new Error('boom'))).toBe('操作失敗')
     expect(extractErrorDetail({ response: { data: { detail: { error_code: 'x' } } } })).toBe('操作失敗')
+  })
+})
+
+describe('localErrorMessage', () => {
+  it('本機產生的 Error（例：彈出視窗被封鎖）回傳其訊息', () => {
+    expect(localErrorMessage(new Error('瀏覽器封鎖了新分頁，請允許彈出視窗'))).toBe('瀏覽器封鎖了新分頁，請允許彈出視窗')
+  })
+
+  it('axios 錯誤（有 response 或 isAxiosError）回 null，交給原本的 apiError／notify', () => {
+    expect(localErrorMessage({ response: { status: 500 }, message: 'Request failed with status code 500' })).toBeNull()
+    expect(localErrorMessage({ isAxiosError: true, code: 'ECONNABORTED', message: 'timeout of 60000ms exceeded' })).toBeNull()
+  })
+
+  it('沒有訊息、空白訊息或非物件回 null', () => {
+    expect(localErrorMessage(new Error(''))).toBeNull()
+    expect(localErrorMessage(new Error('   '))).toBeNull()
+    expect(localErrorMessage(null)).toBeNull()
+    expect(localErrorMessage('boom')).toBeNull()
+    expect(localErrorMessage({ message: 42 })).toBeNull()
   })
 })

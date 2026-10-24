@@ -83,7 +83,7 @@ withDefaults(defineProps<{
 }
 
 /* ── default variant ── */
-.stat-card--default.stat-card--primary .stat-card__icon-wrap { background: var(--brand-primary-soft); color: var(--brand-primary); }
+.stat-card--default.stat-card--primary .stat-card__icon-wrap { background: var(--brand-primary-soft); color: var(--color-primary); }
 .stat-card--default.stat-card--success .stat-card__icon-wrap { background: var(--color-success-soft); color: var(--color-success); }
 .stat-card--default.stat-card--warning .stat-card__icon-wrap { background: var(--color-warning-soft); color: var(--color-warning); }
 .stat-card--default.stat-card--danger  .stat-card__icon-wrap { background: var(--color-danger-soft); color: var(--color-danger); }
@@ -119,7 +119,7 @@ withDefaults(defineProps<{
 .stat-card--filled.stat-card--danger   .stat-card__value { color: var(--color-danger-hover); }
 .stat-card--filled.stat-card--info     .stat-card__value { color: var(--color-info-hover); }
 
-.stat-card--filled.stat-card--primary .stat-card__icon-wrap { background: color-mix(in srgb, var(--brand-primary) 12%, transparent); color: var(--brand-primary-hover); }
+.stat-card--filled.stat-card--primary .stat-card__icon-wrap { background: color-mix(in srgb, var(--color-primary) 12%, transparent); color: var(--brand-primary-hover); }
 .stat-card--filled.stat-card--success  .stat-card__icon-wrap { background: color-mix(in srgb, var(--color-success) 12%, transparent); color: var(--color-success-hover); }
 .stat-card--filled.stat-card--warning  .stat-card__icon-wrap { background: color-mix(in srgb, var(--color-warning) 12%, transparent); color: var(--color-warning-hover); }
 .stat-card--filled.stat-card--danger   .stat-card__icon-wrap { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger-hover); }

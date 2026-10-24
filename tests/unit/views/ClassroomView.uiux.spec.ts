@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ClassroomView from '@/views/ClassroomView.vue'
+import { tenantRemoveItem } from '@/utils/tenantStorage'
 
 const push = vi.fn(() => Promise.resolve())
 
@@ -128,9 +129,16 @@ const flush = async () => {
   await nextTick()
 }
 
+// 2026-10-08：預設檢視改為年級分組表；卡片專屬斷言（role/tabindex/進度條/教師 chip）先切到卡片
+const switchToCard = async (wrapper: ReturnType<typeof mountView>) => {
+  await wrapper.find('[data-test="view-toggle-card"]').trigger('click')
+  await nextTick()
+}
+
 describe('ClassroomView UI/UX', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    tenantRemoveItem('classrooms_view_mode')
     classroomsResponse = () => Promise.resolve({ data: [] })
   })
 
@@ -157,6 +165,7 @@ describe('ClassroomView UI/UX', () => {
     classroomsResponse = () => Promise.resolve({ data: [oneClassroom] })
     const wrapper = mountView()
     await flush()
+    await switchToCard(wrapper)
 
     const card = wrapper.find('.classroom-card')
     expect(card.exists()).toBe(true)
@@ -171,6 +180,7 @@ describe('ClassroomView UI/UX', () => {
     classroomsResponse = () => Promise.resolve({ data: [oneClassroom] })
     const wrapper = mountView()
     await flush()
+    await switchToCard(wrapper)
 
     expect(wrapper.find('.capacity-progress').exists()).toBe(true)
   })
@@ -179,8 +189,50 @@ describe('ClassroomView UI/UX', () => {
     classroomsResponse = () => Promise.resolve({ data: [oneClassroom] })
     const wrapper = mountView()
     await flush()
+    await switchToCard(wrapper)
 
     const teacherText = wrapper.find('.teacher-info').text()
     expect(teacherText).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u)
+  })
+  it('A4b：表格檢視載入中同樣顯示 skeleton（不閃空狀態、不先畫空表）', async () => {
+    classroomsResponse = () => new Promise(() => {})
+    const wrapper = mountView()
+    await flush()
+
+    expect(wrapper.find('.classroom-skeleton').exists()).toBe(true)
+    expect(wrapper.find('[data-test="classroom-table"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('尚無班級資料')
+  })
+
+  it('A1b：表格列的班名是可聚焦的按鈕，Enter（click）開啟學生抽屜', async () => {
+    classroomsResponse = () => Promise.resolve({ data: [oneClassroom] })
+    const wrapper = mountView()
+    await flush()
+
+    const btn = wrapper.find('[data-test="classroom-row"] button.class-name-btn')
+    expect(btn.exists()).toBe(true)
+    expect(btn.element.tagName).toBe('BUTTON')
+    await btn.trigger('click')
+    expect(getClassroom).toHaveBeenCalledWith(1)
+  })
+
+  it('A6b：表格以自繪進度條＋狀態文字呈現在學/容量（不只靠顏色）', async () => {
+    classroomsResponse = () => Promise.resolve({ data: [{ ...oneClassroom, current_count: 28 }] })
+    const wrapper = mountView()
+    await flush()
+
+    const row = wrapper.find('[data-test="classroom-row"]')
+    expect(row.find('.bar').attributes('aria-hidden')).toBe('true')
+    expect(row.text()).toContain('28 / 30')
+    expect(row.text()).toContain('接近額滿')
+  })
+
+  it('A9b：載入失敗與「尚無班級」是兩種狀態，失敗時不出現新增 CTA', async () => {
+    classroomsResponse = () => Promise.reject(new Error('network'))
+    const wrapper = mountView()
+    await flush()
+
+    expect(wrapper.find('[data-test="load-error"]').exists()).toBe(true)
+    expect(wrapper.find('.empty-create-btn').exists()).toBe(false)
   })
 })

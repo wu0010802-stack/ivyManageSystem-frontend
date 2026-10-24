@@ -37,6 +37,14 @@ describe('SalarySection 顯示規範', () => {
     expect(w.text()).toContain('健保豁免')
     expect(w.text()).not.toContain('免就保')
   })
+  it('不投保（承攬／自行投保）旗標啟用時列出', () => {
+    const w = mountWith({ employee_type: 'regular', base_salary: 30000, not_insured: true })
+    expect(w.text()).toContain('不投保（承攬／自行投保）')
+  })
+  it('不投保未啟用時不列出', () => {
+    const w = mountWith({ employee_type: 'regular', base_salary: 30000, not_insured: false })
+    expect(w.text()).not.toContain('不投保')
+  })
   it('標準薪比較：高於標準顯示 tag', () => {
     const w = mountWith({ employee_type: 'regular', base_salary: 50000 }, 40000)
     expect(w.text()).toContain('高於標準')

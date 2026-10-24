@@ -27,7 +27,9 @@
 
 import liff from '@line/liff'
 
-import { fetchTenantMetaForLiff } from '@/api/tenantMeta'
+import { fetchTenantMetaForLine, shouldUseLegacyLineEnvFallback } from '@/api/tenantMeta'
+import { markLineClientFromSdk } from '../utils/lineClient'
+import { reportClientEvent } from '../utils/clientEvents'
 
 const LIFF_REFRESH_MARKER = 'parent_liff_token_refresh_marker'
 // id_token exp buffer：剩餘 < 60 秒視為需 refresh，避免送出途中過期
@@ -42,18 +44,19 @@ function envLiffId(): string {
 
 async function resolveLiffId(): Promise<string> {
   try {
-    // ⚠ 用 `fetchTenantMetaForLiff()` 而**非** `fetchTenantMeta()`：後者被品牌灰度
+    // ⚠ 用 `fetchTenantMetaForLine()` 而**非** `fetchTenantMeta()`：後者被品牌灰度
     // 閘門擋住時會直接 reject、連請求都不發，而該閘門讀的是 build-time 旗標——
     // Zeabur 實測不會把 service variables 傳成 build-arg，旗標在正式環境恆為空
     // ⇒ 家長端會連 LIFF ID 都拿不到而完全無法登入（2026-08-11 prod 事故）。
-    const id = (await fetchTenantMetaForLiff()).liff_id
-    if (id) return id
-  } catch {
-    // tenant-meta 不可用（網路錯誤 / 端點未上線）→ 走過渡 fallback。
-    // 404/403/503 這三種「這個網域不是有效園所」的情況已由 useTenantBranding 的
-    // 三態遮罩接管（CT-F-01），不需要在這裡重複判斷。
+    // 只要 tenant-meta 成功回應，該租戶的欄位就是權威；空值代表尚未設定，
+    // 不能借用 build-time default tenant 的 LIFF ID。
+    return (await fetchTenantMetaForLine()).liff_id || ''
+  } catch (error) {
+    // 唯一相容窗：前端仍是單租戶模式，且舊 FastAPI 明確沒有 tenant-meta route。
+    // 網路錯誤、5xx、租戶 404/403/503 與畸形 404 全部 fail-closed。
+    if (shouldUseLegacyLineEnvFallback(error)) return envLiffId()
   }
-  return envLiffId()
+  return ''
 }
 
 export function initLiff(): Promise<void> {
@@ -69,10 +72,22 @@ export function initLiff(): Promise<void> {
       // 允許在外部瀏覽器（非 LINE 內）也走 OAuth 流程，方便桌面測試
       withLoginOnExternalBrowser: true,
     })
+    // SDK 就緒後把權威判斷回填給 utils/lineClient（SPEC-020 CT-M-02）。
+    // 在此之前該模組靠 User-Agent 推斷，未登入家長走到這裡即升級為 SDK 判斷。
+    try {
+      markLineClientFromSdk(liff.isInClient())
+    } catch {
+      // isInClient() 理論上 init 後必可用；萬一拋錯就維持 UA 推斷，不影響登入。
+    }
   })()
   // 失敗即清空，讓 LoginView 的 manualRetry 能真的重試（原本 reject 會被永久快取）。
+  // 這裡是「初始化 LIFF 失敗」唯一集中處，回報一次即可（SPEC-023 批次 3 Task 3）；
+  // LoginView 接住這個 rethrow 後只負責顯示錯誤 UI，不重複回報同一次失敗。
   _initPromise = _initPromise.catch((e: unknown) => {
     _initPromise = null
+    reportClientEvent('liff_init_failed', {
+      message: e instanceof Error ? e.message : String(e),
+    })
     throw e
   })
   return _initPromise

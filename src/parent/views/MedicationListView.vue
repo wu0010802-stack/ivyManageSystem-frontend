@@ -10,6 +10,7 @@ import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 interface MedLog {
@@ -80,7 +81,12 @@ onMounted(async () => {
   fetchData()
 })
 
-watch(selectedStudentId, fetchData)
+// 換孩子先清掉前一位的用藥單（同 ContactBookView／FeesView）：useAbortableFetch
+// 失敗時不清 data，新孩子載入失敗就會把前一位的藥名掛在新孩子名下（深掃審查 FE-R1）。
+watch(selectedStudentId, () => {
+  medData.value = null
+  return fetchData()
+})
 
 function goNew() {
   if (((childrenStore.items || []) as unknown[]).length === 0) {
@@ -120,6 +126,13 @@ const today = todayISO()
       </div>
     </template>
 
+    <!-- 載入失敗且無資料：持久錯誤態，不得與「沒有用藥紀錄」同形 -->
+    <MobileErrorRetry
+      v-else-if="medError && items.length === 0"
+      :error="medError as Error"
+      @retry="fetchData"
+    />
+
     <EmptyState
       v-else-if="items.length === 0"
       variant="mobile"
@@ -138,7 +151,7 @@ const today = todayISO()
         @click="goDetail(o.id)"
       >
         <div class="card-icon" aria-hidden="true">
-          <span class="material-symbols-rounded">medication</span>
+          <span class="material-symbols-rounded" aria-hidden="true">medication</span>
         </div>
         <div class="card-main">
           <div class="card-head">
@@ -179,7 +192,7 @@ const today = todayISO()
 .new-btn {
   margin-left: auto;
   padding: 7px 14px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .cards {
@@ -231,7 +244,7 @@ const today = todayISO()
   gap: 8px;
 }
 .med-name {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--pt-text-strong);
   overflow: hidden;
@@ -239,7 +252,7 @@ const today = todayISO()
   white-space: nowrap;
 }
 .date {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--pt-text-faint);
   font-weight: 500;
   flex-shrink: 0;
@@ -251,7 +264,7 @@ const today = todayISO()
   align-items: center;
   gap: 4px;
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--pt-text-muted);
 }
 .dot-sep { color: var(--pt-text-faint); }
