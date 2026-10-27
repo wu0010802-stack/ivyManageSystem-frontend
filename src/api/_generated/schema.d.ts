@@ -3060,6 +3060,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/appraisal/cycles/{cycle_id}/roster-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Cycle Roster Paid
+         * @description 標記該考核週期的獎金「已另循名冊發放」（會計核數字權限）。
+         *
+         *     只有已封存（CLOSED）週期可標記。標記後，年終考核 payout（appraisal-payout generate）
+         *     不再為該半年產生 APPRAISAL_HALF_BONUS special_bonus_item，避免年終重複發；
+         *     已產生過的明細不會被自動刪除（需要的話先走 payout void）。重複標記回 409。
+         */
+        post: operations["mark_cycle_roster_paid_api_appraisal_cycles__cycle_id__roster_paid_post"];
+        /**
+         * Unmark Cycle Roster Paid
+         * @description 取消考核名冊已發放標記（標錯時還原）。尚未標記回 409。
+         */
+        delete: operations["unmark_cycle_roster_paid_api_appraisal_cycles__cycle_id__roster_paid_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/appraisal/cycles/{cycle_id}/score_preview": {
         parameters: {
             query?: never;
@@ -7404,6 +7432,52 @@ export interface paths {
          *     既有舊列仍可讀取、顯示舊標籤。
          */
         get: operations["list_categories_api_extra_bonuses_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extra-bonuses/semester2-activity/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Semester2 Activity
+         * @description 產生／更新下學期推動才藝獎＋教課教師獎勵金表外批次（歸屬 8 月，計入補充保費年累計）。
+         *
+         *     冪等：系統產生列重跑即更新金額（0 或已不在計算結果內則刪除）；人工登錄的同類別同期列
+         *     不覆寫。操作者本人跳過（職權分離）。8 月起薪資已封存者整批拒絕（補充保費基數會變）。
+         */
+        post: operations["apply_semester2_activity_api_extra_bonuses_semester2_activity_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extra-bonuses/semester2-activity/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Semester2 Activity
+         * @description 下學期（2–7 月）推動才藝獎＋教課教師獎勵金預覽（8 月表外批次）。唯讀不寫錢。
+         *
+         *     每位員工每個類別一列（推動才藝獎勵金／教課教師獎勵金），含計算明細與既有發放列狀態；
+         *     warnings 列出略過原因（缺單價、班導中途離職／接任、全職才藝老師排除等）。
+         */
+        get: operations["preview_semester2_activity_api_extra_bonuses_semester2_activity_preview_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -25529,6 +25603,11 @@ export interface components {
             /** Admin Festival */
             admin_festival?: number | null;
             /**
+             * After Class Award Midterm Rule
+             * @description 推動獎：班導中途離職／中途接任班級則不保障（關閉＝照發）
+             */
+            after_class_award_midterm_rule?: boolean | null;
+            /**
              * After Class Award Min Sessions
              * @description 推動才藝獎人次堂數門檻（該門課出席 ≥ 此值才計 1 人次；0=停用）
              */
@@ -25665,6 +25744,21 @@ export interface components {
             school_wide_target?: number | null;
             /** Sick Leave Deduction Per Day */
             sick_leave_deduction_per_day?: number | null;
+            /**
+             * Teaching Extra Admin Half Rule
+             * @description 教課獎勵金：未帶班行政人員依課程金額由高到低減半（關閉＝全額）
+             */
+            teaching_extra_admin_half_rule?: boolean | null;
+            /**
+             * Teaching Extra Excluded Employee Ids
+             * @description 教課教師獎勵金排除名單（全職才藝老師，employee id list；空=不排除）
+             */
+            teaching_extra_excluded_employee_ids?: number[] | null;
+            /**
+             * Teaching Extra Payroll Staff Ids
+             * @description 負責核算薪資的同事（employee id list；未帶班減半規則的第 2 門起減半對象）
+             */
+            teaching_extra_payroll_staff_ids?: number[] | null;
             /** Teaching Extra Sessions Per Unit */
             teaching_extra_sessions_per_unit?: number | null;
             /** Teaching Extra Unit Price */
@@ -27209,6 +27303,11 @@ export interface components {
             head_count_target: number;
             /** Head Teacher Employee Id */
             head_teacher_employee_id: number | null;
+            /**
+             * Head Teacher Midterm Takeover
+             * @default false
+             */
+            head_teacher_midterm_takeover: boolean;
             /** Head Teacher Name */
             head_teacher_name?: string | null;
             /** Id */
@@ -27230,6 +27329,8 @@ export interface components {
             head_count_target: number;
             /** Head Teacher Employee Id */
             head_teacher_employee_id?: number | null;
+            /** Head Teacher Midterm Takeover */
+            head_teacher_midterm_takeover?: boolean | null;
             /**
              * Returning Student Rate
              * @default 0
@@ -29547,6 +29648,8 @@ export interface components {
             semester?: number | null;
             /** Sessions */
             sessions?: number | null;
+            /** Teaching Unit Price */
+            teaching_unit_price?: number | null;
             /** Video Url */
             video_url?: string | null;
         };
@@ -29602,6 +29705,8 @@ export interface components {
             price: number;
             /** Sessions */
             sessions?: number | null;
+            /** Teaching Unit Price */
+            teaching_unit_price?: number | null;
             /** Video Url */
             video_url: string;
         };
@@ -29735,6 +29840,8 @@ export interface components {
             sessions?: number | null;
             /** Sort Order */
             sort_order?: number | null;
+            /** Teaching Unit Price */
+            teaching_unit_price?: number | null;
             /** Video Url */
             video_url: string;
             /** Waitlist Count */
@@ -29831,6 +29938,8 @@ export interface components {
             price?: number | null;
             /** Sessions */
             sessions?: number | null;
+            /** Teaching Unit Price */
+            teaching_unit_price?: number | null;
             /** Video Url */
             video_url?: string | null;
         };
@@ -30079,6 +30188,12 @@ export interface components {
             enrollment_target: number | null;
             /** Id */
             id: number;
+            /** Roster Paid At */
+            roster_paid_at?: string | null;
+            /** Roster Paid By */
+            roster_paid_by?: string | null;
+            /** Roster Paid Note */
+            roster_paid_note?: string | null;
             semester: components["schemas"]["Semester"];
             /**
              * Start Date
@@ -39289,6 +39404,11 @@ export interface components {
             earlier_amount: string;
             /** Earlier Cycle Finalized */
             earlier_cycle_finalized: boolean;
+            /**
+             * Earlier Roster Paid
+             * @default false
+             */
+            earlier_roster_paid: boolean;
             /** Earlier Summary Id */
             earlier_summary_id?: number | null;
             /** Employee Id */
@@ -39301,6 +39421,11 @@ export interface components {
             later_amount: string;
             /** Later Cycle Finalized */
             later_cycle_finalized: boolean;
+            /**
+             * Later Roster Paid
+             * @default false
+             */
+            later_roster_paid: boolean;
             /** Later Summary Id */
             later_summary_id?: number | null;
             /** Role Group */
@@ -46732,6 +46857,17 @@ export interface components {
             /** Permissions */
             permissions?: string[] | null;
         };
+        /**
+         * RosterPaidMark
+         * @description POST /cycles/{id}/roster-paid：標記該週期考核獎金已另循名冊發放。
+         */
+        RosterPaidMark: {
+            /**
+             * Note
+             * @description 備註（發放日期／名冊來源等，選填）
+             */
+            note?: string | null;
+        };
         /** RosterResponse */
         RosterResponse: {
             /** Classes */
@@ -49186,6 +49322,87 @@ export interface components {
          * @enum {string}
          */
         Semester: "FIRST" | "SECOND";
+        /** Semester2ActivityApply */
+        Semester2ActivityApply: {
+            /**
+             * Academic Year
+             * @description 民國學年（下學期＝次年 2–7 月，發放歸屬 8 月）
+             */
+            academic_year: number;
+        };
+        /** Semester2ActivityApplyOut */
+        Semester2ActivityApplyOut: {
+            /** Academic Year */
+            academic_year: number;
+            /** Created */
+            created: components["schemas"]["Semester2ActivityBriefOut"][];
+            /** Deleted */
+            deleted: components["schemas"]["Semester2ActivityBriefOut"][];
+            /** Period Month */
+            period_month: number;
+            /** Period Year */
+            period_year: number;
+            /** Skipped Manual */
+            skipped_manual: components["schemas"]["Semester2ActivityBriefOut"][];
+            /** Skipped Self */
+            skipped_self: components["schemas"]["Semester2ActivityBriefOut"][];
+            /** Total Amount */
+            total_amount: number;
+            /** Updated */
+            updated: components["schemas"]["Semester2ActivityBriefOut"][];
+        };
+        /** Semester2ActivityBriefOut */
+        Semester2ActivityBriefOut: {
+            /**
+             * Amount
+             * @default 0
+             */
+            amount: number;
+            /** Category */
+            category: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+        };
+        /** Semester2ActivityPreviewOut */
+        Semester2ActivityPreviewOut: {
+            /** Academic Year */
+            academic_year: number;
+            /** Pending Rules */
+            pending_rules: string[];
+            /** Period Month */
+            period_month: number;
+            /** Period Year */
+            period_year: number;
+            /** Rows */
+            rows: components["schemas"]["Semester2ActivityRowOut"][];
+            /** Total Amount */
+            total_amount: number;
+            /** Warnings */
+            warnings: string[];
+        };
+        /** Semester2ActivityRowOut */
+        Semester2ActivityRowOut: {
+            /** Amount */
+            amount: number;
+            /** Category */
+            category: string;
+            /** Category Label */
+            category_label: string;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Existing Auto Amount */
+            existing_auto_amount?: number | null;
+            /** Has Manual Payment */
+            has_manual_payment: boolean;
+        };
         /** Semester2ExcessApply */
         Semester2ExcessApply: {
             /**
@@ -57970,6 +58187,72 @@ export interface operations {
             };
         };
     };
+    mark_cycle_roster_paid_api_appraisal_cycles__cycle_id__roster_paid_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RosterPaidMark"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CycleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unmark_cycle_roster_paid_api_appraisal_cycles__cycle_id__roster_paid_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CycleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     score_preview_api_appraisal_cycles__cycle_id__score_preview_post: {
         parameters: {
             query?: never;
@@ -65641,6 +65924,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExtraBonusCategoryOut"][];
+                };
+            };
+        };
+    };
+    apply_semester2_activity_api_extra_bonuses_semester2_activity_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Semester2ActivityApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Semester2ActivityApplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_semester2_activity_api_extra_bonuses_semester2_activity_preview_get: {
+        parameters: {
+            query: {
+                academic_year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Semester2ActivityPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
