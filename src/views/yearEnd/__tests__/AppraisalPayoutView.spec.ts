@@ -484,3 +484,129 @@ it('確認建立期間避免重送，送出確認時的年度與離職名單', a
   expect(api.generateAppraisalPayout).toHaveBeenCalledTimes(1)
   expect(api.generateAppraisalPayout).toHaveBeenCalledWith({ year: submittedYear, included_inactive_employee_ids: [3] })
 })
+
+// 名冊已發放（義華 2026-10-27）：考核週期被標記名冊已發放的半年，generate 不會建立發放資料。
+// preview 每列帶 earlier_roster_paid／later_roster_paid；前端金額、按鈕、提示都要誠實反映。
+describe('AppraisalPayoutView — 名冊已發放半年', () => {
+  type RosterPaidVm = {
+    payoutTotal: number
+    payoutRows: unknown[]
+    rosterPaidNoticeText: string | null
+    nothingToGenerate: boolean
+    onGenerate: () => Promise<void>
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+    // 2026 年發放 → 來源 113 學年（113上／113下）
+    routeQuery.value = { year: '2026' }
+  })
+
+  it('沒有任何標記：不顯示提示，金額照後端合計，按鈕可用', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({ data: [mockPreviewRow()] } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as RosterPaidVm
+
+    expect(wrapper.find('[data-test="roster-paid-notice"]').exists()).toBe(false)
+    expect(vm.rosterPaidNoticeText).toBeNull()
+    expect(vm.nothingToGenerate).toBe(false)
+    expect(vm.payoutTotal).toBe(13600)
+  })
+
+  it('上學期已標記：頂部提示點名「113上」，該欄出現「已另循名冊發放」，合計只算下學期', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
+      data: [
+        mockPreviewRow({ employee_id: 1, earlier_roster_paid: true }),
+        mockPreviewRow({ employee_id: 2, earlier_roster_paid: true }),
+      ],
+    } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as RosterPaidVm
+
+    const notice = wrapper.find('[data-test="roster-paid-notice"]')
+    expect(notice.exists()).toBe(true)
+    expect(notice.attributes('title')).toContain('113上')
+    expect(notice.attributes('title')).not.toContain('113下')
+    expect(wrapper.findAll('[data-test="earlier-roster-paid-tag"]')).toHaveLength(2)
+    expect(wrapper.find('[data-test="later-roster-paid-tag"]').exists()).toBe(false)
+    // 每人 13600 − 上學期 6400 = 7200；兩人 14400（不是 27200）
+    expect(vm.payoutTotal).toBe(14400)
+    expect(vm.nothingToGenerate).toBe(false)
+  })
+
+  it('下學期已標記：只算上學期那半', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
+      data: [mockPreviewRow({ later_roster_paid: true })],
+    } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as RosterPaidVm
+
+    expect(wrapper.find('[data-test="later-roster-paid-tag"]').exists()).toBe(true)
+    expect(vm.payoutTotal).toBe(6400)
+  })
+
+  it('確認視窗文案帶上名冊已發放的提醒與實際會發放的合計', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
+      data: [mockPreviewRow({ earlier_roster_paid: true })],
+    } as never)
+    vi.mocked(api.generateAppraisalPayout).mockResolvedValue({
+      data: { cycle_id: 1, generated_count: 1, affected_employee_count: 1, total_amount: '7200', skipped_inactive_count: 0, warnings: ['appraisal_roster_already_paid:12'] },
+    } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as RosterPaidVm
+
+    await vm.onGenerate()
+
+    const message = vi.mocked(ElMessageBox.confirm).mock.calls[0][0] as string
+    expect(message).toContain('113上')
+    expect(message).toContain('名冊已發放')
+    expect(message).toContain('7,200')
+    expect(message).not.toContain('13,600')
+  })
+
+  it('兩個學期都已標記：沒有東西可建立，onGenerate 不問確認也不呼叫後端', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
+      data: [mockPreviewRow({ earlier_roster_paid: true, later_roster_paid: true })],
+    } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as RosterPaidVm
+
+    expect(vm.nothingToGenerate).toBe(true)
+    expect(vm.payoutTotal).toBe(0)
+    await vm.onGenerate()
+
+    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('名冊已發放'))
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(api.generateAppraisalPayout).not.toHaveBeenCalled()
+  })
+
+  it('收據：名冊已發放代碼轉中文、不露出代碼與週期 id，且不再寫死「每人上、下學期各一筆」', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
+      data: [mockPreviewRow({ earlier_roster_paid: true })],
+    } as never)
+    vi.mocked(api.generateAppraisalPayout).mockResolvedValue({
+      data: {
+        cycle_id: 77,
+        generated_count: 1,
+        affected_employee_count: 1,
+        total_amount: '7200',
+        skipped_inactive_count: 0,
+        warnings: ['appraisal_roster_already_paid:12', 'appraisal_roster_already_paid:12'],
+      },
+    } as never)
+    vi.mocked(api.listAppraisalPayouts).mockResolvedValue({ data: [] } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as RosterPaidVm
+
+    await vm.onGenerate()
+    await flushPromises()
+
+    const receipt = wrapper.find('[data-test="generate-receipt"]')
+    expect(receipt.exists()).toBe(true)
+    expect(receipt.text()).toContain('已另循名冊發放')
+    expect(receipt.text()).not.toContain('appraisal_roster_already_paid')
+    expect(receipt.text()).not.toContain('每人上、下學期各一筆')
+    expect(receipt.findAll('.receipt-card__warning')).toHaveLength(1)
+  })
+})

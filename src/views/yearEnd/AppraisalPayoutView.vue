@@ -12,6 +12,14 @@ import { formatCurrency } from '@/utils/currency'
 import { pad2 } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import {
+  displayTotal,
+  hasRosterPaidWarning,
+  payableAmount,
+  payoutWarningLabels,
+  rosterPaidHalves,
+  rosterPaidNotice,
+} from './appraisalPayoutRosterPaid'
 
 interface PreviewRow {
   employee_id: number
@@ -26,6 +34,9 @@ interface PreviewRow {
   total_amount: string
   is_inactive: boolean
   warnings: string[]
+  // 該半年考核週期已標記「名冊已發放」：generate 不會為該半年建立發放資料（週期層級，每列相同）
+  earlier_roster_paid?: boolean
+  later_roster_paid?: boolean
 }
 
 interface PayoutItem {
@@ -82,6 +93,11 @@ const tab = ref<'preview' | 'generated'>('preview')
 const generatedRows = ref<PayoutItem[]>([])
 const generatedLoading = ref(false)
 const receipt = ref<GenerateReceipt | null>(null)
+// 收據的警告改走共用轉換：名冊已發放代碼（帶週期 id）轉中文、相同文字只留一句
+const receiptWarningLabels = computed(() =>
+  payoutWarningLabels(receipt.value?.warnings ?? [], WARNING_LABELS),
+)
+const receiptSkippedRosterPaid = computed(() => hasRosterPaidWarning(receipt.value?.warnings ?? []))
 
 // 考核年終 payout 兩分量 = 前一學年的上/下學期。後端 resolve_target_cycles：
 // source_academic_year = civil_year_to_target_academic_year(year) - 1 = year - 1913
@@ -107,13 +123,19 @@ const notReady = ref(false)
 // 否則畫面顯示與實際寫入金流不一致（bug #27）。
 // 若日後業主需要逐人排除在職員工，需後端 generate 增加 excluded ids 支援，
 // 本次先讓前端與後端實際行為一致。
+// 名冊已發放（義華 2026-10-27）：已標記的半年不會建立發放資料，金額與按鈕都要誠實反映。
+const rosterPaid = computed(() => rosterPaidHalves(rows.value))
+const rosterPaidNoticeText = computed(() =>
+  rosterPaidNotice(rosterPaid.value, earlierLabel.value, laterLabel.value),
+)
+const nothingToGenerate = computed(() => rosterPaid.value.earlier && rosterPaid.value.later)
 const activeRows = computed(() => rows.value.filter((r) => !r.is_inactive))
 const selectedInactiveRows = computed(() =>
   rows.value.filter((r) => r.is_inactive && selected.value.has(r.employee_id))
 )
 const payoutRows = computed(() => [...activeRows.value, ...selectedInactiveRows.value])
 const payoutTotal = computed(() =>
-  payoutRows.value.reduce((s, r) => s + Number(r.total_amount), 0)
+  payoutRows.value.reduce((s, r) => s + payableAmount(r), 0)
 )
 const payoutTotalDisplay = computed(() => formatCurrency(payoutTotal.value))
 const includedInactiveIds = computed(() =>
@@ -185,12 +207,17 @@ async function onGenerate() {
     ElMessage.warning('沒有可發放的員工')
     return
   }
+  if (nothingToGenerate.value) {
+    ElMessage.warning('兩個學期的考核獎金都已標記為名冊已發放，沒有可建立的發放資料')
+    return
+  }
   const submittedYear = year.value
   const submittedIds = [...includedInactiveIds.value]
   submitting.value = true
   try {
     await ElMessageBox.confirm(
-      `將為 ${payoutRows.value.length} 名員工建立考核年終發放資料（全部在職員工＋已勾選的離職員工），合計 ${payoutTotalDisplay.value}。此動作只會在系統內建立發放資料，不會執行匯款。`,
+      `將為 ${payoutRows.value.length} 名員工建立考核年終發放資料（全部在職員工＋已勾選的離職員工），合計 ${payoutTotalDisplay.value}。此動作只會在系統內建立發放資料，不會執行匯款。` +
+        (rosterPaidNoticeText.value ? `\n\n${rosterPaidNoticeText.value}` : ''),
       '確認建立發放資料',
       { confirmButtonText: '確認建立', cancelButtonText: '取消' }
     )
@@ -256,7 +283,7 @@ defineExpose({
   selected, anyCycleNotFinalized, onGenerate, onVoid, loadPreview, rows, year,
   toggleSelect, payoutRows, payoutTotal, payoutTotalDisplay,
   tab, generatedRows, generatedLoading, loadGenerated, notReady, receipt,
-  previewLoadError, generatedLoadError,
+  previewLoadError, generatedLoadError, rosterPaidNoticeText, nothingToGenerate,
 })
 
 onMounted(loadPreview)
@@ -292,6 +319,16 @@ watch(tab, (t) => {
       :closable="false"
       title="來源考核週期尚未全數核定，可能無法建立發放資料；請先完成考核簽核。"
       data-test="not-finalized-warning"
+      style="margin: var(--space-3) 0;"
+    />
+
+    <el-alert
+      v-if="rosterPaidNoticeText"
+      type="info"
+      :closable="false"
+      show-icon
+      :title="rosterPaidNoticeText"
+      data-test="roster-paid-notice"
       style="margin: var(--space-3) 0;"
     />
 
@@ -331,9 +368,21 @@ watch(tab, (t) => {
               </template>
             </el-table-column>
             <el-table-column prop="employee_name" label="員工" />
-            <el-table-column prop="earlier_amount" :label="earlierLabel" />
-            <el-table-column prop="later_amount" :label="laterLabel" />
-            <el-table-column prop="total_amount" label="合計" />
+            <el-table-column :label="earlierLabel">
+              <template #default="{ row }">
+                <span :class="{ 'amount-skipped': row.earlier_roster_paid }">{{ row.earlier_amount }}</span>
+                <el-tag v-if="row.earlier_roster_paid" type="info" size="small" class="paid-tag" data-test="earlier-roster-paid-tag">已另循名冊發放</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column :label="laterLabel">
+              <template #default="{ row }">
+                <span :class="{ 'amount-skipped': row.later_roster_paid }">{{ row.later_amount }}</span>
+                <el-tag v-if="row.later_roster_paid" type="info" size="small" class="paid-tag" data-test="later-roster-paid-tag">已另循名冊發放</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="合計">
+              <template #default="{ row }">{{ displayTotal(row) }}</template>
+            </el-table-column>
             <el-table-column label="任職狀態" width="100">
               <template #default="{ row }">
                 <el-tag :type="row.is_inactive ? 'danger' : 'success'" size="small">
@@ -349,7 +398,7 @@ watch(tab, (t) => {
           </el-table>
 
           <footer class="footer">
-            <el-button type="primary" size="large" data-test="generate-button" :loading="submitting" :disabled="loading || previewLoadError" @click="onGenerate">
+            <el-button type="primary" size="large" data-test="generate-button" :loading="submitting" :disabled="loading || previewLoadError || nothingToGenerate" @click="onGenerate">
               建立發放資料（{{ payoutRows.length }} 人，合計 {{ payoutTotalDisplay }}）
             </el-button>
           </footer>
@@ -361,10 +410,14 @@ watch(tab, (t) => {
         <div v-if="receipt" class="receipt-card" data-test="generate-receipt">
           <div class="receipt-card__title">✅ 發放資料已建立（{{ formatReceiptTime(receipt.created_at) }}）</div>
           <ul class="receipt-card__list">
-            <li>員工 {{ receipt.affected_employee_count }} 人，共 {{ receipt.generated_count }} 筆發放資料（每人上、下學期各一筆）</li>
+            <li>
+              員工 {{ receipt.affected_employee_count }} 人，共 {{ receipt.generated_count }} 筆發放資料（{{
+                receiptSkippedRosterPaid ? '已標記名冊已發放的學期不建立' : '每人上、下學期各一筆'
+              }}）
+            </li>
             <li>合計 {{ formatCurrency(receipt.total_amount) }}</li>
             <li>納入離職員工 {{ receipt.included_inactive_count }} 位；未納入 {{ receipt.skipped_inactive_count }} 位</li>
-            <li v-for="w in receipt.warnings" :key="w" class="receipt-card__warning">{{ warningLabel(w) }}</li>
+            <li v-for="label in receiptWarningLabels" :key="label" class="receipt-card__warning">{{ label }}</li>
           </ul>
           <div class="receipt-card__note">
             此動作僅在系統內建立發放資料，不會執行匯款。下一步：下載轉帳名冊交付銀行作業
@@ -420,6 +473,8 @@ watch(tab, (t) => {
 .appraisal-payout-view { padding: var(--space-4); }
 .footer { margin-top: var(--space-4); text-align: right; }
 .generated-toolbar { margin-bottom: var(--space-3); text-align: right; }
+.amount-skipped { text-decoration: line-through; color: var(--text-tertiary); }
+.paid-tag { margin-left: var(--space-1); }
 .warning-tag {
   display: inline-block; margin-right: var(--space-1); padding: 2px 6px;
   background: var(--color-warning-soft); color: var(--color-warning-darker);
