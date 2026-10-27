@@ -65,7 +65,7 @@ onMounted(() => {
         class="section-card"
       >
         <template #default>
-          後台設定頁不再提供這兩項人工調整；此頁面顯示實際薪資邏輯、runtime 常數與 2026 官方資料比對結果。
+          後台設定頁不再提供這兩項人工調整；此頁面顯示實際的計算規則、系統使用中的數值，以及與 2026 官方公告的比對結果。
         </template>
       </el-alert>
 
@@ -77,7 +77,7 @@ onMounted(() => {
           <el-descriptions-item label="級距列數">{{ bracketVersion.count }} 列</el-descriptions-item>
           <el-descriptions-item label="資料來源">
             <el-tag :type="bracketVersion.fromDb ? 'success' : 'danger'" size="small">
-              {{ bracketVersion.fromDb ? 'DB（insurance_brackets）' : '程式內建 fallback' }}
+              {{ bracketVersion.fromDb ? '已匯入年度級距表' : '未匯入，暫用系統內建值' }}
             </el-tag>
           </el-descriptions-item>
         </el-descriptions>

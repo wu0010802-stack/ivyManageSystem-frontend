@@ -102,7 +102,9 @@ describe('SalaryLogicPanel — 級距表版本', () => {
     expect(text).toContain('勞健保級距表版本')
     expect(text).toContain('2026 年')
     expect(text).toContain('82 列')
-    expect(text).toContain('insurance_brackets')
+    // 給行政看的是「有沒有匯入」，不是資料表名稱
+    expect(text).toContain('已匯入年度級距表')
+    expect(text).not.toContain('insurance_brackets')
     expect(text).not.toContain('程式內建')
   })
 

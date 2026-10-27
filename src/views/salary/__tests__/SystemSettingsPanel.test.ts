@@ -149,7 +149,7 @@ describe('SystemSettingsPanel — bank.* 銀行轉帳設定', () => {
       'bank.payer_name',
       'bank.payer_account',
     ])
-    expect(wrapper.text()).toContain('預設值（未存 DB）')
+    expect(wrapper.text()).toContain('使用內建預設值')
   })
 
   it('修改戶名並儲存後呼叫 updateSystemConfig 並提示成功', async () => {
@@ -177,7 +177,7 @@ describe('SystemSettingsPanel — bank.* 銀行轉帳設定', () => {
     await flushPromises()
     await nextTick()
 
-    expect(wrapper.text()).toContain('目前帳號無系統設定編輯權限')
+    expect(wrapper.text()).toContain('目前帳號沒有修改系統設定的權限')
     expect(wrapper.findAll('button').length).toBe(0)
   })
 
