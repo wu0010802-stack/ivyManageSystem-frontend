@@ -8,7 +8,7 @@ import {
   getSnapshotDiff,
 } from '@/api/salary'
 import { apiError } from '@/utils/error'
-import { money } from '@/utils/format'
+import { money, formatDate } from '@/utils/format'
 import { computeBaseTransferAmount } from '@/utils/salaryAmounts'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
@@ -63,12 +63,6 @@ watch(
   }
 )
 
-const formatDateTime = (iso: string | null | undefined) => {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 const openDetail = async (row: Record<string, unknown>) => {
   detailVisible.value = true
@@ -173,7 +167,7 @@ const formatDiffValue = (v: unknown) => (v == null ? '-' : money(v as number))
       </el-table-column>
       <el-table-column prop="employee_name" label="員工" width="110" />
       <el-table-column label="捕捉時間" width="160">
-        <template #default="{ row }">{{ formatDateTime(row.captured_at) }}</template>
+        <template #default="{ row }">{{ formatDate(row.captured_at) || '-' }}</template>
       </el-table-column>
       <el-table-column prop="captured_by" label="觸發者" width="120" />
       <el-table-column label="來源版本" width="90">
@@ -205,7 +199,7 @@ const formatDiffValue = (v: unknown) => (v == null ? '-' : money(v as number))
             {{ TYPE_LABEL[detailData.snapshot_type as string]?.text || detailData.snapshot_type }}
           </el-descriptions-item>
           <el-descriptions-item label="捕捉時間">
-            {{ formatDateTime(detailData.captured_at as string | null | undefined) }}
+            {{ formatDate(detailData.captured_at) || '-' }}
           </el-descriptions-item>
           <el-descriptions-item label="觸發者">{{ detailData.captured_by || '-' }}</el-descriptions-item>
           <el-descriptions-item label="來源版本">v{{ detailData.source_version ?? '-' }}</el-descriptions-item>

@@ -2,6 +2,7 @@
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiError } from '@/utils/error'
+import { formatIsoMinute } from '@/utils/format'
 import { getIncidents } from '@/api/studentIncidents'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { ACADEMIC_AFFAIRS_FILTERS_KEY } from '@/composables/useAcademicAffairsFilters'
@@ -52,8 +53,6 @@ const fetchIncidents = async () => {
     loading.value = false
   }
 }
-
-const formatDateTime = (v: string | undefined | null) => (v ? v.replace('T', ' ').slice(0, 16) : '')
 
 const openCreate = () => {
   dialogMode.value = 'create'
@@ -160,7 +159,7 @@ defineExpose({ fetchIncidents })
           max-height="560"
         >
       <el-table-column label="時間" width="150">
-        <template #default="{ row }">{{ formatDateTime(row.occurred_at) }}</template>
+        <template #default="{ row }">{{ formatIsoMinute(row.occurred_at) }}</template>
       </el-table-column>
       <el-table-column label="學生" prop="student_name" width="100" />
       <el-table-column label="類型" width="100" align="center">

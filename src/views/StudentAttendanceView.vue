@@ -7,7 +7,7 @@ import { apiError } from '@/utils/error'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { getClassrooms } from '@/api/classrooms'
 import { getCurrentAcademicTerm, normalizeSchoolYear } from '@/utils/academic'
-import { todayISO } from '@/utils/format'
+import { todayISO, formatIsoMinute } from '@/utils/format'
 import {
   getAttendanceOverview,
   getDailyAttendance,
@@ -351,11 +351,6 @@ const detailStatusType = (status: unknown): ElTagType => {
   return undefined
 }
 
-const formatDateTime = (value: string | null | undefined) => {
-  if (!value) return '尚未更新'
-  return value.replace('T', ' ').slice(0, 16)
-}
-
 watch([monthlyClassroomId, monthPicker], () => {
   if (activeTab.value === 'monthly') fetchMonthly()
 })
@@ -471,7 +466,7 @@ onMounted(async () => {
           </el-table-column>
           <el-table-column label="最後更新" min-width="180">
             <template #default="{ row }">
-              <div>{{ formatDateTime(row.last_recorded_at) }}</div>
+              <div>{{ formatIsoMinute(row.last_recorded_at, '尚未更新') }}</div>
               <div class="muted-text">{{ row.last_recorded_by || '尚無紀錄' }}</div>
             </template>
           </el-table-column>
