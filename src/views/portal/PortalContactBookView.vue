@@ -26,6 +26,7 @@ const { notify } = useErrorNotify()
 import ContactBookEntryCard from './components/contactBook/ContactBookEntryCard.vue'
 import ContactBookEntryDrawer from './components/contactBook/ContactBookEntryDrawer.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PortalErrorState from '@/components/portal/PortalErrorState.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 
 const { isMobile } = useIsMobile()
@@ -67,8 +68,13 @@ const completionPercent = computed(() => {
   return Math.round((completion.value.published / total) * 100)
 })
 
+// 哪一段讀取失敗：班級失敗時 fetchClassDay 根本不會跑，原本畫面直接顯示「此日期此班級無學生資料」且無重試
+const loadError = ref<'classrooms' | 'entries' | null>(null)
+const classroomsLoaded = ref(false)
+
 async function fetchClassrooms() {
   classroomLoading.value = true
+  if (loadError.value === 'classrooms') loadError.value = null
   try {
     const res = await getMyStudents()
     classrooms.value = res.data?.classrooms || []
@@ -80,7 +86,9 @@ async function fetchClassrooms() {
         classrooms.value[0].classroom_id ?? null,
       )
     }
+    classroomsLoaded.value = true
   } catch (err) {
+    loadError.value = 'classrooms'
     notify(err, 'PortalContactBook:loadClassrooms', '載入班級失敗')
   } finally {
     classroomLoading.value = false
@@ -104,6 +112,7 @@ async function fetchClassDay() {
     if (drawerVisible.value) closeDrawer()
   }
   listLoading.value = true
+  if (loadError.value === 'entries') loadError.value = null
   try {
     const res = await getClassDay({
       classroom_id: selectedClassroomId.value,
@@ -115,6 +124,7 @@ async function fetchClassDay() {
     loadedContextKey = contextKey
   } catch (err) {
     if (seq !== classDayRequestSeq) return
+    loadError.value = 'entries'
     notify(err, 'PortalContactBook:loadEntries', '載入聯絡簿失敗')
   } finally {
     if (seq === classDayRequestSeq) listLoading.value = false
@@ -523,8 +533,22 @@ watch([selectedClassroomId, selectedDate], () => {
       </div>
     </el-card>
 
+    <PortalErrorState
+      v-if="loadError === 'classrooms'"
+      message="班級資料載入失敗，聯絡簿無法顯示"
+      @retry="fetchClassrooms"
+    />
+    <PortalErrorState
+      v-else-if="loadError === 'entries' && !listLoading && visibleItems.length === 0"
+      message="這天的聯絡簿載入失敗"
+      @retry="fetchClassDay"
+    />
     <el-empty
-      v-if="!listLoading && visibleItems.length === 0"
+      v-else-if="classroomsLoaded && !classrooms.length"
+      description="目前沒有你負責的班級"
+    />
+    <el-empty
+      v-else-if="!listLoading && visibleItems.length === 0"
       :description="showOnlyUnpublished ? '無未發布草稿' : '此日期此班級無學生資料'"
     />
 

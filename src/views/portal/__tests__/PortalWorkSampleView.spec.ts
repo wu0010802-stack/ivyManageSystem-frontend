@@ -28,6 +28,8 @@ vi.mock('vue-router', () => ({
 }))
 
 import PortalWorkSampleView from '../PortalWorkSampleView.vue'
+import { getMyStudents } from '@/api/portal'
+import { listWorkSamples } from '@/api/workSamples'
 
 // 兩個 it() 共用模組層級的 createWorkSample mock，須在每個測試前清空呼叫紀錄，
 // 否則「標題空白不可送出」會誤判成功（沿用 PortalContactBookView.race.test.ts 慣例）。
@@ -58,5 +60,34 @@ describe('PortalWorkSampleView', () => {
     vm.form.studentId = 1
     await vm.submit()
     expect(createWorkSample).not.toHaveBeenCalled()
+  })
+
+  it('學生名單讀取失敗 → 顯示錯誤與重試，不會永遠「讀取中…」', async () => {
+    vi.mocked(getMyStudents).mockRejectedValueOnce(new Error('boom'))
+    const w = mount(PortalWorkSampleView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(w.text()).not.toContain('讀取中')
+    const err = w.findComponent({ name: 'PortalErrorState' })
+    expect(err.exists()).toBe(true)
+    err.vm.$emit('retry')
+    await flushPromises()
+    expect(w.text()).toContain('王小明')
+  })
+
+  it('真的沒有學生 → 說明沒有負責班級，不顯示讀取中', async () => {
+    vi.mocked(getMyStudents).mockResolvedValueOnce({ data: { classrooms: [] } } as never)
+    const w = mount(PortalWorkSampleView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(w.text()).toContain('目前沒有你負責班級的學生')
+  })
+
+  it('近期作品讀取失敗 → 顯示錯誤，不顯示「尚無作品」', async () => {
+    const w = mount(PortalWorkSampleView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    vi.mocked(listWorkSamples).mockRejectedValueOnce(new Error('boom'))
+    ;(w.vm as unknown as { form: { studentId: number | null } }).form.studentId = 1
+    await flushPromises()
+    expect(w.text()).toContain('近期作品讀取失敗')
+    expect(w.text()).not.toContain('尚無作品')
   })
 })

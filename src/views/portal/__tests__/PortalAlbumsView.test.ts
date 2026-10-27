@@ -64,4 +64,39 @@ describe('PortalAlbumsView', () => {
     await wrapper.find('[data-test="album-card"]').trigger('click')
     expect(pushMock).toHaveBeenCalledWith('/portal/albums/1')
   })
+
+  it('相簿載入失敗 → 顯示錯誤與重試，不顯示「還沒有相簿」', async () => {
+    vi.mocked(listAlbums).mockRejectedValueOnce(new Error('boom'))
+    const wrapper = mount(PortalAlbumsView)
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('還沒有相簿')
+    const err = wrapper.findComponent({ name: 'PortalErrorState' })
+    expect(err.exists()).toBe(true)
+    err.vm.$emit('retry')
+    await flushPromises()
+    expect(wrapper.text()).toContain('夏日運動會')
+  })
+
+  it('班級清單失敗不影響相簿列表', async () => {
+    vi.mocked(getAlbumClassrooms).mockRejectedValueOnce(new Error('boom'))
+    const wrapper = mount(PortalAlbumsView)
+    await flushPromises()
+    expect(wrapper.text()).toContain('夏日運動會')
+  })
+
+  it('建立成功但重新載入失敗 → 不誤報「建立失敗」', async () => {
+    const { ElMessage } = await import('element-plus')
+    vi.mocked(createAlbum).mockResolvedValue({ data: { ...albumFixture, id: 2 } } as never)
+    const wrapper = mount(PortalAlbumsView)
+    await flushPromises()
+    vi.mocked(listAlbums).mockRejectedValueOnce(new Error('boom'))
+    const vm = wrapper.vm as unknown as {
+      createForm: { classroom_id: number | null; title: string; event_date: string; description: string }
+      submitCreate: () => Promise<void>
+    }
+    Object.assign(vm.createForm, { classroom_id: 10, title: '校外教學', event_date: '2026-07-30' })
+    await vm.submitCreate()
+    expect(ElMessage.success).toHaveBeenCalledWith('相簿已建立')
+    expect(ElMessage.error).not.toHaveBeenCalled()
+  })
 })

@@ -2,11 +2,12 @@
   <div class="portal-albums-view">
     <PortalPageHeader title="班級相簿">
       <template #actions>
-        <el-button type="primary" :icon="Plus" @click="createVisible = true">建立相簿</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">建立相簿</el-button>
       </template>
     </PortalPageHeader>
 
-    <EmptyState v-if="!loading && albums.length === 0" variant="mobile" title="還沒有相簿，建立第一本吧" />
+    <PortalErrorState v-if="loadError" message="相簿載入失敗，請稍後再試" @retry="load" />
+    <EmptyState v-else-if="!loading && albums.length === 0" variant="mobile" title="還沒有相簿，建立第一本吧" />
 
     <div class="album-grid">
       <div
@@ -82,9 +83,12 @@ import { createAlbum, getAlbumClassrooms, listAlbums } from '@/api/classAlbums'
 import type { AlbumClassroomOption, AlbumSummary } from '@/api/classAlbums'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PortalErrorState from '@/components/portal/PortalErrorState.vue'
 
 const router = useRouter()
 const loading = ref(false)
+// 原本 load 沒有 catch：失敗時沒有任何提示，畫面顯示「還沒有相簿」
+const loadError = ref(false)
 const albums = ref<AlbumSummary[]>([])
 const classrooms = ref<AlbumClassroomOption[]>([])
 const createVisible = ref(false)
@@ -98,9 +102,12 @@ const canSubmit = computed(
 
 async function load(): Promise<void> {
   loading.value = true
+  loadError.value = false
   try {
     const resp = await listAlbums()
     albums.value = resp.data
+  } catch {
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -128,12 +135,25 @@ function goDetail(id: number): void {
   router.push(`/portal/albums/${id}`)
 }
 
-onMounted(async () => {
-  // 效能（2026-08-21）：load() 與 getAlbumClassrooms() 互不依賴，改平行請求。
-  const [, resp] = await Promise.all([load(), getAlbumClassrooms()])
-  const list = resp.data
-  classrooms.value = list
-  if (list.length === 1) createForm.value.classroom_id = list[0].id
+async function loadClassrooms(): Promise<void> {
+  try {
+    const list = (await getAlbumClassrooms()).data
+    classrooms.value = list
+    if (list.length === 1) createForm.value.classroom_id = list[0].id
+  } catch {
+    // 只影響建立相簿的班級下拉；開窗時會再試一次
+    classrooms.value = []
+  }
+}
+
+function openCreate(): void {
+  if (!classrooms.value.length) loadClassrooms()
+  createVisible.value = true
+}
+
+onMounted(() => {
+  // 效能（2026-08-21）：load() 與 getAlbumClassrooms() 互不依賴，平行請求；各自處理失敗
+  void Promise.all([load(), loadClassrooms()])
 })
 
 defineExpose({ createForm, submitCreate })
