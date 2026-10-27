@@ -85847,7 +85847,14 @@ export interface operations {
         parameters: {
             query?: {
                 classroom_id?: number | null;
+                /** @description YYYY-MM-DD；請假期間與區間重疊即列入 */
+                end_date?: string | null;
                 limit?: number;
+                /** @description 學生姓名（部分符合） */
+                q?: string | null;
+                skip?: number;
+                /** @description YYYY-MM-DD；請假期間與區間重疊即列入 */
+                start_date?: string | null;
                 status?: string;
             };
             header?: never;
