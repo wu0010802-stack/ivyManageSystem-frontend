@@ -12,6 +12,19 @@ export const createAppraisalCycle = (payload: ApiBody<'/appraisal/cycles', 'post
 export const patchAppraisalCycle = (cycleId: number, payload: ApiBody<'/appraisal/cycles/{cycle_id}', 'patch'>): AxiosResp<'/appraisal/cycles/{cycle_id}', 'patch'> =>
     api.patch(`/appraisal/cycles/${cycleId}`, payload)
 
+/**
+ * 標記該週期考核獎金「已另循名冊發放」（APPRAISAL_ACCOUNTING；僅 CLOSED 週期，重複標記 409）。
+ * 標記後年終考核 payout 不再為該半年產生明細。note 選填，空白不送。
+ */
+export const markAppraisalCycleRosterPaid = (cycleId: number, note?: string): AxiosResp<'/appraisal/cycles/{cycle_id}/roster-paid', 'post'> => {
+    const trimmed = note?.trim()
+    return api.post(`/appraisal/cycles/${cycleId}/roster-paid`, trimmed ? { note: trimmed } : {})
+}
+
+/** 取消已發放標記（標錯時還原）；尚未標記回 409。 */
+export const unmarkAppraisalCycleRosterPaid = (cycleId: number): AxiosResp<'/appraisal/cycles/{cycle_id}/roster-paid', 'delete'> =>
+    api.delete(`/appraisal/cycles/${cycleId}/roster-paid`)
+
 // ============ Catalog（16 項加減分定義）============
 
 export const listAppraisalCatalog = (): AxiosResp<'/appraisal/catalog', 'get'> =>

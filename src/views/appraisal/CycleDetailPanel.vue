@@ -8,7 +8,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
 
 import {
@@ -25,10 +25,13 @@ import {
   getSignStatusSummary,
   getAppraisalAllEmployeesStatus,
   listScoringRules,
+  markAppraisalCycleRosterPaid,
+  unmarkAppraisalCycleRosterPaid,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { statusLabel, MSG, ROLE_GROUP_LABEL, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
+import { canMarkRosterPaid, canUnmarkRosterPaid, markRosterPaidMessage, rosterPaidSummary } from './rosterPaid'
 
 import KanbanView from './components/KanbanView.vue'
 import ListView from './components/ListView.vue'
@@ -38,7 +41,12 @@ import BatchSignButton from './components/BatchSignButton.vue'
 import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
 import EmployeeSummaryDrawer from './components/EmployeeSummaryDrawer.vue'
 
-interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; status?: string; [key: string]: unknown }
+interface Cycle {
+  id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; status?: string
+  // 名冊已發放標記（義華 2026-10-27）：NULL＝未標記
+  roster_paid_at?: string | null; roster_paid_by?: string | null; roster_paid_note?: string | null
+  [key: string]: unknown
+}
 interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
 interface Summary { id: number; participant_id?: number; status?: string; total_score?: number; grade?: string; bonus_amount?: number; employee_name?: string; [key: string]: unknown }
 interface AggregatedParticipant {
@@ -134,6 +142,79 @@ const canBatchSign = computed(
 // 退簽：後端 endpoint 入口僅要 APPRAISAL_READ 但依當前 stage 再 check 對應 sign
 // 權限；UI 守衛保守用 OR 三個 sign 權限（任一即可顯示，後端會二次驗）。
 const canReject = computed(() => canBatchSign.value)
+
+// 名冊已發放標記（義華 2026-10-27）：該半年獎金已另循名冊轉帳，年終考核 payout 不再重複產生。
+// 後端守 APPRAISAL_ACCOUNTING 且僅 CLOSED 週期可標記；前端對齊，不顯示必失敗的入口。
+const hasAccounting = computed(() => hasPermission('APPRAISAL_ACCOUNTING'))
+const canMarkPaid = computed(() => canMarkRosterPaid(cycle.value, hasAccounting.value))
+const canUnmarkPaid = computed(() => canUnmarkRosterPaid(cycle.value, hasAccounting.value))
+const rosterPaidText = computed(() => rosterPaidSummary(cycle.value))
+const rosterPaidBusy = ref(false)
+
+// 標記／取消的回應是整個 CycleOut；只取三個已發放欄位併回本頁的 cycle，其餘欄位（Decimal 字串等）不動
+function withRosterPaid(
+  current: Cycle,
+  data: { roster_paid_at?: string | null; roster_paid_by?: string | null; roster_paid_note?: string | null },
+): Cycle {
+  return {
+    ...current,
+    roster_paid_at: data.roster_paid_at ?? null,
+    roster_paid_by: data.roster_paid_by ?? null,
+    roster_paid_note: data.roster_paid_note ?? null,
+  }
+}
+
+async function markRosterPaid() {
+  const current = cycle.value
+  if (!current || rosterPaidBusy.value) return
+  let note = ''
+  try {
+    const answer = await ElMessageBox.prompt(markRosterPaidMessage(current), '標記名冊已發放', {
+      confirmButtonText: '標記已發放',
+      cancelButtonText: '取消',
+      type: 'warning',
+      inputPlaceholder: '備註（選填，例如發放日期、名冊來源）',
+      inputValidator: (value: string) => !value || value.length <= 500 || '備註最多 500 字',
+    })
+    note = (answer as { value?: string }).value ?? ''
+  } catch {
+    return // 使用者取消
+  }
+  rosterPaidBusy.value = true
+  try {
+    const res = await markAppraisalCycleRosterPaid(cycleId.value, note)
+    cycle.value = withRosterPaid(current, res.data)
+    ElMessage.success('已標記名冊已發放')
+  } catch (e) {
+    ElMessage.error(apiError(e, '標記名冊已發放失敗'))
+  } finally {
+    rosterPaidBusy.value = false
+  }
+}
+
+async function unmarkRosterPaid() {
+  const current = cycle.value
+  if (!current || rosterPaidBusy.value) return
+  try {
+    await ElMessageBox.confirm(
+      '取消後，年終考核獎金發放會重新為這個學期建立發放明細。確定取消「名冊已發放」標記？',
+      '取消名冊已發放標記',
+      { confirmButtonText: '取消標記', cancelButtonText: '保留標記', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  rosterPaidBusy.value = true
+  try {
+    const res = await unmarkAppraisalCycleRosterPaid(cycleId.value)
+    cycle.value = withRosterPaid(current, res.data)
+    ElMessage.success('已取消名冊已發放標記')
+  } catch (e) {
+    ElMessage.error(apiError(e, '取消名冊已發放標記失敗'))
+  } finally {
+    rosterPaidBusy.value = false
+  }
+}
 
 const search = ref('')
 const filter = ref('all')
@@ -418,6 +499,20 @@ onMounted(() => {
       狀態 {{ statusLabel(cycle.status ?? '') }}
     </div>
 
+    <div v-if="rosterPaidText" class="roster-paid-note" data-test="roster-paid-note">
+      <el-tag type="success" size="small">名冊已發放</el-tag>
+      <span>{{ rosterPaidText }}；年終考核獎金發放不會再產生這個學期的明細</span>
+      <el-button
+        v-if="canUnmarkPaid"
+        link
+        type="danger"
+        size="small"
+        :loading="rosterPaidBusy"
+        data-test="roster-paid-unmark"
+        @click="unmarkRosterPaid"
+      >取消標記</el-button>
+    </div>
+
     <SignProgressBar :counts="signCounts" class="sign-progress-wrap" />
 
     <div class="toolbar" :class="{ 'toolbar--selected': selectedIds.length > 0 }">
@@ -431,6 +526,12 @@ onMounted(() => {
       >{{ MSG.recompute_btn }}</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalCycleXlsxUrl(cycleId)">匯出考核表</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
+      <el-button
+        v-if="canMarkPaid"
+        :loading="rosterPaidBusy"
+        data-test="roster-paid-mark"
+        @click="markRosterPaid"
+      >標記名冊已發放</el-button>
 
       <span
         v-if="canBatchSign"
@@ -546,6 +647,7 @@ onMounted(() => {
 }
 .cycle-detail { padding: 0; }
 .meta { margin: var(--space-3) 0; padding: var(--space-3); background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; }
+.roster-paid-note { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--text-secondary); }
 .sign-progress-wrap { margin: 0 0 var(--space-3); }
 .toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 .batch-zone { display: flex; gap: 6px; }
