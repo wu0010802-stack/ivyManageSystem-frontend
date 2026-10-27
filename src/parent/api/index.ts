@@ -71,6 +71,22 @@ export function buildParentRefreshUrl(base: string = PARENT_API_BASE): string {
   return `${base}/parent/auth/refresh`
 }
 
+// 401 時不走 refresh 的 auth 端點（登入／綁定本身失敗、refresh 自己、登出）。
+// 必須精確比對完整 path：舊版 `includes('/parent/auth/bind')` 會把
+// `/parent/auth/bind-additional`（已登入家長加綁）誤判成 auth 端點，access
+// token 過期時不 refresh 直接失敗。
+const PARENT_AUTH_ENDPOINT_PATHS = [
+  '/parent/auth/liff-login',
+  '/parent/auth/bind',
+  '/parent/auth/refresh',
+  '/parent/auth/logout',
+] as const
+
+export function isParentAuthEndpointUrl(url: string): boolean {
+  const path = (url.split(/[?#]/)[0] ?? '').replace(/\/+$/, '')
+  return PARENT_AUTH_ENDPOINT_PATHS.some((p) => path === p || path.endsWith(p))
+}
+
 /**
  * 家長登入的兩支端點。走到這裡的網路層失敗要回報成 `login_failed`
  * 而不是通用的 `api_timeout`——「家長登不進來」是後台燈號真正在看的訊號
@@ -296,11 +312,7 @@ api.interceptors.response.use(
     }
 
     const url = originalRequest?.url || ''
-    const isAuthEndpoint =
-      url.includes('/parent/auth/liff-login') ||
-      url.includes('/parent/auth/bind') ||
-      url.includes('/parent/auth/refresh') ||
-      url.includes('/parent/auth/logout')
+    const isAuthEndpoint = isParentAuthEndpointUrl(url)
 
     const startedAt = originalRequest?.metadata?.startedAt
     if (startedAt != null) {

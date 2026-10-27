@@ -79,6 +79,30 @@ describe('parent api refresh interceptor', () => {
     expect(globalRefreshCalls).toBe(0)
   })
 
+  it('bind-additional 首次 401 會走一般 refresh 流程並重送（不可被 /parent/auth/bind 前綴誤判）', async () => {
+    mockApi.onPost('/parent/auth/bind-additional').replyOnce(401)
+    mockGlobal.onPost('/api/parent/auth/refresh').replyOnce(200, { ok: true })
+    mockApi.onPost('/parent/auth/bind-additional').replyOnce(200, { status: 'ok' })
+
+    const resp = await api.post('/parent/auth/bind-additional', { code: 'ABC' })
+    expect(resp.data).toEqual({ status: 'ok' })
+    expect(mockGlobal.history.post.filter((r) => r.url === '/api/parent/auth/refresh')).toHaveLength(1)
+  })
+
+  it('/parent/auth/bind（含 query）401 時仍視為 auth 端點、不 refresh', async () => {
+    let refreshCalls = 0
+    mockGlobal.onPost('/api/parent/auth/refresh').reply(() => {
+      refreshCalls += 1
+      return [200]
+    })
+    mockApi.onPost('/parent/auth/bind?x=1').replyOnce(401)
+
+    await expect(api.post('/parent/auth/bind?x=1', { code: 'ABC' })).rejects.toMatchObject({
+      response: { status: 401 },
+    })
+    expect(refreshCalls).toBe(0)
+  })
+
   it('refresh 過期時先走共用本地 session cleanup 再導向登入', async () => {
     mockApi.onGet('/expired').replyOnce(401)
     mockGlobal.onPost('/api/parent/auth/refresh').replyOnce(401)
