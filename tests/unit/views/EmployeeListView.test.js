@@ -109,6 +109,8 @@ describe('EmployeeListView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     employeeStore.employees = []
+    employeeStore.error = null
+    employeeStore.fetchEmployees.mockImplementation(() => Promise.resolve())
     routerMocks.routeQuery.value = {}
     // clearAllMocks 不清 mockResolvedValueOnce/mockRejectedValueOnce 佇列，個別測試若中途拋錯
     // 佇列可能殘留污染下一筆測試；每輪重設回預設實作，杜絕跨測試洩漏。
@@ -126,6 +128,18 @@ describe('EmployeeListView', () => {
     expect(search.exists()).toBe(true)
     expect(search.attributes('aria-label')).toBeTruthy()
     expect(search.attributes('type')).toBe('search')
+  })
+
+  it('store 載入失敗（不 rethrow、寫進 error）→ 提示並顯示錯誤態，不顯示「尚無員工資料」', async () => {
+    employeeStore.fetchEmployees.mockImplementation(() => {
+      employeeStore.error = '員工資料載入失敗'
+      return Promise.resolve()
+    })
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    expect(ElMessage.error).toHaveBeenCalledWith('員工資料載入失敗')
+    expect(wrapper.find('[data-test="employees-load-error"]').exists()).toBe(true)
   })
 
   it('onMounted honors store TTL by calling fetchEmployees(false)', async () => {

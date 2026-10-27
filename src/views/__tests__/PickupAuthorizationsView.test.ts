@@ -72,6 +72,27 @@ describe('PickupAuthorizationsView (admin)', () => {
     document.body.innerHTML = ''
   })
 
+  it('首次載入失敗 → 顯示錯誤與重新載入，不顯示「沒有臨時接送授權」', async () => {
+    mockList.mockRejectedValueOnce(new Error('boom'))
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-test="pickup-load-error"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('沒有臨時接送授權')
+    wrapper.unmount()
+  })
+
+  it('切日載入失敗 → 不留著上一天的授權列', async () => {
+    const wrapper = await mountView()
+    expect(wrapper.text()).toContain('王阿嬤')
+    mockList.mockRejectedValueOnce(new Error('boom'))
+    const vm = wrapper.vm as unknown as { dayOffset: number; fetchData: () => Promise<void> }
+    vm.dayOffset = 1
+    await vm.fetchData()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('王阿嬤')
+    expect(wrapper.find('[data-test="pickup-load-error"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('renders authorization rows', async () => {
     const wrapper = await mountView()
     expect(wrapper.text()).toContain('小明')

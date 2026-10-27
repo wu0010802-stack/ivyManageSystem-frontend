@@ -244,10 +244,19 @@ const exportEmployees = () => {
   downloadFile('/exports/employees', '員工名冊.xlsx', Object.keys(params).length ? params : undefined)
 }
 
+// createFetchStore 不 rethrow、只把錯誤寫進 store.error；原本這裡的 catch 永遠不會觸發，
+// 載入失敗時連提示都沒有，畫面顯示「尚無員工資料／點擊新增員工開始建立」
+const loadError = ref('')
 const fetchEmployees = async (force = true) => {
   loading.value = true
+  loadError.value = ''
   try {
     await employeeStore.fetchEmployees(force)
+    const storeError = (employeeStore as unknown as { error?: string | null }).error
+    if (storeError) {
+      loadError.value = storeError
+      ElMessage.error(storeError)
+    }
   } catch (error) {
     ElMessage.error(friendlyError('載入員工資料失敗', error))
   } finally {
@@ -410,7 +419,14 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
-    <TableSkeleton v-if="loading && !employeeStore.employees.length" :columns="7" />
+    <el-card v-if="loadError && !employeeStore.employees.length" class="no-hover">
+      <EmptyState variant="error" title="員工資料載入失敗" :description="loadError" data-test="employees-load-error">
+        <template #action>
+          <el-button type="primary" :loading="loading" @click="fetchEmployees(true)">重試</el-button>
+        </template>
+      </EmptyState>
+    </el-card>
+    <TableSkeleton v-else-if="loading && !employeeStore.employees.length" :columns="7" />
     <el-card v-else-if="!isMobile" class="no-hover">
       <el-table
         :data="displayedEmployees"

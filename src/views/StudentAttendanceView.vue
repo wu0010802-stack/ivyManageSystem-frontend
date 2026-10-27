@@ -20,6 +20,7 @@ import AdminListCards from '@/components/common/AdminListCards.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import PageHeader from '@/components/common/PageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { useClientTableFilter } from '@/composables'
 
 const TODAY = todayISO()
@@ -73,6 +74,10 @@ interface MonthlyData {
 }
 
 const termClassrooms = ref<ClassroomOption[]>([])
+// 各段讀取失敗旗標：失敗時清掉舊資料並顯示錯誤＋重試，不讓「0 人／沒有資料／請先選擇班級」冒充結果
+const classroomsError = ref(false)
+const overviewError = ref(false)
+const monthlyError = ref(false)
 const activeTab = ref('overview')
 
 const overviewDate = ref(TODAY)
@@ -100,6 +105,7 @@ const classroomOptions = computed(() =>
 )
 
 const fetchTermClassrooms = async () => {
+  classroomsError.value = false
   try {
     const res = await getClassrooms({
       school_year: normalizeSchoolYear(termStore.school_year),
@@ -109,6 +115,7 @@ const fetchTermClassrooms = async () => {
     termClassrooms.value = res.data as ClassroomOption[]
   } catch {
     termClassrooms.value = []
+    classroomsError.value = true
   }
 }
 
@@ -234,6 +241,7 @@ const detailSummary = computed(() => {
 
 const fetchOverview = async () => {
   overviewLoading.value = true
+  overviewError.value = false
   try {
     const res = await getAttendanceOverview({
       date: overviewDate.value,
@@ -242,6 +250,8 @@ const fetchOverview = async () => {
     })
     overviewData.value = res.data
   } catch (error) {
+    overviewData.value = null
+    overviewError.value = true
     ElMessage.error(apiError(error, '載入班級出席總覽失敗'))
   } finally {
     overviewLoading.value = false
@@ -267,6 +277,7 @@ const fetchMonthly = async () => {
   if (!monthlyClassroomId.value || !monthPicker.value) return
   const [year, month] = monthPicker.value.split('-')
   monthlyLoading.value = true
+  monthlyError.value = false
   try {
     const res = await getMonthlySummary({
       classroom_id: monthlyClassroomId.value,
@@ -275,6 +286,8 @@ const fetchMonthly = async () => {
     })
     monthlyData.value = res.data
   } catch (error) {
+    monthlyData.value = null
+    monthlyError.value = true
     ElMessage.error(apiError(error, '載入班級月分析失敗'))
   } finally {
     monthlyLoading.value = false
@@ -406,6 +419,18 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
+    <el-alert
+      v-if="classroomsError"
+      type="error"
+      :closable="false"
+      show-icon
+      title="本學期班級清單載入失敗，月分析與點名編修暫時無法選班級"
+      class="overview-alert"
+      data-test="classrooms-error"
+    >
+      <el-button size="small" @click="fetchTermClassrooms">重新載入班級</el-button>
+    </el-alert>
+
     <el-tabs v-model="activeTab" class="main-tabs">
       <el-tab-pane label="今日班級總覽" name="overview">
         <div class="toolbar">
@@ -427,7 +452,19 @@ onMounted(async () => {
           class="overview-alert"
         />
 
-        <div class="summary-grid">
+        <EmptyState
+          v-if="overviewError"
+          variant="error"
+          title="班級出席總覽載入失敗"
+          description="在重新載入成功前，請勿把畫面上的人數當作實際出席。"
+          data-test="overview-error"
+        >
+          <template #action>
+            <el-button type="primary" :loading="overviewLoading" @click="fetchOverview">重新載入</el-button>
+          </template>
+        </EmptyState>
+
+        <div v-if="!overviewError" class="summary-grid">
           <el-card v-for="card in overviewCards" :key="card.label" class="summary-card" shadow="hover">
             <div class="summary-label">{{ card.label }}</div>
             <template v-if="card.kind === 'pair'">
@@ -443,7 +480,7 @@ onMounted(async () => {
         </div>
 
         <el-table
-          v-if="!isMobile"
+          v-if="!overviewError && !isMobile"
           v-loading="overviewLoading"
           :data="overviewRows"
           stripe
@@ -493,7 +530,7 @@ onMounted(async () => {
           </el-table-column>
         </el-table>
         <AdminListCards
-          v-else
+          v-else-if="!overviewError"
           :items="overviewRows"
           :columns="classroomCardColumns"
           row-key="classroom_name"
@@ -517,7 +554,7 @@ onMounted(async () => {
         </AdminListCards>
 
         <el-empty
-          v-if="!isMobile && !overviewLoading && overviewRows.length === 0"
+          v-if="!overviewError && !isMobile && !overviewLoading && overviewRows.length === 0"
           description="目前沒有可顯示的班級出席資料"
           :image-size="80"
         />
@@ -540,7 +577,17 @@ onMounted(async () => {
         </div>
 
         <div v-loading="monthlyLoading" class="monthly-panel">
-          <template v-if="monthlyData">
+          <EmptyState
+            v-if="monthlyError && !monthlyLoading"
+            variant="error"
+            title="班級月分析載入失敗"
+            data-test="monthly-error"
+          >
+            <template #action>
+              <el-button type="primary" @click="fetchMonthly">重新載入</el-button>
+            </template>
+          </EmptyState>
+          <template v-else-if="monthlyData">
             <div class="summary-grid">
               <el-card v-for="card in monthlySummaryCards" :key="card.label" class="summary-card" shadow="hover">
                 <div class="summary-label">{{ card.label }}</div>
