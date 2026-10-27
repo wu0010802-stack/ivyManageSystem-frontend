@@ -11,6 +11,9 @@
       <el-tab-pane v-if="canReadSalary" label="節慶發放與未扣餘額" name="festival_payout">
         <FestivalPayoutPanel v-if="tab === 'festival_payout'" />
       </el-tab-pane>
+      <el-tab-pane v-if="canReadSalary" label="節慶停課登記" name="festival_suspension">
+        <FestivalSuspensionPanel v-if="tab === 'festival_suspension'" />
+      </el-tab-pane>
       <el-tab-pane v-if="canViewFullSalary" label="下學期超額獎金" name="semester2_excess">
         <Semester2ExcessPanel v-if="tab === 'semester2_excess'" />
       </el-tab-pane>
@@ -36,6 +39,7 @@ import ArtTeacherPayrollPanel from './ArtTeacherPayrollPanel.vue'
 import SystemSettingsPanel from './SystemSettingsPanel.vue'
 import SalaryLogicPanel from './SalaryLogicPanel.vue'
 import FestivalPayoutPanel from './FestivalPayoutPanel.vue'
+import FestivalSuspensionPanel from './FestivalSuspensionPanel.vue'
 import Semester2ExcessPanel from './Semester2ExcessPanel.vue'
 import Semester2ActivityPanel from './Semester2ActivityPanel.vue'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
@@ -52,7 +56,7 @@ const router = useRouter()
 const visibleTabs = computed(() => [
   ...(canReadSettings.value ? ['bonus'] : []),
   'art_teacher',
-  ...(canReadSalary.value ? ['festival_payout'] : []),
+  ...(canReadSalary.value ? ['festival_payout', 'festival_suspension'] : []),
   ...(canViewFullSalary.value ? ['semester2_excess', 'semester2_activity'] : []),
   'system_settings',
   'logic',

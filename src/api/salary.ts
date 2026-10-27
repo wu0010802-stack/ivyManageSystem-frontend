@@ -149,3 +149,37 @@ export const unfinalizeSalary = (recordId: number, reason: string): AxiosResp<'/
     const payload: ApiBody<'/salaries/{record_id}/finalize', 'delete'> = { reason }
     return api.delete(`/salaries/${recordId}/finalize`, { data: payload })
 }
+
+// ── 節慶停課月登記（義華 2026-10-27，第七篇第七條 3／4）──────────────────────
+// 規則開啟時（BonusConfig.festival_suspension_rule），整班／全園當月停課 ≥10 日或繳費率 <60%
+// 即停發節慶獎金。讀 SALARY_READ、寫 SALARY_WRITE；寫入遇薪資批次計算中／已封存／年終已定案回 409。
+
+/** 登記列表（可依年月篩；全園列排在該月最前）。 */
+export const listFestivalSuspensions = (
+    params: ApiQuery<'/salaries/festival-suspensions', 'get'> = {},
+): AxiosResp<'/salaries/festival-suspensions', 'get'> =>
+    api.get('/salaries/festival-suspensions', { params })
+
+/** 該月停發判定預覽（停課日數＋由月費單推導的繳費率）；唯讀。 */
+export const getFestivalSuspensionDecision = (
+    params: ApiQuery<'/salaries/festival-suspensions/decision', 'get'>,
+): AxiosResp<'/salaries/festival-suspensions/decision', 'get'> =>
+    api.get('/salaries/festival-suspensions/decision', { params })
+
+/** 新增登記；classroom_id 省略＝全園，同月同班（全園）只能一列（重複回 409）。 */
+export const createFestivalSuspension = (
+    payload: ApiBody<'/salaries/festival-suspensions', 'post'>,
+): AxiosResp<'/salaries/festival-suspensions', 'post'> =>
+    api.post('/salaries/festival-suspensions', payload)
+
+/** 更新停課日數與原因（年月、班級不可改）。 */
+export const updateFestivalSuspension = (
+    id: number,
+    payload: ApiBody<'/salaries/festival-suspensions/{suspension_id}', 'put'>,
+): AxiosResp<'/salaries/festival-suspensions/{suspension_id}', 'put'> =>
+    api.put(`/salaries/festival-suspensions/${id}`, payload)
+
+export const deleteFestivalSuspension = (
+    id: number,
+): AxiosResp<'/salaries/festival-suspensions/{suspension_id}', 'delete'> =>
+    api.delete(`/salaries/festival-suspensions/${id}`)
