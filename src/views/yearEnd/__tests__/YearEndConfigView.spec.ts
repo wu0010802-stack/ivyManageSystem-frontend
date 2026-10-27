@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { defineComponent, h, inject, nextTick, provide } from 'vue'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import YearEndConfigView from '../YearEndConfigView.vue'
@@ -85,6 +85,7 @@ type ClassRow = {
   returning_student_rate: string
   avg_monthly_enrollment: string
   class_performance_rate: string
+  head_teacher_midterm_takeover: boolean
 }
 
 function makeOrgRow(overrides: Partial<OrgRow> = {}): OrgRow {
@@ -128,6 +129,8 @@ function makeClassRow(overrides: Partial<ClassRow> = {}): ClassRow {
     returning_student_rate: '0.800',
     avg_monthly_enrollment: '22.5',
     class_performance_rate: '0.900',
+    // 後端 ClassEnrollmentTargetOut 一律回布林（預設 false）
+    head_teacher_midterm_takeover: false,
     ...overrides,
   }
 }
@@ -710,6 +713,188 @@ describe('YearEndConfigView', () => {
       const wrapper = await mountView()
       const vm = wrapper.vm as unknown as { canWrite: boolean }
       expect(vm.canWrite).toBe(true)
+    })
+  })
+
+  // yhrulea01（義華 2026-10-27）：班級編制「班導中途接任」勾選
+  describe('班導中途接任勾選（yhrulea01）', () => {
+    type TakeoverVm = {
+      classEdits: Record<number, { head_teacher_midterm_takeover: boolean }>
+      classTargets: ClassRow[]
+      saveClassTarget: (row: ClassRow) => Promise<void>
+      saveAllClassTargets: () => Promise<void>
+    }
+
+    it('載入時把後端勾選狀態放進編輯緩衝；舊後端沒回該欄位視為未勾選', async () => {
+      const legacy: Record<string, unknown> = makeClassRow({ id: 11, classroom_id: 4 })
+      delete legacy.head_teacher_midterm_takeover
+      vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({
+        data: [makeClassRow({ id: 10, head_teacher_midterm_takeover: true }), legacy],
+      } as never)
+      stubSupportApis()
+
+      const wrapper = await mountView()
+      const vm = wrapper.vm as unknown as TakeoverVm
+
+      expect(vm.classEdits[10].head_teacher_midterm_takeover).toBe(true)
+      expect(vm.classEdits[11].head_teacher_midterm_takeover).toBe(false)
+    })
+
+    it('逐列儲存把勾選狀態送給後端（勾選與取消勾選都要送，後端 null 才是「不變」）', async () => {
+      const row = makeClassRow({ id: 10, head_teacher_midterm_takeover: false })
+      vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [row] } as never)
+      vi.mocked(yearEndApi.upsertClassTarget).mockResolvedValue({ data: row } as never)
+      stubSupportApis()
+
+      const wrapper = await mountView()
+      const vm = wrapper.vm as unknown as TakeoverVm
+
+      vm.classEdits[10].head_teacher_midterm_takeover = true
+      await vm.saveClassTarget(vm.classTargets[0])
+      expect(yearEndApi.upsertClassTarget).toHaveBeenLastCalledWith(
+        5,
+        expect.objectContaining({ head_teacher_midterm_takeover: true }),
+      )
+
+      vm.classEdits[10].head_teacher_midterm_takeover = false
+      await vm.saveClassTarget(vm.classTargets[0])
+      expect(yearEndApi.upsertClassTarget).toHaveBeenLastCalledWith(
+        5,
+        expect.objectContaining({ head_teacher_midterm_takeover: false }),
+      )
+    })
+
+    it('全部儲存的批次 payload 每列都帶勾選狀態', async () => {
+      const row10 = makeClassRow({ id: 10, classroom_id: 3, head_teacher_midterm_takeover: true })
+      const row11 = makeClassRow({ id: 11, classroom_id: 4, semester_first: false })
+      vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [row10, row11] } as never)
+      vi.mocked(yearEndApi.upsertClassTargetsBatch).mockResolvedValue({
+        data: { succeeded_count: 2, failed: [] },
+      } as never)
+      stubSupportApis()
+
+      const wrapper = await mountView()
+      const vm = wrapper.vm as unknown as TakeoverVm
+
+      await vm.saveAllClassTargets()
+
+      const items = vi.mocked(yearEndApi.upsertClassTargetsBatch).mock.calls[0][1]
+      expect(items).toEqual([
+        expect.objectContaining({ classroom_id: 3, head_teacher_midterm_takeover: true }),
+        expect.objectContaining({ classroom_id: 4, head_teacher_midterm_takeover: false }),
+      ])
+    })
+
+    // 表格在 mountView() 被 stub 掉不渲染儲存格；這裡用會轉發 slot 的 table／column stub 驗證畫面
+    const RowScope = defineComponent({
+      props: { row: { type: Object, required: true } },
+      setup(props, { slots }) {
+        provide('stubRow', props.row)
+        return () => h('div', { class: 'stub-row' }, slots.default?.())
+      },
+    })
+    const TableStub = defineComponent({
+      props: { data: { type: Array, default: () => [] } },
+      setup(props, { slots }) {
+        return () =>
+          h('div', (props.data as object[]).map((r) => h(RowScope, { row: r }, () => slots.default?.())))
+      },
+    })
+    const ColumnStub = defineComponent({
+      setup(_, { slots }) {
+        const stubRow = inject<object | null>('stubRow', null)
+        return () =>
+          h('div', { class: 'stub-col' }, [slots.header?.(), stubRow ? slots.default?.({ row: stubRow }) : null])
+      },
+    })
+    const CheckboxStub = defineComponent({
+      inheritAttrs: false,
+      props: { modelValue: Boolean },
+      emits: ['update:modelValue'],
+      setup(props, { emit, attrs }) {
+        return () =>
+          h('input', {
+            type: 'checkbox',
+            ...attrs,
+            checked: props.modelValue,
+            onChange: (e: Event) => emit('update:modelValue', (e.target as HTMLInputElement).checked),
+          })
+      },
+    })
+    const mountWithRenderedTable = () =>
+      mount(YearEndConfigView, {
+        props: { cycleId: 5 },
+        global: {
+          stubs: {
+            'el-table': TableStub,
+            'el-table-column': ColumnStub,
+            'el-checkbox': CheckboxStub,
+            'el-button': true,
+            'el-card': { template: '<div><slot /></div>' },
+            'el-alert': true,
+            'el-divider': true,
+            'el-form': true,
+            'el-form-item': true,
+            'el-input-number': true,
+            'el-select': true,
+            'el-option': true,
+            'el-tooltip': { template: '<span><slot /></span>' },
+            'el-icon': true,
+            'el-tag': true,
+          },
+        },
+      })
+
+    it('畫面：可寫入時是 checkbox，勾選後逐列儲存會送出', async () => {
+      const row = makeClassRow({ id: 10, head_teacher_midterm_takeover: false })
+      const takenOver = makeClassRow({ id: 12, classroom_id: 5, head_teacher_midterm_takeover: true })
+      vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [row, takenOver] } as never)
+      vi.mocked(yearEndApi.upsertClassTarget).mockResolvedValue({ data: row } as never)
+      stubSupportApis()
+
+      const wrapper = mountWithRenderedTable()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as TakeoverVm
+
+      const box = wrapper.find('[data-test="check-midterm-takeover-10"]')
+      expect(box.exists()).toBe(true)
+      expect((box.element as HTMLInputElement).checked).toBe(false)
+      expect(
+        (wrapper.find('[data-test="check-midterm-takeover-12"]').element as HTMLInputElement).checked,
+      ).toBe(true)
+      expect(wrapper.text()).toContain('中途接任')
+
+      await box.setValue(true)
+      expect(vm.classEdits[10].head_teacher_midterm_takeover).toBe(true)
+      await vm.saveClassTarget(vm.classTargets[0])
+      expect(yearEndApi.upsertClassTarget).toHaveBeenLastCalledWith(
+        5,
+        expect.objectContaining({ head_teacher_midterm_takeover: true }),
+      )
+    })
+
+    it('畫面：週期已鎖定（唯讀）時不渲染 checkbox，勾選過的列顯示「是」', async () => {
+      vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({
+        data: [
+          makeClassRow({ id: 10, head_teacher_midterm_takeover: false }),
+          makeClassRow({ id: 12, classroom_id: 5, head_teacher_midterm_takeover: true }),
+        ],
+      } as never)
+      vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({
+        data: [makeYearEndCycle({ id: 5, status: 'LOCKED' })],
+      } as never)
+      stubSupportApis()
+
+      const wrapper = mountWithRenderedTable()
+      await flushPromises()
+
+      expect(wrapper.find('[data-test^="check-midterm-takeover-"]').exists()).toBe(false)
+      expect(wrapper.text()).toContain('是')
     })
   })
 })

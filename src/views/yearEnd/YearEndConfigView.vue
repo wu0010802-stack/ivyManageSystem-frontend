@@ -81,6 +81,8 @@ const classEdits = ref<
       head_teacher_employee_id: number | null
       returning_student_rate: number
       assistant_employee_id: number | null
+      // yhrulea01：班導該學期中途接任本班（推動獎中途規則開啟時，該班不發班導推動獎）
+      head_teacher_midterm_takeover: boolean
     }
   >
 >({})
@@ -166,6 +168,7 @@ async function loadClassTargets() {
         head_teacher_employee_id: row.head_teacher_employee_id,
         returning_student_rate: Number(row.returning_student_rate),
         assistant_employee_id: row.assistant_employee_id,
+        head_teacher_midterm_takeover: row.head_teacher_midterm_takeover === true,
       }
     }
   } catch {
@@ -275,6 +278,7 @@ async function saveClassTarget(row: ClassTargetRow) {
       // Schema accepts number | string; pass number directly
       returning_student_rate: edits.returning_student_rate,
       assistant_employee_id: edits.assistant_employee_id,
+      head_teacher_midterm_takeover: edits.head_teacher_midterm_takeover,
     })
     ElMessage.success(`${classroomName(row.classroom_id)}（${semesterLabel(row.semester_first)}）已儲存`)
     await loadClassTargets()
@@ -303,6 +307,7 @@ async function saveAllClassTargets() {
         head_teacher_employee_id: edits.head_teacher_employee_id,
         returning_student_rate: edits.returning_student_rate,
         assistant_employee_id: edits.assistant_employee_id,
+        head_teacher_midterm_takeover: edits.head_teacher_midterm_takeover,
       }
     })
   if (!items.length) return
@@ -537,6 +542,25 @@ onMounted(async () => {
               />
             </el-select>
             <span v-else>{{ row.head_teacher_employee_id ?? '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column width="100">
+          <template #header>
+            <el-tooltip
+              content="班導該學期中途接任本班。年終規則開啟「班導中途離職／接任不保障」時，勾選的班級不發班導推動獎；規則關閉時此勾選不影響金額。"
+              placement="top"
+            >
+              <span>中途接任</span>
+            </el-tooltip>
+          </template>
+          <template #default="{ row }">
+            <el-checkbox
+              v-if="canWrite && classEdits[row.id]"
+              v-model="classEdits[row.id].head_teacher_midterm_takeover"
+              :aria-label="`${classroomName(row.classroom_id)}班導中途接任`"
+              :data-test="`check-midterm-takeover-${row.id}`"
+            />
+            <span v-else>{{ row.head_teacher_midterm_takeover ? '是' : '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="舊生率" width="140">
