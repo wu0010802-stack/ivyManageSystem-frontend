@@ -50,7 +50,7 @@ const loadList = async () => {
     const res = await listSalarySnapshots(props.year, props.month)
     snapshots.value = (res.data as { snapshots?: Record<string, unknown>[] })?.snapshots || []
   } catch (e) {
-    apiError(e, '讀取快照列表失敗')
+    ElMessage.error(apiError(e, '讀取快照列表失敗'))
   } finally {
     loading.value = false
   }
@@ -77,7 +77,7 @@ const openDetail = async (row: Record<string, unknown>) => {
     const res = await getSalarySnapshot(row.id as number)
     detailData.value = res.data as Record<string, unknown>
   } catch (e) {
-    apiError(e, '讀取快照詳情失敗')
+    ElMessage.error(apiError(e, '讀取快照詳情失敗'))
   } finally {
     detailLoading.value = false
   }
@@ -90,7 +90,7 @@ const openDiff = async (row: Record<string, unknown>) => {
     const res = await getSnapshotDiff(row.id as number)
     diffData.value = res.data as Record<string, unknown>
   } catch (e) {
-    apiError(e, '讀取差異失敗')
+    ElMessage.error(apiError(e, '讀取差異失敗'))
   } finally {
     diffLoading.value = false
   }
@@ -114,7 +114,7 @@ const triggerManualSnapshot = async () => {
     await loadList()
   } catch (e) {
     if (e === 'cancel') return
-    apiError(e, '手動補拍快照失敗')
+    ElMessage.error(apiError(e, '手動補拍快照失敗'))
   }
 }
 

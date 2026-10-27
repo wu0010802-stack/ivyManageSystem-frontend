@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getClassrooms } from '@/api/classrooms'
 import { getGrowthBookBatchStatus, createGrowthBook } from '@/api/growthBooks'
 // 成長報告族（下載／LINE 推播）沿用既有 src/api/studentGrowthReports.ts（Task 9 審查後定案），
@@ -204,6 +204,16 @@ async function onSendLine(row: BatchStatusItem) {
   if (row.report_id == null) return
   if (batchGenerating.value || batchSending.value) return
   if (rowLoading.value[row.student_id]) return
+  const resend = row.line_sent_at ? '這份成長冊已推播過，再推一次家長會收到第二則通知。' : ''
+  try {
+    await ElMessageBox.confirm(
+      `${resend}${row.student_name}的家長會立即在 LINE 收到成長冊，送出後無法收回。`,
+      '推播成長冊給家長',
+      { confirmButtonText: '推播', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return // 使用者取消
+  }
   rowLoading.value[row.student_id] = true
   try {
     const r = await sendGrowthReportToLine(row.student_id, row.report_id)
@@ -254,6 +264,15 @@ async function onBatchSendLine() {
   if (targets.length === 0) {
     ElMessage.info('目前沒有需要推播的學生')
     return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `將把成長冊推播給 ${targets.length} 位學生的家長（已推播過的不會重複），家長會立即在 LINE 收到，送出後無法收回。`,
+      '全班推播成長冊',
+      { confirmButtonText: `推播 ${targets.length} 位`, cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return // 使用者取消
   }
   batchSending.value = true
   sendProgress.value = { done: 0, total: targets.length }

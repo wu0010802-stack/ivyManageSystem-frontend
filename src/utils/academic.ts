@@ -90,3 +90,27 @@ export function getTermDateRange(
   const to = now >= start && now < end ? now : end
   return [dateToLocalISO(start), dateToLocalISO(to)]
 }
+
+/**
+ * 學期標籤選項（「民國學年＋上/下」，例：114上），由 `current` 往回排 `count` 個。
+ * 學生評量等以字串存學期的欄位用；`extra` 是既有紀錄的值，不在清單內時補在最後，
+ * 讓舊資料（含格式不一的歷史值）編輯時下拉不會空白。
+ */
+export function buildSemesterLabelOptions(
+  current: { school_year: number; semester: number } = getCurrentAcademicTerm(),
+  count = 6,
+  extra: Array<string | null | undefined> = [],
+): string[] {
+  const out: string[] = []
+  let year = current.school_year
+  let sem = current.semester
+  for (let i = 0; i < count; i++) {
+    out.push(`${year}${sem === 1 ? '上' : '下'}`)
+    if (sem === 2) sem = 1
+    else { sem = 2; year -= 1 }
+  }
+  for (const v of extra) {
+    if (v && !out.includes(v)) out.push(v)
+  }
+  return out
+}

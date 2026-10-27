@@ -21,6 +21,7 @@ import {
   resolveParentScope,
   type ParentRecipientItem,
 } from '@/utils/announcementScope'
+import { buildParentPushConfirm, type ParentScopeSnapshot } from '@/utils/announcementPushConfirm'
 import { useEmployeeStore } from '@/stores/employee'
 import { useAllClassroomStore } from '@/stores/classroomAll'
 import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
@@ -238,6 +239,8 @@ const form = reactive<{
 })
 
 const preservedParentItems = ref<ParentRecipientItem[]>([])
+// 編輯時讀到的原始家長對象；用來判斷這次送出會不會有人收到新的 LINE 通知
+const initialParentScope = ref<ParentScopeSnapshot | null>(null)
 
 // 學生選項：首次切到「指定學生」才載入（名冊百人級，全量 + 班級分組本地過濾）
 const studentOptionsLoading = ref(false)
@@ -290,6 +293,7 @@ const resetForm = () => {
   form.publish_at = null
   form.expires_at = null
   preservedParentItems.value = []
+  initialParentScope.value = null
   pendingAttachments.value = []
   existingAttachments.value = []
   attachmentsToDelete.value = []
@@ -323,6 +327,7 @@ const openEdit = async (row: AnnouncementItem) => {
   form.parent_target_classroom_ids = []
   form.parent_target_student_ids = []
   preservedParentItems.value = []
+  initialParentScope.value = null
   pendingAttachments.value = []
   attachmentsToDelete.value = []
   existingAttachments.value = (row.attachments as AttachmentItem[]) ?? []
@@ -345,6 +350,11 @@ const openEdit = async (row: AnnouncementItem) => {
     form.parent_target_classroom_ids = scope.classroomIds
     form.parent_target_student_ids = scope.studentIds
     preservedParentItems.value = scope.preservedItems
+    initialParentScope.value = {
+      visibility: scope.visibility,
+      classroomIds: [...scope.classroomIds],
+      studentIds: [...scope.studentIds],
+    }
     recipientSettingsReady.value = true
   } catch (error) {
     if (requestEpoch !== recipientHydrationEpoch) return
@@ -396,6 +406,25 @@ const handleSubmit = async () => {
   ) {
     ElMessage.warning('已選「指定學生」對家長公開，請至少選擇一位學生')
     return
+  }
+  const pushConfirm = buildParentPushConfirm({
+    isEdit: isEdit.value,
+    visibility: form.parent_visibility,
+    classroomIds: form.parent_target_classroom_ids,
+    studentIds: form.parent_target_student_ids,
+    initial: initialParentScope.value,
+    publishAt: form.publish_at,
+  })
+  if (pushConfirm) {
+    try {
+      await ElMessageBox.confirm(pushConfirm.message, pushConfirm.title, {
+        confirmButtonText: pushConfirm.confirmButtonText,
+        cancelButtonText: '再檢查一下',
+        type: 'warning',
+      })
+    } catch {
+      return // 使用者取消
+    }
   }
   submitLoading.value = true
   try {

@@ -290,7 +290,7 @@ async function reload() {
     const r = await listObservations(props.studentId, params)
     items.value = r.data.items || []
   } catch (e) {
-    apiError(e, '載入觀察紀錄失敗')
+    ElMessage.error(apiError(e, '載入觀察紀錄失敗'))
   } finally {
     loading.value = false
   }
@@ -346,7 +346,7 @@ async function save() {
     editor.visible = false
     await reload()
   } catch (e) {
-    apiError(e, '儲存失敗')
+    ElMessage.error(apiError(e, '儲存失敗'))
   } finally {
     editor.saving = false
   }
@@ -363,7 +363,7 @@ async function confirmDelete(obs: Observation) {
     ElMessage.success('已刪除')
     await reload()
   } catch (e) {
-    if (e !== 'cancel') apiError(e, '刪除失敗')
+    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
   }
 }
 
@@ -397,7 +397,7 @@ async function doUpload() {
         ok += 1
       } catch (e) {
         fail += 1
-        apiError(e, `上傳 ${wrapper.name} 失敗`)
+        ElMessage.error(apiError(e, `上傳 ${wrapper.name} 失敗`))
       }
     }
     if (ok > 0) ElMessage.success(`成功上傳 ${ok} 張${fail ? `（${fail} 失敗）` : ''}`)

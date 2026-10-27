@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus, { ElMessage } from 'element-plus'
+import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 
 // 班級清單：src/api/classrooms.ts 實際 export 名為 getClassrooms，回傳陣列（非 {items:[...]}）
 vi.mock('@/api/classrooms', () => ({
@@ -84,6 +84,55 @@ function deferred<T>() {
 }
 
 describe('GrowthBooksView', () => {
+  // 推播 LINE 前一律確認（家長立即收到、無法收回）；既有測試預設使用者按「確定」。
+  let confirmSpy: ReturnType<typeof vi.spyOn>
+  beforeEach(() => {
+    confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    sendGrowthReportToLine.mockClear()
+  })
+  afterEach(() => {
+    confirmSpy.mockRestore()
+  })
+
+  async function mountLoaded() {
+    const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
+    const vm = w.vm as unknown as VM
+    vm.classroomId = 1
+    await vm.load()
+    await flushPromises()
+    return w
+  }
+
+  it('單筆推播 LINE 先確認並帶出學生姓名；取消則不推播', async () => {
+    confirmSpy.mockRejectedValueOnce('cancel')
+    const w = await mountLoaded()
+    const pushBtn = w.findAll('button').find((b) => b.text().trim() === '推播 LINE')
+    await pushBtn!.trigger('click')
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(String(confirmSpy.mock.calls[0][0])).toContain('李小華')
+    expect(sendGrowthReportToLine).not.toHaveBeenCalled()
+  })
+
+  it('全班推播先確認並帶出人數；取消則一筆都不推', async () => {
+    confirmSpy.mockRejectedValueOnce('cancel')
+    const w = await mountLoaded()
+    const batchBtn = w.findAll('button').find((b) => b.text().includes('全班推播'))
+    await batchBtn!.trigger('click')
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(String(confirmSpy.mock.calls[0][0])).toContain('1 位')
+    expect(sendGrowthReportToLine).not.toHaveBeenCalled()
+  })
+
+  it('全班推播確認後依序推播', async () => {
+    const w = await mountLoaded()
+    const batchBtn = w.findAll('button').find((b) => b.text().includes('全班推播'))
+    await batchBtn!.trigger('click')
+    await flushPromises()
+    expect(sendGrowthReportToLine).toHaveBeenCalledWith(2, 7)
+  })
+
   it('切班或輪詢重疊時，舊班的慢回應不得覆蓋目前班級名單', async () => {
     type BatchStatusResult = Awaited<ReturnType<typeof getGrowthBookBatchStatus>>
     const oldClass = deferred<BatchStatusResult>()
