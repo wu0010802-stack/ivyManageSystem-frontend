@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheck } from '@element-plus/icons-vue'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
 import { apiError } from '@/utils/error'
@@ -79,6 +79,27 @@ const fetchAnomalies = async () => {
   }
 }
 
+// 送出後後端冪等回傳、不能改選（api/portal/anomalies.py），先講清楚各選項的實際後果
+function buildAnomalyConfirm(a: AnomalyEntry): string {
+  const what = `${a.date ?? ''} ${a.type_label ?? '異常'}`.trim()
+  const tail = '送出後這筆不能再改選其他方式。'
+  if (a.selected_action === 'use_pto') {
+    return `會送出一張 ${a.date ?? '當天'} 整天（8 小時）的特休假單給主管核准，核准後抵銷「${what}」的扣款。${tail}`
+  }
+  if (a.selected_action === 'accept') {
+    return `確認接受「${what}」的預估扣款 NT$ ${a.estimated_deduction ?? 0}？${tail}`
+  }
+  return `送出「${what}」的申訴，由行政審核。${tail}`
+}
+
+async function confirmAction(a: AnomalyEntry): Promise<boolean> {
+  return ElMessageBox.confirm(buildAnomalyConfirm(a), '確認處理方式', {
+    type: 'warning',
+    confirmButtonText: '確認送出',
+    cancelButtonText: '再想想',
+  }).then(() => true, () => false)
+}
+
 const confirmAnomaly = async (anomaly: AnomalyEntry) => {
   if (!anomaly.selected_action) {
     ElMessage.warning('請選擇處理方式')
@@ -89,6 +110,8 @@ const confirmAnomaly = async (anomaly: AnomalyEntry) => {
     ElMessage.warning('請說明申訴原因')
     return
   }
+
+  if (!(await confirmAction(anomaly))) return
 
   anomaly.submitting = true
   try {
@@ -175,7 +198,7 @@ onMounted(async () => {
           <div class="anomaly-actions">
             <p style="margin: 0 0 8px 0; font-weight: 600;">請選擇處理方式：</p>
             <el-radio-group v-model="anomaly.selected_action">
-              <el-radio value="use_pto">使用特休抵銷</el-radio>
+              <el-radio value="use_pto">使用特休抵銷（送整天特休假單）</el-radio>
               <el-radio value="accept">接受扣款</el-radio>
               <el-radio value="dispute">提出申訴</el-radio>
             </el-radio-group>

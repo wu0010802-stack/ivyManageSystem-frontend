@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 
 // 本頁會讀 route.query 決定查詢年月（見 PortalAnomalyMonthQuery.test.ts）
 vi.mock('vue-router', () => ({
@@ -67,6 +67,8 @@ describe('教師端出勤異常申訴', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(confirmAnomaly).mockClear()
+    // 送出前會跳確認（送出後不能改選）；本檔測的是申訴理由，一律模擬按下確認
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
   })
 
   it('申訴理由必須隨請求送出，不可只送 action', async () => {
