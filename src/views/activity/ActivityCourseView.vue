@@ -229,6 +229,7 @@
             v-model="form.instructor_employee_id"
             clearable
             filterable
+            :disabled="!canApproveTeachingBonus"
             placeholder="選擇負責老師"
             style="width: 100%"
             data-test="select-instructor-employee"
@@ -236,6 +237,9 @@
             <el-option v-for="emp in employeeOptions" :key="emp.id" :label="String(emp.name)" :value="emp.id" />
           </el-select>
           <div class="form-hint">年終教課獎勵金依此歸屬自動計算</div>
+          <div v-if="!canApproveTeachingBonus" class="form-hint form-hint--warn" data-test="teaching-bonus-approve-hint">
+            {{ TEACHING_BONUS_APPROVE_HINT }}
+          </div>
         </el-form-item>
         <el-form-item label="教課獎勵單價" prop="teaching_unit_price" class="fg-6">
           <el-input-number
@@ -245,12 +249,16 @@
             :step="5"
             :precision="0"
             :value-on-clear="null"
+            :disabled="!canApproveTeachingBonus"
             controls-position="right"
             placeholder="沿用全域設定"
             style="width: 100%"
             data-test="input-teaching-unit-price"
           />
           <div class="form-hint">每位幼生每計次的教師獎勵金（元）；空白＝沿用年終規則的全域單價，0＝此課不發</div>
+          <div v-if="!canApproveTeachingBonus" class="form-hint form-hint--warn" data-test="teaching-unit-price-approve-hint">
+            {{ TEACHING_BONUS_APPROVE_HINT }}
+          </div>
         </el-form-item>
         <el-form-item label="限定年級" prop="allowed_grades" class="fg-12">
           <el-checkbox-group v-model="form.allowed_grades" data-test="allowed-grades-group">
@@ -658,6 +666,11 @@ const termStore = useAcademicTermStore()
 
 // 對齊 ActivityRegistrationView 慣例：READ-only 使用者隱藏 mutation 入口（後端守衛 ACTIVITY_WRITE）
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
+// 教課獎勵金單價與負責老師歸屬直接決定金額與收款人：後端建立或變更需金流簽核
+// （ACTIVITY_PAYMENT_APPROVE，比照 PUT /config/bonus）。沒有簽核權限只能看，不能改。
+const canApproveTeachingBonus = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
+const TEACHING_BONUS_APPROVE_HINT =
+  '這個欄位會直接影響教課獎勵金的金額或收款人，需具備金流簽核（ACTIVITY_PAYMENT_APPROVE）權限才能建立或變更；請聯絡有簽核權限的人員'
 
 function formatSchedule(row: Course) {
   return formatWeekdaySchedule(row)
@@ -1290,6 +1303,7 @@ onMounted(() => {
 .pending-occupancy-hint__note { display: block; font-size: 10px; }
 .grade-tag { margin: 1px 4px 1px 0; }
 .dm-hint-create { font-size: 12px; color: var(--text-tertiary); }
+.form-hint--warn { color: var(--el-color-warning-dark-2); }
 
 /* 容量佔位名單 Drawer：仿 el-table 外觀的可拖拉列表（el-table 不支援列拖拉，
    改以 vuedraggable + flex 列自繪）；正式（佔位）／候補分兩區、跨區可拖 */

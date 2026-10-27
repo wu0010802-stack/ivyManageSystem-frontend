@@ -25,8 +25,10 @@ vi.mock('@/stores/academicTerm', () => ({
   useAcademicTermStore: () => ({ school_year: 114, semester: 1 }),
 }))
 
+// 教課獎勵單價與負責老師需金流簽核（ACTIVITY_PAYMENT_APPROVE）；其餘權限一律給
+const { permState } = vi.hoisted(() => ({ permState: { approve: true } }))
 vi.mock('@/utils/auth', () => ({
-  hasPermission: () => true,
+  hasPermission: (name: string) => (name === 'ACTIVITY_PAYMENT_APPROVE' ? permState.approve : true),
 }))
 
 vi.mock('element-plus', async (importOriginal) => {
@@ -40,6 +42,7 @@ vi.mock('element-plus', async (importOriginal) => {
 
 import { getCourses, createCourse, updateCourse } from '@/api/activity'
 import * as employeesApi from '@/api/employees'
+import { ElMessage } from 'element-plus'
 
 const STUBS = {
   AcademicTermSelector: true,
@@ -107,6 +110,7 @@ async function mountView() {
 describe('ActivityCourseView — 教課獎勵單價（teaching_unit_price）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    permState.approve = true
     vi.mocked(getCourses).mockResolvedValue({ data: { courses: [sampleCourse] } } as never)
   })
 
@@ -213,5 +217,78 @@ describe('ActivityCourseView — 教課獎勵單價（teaching_unit_price）', (
     const item = input.element.closest('.stub-form-item')
     expect(item?.textContent).toContain('教課獎勵單價')
     expect(item?.textContent).toContain('空白＝沿用')
+  })
+})
+
+// 審查修補：單價與負責老師直接決定教課獎勵金的金額與收款人，後端建立／變更需金流簽核，
+// 沒有簽核權限的人只能看；後端 403 的 detail 要原樣顯示。
+describe('ActivityCourseView — 教課獎勵欄位的金流簽核', () => {
+  // el-input-number／el-select 在此是 auto-stub：disabled=false 會渲染成 disabled="false"
+  const isDisabled = (wrapper: Awaited<ReturnType<typeof mountView>>['wrapper'], dataTest: string) => {
+    const attr = wrapper.find(`[data-test="${dataTest}"]`).attributes('disabled')
+    return attr !== undefined && attr !== 'false'
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    permState.approve = true
+    vi.mocked(getCourses).mockResolvedValue({ data: { courses: [sampleCourse] } } as never)
+  })
+
+  it('有金流簽核權限：單價與負責老師可編輯，沒有權限提示', async () => {
+    const { wrapper, vm } = await mountView()
+    vm.openCreate()
+    await nextTick()
+
+    expect(isDisabled(wrapper, 'input-teaching-unit-price')).toBe(false)
+    expect(isDisabled(wrapper, 'select-instructor-employee')).toBe(false)
+    expect(wrapper.find('[data-test="teaching-unit-price-approve-hint"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="teaching-bonus-approve-hint"]').exists()).toBe(false)
+  })
+
+  it('沒有金流簽核權限：兩個欄位 disabled，並說明原因與需要的權限', async () => {
+    permState.approve = false
+    const { wrapper, vm } = await mountView()
+    vm.openCreate()
+    await nextTick()
+
+    expect(isDisabled(wrapper, 'input-teaching-unit-price')).toBe(true)
+    expect(isDisabled(wrapper, 'select-instructor-employee')).toBe(true)
+    for (const hint of ['teaching-unit-price-approve-hint', 'teaching-bonus-approve-hint']) {
+      const text = wrapper.find(`[data-test="${hint}"]`).text()
+      expect(text).toContain('金流簽核')
+      expect(text).toContain('ACTIVITY_PAYMENT_APPROVE')
+    }
+  })
+
+  it('沒有簽核權限仍可編輯其他欄位：整包送回原值（後端值未變不擋）', async () => {
+    permState.approve = false
+    vi.mocked(updateCourse).mockResolvedValue({ data: { message: 'ok' } } as never)
+    const { vm } = await mountView()
+
+    vm.openEdit(sampleCourse)
+    await nextTick()
+    vm.form.name = '美術班（週三）'
+    await vm.handleSave()
+    await flushPromises()
+
+    expect(updateCourse).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ name: '美術班（週三）', teaching_unit_price: 60, instructor_employee_id: 7 }),
+    )
+  })
+
+  it('後端 403（金流簽核）：顯示後端 detail，對話框不關', async () => {
+    const detail = '教課教師獎勵金單價會直接影響教課教師獎勵金的金額或收款人，建立或變更需由具備『金流簽核』（ACTIVITY_PAYMENT_APPROVE）權限者執行'
+    vi.mocked(updateCourse).mockRejectedValue({ response: { status: 403, data: { detail } } })
+    const { vm } = await mountView()
+
+    vm.openEdit(sampleCourse)
+    await nextTick()
+    vm.form.teaching_unit_price = 99
+    await vm.handleSave()
+    await flushPromises()
+
+    expect(ElMessage.error).toHaveBeenCalledWith(detail)
   })
 })
