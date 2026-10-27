@@ -428,12 +428,21 @@ async function confirmBatchAction(action: 'admin_accept' | 'admin_waive'): Promi
       action,
       ...(remark ? { remark } : {}),
     })
-    const text = `已批次處理 ${res.data.processed} 件`
+    const processed = res.data.processed
     // 能不能復原只看後端回的 undoable_ids（取鎖後重讀、處理前為未確認的列）：原本就已處理的卡（員工自己或
     // 之前的處理）會被這次動作覆蓋，clear 清不回來，所以只要有一件如此就整批不給復原，只說明有幾件無法復原
     const followUp = confirmedFollowUp(res.data)
-    if (followUp.undoIds) showUndoToast({ text, attendanceIds: followUp.undoIds, onUndone: () => emit('resolved') })
-    else ElMessage.success(`${text}${followUp.note}`)
+    if (followUp.nothingProcessed) {
+      // 後端對已不存在／已變更／已封存的列靜默跳過回 200：一件都沒處理到就不能說成功（與單筆一致）
+      ElMessage.warning(`選取的 ${ids.length} 件都已不存在或已變更，沒有處理任何一件，請重新整理`)
+    } else {
+      const missing = ids.length - processed
+      const missingNote = missing > 0 ? `。另 ${missing} 件已不存在或已變更，請重新整理` : ''
+      const text = `已批次處理 ${processed} 件`
+      if (followUp.undoIds) showUndoToast({ text: `${text}${missingNote}`, attendanceIds: followUp.undoIds, onUndone: () => emit('resolved') })
+      else if (missing > 0) ElMessage.warning(`${text}${followUp.note}${missingNote}`)
+      else ElMessage.success(`${text}${followUp.note}`)
+    }
     clearSelection()
     emit('resolved')
   } catch (err) {

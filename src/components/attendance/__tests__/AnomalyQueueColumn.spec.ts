@@ -899,14 +899,42 @@ describe('AnomalyQueueColumn — 件數用語與封存名單變動（R27）', ()
     expect(wrapper.find('.anomaly-queue-column__selected-count').text()).toBe('已選 1 件')
   })
 
-  it('批次成功但實際處理 0 件（例如那幾件已被別人處理）：只顯示一般訊息，不出現帶復原鈕的提示', async () => {
+  it('批次成功但實際處理 0 件（例如那幾件已不存在或已變更）：改顯示警告請重新整理，不顯示成功、不出現復原提示', async () => {
     mockBatchConfirm.mockResolvedValue({ data: { processed: 0 } })
     const wrapper = mountQueue({})
     await boxesOf(wrapper)[0].setValue(true)
     await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
     await flushPromises()
     expect(mockShowUndo).not.toHaveBeenCalled()
-    expect(ElMessage.success).toHaveBeenCalledWith('已批次處理 0 件')
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith('選取的 1 件都已不存在或已變更，沒有處理任何一件，請重新整理')
     expect(wrapper.emitted('resolved')).toBeTruthy()
+  })
+
+  it('部分處理（processed 少於選取件數）、其餘不可復原：顯示警告並說明其餘件數已不存在或已變更', async () => {
+    mockBatchConfirm.mockResolvedValue({ data: { processed: 1, undoable_ids: [] } })
+    const wrapper = mountQueue({})
+    await wrapper.find('.anomaly-queue-column__select-all input[type="checkbox"]').setValue(true)
+    expect(wrapper.find('.anomaly-queue-column__selected-count').text()).toContain('已選 2 件')
+    await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
+    await flushPromises()
+    expect(mockShowUndo).not.toHaveBeenCalled()
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith('已批次處理 1 件。其中 1 件原本已有處理，無法復原。另 1 件已不存在或已變更，請重新整理')
+    expect(wrapper.emitted('resolved')).toBeTruthy()
+  })
+
+  it('部分處理但處理到的都可復原：仍給復原提示，文字說明其餘件數已不存在或已變更', async () => {
+    mockBatchConfirm.mockResolvedValue({ data: { processed: 1, undoable_ids: [cardLate.id] } })
+    const wrapper = mountQueue({})
+    await wrapper.find('.anomaly-queue-column__select-all input[type="checkbox"]').setValue(true)
+    await wrapper.findAll('.anomaly-queue-column__batch-bar button').find((b) => b.text().includes('批次接受扣款'))!.trigger('click')
+    await flushPromises()
+    expect(mockShowUndo).toHaveBeenCalledWith({
+      text: '已批次處理 1 件。另 1 件已不存在或已變更，請重新整理',
+      attendanceIds: [cardLate.id],
+      onUndone: expect.any(Function),
+    })
+    expect(ElMessage.success).not.toHaveBeenCalled()
   })
 })
