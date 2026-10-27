@@ -5,6 +5,8 @@ import type { ApiBody } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { hasPermission } from '@/utils/auth'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { useSettingsDirty } from './settingsDirty'
 import OvertimeBonusTab from './components/OvertimeBonusTab.vue'
 import FestivalBonusTab from './components/FestivalBonusTab.vue'
 import StandardSalaryTab from './components/StandardSalaryTab.vue'
@@ -74,6 +76,15 @@ const gradesLoadError = ref(false)
 const loadingGrades = ref(false)
 const gradeTargets = ref<Record<string, unknown>[]>([])
 
+// 載入／儲存成功後各自 snapshot；兩份資料分開載入，合在一起 snapshot 會在後到的那份
+// 載入時把使用者先改的值當成基準而漏報
+const { isDirty: bonusDirty, snapshot: snapshotBonus } = useFormDirty(bonusConfig)
+const { isDirty: gradesDirty, snapshot: snapshotGrades } = useFormDirty(() => ({ rows: gradeTargets.value }))
+const hasUnsaved = computed(
+  () => (bonusReady.value && bonusDirty.value) || (gradesReady.value && gradesDirty.value),
+)
+useSettingsDirty('超額／節慶獎金', () => hasUnsaved.value)
+
 const fetchBonusConfig = async () => {
   if (loadingBonus.value) return
   bonusReady.value = false
@@ -84,6 +95,7 @@ const fetchBonusConfig = async () => {
     const data = response.data as Record<string, unknown>
     Object.assign(bonusConfig, data)
     loadedFestivalToggles.value = pickFestivalRuleToggles(data)
+    snapshotBonus()
     bonusReady.value = true
   } catch (error) {
     bonusLoadError.value = true
@@ -104,6 +116,7 @@ const fetchGradeTargets = async () => {
       name,
       ...data,
     }))
+    snapshotGrades()
     gradesReady.value = true
   } catch (error) {
     gradesLoadError.value = true
@@ -194,7 +207,8 @@ const saveBonusConfig = async (): Promise<boolean> => {
   try {
     await updateBonusConfig(payload)
     loadedFestivalToggles.value = pickFestivalRuleToggles(bonusConfig)
-    ElMessage.success('薪資設定已儲存')
+    snapshotBonus()
+    ElMessage.success('獎金設定已儲存')
     return true
   } catch (error) {
     const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
@@ -220,6 +234,7 @@ const saveGradeTargets = async (): Promise<boolean> => {
       return updateGradeTargets(payload)
     })
     await Promise.all(updatePromises)
+    snapshotGrades()
     return true
   } catch (error) {
     ElMessage.error(friendlyError('年級目標儲存失敗', error))
@@ -231,7 +246,7 @@ const saveAllBonusSettings = async () => {
   // 防禦：按鈕已 disabled，但函式仍可能被直接呼叫（測試/程式化觸發），
   // 需與 UI gate 同一道防線，避免繞過 disabled 直接打到後端吃 403。
   if (!canSaveBonusSettings.value) {
-    ElMessage.warning('您沒有權限儲存薪資設定（需 SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE）')
+    ElMessage.warning('您沒有權限儲存獎金設定（需要「系統設定寫入」與「金流簽核」權限）')
     return
   }
   if (!bonusReady.value || !gradesReady.value || loadingBonus.value || loadingGrades.value) {
@@ -244,7 +259,7 @@ const saveAllBonusSettings = async () => {
     const bonusOk = await saveBonusConfig()
     if (!bonusOk) return
     const gradeOk = await saveGradeTargets()
-    if (gradeOk) ElMessage.success('所有薪資設定已儲存')
+    if (gradeOk) ElMessage.success('獎金設定與年級目標已儲存')
   } finally {
     loadingBonus.value = false
   }
@@ -262,8 +277,14 @@ onMounted(() => {
     <div v-if="bonusLoadError" role="alert">薪資設定載入失敗。<el-button @click="fetchBonusConfig">重試薪資設定</el-button></div>
     <div v-if="gradesLoadError" role="alert">年級目標載入失敗。<el-button @click="fetchGradeTargets">重試年級目標</el-button></div>
     <div class="bonus-actions">
+      <!-- 這顆只存「超額獎金」「節慶獎金」兩個分頁（含年級目標）；職位標準底薪有自己的儲存鈕，
+           職稱等級對應改了就立即生效。原本寫「儲存所有薪資設定」會讓人以為底薪也一起存了。 -->
+      <span class="bonus-actions__scope">
+        <span v-if="hasUnsaved" class="bonus-actions__dirty" role="status">有未儲存的變更</span>
+        適用「超額獎金」「節慶獎金」分頁
+      </span>
       <el-tooltip
-        content="需要「系統設定寫入」與「金流簽核」權限（SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE）"
+        content="需要「系統設定寫入」與「金流簽核」權限，請聯絡管理員開通"
         :disabled="canSaveBonusSettings"
         placement="top"
       >
@@ -273,7 +294,7 @@ onMounted(() => {
             size="large"
             :disabled="!canSaveBonusSettings || !bonusReady || !gradesReady || loadingBonus || loadingGrades"
             @click="saveAllBonusSettings"
-          >儲存所有薪資設定</el-button>
+          >儲存獎金設定</el-button>
         </span>
       </el-tooltip>
     </div>
@@ -309,7 +330,19 @@ onMounted(() => {
    scoped style，此處只留父層自己模板（外部儲存按鈕列）仍在用的 class。
    .kv-row / .unit-hint 在拆分前就已無任何模板引用（dead code），一併移除。 */
 .bonus-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
   margin-bottom: var(--space-4);
-  text-align: right;
+}
+.bonus-actions__scope {
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
+}
+.bonus-actions__dirty {
+  color: var(--color-warning-darker);
+  font-weight: 600;
+  margin-right: var(--space-2);
 }
 </style>

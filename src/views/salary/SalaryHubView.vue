@@ -148,7 +148,7 @@ const exportQualificationChecklist = async () => {
 const allLinks = [
     { path: '/salary/history', title: '薪資總覽與歷史', desc: '全員月度對帳、個人歷史與快照' },
     { path: '/salary/simulate', title: '薪資試算', desc: '人事談薪情境試算（不寫入）' },
-    { path: '/salary/settings', title: '薪資設定', desc: '獎金規則、才藝老師、系統參數' },
+    { path: '/salary/settings', title: '薪資設定', desc: '獎金規則、才藝老師、銀行轉帳' },
     { path: '/salary/recruitment-bonus', title: '招生獎金', desc: '個人招生獎勵核算與結算轉帳', fullSalaryOnly: true },
     { path: '/salary/growth-contract', title: '自主成長獎勵金', desc: '研習時數登記、學年結算與每年 8 月發放', fullSalaryOnly: true },
     { path: '/salary/returning-class-bonus', title: '舊生註冊／預繳獎金', desc: '逐班舊生註冊率與預繳 100% 達標結算', fullSalaryOnly: true },

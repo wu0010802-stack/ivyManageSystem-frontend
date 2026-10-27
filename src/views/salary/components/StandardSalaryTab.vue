@@ -5,6 +5,8 @@
 // 決定：只有父層通過權限檢查渲染整個面板時，本元件才會 mount 並觸發 fetch，
 // 與拆分前「父層 onMounted 內以 canReadSalarySettings 守衛才 fetch」等效。
 import { reactive, ref, onMounted } from 'vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { useSettingsDirty } from '../settingsDirty'
 import { getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -34,6 +36,9 @@ const positionSalary = reactive({
   principal: null,
 })
 const loadingPositionSalary = ref(false)
+const positionSalaryLoaded = ref(false)
+const { isDirty: positionDirty, snapshot: snapshotPosition } = useFormDirty(positionSalary)
+useSettingsDirty('職位標準底薪', () => positionSalaryLoaded.value && positionDirty.value)
 const compareRows = ref<Record<string, unknown>[]>([])
 const compareOutOfSync = ref(0)
 const loadingCompare = ref(false)
@@ -53,6 +58,8 @@ const fetchPositionSalary = async () => {
   try {
     const response = await getPositionSalary()
     Object.assign(positionSalary, response.data)
+    snapshotPosition()
+    positionSalaryLoaded.value = true
   } catch (error) {
     ElMessage.error(friendlyError('職位底薪設定載入失敗', error))
   } finally {
@@ -64,6 +71,7 @@ const savePositionSalary = async () => {
   loadingPositionSalary.value = true
   try {
     const res = await updatePositionSalary(positionSalary)
+    snapshotPosition()
     ElMessage.success('職位標準底薪設定已儲存')
     // #61：低於該年度基本工資只示警不擋儲存（基本工資調升時既有標準可能整批落後）
     const belowNotice = describeBelowMinimumWage(pickBelowMinimumWage(res?.data), STANDARD_KEY_LABEL)
@@ -270,7 +278,8 @@ onMounted(() => {
       改在員工資料填個人底薪並開啟「個人合約底薪」。
     </p>
 
-    <div class="mt-4" style="text-align: right">
+    <div class="mt-4 position-save-row">
+      <span v-if="positionSalaryLoaded && positionDirty" class="unsaved-hint" role="status">有未儲存的變更</span>
       <el-button type="primary" @click="savePositionSalary">儲存職位底薪設定</el-button>
     </div>
 
@@ -381,4 +390,15 @@ onMounted(() => {
 .mt-4 { margin-top: var(--space-4); }
 /* .mb-4（用於上方 el-row）在原檔亦無對應規則定義，屬既有 dead class 引用，
    拆分時保留原樣不新增，避免引入視覺差異 */
+.position-save-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+.unsaved-hint {
+  color: var(--color-warning-darker);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
 </style>

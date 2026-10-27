@@ -20,6 +20,7 @@ import {
 import type { ApiBody, Schema } from '@/api/_generated/typed'
 import { useFestivalPayoutSettings } from '@/composables/useFestivalPayoutSettings'
 import { festivalPayoutMonthsText } from './festivalCoverage'
+import { useSettingsDirty } from './settingsDirty'
 import {
   MANUAL_ENTRY_TYPE_OPTIONS,
   isValidYearMonth,
@@ -44,6 +45,11 @@ const canWriteCarry = computed(() => canViewCarry.value && hasPermission('SALARY
 const { settings, loading: settingsLoading, load: loadSettings } = useFestivalPayoutSettings()
 const savingKey = ref<FestivalConfigKey | null>(null)
 const earlyFromDraft = ref<string>('')
+// 生效年月是「選好再按儲存」的草稿，切走頁籤就會消失
+useSettingsDirty(
+  '節慶隨前月發放生效年月',
+  () => Boolean(earlyFromDraft.value) && earlyFromDraft.value !== (settings.value?.early_payout_from_ym ?? ''),
+)
 
 const thisYear = new Date().getFullYear()
 const payoutMonthsPreview = computed(() => {

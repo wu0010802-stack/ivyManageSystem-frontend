@@ -8,6 +8,7 @@ import {
   updateSystemConfig,
 } from '@/api/systemConfig'
 import { hasPermission } from '@/utils/auth'
+import { useSettingsDirty } from './settingsDirty'
 
 interface BankConfig {
   config_key: string
@@ -24,6 +25,7 @@ const canEdit = ref(hasPermission('SETTINGS_WRITE'))
 const bankConfigs = ref<BankConfig[]>([])
 const loading = ref(false)
 const savingKey = ref<string | null>(null)
+useSettingsDirty('銀行轉帳設定', () => bankConfigs.value.some((c) => c._dirty))
 
 const fetchBankConfigs = async () => {
   loading.value = true
@@ -91,12 +93,9 @@ onMounted(() => {
         <el-table-column label="項目" width="280">
           <template #default="{ row }">
             <div>
-              <b>{{ row.description || row.config_key }}</b>
-              <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 2px;">
-                <code>{{ row.config_key }}</code>
-                <el-tag v-if="row.is_default" type="info" size="small" style="margin-left: 6px;">
-                  預設值（未存 DB）
-                </el-tag>
+              <b :title="row.config_key">{{ row.description || '未命名設定' }}</b>
+              <div v-if="row.is_default" class="row-meta">
+                <el-tag type="info" size="small">尚未設定，使用內建預設值</el-tag>
               </div>
             </div>
           </template>
@@ -138,7 +137,7 @@ onMounted(() => {
         :closable="false"
         show-icon
         style="margin-top: 16px;"
-        title="目前帳號無系統設定編輯權限（SETTINGS_WRITE）；如需修改請聯絡管理員。"
+        title="目前帳號沒有修改系統設定的權限；如需修改請聯絡管理員。"
       />
     </el-card>
   </div>
@@ -151,10 +150,7 @@ onMounted(() => {
   display: block;
   line-height: 1.5;
 }
-code {
-  background: var(--el-fill-color-light);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 12px;
+.row-meta {
+  margin-top: 2px;
 }
 </style>
