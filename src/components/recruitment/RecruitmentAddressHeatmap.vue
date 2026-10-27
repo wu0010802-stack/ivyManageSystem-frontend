@@ -114,6 +114,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 // kiang 前端查詢已移除，所有資料由 nearby-kindergartens API 一次回傳
 import { syncKiangData } from '@/api/recruitment'
 import { sanitizeHref } from '@/utils/url'
+import { escapeHtml } from '@/utils/html'
 import type { NearbySchool } from '@/types/recruitmentHeatmap'
 import { DEFAULT_SCHOOL_STYLE, getSchoolType, getSchoolTypeStyle } from '@/utils/recruitmentSchoolType'
 import { useGovKindergartenSync } from '@/composables/useGovKindergartenSync'
@@ -549,13 +550,6 @@ const ensureGoogleMaps = async () => {
 
 // onSetCampusSelect／toggleGovData／starClass／sqmToPing 已隨「設為本園中心點」select 與
 // 政府登錄詳情面板一併拆到 RecruitmentNearbySchoolList / RecruitmentSchoolGovDetail。
-
-const escapeHtml = (text: unknown) => String(text ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;')
 
 const clearGoogleOverlays = () => {
   googleOverlays.forEach((overlay) => {

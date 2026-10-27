@@ -11,12 +11,12 @@
     <div v-if="isBatch" class="so-batch-list">
       <div class="so-batch-list__header">
         已選取 {{ records!.length }} 筆待簽收
-        <span class="so-batch-list__total">合計 {{ formatMoney(batchTotal) }}</span>
+        <span class="so-batch-list__total">合計 {{ formatCurrency(batchTotal) }}</span>
       </div>
       <ul class="so-batch-list__items">
         <li v-for="r in records" :key="r.id">
           <span class="so-batch-list__party">{{ r.partyName }}</span>
-          <span class="so-batch-list__amount">{{ formatMoney(r.amount) }}</span>
+          <span class="so-batch-list__amount">{{ formatCurrency(r.amount) }}</span>
         </li>
       </ul>
     </div>
@@ -128,7 +128,6 @@ const batchTotal = computed(() => (props.records ?? []).reduce((sum, r) => sum +
 const dialogTitle = computed(() =>
   isBatch.value ? `批次簽收（${props.records!.length} 筆）` : props.config.texts.signTitle,
 )
-const formatMoney = (value: number) => formatCurrency(value)
 
 const visible = ref(props.modelValue)
 watch(
