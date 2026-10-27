@@ -43,6 +43,10 @@ type PanelVm = {
   teachingExtraSessionsPerUnit: number | null
   promoterPriceOverrides: Record<number, number | null>
   afterClassAwardMinSessions: number | null
+  activityRuleToggles: Record<string, boolean | null>
+  teachingExcludedEmployeeIds: number[]
+  teachingPayrollStaffIds: number[]
+  teachingListsLoaded: boolean
   clearAllGradeThresholds: () => void
   addAfterClassAwardRow: () => void
   removeAfterClassAwardRow: (i: number) => void
@@ -88,6 +92,11 @@ const FULL_BONUS_CONFIG_RESPONSE = {
   dividend_activity_min_sessions: 16,
   teaching_extra_unit_price: 70,
   teaching_extra_sessions_per_unit: 5,
+  // yhrulea01：後端 get_bonus_config 一律回布林與名單（名單未設時為 null）
+  teaching_extra_excluded_employee_ids: [7],
+  teaching_extra_payroll_staff_ids: [9],
+  teaching_extra_admin_half_rule: true,
+  after_class_award_midterm_rule: false,
   late_deduction_per_time: 50,
   missing_punch_deduction_per_time: 50,
   personal_leave_deduction_per_day: 500,
@@ -497,6 +506,151 @@ describe('YearEndRulesPanel', () => {
       >
       expect(payload.teaching_extra_unit_price).toBeNull()
       expect(payload.teaching_extra_sessions_per_unit).toBeNull()
+    })
+  })
+
+  // yhrulea01（義華 2026-10-27）：教課獎勵排除／核算薪資名單、未帶班減半、推動獎中途規則
+  describe('yhrulea01 才藝獎勵規則', () => {
+    async function saveAndGetPayload(
+      configData: Record<string, unknown>,
+      mutate?: (vm: PanelVm) => void,
+    ): Promise<{ vm: PanelVm; payload: Record<string, unknown> }> {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({ data: configData } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+      mutate?.(vm)
+      await nextTick()
+      await vm.saveRules()
+      const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
+        string,
+        unknown
+      >
+      return { vm, payload }
+    }
+
+    it('load: 後端回傳的開關與兩份名單帶入表單', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.activityRuleToggles).toEqual({
+        teaching_extra_admin_half_rule: true,
+        after_class_award_midterm_rule: false,
+      })
+      expect(vm.teachingExcludedEmployeeIds).toEqual([7])
+      expect(vm.teachingPayrollStaffIds).toEqual([9])
+      expect(vm.teachingListsLoaded).toBe(true)
+    })
+
+    it('load: 新後端名單為 null（尚未設定）→ 視為空名單，仍算已載入', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: {
+          ...FULL_BONUS_CONFIG_RESPONSE,
+          teaching_extra_excluded_employee_ids: null,
+          teaching_extra_payroll_staff_ids: null,
+        },
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.teachingExcludedEmployeeIds).toEqual([])
+      expect(vm.teachingPayrollStaffIds).toEqual([])
+      expect(vm.teachingListsLoaded).toBe(true)
+    })
+
+    it('save: 開關與名單隨 payload 送出（round-trip）', async () => {
+      const { payload } = await saveAndGetPayload(FULL_BONUS_CONFIG_RESPONSE)
+
+      expect(payload.teaching_extra_admin_half_rule).toBe(true)
+      expect(payload.after_class_award_midterm_rule).toBe(false)
+      expect(payload.teaching_extra_excluded_employee_ids).toEqual([7])
+      expect(payload.teaching_extra_payroll_staff_ids).toEqual([9])
+    })
+
+    it('save: 改過的開關與名單送出新值，清空名單送 []（才會真的清掉）', async () => {
+      const { payload } = await saveAndGetPayload(FULL_BONUS_CONFIG_RESPONSE, (vm) => {
+        vm.activityRuleToggles.after_class_award_midterm_rule = true
+        vm.activityRuleToggles.teaching_extra_admin_half_rule = false
+        vm.teachingExcludedEmployeeIds = []
+        vm.teachingPayrollStaffIds = [7, 9]
+      })
+
+      expect(payload.after_class_award_midterm_rule).toBe(true)
+      expect(payload.teaching_extra_admin_half_rule).toBe(false)
+      expect(payload.teaching_extra_excluded_employee_ids).toEqual([])
+      expect(payload.teaching_extra_payroll_staff_ids).toEqual([7, 9])
+    })
+
+    it('save: 舊後端沒回這些欄位 → 開關與名單全送 null，不把租戶設定洗成關閉／空', async () => {
+      const legacy: Record<string, unknown> = { ...FULL_BONUS_CONFIG_RESPONSE }
+      delete legacy.teaching_extra_excluded_employee_ids
+      delete legacy.teaching_extra_payroll_staff_ids
+      delete legacy.teaching_extra_admin_half_rule
+      delete legacy.after_class_award_midterm_rule
+
+      const { vm, payload } = await saveAndGetPayload(legacy)
+
+      expect(vm.teachingListsLoaded).toBe(false)
+      expect(payload.teaching_extra_admin_half_rule).toBeNull()
+      expect(payload.after_class_award_midterm_rule).toBeNull()
+      expect(payload.teaching_extra_excluded_employee_ids).toBeNull()
+      expect(payload.teaching_extra_payroll_staff_ids).toBeNull()
+    })
+
+    it('畫面：推動獎卡與教課獎勵卡各有自己的開關列，沿用開／關單選而非 el-switch', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+
+      // 共用的 mountPanel 把 el-card／el-form-item 做成不渲染 slot 的 stub，這裡要看卡片內容
+      const slotStub = { template: '<div><slot /></div>' }
+      const wrapper = mount(YearEndRulesPanel, {
+        global: {
+          stubs: {
+            'el-card': slotStub,
+            'el-form-item': slotStub,
+            'el-radio-group': slotStub,
+            'el-radio-button': slotStub,
+            'el-button': true,
+            'el-alert': true,
+            'el-divider': true,
+            'el-empty': true,
+            'el-row': slotStub,
+            'el-col': slotStub,
+            'el-input': true,
+            'el-input-number': true,
+            'el-select': true,
+            'el-option': true,
+            'el-tooltip': slotStub,
+          },
+        },
+      })
+      await nextTick()
+      await nextTick()
+
+      const midterm = wrapper.find('[data-testid="activity-rule-after_class_award_midterm_rule"]')
+      const adminHalf = wrapper.find('[data-testid="activity-rule-teaching_extra_admin_half_rule"]')
+      expect(midterm.exists()).toBe(true)
+      expect(adminHalf.exists()).toBe(true)
+      expect(midterm.text()).toContain('班導中途離職／接任不保障')
+      expect(adminHalf.text()).toContain('未帶班行政教課獎勵減半')
+      expect(wrapper.html()).not.toContain('el-switch')
+      expect(wrapper.find('[data-test="select-teaching-excluded"]').exists()).toBe(true)
+      expect(wrapper.find('[data-test="select-teaching-payroll-staff"]').exists()).toBe(true)
+      // 開／關各一顆，且每個開關列都有（開啟、關閉）兩個選項
+      expect(midterm.text()).toContain('開啟')
+      expect(midterm.text()).toContain('關閉')
     })
   })
 

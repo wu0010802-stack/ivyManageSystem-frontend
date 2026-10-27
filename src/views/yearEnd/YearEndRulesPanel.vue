@@ -18,6 +18,14 @@ import {
   gradeThresholdsToApi,
   type GradeThresholdPercents,
 } from '@/utils/dividendActivityThresholds'
+import {
+  ACTIVITY_RULE_TOGGLES,
+  emptyActivityRuleToggles,
+  parseEmployeeIdList,
+  pickActivityRuleToggles,
+  type ActivityRuleToggleDef,
+  type ActivityRuleToggleValues,
+} from './activityRuleToggles'
 
 const loading = ref(false)
 const canRead = computed(() => hasPermission('SETTINGS_READ'))
@@ -86,6 +94,16 @@ const dividendActivityMinSessions = ref<number | null>(null)
 const teachingExtraUnitPrice = ref<number | null>(null)
 const teachingExtraSessionsPerUnit = ref<number | null>(null)
 
+// 才藝獎勵規則（yhrulea01）：兩個開關初值 null＝未載入／不異動，不讓前端預設值悄悄把租戶設定改成 false。
+const activityRuleToggles = reactive<ActivityRuleToggleValues>(emptyActivityRuleToggles())
+const togglesFor = (section: ActivityRuleToggleDef['section']) =>
+  ACTIVITY_RULE_TOGGLES.filter((def) => def.section === section)
+// 教課獎勵排除名單（全職才藝老師）、負責核算薪資的同事名單。
+const teachingExcludedEmployeeIds = ref<number[]>([])
+const teachingPayrollStaffIds = ref<number[]>([])
+// GET 沒回這兩份名單（舊後端／載入失敗）時為 false：儲存時不送出，避免把租戶既有名單洗成空。
+const teachingListsLoaded = ref(false)
+
 const clearAllGradeThresholds = () => {
   Object.assign(gradeThresholdPercents, emptyGradeThresholdPercents())
 }
@@ -148,6 +166,14 @@ const fetchRules = async () => {
     const teachingSessionsRaw = data.teaching_extra_sessions_per_unit
     teachingExtraSessionsPerUnit.value =
       typeof teachingSessionsRaw === 'number' ? teachingSessionsRaw : null
+
+    // 才藝獎勵規則（yhrulea01）：開關與名單欄位同樣容錯，缺欄位視為未載入而非「關閉／空名單」
+    Object.assign(activityRuleToggles, pickActivityRuleToggles(data))
+    const excludedIds = parseEmployeeIdList(data.teaching_extra_excluded_employee_ids)
+    const payrollStaffIds = parseEmployeeIdList(data.teaching_extra_payroll_staff_ids)
+    teachingListsLoaded.value = excludedIds !== null && payrollStaffIds !== null
+    teachingExcludedEmployeeIds.value = excludedIds ?? []
+    teachingPayrollStaffIds.value = payrollStaffIds ?? []
   } catch (e) {
     ElMessage.error(friendlyError('年終規則載入失敗', e))
   } finally {
@@ -223,6 +249,14 @@ const saveRules = async () => {
     // G8：留空＝null＝沿用後端預設（65 元／4 堂）
     teaching_extra_unit_price: teachingExtraUnitPrice.value,
     teaching_extra_sessions_per_unit: teachingExtraSessionsPerUnit.value,
+    // 才藝獎勵規則：開關 null＝不變更；名單未載入時送 null 保留後端原值，空陣列＝清空
+    ...activityRuleToggles,
+    teaching_extra_excluded_employee_ids: teachingListsLoaded.value
+      ? [...teachingExcludedEmployeeIds.value]
+      : null,
+    teaching_extra_payroll_staff_ids: teachingListsLoaded.value
+      ? [...teachingPayrollStaffIds.value]
+      : null,
     reason,
   }
 
@@ -380,6 +414,29 @@ onMounted(() => {
           <span class="unit-hint">元 / 人次</span>
         </div>
       </template>
+
+      <el-divider />
+      <div
+        v-for="t in togglesFor('promo')"
+        :key="t.key"
+        class="rule-toggle-row"
+        :data-testid="`activity-rule-${t.key}`"
+      >
+        <div class="rule-toggle-row__text">
+          <div class="rule-toggle-row__label">{{ t.label }}</div>
+          <div class="desc-text rule-toggle-row__hint">{{ t.hint }}</div>
+        </div>
+        <!-- null＝未載入（不送出），el-radio-group 不收 null，以 undefined 呈現「未選」 -->
+        <el-radio-group
+          :model-value="activityRuleToggles[t.key] ?? undefined"
+          :aria-label="t.label"
+          size="small"
+          @update:model-value="(v) => (activityRuleToggles[t.key] = v === true)"
+        >
+          <el-radio-button :value="true">開啟</el-radio-button>
+          <el-radio-button :value="false">關閉</el-radio-button>
+        </el-radio-group>
+      </div>
     </el-card>
 
     <!-- ⑥ 教課獎勵（②③ 為既有編號跳號留白，避免與其他意涵混淆改用下一個未用序號） -->
@@ -414,6 +471,73 @@ onMounted(() => {
           </el-form-item>
         </el-col>
       </el-row>
+      <p class="desc-text">
+        每門課的單價可在才藝課程表單個別設定（「教課獎勵單價」），空白＝沿用這裡的全域單價。
+      </p>
+
+      <el-divider />
+      <el-form-item label="排除名單（全職才藝老師）">
+        <el-select
+          v-model="teachingExcludedEmployeeIds"
+          multiple
+          filterable
+          clearable
+          placeholder="選擇不計教課獎勵金的員工（留空＝不排除）"
+          style="width: 100%"
+          data-test="select-teaching-excluded"
+        >
+          <el-option
+            v-for="emp in employeeOptions"
+            :key="emp.id"
+            :label="String(emp.name)"
+            :value="emp.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="負責核算薪資的同事">
+        <el-select
+          v-model="teachingPayrollStaffIds"
+          multiple
+          filterable
+          clearable
+          placeholder="選擇負責核算薪資的同事（未帶班減半規則用）"
+          style="width: 100%"
+          data-test="select-teaching-payroll-staff"
+        >
+          <el-option
+            v-for="emp in employeeOptions"
+            :key="emp.id"
+            :label="String(emp.name)"
+            :value="emp.id"
+          />
+        </el-select>
+      </el-form-item>
+      <p class="desc-text">
+        名單內的員工不計教課獎勵金。「負責核算薪資的同事」在未帶班減半規則下第 1 門全額、第 2 門起減半，
+        其他未帶班者第 1、2 門全額、第 3 門起減半；只有開啟下方的減半規則才會用到這份名單。
+      </p>
+
+      <el-divider />
+      <div
+        v-for="t in togglesFor('teaching')"
+        :key="t.key"
+        class="rule-toggle-row"
+        :data-testid="`activity-rule-${t.key}`"
+      >
+        <div class="rule-toggle-row__text">
+          <div class="rule-toggle-row__label">{{ t.label }}</div>
+          <div class="desc-text rule-toggle-row__hint">{{ t.hint }}</div>
+        </div>
+        <el-radio-group
+          :model-value="activityRuleToggles[t.key] ?? undefined"
+          :aria-label="t.label"
+          size="small"
+          @update:model-value="(v) => (activityRuleToggles[t.key] = v === true)"
+        >
+          <el-radio-button :value="true">開啟</el-radio-button>
+          <el-radio-button :value="false">關閉</el-radio-button>
+        </el-radio-group>
+      </div>
     </el-card>
 
     <!-- ④ 學期紅利 -->
@@ -610,4 +734,14 @@ onMounted(() => {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
+.rule-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2, 8px) 0;
+}
+.rule-toggle-row__text { flex: 1 1 auto; min-width: 0; }
+.rule-toggle-row__label { font-weight: 600; }
+.rule-toggle-row__hint { margin-bottom: 0; }
 </style>
