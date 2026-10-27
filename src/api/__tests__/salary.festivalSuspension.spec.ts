@@ -43,8 +43,17 @@ describe('節慶停課月登記 API', () => {
     expect(api.put).toHaveBeenCalledWith('/salaries/festival-suspensions/5', { suspended_days: 3, reason: null })
   })
 
-  it('刪除：DELETE /salaries/festival-suspensions/{id}', () => {
+  it('刪除：DELETE /salaries/festival-suspensions/{id}，不需原因時不帶 query', () => {
     deleteFestivalSuspension(5)
     expect(api.delete).toHaveBeenCalledWith('/salaries/festival-suspensions/5')
+    deleteFestivalSuspension(5, '   ')
+    expect(api.delete).toHaveBeenLastCalledWith('/salaries/festival-suspensions/5')
+  })
+
+  it('刪除全園或 >=10 日的登記：原因去頭尾空白後走 query reason', () => {
+    deleteFestivalSuspension(5, '  颱風停課取消，改為正常上課  ')
+    expect(api.delete).toHaveBeenCalledWith('/salaries/festival-suspensions/5', {
+      params: { reason: '颱風停課取消，改為正常上課' },
+    })
   })
 })

@@ -6,6 +6,9 @@
 /** 規章：停課日（含假日）達此日數即停發；與後端 SUSPENSION_DAYS_THRESHOLD 一致，僅供說明文字。 */
 export const SUSPENSION_DAYS_THRESHOLD = 10
 
+/** 全園停課或停課日數達門檻的登記，建立／修改／刪除都要寫明原因（去空白後至少此字數）；對齊後端。 */
+export const MIN_TRIGGER_REASON_LENGTH = 10
+
 export function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate()
 }
@@ -70,4 +73,32 @@ export function decisionHeadline(decision: DecisionLike): { type: HeadlineType; 
     return { type: 'warning', text: `${decision.classes.length} 個班級會停發節慶獎金` }
   }
   return { type: 'success', text: '這個月沒有班級會被停發' }
+}
+
+/** 這筆登記是否會讓節慶獎金停發：全園一律算（不論日數），班級看日數門檻。 */
+export function isTriggerRegistration(schoolWide: boolean, days: number | null | undefined): boolean {
+  return schoolWide || (days ?? 0) >= SUSPENSION_DAYS_THRESHOLD
+}
+
+/**
+ * 儲存時原因是否必填。新增只看新值；修改改前或改後任一邊會停發都要
+ * （10 日改成 5 日也是在恢復發放）。
+ */
+export function reasonRequiredForSave(args: {
+  schoolWide: boolean
+  /** 修改時的原日數；新增不帶 */
+  beforeDays?: number | null
+  afterDays: number | null | undefined
+}): boolean {
+  if (isTriggerRegistration(args.schoolWide, args.afterDays)) return true
+  return args.beforeDays !== undefined && isTriggerRegistration(args.schoolWide, args.beforeDays)
+}
+
+/** 對齊後端 422：去除空白後不足字數回說明，足夠回 null。 */
+export function validateTriggerReason(reason: string | null | undefined, action: '登記' | '修改' | '刪除'): string | null {
+  if ((reason ?? '').trim().length >= MIN_TRIGGER_REASON_LENGTH) return null
+  return (
+    `全園停課或停課日數達 ${SUSPENSION_DAYS_THRESHOLD} 日以上會影響節慶獎金，` +
+    `${action}須填寫原因／公告依據（去除空白後至少 ${MIN_TRIGGER_REASON_LENGTH} 字）`
+  )
 }

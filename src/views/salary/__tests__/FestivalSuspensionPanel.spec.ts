@@ -17,7 +17,7 @@ vi.mock('element-plus', async (importOriginal) => {
   return {
     ...actual,
     ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
-    ElMessageBox: { confirm: vi.fn() },
+    ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() },
   }
 })
 
@@ -63,6 +63,19 @@ const ITEM_SCHOOL = {
   created_by: 'hr01',
   updated_at: null,
 }
+const ITEM_SMALL = {
+  id: 13,
+  year: 2026,
+  month: 9,
+  classroom_id: 4,
+  classroom_name: '小熊班',
+  suspended_days: 3,
+  reason: null,
+  triggers_suspension: false,
+  created_by: 'hr01',
+  updated_at: null,
+}
+const GOOD_REASON = '颱風停課公告 115-09 號'
 const DECISION = {
   year: 2026,
   month: 9,
@@ -289,7 +302,7 @@ describe('FestivalSuspensionPanel', () => {
       vm.openCreate()
       vm.form.scope = 4
       vm.form.suspended_days = 12
-      vm.form.reason = ' 颱風 '
+      vm.form.reason = `  ${GOOD_REASON}  `
 
       await vm.submit()
       await flushPromises()
@@ -299,14 +312,14 @@ describe('FestivalSuspensionPanel', () => {
         month: vm.month,
         classroom_id: 4,
         suspended_days: 12,
-        reason: '颱風',
+        reason: GOOD_REASON,
       })
       expect(ElMessage.success).toHaveBeenCalledWith('已登記')
       expect(vm.dialogVisible).toBe(false)
       expect(api.listFestivalSuspensions).toHaveBeenCalledTimes(2)
     })
 
-    it('登記全園：classroom_id 送 null，空白原因送 null', async () => {
+    it('登記全園：classroom_id 送 null，原因必填', async () => {
       vi.mocked(api.createFestivalSuspension).mockResolvedValue({
         data: { message: '已登記', item: ITEM_SCHOOL, stale: NO_STALE },
       } as never)
@@ -314,13 +327,88 @@ describe('FestivalSuspensionPanel', () => {
       vm.openCreate()
       vm.form.scope = 'school'
       vm.form.suspended_days = 5
-      vm.form.reason = '   '
+      vm.form.reason = GOOD_REASON
 
       await vm.submit()
 
       expect(api.createFestivalSuspension).toHaveBeenCalledWith(
-        expect.objectContaining({ classroom_id: null, suspended_days: 5, reason: null }),
+        expect.objectContaining({ classroom_id: null, suspended_days: 5, reason: GOOD_REASON }),
       )
+    })
+
+    it('登記未達門檻的班級：原因可以不填，空白原因送 null', async () => {
+      vi.mocked(api.createFestivalSuspension).mockResolvedValue({
+        data: { message: '已登記', item: ITEM_SMALL, stale: NO_STALE },
+      } as never)
+      const { vm } = await mountPanel()
+      vm.openCreate()
+      vm.form.scope = 4
+      vm.form.suspended_days = 9
+      vm.form.reason = '   '
+      expect(vm.reasonRequired).toBe(false)
+
+      await vm.submit()
+
+      expect(api.createFestivalSuspension).toHaveBeenCalledWith(
+        expect.objectContaining({ classroom_id: 4, suspended_days: 9, reason: null }),
+      )
+    })
+
+    it('全園或班級日數 >=10：原因必填，畫面標必填並說明；不足 10 字擋下不打 API', async () => {
+      const { wrapper, vm } = await mountPanel()
+      vm.openCreate()
+      vm.form.scope = 4
+      vm.form.suspended_days = 10
+      await flushPromises()
+
+      expect(vm.reasonRequired).toBe(true)
+      expect(wrapper.find('[data-test="reason-required-hint"]').text()).toContain('至少 10 字')
+
+      for (const bad of ['', '   ', '颱風停課', '一二三四五六七八九', '  一二三四五  ']) {
+        vm.form.reason = bad
+        await vm.submit()
+        expect(vm.formError).toContain('至少 10 字')
+        expect(vm.formError).toContain('登記')
+      }
+      expect(api.createFestivalSuspension).not.toHaveBeenCalled()
+
+      vm.form.scope = 'school'
+      vm.form.suspended_days = 0
+      expect(vm.reasonRequired).toBe(true)
+      vm.form.reason = ''
+      await vm.submit()
+      expect(api.createFestivalSuspension).not.toHaveBeenCalled()
+    })
+
+    it('日數降到 <10 的班級登記，不再顯示必填說明', async () => {
+      const { wrapper, vm } = await mountPanel()
+      vm.openCreate()
+      vm.form.scope = 4
+      vm.form.suspended_days = 9
+      await flushPromises()
+
+      expect(vm.reasonRequired).toBe(false)
+      expect(wrapper.find('[data-test="reason-required-hint"]').exists()).toBe(false)
+    })
+
+    it('後端 422（例如原因被判不足）：顯示後端訊息、對話框保留', async () => {
+      vi.mocked(api.createFestivalSuspension).mockRejectedValue({
+        response: {
+          status: 422,
+          data: { detail: '全園停課或停課日數達 10 日以上會影響節慶獎金，登記須填寫原因／公告依據（去除空白後至少 10 字）' },
+        },
+      })
+      const { vm } = await mountPanel()
+      vm.openCreate()
+      vm.form.scope = 3
+      vm.form.suspended_days = 12
+      vm.form.reason = GOOD_REASON
+
+      await vm.submit()
+      await flushPromises()
+
+      expect(vi.mocked(ElMessage.error).mock.calls[0][0] as string).toContain('須填寫原因')
+      expect(vm.dialogVisible).toBe(true)
     })
 
     it('規則已開啟、有薪資被標待重算：另外警告要重算，並講年終草稿編號', async () => {
@@ -335,6 +423,7 @@ describe('FestivalSuspensionPanel', () => {
       vm.openCreate()
       vm.form.scope = 3
       vm.form.suspended_days = 12
+      vm.form.reason = GOOD_REASON
 
       await vm.submit()
 
@@ -362,6 +451,7 @@ describe('FestivalSuspensionPanel', () => {
       vm.openCreate()
       vm.form.scope = 3
       vm.form.suspended_days = 30
+      vm.form.reason = GOOD_REASON
 
       await vm.submit()
 
@@ -388,6 +478,7 @@ describe('FestivalSuspensionPanel', () => {
       vm.openCreate()
       vm.form.scope = 3
       vm.form.suspended_days = 12
+      vm.form.reason = GOOD_REASON
 
       await vm.submit()
       await flushPromises()
@@ -424,46 +515,130 @@ describe('FestivalSuspensionPanel', () => {
       expect(wrapper.find('[data-test="scope-select"]').exists()).toBe(false)
       expect(wrapper.find('[data-test="dialog"]').text()).toContain('向日葵班')
 
-      vm.form.suspended_days = 8
-      vm.form.reason = ''
+      vm.form.suspended_days = 14
+      vm.form.reason = '  颱風延長停課，公告 115-09-2  '
       await vm.submit()
       await flushPromises()
 
-      expect(api.updateFestivalSuspension).toHaveBeenCalledWith(11, { suspended_days: 8, reason: null })
+      expect(api.updateFestivalSuspension).toHaveBeenCalledWith(11, {
+        suspended_days: 14,
+        reason: '颱風延長停課，公告 115-09-2',
+      })
       expect(api.createFestivalSuspension).not.toHaveBeenCalled()
       expect(ElMessage.success).toHaveBeenCalledWith('已更新')
     })
 
-    it('全園列編輯時，scope 帶回全園', async () => {
+    it('原本 >=10 日改成 <10：改前會停發，仍要寫原因（恢復發放也要留依據）', async () => {
+      const { vm } = await mountPanel()
+      vm.openEdit(ITEM_CLASS)
+      vm.form.suspended_days = 5
+      vm.form.reason = ''
+
+      expect(vm.reasonRequired).toBe(true)
+      await vm.submit()
+
+      expect(vm.formError).toContain('修改')
+      expect(vm.formError).toContain('至少 10 字')
+      expect(api.updateFestivalSuspension).not.toHaveBeenCalled()
+    })
+
+    it('原本 <10 日改成 >=10：改後會停發，要寫原因', async () => {
+      const { vm } = await mountPanel()
+      vm.openEdit(ITEM_SMALL as unknown as typeof ITEM_CLASS)
+      expect(vm.reasonRequired).toBe(false)
+      vm.form.suspended_days = 10
+
+      expect(vm.reasonRequired).toBe(true)
+      await vm.submit()
+      expect(api.updateFestivalSuspension).not.toHaveBeenCalled()
+    })
+
+    it('前後都 <10 的班級：原因可空，空白送 null', async () => {
+      vi.mocked(api.updateFestivalSuspension).mockResolvedValue({
+        data: { message: '已更新', item: ITEM_SMALL, stale: NO_STALE },
+      } as never)
+      const { vm } = await mountPanel()
+      vm.openEdit(ITEM_SMALL as unknown as typeof ITEM_CLASS)
+      vm.form.suspended_days = 5
+      vm.form.reason = ''
+
+      await vm.submit()
+
+      expect(api.updateFestivalSuspension).toHaveBeenCalledWith(13, { suspended_days: 5, reason: null })
+    })
+
+    it('全園列編輯時，scope 帶回全園，原因一律必填', async () => {
       const { vm } = await mountPanel()
 
       vm.openEdit(ITEM_SCHOOL as unknown as typeof ITEM_CLASS)
 
       expect(vm.form.scope).toBe('school')
+      expect(vm.reasonRequired).toBe(true)
     })
   })
 
   describe('刪除', () => {
-    it('確認後刪除並重新載入；訊息點明年月與班級', async () => {
-      vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
-      vi.mocked(api.deleteFestivalSuspension).mockResolvedValue({
-        data: { message: '已刪除', item: null, stale: NO_STALE },
-      } as never)
+    const DELETED = { data: { message: '已刪除', item: null, stale: NO_STALE } }
+
+    it('刪除 >=10 日的班級登記：先問原因（至少 10 字），原因隨 DELETE 送出並重新載入', async () => {
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: `  ${GOOD_REASON}  `, action: 'confirm' } as never)
+      vi.mocked(api.deleteFestivalSuspension).mockResolvedValue(DELETED as never)
       const { vm } = await mountPanel()
 
       await vm.remove(ITEM_CLASS)
       await flushPromises()
 
-      const message = vi.mocked(ElMessageBox.confirm).mock.calls[0][0] as string
+      const message = vi.mocked(ElMessageBox.prompt).mock.calls[0][0] as string
       expect(message).toContain('向日葵班')
       expect(message).toContain('12 日')
-      expect(api.deleteFestivalSuspension).toHaveBeenCalledWith(11)
+      expect(message).toContain('恢復發放')
+      expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+      expect(api.deleteFestivalSuspension).toHaveBeenCalledWith(11, GOOD_REASON)
       expect(ElMessage.success).toHaveBeenCalledWith('已刪除')
       expect(api.listFestivalSuspensions).toHaveBeenCalledTimes(2)
     })
 
+    it('刪除全園登記（即使只有 3 日）也要問原因', async () => {
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: GOOD_REASON, action: 'confirm' } as never)
+      vi.mocked(api.deleteFestivalSuspension).mockResolvedValue(DELETED as never)
+      const { vm } = await mountPanel()
+
+      await vm.remove(ITEM_SCHOOL)
+      await flushPromises()
+
+      expect(ElMessageBox.prompt).toHaveBeenCalled()
+      expect(api.deleteFestivalSuspension).toHaveBeenCalledWith(12, GOOD_REASON)
+    })
+
+    it('原因輸入框的驗證與後端一致：不足 10 字回說明、足夠通過', async () => {
+      vi.mocked(ElMessageBox.prompt).mockRejectedValue('cancel')
+      const { vm } = await mountPanel()
+
+      await vm.remove(ITEM_CLASS)
+
+      const options = vi.mocked(ElMessageBox.prompt).mock.calls[0][2] as {
+        inputValidator: (v: string) => string | boolean
+      }
+      expect(options.inputValidator('颱風停課')).toContain('至少 10 字')
+      expect(options.inputValidator('   ')).toContain('至少 10 字')
+      expect(options.inputValidator(GOOD_REASON)).toBe(true)
+    })
+
+    it('未達門檻的班級登記：單純確認，不問原因、DELETE 不帶 reason', async () => {
+      vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+      vi.mocked(api.deleteFestivalSuspension).mockResolvedValue(DELETED as never)
+      const { vm } = await mountPanel()
+
+      await vm.remove(ITEM_SMALL as unknown as typeof ITEM_CLASS)
+      await flushPromises()
+
+      expect(ElMessageBox.prompt).not.toHaveBeenCalled()
+      expect(vi.mocked(ElMessageBox.confirm).mock.calls[0][0] as string).toContain('小熊班')
+      expect(api.deleteFestivalSuspension).toHaveBeenCalledWith(13, undefined)
+    })
+
     it('按取消：不刪除', async () => {
-      vi.mocked(ElMessageBox.confirm).mockRejectedValue('cancel')
+      vi.mocked(ElMessageBox.prompt).mockRejectedValue('cancel')
       const { vm } = await mountPanel()
 
       await vm.remove(ITEM_CLASS)
@@ -472,7 +647,7 @@ describe('FestivalSuspensionPanel', () => {
     })
 
     it('後端 409：顯示後端訊息，不重新載入', async () => {
-      vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: GOOD_REASON, action: 'confirm' } as never)
       vi.mocked(api.deleteFestivalSuspension).mockRejectedValue({
         response: { status: 409, data: { detail: '薪資正在批次計算中，請稍後再試' } },
       })
@@ -483,6 +658,19 @@ describe('FestivalSuspensionPanel', () => {
 
       expect(vi.mocked(ElMessage.error).mock.calls[0][0] as string).toContain('批次計算中')
       expect(api.listFestivalSuspensions).toHaveBeenCalledTimes(1)
+    })
+
+    it('後端 422：顯示後端訊息', async () => {
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: GOOD_REASON, action: 'confirm' } as never)
+      vi.mocked(api.deleteFestivalSuspension).mockRejectedValue({
+        response: { status: 422, data: { detail: '全園停課或停課日數達 10 日以上會影響節慶獎金，刪除須填寫原因／公告依據（去除空白後至少 10 字）' } },
+      })
+      const { vm } = await mountPanel()
+
+      await vm.remove(ITEM_CLASS)
+      await flushPromises()
+
+      expect(vi.mocked(ElMessage.error).mock.calls[0][0] as string).toContain('刪除須填寫原因')
     })
   })
 })

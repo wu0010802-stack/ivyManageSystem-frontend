@@ -179,7 +179,16 @@ export const updateFestivalSuspension = (
 ): AxiosResp<'/salaries/festival-suspensions/{suspension_id}', 'put'> =>
     api.put(`/salaries/festival-suspensions/${id}`, payload)
 
+/**
+ * 刪除登記。全園停課或停課日數 >=10 的登記（會讓節慶獎金恢復發放）後端要求 query `reason`
+ * （去空白後 >=10 字，否則 422）；其他登記不必帶。
+ */
 export const deleteFestivalSuspension = (
     id: number,
-): AxiosResp<'/salaries/festival-suspensions/{suspension_id}', 'delete'> =>
-    api.delete(`/salaries/festival-suspensions/${id}`)
+    reason?: string,
+): AxiosResp<'/salaries/festival-suspensions/{suspension_id}', 'delete'> => {
+    const trimmed = reason?.trim()
+    return trimmed
+        ? api.delete(`/salaries/festival-suspensions/${id}`, { params: { reason: trimmed } })
+        : api.delete(`/salaries/festival-suspensions/${id}`)
+}

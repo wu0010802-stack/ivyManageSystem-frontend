@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import {
+  MIN_TRIGGER_REASON_LENGTH,
   SUSPENSION_DAYS_THRESHOLD,
   daysInMonth,
   decisionHeadline,
   defaultSuspensionPeriod,
+  isTriggerRegistration,
+  reasonRequiredForSave,
   ruleStatusText,
   staleNotice,
   validateSuspendedDays,
+  validateTriggerReason,
 } from '../festivalSuspension'
 
 describe('daysInMonth', () => {
@@ -104,5 +108,69 @@ describe('decisionHeadline', () => {
 describe('常數', () => {
   it('停發門檻與後端 SUSPENSION_DAYS_THRESHOLD 一致（10 日）', () => {
     expect(SUSPENSION_DAYS_THRESHOLD).toBe(10)
+  })
+})
+
+describe('isTriggerRegistration（會讓節慶獎金停發的登記）', () => {
+  it('全園一律算，不論日數（含 0 日）', () => {
+    expect(isTriggerRegistration(true, 0)).toBe(true)
+    expect(isTriggerRegistration(true, 3)).toBe(true)
+  })
+
+  it('班級看門檻：9 日不算、10 日算（含本數）', () => {
+    expect(isTriggerRegistration(false, 9)).toBe(false)
+    expect(isTriggerRegistration(false, 10)).toBe(true)
+    expect(isTriggerRegistration(false, 31)).toBe(true)
+  })
+
+  it('日數未填的班級不算', () => {
+    expect(isTriggerRegistration(false, null)).toBe(false)
+    expect(isTriggerRegistration(false, undefined)).toBe(false)
+  })
+})
+
+describe('reasonRequiredForSave', () => {
+  it('新增班級：只看新日數', () => {
+    expect(reasonRequiredForSave({ schoolWide: false, afterDays: 5 })).toBe(false)
+    expect(reasonRequiredForSave({ schoolWide: false, afterDays: 10 })).toBe(true)
+  })
+
+  it('新增全園：一律必填', () => {
+    expect(reasonRequiredForSave({ schoolWide: true, afterDays: 1 })).toBe(true)
+  })
+
+  it('修改班級：改前或改後任一邊 >=10 都必填（10 日改 5 日也是在恢復發放）', () => {
+    expect(reasonRequiredForSave({ schoolWide: false, beforeDays: 10, afterDays: 5 })).toBe(true)
+    expect(reasonRequiredForSave({ schoolWide: false, beforeDays: 5, afterDays: 12 })).toBe(true)
+    expect(reasonRequiredForSave({ schoolWide: false, beforeDays: 12, afterDays: 12 })).toBe(true)
+  })
+
+  it('修改班級：前後都 <10 不必填', () => {
+    expect(reasonRequiredForSave({ schoolWide: false, beforeDays: 3, afterDays: 5 })).toBe(false)
+  })
+
+  it('修改全園：一律必填', () => {
+    expect(reasonRequiredForSave({ schoolWide: true, beforeDays: 0, afterDays: 0 })).toBe(true)
+  })
+})
+
+describe('validateTriggerReason（對齊後端 422）', () => {
+  it('去除空白後 >=10 字合法', () => {
+    expect(validateTriggerReason('颱風停課公告字號一一五之九', '登記')).toBeNull()
+    expect(validateTriggerReason('  ' + '一二三四五六七八九十' + '  ', '登記')).toBeNull()
+  })
+
+  it('空白、空值、9 字都不合法，訊息帶動作與字數', () => {
+    for (const bad of [null, undefined, '', '          ', '一二三四五六七八九', '  一二三  ']) {
+      const msg = validateTriggerReason(bad, '修改')
+      expect(msg).toContain('修改')
+      expect(msg).toContain(String(MIN_TRIGGER_REASON_LENGTH))
+      expect(msg).toContain('10 日')
+    }
+  })
+
+  it('三種動作的用字', () => {
+    expect(validateTriggerReason('', '登記')).toContain('登記須填寫')
+    expect(validateTriggerReason('', '刪除')).toContain('刪除須填寫')
   })
 })

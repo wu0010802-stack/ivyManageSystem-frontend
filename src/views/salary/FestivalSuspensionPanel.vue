@@ -20,12 +20,16 @@ import {
   updateFestivalSuspension,
 } from '@/api/salary'
 import {
+  MIN_TRIGGER_REASON_LENGTH,
   SUSPENSION_DAYS_THRESHOLD,
   decisionHeadline,
   defaultSuspensionPeriod,
+  isTriggerRegistration,
+  reasonRequiredForSave,
   ruleStatusText,
   staleNotice,
   validateSuspendedDays,
+  validateTriggerReason,
 } from './festivalSuspension'
 
 type Item = Schema<'FestivalSuspensionOut'>
@@ -101,6 +105,8 @@ const classroomOptions = computed(() => {
 
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
+// 編輯時的原始狀態：修改前後任一邊會停發都要寫原因（10 日改成 5 日也是在恢復發放）
+const editingBefore = ref<{ schoolWide: boolean; days: number } | null>(null)
 const saving = ref(false)
 const form = reactive<{ scope: number | typeof SCHOOL_WIDE | null; suspended_days: number | null; reason: string }>({
   scope: null,
@@ -112,6 +118,7 @@ const formError = ref('')
 
 const openCreate = () => {
   editingId.value = null
+  editingBefore.value = null
   Object.assign(form, { scope: null, suspended_days: null, reason: '' })
   formError.value = ''
   snapshotForm()
@@ -120,6 +127,7 @@ const openCreate = () => {
 
 const openEdit = (row: Item) => {
   editingId.value = row.id
+  editingBefore.value = { schoolWide: row.classroom_id == null, days: row.suspended_days }
   Object.assign(form, {
     scope: row.classroom_id ?? SCHOOL_WIDE,
     suspended_days: row.suspended_days,
@@ -129,6 +137,15 @@ const openEdit = (row: Item) => {
   snapshotForm()
   dialogVisible.value = true
 }
+
+// 全園停課或停課日數 >=10 的登記會影響節慶獎金，原因必填（先在前端擋，後端同樣 422）
+const reasonRequired = computed(() =>
+  reasonRequiredForSave({
+    schoolWide: editingBefore.value ? editingBefore.value.schoolWide : form.scope === SCHOOL_WIDE,
+    beforeDays: editingBefore.value ? editingBefore.value.days : undefined,
+    afterDays: form.suspended_days,
+  }),
+)
 
 const editingLabel = computed(() => items.value.find((i) => i.id === editingId.value)?.classroom_name ?? '')
 
@@ -150,6 +167,13 @@ const submit = async () => {
   if (daysError) {
     formError.value = daysError
     return
+  }
+  if (reasonRequired.value) {
+    const reasonError = validateTriggerReason(form.reason, editingId.value === null ? '登記' : '修改')
+    if (reasonError) {
+      formError.value = reasonError
+      return
+    }
   }
   formError.value = ''
   const reason = form.reason.trim() || null
@@ -177,17 +201,35 @@ const submit = async () => {
 }
 
 const remove = async (row: Item) => {
+  const target = `${periodLabel.value}「${row.classroom_name}」的停課登記（${row.suspended_days} 日）`
+  let reason: string | undefined
   try {
-    await ElMessageBox.confirm(
-      `確定刪除 ${periodLabel.value}「${row.classroom_name}」的停課登記（${row.suspended_days} 日）？`,
-      '刪除停課登記',
-      { confirmButtonText: '確定刪除', cancelButtonText: '取消', type: 'warning' },
-    )
+    if (isTriggerRegistration(row.classroom_id == null, row.suspended_days)) {
+      // 刪除會讓這個月的節慶獎金恢復發放：先問原因（後端 query reason，去空白後 >=10 字）
+      const answer = await ElMessageBox.prompt(
+        `刪除${target}後，該班（全園）當月的節慶獎金會恢復發放。請寫明刪除原因／依據（至少 ${MIN_TRIGGER_REASON_LENGTH} 字）：`,
+        '刪除停課登記',
+        {
+          confirmButtonText: '確定刪除',
+          cancelButtonText: '取消',
+          type: 'warning',
+          inputType: 'textarea',
+          inputValidator: (value: string) => validateTriggerReason(value, '刪除') ?? true,
+        },
+      )
+      reason = ((answer as { value?: string }).value ?? '').trim()
+    } else {
+      await ElMessageBox.confirm(`確定刪除${target}？`, '刪除停課登記', {
+        confirmButtonText: '確定刪除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    }
   } catch {
     return
   }
   try {
-    const res = await deleteFestivalSuspension(row.id)
+    const res = await deleteFestivalSuspension(row.id, reason)
     await afterMutation(res.data)
   } catch (e) {
     ElMessage.error(friendlyError('刪除停課登記失敗', e))
@@ -203,7 +245,7 @@ onMounted(() => {
 
 defineExpose({
   items, decision, headline, loadError, year, month, form, formError, dialogVisible, editingId,
-  classroomOptions, load, openCreate, openEdit, submit, remove,
+  classroomOptions, reasonRequired, load, openCreate, openEdit, submit, remove,
 })
 </script>
 
@@ -352,7 +394,7 @@ defineExpose({
           />
           <div class="hint">達 {{ SUSPENSION_DAYS_THRESHOLD }} 日即觸發停發；同月同班（全園）只能有一列，要調整請編輯該列</div>
         </el-form-item>
-        <el-form-item label="原因／公告依據">
+        <el-form-item label="原因／公告依據" :required="reasonRequired" data-test="reason-item">
           <el-input
             v-model="form.reason"
             type="textarea"
@@ -362,6 +404,9 @@ defineExpose({
             placeholder="例如：颱風停課公告字號、整修停課"
             data-test="reason-input"
           />
+          <div v-if="reasonRequired" class="hint" data-test="reason-required-hint">
+            全園停課或停課日數達 {{ SUSPENSION_DAYS_THRESHOLD }} 日會影響節慶獎金，需填寫原因／公告依據（至少 {{ MIN_TRIGGER_REASON_LENGTH }} 字）
+          </div>
         </el-form-item>
         <el-alert v-if="formError" type="error" :closable="false" show-icon :title="formError" data-test="form-error" />
       </el-form>
