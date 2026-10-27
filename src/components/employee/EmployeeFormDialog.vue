@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import type { ApiBody } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { createEmployee, updateEmployeeBasic, updateEmployeeSalary } from '@/api/employees'
@@ -75,7 +76,8 @@ interface EmployeeForm {
   name: string
   english_name: string
   id_number: string
-  employee_type: string
+  // 後端 EmployeeCreate.employee_type 為 Literal['regular','hourly']，直接沿用契約型別
+  employee_type: ApiBody<'/employees', 'post'>['employee_type']
   job_title_id: number | null
   position: string
   supervisor_role: string | null

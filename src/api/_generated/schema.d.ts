@@ -30974,8 +30974,9 @@ export interface components {
             /**
              * Employee Type
              * @default regular
+             * @enum {string}
              */
-            employee_type: string;
+            employee_type: "regular" | "hourly";
             /** English Name */
             english_name?: string | null;
             /** Gender */
@@ -31275,7 +31276,7 @@ export interface components {
             /** Emergency Contact Phone */
             emergency_contact_phone?: string | null;
             /** Employee Type */
-            employee_type?: string | null;
+            employee_type?: ("regular" | "hourly") | null;
             /** English Name */
             english_name?: string | null;
             /** Gender */
