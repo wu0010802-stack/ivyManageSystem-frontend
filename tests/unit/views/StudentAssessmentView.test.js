@@ -43,6 +43,10 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+const formValid = { ok: true }
+const canWriteFlag = { ok: false }
+vi.mock('@/utils/auth', () => ({ hasPermission: () => canWriteFlag.ok }))
+
 // ── global stubs ───────────────────────────────────────────────────────────
 const GLOBAL_STUBS = {
   'el-card': { template: '<div><slot /></div>' },
@@ -54,7 +58,8 @@ const GLOBAL_STUBS = {
   'el-input': { template: '<input />' },
   'el-select': { template: '<div><slot /></div>' },
   'el-option': true,
-  'el-form': { template: '<form><slot /></form>' },
+  // FormDialog 內的 el-form 以 ref.validate() 擋必填；stub 依 formValid 決定結果
+  'el-form': { template: '<form><slot /></form>', methods: { validate: () => Promise.resolve(formValid.ok) } },
   'el-form-item': { props: ['label'], template: '<div><slot /></div>' },
   'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
   'el-pagination': true,
@@ -79,6 +84,8 @@ describe('StudentAssessmentView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    formValid.ok = true
+    canWriteFlag.ok = false
     getClassrooms.mockResolvedValue({ data: [] })
     getAssessments.mockResolvedValue({ data: { items: [], total: 0 } })
     ElMessageBox.confirm.mockResolvedValue('confirm')
@@ -131,7 +138,7 @@ describe('StudentAssessmentView', () => {
     wrapper.vm.$.setupState.dialogMode = 'create'
     Object.assign(wrapper.vm.$.setupState.form, {
       student_id: 1,
-      semester: '2025上',
+      semester: '114上',
       assessment_type: '期中',
       content: '整體表現良好',
       assessment_date: '2025-11-01',
@@ -141,6 +148,30 @@ describe('StudentAssessmentView', () => {
     await flushPromises()
 
     expect(createAssessment).toHaveBeenCalled()
+  })
+
+  it('必填驗證未過時不送出', async () => {
+    formValid.ok = false
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.vm.$.setupState.submitForm()
+    expect(createAssessment).not.toHaveBeenCalled()
+  })
+
+  it('學期改為下拉，預設帶入目前學期（民國學年＋上/下，與既有資料同格式）', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.$.setupState.openCreate()
+    expect(wrapper.vm.$.setupState.form.semester).toMatch(/^\d{3}[上下]$/)
+    expect(wrapper.vm.$.setupState.semesterOptions[0]).toBe(wrapper.vm.$.setupState.form.semester)
+  })
+
+  it('載入失敗顯示錯誤態，不顯示「尚無評量紀錄」', async () => {
+    getAssessments.mockRejectedValue(new Error('boom'))
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('評量紀錄載入失敗')
+    expect(wrapper.text()).not.toContain('尚無評量紀錄')
   })
 
   it('handleDelete 呼叫 deleteAssessment 後刷新列表', async () => {
