@@ -88,7 +88,15 @@ export function confirmedActionLabel(actual: Pick<NonNullable<GridCell['actual']
  */
 function isHandled(actual: NonNullable<GridCell['actual']>): boolean {
   if (!actual.confirmed_action) return false
-  return !(actual.status === 'possible_shift_change' && actual.confirmed_action === 'admin_accept')
+  return confirmedActionClearsIssue(actual.status, actual.confirmed_action)
+}
+
+/**
+ * 對這個判定做了這個處理（接受扣款／豁免）後，格子還算不算待辦：isHandled 與抽屜的
+ * 復原提示（「跳到下一件」）共用同一判斷，提示文字才不會跟面板實際跳不跳格對不上。
+ */
+export function confirmedActionClearsIssue(status: ReconStatus | null | undefined, action: string): boolean {
+  return !(status === 'possible_shift_change' && action === 'admin_accept')
 }
 
 /** 「只看待處理」排除的判定（§2.1）。 */

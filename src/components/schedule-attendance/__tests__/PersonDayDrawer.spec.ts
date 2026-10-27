@@ -492,6 +492,19 @@ describe('PersonDayDrawer 審查修正', () => {
       expect(w.emitted('undone')).toHaveLength(1)
     })
 
+    it('疑似換班「接受扣款」處理後仍是待辦、面板不跳格：有佇列也不寫「跳到下一件」；豁免才寫', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [{ ...anomalyRow, type: 'late', type_label: '遲到', detail: '遲到 91 分鐘' }] } })
+      const nav = { position: 3, total: 12, label: '9 月逐日待辦 3 / 12', hasPrev: true, hasNext: true }
+      const w = mountDrawer(cell(1, W1, { edit: RECORDED, actual: { status: 'possible_shift_change', punch_in: `${W1}T08:31:00`, punch_out: `${W1}T18:02:00`, attendance_id: 55 } }), { nav })
+      await flushPromises()
+      w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'admin_accept' })
+      await flushPromises()
+      expect(undo.show).toHaveBeenLastCalledWith(expect.objectContaining({ text: '已處理 9/14（一）林班導' }))
+      w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'admin_waive', remark: '確實換班' })
+      await flushPromises()
+      expect(undo.show).toHaveBeenLastCalledWith(expect.objectContaining({ text: '已處理 9/14（一）林班導，跳到下一件' }))
+    })
+
     it('後端回的 undoable_ids 少於 processed（這筆原本已有處理）：沒有復原鈕，成功訊息說明無法復原；面板照常提示下一件', async () => {
       att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
       att.batchConfirmAnomalies.mockResolvedValue({ data: { processed: 1, undoable_ids: [] } })

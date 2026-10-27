@@ -48,7 +48,7 @@ import ResolveCard from '@/components/attendance/ResolveCard.vue'
 import { getAnomalyList } from '@/api/attendance'
 import { groupAnomalies, type AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useResolveAnomaly, type ResolveAction, type ResolvePayload } from '@/composables/useResolveAnomaly'
-import { SOURCE_TAGS, confirmedActionLabel, planText, type GridCell } from '@/utils/scheduleAttendanceGrid'
+import { SOURCE_TAGS, confirmedActionClearsIssue, confirmedActionLabel, planText, type GridCell } from '@/utils/scheduleAttendanceGrid'
 
 export type DayResolveMode = 'resolve-first' | 'confirm-first' | 'side-by-side'
 
@@ -157,14 +157,18 @@ const { resolving, resolve } = useResolveAnomaly(
   'DayResolveSection.resolve',
   { onUndone: () => props.onUndone?.() },
 )
-/** 復原提示：「已處理 9/17（四）蔡宜庭，跳到下一件」（提示停留時抽屜已換到下一件，要寫出是哪一件） */
-function undoText(): string {
+/**
+ * 復原提示：「已處理 9/17（四）蔡宜庭，跳到下一件」（提示停留時抽屜已換到下一件，要寫出是哪一件）。
+ * 處理後這格仍算待辦（疑似換班只接受扣款）時面板不會跳格，就不寫「跳到下一件」。
+ */
+function undoText(action: string): string {
   const [, m, d] = props.cell.date.split('-').map(Number)
-  return `已處理 ${m}/${d}（${props.weekday}）${props.employeeName}${props.willAdvance ? '，跳到下一件' : ''}`
+  const advances = props.willAdvance && confirmedActionClearsIssue(props.cell.actual?.status, action)
+  return `已處理 ${m}/${d}（${props.weekday}）${props.employeeName}${advances ? '，跳到下一件' : ''}`
 }
 function onResolve(payload: ResolvePayload): void {
   const id = props.cell.actual?.attendance_id ?? null
-  const sent = payload.action === 'punch' ? payload : { ...payload, doneText: undoText() }
+  const sent = payload.action === 'punch' ? payload : { ...payload, doneText: undoText(payload.action) }
   void resolve({ employeeId: props.cell.employee_id, date: props.cell.date, attendanceId: id }, sent)
 }
 </script>
