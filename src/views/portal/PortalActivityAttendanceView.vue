@@ -72,10 +72,12 @@ const headerSubtitle = computed(() => {
 })
 
 let requestSeq = 0
+const loadError = ref(false)
 
 async function loadSessions() {
   const seq = ++requestSeq
   loading.value = true
+  loadError.value = false
   try {
     const params: Record<string, string> = {}
     if (range.value.start) params.start_date = range.value.start
@@ -85,6 +87,7 @@ async function loadSessions() {
     sessions.value = res.data
   } catch {
     if (seq !== requestSeq) return
+    loadError.value = true
     ElMessage.error('載入場次失敗')
   } finally {
     if (seq === requestSeq) loading.value = false
@@ -154,6 +157,7 @@ onMounted(() => {
       :sessions="(sessions as BoardSession[])"
       :overdue="overdueSessions"
       :loading="loading"
+      :load-error="loadError"
       :today="today"
       :range-label="rangeLabel"
       :mode="mode"
@@ -167,6 +171,7 @@ onMounted(() => {
       @update:custom-end="customEnd = $event"
       @apply-custom="applyCustom"
       @open-rollcall="openRollcall"
+      @retry="loadSessions"
     />
   </div>
 </template>

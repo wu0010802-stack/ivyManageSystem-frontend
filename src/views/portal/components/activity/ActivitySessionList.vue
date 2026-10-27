@@ -11,6 +11,7 @@
 import { computed } from 'vue'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PortalErrorState from '@/components/portal/PortalErrorState.vue'
 import {
   courseOptions,
   groupByDay,
@@ -25,6 +26,8 @@ const props = withDefaults(
     /** 漏點名（過去 N 天沒點完的），由父層另外撈，可能不在目前顯示範圍內 */
     overdue?: SessionView[]
     loading?: boolean
+    /** 場次載入失敗：顯示錯誤與重試，不落到「今天沒有才藝課／這個範圍沒有才藝場次」 */
+    loadError?: boolean
     today: string
     /** 目前範圍的標題，例：本週 9/14 至 9/20 */
     rangeLabel: string
@@ -36,6 +39,7 @@ const props = withDefaults(
   {
     overdue: () => [],
     loading: false,
+    loadError: false,
     mode: 'week',
     filterCourseId: null,
     customStart: null,
@@ -51,6 +55,7 @@ const emit = defineEmits<{
   'update:customEnd': [value: string | null]
   'apply-custom': []
   'open-rollcall': [session: SessionView]
+  retry: []
 }>()
 
 const courses = computed(() => courseOptions(props.sessions))
@@ -166,6 +171,13 @@ function absentNote(s: SessionView): string {
     </div>
 
     <div v-if="loading" v-loading="true" class="board-loading" data-test="board-loading" />
+
+    <PortalErrorState
+      v-else-if="loadError"
+      message="才藝場次載入失敗"
+      data-test="board-error"
+      @retry="emit('retry')"
+    />
 
     <template v-else>
       <!-- 漏點名：不夾在列表裡等人自己翻 -->
