@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { Plus, Edit, Delete, Download, Upload } from '@element-plus/icons-vue'
+import { Edit, Delete, Download, Upload } from '@element-plus/icons-vue'
 import {
   listArtPayroll,
   createArtPayroll,
@@ -11,6 +11,9 @@ import {
   batchImportArtPayroll,
 } from '@/api/artTeacherPayroll'
 import { useEmployeeStore } from '@/stores/employee'
+import AdminCreateButton from '@/components/common/AdminCreateButton.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
 import { downloadFile } from '@/utils/download'
 
 const currentYear = new Date().getFullYear()
@@ -38,6 +41,9 @@ const form = reactive({
   activity_bonus: 0,
   note: '',
 })
+// 開窗時拍快照：改過值按取消／Esc 會先確認；saving 防連點重複新增
+const { isDirty: formDirty, snapshot: snapshotForm } = useFormDirty(form)
+const saving = ref(false)
 
 const SUBJECT_PRESETS = [
   '美語', '外師', '課後美語', '舞蹈', '音樂',
@@ -82,7 +88,7 @@ const fetchList = async () => {
     const res = await listArtPayroll(query.year, query.month)
     items.value = res.data.items || []
   } catch (e) {
-    ElMessage.error(friendlyError('載入美語老師薪資資料失敗', e))
+    ElMessage.error(friendlyError('載入才藝老師薪資資料失敗', e))
   } finally {
     loading.value = false
   }
@@ -101,6 +107,7 @@ const openCreate = () => {
   form.excess_amount = 0
   form.activity_bonus = 0
   form.note = ''
+  snapshotForm()
   dialogVisible.value = true
 }
 
@@ -119,6 +126,7 @@ const openEdit = (row: Record<string, unknown>) => {
     activity_bonus: row.activity_bonus,
     note: row.note || '',
   })
+  snapshotForm()
   dialogVisible.value = true
 }
 
@@ -131,6 +139,8 @@ const handleSave = async () => {
     ElMessage.warning('請填科目')
     return
   }
+  if (saving.value) return
+  saving.value = true
   try {
     if (dialogMode.value === 'create') {
       await createArtPayroll({
@@ -161,7 +171,9 @@ const handleSave = async () => {
     dialogVisible.value = false
     fetchList()
   } catch (e) {
-    ElMessage.error(friendlyError('儲存美語老師薪資失敗', e))
+    ElMessage.error(friendlyError('儲存才藝老師薪資失敗', e))
+  } finally {
+    saving.value = false
   }
 }
 
@@ -180,7 +192,7 @@ const handleDelete = async (row: Record<string, unknown>) => {
     ElMessage.success('刪除成功')
     fetchList()
   } catch (e) {
-    ElMessage.error(friendlyError('刪除美語老師薪資失敗', e))
+    ElMessage.error(friendlyError('刪除才藝老師薪資失敗', e))
   }
 }
 
@@ -221,6 +233,15 @@ const handleImport = async () => {
     ElMessage.warning('請選擇 Excel 檔案')
     return
   }
+  // 覆寫模式會先刪掉該月所有明細（含不在這份檔案裡的老師），不可復原，先講清楚會刪幾筆
+  if (importReplaceExisting.value) {
+    const ok = await ElMessageBox.confirm(
+      `覆寫模式會先刪除 ${query.year} 年 ${query.month} 月現有的 ${items.value.length} 筆才藝薪資明細（${employeeTotals.value.length} 位老師，合計 ${grandTotal.value.toLocaleString()} 元），再匯入這份檔案。刪除的明細無法復原，確定要覆寫？`,
+      '確認整月覆寫',
+      { type: 'warning', confirmButtonText: '刪除並匯入', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' },
+    ).then(() => true, () => false)
+    if (!ok) return
+  }
   importLoading.value = true
   try {
     const res = await batchImportArtPayroll(
@@ -238,7 +259,7 @@ const handleImport = async () => {
     }
     fetchList()
   } catch (e) {
-    ElMessage.error(friendlyError('匯入美語老師薪資失敗', e))
+    ElMessage.error(friendlyError('匯入才藝老師薪資失敗', e))
   } finally {
     importLoading.value = false
   }
@@ -258,13 +279,13 @@ onMounted(() => {
           <div>
             <h3 style="margin: 0 0 4px;">才藝老師薪資</h3>
             <span class="hint">
-              每月每老師可有多筆給付（科目/班級/星期分項）；該月有 entries 時，
-              薪資引擎會以 sum(total) 覆寫 hourly_total 與 net_salary。
+              每位老師每月可登記多筆（依科目、班級、星期分開）；只要該月有登記，
+              薪資結算時這位老師的鐘點薪資就以這裡的總計為準。
             </span>
           </div>
           <div class="header-actions">
-            <el-button :icon="Plus" type="primary" @click="openCreate">新增明細</el-button>
-            <el-button :icon="Upload" type="success" @click="openImportDialog">批次匯入</el-button>
+            <el-button :icon="Upload" @click="openImportDialog">批次匯入</el-button>
+            <AdminCreateButton @click="openCreate">新增明細</AdminCreateButton>
             <el-button :icon="Download" @click="exportRoster">匯出清冊</el-button>
           </div>
         </div>
@@ -329,17 +350,20 @@ onMounted(() => {
       </el-table>
     </el-card>
 
-    <el-dialog
+    <FormDialog
       v-model="dialogVisible"
       :title="dialogMode === 'create' ? '新增才藝薪資明細' : '編輯才藝薪資明細'"
-      width="540px"
+      :dirty="formDirty"
+      :loading="saving"
+      :submit-text="dialogMode === 'create' ? '新增明細' : '儲存'"
+      @submit="handleSave"
     >
       <el-form :model="form" label-width="100px">
         <el-form-item label="老師">
           <el-select
             v-model="form.employee_id"
             filterable
-            placeholder="選擇才藝老師（須為 hourly）"
+            placeholder="選擇才藝老師（僅列時薪制員工）"
             :disabled="dialogMode === 'edit'"
             style="width: 100%;"
           >
@@ -404,16 +428,12 @@ onMounted(() => {
         </el-form-item>
         <el-alert
           :title="`預覽總計：${previewTotal.toLocaleString()} 元（時數×鐘點 + 超額 + 加給活動）`"
-          type="success"
+          type="info"
           :closable="false"
           show-icon
         />
       </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave">儲存</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
 
     <!-- 批次匯入 dialog -->
     <el-dialog v-model="importDialogVisible" title="批次匯入才藝薪資" width="600px">
@@ -444,7 +464,7 @@ onMounted(() => {
         <el-form-item label="覆寫模式">
           <el-switch v-model="importReplaceExisting" />
           <span class="hint" style="margin-left: 12px;">
-            打開後：匯入前先刪除該月所有 entries（整月覆寫，避免重複）
+            打開後：匯入前先刪除這個月所有已登記的明細，再以檔案內容為準（送出前會再確認）
           </span>
         </el-form-item>
       </el-form>

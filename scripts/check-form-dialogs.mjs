@@ -25,7 +25,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 /** 修掉幾處後必須同步調降，否則棘輪鬆掉（同 check-error-detail-ratchet 慣例）。 */
-const BASELINE = { A: 92, B: 80, C: 138, D: 15 } // 2026-09-14 繳費單與公告分類改用 FormDialog；2026-10-08 班級編輯對話框改用 FormDialog（B 89→85）；2026-10-12 預編班編輯班級改 FormDialog、發布／重新產生改用寬度常數（B 85→84、C 153→151；D 20→18 為既有存量下降一併鎖定）；2026-10-12 SPEC-027 排班管理頁與打卡核對清單退場（C 151→148）；2026-10-21 排班與出勤第五輪：班別設定與老師確認兩個表單改 FormDialog、匯入／套用對話框改寬度常數（A 100→97、B 84→83、C 148→143）；2026-10-27 學生評量／事件紀錄表單改 FormDialog（A 97→95、B 83→81、C 143→141、D 18→16）；2026-10-27 加班新增／編輯改 FormDialog（A 95→94、C 141→140、D 16→15）；2026-10-27 才藝用品新增／編輯改 FormDialog（A 94→93、C 140→139）；2026-10-27 隱私政策新增版本改 FormDialog（A 93→92、B 81→80、C 139→138）
+const BASELINE = { A: 91, B: 80, C: 137, D: 15 } // 2026-09-14 繳費單與公告分類改用 FormDialog；2026-10-08 班級編輯對話框改用 FormDialog（B 89→85）；2026-10-12 預編班編輯班級改 FormDialog、發布／重新產生改用寬度常數（B 85→84、C 153→151；D 20→18 為既有存量下降一併鎖定）；2026-10-12 SPEC-027 排班管理頁與打卡核對清單退場（C 151→148）；2026-10-21 排班與出勤第五輪：班別設定與老師確認兩個表單改 FormDialog、匯入／套用對話框改寬度常數（A 100→97、B 84→83、C 148→143）；2026-10-27 學生評量／事件紀錄表單改 FormDialog（A 97→95、B 83→81、C 143→141、D 18→16）；2026-10-27 加班新增／編輯改 FormDialog（A 95→94、C 141→140、D 16→15）；2026-10-27 才藝用品新增／編輯改 FormDialog（A 94→93、C 140→139）；2026-10-27 隱私政策新增版本改 FormDialog（A 93→92、B 81→80、C 139→138）；2026-10-27 才藝老師薪資明細改 FormDialog（A 92→91、C 138→137）
 
 /** 本來就該含 el-dialog 的檔案：FormDialog 殼本身。 */
 const EXEMPT = new Set(['src/components/common/FormDialog.vue'])
