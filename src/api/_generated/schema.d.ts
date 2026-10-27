@@ -3075,7 +3075,9 @@ export interface paths {
          *
          *     只有已封存（CLOSED）週期可標記。標記後，年終考核 payout（appraisal-payout generate）
          *     不再為該半年產生 APPRAISAL_HALF_BONUS special_bonus_item，避免年終重複發；
-         *     已產生過的明細不會被自動刪除（需要的話先走 payout void）。重複標記回 409。
+         *     該半年的 APPRAISAL_HALF_BONUS 明細若已存在（已 generate 或已匯入）回 409，需先作廢
+         *     （payout void）再標記——標記只能擋之後的產生，擋不了已存在的明細。重複標記回 409。
+         *     與 payout generate／void 共用同一把 advisory lock。
          */
         post: operations["mark_cycle_roster_paid_api_appraisal_cycles__cycle_id__roster_paid_post"];
         /**
@@ -18702,7 +18704,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Festival Suspension
-         * @description 刪除停課登記。
+         * @description 刪除停課登記；全園停課或停課日數 >=10 的登記需以 query `reason` 寫明原因（>=10 字）。
          */
         delete: operations["delete_festival_suspension_api_salaries_festival_suspensions__suspension_id__delete"];
         options?: never;
@@ -33335,7 +33337,7 @@ export interface components {
             month: number;
             /**
              * Reason
-             * @description 停課原因／公告依據
+             * @description 停課原因／公告依據。全園停課或停課日數 >=10（會讓節慶獎金停發）時必填，去除空白後至少 10 字，否則 422
              */
             reason?: string | null;
             /**
@@ -33360,7 +33362,7 @@ export interface components {
             month: number;
             /**
              * Rule Enabled
-             * @description 租戶是否已開啟節慶停發規則（BonusConfig.festival_suspension_rule）
+             * @description 該月停課登記會讀到的 BonusConfig 版本（發放月與事件月各自所屬年度的最高 version）是否開啟節慶停發規則（festival_suspension_rule）
              */
             rule_enabled: boolean;
             /** School Reason */
@@ -33413,7 +33415,10 @@ export interface components {
         };
         /** FestivalSuspensionUpdate */
         FestivalSuspensionUpdate: {
-            /** Reason */
+            /**
+             * Reason
+             * @description 停課原因／公告依據。改前或改後任一邊為全園停課或停課日數 >=10 時必填，去除空白後至少 10 字，否則 422
+             */
             reason?: string | null;
             /** Suspended Days */
             suspended_days: number;
@@ -49536,6 +49541,16 @@ export interface components {
             period_month: number;
             /** Period Year */
             period_year: number;
+            /**
+             * Removed Duplicates
+             * @default []
+             */
+            removed_duplicates: components["schemas"]["Semester2ActivityBriefOut"][];
+            /**
+             * Removed For Manual
+             * @default []
+             */
+            removed_for_manual: components["schemas"]["Semester2ActivityBriefOut"][];
             /** Skipped Manual */
             skipped_manual: components["schemas"]["Semester2ActivityBriefOut"][];
             /** Skipped Self */
@@ -49580,6 +49595,11 @@ export interface components {
         Semester2ActivityRowOut: {
             /** Amount */
             amount: number;
+            /**
+             * Auto And Manual Coexist
+             * @default false
+             */
+            auto_and_manual_coexist: boolean;
             /** Category */
             category: string;
             /** Category Label */
@@ -49617,6 +49637,16 @@ export interface components {
             period_month: number;
             /** Period Year */
             period_year: number;
+            /**
+             * Removed Duplicates
+             * @default []
+             */
+            removed_duplicates: components["schemas"]["Semester2ExcessBriefOut"][];
+            /**
+             * Removed For Manual
+             * @default []
+             */
+            removed_for_manual: components["schemas"]["Semester2ExcessBriefOut"][];
             /** Skipped Manual */
             skipped_manual: components["schemas"]["Semester2ExcessBriefOut"][];
             /** Skipped Self */
@@ -49659,6 +49689,11 @@ export interface components {
         Semester2ExcessRowOut: {
             /** Amount */
             amount: number;
+            /**
+             * Auto And Manual Coexist
+             * @default false
+             */
+            auto_and_manual_coexist: boolean;
             /** Eligible */
             eligible: boolean;
             /** Employee Id */
@@ -53413,6 +53448,11 @@ export interface components {
             skipped_unresolved_names: string[];
             /** Special Bonuses Upserted */
             special_bonuses_upserted: number;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /**
          * YearEndSettlementLogAction
@@ -84929,7 +84969,10 @@ export interface operations {
     };
     delete_festival_suspension_api_salaries_festival_suspensions__suspension_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 刪除原因。刪除全園停課或停課日數 >=10 的登記（會讓節慶獎金恢復發放）時必填，去除空白後至少 10 字，否則 422 */
+                reason?: string | null;
+            };
             header?: never;
             path: {
                 suspension_id: number;
