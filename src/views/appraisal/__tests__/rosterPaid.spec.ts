@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
+  isPayoutExistsConflict,
+  payoutVoidLocation,
+  payoutYearForCycle,
   canMarkRosterPaid,
   canUnmarkRosterPaid,
   isRosterPaid,
@@ -95,5 +98,41 @@ describe('markRosterPaidMessage', () => {
 
   it('上學期的文案', () => {
     expect(markRosterPaidMessage({ ...closed, semester: 'FIRST' })).toContain('114 學年上學期')
+  })
+})
+
+describe('payoutYearForCycle / payoutVoidLocation', () => {
+  it('考核週期學年換成年終發放年：113 學年 → 2026（發放年 − 1913 = 來源學年）', () => {
+    expect(payoutYearForCycle(113)).toBe(2026)
+    expect(payoutYearForCycle(114)).toBe(2027)
+  })
+
+  it('作廢入口帶上發放年；缺學年時不帶 query', () => {
+    expect(payoutVoidLocation({ academic_year: 113 })).toEqual({
+      path: '/year-end/appraisal-payout',
+      query: { year: '2026' },
+    })
+    expect(payoutVoidLocation({})).toEqual({ path: '/year-end/appraisal-payout' })
+  })
+})
+
+describe('isPayoutExistsConflict', () => {
+  const err = (status: number) => ({ response: { status } })
+
+  it('409 且說明要求先作廢：是', () => {
+    expect(
+      isPayoutExistsConflict(err(409), '此半年的考核年終獎金明細已在年終產生（或已匯入），請先到「考核年終獎金」頁作廢該年度的明細後再標記'),
+    ).toBe(true)
+  })
+
+  it('其他 409（已標記、狀態不對）不是，不該引導去作廢', () => {
+    expect(isPayoutExistsConflict(err(409), '此週期已標記考核名冊已發放')).toBe(false)
+    expect(isPayoutExistsConflict(err(409), '週期狀態為 OPEN，僅已封存（CLOSED）的週期可標記考核名冊已發放')).toBe(false)
+  })
+
+  it('非 409、沒有 response 都不是', () => {
+    expect(isPayoutExistsConflict(err(403), '請先作廢')).toBe(false)
+    expect(isPayoutExistsConflict(null, '請先作廢')).toBe(false)
+    expect(isPayoutExistsConflict(new Error('x'), '請先作廢')).toBe(false)
   })
 })

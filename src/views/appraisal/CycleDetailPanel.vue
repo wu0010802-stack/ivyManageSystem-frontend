@@ -31,7 +31,14 @@ import {
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { statusLabel, MSG, ROLE_GROUP_LABEL, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
-import { canMarkRosterPaid, canUnmarkRosterPaid, markRosterPaidMessage, rosterPaidSummary } from './rosterPaid'
+import {
+  canMarkRosterPaid,
+  canUnmarkRosterPaid,
+  isPayoutExistsConflict,
+  markRosterPaidMessage,
+  payoutVoidLocation,
+  rosterPaidSummary,
+} from './rosterPaid'
 
 import KanbanView from './components/KanbanView.vue'
 import ListView from './components/ListView.vue'
@@ -150,6 +157,12 @@ const canMarkPaid = computed(() => canMarkRosterPaid(cycle.value, hasAccounting.
 const canUnmarkPaid = computed(() => canUnmarkRosterPaid(cycle.value, hasAccounting.value))
 const rosterPaidText = computed(() => rosterPaidSummary(cycle.value))
 const rosterPaidBusy = ref(false)
+// 標記被 409 擋下、原因是該半年年終明細已存在：要先到「考核年終獎金」頁作廢，訊息常駐並給入口
+const rosterPaidConflict = ref<string | null>(null)
+const canOpenPayout = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+function gotoPayoutVoid() {
+  if (cycle.value) router.push(payoutVoidLocation(cycle.value))
+}
 
 // 標記／取消的回應是整個 CycleOut；只取三個已發放欄位併回本頁的 cycle，其餘欄位（Decimal 字串等）不動
 function withRosterPaid(
@@ -181,12 +194,15 @@ async function markRosterPaid() {
     return // 使用者取消
   }
   rosterPaidBusy.value = true
+  rosterPaidConflict.value = null
   try {
     const res = await markAppraisalCycleRosterPaid(cycleId.value, note)
     cycle.value = withRosterPaid(current, res.data)
     ElMessage.success('已標記名冊已發放')
   } catch (e) {
-    ElMessage.error(apiError(e, '標記名冊已發放失敗'))
+    const message = apiError(e, '標記名冊已發放失敗')
+    ElMessage.error(message)
+    if (isPayoutExistsConflict(e, message)) rosterPaidConflict.value = message
   } finally {
     rosterPaidBusy.value = false
   }
@@ -499,6 +515,27 @@ onMounted(() => {
       狀態 {{ statusLabel(cycle.status ?? '') }}
     </div>
 
+    <el-alert
+      v-if="rosterPaidConflict"
+      type="warning"
+      show-icon
+      :title="rosterPaidConflict"
+      class="roster-paid-conflict"
+      data-test="roster-paid-conflict"
+      @close="rosterPaidConflict = null"
+    >
+      <el-button
+        v-if="canOpenPayout"
+        link
+        type="primary"
+        data-test="roster-paid-goto-payout"
+        @click="gotoPayoutVoid"
+      >前往考核年終獎金作廢該年度明細</el-button>
+      <span v-else class="roster-paid-conflict__hint" data-test="roster-paid-no-payout-permission">
+        作廢需要考核定案權限（APPRAISAL_FINALIZE），請聯絡有權限的人員
+      </span>
+    </el-alert>
+
     <div v-if="rosterPaidText" class="roster-paid-note" data-test="roster-paid-note">
       <el-tag type="success" size="small">名冊已發放</el-tag>
       <span>{{ rosterPaidText }}；年終考核獎金發放不會再產生這個學期的明細</span>
@@ -647,6 +684,8 @@ onMounted(() => {
 }
 .cycle-detail { padding: 0; }
 .meta { margin: var(--space-3) 0; padding: var(--space-3); background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; }
+.roster-paid-conflict { margin: 0 0 var(--space-3); }
+.roster-paid-conflict__hint { font-size: var(--text-sm); color: var(--text-tertiary); }
 .roster-paid-note { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--text-secondary); }
 .sign-progress-wrap { margin: 0 0 var(--space-3); }
 .toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }

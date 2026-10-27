@@ -57,3 +57,25 @@ export function markRosterPaidMessage(cycle: RosterPaidCycleLike): string {
     '已經建立的發放明細不會自動刪除，需要時請先到年終考核獎金頁清空。'
   )
 }
+
+/** 考核年終 payout 的發放年（西元）：來源學年 = 發放年 − 1913（上、下學期週期的 academic_year 相同）。 */
+export function payoutYearForCycle(academicYear: number): number {
+  return academicYear + 1913
+}
+
+/** 「考核年終獎金」頁的位置，帶上該週期所屬的發放年，讓承辦人直接在對的年度作廢明細。 */
+export function payoutVoidLocation(cycle: RosterPaidCycleLike): { path: string; query?: { year: string } } {
+  return cycle.academic_year != null
+    ? { path: '/year-end/appraisal-payout', query: { year: String(payoutYearForCycle(cycle.academic_year)) } }
+    : { path: '/year-end/appraisal-payout' }
+}
+
+/**
+ * 標記遭 409 拒絕，且原因是「該半年的年終明細已存在」（需先作廢再標記）。
+ * `message` 是 apiError() 取出的後端說明（不直接讀回應內容，見 error-detail 棘輪）。
+ * 同樣回 409 的「此週期已標記」「週期不是 CLOSED」不屬此類，不應引導去作廢。
+ */
+export function isPayoutExistsConflict(error: unknown, message: string): boolean {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status
+  return status === 409 && message.includes('作廢')
+}
