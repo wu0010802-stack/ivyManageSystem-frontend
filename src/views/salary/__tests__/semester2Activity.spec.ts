@@ -127,3 +127,20 @@ describe('activityApplyDescription', () => {
     expect(text).toContain('請由其他有權限的人員再執行一次')
   })
 })
+
+describe('activityApplyDescription — 移除列', () => {
+  it('人工優先移除的系統列與重複列各一句，姓名帶類別與被移除金額', () => {
+    const text = activityApplyDescription({
+      skipped_manual: [],
+      skipped_self: [],
+      removed_for_manual: [{ employee_name: '王老師', category: 'teaching_extra', amount: 600 }],
+      removed_duplicates: [{ employee_name: '林老師', category: 'after_class_promo', amount: 3600 }],
+    })
+    expect(text).toContain('已移除系統產生的重複列：王老師（教課教師獎勵金） NT$600')
+    expect(text).toContain('重複的系統產生列已去除（保留最早一筆）：林老師（推動才藝獎勵金） NT$3,600')
+  })
+
+  it('舊後端沒有移除欄位時照舊', () => {
+    expect(activityApplyDescription({ skipped_manual: [], skipped_self: [] })).toBe('')
+  })
+})

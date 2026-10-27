@@ -9,7 +9,13 @@ import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
 import { applySemester2Activity, previewSemester2Activity } from '@/api/extraBonuses'
 import type { Schema } from '@/api/_generated/typed'
-import { applyResultCountsText, defaultSemester2AcademicYear, semester2PeriodLabel } from './semester2Excess'
+import {
+  applyResultCountsText,
+  coexistConfirmNote,
+  coexistCount,
+  defaultSemester2AcademicYear,
+  semester2PeriodLabel,
+} from './semester2Excess'
 import { activityApplyDescription, activityDetailLines, payableActivityCount } from './semester2Activity'
 
 type PreviewOut = Schema<'Semester2ActivityPreviewOut'>
@@ -31,6 +37,8 @@ const tableRows = computed(() =>
   (preview.value?.rows ?? []).map((r) => ({ ...r, detailLines: activityDetailLines(r.category, r.detail) })),
 )
 const payableCount = computed(() => payableActivityCount(preview.value?.rows ?? []))
+// 人工列與系統產生列並存：套用時系統列會被移除（人工優先、不重複發放）
+const coexistRows = computed(() => coexistCount(preview.value?.rows ?? []))
 
 let seq = 0
 const fetchPreview = async () => {
@@ -57,7 +65,9 @@ const doApply = async () => {
     await ElMessageBox.confirm(
       `即將產生 ${academicYear.value} 學年下學期才藝獎勵金表外批次（歸屬 ${p.period_year}/${p.period_month}），` +
         `預計寫入 ${payableCount.value} 筆、預覽合計 ${formatCurrency(p.total_amount)}。` +
-        '此批計入補充保費年累計，須於 8 月薪資封存前執行；重跑會更新系統產生的金額，不覆寫人工登錄。確定執行？',
+        '此批計入補充保費年累計，須於 8 月薪資封存前執行；重跑會更新系統產生的金額，不覆寫人工登錄。' +
+        coexistConfirmNote(coexistRows.value) +
+        '確定執行？',
       '產生下學期才藝獎勵金批次',
       { confirmButtonText: '確定產生', cancelButtonText: '取消', type: 'warning' },
     )
@@ -90,7 +100,7 @@ watch(academicYear, () => {
 })
 onMounted(fetchPreview)
 
-defineExpose({ preview, applyResult, payableCount, tableRows, doApply, fetchPreview, academicYear })
+defineExpose({ preview, applyResult, payableCount, coexistRows, tableRows, doApply, fetchPreview, academicYear })
 </script>
 
 <template>
@@ -177,9 +187,17 @@ defineExpose({ preview, applyResult, payableCount, tableRows, doApply, fetchPrev
             <span v-if="row.detailLines.length === 0" class="hint">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="已產生" width="150">
+        <el-table-column label="已產生" width="220">
           <template #default="{ row }">
-            <span v-if="row.has_manual_payment" class="hint">已有人工登錄（不覆寫）</span>
+            <template v-if="row.has_manual_payment">
+              <span class="hint">已有人工登錄（不覆寫）</span>
+              <div v-if="row.auto_and_manual_coexist" class="coexist" data-test="coexist-note">
+                <el-tag type="warning" size="small">並存</el-tag>
+                <span class="hint">
+                  套用時會移除系統產生的{{ row.existing_auto_amount != null ? ` ${formatCurrency(row.existing_auto_amount)}` : '列' }}，避免重複發放
+                </span>
+              </div>
+            </template>
             <span v-else-if="row.existing_auto_amount != null">{{ formatCurrency(row.existing_auto_amount) }}</span>
             <span v-else class="hint">—</span>
           </template>
@@ -216,6 +234,13 @@ defineExpose({ preview, applyResult, payableCount, tableRows, doApply, fetchPrev
 }
 .summary {
   margin: var(--space-2, 8px) 0 var(--space-3, 12px);
+}
+.coexist {
+  margin-top: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 .detail-line {
   font-size: 12px;

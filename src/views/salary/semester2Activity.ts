@@ -6,6 +6,8 @@
  * 形狀由類別決定，這裡逐欄 narrow 成顯示用的文字行，缺欄位或型別不對一律略過。
  */
 
+import { removalDescriptionParts } from './semester2Excess'
+
 const CATEGORY_LABELS: Record<string, string> = {
   after_class_promo: '推動才藝獎勵金',
   teaching_extra: '教課教師獎勵金',
@@ -87,6 +89,7 @@ export function payableActivityCount(rows: { amount: number; has_manual_payment:
 interface Brief {
   employee_name: string
   category: string
+  amount?: number
 }
 
 /** 同一位員工兩個類別各自一列，名單要註明類別才分得出來。 */
@@ -95,11 +98,17 @@ export function activityBriefNames(list: Brief[]): string {
 }
 
 /** 套用結果的補充說明（人工登錄跳過、執行者本人跳過）；兩者皆無回空字串。 */
-export function activityApplyDescription(r: { skipped_manual: Brief[]; skipped_self: Brief[] }): string {
+export function activityApplyDescription(r: {
+  skipped_manual: Brief[]
+  skipped_self: Brief[]
+  removed_duplicates?: Brief[]
+  removed_for_manual?: Brief[]
+}): string {
   const parts: string[] = []
   if (r.skipped_manual.length > 0) parts.push(`已有人工登錄（未覆寫）：${activityBriefNames(r.skipped_manual)}`)
   if (r.skipped_self.length > 0) {
     parts.push(`執行者本人未產生：${activityBriefNames(r.skipped_self)}，請由其他有權限的人員再執行一次`)
   }
+  parts.push(...removalDescriptionParts(r, (b) => `${b.employee_name}（${activityCategoryLabel(b.category)}）`))
   return parts.join('；')
 }

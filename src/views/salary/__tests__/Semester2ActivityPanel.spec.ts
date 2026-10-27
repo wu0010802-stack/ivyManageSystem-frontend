@@ -279,6 +279,73 @@ describe('Semester2ActivityPanel', () => {
     expect(wrapper.find('[data-test="summary"]').exists()).toBe(false)
   })
 
+  describe('人工優先：並存列與移除結果（審查修補）', () => {
+    const COEXIST_PREVIEW = {
+      ...PREVIEW,
+      rows: [
+        PREVIEW.rows[0],
+        { ...PREVIEW.rows[2], existing_auto_amount: 400, auto_and_manual_coexist: true },
+      ],
+    }
+
+    it('人工列與系統列並存的列標示「並存」並說明套用會移除多少，沒並存的不標', async () => {
+      vi.mocked(api.previewSemester2Activity).mockResolvedValue({ data: COEXIST_PREVIEW } as never)
+      const wrapper = await mountPanel()
+
+      const notes = wrapper.findAll('[data-test="coexist-note"]')
+      expect(notes).toHaveLength(1)
+      expect(notes[0].text()).toContain('並存')
+      expect(notes[0].text()).toContain('NT$400')
+      expect(notes[0].text()).toContain('移除')
+    })
+
+    it('套用確認文案點出有幾位並存、系統列會被移除', async () => {
+      vi.mocked(api.previewSemester2Activity).mockResolvedValue({ data: COEXIST_PREVIEW } as never)
+      vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+      vi.mocked(api.applySemester2Activity).mockResolvedValue({ data: APPLY_RESULT } as never)
+      const wrapper = await mountPanel()
+
+      await wrapper.find('[data-test="apply-button"]').trigger('click')
+      await flushPromises()
+
+      const message = vi.mocked(ElMessageBox.confirm).mock.calls[0][0] as string
+      expect(message).toContain('1 位同時有人工登錄與系統產生的列')
+      expect(message).toContain('移除系統列')
+    })
+
+    it('沒有並存列時確認文案不多一句', async () => {
+      vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+      vi.mocked(api.applySemester2Activity).mockResolvedValue({ data: APPLY_RESULT } as never)
+      const wrapper = await mountPanel()
+
+      await wrapper.find('[data-test="apply-button"]').trigger('click')
+      await flushPromises()
+
+      expect(vi.mocked(ElMessageBox.confirm).mock.calls[0][0] as string).not.toContain('同時有人工登錄')
+    })
+
+    it('套用結果顯示因人工登錄移除、去重的系統列（姓名、類別、被移除金額）', async () => {
+      vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+      vi.mocked(api.applySemester2Activity).mockResolvedValue({
+        data: {
+          ...APPLY_RESULT,
+          removed_for_manual: [{ employee_id: 2, employee_name: '王老師', category: 'teaching_extra', amount: 400 }],
+          removed_duplicates: [{ employee_id: 1, employee_name: '林老師', category: 'after_class_promo', amount: 3600 }],
+        },
+      } as never)
+      const wrapper = await mountPanel()
+
+      await wrapper.find('[data-test="apply-button"]').trigger('click')
+      await flushPromises()
+
+      const result = wrapper.find('[data-test="apply-result"]')
+      expect(result.attributes('title')).toContain('因人工登錄移除系統列 1 位')
+      expect(result.attributes('title')).toContain('去除重複系統列 1 位')
+      expect(result.attributes('description')).toContain('王老師（教課教師獎勵金） NT$400')
+      expect(result.attributes('description')).toContain('林老師（推動才藝獎勵金） NT$3,600')
+    })
+  })
+
   it('切換學年：重新載入該學年並清掉上一次的執行結果', async () => {
     vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
     vi.mocked(api.applySemester2Activity).mockResolvedValue({ data: APPLY_RESULT } as never)
