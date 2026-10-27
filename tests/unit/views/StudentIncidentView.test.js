@@ -43,6 +43,10 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+const formValid = { ok: true }
+const canWriteFlag = { ok: false }
+vi.mock('@/utils/auth', () => ({ hasPermission: () => canWriteFlag.ok }))
+
 // ── global stubs ───────────────────────────────────────────────────────────
 const GLOBAL_STUBS = {
   'el-card': { template: '<div><slot /></div>' },
@@ -54,7 +58,8 @@ const GLOBAL_STUBS = {
   'el-input': { template: '<input />' },
   'el-select': { template: '<div><slot /></div>' },
   'el-option': true,
-  'el-form': { template: '<form><slot /></form>' },
+  // FormDialog 內的 el-form 以 ref.validate() 擋必填；stub 依 formValid 決定結果
+  'el-form': { template: '<form><slot /></form>', methods: { validate: () => Promise.resolve(formValid.ok) } },
   'el-form-item': { props: ['label'], template: '<div><slot /></div>' },
   'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
   'el-pagination': true,
@@ -81,6 +86,8 @@ describe('StudentIncidentView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    formValid.ok = true
+    canWriteFlag.ok = false
     getClassrooms.mockResolvedValue({ data: [] })
     getIncidents.mockResolvedValue({ data: { items: [], total: 0 } })
     ElMessageBox.confirm.mockResolvedValue('confirm')
@@ -147,6 +154,7 @@ describe('StudentIncidentView', () => {
   })
 
   it('toggleParentNotified 呼叫 updateIncident 並切換 parent_notified 旗標', async () => {
+    canWriteFlag.ok = true
     updateIncident.mockResolvedValue({})
 
     const wrapper = mountView()
@@ -160,6 +168,33 @@ describe('StudentIncidentView', () => {
       expect.objectContaining({ parent_notified: true }),
     )
     expect(row.parent_notified).toBe(true)
+  })
+
+  it('沒有 STUDENTS_WRITE 時切換「已告知家長」不寫入（後端會 403）', async () => {
+    updateIncident.mockResolvedValue({})
+    const wrapper = mountView()
+    await flushPromises()
+    const row = { id: 1, parent_notified: false }
+    await wrapper.vm.$.setupState.toggleParentNotified(row)
+    expect(updateIncident).not.toHaveBeenCalled()
+    expect(row.parent_notified).toBe(false)
+  })
+
+  it('必填驗證未過時不送出', async () => {
+    formValid.ok = false
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.vm.$.setupState.submitForm()
+    expect(createIncident).not.toHaveBeenCalled()
+  })
+
+  it('載入失敗顯示錯誤態，不顯示「尚無事件紀錄」', async () => {
+    getIncidents.mockRejectedValue(new Error('boom'))
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.vm.$.setupState.loadError).toBe(true)
+    expect(wrapper.text()).toContain('事件紀錄載入失敗')
+    expect(wrapper.text()).not.toContain('尚無事件紀錄')
   })
 
   it('handleSearch 重置 currentPage=1 並重新載入', async () => {

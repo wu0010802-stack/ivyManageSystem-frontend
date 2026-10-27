@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { getIncidents, createIncident, updateIncident, deleteIncident } from '@/api/studentIncidents'
 import { useAllClassroomStore } from '@/stores/classroomAll'
@@ -13,6 +13,12 @@ import { hasPermission } from '@/utils/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import AdminCreateButton from '@/components/common/AdminCreateButton.vue'
+import AdminListToolbar, { type FilterGroup } from '@/components/common/AdminListToolbar.vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
+import { required } from '@/validators/rules'
+import { useFormDirty } from '@/composables/useFormDirty'
 import { useIsMobile } from '@/composables/useIsMobile'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
@@ -27,7 +33,7 @@ const incidentCardColumns = [
   { label: '事件類型', prop: '__type' },
   { label: '嚴重程度', prop: '__severity' },
   { label: '事件描述', prop: 'description', block: true },
-  { label: '通知家長', prop: '__notified' },
+  { label: '已告知家長', prop: '__notified' },
 ]
 
 // 寫入控制守衛（防禦縱深；班級越權由後端 assert_student_access 把關）
@@ -48,10 +54,20 @@ const hasActiveFilter = computed(() =>
   Boolean(filterClassroom.value) || Boolean(filterType.value) || filterDateRange.value.length === 2
 )
 
+const typeFilterGroups: FilterGroup[] = [
+  { key: 'type', label: '事件類型', options: INCIDENT_TYPES.map((t) => ({ label: t, value: t })) },
+]
+const toolbarFilterValues = computed(() => ({ type: filterType.value }))
+const onToolbarFilters = (v: Record<string, unknown>) => {
+  filterType.value = (v.type as string | null) || null
+  handleSearch()
+}
+
 // ── 表格 ────────────────────────────────────────────────
 const incidents = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 const loading = ref(false)
+const loadError = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
 
@@ -59,6 +75,8 @@ const pageSize = ref(20)
 const dialogVisible = ref(false)
 const dialogMode = ref('create') // 'create' | 'edit'
 const formLoading = ref(false)
+const formRef = ref<FormInstance>()
+const formDialogRef = ref<InstanceType<typeof FormDialog>>()
 
 const emptyForm = (): {
   student_id: number | null
@@ -80,6 +98,14 @@ const emptyForm = (): {
 
 const form = reactive(emptyForm())
 const editId = ref<number | null>(null)
+const { isDirty, snapshot } = useFormDirty(form)
+
+const formRules: FormRules = {
+  student_id: [required('學生', { kind: 'select' })],
+  incident_type: [required('事件類型', { kind: 'select' })],
+  occurred_at: [required('發生時間', { kind: 'select' })],
+  description: [required('事件描述')],
+}
 
 // 新增/編輯 Dialog 的班級/學生選擇
 const dialogClassroom = ref<number | null>(null)
@@ -88,6 +114,7 @@ const dialogStudentsLoading = ref(false)
 
 const fetchIncidents = async () => {
   loading.value = true
+  loadError.value = false
   try {
     const params: Record<string, unknown> = {
       skip: (currentPage.value - 1) * pageSize.value,
@@ -103,6 +130,10 @@ const fetchIncidents = async () => {
     incidents.value = res.data.items
     total.value = res.data.total
   } catch (e) {
+    // 清空並標記失敗，畫面顯示錯誤態而不是「尚無事件紀錄」
+    loadError.value = true
+    incidents.value = []
+    total.value = 0
     ElMessage.error(friendlyError('載入事件紀錄失敗', e))
   } finally {
     loading.value = false
@@ -112,6 +143,13 @@ const fetchIncidents = async () => {
 const handleSearch = () => {
   currentPage.value = 1
   fetchIncidents()
+}
+
+const resetFilters = () => {
+  filterClassroom.value = null
+  filterType.value = null
+  filterDateRange.value = []
+  handleSearch()
 }
 
 const handlePageChange = (page: number) => {
@@ -141,6 +179,7 @@ const openCreate = () => {
   dialogStudents.value = []
   editId.value = null
   dialogMode.value = 'create'
+  snapshot()
   dialogVisible.value = true
 }
 
@@ -159,12 +198,15 @@ const openEdit = (row: Record<string, unknown>) => {
   dialogStudents.value = [{ id: row.student_id as number, name: String(row.student_name ?? '') }]
   editId.value = row.id as number | null
   dialogMode.value = 'edit'
+  snapshot()
   dialogVisible.value = true
 }
 
 const submitForm = async () => {
-  if (!form.student_id || !form.incident_type || !form.occurred_at || !form.description) {
-    ElMessage.warning('請填寫必填欄位（學生、類型、發生時間、描述）')
+  // 必填走 EP rules（欄位標紅＋捲到第一個錯誤欄），ref 未綁定視同驗證失敗（fail-closed）
+  const valid = formRef.value ? await formRef.value.validate().catch(() => false) : false
+  if (!valid) {
+    formDialogRef.value?.scrollToFirstError()
     return
   }
 
@@ -182,22 +224,24 @@ const submitForm = async () => {
 
     if (dialogMode.value === 'create') {
       await createIncident(payload)
-      ElMessage.success('新增成功')
+      ElMessage.success('已建立事件紀錄')
     } else {
       await updateIncident(editId.value!, payload)
-      ElMessage.success('更新成功')
+      ElMessage.success('已更新事件紀錄')
     }
     dialogVisible.value = false
     fetchIncidents()
   } catch (e) {
-    ElMessage.error(apiError(e, '操作失敗'))
+    ElMessage.error(apiError(e, '儲存失敗'))
   } finally {
     formLoading.value = false
   }
 }
 
-// 通知家長開關（表格內直接更新）
+// 「已告知家長」只是紀錄老師是否已用電話／當面告知，系統不會發送任何通知；
+// 開關可隨時切回，所以不另外確認，但沒有寫入權限時不可切（後端會 403）。
 const toggleParentNotified = async (row: Record<string, unknown>) => {
+  if (!canWrite.value) return
   const newVal = !row.parent_notified
   try {
     await updateIncident(row.id as number, {
@@ -206,21 +250,21 @@ const toggleParentNotified = async (row: Record<string, unknown>) => {
     })
     row.parent_notified = newVal
     row.parent_notified_at = newVal ? new Date().toISOString() : null
-    ElMessage.success(newVal ? '已標記通知家長' : '已取消通知標記')
+    ElMessage.success(newVal ? '已記錄：已告知家長' : '已改為：尚未告知家長')
   } catch (e) {
-    ElMessage.error(friendlyError('更新家長通知狀態失敗', e))
+    ElMessage.error(friendlyError('更新告知家長紀錄失敗', e))
   }
 }
 
 const handleDelete = async (row: Record<string, unknown>) => {
   try {
     await ElMessageBox.confirm(
-      `確定要刪除「${row.student_name}」的事件紀錄嗎？`,
+      `確定要刪除「${row.student_name}」的事件紀錄嗎？刪除後無法復原。`,
       '確認刪除',
-      { type: 'warning' }
+      { type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消' }
     )
     await deleteIncident(row.id as number)
-    ElMessage.success('刪除成功')
+    ElMessage.success('已刪除')
     fetchIncidents()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
@@ -247,43 +291,56 @@ onMounted(() => {
   <div class="page-container">
     <PageHeader title="學生事件紀錄">
       <template #actions>
-        <el-button v-if="canWrite" type="primary" @click="openCreate">＋ 新增事件</el-button>
+        <AdminCreateButton v-if="canWrite" @click="openCreate">新增事件</AdminCreateButton>
       </template>
     </PageHeader>
 
-    <!-- 篩選列 -->
-    <el-card class="filter-card" shadow="never">
-      <el-row :gutter="12" align="middle">
-        <el-col :xs="24" :sm="6">
-          <el-select v-model="filterClassroom" placeholder="篩選班級" clearable style="width: 100%">
-            <el-option v-for="c in classrooms" :key="c.id" :label="c.label" :value="c.id" />
-          </el-select>
-        </el-col>
-        <el-col :xs="24" :sm="5">
-          <el-select v-model="filterType" placeholder="事件類型" clearable style="width: 100%">
-            <el-option v-for="t in INCIDENT_TYPES" :key="t" :label="t" :value="t" />
-          </el-select>
-        </el-col>
-        <el-col :xs="24" :sm="8">
-          <el-date-picker
-            v-model="filterDateRange"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="開始日期"
-            end-placeholder="結束日期"
-            value-format="YYYY-MM-DD"
-            style="width: 100%"
-          />
-        </el-col>
-        <el-col :xs="24" :sm="5">
-          <el-button type="primary" @click="handleSearch">查詢</el-button>
-          <el-button @click="filterClassroom = null; filterType = null; filterDateRange = []; handleSearch()">重置</el-button>
-        </el-col>
-      </el-row>
-    </el-card>
+    <AdminListToolbar
+      :searchable="false"
+      :filters="typeFilterGroups"
+      :filter-values="toolbarFilterValues"
+      :total="total"
+      @update:filter-values="onToolbarFilters"
+    >
+      <template #actions>
+        <el-select
+          v-model="filterClassroom"
+          placeholder="全部班級"
+          clearable
+          aria-label="篩選班級"
+          class="filter-select"
+          @change="handleSearch"
+        >
+          <el-option v-for="c in classrooms" :key="c.id" :label="c.label" :value="c.id" />
+        </el-select>
+        <el-date-picker
+          v-model="filterDateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="開始日期"
+          end-placeholder="結束日期"
+          value-format="YYYY-MM-DD"
+          aria-label="篩選發生日期"
+          class="filter-range"
+          @change="handleSearch"
+        />
+        <el-button v-if="hasActiveFilter" @click="resetFilters">清除篩選</el-button>
+      </template>
+    </AdminListToolbar>
 
     <!-- 表格 -->
-    <el-card shadow="never" style="margin-top: 16px">
+    <TableSkeleton v-if="loading && !incidents.length" :columns="7" />
+    <EmptyState
+      v-else-if="loadError"
+      variant="error"
+      title="事件紀錄載入失敗"
+      description="請重新載入；在載入成功前請勿視為沒有紀錄。"
+    >
+      <template #action>
+        <el-button type="primary" @click="fetchIncidents">重新載入</el-button>
+      </template>
+    </EmptyState>
+    <template v-else>
       <el-table v-if="!isMobile" :data="incidents" v-loading="loading" stripe>
         <template #empty>
           <EmptyState
@@ -325,19 +382,26 @@ onMounted(() => {
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column label="通知家長" width="90" align="center">
+        <el-table-column width="110" align="center">
+          <template #header>
+            <el-tooltip content="記錄是否已用電話或當面告知家長；系統不會發送通知" placement="top">
+              <span class="header-hint">已告知家長</span>
+            </el-tooltip>
+          </template>
           <template #default="{ row }">
             <el-switch
               :model-value="row.parent_notified"
-              @change="toggleParentNotified(row)"
+              :disabled="!canWrite"
+              :aria-label="`${row.student_name}已告知家長`"
               size="small"
+              @change="toggleParentNotified(row)"
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column v-if="canWrite" label="操作" width="130" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="canWrite" size="small" text @click="openEdit(row)">編輯</el-button>
-            <el-button v-if="canWrite" size="small" text type="danger" @click="handleDelete(row)">刪除</el-button>
+            <el-button size="small" text @click="openEdit(row)">編輯</el-button>
+            <el-button size="small" text type="danger" @click="handleDelete(row)">刪除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -365,15 +429,21 @@ onMounted(() => {
           <span v-else>-</span>
         </template>
         <template #cell-__notified="{ item }">
-          <el-switch :model-value="Boolean(item.parent_notified)" size="small" @change="toggleParentNotified(item)" />
+          <el-switch
+            :model-value="Boolean(item.parent_notified)"
+            :disabled="!canWrite"
+            :aria-label="`${item.student_name}已告知家長`"
+            size="small"
+            @change="toggleParentNotified(item)"
+          />
         </template>
-        <template #actions="{ item }">
-          <el-button v-if="canWrite" size="small" text @click="openEdit(item)">編輯</el-button>
-          <el-button v-if="canWrite" size="small" text type="danger" @click="handleDelete(item)">刪除</el-button>
+        <template v-if="canWrite" #actions="{ item }">
+          <el-button size="small" text @click="openEdit(item)">編輯</el-button>
+          <el-button size="small" text type="danger" @click="handleDelete(item)">刪除</el-button>
         </template>
       </AdminListCards>
 
-      <div style="display: flex; justify-content: flex-end; margin-top: 16px">
+      <div v-if="total > pageSize" class="pagination-row">
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
@@ -382,55 +452,63 @@ onMounted(() => {
           @current-change="handlePageChange"
         />
       </div>
-    </el-card>
+    </template>
 
     <!-- 新增/編輯 Dialog -->
-    <el-dialog
+    <FormDialog
+      ref="formDialogRef"
       v-model="dialogVisible"
       :title="dialogMode === 'create' ? '新增事件紀錄' : '編輯事件紀錄'"
-      width="560px"
+      size="standardNarrow"
+      :dirty="isDirty"
+      :loading="formLoading"
+      :submit-text="dialogMode === 'create' ? '建立事件紀錄' : '儲存'"
+      @submit="submitForm"
     >
-      <el-form label-width="90px">
-        <el-form-item label="班級">
+      <el-form ref="formRef" :model="form" :rules="formRules" label-position="top" class="form-grid">
+        <el-form-item label="班級" class="fg-6">
           <el-select
             v-model="dialogClassroom"
-            placeholder="選擇班級"
+            placeholder="先選班級再選學生"
             @change="onDialogClassroomChange"
-            style="width: 100%"
           >
             <el-option v-for="c in classrooms" :key="c.id" :label="c.label" :value="c.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="學生 *">
+        <el-form-item label="學生" prop="student_id" class="fg-6">
           <el-select
             v-model="form.student_id"
-            placeholder="選擇學生"
+            :placeholder="dialogClassroom ? '選擇學生' : '請先選班級'"
+            :disabled="!dialogClassroom"
             :loading="dialogStudentsLoading"
-            style="width: 100%"
+            filterable
           >
             <el-option v-for="s in dialogStudents" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="事件類型 *">
-          <el-select v-model="form.incident_type" placeholder="選擇類型" style="width: 100%">
+        <el-form-item label="事件類型" prop="incident_type" class="fg-6">
+          <el-select v-model="form.incident_type" placeholder="選擇類型">
             <el-option v-for="t in INCIDENT_TYPES" :key="t" :label="t" :value="t" />
           </el-select>
         </el-form-item>
-        <el-form-item label="嚴重程度">
-          <el-select v-model="form.severity" placeholder="選擇嚴重程度" clearable style="width: 100%">
+        <el-form-item label="嚴重程度" class="fg-6">
+          <el-select v-model="form.severity" placeholder="選擇嚴重程度（選填）" clearable>
             <el-option v-for="s in SEVERITIES" :key="s" :label="s" :value="s" />
           </el-select>
         </el-form-item>
-        <el-form-item label="發生時間 *">
+        <el-form-item label="發生時間" prop="occurred_at" class="fg-6">
           <el-date-picker
             v-model="form.occurred_at"
             type="datetime"
             placeholder="選擇日期時間"
             value-format="YYYY-MM-DDTHH:mm:ss"
-            style="width: 100%"
           />
         </el-form-item>
-        <el-form-item label="事件描述 *">
+        <el-form-item label="已告知家長" class="fg-6">
+          <el-checkbox v-model="form.parent_notified">已用電話或當面告知</el-checkbox>
+          <span class="form-hint">只做紀錄，系統不會發送通知</span>
+        </el-form-item>
+        <el-form-item label="事件描述" prop="description" class="fg-12">
           <el-input
             v-model="form.description"
             type="textarea"
@@ -438,23 +516,16 @@ onMounted(() => {
             placeholder="請描述事件經過"
           />
         </el-form-item>
-        <el-form-item label="處置方式">
+        <el-form-item label="處置方式" class="fg-12">
           <el-input
             v-model="form.action_taken"
             type="textarea"
             :rows="2"
-            placeholder="已採取的處置措施"
+            placeholder="已採取的處置措施（選填）"
           />
         </el-form-item>
-        <el-form-item label="通知家長">
-          <el-checkbox v-model="form.parent_notified">已通知家長</el-checkbox>
-        </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="formLoading" @click="submitForm">確認</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </div>
 </template>
 
@@ -462,8 +533,20 @@ onMounted(() => {
 .page-container {
   padding: 0;
 }
-.filter-card {
-  margin-bottom: 0;
+.filter-select {
+  width: 200px;
+}
+.filter-range {
+  width: 260px;
+}
+.pagination-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+.header-hint {
+  border-bottom: 1px dashed currentColor;
+  cursor: help;
 }
 .student-link { color: var(--el-color-primary); text-decoration: none; }
 .student-link:hover { text-decoration: underline; }
