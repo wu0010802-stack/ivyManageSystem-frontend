@@ -217,7 +217,7 @@ async function onGenerate() {
   try {
     await ElMessageBox.confirm(
       `將為 ${payoutRows.value.length} 名員工建立考核年終發放資料（全部在職員工＋已勾選的離職員工），合計 ${payoutTotalDisplay.value}。此動作只會在系統內建立發放資料，不會執行匯款。` +
-        (rosterPaidNoticeText.value ? `\n\n${rosterPaidNoticeText.value}` : ''),
+        (rosterPaidNoticeText.value ? ` ${rosterPaidNoticeText.value}` : ''),
       '確認建立發放資料',
       { confirmButtonText: '確認建立', cancelButtonText: '取消' }
     )
