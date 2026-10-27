@@ -40,7 +40,7 @@ const BASELINE = {
   brand: 190, // 2026-10-21 排班與出勤名冊／異常清單改用 --color-primary（-3）
   ivy: 27,
   m3: 383,
-  neutral: 279,
+  neutral: 278,
   pt: 861,
 };
 
