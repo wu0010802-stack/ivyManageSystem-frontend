@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { reactive } from 'vue'
+import { defineComponent, h, inject, provide, reactive } from 'vue'
 import FestivalBonusTab from '@/views/salary/components/FestivalBonusTab.vue'
 
 /**
@@ -63,6 +63,13 @@ const makeConfig = () =>
     warning_deduction: 1000 as number | null,
     minor_offense_deduction: 3000 as number | null,
     major_offense_deduction: 0 as number | null,
+    festival_leader_class_ratio: null as boolean | null,
+    festival_unassigned_teacher_school_ratio: null as boolean | null,
+    festival_new_class_guarantee: null as boolean | null,
+    festival_shared_assistant_simple_avg: null as boolean | null,
+    excess_exclude_long_leave: null as boolean | null,
+    festival_suspension_rule: null as boolean | null,
+    festival_c_grade_promotion: null as boolean | null,
   })
 
 const mountTab = (bonusConfig: ReturnType<typeof makeConfig>) =>
@@ -121,5 +128,121 @@ describe('FestivalBonusTab 懲處預設扣款（義華 Q13）', () => {
     await inputs[2].setValue('6000')
     expect(bonusConfig.major_offense_deduction).toBe(6000)
     expect(bonusConfig.minor_offense_deduction).toBe(3000)
+  })
+})
+
+// 義華 2026-10-27 第二批（yhruleb01）：卡片擴為「節慶／超額計算規則」，新增三個開關
+// 測試環境沒有註冊 Element Plus 元件：用最小的單選群組 stub 驗證選取與寫回。
+const RadioGroupStub = defineComponent({
+  props: { modelValue: { type: null, default: undefined } },
+  emits: ['update:modelValue'],
+  setup(props, { emit, slots }) {
+    provide('rg', {
+      current: () => props.modelValue,
+      select: (v: unknown) => emit('update:modelValue', v),
+    })
+    return () => h('div', { class: 'rg' }, slots.default?.())
+  },
+})
+const RadioButtonStub = defineComponent({
+  props: ['value'],
+  setup(props, { slots }) {
+    const rg = inject<{ current: () => unknown; select: (v: unknown) => void }>('rg')!
+    return () =>
+      h(
+        'button',
+        {
+          type: 'button',
+          class: ['rb', rg.current() === props.value ? 'is-active' : ''],
+          onClick: () => rg.select(props.value),
+        },
+        slots.default?.(),
+      )
+  },
+})
+
+describe('FestivalBonusTab 節慶／超額計算規則開關', () => {
+  const TOGGLE_KEYS = [
+    'festival_leader_class_ratio',
+    'festival_unassigned_teacher_school_ratio',
+    'festival_new_class_guarantee',
+    'festival_shared_assistant_simple_avg',
+    'excess_exclude_long_leave',
+    'festival_suspension_rule',
+    'festival_c_grade_promotion',
+  ] as const
+
+  const mountWithRadios = (bonusConfig: ReturnType<typeof makeConfig>) =>
+    mount(FestivalBonusTab, {
+      props: { bonusConfig, gradeTargets: [] },
+      global: {
+        stubs: { ...STUBS, 'el-radio-group': RadioGroupStub, 'el-radio-button': RadioButtonStub },
+      },
+    })
+  const rowOf = (wrapper: ReturnType<typeof mountWithRadios>, key: string) =>
+    wrapper.find(`[data-testid="festival-rule-${key}"]`)
+  const activeIndex = (wrapper: ReturnType<typeof mountWithRadios>, key: string) =>
+    rowOf(wrapper, key)
+      .findAll('button.rb')
+      .findIndex((b) => b.classes().includes('is-active'))
+
+  it('七個開關依序各一列，卡片標題涵蓋超額', () => {
+    const wrapper = mountWithRadios(makeConfig())
+    const card = wrapper.find('[data-testid="festival-rule-toggles-card"]')
+
+    expect(card.text()).toContain('節慶／超額計算規則')
+    const keys = card
+      .findAll('[data-testid^="festival-rule-"]')
+      .map((el) => el.attributes('data-testid')!.replace('festival-rule-', ''))
+    expect(keys).toEqual([...TOGGLE_KEYS])
+  })
+
+  it('每列都是開啟／關閉單選，不使用 el-switch（null 會被 switch 靜默改成 false）', () => {
+    const wrapper = mountWithRadios(makeConfig())
+
+    for (const key of TOGGLE_KEYS) {
+      const row = rowOf(wrapper, key)
+      expect(row.exists()).toBe(true)
+      expect(row.findAll('button.rb').map((b) => b.text())).toEqual(['開啟', '關閉'])
+    }
+    expect(wrapper.html()).not.toContain('el-switch')
+  })
+
+  it('初值 null 時兩個選項都不選（不假裝是關閉），選了之後寫回 bonusConfig', async () => {
+    const bonusConfig = makeConfig()
+    const wrapper = mountWithRadios(bonusConfig)
+    const buttons = () => rowOf(wrapper, 'festival_suspension_rule').findAll('button.rb')
+
+    expect(activeIndex(wrapper, 'festival_suspension_rule')).toBe(-1)
+    expect(bonusConfig.festival_suspension_rule).toBeNull()
+
+    await buttons()[0].trigger('click')
+    expect(bonusConfig.festival_suspension_rule).toBe(true)
+    expect(activeIndex(wrapper, 'festival_suspension_rule')).toBe(0)
+
+    await buttons()[1].trigger('click')
+    expect(bonusConfig.festival_suspension_rule).toBe(false)
+    expect(activeIndex(wrapper, 'festival_suspension_rule')).toBe(1)
+  })
+
+  it('改一個開關不影響其他開關', async () => {
+    const bonusConfig = makeConfig()
+    const wrapper = mountWithRadios(bonusConfig)
+
+    await rowOf(wrapper, 'excess_exclude_long_leave').findAll('button.rb')[0].trigger('click')
+
+    expect(bonusConfig.excess_exclude_long_leave).toBe(true)
+    expect(bonusConfig.festival_suspension_rule).toBeNull()
+    expect(bonusConfig.festival_c_grade_promotion).toBeNull()
+  })
+
+  it('已載入為 true／false 時，對應選項被選起來', () => {
+    const bonusConfig = makeConfig()
+    bonusConfig.festival_c_grade_promotion = true
+    bonusConfig.excess_exclude_long_leave = false
+    const wrapper = mountWithRadios(bonusConfig)
+
+    expect(activeIndex(wrapper, 'festival_c_grade_promotion')).toBe(0)
+    expect(activeIndex(wrapper, 'excess_exclude_long_leave')).toBe(1)
   })
 })

@@ -38,6 +38,10 @@ interface FestivalBonusConfig {
   festival_unassigned_teacher_school_ratio: boolean | null
   festival_new_class_guarantee: boolean | null
   festival_shared_assistant_simple_avg: boolean | null
+  // 義華 2026-10-27 第二批（yhruleb01）：超額排請假幼生、整班／全園停發、C 級滿二年比照 B 級
+  excess_exclude_long_leave: boolean | null
+  festival_suspension_rule: boolean | null
+  festival_c_grade_promotion: boolean | null
 }
 
 // 懲處預設扣款三欄（後端 PUT /config/bonus 驗證 0–100000）
@@ -238,12 +242,12 @@ defineProps<{
     </el-row>
   </el-card>
 
-  <!-- 義華 Q6–Q9：節慶計算規則開關（per-tenant，預設關＝舊行為） -->
+  <!-- 義華 Q6–Q9、2026-10-27 第二批：節慶／超額計算規則開關（per-tenant，預設關＝舊行為） -->
   <el-card class="box-card mt-4" shadow="never" data-testid="festival-rule-toggles-card">
-    <template #header><div class="card-header"><span>節慶計算規則</span></div></template>
+    <template #header><div class="card-header"><span>節慶／超額計算規則</span></div></template>
     <p class="desc-text">
       各園所依自己的規章開啟；預設全部關閉（維持原計算）。⚠ 開啟後，未封存的薪資會標記需重算，
-      重算時整年度未封存月份的節慶獎金都會套用新規則。
+      重算時整年度未封存月份的節慶／超額獎金都會套用新規則。
     </p>
     <div
       v-for="t in FESTIVAL_RULE_TOGGLES"

@@ -136,9 +136,9 @@ const saveBonusConfig = async (): Promise<boolean> => {
   if (enabled.length > 0) {
     try {
       await ElMessageBox.confirm(
-        `即將開啟節慶規則：${enabled.map((d) => d.label).join('、')}。` +
-          '儲存後未封存的薪資會標記需重算，重算時整年度未封存月份的節慶獎金都會依新規則計算。確定要開啟嗎？',
-        '開啟節慶計算規則',
+        `即將開啟計算規則：${enabled.map((d) => d.label).join('、')}。` +
+          '儲存後未封存的薪資會標記需重算，重算時整年度未封存月份的節慶／超額獎金都會依新規則計算。確定要開啟嗎？',
+        '開啟節慶／超額計算規則',
         { confirmButtonText: '確定開啟', cancelButtonText: '取消', type: 'warning' },
       )
     } catch {
