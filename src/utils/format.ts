@@ -5,6 +5,10 @@
  * formatTime()         — ISO 字串取前 16 字元時間（HH:MM）
  * formatDate()         — ISO 字串轉 YYYY-MM-DD HH:MM（本地時間）
  * formatActivityDate() — ISO 字串轉 "YYYY-MM-DD HH:MM"，null → '-'
+ * formatIsoMinute()    — 純字串切片 "YYYY-MM-DD HH:MM"（不經 Date），fallback 可指定
+ * formatIsoDate()      — 純字串切片 "YYYY-MM-DD"（砍掉 T 之後），fallback 可指定
+ * formatLocalHourMinute() — Date/ISO 字串轉本地時區 "HH:MM"，fallback 可指定
+ * pad2()               — 兩位數補零
  * formatDateTimeTW()   — Asia/Taipei 時區的完整日期時間
  * formatTimeTW()       — Asia/Taipei 時區的 HH:MM
  * fmtPct()             — 百分比格式化（isRatio 控制 0~1 小數 vs 已是百分比數值）
@@ -18,7 +22,8 @@ import { formatCurrency } from '@/utils/currency'
 
 const TAIPEI_TZ = 'Asia/Taipei'
 
-const pad2 = (n: number) => String(n).padStart(2, '0')
+// 兩位數補零（日期/時間組字串用）。全站唯一來源，元件內不得再自己寫 padStart(2, '0')。
+export const pad2 = (n: number) => String(n).padStart(2, '0')
 
 // module 級單例：options 皆為靜態，每次呼叫重建 Intl.DateTimeFormat 成本高，
 // 大量渲染（才藝報名/日曆等）時重用同一實例，輸出完全一致。
@@ -68,6 +73,27 @@ export const formatDate = (isoStr: unknown) => {
 export const formatActivityDate = (str: unknown) => {
   if (!str) return '-'
   return String(str).replace('T', ' ').substring(0, 16)
+}
+
+// 純字串切片：ISO 字串 → "YYYY-MM-DD HH:MM"（T 換空白、取前 16 字元），
+// 不經 Date、不做時區轉換（後端 naive 字串原樣顯示）。falsy → fallback（預設 ''）。
+// 與 formatDate（經 Date 轉瀏覽器本地時間）不同；formatActivityDate 即 fallback='-' 的變體。
+export const formatIsoMinute = (iso: string | null | undefined, fallback = ''): string =>
+  iso ? iso.replace('T', ' ').slice(0, 16) : fallback
+
+// 純字串切片：ISO 字串 → "YYYY-MM-DD"（砍掉 T 之後全部）。falsy → fallback（預設 ''）。
+export const formatIsoDate = (iso: string | null | undefined, fallback = ''): string =>
+  iso ? iso.replace(/T.*/, '') : fallback
+
+// Date 或 ISO 字串 → 瀏覽器本地時區 "HH:MM"。falsy 或無法解析 → fallback（預設 ''）。
+export const formatLocalHourMinute = (
+  value: Date | string | null | undefined,
+  fallback = '',
+): string => {
+  if (!value) return fallback
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return fallback
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
 // Asia/Taipei 時區的完整日期時間（含秒），不可解析的字串原樣回傳
