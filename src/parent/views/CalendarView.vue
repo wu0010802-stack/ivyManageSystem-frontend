@@ -6,6 +6,7 @@ import { localDateISO } from '../utils/date'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 interface AgendaItem {
@@ -68,11 +69,14 @@ const groupedByDate = computed(() => {
     .map(([date, items]) => ({ date, items }))
 })
 
+const firstLoadFailed = ref(false)
+
 async function fetchData() {
   const requestEpoch = ++fetchEpoch
   const requestedMode = mode.value
   const requestedDays = days.value
   loading.value = true
+  firstLoadFailed.value = false
   try {
     const { data: d } =
       requestedMode === 'month'
@@ -90,6 +94,8 @@ async function fetchData() {
     if (requestEpoch !== fetchEpoch) return
     mode.value = appliedMode
     days.value = appliedDays
+    // 首次就失敗時 data 仍為 null；沒有這個旗標畫面會整片空白、也沒有重試入口
+    if (!data.value) firstLoadFailed.value = true
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入行事曆失敗'))
   } finally {
@@ -185,6 +191,12 @@ function dayLabel(iso: string) {
         <SkeletonBlock variant="card" :count="3" />
       </div>
     </template>
+
+    <MobileErrorRetry
+      v-else-if="firstLoadFailed && !data"
+      fallback-message="行事曆載入失敗，請稍後再試"
+      @retry="fetchData"
+    />
 
     <EmptyState
       v-else-if="data && groupedByDate.length === 0"
