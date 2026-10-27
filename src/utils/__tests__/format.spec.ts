@@ -5,7 +5,23 @@ import {
   formatIsoMinute,
   formatIsoDate,
   formatLocalHourMinute,
+  formatDate,
 } from '@/utils/format'
+
+describe('formatDate（經 Date 轉瀏覽器本地 YYYY-MM-DD HH:MM）', () => {
+  it('合法日期照常格式化', () => {
+    expect(formatDate(new Date(2026, 9, 27, 8, 5).toISOString())).toBe('2026-10-27 08:05')
+  })
+
+  it('falsy 回空字串', () => {
+    expect(formatDate(null)).toBe('')
+    expect(formatDate('')).toBe('')
+  })
+
+  it('無法解析的字串回空字串，不顯示 NaN-NaN-NaN NaN:NaN', () => {
+    expect(formatDate('not-a-date')).toBe('')
+  })
+})
 
 describe('fmtPct', () => {
   it('數值已是百分比 → 一位小數 + %', () => expect(fmtPct(83.62)).toBe('83.6%'))

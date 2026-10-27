@@ -63,9 +63,11 @@ export const formatTime = (isoStr: unknown) => {
   return String(isoStr).slice(11, 16)
 }
 
+// 無法解析的字串回空字串（同 falsy），不顯示 "NaN-NaN-NaN NaN:NaN"
 export const formatDate = (isoStr: unknown) => {
   if (!isoStr) return ''
   const d = new Date(String(isoStr))
+  if (Number.isNaN(d.getTime())) return ''
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
