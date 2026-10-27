@@ -63,7 +63,7 @@
                 size="small"
                 type="success"
                 :disabled="!canAdminister"
-                @click="doAdminister(lg.id)"
+                @click="doAdminister(o, lg)"
               >
                 餵藥
               </el-button>
@@ -103,7 +103,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getTodayMedication,
   administerMedication,
@@ -190,19 +190,30 @@ async function reload() {
     summary.pending = 0
     summary.administered = 0
     summary.skipped = 0
-    apiError(e, '載入今日用藥失敗')
+    // 畫面上的 .med-load-error 已說明失敗，這裡補上後端原因方便判斷是權限還是網路
+    ElMessage.error(apiError(e, '載入今日用藥失敗'))
   } finally {
     loading.value = false
   }
 }
 
-async function doAdminister(logId: number | string) {
+async function doAdminister(order: MedicationOrder, log: MedicationLog) {
+  // 餵藥紀錄寫入後不能改（DB 只允許另立修正紀錄），先讓老師再看一眼是哪位孩子、哪個藥
   try {
-    await administerMedication(logId as number, {})
+    await ElMessageBox.confirm(
+      `${order.student_name}｜${order.medication_name}｜劑量 ${order.dose}｜${log.scheduled_time} 時段`,
+      '確認已餵藥？',
+      { confirmButtonText: '已餵藥', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    await administerMedication(log.id as number, {})
     ElMessage.success('已標記餵藥')
     await reload()
   } catch (e) {
-    apiError(e, '餵藥失敗')
+    ElMessage.error(apiError(e, '餵藥失敗'))
   }
 }
 
@@ -226,7 +237,7 @@ async function doSkip() {
     skipDialog.visible = false
     await reload()
   } catch (e) {
-    apiError(e, '跳過失敗')
+    ElMessage.error(apiError(e, '跳過失敗'))
   } finally {
     skipDialog.saving = false
   }
