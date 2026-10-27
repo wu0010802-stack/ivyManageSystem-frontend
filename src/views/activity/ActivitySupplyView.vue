@@ -1,14 +1,40 @@
 <template>
   <div class="activity-supplies">
     <!-- 標題交給外層「才藝設定與品項」頁的 h2 與 tab 標籤，此處不再重複（2026-07-31 整併） -->
-    <div class="toolbar">
-      <div class="toolbar__actions">
+    <AdminListToolbar
+      v-model:search="supplySearch"
+      search-placeholder="搜尋用品名稱"
+      :total="supplyTotal"
+      :shown="supplyShown"
+    >
+      <template #actions>
         <AcademicTermSelector />
-        <el-button v-if="canWrite" type="primary" @click="openCreate">新增用品</el-button>
-      </div>
-    </div>
+        <AdminCreateButton v-if="canWrite" @click="openCreate">新增用品</AdminCreateButton>
+      </template>
+    </AdminListToolbar>
 
-    <el-table :data="supplies" v-loading="loading" border>
+    <el-table :data="filteredSupplies" v-loading="loading" border>
+      <template #empty>
+        <EmptyState v-if="loadError" variant="error" title="用品資料載入失敗" :description="loadError">
+          <template #action><el-button type="primary" @click="fetchSupplies">重試</el-button></template>
+        </EmptyState>
+        <EmptyState
+          v-else-if="supplySearch"
+          variant="inline"
+          title="沒有符合搜尋的用品"
+          :description="`找不到名稱含「${supplySearch}」的用品。`"
+        />
+        <EmptyState
+          v-else-if="!loading"
+          variant="inline"
+          title="這學期還沒有用品"
+          description="新增後，家長報名時就能一起選購（例如美術材料包）。"
+        >
+          <template v-if="canWrite" #action>
+            <AdminCreateButton @click="openCreate">新增用品</AdminCreateButton>
+          </template>
+        </EmptyState>
+      </template>
       <el-table-column label="用品名稱" prop="name" min-width="160" />
       <el-table-column label="價格（元）" prop="price" width="110" align="right">
         <template #default="{ row }">${{ row.price?.toLocaleString() }}</template>
@@ -27,26 +53,31 @@
       </el-table-column>
       <el-table-column v-if="canWrite" label="操作" width="130" align="center" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openEdit(row)">編輯</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">停用</el-button>
+          <el-button size="small" link type="primary" @click="openEdit(row)">編輯</el-button>
+          <el-button size="small" link type="danger" @click="handleDelete(row)">停用</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '編輯用品' : '新增用品'" width="400px" destroy-on-close>
-      <el-form :model="form" label-width="90px">
-        <el-form-item label="用品名稱" required>
-          <el-input v-model="form.name" />
+    <FormDialog
+      ref="formDialogRef"
+      v-model="dialogVisible"
+      :title="editingId ? '編輯用品' : '新增用品'"
+      :dirty="formDirty"
+      :loading="saving"
+      :submit-text="editingId ? '儲存' : '新增用品'"
+      @submit="handleSave"
+    >
+      <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
+        <el-form-item label="用品名稱" prop="name">
+          <el-input v-model="form.name" maxlength="100" placeholder="例：美術材料包" />
         </el-form-item>
-        <el-form-item label="價格（元）" required>
+        <el-form-item label="價格（元）" prop="price">
           <el-input-number v-model="form.price" :min="0" :max="999999" :step="1" :precision="0" style="width: 100%" />
         </el-form-item>
+        <p v-if="editingId" class="form-note">改價格只影響之後的新報名；已報名的金額不會跟著變。</p>
       </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving">儲存</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
 
     <el-dialog
       v-model="orderersVisible"
@@ -91,6 +122,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { getSupplies, createSupply, updateSupply, deleteSupply, getRegistrations } from '@/api/activity'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import AdminCreateButton from '@/components/common/AdminCreateButton.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
+import { useClientTableFilter } from '@/composables'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { required } from '@/validators/rules'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
 import { PAYMENT_STATUS_TAG_TYPE, PAYMENT_STATUS_LABEL } from '@/constants/activity'
@@ -119,6 +158,25 @@ const dialogVisible = ref(false)
 const saving = ref(false)
 const editingId = ref<number | null>(null)
 const form = ref<{ name: string; price: number }>({ name: '', price: 0 })
+const { isDirty: formDirty, snapshot: snapshotForm } = useFormDirty(form)
+const formRef = ref<FormInstance>()
+const formDialogRef = ref<InstanceType<typeof FormDialog>>()
+const formRules: FormRules = {
+  name: [required('用品名稱')],
+  price: [required('價格', { kind: 'select', trigger: 'change' })],
+}
+// 非空＝最近一次載入失敗；空表格據此顯示「載入失敗＋重試」而不是「還沒有用品」
+const loadError = ref('')
+
+const {
+  searchQuery: supplySearch,
+  filtered: filteredSupplies,
+  total: supplyTotal,
+  shown: supplyShown,
+} = useClientTableFilter<Supply>({
+  source: () => supplies.value,
+  searchFields: (r) => [r.name],
+})
 
 // 訂購名單 dialog：點「已訂套數」即查即用，不快取（後端 limit 上限 200）
 const REGISTRATIONS_PAGE_MAX = 200
@@ -134,6 +192,7 @@ let fetchSeq = 0
 async function fetchSupplies() {
   const seq = ++fetchSeq
   loading.value = true
+  loadError.value = ''
   try {
     const res = await getSupplies({
       school_year: termStore.school_year,
@@ -146,7 +205,8 @@ async function fetchSupplies() {
     // F4：載入失敗須清空清單，否則切學期失敗時畫面留著上一學期的資料且編輯/停用
     // 按鈕仍可操作（學期選擇器顯示新學期但資料屬舊學期），易誤改到舊學期資料。
     supplies.value = []
-    ElMessage.error(friendlyError('載入用品資料失敗', e))
+    loadError.value = friendlyError('載入用品資料失敗', e)
+    ElMessage.error(loadError.value)
   } finally {
     if (seq === fetchSeq) loading.value = false
   }
@@ -157,17 +217,24 @@ watch(() => [termStore.school_year, termStore.semester], () => fetchSupplies())
 function openCreate() {
   editingId.value = null
   form.value = { name: '', price: 0 }
+  snapshotForm()
   dialogVisible.value = true
 }
 
 function openEdit(row: Supply) {
   editingId.value = row.id
   form.value = { name: row.name, price: row.price }
+  snapshotForm()
   dialogVisible.value = true
 }
 
 async function handleSave() {
-  if (!form.value.name || form.value.price == null) {
+  const valid = formRef.value?.validate ? await formRef.value.validate().catch(() => false) : true
+  if (!valid) {
+    formDialogRef.value?.scrollToFirstError()
+    return
+  }
+  if (!form.value.name.trim() || form.value.price == null) {
     return ElMessage.warning('請填寫用品名稱和價格')
   }
   saving.value = true
@@ -188,16 +255,25 @@ async function handleSave() {
     dialogVisible.value = false
     fetchSupplies()
   } catch (e) {
-    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-    ElMessage.error(detail || '操作失敗')
+    ElMessage.error(friendlyError(editingId.value ? '更新用品失敗' : '新增用品失敗', e))
   } finally {
     saving.value = false
   }
 }
 
 async function handleDelete(row: Supply) {
+  // 後端不允許停用仍被有效報名選用的用品（否則家長改報名會被卡住），先在前端講清楚、不白按
+  const ordered = row.ordered_count ?? 0
+  if (ordered > 0) {
+    await ElMessageBox.alert(
+      `「${row.name}」目前有 ${ordered} 筆報名選了這項用品，要先到訂購名單把這些報名的用品移除或改選，才能停用。`,
+      '暫時不能停用',
+      { type: 'warning', confirmButtonText: '知道了' },
+    ).catch(() => {})
+    return
+  }
   try {
-    await ElMessageBox.confirm(`確定要停用用品「${row.name}」嗎？`, '確認停用', {
+    await ElMessageBox.confirm(`停用後家長報名時就看不到「${row.name}」。確定要停用嗎？`, '確認停用', {
       type: 'warning',
       confirmButtonText: '確定停用',
       confirmButtonClass: 'el-button--danger',
@@ -206,10 +282,7 @@ async function handleDelete(row: Supply) {
     ElMessage.success('用品已停用')
     fetchSupplies()
   } catch (e) {
-    if (e !== 'cancel') {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      ElMessage.error(detail || '停用失敗')
-    }
+    if (e !== 'cancel') ElMessage.error(friendlyError('停用用品失敗', e))
   }
 }
 
@@ -255,8 +328,7 @@ onMounted(fetchSupplies)
 
 <style scoped>
 .activity-supplies { padding: 16px; }
-.toolbar { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
-.toolbar__actions { display: flex; gap: 8px; align-items: center; }
+.form-note { margin: 0 0 0 90px; font-size: 12px; color: var(--text-tertiary); }
 .count-zero { color: var(--text-tertiary); }
 .orderers-meta { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); color: var(--text-secondary); flex-wrap: wrap; }
 .orderers-truncated { margin-top: var(--space-2); font-size: 12px; color: var(--text-tertiary); }
