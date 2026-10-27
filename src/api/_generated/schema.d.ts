@@ -18662,6 +18662,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/salaries/festival-suspensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Festival Suspensions
+         * @description 節慶停課月登記列表（依年月、班級排序；全園列排在該月最前）。
+         */
+        get: operations["list_festival_suspensions_api_salaries_festival_suspensions_get"];
+        put?: never;
+        /**
+         * Create Festival Suspension
+         * @description 登記某月某班（或全園）的停課日數；同月同班（全園）只能有一列。
+         */
+        post: operations["create_festival_suspension_api_salaries_festival_suspensions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/festival-suspensions/{suspension_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Festival Suspension
+         * @description 更新停課日數與原因（年月、班級不可改，需改請刪除重建）。
+         */
+        put: operations["update_festival_suspension_api_salaries_festival_suspensions__suspension_id__put"];
+        post?: never;
+        /**
+         * Delete Festival Suspension
+         * @description 刪除停課登記。
+         */
+        delete: operations["delete_festival_suspension_api_salaries_festival_suspensions__suspension_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/festival-suspensions/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Festival Suspension Decision
+         * @description 該月節慶停發的系統判定預覽：登記的停課日數＋由月費單推導的繳費率。
+         *
+         *     `rule_enabled=false` 時判定仍會顯示，但計薪不會套用。唯讀，不寫任何資料。
+         */
+        get: operations["get_festival_suspension_decision_api_salaries_festival_suspensions_decision_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/salaries/finalize-month": {
         parameters: {
             query?: never;
@@ -25674,6 +25744,16 @@ export interface components {
              */
             enrollment_count_mode?: string | null;
             /**
+             * Excess Exclude Long Leave
+             * @description 超額獎金排除當月請假逾 10 天的幼生（關閉＝請假幼生照算）
+             */
+            excess_exclude_long_leave?: boolean | null;
+            /**
+             * Festival C Grade Promotion
+             * @description C 級班導／副班導在本園服務滿二年且目前就讀幼保科系者，節慶獎金比照 B 級基數（關閉＝依原等級）
+             */
+            festival_c_grade_promotion?: boolean | null;
+            /**
              * Festival Leader Class Ratio
              * @description 組長兼帶班時節慶獎金改依班級比例（關閉＝主管全校比例）
              */
@@ -25688,6 +25768,11 @@ export interface components {
              * @description 兩班共用副班導節慶獎金取兩班比例簡單平均（關閉＝依在籍人數加權）
              */
             festival_shared_assistant_simple_avg?: boolean | null;
+            /**
+             * Festival Suspension Rule
+             * @description 節慶獎金停發：整班（或全園）當月停課 >=10 日，或繳費人數低於 60%，該班（或全園）當月節慶獎金為 0（關閉＝不判定）
+             */
+            festival_suspension_rule?: boolean | null;
             /**
              * Festival Unassigned Teacher School Ratio
              * @description 未帶班的教保職節慶獎金依全校目標人數比例（關閉＝不發）
@@ -31311,6 +31396,11 @@ export interface components {
              * @default 0
              */
             dependents: number;
+            /**
+             * Ece Program Enrolled
+             * @default false
+             */
+            ece_program_enrolled: boolean;
             /** Email */
             email?: string | null;
             /** Emergency Contact Name */
@@ -31470,6 +31560,11 @@ export interface components {
             classroom_name?: string | null;
             /** Dependents */
             dependents?: number | null;
+            /**
+             * Ece Program Enrolled
+             * @default false
+             */
+            ece_program_enrolled: boolean;
             /** Email */
             email?: string | null;
             /** Emergency Contact Name */
@@ -31615,6 +31710,8 @@ export interface components {
             bypass_standard_base?: boolean | null;
             /** Dependents */
             dependents?: number | null;
+            /** Ece Program Enrolled */
+            ece_program_enrolled?: boolean | null;
             /** Email */
             email?: string | null;
             /** Emergency Contact Name */
@@ -33223,6 +33320,103 @@ export interface components {
              * @default false
              */
             july_leaver_merge_enabled: boolean;
+        };
+        /** FestivalSuspensionCreate */
+        FestivalSuspensionCreate: {
+            /**
+             * Classroom Id
+             * @description 班級 id；省略＝全園停課
+             */
+            classroom_id?: number | null;
+            /**
+             * Month
+             * @description 月份
+             */
+            month: number;
+            /**
+             * Reason
+             * @description 停課原因／公告依據
+             */
+            reason?: string | null;
+            /**
+             * Suspended Days
+             * @description 該月停課日數（含假日）；>=10 觸發節慶停發
+             */
+            suspended_days: number;
+            /**
+             * Year
+             * @description 西元年
+             */
+            year: number;
+        };
+        /**
+         * FestivalSuspensionDecisionOut
+         * @description 某月節慶停發的系統判定（停課日數＋繳費率）；唯讀預覽，不寫任何資料。
+         */
+        FestivalSuspensionDecisionOut: {
+            /** Classes */
+            classes: components["schemas"]["SuspendedClassOut"][];
+            /** Month */
+            month: number;
+            /**
+             * Rule Enabled
+             * @description 租戶是否已開啟節慶停發規則（BonusConfig.festival_suspension_rule）
+             */
+            rule_enabled: boolean;
+            /** School Reason */
+            school_reason?: string | null;
+            /** Warnings */
+            warnings: string[];
+            /** Year */
+            year: number;
+        };
+        /** FestivalSuspensionListOut */
+        FestivalSuspensionListOut: {
+            /** Items */
+            items: components["schemas"]["FestivalSuspensionOut"][];
+        };
+        /** FestivalSuspensionMutationOut */
+        FestivalSuspensionMutationOut: {
+            item?: components["schemas"]["FestivalSuspensionOut"] | null;
+            /** Message */
+            message: string;
+            stale: components["schemas"]["StaleDependentsOut"];
+        };
+        /** FestivalSuspensionOut */
+        FestivalSuspensionOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /**
+             * Classroom Name
+             * @description 班級名稱；全園為「全園」
+             */
+            classroom_name: string;
+            /** Created By */
+            created_by?: string | null;
+            /** Id */
+            id: number;
+            /** Month */
+            month: number;
+            /** Reason */
+            reason?: string | null;
+            /** Suspended Days */
+            suspended_days: number;
+            /**
+             * Triggers Suspension
+             * @description 停課日數是否已達停發門檻（>=10）；不含繳費率判定
+             */
+            triggers_suspension: boolean;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Year */
+            year: number;
+        };
+        /** FestivalSuspensionUpdate */
+        FestivalSuspensionUpdate: {
+            /** Reason */
+            reason?: string | null;
+            /** Suspended Days */
+            suspended_days: number;
         };
         /** FinalizeMonthRequest */
         FinalizeMonthRequest: {
@@ -51941,6 +52135,15 @@ export interface components {
             replied_count: number;
             /** Reply Rate */
             reply_rate: number;
+        };
+        /** SuspendedClassOut */
+        SuspendedClassOut: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Reason */
+            reason: string;
         };
         /** SwapRequestCreate */
         SwapRequestCreate: {
@@ -84620,6 +84823,169 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FestivalPayoutSettingsOut"];
+                };
+            };
+        };
+    };
+    list_festival_suspensions_api_salaries_festival_suspensions_get: {
+        parameters: {
+            query?: {
+                month?: number | null;
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FestivalSuspensionListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_festival_suspension_api_salaries_festival_suspensions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FestivalSuspensionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FestivalSuspensionMutationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_festival_suspension_api_salaries_festival_suspensions__suspension_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suspension_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FestivalSuspensionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FestivalSuspensionMutationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_festival_suspension_api_salaries_festival_suspensions__suspension_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suspension_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FestivalSuspensionMutationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_festival_suspension_decision_api_salaries_festival_suspensions_decision_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FestivalSuspensionDecisionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
