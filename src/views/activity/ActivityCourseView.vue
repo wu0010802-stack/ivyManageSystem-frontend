@@ -237,6 +237,21 @@
           </el-select>
           <div class="form-hint">年終教課獎勵金依此歸屬自動計算</div>
         </el-form-item>
+        <el-form-item label="教課獎勵單價" prop="teaching_unit_price" class="fg-6">
+          <el-input-number
+            v-model="form.teaching_unit_price"
+            :min="0"
+            :max="10000"
+            :step="5"
+            :precision="0"
+            :value-on-clear="null"
+            controls-position="right"
+            placeholder="沿用全域設定"
+            style="width: 100%"
+            data-test="input-teaching-unit-price"
+          />
+          <div class="form-hint">每位幼生每計次的教師獎勵金（元）；空白＝沿用年終規則的全域單價，0＝此課不發</div>
+        </el-form-item>
         <el-form-item label="限定年級" prop="allowed_grades" class="fg-12">
           <el-checkbox-group v-model="form.allowed_grades" data-test="allowed-grades-group">
             <el-checkbox v-for="g in GRADES_ORDER" :key="g" :value="g" :label="g">{{ g }}</el-checkbox>
@@ -609,6 +624,8 @@ interface Course {
   instructor_name?: string | null
   // G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算
   instructor_employee_id?: number | null
+  // 教課獎勵金每位幼生每計次單價（yhrulea01）；null／缺＝沿用年終規則的全域單價
+  teaching_unit_price?: number | null
   // 可報名年級（空=不限；僅顯示 advisory，不擋報名）
   allowed_grades?: string[]
   enrolled?: number
@@ -631,6 +648,7 @@ interface CourseForm {
   meeting_weekdays: number[]; meeting_start_time: string; meeting_end_time: string
   instructor_name: string
   instructor_employee_id: number | null
+  teaching_unit_price: number | null
   allowed_grades: string[]
 }
 
@@ -728,6 +746,7 @@ const defaultForm = (): CourseForm => ({
   meeting_end_time: '',
   instructor_name: '',
   instructor_employee_id: null,
+  teaching_unit_price: null,
   allowed_grades: [],
 })
 const form = ref<CourseForm>(defaultForm())
@@ -1135,6 +1154,7 @@ function openEdit(row: Course) {
     meeting_end_time: row.meeting_end_time || '',
     instructor_name: row.instructor_name || '',
     instructor_employee_id: row.instructor_employee_id ?? null,
+    teaching_unit_price: row.teaching_unit_price ?? null,
     allowed_grades: row.allowed_grades ? [...row.allowed_grades] : [],
   }
   editingDm.value = { dm_url: row.dm_url ?? null, dm_pages: row.dm_pages ?? null }
