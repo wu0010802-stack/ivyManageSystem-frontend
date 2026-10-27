@@ -206,6 +206,7 @@ import {
   findPairCell,
   isRecordedConflict,
   planText,
+  uncoveredDates,
   type GridCell,
   type GridDay,
   type GridEmployee,
@@ -299,10 +300,16 @@ const actionableMode = computed<DayResolveMode | 'none'>(() => {
   if (missingFromImport.value) return 'side-by-side'
   return 'none'
 })
-/** 資料待補且整天沒打卡、當天又有匯入＝匯入的打卡檔裡沒有他這天（多半是卡號沒對照） */
+/**
+ * 「整天未匯入、等匯入就好」的日子：與格子同一個判定（uncoveredDates 只收工作日）。非工作日用每日調整排了人、
+ * 當天卻沒人打卡時，這天永遠不會被匯入涵蓋，格子算待辦，抽屜也要當成要處理（給補登），不是等匯入。
+ */
+const uncovered = computed<ReadonlySet<string>>(() => uncoveredDates(props.day ? [props.day] : []))
+const awaitingImportDay = computed(() => !!props.cell && uncovered.value.has(props.cell.date))
+/** 資料待補且整天沒打卡、這天又不是等匯入＝匯入的打卡檔裡沒有他這天（多半是卡號沒對照） */
 const missingFromImport = computed(() => {
   const actual = props.cell?.actual
-  return !!actual && actual.status === 'data_incomplete' && !actual.punch_in && !actual.punch_out && props.day?.import_covered !== false
+  return !!actual && actual.status === 'data_incomplete' && !actual.punch_in && !actual.punch_out && !awaitingImportDay.value
 })
 /**
  * 本人出勤一律不能自己補（後端 require_not_self_attendance 回 403）。已打卡的本人格後端給 locked_reason
@@ -353,7 +360,7 @@ const absenceRisk = computed(() => {
   if (!cell.plan.expected || cell.plan.day_off || actual.punch_in || actual.punch_out) return false
   if (cell.leaves.some((leave) => leave.status === 'approved' && leave.is_full_day)) return false
   if (actual.status === 'suspected_absence') return true
-  return actual.status === 'data_incomplete' && props.day?.import_covered !== false
+  return actual.status === 'data_incomplete' && !awaitingImportDay.value
 })
 const canCreateLeave = hasPermission('LEAVES_WRITE')
 const canViewEmployees = hasPermission('EMPLOYEES_READ')
@@ -464,7 +471,7 @@ const verdict = computed(() => {
   const actual = cell?.actual
   if (!cell || !actual) return ''
   // R9：與格子同一套判定（今天的上班中／尚未打卡不能和格子不一致）
-  const shown = cellDisplay(cell, props.today, props.day?.import_covered === false ? new Set([props.day.date]) : undefined)
+  const shown = cellDisplay(cell, props.today, uncovered.value)
   if (shown.state === 'working' || shown.state === 'not_punched' || shown.state === 'awaiting_import') return shown.verdict?.label ?? ''
   // 與格子同一個判定文字（含「・已豁免／已接受扣款」）；非應出勤日格子不寫判定，這裡仍寫狀態名
   const parts = [shown.verdict?.label ?? RECON_STATUS_LABELS[actual.status]]

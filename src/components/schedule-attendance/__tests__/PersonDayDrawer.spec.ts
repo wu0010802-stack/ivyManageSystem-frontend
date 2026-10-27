@@ -922,6 +922,24 @@ describe('PersonDayDrawer 沒有打卡的應上班日', () => {
     expect(mountDrawer(cell(2, W1, { actual: { status: 'missing_punch', punch_in: `${W1}T07:00:00` } })).find('[data-test="pdd-absence"]').exists()).toBe(false)
     expect(mountDrawer(cell(2, '2026-09-19', { plan: { expected: false }, actual: { status: 'off_day' } })).find('[data-test="pdd-absence"]').exists()).toBe(false)
   })
+
+  it('非工作日整天未匯入（每日調整排了人）：與格子同判定不算「等匯入」，判定不寫未匯入、給補登入口與曠職提醒', async () => {
+    const SAT = '2026-09-19'
+    const w = mountDrawer(
+      cell(2, SAT, { plan: { source: 'daily' }, actual: { status: 'data_incomplete', attendance_id: null, punch_in: null, punch_out: null } }),
+      { importCovered: false },
+    )
+    await flushPromises()
+    expect(w.get('[data-test="pdd-actual"]').text()).not.toContain('未匯入')
+    expect(w.find('[data-test="pdd-absence"]').exists()).toBe(true)
+    expect(w.get('[data-test="pdd-resolve"]').text()).toContain('補登上下班')
+    // 工作日整天未匯入照舊：等匯入、不給補登、不提示曠職
+    const weekday = mountDrawer(cell(2, W1, { actual: { status: 'data_incomplete', attendance_id: null } }), { importCovered: false })
+    await flushPromises()
+    expect(weekday.get('[data-test="pdd-actual"]').text()).toContain('未匯入')
+    expect(weekday.find('[data-test="pdd-absence"]').exists()).toBe(false)
+    expect(weekday.find('[data-test="pdd-resolve"]').exists()).toBe(false)
+  })
 })
 
 describe('PersonDayDrawer 版面順序', () => {
