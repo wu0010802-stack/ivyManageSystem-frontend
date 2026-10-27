@@ -40,7 +40,7 @@
         @click="goDetail(item.id)"
       >
         <div class="sign-card__title">{{ item.title }}</div>
-        <div class="sign-card__meta">{{ item.student_name }} · 已於 {{ formatDate(item.signed_at) }} 簽署</div>
+        <div class="sign-card__meta">{{ item.student_name }} · 已於 {{ formatIsoMinute(item.signed_at) }} 簽署</div>
       </button>
     </div>
   </div>
@@ -56,6 +56,7 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { listMySignRequests, type SignRequestSummary } from '../api/signDocuments'
 import { toast } from '../utils/toast'
 import { loadErrorMessage } from '../utils/loadError'
+import { formatIsoMinute } from '@/utils/format'
 
 const router = useRouter()
 const pending = ref<SignRequestSummary[]>([])
@@ -73,9 +74,6 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 }
 function docTypeLabel(v: string) {
   return DOC_TYPE_LABELS[v] ?? v
-}
-function formatDate(iso: string | null) {
-  return iso ? iso.replace('T', ' ').slice(0, 16) : ''
 }
 
 async function load() {

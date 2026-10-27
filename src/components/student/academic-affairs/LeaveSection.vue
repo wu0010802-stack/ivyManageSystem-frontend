@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch } from 'vue'
 import { apiError } from '@/utils/error'
+import { formatIsoDate } from '@/utils/format'
 import { listStudentLeaves } from '@/api/studentLeaves'
 import { ACADEMIC_AFFAIRS_FILTERS_KEY } from '@/composables/useAcademicAffairsFilters'
 import SectionCard from './SectionCard.vue'
@@ -40,8 +41,6 @@ const filtered = computed(() => {
     return true
   })
 })
-
-const formatDate = (s: string | undefined | null) => (s ? s.replace(/T.*/, '') : '')
 
 const fetchLeaves = async () => {
   if (!ctx.filters.classroomId) {
@@ -96,8 +95,8 @@ watch(
       <el-table-column label="期間" min-width="170">
         <template #default="{ row }">
           <span class="leave-period">
-            <span>{{ formatDate(row.start_date) }}</span>
-            <span>至 {{ formatDate(row.end_date) }}</span>
+            <span>{{ formatIsoDate(row.start_date) }}</span>
+            <span>至 {{ formatIsoDate(row.end_date) }}</span>
           </span>
         </template>
       </el-table-column>

@@ -15,7 +15,7 @@
       <h2 class="sign-detail-view__title">{{ doc.title }}</h2>
 
       <div v-if="doc.status === 'signed'" class="sign-detail-view__done">
-        <p>您已於 {{ formatDate(doc.signed_at) }} 完成簽署。</p>
+        <p>您已於 {{ formatIsoMinute(doc.signed_at) }} 完成簽署。</p>
         <button type="button" class="sign-detail-view__pdf-link" @click="openPdf">
           查看已簽署 PDF
         </button>
@@ -87,6 +87,7 @@ import { getMySignRequest, signMyRequest, mySignPdfUrl, type SignRequestDetailOu
 import { renderMd, blobToDataUrl, canSubmit } from '../utils/mdRender'
 import { toast } from '../utils/toast'
 import { invalidateHomeSummary } from '../composables/useHomeSummary'
+import { formatIsoMinute } from '@/utils/format'
 
 interface SignaturePadRef {
   isEmpty(): boolean
@@ -110,10 +111,6 @@ const padRef = ref<SignaturePadRef | null>(null)
 
 const renderedHtml = computed(() => (doc.value ? renderMd(doc.value.content_md) : ''))
 const submittable = computed(() => canSubmit(scrolledToBottom.value, confirmedRead.value, hasSignature.value))
-
-function formatDate(iso: string | null) {
-  return iso ? iso.replace('T', ' ').slice(0, 16) : ''
-}
 
 function onScroll() {
   const el = contentRef.value

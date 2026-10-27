@@ -28,6 +28,7 @@ import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm
 import { Top, Document } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import { formatDate } from '@/utils/format'
 import { useTableFilters } from '@/composables/useTableFilters'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -521,12 +522,6 @@ const togglePin = async (row: AnnouncementItem) => {
   } catch (error) {
     ElMessage.error(friendlyError('更新置頂狀態失敗', error))
   }
-}
-
-const formatDate = (isoStr: string | null | undefined) => {
-  if (!isoStr) return ''
-  const d = new Date(isoStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 const getReadPreview = (row: AnnouncementItem) => row.read_preview || []

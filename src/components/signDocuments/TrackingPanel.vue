@@ -45,10 +45,10 @@
         </template>
       </el-table-column>
       <el-table-column label="發送時間" width="160">
-        <template #default="{ row }">{{ formatDate(row.sent_at) }}</template>
+        <template #default="{ row }">{{ formatIsoMinute(row.sent_at) }}</template>
       </el-table-column>
       <el-table-column label="簽署時間" width="160">
-        <template #default="{ row }">{{ row.signed_at ? formatDate(row.signed_at) : '—' }}</template>
+        <template #default="{ row }">{{ row.signed_at ? formatIsoMinute(row.signed_at) : '—' }}</template>
       </el-table-column>
       <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
@@ -156,6 +156,7 @@ import {
 } from '@/api/signDocuments'
 import { getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
+import { formatIsoMinute } from '@/utils/format'
 
 defineProps<{ canWrite: boolean }>()
 
@@ -204,9 +205,6 @@ function statusTagType(v: string): 'warning' | 'success' | 'info' {
   if (v === 'signed') return 'success'
   if (v === 'voided') return 'info'
   return 'warning'
-}
-function formatDate(iso: string) {
-  return iso ? iso.replace('T', ' ').slice(0, 16) : ''
 }
 
 const requests = ref<RequestRow[]>([])

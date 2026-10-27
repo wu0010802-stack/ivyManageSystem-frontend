@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { Document, Top } from '@element-plus/icons-vue'
 import { getPortalAnnouncements, markAnnouncementRead } from '@/api/portal'
 import { apiError } from '@/utils/error'
+import { formatDate } from '@/utils/format'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
@@ -84,12 +85,6 @@ const toggleExpand = async (ann: Announcement) => {
       // Silent fail for read tracking
     }
   }
-}
-
-const formatDate = (isoStr: string) => {
-  if (!isoStr) return ''
-  const d = new Date(isoStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 // 後端對沒有作者的公告回傳「未知」佔位字串（api/portal/announcements.py），

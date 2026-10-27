@@ -5,6 +5,7 @@ import { listStudentLeaves } from '@/api/studentLeaves'
 import { useAllClassroomStore } from '@/stores/classroomAll'
 import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
 import { apiError } from '@/utils/error'
+import { formatIsoDate } from '@/utils/format'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 import { useIsMobile } from '@/composables/useIsMobile'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -122,10 +123,9 @@ watch(() => filters.q, () => {
   searchTimer = setTimeout(handleSearch, 300)
 })
 
-const formatDate = (s: unknown) => (s ? String(s).replace(/T.*/, '') : '')
 const formatPeriod = (row: Record<string, unknown>) => {
-  const start = formatDate(row.start_date)
-  const end = formatDate(row.end_date)
+  const start = formatIsoDate(row.start_date as string | null)
+  const end = formatIsoDate(row.end_date as string | null)
   return start === end ? start : `${start} ~ ${end}`
 }
 

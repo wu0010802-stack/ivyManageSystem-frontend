@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { getPublicRegistrationTime } from '@/api/activityPublic'
 import type { RegistrationTimeSettings } from '@/composables/useRegistrationWindow'
+import { formatIsoMinute } from '@/utils/format'
 
 export function useActivityRegistrationTime() {
   // null＝尚未載入（useRegistrationWindow 對 null fail-open 不擋）；
@@ -21,10 +22,11 @@ export function useActivityRegistrationTime() {
     }
   }
 
-  function formatDate(dateStr: string | null | undefined) {
-    if (!dateStr) return '—'
-    return dateStr.replace('T', ' ').slice(0, 16)
+  // 回傳的 formatDate 是此 composable 的公開 API（有單元測試）：null → '—'，其餘純字串切到分鐘
+  return {
+    timeInfo,
+    loadTime,
+    applyTime,
+    formatDate: (dateStr: string | null | undefined) => formatIsoMinute(dateStr, '—'),
   }
-
-  return { timeInfo, loadTime, applyTime, formatDate }
 }
