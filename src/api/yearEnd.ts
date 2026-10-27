@@ -109,7 +109,7 @@ export const importYearEndExcel = (
     orgRateSecond?: number
     enrollmentTarget?: number
   },
-) => {
+): AxiosResp<'/year_end/cycles/import_excel', 'post'> => {
   const fd = new FormData()
   fd.append('file', file)
   return api.post('/year_end/cycles/import_excel', fd, {

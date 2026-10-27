@@ -79,3 +79,26 @@ export function payoutWarningLabels(codes: string[], labels: Record<string, stri
   }
   return out
 }
+
+const IMPORT_ROSTER_PAID_CODE = /appraisal_roster_already_paid:\d+/
+const IMPORT_ROSTER_PAID_PAREN = /\s*[（(]\s*appraisal_roster_already_paid:\d+\s*[）)]/g
+const IMPORT_ROSTER_PAID_FALLBACK =
+  '該考核學期的名冊已標記發放，本次匯入的對應考核獎金年終仍會再發一次，請確認是否重複'
+
+/**
+ * 年終 Excel 匯入結果的 warnings（不擋匯入的提醒）轉成可直接顯示的中文。
+ * 後端句子本身是中文，只在括號裡夾帶 `appraisal_roster_already_paid:<週期 id>` 代碼：
+ * 把代碼拿掉，整句只剩代碼時改用固定說明；其他警告原樣保留；相同文字只留一句。
+ */
+export function importWarningLabels(warnings: string[] | null | undefined): string[] {
+  const out: string[] = []
+  for (const raw of warnings ?? []) {
+    let text = raw
+    if (IMPORT_ROSTER_PAID_CODE.test(raw)) {
+      text = raw.replace(IMPORT_ROSTER_PAID_PAREN, '').replace(IMPORT_ROSTER_PAID_CODE, '').trim()
+      if (!text) text = IMPORT_ROSTER_PAID_FALLBACK
+    }
+    if (!out.includes(text)) out.push(text)
+  }
+  return out
+}

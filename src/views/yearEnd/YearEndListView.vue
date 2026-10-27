@@ -17,6 +17,7 @@ import { CYCLE_STATUS_LABEL, CYCLE_STATUS_TAG } from '@/constants/appraisalYearE
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
+import { importWarningLabels } from './appraisalPayoutRosterPaid'
 
 interface YearEndCycleRow {
   id: number
@@ -168,6 +169,11 @@ async function doImport() {
         `班級績效 ${data.class_targets_upserted}、跳過 ${data.skipped_unresolved_names.length}`
     )
     importDialog.value = false
+    // 不擋匯入的提醒（例如該考核半年已標記名冊已發放，匯入的金額年終仍會再發）要讓承辦人看到
+    const warnings = importWarningLabels(data.warnings)
+    if (warnings.length > 0) {
+      ElMessage.warning({ message: warnings.join('；'), duration: 12000, showClose: true })
+    }
     await load()
   } catch (e) {
     ElMessage.error(apiError(e, '匯入失敗'))

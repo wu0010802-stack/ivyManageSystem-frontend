@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   displayTotal,
+  importWarningLabels,
   payableAmount,
   payoutWarningLabels,
   rosterPaidHalves,
@@ -86,5 +87,47 @@ describe('payoutWarningLabels', () => {
         base,
       ),
     ).toHaveLength(2)
+  })
+})
+
+describe('importWarningLabels（年終 Excel 匯入的提醒）', () => {
+  const SERVER =
+    '113 學年上學期考核名冊已標記發放（appraisal_roster_already_paid:12），本次匯入的對應考核獎金年終仍會再發一次，請確認是否重複'
+
+  it('後端句子拿掉括號內的代碼與週期 id，其餘照舊', () => {
+    const [label] = importWarningLabels([SERVER])
+    expect(label).toBe('113 學年上學期考核名冊已標記發放，本次匯入的對應考核獎金年終仍會再發一次，請確認是否重複')
+    expect(label).not.toMatch(/appraisal_roster_already_paid|12/)
+  })
+
+  it('全形與半形括號都處理', () => {
+    expect(importWarningLabels(['113 學年下學期名冊已標記發放 (appraisal_roster_already_paid:7)，請確認'])[0]).toBe(
+      '113 學年下學期名冊已標記發放，請確認',
+    )
+  })
+
+  it('整句只剩代碼時改用固定中文說明', () => {
+    const [label] = importWarningLabels(['appraisal_roster_already_paid:12'])
+    expect(label).toContain('名冊已標記發放')
+    expect(label).toContain('年終仍會再發一次')
+    expect(label).not.toContain('appraisal_roster_already_paid')
+  })
+
+  it('兩個學期各一句保留；完全相同的句子只留一句；其他警告原樣', () => {
+    const labels = importWarningLabels([
+      SERVER,
+      SERVER.replace('上學期', '下學期').replace(':12', ':13'),
+      'appraisal_roster_already_paid:99',
+      'appraisal_roster_already_paid:98',
+      '其他提醒',
+    ])
+    expect(labels).toHaveLength(4)
+    expect(labels).toContain('其他提醒')
+  })
+
+  it('沒有警告或舊後端沒回欄位：空陣列', () => {
+    expect(importWarningLabels([])).toEqual([])
+    expect(importWarningLabels(undefined)).toEqual([])
+    expect(importWarningLabels(null)).toEqual([])
   })
 })

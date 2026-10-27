@@ -535,6 +535,59 @@ describe('YearEndListView — Task 7 動態預設 + 權限前置', () => {
     })
   })
 
+  describe('doImport()：匯入結果的提醒 warnings（考核名冊已發放）', () => {
+    const IMPORT_RESULT = {
+      settlements_upserted: 10,
+      special_bonuses_upserted: 4,
+      class_targets_upserted: 6,
+      skipped_unresolved_names: [],
+    }
+    const SERVER_WARNING =
+      '113 學年上學期考核名冊已標記發放（appraisal_roster_already_paid:12），本次匯入的對應考核獎金年終仍會再發一次，請確認是否重複'
+
+    async function importWith(data: Record<string, unknown>) {
+      vi.mocked(api.importYearEndExcel).mockResolvedValueOnce({ data } as never)
+      const wrapper = await mountView()
+      const vm = wrapper.vm as unknown as { importForm: { file: File | null }; doImport: () => Promise<void> }
+      vm.importForm.file = new File(['x'], 'test.xls')
+      await vm.doImport()
+    }
+
+    it('有提醒：匯入照樣成功，另外顯示不含代碼的中文警告（持續顯示、可關閉）', async () => {
+      await importWith({ ...IMPORT_RESULT, warnings: [SERVER_WARNING] })
+
+      expect(ElMessage.success).toHaveBeenCalled()
+      const warnCalls = vi.mocked(ElMessage.warning).mock.calls
+      const arg = warnCalls[warnCalls.length - 1][0] as { message: string; duration: number; showClose: boolean }
+      expect(arg.message).toContain('113 學年上學期考核名冊已標記發放')
+      expect(arg.message).toContain('年終仍會再發一次')
+      expect(arg.message).not.toContain('appraisal_roster_already_paid')
+      expect(arg.duration).toBeGreaterThanOrEqual(10000)
+      expect(arg.showClose).toBe(true)
+    })
+
+    it('兩個學期都有提醒：合併成一則', async () => {
+      await importWith({
+        ...IMPORT_RESULT,
+        warnings: [SERVER_WARNING, SERVER_WARNING.replace('上學期', '下學期').replace(':12', ':13')],
+      })
+
+      const calls = vi.mocked(ElMessage.warning).mock.calls.filter((c) => typeof c[0] === 'object')
+      expect(calls).toHaveLength(1)
+      const message = (calls[0][0] as { message: string }).message
+      expect(message).toContain('上學期')
+      expect(message).toContain('下學期')
+    })
+
+    it('沒有提醒（空陣列或舊後端沒回欄位）：不跳警告', async () => {
+      await importWith({ ...IMPORT_RESULT, warnings: [] })
+      await importWith({ ...IMPORT_RESULT })
+
+      const objectWarnings = vi.mocked(ElMessage.warning).mock.calls.filter((c) => typeof c[0] === 'object')
+      expect(objectWarnings).toHaveLength(0)
+    })
+  })
+
   it('doImport()：使用者填寫魔數值時正常帶入 payload', async () => {
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {
