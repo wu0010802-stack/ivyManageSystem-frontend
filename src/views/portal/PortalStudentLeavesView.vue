@@ -13,6 +13,7 @@ import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import { getMyStudents } from '@/api/portal'
 import { listPortalStudentLeaves } from '@/api/portalStudentLeaves'
 import { apiError } from '@/utils/error'
+import { todayISO } from '@/utils/format'
 
 interface LeaveItem {
   id: number
@@ -46,9 +47,7 @@ const customEnd = ref('')
 const classroomId = ref<number | null>(null)
 const typeFilter = ref('')
 
-const pad = (n: number) => String(n).padStart(2, '0')
-const fmtDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-const todayStr = () => fmtDate(new Date())
+const todayStr = () => todayISO()
 
 const buildParams = () => {
   const params: { classroom_id?: number; start_date?: string; end_date?: string } = {}

@@ -291,7 +291,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 
 import { POS_MODES, computeOwed, formatTWD, normalizeByDateRow } from '@/constants/pos'
-import { todayTaipeiISO } from '@/utils/format'
+import { todayTaipeiISO, pad2 } from '@/utils/format'
 
 const weekdayLabels = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -307,10 +307,6 @@ function taipeiToday() {
     month: Number(parts.find((p) => p.type === 'month')!.value) - 1,
     day: Number(parts.find((p) => p.type === 'day')!.value),
   }
-}
-
-function pad2(n: number) {
-  return String(n).padStart(2, '0')
 }
 
 function compactTWD(n: number | string | null | undefined) {

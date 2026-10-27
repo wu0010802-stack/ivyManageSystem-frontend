@@ -591,6 +591,7 @@ import { useIsMobile } from '@/composables/useIsMobile'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
+import { offsetISO } from '@/utils/format'
 import { sanitizeHref } from '@/utils/url'
 import { formatWeekdaySchedule, isWeekdayScheduleIncomplete } from '@/utils/weekdaySchedule'
 import { GRADES_ORDER } from '@/constants/recruitment'
@@ -651,10 +652,7 @@ const slipDueDate = ref<string>('')
 const slipPrinting = ref(false)
 
 function defaultSlipDueDate(): string {
-  const d = new Date()
-  d.setDate(d.getDate() + 14)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return offsetISO(14)
 }
 
 function openSlipDialog(row: Course) {

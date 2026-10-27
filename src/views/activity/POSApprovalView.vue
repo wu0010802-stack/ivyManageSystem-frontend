@@ -425,7 +425,7 @@ import {
   unlockPOSDailyClose,
 } from '@/api/activity'
 import { getUserInfo, hasPermission } from '@/utils/auth'
-import { todayTaipeiISO, formatDateTimeTW, formatTimeTW } from '@/utils/format'
+import { todayTaipeiISO, formatDateTimeTW, formatTimeTW, pad2 } from '@/utils/format'
 
 // 台北基準的「今日 ± n 天」。
 // Why: 收銀端與後端的「當日」一律是 Asia/Taipei；utils/format 的 todayISO()/
@@ -436,8 +436,7 @@ function taipeiOffsetISO(days: number, now: Date = new Date()): string {
   const [y, m, d] = todayTaipeiISO(now).split('-').map(Number)
   const anchor = new Date(Date.UTC(y, m - 1, d))
   anchor.setUTCDate(anchor.getUTCDate() + days)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${anchor.getUTCFullYear()}-${pad(anchor.getUTCMonth() + 1)}-${pad(anchor.getUTCDate())}`
+  return `${anchor.getUTCFullYear()}-${pad2(anchor.getUTCMonth() + 1)}-${pad2(anchor.getUTCDate())}`
 }
 
 type ApiErr = { response?: { data?: { detail?: string } } }
@@ -587,8 +586,7 @@ const PENDING_RANGE_MAX_SEGMENTS = 8
 function isoShiftDays(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number)
   const shifted = new Date(Date.UTC(y, m - 1, d) + days * 86400000)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`
+  return `${shifted.getUTCFullYear()}-${pad2(shifted.getUTCMonth() + 1)}-${pad2(shifted.getUTCDate())}`
 }
 
 function splitPendingRange(

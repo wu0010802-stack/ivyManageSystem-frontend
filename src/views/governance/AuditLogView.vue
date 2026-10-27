@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { getAuditLogs, getAuditLogsMeta, exportAuditLogs } from '@/api/audit'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
+import { pad2 } from '@/utils/format'
 import AuditChangesDetail from '@/components/AuditChangesDetail.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
@@ -302,9 +303,8 @@ const handlePageSizeChange = (size: number) => {
 
 const setQuickRange = (kind: string) => {
   const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
   const fmt = (d: Date) =>
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
 
   if (kind === 'today') {
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
@@ -335,8 +335,7 @@ const handleExport = async () => {
     const a = document.createElement('a')
     a.href = url
     const now = new Date()
-    const pad = (n: number) => String(n).padStart(2, '0')
-    a.download = `audit_logs_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`
+    a.download = `audit_logs_${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}_${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}.csv`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -406,8 +405,7 @@ const getEntityLabel = (type: string) => entityLabelMap.value[type] || type
 const formatTime = (iso: string | undefined) => {
   if (!iso) return '-'
   const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
 }
 
 const resolveRoute = (row: AuditLog) => {

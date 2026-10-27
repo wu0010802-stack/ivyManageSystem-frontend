@@ -5,6 +5,7 @@
  * `週一日期|uid` 為鍵；送出時轉成後端整份覆寫格式（cells 以 row_index 指向 rows）。
  */
 import type { ApiBody, ApiResponse } from '@/api/_generated/typed'
+import { pad2 } from '@/utils/format'
 
 export type RotationOut = ApiResponse<'/duty-rotations', 'get'>
 export type RotationDocumentBody = ApiBody<'/duty-rotations/{rotation_id}', 'put'>
@@ -164,7 +165,6 @@ export function removeRow(s: EditableState, uid: string): EditableState {
   return { ...s, rows: s.rows.filter((r) => r.uid !== uid), cells }
 }
 
-const pad2 = (n: number) => String(n).padStart(2, '0')
 const toIso = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 
 export function generateWeeks(start: string, end: string, firstNumber = 1): EditableWeek[] {

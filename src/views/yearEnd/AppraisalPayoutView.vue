@@ -9,6 +9,7 @@ import {
   exportYearEndTransferRosterXlsxUrl,
 } from '@/api/yearEnd'
 import { formatCurrency } from '@/utils/currency'
+import { pad2 } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
@@ -248,8 +249,7 @@ async function onVoid() {
 
 // 收據時間戳（本地時間，僅供畫面回顧；權威軌跡在後端 audit log）
 function formatReceiptTime(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
 defineExpose({

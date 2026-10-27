@@ -86,6 +86,7 @@ import { computed, onMounted, ref } from 'vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { getAuditLogs } from '@/api/audit'
 import { getErrorMessage } from '@/utils/errorHandler'
+import { pad2 } from '@/utils/format'
 
 interface AuditLogListResponse {
   total: number
@@ -107,10 +108,9 @@ const isEmpty = computed(() =>
 )
 
 function formatLocal(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
   return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` +
+    `T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
   )
 }
 

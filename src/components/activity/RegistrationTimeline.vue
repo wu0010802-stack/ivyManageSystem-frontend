@@ -59,6 +59,7 @@
 import { computed } from 'vue'
 import { COURSE_STATUS_LABEL, MATCH_STATUS_LABEL_LONG } from '@/constants/activity'
 import { courseBillingLabel } from '@/utils/activityDisplay'
+import { pad2 } from '@/utils/format'
 
 interface TimelineEvent {
   kind?: string
@@ -129,8 +130,7 @@ function fmtDate(s: string | null | undefined) {
   // 2026-05-12 14:33:00 / ISO 都接受；只取到分
   const d = new Date(s)
   if (Number.isNaN(d.getTime())) return s
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
 function fmtMoney(n: number | string | null | undefined) {
