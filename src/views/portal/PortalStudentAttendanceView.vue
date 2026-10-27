@@ -56,6 +56,7 @@ import StudentRollcallFilterBar from './components/studentAttendance/StudentRoll
 import StudentMonthlyStats from './components/studentAttendance/StudentMonthlyStats.vue'
 import StudentOfflinePanel from './components/studentAttendance/StudentOfflinePanel.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import PortalErrorState from '@/components/portal/PortalErrorState.vue'
 
 interface ClassroomEntry { classroom_id?: number; classroom_name?: string; [key: string]: unknown }
 type AttendanceRecord = RollcallRecord
@@ -67,6 +68,10 @@ const classroomId = ref<number | null>(null)
 const dailyDate = ref(todayISO())
 const dailyRecords = ref<AttendanceRecord[]>([])
 const dailyLoading = ref(false)
+// 三段讀取各自的失敗旗標：失敗時顯示錯誤＋重試，不落到「尚無學生」「尚未載入月度資料」
+const classroomsError = ref(false)
+const dailyError = ref(false)
+const monthlyError = ref(false)
 const saveLoading = ref(false)
 const lastRecordedAt = ref<string | null>(null)
 const lastRecordedBy = ref<string | null>(null)
@@ -238,6 +243,7 @@ const dismissReviewOp = async (id: number | string) => {
 }
 
 const fetchClassrooms = async () => {
+  classroomsError.value = false
   try {
     const res = await getMyStudents()
     classrooms.value = res.data.classrooms || []
@@ -250,6 +256,7 @@ const fetchClassrooms = async () => {
       )
     }
   } catch {
+    classroomsError.value = true
     ElMessage.error('載入班級資料失敗')
   }
 }
@@ -261,6 +268,7 @@ const fetchDailyAttendance = async () => {
   if (!classroomId.value || !dailyDate.value) return
   const seq = ++dailyRequestSeq
   dailyLoading.value = true
+  dailyError.value = false
   dailyRecords.value = []
   bulkUndo.value = null
   try {
@@ -285,6 +293,7 @@ const fetchDailyAttendance = async () => {
     acceptSnapshot()
   } catch (error) {
     if (seq !== dailyRequestSeq) return
+    dailyError.value = true
     ElMessage.error(apiError(error, '載入點名資料失敗'))
   } finally {
     if (seq === dailyRequestSeq) dailyLoading.value = false
@@ -382,6 +391,7 @@ const fetchMonthly = async () => {
   const [year, month] = monthPicker.value.split('-')
   const seq = ++monthlyRequestSeq
   monthlyLoading.value = true
+  monthlyError.value = false
   try {
     const res = await getMyClassAttendanceMonthly({
       classroom_id: classroomId.value,
@@ -392,6 +402,7 @@ const fetchMonthly = async () => {
     monthlyData.value = res.data as Record<string, unknown> | null
   } catch (error) {
     if (seq !== monthlyRequestSeq) return
+    monthlyError.value = true
     ElMessage.error(apiError(error, '載入月統計失敗'))
   } finally {
     if (seq === monthlyRequestSeq) monthlyLoading.value = false
@@ -433,6 +444,13 @@ onMounted(async () => {
 <template>
   <div>
     <PortalPageHeader title="學生點名" :subtitle="headerSubtitle" />
+
+    <PortalErrorState
+      v-if="classroomsError"
+      message="班級資料載入失敗，無法點名"
+      data-test="classrooms-error"
+      @retry="fetchClassrooms"
+    />
 
     <StudentOfflinePanel
       :is-online="isOnline"
@@ -503,7 +521,14 @@ onMounted(async () => {
           @update:search="search = $event"
         />
 
+        <PortalErrorState
+          v-if="dailyError && !dailyLoading && !dailyRecords.length"
+          message="這天的點名資料載入失敗"
+          data-test="daily-error"
+          @retry="fetchDailyAttendance"
+        />
         <StudentRollcallTable
+          v-else
           :students="visibleRecords"
           :loading="dailyLoading"
           :disabled="editingBlocked"
@@ -526,7 +551,14 @@ onMounted(async () => {
       </template>
 
       <template #monthly>
+        <PortalErrorState
+          v-if="monthlyError && !monthlyLoading"
+          message="月統計載入失敗"
+          data-test="monthly-error"
+          @retry="fetchMonthly"
+        />
         <StudentMonthlyStats
+          v-else
           v-model:month-picker="monthPicker"
           :data="monthlyData ?? undefined"
           :loading="monthlyLoading"

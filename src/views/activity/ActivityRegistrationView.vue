@@ -1441,8 +1441,13 @@ async function doRemoveSupply(row: RegistrationSupply, forceRefund: boolean, ref
 }
 
 onMounted(async () => {
+  // 報名修改紀錄頁的深連結 ?open=<registration_id>：直接打開那筆報名詳情。
+  // 必須在 fetchList() 前讀，fetchList 內的 syncToQuery() 會把不認得的 query 洗掉
+  // （洗掉也是要的：重新整理不會再自動彈出抽屜）。
+  const openId = Number(route.query.open)
   initFromQuery()
   fetchList()
+  if (Number.isInteger(openId) && openId > 0) openDetail({ id: openId })
   loadOptions()
   try {
     const res = await getRegistrationTime()

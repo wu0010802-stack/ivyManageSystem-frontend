@@ -226,4 +226,14 @@ describe('ActivitySessionList 版面', () => {
     expect(details.attributes('open')).toBeUndefined()
     expect(details.text()).toContain('更早的場次')
   })
+
+  it('載入失敗 → 顯示錯誤與重試，不顯示「今天沒有才藝課」或空範圍', async () => {
+    const w = mountList([], { loadError: true })
+    await flushPromises()
+    expect(w.find('[data-test="board-error"]').exists()).toBe(true)
+    expect(w.text()).not.toContain('今天沒有才藝課')
+    expect(w.text()).not.toContain('這個範圍沒有才藝場次')
+    await w.find('[data-test="board-error"] button').trigger('click')
+    expect(w.emitted('retry')).toHaveLength(1)
+  })
 })

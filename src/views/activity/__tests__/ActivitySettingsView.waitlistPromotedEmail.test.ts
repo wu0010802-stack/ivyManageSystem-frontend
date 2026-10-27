@@ -110,7 +110,8 @@ describe('ActivitySettingsView — 候補直升正式通知信樣板', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('尚未啟用 Email 寄送')
+    expect(wrapper.text()).toContain('還沒開啟 Email 寄送')
+    expect(wrapper.text()).not.toContain('RESEND_API_KEY')
   })
 
   it('測試寄送：未輸入信箱時警告、不呼叫 API', async () => {

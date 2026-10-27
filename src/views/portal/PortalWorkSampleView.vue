@@ -15,6 +15,7 @@ import { getUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { todayISO } from '@/utils/format'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PortalErrorState from '@/components/portal/PortalErrorState.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 // 7 領域對齊台灣課綱（同 PortalObservationView / 後端 OBSERVATION_DOMAINS）
@@ -63,6 +64,8 @@ interface WorkSampleItem {
 }
 
 const classrooms = ref<ClassroomEntry[]>([])
+// 原本只用 classrooms 是否為空判斷「讀取中…」：讀取失敗或真的沒有學生都會永遠卡在讀取中
+const studentsState = ref<'loading' | 'error' | 'ready'>('loading')
 const allStudents = ref<StudentOption[]>([])
 
 const form = reactive({
@@ -77,6 +80,8 @@ const submitting = ref(false)
 
 const recent = ref<WorkSampleItem[]>([])
 const loadingRecent = ref(false)
+// 近期作品讀取失敗原本靜默顯示「尚無作品」
+const recentError = ref(false)
 
 const editor = reactive<{
   visible: boolean
@@ -96,6 +101,7 @@ const currentUserId = (): number | null => (getUserInfo()?.id as number | undefi
 const selectedStudent = computed(() => allStudents.value.find((s) => s.id === form.studentId))
 
 async function loadStudents() {
+  studentsState.value = 'loading'
   try {
     const { data } = await getMyStudents()
     classrooms.value = data?.classrooms || []
@@ -106,7 +112,9 @@ async function loadStudents() {
         classroom_name: c.classroom_name ?? '',
       })),
     )
+    studentsState.value = 'ready'
   } catch (e) {
+    studentsState.value = 'error'
     ElMessage.error(apiError(e, '讀取學生失敗'))
   }
 }
@@ -117,13 +125,15 @@ async function loadRecent() {
     return
   }
   loadingRecent.value = true
+  recentError.value = false
   try {
     const { data } = await listWorkSamples(form.studentId, { limit: 20 })
     // 後端未標 response_model，型別退化為 unknown dict
     const body = data as { items?: WorkSampleItem[] } // TODO(ts-strict): waiting on backend response_model
     recent.value = body?.items || []
-  } catch (e) {
+  } catch {
     recent.value = []
+    recentError.value = true
   } finally {
     loadingRecent.value = false
   }
@@ -242,7 +252,9 @@ async function confirmDelete(item: WorkSampleItem) {
     <!-- 選擇學生：行動優先用可點選 chip，不用下拉（避免多層點擊） -->
     <div class="pt-card form-card">
       <h3>選擇學生</h3>
-      <div v-if="!classrooms.length" class="empty">讀取中…</div>
+      <div v-if="studentsState === 'loading'" class="empty">讀取中…</div>
+      <PortalErrorState v-else-if="studentsState === 'error'" message="學生名單讀取失敗" @retry="loadStudents" />
+      <div v-else-if="!classrooms.length" class="empty">目前沒有你負責班級的學生。</div>
       <div v-else class="student-groups">
         <div v-for="c in classrooms" :key="c.classroom_name" class="student-group">
           <span class="group-label">{{ c.classroom_name }}</span>
@@ -336,6 +348,7 @@ async function confirmDelete(item: WorkSampleItem) {
     <div v-if="form.studentId" class="pt-card recent-card">
       <h3>{{ selectedStudent?.name }} — 近期作品</h3>
       <p v-if="loadingRecent" class="empty">讀取中…</p>
+      <PortalErrorState v-else-if="recentError" message="近期作品讀取失敗" @retry="loadRecent" />
       <EmptyState v-else-if="!recent.length" variant="default" title="尚無作品" />
       <ul v-else class="ws-list">
         <li v-for="item in recent" :key="item.id">

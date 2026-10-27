@@ -26,7 +26,7 @@ vi.mock('@/utils/auth', () => ({
 
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
-  ElMessageBox: { confirm: vi.fn() },
+  ElMessageBox: { confirm: vi.fn(), alert: vi.fn() },
 }))
 
 const STUBS = {

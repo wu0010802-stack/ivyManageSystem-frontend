@@ -5,6 +5,7 @@ import { fetchChildReports, childReportDownloadUrl } from '../api/childReports'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 interface Report {
@@ -21,14 +22,19 @@ const studentId = computed(() => Number(route.params.studentId))
 
 const items = ref<Report[]>([])
 const loading = ref(false)
+// 失敗不能落到「目前還沒有成長報告／期末時老師會幫您準備」，家長會以為真的沒有
+const loadError = ref(false)
 
 async function load() {
   if (!studentId.value) return
   loading.value = true
+  loadError.value = false
   try {
     const r = await fetchChildReports(studentId.value)
     items.value = r.data.items || []
   } catch (e) {
+    loadError.value = true
+    items.value = []
     const err = e as Record<string, unknown>
     toast.error(String(err?.displayMessage || '載入失敗'))
   } finally {
@@ -62,6 +68,12 @@ onMounted(load)
         <SkeletonBlock variant="card" :count="2" />
       </div>
     </template>
+
+    <MobileErrorRetry
+      v-else-if="loadError"
+      fallback-message="成長報告載入失敗，請稍後再試"
+      @retry="load"
+    />
 
     <EmptyState
       v-else-if="items.length === 0"

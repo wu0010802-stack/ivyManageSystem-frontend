@@ -7,6 +7,7 @@ import {
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import M3Switch from '../components/m3/M3Switch.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 // F13：key 一律是後端 canonical event_type（models/parent_notification.py），
 // GET 回傳、渲染、PUT 皆同一組 key，不做新舊名稱轉換。
@@ -45,18 +46,23 @@ const EVENT_HINTS: Record<string, string> = {
 
 const prefs = ref<Record<string, boolean>>({})
 const loading = ref(false)
+// 載入失敗時不畫開關：prefs 為空會讓每個開關都顯示「開」，按下去送出的值也不可信
+const loadError = ref(false)
 // P2-FE-Parent-4：原本共用一個 `saving: ref(false)`，並發 toggle 任一鍵都
 // 會 disable 全部 switch；改 Map 鎖到 key 級。Vue 3 對 Map 是 reactive
 // collection（new Map 須直接 set/has，不是 prefs.value.{key}）。
 const saving = ref<Map<string, boolean>>(new Map())
 function isSaving(ev: string) { return saving.value.has(ev) }
+function isOn(ev: string) { return prefs.value[ev] !== false }
 
 async function load() {
   loading.value = true
+  loadError.value = false
   try {
     const { data } = await getNotificationPreferences()
     prefs.value = { ...(data as { prefs?: Record<string, boolean> }).prefs }
   } catch (err) {
+    loadError.value = true
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
@@ -66,7 +72,8 @@ async function load() {
 
 async function toggle(ev: string) {
   if (saving.value.has(ev)) return // 同 key 仍在處理 → ignore
-  const newVal = !prefs.value[ev]
+  // 與畫面同口徑（未設定＝開）：用 !prefs[ev] 會把未設定當成關，按「關」反而送出 true
+  const newVal = !isOn(ev)
   prefs.value[ev] = newVal
   saving.value.set(ev, true)
   try {
@@ -96,6 +103,11 @@ onMounted(load)
         <SkeletonBlock variant="card" :count="2" />
       </div>
     </template>
+    <MobileErrorRetry
+      v-else-if="loadError"
+      fallback-message="通知設定載入失敗，請稍後再試"
+      @retry="load"
+    />
     <div v-else class="pt-list-group">
       <label
         v-for="(label, ev) in EVENT_LABELS"
@@ -110,7 +122,7 @@ onMounted(load)
           <p class="row-sub">{{ EVENT_HINTS[ev] }}</p>
         </div>
         <M3Switch
-          :model-value="prefs[ev] !== false"
+          :model-value="isOn(ev)"
           :disabled="isSaving(ev)"
           :aria-label="label"
           @update:modelValue="toggle(ev)"

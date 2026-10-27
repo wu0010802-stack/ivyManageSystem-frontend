@@ -19,6 +19,7 @@ import { hasPermission } from '@/utils/auth'
 import { extractErrorCode, extractErrorDetail } from '@/utils/error'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import AdminListToolbar, { type FilterGroup } from '@/components/common/AdminListToolbar.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
@@ -134,6 +135,9 @@ const emptyText = computed(() =>
 
 const items = ref<PickupAuth[]>([])
 const loading = ref(false)
+// 載入失敗：清空清單並顯示錯誤＋重試。原本只 toast、items 保留上一個日期／範圍的列，
+// 切日失敗時會把昨天的授權掛在「今天」標籤下，看起來像沒事；首次失敗則顯示「沒有臨時接送授權」
+const loadError = ref(false)
 
 // 連點切日／切範圍時只採用最後一次請求的結果，避免較慢的舊回應蓋掉新的一天。
 let fetchSeq = 0
@@ -141,6 +145,7 @@ let fetchSeq = 0
 async function fetchData() {
   const seq = ++fetchSeq
   loading.value = true
+  loadError.value = false
   try {
     const params: Record<string, string> = {}
     if (scope.value === 'upcoming') {
@@ -158,7 +163,10 @@ async function fetchData() {
     if (seq !== fetchSeq) return
     items.value = (data as { items?: PickupAuth[] })?.items || []
   } catch {
-    if (seq === fetchSeq) ElMessage.error('載入失敗')
+    if (seq !== fetchSeq) return
+    items.value = []
+    loadError.value = true
+    ElMessage.error('接送授權載入失敗')
   } finally {
     if (seq === fetchSeq) loading.value = false
   }
@@ -440,9 +448,21 @@ onMounted(fetchData)
       @update:filter-values="onFilterChange"
     />
 
+    <EmptyState
+      v-if="loadError"
+      variant="error"
+      :title="`${scopeLabel}的接送授權載入失敗`"
+      description="在重新載入成功前，請勿當作沒有授權；現場接送請先電話向家長確認。"
+      data-test="pickup-load-error"
+    >
+      <template #action>
+        <el-button type="primary" :loading="loading" @click="fetchData">重新載入</el-button>
+      </template>
+    </EmptyState>
+
     <!-- 手機：9 欄表格要橫捲才按得到，改任務卡片 -->
     <AdminListCards
-      v-if="isMobile"
+      v-else-if="isMobile"
       :items="filteredItems"
       :columns="CARD_COLUMNS"
       row-key="id"

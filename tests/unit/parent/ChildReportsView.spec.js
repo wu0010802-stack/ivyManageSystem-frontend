@@ -19,6 +19,15 @@ import { fetchChildReports } from '@/parent/api/childReports'
 import ChildReportsView from '@/parent/views/ChildReportsView.vue'
 
 describe('ChildReportsView', () => {
+  it('載入失敗顯示重試，不顯示「還沒有成長報告」', async () => {
+    fetchChildReports.mockRejectedValueOnce(new Error('boom'))
+    const w = mount(ChildReportsView, { attachTo: document.body })
+    await flushPromises()
+    expect(w.text()).not.toContain('還沒有')
+    expect(w.findComponent({ name: 'MobileErrorRetry' }).exists()).toBe(true)
+    w.unmount()
+  })
+
   it('renders empty state when no reports', async () => {
     fetchChildReports.mockResolvedValueOnce({ data: { items: [] } })
     const w = mount(ChildReportsView, { attachTo: document.body })

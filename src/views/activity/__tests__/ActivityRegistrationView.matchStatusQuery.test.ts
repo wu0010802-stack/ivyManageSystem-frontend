@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { reactive, nextTick } from 'vue'
 
 // 例外中心深連結（/activity/registrations?match_status=pending）需能在兩種情境下生效：
@@ -55,6 +55,7 @@ vi.mock('@/composables/useCountdownBanner', () => ({
 }))
 
 import ActivityRegistrationView from '../ActivityRegistrationView.vue'
+import { getRegistrationDetail, getRegistrationPayments } from '@/api/activity'
 
 function mountView() {
   return mount(ActivityRegistrationView, {
@@ -127,5 +128,32 @@ describe('ActivityRegistrationView — route.query.match_status 綁定（例外�
     expect(getRegistrations).toHaveBeenCalledWith(
       expect.objectContaining({ match_status: undefined }),
     )
+  })
+})
+
+describe('ActivityRegistrationView — ?open=<id> 深連結（報名修改紀錄點學生姓名）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getRegistrations.mockResolvedValue({ data: { items: [], total: 0 } })
+    vi.mocked(getRegistrationDetail).mockResolvedValue({ data: { id: 42, courses: [], supplies: [] } } as never)
+    vi.mocked(getRegistrationPayments).mockResolvedValue({ data: { records: [] } } as never)
+    mockRoute.query = {}
+  })
+
+  it('掛載時帶 ?open=42 → 直接載入那筆報名詳情', async () => {
+    mockRoute.query = { open: '42' }
+    mountView()
+    await flushPromises()
+    expect(getRegistrationDetail).toHaveBeenCalledWith(42)
+  })
+
+  it('沒帶或帶非法值 → 不開詳情', async () => {
+    mockRoute.query = { open: 'abc' }
+    mountView()
+    await flushPromises()
+    mockRoute.query = {}
+    mountView()
+    await flushPromises()
+    expect(getRegistrationDetail).not.toHaveBeenCalled()
   })
 })
