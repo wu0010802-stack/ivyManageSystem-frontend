@@ -3,6 +3,8 @@
 // 就會立即背景推播 LINE；同一則公告已通知過的家長會被去重、不會重複收到。
 // 所以只有「新增」或「編輯時家長對象有變更」才可能有人收到新通知，需要確認。
 
+import { pad2 } from '@/utils/format'
+
 export interface ParentScopeSnapshot {
   visibility: string
   classroomIds: number[]
@@ -34,8 +36,7 @@ function audienceLabel(input: ParentScopeSnapshot): string {
 }
 
 function formatSchedule(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
 export function buildParentPushConfirm(input: ParentPushConfirmInput): ParentPushConfirm | null {
