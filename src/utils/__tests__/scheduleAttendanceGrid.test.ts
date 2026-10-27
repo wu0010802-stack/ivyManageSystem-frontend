@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  actionClearsCellIssue,
   addDaysISO,
   availableFilters,
   cellDisplay,
@@ -732,5 +733,44 @@ describe('nextWeekWithMatch（手機沒有月格子：橫幅「看這 N 件」�
     expect(nextWeekWithMatch({ ...base, cells: [cell(1, '2026-09-24', { actual: {} })], filter: 'issues' })).toBeNull()
     const uncovered = uncoveredDates([day('2026-09-24', { import_covered: false })])
     expect(nextWeekWithMatch({ ...base, cells: [cell(1, '2026-09-24', { actual: { status: 'data_incomplete' } })], filter: 'issues', uncovered })).toBeNull()
+  })
+})
+
+describe('actionClearsCellIssue（抽屜「跳到下一件」與面板 isIssue 同一判定）', () => {
+  const pastIssue = (extra: Parameters<typeof cell>[2] = {}) =>
+    cell(1, W1, { actual: { status: 'missing_punch', attendance_id: 55 }, ...extra })
+
+  it('一般異常：接受扣款或豁免後就不再是待辦', () => {
+    expect(actionClearsCellIssue(pastIssue(), 'admin_accept')).toBe(true)
+    expect(actionClearsCellIssue(pastIssue(), 'admin_waive')).toBe(true)
+  })
+
+  it('疑似換班只接受扣款：仍是待辦；豁免才算處理完', () => {
+    const c = pastIssue({ actual: { status: 'possible_shift_change', attendance_id: 55 } })
+    expect(actionClearsCellIssue(c, 'admin_accept')).toBe(false)
+    expect(actionClearsCellIssue(c, 'admin_waive')).toBe(true)
+  })
+
+  it('老師確認進行中（pending／agreed／disputed）：任何處理後都仍是待辦', () => {
+    for (const status of ['pending', 'agreed', 'disputed']) {
+      const c = pastIssue({ confirmation: { item_id: 4, round_id: 1, kind: 'swap', status, partner_employee_id: 2 } })
+      expect(actionClearsCellIssue(c, 'admin_waive')).toBe(false)
+      expect(actionClearsCellIssue(c, 'admin_accept')).toBe(false)
+    }
+  })
+
+  it('與 isIssue 一致：把 confirmed_action 套上去後 isIssue 的結果相反', () => {
+    const today = '2099-01-01'
+    const cases = [
+      pastIssue(),
+      pastIssue({ actual: { status: 'possible_shift_change', attendance_id: 55 } }),
+      pastIssue({ confirmation: { item_id: 4, round_id: 1, kind: 'swap', status: 'pending', partner_employee_id: 2 } }),
+    ]
+    for (const c of cases) {
+      for (const action of ['admin_accept', 'admin_waive']) {
+        const after = { ...c, actual: { ...c.actual!, confirmed_action: action } }
+        expect(actionClearsCellIssue(c, action)).toBe(!isIssue(after, today))
+      }
+    }
   })
 })

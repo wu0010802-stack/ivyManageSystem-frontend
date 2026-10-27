@@ -48,7 +48,7 @@ import ResolveCard from '@/components/attendance/ResolveCard.vue'
 import { getAnomalyList } from '@/api/attendance'
 import { groupAnomalies, type AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useResolveAnomaly, type ResolveAction, type ResolvePayload } from '@/composables/useResolveAnomaly'
-import { SOURCE_TAGS, confirmedActionClearsIssue, confirmedActionLabel, planText, type GridCell } from '@/utils/scheduleAttendanceGrid'
+import { SOURCE_TAGS, actionClearsCellIssue, confirmedActionLabel, planText, type GridCell } from '@/utils/scheduleAttendanceGrid'
 
 export type DayResolveMode = 'resolve-first' | 'confirm-first' | 'side-by-side'
 
@@ -163,7 +163,7 @@ const { resolving, resolve } = useResolveAnomaly(
  */
 function undoText(action: string): string {
   const [, m, d] = props.cell.date.split('-').map(Number)
-  const advances = props.willAdvance && confirmedActionClearsIssue(props.cell.actual?.status, action)
+  const advances = props.willAdvance && actionClearsCellIssue(props.cell, action)
   return `已處理 ${m}/${d}（${props.weekday}）${props.employeeName}${advances ? '，跳到下一件' : ''}`
 }
 function onResolve(payload: ResolvePayload): void {

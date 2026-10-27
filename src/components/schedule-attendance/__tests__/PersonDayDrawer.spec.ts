@@ -505,6 +505,20 @@ describe('PersonDayDrawer 審查修正', () => {
       expect(undo.show).toHaveBeenLastCalledWith(expect.objectContaining({ text: '已處理 9/14（一）林班導，跳到下一件' }))
     })
 
+    it('老師確認進行中的格子：豁免後仍是待辦（面板重抓後 isIssue 仍為真、不跳格），有佇列也不寫「跳到下一件」', async () => {
+      att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
+      const nav = { position: 3, total: 12, label: '9 月逐日待辦 3 / 12', hasPrev: true, hasNext: true }
+      const w = mountDrawer(cell(1, W1, {
+        edit: RECORDED,
+        actual: { status: 'missing_punch', punch_in: `${W1}T07:52:00`, punch_out: null, attendance_id: 55 },
+        confirmation: { item_id: 4, round_id: 1, kind: 'swap', status: 'pending', partner_employee_id: 2 },
+      }), { nav })
+      await flushPromises()
+      w.findComponent(ResolveCard).vm.$emit('resolve', { action: 'admin_waive', remark: '打卡機故障' })
+      await flushPromises()
+      expect(undo.show).toHaveBeenLastCalledWith(expect.objectContaining({ text: '已處理 9/14（一）林班導' }))
+    })
+
     it('後端回的 undoable_ids 少於 processed（這筆原本已有處理）：沒有復原鈕，成功訊息說明無法復原；面板照常提示下一件', async () => {
       att.getAnomalyList.mockResolvedValue({ data: { total: 1, pending: 1, confirmed: 0, items: [anomalyRow] } })
       att.batchConfirmAnomalies.mockResolvedValue({ data: { processed: 1, undoable_ids: [] } })

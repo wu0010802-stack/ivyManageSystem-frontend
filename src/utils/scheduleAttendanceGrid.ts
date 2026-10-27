@@ -180,6 +180,18 @@ function isIssueIgnoringSeal(cell: GridCell, today: string, uncovered: ReadonlyS
   return !NON_ISSUE_STATUSES.has(cell.actual.status)
 }
 
+/**
+ * 對這格做了這個處理（接受扣款／豁免）後，它還算不算待辦——直接把 confirmed_action 套上去、用與 isIssue
+ * 同一個 isIssueIgnoringSeal 判（老師確認進行中、疑似換班只接受扣款都仍是待辦），抽屜「跳到下一件」的
+ * 提示才會跟面板重抓後實際跳不跳格一致。today／匯入缺口不受處理動作影響，這裡只看處理本身。
+ */
+export function actionClearsCellIssue(cell: GridCell, action: string): boolean {
+  if (!cell.actual) return false
+  const after: GridCell = { ...cell, actual: { ...cell.actual, confirmed_action: action } }
+  return !isIssueIgnoringSeal(after, FAR_FUTURE, NO_DATES)
+}
+const FAR_FUTURE = '9999-12-31'
+
 /** 待辦：封存格一律不算（點進去只會 409，留在待辦裡是要人做做不了的事）。 */
 export function isIssue(cell: GridCell, today: string, uncovered: ReadonlySet<string> = NO_DATES): boolean {
   return !isSealed(cell) && isIssueIgnoringSeal(cell, today, uncovered)
