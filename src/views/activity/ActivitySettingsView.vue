@@ -249,6 +249,7 @@
           v-model:test-email="successTestSendEmail"
           :test-sending="successTestSending"
           data-test-prefix="success-email"
+          require-both
           @save="handleSaveSuccessEmailTemplate"
           @test-send="handleSuccessTestSend"
         />
