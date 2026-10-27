@@ -29,3 +29,15 @@ describe('SalarySection 底薪未設定就地補登', () => {
     expect(w.text()).toContain('32,000')
   })
 })
+
+describe('SalarySection 特殊旗標：就讀幼保（義華 2026-10-27）', () => {
+  it('ece_program_enrolled 為真 → 特殊旗標列出「就讀幼保相關科系」', () => {
+    const w = mountSection({ employee_type: 'regular', base_salary: 32000, ece_program_enrolled: true })
+    expect(w.text()).toContain('特殊旗標')
+    expect(w.text()).toContain('就讀幼保相關科系')
+  })
+  it('為 false 或舊後端沒回 → 不列', () => {
+    expect(mountSection({ employee_type: 'regular', base_salary: 32000, ece_program_enrolled: false }).text()).not.toContain('就讀幼保')
+    expect(mountSection({ employee_type: 'regular', base_salary: 32000 }).text()).not.toContain('就讀幼保')
+  })
+})

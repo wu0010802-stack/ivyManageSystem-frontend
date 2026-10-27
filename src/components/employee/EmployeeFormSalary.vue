@@ -18,6 +18,8 @@ export interface EmployeeFormSalaryData {
   health_exempt?: boolean
   // 義華 R2 #42：不投保（承攬／自行投保）——勞健保、勞退（雇主與自提）一律 0
   not_insured?: boolean
+  // 義華 2026-10-27：目前就讀幼保相關科系（節慶 C 級滿二年比照 B 級規則用，不影響底薪）
+  ece_program_enrolled?: boolean
   // 義華 115.09 對帳 #36：健保本人自付比例（1＝全額、0.5＝中低收入 5 折、0＝本人免繳）
   health_self_pay_ratio?: number | null
   // #41 本次薪資輸入異動生效日（空＝今日）
@@ -217,7 +219,7 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
 
     <!-- 進階特殊投保／獎金狀態（預設摺疊，僅特殊個案需設定）-->
     <FormSection data-test="section-advanced" title="進階特殊狀況" collapsible :default-open="false" style="margin-top: 12px;">
-        <div class="form-hint" style="margin-bottom: 8px;">不投保 / 免就保 / 健保豁免 / 不發紅利 / 分項投保 / 個人合約底薪</div>
+        <div class="form-hint" style="margin-bottom: 8px;">不投保 / 免就保 / 健保豁免 / 不發紅利 / 就讀幼保 / 分項投保 / 個人合約底薪</div>
 
         <!-- 計薪行為旗標 -->
         <el-row :gutter="20">
@@ -275,6 +277,23 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
                     <el-switch v-model="form.not_insured" :disabled="isReadonly" data-test="not-insured" />
                     <div class="form-hint" style="width: 100%;">
                         勾選後勞保、健保、勞退（雇主與自提）一律 0；兼職所得單月達 29,500 仍扣二代健保補充保費
+                    </div>
+                </el-form-item>
+            </el-col>
+        </el-row>
+
+        <!-- 義華 2026-10-27：目前就讀幼保相關科系——只在獎金設定開啟「C 級滿二年且就讀幼保比照 B 級」時影響節慶基數 -->
+        <el-row :gutter="20">
+            <el-col :span="24">
+                <el-form-item>
+                    <template #label>
+                        <el-tooltip content="C 級班導／副班導在本園服務滿兩年且目前就讀幼保相關科系者，節慶獎金基數比照 B 級" placement="top">
+                            <span>目前就讀幼保相關科系</span>
+                        </el-tooltip>
+                    </template>
+                    <el-switch v-model="form.ece_program_enrolled" :disabled="isReadonly" data-test="ece-program-enrolled" />
+                    <div class="form-hint" style="width: 100%;">
+                        只有在「薪資設定 → 獎金設定」開啟「C 級滿二年且就讀幼保比照 B 級」時才影響節慶獎金；不影響底薪與獎金等級。變更會讓未封存薪資標記需重算，且本人不可修改自己的這個欄位
                     </div>
                 </el-form-item>
             </el-col>

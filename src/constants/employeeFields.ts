@@ -78,6 +78,8 @@ export const SALARY_TAB_FIELDS = Object.freeze([
   'health_exempt',
   // 義華 R2 #42：不投保（承攬／自行投保）
   'not_insured',
+  // 義華 2026-10-27：目前就讀幼保相關科系（節慶 C 級滿二年比照 B 級規則用；後端列為薪資輸入與自改敏感欄位）
+  'ece_program_enrolled',
   // 義華 115.09 對帳 #36：健保本人自付比例
   'health_self_pay_ratio',
   'skip_payroll_bonuses',

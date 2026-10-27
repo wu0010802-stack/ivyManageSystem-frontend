@@ -18,6 +18,7 @@ const baseSalaryNum = computed(() => {
 
 const FLAG_LABELS: ReadonlyArray<readonly [string, string]> = [
   ['not_insured', '不投保（承攬／自行投保）'],
+  ['ece_program_enrolled', '就讀幼保相關科系'],
   ['no_employment_insurance', '免就保'],
   ['health_exempt', '健保豁免'],
   ['skip_payroll_bonuses', '不發獎金'],
