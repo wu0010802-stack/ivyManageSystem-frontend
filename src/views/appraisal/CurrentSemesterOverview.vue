@@ -26,7 +26,7 @@ import {
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
-import { fmtPct } from '@/utils/format'
+import { fmtPct, formatLocalHourMinute } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { ROLE_GROUP_LABEL } from '@/constants/appraisalYearEnd'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
@@ -147,15 +147,6 @@ async function loadStatus(
   } finally {
     statusLoading.value = false
   }
-}
-
-function formatTime(iso: string | null | undefined) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${hh}:${mm}`
 }
 
 // ── 載入扣分規則（給 detail dialog tooltip 顯示）──────────
@@ -541,7 +532,7 @@ function onGuideNavigate(key: AppraisalStepKey) {
           class="toolbar__updated"
           data-test="last-refreshed-at"
         >
-          已即時重算 {{ formatTime(lastRefreshedAt) }}
+          已即時重算 {{ formatLocalHourMinute(lastRefreshedAt) }}
         </span>
       </div>
       <div class="toolbar__actions">
@@ -635,7 +626,7 @@ function onGuideNavigate(key: AppraisalStepKey) {
         type="warning"
         closable
         title="自動重算失敗，目前顯示的是上次成功計算的資料"
-        :description="`資料時間：${formatTime(lastRefreshedAt) || '—'}`"
+        :description="`資料時間：${formatLocalHourMinute(lastRefreshedAt) || '—'}`"
         class="banner"
       />
 

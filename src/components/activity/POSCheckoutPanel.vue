@@ -101,7 +101,7 @@
         :max-height="260"
       >
         <el-table-column label="時間" width="80">
-          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+          <template #default="{ row }">{{ formatTimeTW(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="收據編號" width="200">
           <template #default="{ row }">
@@ -225,6 +225,7 @@ import { getClassrooms } from '@/api/classrooms'
 import { usePOSCheckout } from '@/composables/usePOSCheckout'
 import { formatTWD, toChineseAmount } from '@/constants/pos'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { formatTimeTW } from '@/utils/format'
 
 const props = withDefaults(defineProps<{
   onAfterCheckout?: ((...args: unknown[]) => unknown) | null
@@ -350,18 +351,6 @@ function handleToggle(row: Record<string, unknown>, studentName: string) {
 async function handleSubmit() {
   await doSubmit({
     onSubmitted: () => props.onAfterCheckout?.(),
-  })
-}
-
-function formatTime(iso: string | null | undefined) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso.slice(11, 16)
-  return d.toLocaleTimeString('zh-Hant', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Taipei',
   })
 }
 

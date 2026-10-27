@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getYearEndGrid, buildSettlements, listYearEndCycles, getYearEndCycleExceptions } from '@/api/yearEnd'
 import { moneyInt } from '@/utils/currency'
+import { formatLocalHourMinute } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER, exceptionTypeLabel } from '@/constants/appraisalYearEnd'
 import api from '@/api/index'
@@ -258,15 +259,6 @@ function sortByBonusCol(key: string) {
   return (a: GridRow, b: GridRow) => Number(a.special_bonuses[key] ?? 0) - Number(b.special_bonuses[key] ?? 0)
 }
 
-// lastBuiltAt 是本地 Date（非後端 ISO 字串，BuildResultOut 無 timestamp），近複製
-// CurrentSemesterOverview.vue 的 formatTime 慣例但省去 ISO parse 這步。
-function formatTime(d: Date | null) {
-  if (!d) return ''
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${hh}:${mm}`
-}
-
 // Task 12②：build 成功摘要文案。欄位以 BuildResultOut（schema.d.ts／後端
 // schemas/year_end.py:257 起）為準：built/skipped_finalized/unmatched_count/
 // fallback_classes/warnings——unmatched_count/fallback_classes 為 B8 derive_report
@@ -382,7 +374,7 @@ onMounted(initGrid)
     <header class="toolbar">
       <h2 class="title">年終總表（週期 {{ cycleId }}）</h2>
       <span v-if="lastBuiltAt" class="last-built" data-test="last-built-at">
-        最後試算 {{ formatTime(lastBuiltAt) }}
+        最後試算 {{ formatLocalHourMinute(lastBuiltAt) }}
       </span>
       <div class="actions">
         <el-button

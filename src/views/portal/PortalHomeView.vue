@@ -18,6 +18,7 @@ import {
   type PortalPendingActions,
 } from '@/constants/portalClassFeatures'
 import type { PortalHubCounts } from '@/utils/portalHubCounts'
+import { formatLocalHourMinute } from '@/utils/format'
 
 const { summary, loading, error, refresh } = usePortalDashboard()
 const router = useRouter()
@@ -185,16 +186,9 @@ const shiftLabel = computed(() => {
   return `${s.name}（${s.work_start || '—'}–${s.work_end || '—'}）`
 })
 
-function formatTime(iso: string | null | undefined) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
 const attendance = computed(() => (today.value?.attendance as TodayAttendance | null | undefined) || {})
-const punchInLabel = computed(() => formatTime(attendance.value?.punch_in_at))
-const punchOutLabel = computed(() => formatTime(attendance.value?.punch_out_at))
+const punchInLabel = computed(() => formatLocalHourMinute(attendance.value?.punch_in_at, '—'))
+const punchOutLabel = computed(() => formatLocalHourMinute(attendance.value?.punch_out_at, '—'))
 const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
 
 // ===== 功能格（原 /portal/class 的兩組，加上承接首頁三張卡的「我的」組）=====

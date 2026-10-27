@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import AppModal from '../AppModal.vue'
 import ParentIcon from '../ParentIcon.vue'
 import type { AnnouncementCategoryBrief } from '../../api/announcements'
+import { formatIsoMinute } from '@/utils/format'
 
 type AttachmentItem = {
   id: number
@@ -47,10 +48,6 @@ function close() {
   open.value = false
 }
 
-function formatTime(s: string | null | undefined) {
-  return s ? s.replace('T', ' ').slice(0, 16) : ''
-}
-
 function openAttachment(att: { url: string }) {
   window.open(att.url, '_blank', 'noopener')
 }
@@ -87,7 +84,7 @@ function formatSize(bytes: number) {
         </button>
       </div>
       <h2 id="announcement-detail-title" class="detail-title">{{ announcement.title }}</h2>
-      <p class="detail-time">{{ formatTime(announcement.created_at) }}</p>
+      <p class="detail-time">{{ formatIsoMinute(announcement.created_at) }}</p>
       <div class="detail-content">{{ announcement.content }}</div>
 
       <div v-if="(announcement?.attachments?.length ?? 0) > 0" class="parent-att-list">

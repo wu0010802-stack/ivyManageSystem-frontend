@@ -7,6 +7,7 @@ import { Warning, Plus } from '@element-plus/icons-vue'
 import { getMyPunchCorrections, createMyPunchCorrection } from '@/api/portal'
 import type { ApiBody } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'
+import { formatTime } from '@/utils/format'
 import { useIsMobile } from '@/composables/useIsMobile'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 import PortalPunchCorrectionForm from '@/components/portal/PortalPunchCorrectionForm.vue'
@@ -84,11 +85,6 @@ const correctionTypeTagType = (type: string) => {
   if (type === 'punch_in') return 'warning'
   if (type === 'punch_out') return 'info'
   return 'danger'
-}
-
-const formatTime = (isoStr: string | null | undefined) => {
-  if (!isoStr) return '-'
-  return isoStr.slice(11, 16)
 }
 
 // 手機卡片視圖欄位設定（格式化函式沿用既有 formatTime/correctionTypeTagType/statusLabel）
