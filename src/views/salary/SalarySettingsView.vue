@@ -14,6 +14,9 @@
       <el-tab-pane v-if="canViewFullSalary" label="下學期超額獎金" name="semester2_excess">
         <Semester2ExcessPanel v-if="tab === 'semester2_excess'" />
       </el-tab-pane>
+      <el-tab-pane v-if="canViewFullSalary" label="下學期才藝獎勵金" name="semester2_activity">
+        <Semester2ActivityPanel v-if="tab === 'semester2_activity'" />
+      </el-tab-pane>
       <el-tab-pane label="銀行轉帳" name="system_settings">
         <SystemSettingsPanel v-if="tab === 'system_settings'" />
       </el-tab-pane>
@@ -34,6 +37,7 @@ import SystemSettingsPanel from './SystemSettingsPanel.vue'
 import SalaryLogicPanel from './SalaryLogicPanel.vue'
 import FestivalPayoutPanel from './FestivalPayoutPanel.vue'
 import Semester2ExcessPanel from './Semester2ExcessPanel.vue'
+import Semester2ActivityPanel from './Semester2ActivityPanel.vue'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { confirmDiscardChanges, useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import { provideSettingsDirty } from './settingsDirty'
@@ -49,7 +53,7 @@ const visibleTabs = computed(() => [
   ...(canReadSettings.value ? ['bonus'] : []),
   'art_teacher',
   ...(canReadSalary.value ? ['festival_payout'] : []),
-  ...(canViewFullSalary.value ? ['semester2_excess'] : []),
+  ...(canViewFullSalary.value ? ['semester2_excess', 'semester2_activity'] : []),
   'system_settings',
   'logic',
 ])

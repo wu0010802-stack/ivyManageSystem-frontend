@@ -24,3 +24,18 @@ export const applySemester2Excess = (
     body: ApiBody<'/extra-bonuses/semester2-excess/apply', 'post'>,
 ): AxiosResp<'/extra-bonuses/semester2-excess/apply', 'post'> =>
     api.post('/extra-bonuses/semester2-excess/apply', body)
+
+// 下學期（2–7 月）推動才藝獎＋教課教師獎勵金 8 月表外批次（義華 2026-10-27）。
+// 歸屬 8 月、計入補充保費年累計，須在 8 月薪資封存前執行；重跑冪等、人工登錄的同類列不覆寫。
+
+/** 預覽（唯讀不寫錢）。academic_year 為民國學年，下學期＝次年 2–7 月，發放歸屬 8 月。 */
+export const previewSemester2Activity = (
+    params: ApiQuery<'/extra-bonuses/semester2-activity/preview', 'get'>,
+): AxiosResp<'/extra-bonuses/semester2-activity/preview', 'get'> =>
+    api.get('/extra-bonuses/semester2-activity/preview', { params })
+
+/** 產生／更新 8 月表外批次。 */
+export const applySemester2Activity = (
+    body: ApiBody<'/extra-bonuses/semester2-activity/apply', 'post'>,
+): AxiosResp<'/extra-bonuses/semester2-activity/apply', 'post'> =>
+    api.post('/extra-bonuses/semester2-activity/apply', body)
