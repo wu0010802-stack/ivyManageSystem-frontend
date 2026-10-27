@@ -11,7 +11,9 @@ import {
   classifyWebSocketClose,
   closeWebSocketSafely,
   WS_LIVENESS_TIMEOUT_MS,
+  WS_MAX_RETRIES,
   WS_RECOVERY_RETRY_MS,
+  wsReconnectDelayMs,
   type WebSocketCloseInfo,
 } from '@/utils/ws'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
@@ -125,7 +127,6 @@ let wsRecoveryTimer: ReturnType<typeof setTimeout> | null = null
 let wsLivenessTimer: ReturnType<typeof setTimeout> | null = null
 let pollingTimer: ReturnType<typeof setInterval> | null = null
 const wsReconnectCount = ref(0)
-const WS_MAX_RETRIES = 5
 const wsConnected = ref(false)
 const wsExhausted = ref(false) // 已達重試上限，fallback 至 polling
 const lastWsClose = ref<WebSocketCloseInfo | null>(null)
@@ -333,7 +334,7 @@ const startPolling = () => {
 
 const scheduleReconnect = () => {
   if (wsReconnectCount.value < WS_MAX_RETRIES) {
-    const delay = Math.min(1000 * Math.pow(2, wsReconnectCount.value), 30000)
+    const delay = wsReconnectDelayMs(wsReconnectCount.value)
     wsReconnectCount.value++
     if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
     wsReconnectTimer = setTimeout(connectWs, delay)

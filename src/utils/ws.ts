@@ -1,6 +1,17 @@
 export const WS_LIVENESS_TIMEOUT_MS = 90000
 export const WS_RECOVERY_RETRY_MS = 60000
 
+// 斷線重連：前 WS_MAX_RETRIES 次以指數退避重連（1s、2s、4s…，上限 30s），耗盡後改輪詢。
+// 校車監看、家長端校車追蹤、放學叫號（老師端提醒與行政端叫號頁）四處共用同一組參數。
+export const WS_MAX_RETRIES = 5
+const WS_BACKOFF_BASE_MS = 1000
+const WS_BACKOFF_MAX_MS = 30000
+
+/** 第 attempt 次重連（0 起算）前要等待的毫秒數。 */
+export function wsReconnectDelayMs(attempt: number): number {
+  return Math.min(WS_BACKOFF_BASE_MS * Math.pow(2, attempt), WS_BACKOFF_MAX_MS)
+}
+
 export type WebSocketCloseKind = 'auth' | 'permission' | 'rate-limit' | 'transport'
 
 export interface WebSocketCloseInfo {

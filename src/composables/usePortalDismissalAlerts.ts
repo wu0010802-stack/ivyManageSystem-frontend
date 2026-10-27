@@ -16,7 +16,9 @@ import {
   classifyWebSocketClose,
   closeWebSocketSafely,
   WS_LIVENESS_TIMEOUT_MS,
+  WS_MAX_RETRIES,
   WS_RECOVERY_RETRY_MS,
+  wsReconnectDelayMs,
   type WebSocketCloseInfo,
 } from '@/utils/ws'
 import {
@@ -75,7 +77,6 @@ let fetchDispatchSeq = 0
 // WS 新增卡的追蹤表：id → 加入當下的 fetchDispatchSeq。fetchCalls 合併時，快照缺席但
 // createdSeq >= 該 fetch 序號的卡（＝快照發出後才由 WS 加入）須保留，不可被晚到的快照抹除。
 const wsRecentlyCreated = new Map<number, number>()
-const WS_MAX_RETRIES = 5
 // 三音提示約 0.70s 響完才唸，避免尾音與語音重疊。
 const SPEECH_LEAD_MS = 720
 const speechTimers = new Set<ReturnType<typeof setTimeout>>()
@@ -312,7 +313,7 @@ function bumpLiveness(): void {
 }
 function scheduleReconnect(): void {
   if (wsReconnectCount.value < WS_MAX_RETRIES) {
-    const delay = Math.min(1000 * Math.pow(2, wsReconnectCount.value), 30000)
+    const delay = wsReconnectDelayMs(wsReconnectCount.value)
     wsReconnectCount.value++
     if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
     wsReconnectTimer = setTimeout(connectWs, delay)

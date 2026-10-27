@@ -33,7 +33,9 @@ import {
   classifyWebSocketClose,
   closeWebSocketSafely,
   WS_LIVENESS_TIMEOUT_MS,
+  WS_MAX_RETRIES,
   WS_RECOVERY_RETRY_MS,
+  wsReconnectDelayMs,
   type WebSocketCloseInfo,
 } from '@/utils/ws'
 import { parseTaipeiDate } from '@/utils/taipeiTime'
@@ -41,9 +43,6 @@ import { getBusToday } from '../api/bus'
 import { useConnectionStatus } from './useConnectionStatus'
 
 // 快速重試次數；用盡後改輪詢並低頻嘗試恢復（比照教師端接送提醒）
-const WS_MAX_RETRIES = 5
-const WS_BACKOFF_BASE_MS = 1000
-const WS_BACKOFF_MAX_MS = 30000
 // 輪詢降級頻率：與教師端接送提醒一致；娃娃車快照端點很輕，但每位家長都會打
 const POLL_INTERVAL_MS = 15000
 // 與後端 api/parent_portal/bus.py::STALE_THRESHOLD_SECONDS（60 秒）對齊
@@ -364,7 +363,7 @@ function degradeToPolling(): void {
 
 function scheduleReconnect(): void {
   if (retries < WS_MAX_RETRIES) {
-    const delay = Math.min(WS_BACKOFF_BASE_MS * Math.pow(2, retries), WS_BACKOFF_MAX_MS)
+    const delay = wsReconnectDelayMs(retries)
     retries++
     if (reconnectTimer) clearTimeout(reconnectTimer)
     reconnectTimer = setTimeout(connectWs, delay)

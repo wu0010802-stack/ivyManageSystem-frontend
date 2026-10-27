@@ -3,8 +3,22 @@ import {
   classifyWebSocketClose,
   closeWebSocketSafely,
   WS_LIVENESS_TIMEOUT_MS,
+  WS_MAX_RETRIES,
   WS_RECOVERY_RETRY_MS,
+  wsReconnectDelayMs,
 } from '../ws'
+
+describe('wsReconnectDelayMs', () => {
+  it('指數退避 1s、2s、4s、8s、16s，之後封頂 30s', () => {
+    expect([0, 1, 2, 3, 4, 5, 6].map(wsReconnectDelayMs)).toEqual([
+      1000, 2000, 4000, 8000, 16000, 30000, 30000,
+    ])
+  })
+
+  it('重試上限為 5 次（四處即時連線共用）', () => {
+    expect(WS_MAX_RETRIES).toBe(5)
+  })
+})
 
 // QA 2026-06-04 P2-5：dismissal view onUnmounted 直接 ws.close() 會觸發 onclose →
 // scheduleReconnect，在元件卸載後建立殭屍重連 / 輪詢。closeWebSocketSafely 須先卸

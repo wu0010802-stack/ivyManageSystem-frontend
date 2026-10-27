@@ -47,15 +47,14 @@ import {
   classifyWebSocketClose,
   closeWebSocketSafely,
   WS_LIVENESS_TIMEOUT_MS,
+  WS_MAX_RETRIES,
   WS_RECOVERY_RETRY_MS,
+  wsReconnectDelayMs,
 } from '@/utils/ws'
 import { parseTaipeiDate } from '@/utils/taipeiTime'
 import { getBusTripToday, listBusRoutes } from '@/api/bus'
 
 /** 快速重試次數；用盡後改輪詢並低頻嘗試恢復（比照家長端與教師端接送提醒）。 */
-const WS_MAX_RETRIES = 5
-const WS_BACKOFF_BASE_MS = 1000
-const WS_BACKOFF_MAX_MS = 30000
 /** WS 斷線降級時的快照輪詢頻率。 */
 export const POLL_INTERVAL_MS = 15000
 /** 與後端 api/parent_portal/bus.py::STALE_THRESHOLD_SECONDS（60 秒）同口徑。 */
@@ -487,7 +486,7 @@ export function useBusMonitor() {
   function scheduleReconnect(): void {
     if (disposed) return
     if (retries < WS_MAX_RETRIES) {
-      const delay = Math.min(WS_BACKOFF_BASE_MS * Math.pow(2, retries), WS_BACKOFF_MAX_MS)
+      const delay = wsReconnectDelayMs(retries)
       retries++
       if (reconnectTimer) clearTimeout(reconnectTimer)
       reconnectTimer = setTimeout(connectWs, delay)
