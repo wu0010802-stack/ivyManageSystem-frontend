@@ -119,7 +119,7 @@ describe('BonusConfigPanel — saveAllBonusSettings 儲存閘門', () => {
     // 年級目標「不得」照樣寫入
     expect(updateGradeTargets).not.toHaveBeenCalled()
     // 不得顯示總成功訊息
-    expect(ElMessage.success).not.toHaveBeenCalledWith('所有薪資設定已儲存')
+    expect(ElMessage.success).not.toHaveBeenCalledWith('獎金設定與年級目標已儲存')
   })
 
   it('獎金費率儲存失敗時，不得寫入年級目標、且不得謊報全部成功', async () => {
@@ -139,7 +139,7 @@ describe('BonusConfigPanel — saveAllBonusSettings 儲存閘門', () => {
     // 費率失敗後「不得」續寫年級目標
     expect(updateGradeTargets).not.toHaveBeenCalled()
     // 不得顯示總成功訊息（否則與錯誤訊息矛盾）
-    expect(ElMessage.success).not.toHaveBeenCalledWith('所有薪資設定已儲存')
+    expect(ElMessage.success).not.toHaveBeenCalledWith('獎金設定與年級目標已儲存')
   })
 
   it('原因通過且全部成功時，費率與年級目標皆寫入並顯示總成功訊息', async () => {
@@ -158,7 +158,34 @@ describe('BonusConfigPanel — saveAllBonusSettings 儲存閘門', () => {
       expect.objectContaining({ reason: '這是一段足夠長度的異動原因說明' }),
     )
     expect(updateGradeTargets).toHaveBeenCalled()
-    expect(ElMessage.success).toHaveBeenCalledWith('所有薪資設定已儲存')
+    expect(ElMessage.success).toHaveBeenCalledWith('獎金設定與年級目標已儲存')
+  })
+
+  it('改了值就標記未儲存；儲存成功後清除；取消原因則仍保留未儲存', async () => {
+    const wrapper = mountPanel()
+    await flushPromises()
+    const state = wrapper.vm.$.setupState as unknown as SetupState & {
+      hasUnsaved: boolean
+      bonusConfig: Record<string, unknown>
+    }
+    expect(state.hasUnsaved).toBe(false)
+
+    state.bonusConfig.school_wide_target = 200
+    expect(state.hasUnsaved).toBe(true)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('有未儲存的變更')
+
+    ;(ElMessageBox.prompt as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce('cancel')
+    await state.saveAllBonusSettings()
+    await flushPromises()
+    expect(state.hasUnsaved).toBe(true)
+
+    ;(ElMessageBox.prompt as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      value: '這是一段足夠長度的異動原因說明',
+    })
+    await state.saveAllBonusSettings()
+    await flushPromises()
+    expect(state.hasUnsaved).toBe(false)
   })
 
   it('GET 回應的唯讀與舊欄位不得原樣送回嚴格 PUT 契約', async () => {
@@ -222,10 +249,10 @@ describe('BonusConfigPanel — saveAllBonusSettings 儲存閘門', () => {
 // SETTINGS_WRITE 外還額外要求 ACTIVITY_PAYMENT_APPROVE（見 ivy-backend
 // api/config/bonus.py update_bonus_config）。前端 gate 需對齊，唯讀使用者
 // 不應能填完整張表、過完異動原因提示才吃 403。
-// panel 內有多個 <button>（儲存所有薪資設定 / 儲存職位底薪設定 等），
+// panel 內有多個 <button>（儲存獎金設定 / 儲存職位底薪設定 等），
 // 以文字比對取目標按鈕，避免依賴 DOM 順序造成脆弱測試。
 function findSaveAllButton(wrapper: ReturnType<typeof mountPanel>) {
-  return wrapper.findAll('button').find((b) => b.text().includes('儲存所有薪資設定'))!
+  return wrapper.findAll('button').find((b) => b.text().includes('儲存獎金設定'))!
 }
 
 describe('BonusConfigPanel — 儲存按鈕權限 gate（對齊 PUT /config/bonus）', () => {
