@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import FormDialog from '@/components/common/FormDialog.vue'
 import { listPolicies, createPolicy } from '@/api/policy'
 import { apiError } from '@/utils/error'
 import type { Schema } from '@/api/_generated/typed'
@@ -18,6 +19,20 @@ const formVersion = ref('')
 const formEffectiveAt = ref('')
 const formDocumentPath = ref('')
 const formSummary = ref('')
+const formDirty = () =>
+  Boolean(formVersion.value || formEffectiveAt.value || formDocumentPath.value || formSummary.value)
+
+/**
+ * 建立前確認文案。後端沒有刪除／修改端點，且生效時間已到的版本會讓本園所所有家長
+ * 下次開啟家長端時被要求重新簽署（api/policies_admin.py），所以送出前講清楚影響。
+ */
+function buildCreateConfirm(version: string, effectiveAt: string, now = new Date()): string {
+  const immediate = new Date(effectiveAt) <= now
+  const when = immediate
+    ? '這個版本立即生效：本園所所有家長下次開啟家長端時，都必須重新閱讀並簽署才能繼續使用。'
+    : `這個版本將於 ${effectiveAt.replace('T', ' ')} 生效；屆時本園所所有家長下次開啟家長端時，都必須重新簽署。`
+  return `${when}建立後無法刪除或修改，確定要建立 ${version}？`
+}
 
 // --- 載入 ---
 const fetchList = async () => {
@@ -55,6 +70,13 @@ const submitCreate = async () => {
     ElMessage.warning('請填寫文件路徑')
     return
   }
+  const version = formVersion.value.trim()
+  const confirmed = await ElMessageBox.confirm(
+    buildCreateConfirm(version, formEffectiveAt.value),
+    '確認建立政策版本',
+    { type: 'warning', confirmButtonText: '確認建立', cancelButtonText: '再檢查一下' },
+  ).catch(() => false)
+  if (!confirmed) return
   createLoading.value = true
   try {
     await createPolicy({
@@ -90,7 +112,7 @@ onMounted(fetchList)
       :closable="false"
       show-icon
       style="margin-bottom: 16px;"
-      description="建立 effective_at ≤ 現在的新版本將觸發既有家長下次登入重新簽署"
+      description="新版本一旦生效，本園所所有家長下次開啟家長端時都要重新簽署；版本建立後無法刪除或修改。"
     />
 
     <el-table :data="records" v-loading="loading" style="width: 100%">
@@ -106,10 +128,13 @@ onMounted(fetchList)
     </el-table>
 
     <!-- 新增版本 Dialog -->
-    <el-dialog
+    <FormDialog
       v-model="createDialogVisible"
       title="新增隱私政策版本"
-      width="520px"
+      :dirty="formDirty"
+      :loading="createLoading"
+      submit-text="建立版本"
+      @submit="submitCreate"
     >
       <el-form label-width="100px">
         <el-form-item label="版本號" required>
@@ -142,11 +167,7 @@ onMounted(fetchList)
           />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="createLoading" @click="submitCreate">確認建立</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </div>
 </template>
 

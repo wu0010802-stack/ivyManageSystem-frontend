@@ -41,10 +41,11 @@ vi.mock('@/utils/error', () => ({
 
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessageBox: { confirm: vi.fn().mockResolvedValue('confirm') },
 }))
 
 import { listPolicies, createPolicy } from '@/api/policy'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PolicyVersionsView from '../PolicyVersionsView.vue'
 
 // 共用 stubs（避免 Element Plus 元件 teleport 問題）
@@ -67,6 +68,10 @@ const globalStubs = {
       '<div v-if="modelValue" class="el-dialog-stub" :data-title="title"><slot /><slot name="footer" /></div>',
     props: ['modelValue', 'title', 'width'],
     emits: ['update:modelValue'],
+  },
+  FormDialog: {
+    template: '<div v-if="modelValue" class="el-dialog-stub" :data-title="title"><slot /></div>',
+    props: ['modelValue', 'title'],
   },
   'el-form': { template: '<form><slot /></form>', props: ['labelWidth'] },
   'el-form-item': {
@@ -98,6 +103,7 @@ const globalDirectives = {
 describe('PolicyVersionsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
     ;(listPolicies as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: [
         {
@@ -301,5 +307,50 @@ describe('PolicyVersionsView', () => {
     expect(createPolicy).toHaveBeenCalledWith(
       expect.objectContaining({ summary: null }),
     )
+  })
+
+  describe('建立前確認（不可刪除、會觸發家長重簽）', () => {
+    type VM = {
+      openCreateDialog: () => void
+      submitCreate: () => Promise<void>
+      formVersion: string
+      formEffectiveAt: string
+      formDocumentPath: string
+    }
+    async function filled(effectiveAt: string) {
+      const wrapper = mount(PolicyVersionsView, { global: { stubs: globalStubs, directives: globalDirectives } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as VM
+      vm.openCreateDialog()
+      vm.formVersion = 'v1.2.0'
+      vm.formEffectiveAt = effectiveAt
+      vm.formDocumentPath = 'policies/privacy/v1.2.0.pdf'
+      return vm
+    }
+
+    it('取消確認 → 不呼叫 createPolicy', async () => {
+      vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+      const vm = await filled('2020-01-01T00:00:00')
+      await vm.submitCreate()
+      expect(createPolicy).not.toHaveBeenCalled()
+    })
+
+    it('已生效的版本：文案寫明立即要求所有家長重簽、且無法刪除', async () => {
+      const vm = await filled('2020-01-01T00:00:00')
+      await vm.submitCreate()
+      const msg = vi.mocked(ElMessageBox.confirm).mock.calls[0][0] as string
+      expect(msg).toContain('立即生效')
+      expect(msg).toContain('所有家長')
+      expect(msg).toContain('無法刪除')
+      expect(createPolicy).toHaveBeenCalled()
+    })
+
+    it('未來生效的版本：文案寫出生效時間', async () => {
+      const vm = await filled('2099-01-01T08:00:00')
+      await vm.submitCreate()
+      const msg = vi.mocked(ElMessageBox.confirm).mock.calls[0][0] as string
+      expect(msg).toContain('2099-01-01 08:00:00 生效')
+      expect(msg).not.toContain('立即生效')
+    })
   })
 })
