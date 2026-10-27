@@ -947,6 +947,17 @@ describe('PersonDayDrawer 沒有打卡的應上班日', () => {
     expect(w.get('[data-test="pdd-actual"]').text()).not.toContain('未匯入')
     expect(w.find('[data-test="pdd-absence"]').exists()).toBe(true)
     expect(w.get('[data-test="pdd-resolve"]').text()).toContain('補登上下班')
+    // 當天沒有任何人的打卡匯入：不是卡號沒對照，文案不可叫人「卡號對好後重新匯入」
+    const absence = w.get('[data-test="pdd-absence"]').text()
+    expect(absence).not.toContain('卡號')
+    expect(absence).toContain('這天沒有任何打卡匯入')
+    expect(absence).toContain('在下方補登上下班')
+    // 當天有匯入、只是沒有這個人（多半卡號沒對照）：照舊提示卡號
+    const covered = mountDrawer(
+      cell(2, SAT, { plan: { source: 'daily' }, actual: { status: 'data_incomplete', attendance_id: null, punch_in: null, punch_out: null } }),
+    )
+    await flushPromises()
+    expect(covered.get('[data-test="pdd-absence"]').text()).toContain('卡號對好後重新匯入')
     // 工作日整天未匯入照舊：等匯入、不給補登、不提示曠職
     const weekday = mountDrawer(cell(2, W1, { actual: { status: 'data_incomplete', attendance_id: null } }), { importCovered: false })
     await flushPromises()

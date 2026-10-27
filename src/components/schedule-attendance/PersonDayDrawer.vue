@@ -47,7 +47,12 @@
           </dl>
           <p v-if="!missingFromImport" class="pdd__reason">{{ cell.actual.reason }}</p>
           <div v-if="absenceRisk" class="pdd__absence" data-test="pdd-absence">
-            <template v-if="missingFromImport">
+            <template v-if="missingFromImport && dayNotImported">
+              <!-- 非工作日用每日調整排了人、當天整天沒有任何打卡匯入：不是卡號沒對照，叫人對卡號重匯是錯方向 -->
+              <p class="pdd__absence-lead">這天沒有任何打卡匯入（不是工作日，打卡檔通常不會有這天）。格子暫不判缺勤，但算薪只看有沒有打卡：正職員工不處理的話，這天會算曠職扣款。</p>
+              <p v-if="resolveMode !== 'none'" class="pdd__note">有上班：在下方補登上下班；打卡機有這天的紀錄的話，也可以匯入這天的打卡。有請假：建立請假單。</p>
+            </template>
+            <template v-else-if="missingFromImport">
               <p class="pdd__absence-lead">打卡資料裡沒有他這天的紀錄。格子暫不判缺勤，但算薪只看有沒有打卡：正職員工不處理的話，這天會算曠職扣款。</p>
               <p v-if="resolveMode !== 'none'" class="pdd__note">有上班：卡號對好後重新匯入這天打卡，或在下方補登上下班。有請假：建立請假單。</p>
             </template>
@@ -306,6 +311,8 @@ const actionableMode = computed<DayResolveMode | 'none'>(() => {
  */
 const uncovered = computed<ReadonlySet<string>>(() => uncoveredDates(props.day ? [props.day] : []))
 const awaitingImportDay = computed(() => !!props.cell && uncovered.value.has(props.cell.date))
+/** 當天整天沒有任何人的打卡匯入（不分工作日）：非工作日走到「資料待補」時，原因是整天沒匯入、不是卡號沒對照 */
+const dayNotImported = computed(() => props.day?.import_covered === false)
 /** 資料待補且整天沒打卡、這天又不是等匯入＝匯入的打卡檔裡沒有他這天（多半是卡號沒對照） */
 const missingFromImport = computed(() => {
   const actual = props.cell?.actual
