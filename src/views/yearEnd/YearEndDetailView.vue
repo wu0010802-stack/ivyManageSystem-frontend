@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
 import {
   listYearEndCycles,
@@ -189,8 +189,24 @@ function canAccountingSign(row: { status: string }): boolean {
   return ['DRAFT', 'SUPERVISOR_SIGNED'].includes(row.status) && hasPermission('YEAR_END_ACCOUNTING')
 }
 
+// 老闆核定＝年終金額凍結、成為發放依據；之後要改只能先退回草稿（且週期須為開放），送出前講清楚人與金額
+const FINALIZE_NOTE = '核定後金額即凍結並作為發放依據；之後若要修改，須先退回草稿。'
+async function confirmFinalize(rows: Settlement[]): Promise<boolean> {
+  const total = rows.reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0)
+  const message =
+    rows.length === 1
+      ? `核定 ${rows[0].employee_name ?? `結算單 #${rows[0].id}`} 的年終 ${formatCurrency(total)}？${FINALIZE_NOTE}`
+      : `核定選取的 ${rows.length} 筆年終，合計 ${formatCurrency(total)}？${FINALIZE_NOTE}`
+  return ElMessageBox.confirm(message, rows.length === 1 ? '老闆核定' : '批次核定', {
+    type: 'warning',
+    confirmButtonText: '確認核定',
+    cancelButtonText: '取消',
+  }).then(() => true, () => false)
+}
+
 async function sign(s: Settlement, stage: string) {
   if (busy.value || signingId.value != null) return
+  if (stage === 'finalize' && !(await confirmFinalize([s]))) return
   signingId.value = s.id
   busy.value = true
   try {
@@ -248,6 +264,7 @@ function handleSelectionChange(rows: Settlement[]) {
 
 async function signBatch(stage: 'supervisor' | 'accounting' | 'finalize') {
   if (busy.value || !selectedSettlements.value.length) return
+  if (stage === 'finalize' && !(await confirmFinalize(selectedSettlements.value))) return
   const ids = selectedSettlements.value.map((s) => s.id)
   busy.value = true
   try {

@@ -32,6 +32,7 @@ vi.mock('element-plus', async (importOriginal) => {
   return {
     ...actual,
     ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+    ElMessageBox: { confirm: vi.fn().mockResolvedValue('confirm') },
   }
 })
 
@@ -707,4 +708,49 @@ it('切換手機摘要清除桌機選取，並在載入中提供回饋', async (
   expect(wrapper.text()).toContain('正在載入結算單')
   expect(wrapper.find('.batch-bar').exists()).toBe(false)
   expect(wrapper.find('.settlement-card').exists()).toBe(true)
+})
+
+describe('老闆核定前確認', () => {
+  it('單筆：取消就不核定；文案含姓名與金額', async () => {
+    const { ElMessageBox } = await import('element-plus')
+    const settlement = makeSettlement({ id: 2, status: 'ACCOUNTING_SIGNED', employee_name: '王老師', total_amount: 36000 })
+    setupApiMocks([settlement])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { sign: (s: Settlement, stage: string) => Promise<void> }
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    await vm.sign(settlement, 'finalize')
+    expect(api.finalizeSettlement).not.toHaveBeenCalled()
+    const msg = vi.mocked(ElMessageBox.confirm).mock.calls.at(-1)![0] as string
+    expect(msg).toContain('王老師')
+    expect(msg).toContain('36,000')
+  })
+
+  it('批次：文案含筆數與合計；取消不送出', async () => {
+    const { ElMessageBox } = await import('element-plus')
+    setupApiMocks([makeSettlement({ status: 'ACCOUNTING_SIGNED' })])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { selectedSettlements: Settlement[]; signBatch: (stage: string) => Promise<void> }
+    vm.selectedSettlements = [
+      makeSettlement({ id: 1, total_amount: 10000 }),
+      makeSettlement({ id: 2, total_amount: 20000 }),
+    ]
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    await vm.signBatch('finalize')
+    expect(api.finalizeBatch).not.toHaveBeenCalled()
+    const msg = vi.mocked(ElMessageBox.confirm).mock.calls.at(-1)![0] as string
+    expect(msg).toContain('2 筆')
+    expect(msg).toContain('30,000')
+  })
+
+  it('主管／會計簽核不跳確認', async () => {
+    const { ElMessageBox } = await import('element-plus')
+    const settlement = makeSettlement({ id: 3, status: 'DRAFT' })
+    setupApiMocks([settlement])
+    const wrapper = await mountView()
+    vi.mocked(api.signSupervisorSettlement).mockResolvedValue({ data: {} } as never)
+    vi.mocked(ElMessageBox.confirm).mockClear()
+    await (wrapper.vm as unknown as { sign: (s: Settlement, stage: string) => Promise<void> }).sign(settlement, 'supervisor')
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(api.signSupervisorSettlement).toHaveBeenCalledWith(3)
+  })
 })
