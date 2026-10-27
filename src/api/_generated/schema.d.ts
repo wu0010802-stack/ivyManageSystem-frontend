@@ -23967,6 +23967,48 @@ export interface components {
             start_time: string | null;
         };
         /**
+         * AttendancePolicyHistoryItemOut
+         * @description GET /config/attendance-policy/history 的單一版本。
+         */
+        AttendancePolicyHistoryItemOut: {
+            /** Changed By */
+            changed_by?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Default Work End */
+            default_work_end?: string | null;
+            /** Default Work Start */
+            default_work_start?: string | null;
+            /** Festival Bonus Months */
+            festival_bonus_months?: number | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Version */
+            version: number;
+        };
+        /**
+         * AttendancePolicyOut
+         * @description GET /config/attendance-policy。尚未設定時為 `{}`（全部欄位缺席，非 null）。
+         */
+        AttendancePolicyOut: {
+            /** Default Work End */
+            default_work_end?: string | null;
+            /** Default Work Start */
+            default_work_start?: string | null;
+            /** Early Leave Deduction */
+            early_leave_deduction?: number | null;
+            /** Festival Bonus Months */
+            festival_bonus_months?: number | null;
+            /** Id */
+            id?: number | null;
+            /** Late Deduction */
+            late_deduction?: number | null;
+            /** Missing Punch Deduction */
+            missing_punch_deduction?: number | null;
+        };
+        /**
          * AttendancePolicyUpdate
          * @description 考勤政策更新。
          *
@@ -25709,6 +25751,22 @@ export interface components {
              * @default 0
              */
             sort_order: number;
+        };
+        /**
+         * BonusTypeOut
+         * @description GET /config/bonus-types 的單一項目（不含 description）。
+         */
+        BonusTypeOut: {
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Separate Transfer */
+            is_separate_transfer?: boolean | null;
+            /** Name */
+            name: string;
+            /** Sort Order */
+            sort_order?: number | null;
         };
         /** BracketDiffOut */
         BracketDiffOut: {
@@ -28296,6 +28354,129 @@ export interface components {
             /** Topic */
             topic?: string | null;
         };
+        /**
+         * ConfigAllAttendancePolicyOut
+         * @description GET /config/all 的 attendance_policy 區塊（無 id）。
+         */
+        ConfigAllAttendancePolicyOut: {
+            /** Default Work End */
+            default_work_end?: string | null;
+            /** Default Work Start */
+            default_work_start?: string | null;
+            /** Early Leave Deduction */
+            early_leave_deduction?: number | null;
+            /** Festival Bonus Months */
+            festival_bonus_months?: number | null;
+            /** Late Deduction */
+            late_deduction?: number | null;
+            /** Missing Punch Deduction */
+            missing_punch_deduction?: number | null;
+        };
+        /**
+         * ConfigAllBonusConfigOut
+         * @description GET /config/all 的 bonus_config 區塊（金額欄為 Money → float）。
+         */
+        ConfigAllBonusConfigOut: {
+            /** Admin Festival */
+            admin_festival?: number | null;
+            /** Assistant Teacher A */
+            assistant_teacher_a?: number | null;
+            /** Assistant Teacher B */
+            assistant_teacher_b?: number | null;
+            /** Assistant Teacher C */
+            assistant_teacher_c?: number | null;
+            /** Config Year */
+            config_year: number;
+            /** Designer Festival */
+            designer_festival?: number | null;
+            /** Director Dividend */
+            director_dividend?: number | null;
+            /** Director Festival */
+            director_festival?: number | null;
+            /** Driver Festival */
+            driver_festival?: number | null;
+            /** Head Teacher A */
+            head_teacher_a?: number | null;
+            /** Head Teacher B */
+            head_teacher_b?: number | null;
+            /** Head Teacher C */
+            head_teacher_c?: number | null;
+            /** Leader Dividend */
+            leader_dividend?: number | null;
+            /** Leader Festival */
+            leader_festival?: number | null;
+            /** Overtime Assistant Baby */
+            overtime_assistant_baby?: number | null;
+            /** Overtime Assistant Normal */
+            overtime_assistant_normal?: number | null;
+            /** Overtime Head Baby */
+            overtime_head_baby?: number | null;
+            /** Overtime Head Normal */
+            overtime_head_normal?: number | null;
+            /** Principal Dividend */
+            principal_dividend?: number | null;
+            /** Principal Festival */
+            principal_festival?: number | null;
+            /** School Wide Target */
+            school_wide_target?: number | null;
+            /** Vice Leader Dividend */
+            vice_leader_dividend?: number | null;
+        };
+        /**
+         * ConfigAllGradeTargetOut
+         * @description GET /config/all 的 grade_targets 值物件（沒有 id）。
+         */
+        ConfigAllGradeTargetOut: {
+            /** Festival One Teacher */
+            festival_one_teacher?: number | null;
+            /** Festival Shared */
+            festival_shared?: number | null;
+            /** Festival Two Teachers */
+            festival_two_teachers?: number | null;
+            /** Overtime One Teacher */
+            overtime_one_teacher?: number | null;
+            /** Overtime Shared */
+            overtime_shared?: number | null;
+            /** Overtime Two Teachers */
+            overtime_two_teachers?: number | null;
+        };
+        /**
+         * ConfigAllInsuranceRatesOut
+         * @description GET /config/all 的 insurance_rates 區塊（沒有 id、labor_government_ratio）。
+         */
+        ConfigAllInsuranceRatesOut: {
+            /** Average Dependents */
+            average_dependents?: number | null;
+            /** Health Employee Ratio */
+            health_employee_ratio?: number | null;
+            /** Health Employer Ratio */
+            health_employer_ratio?: number | null;
+            /** Health Rate */
+            health_rate?: number | null;
+            /** Labor Employee Ratio */
+            labor_employee_ratio?: number | null;
+            /** Labor Employer Ratio */
+            labor_employer_ratio?: number | null;
+            /** Labor Rate */
+            labor_rate?: number | null;
+            /** Pension Employer Rate */
+            pension_employer_rate?: number | null;
+            /** Rate Year */
+            rate_year?: number | null;
+        };
+        /**
+         * ConfigAllOut
+         * @description GET /config/all：一次載入所有設定。未設定的區塊是 null／空 dict（key 恆在）。
+         */
+        ConfigAllOut: {
+            attendance_policy: components["schemas"]["ConfigAllAttendancePolicyOut"] | null;
+            bonus_config: components["schemas"]["ConfigAllBonusConfigOut"] | null;
+            /** Grade Targets */
+            grade_targets: {
+                [key: string]: components["schemas"]["ConfigAllGradeTargetOut"];
+            };
+            insurance_rates: components["schemas"]["ConfigAllInsuranceRatesOut"] | null;
+        };
         /** ConfigCheckItemOut */
         ConfigCheckItemOut: {
             /** Detail */
@@ -28308,6 +28489,38 @@ export interface components {
             link?: string | null;
             /** Ok */
             ok?: boolean | null;
+        };
+        /**
+         * ConfigMessageOut
+         * @description 只回 `{message}` 的設定操作（POST /reload、DELETE /titles/{id}）。
+         */
+        ConfigMessageOut: {
+            /** Message */
+            message: string;
+        };
+        /**
+         * ConfigStaleResultOut
+         * @description PUT grade-targets、PUT titles/{id}：更新後標記需重算的薪資單筆數。
+         */
+        ConfigStaleResultOut: {
+            /** Message */
+            message: string;
+            /** Salary Records Marked Stale */
+            salary_records_marked_stale: number;
+        };
+        /**
+         * ConfigVersionUpdateOut
+         * @description PUT attendance-policy／insurance-rates：建立新版本後的結果。
+         */
+        ConfigVersionUpdateOut: {
+            /** Id */
+            id: number;
+            /** Message */
+            message: string;
+            /** Salary Records Marked Stale */
+            salary_records_marked_stale: number;
+            /** Version */
+            version: number;
         };
         /**
          * ConfirmationAbsenceDayOut
@@ -30252,6 +30465,24 @@ export interface components {
              * @default 0
              */
             sort_order: number;
+        };
+        /**
+         * DeductionTypeOut
+         * @description GET /config/deduction-types 的單一項目（不含 description）。
+         */
+        DeductionTypeOut: {
+            /** Category */
+            category?: string | null;
+            /** Code */
+            code: string;
+            /** Id */
+            id: number;
+            /** Is Employer Paid */
+            is_employer_paid?: boolean | null;
+            /** Name */
+            name: string;
+            /** Sort Order */
+            sort_order?: number | null;
         };
         /** DeleteRequestIn */
         DeleteRequestIn: {
@@ -35221,6 +35452,58 @@ export interface components {
             total_employee: number;
             /** Total Employer */
             total_employer: number;
+        };
+        /**
+         * InsuranceRatesHistoryItemOut
+         * @description GET /config/insurance-rates/history 的單一版本。
+         */
+        InsuranceRatesHistoryItemOut: {
+            /** Changed By */
+            changed_by?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Health Rate */
+            health_rate?: number | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Labor Rate */
+            labor_rate?: number | null;
+            /** Pension Employer Rate */
+            pension_employer_rate?: number | null;
+            /** Rate Year */
+            rate_year?: number | null;
+            /** Version */
+            version: number;
+        };
+        /**
+         * InsuranceRatesOut
+         * @description GET /config/insurance-rates。尚未設定時為 `{}`（全部欄位缺席，非 null）。
+         */
+        InsuranceRatesOut: {
+            /** Average Dependents */
+            average_dependents?: number | null;
+            /** Health Employee Ratio */
+            health_employee_ratio?: number | null;
+            /** Health Employer Ratio */
+            health_employer_ratio?: number | null;
+            /** Health Rate */
+            health_rate?: number | null;
+            /** Id */
+            id?: number | null;
+            /** Labor Employee Ratio */
+            labor_employee_ratio?: number | null;
+            /** Labor Employer Ratio */
+            labor_employer_ratio?: number | null;
+            /** Labor Government Ratio */
+            labor_government_ratio?: number | null;
+            /** Labor Rate */
+            labor_rate?: number | null;
+            /** Pension Employer Rate */
+            pension_employer_rate?: number | null;
+            /** Rate Year */
+            rate_year?: number | null;
         };
         /**
          * InsuranceRateUpdate
@@ -46822,6 +47105,68 @@ export interface components {
             total_deductions: number;
         };
         /**
+         * SalaryDebugSnapshotOut
+         * @description GET /salaries/employee-salary-debug：單一員工當月薪資逐項試算。
+         *
+         *     非發放月時 `festival_period_rows` 為 null；沒有帶班班級時 `classroom_context` 為 null。
+         */
+        SalaryDebugSnapshotOut: {
+            /** Attendance Summary */
+            attendance_summary: {
+                [key: string]: unknown;
+            };
+            /** Classroom Context */
+            classroom_context: {
+                [key: string]: unknown;
+            } | null;
+            /** Deduction Calc */
+            deduction_calc: {
+                [key: string]: unknown;
+            };
+            /** Employee */
+            employee: {
+                [key: string]: unknown;
+            };
+            /** Festival Bonus Detail */
+            festival_bonus_detail: {
+                [key: string]: unknown;
+            };
+            /** Festival Period Rows */
+            festival_period_rows: {
+                [key: string]: unknown;
+            }[] | null;
+            /** Insurance */
+            insurance: {
+                [key: string]: unknown;
+            };
+            /** Leave Breakdown */
+            leave_breakdown: {
+                [key: string]: unknown;
+            }[];
+            /** Leave Deduction Total */
+            leave_deduction_total: number;
+            /** Meeting */
+            meeting: {
+                [key: string]: unknown;
+            };
+            /** Overtime Pay */
+            overtime_pay: number;
+            /** Overtime Rows */
+            overtime_rows: {
+                [key: string]: unknown;
+            }[];
+            /** Period */
+            period: {
+                [key: string]: unknown;
+            };
+            /** Salary Summary */
+            salary_summary: {
+                [key: string]: unknown;
+            };
+            /** Supervisor Dividend */
+            supervisor_dividend: number;
+        };
+        /**
          * SalaryDetailAuditLogItemOut
          * @description 單筆稽核記錄。
          */
@@ -47213,6 +47558,52 @@ export interface components {
             reset: number;
             /** Year */
             year: number;
+        };
+        /**
+         * SalaryLogicInfoOut
+         * @description GET /salaries/logic。無設定的區塊為 null／空 list，key 恆在。
+         */
+        SalaryLogicInfoOut: {
+            /** Attendance Policy Db */
+            attendance_policy_db: {
+                [key: string]: unknown;
+            } | null;
+            /** Bonus Config Db */
+            bonus_config_db: {
+                [key: string]: unknown;
+            } | null;
+            /** Engine Runtime Config */
+            engine_runtime_config: {
+                [key: string]: unknown;
+            };
+            /** Formula Verification */
+            formula_verification: {
+                [key: string]: unknown;
+            };
+            /** Grade Targets Db */
+            grade_targets_db: {
+                [key: string]: unknown;
+            }[];
+            /** Insurance Rate Db */
+            insurance_rate_db: {
+                [key: string]: unknown;
+            } | null;
+            /** Insurance Runtime Config */
+            insurance_runtime_config: {
+                [key: string]: unknown;
+            };
+            /** Leave Deduction Rules */
+            leave_deduction_rules: {
+                [key: string]: unknown;
+            };
+            /** Salary Formula */
+            salary_formula: {
+                [key: string]: unknown;
+            };
+            /** Shift Types */
+            shift_types: {
+                [key: string]: unknown;
+            }[];
         };
         /** SalaryManualAdjustOut */
         SalaryManualAdjustOut: {
@@ -52815,13 +53206,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -52881,13 +53272,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description PDF 檔案 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/pdf": string;
                 };
             };
             /** @description Validation Error */
@@ -53629,13 +54020,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -54063,13 +54454,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description PDF 檔案 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/pdf": string;
                 };
             };
             /** @description Validation Error */
@@ -54563,14 +54954,24 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "image/gif": string;
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
                 };
+            };
+            /** @description 導向物件儲存的簽名／CDN URL（雲端儲存時） */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -55686,13 +56087,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -55724,13 +56125,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -58440,13 +58841,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -58507,13 +58908,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
         };
@@ -58665,13 +59066,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -58697,13 +59098,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -60021,13 +60422,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description CSV 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "text/csv": string;
                 };
             };
             /** @description Validation Error */
@@ -62027,7 +62428,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConfigAllOut"];
                 };
             };
         };
@@ -62047,7 +62448,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AttendancePolicyOut"];
                 };
             };
         };
@@ -62071,7 +62472,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConfigVersionUpdateOut"];
                 };
             };
             /** @description Validation Error */
@@ -62100,7 +62501,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AttendancePolicyHistoryItemOut"][];
                 };
             };
         };
@@ -62173,7 +62574,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BonusTypeOut"][];
                 };
             };
         };
@@ -62197,7 +62598,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -62246,7 +62647,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeductionTypeOut"][];
                 };
             };
         };
@@ -62270,7 +62671,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -62325,7 +62726,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConfigStaleResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -62354,7 +62755,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["InsuranceRatesOut"];
                 };
             };
         };
@@ -62378,7 +62779,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConfigVersionUpdateOut"];
                 };
             };
             /** @description Validation Error */
@@ -62407,7 +62808,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["InsuranceRatesHistoryItemOut"][];
                 };
             };
         };
@@ -62626,7 +63027,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConfigMessageOut"];
                 };
             };
         };
@@ -62670,7 +63071,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -62705,7 +63106,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConfigStaleResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -62736,7 +63137,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConfigMessageOut"];
                 };
             };
             /** @description Validation Error */
@@ -64583,13 +64984,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
         };
@@ -64672,13 +65073,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -64704,13 +65105,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -64737,13 +65138,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -64772,13 +65173,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -64838,13 +65239,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -64870,13 +65271,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -64936,13 +65337,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -64968,13 +65369,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -65002,13 +65403,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -68241,13 +68642,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description PDF 檔案 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/pdf": string;
                 };
             };
             /** @description Validation Error */
@@ -68337,13 +68738,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -68637,13 +69038,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -68675,13 +69076,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -68719,13 +69120,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                    "text/plain": string;
                 };
             };
             /** @description Validation Error */
@@ -68757,13 +69159,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -68828,13 +69230,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -71893,13 +72295,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description ZIP 壓縮檔下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/zip": string;
                 };
             };
             /** @description Validation Error */
@@ -73781,14 +74183,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description PDF 檔案 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/pdf": string;
                 };
+            };
+            /** @description 導向物件儲存的簽名／CDN URL（雲端儲存時） */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -75580,14 +75989,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "*/*": string;
                 };
+            };
+            /** @description 導向物件儲存的簽名／CDN URL（雲端儲存時） */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -77055,13 +77471,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description PDF 檔案 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/pdf": string;
                 };
             };
             /** @description Validation Error */
@@ -78724,13 +79140,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -78969,14 +79385,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/octet-stream": string;
                 };
+            };
+            /** @description 導向物件儲存的簽名／CDN URL（雲端儲存時） */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -82383,13 +82806,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -82574,13 +82997,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -83089,13 +83512,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description PDF 檔案 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/pdf": string;
                 };
             };
             /** @description Validation Error */
@@ -83260,13 +83683,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -83439,7 +83862,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryDebugSnapshotOut"];
                 };
             };
             /** @description Validation Error */
@@ -83665,13 +84088,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/pdf": string;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -83966,7 +84390,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryLogicInfoOut"];
                 };
             };
         };
@@ -84503,13 +84927,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
         };
@@ -85306,13 +85730,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Excel 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -85622,13 +86046,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description PDF 檔案 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/pdf": string;
                 };
             };
             /** @description Validation Error */
@@ -87803,13 +88227,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description CSV 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "text/csv": string;
                 };
             };
             /** @description Validation Error */
@@ -88715,14 +89139,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "*/*": string;
                 };
+            };
+            /** @description 導向物件儲存的簽名／CDN URL（雲端儲存時） */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -89022,14 +89453,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "*/*": string;
                 };
+            };
+            /** @description 導向物件儲存的簽名／CDN URL（雲端儲存時） */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -89189,14 +89627,24 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description 檔案下載 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/octet-stream": string;
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
                 };
+            };
+            /** @description 導向物件儲存的簽名／CDN URL（雲端儲存時） */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
