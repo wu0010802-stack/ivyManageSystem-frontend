@@ -41,7 +41,15 @@ export interface ConfirmedFollowUp {
   undoIds: number[] | null
   /** 不給復原時接在成功訊息後面的說明（其中幾件原本已有處理）；給復原或沒有這種件時是空字串 */
   note: string
+  /**
+   * 一件都沒處理到（processed=0：紀錄已不存在、已被別人改動或已封存）。呼叫端不可顯示成功，
+   * 改提示請重新整理（後端靜默跳過，回 200）。
+   */
+  nothingProcessed: boolean
 }
+
+/** processed=0 時的提示：單筆處理用 */
+export const NOTHING_PROCESSED_TEXT = '這筆紀錄已不存在或已變更，請重新整理'
 
 /**
  * 接受扣款／豁免成功後給不給復原：undoable_ids 涵蓋這次全部 processed（數量相等）才給，
@@ -50,9 +58,10 @@ export interface ConfirmedFollowUp {
  */
 export function confirmedFollowUp(result: ConfirmedResult): ConfirmedFollowUp {
   const undoable = result.undoable_ids ?? []
-  if (result.processed > 0 && undoable.length === result.processed) return { undoIds: undoable, note: '' }
+  if (result.processed <= 0) return { undoIds: null, note: '', nothingProcessed: true }
+  if (undoable.length === result.processed) return { undoIds: undoable, note: '', nothingProcessed: false }
   const already = result.processed - undoable.length
-  return { undoIds: null, note: already > 0 ? `。其中 ${already} 件原本已有處理，無法復原` : '' }
+  return { undoIds: null, note: already > 0 ? `。其中 ${already} 件原本已有處理，無法復原` : '', nothingProcessed: false }
 }
 
 /** 復原（clear）之後的提示：processed 與送出的件數相等才寫已復原，少的那幾件是被其他人改動了 */

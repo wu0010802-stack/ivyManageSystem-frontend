@@ -90,6 +90,17 @@ describe('useResolveAnomaly（出勤明細與排班抽屜共用的補卡／接�
       expect(ui.success).toHaveBeenCalledWith('已豁免。其中 1 件原本已有處理，無法復原')
     })
 
+    it('processed=0（這筆紀錄已不存在或已變更）：顯示警告、不顯示成功、不跳復原；仍呼叫完成回呼讓畫面重抓', async () => {
+      api.batchConfirmAnomalies.mockResolvedValue({ data: { processed: 0, undoable_ids: [] } })
+      const done = vi.fn()
+      const { resolve } = useResolveAnomaly(done, 'test')
+      await resolve(target, { action: 'admin_accept', doneText: '已處理 9/16（三）林班導，跳到下一件' })
+      expect(ui.success).not.toHaveBeenCalled()
+      expect(ui.undoToast).not.toHaveBeenCalled()
+      expect(ui.warning).toHaveBeenCalledWith('這筆紀錄已不存在或已變更，請重新整理')
+      expect(done).toHaveBeenCalledWith(expect.objectContaining({ action: 'admin_accept' }), { undoToast: false })
+    })
+
     it('全部可復原：復原送出的是後端回的 undoable_ids', async () => {
       api.batchConfirmAnomalies.mockResolvedValue({ data: { processed: 1, undoable_ids: [901] } })
       const { resolve } = useResolveAnomaly(vi.fn(), 'test')

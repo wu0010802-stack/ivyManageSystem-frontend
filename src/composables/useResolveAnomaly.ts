@@ -11,7 +11,7 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { batchConfirmAnomalies, upsertRecord } from '@/api/attendance'
-import { confirmedFollowUp, showUndoToast } from '@/composables/useConfirmUndo'
+import { NOTHING_PROCESSED_TEXT, confirmedFollowUp, showUndoToast } from '@/composables/useConfirmUndo'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 
 export type ResolveAction = 'punch' | 'admin_accept' | 'admin_waive'
@@ -88,7 +88,10 @@ export function useResolveAnomaly(
         })
         // 能不能復原只看後端回的 undoable_ids，不用呼叫端手上的 confirmed_action 快照猜
         const followUp = confirmedFollowUp(res.data)
-        if (followUp.undoIds) {
+        if (followUp.nothingProcessed) {
+          // 後端靜默跳過（紀錄已不存在或已被改動）：不能說成「已處理」；照常呼叫完成回呼讓畫面重抓
+          ElMessage.warning(NOTHING_PROCESSED_TEXT)
+        } else if (followUp.undoIds) {
           showUndoToast({
             text,
             attendanceIds: followUp.undoIds,

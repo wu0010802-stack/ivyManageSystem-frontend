@@ -212,23 +212,24 @@ describe('只留最新一則復原提示，U 鍵復原最近一則（R50）', ()
 
 describe('confirmedFollowUp：接受扣款／豁免成功後給不給復原（只看後端回的 undoable_ids）', () => {
   it('undoable_ids 涵蓋這次全部 processed：給復原，復原送的就是 undoable_ids', () => {
-    expect(confirmedFollowUp({ processed: 3, undoable_ids: [11, 12, 13] })).toEqual({ undoIds: [11, 12, 13], note: '' })
+    expect(confirmedFollowUp({ processed: 3, undoable_ids: [11, 12, 13] })).toEqual({ undoIds: [11, 12, 13], note: '', nothingProcessed: false })
   })
 
   it('undoable_ids 少於 processed：不給復原，說明其中幾件原本已有處理、無法復原', () => {
-    expect(confirmedFollowUp({ processed: 3, undoable_ids: [11, 12] })).toEqual({ undoIds: null, note: '。其中 1 件原本已有處理，無法復原' })
-    expect(confirmedFollowUp({ processed: 3, undoable_ids: [] })).toEqual({ undoIds: null, note: '。其中 3 件原本已有處理，無法復原' })
+    expect(confirmedFollowUp({ processed: 3, undoable_ids: [11, 12] })).toEqual({ undoIds: null, note: '。其中 1 件原本已有處理，無法復原', nothingProcessed: false })
+    expect(confirmedFollowUp({ processed: 3, undoable_ids: [] })).toEqual({ undoIds: null, note: '。其中 3 件原本已有處理，無法復原', nothingProcessed: false })
   })
 
   it('沒帶 undoable_ids（選填欄位）當成空清單', () => {
-    expect(confirmedFollowUp({ processed: 2 })).toEqual({ undoIds: null, note: '。其中 2 件原本已有處理，無法復原' })
+    expect(confirmedFollowUp({ processed: 2 })).toEqual({ undoIds: null, note: '。其中 2 件原本已有處理，無法復原', nothingProcessed: false })
   })
 
-  it('processed 為 0：沒有東西可復原也沒有件數可說明，只給一般成功訊息', () => {
-    expect(confirmedFollowUp({ processed: 0, undoable_ids: [] })).toEqual({ undoIds: null, note: '' })
+  it('processed 為 0：一件都沒處理到（紀錄已不存在或已變更），標成 nothingProcessed，呼叫端不可顯示成功', () => {
+    expect(confirmedFollowUp({ processed: 0, undoable_ids: [] })).toEqual({ undoIds: null, note: '', nothingProcessed: true })
+    expect(confirmedFollowUp({ processed: 0 })).toEqual({ undoIds: null, note: '', nothingProcessed: true })
   })
 
   it('undoable_ids 比 processed 多（不應發生）：不給復原，也不寫負數件數', () => {
-    expect(confirmedFollowUp({ processed: 1, undoable_ids: [11, 12] })).toEqual({ undoIds: null, note: '' })
+    expect(confirmedFollowUp({ processed: 1, undoable_ids: [11, 12] })).toEqual({ undoIds: null, note: '', nothingProcessed: false })
   })
 })
