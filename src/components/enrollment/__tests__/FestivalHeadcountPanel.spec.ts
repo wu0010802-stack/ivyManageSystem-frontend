@@ -133,6 +133,14 @@ describe('FestivalHeadcountPanel — 節慶人數結算', () => {
         expect(wrapper.text()).toContain('只統計、不扣除人數')
     })
 
+    it('觀察期提示的長假門檻用「滿 N 天」（滿 10 天即算，不是逾 10 天）', async () => {
+        getMock.mockResolvedValue(monthResponse([row()]))
+        const wrapper = mountPanel()
+        await flushPromises()
+        expect(wrapper.text()).toContain('請假滿 10 天')
+        expect(wrapper.text()).not.toContain('請假逾')
+    })
+
     it('enforce 模式不顯示觀察期提示', async () => {
         getMock.mockResolvedValue(monthResponse([row()], { long_leave_mode: 'enforce' }))
         const wrapper = mountPanel()

@@ -6,8 +6,12 @@ describe('reasonLabel', () => {
         expect(reasonLabel('unpaid_fee')).toBe('未繳月費')
         expect(reasonLabel('no_fee_record')).toBe('無月費單')
     })
-    it('既有原因文案不變', () => {
-        expect(reasonLabel('long_leave', 12)).toBe('請假逾 12 天')
+    it('長假帶天數門檻：請假滿 N 天即算（業主 2026-10-28，原為逾 N 天）；沒給門檻預設 10', () => {
+        expect(reasonLabel('long_leave', 12)).toBe('請假滿 12 天')
+        expect(reasonLabel('long_leave')).toBe('請假滿 10 天')
+        expect(reasonLabel('long_leave', null)).toBe('請假滿 10 天')
+    })
+    it('其他既有原因文案不變', () => {
         expect(reasonLabel('on_leave')).toBe('休學')
     })
     it('未知代碼原樣顯示', () => {

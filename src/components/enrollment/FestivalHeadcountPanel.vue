@@ -445,7 +445,7 @@ const openExclusions = async (row: SnapshotRow) => {
       薪資節慶／超額獎金、年終超額與節慶差額、考核帶班超編一律採用本頁的「最終節慶人數」。
       人工調整需填原因（≥10 字）；調整或重開後，受影響的薪資／年終／考核草稿會標記需重新計算。
       <span v-if="!longLeaveEnforced">
-        目前長假（請假逾 {{ longLeaveThreshold }} 天）為觀察期：只統計、不扣除人數。
+        目前長假（請假滿 {{ longLeaveThreshold }} 天）為觀察期：只統計、不扣除人數。
       </span>
     </p>
 

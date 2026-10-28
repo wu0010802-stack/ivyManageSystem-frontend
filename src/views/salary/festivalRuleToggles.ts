@@ -48,8 +48,8 @@ export const FESTIVAL_RULE_TOGGLES: readonly FestivalRuleToggleDef[] = [
   },
   {
     key: 'excess_exclude_long_leave',
-    label: '超額排除請假逾 10 天幼生',
-    hint: '開啟：超額獎金的人數不計當月請假逾 10 天（11 天以上）的幼生；節慶比例與節慶獎金不受影響。關閉：請假幼生照算。',
+    label: '超額排除請假滿 10 天幼生',
+    hint: '開啟：超額獎金的人數不計當月請假滿 10 天（含 10 天以上）的幼生；節慶比例與節慶獎金不受影響。關閉：請假幼生照算。',
   },
   {
     key: 'festival_suspension_rule',

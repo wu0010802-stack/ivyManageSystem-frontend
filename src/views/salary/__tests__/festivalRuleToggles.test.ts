@@ -13,7 +13,7 @@ describe('festivalRuleToggles', () => {
       ['festival_unassigned_teacher_school_ratio', '未帶班教保給全校比例'],
       ['festival_new_class_guarantee', '新班／新接班保障 80%'],
       ['festival_shared_assistant_simple_avg', '共用副班導簡單平均'],
-      ['excess_exclude_long_leave', '超額排除請假逾 10 天幼生'],
+      ['excess_exclude_long_leave', '超額排除請假滿 10 天幼生'],
       ['festival_suspension_rule', '整班／全園停課停發節慶'],
       ['festival_c_grade_promotion', 'C 級滿二年且就讀幼保比照 B 級'],
     ])

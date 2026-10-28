@@ -6,7 +6,7 @@ export type CollectionCoverage = Schema<'CollectionCoverageOut'>
 export const reasonLabel = (code: string, leaveDays?: number | null): string => {
     switch (code) {
         case 'long_leave':
-            return `請假逾 ${leaveDays ?? 10} 天`
+            return `請假滿 ${leaveDays ?? 10} 天`
         case 'on_leave':
             return '休學'
         case 'unpaid_fee':
