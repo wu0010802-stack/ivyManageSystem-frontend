@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadUserFile } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import {
   getAnnouncements,
@@ -160,9 +161,22 @@ const attachmentSlotsLeft = computed(
   () => ATTACHMENT_MAX - existingAttachments.value.length,
 )
 
-const handleAttachmentChange = (uploadFile: { uid: number; raw?: File }) => {
+// el-upload 的顯示清單與 pendingAttachments 同步（auto-upload=false 時 before-upload 不會觸發，
+// 大小檢查與「移除」都必須在這裡處理，否則畫面移除了檔案、送出時仍會上傳）。
+const attachmentFileList = ref<UploadUserFile[]>([])
+
+const handleAttachmentChange = (uploadFile: { uid: number; raw?: File; name?: string }) => {
   if (!uploadFile.raw) return
+  if (uploadFile.raw.size > ATTACHMENT_MAX_BYTES) {
+    ElMessage.warning(`單檔上限 10MB（${uploadFile.raw.name || uploadFile.name || ''} 超過）`)
+    attachmentFileList.value = attachmentFileList.value.filter(f => f.uid !== uploadFile.uid)
+    return
+  }
   pendingAttachments.value.push({ file: uploadFile.raw, uid: uploadFile.uid })
+}
+
+const handleAttachmentRemove = (uploadFile: { uid: number }) => {
+  pendingAttachments.value = pendingAttachments.value.filter(p => p.uid !== uploadFile.uid)
 }
 
 const handleAttachmentExceed = () => {
@@ -296,6 +310,7 @@ const resetForm = () => {
   preservedParentItems.value = []
   initialParentScope.value = null
   pendingAttachments.value = []
+  attachmentFileList.value = []
   existingAttachments.value = []
   attachmentsToDelete.value = []
 }
@@ -330,6 +345,7 @@ const openEdit = async (row: AnnouncementItem) => {
   preservedParentItems.value = []
   initialParentScope.value = null
   pendingAttachments.value = []
+  attachmentFileList.value = []
   attachmentsToDelete.value = []
   existingAttachments.value = (row.attachments as AttachmentItem[]) ?? []
   isEdit.value = true
@@ -428,6 +444,7 @@ const handleSubmit = async () => {
     }
   }
   submitLoading.value = true
+  const wasEdit = isEdit.value
   try {
     const recipientIds = form.restrict_recipients ? form.target_employee_ids : []
     let announcementId = form.id
@@ -455,41 +472,74 @@ const handleSubmit = async () => {
       })
       const resData = res.data as { id?: number; announcement?: { id?: number } }
       announcementId = resData?.id ?? resData?.announcement?.id ?? null
+      // 公告已建立：立刻把對話框轉成「編輯這則」，之後附件／家長端任一步失敗再按送出
+      // 也只會更新同一則，不會再 create 出重複公告。
+      if (announcementId) {
+        form.id = announcementId
+        isEdit.value = true
+      }
     }
 
-    // 附件操作（刪除 + 上傳）
+    // 附件操作（刪除 + 上傳）：逐筆結算，成功的從待處理清單移除，失敗的留著讓使用者重試
+    const attachmentFailures: string[] = []
     if (announcementId) {
+      const annId = announcementId
       if (attachmentsToDelete.value.length > 0) {
-        await Promise.allSettled(
-          attachmentsToDelete.value.map(attId =>
-            deleteAnnouncementAttachment(announcementId as number, attId),
-          ),
+        const targets = [...attachmentsToDelete.value]
+        const results = await Promise.allSettled(
+          targets.map(attId => deleteAnnouncementAttachment(annId, attId)),
         )
+        const failedIds = targets.filter((_, i) => results[i].status === 'rejected')
+        attachmentsToDelete.value = failedIds
+        results.forEach((r) => {
+          if (r.status === 'rejected') attachmentFailures.push(apiError(r.reason, '移除附件失敗'))
+        })
       }
       if (pendingAttachments.value.length > 0) {
-        await Promise.all(
-          pendingAttachments.value.map(p =>
-            uploadAnnouncementAttachment(announcementId as number, p.file),
-          ),
+        const targets = [...pendingAttachments.value]
+        const results = await Promise.allSettled(
+          targets.map(p => uploadAnnouncementAttachment(annId, p.file)),
         )
+        const uploadedUids = new Set<number>()
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') {
+            uploadedUids.add(targets[i].uid)
+            const att = r.value?.data as AttachmentItem | undefined
+            if (att && typeof att.id === 'number') existingAttachments.value.push(att)
+          } else {
+            attachmentFailures.push(`${targets[i].file.name}：${apiError(r.reason, '上傳失敗')}`)
+          }
+        })
+        pendingAttachments.value = pendingAttachments.value.filter(p => !uploadedUids.has(p.uid))
+        attachmentFileList.value = attachmentFileList.value.filter(f => f.uid === undefined || !uploadedUids.has(f.uid))
       }
     }
 
-    // 家長端 scope 同步（plan A.5）
+    // 家長端 scope 同步（plan A.5）：公告本體已存檔，附件失敗也照常同步
     if (announcementId) {
       const parentRecipients = buildParentRecipients()
       if (parentRecipients !== null) {
         try {
           await replaceAnnouncementParentRecipients(announcementId, parentRecipients)
+          initialParentScope.value = {
+            visibility: form.parent_visibility,
+            classroomIds: [...form.parent_target_classroom_ids],
+            studentIds: [...form.parent_target_student_ids],
+          }
         } catch (e) {
           ElMessage.warning(apiError(e, '公告已存檔，但家長端對象設定失敗，請稍後重試'))
         }
       }
     }
 
-    ElMessage.success(isEdit.value ? '公告已更新' : '公告已發佈')
-    dialogVisible.value = false
     fetchAnnouncements()
+    if (attachmentFailures.length > 0) {
+      // 不關對話框：公告已存在（已轉為編輯模式），使用者修正附件後再按「更新」即可
+      ElMessage.error(`公告已存檔，但附件處理失敗：${attachmentFailures.join('；')}`)
+      return
+    }
+    ElMessage.success(wasEdit ? '公告已更新' : '公告已發佈')
+    dialogVisible.value = false
   } catch (error) {
     ElMessage.error(apiError(error, '操作失敗'))
   } finally {
@@ -875,7 +925,9 @@ onMounted(() => {
               :auto-upload="false"
               :multiple="true"
               :limit="attachmentSlotsLeft"
+              v-model:file-list="attachmentFileList"
               :on-change="handleAttachmentChange"
+              :on-remove="handleAttachmentRemove"
               :on-exceed="handleAttachmentExceed"
               :before-upload="handleAttachmentBefore"
               accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf"

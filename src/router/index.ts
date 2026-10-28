@@ -1172,10 +1172,17 @@ export async function authGuard(to: RouteLocationNormalized) {
     if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role !== 'teacher') {
         if (!to.meta.errorPage && !canAccessRoute(to.path)) {
             // '/' 是登入後的預設落點：導向第一個有權限的路由屬自動落地、不是錯誤；
-            // 完全沒有權限時導向登入頁（維持既有行為）。
+            // 完全沒有可用路由（例：角色未 seed 被後端 fail-closed 回空權限）時導 403 錯誤頁，
+            // 絕不可回 '/login'：已登入打 /login 又會被導回 '/'，形成無限轉址
+            //（vue-router 只在 dev build 偵測，prod 分頁直接卡死）。錯誤頁有「重新登入」。
             if (to.path === '/') {
                 const allowedRoutes = getAllowedRoutes()
-                return allowedRoutes.length > 0 ? allowedRoutes[0] : '/login'
+                if (allowedRoutes.length > 0) return allowedRoutes[0]
+                void captureException(new Error('admin user has no accessible route'), {
+                    path: to.fullPath,
+                    role: userInfo?.role ?? null,
+                })
+                return { path: '/error', query: { type: 'forbidden' } }
             }
             // 指名頁面無權限：導 403 錯誤頁並上報 Sentry。先前是靜默導去第一個
             // 允許路由，使用者觀感是「功能壞掉被丟到別頁」且維運端毫無紀錄。

@@ -11,6 +11,7 @@ import {
   civilYearToTargetAcademicYear,
   payoutYearToSourceAcademicYear,
   sourceAcademicYearToPayoutYear,
+  academicTermForMonth,
 } from '@/utils/academic'
 
 // 民國年換算：西元年 - 1911
@@ -212,5 +213,15 @@ describe('發放年 ↔ 學年口徑', () => {
     for (const y of [2024, 2025, 2026, 2030]) {
       expect(sourceAcademicYearToPayoutYear(payoutYearToSourceAcademicYear(y))).toBe(y)
     }
+  })
+})
+
+describe('academicTermForMonth（對齊後端 utils/academic._resolve_by_date）', () => {
+  it('8–12 月＝當年上學期；1 月＝前一年上學期；2–7 月＝前一年下學期', () => {
+    expect(academicTermForMonth(2026, 8)).toEqual({ school_year: 115, semester: 1 })
+    expect(academicTermForMonth(2026, 12)).toEqual({ school_year: 115, semester: 1 })
+    expect(academicTermForMonth(2027, 1)).toEqual({ school_year: 115, semester: 1 })
+    expect(academicTermForMonth(2027, 2)).toEqual({ school_year: 115, semester: 2 })
+    expect(academicTermForMonth(2027, 7)).toEqual({ school_year: 115, semester: 2 })
   })
 })

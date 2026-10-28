@@ -8,7 +8,8 @@
  * 修正後契約：
  * - portal 權限不足 → `/portal/error?type=forbidden&feature&permission&from` + Sentry
  * - admin 指名頁面無權限 → `/error?type=forbidden&feature&from` + Sentry
- * - admin 落地 `/`（登入預設落點）→ 維持自動導第一個允許路由（不是錯誤情境）
+ * - admin 落地 `/`（登入預設落點）→ 維持自動導第一個允許路由（不是錯誤情境）；
+ *   完全沒有允許路由 → `/error` 403（不可回 /login，否則與 /login→'/' 互轉成無限迴圈）
  * - meta.errorPage 路由本身跳過 canAccessRoute（default-deny 不含錯誤頁）
  * - teacher 打 admin 路由仍導 `/portal/home`（身分隔離，非錯誤）
  */
@@ -132,6 +133,44 @@ describe('admin 路由權限不足', () => {
     vi.mocked(canAccessRoute).mockReturnValue(false)
 
     await expect(authGuard(resolveTo('/error'))).resolves.toBe(true)
+  })
+})
+
+describe('完全沒有可用路由的管理端帳號（permission_names 為空）', () => {
+  /** 依守衛回傳值一路跟轉址，直到放行；超過上限即視為無限轉址（prod build 不會偵測）。 */
+  async function followRedirects(start: string, limit = 10): Promise<string[]> {
+    const chain: string[] = [start]
+    let current: string = start
+    for (let i = 0; i < limit; i++) {
+      const result = await authGuard(resolveTo(current))
+      if (result === true || result === undefined) return chain
+      const next =
+        typeof result === 'string'
+          ? result
+          : router.resolve(result as Parameters<typeof router.resolve>[0]).fullPath
+      chain.push(next)
+      current = next
+    }
+    throw new Error(`導覽守衛無限轉址：${chain.join(' → ')}`)
+  }
+
+  beforeEach(() => {
+    vi.mocked(getUserInfo).mockReturnValue(ADMIN)
+    vi.mocked(canAccessRoute).mockReturnValue(false)
+    vi.mocked(getAllowedRoutes).mockReturnValue([])
+  })
+
+  it("落地 '/' 導 /error 403，不再回 /login（/login 已登入又回 '/' 會無限迴圈）", async () => {
+    const result = await authGuard(resolveTo('/'))
+
+    expect(result).toMatchObject({ path: '/error', query: { type: 'forbidden' } })
+    expect(captureException).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['/', '/login'])('從 %s 出發的轉址鏈會收斂在錯誤頁', async (start) => {
+    const chain = await followRedirects(start)
+
+    expect(router.resolve(chain[chain.length - 1]!).path).toBe('/error')
   })
 })
 

@@ -73,7 +73,7 @@ export function payoutVoidLocation(cycle: RosterPaidCycleLike): { path: string; 
 
 /**
  * 標記遭 409 拒絕，且原因是「該半年的年終明細已存在」（需先作廢再標記）。
- * `message` 是 apiError() 取出的後端說明（不直接讀回應內容，見 error-detail 棘輪）。
+ * `message` 是經 apiError 取出的後端說明（不直接讀回應內容，見 error-detail 棘輪）。
  * 同樣回 409 的「此週期已標記」「週期不是 CLOSED」不屬此類，不應引導去作廢。
  */
 export function isPayoutExistsConflict(error: unknown, message: string): boolean {

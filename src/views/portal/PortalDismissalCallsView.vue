@@ -71,6 +71,13 @@ const handleAcknowledge = async (call: DismissalCall) => {
       if (idx !== -1) activeCalls.value[idx].status = 'acknowledged'
       return
     }
+    // 委託接送（proxy）且授權仍有效：後端拒絕直接 complete（409），須以取件碼核銷交接。
+    if (call.request_source === 'proxy' && call.pickup_authorization_id) {
+      const idx = activeCalls.value.findIndex(c => c.id === call.id)
+      if (idx !== -1) activeCalls.value[idx].status = 'acknowledged'
+      ElMessage.info('委託接送請於「接送授權」以取件碼核銷後完成交接')
+      return
+    }
     await completeDismissalCall(call.id)
     activeCalls.value = activeCalls.value.filter(c => c.id !== call.id)
   } catch (e) {
