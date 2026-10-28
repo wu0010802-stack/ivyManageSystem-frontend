@@ -42,15 +42,32 @@ const initializingId = ref<number | null>(null)
 const bulkProgress = ref<{ done: number; total: number } | null>(null)
 const canWrite = hasPermission('LEAVES_WRITE')
 
+// rawRows 對應的年度；null＝目前沒有可信的總覽（載入中／失敗）。
+// 「未初始化」的判定與初始化動作只在 loadedYear === overviewYear 時成立——
+// init 會把既有配額覆寫回法定值，若拿失敗的空結果或別年度的資料判定，會洗掉手動調整（bug-hunt 10-28）
+const loadedYear = ref<number | null>(null)
+const loadFailed = ref(false)
+const overviewReady = computed(() => loadedYear.value !== null && loadedYear.value === overviewYear.value)
+let loadSeq = 0
+
 async function loadOverview() {
+  const seq = ++loadSeq
+  const year = overviewYear.value
   overviewLoading.value = true
+  loadedYear.value = null
+  loadFailed.value = false
   try {
-    const res = await getLeaveQuotas({ year: overviewYear.value })
+    const res = await getLeaveQuotas({ year })
+    if (seq !== loadSeq) return // 較慢的舊請求，不得蓋掉目前年度
     rawRows.value = (res as { data: Array<Record<string, unknown>> }).data || []
+    loadedYear.value = year
   } catch (e) {
+    if (seq !== loadSeq) return
+    rawRows.value = []
+    loadFailed.value = true
     ElMessage.error(friendlyError('載入配額總覽失敗', e))
   } finally {
-    overviewLoading.value = false
+    if (seq === loadSeq) overviewLoading.value = false
   }
 }
 onMounted(loadOverview)
@@ -107,7 +124,9 @@ const filterValues = ref<Record<string, unknown>>({})
 const lowAnnualCount = computed(
   () => employeeRows.value.filter((r) => r.initialized && (r.cells.annual?.remaining_hours ?? Infinity) < 16).length,
 )
-const uninitializedCount = computed(() => employeeRows.value.filter((r) => !r.initialized).length)
+const uninitializedCount = computed(() =>
+  overviewReady.value ? employeeRows.value.filter((r) => !r.initialized).length : 0,
+)
 
 const filterGroups = computed<FilterGroup[]>(() => [
   {
@@ -126,7 +145,7 @@ const filteredRows = computed(() => {
   if (q) rows = rows.filter((r) => r.employee_name.toLowerCase().includes(q))
   const focus = filterValues.value.focus as string | undefined
   if (focus === 'low_annual') rows = rows.filter((r) => r.initialized && (r.cells.annual?.remaining_hours ?? Infinity) < 16)
-  if (focus === 'uninitialized') rows = rows.filter((r) => !r.initialized)
+  if (focus === 'uninitialized') rows = overviewReady.value ? rows.filter((r) => !r.initialized) : []
   return rows
 })
 
@@ -142,23 +161,27 @@ const isPastYear = computed(() => overviewYear.value < currentYear)
 
 // 只處理「尚未初始化」的人：init 會把既有配額覆寫回法定值，已初始化（可能被手動調整過）的人不能動
 async function initAllUninitialized() {
+  if (!overviewReady.value) return
+  const year = overviewYear.value
   const targets = employeeRows.value.filter((r) => !r.initialized)
   if (!targets.length) return
   try {
     await ElMessageBox.confirm(
-      `將依勞基法為 ${targets.length} 位尚未初始化的員工建立 ${overviewYear.value} 年度配額（特休依到職日計算年資）。已初始化的員工不受影響。`,
+      `將依勞基法為 ${targets.length} 位尚未初始化的員工建立 ${year} 年度配額（特休依到職日計算年資）。已初始化的員工不受影響。`,
       '批次初始化配額',
       { confirmButtonText: `初始化 ${targets.length} 人`, cancelButtonText: '取消', type: 'info' },
     )
   } catch {
     return
   }
+  // 確認期間年度被切換或總覽重載過：名單已不可信，不執行
+  if (!overviewReady.value || overviewYear.value !== year) return
   bulkProgress.value = { done: 0, total: targets.length }
   const failed: string[] = []
   // 逐人呼叫既有單人端點（後端無批次端點）；序列執行，避免一次灌 40+ 個請求
   for (const row of targets) {
     try {
-      await initLeaveQuotas({ employee_id: row.employee_id, year: overviewYear.value })
+      await initLeaveQuotas({ employee_id: row.employee_id, year })
     } catch (e) {
       failed.push(`${row.employee_name}：${friendlyError('初始化失敗', e)}`)
     }
@@ -168,7 +191,7 @@ async function initAllUninitialized() {
   await loadOverview()
   const ok = targets.length - failed.length
   if (!failed.length) {
-    ElMessage.success(`已為 ${ok} 位員工初始化 ${overviewYear.value} 年度配額`)
+    ElMessage.success(`已為 ${ok} 位員工初始化 ${year} 年度配額`)
   } else {
     ElMessageBox.alert(
       `成功 ${ok} 人，失敗 ${failed.length} 人：\n${failed.join('\n')}`,
@@ -179,6 +202,7 @@ async function initAllUninitialized() {
 }
 
 async function initRow(row: EmpRow) {
+  if (!overviewReady.value || row.initialized) return
   initializingId.value = row.employee_id
   try {
     await initLeaveQuotas({ employee_id: row.employee_id, year: overviewYear.value })
@@ -201,9 +225,22 @@ async function initRow(row: EmpRow) {
       </el-select>
     </div>
 
+    <el-alert
+      v-if="loadFailed"
+      type="error"
+      show-icon
+      :closable="false"
+      class="quota-overview__init-alert"
+      title="配額總覽載入失敗，無法判斷誰尚未初始化；請重新載入後再操作。"
+    >
+      <template #default>
+        <el-button size="small" data-test="quota-reload" @click="loadOverview">重新載入</el-button>
+      </template>
+    </el-alert>
+
     <!-- 年度內還有人沒初始化：配額欄全空、請假時也不會檢查上限，提示並給一鍵處理 -->
     <el-alert
-      v-if="!overviewLoading && uninitializedCount > 0"
+      v-if="!overviewLoading && overviewReady && uninitializedCount > 0"
       type="warning"
       show-icon
       :closable="false"
@@ -267,7 +304,8 @@ async function initRow(row: EmpRow) {
               </td>
             </template>
             <template v-else>
-              <td :colspan="columns.length" class="quota-overview__uninit">
+              <td v-if="!overviewReady" :colspan="columns.length" class="quota-overview__uninit">—</td>
+              <td v-else :colspan="columns.length" class="quota-overview__uninit">
                 尚未初始化
                 <el-button
                   v-if="canWrite && !isPastYear"

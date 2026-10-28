@@ -209,4 +209,70 @@ describe('LeaveQuotaOverviewTable', () => {
     expect(alertMock).toHaveBeenCalledTimes(1)
     expect(String(alertMock.mock.calls[0][0])).toContain('陳雅婷')
   })
+  // bug-hunt 10-28 idx5：GET 失敗／年度切換競態時，不得把已初始化的人誤判為未初始化而批次覆寫回法定值
+  it('總覽載入失敗時不顯示批次初始化、不把員工標成未初始化，也不呼叫 init', async () => {
+    getLeaveQuotas.mockRejectedValue(new Error('500'))
+    confirmMock.mockResolvedValue('confirm')
+    const w = mountTable()
+    await flushPromises()
+
+    expect(w.vm.$.setupState.uninitializedCount).toBe(0)
+    expect(w.find('[data-test="quota-init-all"]').exists()).toBe(false)
+    expect(w.text()).not.toContain('尚未初始化配額')
+    await w.vm.$.setupState.initAllUninitialized()
+    await flushPromises()
+    expect(initLeaveQuotas).not.toHaveBeenCalled()
+  })
+
+  it('切換年度後新年度載入失敗，不沿用上一年度資料判定未初始化', async () => {
+    getLeaveQuotas
+      .mockResolvedValueOnce({ data: [] })
+      .mockRejectedValueOnce(new Error('timeout'))
+    confirmMock.mockResolvedValue('confirm')
+    const w = mountTable()
+    await flushPromises()
+    expect(w.vm.$.setupState.uninitializedCount).toBe(3)
+
+    w.vm.$.setupState.overviewYear = w.vm.$.setupState.overviewYear + 1
+    await flushPromises()
+    await flushPromises()
+
+    expect(w.vm.$.setupState.uninitializedCount).toBe(0)
+    await w.vm.$.setupState.initAllUninitialized()
+    await flushPromises()
+    expect(initLeaveQuotas).not.toHaveBeenCalled()
+  })
+
+  it('快速切換年度時較慢的舊年度回應不得蓋掉目前年度的資料', async () => {
+    const y = new Date().getFullYear()
+    let resolveOld: (v: unknown) => void = () => {}
+    getLeaveQuotas.mockImplementation((p: { year: number }) => {
+      if (p.year === y + 1) return new Promise((r) => { resolveOld = r })
+      // 目前年度：員工 1 已初始化
+      return Promise.resolve({
+        data: [{ employee_id: 1, leave_type: 'sick', leave_type_label: '病假', total_hours: 300, used_hours: 0, pending_hours: 0, remaining_hours: 300 }],
+      })
+    })
+    confirmMock.mockResolvedValue('confirm')
+    initLeaveQuotas.mockResolvedValue({})
+    const w = mountTable()
+    await flushPromises()
+
+    w.vm.$.setupState.overviewYear = y + 1
+    await flushPromises()
+    w.vm.$.setupState.overviewYear = y
+    await flushPromises()
+    await flushPromises()
+    // 舊（y+1）回應晚到：員工 1 在 y+1 沒有配額
+    resolveOld({ data: [] })
+    await flushPromises()
+    await flushPromises()
+
+    const emp1 = w.vm.$.setupState.employeeRows.find((r: { employee_id: number }) => r.employee_id === 1)
+    expect(emp1.initialized).toBe(true)
+    await w.vm.$.setupState.initAllUninitialized()
+    await flushPromises()
+    const ids = initLeaveQuotas.mock.calls.map((c) => (c[0] as { employee_id: number }).employee_id)
+    expect(ids).not.toContain(1)
+  })
 })
