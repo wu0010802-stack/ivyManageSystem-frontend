@@ -25747,7 +25747,7 @@ export interface components {
             enrollment_count_mode?: string | null;
             /**
              * Excess Exclude Long Leave
-             * @description 超額獎金排除當月請假逾 10 天的幼生（關閉＝請假幼生照算）
+             * @description 超額獎金排除當月請假滿 10 天的幼生（關閉＝請假幼生照算）
              */
             excess_exclude_long_leave?: boolean | null;
             /**
