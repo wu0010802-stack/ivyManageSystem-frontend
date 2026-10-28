@@ -110,10 +110,15 @@ const substituteText = computed(() => {
 // ── 配額（開啟時才查，避免每列都打 API）──
 const quota = ref<QuotaRow | null>(null)
 const quotaLoading = ref(false)
+const quotaFailed = ref(false)
+// 有年度上限的假別（與 useLeaveQuota 的 QUOTA_TYPES 一致）：這些假別查無配額列代表「尚未初始化」，
+// 不是「沒有上限」——兩者混為一談會讓審核者以為特休可以無限請
+const QUOTA_LEAVE_TYPES = new Set(['annual', 'sick', 'menstrual', 'personal', 'family_care'])
 
 async function loadQuota() {
   const row = props.row
   quota.value = null
+  quotaFailed.value = false
   if (!row || !row.employee_id || !row.leave_type) return
   quotaLoading.value = true
   try {
@@ -123,6 +128,7 @@ async function loadQuota() {
     quota.value = Array.isArray(data) && data.length ? data[0] : null
   } catch {
     quota.value = null
+    quotaFailed.value = true
   } finally {
     quotaLoading.value = false
   }
@@ -143,7 +149,11 @@ const quotaShort = computed(() => {
   const over = need - quota.value.remaining_hours
   return over > 0 ? over : 0
 })
+const quotaUninitialized = computed(
+  () => !quota.value && !quotaFailed.value && QUOTA_LEAVE_TYPES.has(String(props.row?.leave_type || '')),
+)
 const quotaClass = computed<'ok' | 'warn' | 'info'>(() => {
+  if (quotaUninitialized.value || quotaFailed.value) return 'warn'
   if (!quota.value) return 'info'
   return quotaShort.value > 0 ? 'warn' : 'ok'
 })
@@ -197,6 +207,8 @@ const relatedSwap = computed(() => props.row?.related_swap as { id: number; swap
               剩餘 {{ quota.remaining_hours }}h
               <template v-if="quotaShort > 0">，本次將超出 {{ quotaShort }}h</template>
             </div>
+            <div v-else-if="quotaFailed">配額查詢失敗，無法確認剩餘時數</div>
+            <div v-else-if="quotaUninitialized">本年度配額尚未初始化，無法檢查剩餘時數（可到「配額與到期」初始化）</div>
             <div v-else>此假別無年度配額限制</div>
           </div>
         </div>

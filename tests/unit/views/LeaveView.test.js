@@ -797,4 +797,42 @@ describe('LeaveView', () => {
       expect(wrapper.vm.$.setupState.quotaPendingPct).toBe(50)
     })
   })
+
+  describe('列表互動（2026-10-28 UI/UX）', () => {
+    it('點列開審核抽屜；點勾選欄、操作欄或列內按鈕不開', async () => {
+      const wrapper = mountLeaveView()
+      await flushPromises()
+      const st = wrapper.vm.$.setupState
+      const row = { id: 1, status: 'pending' }
+
+      st.onLeaveRowClick(row, { type: 'selection' }, { target: document.createElement('td') })
+      st.onLeaveRowClick(row, { label: '操作' }, { target: document.createElement('td') })
+      const btn = document.createElement('button')
+      st.onLeaveRowClick(row, { label: '原因' }, { target: btn })
+      expect(st.reviewVisible).toBe(false)
+
+      st.onLeaveRowClick(row, { label: '員工' }, { target: document.createElement('td') })
+      expect(st.reviewVisible).toBe(true)
+      expect(st.reviewRow).toEqual(row)
+    })
+
+    it('本月沒有任何假單指定代理人時收掉代理人欄', async () => {
+      getLeaves.mockResolvedValue(paged([{ id: 1, status: 'approved', substitute_employee_name: null }]))
+      const wrapper = mountLeaveView()
+      await flushPromises()
+      expect(wrapper.vm.$.setupState.hasAnySubstitute).toBe(false)
+
+      wrapper.vm.$.setupState.leaveRecords = [{ id: 2, status: 'approved', substitute_employee_name: '陳老師' }]
+      expect(wrapper.vm.$.setupState.hasAnySubstitute).toBe(true)
+    })
+
+    // useDateQuery 在本檔被 mock 成非 reactive 物件，重新查詢由既有 watch 負責，這裡只驗月份同步
+    it('行事曆切月時同步列表年月', async () => {
+      const wrapper = mountLeaveView()
+      await flushPromises()
+      wrapper.vm.$.setupState.onCalendarMonthChange([2025, 12])
+      expect(wrapper.vm.$.setupState.query.year).toBe(2025)
+      expect(wrapper.vm.$.setupState.query.month).toBe(12)
+    })
+  })
 })

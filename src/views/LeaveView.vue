@@ -312,7 +312,24 @@ const displayLeaves = computed(() => {
 })
 
 function leaveRowClassName({ row }: { row: Record<string, unknown> }) {
-  return row.status === 'pending' ? 'leave-row-pending' : ''
+  return row.status === 'pending' ? 'leave-row-clickable leave-row-pending' : 'leave-row-clickable'
+}
+
+// 本月沒有任何假單指定代理人時整欄收掉（實務上多數月份全是「—」，白佔 140px）
+const hasAnySubstitute = computed(() => displayLeaves.value.some((r) => !!r.substitute_employee_name))
+
+// 點列開審核抽屜；勾選框、操作欄與列內按鈕／連結各有自己的行為，不攔截
+function onLeaveRowClick(row: Record<string, unknown>, column: { type?: string; label?: string } | undefined, event?: MouseEvent) {
+  if (column?.type === 'selection' || column?.label === '操作') return
+  const target = event?.target as HTMLElement | null
+  if (target?.closest('button, a, .el-checkbox, .el-dropdown')) return
+  openReview(row)
+}
+
+// 行事曆切月時同步列表月份，兩個頁籤看的永遠是同一個月
+function onCalendarMonthChange([year, month]: [number, number]) {
+  query.year = year
+  query.month = month
 }
 
 // ── 審核抽屜（畫面 B）：從「點列或⋯查看」開啟，訊號集中一處看 ─────────────────
@@ -691,7 +708,6 @@ onMounted(() => {
   <div class="leave-page">
     <PageHeader title="請假管理" subtitle="審核員工假單、查看請假行事曆與年度配額">
       <template #actions>
-        <el-button @click="downloadImportTemplate">下載範本</el-button>
         <el-button @click="importVisible = true">匯入 Excel</el-button>
         <el-button @click="downloadFile(`/exports/leaves?year=${query.year}&month=${query.month}`, `${query.year}年${query.month}月請假記錄.xlsx`)">匯出 Excel</el-button>
         <el-button type="primary" @click="openCreateWithDraft">
@@ -716,10 +732,6 @@ onMounted(() => {
           <el-select v-model="query.employee_id" placeholder="全部員工" clearable filterable class="ctl-emp">
             <el-option v-for="emp in employeeStore.employees" :key="emp.id" :label="emp.name" :value="emp.id" />
           </el-select>
-          <span class="leave-month-count">
-            本月 {{ leaveRecords.length }} 筆
-            <template v-if="leaveStatusCounts.pending">・待審 {{ leaveStatusCounts.pending }} 筆</template>
-          </span>
         </div>
 
         <el-alert
@@ -774,13 +786,14 @@ onMounted(() => {
             max-height="600"
             :row-class-name="leaveRowClassName"
             @selection-change="handleSelectionChange"
+            @row-click="onLeaveRowClick"
           >
             <template #empty>
               <el-empty :description="leaveSearch ? '沒有符合搜尋條件的請假紀錄' : '尚無請假紀錄'" />
             </template>
             <el-table-column type="selection" width="45" />
             <el-table-column prop="employee_name" label="員工" width="100" />
-            <el-table-column label="假別" width="110">
+            <el-table-column label="假別" width="132">
               <template #default="scope">
                 <el-tag :type="(getLeaveTypeTag(scope.row.leave_type as string).color as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined)" size="small">
                   {{ scope.row.leave_type_label }}
@@ -805,7 +818,7 @@ onMounted(() => {
             <el-table-column label="時數" width="70">
               <template #default="scope">{{ scope.row.leave_hours }}h</template>
             </el-table-column>
-            <el-table-column label="代理人" width="140">
+            <el-table-column v-if="hasAnySubstitute" label="代理人" width="140">
               <template #default="scope">
                 <template v-if="scope.row.substitute_employee_name">
                   <span style="font-size:12px;">{{ scope.row.substitute_employee_name }}</span>
@@ -963,7 +976,12 @@ onMounted(() => {
       <!-- ─── 行事曆 Tab ─── -->
       <el-tab-pane name="calendar">
         <template #label><el-icon><Calendar /></el-icon> 行事曆</template>
-        <LeaveCalendar :activeTab="activeTab" />
+        <LeaveCalendar
+          :activeTab="activeTab"
+          :year="query.year"
+          :month="query.month"
+          @update:year-month="onCalendarMonthChange"
+        />
       </el-tab-pane>
 
       <!-- ─── 配額與到期 Tab（2026-09-15 合併：原「配額管理」彈窗＋「到期管理」頁籤）─── -->
@@ -1194,6 +1212,7 @@ onMounted(() => {
       :loading="importLoading"
       :result="importResult"
       :on-file-change="handleImportFile"
+      @download-template="downloadImportTemplate"
     />
 
     <ApprovalLogDrawer
@@ -1248,16 +1267,10 @@ onMounted(() => {
   font-weight: 600;
   min-width: 100px;
 }
-.leave-month-count {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-  margin-left: auto;
-}
 .ctl-emp { width: 180px; }
 
 /* 手機：月份列控制項改流式填滿、按鈕觸控目標對齊 44px */
 @media (--to-sm) {
-  .leave-month-count { margin-left: 0; flex: 1 1 100%; }
   .ctl-emp { width: auto; flex: 1 1 100%; }
   .leave-month-bar .el-button {
     min-height: var(--touch-target-min);
@@ -1271,6 +1284,7 @@ onMounted(() => {
 
 .leave-dedu {
   margin-left: 4px;
+  white-space: nowrap;
   font-size: 11px;
   color: var(--el-text-color-secondary);
 }
@@ -1387,6 +1401,16 @@ onMounted(() => {
 .breakdown-row.holiday .bd-hours {
   color: var(--el-text-color-secondary);
   font-weight: 400;
+}
+
+/* 點列開審核抽屜 */
+:deep(tr.leave-row-clickable) {
+  cursor: pointer;
+}
+
+/* 頁籤 icon 與文字留一點間距 */
+.leave-tabs :deep(.el-tabs__item .el-icon) {
+  margin-right: 4px;
 }
 
 /* 讓 tab-pane 沒有多餘 top padding */

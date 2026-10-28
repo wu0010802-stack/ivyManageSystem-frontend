@@ -9,7 +9,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { getLeaveQuotas, initLeaveQuotas } from '@/api/leaves'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { hasPermission } from '@/utils/auth'
 import { friendlyError } from '@/utils/errorMessages'
 import AdminListToolbar, { type FilterGroup } from '@/components/common/AdminListToolbar.vue'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
@@ -37,6 +38,9 @@ const overviewYear = ref(currentYear)
 const overviewLoading = ref(false)
 const rawRows = ref<Array<Record<string, unknown>>>([])
 const initializingId = ref<number | null>(null)
+// 批次初始化進度：null＝未執行；done/total 給按鈕顯示「初始化中 12/46」
+const bulkProgress = ref<{ done: number; total: number } | null>(null)
+const canWrite = hasPermission('LEAVES_WRITE')
 
 async function loadOverview() {
   overviewLoading.value = true
@@ -54,7 +58,16 @@ watch(overviewYear, loadOverview)
 
 // 欄位順序照 LEAVE_TYPES 既有順序，未知假別排最後（穩定排序，不因回應陣列順序漂移）
 const columnOrder = leaveTypes.map((t) => t.value)
+// 有年度上限的假別（與 useLeaveQuota 的 QUOTA_TYPES 一致）：整年度還沒有任何人初始化時，
+// 表頭仍照這組畫出來，不讓表格塌成只剩「員工」一欄、操作鈕被擠到最右邊
+const FALLBACK_QUOTA_TYPES = ['annual', 'sick', 'menstrual', 'personal', 'family_care']
 const columns = computed(() => {
+  if (!rawRows.value.length) {
+    return FALLBACK_QUOTA_TYPES.map((value) => ({
+      value,
+      label: leaveTypes.find((t) => t.value === value)?.label || value,
+    }))
+  }
   const present = new Set(rawRows.value.map((r) => r.leave_type as string))
   const ordered = columnOrder.filter((v) => present.has(v))
   const rest = [...present].filter((v) => !columnOrder.includes(v)).sort()
@@ -124,6 +137,47 @@ function cellClass(cell?: QuotaCell): string {
   return 'ok'
 }
 
+// 過去年度後端禁止重新初始化（稽核紀錄完整性），按鈕直接停用並說明
+const isPastYear = computed(() => overviewYear.value < currentYear)
+
+// 只處理「尚未初始化」的人：init 會把既有配額覆寫回法定值，已初始化（可能被手動調整過）的人不能動
+async function initAllUninitialized() {
+  const targets = employeeRows.value.filter((r) => !r.initialized)
+  if (!targets.length) return
+  try {
+    await ElMessageBox.confirm(
+      `將依勞基法為 ${targets.length} 位尚未初始化的員工建立 ${overviewYear.value} 年度配額（特休依到職日計算年資）。已初始化的員工不受影響。`,
+      '批次初始化配額',
+      { confirmButtonText: `初始化 ${targets.length} 人`, cancelButtonText: '取消', type: 'info' },
+    )
+  } catch {
+    return
+  }
+  bulkProgress.value = { done: 0, total: targets.length }
+  const failed: string[] = []
+  // 逐人呼叫既有單人端點（後端無批次端點）；序列執行，避免一次灌 40+ 個請求
+  for (const row of targets) {
+    try {
+      await initLeaveQuotas({ employee_id: row.employee_id, year: overviewYear.value })
+    } catch (e) {
+      failed.push(`${row.employee_name}：${friendlyError('初始化失敗', e)}`)
+    }
+    bulkProgress.value = { done: bulkProgress.value.done + 1, total: targets.length }
+  }
+  bulkProgress.value = null
+  await loadOverview()
+  const ok = targets.length - failed.length
+  if (!failed.length) {
+    ElMessage.success(`已為 ${ok} 位員工初始化 ${overviewYear.value} 年度配額`)
+  } else {
+    ElMessageBox.alert(
+      `成功 ${ok} 人，失敗 ${failed.length} 人：\n${failed.join('\n')}`,
+      '批次初始化結果',
+      { type: 'warning', confirmButtonText: '知道了' },
+    ).catch(() => {})
+  }
+}
+
 async function initRow(row: EmpRow) {
   initializingId.value = row.employee_id
   try {
@@ -146,6 +200,38 @@ async function initRow(row: EmpRow) {
         <el-option v-for="y in 5" :key="y" :label="`${currentYear - 2 + y} 年`" :value="currentYear - 2 + y" />
       </el-select>
     </div>
+
+    <!-- 年度內還有人沒初始化：配額欄全空、請假時也不會檢查上限，提示並給一鍵處理 -->
+    <el-alert
+      v-if="!overviewLoading && uninitializedCount > 0"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="quota-overview__init-alert"
+    >
+      <template #title>
+        {{ overviewYear }} 年度有 {{ uninitializedCount }} 位員工尚未初始化配額，請假時不會檢查年度上限。
+      </template>
+      <template v-if="canWrite" #default>
+        <div class="quota-overview__init-actions">
+          <el-tooltip :disabled="!isPastYear" content="過去年度不可重新初始化" placement="top">
+            <span>
+              <el-button
+                type="primary"
+                size="small"
+                :disabled="isPastYear || !!bulkProgress"
+                :loading="!!bulkProgress"
+                data-test="quota-init-all"
+                @click="initAllUninitialized"
+              >
+                <template v-if="bulkProgress">初始化中 {{ bulkProgress.done }}/{{ bulkProgress.total }}</template>
+                <template v-else>全部依勞基法初始化（{{ uninitializedCount }} 人）</template>
+              </el-button>
+            </span>
+          </el-tooltip>
+        </div>
+      </template>
+    </el-alert>
 
     <AdminListToolbar
       v-model:search="search"
@@ -183,7 +269,15 @@ async function initRow(row: EmpRow) {
             <template v-else>
               <td :colspan="columns.length" class="quota-overview__uninit">
                 尚未初始化
-                <el-button link type="primary" size="small" :loading="initializingId === row.employee_id" @click="initRow(row)">依勞基法初始化</el-button>
+                <el-button
+                  v-if="canWrite && !isPastYear"
+                  link
+                  type="primary"
+                  size="small"
+                  :loading="initializingId === row.employee_id"
+                  :disabled="!!bulkProgress"
+                  @click="initRow(row)"
+                >依勞基法初始化</el-button>
               </td>
               <td class="quota-overview__op-col"></td>
             </template>
@@ -256,6 +350,12 @@ async function initRow(row: EmpRow) {
 }
 .quota-overview__uninit {
   color: var(--el-text-color-secondary);
+}
+.quota-overview__init-alert {
+  margin-bottom: var(--space-3);
+}
+.quota-overview__init-actions {
+  margin-top: var(--space-2);
 }
 .quota-overview__empty {
   text-align: center;
