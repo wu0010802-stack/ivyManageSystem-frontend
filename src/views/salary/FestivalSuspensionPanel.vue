@@ -7,7 +7,8 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FormDialog from '@/components/common/FormDialog.vue'
 import { useFormDirty } from '@/composables/useFormDirty'
-import { useClassroomStore } from '@/stores/classroom'
+import { getClassrooms } from '@/api/classrooms'
+import { academicTermForMonth } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatTaipeiDateTimeMinute, todayISO } from '@/utils/format'
@@ -85,10 +86,24 @@ const load = async () => {
 }
 
 // ── 新增／編輯 dialog ────────────────────────────────────────────────
-const classroomStore = useClassroomStore()
+// 班級每學期一列：下拉必須是「登記年月所屬學期」的班級，否則 classroom_id 會掛到別學期的列，
+// 計薪端依該月學期解析老師班級時對不上，停發靜默失效。切換年月時重抓，只採最後一次結果。
+const termClassrooms = ref<{ id: number; name: string }[]>([])
+let classroomSeq = 0
+const loadClassrooms = async () => {
+  const mine = ++classroomSeq
+  termClassrooms.value = []
+  try {
+    const res = await getClassrooms(academicTermForMonth(year.value, month.value))
+    if (mine !== classroomSeq) return
+    termClassrooms.value = res.data.map((c) => ({ id: c.id, name: c.name }))
+  } catch {
+    // 班級選項只在新增時用；載入失敗不影響瀏覽既有登記
+  }
+}
 const classroomOptions = computed(() => {
   const registered = new Set<number | null>(items.value.map((i) => i.classroom_id ?? null))
-  const classes = (classroomStore.classrooms as { id: number; name: string }[]).map((c) => ({
+  const classes = termClassrooms.value.map((c) => ({
     value: c.id as number | typeof SCHOOL_WIDE,
     label: registered.has(c.id) ? `${c.name}（本月已登記）` : c.name,
     disabled: registered.has(c.id),
@@ -236,11 +251,13 @@ const remove = async (row: Item) => {
   }
 }
 
-watch([year, month], load)
+watch([year, month], () => {
+  load()
+  loadClassrooms()
+})
 onMounted(() => {
   load()
-  // 班級選項只在新增時用；載入失敗不影響瀏覽既有登記
-  Promise.resolve(classroomStore.fetchClassrooms()).catch(() => {})
+  loadClassrooms()
 })
 
 defineExpose({

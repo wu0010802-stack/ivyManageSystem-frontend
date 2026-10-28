@@ -37,10 +37,18 @@ export function coerceRocYear(value: number): number {
  */
 export function getCurrentAcademicTerm() {
   const now = new Date()
-  const month = now.getMonth() + 1
-  if (month >= 8) return { school_year: toRocYear(now.getFullYear()), semester: 1 }
-  if (month >= 2) return { school_year: toRocYear(now.getFullYear() - 1), semester: 2 }
-  return { school_year: toRocYear(now.getFullYear() - 1), semester: 1 }
+  return academicTermForMonth(now.getFullYear(), now.getMonth() + 1)
+}
+
+/**
+ * 西元年月所屬的學年學期（對齊後端 `utils/academic._resolve_by_date`）：
+ * 8–12 月＝當年上學期、1 月＝前一年上學期、2–7 月＝前一年下學期。
+ * 班級等「逐學期一列」的資料，依某個月份查詢時一律用它推學期，不要用今天的學期。
+ */
+export function academicTermForMonth(adYear: number, month: number): { school_year: number; semester: number } {
+  if (month >= 8) return { school_year: toRocYear(adYear), semester: 1 }
+  if (month >= 2) return { school_year: toRocYear(adYear - 1), semester: 2 }
+  return { school_year: toRocYear(adYear - 1), semester: 1 }
 }
 
 /**

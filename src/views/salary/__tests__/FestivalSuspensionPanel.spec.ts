@@ -21,12 +21,13 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+// 班級每學期一列：下拉必須依「所選登記年月所屬學期」取班級，不能用今天所在學期的 store
+vi.mock('@/api/classrooms', () => ({
+  getClassrooms: vi.fn(),
+}))
 vi.mock('@/stores/classroom', () => ({
   useClassroomStore: () => ({
-    classrooms: [
-      { id: 3, name: '向日葵班' },
-      { id: 4, name: '小熊班' },
-    ],
+    classrooms: [{ id: 999, name: '今天學期的班' }],
     fetchClassrooms: vi.fn().mockResolvedValue(undefined),
   }),
 }))
@@ -37,6 +38,7 @@ vi.mock('@/utils/auth', () => ({
 }))
 
 import * as api from '@/api/salary'
+import { getClassrooms } from '@/api/classrooms'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const ITEM_CLASS = {
@@ -187,6 +189,65 @@ describe('FestivalSuspensionPanel', () => {
     vi.clearAllMocks()
     vi.mocked(api.listFestivalSuspensions).mockResolvedValue({ data: { items: [ITEM_CLASS, ITEM_SCHOOL] } } as never)
     vi.mocked(api.getFestivalSuspensionDecision).mockResolvedValue({ data: DECISION } as never)
+    vi.mocked(getClassrooms).mockResolvedValue({
+      data: [
+        { id: 3, name: '向日葵班' },
+        { id: 4, name: '小熊班' },
+      ],
+    } as never)
+  })
+
+  describe('班級下拉依登記年月所屬學期取班級', () => {
+    it('選 2027 年 1 月（115 上學期）：以 school_year=115、semester=1 取班級，不用今天學期的 store', async () => {
+      const { vm } = await mountPanel()
+      vi.mocked(getClassrooms).mockClear()
+      vi.mocked(getClassrooms).mockResolvedValue({ data: [{ id: 802, name: '大班A' }] } as never)
+
+      vm.year = 2027
+      vm.month = 1
+      await flushPromises()
+
+      expect(getClassrooms).toHaveBeenCalledWith({ school_year: 115, semester: 1 })
+      const values = vm.classroomOptions.map((o) => o.value)
+      expect(values).toContain(802)
+      expect(values).not.toContain(999)
+    })
+
+    it('切到 2027 年 2 月（115 下學期）重抓；7 月仍是下學期、8 月換到 116 上學期', async () => {
+      const { vm } = await mountPanel()
+      vm.year = 2027
+      vm.month = 2
+      await flushPromises()
+      expect(getClassrooms).toHaveBeenLastCalledWith({ school_year: 115, semester: 2 })
+
+      vm.month = 7
+      await flushPromises()
+      expect(getClassrooms).toHaveBeenLastCalledWith({ school_year: 115, semester: 2 })
+
+      vm.month = 8
+      await flushPromises()
+      expect(getClassrooms).toHaveBeenLastCalledWith({ school_year: 116, semester: 1 })
+    })
+
+    it('快速切換年月：只採最後一次學期的班級', async () => {
+      const { vm } = await mountPanel()
+      let resolveSlow: (v: unknown) => void = () => {}
+      vi.mocked(getClassrooms)
+        .mockImplementationOnce(() => new Promise((r) => { resolveSlow = r }) as never)
+        .mockResolvedValueOnce({ data: [{ id: 902, name: '大班A（下學期）' }] } as never)
+
+      vm.year = 2027
+      vm.month = 1
+      await flushPromises()
+      vm.month = 3
+      await flushPromises()
+      resolveSlow({ data: [{ id: 802, name: '大班A（上學期）' }] })
+      await flushPromises()
+
+      const values = vm.classroomOptions.map((o) => o.value)
+      expect(values).toContain(902)
+      expect(values).not.toContain(802)
+    })
   })
 
   it('掛載時以目前年月載入登記列表與停發判定', async () => {
