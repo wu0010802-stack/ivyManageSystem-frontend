@@ -6,6 +6,7 @@
  * 不再為該半年產生 `APPRAISAL_HALF_BONUS_*` 明細，避免已另循名冊轉帳的獎金年終又發一次。
  */
 import { formatTaipeiDateTimeMinute } from '@/utils/format'
+import { sourceAcademicYearToPayoutYear } from '@/utils/academic'
 
 export interface RosterPaidCycleLike {
   academic_year?: number
@@ -60,7 +61,7 @@ export function markRosterPaidMessage(cycle: RosterPaidCycleLike): string {
 
 /** 考核年終 payout 的發放年（西元）：來源學年 = 發放年 − 1913（上、下學期週期的 academic_year 相同）。 */
 export function payoutYearForCycle(academicYear: number): number {
-  return academicYear + 1913
+  return sourceAcademicYearToPayoutYear(academicYear)
 }
 
 /** 「考核年終獎金」頁的位置，帶上該週期所屬的發放年，讓承辦人直接在對的年度作廢明細。 */

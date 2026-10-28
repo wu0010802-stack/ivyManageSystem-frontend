@@ -273,6 +273,7 @@ import GrowthAdjustmentsPanel from './components/GrowthAdjustmentsPanel.vue'
 import { semesterProgressLabels } from './growthAdjustments'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
+import { toRocYear } from '@/utils/academic'
 import { friendlyError } from '@/utils/errorMessages'
 import { useEmployeeStore } from '@/stores/employee'
 import {
@@ -333,7 +334,7 @@ function gateVisual(status: string): { symbol: string; cls: string } {
 
 /** 民國學年：8/1 起算新學年（今天在 8/1 前後決定屬於哪個學年）。 */
 function currentSchoolYear(d = new Date()): number {
-    const rocYear = d.getFullYear() - 1911
+    const rocYear = toRocYear(d.getFullYear())
     return d.getMonth() + 1 >= 8 ? rocYear : rocYear - 1
 }
 

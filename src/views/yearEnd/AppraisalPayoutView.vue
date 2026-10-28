@@ -9,6 +9,7 @@ import {
 } from '@/api/yearEnd'
 import { formatCurrency } from '@/utils/currency'
 import { pad2 } from '@/utils/format'
+import { payoutYearToSourceAcademicYear } from '@/utils/academic'
 import { downloadTransferRoster, yearEndTransferRosterPath } from '@/utils/transferRoster'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -112,10 +113,10 @@ const receiptWarningLabels = computed(() =>
 const receiptSkippedRosterPaid = computed(() => hasRosterPaidWarning(receipt.value?.warnings ?? []))
 
 // 考核年終 payout 兩分量 = 前一學年的上/下學期。後端 resolve_target_cycles：
-// source_academic_year = civil_year_to_target_academic_year(year) - 1 = year - 1913
-// （civil_year_to_target_academic_year(N) = N - 1912）。動態計算避免寫死
+// source_academic_year = civil_year_to_target_academic_year(year) - 1（= year − 1913），
+// 前端同式工具見 @/utils/academic::payoutYearToSourceAcademicYear。動態計算避免寫死
 // （原寫死 113下/114上 兩者皆錯，正確為 113上/113下）。
-const sourceAcademicYear = computed(() => year.value - 1913)
+const sourceAcademicYear = computed(() => payoutYearToSourceAcademicYear(year.value))
 const earlierLabel = computed(() => `${sourceAcademicYear.value}上`)
 const laterLabel = computed(() => `${sourceAcademicYear.value}下`)
 

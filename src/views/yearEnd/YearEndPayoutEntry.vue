@@ -3,11 +3,12 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { listYearEndCycles } from '@/api/yearEnd'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { payoutYearToSourceAcademicYear } from '@/utils/academic'
 
 // 純解析器：獨立發放路由退場後的落點。舊路由只認「發放年度」（AD year），
-// 工作區以 year_end_cycles.id 為主鍵，兩者換算式與 AppraisalPayoutView.vue
-// 既有的 sourceAcademicYear = year - 1913 同一條（Batch 4 已驗證，此處
-// 只沿用不重新推導）：目標週期學年 = 發放年度 - 1913。
+// 工作區以 year_end_cycles.id 為主鍵，兩者換算與 AppraisalPayoutView.vue 的
+// sourceAcademicYear 同一條：目標週期學年 = payoutYearToSourceAcademicYear(發放年度)
+// （= 發放年度 − 1913，見 @/utils/academic）。
 interface YearEndCycle { id: number; academic_year: number }
 
 const route = useRoute()
@@ -19,7 +20,7 @@ async function resolve() {
   notFound.value = false
   loadError.value = false
   const year = Number(route.query.year) || new Date().getFullYear()
-  const targetAcademicYear = year - 1913
+  const targetAcademicYear = payoutYearToSourceAcademicYear(year)
   try {
     const res = await listYearEndCycles()
     const cycles = res.data as YearEndCycle[]

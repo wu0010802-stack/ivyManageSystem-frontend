@@ -15,6 +15,7 @@ import { apiError } from '@/utils/error'
 import { CYCLE_STATUS_LABEL, CYCLE_STATUS_TAG } from '@/constants/appraisalYearEnd'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { toAdYear } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
 import { importWarningLabels } from './appraisalPayoutRosterPaid'
 import { downloadTransferRoster, yearEndTransferRosterPath } from '@/utils/transferRoster'
@@ -92,7 +93,7 @@ const form = ref({
 /** 新增年度週期：開窗時依當前學年動態推算預設值（避免捕捉過期的學年常數）。 */
 function openCreate() {
   const y = term.school_year
-  const west = y + 1911
+  const west = toAdYear(y)
   form.value = {
     academic_year: y,
     start_date: `${west}-08-01`,
@@ -102,7 +103,7 @@ function openCreate() {
   createDialog.value = true
 }
 
-const importWest = term.school_year + 1911
+const importWest = toAdYear(term.school_year)
 const importForm = ref<{
   file: File | null
   start_date: string

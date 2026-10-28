@@ -67,6 +67,7 @@ import { PERMISSION_NAMES } from '@/constants/permissions'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { saveBlobResponse } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errorHandler'
+import { toRocYear } from '@/utils/academic'
 
 const router = useRouter()
 const now = new Date()
@@ -130,7 +131,7 @@ const exportQualificationChecklist = async () => {
         })
         saveBlobResponse(
             response,
-            `教職員4合1資格核對表_${query.year - 1911}年${String(query.month).padStart(2, '0')}月.xlsx`,
+            `教職員4合1資格核對表_${toRocYear(query.year)}年${String(query.month).padStart(2, '0')}月.xlsx`,
         )
         ElMessage.success('4 合 1 資格核對表已下載')
     } catch (error: unknown) {
