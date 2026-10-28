@@ -7,6 +7,7 @@ import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/ap
 import { fetchTenantMetaForLine, shouldUseLegacyLineEnvFallback } from '@/api/tenantMeta'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { safeExternalUrl, LINE_FRIEND_URL_HOSTS } from '@/utils/url'
 import { WarningFilled } from '@element-plus/icons-vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
@@ -118,11 +119,14 @@ const loadLineBotFriendUrl = async () => {
   try {
     // LINE OA 是各租戶的身分，必須讀原始 tenant-meta，不能讀已混入品牌
     // 預設值的正規化結果。成功但欄位空白即代表該園尚未設定。
-    lineBotFriendUrl.value = (await fetchTenantMetaForLine()).line_bot_friend_url || ''
+    // 該欄由同租戶 SETTINGS_WRITE 帳號可寫：只收 https LINE 網域，否則視同未設定
+    // （資安稽核 2026-10-28：javascript:／釣魚網址不得進 :href、QR 與剪貼簿）。
+    lineBotFriendUrl.value =
+      safeExternalUrl((await fetchTenantMetaForLine()).line_bot_friend_url, LINE_FRIEND_URL_HOSTS) || ''
   } catch (error) {
     // 僅舊單租戶後端明確沒有 tenant-meta route 時沿用過渡 env。
     lineBotFriendUrl.value = shouldUseLegacyLineEnvFallback(error)
-      ? import.meta.env.VITE_LINE_BOT_FRIEND_URL || ''
+      ? safeExternalUrl(import.meta.env.VITE_LINE_BOT_FRIEND_URL, LINE_FRIEND_URL_HOSTS) || ''
       : ''
   }
 }
@@ -355,7 +359,7 @@ onMounted(() => {
               <el-button
                 type="success"
                 tag="a"
-                :href="lineBotFriendUrl"
+                :href="safeExternalUrl(lineBotFriendUrl, LINE_FRIEND_URL_HOSTS)"
                 target="_blank"
                 rel="noopener noreferrer"
               >

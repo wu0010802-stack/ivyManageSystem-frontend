@@ -24,6 +24,7 @@ import { TENANT_RESOLUTION_BUSY, tenantSlugOrPlaceholder } from '@/utils/tenant'
 // 三態遮罩（CT-F-01）：與 fc 的 boot 檢查、兩個 axios interceptor 共用**同一款畫面**
 // （CT-F-08）。fb 刻意不自建第二款——三種長相不同的「無法識別園所」是使用者的災難。
 import { showTenantBlocked } from '@/utils/tenantBlocked'
+import { safeExternalUrl, LINE_FRIEND_URL_HOSTS } from '@/utils/url'
 
 export interface TenantBrandingManifest {
   name: string
@@ -297,7 +298,9 @@ export function normalizeBranding(meta: TenantMeta | null | undefined): TenantBr
     school_keywords: isDefaultTenant && !keywords.length ? d.school_keywords.slice() : keywords,
     school_aliases: aliases ?? (isDefaultTenant ? d.school_aliases.slice() : []),
     liff_id: m.liff_id || d.liff_id,
-    line_bot_friend_url: m.line_bot_friend_url || d.line_bot_friend_url,
+    // 租戶可寫欄位：只收 https LINE 網域（資安稽核 2026-10-28），不合格退回預設（空）。
+    line_bot_friend_url:
+      safeExternalUrl(m.line_bot_friend_url, LINE_FRIEND_URL_HOSTS) || d.line_bot_friend_url,
     public_site_origin: m.public_site_origin || d.public_site_origin,
   }
 }

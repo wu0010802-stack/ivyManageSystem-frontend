@@ -114,6 +114,23 @@ describe('逐欄 fallback（normalizeBranding）', () => {
  * 真的」），前端逐欄 fallback 不得把它們蓋回義華的值。
  * 預設租戶（slug = BRANDING_DEFAULTS.slug）與沒帶 slug 的 payload 維持原行為（DEV-12）。
  */
+describe('line_bot_friend_url 只收 https LINE 網域（資安稽核 2026-10-28）', () => {
+  it('合法 LINE 網址照用', () => {
+    expect(normalizeBranding({ line_bot_friend_url: 'https://lin.ee/abc' }).line_bot_friend_url).toBe(
+      'https://lin.ee/abc',
+    )
+  })
+
+  it.each(['javascript:alert(1)', 'http://line.me/R/ti/p/@x', 'https://evil.example/x'])(
+    '不合格值 %s 退回預設空字串',
+    (url) => {
+      expect(normalizeBranding({ line_bot_friend_url: url }).line_bot_friend_url).toBe(
+        BRANDING_DEFAULTS.line_bot_friend_url,
+      )
+    },
+  )
+})
+
 describe('非預設租戶不退回義華專屬值（F65）', () => {
   // prod renwu 實測的 tenant-meta 形狀（2026-09 查核）
   const RENWU = {

