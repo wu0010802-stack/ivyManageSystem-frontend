@@ -114,7 +114,15 @@ const PII_KEY_SUBSTRINGS = [
 // PIN 的 request body 鍵名都是裸字 `pin`（4–6 位數字＋employee_id＝完整打卡憑證）；
 // punch_pin_hash 短數字 hash 可離線窮舉。走整字相等——substring 'pin' 會誤傷
 // is_pinned / shipping / mapping / last_ping_at。
-const PII_KEY_EXACT = ['student', 'child', 'parent', 'lat', 'lng', 'stop_lat', 'stop_lng', 'pin', 'punch_pin_hash']
+// 通用搜尋參數（資安稽核 2026-10-28 P3，與 BE _PII_KEY_EXACT 同步）：/api/search?q=、
+// /portal/search?q=、/activity/students/search?q= 及 ?keyword= / ?search= / ?query= 的值就是
+// 學生／家長／員工姓名，key 不命中 denylist、姓名也不命中 value-level 正則 → transaction span、
+// xhr breadcrumb 原樣外送。走整字相等：substring 'q' 會誤傷 frequency / unique，'query' 會誤傷
+// query_count / http.query。裸字 'name' 刻意不列（保留 route_name／課程名等 debug context，待裁定）。
+const PII_KEY_EXACT = [
+  'student', 'child', 'parent', 'lat', 'lng', 'stop_lat', 'stop_lng', 'pin', 'punch_pin_hash',
+  'q', 'search', 'keyword', 'query',
+]
 
 const FILTERED = '[Filtered]'
 const URL_LIKE_CONTEXT_KEYS = new Set(['url', 'path', 'from'])

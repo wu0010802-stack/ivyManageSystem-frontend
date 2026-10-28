@@ -1043,3 +1043,64 @@ describe('scrubTransaction（beforeSendTransaction，對齊後端 _scrub_transac
     expect(scrubTransaction(null)).toBeNull()
   })
 })
+
+describe('通用搜尋參數精確比對（與後端 _PII_KEY_EXACT 同步，資安稽核 2026-10-28）', () => {
+  // /api/search?q=王小明、/portal/search?q=、/activity/students/search?q= 的值就是姓名，
+  // key 不命中 denylist、姓名也不命中 value-level 正則 → transaction / xhr breadcrumb 原樣外送。
+  it.each(['q', 'search', 'keyword', 'query'])('query string 的 %s= 值遮罩', (key) => {
+    const url = `/api/search?${key}=${encodeURIComponent('王小明')}&limit=10`
+    const out = sanitizeUrl(url)
+    expect(out).not.toContain(encodeURIComponent('王小明'))
+    expect(out).toBe(`/api/search?${key}=%5BFiltered%5D&limit=10`)
+    expect(scrubQueryString(`${key}=王小明`)).toBe(`${key}=%5BFiltered%5D`)
+    expect(scrubMapping({ [key]: '王小明' })).toEqual({ [key]: '[Filtered]' })
+    const crumb = scrubBreadcrumb({ category: 'xhr', data: { url } })
+    expect(JSON.stringify(crumb)).not.toContain(encodeURIComponent('王小明'))
+  })
+
+  it('整字相等：不誤傷 frequency / unique_id / query_count / http.query / search_scope', () => {
+    const keep = { frequency: 'x', unique_id: 1, query_count: 3, 'http.query': 'a=1', search_scope: 'all' }
+    expect(scrubMapping(keep)).toEqual(keep)
+  })
+})
+
+// 結構守衛（擋整類：「後端 _PII_KEY_EXACT／SUBSTRINGS／EXEMPT 加了 key、前端漏同步」）：
+// 與後端 tests/test_pii_denylist_parity.py 對稱。找得到後端 sentry_init.py 才跑
+// （PII_PARITY_BACKEND 指定路徑，或 sibling checkout ../ivy-backend）；CI 單 repo 時 skip。
+describe('PII 名單前後端 parity（前端側）', async () => {
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const candidates = [
+    process.env.PII_PARITY_BACKEND,
+    path.resolve(process.cwd(), '../ivy-backend/utils/sentry_init.py'),
+  ].filter(Boolean)
+  const backendFile = candidates.find((p) => fs.existsSync(p))
+  const feSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/utils/sentry.ts'), 'utf8')
+
+  const feArray = (name) => {
+    const m = feSrc.match(new RegExp(`const\\s+${name}\\s*=\\s*\\[([\\s\\S]*?)\\]`))
+    expect(m, `前端抽不到 ${name}`).not.toBeNull()
+    return new Set([...m[1].matchAll(/['"]([^'"]+)['"]/g)].map((x) => x[1]))
+  }
+  const beSet = (src, name) => {
+    // 取「行首 NAME:」到下一個行首 `)` 或 `]`（模組層定義收尾）之間，去掉註解再抽字串
+    const start = src.search(new RegExp(`^${name}\\s*[:=]`, 'm'))
+    expect(start, `後端抽不到 ${name}`).toBeGreaterThanOrEqual(0)
+    const rest = src.slice(start)
+    const end = rest.search(/^[)\]]/m)
+    const body = rest.slice(0, end).split('\n').map((l) => l.replace(/#.*$/, '')).join('\n')
+    return new Set([...body.matchAll(/['"]([^'"]+)['"]/g)].map((x) => x[1]))
+  }
+
+  it.skipIf(!backendFile).each([
+    ['PII_KEY_EXACT', '_PII_KEY_EXACT'],
+    ['PII_KEY_SUBSTRINGS', '_PII_KEY_SUBSTRINGS'],
+    ['PII_KEY_EXEMPT_SUBSTRINGS', '_PII_KEY_EXEMPT_SUBSTRINGS'],
+  ])('%s 與後端 %s 相同', (feName, beName) => {
+    const src = fs.readFileSync(backendFile, 'utf8')
+    const be = beSet(src, beName)
+    const fe = feArray(feName)
+    expect([...be].filter((k) => !fe.has(k)).sort(), 'backend 有但 frontend 缺').toEqual([])
+    expect([...fe].filter((k) => !be.has(k)).sort(), 'frontend 有但 backend 缺').toEqual([])
+  })
+})
