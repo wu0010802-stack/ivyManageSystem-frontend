@@ -85,7 +85,7 @@ describe('StepExport', () => {
             button.text().includes('名冊') || button.text().includes('Excel') || button.text().includes('PDF'),
         )
 
-        expect(exportButtons).toHaveLength(7)
+        expect(exportButtons).toHaveLength(8)
         expect(exportButtons.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
         await exportButtons[0].trigger('click')
         expect(downloadFileMock).not.toHaveBeenCalled()
@@ -183,6 +183,31 @@ describe('StepExport', () => {
         await flushPromises()
         expect(downloadFileWithHeadersMock).toHaveBeenCalledTimes(2)
         expect(messageWarningMock).not.toHaveBeenCalled()
+    })
+
+    it('表外獎金轉帳名冊（後端 1ebcf1eb）：帶 period=YYYY-MM、不算結薪完成、排除人數提醒', async () => {
+        downloadFileWithHeadersMock.mockResolvedValueOnce({ 'x-roster-excluded-count': '1' })
+        const wrapper = mountStep(makeSettlement([rec()]))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('表外獎金'))
+        expect(btn).toBeTruthy()
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(downloadFileWithHeadersMock).toHaveBeenCalledWith(
+            '/extra-bonuses/transfer-roster',
+            '2026年05月_表外獎金轉帳名冊.xlsx',
+            { period: '2026-05' },
+        )
+        expect(messageWarningMock).toHaveBeenCalledTimes(1)
+        expect(messageWarningMock.mock.calls[0][0]).toContain('1 人')
+        // 表外獎金名冊不是薪資名冊，不可據此宣告本月結薪完成
+        expect(wrapper.text()).not.toContain('本月結薪完成')
+    })
+
+    it('表外獎金名冊非完整薪資角色不可匯出', async () => {
+        hasFullSalaryViewMock.mockReturnValue(false)
+        const wrapper = mountStep(makeSettlement([rec()]))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('表外獎金'))!
+        expect(btn.attributes('disabled')).toBeDefined()
     })
 
     it('提示被排除者會列在「未列入名冊」工作表', () => {
