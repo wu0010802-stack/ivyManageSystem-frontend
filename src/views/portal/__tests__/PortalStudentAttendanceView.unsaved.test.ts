@@ -50,6 +50,7 @@ import {
 } from '@/api/portal'
 import { ElMessageBox } from 'element-plus'
 import { enqueueOp } from '@/utils/offlineQueue'
+import { discardSupersededClassAttendanceOps } from '@/utils/attendanceSync'
 import { isNetworkError } from '@/composables/useOnlineStatus'
 import PortalStudentAttendanceView from '../PortalStudentAttendanceView.vue'
 
@@ -150,6 +151,14 @@ describe('點名未儲存保護與批次操作', () => {
     await (w.vm as unknown as { saveDailyAttendance(): Promise<void> }).saveDailyAttendance()
     expect(unloadBlocked()).toBe(false)
     expect(batchSaveClassAttendance).toHaveBeenCalledWith(expect.objectContaining({ entries: expect.arrayContaining([{ student_id: 3, status: '遲到', remark: null }]) }))
+  })
+
+  it('佇列無 pending（只剩 needs_review 舊點名）時線上儲存成功仍剔除被覆蓋的舊 op', async () => {
+    const w = await mountView()
+    edit(w)
+    await flushPromises()
+    await (w.vm as unknown as { saveDailyAttendance(): Promise<void> }).saveDailyAttendance()
+    expect(discardSupersededClassAttendanceOps).toHaveBeenCalledTimes(1)
   })
 
   it('儲存失敗仍保留未存保護', async () => {

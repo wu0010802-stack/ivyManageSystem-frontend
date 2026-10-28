@@ -362,19 +362,18 @@ const saveDailyAttendance = async () => {
         ? `已儲存 ${entries.length} 筆，還有 ${unmarkedCount.value} 位未點名`
         : '點名儲存成功',
     )
-    if (pendingCount.value > 0) {
-      // 先剔除佇列中已被這次儲存覆蓋的舊狀態，否則補送會把新點名蓋回並誤發缺席推播；
-      // 剔除失敗就不補送（寧可留在佇列，也不拿舊資料覆寫）。
-      let discarded = false
-      try {
-        await discardSupersededClassAttendanceOps(payload, { userId: uid })
-        discarded = true
-      } catch {
-        discarded = false
-      }
-      await refreshPendingCount()
-      if (discarded && pendingCount.value > 0) syncQueue({ silent: true })
+    // 先剔除佇列中已被這次儲存覆蓋的舊狀態，否則補送會把新點名蓋回並誤發缺席推播；
+    // 剔除失敗就不補送（寧可留在佇列，也不拿舊資料覆寫）。pendingCount 只計 pending，
+    // needs_review 的舊 op 也要剔除（老師手動重試會蓋回），故不以 pendingCount 為前提。
+    let discarded = false
+    try {
+      await discardSupersededClassAttendanceOps(payload, { userId: uid })
+      discarded = true
+    } catch {
+      discarded = false
     }
+    await refreshPendingCount()
+    if (discarded && pendingCount.value > 0) syncQueue({ silent: true })
   } catch (error) {
     // navigator.onLine 可能說謊：實際網路失敗也要 fallback 到佇列
     if (isNetworkError(error)) {
