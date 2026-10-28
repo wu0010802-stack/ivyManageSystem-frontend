@@ -7531,6 +7531,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/extra-bonuses/transfer-roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Extra Bonus Transfer Roster
+         * @description 匯出表外獎金銀行轉帳名冊 xlsx（同員工同月多筆合併一列）。
+         *
+         *     不薪轉／無帳號者列在「未列入名冊」工作表，`X-Roster-Excluded-Count` 回報人數；
+         *     招生獎金已有招生活動自己的轉帳名冊，這裡不收、指定 category=recruitment 回 400。
+         */
+        get: operations["export_extra_bonus_transfer_roster_api_extra_bonuses_transfer_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fee-due/run-now": {
         parameters: {
             query?: never;
@@ -11392,6 +11415,29 @@ export interface paths {
          * @description 下載加班批次匯入 Excel 範本
          */
         get: operations["get_overtime_import_template_api_overtimes_import_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/overtimes/suggest-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggest Overtime Type
+         * @description 依日期與員工排班建議加班類型（唯讀；與建立／核准時的類型驗證同一判定）。
+         *
+         *     國定假日 → holiday；無排班週末 → weekend；工作日／補班日 → weekday；
+         *     週末有排班或工作日被排休 → 模稜兩可（``allowed_types`` 兩種都放行）。
+         */
+        get: operations["suggest_overtime_type_api_overtimes_suggest_type_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -36323,6 +36369,11 @@ export interface components {
             daily_wage: number;
             /** Payout Amount */
             payout_amount: number;
+            /**
+             * Quota Missing
+             * @default false
+             */
+            quota_missing: boolean;
             /** Special Leave Days */
             special_leave_days: number;
         };
@@ -38494,6 +38545,28 @@ export interface components {
             page_size: number;
             /** Total */
             total: number;
+        };
+        /**
+         * OvertimeTypeSuggestionOut
+         * @description GET /overtimes/suggest-type：依日期（與員工排班）建議加班類型（F12，2026-10-28）。
+         *
+         *     ``allowed_types`` 是建立／核准時後端會放行的類型；長度 >1 表示模稜兩可
+         *     （週末有排班、工作日被明確排休），前端只做建議、不強制。
+         */
+        OvertimeTypeSuggestionOut: {
+            /** Allowed Types */
+            allowed_types: string[];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Day Kind */
+            day_kind: string;
+            /** Reason */
+            reason: string;
+            /** Suggested Type */
+            suggested_type: string;
         };
         /** OvertimeUpdate */
         OvertimeUpdate: {
@@ -42212,7 +42285,7 @@ export interface components {
         };
         /**
          * PortalSalaryDetailOut
-         * @description 定案薪資單三區明細（api/salary_fields.build_history_breakdown 形狀）。
+         * @description 定案薪資單三區明細（services/salary/history_breakdown.build_history_breakdown 形狀）。
          */
         PortalSalaryDetailOut: {
             /** Base Transfer Amount */
@@ -42818,6 +42891,35 @@ export interface components {
             /** Version */
             version?: number | null;
         };
+        /** PositionSalarySyncNeedsConfirmationItem */
+        PositionSalarySyncNeedsConfirmationItem: {
+            /** Current Salary */
+            current_salary: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Name */
+            name: string;
+            /** Standard Salary */
+            standard_salary: number;
+            /** Warning */
+            warning: string;
+        };
+        /**
+         * PositionSalarySyncOut
+         * @description POST /position-salary/sync 回傳。
+         *
+         *     補 response_model 時逐欄對齊既有回傳 dict（response_model 會過濾未宣告欄位）。
+         */
+        PositionSalarySyncOut: {
+            /** Needs Confirmation */
+            needs_confirmation: components["schemas"]["PositionSalarySyncNeedsConfirmationItem"][];
+            /** Skipped */
+            skipped: string[];
+            /** Total Updated */
+            total_updated: number;
+            /** Updated */
+            updated: components["schemas"]["PositionSalarySyncUpdatedItem"][];
+        };
         /**
          * PositionSalarySyncRequest
          * @description 職位薪資同步請求。
@@ -42841,6 +42943,15 @@ export interface components {
              * @description 空清單表示同步全部可對應員工
              */
             employee_ids?: number[];
+        };
+        /** PositionSalarySyncUpdatedItem */
+        PositionSalarySyncUpdatedItem: {
+            /** Name */
+            name: string;
+            /** New */
+            new: number;
+            /** Old */
+            old: number;
         };
         /**
          * PositionSalaryUpdate
@@ -63524,7 +63635,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PositionSalarySyncOut"];
                 };
             };
             /** @description Validation Error */
@@ -66286,6 +66397,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Semester2ExcessPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_extra_bonus_transfer_roster_api_extra_bonuses_transfer_roster_get: {
+        parameters: {
+            query: {
+                /** @description 類別（省略＝該月全部表外獎金；招生獎金請用招生活動名冊） */
+                category?: string | null;
+                /** @description 歸屬月 YYYY-MM（ExtraBonusPayment.period_year/period_month） */
+                period: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Excel 檔案下載 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
@@ -73196,6 +73341,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    suggest_overtime_type_api_overtimes_suggest_type_get: {
+        parameters: {
+            query: {
+                date: string;
+                employee_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OvertimeTypeSuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
