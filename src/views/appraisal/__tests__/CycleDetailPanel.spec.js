@@ -18,7 +18,6 @@ vi.mock('@/api/appraisal', () => ({
     ],
   }),
   exportAppraisalCycleXlsxUrl: vi.fn().mockReturnValue('/x'),
-  exportAppraisalTransferRosterXlsxUrl: vi.fn().mockReturnValue('/y'),
   getSignStatusSummary: vi.fn().mockResolvedValue({
     data: { cycle_id: 5, counts: { DRAFT: 2, SUPERVISOR_SIGNED: 1, ACCOUNTING_SIGNED: 0, FINALIZED: 3 }, buckets: [] },
   }),

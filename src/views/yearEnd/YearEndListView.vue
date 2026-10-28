@@ -8,7 +8,6 @@ import {
   createYearEndCycle,
   importYearEndExcel,
   exportYearEndSummaryXlsxUrl,
-  exportYearEndTransferRosterXlsxUrl,
   getCycleProgress,
 } from '@/api/yearEnd'
 import type { Schema } from '@/api/_generated/typed'
@@ -18,6 +17,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
 import { importWarningLabels } from './appraisalPayoutRosterPaid'
+import { downloadTransferRoster, yearEndTransferRosterPath } from '@/utils/transferRoster'
 
 interface YearEndCycleRow {
   id: number
@@ -30,6 +30,11 @@ interface YearEndCycleRow {
 type CycleProgress = Schema<'CycleProgressOut'>
 
 const router = useRouter()
+
+// 轉帳名冊改走 axios 下載（原 <a href> 讀不到 X-Roster-Excluded-Count），
+// 不薪轉／無帳號者被排除時提醒 HR。
+const exportTransferRoster = (cycleId: number) =>
+  downloadTransferRoster(yearEndTransferRosterPath(cycleId), '年終轉帳名冊.xlsx')
 const cycles = ref<YearEndCycleRow[]>([])
 const loading = ref(false)
 
@@ -247,7 +252,7 @@ onMounted(load)
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item><a :href="exportYearEndSummaryXlsxUrl(row.id)">年終獎金總表</a></el-dropdown-item>
-                <el-dropdown-item><a :href="exportYearEndTransferRosterXlsxUrl(row.id)">轉帳名冊</a></el-dropdown-item>
+                <el-dropdown-item data-test="roster-export" @click="exportTransferRoster(row.id)">轉帳名冊</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>

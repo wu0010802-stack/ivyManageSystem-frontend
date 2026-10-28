@@ -47,6 +47,11 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+const downloadFileWithHeadersMock = vi.fn()
+vi.mock('@/utils/download', () => ({
+  downloadFileWithHeaders: (...a: unknown[]) => downloadFileWithHeadersMock(...a),
+}))
+
 const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush, back: vi.fn() }),
@@ -311,7 +316,7 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     })
   })
 
-  it('匯出 dropdown 內含總表 Excel 與轉帳名冊連結', async () => {
+  it('匯出 dropdown 內含總表 Excel 連結與轉帳名冊（axios 下載，排除人數提醒）', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
     const wrapper = await mountView()
 
@@ -319,7 +324,15 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     expect(wrapper.text()).toContain('轉帳名冊')
     const links = wrapper.findAll('a')
     expect(links.some((a) => a.attributes('href') === api.exportYearEndSummaryXlsxUrl(1))).toBe(true)
-    expect(links.some((a) => a.attributes('href') === api.exportYearEndTransferRosterXlsxUrl(1))).toBe(true)
+
+    // 原 <a href> 讀不到 X-Roster-Excluded-Count；改 axios 下載後被排除者要提醒
+    downloadFileWithHeadersMock.mockResolvedValueOnce({ 'x-roster-excluded-count': '2' })
+    await wrapper.find('[data-test="roster-export"]').trigger('click')
+    await flushPromises()
+    expect(downloadFileWithHeadersMock).toHaveBeenCalledWith(
+      '/year_end/cycles/1/transfer_roster.xlsx', '年終轉帳名冊.xlsx', undefined,
+    )
+    expect(vi.mocked(ElMessage.warning).mock.calls.some((c) => String(c[0]).includes('2 人'))).toBe(true)
   })
 
   it('頂部改用共用 PageHeader（無返回鍵）', async () => {

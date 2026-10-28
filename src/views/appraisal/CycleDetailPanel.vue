@@ -21,7 +21,6 @@ import {
   finalizeAppraisalSummary,
   listAppraisalCycles,
   exportAppraisalCycleXlsxUrl,
-  exportAppraisalTransferRosterXlsxUrl,
   getSignStatusSummary,
   getAppraisalAllEmployeesStatus,
   listScoringRules,
@@ -29,6 +28,7 @@ import {
   unmarkAppraisalCycleRosterPaid,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { downloadTransferRoster, appraisalTransferRosterPath } from '@/utils/transferRoster'
 import { hasPermission } from '@/utils/auth'
 import { statusLabel, MSG, ROLE_GROUP_LABEL, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 import {
@@ -73,6 +73,19 @@ const props = defineProps<{ cycleId: number }>()
 const route = useRoute()
 const router = useRouter()
 const cycleId = computed(() => props.cycleId)
+
+// 轉帳名冊改走 axios 下載（原 <a href> 讀不到 X-Roster-Excluded-Count），
+// 不薪轉／無帳號者被排除時提醒 HR。
+const rosterExporting = ref(false)
+const exportTransferRoster = async () => {
+  if (rosterExporting.value) return
+  rosterExporting.value = true
+  try {
+    await downloadTransferRoster(appraisalTransferRosterPath(cycleId.value), '考核獎金轉帳名冊.xlsx')
+  } finally {
+    rosterExporting.value = false
+  }
+}
 
 const cycle = ref<Cycle | null>(null)
 const participants = ref<Participant[]>([])
@@ -562,7 +575,7 @@ onMounted(() => {
         @click="recompute"
       >{{ MSG.recompute_btn }}</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalCycleXlsxUrl(cycleId)">匯出考核表</el-button>
-      <el-button :icon="Download" tag="a" :href="exportAppraisalTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
+      <el-button :icon="Download" :loading="rosterExporting" data-test="roster-export" @click="exportTransferRoster">轉帳名冊</el-button>
       <el-button
         v-if="canMarkPaid"
         :loading="rosterPaidBusy"

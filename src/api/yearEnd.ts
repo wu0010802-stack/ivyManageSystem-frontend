@@ -128,8 +128,7 @@ export const importYearEndExcel = (
 export const exportYearEndSummaryXlsxUrl = (cycleId: number) =>
   `${api.defaults.baseURL || '/api'}/year_end/cycles/${cycleId}/summary.xlsx`
 
-export const exportYearEndTransferRosterXlsxUrl = (cycleId: number) =>
-  `${api.defaults.baseURL || '/api'}/year_end/cycles/${cycleId}/transfer_roster.xlsx`
+// 轉帳名冊下載改走 @/utils/transferRoster（axios 下載才讀得到 X-Roster-Excluded-Count）
 
 // ============ Grid / Build / Manual Patch ============
 

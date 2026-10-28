@@ -19,7 +19,6 @@ vi.mock('@/api/appraisal', () => ({
   signAccountingAppraisalSummary: vi.fn().mockResolvedValue({ data: {} }),
   finalizeAppraisalSummary: vi.fn().mockResolvedValue({ data: {} }),
   exportAppraisalCycleXlsxUrl: vi.fn().mockReturnValue('/x'),
-  exportAppraisalTransferRosterXlsxUrl: vi.fn().mockReturnValue('/y'),
   getSignStatusSummary: vi.fn().mockResolvedValue({ data: { counts: {} } }),
   getAppraisalAllEmployeesStatus: vi.fn().mockResolvedValue({ data: { participants: [] } }),
   listScoringRules: vi.fn().mockResolvedValue({ data: [] }),

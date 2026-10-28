@@ -18,7 +18,6 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     signAccountingBatch: vi.fn(),
     finalizeBatch: vi.fn(),
     exportYearEndSummaryXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/summary.xlsx'),
-    exportYearEndTransferRosterXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/roster.xlsx'),
     // Task 2：openProvenanceDrawer 觸發真的 ProvenanceDrawer.vue（本檔未 stub），
     // 其 fetchAll 會呼叫 getProvenance；不 mock 會打到 importOriginal 的真實實作，
     // 沒回應可 resolve → Promise.allSettled 對非 thenable 值視為已 fulfilled，
