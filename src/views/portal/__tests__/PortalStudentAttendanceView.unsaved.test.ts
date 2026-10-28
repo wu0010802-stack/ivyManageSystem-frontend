@@ -26,6 +26,7 @@ vi.mock('@/utils/offlineQueue', () => ({
 }))
 vi.mock('@/utils/attendanceSync', () => ({
   flushClassAttendanceQueue: vi.fn().mockResolvedValue({ succeeded: 0, needs_review: 0, auth_failed: false }),
+  discardSupersededClassAttendanceOps: vi.fn().mockResolvedValue(0),
 }))
 vi.mock('@/composables/useOnlineStatus', async () => {
   const { ref } = await import('vue')
