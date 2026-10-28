@@ -24,6 +24,7 @@ type LeaveRecord = Pick<
   | 'end_date'
   | 'leave_type'
   | 'leave_type_label'
+  | 'employee_id'
   | 'employee_name'
   | 'start_time'
   | 'end_time'
@@ -168,8 +169,9 @@ const calendarGrid = computed(() => {
   return weeks
 })
 
-// 同一人同日兩張假單（上午＋下午）只算一人，「N 人」才是真的人數
-const distinctPeople = (leaves: LeaveRecord[]) => new Set(leaves.map((lv) => lv.employee_name)).size
+// 同一人同日兩張假單（上午＋下午）只算一人，「N 人」才是真的人數。
+// 去重鍵必須是 employee_id：姓名會撞（staging 已有 13 組同名員工），以姓名去重會低估缺勤人數。
+const distinctPeople = (leaves: LeaveRecord[]) => new Set(leaves.map((lv) => lv.employee_id)).size
 
 // 點擊日期格子 → 開啟詳情 Dialog
 const openCalDetail = (cell: CalCell) => {
