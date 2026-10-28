@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
+  (e: 'download-template'): void
 }>()
 
 const updateVisible = (value: boolean) => emit('update:visible', value)
@@ -36,7 +37,12 @@ const updateVisible = (value: boolean) => emit('update:visible', value)
   >
     <div style="margin-bottom: 12px;">
       <el-alert type="info" :closable="false" show-icon>
-        <template #title>上傳 Excel 檔案（.xlsx），系統將批次建立草稿假單，需後續人工審核。</template>
+        <template #title>
+          上傳 Excel 檔案（.xlsx），系統將批次建立草稿假單，需後續人工審核。
+          第一次匯入請先
+          <el-button link type="primary" class="import-template-link" @click="emit('download-template')">下載範本</el-button>
+          照欄位填寫。
+        </template>
       </el-alert>
     </div>
     <el-upload
@@ -75,3 +81,11 @@ const updateVisible = (value: boolean) => emit('update:visible', value)
     </template>
   </el-dialog>
 </template>
+
+<style scoped>
+.import-template-link {
+  vertical-align: baseline;
+  padding: 0;
+  height: auto;
+}
+</style>

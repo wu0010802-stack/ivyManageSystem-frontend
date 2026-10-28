@@ -9,9 +9,17 @@ vi.mock('@/api/leaves', () => ({
   initLeaveQuotas: (...a: unknown[]) => initLeaveQuotas(...a),
 }))
 
+const confirmMock = vi.fn()
+const alertMock = vi.fn()
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn() },
+  ElMessageBox: {
+    confirm: (...a: unknown[]) => confirmMock(...a),
+    alert: (...a: unknown[]) => alertMock(...a),
+  },
 }))
+
+vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
 
 const flushPromises = async () => {
   await Promise.resolve()
@@ -145,5 +153,60 @@ describe('LeaveQuotaOverviewTable', () => {
 
     expect(initLeaveQuotas).toHaveBeenCalledWith(expect.objectContaining({ employee_id: 3 }))
     expect(getLeaveQuotas).toHaveBeenCalledTimes(2)
+  })
+
+  it('整年度沒有任何人初始化時，表頭仍畫出有上限的假別欄（不塌成只剩員工欄）', async () => {
+    getLeaveQuotas.mockResolvedValue({ data: [] })
+    const w = mountTable()
+    await flushPromises()
+    const cols = w.vm.$.setupState.columns.map((c: { value: string }) => c.value)
+    expect(cols).toEqual(['annual', 'sick', 'menstrual', 'personal', 'family_care'])
+    expect(w.findAll('thead th').length).toBe(cols.length + 2)
+  })
+
+  it('批次初始化只處理尚未初始化的員工（已初始化者不被覆寫回法定值），完成後重新載入', async () => {
+    getLeaveQuotas.mockResolvedValue({
+      data: [
+        { employee_id: 1, leave_type: 'annual', leave_type_label: '特休', total_hours: 80, used_hours: 0, pending_hours: 0, remaining_hours: 80 },
+      ],
+    })
+    confirmMock.mockResolvedValue('confirm')
+    initLeaveQuotas.mockResolvedValue({})
+    const w = mountTable()
+    await flushPromises()
+
+    await w.vm.$.setupState.initAllUninitialized()
+    await flushPromises()
+
+    const ids = initLeaveQuotas.mock.calls.map((c) => (c[0] as { employee_id: number }).employee_id).sort()
+    expect(ids).toEqual([2, 3])
+    expect(getLeaveQuotas).toHaveBeenCalledTimes(2)
+    expect(w.vm.$.setupState.bulkProgress).toBeNull()
+  })
+
+  it('批次初始化取消確認時不呼叫任何初始化', async () => {
+    getLeaveQuotas.mockResolvedValue({ data: [] })
+    confirmMock.mockRejectedValue('cancel')
+    const w = mountTable()
+    await flushPromises()
+    await w.vm.$.setupState.initAllUninitialized()
+    expect(initLeaveQuotas).not.toHaveBeenCalled()
+  })
+
+  it('批次初始化部分失敗時繼續處理其餘員工並列出失敗名單', async () => {
+    getLeaveQuotas.mockResolvedValue({ data: [] })
+    confirmMock.mockResolvedValue('confirm')
+    alertMock.mockResolvedValue('confirm')
+    initLeaveQuotas.mockImplementation(async (p: { employee_id: number }) => {
+      if (p.employee_id === 2) throw new Error('boom')
+      return {}
+    })
+    const w = mountTable()
+    await flushPromises()
+    await w.vm.$.setupState.initAllUninitialized()
+    await flushPromises()
+    expect(initLeaveQuotas).toHaveBeenCalledTimes(3)
+    expect(alertMock).toHaveBeenCalledTimes(1)
+    expect(String(alertMock.mock.calls[0][0])).toContain('陳雅婷')
   })
 })

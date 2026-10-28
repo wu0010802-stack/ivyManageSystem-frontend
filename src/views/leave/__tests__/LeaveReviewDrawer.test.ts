@@ -143,6 +143,25 @@ describe('LeaveReviewDrawer', () => {
       expect(w.vm.$.setupState.quotaClass).toBe('info')
     })
 
+    it('有上限的假別（特休）查無配額列＝尚未初始化 → warn，且不說成「無年度配額限制」', async () => {
+      getLeaveQuotas.mockResolvedValue({ data: [] })
+      const w = mountDrawer({ ...baseRow, leave_type: 'annual' })
+      await flushPromises()
+      expect(w.vm.$.setupState.quotaUninitialized).toBe(true)
+      expect(w.vm.$.setupState.quotaClass).toBe('warn')
+      const text = w.find('[data-test="lrd-check-quota"]').text()
+      expect(text).toContain('尚未初始化')
+      expect(text).not.toContain('無年度配額限制')
+    })
+
+    it('配額查詢失敗 → warn 並明講查詢失敗', async () => {
+      getLeaveQuotas.mockRejectedValue(new Error('boom'))
+      const w = mountDrawer({ ...baseRow, leave_type: 'annual' })
+      await flushPromises()
+      expect(w.vm.$.setupState.quotaClass).toBe('warn')
+      expect(w.find('[data-test="lrd-check-quota"]').text()).toContain('查詢失敗')
+    })
+
     it('已核准的假單不比對配額超額（remaining 已反映本筆，不重複警示）', async () => {
       getLeaveQuotas.mockResolvedValue({ data: [{ remaining_hours: 0, used_hours: 40, pending_hours: 0, total_hours: 40 }] })
       const w = mountDrawer({ ...baseRow, leave_hours: 40, status: 'approved' })

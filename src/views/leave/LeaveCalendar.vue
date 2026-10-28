@@ -41,12 +41,22 @@ interface CalCell {
 
 const props = defineProps<{
   activeTab?: string
+  /** 與「假單」頁籤共用的月份；切到行事曆時以此為準，行事曆內切月再回報給父層 */
+  year?: number
+  month?: number
+}>()
+const emit = defineEmits<{
+  (e: 'update:year-month', value: [number, number]): void
 }>()
 
 const employeeStore = useEmployeeStore()
 
-const calYear  = ref(new Date().getFullYear())
-const calMonth = ref(new Date().getMonth() + 1)
+const calYear  = ref(props.year ?? new Date().getFullYear())
+const calMonth = ref(props.month ?? new Date().getMonth() + 1)
+
+function emitMonth() {
+  emit('update:year-month', [calYear.value, calMonth.value])
+}
 const calLoading     = ref(false)
 const calendarLeaves = ref<LeaveRecord[]>([])
 const calFilterEmp   = ref<number | null>(null)
@@ -84,12 +94,14 @@ const fetchCalendar = async () => {
 const calPrevMonth = () => {
   if (calMonth.value === 1) { calMonth.value = 12; calYear.value-- }
   else calMonth.value--
+  emitMonth()
   fetchCalendar()
 }
 
 const calNextMonth = () => {
   if (calMonth.value === 12) { calMonth.value = 1; calYear.value++ }
   else calMonth.value++
+  emitMonth()
   fetchCalendar()
 }
 
@@ -97,6 +109,7 @@ const calGoToday = () => {
   const now = new Date()
   calYear.value  = now.getFullYear()
   calMonth.value = now.getMonth() + 1
+  emitMonth()
   fetchCalendar()
 }
 
@@ -155,6 +168,9 @@ const calendarGrid = computed(() => {
   return weeks
 })
 
+// 同一人同日兩張假單（上午＋下午）只算一人，「N 人」才是真的人數
+const distinctPeople = (leaves: LeaveRecord[]) => new Set(leaves.map((lv) => lv.employee_name)).size
+
 // 點擊日期格子 → 開啟詳情 Dialog
 const openCalDetail = (cell: CalCell) => {
   if (!cell.day || !cell.leaves.length) return
@@ -165,7 +181,12 @@ const openCalDetail = (cell: CalCell) => {
 
 // 切換到行事曆 Tab 時自動載入
 watch(() => props.activeTab, (val) => {
-  if (val === 'calendar') fetchCalendar()
+  if (val !== 'calendar') return
+  if (props.year && props.month) {
+    calYear.value = props.year
+    calMonth.value = props.month
+  }
+  fetchCalendar()
 })
 watch(calFilterEmp, () => {
   if (props.activeTab === 'calendar') fetchCalendar()
@@ -178,7 +199,7 @@ watch(calFilterEmp, () => {
     <div class="cal-nav">
       <el-button-group>
         <el-button @click="calPrevMonth"><el-icon><ArrowLeft /></el-icon></el-button>
-        <el-button @click="calGoToday">今天</el-button>
+        <el-button @click="calGoToday">本月</el-button>
         <el-button @click="calNextMonth"><el-icon><ArrowRight /></el-icon></el-button>
       </el-button-group>
       <span class="cal-title">{{ calYear }} 年 {{ calMonth }} 月</span>
@@ -246,7 +267,7 @@ watch(calFilterEmp, () => {
         <!-- 日期數字 -->
         <div v-if="cell.day" class="cal-day-num">
           <span :class="{ 'today-badge': cell.isToday }">{{ cell.day }}</span>
-          <span v-if="cell.leaves.length" class="cal-leave-count">{{ cell.leaves.length }} 人</span>
+          <span v-if="cell.leaves.length" class="cal-leave-count">{{ distinctPeople(cell.leaves) }} 人</span>
         </div>
 
         <!-- 請假事件 -->
@@ -325,11 +346,11 @@ watch(calFilterEmp, () => {
   gap: var(--space-3);
 }
 
+/* 與「假單」頁籤的月份標題同字級，切頁籤時不跳動 */
 .cal-title {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
-  min-width: 120px;
-  text-align: center;
+  min-width: 100px;
 }
 
 /* 圖例 */
@@ -483,10 +504,12 @@ watch(calFilterEmp, () => {
 }
 
 /* 請假人數小標 */
+/* 人數是資訊不是警示：中性色，避免每一格都亮橘燈 */
 .cal-leave-count {
-  font-size: 10px;
-  color: var(--el-color-warning);
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 事件容器 */
