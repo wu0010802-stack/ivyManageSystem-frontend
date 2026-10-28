@@ -12,6 +12,10 @@ import { downloadFileWithHeaders } from '@/utils/download'
 export const yearEndTransferRosterPath = (cycleId: number) =>
   `/year_end/cycles/${cycleId}/transfer_roster.xlsx`
 
+/** 年終轉帳名冊列印版（PDF），同樣回 X-Roster-Excluded-Count。 */
+export const yearEndTransferRosterPdfPath = (cycleId: number) =>
+  `/year_end/cycles/${cycleId}/transfer_roster.pdf`
+
 export const appraisalTransferRosterPath = (cycleId: number) =>
   `/appraisal/cycles/${cycleId}/transfer_roster.xlsx`
 

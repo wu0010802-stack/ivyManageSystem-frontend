@@ -49,6 +49,12 @@ vi.mock('@/utils/auth', () => ({
   hasPermission: vi.fn().mockReturnValue(true),
 }))
 
+// F01：轉帳名冊改走 axios 下載，才能讀 X-Roster-Excluded-Count 提醒未入冊人數
+const { downloadFileWithHeadersMock } = vi.hoisted(() => ({ downloadFileWithHeadersMock: vi.fn() }))
+vi.mock('@/utils/download', () => ({
+  downloadFileWithHeaders: (...a: unknown[]) => downloadFileWithHeadersMock(...a),
+}))
+
 // Mock api index so baseURL resolves in the component without errors
 vi.mock('@/api/index', () => ({
   default: { defaults: { baseURL: '/api' }, get: vi.fn(), post: vi.fn(), patch: vi.fn() },
@@ -1162,5 +1168,43 @@ describe('YearEndGridView 試算就緒檢查', () => {
     const wrapper = await mountView()
 
     expect(wrapper.find('[data-test="readiness-card"]').exists()).toBe(false)
+  })
+})
+
+describe('YearEndGridView 轉帳名冊下載（F01：原 <a href> 直連讀不到排除人數 header）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(hasPermission).mockReturnValue(true)
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [{ id: 7, status: 'OPEN' }] } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+    mockExceptions([])
+  })
+
+  it.each([
+    ['roster-xlsx-button', '/year_end/cycles/7/transfer_roster.xlsx', '年終轉帳名冊.xlsx'],
+    ['roster-pdf-button', '/year_end/cycles/7/transfer_roster.pdf', '年終轉帳名冊.pdf'],
+  ])('%s：走 downloadFileWithHeaders，有人被排除時警示人數', async (testId, path, name) => {
+    downloadFileWithHeadersMock.mockResolvedValueOnce({ 'x-roster-excluded-count': '2' })
+    const wrapper = await mountView()
+    const button = wrapper.find(`[data-test="${testId}"]`)
+    expect(button.exists()).toBe(true)
+    expect(button.attributes('href')).toBeUndefined()
+    await button.trigger('click')
+    await flushPromises()
+    expect(downloadFileWithHeadersMock).toHaveBeenCalledWith(path, name, undefined)
+    expect(vi.mocked(ElMessage.warning).mock.calls.some((c) => String(c[0]).includes('2 人'))).toBe(true)
+  })
+
+  it('下載進行中重複點擊不會重發請求', async () => {
+    let resolve: (v: unknown) => void = () => {}
+    downloadFileWithHeadersMock.mockReturnValueOnce(new Promise((r) => { resolve = r }))
+    const wrapper = await mountView()
+    const button = wrapper.find('[data-test="roster-xlsx-button"]')
+    await button.trigger('click')
+    await button.trigger('click')
+    await wrapper.find('[data-test="roster-pdf-button"]').trigger('click')
+    expect(downloadFileWithHeadersMock).toHaveBeenCalledTimes(1)
+    resolve({})
+    await flushPromises()
   })
 })

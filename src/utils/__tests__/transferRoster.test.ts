@@ -12,6 +12,7 @@ import {
   downloadTransferRoster,
   rosterExcludedCount,
   yearEndTransferRosterPath,
+  yearEndTransferRosterPdfPath,
 } from '@/utils/transferRoster'
 
 describe('transferRoster', () => {
@@ -22,6 +23,7 @@ describe('transferRoster', () => {
 
   it('路徑不帶 /api（走 axios baseURL）', () => {
     expect(yearEndTransferRosterPath(3)).toBe('/year_end/cycles/3/transfer_roster.xlsx')
+    expect(yearEndTransferRosterPdfPath(3)).toBe('/year_end/cycles/3/transfer_roster.pdf')
     expect(appraisalTransferRosterPath(4)).toBe('/appraisal/cycles/4/transfer_roster.xlsx')
   })
 

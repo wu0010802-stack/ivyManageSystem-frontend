@@ -12,6 +12,11 @@ import { BONUS_COL_KEYS, SPECIAL_BONUS_LABELS, loadVisibleBonusCols, saveVisible
 import GridRowDetailDrawer from './components/GridRowDetailDrawer.vue'
 import { getEmployees } from '@/api/employees'
 import { employeeNames } from './yearEnd0315'
+import {
+  downloadTransferRoster,
+  yearEndTransferRosterPath,
+  yearEndTransferRosterPdfPath,
+} from '@/utils/transferRoster'
 
 // Derive row type from the typed API wrapper — no hand-written `any`.
 type GridRow = Awaited<ReturnType<typeof getYearEndGrid>>['data'][number]
@@ -196,6 +201,22 @@ function sortBySpecialBonusTotal(a: GridRow, b: GridRow) {
 }
 
 const baseUrl = computed(() => api.defaults.baseURL || '/api')
+
+// F01：轉帳名冊下載（xlsx／pdf 共用一把鎖防重複點擊）；有人未入冊時 util 會跳警示。
+const rosterExporting = ref<'xlsx' | 'pdf' | null>(null)
+const exportTransferRoster = async (format: 'xlsx' | 'pdf') => {
+  if (rosterExporting.value) return
+  rosterExporting.value = format
+  try {
+    if (format === 'xlsx') {
+      await downloadTransferRoster(yearEndTransferRosterPath(cycleId), '年終轉帳名冊.xlsx')
+    } else {
+      await downloadTransferRoster(yearEndTransferRosterPdfPath(cycleId), '年終轉帳名冊.pdf')
+    }
+  } finally {
+    rosterExporting.value = null
+  }
+}
 
 // ── 批次 B：試算就緒檢查前移 ──────────────────────────────────────────────
 // 例外中心（GET /cycles/{id}/exceptions，唯讀衍生）的 blocking 訊號原本藏在另一頁，
@@ -386,8 +407,8 @@ onMounted(initGrid)
         >
           開始試算
         </el-button>
-        <!-- Task 12④：匯出四鈕統一 el-button tag="a" :href 寫法（原本各自包一層 <a> 再塞
-             el-button，寫法不一致；比照 YearEndDetailView.vue 既有 tag="a" 慣例）。 -->
+        <!-- Task 12④：總表兩鈕統一 el-button tag="a" :href 寫法（原本各自包一層 <a> 再塞
+             el-button，寫法不一致）；轉帳名冊兩鈕見下方 F01 說明。 -->
         <el-button
           tag="a"
           :href="`${baseUrl}/year_end/cycles/${cycleId}/summary.xlsx`"
@@ -398,15 +419,19 @@ onMounted(initGrid)
           :href="`${baseUrl}/year_end/cycles/${cycleId}/summary.pdf`"
           target="_blank"
         >總表 PDF</el-button>
+        <!-- F01：轉帳名冊改走 axios 下載（原 tag="a" 直連讀不到 X-Roster-Excluded-Count，
+             不薪轉／無帳號者被排除時 HR 不會收到提醒）。總表不含銀行帳號、無此 header，維持直連。 -->
         <el-button
-          tag="a"
-          :href="`${baseUrl}/year_end/cycles/${cycleId}/transfer_roster.xlsx`"
-          target="_blank"
+          data-test="roster-xlsx-button"
+          :loading="rosterExporting === 'xlsx'"
+          :disabled="rosterExporting !== null"
+          @click="exportTransferRoster('xlsx')"
         >轉帳名冊 Excel</el-button>
         <el-button
-          tag="a"
-          :href="`${baseUrl}/year_end/cycles/${cycleId}/transfer_roster.pdf`"
-          target="_blank"
+          data-test="roster-pdf-button"
+          :loading="rosterExporting === 'pdf'"
+          :disabled="rosterExporting !== null"
+          @click="exportTransferRoster('pdf')"
         >轉帳名冊 PDF</el-button>
       </div>
     </header>
