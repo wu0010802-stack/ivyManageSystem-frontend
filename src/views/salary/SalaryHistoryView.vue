@@ -2,12 +2,7 @@
   <div>
     <PageHeader title="薪資總覽與歷史" subtitle="全員月度對帳、發放構成與個人歷月明細">
       <template #actions>
-        <el-select v-model="year" style="width: 100px" aria-label="年份">
-          <el-option v-for="y in yearOptions" :key="y" :value="y" :label="`${y} 年`" />
-        </el-select>
-        <el-select v-model="month" style="width: 90px" aria-label="月份">
-          <el-option v-for="m in 12" :key="m" :value="m" :label="`${m} 月`" />
-        </el-select>
+        <YearMonthPicker v-model:year="year" v-model:month="month" :years-before="2" />
         <el-button @click="showSnapshotDialog = true">月底快照</el-button>
       </template>
     </PageHeader>
@@ -39,6 +34,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import YearMonthPicker from '@/components/common/YearMonthPicker.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import SalaryMonthlyOverviewPanel from './SalaryMonthlyOverviewPanel.vue'
 import SalaryHistoryPanel from './SalaryHistoryPanel.vue'
@@ -52,7 +48,6 @@ const canWriteSalary = computed(() => hasPermission('SALARY_WRITE'))
 const now = new Date()
 const year = ref(now.getFullYear())
 const month = ref(now.getMonth() + 1)
-const yearOptions = computed(() => [year.value - 2, year.value - 1, year.value, year.value + 1])
 const showSnapshotDialog = ref(false)
 
 const activeTab = ref('overview')

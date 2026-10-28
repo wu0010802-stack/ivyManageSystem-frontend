@@ -2,12 +2,7 @@
   <div>
     <PageHeader title="薪資管理" subtitle="月結進度與薪資功能入口">
       <template #actions>
-        <el-select v-model="query.year" style="width: 100px" aria-label="年份">
-          <el-option v-for="y in yearOptions" :key="y" :value="y" :label="`${y} 年`" />
-        </el-select>
-        <el-select v-model="query.month" style="width: 90px" aria-label="月份">
-          <el-option v-for="m in 12" :key="m" :value="m" :label="`${m} 月`" />
-        </el-select>
+        <YearMonthPicker v-model:year="query.year" v-model:month="query.month" />
         <el-button
           v-if="canExportGovReports"
           data-testid="qualification-checklist-export"
@@ -63,6 +58,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import YearMonthPicker from '@/components/common/YearMonthPicker.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import LoadingPanel from '@/components/common/LoadingPanel.vue'
 import { useSalarySettlement, type SettlementStatus } from '@/composables/useSalarySettlement'
@@ -75,7 +71,6 @@ import { getErrorMessage } from '@/utils/errorHandler'
 const router = useRouter()
 const now = new Date()
 const query = reactive({ year: now.getFullYear(), month: now.getMonth() + 1 })
-const yearOptions = computed(() => [query.year - 1, query.year, query.year + 1])
 const canExportGovReports = computed(() =>
     hasPermission(PERMISSION_NAMES.GOV_REPORTS_EXPORT),
 )

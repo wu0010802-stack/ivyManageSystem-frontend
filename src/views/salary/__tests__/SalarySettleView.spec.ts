@@ -96,4 +96,17 @@ describe('SalarySettleView 嚮導外殼', () => {
 
         expect(wrapper.get('[data-test="finalize-mounted-month"]').text()).toBe('9')
     })
+
+    it('年月選擇改用共用 YearMonthPicker（±1 年），計算中鎖住', async () => {
+        routeState.query = { step: 'review', year: '2026', month: '5' }
+        const wrapper = mount(SalarySettleView, { global: { stubs: STUBS } })
+        await flushPromises()
+        const picker = wrapper.findComponent({ name: 'YearMonthPicker' })
+        expect(picker.exists()).toBe(true)
+        expect(picker.props('year')).toBe(2026)
+        expect(picker.props('month')).toBe(5)
+        expect(picker.props('yearsBefore')).toBe(1)
+        expect(picker.props('yearsAfter')).toBe(1)
+        expect(picker.props('disabled')).toBe(false)
+    })
 })

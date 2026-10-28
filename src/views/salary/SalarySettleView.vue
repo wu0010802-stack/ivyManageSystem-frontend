@@ -2,12 +2,7 @@
   <div>
     <PageHeader :title="`${query.year} 年 ${query.month} 月結薪`" :subtitle="statusLabel">
       <template #actions>
-        <el-select v-model="query.year" style="width: 100px" aria-label="年份" :disabled="calculating">
-          <el-option v-for="y in yearOptions" :key="y" :value="y" :label="`${y} 年`" />
-        </el-select>
-        <el-select v-model="query.month" style="width: 90px" aria-label="月份" :disabled="calculating">
-          <el-option v-for="m in 12" :key="m" :value="m" :label="`${m} 月`" />
-        </el-select>
+        <YearMonthPicker v-model:year="query.year" v-model:month="query.month" :disabled="calculating" />
       </template>
     </PageHeader>
 
@@ -36,6 +31,7 @@
 import { reactive, computed, toRef, provide, onMounted, watch, ref, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader.vue'
+import YearMonthPicker from '@/components/common/YearMonthPicker.vue'
 import StepPrecheck from './settle/StepPrecheck.vue'
 import StepCalculate from './settle/StepCalculate.vue'
 import StepReview from './settle/StepReview.vue'
@@ -60,7 +56,6 @@ const query = reactive({
     year: routeNumber(route.query.year) || now.getFullYear(),
     month: routeNumber(route.query.month) || now.getMonth() + 1,
 })
-const yearOptions = computed(() => [query.year - 1, query.year, query.year + 1])
 
 const stepIndex = computed(() => {
     const i = STEPS.findIndex((s) => s.key === route.query.step)

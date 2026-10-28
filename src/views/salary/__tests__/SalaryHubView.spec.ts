@@ -179,4 +179,14 @@ describe('SalaryHubView', () => {
             expect.stringContaining('教職員4合1資格核對表'),
         )
     })
+
+    it('年月選擇改用共用 YearMonthPicker（±1 年）', async () => {
+        getRecordsMock.mockResolvedValue({ data: [] })
+        const wrapper = mountHub()
+        await flushPromises()
+        const picker = wrapper.findComponent({ name: 'YearMonthPicker' })
+        expect(picker.exists()).toBe(true)
+        expect(picker.props('yearsBefore')).toBe(1)
+        expect(picker.props('yearsAfter')).toBe(1)
+    })
 })
