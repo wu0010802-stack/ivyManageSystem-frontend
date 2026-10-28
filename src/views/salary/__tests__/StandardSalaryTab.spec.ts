@@ -6,6 +6,7 @@ import StandardSalaryTab from '@/views/salary/components/StandardSalaryTab.vue'
 import {
   describeBelowMinimumWage,
   describeNeedsConfirmation,
+  pickSyncMinimumWageBlock,
   requiresGradeDefaultConfirm,
 } from '@/views/salary/components/standardSalaryNotices'
 
@@ -235,5 +236,54 @@ describe('standardSalaryNotices 純函式', () => {
     expect(requiresGradeDefaultConfirm({ grade_defaulted: true, diff: 3500 })).toBe(true)
     expect(requiresGradeDefaultConfirm({ grade_defaulted: true, diff: -500 })).toBe(false)
     expect(requiresGradeDefaultConfirm({ grade_defaulted: false, diff: 3500 })).toBe(false)
+  })
+})
+
+describe('StandardSalaryTab — 同步後低於基本工資整批 422（後端 b405e8ec，使用者 2026-10-28 裁定）', () => {
+  const BLOCK_DETAIL = {
+    code: 'SYNC_BELOW_MINIMUM_WAGE',
+    message: '1 位員工同步後底薪低於法定基本工資（勞基法第 21 條），整批未同步；請先調整職位標準或排除這些員工後再同步',
+    employees: [
+      { employee_id: 27, name: '高琦雅', new_salary: 27000, minimum: 28590, shortfall: 1590, message: '低於基本工資' },
+    ],
+  }
+  const blockError = () => ({ response: { status: 422, data: { detail: BLOCK_DETAIL } } })
+
+  it('pickSyncMinimumWageBlock 只認 SYNC_BELOW_MINIMUM_WAGE 的 422', () => {
+    expect(pickSyncMinimumWageBlock(blockError())?.employees[0].name).toBe('高琦雅')
+    expect(pickSyncMinimumWageBlock({ response: { status: 422, data: { detail: 'x' } } })).toBeNull()
+    expect(pickSyncMinimumWageBlock({ response: { status: 400, data: { detail: BLOCK_DETAIL } } })).toBeNull()
+    expect(pickSyncMinimumWageBlock(new Error('boom'))).toBeNull()
+  })
+
+  it('批次同步被擋 → 列出姓名、同步後底薪、基本工資、差額', async () => {
+    syncPositionSalary.mockRejectedValue(blockError())
+    const wrapper = await mountTab()
+    const batch = wrapper.findAll('button').find((b) => b.text().startsWith('批次同步全部'))!
+    await batch.trigger('click')
+    await flush()
+    await wrapper.vm.$nextTick()
+    const block = wrapper.find('[data-test="sync-min-wage-block"]')
+    expect(block.exists()).toBe(true)
+    const text = block.text()
+    expect(text).toContain('高琦雅')
+    expect(text).toContain('27,000')
+    expect(text).toContain('28,590')
+    expect(text).toContain('1,590')
+    expect(ElMessage.error).toHaveBeenCalledWith(expect.stringContaining('整批未同步'))
+  })
+
+  it('比對預覽 sync_blocked_by_minimum_wage → 標示低於基本工資並停用單筆同步', async () => {
+    comparePositionSalary.mockResolvedValue({
+      data: {
+        employees: [{ ...GAO, grade_defaulted: false, sync_blocked_by_minimum_wage: true, minimum_wage: 28590 }],
+        out_of_sync: 1,
+        sync_blocked_count: 1,
+      },
+    })
+    const wrapper = await mountTab()
+    expect(wrapper.text()).toContain('低於基本工資')
+    expect(wrapper.find('[data-test="sync-blocked-count"]').text()).toContain('1 人')
+    expect(syncButtonOf(wrapper).attributes('disabled')).toBeDefined()
   })
 })

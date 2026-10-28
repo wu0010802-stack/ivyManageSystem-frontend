@@ -56,3 +56,41 @@ export function describeNeedsConfirmation(rows: NeedsConfirmationRow[]): string 
 export function requiresGradeDefaultConfirm(row: Record<string, unknown>): boolean {
   return row.grade_defaulted === true && typeof row.diff === 'number' && row.diff > 0
 }
+
+// 使用者 2026-10-28 裁定：POST /config/position-salary/sync 同步到員工個人底薪時
+// 任一員工低於基本工資即整批 422（不部分寫入），detail 結構化列出阻擋名單。
+export const SYNC_BELOW_MINIMUM_WAGE = 'SYNC_BELOW_MINIMUM_WAGE'
+
+export interface SyncMinimumWageBlockedEmployee {
+  employee_id: number
+  name: string
+  new_salary: number
+  minimum: number
+  shortfall: number
+}
+
+export interface SyncMinimumWageBlock {
+  message: string
+  employees: SyncMinimumWageBlockedEmployee[]
+}
+
+/** 從 axios error 取出「同步後低於基本工資」的結構化 422；其他錯誤回 null。 */
+export function pickSyncMinimumWageBlock(err: unknown): SyncMinimumWageBlock | null {
+  if (!isRecord(err) || !isRecord(err.response)) return null
+  const { status, data } = err.response
+  if (status !== 422 || !isRecord(data) || !isRecord(data.detail)) return null
+  const detail = data.detail
+  if (detail.code !== SYNC_BELOW_MINIMUM_WAGE || !Array.isArray(detail.employees)) return null
+  const employees = detail.employees.filter(
+    (r): r is SyncMinimumWageBlockedEmployee =>
+      isRecord(r) &&
+      typeof r.name === 'string' &&
+      typeof r.new_salary === 'number' &&
+      typeof r.minimum === 'number' &&
+      typeof r.shortfall === 'number',
+  )
+  return {
+    message: typeof detail.message === 'string' ? detail.message : '同步後底薪低於法定基本工資，整批未同步',
+    employees,
+  }
+}

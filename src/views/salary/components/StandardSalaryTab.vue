@@ -15,7 +15,9 @@ import {
   describeNeedsConfirmation,
   pickBelowMinimumWage,
   pickNeedsConfirmation,
+  pickSyncMinimumWageBlock,
   requiresGradeDefaultConfirm,
+  type SyncMinimumWageBlock,
 } from './standardSalaryNotices'
 
 const positionSalary = reactive({
@@ -41,6 +43,10 @@ const { isDirty: positionDirty, snapshot: snapshotPosition } = useFormDirty(posi
 useSettingsDirty('職位標準底薪', () => positionSalaryLoaded.value && positionDirty.value)
 const compareRows = ref<Record<string, unknown>[]>([])
 const compareOutOfSync = ref(0)
+// GET /compare 預覽：同步後會低於基本工資的人數（POST /sync 會整批 422）
+const compareSyncBlocked = ref(0)
+// 最近一次 POST /sync 被基本工資整批擋下的明細（成功同步或重新嘗試時清掉）
+const syncBlock = ref<SyncMinimumWageBlock | null>(null)
 const loadingCompare = ref(false)
 const syncingAll = ref(false)
 const syncingIds = ref(new Set<number>())
@@ -90,11 +96,23 @@ const fetchCompare = async () => {
     const res = await comparePositionSalary()
     compareRows.value = res.data.employees
     compareOutOfSync.value = res.data.out_of_sync
+    compareSyncBlocked.value = Number(res.data.sync_blocked_count ?? 0)
   } catch (e) {
     ElMessage.error(friendlyError('載入比對資料失敗', e))
   } finally {
     loadingCompare.value = false
   }
+}
+
+// 同步失敗：基本工資整批 422 要列出名單（姓名／同步後底薪／基本工資／差額），其餘走一般錯誤。
+const handleSyncError = (action: string, e: unknown) => {
+  const block = pickSyncMinimumWageBlock(e)
+  if (block) {
+    syncBlock.value = block
+    ElMessage.error(block.message)
+    return
+  }
+  ElMessage.error(friendlyError(action, e))
 }
 
 // 後端 finance_guards.MIN_FINANCE_REASON_LENGTH：批次調薪原因至少 5 字（trim 後）
@@ -135,6 +153,7 @@ const syncOne = async (row: Record<string, unknown>) => {
   const reason = await askSyncReason(`同步 ${row.name} 底薪`)
   if (reason === null) return
   syncingIds.value = new Set([...syncingIds.value, employeeId])
+  syncBlock.value = null
   try {
     await syncPositionSalary({
       employee_ids: [employeeId],
@@ -144,7 +163,7 @@ const syncOne = async (row: Record<string, unknown>) => {
     ElMessage.success(`${row.name} 底薪已更新為 $${(row.standard_salary as number).toLocaleString()}`)
     await fetchCompare()
   } catch (e) {
-    ElMessage.error(friendlyError('同步底薪失敗', e))
+    handleSyncError('同步底薪失敗', e)
   } finally {
     const s = new Set(syncingIds.value)
     s.delete(row.employee_id as number)
@@ -156,6 +175,7 @@ const syncAll = async () => {
   const reason = await askSyncReason('批次同步全部底薪')
   if (reason === null) return
   syncingAll.value = true
+  syncBlock.value = null
   try {
     const res = await syncPositionSalary({ employee_ids: [], adjustment_reason: reason })
     ElMessage.success(`已同步 ${res.data.total_updated} 位員工底薪至職位標準`)
@@ -163,7 +183,7 @@ const syncAll = async () => {
     if (pending) ElMessage.warning(pending)
     await fetchCompare()
   } catch (e) {
-    ElMessage.error(friendlyError('批次同步底薪失敗', e))
+    handleSyncError('批次同步底薪失敗', e)
   } finally {
     syncingAll.value = false
   }
@@ -291,8 +311,29 @@ onMounted(() => {
         {{ compareOutOfSync }} 人不符標準
       </el-tag>
       <el-tag v-else-if="compareRows.length > 0" type="success" size="small">全員已符合標準</el-tag>
+      <el-tag v-if="compareSyncBlocked > 0" type="warning" size="small" data-test="sync-blocked-count">
+        {{ compareSyncBlocked }} 人同步後低於基本工資，批次同步會整批被擋
+      </el-tag>
     </div>
     <p class="desc-text">薪資計算時會自動套用上方標準底薪，此表顯示員工資料庫中的底薪是否已同步（僅供參考，不影響計算結果）。</p>
+
+    <el-alert
+      v-if="syncBlock"
+      type="error"
+      show-icon
+      :title="syncBlock.message"
+      :closable="true"
+      class="sync-block-alert"
+      data-test="sync-min-wage-block"
+      @close="syncBlock = null"
+    >
+      <ul class="sync-block-list">
+        <li v-for="emp in syncBlock.employees" :key="emp.employee_id">
+          {{ emp.name }}：同步後底薪 ${{ emp.new_salary.toLocaleString() }}，基本工資
+          ${{ emp.minimum.toLocaleString() }}，差額 ${{ emp.shortfall.toLocaleString() }}
+        </li>
+      </ul>
+    </el-alert>
 
     <div v-loading="loadingCompare">
       <div v-if="compareRows.length > 0">
@@ -344,12 +385,20 @@ onMounted(() => {
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="90" align="center">
+          <el-table-column label="操作" width="160" align="center">
             <template #default="{ row }">
+              <el-tooltip
+                v-if="!row.in_sync && row.sync_blocked_by_minimum_wage"
+                :content="`同步後 $${row.standard_salary.toLocaleString()} 低於基本工資 $${(row.minimum_wage ?? 0).toLocaleString()}，請先調整職位標準`"
+                placement="top"
+              >
+                <el-tag type="danger" size="small">低於基本工資</el-tag>
+              </el-tooltip>
               <el-button
                 v-if="!row.in_sync"
                 type="primary"
                 size="small"
+                :disabled="row.sync_blocked_by_minimum_wage === true"
                 :loading="syncingIds.has(row.employee_id)"
                 @click="syncOne(row)"
               >同步</el-button>
@@ -364,6 +413,15 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.sync-block-alert {
+  margin-bottom: var(--space-3);
+}
+
+.sync-block-list {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.2em;
+}
+
 .section-title {
   font-size: var(--text-lg);
   font-weight: bold;
