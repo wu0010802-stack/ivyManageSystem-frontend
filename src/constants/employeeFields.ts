@@ -17,6 +17,22 @@ export const SALARY_SENSITIVE_FIELDS = Object.freeze([
   'classroom_id',
   'insurance_salary_level',
   'pension_self_rate',
+  'labor_insured_salary',
+  'health_insured_salary',
+  'pension_insured_salary',
+  'not_insured',
+  'health_self_pay_ratio',
+  'ece_program_enrolled',
+  'health_exempt',
+  'no_employment_insurance',
+  'dependents',
+  'work_start_time',
+  'work_end_time',
+  'birthday',
+  'bypass_standard_base',
+  'skip_payroll_bonuses',
+  'resign_date',
+  'is_active',
 ])
 
 // 「員工本人」可編輯的欄位（B 中度版）
@@ -29,7 +45,6 @@ export const SELF_EDITABLE_FIELDS = Object.freeze([
   'bank_code',
   'bank_account',
   'bank_account_name',
-  'birthday',
 ])
 
 // 編輯 dialog「基本資料」tab 涵蓋的欄位
