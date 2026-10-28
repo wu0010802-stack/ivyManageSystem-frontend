@@ -43,6 +43,7 @@ vi.mock('@/api/overtimes', () => ({
   batchApproveOvertimes: vi.fn(),
   getOvertimeImportTemplate: vi.fn(),
   importOvertimes: vi.fn(),
+  suggestOvertimeType: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {} }),

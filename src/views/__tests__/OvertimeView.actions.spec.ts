@@ -43,6 +43,7 @@ vi.mock('@/api/overtimes', () => ({
   batchApproveOvertimes: vi.fn(),
   getOvertimeImportTemplate: vi.fn(),
   importOvertimes: vi.fn(),
+  suggestOvertimeType: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {} }),
@@ -67,7 +68,8 @@ vi.mock('@/stores/notification', () => ({
 }))
 
 import OvertimeView from '@/views/OvertimeView.vue'
-import { approveOvertime } from '@/api/overtimes'
+import { approveOvertime, createOvertime, suggestOvertimeType } from '@/api/overtimes'
+import { ElMessage } from 'element-plus'
 import { buildOvertimeApproveConfirm } from '@/utils/overtimeApproveConfirm'
 
 const globalStubs = {
@@ -143,3 +145,98 @@ describe('OvertimeView 核准確認與權限', () => {
     expect(w.findComponent({ name: 'AdminCreateButton' }).exists()).toBe(true)
   })
 })
+
+describe('OvertimeView 管理端表單：建議加班類型（後端 GET /overtimes/suggest-type）', () => {
+  type FormVm = {
+    form: { employee_id: number | null; overtime_date: string; overtime_type: string; hours: number }
+    openCreate: () => void
+    saveOvertime: () => Promise<void>
+  }
+  // FormDialog 被 shallowMount stub 掉，改以 render 預設 slot 的 stub 才看得到表單內提示
+  const mountWithForm = async () => {
+    const w = shallowMount(OvertimeView, {
+      global: {
+        stubs: {
+          ...globalStubs.stubs,
+          FormDialog: { template: '<div class="form-dialog"><slot /></div>' },
+          'el-form': { template: '<form><slot /></form>' },
+          'el-form-item': { template: '<div><slot /></div>' },
+        },
+      },
+    })
+    await flushPromises()
+    return w
+  }
+
+  beforeEach(() => {
+    vi.mocked(suggestOvertimeType).mockReset()
+    vi.mocked(createOvertime).mockReset()
+    vi.mocked(ElMessage.error).mockReset()
+    perms.add('OVERTIME_READ').add('OVERTIME_WRITE')
+  })
+
+  it('新增時選好員工與日期 → 自動帶入建議類型；改成不符 → 顯示提示', async () => {
+    vi.mocked(suggestOvertimeType).mockResolvedValue({
+      data: {
+        date: '2026-10-31',
+        day_kind: 'rest_day',
+        suggested_type: 'weekend',
+        allowed_types: ['weekend'],
+        reason: '2026-10-31依行事曆為休息日',
+      },
+    } as never)
+    const w = await mountWithForm()
+    const vm = w.vm as unknown as FormVm
+    vm.openCreate()
+    await nextTick()
+    vm.form.employee_id = 5
+    vm.form.overtime_date = '2026-10-31'
+    await flushPromises()
+    expect(suggestOvertimeType).toHaveBeenCalledWith({ employee_id: 5, date: '2026-10-31' })
+    expect(vm.form.overtime_type).toBe('weekend')
+    expect(w.find('[data-test="ot-type-mismatch"]').exists()).toBe(false)
+
+    vm.form.overtime_type = 'weekday'
+    await nextTick()
+    expect(w.find('[data-test="ot-type-mismatch"]').text()).toContain('依行事曆為休息日')
+  })
+
+  it('模稜兩可 → 不改類型、只顯示 reason', async () => {
+    vi.mocked(suggestOvertimeType).mockResolvedValue({
+      data: {
+        date: '2026-11-01',
+        day_kind: 'ambiguous',
+        suggested_type: 'weekday',
+        allowed_types: ['weekday', 'weekend'],
+        reason: '2026-11-01為週末，但該員工當日有排班',
+      },
+    } as never)
+    const w = await mountWithForm()
+    const vm = w.vm as unknown as FormVm
+    vm.openCreate()
+    await nextTick()
+    vm.form.overtime_type = 'weekend'
+    vm.form.employee_id = 5
+    vm.form.overtime_date = '2026-11-01'
+    await flushPromises()
+    expect(vm.form.overtime_type).toBe('weekend')
+    expect(w.find('[data-test="ot-type-info"]').text()).toContain('該員工當日有排班')
+  })
+
+  it('後端對類型與日期不符回 400 → 顯示後端訊息', async () => {
+    vi.mocked(suggestOvertimeType).mockRejectedValue(new Error('offline'))
+    vi.mocked(createOvertime).mockRejectedValueOnce({
+      response: { status: 400, data: { detail: '2026-10-31依行事曆為休息日，不可填 weekday，請改為 weekend' } },
+    })
+    const w = await mountWithForm()
+    const vm = w.vm as unknown as FormVm
+    vm.openCreate()
+    vm.form.employee_id = 5
+    vm.form.overtime_date = '2026-10-31'
+    vm.form.overtime_type = 'weekday'
+    await flushPromises()
+    await vm.saveOvertime()
+    expect(vi.mocked(ElMessage.error).mock.calls.some((c) => String(c[0]).includes('不可填 weekday'))).toBe(true)
+  })
+})
+

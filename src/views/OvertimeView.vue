@@ -17,6 +17,7 @@ import FormDialog from '@/components/common/FormDialog.vue'
 import { useFormDirty } from '@/composables/useFormDirty'
 import { useCrudDialog, useConfirmDelete, useDateQuery, useFetchPending, useApprovalOperation, useClientTableFilter } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
+import { useOvertimeTypeSuggestion } from '@/composables/useOvertimeTypeSuggestion'
 import { downloadFile } from '@/utils/download'
 import { money } from '@/utils/format'
 import { buildOvertimeApproveConfirm } from '@/utils/overtimeApproveConfirm'
@@ -161,6 +162,19 @@ const checkOvertimeTimeConsistency = () => {
 watch([() => form.start_time, () => form.end_time, () => form.hours], checkOvertimeTimeConsistency)
 
 const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
+
+// 選好員工與日期後依行事曆／排班建議加班類型（後端 GET /overtimes/suggest-type）：
+// 新增時明確者自動帶入（仍可改）；編輯既有紀錄不覆寫，只提示不符。後端對類型與日期不符回 400。
+const {
+  infoHint: overtimeTypeInfoHint,
+  mismatchHint: overtimeTypeMismatchHint,
+} = useOvertimeTypeSuggestion({
+  employeeId: () => form.employee_id,
+  date: () => form.overtime_date,
+  currentType: () => form.overtime_type,
+  autoApply: () => !isEdit.value,
+  apply: (type) => { form.overtime_type = type },
+})
 
 const resolveSectionFromRoute = () => {
   if (route.query.tab === 'meetings' && canViewMeetings.value) return 'meetings'
@@ -723,6 +737,13 @@ watch(activeSection, async (value) => {
           <el-select v-model="form.overtime_type" style="width: 100%;">
             <el-option v-for="ot in overtimeTypes" :key="ot.value" :label="`${ot.label}（${ot.desc}）`" :value="ot.value" />
           </el-select>
+          <div v-if="overtimeTypeMismatchHint" class="field-hint field-hint--warning" data-test="ot-type-mismatch">
+            <el-icon style="vertical-align: middle;"><Warning /></el-icon>
+            {{ overtimeTypeMismatchHint }}
+          </div>
+          <div v-else-if="overtimeTypeInfoHint" class="field-hint" data-test="ot-type-info">
+            {{ overtimeTypeInfoHint }}（平日、假日皆可，請依實際情況選擇）
+          </div>
         </el-form-item>
         <el-form-item label="開始時間">
           <el-time-picker v-model="form.start_time" format="HH:mm" value-format="HH:mm" placeholder="選擇時間" style="width: 100%;" />
@@ -795,6 +816,7 @@ watch(activeSection, async (value) => {
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
+.field-hint--warning { color: var(--el-color-warning); }
 .ctl-emp { width: 180px; }
 .ctl-year { width: 110px; }
 .ctl-month { width: 90px; }
