@@ -1065,16 +1065,15 @@ describe('通用搜尋參數精確比對（與後端 _PII_KEY_EXACT 同步，資
 })
 
 // 結構守衛（擋整類：「後端 _PII_KEY_EXACT／SUBSTRINGS／EXEMPT 加了 key、前端漏同步」）：
-// 與後端 tests/test_pii_denylist_parity.py 對稱。找得到後端 sentry_init.py 才跑
-// （PII_PARITY_BACKEND 指定路徑，或 sibling checkout ../ivy-backend）；CI 單 repo 時 skip。
+// 與後端 tests/test_pii_denylist_parity.py 對稱。只在明確設定 PII_PARITY_BACKEND
+// （指向「與本前端 ref 對應」的後端 sentry_init.py）時才跑；未設一律 skip。
+// 刻意不自動探測 sibling ../ivy-backend：本機主 checkout 的 BE main 與 FE 各自前進，
+// 自動比對會在兩 repo 進度錯開時本機假紅（10-28 獨立審查 P3）。
 describe('PII 名單前後端 parity（前端側）', async () => {
   const fs = await import('node:fs')
   const path = await import('node:path')
-  const candidates = [
-    process.env.PII_PARITY_BACKEND,
-    path.resolve(process.cwd(), '../ivy-backend/utils/sentry_init.py'),
-  ].filter(Boolean)
-  const backendFile = candidates.find((p) => fs.existsSync(p))
+  const explicit = process.env.PII_PARITY_BACKEND
+  const backendFile = explicit && fs.existsSync(explicit) ? explicit : undefined
   const feSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/utils/sentry.ts'), 'utf8')
 
   const feArray = (name) => {
