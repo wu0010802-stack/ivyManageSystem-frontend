@@ -78,14 +78,6 @@ describe('leaves api', () => {
     })
   })
 
-  it('uploadLeaveAttachments POST /leaves/:id/attachments as multipart', async () => {
-    const fd = new FormData()
-    await mod.uploadLeaveAttachments(99, fd)
-    expect(mockPost).toHaveBeenCalledWith('/leaves/99/attachments', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-  })
-
   it('getLeaveQuotas GET /leaves/quotas with params', async () => {
     await mod.getLeaveQuotas({ year: 2026 })
     expect(mockGet).toHaveBeenCalledWith('/leaves/quotas', { params: { year: 2026 } })
@@ -142,5 +134,10 @@ describe('leaves api', () => {
     expect(mockPost).toHaveBeenCalledWith('/leaves/import', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
+  })
+
+  // 死碼清理（C15）：以下 wrapper 全 repo 沒有正式 caller，已移除
+  it.each(['uploadLeaveAttachments'])('%s 已不再匯出', (name) => {
+    expect(mod[name]).toBeUndefined()
   })
 })

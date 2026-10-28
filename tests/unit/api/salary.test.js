@@ -43,26 +43,9 @@ describe('salary api', () => {
     )
   })
 
-  it('getFestivalBonus GET /salaries/festival-bonus?year=&month=', async () => {
-    await mod.getFestivalBonus(2026, 5)
-    expect(mockGet).toHaveBeenCalledWith('/salaries/festival-bonus?year=2026&month=5')
-  })
-
-  it('getFestivalBonusPeriodAccrual GET /salaries/festival-bonus/period-accrual?year=&month=', async () => {
-    await mod.getFestivalBonusPeriodAccrual(2026, 5)
-    expect(mockGet).toHaveBeenCalledWith(
-      '/salaries/festival-bonus/period-accrual?year=2026&month=5',
-    )
-  })
-
   it('getRecords GET /salaries/records?year=&month=', async () => {
     await mod.getRecords(2026, 5)
     expect(mockGet).toHaveBeenCalledWith('/salaries/records?year=2026&month=5')
-  })
-
-  it('getSalaryBreakdown GET /salaries/:recordId/breakdown', async () => {
-    await mod.getSalaryBreakdown(42)
-    expect(mockGet).toHaveBeenCalledWith('/salaries/42/breakdown')
   })
 
   it('getSalaryFieldBreakdown GET /salaries/:recordId/field-breakdown?field=', async () => {
@@ -87,14 +70,6 @@ describe('salary api', () => {
   it('getHistory GET /salaries/history with params', async () => {
     await mod.getHistory({ employee_id: 42 })
     expect(mockGet).toHaveBeenCalledWith('/salaries/history', { params: { employee_id: 42 } })
-  })
-
-  it('exportTransferRoster GET /salaries/:year/:month/transfer-roster as blob', async () => {
-    await mod.exportTransferRoster(2026, 5, 'base')
-    expect(mockGet).toHaveBeenCalledWith('/salaries/2026/5/transfer-roster', {
-      params: { type: 'base' },
-      responseType: 'blob',
-    })
   })
 
   it('simulateSalary POST /salaries/simulate', async () => {
@@ -154,5 +129,10 @@ describe('salary api', () => {
     expect(mockDelete).toHaveBeenCalledWith('/salaries/42/finalize', {
       data: { reason: '更正錯帳因應審計' },
     })
+  })
+
+  // 死碼清理（C15）：以下 wrapper 全 repo 沒有正式 caller，已移除
+  it.each(['getFestivalBonus', 'getFestivalBonusPeriodAccrual', 'getSalaryBreakdown', 'exportTransferRoster'])('%s 已不再匯出', (name) => {
+    expect(mod[name]).toBeUndefined()
   })
 })

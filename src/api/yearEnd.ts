@@ -24,17 +24,10 @@ export const getCycleProgress = (
 
 // ============ Org Year Settings ============
 
-export const listOrgYearSettings = (cycleId: number) =>
-  api.get(`/year_end/cycles/${cycleId}/org_settings`)
-
-/** Typed getter for org settings — use this in new views. */
 export const getOrgSettings = (
   cycleId: number,
 ): AxiosResp<'/year_end/cycles/{cycle_id}/org_settings', 'get'> =>
   api.get(`/year_end/cycles/${cycleId}/org_settings`)
-
-export const upsertOrgYearSettings = (cycleId: number, payload: unknown) =>
-  api.post(`/year_end/cycles/${cycleId}/org_settings`, payload)
 
 // ============ Class Enrollment Targets ============
 
@@ -50,12 +43,6 @@ export const getClassTargets = (
 // ============ Settlements ============
 
 export const listYearEndSettlements = (cycleId: number) =>
-  api.get(`/year_end/cycles/${cycleId}/settlements`)
-
-/** Typed getter for cycle settlements — use this in new views. */
-export const getCycleSettlements = (
-  cycleId: number,
-): AxiosResp<'/year_end/cycles/{cycle_id}/settlements', 'get'> =>
   api.get(`/year_end/cycles/${cycleId}/settlements`)
 
 export const signSupervisorSettlement = (settlementId: number) =>
@@ -86,9 +73,6 @@ export const finalizeBatch = (settlementIds: number[]) =>
 
 export const listSpecialBonuses = (cycleId: number, params: unknown = {}) =>
   api.get(`/year_end/cycles/${cycleId}/special_bonuses`, { params })
-
-export const addSpecialBonus = (cycleId: number, payload: unknown) =>
-  api.post(`/year_end/cycles/${cycleId}/special_bonuses`, payload)
 
 // ============ Excel I/O ============
 

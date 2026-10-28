@@ -23,7 +23,6 @@ vi.mock('@/api/employees', () => ({
   getEmployees: vi.fn(() => Promise.resolve({ data: [] })),
   getEmployee: vi.fn(),
   createEmployee: vi.fn(),
-  updateEmployee: vi.fn(),
   updateEmployeeBasic: vi.fn(() => Promise.resolve({ data: {} })),
   updateEmployeeSalary: vi.fn(() => Promise.resolve({ data: {} })),
   resetPunchPin: vi.fn(() => Promise.resolve({ data: {} })),

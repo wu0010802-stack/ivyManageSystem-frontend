@@ -42,17 +42,6 @@ describe('yearEnd api', () => {
     expect(mockPost).toHaveBeenCalledWith('/year_end/cycles', payload)
   })
 
-  it('listOrgYearSettings GET /year_end/cycles/:cycleId/org_settings', async () => {
-    await mod.listOrgYearSettings(42)
-    expect(mockGet).toHaveBeenCalledWith('/year_end/cycles/42/org_settings')
-  })
-
-  it('upsertOrgYearSettings POST /year_end/cycles/:cycleId/org_settings', async () => {
-    const payload = { rate: 0.9 }
-    await mod.upsertOrgYearSettings(42, payload)
-    expect(mockPost).toHaveBeenCalledWith('/year_end/cycles/42/org_settings', payload)
-  })
-
   it('listClassEnrollmentTargets GET /year_end/cycles/:cycleId/class_targets', async () => {
     await mod.listClassEnrollmentTargets(42)
     expect(mockGet).toHaveBeenCalledWith('/year_end/cycles/42/class_targets')
@@ -90,12 +79,6 @@ describe('yearEnd api', () => {
     expect(mockGet).toHaveBeenCalledWith('/year_end/cycles/42/special_bonuses', {
       params: {},
     })
-  })
-
-  it('addSpecialBonus POST /year_end/cycles/:cycleId/special_bonuses', async () => {
-    const payload = { employee_id: 7, amount: 1000 }
-    await mod.addSpecialBonus(42, payload)
-    expect(mockPost).toHaveBeenCalledWith('/year_end/cycles/42/special_bonuses', payload)
   })
 
   it('importYearEndExcel POST /year_end/cycles/import_excel with multipart + mapped params (defaults)', async () => {
@@ -148,5 +131,10 @@ describe('yearEnd api', () => {
 
   it('不再匯出給 <a href> 直連用的 URL builder', () => {
     expect(mod.exportYearEndSummaryXlsxUrl).toBeUndefined()
+  })
+
+  // 死碼清理（C15）：以下 wrapper 全 repo 沒有正式 caller，已移除
+  it.each(['listOrgYearSettings', 'upsertOrgYearSettings', 'getCycleSettlements', 'addSpecialBonus'])('%s 已不再匯出', (name) => {
+    expect(mod[name]).toBeUndefined()
   })
 })
