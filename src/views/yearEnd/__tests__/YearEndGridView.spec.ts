@@ -50,12 +50,16 @@ vi.mock('@/utils/auth', () => ({
 }))
 
 // F01：轉帳名冊改走 axios 下載，才能讀 X-Roster-Excluded-Count 提醒未入冊人數
-const { downloadFileWithHeadersMock } = vi.hoisted(() => ({ downloadFileWithHeadersMock: vi.fn() }))
+const { downloadFileWithHeadersMock, downloadFileMock } = vi.hoisted(() => ({
+  downloadFileWithHeadersMock: vi.fn(),
+  downloadFileMock: vi.fn(),
+}))
 vi.mock('@/utils/download', () => ({
   downloadFileWithHeaders: (...a: unknown[]) => downloadFileWithHeadersMock(...a),
+  downloadFile: (...a: unknown[]) => downloadFileMock(...a),
 }))
 
-// Mock api index so baseURL resolves in the component without errors
+// Mock api index（元件已不直接用 baseURL；保留 mock 避免真 axios instance 初始化）
 vi.mock('@/api/index', () => ({
   default: { defaults: { baseURL: '/api' }, get: vi.fn(), post: vi.fn(), patch: vi.fn() },
 }))
@@ -1206,5 +1210,43 @@ describe('YearEndGridView 轉帳名冊下載（F01：原 <a href> 直連讀不�
     expect(downloadFileWithHeadersMock).toHaveBeenCalledTimes(1)
     resolve({})
     await flushPromises()
+  })
+})
+
+describe('YearEndGridView 總表／明細條下載（C15：原 <a href> 直連，失敗只下載到 JSON 錯誤頁）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(hasPermission).mockReturnValue(true)
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [{ id: 7, status: 'OPEN' }] } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+    mockExceptions([])
+    routeQuery.value = {}
+    downloadFileMock.mockResolvedValue(true)
+  })
+
+  it.each([
+    ['summary-xlsx-button', '/year_end/cycles/7/summary.xlsx', '年終獎金總表.xlsx'],
+    ['summary-pdf-button', '/year_end/cycles/7/summary.pdf', '年終獎金總表.pdf'],
+  ])('%s：走 downloadFile，不再是 <a href>', async (testId, path, name) => {
+    const wrapper = await mountView()
+    const button = wrapper.find(`[data-test="${testId}"]`)
+    expect(button.exists()).toBe(true)
+    expect(button.attributes('href')).toBeUndefined()
+    await button.trigger('click')
+    await flushPromises()
+    expect(downloadFileMock).toHaveBeenCalledWith(path, name)
+  })
+
+  it('明細條：走 downloadFile 下載該筆 settlement 的 slip.pdf', async () => {
+    const wrapper = await mountViewWithTable()
+    expect(wrapper.find('a.slip-link').exists()).toBe(false)
+    const button = wrapper.find('[data-test="slip-button"]')
+    expect(button.exists()).toBe(true)
+    await button.trigger('click')
+    await flushPromises()
+    const row = makeRow()
+    expect(downloadFileMock).toHaveBeenCalledWith(
+      `/year_end/cycles/7/settlements/${row.settlement_id}/slip.pdf`, '年終明細條.pdf',
+    )
   })
 })

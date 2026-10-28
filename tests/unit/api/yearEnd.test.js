@@ -2,7 +2,8 @@
  * tests/unit/api/yearEnd.test.js
  *
  * 驗證 src/api/yearEnd.ts wrapper：HTTP method / URL / payload / multipart + params /
- * URL builder（exportYearEndSummaryXlsxUrl / exportYearEndTransferRosterXlsxUrl）。
+ * 下載路徑 builder（yearEndSummaryXlsxPath / yearEndSummaryPdfPath / yearEndSlipPdfPath，
+ * 交給 @/utils/download 的 downloadFile；不再帶 baseURL 給 <a href> 直連）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -139,11 +140,13 @@ describe('yearEnd api', () => {
     expect(opts.params.enrollment_target).toBe(200)
   })
 
-  it('exportYearEndSummaryXlsxUrl returns URL with baseURL', () => {
-    expect(mod.exportYearEndSummaryXlsxUrl(42)).toBe('/api/year_end/cycles/42/summary.xlsx')
+  it('總表／明細條下載路徑為相對 API 路徑（交 downloadFile，不帶 /api 前綴）', () => {
+    expect(mod.yearEndSummaryXlsxPath(42)).toBe('/year_end/cycles/42/summary.xlsx')
+    expect(mod.yearEndSummaryPdfPath(42)).toBe('/year_end/cycles/42/summary.pdf')
+    expect(mod.yearEndSlipPdfPath(42, 9)).toBe('/year_end/cycles/42/settlements/9/slip.pdf')
   })
 
-  it('exportYearEndTransferRosterXlsxUrl returns URL with baseURL', () => {
-    expect(mod.exportYearEndTransferRosterXlsxUrl(42)).toBe('/api/year_end/cycles/42/transfer_roster.xlsx')
+  it('不再匯出給 <a href> 直連用的 URL builder', () => {
+    expect(mod.exportYearEndSummaryXlsxUrl).toBeUndefined()
   })
 })

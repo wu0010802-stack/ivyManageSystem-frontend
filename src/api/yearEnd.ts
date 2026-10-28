@@ -125,8 +125,16 @@ export const importYearEndExcel = (
   })
 }
 
-export const exportYearEndSummaryXlsxUrl = (cycleId: number) =>
-  `${api.defaults.baseURL || '/api'}/year_end/cycles/${cycleId}/summary.xlsx`
+// 總表／明細條下載路徑：交給 @/utils/download 的 downloadFile（axios，帶 auth、timeout 與
+// 錯誤提示）。原本是帶 baseURL 的 <a href> 直連，後端回錯時只會下載到 JSON 錯誤頁。
+export const yearEndSummaryXlsxPath = (cycleId: number) =>
+  `/year_end/cycles/${cycleId}/summary.xlsx`
+
+export const yearEndSummaryPdfPath = (cycleId: number) =>
+  `/year_end/cycles/${cycleId}/summary.pdf`
+
+export const yearEndSlipPdfPath = (cycleId: number, settlementId: number) =>
+  `/year_end/cycles/${cycleId}/settlements/${settlementId}/slip.pdf`
 
 // 轉帳名冊下載改走 @/utils/transferRoster（axios 下載才讀得到 X-Roster-Excluded-Count）
 

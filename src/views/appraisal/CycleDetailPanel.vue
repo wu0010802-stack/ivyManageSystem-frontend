@@ -20,7 +20,7 @@ import {
   signAccountingAppraisalSummary,
   finalizeAppraisalSummary,
   listAppraisalCycles,
-  exportAppraisalCycleXlsxUrl,
+  appraisalCycleXlsxPath,
   getSignStatusSummary,
   getAppraisalAllEmployeesStatus,
   listScoringRules,
@@ -29,6 +29,7 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { downloadTransferRoster, appraisalTransferRosterPath } from '@/utils/transferRoster'
+import { downloadFile } from '@/utils/download'
 import { hasPermission } from '@/utils/auth'
 import { statusLabel, MSG, ROLE_GROUP_LABEL, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 import {
@@ -86,6 +87,9 @@ const exportTransferRoster = async () => {
     rosterExporting.value = false
   }
 }
+
+// 考核表匯出走 downloadFile（原 <a href> 直連，後端回錯時只會下載到 JSON 錯誤頁）。
+const exportCycleXlsx = () => downloadFile(appraisalCycleXlsxPath(cycleId.value), '考核表.xlsx')
 
 const cycle = ref<Cycle | null>(null)
 const participants = ref<Participant[]>([])
@@ -574,7 +578,7 @@ onMounted(() => {
         data-test="recompute-btn"
         @click="recompute"
       >{{ MSG.recompute_btn }}</el-button>
-      <el-button :icon="Download" tag="a" :href="exportAppraisalCycleXlsxUrl(cycleId)">匯出考核表</el-button>
+      <el-button :icon="Download" data-test="appraisal-export" @click="exportCycleXlsx">匯出考核表</el-button>
       <el-button :icon="Download" :loading="rosterExporting" data-test="roster-export" @click="exportTransferRoster">轉帳名冊</el-button>
       <el-button
         v-if="canMarkPaid"

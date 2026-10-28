@@ -48,8 +48,10 @@ vi.mock('element-plus', async (importOriginal) => {
 })
 
 const downloadFileWithHeadersMock = vi.fn()
+const downloadFileMock = vi.fn()
 vi.mock('@/utils/download', () => ({
   downloadFileWithHeaders: (...a: unknown[]) => downloadFileWithHeadersMock(...a),
+  downloadFile: (...a: unknown[]) => downloadFileMock(...a),
 }))
 
 const mockPush = vi.fn()
@@ -316,14 +318,17 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     })
   })
 
-  it('匯出 dropdown 內含總表 Excel 連結與轉帳名冊（axios 下載，排除人數提醒）', async () => {
+  it('匯出 dropdown 內含總表 Excel 與轉帳名冊（皆 axios 下載，名冊排除人數提醒）', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
     const wrapper = await mountView()
 
     expect(wrapper.text()).toContain('年終獎金總表')
     expect(wrapper.text()).toContain('轉帳名冊')
-    const links = wrapper.findAll('a')
-    expect(links.some((a) => a.attributes('href') === api.exportYearEndSummaryXlsxUrl(1))).toBe(true)
+    // C15：總表原為 <a href> 直連（失敗只下載到 JSON 錯誤頁），改走 downloadFile
+    expect(wrapper.findAll('a').some((a) => (a.attributes('href') ?? '').includes('summary.xlsx'))).toBe(false)
+    await wrapper.find('[data-test="summary-export"]').trigger('click')
+    await flushPromises()
+    expect(downloadFileMock).toHaveBeenCalledWith('/year_end/cycles/1/summary.xlsx', '年終獎金總表.xlsx')
 
     // 原 <a href> 讀不到 X-Roster-Excluded-Count；改 axios 下載後被排除者要提醒
     downloadFileWithHeadersMock.mockResolvedValueOnce({ 'x-roster-excluded-count': '2' })

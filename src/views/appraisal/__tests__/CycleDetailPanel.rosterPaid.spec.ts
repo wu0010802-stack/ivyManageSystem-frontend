@@ -15,7 +15,7 @@ vi.mock('@/api/appraisal', () => ({
   signAccountingAppraisalSummary: vi.fn(),
   finalizeAppraisalSummary: vi.fn(),
   listAppraisalCycles: vi.fn(),
-  exportAppraisalCycleXlsxUrl: vi.fn().mockReturnValue('/x'),
+  appraisalCycleXlsxPath: vi.fn().mockReturnValue('/x'),
   getSignStatusSummary: vi.fn().mockResolvedValue({ data: { cycle_id: 5, counts: {}, buckets: [] } }),
   getAppraisalAllEmployeesStatus: vi.fn().mockResolvedValue({ data: { participants: [] } }),
   listScoringRules: vi.fn().mockResolvedValue({ data: [] }),
@@ -32,6 +32,12 @@ const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {} }),
   useRouter: () => ({ back: vi.fn(), replace: vi.fn(), push: pushMock }),
+}))
+
+const { downloadFileMock } = vi.hoisted(() => ({ downloadFileMock: vi.fn() }))
+vi.mock('@/utils/download', () => ({
+  downloadFile: (...a: unknown[]) => downloadFileMock(...a),
+  downloadFileWithHeaders: vi.fn(),
 }))
 
 const perms = new Set<string>()
@@ -275,5 +281,23 @@ describe('CycleDetailPanel — 名冊已發放標記', () => {
       expect(wrapper.find('[data-test="roster-paid-conflict"]').exists()).toBe(false)
       expect(wrapper.find('[data-test="roster-paid-note"]').exists()).toBe(true)
     })
+  })
+})
+
+describe('CycleDetailPanel — 匯出考核表（C15：原 <a href> 直連，失敗只下載到 JSON 錯誤頁）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('匯出考核表走 downloadFile（帶錯誤提示），不再是 <a href>', async () => {
+    downloadFileMock.mockResolvedValueOnce(true)
+    const wrapper = await mountPanel(CLOSED_CYCLE, ['APPRAISAL_READ'])
+    const btn = wrapper.find('[data-test="appraisal-export"]')
+    expect(btn.exists()).toBe(true)
+    expect(btn.attributes('href')).toBeUndefined()
+    await btn.trigger('click')
+    await flushPromises()
+    expect(appraisalApi.appraisalCycleXlsxPath).toHaveBeenCalledWith(5)
+    expect(downloadFileMock).toHaveBeenCalledWith('/x', '考核表.xlsx')
   })
 })

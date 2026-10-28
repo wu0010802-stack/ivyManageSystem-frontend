@@ -2,12 +2,20 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getYearEndGrid, buildSettlements, listYearEndCycles, getYearEndCycleExceptions } from '@/api/yearEnd'
+import {
+  getYearEndGrid,
+  buildSettlements,
+  listYearEndCycles,
+  getYearEndCycleExceptions,
+  yearEndSummaryXlsxPath,
+  yearEndSummaryPdfPath,
+  yearEndSlipPdfPath,
+} from '@/api/yearEnd'
+import { downloadFile } from '@/utils/download'
 import { moneyInt } from '@/utils/currency'
 import { formatLocalHourMinute } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER, exceptionTypeLabel } from '@/constants/appraisalYearEnd'
-import api from '@/api/index'
 import { BONUS_COL_KEYS, SPECIAL_BONUS_LABELS, loadVisibleBonusCols, saveVisibleBonusCols } from './gridColumns'
 import GridRowDetailDrawer from './components/GridRowDetailDrawer.vue'
 import { getEmployees } from '@/api/employees'
@@ -200,7 +208,14 @@ function sortBySpecialBonusTotal(a: GridRow, b: GridRow) {
   return specialBonusTotal(a) - specialBonusTotal(b)
 }
 
-const baseUrl = computed(() => api.defaults.baseURL || '/api')
+// C15：總表／明細條改走 axios 下載（原 <a href> 直連，後端回錯時只會下載到 JSON 錯誤頁；
+// 總表不含銀行帳號、沒有排除人數 header，所以用一般 downloadFile 即可）。
+const exportSummary = (format: 'xlsx' | 'pdf') =>
+  format === 'xlsx'
+    ? downloadFile(yearEndSummaryXlsxPath(cycleId), '年終獎金總表.xlsx')
+    : downloadFile(yearEndSummaryPdfPath(cycleId), '年終獎金總表.pdf')
+const downloadSlip = (settlementId: number) =>
+  downloadFile(yearEndSlipPdfPath(cycleId, settlementId), '年終明細條.pdf')
 
 // F01：轉帳名冊下載（xlsx／pdf 共用一把鎖防重複點擊）；有人未入冊時 util 會跳警示。
 const rosterExporting = ref<'xlsx' | 'pdf' | null>(null)
@@ -407,20 +422,11 @@ onMounted(initGrid)
         >
           開始試算
         </el-button>
-        <!-- Task 12④：總表兩鈕統一 el-button tag="a" :href 寫法（原本各自包一層 <a> 再塞
-             el-button，寫法不一致）；轉帳名冊兩鈕見下方 F01 說明。 -->
-        <el-button
-          tag="a"
-          :href="`${baseUrl}/year_end/cycles/${cycleId}/summary.xlsx`"
-          target="_blank"
-        >總表 Excel</el-button>
-        <el-button
-          tag="a"
-          :href="`${baseUrl}/year_end/cycles/${cycleId}/summary.pdf`"
-          target="_blank"
-        >總表 PDF</el-button>
+        <!-- C15：總表兩鈕改走 axios 下載（原 tag="a" :href 直連，失敗只下載到 JSON 錯誤頁）。 -->
+        <el-button data-test="summary-xlsx-button" @click="exportSummary('xlsx')">總表 Excel</el-button>
+        <el-button data-test="summary-pdf-button" @click="exportSummary('pdf')">總表 PDF</el-button>
         <!-- F01：轉帳名冊改走 axios 下載（原 tag="a" 直連讀不到 X-Roster-Excluded-Count，
-             不薪轉／無帳號者被排除時 HR 不會收到提醒）。總表不含銀行帳號、無此 header，維持直連。 -->
+             不薪轉／無帳號者被排除時 HR 不會收到提醒）。 -->
         <el-button
           data-test="roster-xlsx-button"
           :loading="rosterExporting === 'xlsx'"
@@ -649,13 +655,9 @@ onMounted(initGrid)
           >
             明細
           </el-button>
-          <a
-            :href="`${baseUrl}/year_end/cycles/${cycleId}/settlements/${row.settlement_id}/slip.pdf`"
-            target="_blank"
-            class="slip-link"
-          >
-            <el-button size="small">明細條</el-button>
-          </a>
+          <el-button size="small" data-test="slip-button" @click="downloadSlip(row.settlement_id)">
+            明細條
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -725,9 +727,6 @@ onMounted(initGrid)
   gap: var(--space-2);
   flex-wrap: wrap;
   margin-left: auto;
-}
-.slip-link {
-  text-decoration: none;
 }
 .total-amount {
   color: var(--el-color-primary);

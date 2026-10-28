@@ -7,7 +7,7 @@ import {
   listYearEndCycles,
   createYearEndCycle,
   importYearEndExcel,
-  exportYearEndSummaryXlsxUrl,
+  yearEndSummaryXlsxPath,
   getCycleProgress,
 } from '@/api/yearEnd'
 import type { Schema } from '@/api/_generated/typed'
@@ -18,6 +18,7 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
 import { importWarningLabels } from './appraisalPayoutRosterPaid'
 import { downloadTransferRoster, yearEndTransferRosterPath } from '@/utils/transferRoster'
+import { downloadFile } from '@/utils/download'
 
 interface YearEndCycleRow {
   id: number
@@ -35,6 +36,9 @@ const router = useRouter()
 // 不薪轉／無帳號者被排除時提醒 HR。
 const exportTransferRoster = (cycleId: number) =>
   downloadTransferRoster(yearEndTransferRosterPath(cycleId), '年終轉帳名冊.xlsx')
+// 總表同樣走 axios 下載（原 <a href> 直連，後端回錯時只會下載到 JSON 錯誤頁）。
+const exportSummaryXlsx = (cycleId: number) =>
+  downloadFile(yearEndSummaryXlsxPath(cycleId), '年終獎金總表.xlsx')
 const cycles = ref<YearEndCycleRow[]>([])
 const loading = ref(false)
 
@@ -251,7 +255,7 @@ onMounted(load)
             <el-button link>匯出<el-icon><ArrowDown /></el-icon></el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item><a :href="exportYearEndSummaryXlsxUrl(row.id)">年終獎金總表</a></el-dropdown-item>
+                <el-dropdown-item data-test="summary-export" @click="exportSummaryXlsx(row.id)">年終獎金總表</el-dropdown-item>
                 <el-dropdown-item data-test="roster-export" @click="exportTransferRoster(row.id)">轉帳名冊</el-dropdown-item>
               </el-dropdown-menu>
             </template>
