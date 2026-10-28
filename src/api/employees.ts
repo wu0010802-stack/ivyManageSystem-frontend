@@ -10,9 +10,6 @@ export const getEmployee = (id: number): AxiosResp<'/employees/{employee_id}', '
 export const createEmployee = (data: ApiBody<'/employees', 'post'>): AxiosResp<'/employees', 'post'> =>
     api.post('/employees', data)
 
-export const updateEmployee = (id: number, data: ApiBody<'/employees/{employee_id}', 'put'>): AxiosResp<'/employees/{employee_id}', 'put'> =>
-    api.put(`/employees/${id}`, data)
-
 /** 快速標記離職（軟刪：設離職+撤帳號，跳過 offboarding 流程）——非資料刪除 */
 export const deleteEmployee = (id: number): AxiosResp<'/employees/{employee_id}', 'delete'> =>
     api.delete(`/employees/${id}`)

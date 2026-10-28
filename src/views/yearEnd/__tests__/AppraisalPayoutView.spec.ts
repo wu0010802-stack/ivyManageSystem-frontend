@@ -23,6 +23,11 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+const downloadFileWithHeadersMock = vi.fn()
+vi.mock('@/utils/download', () => ({
+  downloadFileWithHeaders: (...a: unknown[]) => downloadFileWithHeadersMock(...a),
+}))
+
 // Task 13③：year 同步 URL query，需要可觀察的 route.query / router.replace
 // （比照 CycleListView.spec.ts 慣例：routeQuery 為可變殼、replaceMock 供斷言）。
 const routeQuery: { value: Record<string, unknown> } = { value: {} }
@@ -355,7 +360,12 @@ describe('AppraisalPayoutView', () => {
 
     const rosterLink = wrapper.find('[data-test="receipt-roster-link"]')
     expect(rosterLink.exists()).toBe(true)
-    expect(rosterLink.attributes('href')).toContain('/year_end/cycles/77/transfer_roster.xlsx')
+    downloadFileWithHeadersMock.mockResolvedValueOnce({})
+    await rosterLink.trigger('click')
+    await flushPromises()
+    expect(downloadFileWithHeadersMock).toHaveBeenCalledWith(
+      '/year_end/cycles/77/transfer_roster.xlsx', '年終轉帳名冊.xlsx', undefined,
+    )
   })
 
   it('預覽列 warnings 英文代碼中文化（不得出現原始代碼）', async () => {

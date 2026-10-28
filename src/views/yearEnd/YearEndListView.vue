@@ -7,8 +7,7 @@ import {
   listYearEndCycles,
   createYearEndCycle,
   importYearEndExcel,
-  exportYearEndSummaryXlsxUrl,
-  exportYearEndTransferRosterXlsxUrl,
+  yearEndSummaryXlsxPath,
   getCycleProgress,
 } from '@/api/yearEnd'
 import type { Schema } from '@/api/_generated/typed'
@@ -16,8 +15,11 @@ import { apiError } from '@/utils/error'
 import { CYCLE_STATUS_LABEL, CYCLE_STATUS_TAG } from '@/constants/appraisalYearEnd'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { toAdYear } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
 import { importWarningLabels } from './appraisalPayoutRosterPaid'
+import { downloadTransferRoster, yearEndTransferRosterPath } from '@/utils/transferRoster'
+import { downloadFile } from '@/utils/download'
 
 interface YearEndCycleRow {
   id: number
@@ -30,6 +32,14 @@ interface YearEndCycleRow {
 type CycleProgress = Schema<'CycleProgressOut'>
 
 const router = useRouter()
+
+// 轉帳名冊改走 axios 下載（原 <a href> 讀不到 X-Roster-Excluded-Count），
+// 不薪轉／無帳號者被排除時提醒 HR。
+const exportTransferRoster = (cycleId: number) =>
+  downloadTransferRoster(yearEndTransferRosterPath(cycleId), '年終轉帳名冊.xlsx')
+// 總表同樣走 axios 下載（原 <a href> 直連，後端回錯時只會下載到 JSON 錯誤頁）。
+const exportSummaryXlsx = (cycleId: number) =>
+  downloadFile(yearEndSummaryXlsxPath(cycleId), '年終獎金總表.xlsx')
 const cycles = ref<YearEndCycleRow[]>([])
 const loading = ref(false)
 
@@ -83,7 +93,7 @@ const form = ref({
 /** 新增年度週期：開窗時依當前學年動態推算預設值（避免捕捉過期的學年常數）。 */
 function openCreate() {
   const y = term.school_year
-  const west = y + 1911
+  const west = toAdYear(y)
   form.value = {
     academic_year: y,
     start_date: `${west}-08-01`,
@@ -93,7 +103,7 @@ function openCreate() {
   createDialog.value = true
 }
 
-const importWest = term.school_year + 1911
+const importWest = toAdYear(term.school_year)
 const importForm = ref<{
   file: File | null
   start_date: string
@@ -246,8 +256,8 @@ onMounted(load)
             <el-button link>匯出<el-icon><ArrowDown /></el-icon></el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item><a :href="exportYearEndSummaryXlsxUrl(row.id)">年終獎金總表</a></el-dropdown-item>
-                <el-dropdown-item><a :href="exportYearEndTransferRosterXlsxUrl(row.id)">轉帳名冊</a></el-dropdown-item>
+                <el-dropdown-item data-test="summary-export" @click="exportSummaryXlsx(row.id)">年終獎金總表</el-dropdown-item>
+                <el-dropdown-item data-test="roster-export" @click="exportTransferRoster(row.id)">轉帳名冊</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>

@@ -64,12 +64,6 @@ describe('attendance api', () => {
     })
   })
 
-  it('deleteMonthRecords DELETE /attendance/records/month/:year/:month', async () => {
-    await mod.deleteMonthRecords(2026, 5)
-    // path 用 /records/month/... 避免與單筆刪除路由遮蔽（見後端 P1-6）
-    expect(mockDelete).toHaveBeenCalledWith('/attendance/records/month/2026/5')
-  })
-
   it('deleteEmployeeDateRecord DELETE /attendance/records/:employeeId/:date', async () => {
     await mod.deleteEmployeeDateRecord(42, '2026-05-17')
     expect(mockDelete).toHaveBeenCalledWith('/attendance/records/42/2026-05-17')
@@ -100,27 +94,9 @@ describe('attendance api', () => {
     expect(mockPost).toHaveBeenCalledWith('/attendance/anomalies/batch-confirm', payload)
   })
 
-  it('exportAnomalies GET /attendance/anomalies/export as blob (default status)', async () => {
-    await mod.exportAnomalies(2026, 5)
-    expect(mockGet).toHaveBeenCalledWith('/attendance/anomalies/export', {
-      params: { year: 2026, month: 5, status: 'all' },
-      responseType: 'blob',
-    })
-  })
 
-  it('exportAnomalies GET /attendance/anomalies/export as blob (explicit status)', async () => {
-    await mod.exportAnomalies(2026, 5, 'pending')
-    expect(mockGet).toHaveBeenCalledWith('/attendance/anomalies/export', {
-      params: { year: 2026, month: 5, status: 'pending' },
-      responseType: 'blob',
-    })
-  })
-
-  it('exportEmployeeAttendance GET /exports/employee-attendance as blob', async () => {
-    await mod.exportEmployeeAttendance({ employee_id: 42, year: 2026, month: 5 })
-    expect(mockGet).toHaveBeenCalledWith('/exports/employee-attendance', {
-      params: { employee_id: 42, year: 2026, month: 5 },
-      responseType: 'blob',
-    })
+  // 死碼清理（C15）：以下 wrapper 全 repo 沒有正式 caller，已移除
+  it.each(['exportAnomalies', 'exportEmployeeAttendance', 'deleteMonthRecords'])('%s 已不再匯出', (name) => {
+    expect(mod[name]).toBeUndefined()
   })
 })

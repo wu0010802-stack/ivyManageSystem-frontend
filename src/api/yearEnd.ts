@@ -24,17 +24,10 @@ export const getCycleProgress = (
 
 // ============ Org Year Settings ============
 
-export const listOrgYearSettings = (cycleId: number) =>
-  api.get(`/year_end/cycles/${cycleId}/org_settings`)
-
-/** Typed getter for org settings — use this in new views. */
 export const getOrgSettings = (
   cycleId: number,
 ): AxiosResp<'/year_end/cycles/{cycle_id}/org_settings', 'get'> =>
   api.get(`/year_end/cycles/${cycleId}/org_settings`)
-
-export const upsertOrgYearSettings = (cycleId: number, payload: unknown) =>
-  api.post(`/year_end/cycles/${cycleId}/org_settings`, payload)
 
 // ============ Class Enrollment Targets ============
 
@@ -50,12 +43,6 @@ export const getClassTargets = (
 // ============ Settlements ============
 
 export const listYearEndSettlements = (cycleId: number) =>
-  api.get(`/year_end/cycles/${cycleId}/settlements`)
-
-/** Typed getter for cycle settlements — use this in new views. */
-export const getCycleSettlements = (
-  cycleId: number,
-): AxiosResp<'/year_end/cycles/{cycle_id}/settlements', 'get'> =>
   api.get(`/year_end/cycles/${cycleId}/settlements`)
 
 export const signSupervisorSettlement = (settlementId: number) =>
@@ -86,9 +73,6 @@ export const finalizeBatch = (settlementIds: number[]) =>
 
 export const listSpecialBonuses = (cycleId: number, params: unknown = {}) =>
   api.get(`/year_end/cycles/${cycleId}/special_bonuses`, { params })
-
-export const addSpecialBonus = (cycleId: number, payload: unknown) =>
-  api.post(`/year_end/cycles/${cycleId}/special_bonuses`, payload)
 
 // ============ Excel I/O ============
 
@@ -125,11 +109,18 @@ export const importYearEndExcel = (
   })
 }
 
-export const exportYearEndSummaryXlsxUrl = (cycleId: number) =>
-  `${api.defaults.baseURL || '/api'}/year_end/cycles/${cycleId}/summary.xlsx`
+// 總表／明細條下載路徑：交給 @/utils/download 的 downloadFile（axios，帶 auth、timeout 與
+// 錯誤提示）。原本是帶 baseURL 的 <a href> 直連，後端回錯時只會下載到 JSON 錯誤頁。
+export const yearEndSummaryXlsxPath = (cycleId: number) =>
+  `/year_end/cycles/${cycleId}/summary.xlsx`
 
-export const exportYearEndTransferRosterXlsxUrl = (cycleId: number) =>
-  `${api.defaults.baseURL || '/api'}/year_end/cycles/${cycleId}/transfer_roster.xlsx`
+export const yearEndSummaryPdfPath = (cycleId: number) =>
+  `/year_end/cycles/${cycleId}/summary.pdf`
+
+export const yearEndSlipPdfPath = (cycleId: number, settlementId: number) =>
+  `/year_end/cycles/${cycleId}/settlements/${settlementId}/slip.pdf`
+
+// 轉帳名冊下載改走 @/utils/transferRoster（axios 下載才讀得到 X-Roster-Excluded-Count）
 
 // ============ Grid / Build / Manual Patch ============
 

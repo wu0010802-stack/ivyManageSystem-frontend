@@ -18,6 +18,31 @@ export function toAdYear(rocYear: number): number {
   return rocYear + ROC_OFFSET
 }
 
+/**
+ * 國曆（西元）年 N → 該年 2 月所在的「本學年」（民國）＝ N − 1912。
+ * 例：2026/2 為 114 學年下學期 → 114。
+ * 對應後端 services/year_end/appraisal_sync.py::civil_year_to_target_academic_year；
+ * 年終發放年、下學期（2–7 月）所屬學年都用這條。
+ */
+export function civilYearToTargetAcademicYear(civilYear: number): number {
+  return toRocYear(civilYear) - 1
+}
+
+/**
+ * 考核年終發放年（西元）→ 來源學年（民國）＝ N − 1913。
+ * 考核年終發放的是「前一學年」上、下學期的考核獎金：
+ * 後端 resolve_target_cycles 的 source = civil_year_to_target_academic_year(N) − 1。
+ * 年終週期 year_end_cycles.academic_year 也落在同一個學年。
+ */
+export function payoutYearToSourceAcademicYear(payoutYear: number): number {
+  return civilYearToTargetAcademicYear(payoutYear) - 1
+}
+
+/** payoutYearToSourceAcademicYear 的反函數：來源學年 → 考核年終發放年（學年 + 1913）。 */
+export function sourceAcademicYearToPayoutYear(academicYear: number): number {
+  return toAdYear(academicYear) + 2
+}
+
 /** 當前西元年對應的民國學年度。 */
 export function currentRocYear(): number {
   return toRocYear(new Date().getFullYear())

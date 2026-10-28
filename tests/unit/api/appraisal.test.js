@@ -155,14 +155,9 @@ describe('appraisal api', () => {
     })
   })
 
-  it('exportAppraisalCycleXlsxUrl returns absolute export path', () => {
-    expect(mod.exportAppraisalCycleXlsxUrl(7)).toBe('/api/appraisal/cycles/7/export.xlsx')
-  })
-
-  it('exportAppraisalTransferRosterXlsxUrl returns absolute transfer roster path', () => {
-    expect(mod.exportAppraisalTransferRosterXlsxUrl(7)).toBe(
-      '/api/appraisal/cycles/7/transfer_roster.xlsx'
-    )
+  it('考核表匯出下載路徑為相對 API 路徑（交 downloadFile，不帶 /api 前綴）', () => {
+    expect(mod.appraisalCycleXlsxPath(7)).toBe('/appraisal/cycles/7/export.xlsx')
+    expect(mod.exportAppraisalCycleXlsxUrl).toBeUndefined()
   })
 
   it('getAppraisalCurrentCycle GET /appraisal/current with empty params by default', async () => {

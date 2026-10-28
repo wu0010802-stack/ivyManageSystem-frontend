@@ -9,6 +9,7 @@ import { hasPermission } from '@/utils/auth'
 import { CYCLE_STATUS_TAG, cycleStatusLabel } from '@/constants/appraisalYearEnd'
 // 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
+import { sourceAcademicYearToPayoutYear } from '@/utils/academic'
 
 const YearEndConfigView = defineAsyncComponent(() => import('./YearEndConfigView.vue'))
 const YearEndGridView = defineAsyncComponent(() => import('./YearEndGridView.vue'))
@@ -26,7 +27,7 @@ function goStep(key: WorkspaceStepKey) {
   if (key === step.value) return
   const q: LocationQueryRaw = { ...route.query, step: key }
   if (key === 'payout' && !q.year && cycle.value) {
-    q.year = String(cycle.value.academic_year + 1913)
+    q.year = String(sourceAcademicYearToPayoutYear(cycle.value.academic_year))
   }
   router.replace({ query: q })
 }

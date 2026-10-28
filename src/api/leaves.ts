@@ -33,11 +33,6 @@ export const approveLeave = (id: number, payload: unknown) => api.put(`/leaves/$
 export const getLeaveAttachment = (leaveId: number, filename: string) =>
   api.get(`/leaves/${leaveId}/attachments/${filename}`, { responseType: 'blob' })
 
-export const uploadLeaveAttachments = (leaveId: number, formData: FormData) =>
-  api.post(`/leaves/${leaveId}/attachments`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-
 export const getLeaveQuotas = (params: unknown) => api.get('/leaves/quotas', { params })
 
 export const updateLeaveQuota = (id: number, data: unknown) => api.put(`/leaves/quotas/${id}`, data)

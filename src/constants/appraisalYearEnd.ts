@@ -118,6 +118,8 @@ export const EXCEPTION_TYPE_LABEL: Record<string, string> = {
   unmatched_registrations: '報名未配對',
   prereq_not_finalized: '前置未核定',
   performance_anomaly: '班級績效異常',
+  // 後端 010df2ba：名冊已標記發放後，又經 Excel 匯入改到該半年考核獎金（warning，不擋簽核）
+  appraisal_roster_paid_conflict: '名冊已發放後重複匯入',
 }
 
 export function cycleStatusLabel(s: string) { return CYCLE_STATUS_LABEL[s] || s }

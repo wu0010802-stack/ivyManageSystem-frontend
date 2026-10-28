@@ -80,4 +80,14 @@ describe('SalaryHistoryView', () => {
     expect(panel.attributes('data-year')).toBe(String(dialog.props('year')))
     expect(panel.attributes('data-month')).toBe(String(dialog.props('month')))
   })
+
+  it('年月選擇改用共用 YearMonthPicker（保留原本 -2..+1 年的視窗）', async () => {
+    const wrapper = mountView()
+    const picker = wrapper.findComponent({ name: 'YearMonthPicker' })
+    expect(picker.exists()).toBe(true)
+    expect(picker.props('yearsBefore')).toBe(2)
+    expect(picker.props('yearsAfter')).toBe(1)
+    await picker.vm.$emit('update:month', 3)
+    expect(wrapper.find('.overview-panel-stub').attributes('data-month')).toBe('3')
+  })
 })

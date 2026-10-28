@@ -30,12 +30,6 @@ export const calculateAsync = (
 export const getSalaryCalcJob = (jobId: string): AxiosResp<'/salaries/calculate-jobs/{job_id}', 'get'> =>
     api.get(`/salaries/calculate-jobs/${jobId}`)
 
-export const getFestivalBonus = (year: number, month: number) =>
-    api.get(`/salaries/festival-bonus?year=${year}&month=${month}`)
-
-export const getFestivalBonusPeriodAccrual = (year: number, month: number) =>
-    api.get(`/salaries/festival-bonus/period-accrual?year=${year}&month=${month}`)
-
 // 節慶人數月底結算（2026-08-20；程式沿用 enrollment snapshot 命名，UI 稱「節慶人數」）
 // 產生 → HR 核對 → 必要時人工調整 → 確認本月 → 薪資/年終/考核共用同一份人數。
 export const getEnrollmentSnapshot = (
@@ -75,9 +69,6 @@ export const getEnrollmentSnapshotExclusions = (
 export const getRecords = (year: number, month: number): AxiosResp<'/salaries/records', 'get'> =>
     api.get(`/salaries/records?year=${year}&month=${month}`)
 
-export const getSalaryBreakdown = (recordId: number): AxiosResp<'/salaries/{record_id}/breakdown', 'get'> =>
-    api.get(`/salaries/${recordId}/breakdown`)
-
 export const getSalaryFieldBreakdown = (recordId: number, field: string) =>
     api.get(`/salaries/${recordId}/field-breakdown?field=${field}`)
 
@@ -100,14 +91,6 @@ export const getSalaryMonthlyOverview = (
     signal?: AbortSignal,
 ): AxiosResp<'/salaries/monthly-overview', 'get'> =>
     api.get('/salaries/monthly-overview', { params, signal })
-
-// 銀行轉帳名冊匯出（xlsx）
-// type: 'base' | 'festival' | 'surplus' | 'art_teacher' | 'cash'（cash＝領現名冊）
-export const exportTransferRoster = (year: number, month: number, type: string) =>
-    api.get(`/salaries/${year}/${month}/transfer-roster`, {
-        params: { type },
-        responseType: 'blob',
-    })
 
 export const simulateSalary = (payload: ApiBody<'/salaries/simulate', 'post'>): AxiosResp<'/salaries/simulate', 'post'> =>
     api.post('/salaries/simulate', payload)

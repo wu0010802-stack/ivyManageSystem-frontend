@@ -2,7 +2,8 @@
  * tests/unit/api/yearEnd.test.js
  *
  * 驗證 src/api/yearEnd.ts wrapper：HTTP method / URL / payload / multipart + params /
- * URL builder（exportYearEndSummaryXlsxUrl / exportYearEndTransferRosterXlsxUrl）。
+ * 下載路徑 builder（yearEndSummaryXlsxPath / yearEndSummaryPdfPath / yearEndSlipPdfPath，
+ * 交給 @/utils/download 的 downloadFile；不再帶 baseURL 給 <a href> 直連）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -39,17 +40,6 @@ describe('yearEnd api', () => {
     const payload = { year: 2026 }
     await mod.createYearEndCycle(payload)
     expect(mockPost).toHaveBeenCalledWith('/year_end/cycles', payload)
-  })
-
-  it('listOrgYearSettings GET /year_end/cycles/:cycleId/org_settings', async () => {
-    await mod.listOrgYearSettings(42)
-    expect(mockGet).toHaveBeenCalledWith('/year_end/cycles/42/org_settings')
-  })
-
-  it('upsertOrgYearSettings POST /year_end/cycles/:cycleId/org_settings', async () => {
-    const payload = { rate: 0.9 }
-    await mod.upsertOrgYearSettings(42, payload)
-    expect(mockPost).toHaveBeenCalledWith('/year_end/cycles/42/org_settings', payload)
   })
 
   it('listClassEnrollmentTargets GET /year_end/cycles/:cycleId/class_targets', async () => {
@@ -89,12 +79,6 @@ describe('yearEnd api', () => {
     expect(mockGet).toHaveBeenCalledWith('/year_end/cycles/42/special_bonuses', {
       params: {},
     })
-  })
-
-  it('addSpecialBonus POST /year_end/cycles/:cycleId/special_bonuses', async () => {
-    const payload = { employee_id: 7, amount: 1000 }
-    await mod.addSpecialBonus(42, payload)
-    expect(mockPost).toHaveBeenCalledWith('/year_end/cycles/42/special_bonuses', payload)
   })
 
   it('importYearEndExcel POST /year_end/cycles/import_excel with multipart + mapped params (defaults)', async () => {
@@ -139,11 +123,18 @@ describe('yearEnd api', () => {
     expect(opts.params.enrollment_target).toBe(200)
   })
 
-  it('exportYearEndSummaryXlsxUrl returns URL with baseURL', () => {
-    expect(mod.exportYearEndSummaryXlsxUrl(42)).toBe('/api/year_end/cycles/42/summary.xlsx')
+  it('總表／明細條下載路徑為相對 API 路徑（交 downloadFile，不帶 /api 前綴）', () => {
+    expect(mod.yearEndSummaryXlsxPath(42)).toBe('/year_end/cycles/42/summary.xlsx')
+    expect(mod.yearEndSummaryPdfPath(42)).toBe('/year_end/cycles/42/summary.pdf')
+    expect(mod.yearEndSlipPdfPath(42, 9)).toBe('/year_end/cycles/42/settlements/9/slip.pdf')
   })
 
-  it('exportYearEndTransferRosterXlsxUrl returns URL with baseURL', () => {
-    expect(mod.exportYearEndTransferRosterXlsxUrl(42)).toBe('/api/year_end/cycles/42/transfer_roster.xlsx')
+  it('不再匯出給 <a href> 直連用的 URL builder', () => {
+    expect(mod.exportYearEndSummaryXlsxUrl).toBeUndefined()
+  })
+
+  // 死碼清理（C15）：以下 wrapper 全 repo 沒有正式 caller，已移除
+  it.each(['listOrgYearSettings', 'upsertOrgYearSettings', 'getCycleSettlements', 'addSpecialBonus'])('%s 已不再匯出', (name) => {
+    expect(mod[name]).toBeUndefined()
   })
 })

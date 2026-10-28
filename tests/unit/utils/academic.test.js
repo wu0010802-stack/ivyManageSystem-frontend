@@ -8,6 +8,9 @@ import {
   currentRocYear,
   coerceRocYear,
   getTermDateRange,
+  civilYearToTargetAcademicYear,
+  payoutYearToSourceAcademicYear,
+  sourceAcademicYearToPayoutYear,
   academicTermForMonth,
 } from '@/utils/academic'
 
@@ -189,6 +192,27 @@ describe('getTermDateRange', () => {
     // 台北 2026-09-07 07:00 → UTC 仍是 09-06；toISOString() 會少一天
     const taipeiEarlyMorning = new Date(2026, 8, 7, 7, 0, 0)
     expect(getTermDateRange(115, 1, taipeiEarlyMorning)[1]).toBe('2026-09-07')
+  })
+})
+
+// 年終／考核發放年 ↔ 學年口徑（後端 services/year_end/appraisal_sync.py
+// civil_year_to_target_academic_year），取代散落各頁的 1912／1913 magic number。
+describe('發放年 ↔ 學年口徑', () => {
+  it('civilYearToTargetAcademicYear：國曆年 N → 本學年（N − 1912）', () => {
+    expect(civilYearToTargetAcademicYear(2026)).toBe(114)
+    expect(civilYearToTargetAcademicYear(2025)).toBe(113)
+  })
+
+  it('payoutYearToSourceAcademicYear：考核年終發放年 → 來源學年（N − 1913）', () => {
+    expect(payoutYearToSourceAcademicYear(2026)).toBe(113)
+    expect(payoutYearToSourceAcademicYear(2027)).toBe(114)
+  })
+
+  it('sourceAcademicYearToPayoutYear 為反函數（學年 + 1913）', () => {
+    expect(sourceAcademicYearToPayoutYear(113)).toBe(2026)
+    for (const y of [2024, 2025, 2026, 2030]) {
+      expect(sourceAcademicYearToPayoutYear(payoutYearToSourceAcademicYear(y))).toBe(y)
+    }
   })
 })
 

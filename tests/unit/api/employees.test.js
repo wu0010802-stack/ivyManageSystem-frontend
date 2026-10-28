@@ -52,12 +52,6 @@ describe('employees api', () => {
     expect(mockPost).toHaveBeenCalledWith('/employees', payload)
   })
 
-  it('updateEmployee PUT /employees/:id', async () => {
-    const payload = { name: 'B' }
-    await mod.updateEmployee(42, payload)
-    expect(mockPut).toHaveBeenCalledWith('/employees/42', payload)
-  })
-
   it('updateEmployeeBasic PUT /employees/:id with dirty payload', async () => {
     await mod.updateEmployeeBasic(42, { phone: '0912' })
     expect(mockPut).toHaveBeenCalledWith('/employees/42', { phone: '0912' })
@@ -135,5 +129,10 @@ describe('employees api', () => {
   it('deleteEmployeeContract DELETE /employees/:id/contracts/:cid', async () => {
     await mod.deleteEmployeeContract(42, 11)
     expect(mockDelete).toHaveBeenCalledWith('/employees/42/contracts/11')
+  })
+
+  // 死碼清理（C15）：以下 wrapper 全 repo 沒有正式 caller，已移除
+  it.each(['updateEmployee'])('%s 已不再匯出', (name) => {
+    expect(mod[name]).toBeUndefined()
   })
 })

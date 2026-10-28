@@ -18,8 +18,7 @@ vi.mock('@/api/appraisal', () => ({
   listAppraisalCycles: (...args: unknown[]) => listCyclesMock(...args),
   createAppraisalCycle: vi.fn().mockResolvedValue({ data: {} }),
   importAppraisalExcel: vi.fn().mockResolvedValue({ data: {} }),
-  exportAppraisalCycleXlsxUrl: vi.fn().mockReturnValue('/x'),
-  exportAppraisalTransferRosterXlsxUrl: vi.fn().mockReturnValue('/y'),
+  appraisalCycleXlsxPath: vi.fn().mockReturnValue('/x'),
 }))
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },

@@ -17,8 +17,7 @@ vi.mock('@/api/appraisal', () => ({
       { id: 5, academic_year: 114, semester: 'FIRST', base_score_calc_date: '2025-09-15', base_score: 75.6, status: 'OPEN' },
     ],
   }),
-  exportAppraisalCycleXlsxUrl: vi.fn().mockReturnValue('/x'),
-  exportAppraisalTransferRosterXlsxUrl: vi.fn().mockReturnValue('/y'),
+  appraisalCycleXlsxPath: vi.fn().mockReturnValue('/x'),
   getSignStatusSummary: vi.fn().mockResolvedValue({
     data: { cycle_id: 5, counts: { DRAFT: 2, SUPERVISOR_SIGNED: 1, ACCOUNTING_SIGNED: 0, FINALIZED: 3 }, buckets: [] },
   }),

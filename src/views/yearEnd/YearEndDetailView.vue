@@ -14,12 +14,13 @@ import {
   signSupervisorBatch,
   signAccountingBatch,
   finalizeBatch,
-  exportYearEndSummaryXlsxUrl,
-  exportYearEndTransferRosterXlsxUrl,
+  yearEndSummaryXlsxPath,
   rejectSettlement,
 } from '@/api/yearEnd'
 import { rejectableStages, formatBatchFailures } from './settlementReject'
 import { apiError } from '@/utils/error'
+import { downloadTransferRoster, yearEndTransferRosterPath } from '@/utils/transferRoster'
+import { downloadFile } from '@/utils/download'
 import { hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
 import { SIGN_STATUS_TAG, SIGN_STATUS_ORDER, signStatusLabel } from '@/constants/appraisalYearEnd'
@@ -43,6 +44,22 @@ interface YearEndCycle { id: number; academic_year: number; bonus_calc_date: str
 
 const props = defineProps<{ cycleId: number }>()
 const cycleId = props.cycleId
+
+// 轉帳名冊改走 axios 下載（原 <a href> 讀不到 X-Roster-Excluded-Count），
+// 不薪轉／無帳號者被排除時提醒 HR。
+const rosterExporting = ref(false)
+const exportTransferRoster = async () => {
+  if (rosterExporting.value) return
+  rosterExporting.value = true
+  try {
+    await downloadTransferRoster(yearEndTransferRosterPath(cycleId), '年終轉帳名冊.xlsx')
+  } finally {
+    rosterExporting.value = false
+  }
+}
+
+// 總表走 axios 下載（原 <a href> 直連，後端回錯時只會下載到 JSON 錯誤頁）。
+const exportSummaryXlsx = () => downloadFile(yearEndSummaryXlsxPath(cycleId), '年終獎金總表.xlsx')
 
 const cycle = ref<YearEndCycle | null>(null)
 const settlements = ref<Settlement[]>([])
@@ -308,8 +325,8 @@ onMounted(() => {
 
     <div class="toolbar">
       <el-button :icon="Refresh" @click="load">重新載入</el-button>
-      <el-button :icon="Download" tag="a" :href="exportYearEndSummaryXlsxUrl(cycleId)">年終獎金總表</el-button>
-      <el-button :icon="Download" tag="a" :href="exportYearEndTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
+      <el-button :icon="Download" data-test="summary-export" @click="exportSummaryXlsx">年終獎金總表</el-button>
+      <el-button :icon="Download" :loading="rosterExporting" data-test="roster-export" @click="exportTransferRoster">轉帳名冊</el-button>
     </div>
 
     <div v-if="loadError" class="ye-detail-error">

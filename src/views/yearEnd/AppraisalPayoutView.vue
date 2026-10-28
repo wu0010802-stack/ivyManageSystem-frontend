@@ -6,10 +6,11 @@ import { friendlyError } from '@/utils/errorMessages'
 import {
   previewAppraisalPayout, generateAppraisalPayout,
   listAppraisalPayouts, voidAppraisalPayouts,
-  exportYearEndTransferRosterXlsxUrl,
 } from '@/api/yearEnd'
 import { formatCurrency } from '@/utils/currency'
 import { pad2 } from '@/utils/format'
+import { payoutYearToSourceAcademicYear } from '@/utils/academic'
+import { downloadTransferRoster, yearEndTransferRosterPath } from '@/utils/transferRoster'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import {
@@ -93,6 +94,18 @@ const tab = ref<'preview' | 'generated'>('preview')
 const generatedRows = ref<PayoutItem[]>([])
 const generatedLoading = ref(false)
 const receipt = ref<GenerateReceipt | null>(null)
+// 轉帳名冊改走 axios 下載（原 <a href> 讀不到 X-Roster-Excluded-Count），
+// 不薪轉／無帳號者被排除時提醒 HR。
+const rosterExporting = ref(false)
+const exportTransferRoster = async (cycleId: number) => {
+  if (rosterExporting.value) return
+  rosterExporting.value = true
+  try {
+    await downloadTransferRoster(yearEndTransferRosterPath(cycleId), '年終轉帳名冊.xlsx')
+  } finally {
+    rosterExporting.value = false
+  }
+}
 // 收據的警告改走共用轉換：名冊已發放代碼（帶週期 id）轉中文、相同文字只留一句
 const receiptWarningLabels = computed(() =>
   payoutWarningLabels(receipt.value?.warnings ?? [], WARNING_LABELS),
@@ -100,10 +113,10 @@ const receiptWarningLabels = computed(() =>
 const receiptSkippedRosterPaid = computed(() => hasRosterPaidWarning(receipt.value?.warnings ?? []))
 
 // 考核年終 payout 兩分量 = 前一學年的上/下學期。後端 resolve_target_cycles：
-// source_academic_year = civil_year_to_target_academic_year(year) - 1 = year - 1913
-// （civil_year_to_target_academic_year(N) = N - 1912）。動態計算避免寫死
+// source_academic_year = civil_year_to_target_academic_year(year) - 1（= year − 1913），
+// 前端同式工具見 @/utils/academic::payoutYearToSourceAcademicYear。動態計算避免寫死
 // （原寫死 113下/114上 兩者皆錯，正確為 113上/113下）。
-const sourceAcademicYear = computed(() => year.value - 1913)
+const sourceAcademicYear = computed(() => payoutYearToSourceAcademicYear(year.value))
 const earlierLabel = computed(() => `${sourceAcademicYear.value}上`)
 const laterLabel = computed(() => `${sourceAcademicYear.value}下`)
 
@@ -423,14 +436,14 @@ watch(tab, (t) => {
             此動作僅在系統內建立發放資料，不會執行匯款。下一步：下載轉帳名冊交付銀行作業
             （名冊涵蓋整個年終週期，含本次考核獎金與其他年終項目）。
           </div>
-          <a
-            :href="exportYearEndTransferRosterXlsxUrl(receipt.cycle_id)"
-            target="_blank"
+          <el-button
+            type="primary"
+            plain
             class="receipt-card__link"
             data-test="receipt-roster-link"
-          >
-            <el-button type="primary" plain>下載轉帳名冊 Excel</el-button>
-          </a>
+            :loading="rosterExporting"
+            @click="exportTransferRoster(receipt.cycle_id)"
+          >下載轉帳名冊 Excel</el-button>
         </div>
         <div class="generated-toolbar">
           <el-button type="danger" plain data-test="void-button" :loading="submitting" @click="onVoid">清空本年發放資料</el-button>

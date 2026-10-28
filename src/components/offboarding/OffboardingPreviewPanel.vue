@@ -59,6 +59,10 @@ const inFlightCycles = computed(() => props.preview.preview.appraisal_in_flight_
                 {{ leaveSnapshot.special_leave_days }} 天 ×
                 日薪 {{ leaveSnapshot.daily_wage.toLocaleString() }} =
                 ${{ leaveSnapshot.payout_amount.toLocaleString() }}
+                <!-- 後端缺 LeaveQuota 列時依到職日法定現算（quota_missing），非人工調整後的真實餘額 -->
+                <div v-if="leaveSnapshot.quota_missing" class="quota-missing-hint" data-test="leave-quota-missing">
+                    此員工未建特休配額，已依到職日按法定天數計算，建議先初始化配額
+                </div>
             </el-descriptions-item>
 
             <el-descriptions-item label="離職當月薪資">
@@ -95,6 +99,12 @@ const inFlightCycles = computed(() => props.preview.preview.appraisal_in_flight_
 </template>
 
 <style scoped>
+.quota-missing-hint {
+    margin-top: 4px;
+    font-size: var(--text-sm);
+    color: var(--el-color-warning);
+}
+
 .offboarding-preview-panel {
     padding: 4px 0;
 }

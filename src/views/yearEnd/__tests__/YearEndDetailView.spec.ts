@@ -17,8 +17,6 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     signSupervisorBatch: vi.fn(),
     signAccountingBatch: vi.fn(),
     finalizeBatch: vi.fn(),
-    exportYearEndSummaryXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/summary.xlsx'),
-    exportYearEndTransferRosterXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/roster.xlsx'),
     // Task 2：openProvenanceDrawer 觸發真的 ProvenanceDrawer.vue（本檔未 stub），
     // 其 fetchAll 會呼叫 getProvenance；不 mock 會打到 importOriginal 的真實實作，
     // 沒回應可 resolve → Promise.allSettled 對非 thenable 值視為已 fulfilled，
@@ -26,6 +24,12 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     getProvenance: vi.fn().mockResolvedValue({ data: null }),
   }
 })
+
+const { downloadFileMock } = vi.hoisted(() => ({ downloadFileMock: vi.fn() }))
+vi.mock('@/utils/download', () => ({
+  downloadFile: (...a: unknown[]) => downloadFileMock(...a),
+  downloadFileWithHeaders: vi.fn(),
+}))
 
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal<typeof import('element-plus')>()
@@ -752,5 +756,24 @@ describe('老闆核定前確認', () => {
     await (wrapper.vm as unknown as { sign: (s: Settlement, stage: string) => Promise<void> }).sign(settlement, 'supervisor')
     expect(ElMessageBox.confirm).not.toHaveBeenCalled()
     expect(api.signSupervisorSettlement).toHaveBeenCalledWith(3)
+  })
+})
+
+describe('YearEndDetailView — 年終獎金總表下載（C15）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+    routeQuery.value = {}
+  })
+
+  it('總表按鈕走 downloadFile（帶錯誤提示），不再是 <a href>', async () => {
+    setupApiMocks([makeSettlement()])
+    downloadFileMock.mockResolvedValueOnce(true)
+    const wrapper = await mountView()
+    const btn = wrapper.find('[data-test="summary-export"]')
+    expect(btn.exists()).toBe(true)
+    expect(btn.attributes('href')).toBeUndefined()
+    await btn.trigger('click')
+    expect(downloadFileMock).toHaveBeenCalledWith('/year_end/cycles/1/summary.xlsx', '年終獎金總表.xlsx')
   })
 })

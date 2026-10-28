@@ -87,11 +87,12 @@ export const importAppraisalExcel = (file: File, { startDate, endDate, baseScore
     })
 }
 
-export const exportAppraisalCycleXlsxUrl = (cycleId: number) =>
-    `${api.defaults.baseURL || '/api'}/appraisal/cycles/${cycleId}/export.xlsx`
+// 考核表匯出路徑：交給 @/utils/download 的 downloadFile（原為帶 baseURL 的 <a href> 直連，
+// 後端回錯時只會下載到 JSON 錯誤頁）。
+export const appraisalCycleXlsxPath = (cycleId: number) =>
+    `/appraisal/cycles/${cycleId}/export.xlsx`
 
-export const exportAppraisalTransferRosterXlsxUrl = (cycleId: number) =>
-    `${api.defaults.baseURL || '/api'}/appraisal/cycles/${cycleId}/transfer_roster.xlsx`
+// 轉帳名冊下載改走 @/utils/transferRoster（axios 下載才讀得到 X-Roster-Excluded-Count）
 
 // ============ Current Semester（M5 重構：當期狀態彙整）============
 

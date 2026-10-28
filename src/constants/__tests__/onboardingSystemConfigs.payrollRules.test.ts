@@ -50,4 +50,11 @@ describe('薪資／請假／加班規則 section', () => {
       'festival.unsigned_cutoff_hire_date',
     ]))
   })
+
+  it('section 說明反映後端會自動把未封存薪資標記需重算（hr-payroll 2026-10-28）', () => {
+    const hint = section()!.hint!
+    expect(hint).not.toContain('不會自動把薪資標記為需重算')
+    expect(hint).toContain('自動把尚未封存的薪資月份標記為需重算')
+    expect(hint).toContain('已封存')
+  })
 })

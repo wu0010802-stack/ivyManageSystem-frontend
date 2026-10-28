@@ -29,6 +29,24 @@
     </el-card>
 
     <el-card shadow="never" class="no-hover export-card">
+      <h4 class="export-title">表外獎金轉帳名冊（xlsx，歸屬本月）</h4>
+      <div class="export-buttons">
+        <el-button
+          type="primary"
+          plain
+          :loading="extraBonusRosterLoading"
+          :disabled="!canExportFullSalary"
+          @click="exportExtraBonusRoster"
+        >
+          表外獎金名冊
+        </el-button>
+      </div>
+      <p class="export-hint">
+        表外獎金獨立轉帳、不入薪資紀錄；同員工同月多筆合併一列，不含招生獎金（請至招生獎金頁匯出）。
+      </p>
+    </el-card>
+
+    <el-card shadow="never" class="no-hover export-card">
       <h4 class="export-title">薪資總表與快照</h4>
       <div class="export-buttons">
         <el-button :loading="excelLoading" :disabled="!canExportFullSalary" @click="exportAllExcel">匯出全部 Excel</el-button>
@@ -63,6 +81,7 @@ import SalarySnapshotDialog from '../SalarySnapshotDialog.vue'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { ElMessage } from 'element-plus'
 import { downloadFile, downloadFileWithHeaders } from '@/utils/download'
+import { downloadTransferRoster, EXTRA_BONUS_TRANSFER_ROSTER_PATH } from '@/utils/transferRoster'
 import type { SalarySettlement } from '@/composables/useSalarySettlement'
 
 defineEmits<{ (e: 'next'): void }>()
@@ -131,6 +150,24 @@ const exportRoster = async (type: keyof typeof ROSTER_TYPE_LABELS) => {
         }
     } finally {
         rosterLoading.value = null
+    }
+}
+
+// 表外獎金名冊（GET /extra-bonuses/transfer-roster，SALARY_READ＋全員薪資視野）：
+// 不屬薪資名冊，成功不標記「本月結薪完成」。
+const extraBonusRosterLoading = ref(false)
+const exportExtraBonusRoster = async () => {
+    if (!canExportFullSalary.value || extraBonusRosterLoading.value) return
+    extraBonusRosterLoading.value = true
+    const mm = String(q.month).padStart(2, '0')
+    try {
+        await downloadTransferRoster(
+            EXTRA_BONUS_TRANSFER_ROSTER_PATH,
+            `${q.year}年${mm}月_表外獎金轉帳名冊.xlsx`,
+            { period: `${q.year}-${mm}` },
+        )
+    } finally {
+        extraBonusRosterLoading.value = false
     }
 }
 

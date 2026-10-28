@@ -6,6 +6,8 @@
  * - 扣抵：金額為正整數；原因 1–200 字。
  */
 
+import { toAdYear } from '@/utils/academic'
+
 const YM_RE = /^(\d{4})-(0[1-9]|1[0-2])$/
 
 /** 職務 key 中文標籤（與後端 services/growth_contract/constants 的 key 對齊；未知 key 原樣顯示）。 */
@@ -34,7 +36,7 @@ export function growthPositionLabel(key: string | null | undefined): string {
 
 /** 民國學年 → 西元起訖月（8 月～次年 7 月，含兩端），格式 YYYY-MM。 */
 export function schoolYearMonthBounds(schoolYear: number): { first: string; last: string } {
-  const ad = schoolYear + 1911
+  const ad = toAdYear(schoolYear)
   return { first: `${ad}-08`, last: `${ad + 1}-07` }
 }
 

@@ -1,4 +1,5 @@
 import { formatCurrency } from '@/utils/currency'
+import { civilYearToTargetAcademicYear } from '@/utils/academic'
 
 /**
  * 下學期（2–7 月）超額獎金 7 月表外批次（義華 Q11）的前端純邏輯。
@@ -7,11 +8,12 @@ import { formatCurrency } from '@/utils/currency'
 
 /**
  * 預設民國學年：最近一個「已開始」的下學期。下學期＝學年次年 2–7 月，
- * 所以西元年 Y 的 2–7 月屬於 (Y − 1912) 學年；8 月後的上學期期間，最近一個
- * 下學期也是同一個 (Y − 1912)。1 月則是前一年 2–7 月那學期，同為 (Y − 1912)。
+ * 所以西元年 Y 的 2–7 月屬於 civilYearToTargetAcademicYear(Y) 學年（Y − 1912）；
+ * 8 月後的上學期期間，最近一個下學期也是同一學年。1 月則是前一年 2–7 月那學期，
+ * 同樣是這個學年。
  */
 export function defaultSemester2AcademicYear(d: Date = new Date()): number {
-  return d.getFullYear() - 1912
+  return civilYearToTargetAcademicYear(d.getFullYear())
 }
 
 /** 下學期期間文字：「116 年 2–7 月」（民國）。 */

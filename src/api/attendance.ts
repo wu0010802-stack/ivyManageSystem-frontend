@@ -79,12 +79,6 @@ export const recalculateAttendance = (
 ): AxiosResp<'/attendance/recalculate', 'post'> =>
   api.post('/attendance/recalculate', payload)
 
-export const exportAnomalies = (year: number, month: number, status = 'all') =>
-  api.get('/attendance/anomalies/export', { params: { year, month, status }, responseType: 'blob' })
-
-export const exportEmployeeAttendance = (params: ApiQuery<'/exports/employee-attendance', 'get'>) =>
-  api.get('/exports/employee-attendance', { params, responseType: 'blob' })
-
 // ── 月考核表（PDF 列印）──────────────────────────────────────────────────────
 
 export type AppraisalSheetCandidatesOut = components['schemas']['AppraisalSheetCandidatesOut']
@@ -119,13 +113,6 @@ export const getAppraisalSheetsPdf = (params: {
 export const upsertRecord = (
   data: ApiBody<'/attendance/record', 'post'>,
 ): AxiosResp<'/attendance/record', 'post'> => api.post('/attendance/record', data)
-
-// 刪除整月份考勤（path 用 /records/month/... 避免與單筆刪除路由遮蔽，見後端 P1-6）
-export const deleteMonthRecords = (
-  year: number,
-  month: number,
-): AxiosResp<'/attendance/records/month/{year}/{month}', 'delete'> =>
-  api.delete(`/attendance/records/month/${year}/${month}`)
 
 // 刪除特定員工某日考勤
 export const deleteEmployeeDateRecord = (
