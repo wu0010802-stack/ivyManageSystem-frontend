@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { Search } from '@element-plus/icons-vue'
+import { ArrowDown, Search } from '@element-plus/icons-vue'
 import type {
   DatesSetArg,
   EventClickArg,
@@ -11,29 +11,39 @@ import type {
 import { createEvent, deleteEvent, getCalendarFeed, getEvent, updateEvent } from '@/api/events'
 import { getAdminFeed } from '@/api/calendar'
 import { useCalendarLayers } from '@/composables/useCalendarLayers'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useEmployeeStore } from '@/stores/employee'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 import CalendarToolbar from '@/components/calendar/CalendarToolbar.vue'
-import RecurrenceEditor from '@/components/calendar/RecurrenceEditor.vue'
+import CalendarEventFormDialog from '@/components/calendar/CalendarEventFormDialog.vue'
+import {
+  createEmptyEventForm,
+  eventDetailToFormValues,
+  type CalendarEventDetailSource,
+  type CalendarEventFormValues,
+  type CalendarEventPayload,
+  type EmployeeOption,
+} from '@/components/calendar/eventForm'
 import type { RecurrenceRule } from '@/components/calendar/types'
 import type { CalendarLayer } from '@/api/calendar'
 import CalendarBoard from '@/components/calendar/CalendarBoard.vue'
 import CalendarImportDialog from '@/components/calendar/CalendarImportDialog.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import AdminCreateButton from '@/components/common/AdminCreateButton.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import CalendarEventDetailDialog from '@/components/calendar/CalendarEventDetailDialog.vue'
-import { EVENT_TYPES, eventTypeColor } from '@/constants/calendarEventTypes'
+import { eventTypeColor, eventTypeLabel } from '@/constants/calendarEventTypes'
 import {
-  EVENT_CATEGORY_OPTIONS,
-  EVENT_SEMESTER_OPTIONS,
   EVENT_VISIBILITY_LABELS,
-  EVENT_VISIBILITY_OPTIONS,
   eventVisibilityTagType,
 } from '@/constants/eventVisibility'
 
 interface CalendarEvent {
-  id: number
+  // 重複事件展開後的每個場次 id 為 "{pk}@{date}"（非重複事件為數字）
+  id: number | string
   title: string
   event_date: string
   end_date?: string | null
@@ -58,14 +68,13 @@ interface CalendarEvent {
   [key: string]: unknown
 }
 
-type EmployeeOption = { id: number; name: string; employee_id?: string }
-
 interface OfficialSync {
   warning?: string
   [key: string]: unknown
 }
 
 const router = useRouter()
+const { isMobile } = useIsMobile()
 const {
   enabledLayers,
   fullCalendarEvents,
@@ -74,11 +83,21 @@ const {
 
 const loading = ref(false)
 const events = ref<CalendarEvent[]>([])
-const deleting = ref(false)
+// 載入失敗要明講，不能讓畫面看起來像「這個月沒有事件」：
+// feedError＝月曆格線（admin_feed）失敗，eventsError＝下方事件列表失敗
+const feedError = ref(false)
+const eventsError = ref(false)
+const deletingId = ref<number | string | null>(null)
+const saving = ref(false)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const importVisible = ref(false)
-const isEdit = ref(false)
+const dialogMode = ref<'create' | 'edit'>('create')
+const dialogInitial = ref<CalendarEventFormValues>(createEmptyEventForm())
+const dialogOwnerName = ref<string | null>(null)
+// 開啟時事件原本的可見範圍：只有「新發布給家長」才需要再確認一次
+const originalVisibility = ref<string | null>(null)
+const selectedEvent = ref<CalendarEvent | null>(null)
 const officialSync = ref<OfficialSync | null>(null)
 const searchText = ref('')
 
@@ -86,6 +105,11 @@ const employeeStore = useEmployeeStore()
 onMounted(() => {
   employeeStore.fetchEmployees()
 })
+const employeeOptions = computed(() => employeeStore.employees as EmployeeOption[])
+// createFetchStore 不 rethrow，失敗只寫進 store.error——負責人下拉要能說清楚「沒載到」
+const employeesError = computed(
+  () => Boolean((employeeStore as unknown as { error?: string | null }).error),
+)
 
 // FC 當前可見區間（datesSet 維護），用於決定 admin_feed window
 const viewRange = ref<{ start: Date; end: Date }>({
@@ -99,70 +123,6 @@ const viewAnchor = ref<Date>(new Date())
 
 const currentYear = computed(() => viewAnchor.value.getFullYear())
 const currentMonth = computed(() => viewAnchor.value.getMonth() + 1)
-
-const eventTypes = EVENT_TYPES
-
-const form = reactive<{
-  id: number | null
-  title: string
-  description: string
-  event_date: string
-  end_date: string | null
-  event_type: string
-  is_all_day: boolean
-  start_time: string
-  end_time: string
-  location: string
-  recurrence_rule: RecurrenceRule | null
-  visibility: string
-  category: string
-  academic_year: number | null
-  semester: string | null
-  week_no: number | null
-  owner_employee_id: number | null
-}>({
-  id: null,
-  title: '',
-  description: '',
-  event_date: '',
-  end_date: null,
-  event_type: 'general',
-  is_all_day: true,
-  start_time: '',
-  end_time: '',
-  location: '',
-  recurrence_rule: null,
-  // 手動建立預設 parent（與後端相容預設一致＝改版前行為）；
-  // UI 會對 parent 顯示明顯警示
-  visibility: 'parent',
-  category: 'general',
-  academic_year: null,
-  semester: null,
-  week_no: null,
-  owner_employee_id: null,
-})
-
-const selectedEvent = ref<CalendarEvent | null>(null)
-
-const resetForm = () => {
-  form.id = null
-  form.title = ''
-  form.description = ''
-  form.event_date = ''
-  form.end_date = null
-  form.event_type = 'general'
-  form.is_all_day = true
-  form.start_time = ''
-  form.end_time = ''
-  form.location = ''
-  form.recurrence_rule = null
-  form.visibility = 'parent'
-  form.category = 'general'
-  form.academic_year = null
-  form.semester = null
-  form.week_no = null
-  form.owner_employee_id = null
-}
 
 const officialSyncAlertType = computed(() => {
   if (officialSync.value?.warning) return 'warning'
@@ -184,6 +144,17 @@ const filteredEvents = computed(() => {
   )
 })
 
+const emptyTitle = computed(() =>
+  searchText.value ? `找不到符合「${searchText.value}」的事件` : '這個月還沒有事件',
+)
+const emptyDescription = computed(() =>
+  searchText.value
+    ? '搜尋只會比對目前顯示月份的標題、說明與地點。'
+    : '按右上角「新增事件」就能建立。',
+)
+
+// ===== 匯入／匯出 =====
+
 const exportCalendar = () => {
   downloadFile(`/exports/calendar?year=${currentYear.value}&month=${currentMonth.value}`, `${currentYear.value}年${currentMonth.value}月行事曆.xlsx`)
 }
@@ -191,6 +162,18 @@ const exportCalendar = () => {
 const exportHolidays = () => {
   downloadFile(`/exports/holidays?year=${currentYear.value}`, `${currentYear.value}年國定假日.xlsx`)
 }
+
+const onMenuCommand = (command: unknown) => {
+  if (command === 'import') importVisible.value = true
+  else if (command === 'export-calendar') exportCalendar()
+  else if (command === 'export-holidays') exportHolidays()
+}
+
+// 呼叫 API 一律用來源事件的 pk：重複事件的場次 id 長得像 "5@2026-07-10"，直接拿去打 API 會 4xx
+const sourceEventId = (id: number | string): number =>
+  typeof id === 'string' ? Number(id.split('@')[0]) : Number(id)
+const isRecurringOccurrence = (event: CalendarEvent) =>
+  typeof event.id === 'string' && event.id.includes('@')
 
 // FC 給 end 是 exclusive — 在拉資料窗口時減一天得到 inclusive end
 const fmtDate = (d: Date) => {
@@ -211,10 +194,13 @@ const fetchAdminFeed = async (start: Date, end: Date) => {
     const resp = await getAdminFeed(fromStr, toStr)
     if (requestEpoch !== adminFeedEpoch) return
     setItems(resp.data.items)
+    feedError.value = false
   } catch (error) {
     if (requestEpoch !== adminFeedEpoch) return
     console.error('[calendar] getAdminFeed failed', error)
+    // 清空避免留著上個月的項目，並標記失敗：空白月曆 ≠ 沒有行程
     setItems([])
+    feedError.value = true
   }
 }
 
@@ -234,9 +220,13 @@ const fetchEvents = async () => {
     const d = res.data as { events: CalendarEvent[]; official_sync?: OfficialSync }
     events.value = d.events
     officialSync.value = d.official_sync ?? null
+    eventsError.value = false
   } catch (error) {
     if (requestEpoch !== calendarEventsEpoch) return
-    ElMessage.error(apiError(error, '載入失敗'))
+    // 清空而不是保留上個月的列：否則失敗時舊月份的事件會掛在新月份標題底下
+    events.value = []
+    eventsError.value = true
+    ElMessage.error(apiError(error, '本月事件載入失敗'))
   } finally {
     if (requestEpoch === calendarEventsEpoch) loading.value = false
   }
@@ -247,11 +237,26 @@ const refreshAll = () => {
   fetchAdminFeed(viewRange.value.start, viewRange.value.end)
 }
 
-const handleAdd = (dateStr: string | null | undefined) => {
-  isEdit.value = false
-  resetForm()
-  if (dateStr) form.event_date = dateStr
+// ===== 新增／編輯 =====
+
+const openDialog = (
+  mode: 'create' | 'edit',
+  initial: CalendarEventFormValues,
+  ownerName: string | null = null,
+) => {
+  dialogMode.value = mode
+  dialogInitial.value = initial
+  dialogOwnerName.value = ownerName
+  originalVisibility.value = mode === 'edit' ? initial.visibility : null
+  // 員工名單上次沒載到：開表單時再試一次（有快取時不會重打）
+  if (employeesError.value) employeeStore.fetchEmployees()
   dialogVisible.value = true
+}
+
+const handleAdd = (dateStr: string | null | undefined) => {
+  const initial = createEmptyEventForm()
+  if (dateStr) initial.event_date = dateStr
+  openDialog('create', initial)
 }
 
 const showDetail = (event: CalendarEvent) => {
@@ -268,61 +273,41 @@ const openEvent = async (event: CalendarEvent) => {
   // 先抓單筆完整資料，否則存檔會把這些欄位靜默打回預設值（資料遺失）
   let detail: CalendarEvent
   try {
-    const res = await getEvent(event.id)
+    const res = await getEvent(sourceEventId(event.id))
     detail = res.data as CalendarEvent
   } catch (error) {
     ElMessage.error(apiError(error, '載入事件資料失敗'))
     return
   }
-  isEdit.value = true
-  Object.assign(form, {
-    id: detail.id,
-    title: detail.title,
-    description: detail.description || '',
-    event_date: detail.event_date,
-    end_date: detail.end_date || null,
-    event_type: detail.event_type,
-    is_all_day: detail.is_all_day,
-    start_time: detail.start_time || '',
-    end_time: detail.end_time || '',
-    location: detail.location || '',
-    recurrence_rule: detail.recurrence_rule ?? null,
-    visibility: detail.visibility || 'parent',
-    category: detail.category || 'general',
-    academic_year: detail.academic_year ?? null,
-    semester: detail.semester ?? null,
-    week_no: detail.week_no ?? null,
-    owner_employee_id: detail.owner_employee_id ?? null,
-  })
-  dialogVisible.value = true
+  openDialog(
+    'edit',
+    eventDetailToFormValues(detail as unknown as CalendarEventDetailSource),
+    detail.owner_employee_name ?? null,
+  )
 }
 
-const saveEvent = async () => {
-  if (!form.title || !form.event_date) {
-    ElMessage.warning('請填寫標題與日期')
-    return
-  }
-  try {
-    const payload = {
-      title: form.title,
-      description: form.description || null,
-      event_date: form.event_date,
-      end_date: form.end_date || null,
-      event_type: form.event_type,
-      is_all_day: form.is_all_day,
-      start_time: form.is_all_day ? null : (form.start_time || null),
-      end_time: form.is_all_day ? null : (form.end_time || null),
-      location: form.location || null,
-      recurrence_rule: form.recurrence_rule || null,
-      visibility: form.visibility,
-      category: form.category,
-      academic_year: form.academic_year ?? null,
-      semester: form.semester || null,
-      week_no: form.week_no ?? null,
-      owner_employee_id: form.owner_employee_id ?? null,
+const saveEvent = async (payload: CalendarEventPayload) => {
+  if (saving.value) return
+  const editingId = dialogInitial.value.id
+  // 新發布給家長（新增，或編輯時把範圍改成家長）要再確認一次：家長端手機馬上看得到
+  if (
+    payload.visibility === 'parent'
+    && (dialogMode.value === 'create' || originalVisibility.value !== 'parent')
+  ) {
+    try {
+      await ElMessageBox.confirm(
+        `「${payload.title}」會公開給家長端，家長在手機上就看得到。確定要發布嗎？`,
+        '確認發布給家長',
+        { confirmButtonText: '發布', cancelButtonText: '再檢查一下', type: 'warning' },
+      )
+    } catch {
+      return
     }
-    if (isEdit.value) {
-      await updateEvent(form.id!, payload)
+  }
+  saving.value = true
+  try {
+    if (dialogMode.value === 'edit') {
+      await updateEvent(editingId!, payload)
       ElMessage.success('事件已更新')
     } else {
       // requires_acknowledgment 僅 create 時送預設值；update 絕不送（表單
@@ -333,29 +318,45 @@ const saveEvent = async () => {
     dialogVisible.value = false
     refreshAll()
   } catch (error) {
-    ElMessage.error(apiError(error, '操作失敗'))
+    // 失敗時對話框保持開啟、內容不動，使用者可直接修正後再送
+    ElMessage.error(apiError(error, '儲存失敗，請稍後再試'))
+  } finally {
+    saving.value = false
   }
+}
+
+const deleteImpactNote = (event: CalendarEvent) => {
+  const notes: string[] = []
+  // 重複事件刪的是整個系列，不是只有點到的這一天
+  if (isRecurringOccurrence(event)) notes.push('這是重複事件，刪除會一併移除整個系列的所有場次。')
+  if (event.visibility === 'parent') notes.push('這個事件家長端看得到，刪除後家長端也會一併消失。')
+  else if (event.visibility === 'staff') notes.push('這個事件教師端看得到，刪除後教師端也會一併消失。')
+  return notes.join('')
 }
 
 const handleDelete = async (event: CalendarEvent) => {
   try {
-    await ElMessageBox.confirm(`確定要刪除「${event.title}」？`, '確認刪除', {
-      confirmButtonText: '刪除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      `確定要刪除「${event.title}」？${deleteImpactNote(event)}`,
+      '確認刪除',
+      {
+        confirmButtonText: '刪除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
   } catch {
     return
   }
-  deleting.value = true
+  deletingId.value = event.id
   try {
-    await deleteEvent(event.id)
+    await deleteEvent(sourceEventId(event.id))
     ElMessage.success('事件已刪除')
     refreshAll()
   } catch (error) {
     ElMessage.error(apiError(error, '刪除失敗'))
   } finally {
-    deleting.value = false
+    deletingId.value = null
   }
 }
 
@@ -376,11 +377,21 @@ const onEventClick = (arg: EventClickArg) => {
   const link = arg.event.extendedProps.link as string | null | undefined
 
   if (layer === 'event') {
-    // Phase C 展開的重複事件 id 為 "{pk}@{date}"——取 pk 部分
-    const pk = typeof rawId === 'string' ? Number(rawId.split('@')[0]) : Number(rawId)
-    const ev = events.value.find((e) => e.id === pk)
+    // Phase C 展開的重複事件 id 為 "{pk}@{date}"——先找同一場次，找不到再用 pk 找同一系列
+    const pk = sourceEventId(rawId)
+    const ev = events.value.find((e) => String(e.id) === String(rawId))
+      ?? events.value.find((e) => sourceEventId(e.id) === pk)
     if (ev) {
       openEvent(ev)
+      return
+    }
+    // 找不到對應事件：不能讓點擊無聲無息。多半是事件清單沒載到，或點到月曆格線上相鄰月份的日期
+    if (!link) {
+      ElMessage.warning(
+        eventsError.value
+          ? '本月事件清單沒有載入成功，請先按「重新載入」再開啟事件'
+          : '這個事件不在目前月份的清單內，請切換到事件所在的月份再開啟',
+      )
       return
     }
   }
@@ -402,7 +413,7 @@ const onEventDrop = async (info: EventDropArg) => {
     return
   }
   const rawId = info.event.extendedProps.rawId
-  const pk = typeof rawId === 'string' ? Number(rawId.split('@')[0]) : Number(rawId)
+  const pk = sourceEventId(rawId)
   if (!pk || Number.isNaN(pk)) {
     info.revert()
     return
@@ -439,6 +450,22 @@ const onEventDrop = async (info: EventDropArg) => {
     payload.end_time = info.event.end ? fmtHHMM(info.event.end) : null
   }
 
+  // 拖到錯的格子很容易：家長看得到的事件改期前先確認（取消就彈回原位）
+  const target = events.value.find((e) => sourceEventId(e.id) === pk)
+  if (target?.visibility === 'parent') {
+    const range = newEnd ? `${newStart} ~ ${newEnd}` : newStart
+    try {
+      await ElMessageBox.confirm(
+        `「${target.title}」家長端看得到，確定要改到 ${range}？`,
+        '確認改期',
+        { confirmButtonText: '改期', cancelButtonText: '取消', type: 'warning' },
+      )
+    } catch {
+      info.revert()
+      return
+    }
+  }
+
   try {
     await updateEvent(pk, payload)
     ElMessage.success('已更新事件日期')
@@ -449,16 +476,50 @@ const onEventDrop = async (info: EventDropArg) => {
   }
 }
 
+// ===== 事件列表顯示 =====
+
+const typeLabel = (row: CalendarEvent) => row.event_type_label || eventTypeLabel(row.event_type)
+const visibilityLabel = (visibility: string) => EVENT_VISIBILITY_LABELS[visibility] || '其他'
+const dateText = (row: CalendarEvent) =>
+  row.end_date && row.end_date !== row.event_date ? `${row.event_date} ~ ${row.end_date}` : row.event_date
+const timeText = (row: CalendarEvent) => {
+  if (row.is_all_day) return '全天'
+  if (row.start_time && row.end_time) return `${row.start_time} - ${row.end_time}`
+  return row.start_time || '—'
+}
+
+// 手機：8 欄表格要橫捲才按得到編輯／刪除，改任務卡片
+const CARD_COLUMNS = [
+  { label: '日期', prop: '__date', formatter: (item: Record<string, unknown>) => dateText(item as CalendarEvent) },
+  { label: '類型', prop: '__type' },
+  { label: '可見範圍', prop: '__visibility' },
+  { label: '時間', prop: '__time', formatter: (item: Record<string, unknown>) => timeText(item as CalendarEvent) },
+  { label: '地點', prop: 'location', formatter: (item: Record<string, unknown>) => (item.location as string) || '—' },
+  { label: '說明', prop: 'description', block: true, formatter: (item: Record<string, unknown>) => (item.description as string) || '—' },
+]
 </script>
 
 <template>
   <div class="calendar-page" v-loading="loading">
     <PageHeader :title="PAGE_TERMS.calendar">
       <template #actions>
-        <el-button type="success" @click="exportCalendar">匯出行事曆</el-button>
-        <el-button @click="exportHolidays">匯出假日</el-button>
-        <el-button @click="importVisible = true">匯入分校行事曆</el-button>
-        <el-button type="primary" @click="handleAdd(null)">新增事件</el-button>
+        <el-dropdown trigger="click" @command="onMenuCommand">
+          <el-button data-test="calendar-more-menu">
+            匯入／匯出<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="import" data-test="menu-import">匯入分校行事曆</el-dropdown-item>
+              <el-dropdown-item command="export-calendar" divided data-test="menu-export-calendar">
+                匯出 {{ currentYear }} 年 {{ currentMonth }} 月行事曆
+              </el-dropdown-item>
+              <el-dropdown-item command="export-holidays" data-test="menu-export-holidays">
+                匯出 {{ currentYear }} 年國定假日
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <AdminCreateButton @click="handleAdd(null)">新增事件</AdminCreateButton>
       </template>
     </PageHeader>
 
@@ -469,6 +530,23 @@ const onEventDrop = async (info: EventDropArg) => {
       show-icon
       class="sync-alert"
     />
+
+    <el-alert
+      v-if="feedError"
+      title="月曆資料載入失敗"
+      type="error"
+      :closable="false"
+      show-icon
+      class="sync-alert"
+      data-test="calendar-feed-error"
+    >
+      <div class="feed-error-body">
+        <span>月曆上現在看不到的項目，不代表這段期間沒有行程；請重新載入後再確認。</span>
+        <el-button size="small" type="primary" :loading="loading" data-test="calendar-feed-retry" @click="refreshAll">
+          重新載入
+        </el-button>
+      </div>
+    </el-alert>
 
     <el-card class="calendar-card">
       <CalendarToolbar v-model="enabledLayers" />
@@ -481,12 +559,94 @@ const onEventDrop = async (info: EventDropArg) => {
       />
     </el-card>
 
-    <el-card style="margin-top: 20px">
+    <el-card class="list-card">
       <div class="list-header">
-        <h3>事件列表</h3>
-        <el-input v-model="searchText" placeholder="搜尋事件" clearable style="width: 220px" :prefix-icon="Search" />
+        <h3>{{ currentYear }} 年 {{ currentMonth }} 月事件</h3>
+        <el-input
+          v-model="searchText"
+          class="list-search"
+          placeholder="搜尋本月事件"
+          aria-label="搜尋本月事件"
+          clearable
+          :prefix-icon="Search"
+        />
       </div>
-      <el-table :data="filteredEvents" stripe style="width: 100%" max-height="600" empty-text="本月無事件">
+
+      <EmptyState
+        v-if="eventsError"
+        variant="error"
+        title="本月事件列表載入失敗"
+        description="請重新載入；成功之前請勿當作這個月沒有事件。"
+        data-test="calendar-events-error"
+      >
+        <template #action>
+          <el-button type="primary" :loading="loading" data-test="calendar-events-retry" @click="refreshAll">
+            重新載入
+          </el-button>
+        </template>
+      </EmptyState>
+
+      <AdminListCards
+        v-else-if="isMobile"
+        :items="filteredEvents"
+        :columns="CARD_COLUMNS"
+        row-key="id"
+        data-test="calendar-event-cards"
+      >
+        <template #empty>
+          <EmptyState variant="inline" :title="emptyTitle" :description="emptyDescription" />
+        </template>
+        <template #title="{ item }">
+          <span class="card-title">
+            {{ item.title }}
+            <el-tag v-if="item.is_official" size="small" type="info">官方</el-tag>
+          </span>
+        </template>
+        <template #cell-__type="{ item }">
+          <el-tag
+            :color="eventTypeColor(item.event_type as string)"
+            effect="dark"
+            size="small"
+            style="border: none; color: #fff"
+          >
+            {{ typeLabel(item as CalendarEvent) }}
+          </el-tag>
+        </template>
+        <template #cell-__visibility="{ item }">
+          <el-tag
+            v-if="!item.is_official && item.visibility"
+            :type="eventVisibilityTagType(item.visibility as string)"
+            size="small"
+            :effect="item.visibility === 'parent' ? 'dark' : 'plain'"
+          >
+            {{ visibilityLabel(item.visibility as string) }}
+          </el-tag>
+          <span v-else>—</span>
+        </template>
+        <template #actions="{ item }">
+          <template v-if="item.is_read_only">
+            <el-button link type="primary" size="small" @click="showDetail(item as CalendarEvent)">查看</el-button>
+            <span class="readonly-label">唯讀</span>
+          </template>
+          <template v-else>
+            <el-button link type="primary" size="small" @click="openEvent(item as CalendarEvent)">編輯</el-button>
+            <el-button
+              link
+              type="danger"
+              size="small"
+              :loading="deletingId === item.id"
+              @click="handleDelete(item as CalendarEvent)"
+            >
+              刪除
+            </el-button>
+          </template>
+        </template>
+      </AdminListCards>
+
+      <el-table v-else :data="filteredEvents" stripe style="width: 100%" max-height="600">
+        <template #empty>
+          <EmptyState variant="inline" :title="emptyTitle" :description="emptyDescription" />
+        </template>
         <el-table-column label="日期" width="120">
           <template #default="{ row }">
             {{ row.event_date }}
@@ -509,7 +669,7 @@ const onEventDrop = async (info: EventDropArg) => {
               size="small"
               style="border: none; color: #fff"
             >
-              {{ row.event_type_label }}
+              {{ typeLabel(row) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -521,15 +681,12 @@ const onEventDrop = async (info: EventDropArg) => {
               size="small"
               :effect="row.visibility === 'parent' ? 'dark' : 'plain'"
             >
-              {{ EVENT_VISIBILITY_LABELS[row.visibility] || row.visibility }}
+              {{ visibilityLabel(row.visibility) }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="時間" width="120">
-          <template #default="{ row }">
-            <span v-if="row.is_all_day">全天</span>
-            <span v-else>{{ row.start_time }} - {{ row.end_time }}</span>
-          </template>
+          <template #default="{ row }">{{ timeText(row) }}</template>
         </el-table-column>
         <el-table-column prop="location" label="地點" width="120" />
         <el-table-column prop="description" label="說明" min-width="180" show-overflow-tooltip />
@@ -541,137 +698,31 @@ const onEventDrop = async (info: EventDropArg) => {
             </template>
             <template v-else>
               <el-button link type="primary" size="small" @click="openEvent(row)">編輯</el-button>
-              <el-button link type="danger" size="small" @click="handleDelete(row)" :loading="deleting">刪除</el-button>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                :loading="deletingId === row.id"
+                @click="handleDelete(row)"
+              >
+                刪除
+              </el-button>
             </template>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '編輯事件' : '新增事件'" width="550px">
-      <el-form :model="form" label-width="80px">
-        <el-form-item label="標題" required>
-          <el-input v-model="form.title" placeholder="例：期末教學會議" />
-        </el-form-item>
-        <el-form-item label="類型">
-          <el-select v-model="form.event_type" style="width: 100%">
-            <el-option
-              v-for="item in eventTypes.filter((eventType) => !['holiday', 'makeup_workday'].includes(eventType.value))"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="開始日期" required>
-          <el-date-picker v-model="form.event_date" type="date" placeholder="選擇日期" value-format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="結束日期">
-          <el-date-picker v-model="form.end_date" type="date" placeholder="多日事件可選" value-format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="全天">
-          <el-switch v-model="form.is_all_day" />
-        </el-form-item>
-        <el-form-item v-if="!form.is_all_day" label="開始時間">
-          <el-time-picker v-model="form.start_time" format="HH:mm" value-format="HH:mm" placeholder="開始時間" style="width: 100%" />
-        </el-form-item>
-        <el-form-item v-if="!form.is_all_day" label="結束時間">
-          <el-time-picker v-model="form.end_time" format="HH:mm" value-format="HH:mm" placeholder="結束時間" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="地點">
-          <el-input v-model="form.location" placeholder="例：會議室A" />
-        </el-form-item>
-        <el-form-item label="可見範圍">
-          <div class="visibility-field">
-            <el-radio-group v-model="form.visibility">
-              <el-radio-button
-                v-for="opt in EVENT_VISIBILITY_OPTIONS"
-                :key="opt.value"
-                :value="opt.value"
-              >
-                {{ opt.label }}
-              </el-radio-button>
-            </el-radio-group>
-            <el-alert
-              v-if="form.visibility === 'parent'"
-              title="此事件將對「家長端」公開顯示，請確認內容不含內部事項（薪資、對帳、考核、負責人分工等）。"
-              type="warning"
-              :closable="false"
-              show-icon
-              class="visibility-warning"
-              data-test="parent-visibility-warning"
-            />
-            <div v-else class="visibility-hint">
-              {{ EVENT_VISIBILITY_OPTIONS.find((o) => o.value === form.visibility)?.hint }}
-            </div>
-          </div>
-        </el-form-item>
-        <el-form-item label="工作分類">
-          <el-select v-model="form.category" style="width: 100%">
-            <el-option
-              v-for="opt in EVENT_CATEGORY_OPTIONS"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="學年/學期">
-          <div class="term-row">
-            <el-input-number
-              v-model="form.academic_year"
-              :min="100"
-              :max="200"
-              :controls="false"
-              placeholder="學年 例:115"
-              style="width: 110px"
-            />
-            <el-select v-model="form.semester" clearable placeholder="學期" style="width: 110px">
-              <el-option
-                v-for="opt in EVENT_SEMESTER_OPTIONS"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-            <el-input-number
-              v-model="form.week_no"
-              :min="0"
-              :max="60"
-              :controls="false"
-              placeholder="週次"
-              style="width: 90px"
-            />
-          </div>
-        </el-form-item>
-        <el-form-item label="負責人">
-          <el-select
-            v-model="form.owner_employee_id"
-            clearable
-            filterable
-            placeholder="選擇負責員工（可空）"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="emp in (employeeStore.employees as EmployeeOption[])"
-              :key="emp.id"
-              :label="emp.employee_id ? `${emp.name}（${emp.employee_id}）` : emp.name"
-              :value="emp.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="重複">
-          <RecurrenceEditor v-model="form.recurrence_rule" />
-        </el-form-item>
-        <el-form-item label="說明">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="事件說明..." />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveEvent">儲存</el-button>
-      </template>
-    </el-dialog>
+    <CalendarEventFormDialog
+      v-model="dialogVisible"
+      :mode="dialogMode"
+      :initial="dialogInitial"
+      :saving="saving"
+      :employees="employeeOptions"
+      :owner-name="dialogOwnerName"
+      :employees-error="employeesError"
+      @submit="saveEvent"
+    />
 
     <CalendarEventDetailDialog v-model="detailVisible" :event="selectedEvent" />
     <CalendarImportDialog v-model="importVisible" @imported="refreshAll" />
@@ -683,19 +734,36 @@ const onEventDrop = async (info: EventDropArg) => {
   margin-bottom: 16px;
 }
 
+.feed-error-body {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
 .calendar-card {
   overflow: visible;
+}
+
+.list-card {
+  margin-top: 20px;
 }
 
 .list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
 
 .list-header h3 {
   margin: 0;
+}
+
+.list-search {
+  width: 220px;
 }
 
 .title-cell {
@@ -704,28 +772,21 @@ const onEventDrop = async (info: EventDropArg) => {
   gap: 8px;
 }
 
+.card-title {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .readonly-label {
   color: var(--text-tertiary);
   font-size: 12px;
 }
 
-.visibility-field {
-  width: 100%;
-}
-
-.visibility-warning {
-  margin-top: 8px;
-}
-
-.visibility-hint {
-  margin-top: 4px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.term-row {
-  display: flex;
-  gap: 8px;
+@media (--to-sm) {
+  .list-search {
+    width: 100%;
+  }
 }
 </style>

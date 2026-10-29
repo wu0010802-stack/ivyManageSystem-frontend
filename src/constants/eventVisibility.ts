@@ -19,13 +19,13 @@ export const EVENT_VISIBILITY_OPTIONS: {
     value: 'staff',
     label: '教職員',
     tagType: 'warning',
-    hint: '管理端＋教師 Portal 可見',
+    hint: '管理端＋教師端可見',
   },
   {
     value: 'parent',
     label: '家長',
     tagType: 'danger',
-    hint: '管理端＋教師 Portal＋家長端全部可見',
+    hint: '管理端＋教師端＋家長端全部可見',
   },
 ]
 
