@@ -183,8 +183,9 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '今日用藥' }
         },
         {
-            // 在籍記錄表已折入班級學生管理頁的「統計表」modal；在籍統計獨立為 /enrollment-stats。
-            // 舊連結一律導回班級學生管理（不再有 tab query）。
+            // 在籍記錄表曾折入班級學生管理頁的「統計表」modal；2026-10-29（後台 IA 重整 S4）入口改到
+            // 在籍統計頁（/enrollment-stats）頁首。舊連結仍導回班級學生管理（不再有 tab query）：
+            // 這條路徑的權限規則是 CLASSROOMS_READ，導去 STUDENTS_READ 的統計頁會讓只持班級權限者撲空。
             path: '/student-enrollment',
             redirect: '/classrooms',
         },
@@ -205,7 +206,9 @@ export const routes: RouteRecordRaw[] = [
             path: '/students/year-plan',
             name: 'studentsYearPlan',
             component: () => import('../views/students/YearPlanWorkspaceView.vue'),
-            meta: { title: '新學年預編班' }
+            // 唯一入口是班級頁的預編班橫幅，權限也掛在班級（CLASSROOMS_READ），但路徑前綴是 /students：
+            // 不明示的話麵包屑的最長前綴反查會把父層算成「學生」。2026-10-29 後台 IA 重整 S4。
+            meta: { title: '新學年預編班', parent: '/classrooms' }
         },
         {
             // 入學文件電子簽署（esign01，2026-08-11）：範本管理 + 發送追蹤兩個 tab。

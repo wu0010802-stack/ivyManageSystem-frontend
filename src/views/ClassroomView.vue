@@ -14,7 +14,7 @@ import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } f
 import { getIntakePlan } from '@/api/recruitmentIntake'
 import { mapReservedByGrade, reservedCountFor, type IntakePlanRowLite } from '@/utils/classroomReserved'
 import { ElMessage, ElMessageBox, type FormItemRule } from 'element-plus'
-import { ArrowRight, Grid, List, Lock, Menu, Plus, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowRight, List, Lock, Menu, Plus, WarningFilled } from '@element-plus/icons-vue'
 import { capacityStatus, capacityPercent } from '@/utils/classroomCapacity'
 import { sumRegistered } from '@/utils/headcountLabels'
 import { formatTeacherOptionLabel } from '@/utils/teacherOption'
@@ -37,7 +37,6 @@ import FormDialog from '@/components/common/FormDialog.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
-import EnrollmentRosterDialog from '@/components/enrollment/EnrollmentRosterDialog.vue'
 
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
 interface TeacherOption { id: number; name: string; employee_id?: string | null; position?: string | null; [key: string]: unknown }
@@ -62,7 +61,6 @@ const classroomDrawerLoading = ref(false)
 const drawerClassroom = ref<ClassroomRow | null>(null)
 const changeLogDrawerVisible = ref(false)
 const changeLogClassroom = ref<ClassroomRow | null>(null)
-const statsDialogVisible = ref(false)
 const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
 const canReadStudents = computed(() => hasPermission('STUDENTS_READ'))
 const reservedByGrade = ref<Record<number, number>>({})
@@ -694,7 +692,6 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
             :value="t.key"
           />
         </el-select>
-        <el-button :icon="Grid" @click="statsDialogVisible = true">在籍記錄表</el-button>
         <el-button v-if="canWrite && !loadFailedEmpty" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
       </template>
     </PageHeader>
@@ -1066,7 +1063,6 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
       :classroom="changeLogClassroom"
     />
 
-    <EnrollmentRosterDialog v-model:visible="statsDialogVisible" />
   </div>
 </template>
 

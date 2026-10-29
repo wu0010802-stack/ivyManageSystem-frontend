@@ -378,7 +378,7 @@ export const NAVIGATION_MANIFEST = {
           actions: [{ code: 'CLASSROOMS_WRITE' }],
           menu: { icon: icon('OfficeBuilding') },
           extraRoutes: [
-            // 在籍記錄表已折入班級學生管理頁；舊路徑 redirect 至 /classrooms，規則保留供解析。
+            // 在籍記錄表曾折入班級學生管理頁（現入口在在籍統計頁頁首）；舊路徑 redirect 至 /classrooms，規則保留供解析。
             { path: '/student-enrollment', permission: 'CLASSROOMS_READ' },
             // 新學年預編班：對齊後端 api/classroom_year_plans.py 的 CLASSROOMS_READ 守衛。
             { path: '/students/year-plan', permission: 'CLASSROOMS_READ' },

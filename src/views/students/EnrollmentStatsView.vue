@@ -11,7 +11,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { RefreshRight } from '@element-plus/icons-vue'
+import { Grid, RefreshRight } from '@element-plus/icons-vue'
 import {
   getEnrollmentStats,
   getEnrollmentOptions,
@@ -26,6 +26,7 @@ import type { ApiResponse, Schema } from '@/api/_generated/typed'
 import { describeReconcile, type LedgerSummary, type ReconcileResult } from '@/utils/enrollmentLedger'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EnrollmentLedgerPanel from './EnrollmentLedgerPanel.vue'
+import EnrollmentRosterDialog from '@/components/enrollment/EnrollmentRosterDialog.vue'
 import { formatRegistered } from '@/utils/headcountLabels'
 
 type TermOption = Schema<'TermOption'>
@@ -35,6 +36,12 @@ type EnrollmentStats = ApiResponse<'/student-enrollment/stats', 'get'>
 const termStore = useAcademicTermStore()
 const { isMobile } = useIsMobile()
 const loading = ref(false)
+/**
+ * 在籍記錄表（逐班花名冊 dialog）：2026-10-29 後台 IA 重整 S4 自班級頁頁首搬來——
+ * 它與本頁同走 student_enrollment（/roster、/stats、/options，皆 STUDENTS_READ），是同一組資料的另一種看法。
+ * dialog 自己維護學期選單（開啟時讀一次全域學期，不回寫 store），所以不吃本頁的學期選擇。
+ */
+const rosterDialogVisible = ref(false)
 const stats = ref<EnrollmentStats | null>(null)
 const termOptions = ref<TermOption[]>([])
 /** 下方異動帳面板的元件實例，供對帳橫幅按鈕呼叫其 setSourceFilter。 */
@@ -333,6 +340,13 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
           />
         </el-select>
         <el-button
+          data-testid="roster-dialog-btn"
+          :icon="Grid"
+          @click="rosterDialogVisible = true"
+        >
+          在籍記錄表
+        </el-button>
+        <el-button
           data-testid="refresh-btn"
           :icon="RefreshRight"
           :loading="loading"
@@ -564,6 +578,8 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
         :default-range="defaultDateRange"
       />
     </section>
+
+    <EnrollmentRosterDialog v-model:visible="rosterDialogVisible" />
   </div>
 </template>
 

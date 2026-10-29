@@ -28,6 +28,14 @@ describe('router 麵包屑 meta', () => {
     expect(ROUTER_SRC).toContain("parent: '/appraisal-year-end/year-end'")
   })
 
+  it('新學年預編班（/students/year-plan）以 meta.parent 指回班級：權限與唯一入口在班級頁，路徑前綴卻是 /students', () => {
+    const start = ROUTER_SRC.indexOf("path: '/students/year-plan'")
+    expect(start).toBeGreaterThan(-1)
+    const metaStart = ROUTER_SRC.indexOf('meta:', start)
+    const metaBlock = ROUTER_SRC.slice(metaStart, ROUTER_SRC.indexOf('}', metaStart))
+    expect(metaBlock).toContain("parent: '/classrooms'")
+  })
+
   it('年終結算工作區不再用手工「›」拼假麵包屑（層級改由 meta.parent 表達）', () => {
     expect(ROUTER_SRC).not.toContain('年終 › 結算工作區')
   })

@@ -534,14 +534,15 @@ describe('ClassroomView 改版：工具列收斂', () => {
     expect(toggle.text()).toContain('顯示停用班級')
   })
 
-  it('頁首帶副標；「統計表」按鈕改名「在籍記錄表」', async () => {
+  it('頁首帶副標；「在籍記錄表」入口已移到在籍統計頁（2026-10-29 S4），班級頁不再有它', async () => {
     const wrapper = mountView()
     await flush()
 
     expect(wrapper.text()).toContain('各班在籍概況')
     const labels = wrapper.findAll('button').map((b) => b.text())
-    expect(labels).toContain('在籍記錄表')
+    expect(labels).not.toContain('在籍記錄表')
     expect(labels).not.toContain('統計表')
+    expect(wrapper.findComponent({ name: 'EnrollmentRosterDialog' }).exists()).toBe(false)
   })
 
   it('搜尋框 placeholder 涵蓋代號', async () => {

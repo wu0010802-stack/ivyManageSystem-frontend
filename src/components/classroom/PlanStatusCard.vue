@@ -4,6 +4,8 @@
 // apply_overdue 疊加 warning 樣式。純顯示 + 導頁，不做任何寫入（草稿隔離鐵律）。
 // 2026-08-24 改版：由 el-card + el-alert 收斂為單列輕量橫幅（一行講清楚狀態，
 // 主動作只留導頁連結），狀態語意（info/warning/success/error）沿用不變。
+// 2026-10-29（後台 IA 重整 S4）再收斂：橫幅是預編班的唯一入口所以保留在班級頁，但視覺重量降到
+// 一般資訊列——桌機固定單行（訊息過長以刪節號收尾，全文放 title），間距與最小高度縮小；手機仍允許換行。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight, Calendar } from '@element-plus/icons-vue'
@@ -106,7 +108,7 @@ onMounted(load)
     role="status"
   >
     <el-icon class="plan-banner__icon" aria-hidden="true"><Calendar /></el-icon>
-    <p v-if="!loading" class="plan-banner__text">
+    <p v-if="!loading" class="plan-banner__text" :title="`${bannerTitle}　${displayMessage}`">
       <strong>{{ bannerTitle }}</strong>
       <span class="plan-banner__message">{{ displayMessage }}</span>
     </p>
@@ -125,13 +127,13 @@ onMounted(load)
 .plan-banner {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: 10px 16px;
-  margin-bottom: var(--space-4);
+  gap: var(--space-2);
+  padding: 6px 12px;
+  margin-bottom: var(--space-3);
   border-radius: var(--radius-md);
   border: 1px solid var(--el-border-color-light);
   background: var(--el-bg-color);
-  min-height: 44px;
+  min-height: 36px;
 }
 
 .plan-banner__icon {
@@ -146,11 +148,22 @@ onMounted(load)
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  /* 桌機固定單行：標題不縮、訊息吃剩餘寬度並以刪節號收尾（全文在 title） */
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.plan-banner__text strong {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .plan-banner__message {
   color: var(--text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .plan-banner__link {
@@ -200,6 +213,16 @@ onMounted(load)
 }
 
 @media (--to-sm) {
+  .plan-banner {
+    min-height: var(--touch-target-min);
+  }
+  /* 手機寬度不夠放單行：允許換行 */
+  .plan-banner__text {
+    flex-wrap: wrap;
+  }
+  .plan-banner__message {
+    white-space: normal;
+  }
   .plan-banner__link {
     min-height: var(--touch-target-min);
   }

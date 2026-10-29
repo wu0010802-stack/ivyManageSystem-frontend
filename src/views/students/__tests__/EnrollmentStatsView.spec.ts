@@ -160,6 +160,37 @@ describe('EnrollmentStatsView（現值與異動帳整合）', () => {
     expect(wrapper.find('.el-tabs').exists()).toBe(false)
   })
 
+  // 後台 IA 重整 S4（2026-10-29）：在籍記錄表（逐班花名冊 dialog）入口自班級頁頁首搬到本頁頁首。
+  it('頁首有「在籍記錄表」按鈕，點了開同一個 EnrollmentRosterDialog（班級頁已無此入口）', async () => {
+    const wrapper = mount(EnrollmentStatsView, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          RouterLink: RouterLinkStub,
+          EnrollmentRosterDialog: {
+            name: 'EnrollmentRosterDialog',
+            props: ['visible'],
+            emits: ['update:visible'],
+            template: '<div class="roster-dialog-stub" :data-visible="String(visible)" />',
+          },
+        },
+      },
+    })
+    await flushPromises()
+    const dialog = wrapper.get('.roster-dialog-stub')
+    expect(dialog.attributes('data-visible')).toBe('false')
+
+    const btn = wrapper.get('[data-testid="roster-dialog-btn"]')
+    expect(btn.text()).toContain('在籍記錄表')
+    await btn.trigger('click')
+    expect(wrapper.get('.roster-dialog-stub').attributes('data-visible')).toBe('true')
+
+    // dialog 關閉（emit update:visible=false）後回到未開啟
+    wrapper.getComponent({ name: 'EnrollmentRosterDialog' }).vm.$emit('update:visible', false)
+    await flushPromises()
+    expect(wrapper.get('.roster-dialog-stub').attributes('data-visible')).toBe('false')
+  })
+
   it('現值統計與異動明細出現在同一頁', async () => {
     const wrapper = mountView()
     await flushPromises()

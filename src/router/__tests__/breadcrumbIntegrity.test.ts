@@ -144,4 +144,25 @@ describe('麵包屑父層完整性守衛', () => {
     expect(resolveFor(pageAt('/bus/monitor'))).toBeNull()
     expect(resolveFor(pageAt('/appraisal-year-end/overview'))).toBeNull()
   })
+
+  it('後台 IA 重整（2026-10-29）新增的層級', () => {
+    const pageAt = (p: string): FlatRoute => {
+      const r = byPath.get(p)
+      if (!r) throw new Error(`測試前提失效：router 中找不到 ${p}`)
+      return r
+    }
+    // S4：新學年預編班的權限與唯一入口在班級頁，路徑前綴卻是 /students，必須 meta.parent 明示
+    expect(resolveFor(pageAt('/students/year-plan'))).toEqual({ path: '/classrooms', title: '班級管理' })
+    // S1：「考核」「年終」成為側欄項目後，其下的深層頁以它們為父層
+    expect(resolveFor(pageAt('/appraisal-year-end/appraisal/calibration'))?.title).toBe('考核')
+    expect(resolveFor(pageAt('/appraisal-year-end/year-end/cycles/:id'))?.title).toBe('年終')
+    // 兩個側欄項目本身是一級頁
+    expect(resolveFor(pageAt('/appraisal-year-end/appraisal'))).toBeNull()
+    expect(resolveFor(pageAt('/appraisal-year-end/year-end'))).toBeNull()
+    // S2：獎金批次作業是薪資管理的子頁
+    expect(resolveFor(pageAt('/salary/batches'))?.title).toBe('薪資管理')
+    // S3：排班、出勤核對各是一級頁
+    expect(resolveFor(pageAt('/schedule'))).toBeNull()
+    expect(resolveFor(pageAt('/attendance'))).toBeNull()
+  })
 })
