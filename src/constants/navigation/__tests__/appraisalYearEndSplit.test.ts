@@ -86,10 +86,16 @@ describe('規則頁籤歸邊與側欄高亮別名同步', () => {
     expect(owner(`/appraisal-year-end/rules/${name}`)).toEqual([side === 'appraisal' ? APPRAISAL : YEAR_END])
   })
 
-  it('考核側：scoring／catalog／enrollment-targets；年終側：bonus-rates／festival-headcount／year-end-rules', () => {
+  it('依權限碼歸邊：考核側＝APPRAISAL_READ 的四頁（含 bonus-rates），年終側＝SETTINGS_READ／SALARY_READ 的兩頁', () => {
     const names = (side: string) => RULE_TABS.filter((t) => t.side === side).map((t) => t.name).sort()
-    expect(names('appraisal')).toEqual(['catalog', 'enrollment-targets', 'scoring'])
-    expect(names('year-end')).toEqual(['bonus-rates', 'festival-headcount', 'year-end-rules'])
+    expect(names('appraisal')).toEqual(['bonus-rates', 'catalog', 'enrollment-targets', 'scoring'])
+    expect(names('year-end')).toEqual(['festival-headcount', 'year-end-rules'])
+    // 每個頁籤的歸邊與 manifest 路由規則的讀權限碼一致（APPRAISAL_READ→考核；其餘→年終）
+    for (const tab of RULE_TABS) {
+      const codes = ROUTE_PERMISSION_RULES.filter((r) => r.path === `/appraisal-year-end/rules/${tab.name}`).map((r) => r.permission)
+      expect(codes.length, tab.name).toBeGreaterThan(0)
+      expect(codes.every((c) => (c === 'APPRAISAL_READ') === (tab.side === 'appraisal')), `${tab.name}: ${codes.join(',')}`).toBe(true)
+    }
   })
 
   it('待辦、overview、待補資料兩邊共用：兩個選單項都掛別名（考核在前）', () => {

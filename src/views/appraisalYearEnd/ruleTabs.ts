@@ -4,14 +4,15 @@
 // 路徑（/appraisal-year-end/rules/<name>）與各頁籤的權限 gate 完全不變，
 // 只多一個 `side` 決定「在哪一邊的規則設定裡出現／高亮哪個選單項」。
 //
-// 歸邊依各頁籤的實際 gate 與寫入權限判斷：
-// - 考核側：scoring／catalog（APPRAISAL_READ＋APPRAISAL_RULE_WRITE）、
-//   enrollment-targets（APPRAISAL_READ＋APPRAISAL_FINALIZE，考核週期目標人數）。
-// - 年終側：bonus-rates（年終獎金率）、year-end-rules（年終規則，SETTINGS_READ）、
-//   festival-headcount（節慶人數，SALARY_READ）。
-//   節慶人數是薪資權限（業主裁定 D4）、與薪資結算前檢查共用同一元件；它的受眾是
-//   帶薪資權限的財務角色，與年終側（金額類規則）同一批人，考核側的 APPRAISAL_READ 持有者
-//   多半看不到它，放考核側只會多一個大部分人用不到的頁籤，故歸年終側。
+// 歸邊依各頁籤的實際權限碼（RulesSettingsLayout 原有的 gate，路徑與 gate 都不變）：
+// - 考核側：scoring／bonus-rates／catalog／enrollment-targets——四頁讀權限都是 APPRAISAL_READ，
+//   寫入走 APPRAISAL_RULE_WRITE 或 APPRAISAL_FINALIZE，全是考核權限域。
+//   bonus-rates（年終獎金率）名稱帶「年終」，但 gate 是 APPRAISAL_*：只持考核權限的人沒有「年終」選單項，
+//   若歸年終側就進不去，所以依碼歸考核側（要改歸年終側，改這裡的 side 並同步 manifest 的 activeAlso，測試會守）。
+// - 年終側：year-end-rules（SETTINGS_READ）、festival-headcount（SALARY_READ）——非考核權限域的兩頁。
+//   節慶人數是薪資權限（業主裁定 D4）、與薪資結算前檢查共用同一元件；它的受眾是帶薪資權限的財務角色，
+//   與年終規則（SETTINGS 域）同一批人，考核側的 APPRAISAL_READ 持有者多半看不到它，放考核側只會多一個
+//   大部分人用不到的頁籤，故歸年終側。
 //
 // 側欄高亮用的別名清單寫在 navigation/manifest.ts 的 menu.activeAlso，
 // 與本檔的 side 由 navigation/__tests__/appraisalYearEndSplit.test.ts 守同步。
@@ -47,7 +48,7 @@ export const RULE_TABS: readonly RuleTabDef[] = [
   },
   {
     name: 'bonus-rates',
-    side: 'year-end',
+    side: 'appraisal',
     label: '年終獎金率',
     can: () => hasPermission('APPRAISAL_READ'),
     canWrite: () => hasPermission('APPRAISAL_FINALIZE'),

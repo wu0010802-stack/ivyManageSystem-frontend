@@ -271,6 +271,7 @@ export const NAVIGATION_MANIFEST = {
               '/appraisal-year-end/overview',
               '/appraisal-year-end/exceptions',
               '/appraisal-year-end/rules/scoring',
+              '/appraisal-year-end/rules/bonus-rates',
               '/appraisal-year-end/rules/catalog',
               '/appraisal-year-end/rules/enrollment-targets',
             ],
@@ -290,6 +291,7 @@ export const NAVIGATION_MANIFEST = {
             { path: '/appraisal-year-end/rules', permission: 'APPRAISAL_READ', prefix: true },
             { path: '/appraisal-year-end/rules', permission: 'SETTINGS_READ', prefix: true },
             { path: '/appraisal-year-end/rules/scoring', permission: 'APPRAISAL_READ' },
+            { path: '/appraisal-year-end/rules/bonus-rates', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/rules/catalog', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/rules/enrollment-targets', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/exceptions', permission: 'APPRAISAL_READ' },
@@ -312,7 +314,7 @@ export const NAVIGATION_MANIFEST = {
             // 仍要看得到入口（sidebar 回歸測試曾因漏掉它們出過事），點下去落在兩邊共用的待辦頁。
             visibleAlso: ['SETTINGS_READ', 'SALARY_READ', 'APPRAISAL_FINALIZE'],
             visibleAlsoEntry: '/appraisal-year-end/todo',
-            // 年終側規則頁籤（年終獎金率、節慶人數、年終規則）的高亮別名；
+            // 年終側規則頁籤（節慶人數、年終規則）的高亮別名；
             // /year-end/payout、/year-end/cycles/:id 已在 routePath 前綴內。
             // 待辦、待補資料兩邊共用，這裡與「考核」都掛別名：兩個選單項都有時先到先得（考核），
             // 只看得到年終的帳號由側欄略過不可見的擁有者而落到這一項。
@@ -320,7 +322,6 @@ export const NAVIGATION_MANIFEST = {
               '/appraisal-year-end/todo',
               '/appraisal-year-end/overview',
               '/appraisal-year-end/exceptions',
-              '/appraisal-year-end/rules/bonus-rates',
               '/appraisal-year-end/rules/festival-headcount',
               '/appraisal-year-end/rules/year-end-rules',
             ],
@@ -329,7 +330,6 @@ export const NAVIGATION_MANIFEST = {
             { path: '/year_end', permission: 'YEAR_END_READ', prefix: true },
             { path: '/year-end/appraisal-payout', permission: 'APPRAISAL_FINALIZE' },
             { path: '/appraisal-year-end/year-end/payout', permission: 'APPRAISAL_FINALIZE' },
-            { path: '/appraisal-year-end/rules/bonus-rates', permission: 'APPRAISAL_READ' },
             // 節慶人數（月度共用人數）沿用薪資權限（業主裁定 D4）；歸年終側的理由見 ruleTabs.ts。
             { path: '/appraisal-year-end/rules/festival-headcount', permission: 'SALARY_READ' },
             { path: '/appraisal-year-end/rules/year-end-rules', permission: 'SETTINGS_READ' },

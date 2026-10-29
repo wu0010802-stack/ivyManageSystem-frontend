@@ -186,6 +186,7 @@ describe('AdminSidebar activeMenu 薪資子頁高亮', () => {
       '/appraisal-year-end/appraisal',
       '/appraisal-year-end/appraisal/calibration',
       '/appraisal-year-end/rules/scoring',
+      '/appraisal-year-end/rules/bonus-rates',
       '/appraisal-year-end/rules/catalog',
       '/appraisal-year-end/rules/enrollment-targets',
     ]) {
@@ -200,7 +201,6 @@ describe('AdminSidebar activeMenu 薪資子頁高亮', () => {
       '/appraisal-year-end/year-end',
       '/appraisal-year-end/year-end/payout',
       '/appraisal-year-end/year-end/cycles/7',
-      '/appraisal-year-end/rules/bonus-rates',
       '/appraisal-year-end/rules/festival-headcount',
       '/appraisal-year-end/rules/year-end-rules',
     ]) {

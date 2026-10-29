@@ -134,13 +134,23 @@ describe('AppraisalYearEndLayout — activeKey（只有待辦、待補資料會�
 describe('AppraisalYearEndLayout — 齒輪依所在邊帶到該邊第一個可見規則頁籤', () => {
   beforeEach(() => { permState.read = true; permState.settings = true; permState.finalize = false; permState.yearEnd = true })
 
-  it('年終側（/year-end）→ 年終側第一個可見頁籤（bonus-rates）', async () => {
+  it('年終側（/year-end）→ 年終側第一個可見頁籤（無 SALARY_READ 時是 year-end-rules）', async () => {
     await router.push('/appraisal-year-end/year-end')
     await router.isReady()
     const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
     await w.find('.aye-gear').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/appraisal-year-end/rules/bonus-rates')
+    expect(router.currentRoute.value.path).toBe('/appraisal-year-end/rules/year-end-rules')
+  })
+
+  it('年終側沒有任何可見規則頁籤（只持 APPRAISAL_READ）→ 退回 /rules（由 redirect 落考核側）', async () => {
+    permState.settings = false
+    await router.push('/appraisal-year-end/year-end')
+    await router.isReady()
+    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
+    await w.find('.aye-gear').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/appraisal-year-end/rules')
   })
 
   it('年終側規則頁籤上同樣帶回年終側（只持 SETTINGS_READ → year-end-rules）', async () => {

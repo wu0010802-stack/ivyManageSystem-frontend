@@ -38,6 +38,13 @@ const stubs = {
     name: 'ElAlert',
     template: '<div class="el-alert" data-test="open-cycle-alert"><slot name="title" /></div>',
   },
+  // 考核／年終 切換（S1）：只關心 options 與 change 事件
+  'el-segmented': {
+    name: 'ElSegmented',
+    props: ['modelValue', 'options'],
+    emits: ['change'],
+    template: '<div class="stub-segmented" data-test="rules-side-switch" :data-value="modelValue" />',
+  },
 }
 
 // 同 AppraisalManagementView.spec.ts 的既知現象：RulesSettingsLayout 自身即為路由 component，
@@ -81,31 +88,76 @@ describe('RulesSettingsLayout', () => {
     listAppraisalCyclesMock.mockResolvedValue({ data: [] })
   })
 
-  // 2026-10-29 後台 IA 重整 S1：頁籤依所在邊分列（考核側 3 個、年終側 3 個），合計仍是原本 6 個。
-  it('全權限、停在考核側頁籤 → 只列考核側 3 個分頁', async () => {
+  // 2026-10-29 後台 IA 重整 S1：頁籤依所在邊（權限碼歸屬）分列，合計仍是原本 6 個。
+  it('全權限、停在考核側頁籤 → 列考核側 4 個分頁（APPRAISAL_* 域，維持原順序）', async () => {
     const { w } = await mountAt('/appraisal-year-end/rules/scoring')
     const panes = w.findAllComponents({ name: 'ElTabPane' })
-    expect(panes.map((p) => p.props('name'))).toEqual(['scoring', 'catalog', 'enrollment-targets'])
+    expect(panes.map((p) => p.props('name'))).toEqual(['scoring', 'bonus-rates', 'catalog', 'enrollment-targets'])
   })
 
-  it('全權限、停在年終側頁籤 → 只列年終側 3 個分頁（2026-08-20 起含節慶人數）', async () => {
-    const { w } = await mountAt('/appraisal-year-end/rules/bonus-rates')
+  it('全權限、停在年終側頁籤 → 列年終側 2 個分頁（節慶人數 SALARY_READ、年終規則 SETTINGS_READ）', async () => {
+    const { w } = await mountAt('/appraisal-year-end/rules/year-end-rules')
     const panes = w.findAllComponents({ name: 'ElTabPane' })
-    expect(panes.map((p) => p.props('name'))).toEqual(['bonus-rates', 'festival-headcount', 'year-end-rules'])
+    expect(panes.map((p) => p.props('name'))).toEqual(['festival-headcount', 'year-end-rules'])
   })
 
   it('節慶人數分頁需 SALARY_READ（業主裁定 D4：沿用薪資權限）', async () => {
     hasPermissionMock.mockImplementation((code: string) => code !== 'SALARY_READ')
-    const { w } = await mountAt('/appraisal-year-end/rules/bonus-rates')
+    const { w } = await mountAt('/appraisal-year-end/rules/year-end-rules')
     const panes = w.findAllComponents({ name: 'ElTabPane' })
     expect(panes.map((p) => p.props('name'))).not.toContain('festival-headcount')
-    expect(panes.map((p) => p.props('name'))).toEqual(['bonus-rates', 'year-end-rules'])
+    expect(panes.map((p) => p.props('name'))).toEqual(['year-end-rules'])
   })
 
   it('停在 bare /rules（尚未 redirect）→ 取使用者第一個可見頁籤所在的邊', async () => {
     const { w } = await mountAt('/appraisal-year-end/rules')
     const panes = w.findAllComponents({ name: 'ElTabPane' })
-    expect(panes.map((p) => p.props('name'))).toEqual(['scoring', 'catalog', 'enrollment-targets'])
+    expect(panes.map((p) => p.props('name'))).toEqual(['scoring', 'bonus-rates', 'catalog', 'enrollment-targets'])
+  })
+
+  describe('考核／年終 切換（兩邊都有可見頁籤才出現，避免頁籤因側欄沒有對應入口而進不去）', () => {
+    it('兩邊都有可見頁籤 → 顯示切換，options 為考核、年終，value 是所在邊', async () => {
+      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
+      const seg = w.findComponent({ name: 'ElSegmented' })
+      expect(seg.exists()).toBe(true)
+      expect((seg.props('options') as Array<{ value: string }>).map((o) => o.value)).toEqual(['appraisal', 'year-end'])
+      expect(seg.props('modelValue')).toBe('appraisal')
+    })
+
+    it('切到年終 → 導到年終側第一個可見頁籤；已在該邊不重覆 push', async () => {
+      const { w, router } = await mountAt('/appraisal-year-end/rules/scoring')
+      const pushSpy = vi.spyOn(router, 'push')
+      w.findComponent({ name: 'ElSegmented' }).vm.$emit('change', 'year-end')
+      await flushPromises()
+      expect(pushSpy).toHaveBeenCalledWith('/appraisal-year-end/rules/festival-headcount')
+
+      pushSpy.mockClear()
+      w.findComponent({ name: 'ElSegmented' }).vm.$emit('change', 'appraisal')
+      await flushPromises()
+      expect(pushSpy).toHaveBeenCalledWith('/appraisal-year-end/rules/scoring')
+    })
+
+    it('只持 APPRAISAL_READ → 只有考核側有頁籤，不顯示切換', async () => {
+      hasPermissionMock.mockImplementation((p: string) => p === 'APPRAISAL_READ')
+      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
+      expect(w.findComponent({ name: 'ElSegmented' }).exists()).toBe(false)
+    })
+
+    it('只持 SETTINGS_READ → 只有年終側有頁籤，不顯示切換', async () => {
+      hasPermissionMock.mockImplementation((p: string) => p === 'SETTINGS_READ')
+      const { w } = await mountAt('/appraisal-year-end/rules/year-end-rules')
+      expect(w.findComponent({ name: 'ElSegmented' }).exists()).toBe(false)
+    })
+
+    it('持 APPRAISAL_READ＋SETTINGS_READ（沒有 YEAR_END_READ，側欄只有「考核」入口）→ 仍能用切換到年終規則', async () => {
+      hasPermissionMock.mockImplementation((p: string) => p === 'APPRAISAL_READ' || p === 'SETTINGS_READ')
+      const { w, router } = await mountAt('/appraisal-year-end/rules/scoring')
+      const pushSpy = vi.spyOn(router, 'push')
+      expect(w.findComponent({ name: 'ElSegmented' }).exists()).toBe(true)
+      w.findComponent({ name: 'ElSegmented' }).vm.$emit('change', 'year-end')
+      await flushPromises()
+      expect(pushSpy).toHaveBeenCalledWith('/appraisal-year-end/rules/year-end-rules')
+    })
   })
 
   it('path=.../year-end-rules 渲染年終規則子頁且 tabs active=year-end-rules', async () => {
@@ -206,10 +258,10 @@ describe('RulesSettingsLayout', () => {
 
     // 頁籤分列兩邊後，同一個 wrapper 看不到全部 6 個頁籤；矩陣測試同時掛考核側與年終側，
     // 依頁籤所屬邊取對應 wrapper，維持「逐一頁籤驗證徽章」的鐵律。
-    const APPRAISAL_SIDE = ['scoring', 'catalog', 'enrollment-targets']
+    const APPRAISAL_SIDE = ['scoring', 'bonus-rates', 'catalog', 'enrollment-targets']
     async function mountSides() {
       const appraisal = await mountAt('/appraisal-year-end/rules/scoring')
-      const yearEnd = await mountAt('/appraisal-year-end/rules/bonus-rates')
+      const yearEnd = await mountAt('/appraisal-year-end/rules/year-end-rules')
       const pick = (tabName: string) => (APPRAISAL_SIDE.includes(tabName) ? appraisal.w : yearEnd.w)
       return {
         label: (tabName: string) => pick(tabName).find(`[data-test="tab-label-${tabName}"]`),
