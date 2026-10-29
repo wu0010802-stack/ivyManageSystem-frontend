@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import GrowthContractView from '../GrowthContractView.vue'
 import { formatCurrency } from '@/utils/currency'
 import type { Schema } from '@/api/_generated/typed'
@@ -76,12 +76,17 @@ vi.mock('element-plus', async (importOriginal) => {
 // 系統時鐘固定在 2026-08-14（115 學年 8/1 剛換年）——currentSchoolYear() 依此推算預設學年。
 const FIXED_NOW = new Date('2026-08-14T09:00:00+08:00')
 
+// FormDialog 內的 el-form 以 ref.validate() 擋必填；stub 依 formValid 決定結果。
+// ⚠ vitest 下真 ElForm.validate() 對任何輸入都回 true，靠真 el-form 驗證失敗的斷言會假綠；
+// 規則是否接上欄位另以 .is-required 斷言（見檔尾 describe）。
+const formValid = { ok: true }
+
 const STUBS = {
     'el-select': true,
     'el-option': true,
     'el-input': true,
     'el-input-number': true,
-    'el-form': true,
+    'el-form': { template: '<form><slot /></form>', methods: { validate: () => Promise.resolve(formValid.ok) } },
     'el-form-item': true,
     'el-checkbox': true,
     'el-date-picker': true,
@@ -94,8 +99,10 @@ const STUBS = {
         props: ['modelValue'],
         template: '<div v-if="modelValue" class="dialog-stub"><slot /><slot name="footer" /></div>',
     },
+    // emits 要明寫：否則父層的 @click 會同時當原生監聽器落在 <button> 上，點一次觸發兩次。
     'el-button': {
         props: ['disabled', 'loading'],
+        emits: ['click'],
         template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
     },
     // 保留 title/description 到文字，才能斷言 pending_rule 警示條內容。
@@ -238,6 +245,15 @@ interface ViewVm {
     carryOffsetIds: number[]
     hasPendingCarry: boolean
     toggleCarryOffset: (employeeId: number, checked: boolean) => void
+    hoursError: boolean
+    previewError: boolean
+    extraBonusError: boolean
+    settleDisabled: boolean
+    hourSaving: boolean
+    signedOnSaving: boolean
+    hourRules: Record<string, Array<Record<string, unknown>>>
+    hourPaidNotice: string
+    signedOnPaidNotice: string
 }
 
 describe('GrowthContractView', () => {
@@ -257,6 +273,7 @@ describe('GrowthContractView', () => {
         vi.mocked(ElMessage.error).mockReset()
         vi.mocked(ElMessage.warning).mockReset()
         vi.mocked(ElMessageBox.confirm).mockReset()
+        formValid.ok = true
     })
 
     it('非完整薪資角色不載入跨員工資料並顯示拒絕狀態', async () => {
@@ -305,6 +322,7 @@ describe('GrowthContractView', () => {
         const vm = wrapper.vm as unknown as ViewVm
 
         vm.openHourDialog()
+        await flushPromises() // 等 FormDialog 內的 el-form ref 綁定
         vm.hourForm.employee_id = 2
         vm.hourForm.activity_date = '2026-09-01'
         vm.hourForm.hours = 3.5
@@ -328,16 +346,19 @@ describe('GrowthContractView', () => {
         expect(getGrowthPreviewMock.mock.calls.length).toBeGreaterThanOrEqual(2)
     })
 
-    it('新增時數欄位未填齊時不送出，顯示提醒', async () => {
+    it('新增時數表單驗證不過時不送出，對話框保持開啟', async () => {
         const wrapper = mountView()
         await flushPromises()
         const vm = wrapper.vm as unknown as ViewVm
         vm.openHourDialog()
+        await flushPromises()
         // employee_id 未選
+        formValid.ok = false
         await vm.submitHour()
         await flushPromises()
         expect(createGrowthHourMock).not.toHaveBeenCalled()
-        expect(ElMessage.warning).toHaveBeenCalled()
+        expect(vm.hourDialogVisible).toBe(true)
+        expect(vm.hourSaving).toBe(false)
     })
 
     it('編輯既有時數登記呼叫 patchGrowthHour（不含 employee_id，後端不允許改員工）', async () => {
@@ -348,6 +369,7 @@ describe('GrowthContractView', () => {
         const vm = wrapper.vm as unknown as ViewVm
 
         vm.openHourDialog(vm.hourRows[0])
+        await flushPromises()
         vm.hourForm.hours = 4
         await vm.submitHour()
         await flushPromises()
@@ -550,6 +572,7 @@ describe('GrowthContractView', () => {
         const vm = wrapper.vm as unknown as ViewVm
 
         vm.openSignedOnDialog(vm.previewRows[0])
+        await flushPromises()
         vm.signedOnDate = '2026-09-01'
         await vm.saveSignedOn()
         await flushPromises()
@@ -576,6 +599,7 @@ describe('GrowthContractView', () => {
         const vm = wrapper.vm as unknown as ViewVm
 
         vm.openSignedOnDialog(vm.previewRows[0])
+        await flushPromises()
         await vm.clearSignedOn()
         await flushPromises()
 
@@ -590,6 +614,7 @@ describe('GrowthContractView', () => {
         const vm = wrapper.vm as unknown as ViewVm
 
         vm.openSignedOnDialog(vm.previewRows[0])
+        await flushPromises()
         await vm.clearSignedOn()
         await flushPromises()
 
@@ -859,5 +884,393 @@ describe('GrowthContractView 頁面文案與現況一致', () => {
         await flushPromises()
 
         expect(wrapper.text()).not.toContain('不發放')
+    })
+})
+
+// ============================================================================
+// 2026-10-29 UI/UX：載入失敗錯誤態、寫入失敗提示、已發放員工異動確認、FormDialog 化
+// ============================================================================
+
+const apiError = (status = 500) => Object.assign(new Error('boom'), { response: { status, data: {} } })
+
+describe('GrowthContractView 載入失敗不可偽裝成空資料', () => {
+    beforeEach(() => {
+        vi.setSystemTime(FIXED_NOW)
+        hasPermissionMock.mockReset().mockReturnValue(true)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
+        listGrowthHoursMock.mockReset().mockResolvedValue({ data: { items: [] } })
+        getGrowthPreviewMock.mockReset().mockResolvedValue({ data: previewFixture() })
+        settleGrowthContractMock.mockReset()
+        listExtraBonusesMock.mockReset().mockResolvedValue({ data: { items: [], total_amount: 0 } })
+        vi.mocked(ElMessage.error).mockReset()
+        vi.mocked(ElMessage.warning).mockReset()
+        vi.mocked(ElMessageBox.confirm).mockReset()
+        formValid.ok = true
+    })
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('研習時數載入失敗：顯示錯誤態，不說「尚無時數登記」；重試成功後顯示列表', async () => {
+        listGrowthHoursMock.mockRejectedValueOnce(apiError())
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        expect(vm.hoursError).toBe(true)
+        expect(wrapper.text()).toContain('研習時數載入失敗')
+        expect(wrapper.findAll('.empty-state__title').map((t) => t.text())).not.toContain('尚無時數登記')
+
+        listGrowthHoursMock.mockResolvedValueOnce({ data: { items: [growthHour()] } })
+        await wrapper.find('[data-test="load-error-retry"]').trigger('click')
+        await flushPromises()
+        expect(vm.hoursError).toBe(false)
+        expect(wrapper.text()).toContain('幼兒發展研習')
+    })
+
+    it('結算預覽載入失敗：清掉舊列、不顯示「查無資料」、擋下結算且不送 API', async () => {
+        getGrowthPreviewMock.mockRejectedValueOnce(apiError())
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        expect(vm.previewError).toBe(true)
+        expect(vm.previewRows).toEqual([])
+        expect(wrapper.text()).toContain('結算預覽載入失敗')
+        expect(wrapper.findAll('.empty-state__title').map((t) => t.text())).not.toContain('查無資料')
+        expect(vm.settleDisabled).toBe(true)
+        // 失敗時不顯示金額試算規則（那是上一份預覽的內容）
+        expect(wrapper.find('.pending-rule-alert').exists()).toBe(false)
+
+        await vm.doSettle()
+        expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+        expect(settleGrowthContractMock).not.toHaveBeenCalled()
+        expect(ElMessage.warning).toHaveBeenCalled()
+    })
+
+    it('切換學年後預覽載入失敗：不會把上一學年的人與金額留在新學年底下', async () => {
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        expect(vm.previewRows).toHaveLength(1)
+
+        getGrowthPreviewMock.mockRejectedValueOnce(apiError())
+        vm.schoolYear = 114
+        await flushPromises()
+
+        expect(vm.previewRows).toEqual([])
+        expect(vm.previewError).toBe(true)
+        expect(vm.settleDisabled).toBe(true)
+    })
+
+    it('預覽重試成功後恢復，可再結算', async () => {
+        getGrowthPreviewMock.mockRejectedValueOnce(apiError())
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        expect(vm.settleDisabled).toBe(true)
+
+        await wrapper.find('[data-test="load-error-retry"]').trigger('click')
+        await flushPromises()
+
+        expect(vm.previewError).toBe(false)
+        expect(vm.previewRows).toHaveLength(1)
+        expect(vm.settleDisabled).toBe(false)
+    })
+
+    it('已發放明細載入失敗：顯示錯誤態，不說「查無已發放明細」', async () => {
+        listExtraBonusesMock.mockRejectedValueOnce(apiError())
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        expect(vm.extraBonusError).toBe(true)
+        expect(wrapper.text()).toContain('已發放明細載入失敗')
+        expect(wrapper.findAll('.empty-state__title').map((t) => t.text())).not.toContain('查無已發放明細')
+
+        listExtraBonusesMock.mockResolvedValueOnce({ data: { items: [extraBonusRow()], total_amount: 7440 } })
+        await wrapper.find('[data-test="load-error-retry"]').trigger('click')
+        await flushPromises()
+        expect(vm.extraBonusError).toBe(false)
+        expect(wrapper.text()).toContain('林慧慈')
+    })
+
+    it('切換學年時清掉上一學年的結算結果', async () => {
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        settleGrowthContractMock.mockResolvedValue({
+            data: { school_year: 115, paid_period: '115-08', created: [], skipped_already_paid: [], total_amount: 0 },
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        await vm.doSettle()
+        await flushPromises()
+        expect(vm.settleResult).not.toBeNull()
+
+        vm.schoolYear = 114
+        await flushPromises()
+        expect(vm.settleResult).toBeNull()
+    })
+})
+
+describe('GrowthContractView 寫入失敗提示與防連點', () => {
+    beforeEach(() => {
+        vi.setSystemTime(FIXED_NOW)
+        hasPermissionMock.mockReset().mockReturnValue(true)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
+        listGrowthHoursMock.mockReset().mockResolvedValue({ data: { items: [growthHour()] } })
+        getGrowthPreviewMock.mockReset().mockResolvedValue({ data: previewFixture() })
+        createGrowthHourMock.mockReset()
+        patchGrowthHourMock.mockReset()
+        patchSignedOnMock.mockReset()
+        listExtraBonusesMock.mockReset().mockResolvedValue({ data: { items: [], total_amount: 0 } })
+        vi.mocked(ElMessage.success).mockReset()
+        vi.mocked(ElMessage.error).mockReset()
+        vi.mocked(ElMessageBox.confirm).mockReset()
+        formValid.ok = true
+    })
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    const fillHour = (vm: ViewVm) => {
+        vm.hourForm.employee_id = 2
+        vm.hourForm.activity_date = '2026-09-01'
+        vm.hourForm.hours = 3.5
+        vm.hourForm.title = '  幼兒發展研習  '
+    }
+
+    it('新增時數送出失敗：顯示錯誤提示、對話框保留輸入、可再次送出', async () => {
+        createGrowthHourMock.mockRejectedValueOnce(apiError(422))
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openHourDialog()
+        await flushPromises()
+        fillHour(vm)
+
+        await vm.submitHour()
+        await flushPromises()
+
+        expect(ElMessage.error).toHaveBeenCalledTimes(1)
+        expect(String(vi.mocked(ElMessage.error).mock.calls[0][0])).toContain('新增時數登記失敗')
+        expect(vm.hourDialogVisible).toBe(true)
+        expect(vm.hourForm.hours).toBe(3.5)
+        expect(vm.hourSaving).toBe(false)
+
+        createGrowthHourMock.mockResolvedValueOnce({ data: growthHour() })
+        await vm.submitHour()
+        await flushPromises()
+        // 課程名稱送出前去除前後空白
+        expect(createGrowthHourMock).toHaveBeenLastCalledWith(expect.objectContaining({ title: '幼兒發展研習' }))
+        expect(vm.hourDialogVisible).toBe(false)
+    })
+
+    it('新增時數送出中連點只會新增一筆', async () => {
+        let resolveCreate: (v: unknown) => void = () => {}
+        createGrowthHourMock.mockImplementationOnce(() => new Promise((resolve) => { resolveCreate = resolve }))
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openHourDialog()
+        await flushPromises()
+        fillHour(vm)
+
+        const first = vm.submitHour()
+        const second = vm.submitHour()
+        await flushPromises()
+        expect(vm.hourSaving).toBe(true)
+        resolveCreate({ data: growthHour() })
+        await Promise.all([first, second])
+        await flushPromises()
+
+        expect(createGrowthHourMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('簽約日儲存失敗：顯示錯誤提示且對話框保留；表單驗證不過時不送出', async () => {
+        patchSignedOnMock.mockRejectedValueOnce(apiError(403))
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openSignedOnDialog(vm.previewRows[0])
+        await flushPromises()
+
+        formValid.ok = false
+        await vm.saveSignedOn()
+        expect(patchSignedOnMock).not.toHaveBeenCalled()
+
+        formValid.ok = true
+        vm.signedOnDate = '2026-10-01'
+        await vm.saveSignedOn()
+        await flushPromises()
+        expect(String(vi.mocked(ElMessage.error).mock.calls.at(-1)?.[0])).toContain('更新簽約日失敗')
+        expect(vm.signedOnDialogVisible).toBe(true)
+        expect(vm.signedOnSaving).toBe(false)
+    })
+
+    it('清空簽約日失敗：顯示錯誤提示且對話框保留', async () => {
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        patchSignedOnMock.mockRejectedValueOnce(apiError(500))
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openSignedOnDialog(vm.previewRows[0])
+        await flushPromises()
+
+        await vm.clearSignedOn()
+        await flushPromises()
+        expect(String(vi.mocked(ElMessage.error).mock.calls.at(-1)?.[0])).toContain('清空簽約日失敗')
+        expect(vm.signedOnDialogVisible).toBe(true)
+    })
+})
+
+describe('GrowthContractView 已發放員工的異動要先確認', () => {
+    // 結算是 per-employee 冪等：發過的員工再改時數／簽約日，已發金額不會變，也不會自動追扣或補發。
+    beforeEach(() => {
+        vi.setSystemTime(FIXED_NOW)
+        hasPermissionMock.mockReset().mockReturnValue(true)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
+        listGrowthHoursMock.mockReset().mockResolvedValue({ data: { items: [growthHour()] } })
+        getGrowthPreviewMock.mockReset().mockResolvedValue({ data: previewFixture() })
+        patchGrowthHourMock.mockReset().mockResolvedValue({ data: growthHour({ hours: 4 }) })
+        deleteGrowthHourMock.mockReset().mockResolvedValue({ data: { message: 'ok' } })
+        patchSignedOnMock.mockReset().mockResolvedValue({ data: {} })
+        // 員工 2（林慧慈）本學年已發放
+        listExtraBonusesMock.mockReset().mockResolvedValue({ data: { items: [extraBonusRow()], total_amount: 7440 } })
+        vi.mocked(ElMessageBox.confirm).mockReset()
+        formValid.ok = true
+    })
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('編輯已發放員工的時數：對話框顯示提醒，送出前再確認；取消就不送', async () => {
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openHourDialog(vm.hourRows[0])
+        await flushPromises()
+        expect(vm.hourPaidNotice).toContain('林慧慈')
+        expect(vm.hourPaidNotice).toContain('已發放')
+
+        vm.hourForm.hours = 4
+        vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+        await vm.submitHour()
+        await flushPromises()
+        expect(patchGrowthHourMock).not.toHaveBeenCalled()
+        expect(vm.hourDialogVisible).toBe(true)
+
+        vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+        await vm.submitHour()
+        await flushPromises()
+        expect(patchGrowthHourMock).toHaveBeenCalledTimes(1)
+        const [message] = vi.mocked(ElMessageBox.confirm).mock.calls.at(-1) ?? []
+        expect(String(message)).toContain('已發放的金額不會更動')
+    })
+
+    it('編輯尚未發放員工的時數：沒有額外確認', async () => {
+        listExtraBonusesMock.mockResolvedValue({ data: { items: [], total_amount: 0 } })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openHourDialog(vm.hourRows[0])
+        await flushPromises()
+        expect(vm.hourPaidNotice).toBe('')
+
+        vm.hourForm.hours = 4
+        await vm.submitHour()
+        await flushPromises()
+        expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+        expect(patchGrowthHourMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('刪除已發放員工的時數：確認文案帶「已發放」提醒', async () => {
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        await vm.confirmDeleteHour(vm.hourRows[0])
+        const [message] = vi.mocked(ElMessageBox.confirm).mock.calls[0]
+        expect(String(message)).toContain('已發放')
+        expect(String(message)).toContain('不會自動追扣')
+        expect(deleteGrowthHourMock).toHaveBeenCalledWith(1)
+    })
+
+    it('清空已發放員工的簽約日：確認文案帶「已發放」提醒', async () => {
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openSignedOnDialog(vm.previewRows[0])
+        await flushPromises()
+        expect(vm.signedOnPaidNotice).toContain('已發放')
+
+        await vm.clearSignedOn()
+        const [message] = vi.mocked(ElMessageBox.confirm).mock.calls[0]
+        expect(String(message)).toContain('已發放')
+    })
+
+    it('已發放明細載入失敗時不假裝知道誰已發放：不顯示提醒', async () => {
+        listExtraBonusesMock.mockRejectedValue(apiError())
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openHourDialog(vm.hourRows[0])
+        await flushPromises()
+        expect(vm.hourPaidNotice).toBe('')
+    })
+})
+
+// vitest 下真 ElForm.validate() 恆回 true，所以「規則有接上欄位」改斷言 EP 由規則推導出的 .is-required。
+describe('GrowthContractView 對話框必填欄位已接上規則（真 el-form）', () => {
+    const mountReal = () =>
+        mount(GrowthContractView, {
+            global: {
+                plugins: [ElementPlus],
+                stubs: {
+                    GrowthAdjustmentsPanel: true,
+                    'el-dialog': {
+                        props: ['modelValue'],
+                        template: '<div v-if="modelValue" class="dialog-stub"><slot /><slot name="footer" /></div>',
+                    },
+                    'el-table': { props: ['data'], template: '<div class="table-stub" />' },
+                },
+            },
+        })
+
+    beforeEach(() => {
+        vi.setSystemTime(FIXED_NOW)
+        hasPermissionMock.mockReset().mockReturnValue(true)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
+        listGrowthHoursMock.mockReset().mockResolvedValue({ data: { items: [] } })
+        getGrowthPreviewMock.mockReset().mockResolvedValue({ data: previewFixture() })
+        listExtraBonusesMock.mockReset().mockResolvedValue({ data: { items: [], total_amount: 0 } })
+    })
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('時數登記：員工、學年、學期、日期、時數、課程名稱必填', async () => {
+        const wrapper = mountReal()
+        await flushPromises()
+        ;(wrapper.vm as unknown as ViewVm).openHourDialog()
+        await flushPromises()
+
+        const items = wrapper.findAllComponents({ name: 'ElFormItem' })
+        const required = items.filter((c) => c.classes().includes('is-required')).map((c) => c.props('prop'))
+        expect(required).toEqual(['employee_id', 'school_year', 'semester', 'activity_date', 'hours', 'title'])
+    })
+
+    it('簽約日維護：簽約日必填（要撤銷走「清空簽約日」）', async () => {
+        const wrapper = mountReal()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openSignedOnDialog(vm.previewRows[0])
+        await flushPromises()
+
+        const items = wrapper.findAllComponents({ name: 'ElFormItem' })
+        const required = items.filter((c) => c.classes().includes('is-required')).map((c) => c.props('prop'))
+        expect(required).toEqual(['date'])
     })
 })

@@ -16,6 +16,7 @@
     </PageHeader>
 
     <el-alert
+      v-if="!previewError"
       class="pending-rule-alert"
       type="warning"
       show-icon
@@ -23,7 +24,7 @@
       title="金額試算規則"
       :description="pendingRule || DEFAULT_PENDING_RULE"
     />
-    <p v-if="paidPeriod" class="paid-period-hint">將於 {{ paidPeriod }} 發放</p>
+    <p v-if="paidPeriod && !previewError" class="paid-period-hint">將於 {{ paidPeriod }} 發放</p>
 
     <section class="hours-section">
       <div class="section-header">
@@ -35,34 +36,45 @@
             filterable
             placeholder="全部員工"
             aria-label="依員工篩選"
-            style="width: 160px"
+            class="hours-filter"
           >
             <el-option v-for="emp in employeeOptions" :key="emp.id" :value="emp.id" :label="emp.name" />
           </el-select>
-          <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openHourDialog()">新增時數</el-button>
+          <AdminCreateButton v-if="canWrite" @click="openHourDialog()">新增時數</AdminCreateButton>
         </div>
       </div>
 
+      <LoadErrorState
+        v-if="hoursError"
+        compact
+        title="研習時數載入失敗"
+        description="載入成功前請勿視為沒有登記過時數，請重新載入。"
+        :retrying="hoursLoading"
+        @retry="fetchHours"
+      />
       <EmptyState
-        v-if="!hoursLoading && hourTableData.length === 0"
+        v-else-if="!hoursLoading && hourTableData.length === 0"
         variant="inline"
         title="尚無時數登記"
-        description="點右上角「新增時數」開始登記研習時數"
+        :description="canWrite ? '點右上角「新增時數」開始登記研習時數' : '本學年尚未登記研習時數'"
       />
-      <el-table v-else v-loading="hoursLoading" :data="hourTableData" stripe style="width: 100%">
-        <el-table-column prop="employee_name" label="員工" min-width="120" />
-        <el-table-column prop="semesterLabel" label="學期" width="90" />
-        <el-table-column prop="activity_date" label="日期" width="110" />
-        <el-table-column prop="hours" label="時數" width="80" />
-        <el-table-column prop="title" label="課程／研習名稱" min-width="160" />
-        <el-table-column prop="note" label="備註" min-width="140" />
-        <el-table-column v-if="canWrite" label="操作" width="140" fixed="right">
-          <template #default="{ row }">
-            <el-button link size="small" @click="openHourDialog(row)">編輯</el-button>
-            <el-button link size="small" type="danger" @click="confirmDeleteHour(row)">刪除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template v-else>
+        <p class="scroll-hint">表格可左右滑動，查看全部欄位</p>
+        <el-table v-loading="hoursLoading" :data="hourTableData" stripe style="width: 100%">
+          <el-table-column prop="employee_name" label="員工" min-width="120" fixed />
+          <el-table-column prop="semesterLabel" label="學期" width="90" />
+          <el-table-column prop="activity_date" label="日期" width="110" />
+          <el-table-column prop="hours" label="時數" width="80" />
+          <el-table-column prop="title" label="課程／研習名稱" min-width="160" />
+          <el-table-column prop="note" label="備註" min-width="140" />
+          <el-table-column v-if="canWrite" label="操作" width="140" fixed="right">
+            <template #default="{ row }">
+              <el-button link size="small" @click="openHourDialog(row)">編輯</el-button>
+              <el-button link size="small" type="danger" @click="confirmDeleteHour(row)">刪除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
     </section>
 
     <section class="preview-section">
@@ -72,7 +84,7 @@
           <el-checkbox v-model="onlyEligiblePayable">只顯示符合資格且金額 &gt; 0</el-checkbox>
           <el-button
             v-if="canWrite"
-            type="danger"
+            type="primary"
             :loading="settling"
             :disabled="settleDisabled"
             @click="doSettle"
@@ -90,106 +102,136 @@
         :description="settleSelfSkipDescription"
       />
 
+      <LoadErrorState
+        v-if="previewError"
+        compact
+        title="結算預覽載入失敗"
+        description="載入成功前無法結算，也請勿視為沒有符合資格的人，請重新載入。"
+        :retrying="previewLoading"
+        @retry="fetchPreview"
+      />
       <EmptyState
-        v-if="!previewLoading && previewTableData.length === 0"
+        v-else-if="!previewLoading && previewTableData.length === 0"
         variant="inline"
         title="查無資料"
         description="該學年查無在職或於學年內離職的員工，或篩選條件下無符合資格者"
       />
-      <el-table v-else v-loading="previewLoading" :data="previewTableData" stripe style="width: 100%">
-        <el-table-column label="員工" min-width="130">
-          <template #default="{ row }">
-            {{ row.employee_name }}
-            <span v-if="row.position_unknown" class="badge-unknown">職務未知</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="職務月額" width="110">
-          <template #default="{ row }">
-            {{ row.monthlyRateLabel }}
-            <div v-if="row.rate_overridden" class="amount-cell__hint" title="學年中有職務異動月額覆寫，金額依逐月月額小計">
-              有異動覆寫・小計 {{ row.subtotalLabel }}
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="required_hours" label="應修時數" width="90" />
-        <el-table-column label="實際時數" width="140">
-          <template #default="{ row }">
-            {{ row.actual_hours }}
-            <div v-for="label in row.semesterLabels" :key="label" class="amount-cell__hint">{{ label }}</div>
-          </template>
-        </el-table-column>
-        <el-table-column label="時數比例" width="90">
-          <template #default="{ row }">{{ row.hoursRatioLabel }}</template>
-        </el-table-column>
-        <el-table-column prop="tenure_months" label="在職月數" width="90" />
-        <el-table-column label="資格條件" min-width="240">
-          <template #default="{ row }">
-            <span
-              v-for="g in row.gateItems"
-              :key="g.code"
-              class="gate-tag"
-              :class="g.cls"
-              :title="`${g.label}：${g.detail}`"
-            >{{ g.symbol }} {{ g.label }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="金額（試算）" width="180">
-          <template #default="{ row }">
-            <div class="amount-cell">
-              <strong>{{ row.amountLabel }}</strong>
-              <span class="amount-cell__badge">試算</span>
-              <div v-if="row.amountHintLabel" class="amount-cell__hint">{{ row.amountHintLabel }}</div>
-              <div
-                v-if="row.deduction_amount > 0"
-                class="amount-cell__hint"
-                :title="row.deductionDetail"
-              >含扣抵 −{{ row.deductionLabel }}</div>
-              <div v-if="row.deduction_unapplied > 0" class="amount-cell__warn">
-                ⚠ 扣不完 {{ row.deductionUnappliedLabel }}
-              </div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="資格" width="90">
-          <template #default="{ row }">
-            <el-tag :type="row.eligible ? 'success' : 'info'">{{ row.eligibleLabel }}</el-tag>
-          </template>
-        </el-table-column>
-        <!-- 義華 Q14：節慶未扣餘額（不足額結轉）可勾選以本次獎勵金扣抵；不勾不扣 -->
-        <el-table-column v-if="hasPendingCarry" label="節慶未扣餘額" width="150">
-          <template #default="{ row }">
-            <template v-if="row.pending_festival_carry > 0">
-              <div>{{ row.pendingCarryLabel }}</div>
-              <el-checkbox
-                v-if="canWrite && row.eligible && row.amount > 0"
-                :model-value="carryOffsetIds.includes(row.employee_id)"
-                size="small"
-                :aria-label="`${row.employee_name} 結算時扣抵節慶未扣餘額`"
-                @update:model-value="(v: string | number | boolean) => toggleCarryOffset(row.employee_id, v === true)"
-              >結算時扣抵</el-checkbox>
+      <template v-else>
+        <p class="scroll-hint">表格可左右滑動，查看全部欄位</p>
+        <el-table v-loading="previewLoading" :data="previewTableData" stripe style="width: 100%">
+          <el-table-column label="員工" min-width="130" fixed>
+            <template #default="{ row }">
+              {{ row.employee_name }}
+              <span v-if="row.position_unknown" class="badge-unknown">職務未知</span>
             </template>
-            <span v-else class="hint">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column v-if="canWrite" label="簽約日" width="90" fixed="right">
-          <template #default="{ row }">
-            <el-button link size="small" @click="openSignedOnDialog(row)">設定</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+          </el-table-column>
+          <el-table-column label="職務月額" width="110">
+            <template #default="{ row }">
+              {{ row.monthlyRateLabel }}
+              <div v-if="row.rate_overridden" class="amount-cell__hint" title="學年中有職務異動月額覆寫，金額依逐月月額小計">
+                有異動覆寫・小計 {{ row.subtotalLabel }}
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="required_hours" label="應修時數" width="90" />
+          <el-table-column label="實際時數" width="140">
+            <template #default="{ row }">
+              {{ row.actual_hours }}
+              <div v-for="label in row.semesterLabels" :key="label" class="amount-cell__hint">{{ label }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="時數比例" width="90">
+            <template #default="{ row }">{{ row.hoursRatioLabel }}</template>
+          </el-table-column>
+          <el-table-column prop="tenure_months" label="在職月數" width="90" />
+          <el-table-column label="資格條件" min-width="240">
+            <template #default="{ row }">
+              <span
+                v-for="g in row.gateItems"
+                :key="g.code"
+                class="gate-tag"
+                :class="g.cls"
+                :title="`${g.label}：${g.detail}`"
+              >{{ g.symbol }} {{ g.label }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="金額（試算）" width="180">
+            <template #default="{ row }">
+              <div class="amount-cell">
+                <strong>{{ row.amountLabel }}</strong>
+                <span class="amount-cell__badge">試算</span>
+                <div v-if="row.amountHintLabel" class="amount-cell__hint">{{ row.amountHintLabel }}</div>
+                <div
+                  v-if="row.deduction_amount > 0"
+                  class="amount-cell__hint"
+                  :title="row.deductionDetail"
+                >含扣抵 −{{ row.deductionLabel }}</div>
+                <div v-if="row.deduction_unapplied > 0" class="amount-cell__warn">
+                  ⚠ 扣不完 {{ row.deductionUnappliedLabel }}
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="資格" width="90">
+            <template #default="{ row }">
+              <el-tag :type="row.eligible ? 'success' : 'info'">{{ row.eligibleLabel }}</el-tag>
+            </template>
+          </el-table-column>
+          <!-- 義華 Q14：節慶未扣餘額（不足額結轉）可勾選以本次獎勵金扣抵；不勾不扣 -->
+          <el-table-column v-if="hasPendingCarry" label="節慶未扣餘額" width="150">
+            <template #default="{ row }">
+              <template v-if="row.pending_festival_carry > 0">
+                <div>{{ row.pendingCarryLabel }}</div>
+                <el-checkbox
+                  v-if="canWrite && row.eligible && row.amount > 0"
+                  :model-value="carryOffsetIds.includes(row.employee_id)"
+                  size="small"
+                  :aria-label="`${row.employee_name} 結算時扣抵節慶未扣餘額`"
+                  @update:model-value="(v: string | number | boolean) => toggleCarryOffset(row.employee_id, v === true)"
+                >結算時扣抵</el-checkbox>
+              </template>
+              <span v-else class="hint">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="簽約日" width="130" fixed="right">
+            <template #default="{ row }">
+              <div class="signed-on-cell">
+                <span :class="{ 'signed-on-cell__empty': !row.signed_on }">{{ row.signed_on || '未簽約' }}</span>
+                <el-button
+                  v-if="canWrite"
+                  link
+                  size="small"
+                  type="primary"
+                  :aria-label="`設定 ${row.employee_name} 的簽約日`"
+                  @click="openSignedOnDialog(row)"
+                >{{ row.signed_on ? '修改' : '設定' }}</el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
     </section>
 
     <GrowthAdjustmentsPanel
       :school-year="schoolYear"
       :can-write="canWrite"
       :employee-options="employeeOptions"
+      :paid-employee-ids="paidEmployeeIdList"
       @changed="fetchPreview"
     />
 
     <section class="paid-section">
-      <h3>已發放明細（表外獎金－自主成長獎勵金）</h3>
+      <h3>已發放明細（獨立轉帳）</h3>
+      <LoadErrorState
+        v-if="extraBonusError"
+        compact
+        title="已發放明細載入失敗"
+        description="載入成功前請勿視為尚未發放，請重新載入。"
+        :retrying="extraBonusLoading"
+        @retry="fetchSettledPayments"
+      />
       <EmptyState
-        v-if="!extraBonusLoading && extraBonusItems.length === 0"
+        v-else-if="!extraBonusLoading && extraBonusItems.length === 0"
         variant="inline"
         title="查無已發放明細"
         description="尚未結算過，或該學年對應的發放年月查無紀錄"
@@ -207,68 +249,105 @@
     </section>
 
     <!-- 新增／編輯時數 dialog -->
-    <el-dialog v-model="hourDialogVisible" :title="hourForm.id != null ? '編輯時數登記' : '新增時數登記'" width="480px">
-      <el-form :model="hourForm" label-width="100px">
-        <el-form-item label="員工">
+    <FormDialog
+      ref="hourDialogRef"
+      v-model="hourDialogVisible"
+      :title="hourForm.id != null ? '編輯時數登記' : '新增時數登記'"
+      size="standardNarrow"
+      :submit-text="hourForm.id != null ? '儲存' : '新增'"
+      :dirty="hourDirty"
+      :loading="hourSaving"
+      :enter-submit="false"
+      @submit="submitHour"
+    >
+      <el-alert
+        v-if="hourPaidNotice"
+        class="paid-impact-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="hourPaidNotice"
+      />
+      <el-form ref="hourFormRef" :model="hourForm" :rules="hourRules" label-position="top" class="form-grid" @submit.prevent>
+        <el-form-item label="員工" prop="employee_id" class="fg-12">
           <el-select v-model="hourForm.employee_id" filterable :disabled="hourForm.id != null" style="width: 100%">
             <el-option v-for="emp in employeeOptions" :key="emp.id" :value="emp.id" :label="emp.name" />
           </el-select>
         </el-form-item>
-        <el-form-item label="學年">
+        <el-form-item label="學年" prop="school_year" class="fg-6">
           <el-input-number v-model="hourForm.school_year" :min="100" :max="200" controls-position="right" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="學期">
+        <el-form-item label="學期" prop="semester" class="fg-6">
           <el-select v-model="hourForm.semester" style="width: 100%">
             <el-option :value="1" label="上學期" />
             <el-option :value="2" label="下學期" />
           </el-select>
         </el-form-item>
-        <el-form-item label="研習日期">
+        <el-form-item label="研習日期" prop="activity_date" class="fg-6">
           <el-date-picker v-model="hourForm.activity_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="時數">
+        <el-form-item label="時數" prop="hours" class="fg-6">
           <el-input-number v-model="hourForm.hours" :min="0.5" :step="0.5" controls-position="right" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="課程名稱">
-          <el-input v-model="hourForm.title" />
+        <el-form-item label="課程名稱" prop="title" class="fg-12">
+          <el-input v-model="hourForm.title" maxlength="200" />
         </el-form-item>
-        <el-form-item label="備註">
+        <el-form-item label="備註" class="fg-12">
           <el-input v-model="hourForm.note" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="hourDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitHour">{{ hourForm.id != null ? '儲存' : '新增' }}</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
 
     <!-- 簽約日維護 dialog -->
-    <el-dialog v-model="signedOnDialogVisible" title="簽約日維護" width="360px">
-      <p v-if="signedOnTarget" class="hint">{{ signedOnTarget.employee_name }}</p>
-      <el-date-picker
-        v-model="signedOnDate"
-        type="date"
-        value-format="YYYY-MM-DD"
-        placeholder="未簽約"
-        style="width: 100%"
-      />
-      <p class="hint">留空並按「清空簽約日」可撤銷成未簽約；未變更則按「取消」。</p>
-      <template #footer>
-        <el-button type="danger" plain @click="clearSignedOn">清空簽約日</el-button>
-        <el-button @click="signedOnDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveSignedOn">儲存</el-button>
+    <FormDialog
+      ref="signedOnDialogRef"
+      v-model="signedOnDialogVisible"
+      title="簽約日維護"
+      size="compact"
+      :dirty="signedOnDirty"
+      :loading="signedOnSaving"
+      :enter-submit="false"
+      @submit="saveSignedOn"
+    >
+      <template #footer-extra>
+        <el-button type="danger" plain :disabled="signedOnSaving" @click="clearSignedOn">清空簽約日</el-button>
       </template>
-    </el-dialog>
+      <el-alert
+        v-if="signedOnPaidNotice"
+        class="paid-impact-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="signedOnPaidNotice"
+      />
+      <p v-if="signedOnTarget" class="signed-on-target">{{ signedOnTarget.employee_name }}</p>
+      <el-form ref="signedOnFormRef" :model="signedOnForm" :rules="signedOnRules" label-position="top" @submit.prevent>
+        <el-form-item label="簽約日" prop="date">
+          <el-date-picker
+            v-model="signedOnForm.date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="未簽約"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <p class="hint">要撤銷成未簽約，請按「清空簽約日」；日期沒有變更就按「取消」。</p>
+    </FormDialog>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import AdminCreateButton from '@/components/common/AdminCreateButton.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
+import LoadErrorState from '@/components/salary/LoadErrorState.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { required } from '@/validators/rules'
 import GrowthAdjustmentsPanel from './components/GrowthAdjustmentsPanel.vue'
 import { semesterProgressLabels } from './growthAdjustments'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
@@ -290,7 +369,7 @@ import type { ApiBody, Schema } from '@/api/_generated/typed'
 
 // 自主成長獎勵金頁（計畫 Task 11 + 業主 2026-08-14 裁定發放）：學年選擇 → 時數登記
 // （dialog CRUD）與簽約日維護（可設可清空）→ 學年結算預覽（動態試算）→ 結算
-// （POST /growth-contract/settle，per-employee 冪等，寫入表外獎金獨立轉帳）→
+// （POST /growth-contract/settle，per-employee 冪等，寫入表外獎金獨立轉帳；畫面稱「獨立轉帳」）→
 // 已發放明細（GET /extra-bonuses?category=growth_contract）。`pending_rule` 警示條
 // 仍是刻意的制度標記，但金額語意已由業主確認、不再是「待確認、不可發放」，內容一律
 // 以後端回傳原文為準，前端不可再寫死「未發放」這類與「已可結算」矛盾的固定文案。
@@ -311,7 +390,7 @@ interface EmployeeOption {
 }
 
 const DEFAULT_PENDING_RULE =
-    '金額依「每月提撥×在職月數」與各項資格條件計算；結算後將寫入表外獎金獨立轉帳，實際入帳金額以結算結果為準。'
+    '金額依「每月提撥×在職月數」與各項資格條件計算；結算後以獨立轉帳發放（不併入月薪），實際入帳金額以結算結果為準。'
 
 const SEMESTER_LABELS: Record<number, string> = { 1: '上學期', 2: '下學期' }
 // 資格條件 code → 短標籤（用於資格條件欄的 tag 文字）。
@@ -347,6 +426,10 @@ const canWrite = computed(
 const employeeStore = useEmployeeStore()
 const employeeOptions = computed<EmployeeOption[]>(() => (employeeStore.employees || []) as EmployeeOption[])
 
+// 表單是否通過驗證。ref 未綁定（dialog 尚未渲染）視同失敗（fail-closed）。
+const isFormValid = async (form: FormInstance | undefined): Promise<boolean> =>
+    form ? await form.validate().catch(() => false) : false
+
 // ---- 學年 ----
 const baseSchoolYear = currentSchoolYear()
 const schoolYear = ref(baseSchoolYear)
@@ -355,6 +438,8 @@ const schoolYearOptions = computed(() => [baseSchoolYear - 1, baseSchoolYear, ba
 // ---- 時數登記 ----
 const hourRows = ref<GrowthHour[]>([])
 const hoursLoading = ref(false)
+// 載入失敗不可退回「尚無時數登記」，也不可留著上一個學年的列
+const hoursError = ref(false)
 const hoursEmployeeFilter = ref<number | null>(null)
 const hourTableData = computed(() =>
     hourRows.value.map((row) => ({
@@ -370,6 +455,7 @@ const fetchHours = async () => {
     if (!canViewFullSalary.value) return
     const seq = ++hoursSeq
     hoursLoading.value = true
+    hoursError.value = false
     try {
         const res = await listGrowthHours({
             school_year: schoolYear.value,
@@ -379,6 +465,8 @@ const fetchHours = async () => {
         hourRows.value = res.data.items
     } catch (e) {
         if (seq !== hoursSeq) return
+        hourRows.value = []
+        hoursError.value = true
         ElMessage.error(friendlyError('載入時數登記失敗', e))
     } finally {
         if (seq === hoursSeq) hoursLoading.value = false
@@ -388,6 +476,8 @@ const fetchHours = async () => {
 // ---- 結算預覽 ----
 const previewRows = ref<GrowthPreviewRow[]>([])
 const previewLoading = ref(false)
+// 預覽失敗時一定要清掉舊列：結算確認的人數／金額是從預覽列算的，留著舊學年的列等於拿錯的數字請人確認
+const previewError = ref(false)
 const pendingRule = ref('')
 const paidPeriod = ref('')
 const onlyEligiblePayable = ref(false)
@@ -397,6 +487,7 @@ const fetchPreview = async () => {
     if (!canViewFullSalary.value) return
     const seq = ++previewSeq
     previewLoading.value = true
+    previewError.value = false
     try {
         const res = await getGrowthPreview(schoolYear.value)
         if (seq !== previewSeq) return
@@ -412,6 +503,13 @@ const fetchPreview = async () => {
         fetchSettledPayments()
     } catch (e) {
         if (seq !== previewSeq) return
+        previewRows.value = []
+        carryOffsetIds.value = []
+        pendingRule.value = ''
+        paidPeriod.value = ''
+        extraBonusItems.value = []
+        extraBonusError.value = false
+        previewError.value = true
         ElMessage.error(friendlyError('載入結算預覽失敗', e))
     } finally {
         if (seq === previewSeq) previewLoading.value = false
@@ -489,7 +587,9 @@ const settleResult = ref<GrowthSettleResult | null>(null)
 // 的列本來就不會被後端寫入，計入確認文案裡只會誤導 HR。
 const settleTargets = computed(() => previewRows.value.filter((r) => r.eligible && r.amount > 0))
 const settleTotalAmount = computed(() => settleTargets.value.reduce((sum, r) => sum + r.amount, 0))
-const settleDisabled = computed(() => settleTargets.value.length === 0)
+const settleDisabled = computed(
+    () => settleTargets.value.length === 0 || previewLoading.value || previewError.value,
+)
 
 // ---- 節慶未扣餘額扣抵（義華 Q14）：預覽每列帶 pending_festival_carry，HR 勾選才扣抵；
 // 未開結轉開關時傳入勾選後端回 422。實發 amount 為扣抵後金額。 ----
@@ -532,6 +632,10 @@ const settleSelfSkipDescription = computed(() => {
 })
 
 const doSettle = async () => {
+    if (previewLoading.value || previewError.value) {
+        ElMessage.warning('結算預覽尚未載入完成，請稍候或重新載入後再結算')
+        return
+    }
     if (settleTargets.value.length === 0) {
         ElMessage.warning('目前查無符合資格且金額大於 0 的員工，無需結算')
         return
@@ -569,6 +673,8 @@ const doSettle = async () => {
 // ---- 已發放明細（表外獎金，category=growth_contract） ----
 const extraBonusItems = ref<ExtraBonusRow[]>([])
 const extraBonusLoading = ref(false)
+// 失敗時不能顯示「查無已發放明細」，否則會被誤讀成「還沒發」
+const extraBonusError = ref(false)
 const extraBonusTableData = computed(() =>
     extraBonusItems.value.map((row) => ({ ...row, amountLabel: formatCurrency(row.amount) })),
 )
@@ -583,12 +689,15 @@ const fetchSettledPayments = async () => {
     if (!year || !month) return
     const seq = ++extraBonusSeq
     extraBonusLoading.value = true
+    extraBonusError.value = false
     try {
         const res = await listExtraBonuses({ year, month, category: 'growth_contract' })
         if (seq !== extraBonusSeq) return
         extraBonusItems.value = res.data.items
     } catch (e) {
         if (seq !== extraBonusSeq) return
+        extraBonusItems.value = []
+        extraBonusError.value = true
         ElMessage.error(friendlyError('載入已發放明細失敗', e))
     } finally {
         if (seq === extraBonusSeq) extraBonusLoading.value = false
@@ -597,12 +706,43 @@ const fetchSettledPayments = async () => {
 
 watch(schoolYear, () => {
     if (!canViewFullSalary.value) return
+    settleResult.value = null // 上一個學年的結算結果不可掛在新學年底下
     fetchHours()
     fetchPreview()
 })
 watch(hoursEmployeeFilter, () => {
     if (canViewFullSalary.value) fetchHours()
 })
+
+// ---- 已發放員工的異動提醒 ----
+// 結算是 per-employee 冪等：發過的員工再改時數／簽約日，已發金額不會變、也不會自動追扣或補發。
+// 行政常以為「改了就會重算」，所以對已發放員工的寫入，先講清楚再讓他確認。
+const paidEmployeeIds = computed(() => new Set(extraBonusItems.value.map((i) => Number(i.employee_id))))
+const paidEmployeeIdList = computed<number[]>(() => (extraBonusError.value ? [] : [...paidEmployeeIds.value]))
+const isPaidEmployee = (employeeId: number | null | undefined, year: number): boolean =>
+    employeeId != null && year === schoolYear.value && !extraBonusError.value && paidEmployeeIds.value.has(employeeId)
+const employeeNameOf = (employeeId: number | null | undefined): string =>
+    employeeOptions.value.find((e) => e.id === employeeId)?.name ??
+    extraBonusItems.value.find((i) => i.employee_id === employeeId)?.employee_name ??
+    '此員工'
+const PAID_IMPACT_NOTE = '已發放的金額不會更動，也不會自動追扣或補發；若需調整，請另行人工處理。'
+const confirmPaidImpact = async (
+    employeeId: number | null | undefined,
+    year: number,
+    actionLabel: string,
+): Promise<boolean> => {
+    if (!isPaidEmployee(employeeId, year)) return true
+    try {
+        await ElMessageBox.confirm(
+            `${employeeNameOf(employeeId)} 本學年的自主成長獎勵金已發放。${actionLabel}後，${PAID_IMPACT_NOTE}確定繼續？`,
+            '已發放員工的異動確認',
+            { confirmButtonText: '確定繼續', cancelButtonText: '取消', type: 'warning' },
+        )
+        return true
+    } catch {
+        return false
+    }
+}
 
 // ---- 時數 dialog ----
 interface HourForm {
@@ -616,6 +756,9 @@ interface HourForm {
     note: string
 }
 const hourDialogVisible = ref(false)
+const hourSaving = ref(false)
+const hourFormRef = ref<FormInstance>()
+const hourDialogRef = ref<InstanceType<typeof FormDialog>>()
 const hourForm = reactive<HourForm>({
     id: null,
     employee_id: null,
@@ -626,6 +769,20 @@ const hourForm = reactive<HourForm>({
     title: '',
     note: '',
 })
+const { isDirty: hourDirty, snapshot: snapshotHour } = useFormDirty(hourForm)
+const hourRules: FormRules = {
+    employee_id: [required('員工', { kind: 'select' })],
+    school_year: [{ required: true, type: 'number', min: 100, max: 200, message: '請輸入學年（民國 100–200）', trigger: 'change' }],
+    semester: [required('學期', { kind: 'select' })],
+    activity_date: [required('研習日期', { kind: 'select' })],
+    hours: [{ required: true, type: 'number', min: 0.5, message: '請輸入時數（至少 0.5 小時）', trigger: 'change' }],
+    title: [{ ...required('課程名稱'), whitespace: true }],
+}
+const hourPaidNotice = computed(() =>
+    hourDialogVisible.value && isPaidEmployee(hourForm.employee_id, hourForm.school_year)
+        ? `${employeeNameOf(hourForm.employee_id)} 本學年的獎勵金已發放。${PAID_IMPACT_NOTE}`
+        : '',
+)
 
 const openHourDialog = (row?: GrowthHour) => {
     if (row) {
@@ -647,27 +804,27 @@ const openHourDialog = (row?: GrowthHour) => {
         hourForm.title = ''
         hourForm.note = ''
     }
+    snapshotHour()
     hourDialogVisible.value = true
 }
 
 const submitHour = async () => {
-    if (
-        !hourForm.activity_date ||
-        !hourForm.title ||
-        hourForm.hours <= 0 ||
-        (hourForm.id == null && hourForm.employee_id == null)
-    ) {
-        ElMessage.warning('請填寫員工、研習日期、時數（大於 0）與課程名稱')
-        return
-    }
+    if (hourSaving.value) return
+    hourSaving.value = true
+    const editing = hourForm.id != null
     try {
+        if (!(await isFormValid(hourFormRef.value))) {
+            hourDialogRef.value?.scrollToFirstError()
+            return
+        }
+        if (!(await confirmPaidImpact(hourForm.employee_id, hourForm.school_year, editing ? '修改時數' : '新增時數'))) return
         if (hourForm.id != null) {
             const body: HourUpdateBody = {
                 school_year: hourForm.school_year,
                 semester: hourForm.semester,
                 activity_date: hourForm.activity_date,
                 hours: hourForm.hours,
-                title: hourForm.title,
+                title: hourForm.title.trim(),
                 note: hourForm.note || null,
             }
             await patchGrowthHour(hourForm.id, body)
@@ -678,25 +835,30 @@ const submitHour = async () => {
                 semester: hourForm.semester,
                 activity_date: hourForm.activity_date,
                 hours: hourForm.hours,
-                title: hourForm.title,
+                title: hourForm.title.trim(),
                 note: hourForm.note || null,
             }
             await createGrowthHour(body)
         }
-        ElMessage.success(hourForm.id != null ? '已更新時數登記' : '已新增時數登記')
+        ElMessage.success(editing ? '已更新時數登記' : '已新增時數登記')
         hourDialogVisible.value = false
         await fetchHours()
         // 只有本次登記落在目前檢視學年時，實際時數才會影響到畫面上的預覽金額。
         if (hourForm.school_year === schoolYear.value) await fetchPreview()
     } catch (e) {
-        ElMessage.error(friendlyError(hourForm.id != null ? '更新時數登記失敗' : '新增時數登記失敗', e))
+        ElMessage.error(friendlyError(editing ? '更新時數登記失敗' : '新增時數登記失敗', e))
+    } finally {
+        hourSaving.value = false
     }
 }
 
 const confirmDeleteHour = async (row: GrowthHour) => {
+    const paidNote = isPaidEmployee(row.employee_id, row.school_year)
+        ? `此員工本學年的獎勵金已發放，刪除時數後${PAID_IMPACT_NOTE}`
+        : ''
     try {
         await ElMessageBox.confirm(
-            `確定刪除「${row.title}」（${row.employee_name ?? ''} ${row.activity_date}）這筆時數登記？刪除後無法復原。`,
+            `確定刪除「${row.title}」（${row.employee_name ?? ''} ${row.activity_date}）這筆時數登記？刪除後無法復原。${paidNote}`,
             '確認刪除',
             { confirmButtonText: '確定刪除', cancelButtonText: '取消', type: 'warning' },
         )
@@ -715,51 +877,82 @@ const confirmDeleteHour = async (row: GrowthHour) => {
 
 // ---- 簽約日維護 ----
 const signedOnDialogVisible = ref(false)
+const signedOnSaving = ref(false)
+const signedOnFormRef = ref<FormInstance>()
+const signedOnDialogRef = ref<InstanceType<typeof FormDialog>>()
 const signedOnTarget = ref<{ employee_id: number; employee_name: string } | null>(null)
-const signedOnDate = ref<string | null>(null)
+const signedOnForm = reactive<{ date: string | null }>({ date: null })
+const signedOnDate = computed<string | null>({
+    get: () => signedOnForm.date,
+    set: (v) => {
+        signedOnForm.date = v
+    },
+})
+const { isDirty: signedOnDirty, snapshot: snapshotSignedOn } = useFormDirty(signedOnForm)
+const signedOnRules: FormRules = {
+    date: [required('簽約日', { kind: 'select' })],
+}
+const signedOnPaidNotice = computed(() =>
+    signedOnDialogVisible.value && isPaidEmployee(signedOnTarget.value?.employee_id, schoolYear.value)
+        ? `${signedOnTarget.value?.employee_name} 本學年的獎勵金已發放。${PAID_IMPACT_NOTE}`
+        : '',
+)
 
 const openSignedOnDialog = (row: GrowthPreviewRow) => {
     signedOnTarget.value = { employee_id: row.employee_id, employee_name: row.employee_name }
-    signedOnDate.value = row.signed_on ?? null
+    signedOnForm.date = row.signed_on ?? null
+    snapshotSignedOn()
     signedOnDialogVisible.value = true
 }
 
 const saveSignedOn = async () => {
-    if (!signedOnTarget.value) return
-    if (!signedOnDate.value) {
-        ElMessage.warning('請選擇簽約日，或改用「清空簽約日」')
-        return
-    }
-    const body: SignedOnBody = { signed_on: signedOnDate.value }
+    const target = signedOnTarget.value
+    if (!target || signedOnSaving.value) return
+    signedOnSaving.value = true
     try {
-        await patchSignedOn(signedOnTarget.value.employee_id, body)
+        if (!(await isFormValid(signedOnFormRef.value)) || !signedOnForm.date) {
+            signedOnDialogRef.value?.scrollToFirstError()
+            return
+        }
+        if (!(await confirmPaidImpact(target.employee_id, schoolYear.value, '修改簽約日'))) return
+        const body: SignedOnBody = { signed_on: signedOnForm.date }
+        await patchSignedOn(target.employee_id, body)
         ElMessage.success('已更新簽約日')
         signedOnDialogVisible.value = false
         await fetchPreview()
     } catch (e) {
         ElMessage.error(friendlyError('更新簽約日失敗', e))
+    } finally {
+        signedOnSaving.value = false
     }
 }
 
 const clearSignedOn = async () => {
-    if (!signedOnTarget.value) return
+    const target = signedOnTarget.value
+    if (!target || signedOnSaving.value) return
+    const paidNote = isPaidEmployee(target.employee_id, schoolYear.value)
+        ? `此員工本學年的獎勵金已發放，清空後${PAID_IMPACT_NOTE}`
+        : ''
     try {
         await ElMessageBox.confirm(
-            `確定清空 ${signedOnTarget.value.employee_name} 的簽約日？清空後視為未簽約，本學年不符合發放資格。`,
+            `確定清空 ${target.employee_name} 的簽約日？清空後視為未簽約，本學年不符合發放資格。${paidNote}`,
             '確認清空簽約日',
             { confirmButtonText: '確定清空', cancelButtonText: '取消', type: 'warning' },
         )
     } catch {
         return
     }
-    const body: SignedOnBody = { signed_on: null }
+    signedOnSaving.value = true
     try {
-        await patchSignedOn(signedOnTarget.value.employee_id, body)
+        const body: SignedOnBody = { signed_on: null }
+        await patchSignedOn(target.employee_id, body)
         ElMessage.success('已清空簽約日')
         signedOnDialogVisible.value = false
         await fetchPreview()
     } catch (e) {
         ElMessage.error(friendlyError('清空簽約日失敗', e))
+    } finally {
+        signedOnSaving.value = false
     }
 }
 
@@ -776,6 +969,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
   margin: var(--space-4) 0 var(--space-2);
 }
 .section-header h3 {
@@ -784,7 +979,44 @@ onMounted(() => {
 .section-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
+}
+.hours-filter {
+  width: 160px;
+}
+.scroll-hint {
+  display: none;
+  margin: 0 0 var(--space-2);
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.paid-impact-alert {
+  margin-bottom: var(--space-3);
+}
+.signed-on-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.signed-on-cell__empty {
+  color: var(--el-text-color-secondary);
+}
+.signed-on-target {
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+}
+@media (--to-sm) {
+  .section-actions {
+    width: 100%;
+  }
+  .hours-filter {
+    flex: 1 1 140px;
+    width: auto;
+  }
+  .scroll-hint {
+    display: block;
+  }
 }
 .pending-rule-alert {
   margin-bottom: var(--space-4);
