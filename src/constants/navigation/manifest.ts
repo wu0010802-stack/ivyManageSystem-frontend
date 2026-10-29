@@ -55,6 +55,7 @@ const SIDEBAR_ICONS = {
   EditPen: safeIcon(() => ElementPlusIcons.EditPen),
   Files: safeIcon(() => ElementPlusIcons.Files),
   Finished: safeIcon(() => ElementPlusIcons.Finished),
+  FirstAidKit: safeIcon(() => ElementPlusIcons.FirstAidKit),
   Guide: safeIcon(() => ElementPlusIcons.Guide),
   Histogram: safeIcon(() => ElementPlusIcons.Histogram),
   MapLocation: safeIcon(() => ElementPlusIcons.MapLocation),
@@ -136,7 +137,12 @@ export interface ManifestPage {
 }
 
 export interface ManifestGroup {
-  /** el-sub-menu index = `group-${key}`，沿用現值：leave/students/admin/activity/reports/settings。 */
+  /**
+   * el-sub-menu index = `group-${key}`。舊群沿用原 key：leave/students/admin/activity/settings/platform；
+   * 2026-10-29 後台 IA 重整 批次 2 新增 recruitment/transport/finance，原 reports 群取消
+   * （經營報表併入 finance）。側欄展開狀態不落地（el-menu 只吃 default-active），
+   * 所以舊 key 不會殘留在 localStorage 造成壞狀態。
+   */
   key: string
   title: string
   icon: Component
@@ -341,13 +347,16 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('EditPen') },
         },
         {
-          // 隱藏頁：健康與給藥（路由存在但無選單入口）。
+          // 健康與給藥：2026-10-29 後台 IA 重整 批次 2 起加進側欄（先前路由存在但無選單入口）。
+          // 可見性碼就是頁面自己的 views（STUDENTS_HEALTH_READ），與路由規則同源；
+          // 寫入／給藥動作碼（STUDENTS_HEALTH_WRITE／STUDENTS_MEDICATION_ADMINISTER）仍只控頁內按鈕。
           key: 'studentsHealth', title: '健康與給藥', routePath: '/portfolio/medication-today',
           views: [{ code: 'STUDENTS_HEALTH_READ' }],
           actions: [
             { code: 'STUDENTS_HEALTH_WRITE' },
             { code: 'STUDENTS_MEDICATION_ADMINISTER' },
           ],
+          menu: { icon: icon('FirstAidKit') },
         },
         {
           // picker-only：特教需求（無獨立路由）。
@@ -366,6 +375,21 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('Collection') },
         },
         {
+          // 在籍統計：現值統計與異動帳同一頁（2026-09-07 整合），資料同源於在籍統計 API，
+          // 權限借道學生模組 STUDENTS_READ（owned 於 studentsMain）。
+          // 依業主指示置於本群組最下方（2026-07-31）。
+          key: 'enrollmentStats', title: '在籍統計', routePath: '/enrollment-stats',
+          views: [], sharedViews: ['STUDENTS_READ'],
+          menu: { icon: icon('PieChart') },
+        },
+      ],
+    },
+
+    {
+      // 招生（2026-10-29 後台 IA 重整 批次 2 新群）：招生是獨立業務、權限碼獨立（RECRUITMENT_*），
+      // 之後官網報名、名額規劃都會留在這裡，所以只有一頁也自成一群。
+      key: 'recruitment', title: '招生', icon: icon('Guide'), pages: [
+        {
           key: 'admissions', title: '招生入學', routePath: '/students/admissions',
           views: [{ code: 'RECRUITMENT_READ' }],
           actions: [{ code: 'RECRUITMENT_WRITE' }, { code: 'RECRUITMENT_CONVERT' }],
@@ -373,6 +397,12 @@ export const NAVIGATION_MANIFEST = {
           // /recruitment 為 redirect 至 /students/admissions；規則保留供 redirect 解析。
           extraRoutes: [{ path: '/recruitment', permission: 'RECRUITMENT_READ' }],
         },
+      ],
+    },
+
+    {
+      // 接送交通（2026-10-29 後台 IA 重整 批次 2 新群）：放學佇列、接送授權、娃娃車自「學生與班級」移出。
+      key: 'transport', title: '接送交通', icon: icon('Van'), pages: [
         {
           key: 'dismissalQueue', title: PAGE_TERMS.dismissalQueue, routePath: '/dismissal-queue',
           views: [{ code: 'DISMISSAL_CALLS_READ' }],
@@ -441,6 +471,13 @@ export const NAVIGATION_MANIFEST = {
             { path: '/bus-routes', permission: 'BUS_WRITE' },
           ],
         },
+      ],
+    },
+
+    {
+      // 財務（2026-10-29 後台 IA 重整 批次 2 新群）：學費管理（自學生與班級）、收付款管理（自園務行政）、
+      // 經營報表（原「報表」群取消，頁移入）、政府報表各頁。
+      key: 'finance', title: '財務', icon: icon('Money'), pages: [
         {
           key: 'fees', title: '學費管理', routePath: '/fees',
           views: [{ code: 'FEES_READ' }],
@@ -450,12 +487,58 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('CreditCard') },
         },
         {
-          // 在籍統計：現值統計與異動帳同一頁（2026-09-07 整合），資料同源於在籍統計 API，
-          // 權限借道學生模組 STUDENTS_READ（owned 於 studentsMain）。
-          // 依業主指示置於本群組最下方（2026-07-31）。
-          key: 'enrollmentStats', title: '在籍統計', routePath: '/enrollment-stats',
-          views: [], sharedViews: ['STUDENTS_READ'],
+          // 收付款管理（2026-08 內控改版，前身「收支簽收」）：廠商付款／雜項
+          // 收款任一 READ 即可進整合頁（OR 語意，比照 /overtime）。路由沿用
+          // /finance-signoffs 保住深連結。
+          key: 'financeSignoffs', title: '收付款管理', routePath: '/finance-signoffs',
+          views: [
+            { code: 'VENDOR_PAYMENT_READ', label: '廠商付款檢視' },
+            { code: 'MISC_RECEIPT_READ', label: '雜項收款檢視' },
+          ],
+          actions: [
+            { code: 'VENDOR_PAYMENT_WRITE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'VENDOR_PAYMENT_APPROVE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'VENDOR_PAYMENT_SETTLE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'VENDOR_PAYMENT_RECONCILE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'MISC_RECEIPT_WRITE', requiresView: 'MISC_RECEIPT_READ' },
+            { code: 'MISC_RECEIPT_APPROVE', requiresView: 'MISC_RECEIPT_READ' },
+            { code: 'MISC_RECEIPT_SETTLE', requiresView: 'MISC_RECEIPT_READ' },
+            { code: 'MISC_RECEIPT_RECONCILE', requiresView: 'MISC_RECEIPT_READ' },
+          ],
+          menu: { icon: icon('Wallet') },
+        },
+        {
+          key: 'reportsMain', title: PAGE_TERMS.reports, routePath: '/reports',
+          views: [{ code: 'REPORTS' }],
           menu: { icon: icon('PieChart') },
+        },
+        // 政府報表五頁自「報表」群組移入本群組（業主指示，2026-08-01）；
+        // 權限碼主屬與路由不動，僅選單歸屬變更。
+        // 2026-10-12 業主指示暫時自側欄下架：五頁皆拿掉 menu，路由、權限規則、權限編輯器
+        // 節點與後端 API 全數保留（深連結仍受原權限碼守衛）。恢復時把 menu 加回即可，
+        // 原圖示依序為 Histogram／Document／Document／Document／Files（見 govReportsNav.test.ts）。
+        {
+          key: 'govMonthly', title: PAGE_TERMS.govMonthly, routePath: '/admin/gov-reports/monthly',
+          views: [{ code: 'GOV_REPORTS_VIEW' }],
+          // /admin/gov-reports/{monthly,certificates,subsidies,iep} 由此 prefix 規則涵蓋。
+          extraRoutes: [{ path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true }],
+        },
+        {
+          key: 'govCertificates', title: PAGE_TERMS.govCertificates, routePath: '/admin/gov-reports/certificates',
+          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
+        },
+        {
+          key: 'govSubsidies', title: PAGE_TERMS.govSubsidies, routePath: '/admin/gov-reports/subsidies',
+          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
+        },
+        {
+          key: 'govIep', title: 'IEP 個別化教育計畫', routePath: '/admin/gov-reports/iep',
+          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
+        },
+        {
+          // 勞健保與稅務申報：對齊後端 api/gov_reports.py 的 GOV_REPORTS_EXPORT 守衛。
+          key: 'govExport', title: PAGE_TERMS.govExport, routePath: '/gov-reports',
+          views: [{ code: 'GOV_REPORTS_EXPORT' }],
         },
       ],
     },
@@ -506,55 +589,6 @@ export const NAVIGATION_MANIFEST = {
           actions: [{ code: 'SURVEYS_WRITE', label: '建立與管理' }],
           menu: { icon: icon('EditPen') },
           extraRoutes: [{ path: '/surveys/new', permission: 'SURVEYS_WRITE' }],
-        },
-        {
-          // 收付款管理（2026-08 內控改版，前身「收支簽收」）：廠商付款／雜項
-          // 收款任一 READ 即可進整合頁（OR 語意，比照 /overtime）。路由沿用
-          // /finance-signoffs 保住深連結。
-          key: 'financeSignoffs', title: '收付款管理', routePath: '/finance-signoffs',
-          views: [
-            { code: 'VENDOR_PAYMENT_READ', label: '廠商付款檢視' },
-            { code: 'MISC_RECEIPT_READ', label: '雜項收款檢視' },
-          ],
-          actions: [
-            { code: 'VENDOR_PAYMENT_WRITE', requiresView: 'VENDOR_PAYMENT_READ' },
-            { code: 'VENDOR_PAYMENT_APPROVE', requiresView: 'VENDOR_PAYMENT_READ' },
-            { code: 'VENDOR_PAYMENT_SETTLE', requiresView: 'VENDOR_PAYMENT_READ' },
-            { code: 'VENDOR_PAYMENT_RECONCILE', requiresView: 'VENDOR_PAYMENT_READ' },
-            { code: 'MISC_RECEIPT_WRITE', requiresView: 'MISC_RECEIPT_READ' },
-            { code: 'MISC_RECEIPT_APPROVE', requiresView: 'MISC_RECEIPT_READ' },
-            { code: 'MISC_RECEIPT_SETTLE', requiresView: 'MISC_RECEIPT_READ' },
-            { code: 'MISC_RECEIPT_RECONCILE', requiresView: 'MISC_RECEIPT_READ' },
-          ],
-          menu: { icon: icon('Wallet') },
-        },
-        // 政府報表五頁自「報表」群組移入本群組（業主指示，2026-08-01）；
-        // 權限碼主屬與路由不動，僅選單歸屬變更。
-        // 2026-10-12 業主指示暫時自側欄下架：五頁皆拿掉 menu，路由、權限規則、權限編輯器
-        // 節點與後端 API 全數保留（深連結仍受原權限碼守衛）。恢復時把 menu 加回即可，
-        // 原圖示依序為 Histogram／Document／Document／Document／Files（見 govReportsNav.test.ts）。
-        {
-          key: 'govMonthly', title: PAGE_TERMS.govMonthly, routePath: '/admin/gov-reports/monthly',
-          views: [{ code: 'GOV_REPORTS_VIEW' }],
-          // /admin/gov-reports/{monthly,certificates,subsidies,iep} 由此 prefix 規則涵蓋。
-          extraRoutes: [{ path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true }],
-        },
-        {
-          key: 'govCertificates', title: PAGE_TERMS.govCertificates, routePath: '/admin/gov-reports/certificates',
-          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
-        },
-        {
-          key: 'govSubsidies', title: PAGE_TERMS.govSubsidies, routePath: '/admin/gov-reports/subsidies',
-          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
-        },
-        {
-          key: 'govIep', title: 'IEP 個別化教育計畫', routePath: '/admin/gov-reports/iep',
-          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
-        },
-        {
-          // 勞健保與稅務申報：對齊後端 api/gov_reports.py 的 GOV_REPORTS_EXPORT 守衛。
-          key: 'govExport', title: PAGE_TERMS.govExport, routePath: '/gov-reports',
-          views: [{ code: 'GOV_REPORTS_EXPORT' }],
         },
       ],
     },
@@ -629,17 +663,6 @@ export const NAVIGATION_MANIFEST = {
           key: 'activityAttendance', title: '點名管理', routePath: '/activity/attendance', routePrefix: true,
           views: [], sharedViews: ['ACTIVITY_READ'],
           menu: { icon: icon('Checked') },
-        },
-      ],
-    },
-
-    {
-      // 2026-08-20：操作紀錄與資料異常待辦移至 topLevel 的 governance 節點（整合頁）。
-      key: 'reports', title: '報表', icon: icon('DataAnalysis'), pages: [
-        {
-          key: 'reportsMain', title: PAGE_TERMS.reports, routePath: '/reports',
-          views: [{ code: 'REPORTS' }],
-          menu: { icon: icon('PieChart') },
         },
       ],
     },

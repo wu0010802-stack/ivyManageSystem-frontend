@@ -100,9 +100,11 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('工作台')
   })
 
-  it('「報表」一級子選單存在（操作紀錄已於 2026-08-20 移出至稽核與資料品質）', async () => {
+  it('經營報表在「財務」群組（原「報表」群組 2026-10-29 取消；操作紀錄已於 2026-08-20 移出至稽核與資料品質）', async () => {
     const wrapper = await mountSidebar()
-    expect(wrapper.text()).toContain('報表')
+    expect(wrapper.text()).toContain('財務')
+    expect(wrapper.text()).toContain('經營報表')
+    expect(wrapper.find('[data-index="/reports"]').exists()).toBe(true)
     expect(wrapper.find('[data-index="/audit-logs"]').exists()).toBe(false)
     expect(wrapper.find('[data-index="/data-quality"]').exists()).toBe(false)
   })
@@ -157,7 +159,7 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('考核與年終')
   })
 
-  it('「收付款管理」整合入口在園務行政（廠商付款/雜項收款已整併；2026-08 內控改版更名）', async () => {
+  it('「收付款管理」整合入口在財務群組（廠商付款/雜項收款已整併；2026-08 內控改版更名；2026-10-29 自園務行政移入財務）', async () => {
     const wrapper = await mountSidebar()
     const item = wrapper.find('[data-index="/finance-signoffs"]')
     expect(item.exists()).toBe(true)

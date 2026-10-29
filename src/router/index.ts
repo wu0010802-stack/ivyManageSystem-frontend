@@ -177,7 +177,9 @@ export const routes: RouteRecordRaw[] = [
             path: '/portfolio/medication-today',
             name: 'medication-today',
             component: () => import('../views/MedicationTodayView.vue'),
-            meta: { title: '今日用藥', parent: '/students' }
+            // 2026-10-29 後台 IA 重整 批次 2：本頁成為側欄項目（學生與班級 › 健康與給藥），
+            // 一級頁無麵包屑父層，meta.parent 隨之退場。
+            meta: { title: '今日用藥' }
         },
         {
             // 在籍記錄表已折入班級學生管理頁的「統計表」modal；在籍統計獨立為 /enrollment-stats。

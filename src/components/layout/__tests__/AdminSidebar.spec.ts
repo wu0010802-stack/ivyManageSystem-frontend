@@ -91,15 +91,18 @@ describe('AdminSidebar 考核年終整併 + 群組可見性回歸', () => {
     expect(activity).not.toContain('/activity/changes')
 
     expect(inGroup('group-settings')).not.toContain('/activity/settings')
-    expect(inGroup('group-reports')).not.toContain('/activity/changes')
+    // 「報表」群組已於 2026-10-29 批次 2 取消，經營報表併入「財務」
+    expect(subs(w)).not.toContain('group-reports')
+    expect(inGroup('group-finance')).not.toContain('/activity/changes')
   })
 
-  it('只有 ACTIVITY_READ → 課後才藝顯示報名管理（含異動紀錄頁籤）；報表群組不再因此空殼顯示', () => {
+  it('只有 ACTIVITY_READ → 課後才藝顯示報名管理（含異動紀錄頁籤）；報表／財務群組不會因此空殼顯示', () => {
     const w = mountWith(['ACTIVITY_READ'])
     expect(subs(w)).toContain('group-activity')
     expect(items(w)).toContain('/activity/registrations')
     expect(items(w)).not.toContain('/activity/changes')
     expect(subs(w)).not.toContain('group-reports')
+    expect(subs(w)).not.toContain('group-finance')
   })
 
   it('只有 ACTIVITY_READ → 仍看得到 /activity/settings（課程與用品併入後不可再要求 WRITE）', () => {

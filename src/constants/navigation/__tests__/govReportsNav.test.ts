@@ -33,7 +33,12 @@ describe('政府報表五頁不出現在側邊欄', () => {
   it('「園務行政」群組仍保留其餘項目（防整組被誤刪的假綠）', () => {
     const admin = SIDEBAR_TREE.groups.find((g) => g.index === 'group-admin')
     expect(admin?.items.map((i) => i.index)).toEqual(
-      expect.arrayContaining(['/announcements', '/calendar', '/surveys', '/finance-signoffs'])
+      expect.arrayContaining(['/announcements', '/calendar', '/surveys'])
+    )
+    // 收付款管理 2026-10-29（後台 IA 重整 批次 2）起移到「財務」群組
+    const finance = SIDEBAR_TREE.groups.find((g) => g.index === 'group-finance')
+    expect(finance?.items.map((i) => i.index)).toEqual(
+      expect.arrayContaining(['/fees', '/finance-signoffs', '/reports'])
     )
   })
 })

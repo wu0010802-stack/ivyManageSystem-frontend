@@ -1,8 +1,8 @@
 /**
  * 側欄的娃娃車入口（2026-08-13 起三項整合為單一「娃娃車管理」/bus）。
  *
- * 陷阱在群組層：項目掛在「學生與班級」群組底下，而群組本身有
- * `hasVisibleStudentItems` 的 v-if。只加項目、忘了把 BUS_* 加進群組條件的話，
+ * 陷阱在群組層：項目掛在「接送交通」群組底下（2026-10-29 後台 IA 重整 批次 2 起；先前在
+ * 「學生與班級」），而群組可見性＝子項權限濾後非空。只加項目、忘了把 BUS_* 加進群組條件的話，
  * 只持 BUS_READ／BUS_WRITE 的帳號會連整個群組都看不到——選單裡等於沒有娃娃車，
  * 而使用者完全無從診斷（頁面其實進得去）。
  *
@@ -65,13 +65,13 @@ describe('AdminSidebar 娃娃車入口', () => {
   it('只有 BUS_READ：看得到整合入口，且群組本身要顯示出來', () => {
     const w = mountWith(['BUS_READ'])
     expect(items(w)).toContain('/bus')
-    expect(subs(w)).toContain('group-students')
+    expect(subs(w)).toContain('group-transport')
   })
 
   it('只有 BUS_WRITE：看得到整合入口，且群組本身要顯示出來', () => {
     const w = mountWith(['BUS_WRITE'])
     expect(items(w)).toContain('/bus')
-    expect(subs(w)).toContain('group-students')
+    expect(subs(w)).toContain('group-transport')
   })
 
   it('沒有 BUS_* 的帳號看不到娃娃車入口', () => {

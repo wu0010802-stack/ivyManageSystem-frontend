@@ -39,7 +39,8 @@ describe('router 麵包屑 meta', () => {
       '/student-leaves',
       '/student-assessments',
       '/student-incidents',
-      '/portfolio/medication-today',
+      // /portfolio/medication-today 已於 2026-10-29（後台 IA 重整 批次 2）成為側欄項目，
+      // 一級頁無父層，不在此列。
     ]) {
       const start = ROUTER_SRC.indexOf(`path: '${path}'`)
       if (start < 0) {

@@ -157,20 +157,37 @@ describe('PermissionPicker 群組級聯', () => {
     // definition 有 scope_options 的碼
     expect(next).toContain('STUDENTS_READ:own_class')
     expect(next).toContain('PORTFOLIO_READ:own_class')
-    // definition 落後（scope_options 缺）但在 SCOPE_AWARE_CODES → fallback 仍落 own_class
-    expect(next).toContain('DISMISSAL_CALLS_READ:own_class')
-    // 非 scope-aware view → bare
-    expect(next).toContain('FEES_READ')
-    expect(next).toContain('RECRUITMENT_READ')
     // 高風險 actions 不得一鍵給
     expect(next.some((k) => k.startsWith('STUDENTS_WRITE'))).toBe(false)
     expect(next.some((k) => k.startsWith('PORTFOLIO_PUBLISH'))).toBe(false)
+    // 2026-10-29 後台 IA 重整 批次 2：招生／接送／學費已移出「學生與班級」群組，
+    // 勾學生群組不得連帶授出（群組邊界＝授權邊界）。
+    expect(next.some((k) => k.startsWith('RECRUITMENT_'))).toBe(false)
+    expect(next.some((k) => k.startsWith('DISMISSAL_CALLS_'))).toBe(false)
+    expect(next).not.toContain('FEES_READ')
+  })
+
+  it('招生／接送交通／財務各自成群：勾群組只落該群組的 view 碼（scope-aware 帶 :own_class、其餘 bare）', () => {
+    const w1 = mountPicker([])
+    vmOf(w1).toggleGroup(groupOf('recruitment'), true)
+    expect(lastEmit(w1)).toContain('RECRUITMENT_READ')
+
+    const w2 = mountPicker([])
+    vmOf(w2).toggleGroup(groupOf('transport'), true)
+    // definition 落後（scope_options 缺）但在 SCOPE_AWARE_CODES → fallback 仍落 own_class
+    expect(lastEmit(w2)).toContain('DISMISSAL_CALLS_READ:own_class')
+
+    const w3 = mountPicker([])
+    vmOf(w3).toggleGroup(groupOf('finance'), true)
+    // 非 scope-aware view → bare
+    expect(lastEmit(w3)).toContain('FEES_READ')
   })
 
   it('取消群組 → owned 碼（含 scoped 形態與 actions）清空，群組外碼保留', () => {
     const w = mountPicker(['STUDENTS_READ:all', 'STUDENTS_WRITE:own_class', 'FEES_READ', 'DASHBOARD'])
     vmOf(w).toggleGroup(students, false)
-    expect(lastEmit(w)).toEqual(['DASHBOARD'])
+    // FEES_READ 現屬「財務」群組，取消「學生與班級」時屬群組外碼，須保留
+    expect(lastEmit(w)).toEqual(['FEES_READ', 'DASHBOARD'])
   })
 
   it('groupState：部分 view → indeterminate；只勾 action → indeterminate；全 view → checked', () => {
@@ -193,7 +210,7 @@ describe('PermissionPicker 群組級聯', () => {
 })
 
 describe('PermissionPicker 頁面檢視連動 actions', () => {
-  const financeSignoffs = pageOf('admin', 'financeSignoffs')
+  const financeSignoffs = pageOf('finance', 'financeSignoffs')
 
   it('取消 view → 依附（requiresView）該 view 的 action 連動移除，他 view 的 action 保留', () => {
     const w = mountPicker(['VENDOR_PAYMENT_READ', 'VENDOR_PAYMENT_WRITE', 'MISC_RECEIPT_READ', 'MISC_RECEIPT_WRITE'])
@@ -367,7 +384,7 @@ describe('PermissionPicker 搜尋', () => {
   it('以權限碼搜尋（大小寫不敏感）：只留命中節點與其祖先', async () => {
     const w = mountPicker([])
     await typeSearch(w, 'vendor_payment')
-    expect(w.find('[data-perm-group="admin"]').exists()).toBe(true)
+    expect(w.find('[data-perm-group="finance"]').exists()).toBe(true)
     expect(w.find('[data-perm-page="financeSignoffs"]').exists()).toBe(true)
     expect(w.find('[data-perm-view="VENDOR_PAYMENT_READ"]').exists()).toBe(true)
     expect(w.find('[data-perm-action="VENDOR_PAYMENT_WRITE"]').exists()).toBe(true)
