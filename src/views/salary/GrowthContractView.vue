@@ -324,7 +324,7 @@
       <el-form ref="signedOnFormRef" :model="signedOnForm" :rules="signedOnRules" label-position="top" @submit.prevent>
         <el-form-item label="簽約日" prop="date">
           <el-date-picker
-            v-model="signedOnForm.date"
+            v-model="signedOnDate"
             type="date"
             value-format="YYYY-MM-DD"
             placeholder="未簽約"
