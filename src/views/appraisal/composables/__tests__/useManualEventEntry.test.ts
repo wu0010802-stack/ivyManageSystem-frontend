@@ -12,7 +12,9 @@ vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }))
 
+import { ElMessage } from 'element-plus'
 import {
+  batchUpsertManualEventCounts,
   getManualEventCounts,
   listAppraisalCycles,
   getAppraisalAllEmployeesStatus,
@@ -133,5 +135,23 @@ describe('useManualEventEntry inheritFromPreviousCycle', () => {
     const res = await inheritFromPreviousCycle([{ participant_id: 202, employee_id: 555 }])
     expect(res).toEqual({ applied: 0, skipped: 1 })
     expect(dirtyEntries.value).toHaveLength(0)
+  })
+})
+
+describe('useManualEventEntry 自我守衛 403 顯示後端原因（資安稽核 2026-10-29）', () => {
+  it('批次含本人 → 顯示後端中文 detail，而非籠統的「儲存失敗」', async () => {
+    mockGetCounts.mockResolvedValue({
+      data: { entries: [{ participant_id: 10, item_code: 'OTHER', count: 1 }] },
+    } as never)
+    const detail = '不得填寫自己的考核事件次數，請由主管或 HR 代為操作'
+    vi.mocked(batchUpsertManualEventCounts).mockRejectedValue({
+      response: { status: 403, data: { detail } },
+      displayMessage: detail,
+    })
+    const { setCount, saveAll } = useManualEventEntry(ref(1))
+    await nextTick(); await Promise.resolve(); await nextTick()
+    setCount(10, 'OTHER', 2)
+    await saveAll()
+    expect(ElMessage.error).toHaveBeenCalledWith(detail)
   })
 })
