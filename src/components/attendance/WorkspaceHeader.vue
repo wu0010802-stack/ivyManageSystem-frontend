@@ -39,6 +39,7 @@
         <el-dropdown-menu>
           <el-dropdown-item v-if="canImport" command="import">匯入打卡紀錄</el-dropdown-item>
           <el-dropdown-item command="kiosk">開電子打卡台</el-dropdown-item>
+          <el-dropdown-item v-if="canKioskSettings" command="kioskSettings">打卡設定</el-dropdown-item>
           <el-dropdown-item v-if="canPayrollCompare" command="payroll" divided>薪資扣項核對</el-dropdown-item>
           <el-dropdown-item command="export" :divided="!canPayrollCompare">匯出月報</el-dropdown-item>
           <el-dropdown-item v-if="canPrintAppraisal" command="appraisal">批次列印考核表</el-dropdown-item>
@@ -50,6 +51,8 @@
     <div v-else class="workspace-header__actions">
       <!-- 電子打卡台是給打卡用的平板開的，行政很少從這裡開：退成文字連結，不和匯入同級 -->
       <el-button link :icon="Monitor" class="workspace-header__kiosk" data-test="header-kiosk" @click="openKiosk">開電子打卡台</el-button>
+      <!-- 打卡台能不能用取決於 IP 白名單（留空＝全擋），設定入口就放在打卡台連結旁（2026-10-29 S5，原在系統設定 › 分校設定） -->
+      <el-button v-if="canKioskSettings" link :icon="Setting" class="workspace-header__kiosk-settings" data-test="header-kiosk-settings" @click="emit('kioskSettings')">打卡設定</el-button>
       <!-- 主要動作是匯入時，匯入鈕自己就是那顆 primary（整列只有一顆） -->
       <el-button v-if="canImport" :type="importIsPrimary ? 'primary' : undefined" data-test="header-import" @click="onImport">{{ importLabel }}</el-button>
       <!-- 選單裡是月底要做的事（核對扣項、匯出、重算），封存在薪資結算：叫「月結」會以為按了就結帳 -->
@@ -77,7 +80,7 @@
  */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowDown, ArrowLeft, ArrowRight, MoreFilled, Monitor } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft, ArrowRight, MoreFilled, Monitor, Setting } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import type { PrimaryAction, PrimaryActionSpec, SealState } from '@/utils/attendanceMonthSummary'
 
@@ -107,6 +110,8 @@ const emit = defineEmits<{
   (e: 'appraisal'): void
   /** 依目前班表重算本月已匯入的出勤（改了員工上下班時間或班別時段之後） */
   (e: 'recalculate'): void
+  /** 開「打卡設定」（Kiosk／校內 WiFi 允許 IP）；由頁面開 dialog */
+  (e: 'kioskSettings'): void
   /** 按了主要按鈕（匯入也算：它是 primary 時送這個，不送 import） */
   (e: 'primary', action: PrimaryAction): void
 }>()
@@ -118,6 +123,8 @@ const STATUS_TEXT: Record<SealState, string> = {
 }
 
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
+/** 打卡設定入口：內容是 system_configs，讀取要 SETTINGS_READ（寫入權限由 dialog 內逐 key 鎖定） */
+const canKioskSettings = computed(() => hasPermission('SETTINGS_READ'))
 /** 匯入入口：要出勤寫入權限，且月份還沒整月封存（後端本來就拒收已封存月份的匯入） */
 const canImport = computed(() => canWrite.value && props.sealState !== 'sealed')
 const importIsPrimary = computed(() => props.primary?.action === 'import')
@@ -139,6 +146,7 @@ function openKiosk() {
 function onMenuCommand(command: string | number | object): void {
   if (command === 'import') emit('import')
   else if (command === 'kiosk') openKiosk()
+  else if (command === 'kioskSettings') emit('kioskSettings')
   else if (command === 'payroll') emit('payroll')
   else if (command === 'export') emit('export')
   else if (command === 'appraisal') emit('appraisal')
@@ -173,6 +181,7 @@ function nextMonth() {
 .workspace-header__actions .el-button { margin-left: 0; }
 /* 電子打卡台退成連結排在動作鈕之後；主要動作在最右 */
 .workspace-header__kiosk { order: 1; }
+.workspace-header__kiosk-settings { order: 1; }
 .workspace-header__primary { order: 2; }
 
 /* 月份狀態膠囊：核對中＝主色淡底＋實心圓點、部分封存＝黃淡底＋空心圓、已封存＝中性灰＋鎖頭（封存是狀態、不是警告） */

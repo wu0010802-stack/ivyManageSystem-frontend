@@ -85,6 +85,7 @@ const STUBS = {
   ImportPreviewDialog: { template: '<div />' },
   PayrollComparisonDialog: { template: '<div />' },
   AppraisalSheetBatchDialog: { template: '<div />' },
+  SystemConfigDialog: { name: 'SystemConfigDialog', props: ['modelValue', 'title', 'placement'], template: '<div class="config-dialog-stub" :data-placement="placement" :data-title="title" />' },
   RecalculateAttendanceDrawer: { template: '<div />' },
   ElDrawer: { template: '<div />' },
   'el-tabs': { template: '<div><slot /></div>' },
@@ -189,6 +190,26 @@ describe('ScheduleAttendanceView — scope 鎖定', () => {
       expect(w.find('[data-test="schedule-sub"]').exists()).toBe(false)
       expect(w.findAllComponents(GridStub).every((c) => c.props('mode') === 'reconcile')).toBe(true)
       expect(api.getSummary).toHaveBeenCalledTimes(1)
+    })
+
+    // 2026-10-29 S5：Kiosk／校內 WiFi 允許 IP 自系統設定 › 分校設定搬到頁首「打卡設定」
+    it('頁首「打卡設定」：有 SETTINGS_READ 才開得起 dialog（placement=attendance）；沒有則不掛', async () => {
+      granted.codes = new Set(['ATTENDANCE_READ', 'SETTINGS_READ'])
+      const w = mountPage(props())
+      await flushPromises()
+      expect(w.find('.config-dialog-stub').exists()).toBe(false)
+      w.getComponent({ name: 'WorkspaceHeader' }).vm.$emit('kioskSettings')
+      await flushPromises()
+      const dialog = w.get('.config-dialog-stub')
+      expect(dialog.attributes('data-placement')).toBe('attendance')
+      expect(dialog.attributes('data-title')).toBe('打卡設定')
+
+      granted.codes = new Set(['ATTENDANCE_READ'])
+      const noRead = mountPage(props())
+      await flushPromises()
+      noRead.getComponent({ name: 'WorkspaceHeader' }).vm.$emit('kioskSettings')
+      await flushPromises()
+      expect(noRead.find('.config-dialog-stub').exists()).toBe(false)
     })
 
     it('即使持有 SCHEDULE 也看不到排班（排班在 /schedule）', async () => {

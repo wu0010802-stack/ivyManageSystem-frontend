@@ -2,11 +2,18 @@
  * 政府申報頁籤殼（GovReportsLayout，後台 IA 重整 批次 2，2026-10-29）。
  * 每個頁籤依該頁 gate 用 v-if；可見頁籤不足兩個時整列隱藏；點頁籤＝導到該頁網址。
  */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Router } from 'vue-router'
+
+const getSystemConfig = vi.hoisted(() => vi.fn())
+const updateSystemConfig = vi.hoisted(() => vi.fn())
+vi.mock('@/api/systemConfig', () => ({
+  getSystemConfig: (...a: unknown[]) => getSystemConfig(...a),
+  updateSystemConfig: (...a: unknown[]) => updateSystemConfig(...a),
+}))
 
 import GovReportsLayout from '../GovReportsLayout.vue'
 import { setUserInfo } from '@/utils/auth'
@@ -115,5 +122,68 @@ describe('GovReportsLayout 頁籤依各頁 gate 顯示', () => {
     await click('勞健保與稅務申報')
     expect(router.currentRoute.value.path).toBe('/gov-reports')
     expect(wrapper.find('[data-testid="page-export"]').exists()).toBe(true)
+  })
+})
+
+// 2026-10-29 S5：勞保／健保／勞退三組單位編號（gov.* system_configs）自系統設定 › 分校設定搬來，
+// 頁籤列右側「申報單位設定」開 dialog。入口需 SETTINGS_READ（讀 system_configs），寫入需 SETTINGS_WRITE。
+describe('GovReportsLayout 申報單位設定', () => {
+  beforeEach(() => {
+    setUserInfo(null)
+    getSystemConfig.mockReset().mockRejectedValue({ response: { status: 404 } })
+    updateSystemConfig.mockReset()
+  })
+
+  const settingsBtn = (w: Awaited<ReturnType<typeof mountAt>>['wrapper']) =>
+    w.find('[data-testid="gov-unit-settings"]')
+
+  it('有 SETTINGS_READ：頁籤列右側有「申報單位設定」；沒有則不顯示', async () => {
+    const withRead = await mountAt('/admin/gov-reports/monthly', ['GOV_REPORTS_VIEW', 'SETTINGS_READ'])
+    expect(settingsBtn(withRead.wrapper).exists()).toBe(true)
+    expect(settingsBtn(withRead.wrapper).text()).toBe('申報單位設定')
+
+    const without = await mountAt('/admin/gov-reports/monthly', ['GOV_REPORTS_VIEW'])
+    expect(settingsBtn(without.wrapper).exists()).toBe(false)
+    expect(getSystemConfig).not.toHaveBeenCalled()
+  })
+
+  it('只剩一個頁籤（頁籤列隱藏）時入口仍在，頁面內容照常渲染', async () => {
+    const { wrapper } = await mountAt('/gov-reports', ['GOV_REPORTS_EXPORT', 'SETTINGS_READ'])
+    expect(wrapper.find('[data-testid="gov-reports-tabs"]').exists()).toBe(false)
+    expect(settingsBtn(wrapper).exists()).toBe(true)
+    expect(wrapper.find('[data-testid="page-export"]').exists()).toBe(true)
+  })
+
+  it('點開後只讀取三組單位編號 key；沒有 SETTINGS_WRITE 時唯讀（無儲存鈕、顯示無權限提示）', async () => {
+    const { wrapper } = await mountAt('/admin/gov-reports/monthly', ['GOV_REPORTS_VIEW', 'SETTINGS_READ'])
+    expect(getSystemConfig).not.toHaveBeenCalled() // dialog 沒開不載入
+    await settingsBtn(wrapper).trigger('click')
+    await flushPromises()
+    expect(getSystemConfig.mock.calls.map((c) => c[0]).sort()).toEqual([
+      'gov.health_insurance_unit_code',
+      'gov.labor_insurance_unit_code',
+      'gov.pension_employer_code',
+    ])
+    const body = document.body.textContent ?? ''
+    expect(body).toContain('勞保投保單位編號')
+    expect(body).toContain('目前帳號無系統設定編輯權限')
+    expect(document.body.querySelector('.tenant-config-tab .config-row__actions button')).toBeNull()
+  })
+
+  it('有 SETTINGS_WRITE：可編輯並儲存（PUT /system-configs/{key}）', async () => {
+    updateSystemConfig.mockResolvedValue({ data: { config_key: 'x', config_value: '12345678', is_default: false } })
+    const { wrapper } = await mountAt('/admin/gov-reports/monthly', ['GOV_REPORTS_VIEW', 'SETTINGS_READ', 'SETTINGS_WRITE'])
+    await settingsBtn(wrapper).trigger('click')
+    await flushPromises()
+    const row = document.body.querySelector('[data-test="config-row-gov.labor_insurance_unit_code"]')!
+    const input = row.querySelector('input') as HTMLInputElement
+    input.value = '12345678'
+    input.dispatchEvent(new Event('input'))
+    await flushPromises()
+    const save = row.querySelector('.config-row__actions button') as HTMLButtonElement
+    expect(save).not.toBeNull()
+    save.click()
+    await flushPromises()
+    expect(updateSystemConfig).toHaveBeenCalledWith('gov.labor_insurance_unit_code', { config_value: '12345678' })
   })
 })

@@ -1,4 +1,16 @@
 <script setup lang="ts">
+/**
+ * `system_configs` 設定區塊（逐 key 讀寫 GET/PUT /system-configs/{key}）。
+ *
+ * 2026-10-29（後台 IA 重整 S5）：同一個元件依 `placement` 嵌在不同模組頁，各自只顯示所屬區塊
+ * （區塊與位置的對照見 `constants/onboardingSystemConfigs.ts` 檔頭）；預設 `settings`＝
+ * /settings「分校設定」頁籤（機構全名、家長同意書）。
+ *
+ * 寫入權限必須與後端 `PUT /system-configs/{key}` 一致、不可比它寬：
+ * SETTINGS_WRITE（所有 key）＋ 內控／安全邊界 key 另需超級管理員 ＋ 金流／薪資口徑 key 另需
+ * 金流簽核（ACTIVITY_PAYMENT_APPROVE）。嵌入處的可見性由呼叫端以 SETTINGS_READ 控制
+ * （本元件的 GET 需要 SETTINGS_READ，沒有就會整片載入失敗）。
+ */
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -6,12 +18,13 @@ import { Check, Refresh } from '@element-plus/icons-vue'
 import { getSystemConfig, updateSystemConfig } from '@/api/systemConfig'
 import { hasPermission, isSuperAdmin } from '@/utils/auth'
 import {
-  SYSTEM_CONFIG_SECTIONS,
-  ALL_SYSTEM_CONFIG_FIELDS,
+  sectionsForPlacement,
   SUPER_ADMIN_ONLY_CONFIG_KEYS,
+  FINANCE_APPROVE_CONFIG_KEYS,
   type SystemConfigFieldDef,
   type SystemConfigFieldType,
   type SystemConfigOption,
+  type SystemConfigPlacement,
 } from '@/constants/onboardingSystemConfigs'
 import {
   normalizeConfigBoolean,
@@ -44,13 +57,25 @@ interface ConfigSectionRows {
   rows: ConfigRow[]
 }
 
+const props = withDefaults(defineProps<{ placement?: SystemConfigPlacement }>(), {
+  placement: 'settings',
+})
+
+const placementSections = sectionsForPlacement(props.placement)
+const placementFields = placementSections.flatMap((section) => section.fields)
+
 const canEdit = ref(hasPermission('SETTINGS_WRITE'))
 const superAdmin = ref(isSuperAdmin())
+const financeApprover = ref(hasPermission('ACTIVITY_PAYMENT_APPROVE'))
 
 /** 內控／安全邊界 key（後端 INTERNAL_CONTROL_CONFIG_KEYS）寫入另需超級管理員，否則後端 403。 */
 const requiresSuperAdmin = (row: ConfigRow): boolean => SUPER_ADMIN_ONLY_CONFIG_KEYS.has(row.key)
 const isLockedBySuperAdmin = (row: ConfigRow): boolean => requiresSuperAdmin(row) && !superAdmin.value
-const canEditRow = (row: ConfigRow): boolean => canEdit.value && !isLockedBySuperAdmin(row)
+/** 金流管控門檻／薪資口徑 key（後端 FINANCE_CONTROLLED_CONFIG_KEYS）寫入另需金流簽核權，否則後端 403。 */
+const requiresFinanceApprove = (row: ConfigRow): boolean => FINANCE_APPROVE_CONFIG_KEYS.has(row.key)
+const isLockedByFinance = (row: ConfigRow): boolean => requiresFinanceApprove(row) && !financeApprover.value
+const canEditRow = (row: ConfigRow): boolean =>
+  canEdit.value && !isLockedBySuperAdmin(row) && !isLockedByFinance(row)
 
 const sections = ref<ConfigSectionRows[]>([])
 const loading = ref(false)
@@ -99,10 +124,10 @@ const fetchAll = async () => {
   loading.value = true
   try {
     const rowsByKey = new Map<string, ConfigRow>()
-    const results = await Promise.all(ALL_SYSTEM_CONFIG_FIELDS.map(fetchOne))
+    const results = await Promise.all(placementFields.map(fetchOne))
     results.forEach((row) => rowsByKey.set(row.key, row))
 
-    sections.value = SYSTEM_CONFIG_SECTIONS.map((section) => ({
+    sections.value = placementSections.map((section) => ({
       title: section.title,
       hint: section.hint,
       rows: section.fields.map((def) => rowsByKey.get(def.key)!),
@@ -189,10 +214,16 @@ onMounted(() => {
             <el-tag v-if="canEdit && isLockedBySuperAdmin(row)" type="warning" size="small" style="margin-left: 6px;">
               需超級管理員
             </el-tag>
+            <el-tag v-if="canEdit && isLockedByFinance(row)" type="warning" size="small" style="margin-left: 6px;">
+              需金流簽核權限
+            </el-tag>
           </div>
           <div v-if="row.hint" class="config-row__hint">{{ row.hint }}</div>
           <div v-if="canEdit && isLockedBySuperAdmin(row)" class="config-row__hint">
             此項為內控／安全邊界設定，需超級管理員才能調整；目前僅供檢視。
+          </div>
+          <div v-if="canEdit && isLockedByFinance(row)" class="config-row__hint">
+            此項會直接影響金額計算或簽核嚴格度，需具備「金流簽核」權限（ACTIVITY_PAYMENT_APPROVE）才能調整；目前僅供檢視。
           </div>
         </div>
 

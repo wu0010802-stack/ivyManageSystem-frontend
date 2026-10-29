@@ -26,6 +26,7 @@
           @payroll="payrollOpen = true"
           @appraisal="appraisalOpen = true"
           @recalculate="recalcOpen = true"
+          @kiosk-settings="kioskSettingsOpen = true"
         />
       </template>
     </PageHeader>
@@ -47,6 +48,8 @@
     </div>
     <PayrollComparisonDialog v-if="payrollOpen && canPayrollCompare" v-model="payrollOpen" :year="query.year" :month="query.month" />
     <AppraisalSheetBatchDialog v-if="appraisalOpen && canPrintAppraisal" v-model="appraisalOpen" :year="query.year" :month="query.month" />
+    <!-- 打卡設定（Kiosk／校內 WiFi 允許 IP）：2026-10-29 S5 自系統設定 › 分校設定搬來。入口需 SETTINGS_READ（system_configs 的 GET），寫入權限由元件逐 key 鎖定 -->
+    <SystemConfigDialog v-if="kioskSettingsOpen && canKioskSettings" v-model="kioskSettingsOpen" title="打卡設定" placement="attendance" />
 
     <!-- 核對：週／月看格子（判定與待處理），逐人＝名冊＋整月明細。格子首次看週或月才掛載，之後 v-show 常駐保留抽屜狀態 -->
     <template v-if="showReconcile">
@@ -283,6 +286,7 @@ import { hasPermission, hasFullSalaryView } from '@/utils/auth'
 import type { AttendanceScope, AttendanceSub, AttendanceTab, AttendanceView } from '@/router/attendanceRouteProps'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
 const AppraisalSheetBatchDialog = defineAsyncComponent(() => import('@/components/attendance/AppraisalSheetBatchDialog.vue'))
+const SystemConfigDialog = defineAsyncComponent(() => import('@/components/settings/SystemConfigDialog.vue'))
 const DutyRotationPanel = defineAsyncComponent(() => import('@/components/schedule/DutyRotationPanel.vue'))
 const SwapHistoryPanel = defineAsyncComponent(() => import('@/components/schedule-attendance/SwapHistoryPanel.vue'))
 const ShiftTypesPanel = defineAsyncComponent(() => import('@/components/schedule-attendance/ShiftTypesPanel.vue'))
@@ -596,6 +600,8 @@ const importContext = ref<{ employee_id: number; employee_name: string; date: st
 function openImport(): void { importContext.value = null; importOpen.value = true }
 const payrollOpen = ref(false)
 const appraisalOpen = ref(false)
+const kioskSettingsOpen = ref(false)
+const canKioskSettings = hasPermission('SETTINGS_READ')
 const recalcOpen = ref(false)
 const importRevision = ref(0)
 watch(() => [query.year, query.month], () => {

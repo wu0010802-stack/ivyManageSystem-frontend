@@ -202,6 +202,12 @@
         </el-card>
       </el-tab-pane>
 
+      <!-- 2026-10-29 S5：自「系統設定 › 分校設定」移入的 POS 現金門檻。元件讀寫 system_configs：
+           讀要 SETTINGS_READ（頁籤依此顯示）；寫入要 SETTINGS_WRITE＋金流簽核，逐 key 在元件內鎖定，與後端一致。 -->
+      <el-tab-pane v-if="canReadSystemConfigs" label="收銀設定" name="cash">
+        <SettingsTenantConfigTab v-if="activeTab === 'cash'" placement="activity" />
+      </el-tab-pane>
+
       <el-tab-pane v-if="canWrite" label="候補轉正信模板" name="waitlistEmail">
         <EmailTemplateEditor
           title="候補直升正式通知信樣板"
@@ -282,6 +288,7 @@ import {
   taipeiNowMinuteString,
 } from './registrationSettingsConfirm'
 import EmailTemplateEditor from './EmailTemplateEditor.vue'
+import SettingsTenantConfigTab from '@/components/settings/SettingsTenantConfigTab.vue'
 // 課程／用品兩支頁面很重（課程頁近千行），靜態 import 會把它們併進設定頁 chunk；
 // 併入前它們各自是 route-level chunk，改 async 才維持原本的分包與首屏成本。
 const ActivityCourseView = defineAsyncComponent(() => import('./ActivityCourseView.vue'))
@@ -324,10 +331,13 @@ const router = useRouter()
 // 課程與用品（原 /activity/catalog）於 2026-07-31 併入本頁；日常使用的品項排前面，
 // 低頻的設定與信件模板排後面。設定三個 tab 需 ACTIVITY_WRITE，唯讀角色只看得到品項。
 const canWrite = hasPermission('ACTIVITY_WRITE')
+// 收銀設定（POS 現金門檻）是 system_configs，讀取走 SETTINGS_READ，與 ACTIVITY_WRITE 無關
+const canReadSystemConfigs = hasPermission('SETTINGS_READ')
 const DEFAULT_TAB = 'courses'
 const CATALOG_TABS = ['courses', 'supplies']
 const SETTINGS_TABS = ['registration', 'waitlistEmail', 'successEmail']
-const VALID_TABS = canWrite ? [...CATALOG_TABS, ...SETTINGS_TABS] : CATALOG_TABS
+const CASH_TABS = canReadSystemConfigs ? ['cash'] : []
+const VALID_TABS = canWrite ? [...CATALOG_TABS, ...CASH_TABS, ...SETTINGS_TABS] : [...CATALOG_TABS, ...CASH_TABS]
 const queryTab = route.query.tab as string | undefined
 const initialTab = queryTab && VALID_TABS.includes(queryTab) ? queryTab : DEFAULT_TAB
 const activeTab = ref(initialTab)

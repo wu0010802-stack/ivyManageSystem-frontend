@@ -7,16 +7,24 @@
  *
  * ⚠ 12 項中的 `bank.payer_name` / `bank.payer_account` 與薪資模組相關，UI 留在
  * `src/views/salary/SystemSettingsPanel.vue`（自有 `listSystemConfigs('bank')`
- * 邏輯，不吃本檔定義）；本檔僅收錄其餘 10 項機構層級設定，供
- * `src/components/settings/SettingsTenantConfigTab.vue`（系統設定頁「租戶基本
- * 設定」tab）使用。
+ * 邏輯，不吃本檔定義）；`bus.school_lat` / `bus.school_lng` 的編輯在
+ * `src/views/bus/BusSettingsPanel.vue`（走 `/bus/settings`，BUS_WRITE），2026-10-29 起
+ * 自本檔移除。本檔收錄其餘 8 項 onboarding 機構層級設定。
  *
- * ⚠ 本表 ≠ onboarding 必填清單：除上述 10 項外，另收錄「POS 現金門檻」兩個
+ * ⚠ 本表 ≠ onboarding 必填清單：除上述 8 項外，另收錄「POS 現金門檻」兩個
  * **選填** key（`pos.cash_count_required_threshold` /
- * `pos.cash_deposit_warning_threshold`），只是借用同一個 tab 讓人維護。新增
+ * `pos.cash_deposit_warning_threshold`），只是借用同一份定義讓人維護。新增
  * 選填 key 時**不可**同步加進後端 `ONBOARDING_REQUIRED_CONFIG_KEYS`，否則每個
  * 新租戶的 onboarding 進度都永遠不會齊。
  * 2026-10-23 起另收錄「薪資／請假／加班規則」五個選填 key（同理不屬 onboarding）。
+ *
+ * 2026-10-29（後台 IA 重整 S5）：每個區塊帶 `placement`，由 `SettingsTenantConfigTab`
+ * 依 placement 嵌進所屬模組的設定頁（原本全擠在「系統設定 › 分校設定」一個頁籤）：
+ *   settings   → /settings 分校設定（只剩機構全名、家長同意書）
+ *   attendance → /attendance 頁首「打卡設定」dialog（Kiosk／校內 WiFi IP 白名單）
+ *   gov        → 政府申報頁籤列「申報單位設定」dialog（三組單位代號）
+ *   activity   → /activity/settings「收銀設定」頁籤（POS 現金門檻）
+ *   salary     → /salary/settings「計算規則開關」頁籤（薪資／請假／加班規則、加班抵休）
  */
 
 /**
@@ -50,9 +58,13 @@ export interface SystemConfigFieldDef {
   options?: SystemConfigOption[]
 }
 
+/** 區塊嵌在哪個頁面（見檔頭）；同一區塊只出現在一處。 */
+export type SystemConfigPlacement = 'settings' | 'attendance' | 'gov' | 'activity' | 'salary'
+
 export interface SystemConfigSectionDef {
   title: string
   hint: string
+  placement: SystemConfigPlacement
   fields: SystemConfigFieldDef[]
 }
 
@@ -60,6 +72,7 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
   {
     title: '機構基本資訊',
     hint: '機構的正式全名，會用於申報文件、對外通知等場合。',
+    placement: 'settings',
     fields: [
       { key: 'org_name', label: '機構全名', type: 'text' },
     ],
@@ -70,6 +83,7 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
       '控制哪些來源 IP 可以使用 Kiosk 打卡機、或視為「校內 WiFi」允許教師登入。' +
       '⚠ 兩項留空的效果相反：Kiosk 留空＝打卡全部擋下（fail-closed），新租戶請務必填寫；' +
       '校內 WiFi 留空＝教師登入不限來源（全部放行）。',
+    placement: 'attendance',
     fields: [
       {
         key: 'kiosk.allowed_ips',
@@ -92,26 +106,9 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
     ],
   },
   {
-    title: '校車座標',
-    hint: '校車動線與到站距離計算所使用的校區座標（十進位經緯度字串）。',
-    fields: [
-      {
-        key: 'bus.school_lat',
-        label: '校區緯度',
-        hint: '十進位數字字串，例：22.6420',
-        type: 'text',
-      },
-      {
-        key: 'bus.school_lng',
-        label: '校區經度',
-        hint: '十進位數字字串，例：120.3243',
-        type: 'text',
-      },
-    ],
-  },
-  {
     title: '政府代碼',
     hint: '勞保／健保／勞退申報時所需的單位編號，供薪資申報作業使用。',
+    placement: 'gov',
     fields: [
       { key: 'gov.labor_insurance_unit_code', label: '勞保投保單位編號', type: 'text' },
       { key: 'gov.health_insurance_unit_code', label: '健保投保單位編號', type: 'text' },
@@ -123,6 +120,7 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
     hint:
       '才藝 POS 收銀與日結簽核的兩個現金門檻。兩者皆為選填，留空即沿用系統預設值，'
       + '不屬於新租戶 onboarding 必填項。',
+    placement: 'activity',
     fields: [
       {
         key: 'pos.cash_count_required_threshold',
@@ -146,6 +144,7 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
       '依各園所規章調整的計算口徑，皆為選填；未設定＝沿用系統原本的算法。'
       + '改「節慶目標人數生效月」或「未簽約新人節慶截止日」後，系統會自動把尚未封存的薪資月份標記為需重算，'
       + '請到薪資計算頁重算；已封存的月份不會變動。產假月份開關屬年終結算，改完須重建年終結算。',
+    placement: 'salary',
     fields: [
       {
         key: 'festival_target.effective_ym',
@@ -197,10 +196,18 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
     ],
   },
   {
-    title: '其他開關',
-    hint: '與家長同意書流程、加班抵休制度相關的功能開關。',
+    title: '家長同意書',
+    hint: '家長同意書流程的功能開關。',
+    placement: 'settings',
     fields: [
       { key: 'consent.enforcement_enabled', label: '強制家長同意書流程', type: 'switch' },
+    ],
+  },
+  {
+    title: '加班抵休',
+    hint: '加班時數可抵休假的制度開關。',
+    placement: 'salary',
+    fields: [
       { key: 'leave.ot_offset_enabled', label: '加班抵休啟用', type: 'switch' },
     ],
   },
@@ -225,3 +232,25 @@ export const SUPER_ADMIN_ONLY_CONFIG_KEYS: ReadonlySet<string> = new Set([
 export const ALL_SYSTEM_CONFIG_FIELDS: SystemConfigFieldDef[] = SYSTEM_CONFIG_SECTIONS.flatMap(
   (section) => section.fields,
 )
+
+/**
+ * 寫入另需「金流簽核」權限（ACTIVITY_PAYMENT_APPROVE）的 key。
+ *
+ * 與後端 `api/system_config.py::FINANCE_CONTROLLED_CONFIG_KEYS` 手動同步（僅列本檔有顯示的 key）：
+ * POS 現金門檻（調高＝日結盲簽／抽屜現金警報失效）＋薪資／年終口徑
+ * （`services/salary/policy_config_registry` 的 affects_amount key 與 `leave_quota_year_basis`）。
+ * 只有 SETTINGS_WRITE 的行政寫入會被後端 403；前端只用來把欄位改唯讀並提示，授權仍以後端為準。
+ * 2026-10-29 S5 把這些 key 搬進模組頁時一併補上：舊分校設定頁只看 SETTINGS_WRITE，會讓人改完才吃 403。
+ */
+export const FINANCE_APPROVE_CONFIG_KEYS: ReadonlySet<string> = new Set([
+  'pos.cash_count_required_threshold',
+  'pos.cash_deposit_warning_threshold',
+  'festival_target.effective_ym',
+  'festival.unsigned_cutoff_hire_date',
+  'year_end.exclude_maternity_months',
+  'leave_quota_year_basis',
+])
+
+/** 指定位置要顯示的區塊（保留 SYSTEM_CONFIG_SECTIONS 的順序）。 */
+export const sectionsForPlacement = (placement: SystemConfigPlacement): SystemConfigSectionDef[] =>
+  SYSTEM_CONFIG_SECTIONS.filter((section) => section.placement === placement)

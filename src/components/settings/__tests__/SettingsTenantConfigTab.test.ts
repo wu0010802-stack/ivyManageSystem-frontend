@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import SettingsTenantConfigTab from '@/components/settings/SettingsTenantConfigTab.vue'
+import type { SystemConfigPlacement } from '@/constants/onboardingSystemConfigs'
 import { ElMessage } from 'element-plus'
 
 // ── API mocks ────────────────────────────────────────────────────────────────
@@ -58,8 +59,9 @@ const GLOBAL_STUBS = {
   'el-icon': true,
 }
 
-function mountPanel() {
+function mountPanel(placement?: SystemConfigPlacement) {
   return shallowMount(SettingsTenantConfigTab, {
+    props: placement ? { placement } : {},
     global: {
       directives: { loading: {} },
       stubs: GLOBAL_STUBS,
@@ -100,7 +102,10 @@ function findRow(wrapper: ReturnType<typeof mountPanel>, key: string): ConfigRow
   throw new Error(`row not found: ${key}`)
 }
 
-describe('SettingsTenantConfigTab — 17 項（onboarding 非 bank 10 項 + POS 門檻 2 項 + 薪資規則 5 項）', () => {
+// 2026-10-29（後台 IA 重整 S5）：同一元件依 placement 只渲染所屬區塊——
+//   settings（預設）＝機構全名、家長同意書；attendance＝Kiosk／校內 WiFi；gov＝三組單位編號；
+//   activity＝POS 現金門檻；salary＝薪資／請假／加班規則 5 項＋加班抵休。校車座標已移到 /bus/settings。
+describe('SettingsTenantConfigTab — 依 placement 渲染所屬區塊', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     hasPermissionMock.mockReturnValue(true)
@@ -122,33 +127,69 @@ describe('SettingsTenantConfigTab — 17 項（onboarding 非 bank 10 項 + POS 
     expect(row.loadError).toBe(false)
     expect(row._editValue).toBe('')
 
-    // 全部 17 項皆 404，仍不得觸發「載入失敗」錯誤 toast
+    // 全部皆 404，仍不得觸發「載入失敗」錯誤 toast
     expect(ElMessage.error).not.toHaveBeenCalled()
     // 畫面上要看到「尚未設定」標籤，而非錯誤提示
     expect(wrapper.text()).toContain('尚未設定')
     expect(wrapper.text()).not.toContain('載入失敗')
   })
 
-  it('不包含 bank.* 欄位（銀行轉帳設定留在薪資設定頁）', async () => {
+  const PLACEMENT_KEYS: Record<SystemConfigPlacement, string[]> = {
+    settings: ['org_name', 'consent.enforcement_enabled'],
+    attendance: ['kiosk.allowed_ips', 'auth.school_wifi_ips'],
+    gov: [
+      'gov.labor_insurance_unit_code',
+      'gov.health_insurance_unit_code',
+      'gov.pension_employer_code',
+    ],
+    activity: ['pos.cash_count_required_threshold', 'pos.cash_deposit_warning_threshold'],
+    salary: [
+      'festival_target.effective_ym',
+      'leave_quota_year_basis',
+      'overtime.block_on_partial_leave_day',
+      'year_end.exclude_maternity_months',
+      'festival.unsigned_cutoff_hire_date',
+      'leave.ot_offset_enabled',
+    ],
+  }
+
+  it.each(Object.entries(PLACEMENT_KEYS) as [SystemConfigPlacement, string[]][])(
+    'placement=%s 只讀取並渲染自己的 key（逐 key GET，凍結清單守衛）',
+    async (placement, keys) => {
+      mock404All()
+
+      const wrapper = mountPanel(placement)
+      await flushPromises()
+      await nextTick()
+
+      const state = wrapper.vm.$.setupState as unknown as SetupState
+      const rendered = state.sections.flatMap((s) => s.rows.map((r) => r.key))
+      expect(rendered).toEqual(keys)
+      expect(getSystemConfig.mock.calls.map((c) => c[0] as string).sort()).toEqual([...keys].sort())
+    },
+  )
+
+  it('不包含 bank.*（留在薪資設定頁）與 bus.*（已移到 /bus/settings）；五個位置合計 15 項', async () => {
     mock404All()
 
-    const wrapper = mountPanel()
-    await flushPromises()
-    await nextTick()
-
-    const state = wrapper.vm.$.setupState as unknown as SetupState
-    const allKeys = state.sections.flatMap((s) => s.rows.map((r) => r.key))
-    expect(allKeys).not.toContain('bank.payer_name')
-    expect(allKeys).not.toContain('bank.payer_account')
-    // 凍結清單守衛：維持精確數字（不可放寬成 >=，否則誤刪欄位不會紅）。
-    // 17 ＝ 10 項 onboarding 必填（12 項扣掉留在薪資設定頁的 bank.* 兩項）
-    //      ＋ 2 項 POS 現金門檻（選填，2026-08-14 P3-17 借用同一 tab 維護）。
+    const allKeys: string[] = []
+    for (const placement of Object.keys(PLACEMENT_KEYS) as SystemConfigPlacement[]) {
+      const wrapper = mountPanel(placement)
+      await flushPromises()
+      await nextTick()
+      const state = wrapper.vm.$.setupState as unknown as SetupState
+      allKeys.push(...state.sections.flatMap((s) => s.rows.map((r) => r.key)))
+    }
+    expect(allKeys.some((k) => k.startsWith('bank.'))).toBe(false)
+    expect(allKeys.some((k) => k.startsWith('bus.'))).toBe(false)
+    // 精確數字（不可放寬成 >=，否則誤刪欄位不會紅）。
+    // 15 ＝ 8 項 onboarding（12 項扣掉 bank.* 兩項留在薪資設定頁、bus.* 兩項在 /bus/settings）
+    //      ＋ 2 項 POS 現金門檻（選填，2026-08-14 P3-17）
+    //      ＋ 5 項「薪資／請假／加班規則」（選填，2026-10-23 義華第二批裁定）。
     // ⚠ 後端 KNOWN_DEFAULTS 另有第三個 POS key（pos.operator_daily_refund_threshold），
     //   刻意不進前端 SYSTEM_CONFIG_SECTIONS。
-    // ＋ 5 項「薪資／請假／加班規則」（選填，2026-10-23 義華第二批裁定借用同一 tab；
-    //   含 year_end.exclude_maternity_months／festival.unsigned_cutoff_hire_date）
-    //   ＝ 17。
-    expect(allKeys).toHaveLength(17)
+    expect(allKeys).toHaveLength(15)
+    expect(new Set(allKeys).size).toBe(15)
   })
 
   it('GET 單筆非 404 錯誤（如 5xx）標記為載入失敗並提示重新整理', async () => {
@@ -200,7 +241,7 @@ describe('SettingsTenantConfigTab — 17 項（onboarding 非 bank 10 項 + POS 
   it('開關型從未設定（404）轉為開啟並儲存時，送出正規化的 "true"（非 1/yes 等變體）', async () => {
     mock404All()
 
-    const wrapper = mountPanel()
+    const wrapper = mountPanel('salary')
     await flushPromises()
     await nextTick()
 
@@ -220,7 +261,7 @@ describe('SettingsTenantConfigTab — 17 項（onboarding 非 bank 10 項 + POS 
   it('IP 白名單欄位輸入 JSON 陣列格式時顯示 inline 警示，逗號分隔格式不顯示', async () => {
     mock404All()
 
-    const wrapper = mountPanel()
+    const wrapper = mountPanel('attendance')
     await flushPromises()
     await nextTick()
 
@@ -250,28 +291,40 @@ describe('SettingsTenantConfigTab — 17 項（onboarding 非 bank 10 項 + POS 
   })
 
   describe('內控／安全邊界 key 需超級管理員（後端 INTERNAL_CONTROL_CONFIG_KEYS，稽核 F22）', () => {
-    const SUPER_KEYS_IN_TAB = [
-      'kiosk.allowed_ips',
-      'auth.school_wifi_ips',
-      'consent.enforcement_enabled',
-      'leave.ot_offset_enabled',
+    // 四個內控 key 分散在三個位置：settings／attendance／salary
+    const SUPER_KEYS_BY_PLACEMENT: [SystemConfigPlacement, string[]][] = [
+      ['settings', ['consent.enforcement_enabled']],
+      ['attendance', ['kiosk.allowed_ips', 'auth.school_wifi_ips']],
+      ['salary', ['leave.ot_offset_enabled']],
     ]
 
-    it('有 SETTINGS_WRITE 但非超級管理員：這些 key 唯讀並提示「需超級管理員」，其餘欄位照常可編輯', async () => {
+    it.each(SUPER_KEYS_BY_PLACEMENT)(
+      '有 SETTINGS_WRITE 但非超級管理員（%s）：內控 key 唯讀並提示「需超級管理員」',
+      async (placement, keys) => {
+        isSuperAdminMock.mockReturnValue(false)
+        mock404All()
+
+        const wrapper = mountPanel(placement)
+        await flushPromises()
+        await nextTick()
+
+        for (const key of keys) {
+          const rowEl = wrapper.find(`[data-test="config-row-${key}"]`)
+          expect(rowEl.exists(), key).toBe(true)
+          expect(rowEl.text(), key).toContain('需超級管理員')
+          expect(rowEl.find('input').attributes('disabled'), key).toBeDefined()
+          expect(rowEl.findAll('button'), key).toHaveLength(0)
+        }
+      },
+    )
+
+    it('同一位置內非內控的欄位照常可編輯（settings 的機構全名）', async () => {
       isSuperAdminMock.mockReturnValue(false)
       mock404All()
 
       const wrapper = mountPanel()
       await flushPromises()
       await nextTick()
-
-      for (const key of SUPER_KEYS_IN_TAB) {
-        const rowEl = wrapper.find(`[data-test="config-row-${key}"]`)
-        expect(rowEl.exists(), key).toBe(true)
-        expect(rowEl.text(), key).toContain('需超級管理員')
-        expect(rowEl.find('input').attributes('disabled'), key).toBeDefined()
-        expect(rowEl.findAll('button'), key).toHaveLength(0)
-      }
 
       const orgRow = wrapper.find('[data-test="config-row-org_name"]')
       expect(orgRow.text()).not.toContain('需超級管理員')
@@ -299,13 +352,110 @@ describe('SettingsTenantConfigTab — 17 項（onboarding 非 bank 10 項 + POS 
     it('超級管理員：不顯示「需超級管理員」提示，可編輯', async () => {
       mock404All()
 
-      const wrapper = mountPanel()
+      const wrapper = mountPanel('attendance')
       await flushPromises()
       await nextTick()
 
       expect(wrapper.text()).not.toContain('需超級管理員')
       const rowEl = wrapper.find('[data-test="config-row-kiosk.allowed_ips"]')
       expect(rowEl.find('input').attributes('disabled')).toBeUndefined()
+    })
+  })
+
+  describe('金流簽核 key 需 ACTIVITY_PAYMENT_APPROVE（後端 FINANCE_CONTROLLED_CONFIG_KEYS）', () => {
+    // 有 SETTINGS_WRITE、沒有金流簽核：後端會 403，所以搬進模組頁後前端就不給編輯
+    const noFinance = () =>
+      hasPermissionMock.mockImplementation((p: string) => p !== 'ACTIVITY_PAYMENT_APPROVE')
+
+    it('activity：POS 兩個門檻唯讀並提示「需金流簽核權限」', async () => {
+      noFinance()
+      mock404All()
+
+      const wrapper = mountPanel('activity')
+      await flushPromises()
+      await nextTick()
+
+      for (const key of ['pos.cash_count_required_threshold', 'pos.cash_deposit_warning_threshold']) {
+        const rowEl = wrapper.find(`[data-test="config-row-${key}"]`)
+        expect(rowEl.text(), key).toContain('需金流簽核權限')
+        expect(rowEl.find('input').attributes('disabled'), key).toBeDefined()
+        expect(rowEl.findAll('button'), key).toHaveLength(0)
+      }
+    })
+
+    it('salary：算錢口徑 4 個 key 唯讀；半日假加班與加班抵休（超級管理員）不受金流簽核影響', async () => {
+      noFinance()
+      mock404All()
+
+      const wrapper = mountPanel('salary')
+      await flushPromises()
+      await nextTick()
+
+      for (const key of [
+        'festival_target.effective_ym',
+        'leave_quota_year_basis',
+        'year_end.exclude_maternity_months',
+        'festival.unsigned_cutoff_hire_date',
+      ]) {
+        const rowEl = wrapper.find(`[data-test="config-row-${key}"]`)
+        expect(rowEl.text(), key).toContain('需金流簽核權限')
+        expect(rowEl.findAll('button'), key).toHaveLength(0)
+      }
+      // overtime.block_on_partial_leave_day：後端只要 SETTINGS_WRITE，不在 FINANCE_CONTROLLED_CONFIG_KEYS
+      const otRow = wrapper.find('[data-test="config-row-overtime.block_on_partial_leave_day"]')
+      expect(otRow.text()).not.toContain('需金流簽核權限')
+      expect(otRow.find('input').attributes('disabled')).toBeUndefined()
+      // leave.ot_offset_enabled：內控 key，超級管理員即可，不要求金流簽核
+      const offsetRow = wrapper.find('[data-test="config-row-leave.ot_offset_enabled"]')
+      expect(offsetRow.text()).not.toContain('需金流簽核權限')
+      expect(offsetRow.find('input').attributes('disabled')).toBeUndefined()
+    })
+
+    it('沒有金流簽核即使繞過 UI 呼叫 saveConfig，也不送出 PUT', async () => {
+      noFinance()
+      mock404All()
+
+      const wrapper = mountPanel('activity')
+      await flushPromises()
+      await nextTick()
+
+      const row = findRow(wrapper, 'pos.cash_count_required_threshold')
+      row._editValue = '99999999'
+      const state = wrapper.vm.$.setupState as unknown as SetupState
+      await state.saveConfig(row)
+      await flushPromises()
+
+      expect(updateSystemConfig).not.toHaveBeenCalled()
+    })
+
+    it('具備金流簽核：POS 門檻可編輯並送出 PUT', async () => {
+      mock404All()
+
+      const wrapper = mountPanel('activity')
+      await flushPromises()
+      await nextTick()
+
+      const row = findRow(wrapper, 'pos.cash_count_required_threshold')
+      row._editValue = '5000'
+      const state = wrapper.vm.$.setupState as unknown as SetupState
+      await state.saveConfig(row)
+      await flushPromises()
+
+      expect(updateSystemConfig).toHaveBeenCalledWith('pos.cash_count_required_threshold', {
+        config_value: '5000',
+      })
+    })
+
+    it('settings／attendance／gov 位置不出現「需金流簽核權限」', async () => {
+      noFinance()
+      mock404All()
+
+      for (const placement of ['settings', 'attendance', 'gov'] as SystemConfigPlacement[]) {
+        const wrapper = mountPanel(placement)
+        await flushPromises()
+        await nextTick()
+        expect(wrapper.text(), placement).not.toContain('需金流簽核權限')
+      }
     })
   })
 })

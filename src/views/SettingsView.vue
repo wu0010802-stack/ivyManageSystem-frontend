@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import SettingsLineTab from '@/components/settings/SettingsLineTab.vue'
 import SettingsTenantConfigTab from '@/components/settings/SettingsTenantConfigTab.vue'
+import SettingsMovedConfigNotice from '@/components/settings/SettingsMovedConfigNotice.vue'
 import DsrRequestsView from '@/views/DsrRequestsView.vue'
 import PolicyVersionsView from '@/views/PolicyVersionsView.vue'
 import { hasPermission } from '@/utils/auth'
@@ -61,7 +62,12 @@ const onTabChange = (name: string | number) => {
         <SettingsLineTab v-if="activeTab === 'line'" />
       </el-tab-pane>
       <el-tab-pane v-if="hasPermission('SETTINGS_READ')" label="分校設定" name="tenant-config" lazy>
-        <SettingsTenantConfigTab v-if="activeTab === 'tenant-config'" />
+        <!-- 2026-10-29 S5：Kiosk／WiFi、政府單位代號、POS 門檻、薪資規則開關、校車座標已歸位到各模組設定頁；
+             本頁籤只剩機構全名與家長同意書，其餘在上方說明裡指路（保留一個版本週期）。 -->
+        <template v-if="activeTab === 'tenant-config'">
+          <SettingsMovedConfigNotice />
+          <SettingsTenantConfigTab />
+        </template>
       </el-tab-pane>
       <el-tab-pane
         v-if="hasPermission('DSR_MANAGE')"

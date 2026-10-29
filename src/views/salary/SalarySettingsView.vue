@@ -1,6 +1,6 @@
 <template>
   <div>
-    <PageHeader title="薪資設定" subtitle="獎金規則、才藝老師、銀行轉帳與計算規則說明" />
+    <PageHeader title="薪資設定" subtitle="獎金規則、才藝老師、銀行轉帳、計算規則開關與計算規則說明" />
     <el-tabs v-model="tab" type="card" :before-leave="beforeTabLeave">
       <el-tab-pane v-if="canReadSettings" label="獎金設定" name="bonus">
         <BonusConfigPanel v-if="tab === 'bonus'" />
@@ -10,6 +10,12 @@
       </el-tab-pane>
       <el-tab-pane label="銀行轉帳" name="system_settings">
         <SystemSettingsPanel v-if="tab === 'system_settings'" />
+      </el-tab-pane>
+      <!-- 2026-10-29 S5：自「系統設定 › 分校設定」移入的薪資／請假／加班／年終／節慶口徑開關。
+           元件本身讀寫 GET/PUT /system-configs/{key}：讀要 SETTINGS_READ（所以頁籤依此顯示），
+           寫入權限（SETTINGS_WRITE＋金流簽核／超級管理員）逐 key 在元件內鎖定，與後端一致。 -->
+      <el-tab-pane v-if="canReadSettings" label="計算規則開關" name="rule_switches">
+        <SettingsTenantConfigTab v-if="tab === 'rule_switches'" placement="salary" />
       </el-tab-pane>
       <el-tab-pane label="計算規則說明" name="logic">
         <SalaryLogicPanel v-if="tab === 'logic'" />
@@ -26,6 +32,7 @@ import BonusConfigPanel from './BonusConfigPanel.vue'
 import ArtTeacherPayrollPanel from './ArtTeacherPayrollPanel.vue'
 import SystemSettingsPanel from './SystemSettingsPanel.vue'
 import SalaryLogicPanel from './SalaryLogicPanel.vue'
+import SettingsTenantConfigTab from '@/components/settings/SettingsTenantConfigTab.vue'
 import { hasPermission } from '@/utils/auth'
 import { confirmDiscardChanges, useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import { provideSettingsDirty } from './settingsDirty'
@@ -41,6 +48,7 @@ const visibleTabs = computed(() => [
   ...(canReadSettings.value ? ['bonus'] : []),
   'art_teacher',
   'system_settings',
+  ...(canReadSettings.value ? ['rule_switches'] : []),
   'logic',
 ])
 const queryTab = typeof route.query.tab === 'string' ? route.query.tab : ''

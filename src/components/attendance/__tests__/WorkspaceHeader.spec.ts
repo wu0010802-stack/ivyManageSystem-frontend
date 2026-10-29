@@ -93,6 +93,34 @@ describe('WorkspaceHeader — 電子打卡入口', () => {
   })
 })
 
+describe('WorkspaceHeader — 打卡設定入口（Kiosk／校內 WiFi 允許 IP，2026-10-29 S5）', () => {
+  it('有 SETTINGS_READ：打卡台連結旁有「打卡設定」，點了送 kioskSettings', async () => {
+    perms.set = new Set(['ATTENDANCE_READ', 'SETTINGS_READ'])
+    const wrapper = mountHeader()
+    const btn = wrapper.get('[data-test="header-kiosk-settings"]')
+    expect(btn.text()).toBe('打卡設定')
+    await btn.trigger('click')
+    expect(wrapper.emitted('kioskSettings')).toHaveLength(1)
+    perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
+  })
+
+  it('沒有 SETTINGS_READ（讀不到 system_configs）：不給入口', () => {
+    perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
+    expect(mountHeader().find('[data-test="header-kiosk-settings"]').exists()).toBe(false)
+  })
+
+  it('手機 ⋯ 選單：有 SETTINGS_READ 列出「打卡設定」，選了送 kioskSettings；沒有則不列', () => {
+    perms.set = new Set(['ATTENDANCE_READ', 'SETTINGS_READ'])
+    const wrapper = mountHeader({ mobile: true })
+    expect(wrapper.find('[data-command="kioskSettings"]').text()).toBe('打卡設定')
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'kioskSettings')
+    expect(wrapper.emitted('kioskSettings')).toHaveLength(1)
+
+    perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
+    expect(mountHeader({ mobile: true }).find('[data-command="kioskSettings"]').exists()).toBe(false)
+  })
+})
+
 describe('WorkspaceHeader — 月結選單', () => {
   it('有出勤寫入權限：列出「重算本月出勤」，選了送出 recalculate', async () => {
     perms.set = new Set(['ATTENDANCE_READ', 'ATTENDANCE_WRITE'])
