@@ -47,9 +47,11 @@ vi.mock('@/api/growthBooks', () => ({
 }))
 
 const sendGrowthReportToLine = vi.fn(() => Promise.resolve({ data: { sent_count: 1 } }))
+const deleteGrowthReport = vi.fn(() => Promise.resolve({ data: null }))
 const downloadGrowthReportUrl = (s: number, r: number) => `/dl/${s}/${r}`
 vi.mock('@/api/studentGrowthReports', () => ({
   sendGrowthReportToLine: (...a: unknown[]) => sendGrowthReportToLine(...a),
+  deleteGrowthReport: (...a: unknown[]) => deleteGrowthReport(...a),
   downloadGrowthReportUrl: (s: number, r: number) => downloadGrowthReportUrl(s, r),
   listGrowthReports: vi.fn(),
 }))
@@ -257,7 +259,7 @@ describe('GrowthBooksView', () => {
     expect(sendGrowthReportToLine).toHaveBeenCalledWith(2, 7)
   })
 
-  it('建立失敗（409）顯示後端 detail 訊息', async () => {
+  it('建立失敗（409 同學年已有成長冊）改顯示白話訊息，不外露 report_id／status 代碼', async () => {
     const errorSpy = vi.spyOn(ElMessage, 'error')
     const detail = '同學年已有成長冊（report_id=99, status=ready）'
     createGrowthBook.mockImplementationOnce(() =>
@@ -273,8 +275,10 @@ describe('GrowthBooksView', () => {
     await genBtn!.trigger('click')
     await flushPromises()
     expect(createGrowthBook).toHaveBeenCalled()
-    // 後端 409 detail 是純字串，apiError() 應直接透傳給 ElMessage.error 顯示
-    expect(errorSpy).toHaveBeenCalledWith(detail)
+    expect(errorSpy).toHaveBeenCalledWith(
+      '這位幼生本學年已有成長冊（或正在生成中），請重新整理確認目前狀態',
+    )
+    expect(errorSpy).not.toHaveBeenCalledWith(detail)
     errorSpy.mockRestore()
   })
 
@@ -333,22 +337,22 @@ describe('GrowthBooksView', () => {
     expect(createGrowthBook).toHaveBeenCalledWith(1, { academic_year: expect.any(Number) })
   })
 
-  it('點擊「策展」開啟策展抽屜並帶入該生 id／姓名', async () => {
+  it('點擊「挑選內容」開啟挑選抽屜並帶入該生 id／姓名', async () => {
     const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
     const vm = w.vm as unknown as VM
     vm.classroomId = 1
     await vm.load()
     await flushPromises()
-    const curationBtn = w.findAll('button').find((b) => b.text().trim() === '策展')
+    const curationBtn = w.findAll('button').find((b) => b.text().trim() === '挑選內容')
     expect(curationBtn).toBeTruthy()
     await curationBtn!.trigger('click')
     await flushPromises()
     expect(draftGrowthBook).toHaveBeenCalledWith(1, { academic_year: expect.any(Number) })
-    expect(w.text()).toContain('策展：王小明')
+    expect(w.text()).toContain('挑選成長冊內容：王小明')
   })
 
-  it('無 PORTFOLIO_PUBLISH 權限（READ-only 帳號）不應看到「策展」按鈕', async () => {
-    // 審查發現：策展按鈕原本只看 row.status，READ-only 帳號點開會 403 死路抽屜。
+  it('無 PORTFOLIO_PUBLISH 權限（READ-only 帳號）不應看到「挑選內容」按鈕', async () => {
+    // 審查發現：挑選內容（原「策展」）按鈕原本只看 row.status，READ-only 帳號點開會 403 死路抽屜。
     // 比照同檔其他動作按鈕（一鍵生成／推播 LINE）補上 canPublish gate。
     hasPermission.mockReturnValueOnce(false)
     const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
@@ -356,7 +360,7 @@ describe('GrowthBooksView', () => {
     vm.classroomId = 1
     await vm.load()
     await flushPromises()
-    const curationBtn = w.findAll('button').find((b) => b.text().trim() === '策展')
+    const curationBtn = w.findAll('button').find((b) => b.text().trim() === '挑選內容')
     expect(curationBtn).toBeUndefined()
   })
 
@@ -411,5 +415,290 @@ describe('GrowthBooksView', () => {
 
     releaseFirst?.()
     await flushPromises()
+  })
+  // ---------- 2026-10 UI/UX：頁首、四態、錯誤可見、重新製作 ----------
+
+  it('有頁首標題，且未選班級時顯示引導而不是空表格', async () => {
+    const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(w.find('h2').text()).toBe('成長冊工作台')
+    expect(w.find('[data-test="pick-classroom"]').exists()).toBe(true)
+    expect(w.text()).toContain('請先選擇班級')
+    expect(w.find('.el-table').exists()).toBe(false)
+  })
+
+  it('首次載入失敗：顯示錯誤態與重新載入，不當成沒有資料；重試成功後恢復列表', async () => {
+    const errorSpy = vi.spyOn(ElMessage, 'error')
+    getGrowthBookBatchStatus.mockImplementationOnce(() => Promise.reject(new Error('boom')))
+    const w = await mountLoaded()
+    expect(w.find('[data-test="load-error"]').exists()).toBe(true)
+    expect(w.text()).toContain('成長冊狀態載入失敗')
+    expect(w.text()).not.toContain('這個班級目前沒有在學的幼生')
+    expect(w.find('.el-table').exists()).toBe(false)
+    expect(errorSpy).toHaveBeenCalledWith('讀取成長冊狀態失敗')
+
+    await w.find('[data-test="load-error"] button').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test="load-error"]').exists()).toBe(false)
+    expect(w.text()).toContain('王小明')
+    errorSpy.mockRestore()
+  })
+
+  it('班級沒有在學幼生：顯示空狀態而不是空表格', async () => {
+    getGrowthBookBatchStatus.mockImplementationOnce(() =>
+      Promise.resolve({ data: { period_label: '114學年度成長冊', items: [] } }))
+    const w = await mountLoaded()
+    expect(w.find('[data-test="empty-class"]').exists()).toBe(true)
+    expect(w.text()).toContain('這個班級目前沒有在學的幼生')
+    expect(w.find('[data-test="load-error"]').exists()).toBe(false)
+  })
+
+  it('已有資料時重新載入失敗：保留舊列並提示可能不是最新，且鎖住全班動作', async () => {
+    const w = await mountLoaded()
+    const vm = w.vm as unknown as VM
+    getGrowthBookBatchStatus.mockImplementationOnce(() => Promise.reject(new Error('net')))
+    await vm.load()
+    await flushPromises()
+    expect(w.find('[data-test="stale-warning"]').exists()).toBe(true)
+    expect(w.find('[data-test="load-error"]').exists()).toBe(false)
+    expect(w.text()).toContain('王小明')
+    const batch = w.find('[data-test="batch-generate"]')
+    expect(batch.attributes('disabled')).not.toBeUndefined()
+  })
+
+  it('背景輪詢失敗後停止輪詢，不會每 5 秒重複彈出錯誤', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      getGrowthBookBatchStatus.mockImplementationOnce(() =>
+        Promise.resolve({
+          data: {
+            period_label: '114學年度成長冊',
+            items: [{ student_id: 1, student_name: '王小明', status: 'generating', report_id: 5,
+              line_sent_at: null,
+              material_summary: { observations: 1, work_samples: 0, photos: 0 } }],
+          },
+        }))
+      const w = await mountLoaded()
+      getGrowthBookBatchStatus.mockClear()
+      getGrowthBookBatchStatus.mockImplementationOnce(() => Promise.reject(new Error('net')))
+
+      vi.advanceTimersByTime(5000)
+      await flushPromises()
+      expect(getGrowthBookBatchStatus).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(20000)
+      await flushPromises()
+      expect(getGrowthBookBatchStatus).toHaveBeenCalledTimes(1)
+      expect(w.find('[data-test="stale-warning"]').exists()).toBe(true)
+      w.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('單筆推播失敗要有可見錯誤，並帶出學生姓名與後端原因', async () => {
+    const errorSpy = vi.spyOn(ElMessage, 'error')
+    sendGrowthReportToLine.mockImplementationOnce(() => Promise.reject({
+      response: { status: 409, data: { detail: '該學生家長未綁定 LINE' } },
+    }))
+    const w = await mountLoaded()
+    const pushBtn = w.findAll('button').find((b) => b.text().trim() === '推播 LINE')
+    await pushBtn!.trigger('click')
+    await flushPromises()
+    expect(errorSpy).toHaveBeenCalledWith('李小華推播失敗：該學生家長未綁定 LINE')
+    errorSpy.mockRestore()
+  })
+
+  it('批次生成部分失敗：頁面上留下失敗名單與原因，並彈出摘要而非逐筆 toast', async () => {
+    const errorSpy = vi.spyOn(ElMessage, 'error')
+    const warnSpy = vi.spyOn(ElMessage, 'warning')
+    errorSpy.mockClear()
+    getGrowthBookBatchStatus.mockImplementationOnce(() =>
+      Promise.resolve({
+        data: {
+          period_label: '114學年度成長冊',
+          items: [
+            { student_id: 1, student_name: '王小明', status: 'none', report_id: null, line_sent_at: null,
+              material_summary: { observations: 0, work_samples: 0, photos: 0 } },
+            { student_id: 3, student_name: '陳小美', status: 'none', report_id: null, line_sent_at: null,
+              material_summary: { observations: 2, work_samples: 1, photos: 5 } },
+          ],
+        },
+      }))
+    createGrowthBook.mockImplementationOnce(() => Promise.reject({
+      response: { status: 422, data: { detail: '該學年沒有任何可用素材' } },
+    }))
+    const w = await mountLoaded()
+    await w.find('[data-test="batch-generate"]').trigger('click')
+    await flushPromises()
+
+    const alert = w.find('[data-test="batch-failures"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('生成失敗 1 位')
+    expect(alert.text()).toContain('王小明：該學年沒有任何可用素材')
+    expect(alert.text()).not.toContain('陳小美')
+    expect(errorSpy).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('1 位失敗'))
+    errorSpy.mockRestore()
+    warnSpy.mockRestore()
+  })
+
+  it('批次推播部分失敗：頁面上列出推播失敗的學生與原因', async () => {
+    getGrowthBookBatchStatus.mockImplementationOnce(() =>
+      Promise.resolve({
+        data: {
+          period_label: '114學年度成長冊',
+          items: [
+            { student_id: 2, student_name: '李小華', status: 'ready', report_id: 7, line_sent_at: null,
+              material_summary: { observations: 1, work_samples: 0, photos: 3 } },
+            { student_id: 4, student_name: '張小花', status: 'ready', report_id: 9, line_sent_at: null,
+              material_summary: { observations: 1, work_samples: 0, photos: 3 } },
+          ],
+        },
+      }))
+    sendGrowthReportToLine.mockImplementationOnce(() => Promise.reject({
+      response: { status: 409, data: { detail: '該學生家長未綁定 LINE' } },
+    }))
+    const w = await mountLoaded()
+    await w.find('[data-test="batch-send"]').trigger('click')
+    await flushPromises()
+    expect(sendGrowthReportToLine).toHaveBeenCalledTimes(2)
+    const alert = w.find('[data-test="batch-failures"]')
+    expect(alert.text()).toContain('推播失敗 1 位')
+    expect(alert.text()).toContain('李小華：該學生家長未綁定 LINE')
+    expect(alert.text()).not.toContain('張小花')
+  })
+
+  it('一頁一個主要動作：還有人沒生成時「全班一鍵生成」為主要按鈕，全部生成後換成「全班推播」', async () => {
+    const w = await mountLoaded()
+    expect(w.find('[data-test="batch-generate"]').classes()).toContain('el-button--primary')
+    expect(w.find('[data-test="batch-send"]').classes()).not.toContain('el-button--primary')
+
+    getGrowthBookBatchStatus.mockImplementationOnce(() =>
+      Promise.resolve({
+        data: {
+          period_label: '114學年度成長冊',
+          items: [{ student_id: 2, student_name: '李小華', status: 'ready', report_id: 7, line_sent_at: null,
+            material_summary: { observations: 1, work_samples: 0, photos: 3 } }],
+        },
+      }))
+    await (w.vm as unknown as VM).load()
+    await flushPromises()
+    expect(w.find('[data-test="batch-generate"]').classes()).not.toContain('el-button--primary')
+    expect(w.find('[data-test="batch-generate"]').attributes('disabled')).not.toBeUndefined()
+    expect(w.find('[data-test="batch-send"]').classes()).toContain('el-button--primary')
+  })
+
+  it('已推播過的學生：按鈕改稱「再次推播」，已推播標記帶推播時間', async () => {
+    getGrowthBookBatchStatus.mockImplementationOnce(() =>
+      Promise.resolve({
+        data: {
+          period_label: '114學年度成長冊',
+          items: [{ student_id: 2, student_name: '李小華', status: 'ready', report_id: 7,
+            line_sent_at: '2026-07-20T10:00:00+08:00',
+            material_summary: { observations: 1, work_samples: 0, photos: 3 } }],
+        },
+      }))
+    const w = await mountLoaded()
+    expect(w.findAll('button').some((b) => b.text().trim() === '再次推播')).toBe(true)
+    expect(w.findAll('button').some((b) => b.text().trim() === '推播 LINE')).toBe(false)
+    expect(w.find('.pushed-tag').attributes('title')).toContain('已推播給家長')
+  })
+
+  it('「重新製作」先確認；取消則不刪除', async () => {
+    confirmSpy.mockRejectedValueOnce('cancel')
+    deleteGrowthReport.mockClear()
+    const w = await mountLoaded()
+    const btn = w.findAll('button').find((b) => b.text().trim() === '重新製作')
+    expect(btn).toBeTruthy()
+    await btn!.trigger('click')
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(String(confirmSpy.mock.calls[0][0])).toContain('李小華')
+    expect(deleteGrowthReport).not.toHaveBeenCalled()
+  })
+
+  it('「重新製作」確認後刪除舊冊、重新載入並開啟挑選內容抽屜', async () => {
+    deleteGrowthReport.mockClear()
+    draftGrowthBook.mockClear()
+    const w = await mountLoaded()
+    getGrowthBookBatchStatus.mockClear()
+    const btn = w.findAll('button').find((b) => b.text().trim() === '重新製作')
+    await btn!.trigger('click')
+    await flushPromises()
+    expect(deleteGrowthReport).toHaveBeenCalledWith(2, 7)
+    expect(getGrowthBookBatchStatus).toHaveBeenCalledTimes(1)
+    expect(draftGrowthBook).toHaveBeenCalledWith(2, { academic_year: expect.any(Number) })
+    expect(w.text()).toContain('挑選成長冊內容：李小華')
+  })
+
+  it('「重新製作」刪除失敗：顯示錯誤、不開抽屜', async () => {
+    const errorSpy = vi.spyOn(ElMessage, 'error')
+    deleteGrowthReport.mockImplementationOnce(() => Promise.reject({
+      response: { status: 403, data: { detail: '無權限' } },
+    }))
+    draftGrowthBook.mockClear()
+    const w = await mountLoaded()
+    const btn = w.findAll('button').find((b) => b.text().trim() === '重新製作')
+    await btn!.trigger('click')
+    await flushPromises()
+    expect(errorSpy).toHaveBeenCalledWith('刪除李小華的舊成長冊失敗：無權限')
+    expect(draftGrowthBook).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
+
+  it('無 PORTFOLIO_PUBLISH 權限：不顯示全班動作、推播與重新製作，但仍可下載', async () => {
+    hasPermission.mockReturnValueOnce(false)
+    const w = await mountLoaded()
+    expect(w.find('[data-test="batch-generate"]').exists()).toBe(false)
+    expect(w.find('[data-test="batch-send"]').exists()).toBe(false)
+    const labels = w.findAll('button').map((b) => b.text().trim())
+    expect(labels).not.toContain('重新製作')
+    expect(labels).not.toContain('推播 LINE')
+    expect(labels).toContain('下載')
+  })
+
+  it('學年度欄被清空時退回本學年度，不會送 null 給後端', async () => {
+    const w = await mountLoaded()
+    const vm = w.vm as unknown as VM
+    getGrowthBookBatchStatus.mockClear()
+    vm.academicYear = null as unknown as number
+    const input = w.findComponent({ name: 'ElInputNumber' })
+    input.vm.$emit('change', undefined, 114)
+    await flushPromises()
+    expect(typeof vm.academicYear).toBe('number')
+    expect(getGrowthBookBatchStatus).toHaveBeenCalledWith({
+      classroom_id: 1,
+      academic_year: vm.academicYear,
+    })
+  })
+
+  it('手機寬度改用卡片列表，操作按鈕仍可用且帶學生姓名', async () => {
+    const mq = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }) as unknown as MediaQueryList)
+    try {
+      const w = await mountLoaded()
+      expect(w.find('.el-table').exists()).toBe(false)
+      const cards = w.findAll('.alc-card')
+      expect(cards.length).toBe(2)
+      expect(cards[0].text()).toContain('王小明')
+      const gen = cards[0].findAll('button').find((b) => b.text().trim() === '一鍵生成')
+      expect(gen).toBeTruthy()
+      expect(gen!.attributes('aria-label')).toBe('一鍵生成：王小明')
+      createGrowthBook.mockClear()
+      await gen!.trigger('click')
+      await flushPromises()
+      expect(createGrowthBook).toHaveBeenCalledWith(1, { academic_year: expect.any(Number) })
+    } finally {
+      mq.mockRestore()
+    }
   })
 })
