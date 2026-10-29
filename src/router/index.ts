@@ -5,7 +5,13 @@ import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo,
 import { captureException } from '@/utils/sentry'
 import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
-import { attendancePageProps, legacyAttendanceScheduleRedirect, legacySettingsShiftsRedirect, schedulePageProps } from './attendanceRouteProps'
+import {
+    attendancePageProps,
+    legacyAttendanceScheduleRedirect,
+    legacySettingsShiftsRedirect,
+    scheduleFallbackForAttendance,
+    schedulePageProps,
+} from './attendanceRouteProps'
 import { isBatchTab } from '../views/salary/batchTabs'
 
 
@@ -1230,6 +1236,10 @@ export async function authGuard(to: RouteLocationNormalized) {
     // 錯誤頁不在 ROUTE_PERMISSION_RULES 內，不跳過會把錯誤頁再重導成迴圈。
     if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role !== 'teacher') {
         if (!to.meta.errorPage && !canAccessRoute(to.path)) {
+            // 2026-10-29 S3 拆頁：/attendance 不再借道 SCHEDULE；只能排班的人開舊入口改落排班頁
+            if (to.path === '/attendance' && canAccessRoute('/schedule')) {
+                return scheduleFallbackForAttendance(to)
+            }
             // '/' 是登入後的預設落點：導向第一個有權限的路由屬自動落地、不是錯誤；
             // 完全沒有可用路由（例：角色未 seed 被後端 fail-closed 回空權限）時導 403 錯誤頁，
             // 絕不可回 '/login'：已登入打 /login 又會被導回 '/'，形成無限轉址

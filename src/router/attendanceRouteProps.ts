@@ -81,6 +81,19 @@ export function legacyAttendanceScheduleRedirect(to: { path: string; query: Loca
   return { path: '/schedule', query }
 }
 
+/**
+ * 只持 SCHEDULE、無 ATTENDANCE_READ 的人開舊 /attendance（不帶排班頁籤，例如舊側欄入口的書籤）：
+ * 拆頁前 /attendance 借道 SCHEDULE、會直接落在排班頁籤；拆頁後改落 /schedule（帶合法 date），
+ * 而不是被擋成 403。authGuard 只在 canAccessRoute('/attendance') 為 false、'/schedule' 為 true 時呼叫。
+ */
+export function scheduleFallbackForAttendance(to: { query: LocationQuery }): {
+  path: '/schedule'
+  query: { date?: string }
+} {
+  const date = first(to.query.date)
+  return { path: '/schedule', query: isValidDateQuery(date) ? { date } : {} }
+}
+
 /** tab（含舊值）→ 頁籤＋它帶出的子頁籤／檢視／篩選 */
 function resolveTab(rawTab: string | undefined, rawSub: string | undefined): {
   tab?: AttendanceTab
