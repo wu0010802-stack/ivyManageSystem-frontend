@@ -42,7 +42,7 @@ vi.mock('@/utils/format', () => ({ todayTaipeiISO: () => '2026-10-29' }))
 import OtherSignoffsStrip from '../OtherSignoffsStrip.vue'
 
 const ALL_ROUTES = ['/appraisal-year-end/todo', '/finance-signoffs', '/fees', '/activity/pos/approval']
-const ALL_PERMS = ['APPRAISAL_READ', 'VENDOR_PAYMENT_READ', 'MISC_RECEIPT_READ']
+const ALL_PERMS = ['APPRAISAL_READ', 'VENDOR_PAYMENT_READ', 'MISC_RECEIPT_READ', 'ACTIVITY_READ']
 
 const STUBS = {
   'el-card': { template: '<div><slot /></div>' },
@@ -124,6 +124,40 @@ describe('OtherSignoffsStrip', () => {
     await flushPromises()
     expect(text(w, 'fees-close')).toContain('1 項')
     expect(text(w, 'fees-close')).toContain('上個月（2026-09）尚未關帳')
+  })
+
+  it('學費月結：從沒關過帳的租戶不算「上月未關帳」', async () => {
+    closePeriodsMock.mockResolvedValue({ items: [], total: 0 })
+    handoversMock.mockResolvedValue({ total: 0, items: [] })
+    closeSummaryMock.mockResolvedValue({ owner: { pending_refunds: 0 } })
+    const w = mountStrip()
+    await flushPromises()
+    expect(text(w, 'fees-close')).toContain('0 項')
+    expect(text(w, 'fees-close')).not.toContain('尚未關帳')
+  })
+
+  it('學費月結：班級受限角色計數端點 403 → 只放連結，不顯示載入失敗', async () => {
+    handoversMock.mockRejectedValue({ response: { status: 403 } })
+    const w = mountStrip()
+    await flushPromises()
+    expect(w.find('[data-test="signoff-fees-close"] [data-test="count-error"]').exists()).toBe(false)
+    expect(text(w, 'fees-close')).not.toMatch(/\d+ 項/)
+  })
+
+  it('學費月結：非 403 錯誤仍顯示「—」，不吞成 0', async () => {
+    handoversMock.mockRejectedValue({ response: { status: 500 } })
+    const w = mountStrip()
+    await flushPromises()
+    expect(w.get('[data-test="signoff-fees-close"] [data-test="count-error"]').text()).toBe('—')
+  })
+
+  it('POS 日結：只持簽核碼、無 ACTIVITY_READ → 不打計數端點、只放連結', async () => {
+    authState.perms = new Set(['APPRAISAL_READ', 'VENDOR_PAYMENT_READ', 'MISC_RECEIPT_READ'])
+    const w = mountStrip()
+    await flushPromises()
+    expect(posPendingMock).not.toHaveBeenCalled()
+    expect(w.find('[data-test="signoff-pos-daily-close"]').exists()).toBe(true)
+    expect(w.find('[data-test="signoff-pos-daily-close"] [data-test="count-error"]').exists()).toBe(false)
   })
 
   it('學費月結：全部乾淨顯示 0', async () => {

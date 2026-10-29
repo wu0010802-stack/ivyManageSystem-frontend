@@ -107,11 +107,21 @@ async function loadFeesClose(): Promise<Loaded | null> {
   const prevYear = month === 1 ? year - 1 : year
   const prevMonth = month === 1 ? 12 : month - 1
   // 三支都是學費「結算」頁既有的摘要／帶 total 的呼叫（現金交接 limit=1 只取 total）。
-  const [handovers, closeSummary, periods] = await Promise.all([
-    getCashHandovers({ status: 'submitted', limit: 1 }),
-    getCloseSummary(year, month),
-    getClosePeriods(),
-  ])
+  // 後端守衛 require_recon_scope 另要全園範圍：班級受限的 FEES_READ 角色看得到 /fees 卻打不了
+  // 這三支（403）——對他們只放連結，不顯示「載入失敗」。其他錯誤照常往外拋顯示「—」。
+  let handovers: Awaited<ReturnType<typeof getCashHandovers>>
+  let closeSummary: Awaited<ReturnType<typeof getCloseSummary>>
+  let periods: Awaited<ReturnType<typeof getClosePeriods>>
+  try {
+    ;[handovers, closeSummary, periods] = await Promise.all([
+      getCashHandovers({ status: 'submitted', limit: 1 }),
+      getCloseSummary(year, month),
+      getClosePeriods(),
+    ])
+  } catch (e) {
+    if ((e as { response?: { status?: number } })?.response?.status === 403) return null
+    throw e
+  }
   const submitted = requireNumber((handovers as { total?: unknown }).total, '現金交接')
   const refunds = requireNumber(
     (closeSummary as unknown as { owner?: { pending_refunds?: unknown } }).owner?.pending_refunds,
@@ -122,16 +132,21 @@ async function loadFeesClose(): Promise<Loaded | null> {
     (r) => r.close_year === prevYear && r.close_month === prevMonth && r.status === 'closed',
   )
   const parts: string[] = []
-  if (!prevClosed) parts.push(`上個月（${prevYear}-${String(prevMonth).padStart(2, '0')}）尚未關帳`)
+  // 從沒關過帳（沒採用月結）的租戶不算「上月未關帳」，否則這張卡永遠亮著 1
+  const usesMonthlyClose = rows.length > 0
+  const prevPending = usesMonthlyClose && !prevClosed
+  if (prevPending) parts.push(`上個月（${prevYear}-${String(prevMonth).padStart(2, '0')}）尚未關帳`)
   if (submitted > 0) parts.push(`現金交接 ${submitted} 批待簽收`)
   if (refunds > 0) parts.push(`預繳退款 ${refunds} 筆待處理`)
   return {
-    count: (prevClosed ? 0 : 1) + submitted + refunds,
+    count: (prevPending ? 1 : 0) + submitted + refunds,
     detail: parts.length > 0 ? parts.join('、') : '沒有待老闆簽核的項目',
   }
 }
 
 async function loadPosDailyClose(): Promise<Loaded | null> {
+  // 卡片 gate 是 POS 簽核頁（ACTIVITY_PAYMENT_APPROVE），計數端點卻要 ACTIVITY_READ：沒有就只放連結
+  if (!hasPermission(PERMISSION_NAMES.ACTIVITY_READ)) return null
   const data = (await getPOSDailyClosePending()).data
   const older = data.older_pending_count ?? 0
   const recent = (data.pending ?? []).length
