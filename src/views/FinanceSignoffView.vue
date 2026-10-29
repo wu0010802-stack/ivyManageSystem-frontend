@@ -38,18 +38,12 @@
     </el-tabs>
 
     <section v-if="activeKey === 'fixed-cost' && canReadFixedCost" aria-label="固定支出登錄">
-      <!-- 有「經營報表」權限者：登錄表已搬到報表分頁，這裡只留導引 -->
-      <div v-if="fixedCostMovedToReports" class="fs-moved" data-test="fixed-cost-moved">
-        <p class="fs-moved__text">固定支出登錄已移到「經營報表」，和每月結帳狀態放在一起。</p>
-        <el-button type="primary" data-test="goto-reports-fixed-cost" @click="gotoReportsFixedCost">前往登錄</el-button>
-      </div>
-      <template v-else>
-        <label for="fixed-cost-year">登錄年度</label>
-        <el-select id="fixed-cost-year" :model-value="fixedCostYear" aria-label="登錄年度" @change="changeFixedCostYear">
-          <el-option v-for="year in fixedCostYears" :key="year" :label="`${year} 年`" :value="year" />
-        </el-select>
-        <MonthlyFixedCostPanel :key="fixedCostYear" :year="fixedCostYear" :highlight-month="fixedCostMonth" @update:dirty="fixedCostDirty = $event" />
-      </template>
+      <!-- 固定支出登錄唯一的登錄入口（2026-10-29 後台 IA 重整 M2：經營報表不再有登錄頁籤） -->
+      <label for="fixed-cost-year">登錄年度</label>
+      <el-select id="fixed-cost-year" :model-value="fixedCostYear" aria-label="登錄年度" @change="changeFixedCostYear">
+        <el-option v-for="year in fixedCostYears" :key="year" :label="`${year} 年`" :value="year" />
+      </el-select>
+      <MonthlyFixedCostPanel :key="fixedCostYear" :year="fixedCostYear" :highlight-month="fixedCostMonth" @update:dirty="fixedCostDirty = $event" />
     </section>
     <SignoffPanel
       v-else-if="activeModule"
@@ -128,15 +122,8 @@ const fixedCostMonth = computed(() => {
   const month = Number(route.query.month)
   return typeof route.query.month === 'string' && Number.isInteger(month) && month >= 1 && month <= 12 ? month : undefined
 })
-// 固定支出登錄自 2026-10-12 起搬到「經營報表」分頁（和每月結帳狀態放一起）。
-// 有 REPORTS 權限者改看導引；沒有 REPORTS 的角色（只有廠商付款權限）進不了報表，
-// 仍在此頁登錄，避免失去唯一入口。
-const fixedCostMovedToReports = computed(() => hasPermission('REPORTS'))
-function gotoReportsFixedCost() {
-  const query: Record<string, string> = { tab: 'fixed-cost', year: String(fixedCostYear.value) }
-  if (fixedCostMonth.value != null) query.month = String(fixedCostMonth.value)
-  router.push({ path: '/reports', query })
-}
+// 固定支出登錄曾於 2026-10-12 搬到「經營報表」分頁，2026-10-29（後台 IA 重整 M2）收回：
+// 登錄只留本頁，經營報表頁首改放「前往收付款管理登錄固定支出」連結。
 async function confirmLeaveFixedCost(): Promise<boolean> {
   if (activeKey.value !== 'fixed-cost' || !fixedCostDirty.value) return true
   try {
@@ -248,22 +235,6 @@ async function createFor(key: string) {
 }
 .fs-create-icon {
   margin-right: 4px;
-}
-
-/* 固定支出已搬到經營報表的導引 */
-.fs-moved {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3, 12px);
-  padding: var(--space-6, 24px) var(--space-4, 16px);
-  background: var(--el-fill-color-light);
-  border-radius: var(--radius-md);
-}
-.fs-moved__text {
-  margin: 0;
-  font-size: var(--text-base);
-  color: var(--el-text-color-regular);
 }
 
 /* ── 行動版 sticky 新增列（滿寬主按鈕 + 44px 選單鈕，避開 safe-area）── */

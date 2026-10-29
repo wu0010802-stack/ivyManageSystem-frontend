@@ -4,8 +4,16 @@
  * 舊路徑的權限規則仍由 manifest 保留（redirect 解析前不被彈走）。
  * 照 scheduleRedirect.spec.ts 用 follow() 取 matched[-1].redirect 二次 resolve。
  */
-import { describe, it, expect } from 'vitest'
-import type { RouteLocationRaw } from 'vue-router'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { RouteLocationNormalized, RouteLocationRaw } from 'vue-router'
+
+// M2 的 /reports beforeEnter 依 hasPermission('VENDOR_PAYMENT_READ') 分流；其餘 auth 匯出保持真實
+const granted = vi.hoisted(() => new Set<string>())
+vi.mock('@/utils/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/auth')>()),
+  hasPermission: (code: string) => granted.has(code),
+}))
+
 import router from '@/router'
 import { SIDEBAR_TREE } from '@/constants/navigation'
 import { ROUTE_PERMISSION_RULES } from '@/constants/permissions'
@@ -53,5 +61,38 @@ describe('M1 公告分類併入公告管理', () => {
   it('舊路徑權限規則保留（仍為 ANNOUNCEMENTS_READ）', () => {
     const rules = ROUTE_PERMISSION_RULES.filter((r) => r.path === '/announcement-categories')
     expect(rules.map((r) => r.permission)).toEqual(['ANNOUNCEMENTS_READ'])
+  })
+})
+
+type EnterGuard = (to: RouteLocationNormalized) => unknown
+
+describe('M2 固定支出登錄只留收付款管理', () => {
+  const reportsGuard = () => {
+    const rec = router.getRoutes().find((r) => r.path === '/reports')
+    const guard = rec?.beforeEnter
+    expect(guard).toBeTypeOf('function')
+    return guard as unknown as EnterGuard
+  }
+  const to = (query: Record<string, string>) => ({ query }) as unknown as RouteLocationNormalized
+
+  beforeEach(() => granted.clear())
+
+  it('/reports?tab=fixed-cost 導到 /finance-signoffs?tab=fixed-cost，year／month 一併帶過去', () => {
+    granted.add('VENDOR_PAYMENT_READ')
+    expect(reportsGuard()(to({ tab: 'fixed-cost', year: '2025', month: '8' }))).toEqual({
+      path: '/finance-signoffs',
+      query: { tab: 'fixed-cost', year: '2025', month: '8' },
+      replace: true,
+    })
+  })
+
+  it('沒有 VENDOR_PAYMENT_READ：不導走（收付款管理看不到該頁籤），報表頁自行 fallback 總覽', () => {
+    expect(reportsGuard()(to({ tab: 'fixed-cost' }))).toBe(true)
+  })
+
+  it('其他報表頁籤不受影響', () => {
+    granted.add('VENDOR_PAYMENT_READ')
+    expect(reportsGuard()(to({ tab: 'finance', year: '2025' }))).toBe(true)
+    expect(reportsGuard()(to({}))).toBe(true)
   })
 })

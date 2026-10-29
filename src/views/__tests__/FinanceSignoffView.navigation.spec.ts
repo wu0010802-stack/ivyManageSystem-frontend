@@ -4,7 +4,7 @@ import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
 import ElementPlus, { ElMessageBox } from 'element-plus'
 import FinanceSignoffView from '../FinanceSignoffView.vue'
 
-// 預設不含 REPORTS：固定支出登錄表只在沒有 REPORTS 權限時才渲染在這頁（有 REPORTS 者改看導引）
+// 固定支出登錄只留收付款管理（後台 IA 重整 M2）：不論是否持有 REPORTS 都渲染登錄表
 const perms = vi.hoisted(() => ({ reports: false }))
 vi.mock('@/utils/auth', () => ({
   hasPermission: (p: string) => (p === 'REPORTS' ? perms.reports : true),
@@ -65,26 +65,18 @@ describe('固定支出導覽整合', () => {
     wrapper.unmount()
   })
 
-  it('有 REPORTS 權限：不渲染登錄表，「前往登錄」直接進經營報表、不觸發未儲存確認', async () => {
+  it('持有 REPORTS 權限：仍直接渲染登錄表（不再導去經營報表）', async () => {
     perms.reports = true
     const router = createRouter({
       history: createMemoryHistory(),
-      routes: [
-        { path: '/finance-signoffs', component: FinanceSignoffView },
-        { path: '/reports', component: { template: '<div data-test="reports-page" />' } },
-      ],
+      routes: [{ path: '/finance-signoffs', component: FinanceSignoffView }],
     })
     await router.push('/finance-signoffs?tab=fixed-cost&year=2025')
     const wrapper = mount(RouterView, { global: { plugins: [router, ElementPlus] } })
     await flushPromises()
-    expect(wrapper.find('[data-test="draft"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="fixed-cost-moved"]').exists()).toBe(true)
-
-    await wrapper.find('[data-test="goto-reports-fixed-cost"]').trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/reports')
-    expect(router.currentRoute.value.query).toEqual({ tab: 'fixed-cost', year: '2025' })
-    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="draft"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="fixed-cost-moved"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="goto-reports-fixed-cost"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })

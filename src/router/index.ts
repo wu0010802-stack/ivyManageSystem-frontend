@@ -108,6 +108,12 @@ export const routes: RouteRecordRaw[] = [
             path: '/reports',
             name: 'reports',
             component: () => import('../views/ReportsView.vue'),
+            // 2026-10-29 後台 IA 重整 M2：固定支出登錄只留收付款管理。舊 ?tab=fixed-cost 深連結
+            //（書籤／報表頁舊按鈕）導到 /finance-signoffs?tab=fixed-cost，year／month 等 query 原樣帶過。
+            // 沒有 VENDOR_PAYMENT_READ 的人在收付款管理看不到該頁籤，維持落在報表（頁內 fallback 總覽）。
+            beforeEnter: (to) => to.query.tab === 'fixed-cost' && hasPermission('VENDOR_PAYMENT_READ')
+                ? { path: '/finance-signoffs', query: { ...to.query, tab: 'fixed-cost' }, replace: true }
+                : true,
             meta: { title: PAGE_TERMS.reports }
         },
         {

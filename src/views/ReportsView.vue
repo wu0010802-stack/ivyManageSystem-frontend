@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, ArrowLeft, ArrowRight, Download, EditPen } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { ArrowDown, ArrowLeft, ArrowRight, Download } from '@element-plus/icons-vue'
 import { getFinanceSummary, financeSummaryExportUrl, monthlyPnlExportUrl } from '@/api/reports'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
 import { computeReportPeriod, defaultFocusMonth, monthState } from './reports/useReportPeriod'
 import { useFixedCostStatus } from './reports/useFixedCostStatus'
 import type { FinanceTrendRow } from './reports/financeTrend'
 import OverviewPanel from './reports/OverviewPanel.vue'
 import FinanceSummaryPanel from './reports/FinanceSummaryPanel.vue'
 import MonthlyPnLPanel from './reports/MonthlyPnLPanel.vue'
-import MonthlyFixedCostPanel from './reports/MonthlyFixedCostPanel.vue'
 import AttendancePanel from './reports/AttendancePanel.vue'
 import SalaryPanel from './reports/SalaryPanel.vue'
 import ReportNotesDrawer from './reports/ReportNotesDrawer.vue'
@@ -23,7 +23,10 @@ const route = useRoute()
 const router = useRouter()
 
 // tab key 沿用舊值（舊網址與書籤可用），只改顯示名稱與順序（2026-10-12 改版 Q2）
-const VALID_TABS = ['overview', 'finance', 'monthly-pnl', 'salary', 'attendance', 'fixed-cost'] as const
+// 2026-10-29 後台 IA 重整 M2：「固定支出登錄」頁籤移除（登錄只留收付款管理）；舊的
+// /reports?tab=fixed-cost 由 router 的 beforeEnter 導到 /finance-signoffs?tab=fixed-cost，
+// 這裡再遇到該值（無 VENDOR_PAYMENT_READ 的人）一律 fallback 到總覽。
+const VALID_TABS = ['overview', 'finance', 'monthly-pnl', 'salary', 'attendance'] as const
 const currentYear = new Date().getFullYear()
 // 年度選單：往回 4 年、往後 1 年（舊版往後 3 年、往回 1 年，與實際使用相反）
 const YEAR_OPTIONS = Array.from({ length: 6 }, (_, i) => currentYear + 1 - i)
@@ -45,7 +48,6 @@ const selectedYear = ref(parseYear(route.query.year))
 const activeTab = ref(parseTab(route.query.tab))
 // 使用者明確選過的月份；null＝跟著預設（最近完整月）。只有明確選過才寫進網址。
 const selectedMonth = ref<number | null>(parseMonth(route.query.month))
-const fixedCostDirty = ref(false)
 
 watch([activeTab, selectedYear, selectedMonth], ([tab, year, month]) => {
   const query: Record<string, string> = {}
@@ -97,7 +99,7 @@ function shiftMonth(delta: number) {
   setFocusMonth(Math.min(12, Math.max(1, focusMonth.value + delta)))
 }
 
-// ── 固定支出登錄狀態（分頁列未登錄數＋總覽／收支分析的結帳狀態共用）────────
+// ── 固定支出登錄狀態（頁首「前往登錄」連結的未登錄數＋總覽／收支分析的結帳狀態共用）────
 const fixedCost = useFixedCostStatus(selectedYear)
 const missingFixedCostCount = computed<number | null>(() => {
   const s = fixedCost.status.value
@@ -108,40 +110,31 @@ const missingFixedCostCount = computed<number | null>(() => {
   return n
 })
 
+// ── 固定支出登錄：只留收付款管理（2026-10-29 後台 IA 重整 M2）─────────────
+// 登錄表（MonthlyFixedCostPanel）與其未儲存離開保護都搬走了，報表頁只放前往連結。
+// gate 與收付款管理的「固定支出登錄」頁籤一致（VENDOR_PAYMENT_READ）；沒有這個權限的人
+// useFixedCostStatus 會是 forbidden，總覽／收支分析也不會出現「登錄」按鈕。
+const canRegisterFixedCost = hasPermission('VENDOR_PAYMENT_READ')
+function gotoFixedCostRegistration(month?: number | null) {
+  const query: Record<string, string> = { tab: 'fixed-cost', year: String(selectedYear.value) }
+  const m = month ?? selectedMonth.value
+  if (m != null) query.month = String(m)
+  router.push({ path: '/finance-signoffs', query })
+}
+
 // ── 跨分頁導覽（總覽的結帳狀態動作、指標連結） ─────────────────────────
 function onNavigate(payload: { tab: string; month?: number }) {
+  if (payload.tab === 'fixed-cost') {
+    if (canRegisterFixedCost) gotoFixedCostRegistration(payload.month)
+    return
+  }
   if (payload.month != null) setFocusMonth(payload.month)
   if ((VALID_TABS as readonly string[]).includes(payload.tab)) activeTab.value = payload.tab
 }
 
-// ── 固定支出 dirty 離開保護 ─────────────────────────────────────────
-async function confirmLoseFixedCost(): Promise<boolean> {
-  if (!(activeTab.value === 'fixed-cost' && fixedCostDirty.value)) return true
-  try {
-    await ElMessageBox.confirm('固定費用尚有未儲存變更，確定離開並捨棄？', '未儲存變更', {
-      type: 'warning',
-      confirmButtonText: '捨棄變更',
-      cancelButtonText: '留在此頁',
-    })
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function onYearChange(y: number): Promise<void> {
-  if (await confirmLoseFixedCost()) {
-    selectedYear.value = y
-    selectedMonth.value = null // 換年度回到該年的預設月份
-  }
-  // 取消則不 commit；el-select 受控於 :model-value 會自動還原顯示
-}
-
-async function onTabBeforeLeave(_activeName: string | number, oldName: string | number): Promise<boolean> {
-  if (oldName === 'fixed-cost' && fixedCostDirty.value) {
-    return confirmLoseFixedCost()
-  }
-  return true
+function onYearChange(y: number): void {
+  selectedYear.value = y
+  selectedMonth.value = null // 換年度回到該年的預設月份
 }
 
 // ── 匯出（集中在頁首，取代各分頁各自的按鈕） ───────────────────────────
@@ -172,9 +165,8 @@ defineExpose({
   selectedMonth,
   focusMonth,
   activeTab,
-  fixedCostDirty,
   onYearChange,
-  onTabBeforeLeave,
+  gotoFixedCostRegistration,
   setFocusMonth,
   onExport,
 })
@@ -187,6 +179,19 @@ defineExpose({
         現金收付實現制 · 含薪資、固定支出、廠商付款、年終撥款與代收手續費 ·
         <span data-test="data-cutoff-badge">{{ cutoffText }}</span> ·
         <button type="button" class="notes-link" data-test="open-notes" @click="notesOpen = true">口徑說明</button>
+        <template v-if="canRegisterFixedCost">
+          ·
+          <button
+            type="button" class="notes-link" data-test="goto-fixed-cost"
+            @click="gotoFixedCostRegistration()"
+          >前往收付款管理登錄固定支出</button>
+          <span
+            v-if="missingFixedCostCount"
+            class="tab-entry__count"
+            data-test="fixed-cost-missing-count"
+            :aria-label="`${missingFixedCostCount} 個月未登錄`"
+          >{{ missingFixedCostCount }}</span>
+        </template>
       </p>
       <template #actions>
         <div class="period" data-test="period-controls">
@@ -237,7 +242,7 @@ defineExpose({
       </template>
     </PageHeader>
 
-    <el-tabs v-model="activeTab" class="reports-tabs" :before-leave="onTabBeforeLeave">
+    <el-tabs v-model="activeTab" class="reports-tabs">
       <el-tab-pane label="總覽" name="overview">
         <OverviewPanel
           v-if="activeTab === 'overview' && panelsReady"
@@ -288,31 +293,9 @@ defineExpose({
           @update:focus-month="setFocusMonth"
         />
       </el-tab-pane>
-      <el-tab-pane name="fixed-cost">
-        <template #label>
-          <span class="tab-entry" data-test="fixed-cost-tab-label">
-            <el-icon :size="13"><EditPen /></el-icon>
-            固定支出登錄
-            <span
-              v-if="missingFixedCostCount"
-              class="tab-entry__count"
-              data-test="fixed-cost-missing-count"
-              :aria-label="`${missingFixedCostCount} 個月未登錄`"
-            >{{ missingFixedCostCount }}</span>
-          </span>
-        </template>
-        <MonthlyFixedCostPanel
-          v-if="activeTab === 'fixed-cost'"
-          :key="selectedYear"
-          :year="selectedYear"
-          :highlight-month="selectedMonth ?? undefined"
-          @update:dirty="fixedCostDirty = $event"
-          @saved="fixedCost.reload()"
-        />
-      </el-tab-pane>
     </el-tabs>
 
-    <el-skeleton v-if="!panelsReady && activeTab !== 'fixed-cost'" :rows="8" animated data-test="period-loading" />
+    <el-skeleton v-if="!panelsReady" :rows="8" animated data-test="period-loading" />
 
     <ReportNotesDrawer v-model="notesOpen" />
   </div>
@@ -359,12 +342,10 @@ defineExpose({
   white-space: nowrap;
 }
 
-/* 分頁：底線式；固定支出登錄靠右，和「看報表」的分頁分開（它是唯一會寫資料的地方） */
+/* 分頁：底線式 */
 .reports-tabs :deep(.el-tabs__item) { font-weight: 600; }
-.reports-tabs :deep(.el-tabs__nav) { width: 100%; }
-.reports-tabs :deep(#tab-fixed-cost) { margin-left: auto; }
-.tab-entry { display: inline-flex; align-items: center; gap: 4px; }
 .tab-entry__count {
+  margin-left: 4px;
   /* warning-darker 底＋白字過 AA（同舊版待辦計數稽核 M5） */
   background: var(--color-warning-darker);
   color: var(--el-color-white);
@@ -377,8 +358,6 @@ defineExpose({
   padding: 0 6px;
 }
 @media (--to-sm) {
-  .reports-tabs :deep(.el-tabs__nav) { width: auto; }
-  .reports-tabs :deep(#tab-fixed-cost) { margin-left: 0; }
   .period { justify-content: flex-start; }
 }
 </style>
