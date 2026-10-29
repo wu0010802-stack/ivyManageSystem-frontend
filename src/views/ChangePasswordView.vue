@@ -1,210 +1,96 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+/**
+ * 強制改密頁（must_change_password）。
+ *
+ * 路由守衛會把「帳號仍是初始密碼」的使用者擋在這裡，改完才能進其他頁（守衛在 router/index.ts，
+ * 本頁不改變任何授權判斷）。表單本身是與「個人資料 → 修改密碼」共用的 PasswordChangeForm；
+ * 本頁只負責：版面、說明、成功後清旗標並進系統，以及一個「登出」出口，避免使用者被困住。
+ */
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { changePassword } from '@/api/auth'
-import { clearMustChangePassword, getUserInfo } from '@/utils/auth'
-import { PASSWORD_RULES, validatePasswordStrength } from '@/utils/passwordRules'
-import { apiError } from '@/utils/error'
+import { SwitchButton } from '@element-plus/icons-vue'
+import PageHeader from '@/components/common/PageHeader.vue'
+import PasswordChangeForm from '@/components/auth/PasswordChangeForm.vue'
+import { clearAuth, clearMustChangePassword, getUserInfo } from '@/utils/auth'
 
 const router = useRouter()
-const loading = ref(false)
-const formRef = ref<{ validate: () => Promise<void> } | null>(null)
-const userInfo = getUserInfo()
+const submitting = ref(false)
 
-const form = reactive({
-  old_password: '',
-  new_password: '',
-  confirm_password: '',
+const accountLabel = computed(() => {
+  const info = getUserInfo() as { name?: string; username?: string } | null
+  return info?.name || info?.username || ''
 })
 
-const validateConfirm = (_: unknown, value: string, callback: (err?: Error) => void) => {
-  if (value !== form.new_password) {
-    callback(new Error('兩次輸入的密碼不一致'))
-  } else {
-    callback()
-  }
+const handleSuccess = () => {
+  clearMustChangePassword()
+  ElMessage.success('密碼已更新')
+  router.push('/')
 }
 
-const rules = {
-  old_password: [{ required: true, message: '請輸入目前密碼', trigger: 'blur' }],
-  new_password: [
-    { required: true, message: '請輸入新密碼', trigger: 'blur' },
-    { validator: validatePasswordStrength, trigger: 'blur' },
-  ],
-  confirm_password: [
-    { required: true, message: '請再次輸入新密碼', trigger: 'blur' },
-    { validator: validateConfirm, trigger: 'blur' },
-  ],
-}
-
-const handleSubmit = async () => {
-  try {
-    await formRef.value?.validate()
-  } catch {
-    return
-  }
-
-  loading.value = true
-  try {
-    await changePassword({
-      old_password: form.old_password,
-      new_password: form.new_password,
-    })
-    clearMustChangePassword()
-    ElMessage.success('密碼修改成功，請重新使用新密碼操作系統')
-    router.push('/')
-  } catch (error) {
-    ElMessage.error(apiError(error, '修改失敗，請確認目前密碼是否正確'))
-  } finally {
-    loading.value = false
-  }
+// 與右上角帳號選單的「登出」同一條流程（AdminHeader.handleCommand）：
+// clearAuth 會同步清本地身分並通知後端清 Cookie，再回登入頁。
+const handleLogout = () => {
+  if (submitting.value) return
+  Promise.resolve(clearAuth()).catch(() => undefined)
+  router.push('/login')
+  ElMessage.success('已登出')
 }
 </script>
 
 <template>
   <div class="change-password-page">
-    <div class="change-password-card">
-      <div class="header">
-        <div class="lock-icon">🔒</div>
-        <h2>請修改初始密碼</h2>
-        <p>為確保帳號安全，請立即設定您的新密碼</p>
-      </div>
+    <PageHeader title="請修改初始密碼" subtitle="為確保帳號安全，請先設定新密碼才能使用系統">
+      <template #actions>
+        <el-button
+          data-test="forced-logout"
+          :icon="SwitchButton"
+          :disabled="submitting"
+          @click="handleLogout"
+        >
+          登出
+        </el-button>
+      </template>
+    </PageHeader>
 
+    <el-card class="change-password-card" shadow="never">
       <el-alert
-        title="安全提醒"
+        class="change-password-notice"
         type="warning"
-        description="您的帳號正在使用初始密碼，必須修改後才能繼續使用系統。"
+        title="完成修改後，才能使用系統其他功能"
+        description="這是為了保護您的帳號。若現在不方便修改，可先按頁面上方的「登出」，下次登入仍會回到這一頁。"
         show-icon
         :closable="false"
-        style="margin-bottom: 24px"
       />
 
-      <div class="password-rules">
-        <div class="password-rules__title">密碼規則</div>
-        <ul class="password-rules__list">
-          <li v-for="rule in PASSWORD_RULES" :key="rule">{{ rule }}</li>
-        </ul>
-      </div>
+      <PasswordChangeForm
+        v-model:submitting="submitting"
+        size="large"
+        autofocus
+        submit-text="設定新密碼並繼續"
+        @success="handleSuccess"
+      />
 
-      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
-        <el-form-item label="目前密碼" prop="old_password">
-          <el-input
-            v-model="form.old_password"
-            type="password"
-            placeholder="請輸入目前密碼"
-            size="large"
-            show-password
-          />
-        </el-form-item>
-
-        <el-form-item label="新密碼" prop="new_password">
-          <el-input
-            v-model="form.new_password"
-            type="password"
-            placeholder="請輸入符合規則的新密碼"
-            size="large"
-            show-password
-          />
-        </el-form-item>
-
-        <el-form-item label="確認新密碼" prop="confirm_password">
-          <el-input
-            v-model="form.confirm_password"
-            type="password"
-            placeholder="再次輸入新密碼"
-            size="large"
-            show-password
-            @keyup.enter="handleSubmit"
-          />
-        </el-form-item>
-
-        <el-button
-          type="primary"
-          size="large"
-          :loading="loading"
-          style="width: 100%; margin-top: 8px"
-          @click="handleSubmit"
-        >
-          確認修改
-        </el-button>
-      </el-form>
-
-      <div class="user-hint" v-if="userInfo?.name">
-        目前登入帳號：{{ userInfo.name }}
-      </div>
-    </div>
+      <p v-if="accountLabel" class="account-hint" data-test="account-hint">
+        目前登入帳號：{{ accountLabel }}
+      </p>
+    </el-card>
   </div>
 </template>
 
 <style scoped>
 .change-password-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* 藍漸層背景改平面 token 底色（與 LoginView 的冷色淺底一致的安靜基調） */
-  background: var(--bg-color-soft);
+  max-width: 560px;
 }
 
-.change-password-card {
-  width: 440px;
-  padding: 40px;
-  background: var(--surface-color);
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+.change-password-notice {
+  margin-bottom: var(--space-5);
 }
 
-.header {
+.account-hint {
+  margin: var(--space-5) 0 0;
   text-align: center;
-  margin-bottom: 28px;
-}
-
-.lock-icon {
-  font-size: 40px;
-  margin-bottom: 12px;
-}
-
-.header h2 {
-  font-size: 22px;
-  color: var(--text-primary);
-  margin: 0 0 8px 0;
-}
-
-.header p {
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
-  font-size: 14px;
-  margin: 0;
-}
-
-.user-hint {
-  margin-top: 20px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-tertiary);
-}
-
-.password-rules {
-  margin-bottom: 24px;
-  padding: 14px 16px;
-  border-radius: 10px;
-  background: var(--bg-color-soft);
-  border: 1px solid var(--border-color);
-}
-
-.password-rules__title {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: var(--text-primary);
-}
-
-.password-rules__list {
-  margin: 0;
-  padding-left: 20px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.7;
 }
 </style>

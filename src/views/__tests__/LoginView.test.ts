@@ -96,3 +96,111 @@ describe('LoginView（管理端）— 角色登入放行', () => {
     expect(mockSetUserInfo).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * 登入互動 UX（2026-10-29）：錯誤常駐顯示、Enter 送出、防連點、強制改密導向。
+ * 文案不區分「帳號不存在」與「密碼錯誤」——前端只顯示後端給的訊息，不自行細分。
+ */
+describe('LoginView（管理端）— 互動 UX', () => {
+  const uxStubs = {
+    ...globalStubs,
+    'el-alert': { props: ['title'], template: '<div data-test="login-error" role="alert">{{ title }}</div>' },
+  }
+
+  async function mountLogin() {
+    const router = createTestRouter()
+    await router.push('/login')
+    const wrapper = mount(LoginView, { global: { plugins: [router], stubs: uxStubs } })
+    const inputs = wrapper.findAll('input')
+    await inputs[0].setValue('user01')
+    await inputs[1].setValue('wrong-password')
+    return { wrapper, router, inputs }
+  }
+
+  it('登入失敗：訊息常駐顯示在表單內，不再只丟會消失的 toast', async () => {
+    mockLogin.mockRejectedValue({ displayMessage: '帳號或密碼錯誤' })
+    const { wrapper } = await mountLogin()
+
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="login-error"]').text()).toBe('帳號或密碼錯誤')
+    expect(mockElMessageError).not.toHaveBeenCalled()
+    expect(mockSetUserInfo).not.toHaveBeenCalled()
+  })
+
+  it('後端沒給訊息時顯示通用文案（不細分帳號存在與否）', async () => {
+    mockLogin.mockRejectedValue(new Error('network'))
+    const { wrapper } = await mountLogin()
+
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="login-error"]').text()).toBe('登入失敗，請確認帳號密碼')
+  })
+
+  it('開始修改帳號或密碼後，上一次的錯誤訊息收掉', async () => {
+    mockLogin.mockRejectedValue({ displayMessage: '帳號或密碼錯誤' })
+    const { wrapper, inputs } = await mountLogin()
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="login-error"]').exists()).toBe(true)
+
+    await inputs[1].setValue('another-try')
+
+    expect(wrapper.find('[data-test="login-error"]').exists()).toBe(false)
+  })
+
+  it('教師帳號走管理端登入：顯示導引文案且不建立管理端 session', async () => {
+    mockLogin.mockResolvedValue({ data: { user: { role: 'teacher', name: '王老師' } } })
+    const { wrapper } = await mountLogin()
+
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="login-error"]').text()).toContain('教職員入口')
+    expect(mockSetUserInfo).not.toHaveBeenCalled()
+  })
+
+  it('在帳號欄按 Enter 也會送出（不只密碼欄）', async () => {
+    mockLogin.mockResolvedValue({ data: { user: { role: 'admin', name: '管理員' } } })
+    const { inputs } = await mountLogin()
+
+    await inputs[0].trigger('keyup.enter')
+    await flushPromises()
+
+    expect(mockLogin).toHaveBeenCalledTimes(1)
+    expect(mockLogin).toHaveBeenCalledWith('user01', 'wrong-password')
+  })
+
+  it('登入進行中連按 Enter／連點只會送出一次', async () => {
+    let resolveLogin: (value: unknown) => void = () => {}
+    mockLogin.mockReturnValue(new Promise((resolve) => { resolveLogin = resolve }))
+    const { wrapper, inputs } = await mountLogin()
+
+    await inputs[1].trigger('keyup.enter')
+    await inputs[1].trigger('keyup.enter')
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(mockLogin).toHaveBeenCalledTimes(1)
+
+    resolveLogin({ data: { user: { role: 'admin', name: '管理員' } } })
+    await flushPromises()
+  })
+
+  it('後端標記必須改密碼 → 導向 /change-password，旗標寫入 userInfo', async () => {
+    mockLogin.mockResolvedValue({
+      data: { user: { role: 'admin', name: '管理員' }, must_change_password: true },
+    })
+    const { wrapper, router } = await mountLogin()
+
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(mockSetUserInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'admin', must_change_password: true }),
+    )
+    expect(router.currentRoute.value.path).toBe('/change-password')
+  })
+})

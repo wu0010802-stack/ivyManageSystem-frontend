@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
@@ -32,6 +32,16 @@ const form = reactive({
   password: '',
 })
 
+// 登入失敗訊息常駐顯示（toast 3 秒就消失，使用者常來不及看）；開始修改輸入就收掉。
+// 文案一律沿用後端「帳號或密碼錯誤」這類不區分帳號是否存在的訊息，前端不自行細分。
+const errorMessage = ref('')
+watch(
+  () => [form.username, form.password],
+  () => {
+    errorMessage.value = ''
+  },
+)
+
 const rules = {
   username: [{ required: true, message: '請輸入帳號', trigger: 'blur' }],
   password: [{ required: true, message: '請輸入密碼', trigger: 'blur' }],
@@ -43,7 +53,16 @@ const focusFirstInvalid = async () => {
   else if (!form.password) passwordInput.value?.focus?.()
 }
 
+// Enter 送出：帳號、密碼欄位都可觸發；輸入法選字中的 Enter 不算（避免選字就誤送出）。
+const onEnter = (event: KeyboardEvent) => {
+  if (event.isComposing) return
+  handleLogin()
+}
+
 const handleLogin = async () => {
+  // 防連點／連按 Enter：登入進行中不重複送出（按鈕 loading 只擋得住點擊）
+  if (loading.value) return
+  errorMessage.value = ''
   try {
     await loginForm.value?.validate()
   } catch {
@@ -57,7 +76,7 @@ const handleLogin = async () => {
 
     const userData = res.data as { user: { role: string; name: string; flags?: string[] }; must_change_password?: boolean }
     if (isPortalOnlyUser(userData.user)) {
-      ElMessage.error('此帳號僅能從「教職員入口」登入')
+      errorMessage.value = '此帳號僅能從「教職員入口」登入'
       usernameInput.value?.focus?.()
       return
     }
@@ -67,7 +86,7 @@ const handleLogin = async () => {
     ElMessage.success(`歡迎回來，${userData.user.name}`)
     router.push(userData.must_change_password ? '/change-password' : '/')
   } catch (error) {
-    ElMessage.error(apiError(error, '登入失敗，請確認帳號密碼'))
+    errorMessage.value = apiError(error, '登入失敗，請確認帳號密碼')
     passwordInput.value?.focus?.()
   } finally {
     loading.value = false
@@ -102,8 +121,11 @@ const handleLogin = async () => {
                 placeholder="請輸入帳號"
                 size="large"
                 autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
                 aria-label="帳號"
                 :prefix-icon="User"
+                @keyup.enter="onEnter"
               />
             </el-form-item>
             <el-form-item prop="password" label="密碼">
@@ -117,9 +139,19 @@ const handleLogin = async () => {
                 aria-label="密碼"
                 :prefix-icon="Lock"
                 show-password
-                @keyup.enter="handleLogin"
+                @keyup.enter="onEnter"
               />
             </el-form-item>
+            <el-alert
+              v-if="errorMessage"
+              class="login-error"
+              data-test="login-error"
+              type="error"
+              show-icon
+              :closable="false"
+              :title="errorMessage"
+              role="alert"
+            />
             <el-form-item>
               <el-button
                 type="primary"
@@ -132,6 +164,8 @@ const handleLogin = async () => {
               </el-button>
             </el-form-item>
           </el-form>
+
+          <p class="login-help">忘記密碼或無法登入？請洽園所管理員協助重設。</p>
 
           <div class="login-divider" role="separator"><span>或</span></div>
           <router-link class="alternate-entry" to="/portal/login">前往教職員入口</router-link>
@@ -274,6 +308,18 @@ const handleLogin = async () => {
   font-weight: var(--font-weight-semibold);
 }
 
+.login-error {
+  margin-bottom: var(--space-3);
+}
+
+.login-help {
+  margin: var(--space-2) 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  line-height: var(--line-height-base);
+  text-align: center;
+}
+
 .login-divider {
   display: flex;
   align-items: center;
@@ -355,6 +401,21 @@ const handleLogin = async () => {
 
   .brand-mark {
     width: min(100%, 280px);
+  }
+}
+
+/* 手機：縮小品牌圖，讓帳號／密碼欄位與登入鈕落在第一屏內，不必先捲過一大張 logo */
+@media (--to-sm) {
+  .login-page {
+    padding-top: 24px;
+  }
+
+  .login-shell {
+    gap: 12px;
+  }
+
+  .brand-mark {
+    width: 104px;
   }
 }
 

@@ -3,12 +3,10 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getProfile, updateProfile } from '@/api/portal'
-import { changePassword } from '@/api/auth'
 import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/api/lineBinding'
 import { getUserInfo, clearAuth } from '@/utils/auth'
-import { PASSWORD_RULES, validatePasswordStrength } from '@/utils/passwordRules'
 import { useErrorNotify } from '@/composables/useErrorNotify'
-import { apiError } from '@/utils/error'
+import PasswordChangeForm from '@/components/auth/PasswordChangeForm.vue'
 
 interface ProfileData {
   employee_id?: string | number
@@ -110,57 +108,14 @@ const saveProfile = async () => {
 }
 
 // ────────────── 修改密碼 ──────────────
-const pwdFormRef = ref<{ validate: () => Promise<void> } | null>(null)
-const pwdSaving = ref(false)
-const pwdForm = reactive({
-  old_password: '',
-  new_password: '',
-  confirm_password: '',
-})
-
-const validateConfirm = (_: unknown, value: string, callback: (err?: Error) => void) => {
-  if (value !== pwdForm.new_password) callback(new Error('兩次輸入的密碼不一致'))
-  else callback()
-}
-
-const pwdRules = {
-  old_password: [{ required: true, message: '請輸入目前密碼', trigger: 'blur' }],
-  new_password: [
-    { required: true, message: '請輸入新密碼', trigger: 'blur' },
-    { validator: validatePasswordStrength, trigger: 'blur' },
-  ],
-  confirm_password: [
-    { required: true, message: '請再次輸入新密碼', trigger: 'blur' },
-    { validator: validateConfirm, trigger: 'blur' },
-  ],
-}
-
-const submitPassword = async () => {
-  try {
-    await pwdFormRef.value?.validate()
-  } catch {
-    return
-  }
-  pwdSaving.value = true
-  try {
-    await changePassword({
-      old_password: pwdForm.old_password,
-      new_password: pwdForm.new_password,
-    })
-    ElMessage.success('密碼已更新，請使用新密碼重新登入')
-    pwdForm.old_password = ''
-    pwdForm.new_password = ''
-    pwdForm.confirm_password = ''
-    // 後端會發新 token，但為確保安全請使用者重新登入
-    setTimeout(() => {
-      clearAuth()
-      router.push('/login')
-    }, 1200)
-  } catch (error) {
-    ElMessage.error(apiError(error, '修改失敗，請確認目前密碼是否正確'))
-  } finally {
-    pwdSaving.value = false
-  }
+// 表單、驗證與送出都在共用的 PasswordChangeForm（與強制改密頁同一份）；這裡只管成功後的收尾。
+const handlePasswordChanged = () => {
+  ElMessage.success('密碼已更新，請使用新密碼重新登入')
+  // 後端會發新 token，但為確保安全請使用者重新登入
+  setTimeout(() => {
+    clearAuth()
+    router.push('/login')
+  }, 1200)
 }
 
 // ────────────── LINE Bot 綁定 ──────────────
@@ -332,33 +287,9 @@ onMounted(() => {
         <span class="card-title">修改密碼</span>
       </template>
 
-      <div class="password-rules">
-        <div class="password-rules__title">密碼規則</div>
-        <ul class="password-rules__list">
-          <li v-for="rule in PASSWORD_RULES" :key="rule">{{ rule }}</li>
-        </ul>
+      <div class="password-form-wrap">
+        <PasswordChangeForm @success="handlePasswordChanged" />
       </div>
-
-      <el-form
-        ref="pwdFormRef"
-        :model="pwdForm"
-        :rules="pwdRules"
-        label-width="120px"
-        class="edit-form"
-      >
-        <el-form-item label="目前密碼" prop="old_password">
-          <el-input v-model="pwdForm.old_password" type="password" show-password autocomplete="current-password" />
-        </el-form-item>
-        <el-form-item label="新密碼" prop="new_password">
-          <el-input v-model="pwdForm.new_password" type="password" show-password autocomplete="new-password" />
-        </el-form-item>
-        <el-form-item label="確認新密碼" prop="confirm_password">
-          <el-input v-model="pwdForm.confirm_password" type="password" show-password autocomplete="new-password" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :loading="pwdSaving" @click="submitPassword">更新密碼</el-button>
-        </el-form-item>
-      </el-form>
     </el-card>
 
     <!-- LINE Bot 綁定（有員工資料才能綁） -->
@@ -435,27 +366,8 @@ onMounted(() => {
   max-width: min(600px, 100%);
 }
 
-.password-rules {
-  margin-bottom: var(--space-4);
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
-  background: var(--bg-color-soft, var(--bg-color));
-  border: 1px solid var(--border-color-lighter, var(--border-color));
-}
-
-.password-rules__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-}
-
-.password-rules__list {
-  margin: 0;
-  padding-left: 20px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.7;
+.password-form-wrap {
+  max-width: 480px;
 }
 
 @media (--to-sm) {
