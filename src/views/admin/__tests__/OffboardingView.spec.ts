@@ -20,8 +20,21 @@ vi.mock('@/api/offboarding', () => ({
     getOffboardingList: vi.fn(),
 }))
 
+// 資安稽核 2026-10-29 P2：離職證明 PDF 含完整身分證字號，後端下載改需全員薪資視野
+// ＋SALARY_WRITE（api/offboarding._require_certificate_download_permission）。
+const authState = vi.hoisted(() => ({ fullSalaryView: true, perms: new Set<string>(['SALARY_WRITE']) }))
+vi.mock('@/utils/auth', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/utils/auth')>()
+    return {
+        ...actual,
+        hasFullSalaryView: () => authState.fullSalaryView,
+        hasPermission: (name: string) => authState.perms.has(name),
+    }
+})
+
 import { getEmployees } from '@/api/employees'
 import {
+    getOffboardingCertificate,
     getOffboardingDetail,
     getOffboardingList,
     patchNhiUnenroll,
@@ -471,5 +484,48 @@ describe('OffboardingView 發起離職動線', () => {
 
         expect(w.text()).toContain('目前沒有離職中的員工')
         expect(w.text()).toContain('辦理離職')
+    })
+})
+
+describe('OffboardingView 離職證明下載權限（資安稽核 2026-10-29）', () => {
+    const mockGetCert = getOffboardingCertificate as unknown as ReturnType<typeof vi.fn>
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        setActivePinia(createPinia())
+        authState.fullSalaryView = true
+        authState.perms = new Set(['SALARY_WRITE'])
+    })
+
+    async function mountWithCert() {
+        mockGetList.mockResolvedValue(
+            listResponse([
+                listItem({ employee_id: 3, employee_name: '已結案員工', has_record: true, certificate_pdf_path: '/tmp/cert-3.pdf' }),
+            ]),
+        )
+        mockGetDetail.mockResolvedValue({ data: detailFixture({ employee_id: 3, certificate_pdf_path: '/tmp/cert-3.pdf' }) })
+        const w = mountView()
+        await flushPromises()
+        await w.find('.offboard-action-btn').trigger('click')
+        await flushPromises()
+        return w
+    }
+
+    it.each([
+        ['缺 SALARY_WRITE', true, []],
+        ['無全員薪資視野', false, ['SALARY_WRITE']],
+    ])('%s：不提供下載鈕，改說明需要的權限', async (_label, full, perms) => {
+        authState.fullSalaryView = full as boolean
+        authState.perms = new Set(perms as string[])
+        const w = await mountWithCert()
+        expect(w.find('.drawer-download-cert-btn').exists()).toBe(false)
+        expect(w.findAll('button').some((b) => b.text() === '下載 PDF')).toBe(false)
+        expect(w.text()).toContain('含完整身分證字號')
+        expect(mockGetCert).not.toHaveBeenCalled()
+    })
+
+    it('具全員薪資視野＋SALARY_WRITE：可下載', async () => {
+        const w = await mountWithCert()
+        expect(w.find('.drawer-download-cert-btn').exists()).toBe(true)
     })
 })

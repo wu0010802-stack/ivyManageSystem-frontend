@@ -2,6 +2,7 @@
 import { computed, ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
+import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { Search } from '@element-plus/icons-vue'
 import { getEmployees } from '@/api/employees'
 import { getOffboardingCertificate, getOffboardingList, patchNhiUnenroll } from '@/api/offboarding'
@@ -127,7 +128,17 @@ function handleAction(row: ListItem): void {
 
 // ── 證明 PDF ──────────────────────────────────────────────
 
+// 資安稽核 2026-10-29 P2：PDF 含未遮罩身分證字號，後端下載需全員薪資視野＋SALARY_WRITE
+// （api/offboarding._require_certificate_download_permission，與員工 API 解遮罩同級）。
+// 前端對齊同一條件，不給一定會 403 的下載鈕；真正授權仍由後端決定。
+const canDownloadCertificate = computed(() => hasFullSalaryView() && hasPermission('SALARY_WRITE'))
+const CERT_DOWNLOAD_DENIED_HINT = '已產生（含完整身分證字號，下載需全員薪資視野與薪資編輯權限）'
+
 async function handleDownloadCertificate(id: number, name: string): Promise<void> {
+    if (!canDownloadCertificate.value) {
+        ElMessage.warning(CERT_DOWNLOAD_DENIED_HINT)
+        return
+    }
     try {
         const res = await getOffboardingCertificate(id)
         const blob = res.data
@@ -376,7 +387,10 @@ function confirmInitiate(): void {
             <!-- 離職證明 PDF -->
             <el-table-column label="離職證明" min-width="120">
                 <template #default="{ row }: { row: ListItem }">
-                    <template v-if="row.certificate_pdf_path">
+                    <span v-if="row.certificate_pdf_path && !canDownloadCertificate" class="text-muted">
+                        {{ CERT_DOWNLOAD_DENIED_HINT }}
+                    </span>
+                    <template v-else-if="row.certificate_pdf_path">
                         <el-button
                             link
                             type="primary"
@@ -521,8 +535,12 @@ function confirmInitiate(): void {
                     <!-- 離職證明 -->
                     <div class="drawer-section">
                         <h4 class="drawer-section-title">離職證明</h4>
+                        <span
+                            v-if="drawerDetail.certificate_pdf_path && !canDownloadCertificate"
+                            class="text-muted"
+                        >{{ CERT_DOWNLOAD_DENIED_HINT }}</span>
                         <el-button
-                            v-if="drawerDetail.certificate_pdf_path"
+                            v-else-if="drawerDetail.certificate_pdf_path"
                             class="drawer-download-cert-btn"
                             link
                             type="primary"
