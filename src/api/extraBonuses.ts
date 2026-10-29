@@ -10,6 +10,10 @@ export const listExtraBonuses = (
     params: ApiQuery<'/extra-bonuses', 'get'>,
 ): AxiosResp<'/extra-bonuses', 'get'> => api.get('/extra-bonuses', { params })
 
+/** 表外獎金類別清單（下拉選項；後端已排除舊別名 education_training）。 */
+export const listExtraBonusCategories = (): AxiosResp<'/extra-bonuses/categories', 'get'> =>
+    api.get('/extra-bonuses/categories')
+
 // 下學期（2–7 月）超額獎金 7 月表外批次（義華 Q11，category=excess_enrollment_s2）。
 // 計入補充保費年累計，須在 7 月薪資封存前執行；重跑冪等、人工登錄的同類列不覆寫。
 

@@ -238,7 +238,7 @@ export const NAVIGATION_MANIFEST = {
           extraRoutes: [{ path: '/admin/offboarding', permission: 'EMPLOYEES_READ' }],
         },
         {
-          // prefix: 薪資 IA 拆分（2026-06-12）後涵蓋 /salary/settle|history|simulate|settings 全部子頁；2026-10-29 S2 起另含 /salary/batches
+          // prefix: 薪資 IA 拆分（2026-06-12）後涵蓋 /salary/settle|history|simulate|settings 全部子頁；2026-10-29 S2 起另含 /salary/batches，W1 起另含 /salary/rosters
           key: 'salary', title: '薪資管理', routePath: '/salary', routePrefix: true,
           views: [{ code: 'SALARY_READ' }],
           actions: [{ code: 'SALARY_WRITE' }],

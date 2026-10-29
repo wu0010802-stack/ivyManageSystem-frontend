@@ -318,6 +318,13 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '獎金批次作業' }
         },
         {
+            // 2026-10-29（後台 IA 重整 W1）：轉帳名冊集中下載頁；原各流程內的下載入口照舊保留
+            path: '/salary/rosters',
+            name: 'salary-rosters',
+            component: () => import('../views/salary/TransferRostersView.vue'),
+            meta: { title: '轉帳名冊' }
+        },
+        {
             path: '/salary/recruitment-bonus',
             name: 'salary-recruitment-bonus',
             component: () => import('../views/salary/RecruitmentBonusView.vue'),

@@ -90,6 +90,21 @@ describe('SalaryHubView', () => {
         expect(mountHub().text()).toContain('獎金批次作業')
     })
 
+    it('入口卡含「轉帳名冊」→ /salary/rosters；非完整薪資角色不顯示', async () => {
+        getRecordsMock.mockResolvedValue({ data: [] })
+        const wrapper = mountHub()
+        await flushPromises()
+        const card = wrapper.findAll('.hub-link-card').find((c) => c.text().includes('轉帳名冊'))
+        expect(card).toBeTruthy()
+        await card!.trigger('click')
+        expect(pushMock).toHaveBeenCalledWith('/salary/rosters')
+
+        hasFullSalaryViewMock.mockReturnValue(false)
+        const w2 = mountHub()
+        await flushPromises()
+        expect(w2.text()).not.toContain('轉帳名冊')
+    })
+
     it('覆核中狀態：顯示封存進度與需注意數，深連結到 review 步驟', async () => {
         // 本月 2 筆（1 封存 1 未封存 + 手動調整異常）；上月查詢回空
         getRecordsMock.mockImplementation((_y: number, m: number) => {

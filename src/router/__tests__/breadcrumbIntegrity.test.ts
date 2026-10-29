@@ -161,6 +161,8 @@ describe('麵包屑父層完整性守衛', () => {
     expect(resolveFor(pageAt('/appraisal-year-end/year-end'))).toBeNull()
     // S2：獎金批次作業是薪資管理的子頁
     expect(resolveFor(pageAt('/salary/batches'))?.title).toBe('薪資管理')
+    // W1：轉帳名冊集中頁同樣是薪資管理的子頁
+    expect(resolveFor(pageAt('/salary/rosters'))?.title).toBe('薪資管理')
     // S3：排班、出勤核對各是一級頁
     expect(resolveFor(pageAt('/schedule'))).toBeNull()
     expect(resolveFor(pageAt('/attendance'))).toBeNull()
