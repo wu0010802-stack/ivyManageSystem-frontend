@@ -26,7 +26,7 @@ function disableAll() {
 </script>
 
 <template>
-  <div class="calendar-toolbar" role="toolbar" aria-label="行事曆 layer 篩選">
+  <div class="calendar-toolbar" role="toolbar" aria-label="行事曆項目篩選">
     <el-checkbox-group v-model="selectedArr" size="small">
       <el-checkbox
         v-for="layer in CALENDAR_LAYERS"
