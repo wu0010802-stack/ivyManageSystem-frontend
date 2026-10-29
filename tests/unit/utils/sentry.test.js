@@ -1064,6 +1064,26 @@ describe('通用搜尋參數精確比對（與後端 _PII_KEY_EXACT 同步，資
   })
 })
 
+describe('人名類查詢參數精確比對（與後端 _PII_KEY_EXACT 同步，資安稽核 2026-10-29）', () => {
+  // /api/misc-receipts?payer_name=<家長姓名>、/api/recruitment/records?referrer=<介紹者姓名>：
+  // key 不命中 denylist、姓名不命中 value-level 正則 → transaction / xhr breadcrumb 原樣外送。
+  it.each(['payer_name', 'payerName', 'referrer'])('query string 的 %s= 值遮罩', (key) => {
+    const url = `/api/misc-receipts?category=a&${key}=${encodeURIComponent('王小明')}&limit=10`
+    const out = sanitizeUrl(url)
+    expect(out).not.toContain(encodeURIComponent('王小明'))
+    expect(out).toBe(`/api/misc-receipts?category=a&${key}=%5BFiltered%5D&limit=10`)
+    expect(scrubQueryString(`${key}=王小明`)).toBe(`${key}=%5BFiltered%5D`)
+    expect(scrubMapping({ [key]: '王小明' })).toEqual({ [key]: '[Filtered]' })
+    const crumb = scrubBreadcrumb({ category: 'xhr', data: { url } })
+    expect(JSON.stringify(crumb)).not.toContain(encodeURIComponent('王小明'))
+  })
+
+  it('整字相等：不誤傷 payer_name_font / referrer_policy', () => {
+    const keep = { payer_name_font: 'kai', referrer_policy: 'no-referrer' }
+    expect(scrubMapping(keep)).toEqual(keep)
+  })
+})
+
 // 結構守衛（擋整類：「後端 _PII_KEY_EXACT／SUBSTRINGS／EXEMPT 加了 key、前端漏同步」）：
 // 與後端 tests/test_pii_denylist_parity.py 對稱。只在明確設定 PII_PARITY_BACKEND
 // （指向「與本前端 ref 對應」的後端 sentry_init.py）時才跑；未設一律 skip。
