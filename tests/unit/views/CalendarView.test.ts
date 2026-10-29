@@ -72,7 +72,8 @@ const GLOBAL_STUBS = {
   'el-table-column': true,
   'el-tag': { template: '<span><slot /></span>' },
   'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
-  'el-form': { template: '<form><slot /></form>' },
+  // 表單驗證流程另有專檔；這裡只關心送出 payload，validate 固定通過
+  'el-form': { methods: { validate: () => Promise.resolve(true) }, template: '<form><slot /></form>' },
   'el-form-item': { props: ['label'], template: '<label>{{ label }}<slot /></label>' },
   'el-select': { template: '<div><slot /></div>' },
   'el-option': true,
@@ -81,10 +82,8 @@ const GLOBAL_STUBS = {
   'el-switch': { template: '<input type="checkbox" />' },
 }
 
-const flushPromises = async () => {
-  await Promise.resolve()
-  await Promise.resolve()
-}
+// 送出流程多了 validate／emit／確認等非同步步驟，用 macrotask 一次沖乾淨
+const flushPromises = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 function mountCalendarView() {
   return mount(CalendarView, {
@@ -270,12 +269,13 @@ describe('CalendarView 事件編輯 payload（calimp01 可見範圍/分類/負�
     })
     await flushPromises()
 
-    const saveBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('儲存'))
-    await saveBtn!.trigger('click')
+    // 沒有開成編輯表單＝仍是空白的「新增」狀態；直接按送出也不能送出任何東西
+    const submitBtn = wrapper.find('[data-test="form-dialog-submit"]')
+    expect(submitBtn.text()).toBe('新增事件')
+    await submitBtn.trigger('click')
     await flushPromises()
-    // 表單沒被回填（title 空）→ saveEvent 走「請填寫標題與日期」的早退路徑
+    // 表單沒被回填（title 空）→ 送出前的最後防線擋下（回「請輸入標題」）
     expect(updateEvent).not.toHaveBeenCalled()
+    expect(createEvent).not.toHaveBeenCalled()
   })
 })
