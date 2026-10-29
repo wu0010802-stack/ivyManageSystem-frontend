@@ -159,12 +159,12 @@ describe('GrowthBookCurationDrawer', () => {
     vm.coverAttachmentId = null
     await w.vm.$nextTick()
     expect(w.text()).toContain('至少選擇一項素材')
-    const genBtn = w.findAll('button').find((b) => b.text().trim() === '生成')
+    const genBtn = w.findAll('button').find((b) => b.text().trim() === '生成成長冊')
     expect(genBtn).toBeTruthy()
     expect(genBtn!.attributes('disabled')).not.toBeUndefined()
   })
 
-  it('409 衝突時顯示後端 detail 並提示先刪除舊冊', async () => {
+  it('409 衝突時改顯示白話訊息（不外露 report_id／status），並提示用「重新製作」', async () => {
     const detail = '同學年已有成長冊（report_id=99, status=ready）'
     createGrowthBook.mockImplementationOnce(() => Promise.reject({
       response: { status: 409, data: { detail } },
@@ -175,8 +175,53 @@ describe('GrowthBookCurationDrawer', () => {
     const vm = w.vm as unknown as VM
     await vm.generate()
     await flushPromises()
-    expect(errorSpy).toHaveBeenCalledWith(detail)
-    expect(w.text()).toContain('請先於列表刪除舊冊')
+    expect(errorSpy).toHaveBeenCalledWith(
+      '這位幼生本學年已有成長冊（或正在生成中），請重新整理確認目前狀態',
+    )
+    expect(errorSpy).not.toHaveBeenCalledWith(detail)
+    expect(w.find('[data-test="conflict-hint"]').text()).toContain('重新製作')
+    errorSpy.mockRestore()
+  })
+
+  it('標題與說明用白話：「挑選成長冊內容」，並顯示每領域已選數與上限', async () => {
+    const w = mountDrawer()
+    await flushPromises()
+    expect(w.text()).toContain('挑選成長冊內容：王小明')
+    expect(w.text()).not.toContain('策展')
+    expect(w.text()).toContain('勾選的才會放進成長冊')
+    // 美感領域預選 1 則、上限 3
+    expect(w.text()).toContain('已選 1／3')
+    expect(w.text()).toContain('歲末回顧照片')
+  })
+
+  it('載入失敗：顯示錯誤態與重新載入、鎖住生成，且不殘留上一位學生的勾選', async () => {
+    const errorSpy = vi.spyOn(ElMessage, 'error')
+    const w = mountDrawer()
+    await flushPromises()
+    const vm = w.vm as unknown as VM & { loadErrorMessage: string | null }
+    expect(vm.selectedObservationIds).toEqual([1])
+
+    await w.setProps({ modelValue: false })
+    draftGrowthBook.mockImplementationOnce(() => Promise.reject({
+      response: { status: 422, data: { detail: '該學年沒有任何可用素材' } },
+    }))
+    await w.setProps({ studentId: 2, studentName: '李小華', modelValue: true })
+    await flushPromises()
+
+    expect(w.find('[data-test="draft-error"]').exists()).toBe(true)
+    expect(w.text()).toContain('該學年沒有任何可用素材')
+    expect(errorSpy).toHaveBeenCalledWith('該學年沒有任何可用素材')
+    expect(vm.selectedObservationIds).toEqual([])
+    expect(vm.selectedWorkSampleIds).toEqual([])
+    expect(vm.coverAttachmentId).toBeNull()
+    const genBtn = w.findAll('button').find((b) => b.text().trim() === '生成成長冊')
+    expect(genBtn!.attributes('disabled')).not.toBeUndefined()
+
+    // 重新載入成功後恢復
+    await w.find('[data-test="draft-error"] button').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test="draft-error"]').exists()).toBe(false)
+    expect(vm.selectedObservationIds).toEqual([1])
     errorSpy.mockRestore()
   })
 })

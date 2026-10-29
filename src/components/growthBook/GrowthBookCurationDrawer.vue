@@ -2,7 +2,11 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { draftGrowthBook, createGrowthBook } from '@/api/growthBooks'
-import { apiError } from '@/utils/error'
+import EmptyState from '@/components/common/EmptyState.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+import { growthBookErrorMessage, isExistingBookConflict } from './errorMessage'
+
+const { isMobile } = useIsMobile()
 
 // 上限常數對齊後端 services/growth_book_service.py（OBS_PER_DOMAIN / WORK_SAMPLE_LIMIT /
 // COLLAGE_MAX），超過即 disable 新增勾選（不可等到送出才被 422 擋下）。
@@ -93,6 +97,8 @@ const emit = defineEmits<{
 const loading = ref(false)
 const generating = ref(false)
 const conflictHint = ref<string | null>(null)
+// 草稿載入失敗：顯示錯誤與重試，並鎖住「生成」（否則會帶著上一位學生的勾選送出）
+const loadErrorMessage = ref<string | null>(null)
 
 const candidates = ref<DraftCandidates>({
   observations: [],
@@ -124,11 +130,37 @@ function resetSelectionFromManifest(manifest: DraftManifest) {
   includeMeasurements.value = manifest.include_measurements
 }
 
+function resetDraftState() {
+  candidates.value = {
+    observations: [],
+    work_samples: [],
+    collage_pool: [],
+    milestones: [],
+    measurement_count: 0,
+  }
+  period.value = null
+  coverAttachmentId.value = null
+  selectedObservationIds.value = []
+  selectedWorkSampleIds.value = []
+  selectedCollageIds.value = []
+  selectedMilestoneIds.value = []
+  includeMeasurements.value = true
+  teacherNarrative.value = ''
+}
+
+// 連點不同學生時，只採用最後一次請求的結果
+let draftSeq = 0
+
 async function loadDraft() {
+  const seq = ++draftSeq
   loading.value = true
   conflictHint.value = null
+  loadErrorMessage.value = null
+  // 先清掉上一位學生的候選與勾選，失敗時才不會殘留別人的資料
+  resetDraftState()
   try {
     const r = await draftGrowthBook(props.studentId, { academic_year: props.academicYear })
+    if (seq !== draftSeq) return
     // 後端 draft 端點未標 response_model，型別退為 unknown，依 CLAUDE.md 慣例以本地
     // interface 明確標註等候補齊後端 schema。
     const data = r.data as unknown as {
@@ -141,9 +173,11 @@ async function loadDraft() {
     resetSelectionFromManifest(data.manifest)
     teacherNarrative.value = ''
   } catch (e) {
-    ElMessage.error(apiError(e, '載入草稿失敗'))
+    if (seq !== draftSeq) return
+    loadErrorMessage.value = growthBookErrorMessage(e, '載入可挑選的內容失敗')
+    ElMessage.error(loadErrorMessage.value)
   } finally {
-    loading.value = false
+    if (seq === draftSeq) loading.value = false
   }
 }
 
@@ -212,6 +246,11 @@ function isCollageCheckboxDisabled(item: CollagePoolItem) {
   return selectedCollageIds.value.length >= COLLAGE_LIMIT
 }
 
+// 領域標題旁的「已選 x／3」，讓使用者知道為什麼其餘項目被鎖住
+function domainCountLabel(obsInDomain: CandidateObservation[]) {
+  return `已選 ${domainSelectedCount(obsInDomain)}／${OBS_PER_DOMAIN_LIMIT}`
+}
+
 function narrativeExcerpt(text: string | null) {
   if (!text) return ''
   return text.length > 40 ? `${text.slice(0, 40)}…` : text
@@ -251,11 +290,10 @@ async function generate() {
     emit('generated')
     emit('update:modelValue', false)
   } catch (e) {
-    const status = (e as { response?: { status?: number } })?.response?.status
-    if (status === 409) {
-      conflictHint.value = '重新生成前請先於列表刪除舊冊'
+    if (isExistingBookConflict(e)) {
+      conflictHint.value = '這位幼生本學年已有成長冊（或正在生成中）。請關閉視窗、重新整理列表確認狀態；若要換內容，請在列表按「重新製作」。'
     }
-    ElMessage.error(apiError(e, '生成失敗'))
+    ElMessage.error(growthBookErrorMessage(e, '生成失敗'))
   } finally {
     generating.value = false
   }
@@ -275,6 +313,7 @@ defineExpose({
   teacherNarrative,
   conflictHint,
   hasAnyMaterial,
+  loadErrorMessage,
   generate,
 })
 </script>
@@ -282,8 +321,8 @@ defineExpose({
 <template>
   <el-drawer
     :model-value="modelValue"
-    size="60%"
-    :title="`策展：${studentName}`"
+    :size="isMobile ? '100%' : '60%'"
+    :title="`挑選成長冊內容：${studentName}`"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
     <div v-loading="loading" class="curation-drawer">
@@ -294,118 +333,148 @@ defineExpose({
         show-icon
         :closable="false"
         class="conflict-hint"
+        data-test="conflict-hint"
       />
-      <p v-if="period" class="period-label">{{ period.label }}（{{ period.start }} ～ {{ period.end }}）</p>
 
-      <el-collapse v-model="activeNames">
-        <el-collapse-item title="封面" name="cover">
-          <p v-if="coverCandidates.length === 0" class="empty-hint">尚無可選封面照片</p>
-          <el-radio-group v-else v-model="coverAttachmentIdForRadio" class="thumb-grid">
-            <label
-              v-for="c in coverCandidates"
-              :key="c.id"
-              class="thumb-item"
+      <EmptyState
+        v-if="loadErrorMessage"
+        variant="error"
+        title="無法載入可挑選的內容"
+        :description="loadErrorMessage"
+        data-test="draft-error"
+      >
+        <template #action>
+          <el-button type="primary" :loading="loading" @click="loadDraft">重新載入</el-button>
+        </template>
+      </EmptyState>
+
+      <template v-else>
+        <p v-if="period" class="period-label">{{ period.label }}（{{ period.start }} ～ {{ period.end }}）</p>
+        <p class="intro">系統已先幫你選好建議的內容；勾選的才會放進成長冊，不想放的取消勾選即可。</p>
+
+        <el-collapse v-model="activeNames">
+          <el-collapse-item title="封面" name="cover">
+            <p v-if="coverCandidates.length === 0" class="empty-hint">尚無可選封面照片</p>
+            <el-radio-group v-else v-model="coverAttachmentIdForRadio" class="thumb-grid">
+              <label
+                v-for="c in coverCandidates"
+                :key="c.id"
+                class="thumb-item"
+              >
+                <el-radio :value="c.id" class="thumb-radio">
+                  <img v-if="c.thumb_url" :src="c.thumb_url" class="thumb-img" />
+                  <span v-else class="thumb-placeholder">無縮圖</span>
+                </el-radio>
+              </label>
+            </el-radio-group>
+          </el-collapse-item>
+
+          <el-collapse-item title="觀察精選" name="observations">
+            <div
+              v-for="(list, domain) in observationsByDomain"
+              :key="domain"
+              class="domain-group"
             >
-              <el-radio :value="c.id" class="thumb-radio">
-                <img v-if="c.thumb_url" :src="c.thumb_url" class="thumb-img" />
-                <span v-else class="thumb-placeholder">無縮圖</span>
-              </el-radio>
-            </label>
-          </el-radio-group>
-        </el-collapse-item>
+              <h4 class="domain-title">
+                {{ domain }}
+                <span class="count-hint">{{ domainCountLabel(list) }}（每個領域最多 {{ OBS_PER_DOMAIN_LIMIT }} 則）</span>
+              </h4>
+              <el-checkbox-group v-model="selectedObservationIds">
+                <div v-for="o in list" :key="o.id" class="obs-row">
+                  <el-checkbox
+                    :value="o.id"
+                    :disabled="isObservationCheckboxDisabled(domain, o)"
+                  >
+                    <span class="obs-date">{{ o.observation_date }}</span>
+                    <span class="obs-narrative">{{ narrativeExcerpt(o.narrative) }}</span>
+                    <el-tag v-if="o.is_highlight" size="small" type="danger">亮點</el-tag>
+                    <el-tag v-if="o.rating" size="small" type="warning">{{ o.rating }}★</el-tag>
+                  </el-checkbox>
+                </div>
+              </el-checkbox-group>
+            </div>
+          </el-collapse-item>
 
-        <el-collapse-item title="觀察精選" name="observations">
-          <div
-            v-for="(list, domain) in observationsByDomain"
-            :key="domain"
-            class="domain-group"
-          >
-            <h4 class="domain-title">{{ domain }}</h4>
-            <el-checkbox-group v-model="selectedObservationIds">
-              <div v-for="o in list" :key="o.id" class="obs-row">
-                <el-checkbox
-                  :value="o.id"
-                  :disabled="isObservationCheckboxDisabled(domain, o)"
-                >
-                  <span class="obs-date">{{ o.observation_date }}</span>
-                  <span class="obs-narrative">{{ narrativeExcerpt(o.narrative) }}</span>
-                  <el-tag v-if="o.is_highlight" size="small" type="danger">亮點</el-tag>
-                  <el-tag v-if="o.rating" size="small" type="warning">{{ o.rating }}★</el-tag>
+          <el-collapse-item name="workSamples">
+            <template #title>
+              作品<span class="count-hint">已選 {{ selectedWorkSampleIds.length }}／{{ WORK_SAMPLE_LIMIT }}</span>
+            </template>
+            <p v-if="candidates.work_samples.length === 0" class="empty-hint">此學年無作品可選</p>
+            <el-checkbox-group v-else v-model="selectedWorkSampleIds" class="thumb-grid">
+              <label
+                v-for="w in candidates.work_samples"
+                :key="w.id"
+                class="thumb-item"
+              >
+                <el-checkbox :value="w.id" :disabled="isWorkSampleCheckboxDisabled(w)" class="thumb-checkbox">
+                  <img
+                    v-if="(w.attachment_thumbs ?? [])[0]?.thumb_url"
+                    :src="(w.attachment_thumbs ?? [])[0].thumb_url as string"
+                    class="thumb-img"
+                  />
+                  <span v-else class="thumb-placeholder">{{ w.title }}</span>
+                  <span class="thumb-caption">{{ w.title }}</span>
+                </el-checkbox>
+              </label>
+            </el-checkbox-group>
+          </el-collapse-item>
+
+          <el-collapse-item name="collage">
+            <template #title>
+              歲末回顧照片<span class="count-hint">已選 {{ selectedCollageIds.length }}／{{ COLLAGE_LIMIT }}</span>
+            </template>
+            <p v-if="candidates.collage_pool.length > 0" class="empty-hint">成長冊最後幾頁的照片牆，最多 {{ COLLAGE_LIMIT }} 張。</p>
+            <p v-if="candidates.collage_pool.length === 0" class="empty-hint">此學年無可用的回顧照片</p>
+            <el-checkbox-group v-else v-model="selectedCollageIds" class="thumb-grid">
+              <label
+                v-for="c in candidates.collage_pool"
+                :key="c.id"
+                class="thumb-item"
+              >
+                <el-checkbox :value="c.id" :disabled="isCollageCheckboxDisabled(c)" class="thumb-checkbox">
+                  <img v-if="c.thumb_url" :src="c.thumb_url" class="thumb-img" />
+                  <span v-else class="thumb-placeholder">無縮圖</span>
+                </el-checkbox>
+              </label>
+            </el-checkbox-group>
+          </el-collapse-item>
+
+          <el-collapse-item name="milestones">
+            <template #title>
+              里程碑<span class="count-hint">已選 {{ selectedMilestoneIds.length }}／{{ candidates.milestones.length }}</span>
+            </template>
+            <p v-if="candidates.milestones.length === 0" class="empty-hint">此學年無里程碑</p>
+            <el-checkbox-group v-else v-model="selectedMilestoneIds">
+              <div v-for="m in candidates.milestones" :key="m.id" class="milestone-row">
+                <el-checkbox :value="m.id">
+                  <span class="obs-date">{{ m.date }}</span>
+                  <span class="obs-narrative">{{ m.title }}</span>
                 </el-checkbox>
               </div>
             </el-checkbox-group>
-          </div>
-        </el-collapse-item>
+          </el-collapse-item>
 
-        <el-collapse-item title="作品" name="workSamples">
-          <p v-if="candidates.work_samples.length === 0" class="empty-hint">此學年無作品可選</p>
-          <el-checkbox-group v-else v-model="selectedWorkSampleIds" class="thumb-grid">
-            <label
-              v-for="w in candidates.work_samples"
-              :key="w.id"
-              class="thumb-item"
-            >
-              <el-checkbox :value="w.id" :disabled="isWorkSampleCheckboxDisabled(w)" class="thumb-checkbox">
-                <img
-                  v-if="(w.attachment_thumbs ?? [])[0]?.thumb_url"
-                  :src="(w.attachment_thumbs ?? [])[0].thumb_url as string"
-                  class="thumb-img"
-                />
-                <span v-else class="thumb-placeholder">{{ w.title }}</span>
-                <span class="thumb-caption">{{ w.title }}</span>
-              </el-checkbox>
-            </label>
-          </el-checkbox-group>
-        </el-collapse-item>
+          <el-collapse-item title="成長曲線" name="measurement">
+            <el-switch v-model="includeMeasurements" />
+            <span class="measurement-hint">
+              期間內共 {{ candidates.measurement_count }} 筆身高體重等量測記錄（未滿 2 筆時成長冊不會畫出曲線）
+            </span>
+          </el-collapse-item>
 
-        <el-collapse-item title="歲末拼貼" name="collage">
-          <p v-if="candidates.collage_pool.length === 0" class="empty-hint">此學年無可用拼貼照片</p>
-          <el-checkbox-group v-else v-model="selectedCollageIds" class="thumb-grid">
-            <label
-              v-for="c in candidates.collage_pool"
-              :key="c.id"
-              class="thumb-item"
-            >
-              <el-checkbox :value="c.id" :disabled="isCollageCheckboxDisabled(c)" class="thumb-checkbox">
-                <img v-if="c.thumb_url" :src="c.thumb_url" class="thumb-img" />
-                <span v-else class="thumb-placeholder">無縮圖</span>
-              </el-checkbox>
-            </label>
-          </el-checkbox-group>
-        </el-collapse-item>
+          <el-collapse-item title="老師的話" name="narrative">
+            <el-input
+              v-model="teacherNarrative"
+              type="textarea"
+              :rows="4"
+              maxlength="5000"
+              show-word-limit
+              placeholder="給家長的一段話（選填）"
+            />
+          </el-collapse-item>
+        </el-collapse>
 
-        <el-collapse-item title="里程碑" name="milestones">
-          <p v-if="candidates.milestones.length === 0" class="empty-hint">此學年無里程碑</p>
-          <el-checkbox-group v-else v-model="selectedMilestoneIds">
-            <div v-for="m in candidates.milestones" :key="m.id" class="milestone-row">
-              <el-checkbox :value="m.id">
-                <span class="obs-date">{{ m.date }}</span>
-                <span class="obs-narrative">{{ m.title }}</span>
-              </el-checkbox>
-            </div>
-          </el-checkbox-group>
-        </el-collapse-item>
-
-        <el-collapse-item title="成長曲線" name="measurement">
-          <el-switch v-model="includeMeasurements" />
-          <span class="measurement-hint">
-            期間內共 {{ candidates.measurement_count }} 筆量測記錄（未滿 2 筆時 PDF 不會畫曲線）
-          </span>
-        </el-collapse-item>
-
-        <el-collapse-item title="老師的話" name="narrative">
-          <el-input
-            v-model="teacherNarrative"
-            type="textarea"
-            :rows="4"
-            maxlength="5000"
-            show-word-limit
-            placeholder="給家長的一段話（選填）"
-          />
-        </el-collapse-item>
-      </el-collapse>
-
-      <p v-if="!hasAnyMaterial" class="no-material-hint">至少選擇一項素材才能生成</p>
+        <p v-if="!hasAnyMaterial" class="no-material-hint">至少選擇一項素材才能生成</p>
+      </template>
     </div>
 
     <template #footer>
@@ -413,10 +482,10 @@ defineExpose({
       <el-button
         type="primary"
         :loading="generating"
-        :disabled="!hasAnyMaterial"
+        :disabled="!hasAnyMaterial || loading || !!loadErrorMessage"
         @click="generate"
       >
-        生成
+        生成成長冊
       </el-button>
     </template>
   </el-drawer>
@@ -432,7 +501,18 @@ defineExpose({
 .period-label {
   color: var(--el-text-color-secondary);
   font-size: 13px;
+  margin: 0 0 4px;
+}
+.intro {
+  color: var(--el-text-color-regular);
+  font-size: 13px;
   margin: 0 0 12px;
+}
+.count-hint {
+  margin-left: 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 400;
 }
 .domain-group {
   margin-bottom: 16px;
