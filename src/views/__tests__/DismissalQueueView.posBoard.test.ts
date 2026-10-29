@@ -22,18 +22,13 @@ const { CLASSROOMS, STUDENTS } = vi.hoisted(() => ({
   ],
 }))
 
-vi.mock('@/api/classrooms', () => ({
-  getClassrooms: vi.fn().mockResolvedValue({ data: CLASSROOMS }),
-}))
 
-vi.mock('@/api/students', () => ({
-  getStudents: vi.fn().mockResolvedValue({ data: { items: STUDENTS, total: STUDENTS.length } }),
-}))
 
 vi.mock('@/api/dismissalCalls', () => ({
   getDismissalCalls: vi.fn().mockResolvedValue({ data: [] }),
   cancelDismissalCall: vi.fn().mockResolvedValue({ data: {} }),
   createDismissalCall: vi.fn().mockResolvedValue({ data: {} }),
+  getDismissalRoster: vi.fn().mockResolvedValue({ data: { students: STUDENTS, classrooms: CLASSROOMS } }),
 }))
 
 vi.mock('element-plus', async (orig) => {

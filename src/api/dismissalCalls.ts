@@ -15,6 +15,9 @@ export const getDismissalCalls = (params: unknown) => api.get('/dismissal-calls'
 /** 寫入後的重抓：繞過 apiDedupe 的 in-flight 合併 */
 export const getDismissalCallsFresh = (params: unknown) =>
   api.get('/dismissal-calls', { ...DEDUPE_ESCAPE, params })
+/** 放學佇列點名單：在學學生 id／姓名／班級＋班級學期標籤（只需放學佇列權限） */
+export const getDismissalRoster = (): AxiosResp<'/dismissal-calls/roster', 'get'> =>
+  api.get('/dismissal-calls/roster')
 export const cancelDismissalCall = (id: number) => api.post(`/dismissal-calls/${id}/cancel`)
 // 標記已到門口（pnotice01 家長預告接送：辦公室代替忘記按抵達的家長操作）
 export const arriveDismissalCall = (id: number) => api.post(`/dismissal-calls/${id}/arrive`)

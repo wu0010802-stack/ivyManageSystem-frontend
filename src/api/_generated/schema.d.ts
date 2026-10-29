@@ -6517,6 +6517,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dismissal-calls/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dismissal Roster
+         * @description 放學佇列點名單：全園在學學生的 id／姓名／班級，與其班級的學期標籤。
+         *
+         *     刻意不重用 GET /students、/classrooms（分別要 STUDENTS_READ、CLASSROOMS_READ，
+         *     且回傳生日、家長等整份資料）：只持放學佇列權限的角色也要能發通知，名單只給
+         *     發通知所需的最少欄位。
+         */
+        get: operations["get_dismissal_roster_api_dismissal_calls_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/duty-rotations": {
         parameters: {
             query?: never;
@@ -31075,6 +31099,13 @@ export interface components {
             /** Student Name */
             student_name: string;
         };
+        /** DismissalRosterOut */
+        DismissalRosterOut: {
+            /** Classrooms */
+            classrooms: components["schemas"]["RosterClassroomOut"][];
+            /** Students */
+            students: components["schemas"]["RosterStudentOut"][];
+        };
         /**
          * DsrDecisionIn
          * @description admin approve / reject 的決議說明。
@@ -47167,6 +47198,17 @@ export interface components {
             /** Permissions */
             permissions?: string[] | null;
         };
+        /** RosterClassroomOut */
+        RosterClassroomOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
+        };
         /**
          * RosterPaidMark
          * @description POST /cycles/{id}/roster-paid：標記該週期考核獎金已另循名冊發放。
@@ -47213,6 +47255,15 @@ export interface components {
             status_tag: string | null;
             /** Student Id */
             student_id: number;
+        };
+        /** RosterStudentOut */
+        RosterStudentOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
         };
         /** RotationClassroomOut */
         RotationClassroomOut: {
@@ -64392,6 +64443,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dismissal_roster_api_dismissal_calls_roster_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissalRosterOut"];
                 };
             };
         };

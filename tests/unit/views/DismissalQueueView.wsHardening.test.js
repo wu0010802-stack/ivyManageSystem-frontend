@@ -10,22 +10,16 @@ import DismissalQueueView from '@/views/DismissalQueueView.vue'
 const getDismissalCalls = vi.fn(() => Promise.resolve({ data: [] }))
 const cancelDismissalCall = vi.fn(() => Promise.resolve({ data: {} }))
 const createDismissalCall = vi.fn(() => Promise.resolve({ data: {} }))
-const getStudents = vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } }))
+const getDismissalRoster = vi.fn(() => Promise.resolve({ data: { students: [], classrooms: [] } }))
 
 vi.mock('@/api/dismissalCalls', () => ({
   getDismissalCalls: (...args) => getDismissalCalls(...args),
   cancelDismissalCall: (...args) => cancelDismissalCall(...args),
   createDismissalCall: (...args) => createDismissalCall(...args),
+  getDismissalRoster: (...args) => getDismissalRoster(...args),
 }))
 
-vi.mock('@/api/students', () => ({
-  getStudents: (...args) => getStudents(...args),
-}))
 
-const getClassrooms = vi.fn(() => Promise.resolve({ data: [] }))
-vi.mock('@/api/classrooms', () => ({
-  getClassrooms: (...args) => getClassrooms(...args),
-}))
 
 vi.mock('@/utils/auth', () => ({
   getUserInfo: () => ({ role: 'admin', permissions: -1 }),

@@ -9,22 +9,16 @@ import DismissalPosBoard from '@/components/dismissal/pos/DismissalPosBoard.vue'
 const getDismissalCalls = vi.fn(() => Promise.resolve({ data: [] }))
 const cancelDismissalCall = vi.fn(() => Promise.resolve({ data: {} }))
 const createDismissalCall = vi.fn(() => Promise.resolve({ data: {} }))
-const getClassrooms = vi.fn(() => Promise.resolve({ data: [] }))
-const getStudents = vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } }))
+const getDismissalRoster = vi.fn(() => Promise.resolve({ data: { students: [], classrooms: [] } }))
 
 vi.mock('@/api/dismissalCalls', () => ({
   getDismissalCalls: (...args) => getDismissalCalls(...args),
   cancelDismissalCall: (...args) => cancelDismissalCall(...args),
   createDismissalCall: (...args) => createDismissalCall(...args),
+  getDismissalRoster: (...args) => getDismissalRoster(...args),
 }))
 
-vi.mock('@/api/classrooms', () => ({
-  getClassrooms: (...args) => getClassrooms(...args),
-}))
 
-vi.mock('@/api/students', () => ({
-  getStudents: (...args) => getStudents(...args),
-}))
 
 vi.mock('@/utils/auth', () => ({
   getUserInfo: () => ({ role: 'admin', permissions: -1 }),
@@ -88,14 +82,13 @@ describe('DismissalQueueView', () => {
     vi.clearAllMocks()
     mockWs.send.mockClear()
     getDismissalCalls.mockResolvedValue({ data: [] })
-    getClassrooms.mockResolvedValue({ data: [] })
   })
 
-  it('掛載後應呼叫 getDismissalCalls 與 getClassrooms', async () => {
+  it('掛載後應呼叫 getDismissalCalls 與 getDismissalRoster', async () => {
     mountView()
     await nextTick()
     expect(getDismissalCalls).toHaveBeenCalled()
-    expect(getClassrooms).toHaveBeenCalled()
+    expect(getDismissalRoster).toHaveBeenCalled()
   })
 
   it('fetchCalls 成功後 calls 陣列應更新', async () => {
@@ -191,10 +184,10 @@ describe('DismissalQueueView', () => {
   // useDismissalPosQueue.addToQueue（見 useDismissalPosQueue.test.ts 的
   // addToQueue 相關測試，含 409/重複發起防呆），這裡不再有 handleQuickCreate
   // 可測。學生清單本身仍在掛載時載入，只是消費端換成 DismissalPosBoard。
-  it('掛載後應呼叫 getStudents 載入學生清單', async () => {
+  it('掛載後應呼叫 getDismissalRoster 載入點名單', async () => {
     mountView()
     await flushPromises()
-    expect(getStudents).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }))
+    expect(getDismissalRoster).toHaveBeenCalled()
   })
 
   // ─── T-012：篩選狀態切換三欄 POS 佈局 vs. 歷史表格（D7）─────

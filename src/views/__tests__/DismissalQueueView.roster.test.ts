@@ -5,8 +5,10 @@
  * 暑假期間學生已編入下學年班級 → 班級查不到 → 全部被誤標「未分班」
  * （staging 實測 198 位在籍學生中 196 位中彈，而 classroom_id IS NULL 的其實是 0 位）。
  *
- * 這裡的 getClassrooms 假件刻意複製後端語義：不帶 current_only=false 就只回當期班級，
- * 所以「畫面顯示正確班名」這件事只有在前端真的把參數帶對時才會綠。
+ * 2026-10-29 起點名單改走 GET /dismissal-calls/roster（只需放學佇列權限），跨學期
+ * 班級由後端依學生實際班級帶回（見 BE tests/test_dismissal_queue_permission_2026_10_29.py）。
+ * 這裡保留 /classrooms、/students 假件（含 current_only 語義），斷言頁面**不再**打它們，
+ * 並確認 roster 回來的跨學期班級完整傳給 DismissalPosBoard。
  *
  * 【T-012 改版】isActiveView 原本的「搜尋框＋待接送看板＋點名單」三段已換成
  * DismissalPosBoard（三欄 POS 佈局，D7）。原本用 `.roster-group__name` 直接
@@ -54,7 +56,16 @@ vi.mock('@/api/students', () => ({
   }),
 }))
 
+const ROSTER_STUDENTS = [
+  { id: 1, name: '王小明', classroom_id: 13 }, // 115-1 天堂鳥
+  { id: 2, name: '李小美', classroom_id: 22 }, // 115-1 向日葵
+  { id: 3, name: '陳大文', classroom_id: 24 }, // 114-2 向日葵
+]
+
 vi.mock('@/api/dismissalCalls', () => ({
+  getDismissalRoster: vi.fn(() =>
+    Promise.resolve({ data: { students: ROSTER_STUDENTS, classrooms: ALL_CLASSROOMS } }),
+  ),
   getDismissalCalls: vi.fn().mockResolvedValue({ data: [] }),
   cancelDismissalCall: vi.fn(),
   createDismissalCall: vi.fn().mockResolvedValue({ data: {} }),
@@ -97,6 +108,8 @@ vi.stubGlobal('WebSocket', FakeWebSocket)
 
 import DismissalQueueView from '@/views/DismissalQueueView.vue'
 import DismissalPosBoard from '@/components/dismissal/pos/DismissalPosBoard.vue'
+import { getClassrooms } from '@/api/classrooms'
+import { getStudents } from '@/api/students'
 
 const globalConfig = {
   stubs: { teleport: true, 'el-table-column': { template: '<span />' } },
@@ -115,10 +128,16 @@ const posBoardProps = (wrapper: ReturnType<typeof shallowMount>) =>
 describe('DismissalQueueView 點名單班級歸屬', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('點名單只打 /dismissal-calls/roster，不打要 STUDENTS_READ／CLASSROOMS_READ 的 /students、/classrooms', async () => {
+    await mountView()
+    expect(getStudents).not.toHaveBeenCalled()
+    expect(getClassrooms).not.toHaveBeenCalled()
+  })
+
   it('學生編在非當期學年的班級時，DismissalPosBoard 仍收到該班的正確班級資料（不受 current_only 影響）', async () => {
     const wrapper = await mountView()
     const { classrooms } = posBoardProps(wrapper)
-    // 115-1 天堂鳥（id 13）屬於非當期學年，只有 current_only=false 撈回全部班級時才拿得到。
+    // 115-1 天堂鳥（id 13）屬於非當期學年；roster 依學生實際班級帶回，不受當期學期限制。
     expect(classrooms.map((c: { id: number }) => c.id)).toContain(13)
   })
 

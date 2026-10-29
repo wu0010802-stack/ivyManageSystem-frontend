@@ -3,9 +3,13 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { Plus, Refresh } from '@element-plus/icons-vue'
-import { getDismissalCalls, getDismissalCallsFresh, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
-import { getClassrooms } from '@/api/classrooms'
-import { getStudents } from '@/api/students'
+import {
+  getDismissalCalls,
+  getDismissalCallsFresh,
+  cancelDismissalCall,
+  createDismissalCall,
+  getDismissalRoster,
+} from '@/api/dismissalCalls'
 import DismissalPosBoard from '@/components/dismissal/pos/DismissalPosBoard.vue'
 import {
   classifyWebSocketClose,
@@ -50,7 +54,7 @@ interface DismissalCall {
 interface StudentItem {
   id: number
   name: string
-  classroom_id: number
+  classroom_id: number | null
   [key: string]: unknown
 }
 
@@ -116,7 +120,7 @@ const classroomNameMap = computed(() =>
 )
 
 const studentLabel = (s: StudentItem) => {
-  const cName = classroomNameMap.value[s.classroom_id]
+  const cName = s.classroom_id == null ? undefined : classroomNameMap.value[s.classroom_id]
   return cName ? `${s.name}（${cName}）` : s.name
 }
 
@@ -218,38 +222,18 @@ const handleCancel = async (call: DismissalCall) => {
   }
 }
 
-// ─── 學生清單載入（點名單 + Dialog 共用）────────────────
-// 翻頁到底（仿 useBusRouteEditor.loadStudents）：單發 limit:500 在學生數
-// 超過上限時會靜默截斷，漏掉的學生無法發接送通知。
-const STUDENT_PAGE_SIZE = 500
-const MAX_STUDENT_PAGES = 10
-const loadStudents = async () => {
+// ─── 點名單載入（學生 + 班級，點名單與 Dialog 共用）──────
+// 走 /dismissal-calls/roster 而非 /students、/classrooms：後兩者要 STUDENTS_READ、
+// CLASSROOMS_READ，只被授予放學佇列權限（DISMISSAL_CALLS_*）的角色會整頁 403。
+// roster 只回發通知所需的 id／姓名／班級，且已含跨學期班級（學生名單不跟學期，
+// 暑假期間學生已編入下學年班級，只取當期班級會整批查不到）。
+const loadRoster = async () => {
   try {
-    const collected: StudentItem[] = []
-    let skip = 0
-    for (let page = 0; page < MAX_STUDENT_PAGES; page += 1) {
-      const res = await getStudents({ is_active: true, limit: STUDENT_PAGE_SIZE, skip })
-      const data = res.data as { items?: StudentItem[]; total?: number }
-      const items = data.items || []
-      collected.push(...items)
-      skip += items.length
-      if (items.length === 0 || collected.length >= (data.total ?? collected.length)) break
-    }
-    students.value = collected
+    const res = await getDismissalRoster()
+    students.value = res.data.students as StudentItem[]
+    classrooms.value = res.data.classrooms as ClassroomInput[]
   } catch (e) {
-    ElMessage.error(friendlyError('載入學生清單失敗', e))
-  }
-}
-
-// ─── 班級清單載入（跨學期）───────────────────────────────
-// current_only=false 是關鍵：後端預設只回當期學期的班級，而學生名單不跟學期，
-// 兩邊錯配時學生的班級會查不到（暑假期間學生已編入下學年班級 → 整批誤標）。
-const loadClassrooms = async () => {
-  try {
-    const res = await getClassrooms({ current_only: false })
-    classrooms.value = (res.data || []) as ClassroomInput[]
-  } catch (e) {
-    ElMessage.error(friendlyError('載入班級清單失敗', e))
+    ElMessage.error(friendlyError('載入點名單失敗', e))
   }
 }
 
@@ -257,7 +241,7 @@ const loadClassrooms = async () => {
 const openCreateDialog = async () => {
   createForm.value = { student_id: null, classroom_id: null, note: '' }
   createFilterClassroomId.value = null
-  if (students.value.length === 0) await loadStudents() // 點名單已於掛載時載入，通常直接命中快取
+  if (students.value.length === 0) await loadRoster() // 點名單已於掛載時載入，通常直接命中快取
   createDialogVisible.value = true
 }
 
@@ -491,8 +475,8 @@ const formatTime = (dt: string | undefined) => formatTaipeiClock(dt) ?? '-'
 // ─── Lifecycle ────────────────────────────────────────────
 onMounted(async () => {
   document.addEventListener('visibilitychange', onVisibility)
-  // 班級清單走本頁 loadClassrooms（見檔頭註解：刻意不走全域 classroomStore）
-  await Promise.all([fetchCalls(), loadClassrooms(), loadStudents()])
+  // 班級清單走本頁 loadRoster（見檔頭註解：刻意不走全域 classroomStore）
+  await Promise.all([fetchCalls(), loadRoster()])
   // fetchCalls 若在等待期間已判定認證失效並呼叫 stopAllConnections()，
   // 不可在此又無條件把 WS 重新接上去。
   if (authFailed) return

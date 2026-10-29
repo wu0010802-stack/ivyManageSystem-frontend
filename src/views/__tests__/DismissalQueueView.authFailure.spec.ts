@@ -28,13 +28,8 @@ vi.mock('@/api/dismissalCalls', () => ({
   getDismissalCalls: (...args: unknown[]) => getCallsMock(...args),
   cancelDismissalCall: vi.fn().mockResolvedValue({ data: {} }),
   createDismissalCall: vi.fn().mockResolvedValue({ data: {} }),
+  getDismissalRoster: vi.fn().mockResolvedValue({ data: { students: [], classrooms: [] } }),
   arriveDismissalCall: vi.fn().mockResolvedValue({ data: {} }),
-}))
-vi.mock('@/api/classrooms', () => ({
-  getClassrooms: vi.fn().mockResolvedValue({ data: [] }),
-}))
-vi.mock('@/api/students', () => ({
-  getStudents: vi.fn().mockResolvedValue({ data: { items: [] } }),
 }))
 vi.mock('@/stores/classroom', () => ({
   useClassroomStore: () => ({ classrooms: [], fetchClassrooms: vi.fn() }),
