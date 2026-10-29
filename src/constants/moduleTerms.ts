@@ -24,6 +24,10 @@ export const MODULE_TERMS = {
 // 命名原則：名稱要說出這頁「實際在做的事」。功能長大時（新增分頁、涵蓋第二類資料）
 // 必須回來改名，不要讓名稱停在功能的初始版本。
 export const PAGE_TERMS = {
+  /** /attendance。2026-10-29 排班獨立成 /schedule 後只剩核對（出勤明細、打卡核對、匯入、月底作業），原「排班與出勤」不再準確。 */
+  attendanceReconcile: '出勤核對',
+  /** /schedule。週班表、學期輪值表、換班紀錄、班別設定。 */
+  schedule: '排班',
   /** /workbench。原側欄「工作台」過泛（另有學生／班級／出勤工作台），實際只做審核。 */
   workbench: '審核工作台',
   /** /classrooms。原「班級學生管理」與 students 的「學生」語意重疊，難以辨別該點哪個。 */

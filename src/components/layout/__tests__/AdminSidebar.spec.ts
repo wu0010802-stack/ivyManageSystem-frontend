@@ -101,6 +101,16 @@ describe('AdminSidebar 考核年終整併 + 群組可見性回歸', () => {
     expect(all).not.toContain('/appraisal-year-end/todo')
   })
 
+  it('「排班」「出勤核對」分開兩個入口（2026-10-29 S3）：SCHEDULE 只看到排班、ATTENDANCE_READ 只看到出勤核對', () => {
+    const both = items(mountWith(['SCHEDULE', 'ATTENDANCE_READ']))
+    expect(both).toContain('/schedule')
+    expect(both).toContain('/attendance')
+    expect(items(mountWith(['SCHEDULE']))).toContain('/schedule')
+    expect(items(mountWith(['SCHEDULE']))).not.toContain('/attendance')
+    expect(items(mountWith(['ATTENDANCE_READ']))).toContain('/attendance')
+    expect(items(mountWith(['ATTENDANCE_READ']))).not.toContain('/schedule')
+  })
+
   it('報名時間設定 掛課後才藝群組，不在系統設定；修改紀錄已併入報名管理頁籤（2026-10-29 M4），不再有獨立側欄項', () => {
     const w = mountWith(['*'])
     const inGroup = (sub: string) =>

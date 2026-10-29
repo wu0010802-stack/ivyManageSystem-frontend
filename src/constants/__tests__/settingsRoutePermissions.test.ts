@@ -19,7 +19,7 @@ describe('系統設定路由拆分權限規則', () => {
   })
 
   it('/settings 對頁內兩個獨立權限域採 OR，且非 prefix（不可外溢到子路由）', () => {
-    // SCHEDULE 已不借道：班別設定 2026-10 搬到排班與出勤（/attendance?tab=shifts）
+    // SCHEDULE 已不借道：班別設定 2026-10 搬到排班頁（/schedule?sub=shifts，2026-10-29 S3 起）
     const rules = rulesFor('/settings')
     expect(rules.map((r) => r.permission)).toEqual(['SETTINGS_READ', 'DSR_MANAGE'])
     expect(rules.some((r) => 'prefix' in r && r.prefix)).toBe(false)
@@ -52,9 +52,11 @@ describe('canAccessRoute 三路由獨立放行', () => {
     expect(canAccessRoute('/settings/roles')).toBe(false)
   })
 
-  it('只有 SCHEDULE：班別設定在排班與出勤，三個設定頁都不可進（側欄不出現空白設定頁）', () => {
+  it('只有 SCHEDULE：班別設定在排班頁（/schedule），三個設定頁都不可進（側欄不出現空白設定頁）', () => {
     setUserInfo({ role: 'supervisor', permission_names: ['SCHEDULE'] })
-    expect(canAccessRoute('/attendance')).toBe(true)
+    expect(canAccessRoute('/schedule')).toBe(true)
+    // 2026-10-29 S3：/attendance 不再借道 SCHEDULE
+    expect(canAccessRoute('/attendance')).toBe(false)
     expect(canAccessRoute('/settings')).toBe(false)
     expect(canAccessRoute('/settings/accounts')).toBe(false)
     expect(canAccessRoute('/settings/roles')).toBe(false)

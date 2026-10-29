@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { attendanceRouteProps, isValidDateQuery, legacySettingsShiftsRedirect } from '../attendanceRouteProps'
+import {
+  attendancePageProps,
+  attendanceRouteProps,
+  isValidDateQuery,
+  legacyAttendanceScheduleRedirect,
+  legacySettingsShiftsRedirect,
+  schedulePageProps,
+} from '../attendanceRouteProps'
 
 describe('attendanceRouteProps（SPEC-027 §6.1）', () => {
   it('未帶 query：全部 undefined，由頁面套預設（第一個看得到的頁籤、今天）', () => {
@@ -64,15 +71,15 @@ describe('attendanceRouteProps filter（核對的列篩選）', () => {
   })
 })
 
-describe('legacySettingsShiftsRedirect（班別設定自 /settings 搬進排班與出勤）', () => {
-  it('/settings?tab=shifts → /attendance?tab=shifts（只帶 tab，不夾帶其他 query）', () => {
+describe('legacySettingsShiftsRedirect（班別設定自 /settings 搬進排班頁）', () => {
+  it('/settings?tab=shifts → /schedule?sub=shifts（只帶 sub，不夾帶其他 query）', () => {
     expect(legacySettingsShiftsRedirect({ path: '/settings', query: { tab: 'shifts', view: 'x' } })).toEqual({
-      path: '/attendance',
-      query: { tab: 'shifts' },
+      path: '/schedule',
+      query: { sub: 'shifts' },
     })
     expect(legacySettingsShiftsRedirect({ path: '/settings', query: { tab: ['shifts', 'line'] } })).toEqual({
-      path: '/attendance',
-      query: { tab: 'shifts' },
+      path: '/schedule',
+      query: { sub: 'shifts' },
     })
   })
 
@@ -81,5 +88,54 @@ describe('legacySettingsShiftsRedirect（班別設定自 /settings 搬進排班�
     expect(legacySettingsShiftsRedirect({ path: '/settings', query: {} })).toBeNull()
     expect(legacySettingsShiftsRedirect({ path: '/settings/accounts', query: { tab: 'shifts' } })).toBeNull()
     expect(legacySettingsShiftsRedirect({ path: '/attendance', query: { tab: 'shifts' } })).toBeNull()
+  })
+})
+
+describe('legacyAttendanceScheduleRedirect（排班自 /attendance 獨立成 /schedule，2026-10-29 S3）', () => {
+  it('tab=schedule 與舊值 rotation／swaps／shifts → /schedule，保留子頁籤（週班表是預設不寫）與合法 date', () => {
+    expect(legacyAttendanceScheduleRedirect({ path: '/attendance', query: { tab: 'schedule' } })).toEqual({ path: '/schedule', query: {} })
+    expect(legacyAttendanceScheduleRedirect({ path: '/attendance', query: { tab: 'schedule', sub: 'swaps', date: '2026-09-14' } })).toEqual({
+      path: '/schedule',
+      query: { sub: 'swaps', date: '2026-09-14' },
+    })
+    for (const sub of ['rotation', 'swaps', 'shifts']) {
+      expect(legacyAttendanceScheduleRedirect({ path: '/attendance', query: { tab: sub } })).toEqual({ path: '/schedule', query: { sub } })
+    }
+  })
+
+  it('不合法的 date 丟掉；核對的 emp／filter／view 不夾帶', () => {
+    expect(legacyAttendanceScheduleRedirect({ path: '/attendance', query: { tab: 'swaps', date: 'x', emp: '3', filter: 'issues', view: 'month' } })).toEqual({
+      path: '/schedule',
+      query: { sub: 'swaps' },
+    })
+  })
+
+  it('核對的連結與其他路徑不轉（含 tab=records／reconcile 這兩個舊核對值）', () => {
+    for (const tab of [undefined, 'grid', 'records', 'reconcile', 'nope']) {
+      expect(legacyAttendanceScheduleRedirect({ path: '/attendance', query: tab ? { tab } : {} })).toBeNull()
+    }
+    expect(legacyAttendanceScheduleRedirect({ path: '/schedule', query: { tab: 'schedule' } })).toBeNull()
+    expect(legacyAttendanceScheduleRedirect({ path: '/leaves', query: { tab: 'swaps' } })).toBeNull()
+  })
+})
+
+describe('頁面 props：attendancePageProps／schedulePageProps', () => {
+  it('attendancePageProps＝attendanceRouteProps＋scope=attendance', () => {
+    expect(attendancePageProps({ tab: 'grid', view: 'person', emp: '7', date: '2026-09-14' })).toEqual({
+      ...attendanceRouteProps({ tab: 'grid', view: 'person', emp: '7', date: '2026-09-14' }),
+      scope: 'attendance',
+    })
+  })
+
+  it('schedulePageProps：scope=schedule、tab 固定 schedule；sub 預設週班表，非法值退回週班表；date 須合法', () => {
+    expect(schedulePageProps({})).toEqual({ scope: 'schedule', tab: 'schedule', sub: 'week', date: undefined })
+    for (const sub of ['week', 'rotation', 'swaps', 'shifts']) {
+      expect(schedulePageProps({ sub })).toMatchObject({ sub })
+    }
+    expect(schedulePageProps({ sub: 'nope' }).sub).toBe('week')
+    expect(schedulePageProps({ date: '2026-09-14' }).date).toBe('2026-09-14')
+    expect(schedulePageProps({ date: 'x' }).date).toBeUndefined()
+    // 舊的 tab=rotation 直接帶到 /schedule 也認得（正常會先被守衛轉成 ?sub=）
+    expect(schedulePageProps({ tab: 'rotation' }).sub).toBe('rotation')
   })
 })

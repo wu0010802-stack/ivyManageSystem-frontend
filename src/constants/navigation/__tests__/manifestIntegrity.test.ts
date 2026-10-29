@@ -226,9 +226,8 @@ const INTENTIONAL_DIVERGENCE = {
   // 否則「授高風險事件」等於連「報表 › 操作紀錄」一起授出去。
   removedFromLegacy: [
     '/workbench/high-risk × AUDIT_LOGS',
-    // 2026-10 SPEC-027：排班管理併入「排班與出勤」（/attendance 主屬 SCHEDULE），
-    // /schedule 改為 redirect，不再是 manifest 頁面。
-    '/schedule × SCHEDULE',
+    // （2026-10-29 後台 IA 重整 S3：/schedule 恢復為正式頁、主屬 SCHEDULE，
+    // 原 SPEC-027 的 '/schedule × SCHEDULE' 差異條目隨之移除，衍生輸出回到與 fixture 一致。）
   ],
   addedByManifest: [
     // 2026-08-20 稽核與資料品質整併：高風險事件（原 /workbench/high-risk）、操作紀錄
@@ -254,9 +253,6 @@ const INTENTIONAL_DIVERGENCE = {
     '/platform/audit × PLATFORM_AUDIT_VIEW',
     // 2026-08-10 娃娃車乘車歷史頁新增（fixture 凍結於 2026-07-31，此路由更晚才有）。
     '/bus-history × BUS_READ',
-    // 2026-10 SPEC-027：排班與出勤合併成單一頁，/attendance 改由本頁主屬 SCHEDULE
-    //（2026-09-06 曾借道同一條、09-10 拆分時移除，本次反轉回來）。
-    '/attendance × SCHEDULE',
     // 2026-08-10 活動參加調查表（Task 13）新增（fixture 凍結於 2026-07-31，此模組更晚才有）。
     '/surveys × SURVEYS_READ × prefix',
     '/surveys/new × SURVEYS_WRITE',

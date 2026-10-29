@@ -5,7 +5,7 @@ import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo,
 import { captureException } from '@/utils/sentry'
 import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
-import { attendanceRouteProps, isValidDateQuery, legacySettingsShiftsRedirect } from './attendanceRouteProps'
+import { attendancePageProps, legacyAttendanceScheduleRedirect, legacySettingsShiftsRedirect, schedulePageProps } from './attendanceRouteProps'
 import { isBatchTab } from '../views/salary/batchTabs'
 
 
@@ -240,13 +240,23 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/attendance',
             name: 'attendance',
-            component: () => import('../views/attendance/ScheduleAttendanceView.vue'),
-            // 2026-10 SPEC-027：排班與出勤合併成單一頁（推翻 2026-09-10 拆成兩個側欄項目）。
-            // query：tab=grid（核對）|schedule（排班）、sub、view、date、emp、filter；
-            // 舊 tab=records|rotation|swaps|shifts|reconcile 由 attendanceRouteProps 對映（2026-10-24 頁籤收成兩個）。
-            // 舊 /settings?tab=shifts 由 authGuard 轉來，落在排班 › 班別設定。
-            props: (route) => attendanceRouteProps(route.query),
-            meta: { title: '排班與出勤' }
+            component: () => import('../views/attendance/AttendanceReconcilePage.vue'),
+            // 2026-10-29 後台 IA 重整 S3：「排班與出勤」拆回兩頁（SPEC-027 的合併反轉），本頁只留核對
+            //（ATTENDANCE_READ），排班在 /schedule。兩條路由共用 ScheduleAttendanceView（各包一層薄殼避免切頁重用實例），以 scope prop 鎖定顯示哪一半。
+            // query：tab=grid、view、date、emp、filter；舊 tab=records|reconcile 由 attendanceRouteProps 對映。
+            // 舊 tab=schedule|rotation|swaps|shifts 由 authGuard 的 legacyAttendanceScheduleRedirect 轉到 /schedule。
+            props: (route) => attendancePageProps(route.query),
+            meta: { title: PAGE_TERMS.attendanceReconcile }
+        },
+        {
+            // 排班（SCHEDULE）：週班表、學期輪值表、換班紀錄、班別設定。2026-10-29 S3 自 redirect 恢復為正式頁
+            //（原 redirect 是 SPEC-027 合併「排班與出勤」時留的）。query：sub、date。
+            // 舊 /settings?tab=shifts 由 authGuard 轉來（sub=shifts）；舊 /attendance?tab=swaps 等同上。
+            path: '/schedule',
+            name: 'schedule',
+            component: () => import('../views/attendance/SchedulePage.vue'),
+            props: (route) => schedulePageProps(route.query),
+            meta: { title: PAGE_TERMS.schedule }
         },
         {
             path: '/leaves',
@@ -259,15 +269,6 @@ export const routes: RouteRecordRaw[] = [
             name: 'overtime',
             component: () => import('../views/OvertimeView.vue'),
             meta: { title: PAGE_TERMS.overtime }
-        },
-        {
-            // 舊「排班管理」入口（書籤／外部連結相容）：落在排班與出勤的排班 › 週班表（週班別編輯在那裡），保留 date。
-            // 刻意不掛 name 與 meta.title：全域搜尋掃 meta.title，同名會讓結果重複。
-            path: '/schedule',
-            redirect: (to) => ({
-                path: '/attendance',
-                query: { ...(isValidDateQuery(to.query.date) ? { date: to.query.date } : {}), tab: 'schedule', sub: 'week' },
-            }),
         },
         {
             path: '/salary',
@@ -1172,8 +1173,9 @@ async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
 // 抽成具名匯出供單元測試（src/router/__tests__/authGuardErrorRedirects.spec.ts）；
 // startRouteLoading 留在 beforeEach wrapper，authGuard 本身不碰載入狀態。
 export async function authGuard(to: RouteLocationNormalized) {
-    // 舊書籤先轉址再做任何檢查（見 legacySettingsShiftsRedirect：否則只有 SCHEDULE 的人會被 /settings 擋成 403）
-    const legacy = legacySettingsShiftsRedirect(to)
+    // 舊書籤先轉址再做任何檢查（見 legacySettingsShiftsRedirect／legacyAttendanceScheduleRedirect：
+    // 否則只有 SCHEDULE 的人會被 /settings、/attendance 擋成 403）
+    const legacy = legacySettingsShiftsRedirect(to) ?? legacyAttendanceScheduleRedirect(to)
     if (legacy) return legacy
 
     const { loggedIn, userInfo } = await restoreSessionIfNeeded(to)

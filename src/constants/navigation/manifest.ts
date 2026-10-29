@@ -336,14 +336,19 @@ export const NAVIGATION_MANIFEST = {
           ],
         },
         {
-          // 2026-10 SPEC-027：排班與出勤合併成單一側欄項目（推翻 2026-09-10 拆分）。
-          // SCHEDULE 或 ATTENDANCE_READ 任一即可開頁；頁籤與動作再依權限顯示。
-          // SCHEDULE 原屬已退場的 /schedule 頁，改由本頁主屬（views），不用 sharedViews
-          //（sharedViews 只能借道「別處已主屬」的碼，否則 M3 不變式紅）。
-          key: 'attendance', title: '排班與出勤', routePath: '/attendance',
-          views: [{ code: 'ATTENDANCE_READ' }, { code: 'SCHEDULE' }],
-          actions: [{ code: 'ATTENDANCE_WRITE' }],
+          // 2026-10-29 後台 IA 重整 S3：排班自「排班與出勤」獨立成 /schedule（SPEC-027 合併的反轉）。
+          // SCHEDULE 主屬本頁；/attendance 回到只吃 ATTENDANCE_READ，不再借道 SCHEDULE。
+          // 週班表、學期輪值表、換班紀錄、班別設定四個子頁籤都在這一頁（?sub=）。
+          key: 'schedule', title: PAGE_TERMS.schedule, routePath: '/schedule',
+          views: [{ code: 'SCHEDULE' }],
           menu: { icon: icon('Calendar') },
+        },
+        {
+          // 原「排班與出勤」只留核對（出勤明細、打卡核對、匯入、月底作業），改名「出勤核對」。
+          key: 'attendance', title: PAGE_TERMS.attendanceReconcile, routePath: '/attendance',
+          views: [{ code: 'ATTENDANCE_READ' }],
+          actions: [{ code: 'ATTENDANCE_WRITE' }],
+          menu: { icon: icon('Clock') },
         },
         {
           key: 'leaves', title: '請假管理', routePath: '/leaves',

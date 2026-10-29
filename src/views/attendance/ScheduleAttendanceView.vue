@@ -1,13 +1,14 @@
 <template>
   <div class="attendance-workspace">
-    <!-- 無獨立頁面層級權限閘（本站慣例＝側欄隱藏＋後端 403）；SCHEDULE 或 ATTENDANCE_READ 任一可進頁，
-         各頁籤與動作再依權限顯示（SPEC-027 §8）。頁籤只有兩個：核對（ATTENDANCE_READ）與排班（SCHEDULE）。
-         頁首只放月份與動作，讓核對的格子盡量進首屏；逐人檢視沒有另一套統計，數字都跟格子同一個口徑。 -->
-    <PageHeader title="排班與出勤">
+    <!-- 無獨立頁面層級權限閘（本站慣例＝側欄隱藏＋後端 403）。頁籤只有兩個：核對（ATTENDANCE_READ）與排班（SCHEDULE）。
+         2026-10-29 後台 IA 重整 S3：路由拆成 /attendance（scope=attendance，只有核對）與 /schedule（scope=schedule，只有排班），
+         兩頁共用本元件；沒帶 scope（單元測試、舊用法）＝兩個頁籤都依權限出現。
+         頁首只放月份與動作（屬核對），讓核對的格子盡量進首屏；逐人檢視沒有另一套統計，數字都跟格子同一個口徑。 -->
+    <PageHeader :title="pageTitle">
       <template #actions>
         <!-- 年月與動作只管核對頁籤；排班頁籤（週班表、輪值表、換班紀錄、班別設定）不受它控制，不顯示以免誤會 -->
         <WorkspaceHeader
-          v-if="canViewAttendance"
+          v-if="showReconcile"
           v-show="monthTabs"
           :year="query.year"
           :month="query.month"
@@ -31,7 +32,7 @@
 
     <MonthProgressBar v-show="monthTabs" ref="progressBar" :month="monthGrid" :mobile="isMobile" @show-issues="showIssues" @show-leftover="showLeftover" @go-month="goMonth" @changed="onDetailResolved" @summary="(v) => (monthSummary = v)" @records="openRecords" @import="openImport" @primary="onPrimary" @recalculate="recalcOpen = true" />
 
-    <div class="workspace-mode" role="tablist" aria-label="排班與出勤">
+    <div v-if="showTabBar" class="workspace-mode" role="tablist" aria-label="排班與出勤">
       <button
         v-for="t in visibleTabs"
         :key="t.key"
@@ -48,7 +49,7 @@
     <AppraisalSheetBatchDialog v-if="appraisalOpen && canPrintAppraisal" v-model="appraisalOpen" :year="query.year" :month="query.month" />
 
     <!-- 核對：週／月看格子（判定與待處理），逐人＝名冊＋整月明細。格子首次看週或月才掛載，之後 v-show 常駐保留抽屜狀態 -->
-    <template v-if="canViewAttendance">
+    <template v-if="showReconcile">
     <el-radio-group
       v-show="activeTab === 'grid'"
       :model-value="shownView"
@@ -232,7 +233,7 @@
     <ShiftTypesPanel v-if="activeTab === 'schedule' && scheduleSub === 'shifts'" @changed="onShiftTypesChanged" />
     </template>
 
-    <el-drawer v-if="canViewAttendance && ws.hasCurrentData.value" v-model="anomalyDrawerOpen" title="全月出勤異常（全體人員）" :size="isMobile ? '100%' : '480px'" append-to-body>
+    <el-drawer v-if="showReconcile && ws.hasCurrentData.value" v-model="anomalyDrawerOpen" title="全月出勤異常（全體人員）" :size="isMobile ? '100%' : '480px'" append-to-body>
       <AnomalyQueueColumn :items="ws.anomalyQueue.value" :selected-index="selectedAnomalyIndex" :loading="ws.loading.value" :sealed-employee-ids="sealedEmployeeIds" :employee-id-by-number="employeeIdByNumber" @select="onAnomalySelect" @filter-change="onFilterChange" @resolved="onDetailResolved" />
     </el-drawer>
     <!-- 重算本月出勤（改了員工上下班時間或班別時段之後）：試算後確認，完成後整頁重抓 -->
@@ -267,6 +268,7 @@ import { getRecords } from '@/api/attendance'
 import { getAttendanceWorkingMonth } from '@/api/attendanceMonthContext'
 import type { ApiResponse } from '@/api/_generated/typed'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
 import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
@@ -278,7 +280,7 @@ import { primaryAction as resolvePrimaryAction, type MonthStep, type MonthSummar
 import { patternCellKeys } from '@/utils/attendancePatterns'
 import { cellKey, isIssue, mondayOf, nextWeekWithMatch, uncoveredDates, type GridFilter, type GridMode, type GridView } from '@/utils/scheduleAttendanceGrid'
 import { hasPermission, hasFullSalaryView } from '@/utils/auth'
-import type { AttendanceSub, AttendanceTab, AttendanceView } from '@/router/attendanceRouteProps'
+import type { AttendanceScope, AttendanceSub, AttendanceTab, AttendanceView } from '@/router/attendanceRouteProps'
 const PayrollComparisonDialog = defineAsyncComponent(() => import('@/components/attendance/PayrollComparisonDialog.vue'))
 const AppraisalSheetBatchDialog = defineAsyncComponent(() => import('@/components/attendance/AppraisalSheetBatchDialog.vue'))
 const DutyRotationPanel = defineAsyncComponent(() => import('@/components/schedule/DutyRotationPanel.vue'))
@@ -302,6 +304,11 @@ const props = defineProps<{
   filter?: GridFilter
   /** 核對頁籤的檢視（預設週）：週／月（只在桌機）／逐人 */
   view?: ReconcileView
+  /**
+   * 這個頁面鎖定只顯示哪一半（2026-10-29 S3）：attendance＝只有核對（/attendance）、schedule＝只有排班（/schedule）。
+   * 沒帶＝兩個頁籤都依權限出現（舊的合併頁行為；單元測試仍用它）。
+   */
+  scope?: AttendanceScope
 }>()
 const emit = defineEmits<{ dateChange: [date: string] }>()
 
@@ -310,7 +317,11 @@ const router = useRouter()
 
 // ── 權限（SPEC-027 §8）──────────────────────────────────────────────────────
 const canViewAttendance = hasPermission('ATTENDANCE_READ')
-const canSchedule = hasPermission('SCHEDULE')
+// scope 只決定「這個頁面顯示哪一半」，不改任何權限判斷：排班那半要 SCHEDULE，核對那半要 ATTENDANCE_READ。
+const canSchedule = hasPermission('SCHEDULE') && props.scope !== 'attendance'
+/** 核對那半（頁首月份與動作、逐人／週／月檢視、異常抽屜）要顯示：有出勤檢視權限，且這頁沒被鎖定成只有排班 */
+const showReconcile = canViewAttendance && props.scope !== 'schedule'
+const pageTitle = props.scope === 'attendance' ? PAGE_TERMS.attendanceReconcile : props.scope === 'schedule' ? PAGE_TERMS.schedule : '排班與出勤'
 // 頁首主要動作的權限（同手機膠囊）：匯入要出勤寫入，交薪資要薪資讀取
 const canWriteAttendance = hasPermission('ATTENDANCE_WRITE')
 const canViewSalary = hasPermission('SALARY_READ')
@@ -320,7 +331,7 @@ const canPrintAppraisal = computed(() => hasPermission('ATTENDANCE_READ') && has
 
 // 2026-10-24 頁籤由五個收成兩個（使用者裁定）：本週班別編輯移到「排班」，原出勤明細變成「核對」的逐人檢視
 const TABS: Array<{ key: WorkspaceTab; label: string; visible: boolean }> = [
-  { key: 'grid', label: '核對', visible: canViewAttendance },
+  { key: 'grid', label: '核對', visible: showReconcile },
   { key: 'schedule', label: '排班', visible: canSchedule },
 ]
 const SCHEDULE_SUBS: Array<{ key: ScheduleSub; label: string }> = [
@@ -331,6 +342,8 @@ const SCHEDULE_SUBS: Array<{ key: ScheduleSub; label: string }> = [
   { key: 'shifts', label: '班別設定' },
 ]
 const visibleTabs = TABS.filter((t) => t.visible)
+/** 拆頁後每頁只剩一個頁籤，頁籤列沒有資訊量而且像「還有別的頁籤」：鎖定 scope 時只有一個就不畫（沒帶 scope 照舊） */
+const showTabBar = props.scope === undefined || visibleTabs.length > 1
 /** 沒帶或看不到的頁籤＝第一個看得到的（只有排班權限就是排班） */
 const normalizeTab = (tab: WorkspaceTab | undefined): WorkspaceTab =>
   tab && visibleTabs.some((t) => t.key === tab) ? tab : visibleTabs[0]?.key ?? 'grid'
@@ -376,7 +389,8 @@ function selectTab(tab: WorkspaceTab): void {
 function selectSub(sub: ScheduleSub): void {
   activeTab.value = 'schedule'
   scheduleSub.value = sub
-  syncQuery({ tab: 'schedule', sub })
+  // /schedule 的網址只有 sub／date：tab=schedule 是合併頁時代的，別寫進這個頁面的網址
+  syncQuery(props.scope === 'schedule' ? { tab: undefined, sub } : { tab: 'schedule', sub })
 }
 
 function setFilter(filter: GridFilter): void {
@@ -399,6 +413,11 @@ function showLeftover(): Promise<void> {
  * 不落在空的週（死路）。換週先問排班頁籤未儲存的週排班，不放行就整個不動。桌機看月格子，不用跳。
  */
 async function showGridFilter(filter: 'issues' | 'leftover'): Promise<void> {
+  // 排班頁沒有核對的格子：要看待處理就到出勤核對頁（帶篩選與目前錨點）
+  if (props.scope === 'schedule') {
+    void router.push({ path: '/attendance', query: { tab: 'grid', filter, date: anchorDate.value } })
+    return
+  }
   const desktop = isDesktop.value
   const target = desktop ? null : firstMatchDate(filter)
   if (target && !(await confirmAnchorChange(target))) return
@@ -566,6 +585,13 @@ const detailMode = ref<'resolve' | 'month'>('month')
 const anomalyDrawerOpen = ref(false)
 const importOpen = ref(false)
 const focusDate = ref<string | null>(null)
+// 從排班頁週班表抽屜「看他整月」過來（/attendance?view=person&emp=&date=）：開頁就選取這個人並聚焦那天。
+// emp 在核對的格子上另有「開頁即開這個人的抽屜」語意，這裡用完就從網址拿掉，免得之後切到週／月格子又被它彈出抽屜。
+if (props.view === 'person' && props.emp) {
+  selectedEmployeeId.value = props.emp
+  focusDate.value = props.date ?? null
+  void nextTick(() => syncQuery({ emp: undefined }))
+}
 const importContext = ref<{ employee_id: number; employee_name: string; date: string } | null>(null)
 function openImport(): void { importContext.value = null; importOpen.value = true }
 const payrollOpen = ref(false)
@@ -582,6 +608,8 @@ watch(() => [query.year, query.month], () => {
 // 桌機兩欄同時可見，不需要這個狀態；手機一次只看得到一段，故需記錄目前在哪一段。
 type MobileTab = 'roster' | 'detail'
 const mobileTab = ref<MobileTab>('roster')
+// 排班頁「看他整月」跳過來（見上方 emp 預選）：手機一次只看一段，直接進明細
+if (props.view === 'person' && props.emp && !isDesktop.value) mobileTab.value = 'detail'
 
 // 手機從異常明細返回抽屜，整月明細返回名冊。
 function backFromDetail(): void {
@@ -778,6 +806,12 @@ function onNavigate(delta: number): void {
  * 月模式點的格子可在任一週，錨點跨週會讓排班面板捨棄未儲存的週排班，所以先問它；不放行就整個不動。
  */
 async function openRecords(employeeId: number, date: string): Promise<void> {
+  // 排班頁（週班表抽屜的「看他整月」）：逐人明細在出勤核對頁，帶人帶日期過去（該頁開頁時選取這個人）
+  if (props.scope === 'schedule') {
+    if (!(await confirmAnchorChange(date))) return
+    void router.push({ path: '/attendance', query: { tab: 'grid', view: 'person', date, emp: String(employeeId) } })
+    return
+  }
   if (!(await confirmAnchorChange(date))) return
   anchorDate.value = date
   activeTab.value = 'grid'
@@ -810,7 +844,7 @@ async function onGridChanged(source: GridMode): Promise<void> {
   dataRevision.value += 1
   reloadGrids(source)
   importRevision.value += 1 // 逐人檢視常駐，格子確認／改班後它的整月表也要刷新
-  if (canViewAttendance) await onResolved()
+  if (showReconcile) await onResolved()
 }
 
 function onRotationApplied(): void {
@@ -828,8 +862,8 @@ async function onImported(): Promise<void> {
   importRevision.value += 1
   dataRevision.value += 1
   reloadGrids()
-  // 匯入完成 → 直接看有問題的格子（SPEC-027 §6.3 #22）
-  void showIssues()
+  // 匯入完成 → 直接看有問題的格子（SPEC-027 §6.3 #22）；排班頁（從週班表抽屜匯入這天打卡）留在原地，只重載格子
+  if (props.scope !== 'schedule') void showIssues()
   await Promise.all([ws.refresh(), invalidateRecordsCache()])
   clampSelectedIndex()
   ElMessage.success('匯入完成')
@@ -946,7 +980,8 @@ async function onExport(): Promise<void> {
 let unmounted = false
 onBeforeUnmount(() => { unmounted = true })
 onMounted(() => {
-  if (!canViewAttendance) return
+  // 名冊／異常佇列與「預設看最早未交薪資月」都只屬核對那半；排班頁固定從今天那週開始
+  if (!showReconcile) return
   void ws.refresh()
   void applyWorkingMonth()
 })
