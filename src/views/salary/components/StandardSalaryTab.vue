@@ -4,12 +4,13 @@
 // 掛載時機由父層 el-tabs（非 lazy）與外層 v-if="canReadSalarySettings"
 // 決定：只有父層通過權限檢查渲染整個面板時，本元件才會 mount 並觸發 fetch，
 // 與拆分前「父層 onMounted 內以 canReadSalarySettings 守衛才 fetch」等效。
-import { reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { useFormDirty } from '@/composables/useFormDirty'
 import { useSettingsDirty } from '../settingsDirty'
 import { getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
+import { hasPermission } from '@/utils/auth'
 import {
   describeBelowMinimumWage,
   describeNeedsConfirmation,
@@ -38,6 +39,12 @@ const positionSalary = reactive({
   principal: null,
 })
 const loadingPositionSalary = ref(false)
+// 資安稽核 2026-10-29 P3：改職位標準＝改該職位全員底薪，後端 PUT /config/position-salary
+// 除 SETTINGS_WRITE 外改需金流簽核（require_salary_config_finance_approve）。前端 gate
+// 比照 BonusConfigPanel.canSaveBonusSettings，避免填完整張表才吃 403。
+const canSavePositionSalary = computed(
+  () => hasPermission('SETTINGS_WRITE') && hasPermission('ACTIVITY_PAYMENT_APPROVE'),
+)
 const positionSalaryLoaded = ref(false)
 const { isDirty: positionDirty, snapshot: snapshotPosition } = useFormDirty(positionSalary)
 useSettingsDirty('職位標準底薪', () => positionSalaryLoaded.value && positionDirty.value)
@@ -74,6 +81,11 @@ const fetchPositionSalary = async () => {
 }
 
 const savePositionSalary = async () => {
+  // 防禦：按鈕已 disabled，但函式仍可能被程式化觸發，與 UI gate 同一道防線
+  if (!canSavePositionSalary.value) {
+    ElMessage.warning('您沒有權限儲存職位標準底薪（需要「系統設定寫入」與「金流簽核」權限）')
+    return
+  }
   loadingPositionSalary.value = true
   try {
     const res = await updatePositionSalary(positionSalary)
@@ -300,7 +312,10 @@ onMounted(() => {
 
     <div class="mt-4 position-save-row">
       <span v-if="positionSalaryLoaded && positionDirty" class="unsaved-hint" role="status">有未儲存的變更</span>
-      <el-button type="primary" @click="savePositionSalary">儲存職位底薪設定</el-button>
+      <span v-if="!canSavePositionSalary" class="unsaved-hint" role="note">
+        職位標準底薪會改變該職位全員底薪，需「系統設定寫入」與「金流簽核」權限才能儲存
+      </span>
+      <el-button type="primary" :disabled="!canSavePositionSalary" @click="savePositionSalary">儲存職位底薪設定</el-button>
     </div>
 
     <!-- 員工底薪比對 -->

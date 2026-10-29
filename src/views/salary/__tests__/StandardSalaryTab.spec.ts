@@ -35,6 +35,13 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() },
 }))
 
+// 資安稽核 2026-10-29 P3：PUT /config/position-salary 後端改需金流簽核
+// （require_salary_config_finance_approve）。預設授予兩權限，個別測試再移除。
+const granted = vi.hoisted(() => new Set<string>())
+vi.mock('@/utils/auth', () => ({
+  hasPermission: (name: string) => granted.has(name),
+}))
+
 const ElTableColumnStub = defineComponent({
   name: 'ElTableColumnStub',
   props: { data: { type: Array, default: () => [] }, label: { type: String, default: '' } },
@@ -107,6 +114,8 @@ const mountTab = async () => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  granted.clear()
+  granted.add('SETTINGS_WRITE').add('ACTIVITY_PAYMENT_APPROVE')
   getPositionSalary.mockResolvedValue({ data: {} })
   comparePositionSalary.mockResolvedValue({ data: { employees: [GAO], out_of_sync: 1 } })
   syncPositionSalary.mockResolvedValue({ data: { total_updated: 1, updated: [], needs_confirmation: [] } })
@@ -285,5 +294,36 @@ describe('StandardSalaryTab — 同步後低於基本工資整批 422（後端 b
     expect(wrapper.text()).toContain('低於基本工資')
     expect(wrapper.find('[data-test="sync-blocked-count"]').text()).toContain('1 人')
     expect(syncButtonOf(wrapper).attributes('disabled')).toBeDefined()
+  })
+})
+
+describe('StandardSalaryTab — 職位標準底薪改需金流簽核（資安稽核 2026-10-29）', () => {
+  const saveButtonOf = (wrapper: Awaited<ReturnType<typeof mountTab>>) =>
+    wrapper.findAll('button').find((b) => b.text() === '儲存職位底薪設定')!
+
+  it('缺金流簽核：儲存鈕停用、說明權限需求，且不送出', async () => {
+    granted.delete('ACTIVITY_PAYMENT_APPROVE')
+    const wrapper = await mountTab()
+    const save = saveButtonOf(wrapper)
+    expect(save.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('金流簽核')
+    await save.trigger('click')
+    await flush()
+    expect(updatePositionSalary).not.toHaveBeenCalled()
+  })
+
+  it('缺系統設定寫入：同樣停用', async () => {
+    granted.delete('SETTINGS_WRITE')
+    const wrapper = await mountTab()
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
+  })
+
+  it('兩權限皆有：可儲存', async () => {
+    const wrapper = await mountTab()
+    const save = saveButtonOf(wrapper)
+    expect(save.attributes('disabled')).toBeUndefined()
+    await save.trigger('click')
+    await flush()
+    expect(updatePositionSalary).toHaveBeenCalled()
   })
 })

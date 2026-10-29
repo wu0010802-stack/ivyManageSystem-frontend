@@ -31,6 +31,12 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+// 資安稽核 2026-10-29 P3：PUT /config/titles/{id} 改等級後端改需金流簽核。
+const granted = vi.hoisted(() => new Set<string>())
+vi.mock('@/utils/auth', () => ({
+  hasPermission: (name: string) => granted.has(name),
+}))
+
 // ── 會把 data 傳進欄位、讓 #default="scope" 拿得到 row 的 table stubs ──────────
 const ElTableColumnStub = defineComponent({
   name: 'ElTableColumnStub',
@@ -68,7 +74,7 @@ const ElTableStub = defineComponent({
 
 const ElSelectStub = defineComponent({
   name: 'ElSelectStub',
-  props: { modelValue: { type: String, default: undefined } },
+  props: { modelValue: { type: String, default: undefined }, disabled: { type: Boolean, default: false } },
   emits: ['update:modelValue', 'change'],
   setup(_props, { slots }) {
     return () => h('div', { class: 'grade-select' }, slots.default ? slots.default() : [])
@@ -118,6 +124,8 @@ const pickGrade = async (wrapper: ReturnType<typeof mount>, rowIndex: number, va
 
 beforeEach(() => {
   vi.clearAllMocks()
+  granted.clear()
+  granted.add('SETTINGS_WRITE').add('ACTIVITY_PAYMENT_APPROVE')
   getTitles.mockResolvedValue({
     data: [
       { id: 2, name: '幼兒園教師', bonus_grade: 'A' },
@@ -203,5 +211,26 @@ describe('JobTitleGradeTab — 說明欄', () => {
     const wrapper = await mountTab()
 
     expect(wrapper.findAllComponents(ElSelectStub)[0].props('modelValue')).toBe('B')
+  })
+})
+
+describe('JobTitleGradeTab — 職稱節慶等級改需金流簽核（資安稽核 2026-10-29）', () => {
+  it('缺金流簽核：等級選單停用、說明權限需求，且不送出', async () => {
+    granted.delete('ACTIVITY_PAYMENT_APPROVE')
+    const wrapper = await mountTab()
+
+    const selects = wrapper.findAllComponents(ElSelectStub)
+    expect(selects.every((s) => s.props('disabled') === true)).toBe(true)
+    expect(wrapper.text()).toContain('金流簽核')
+
+    await pickGrade(wrapper, 0, 'C')
+    expect(updateTitle).not.toHaveBeenCalled()
+    // 被擋下的變更要還原畫面，不可停在未存進 DB 的值
+    expect(wrapper.findAllComponents(ElSelectStub)[0].props('modelValue')).toBe('A')
+  })
+
+  it('兩權限皆有：選單可用', async () => {
+    const wrapper = await mountTab()
+    expect(wrapper.findAllComponents(ElSelectStub).every((s) => s.props('disabled') === false)).toBe(true)
   })
 })

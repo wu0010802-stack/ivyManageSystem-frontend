@@ -4,10 +4,11 @@
 // 但獎金基數改由父層 bonusConfig 傳入（說明欄要顯示實際金額，見下）。
 // 掛載時機同 StandardSalaryTab，由父層 el-tabs（非 lazy）+ 外層
 // v-if="canReadSalarySettings" 決定。
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { getTitles, updateTitle } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
+import { hasPermission } from '@/utils/auth'
 
 // 說明欄只需要節慶獎金基數這幾格；金額原本硬編碼 2000/1200/1500，但基數其實是
 // 隔壁「節慶獎金」tab 可改的 DB 設定，且 A/B 級自 festab01（2026-08-28）起可
@@ -29,6 +30,13 @@ interface JobTitleRow {
   name: string
   bonus_grade: string | null
 }
+
+// 資安稽核 2026-10-29 P3：職稱節慶獎金等級決定帶班老師節慶獎金基數，後端
+// PUT /config/titles/{id} 改等級時除 SETTINGS_WRITE 外改需金流簽核。gate 比照
+// BonusConfigPanel.canSaveBonusSettings。
+const canEditGrade = computed(
+  () => hasPermission('SETTINGS_WRITE') && hasPermission('ACTIVITY_PAYMENT_APPROVE'),
+)
 
 const jobTitles = ref<JobTitleRow[]>([])
 const loadingTitles = ref(false)
@@ -72,6 +80,12 @@ const updateTitleGrade = async (row: JobTitleRow) => {
   const next = normalizeGrade(row.bonus_grade)
   const previous = gradesBeforeEdit.get(row.id) ?? null
   if (next === previous) return
+  // 防禦：選單已 disabled；被擋下時把 v-model 已改寫的值還原
+  if (!canEditGrade.value) {
+    row.bonus_grade = previous
+    ElMessage.warning('您沒有權限調整職稱節慶獎金等級（需要「系統設定寫入」與「金流簽核」權限）')
+    return
+  }
   row.bonus_grade = next
 
   if (previous && !next) {
@@ -136,6 +150,9 @@ onMounted(() => {
       {{ props.bonusConfig.art_teacher_festival }} 計算。
       下方金額同樣取自「節慶獎金」tab 的現行設定，改那裡即會連動。
     </p>
+    <p v-if="!canEditGrade" class="desc-text" role="note">
+      調整等級會改變節慶獎金計算基準，需「系統設定寫入」與「金流簽核」權限；目前僅能檢視。
+    </p>
     <el-table :data="jobTitles" border>
       <el-table-column prop="name" label="職稱" width="200" />
       <el-table-column label="等級">
@@ -144,6 +161,7 @@ onMounted(() => {
             v-model="scope.row.bonus_grade"
             placeholder="（不設定）"
             clearable
+            :disabled="!canEditGrade"
             size="small"
             style="width: 200px;"
             @change="updateTitleGrade(scope.row)"
