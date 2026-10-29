@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { RouteLocationRaw } from 'vue-router'
+import OpenFullPageLink from './OpenFullPageLink.vue'
+
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 
 withDefaults(defineProps<{
@@ -9,7 +12,7 @@ withDefaults(defineProps<{
   errorMessage?: string
   emptyDescription?: string
   showEmpty?: boolean
-  openFullRoute?: Record<string, unknown> | null
+  openFullRoute?: RouteLocationRaw | null
   hideHeader?: boolean
 }>(), {
   count: null,
@@ -38,16 +41,7 @@ defineEmits<{ 'retry': [] }>()
         </div>
         <div class="section-actions">
           <slot name="actions" />
-          <router-link
-            v-if="openFullRoute"
-            :to="openFullRoute"
-            target="_blank"
-            rel="noopener"
-            class="open-full-link"
-            :title="`開啟完整 ${title} 頁`"
-          >
-            ↗
-          </router-link>
+          <OpenFullPageLink v-if="openFullRoute" :to="openFullRoute" :label="title" />
         </div>
       </div>
     </template>
@@ -107,15 +101,6 @@ defineEmits<{ 'retry': [] }>()
   display: flex;
   align-items: center;
   gap: var(--space-2);
-}
-.open-full-link {
-  font-size: var(--text-xl);
-  color: var(--text-secondary);
-  text-decoration: none;
-  padding: 0 6px;
-}
-.open-full-link:hover {
-  color: var(--color-info-darker);
 }
 .section-alert {
   margin-top: var(--space-2);

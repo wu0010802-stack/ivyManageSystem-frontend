@@ -9,6 +9,7 @@ import { RATING_TAG } from '@/constants/studentRecords'
 import { domainBus, RECORD_EVENTS } from '@/utils/domainBus'
 import AssessmentEditorDialog from '@/components/student/AssessmentEditorDialog.vue'
 import SectionCard from './SectionCard.vue'
+import OpenFullPageLink from './OpenFullPageLink.vue'
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('AssessmentSection 須在 TodayTasksPanel 內使用')
@@ -131,7 +132,8 @@ defineExpose({ fetchAssessments })
       size="720px"
       append-to-body
     >
-      <div style="display: flex; justify-content: flex-end; margin-bottom: var(--space-3)">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3)">
+        <OpenFullPageLink :to="{ path: '/student-assessments' }" label="評量" />
         <el-button
           size="small"
           type="primary"
