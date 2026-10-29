@@ -323,14 +323,17 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/announcements',
             name: 'announcements',
-            component: () => import('../views/AnnouncementView.vue'),
+            component: () => import('../views/AnnouncementHubView.vue'),
             meta: { title: '公告管理' }
         },
+        // 2026-10-29 後台 IA 重整 M1：公告分類併入公告管理的「分類」頁籤，舊網址保留 redirect
+        //（書籤／通知連結）。⚠ 不掛 meta.title：全域搜尋掃 router.getRoutes() × meta.title，
+        // 舊路徑沿用標題會讓搜尋結果出現兩筆；權限規則仍由 manifest announcements 頁的
+        // extraRoutes 保留（redirect 解析前不被彈走）。
         {
             path: '/announcement-categories',
             name: 'announcement-categories',
-            component: () => import('../views/AnnouncementCategoryView.vue'),
-            meta: { title: '公告分類管理' }
+            redirect: (to) => ({ path: '/announcements', query: { ...to.query, tab: 'categories' } })
         },
         {
             path: '/finance-signoffs',

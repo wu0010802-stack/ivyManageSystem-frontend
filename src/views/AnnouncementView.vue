@@ -51,6 +51,10 @@ import {
   type AttachmentItem,
 } from '@/views/announcement/useAnnouncementAttachments'
 
+// embedded：由 AnnouncementHubView 以頁籤嵌入時為 true——頁首（標題）由 hub 統一提供，
+// 這裡只留「新增公告」動作列，避免同頁出現兩個標題。獨立掛載（預設）行為不變。
+defineProps<{ embedded?: boolean }>()
+
 // 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）
 const { isMobile } = useIsMobile()
 
@@ -654,7 +658,10 @@ onMounted(() => {
 
 <template>
   <div class="announcement-view" :class="{ 'is-load-error': loadError }">
-    <PageHeader title="公告管理">
+    <div v-if="embedded" class="announcement-embedded-actions">
+      <AdminCreateButton @click="openAdd">新增公告</AdminCreateButton>
+    </div>
+    <PageHeader v-else title="公告管理">
       <template #actions>
         <AdminCreateButton @click="openAdd">新增公告</AdminCreateButton>
       </template>
@@ -1099,6 +1106,12 @@ onMounted(() => {
 <style scoped>
 .announcement-view {
   padding: 0;
+}
+
+.announcement-embedded-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-3);
 }
 
 /* 載入失敗時「共 0 筆」是假的，隱藏避免與錯誤態矛盾 */

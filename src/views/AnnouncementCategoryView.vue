@@ -18,6 +18,10 @@ import {
   previewIconFor,
 } from '@/constants/announcementCategoryIcons'
 
+// embedded：由 AnnouncementHubView 以「分類」頁籤嵌入時為 true——頁首標題由 hub 提供，
+// 這裡只留說明文字＋「新增分類」動作列。獨立掛載（預設）行為不變。
+defineProps<{ embedded?: boolean }>()
+
 type CategoryRow = Schema<'AnnouncementCategoryOut'>
 
 const canWrite = computed(() => hasPermission('ANNOUNCEMENTS_WRITE'))
@@ -163,7 +167,11 @@ const handleDelete = async (row: CategoryRow) => {
 
 <template>
   <div class="announcement-category-view">
-    <PageHeader title="公告分類管理" subtitle="管理公告使用的分類圖示、顏色與預設分類">
+    <div v-if="embedded" class="category-embedded-bar">
+      <p class="category-embedded-bar__hint">管理公告使用的分類圖示、顏色與預設分類</p>
+      <el-button v-if="canWrite" type="primary" @click="openAdd">新增分類</el-button>
+    </div>
+    <PageHeader v-else title="公告分類管理" subtitle="管理公告使用的分類圖示、顏色與預設分類">
       <template #actions>
         <el-button v-if="canWrite" type="primary" @click="openAdd">新增分類</el-button>
       </template>
@@ -260,6 +268,20 @@ const handleDelete = async (row: CategoryRow) => {
 <style scoped>
 .announcement-category-view {
   padding: 0;
+}
+
+.category-embedded-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.category-embedded-bar__hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 .text-muted {

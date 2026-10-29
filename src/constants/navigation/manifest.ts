@@ -472,17 +472,15 @@ export const NAVIGATION_MANIFEST = {
             { code: 'ANNOUNCEMENTS_SCHOOL_WRITE', label: '校園發布' },
             { code: 'ANNOUNCEMENTS_CLASS_WRITE', label: '班級發布' },
           ],
-          menu: { icon: icon('Bell') },
-        },
-        {
           // 公告分類管理（2026-09-08 anncat01）：權限沿用公告管理本身的
-          // ANNOUNCEMENTS_READ/WRITE，不另外新增管理權限碼——views 借道
-          // sharedViews（該碼已由上面 announcements 頁 owned），本頁不重複 own。
+          // ANNOUNCEMENTS_READ/WRITE，不另外新增管理權限碼。2026-10-29 後台 IA 重整 M1：
+          // 分類併入本頁的「分類」頁籤（/announcement-categories 改為 redirect 到
+          // /announcements?tab=categories），原 announcementCategories 節點移除；舊路徑的
+          // 權限規則以 extraRoutes 保留（redirect 解析前不被彈走，規則集合與併入前相同）。
           // 寫入操作（新增/編輯/刪除/設預設）由元件內 hasPermission('ANNOUNCEMENTS_WRITE')
           // 控制，manifest 層不需要（也不可）再掛一次同碼的 actions。
-          key: 'announcementCategories', title: '公告分類管理', routePath: '/announcement-categories',
-          views: [], sharedViews: ['ANNOUNCEMENTS_READ'],
-          menu: { icon: icon('CollectionTag') },
+          extraRoutes: [{ path: '/announcement-categories', permission: 'ANNOUNCEMENTS_READ' }],
+          menu: { icon: icon('Bell') },
         },
         {
           key: 'calendar', title: PAGE_TERMS.calendar, routePath: '/calendar',
