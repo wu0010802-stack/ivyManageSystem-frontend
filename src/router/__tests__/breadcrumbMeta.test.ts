@@ -23,7 +23,8 @@ describe('router 麵包屑 meta', () => {
   })
 
   it('manifest 涵蓋不到的深層頁以 meta.parent 明示', () => {
-    expect(ROUTER_SRC).toContain("parent: '/activity/pos'")
+    // /activity/audit/pos-unlock 的 meta.parent 已隨 2026-10-29 後台 IA 重整 M5 退場（併入 POS 簽核頁籤、
+    // 舊路徑成純 redirect）。
     expect(ROUTER_SRC).toContain("parent: '/appraisal-year-end/year-end'")
   })
 

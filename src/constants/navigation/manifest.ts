@@ -614,6 +614,7 @@ export const NAVIGATION_MANIFEST = {
           views: [], sharedViews: ['ACTIVITY_PAYMENT_APPROVE'],
           menu: { icon: icon('CircleCheck') },
           // POS 日結解鎖稽核軌跡：對齊後端 api/activity/pos_approval.py 的 ACTIVITY_PAYMENT_APPROVE。
+          // 2026-10-29 後台 IA 重整 M5 起併入本頁的「稽核軌跡」頁籤，舊路徑改 redirect，規則保留。
           extraRoutes: [{ path: '/activity/audit/pos-unlock', permission: 'ACTIVITY_PAYMENT_APPROVE' }],
         },
         {

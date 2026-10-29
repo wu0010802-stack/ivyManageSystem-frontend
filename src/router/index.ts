@@ -678,11 +678,13 @@ export const routes: RouteRecordRaw[] = [
             component: () => import('../views/activity/POSApprovalView.vue'),
             meta: { title: PAGE_TERMS.activityPosApproval }
         },
+        // 2026-10-29 後台 IA 重整 M5：POS 異常稽核軌跡併入 POS 收款簽核的「稽核軌跡」頁籤，舊網址
+        // 保留 redirect（書籤／後端排程提醒文案裡的連結）。⚠ 不掛 meta.title（避免全域搜尋出現
+        // 同名兩筆）；權限規則仍由 manifest activityPosApproval 頁的 extraRoutes 保留。
         {
             path: '/activity/audit/pos-unlock',
             name: 'POSAuditEvents',
-            component: () => import('../views/activity/POSAuditEventsView.vue'),
-            meta: { title: PAGE_TERMS.activityPosAudit, parent: '/activity/pos' }
+            redirect: (to) => ({ path: '/activity/pos/approval', query: { ...to.query, tab: 'audit' } })
         },
         // 舊路徑保留相容：課程與用品已於 2026-07-31 併入 /activity/settings 的前兩個 tab
         {

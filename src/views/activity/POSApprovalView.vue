@@ -1,16 +1,6 @@
 <template>
   <div class="pos-approval">
-    <PageHeader :title="PAGE_TERMS.activityPosApproval" subtitle="日結：老闆核對單日流水後簽核；學期對帳：跨學期檢視繳費與簽核狀況">
-      <template #actions>
-        <el-button
-          v-if="canApprove"
-          size="small"
-          @click="$router.push('/activity/audit/pos-unlock')"
-        >
-          異常稽核軌跡
-        </el-button>
-      </template>
-    </PageHeader>
+    <PageHeader :title="PAGE_TERMS.activityPosApproval" subtitle="日結：老闆核對單日流水後簽核；學期對帳：跨學期檢視繳費與簽核狀況；稽核軌跡：日結解鎖事件與操作員活動" />
 
     <el-tabs v-model="activeTab" class="pos-approval__tabs">
       <el-tab-pane label="日結簽核" name="daily">
@@ -399,12 +389,19 @@
       <el-tab-pane label="學期對帳" name="semester" lazy>
         <POSSemesterReconciliation />
       </el-tab-pane>
+
+      <!-- 稽核軌跡（後台 IA 重整 M5）：原獨立頁 /activity/audit/pos-unlock 併入此處，舊網址 redirect
+           到 ?tab=audit。gate 照原頁（ACTIVITY_PAYMENT_APPROVE，亦即簽核權限）。 -->
+      <el-tab-pane v-if="canApprove" label="稽核軌跡" name="audit" lazy>
+        <POSAuditEventsView embedded />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { RefreshRight } from '@element-plus/icons-vue'
 
@@ -412,6 +409,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import POSCloseHistoryPanel from '@/components/activity/POSCloseHistoryPanel.vue'
 import POSSemesterReconciliation from '@/components/activity/POSSemesterReconciliation.vue'
+import POSAuditEventsView from '@/views/activity/POSAuditEventsView.vue'
 import StatStrip, { type StatStripItem } from '@/components/common/StatStrip.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import { useClientTableFilter } from '@/composables'
@@ -456,7 +454,33 @@ interface ReconTotals { payment_total?: number; refund_total?: number; net_total
 
 const canApprove = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
 
-const activeTab = ref('daily')
+// 頁籤與網址 ?tab= 同步（後台 IA 重整 M5：/activity/audit/pos-unlock 舊網址 redirect 到 ?tab=audit）。
+// route／router 在無 router 的測試掛載下為 undefined，防禦式取值（同 OvertimeView 慣例）。
+type PosApprovalTab = 'daily' | 'semester' | 'audit'
+const route = useRoute()
+const router = useRouter()
+function resolveTab(raw: unknown): PosApprovalTab {
+  if (raw === 'semester') return 'semester'
+  // 稽核軌跡頁籤 gate 與原獨立頁相同；無權限者落回日結簽核，不渲染該頁籤
+  if (raw === 'audit' && canApprove.value) return 'audit'
+  return 'daily'
+}
+const activeTab = ref<PosApprovalTab>(resolveTab(route?.query?.tab))
+watch(
+  () => route?.query?.tab,
+  (value) => {
+    activeTab.value = resolveTab(value)
+  },
+)
+watch(activeTab, (value) => {
+  if (!route || !router) return
+  const current = typeof route.query.tab === 'string' ? route.query.tab : undefined
+  if (value === (current ?? 'daily')) return
+  const nextQuery = { ...route.query } as Record<string, string | (string | null)[] | null>
+  if (value === 'daily') delete nextQuery.tab
+  else nextQuery.tab = value
+  void router.replace({ query: nextQuery })
+})
 
 const selectedDate = ref(todayTaipeiISO())
 const pending = ref<PendingRow[]>([])

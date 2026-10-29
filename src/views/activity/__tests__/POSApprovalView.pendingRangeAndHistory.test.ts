@@ -87,6 +87,8 @@ async function mountReady() {
       stubs: {
         PageHeader: true,
         POSSemesterReconciliation: true,
+        // 稽核軌跡頁籤（M5）內的頁面有自己的 API 呼叫；本檔不測它，stub 掉以免 mock 缺 getPOSUnlockEvents
+        POSAuditEventsView: true,
         POSCloseHistoryPanel: true,
         StatCard: true,
         AdminListToolbar: true,

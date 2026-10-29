@@ -1,7 +1,8 @@
 <template>
-  <div class="pos-audit">
-    <el-card>
-      <template #header>
+  <div class="pos-audit" :class="{ 'pos-audit--embedded': embedded }">
+    <!-- embedded：由 POSApprovalView 以「稽核軌跡」頁籤嵌入（後台 IA 重整 M5），標題由頁籤承擔 -->
+    <el-card :shadow="embedded ? 'never' : undefined">
+      <template v-if="!embedded" #header>
         <h2 class="pos-audit__title">{{ PAGE_TERMS.activityPosAudit }}</h2>
       </template>
 
@@ -66,6 +67,8 @@ import OperatorActivityTab from '@/components/activity/OperatorActivityTab.vue'
 import { getPOSUnlockEvents } from '@/api/activity'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 
+defineProps<{ embedded?: boolean }>()
+
 interface UnlockEvent { id: string | number; occurred_at?: string; action?: string; close_date?: string; unlocker_username?: string; unlocker_role?: string; comment?: string }
 
 const activeTab = ref('unlock')
@@ -92,6 +95,10 @@ onMounted(loadUnlock)
 <style scoped>
 .pos-audit {
   padding: 16px;
+}
+
+.pos-audit--embedded {
+  padding: 0;
 }
 
 .pos-audit__title {

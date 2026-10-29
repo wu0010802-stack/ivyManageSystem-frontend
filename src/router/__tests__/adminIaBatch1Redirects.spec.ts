@@ -122,3 +122,24 @@ describe('M4 才藝異動變成報名管理頁籤', () => {
     expect(rules.map((r) => r.permission)).toEqual(['ACTIVITY_READ'])
   })
 })
+
+describe('M5 POS 稽核軌跡變成 POS 簽核頁籤', () => {
+  it('/activity/audit/pos-unlock 導到 /activity/pos/approval?tab=audit，query 一併帶過去', () => {
+    const r = follow('/activity/audit/pos-unlock')
+    expect(r.path).toBe('/activity/pos/approval')
+    expect(r.query).toEqual({ tab: 'audit' })
+    expect(follow('/activity/audit/pos-unlock?foo=1').query).toEqual({ foo: '1', tab: 'audit' })
+  })
+
+  it('舊路由不掛 meta.title；/activity/pos/approval 仍是 POS 收款簽核', () => {
+    const old = router.getRoutes().find((r) => r.path === '/activity/audit/pos-unlock')
+    expect(old?.meta?.title).toBeUndefined()
+    const page = router.getRoutes().find((r) => r.path === '/activity/pos/approval')
+    expect(page?.meta?.title).toBe('POS 收款簽核')
+  })
+
+  it('舊路徑權限規則保留（仍為 ACTIVITY_PAYMENT_APPROVE）', () => {
+    const rules = ROUTE_PERMISSION_RULES.filter((r) => r.path === '/activity/audit/pos-unlock')
+    expect(rules.map((r) => r.permission)).toEqual(['ACTIVITY_PAYMENT_APPROVE'])
+  })
+})
