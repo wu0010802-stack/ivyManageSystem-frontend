@@ -12,7 +12,8 @@ import { resolveBreadcrumbParent, type BreadcrumbResolveContext } from '../bread
 const PARENTS: BreadcrumbParent[] = [
   { path: '/activity/pos/approval', title: 'POS 收款簽核' },
   { path: '/platform/tenants', title: '分校管理' },
-  { path: '/appraisal-year-end', title: '考核與年終' },
+  { path: '/appraisal-year-end/appraisal', title: '考核' },
+  { path: '/appraisal-year-end/year-end', title: '年終' },
   { path: '/activity/dashboard', title: '統計儀表板' },
   { path: '/settings/accounts', title: '帳號設定' },
   { path: '/activity/pos', title: 'POS 收銀' },
@@ -26,7 +27,7 @@ const PARENTS: BreadcrumbParent[] = [
 ]
 
 const CONTAINERS = new Set(['/bus', '/workbench', '/appraisal-year-end'])
-const TITLES: Record<string, string> = { '/appraisal-year-end/year-end': '年終' }
+const TITLES: Record<string, string> = { '/appraisal-year-end/todo': '待辦' }
 
 const ctx = (over: Partial<BreadcrumbResolveContext> = {}): BreadcrumbResolveContext => ({
   parents: PARENTS,
@@ -101,6 +102,15 @@ describe('resolveBreadcrumbParent', () => {
     })
 
     it('指向非選單項時以 titleOf 取路由 meta.title', () => {
+      expect(
+        resolveBreadcrumbParent(
+          '/appraisal-year-end/exceptions/detail',
+          ctx({ metaParent: '/appraisal-year-end/todo' }),
+        ),
+      ).toEqual({ path: '/appraisal-year-end/todo', title: '待辦' })
+    })
+
+    it('年終週期工作區的父層是側欄的「年終」項（2026-10-29 S1 起「年終」為選單項）', () => {
       expect(
         resolveBreadcrumbParent(
           '/appraisal-year-end/year-end/cycles/9',

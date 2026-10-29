@@ -35,6 +35,7 @@ describe('NAVIGATION_MANIFEST 完整性', () => {
         if (a.requiresView) referenced.push(a.requiresView)
       }
       referenced.push(...(page.extraRoutes ?? []).map((r) => r.permission))
+      referenced.push(...(page.menu?.visibleAlso ?? []))
     }
     referenced.push(...NAVIGATION_MANIFEST.standalonePermissions.map((s) => s.code))
 
@@ -78,6 +79,9 @@ describe('NAVIGATION_MANIFEST 完整性', () => {
     for (const page of ALL_PAGES) {
       for (const code of page.sharedViews ?? []) {
         if (!owned.has(code)) offenders.push(`${page.key}.sharedViews: ${code} 無人 owned`)
+      }
+      for (const code of page.menu?.visibleAlso ?? []) {
+        if (!owned.has(code)) offenders.push(`${page.key}.menu.visibleAlso: ${code} 無人 owned`)
       }
       const viewCodes = new Set(page.views.map((v) => v.code))
       for (const a of page.actions ?? []) {
@@ -277,7 +281,7 @@ const INTENTIONAL_DIVERGENCE = {
     '/platform/gov-data × PLATFORM_TENANTS_MANAGE',
     // 排程監控改為總部專屬頁，沿用平台維運權限。
     '/platform/observability × PLATFORM_TENANTS_MANAGE',
-    // 2026-08-20 節慶人數月底結算：新頁掛在「考核與年終 › 規則設定」下，權限沿用
+    // 2026-08-20 節慶人數月底結算：新頁掛在「考核與年終 › 規則設定」下（2026-10-29 起歸年終側），權限沿用
     // SALARY_READ（業主裁定 D4；該碼本就在 appraisalYearEnd 群組 sharedViews 內）。
     '/appraisal-year-end/rules/festival-headcount × SALARY_READ',
     // 2026-09-04 家長端服務監控新分頁（SPEC-023 批次 1）：沿用操作紀錄的

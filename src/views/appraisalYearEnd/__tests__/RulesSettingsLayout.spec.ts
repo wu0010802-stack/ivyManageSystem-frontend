@@ -81,20 +81,31 @@ describe('RulesSettingsLayout', () => {
     listAppraisalCyclesMock.mockResolvedValue({ data: [] })
   })
 
-  it('全權限 → 6 個分頁全顯示（2026-08-20 起含節慶人數）', async () => {
+  // 2026-10-29 後台 IA 重整 S1：頁籤依所在邊分列（考核側 3 個、年終側 3 個），合計仍是原本 6 個。
+  it('全權限、停在考核側頁籤 → 只列考核側 3 個分頁', async () => {
     const { w } = await mountAt('/appraisal-year-end/rules/scoring')
     const panes = w.findAllComponents({ name: 'ElTabPane' })
-    expect(panes.map((p) => p.props('name'))).toEqual([
-      'scoring', 'bonus-rates', 'catalog', 'enrollment-targets',
-      'festival-headcount', 'year-end-rules',
-    ])
+    expect(panes.map((p) => p.props('name'))).toEqual(['scoring', 'catalog', 'enrollment-targets'])
+  })
+
+  it('全權限、停在年終側頁籤 → 只列年終側 3 個分頁（2026-08-20 起含節慶人數）', async () => {
+    const { w } = await mountAt('/appraisal-year-end/rules/bonus-rates')
+    const panes = w.findAllComponents({ name: 'ElTabPane' })
+    expect(panes.map((p) => p.props('name'))).toEqual(['bonus-rates', 'festival-headcount', 'year-end-rules'])
   })
 
   it('節慶人數分頁需 SALARY_READ（業主裁定 D4：沿用薪資權限）', async () => {
     hasPermissionMock.mockImplementation((code: string) => code !== 'SALARY_READ')
-    const { w } = await mountAt('/appraisal-year-end/rules/scoring')
+    const { w } = await mountAt('/appraisal-year-end/rules/bonus-rates')
     const panes = w.findAllComponents({ name: 'ElTabPane' })
     expect(panes.map((p) => p.props('name'))).not.toContain('festival-headcount')
+    expect(panes.map((p) => p.props('name'))).toEqual(['bonus-rates', 'year-end-rules'])
+  })
+
+  it('停在 bare /rules（尚未 redirect）→ 取使用者第一個可見頁籤所在的邊', async () => {
+    const { w } = await mountAt('/appraisal-year-end/rules')
+    const panes = w.findAllComponents({ name: 'ElTabPane' })
+    expect(panes.map((p) => p.props('name'))).toEqual(['scoring', 'catalog', 'enrollment-targets'])
   })
 
   it('path=.../year-end-rules 渲染年終規則子頁且 tabs active=year-end-rules', async () => {
@@ -193,8 +204,18 @@ describe('RulesSettingsLayout', () => {
       })
     }
 
-    function badgeIn(w: ReturnType<typeof mount>, tabName: string) {
-      return w.find(`[data-test="tab-label-${tabName}"] [data-test="readonly-badge"]`)
+    // 頁籤分列兩邊後，同一個 wrapper 看不到全部 6 個頁籤；矩陣測試同時掛考核側與年終側，
+    // 依頁籤所屬邊取對應 wrapper，維持「逐一頁籤驗證徽章」的鐵律。
+    const APPRAISAL_SIDE = ['scoring', 'catalog', 'enrollment-targets']
+    async function mountSides() {
+      const appraisal = await mountAt('/appraisal-year-end/rules/scoring')
+      const yearEnd = await mountAt('/appraisal-year-end/rules/bonus-rates')
+      const pick = (tabName: string) => (APPRAISAL_SIDE.includes(tabName) ? appraisal.w : yearEnd.w)
+      return {
+        label: (tabName: string) => pick(tabName).find(`[data-test="tab-label-${tabName}"]`),
+        badgeIn: (tabName: string) =>
+          pick(tabName).find(`[data-test="tab-label-${tabName}"] [data-test="readonly-badge"]`),
+      }
     }
 
     it('全持 4 個寫入權限 → 5 個分頁皆無徽章', async () => {
@@ -204,58 +225,58 @@ describe('RulesSettingsLayout', () => {
         SETTINGS_WRITE: true,
         ACTIVITY_PAYMENT_APPROVE: true,
       })
-      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
+      const { badgeIn } = await mountSides()
       for (const name of ['scoring', 'bonus-rates', 'catalog', 'enrollment-targets', 'year-end-rules']) {
-        expect(badgeIn(w, name).exists()).toBe(false)
+        expect(badgeIn(name).exists()).toBe(false)
       }
     })
 
     it('全無寫入權限 → 5 個分頁皆顯示徽章，文案含各自對應的權限白話名', async () => {
       setWritePerms({})
-      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
-      expect(w.find('[data-test="tab-label-scoring"]').text()).toContain('唯讀（需考核規則設定權限）')
-      expect(w.find('[data-test="tab-label-bonus-rates"]').text()).toContain('唯讀（需考核核定權限）')
-      expect(w.find('[data-test="tab-label-catalog"]').text()).toContain('唯讀（需考核規則設定權限）')
-      expect(w.find('[data-test="tab-label-enrollment-targets"]').text()).toContain('唯讀（需考核核定權限）')
-      expect(w.find('[data-test="tab-label-year-end-rules"]').text()).toContain('唯讀（需年終規則設定權限）')
+      const { label } = await mountSides()
+      expect(label('scoring').text()).toContain('唯讀（需考核規則設定權限）')
+      expect(label('bonus-rates').text()).toContain('唯讀（需考核核定權限）')
+      expect(label('catalog').text()).toContain('唯讀（需考核規則設定權限）')
+      expect(label('enrollment-targets').text()).toContain('唯讀（需考核核定權限）')
+      expect(label('year-end-rules').text()).toContain('唯讀（需年終規則設定權限）')
     })
 
     it('只有 APPRAISAL_RULE_WRITE → scoring/catalog 無徽章，其餘 3 頁仍唯讀（防止與 APPRAISAL_FINALIZE 混用）', async () => {
       setWritePerms({ APPRAISAL_RULE_WRITE: true })
-      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
-      expect(badgeIn(w, 'scoring').exists()).toBe(false)
-      expect(badgeIn(w, 'catalog').exists()).toBe(false)
-      expect(badgeIn(w, 'bonus-rates').exists()).toBe(true)
-      expect(badgeIn(w, 'enrollment-targets').exists()).toBe(true)
-      expect(badgeIn(w, 'year-end-rules').exists()).toBe(true)
+      const { badgeIn } = await mountSides()
+      expect(badgeIn('scoring').exists()).toBe(false)
+      expect(badgeIn('catalog').exists()).toBe(false)
+      expect(badgeIn('bonus-rates').exists()).toBe(true)
+      expect(badgeIn('enrollment-targets').exists()).toBe(true)
+      expect(badgeIn('year-end-rules').exists()).toBe(true)
     })
 
     it('只有 APPRAISAL_FINALIZE → bonus-rates/enrollment-targets 無徽章，scoring/catalog/year-end-rules 仍唯讀', async () => {
       setWritePerms({ APPRAISAL_FINALIZE: true })
-      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
-      expect(badgeIn(w, 'bonus-rates').exists()).toBe(false)
-      expect(badgeIn(w, 'enrollment-targets').exists()).toBe(false)
-      expect(badgeIn(w, 'scoring').exists()).toBe(true)
-      expect(badgeIn(w, 'catalog').exists()).toBe(true)
-      expect(badgeIn(w, 'year-end-rules').exists()).toBe(true)
+      const { badgeIn } = await mountSides()
+      expect(badgeIn('bonus-rates').exists()).toBe(false)
+      expect(badgeIn('enrollment-targets').exists()).toBe(false)
+      expect(badgeIn('scoring').exists()).toBe(true)
+      expect(badgeIn('catalog').exists()).toBe(true)
+      expect(badgeIn('year-end-rules').exists()).toBe(true)
     })
 
     it('year-end-rules 雙權限只滿足 SETTINGS_WRITE（缺 ACTIVITY_PAYMENT_APPROVE）→ 仍顯示唯讀徽章', async () => {
       setWritePerms({ SETTINGS_WRITE: true })
-      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
-      expect(badgeIn(w, 'year-end-rules').exists()).toBe(true)
+      const { badgeIn } = await mountSides()
+      expect(badgeIn('year-end-rules').exists()).toBe(true)
     })
 
     it('year-end-rules 雙權限只滿足 ACTIVITY_PAYMENT_APPROVE（缺 SETTINGS_WRITE）→ 仍顯示唯讀徽章', async () => {
       setWritePerms({ ACTIVITY_PAYMENT_APPROVE: true })
-      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
-      expect(badgeIn(w, 'year-end-rules').exists()).toBe(true)
+      const { badgeIn } = await mountSides()
+      expect(badgeIn('year-end-rules').exists()).toBe(true)
     })
 
     it('year-end-rules 雙權限皆滿足 → 無徽章', async () => {
       setWritePerms({ SETTINGS_WRITE: true, ACTIVITY_PAYMENT_APPROVE: true })
-      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
-      expect(badgeIn(w, 'year-end-rules').exists()).toBe(false)
+      const { badgeIn } = await mountSides()
+      expect(badgeIn('year-end-rules').exists()).toBe(false)
     })
   })
 })

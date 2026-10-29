@@ -140,7 +140,7 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(wrapper.text()).not.toContain('勞健保與稅務申報')
   })
 
-  it('「系統設定」不再含考核管理（已整併至人事薪資「考核與年終」）', async () => {
+  it('「系統設定」不再含考核管理（已整併至人事薪資「考核」「年終」）', async () => {
     const wrapper = await mountSidebar()
     const items = wrapper.findAll('[data-index="/appraisal-management"]')
     expect(items.length).toBe(0)
@@ -155,11 +155,16 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(wrapper.find('[data-index="/activity/catalog"]').exists()).toBe(false)
   })
 
-  it('「人事薪資」含「考核與年終」整合入口 /appraisal-year-end', async () => {
+  it('「人事薪資」含「考核」「年終」兩個入口（2026-10-29 S1 自「考核與年終」拆開）', async () => {
     const wrapper = await mountSidebar()
-    const item = wrapper.find('[data-index="/appraisal-year-end"]')
-    expect(item.exists()).toBe(true)
-    expect(item.text()).toContain('考核與年終')
+    const appraisal = wrapper.find('[data-index="/appraisal-year-end/appraisal"]')
+    expect(appraisal.exists()).toBe(true)
+    expect(appraisal.text()).toContain('考核')
+    const yearEnd = wrapper.find('[data-index="/appraisal-year-end/year-end"]')
+    expect(yearEnd.exists()).toBe(true)
+    expect(yearEnd.text()).toContain('年終')
+    expect(wrapper.find('[data-index="/appraisal-year-end"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('考核與年終')
   })
 
   it('「收付款管理」整合入口在財務群組（廠商付款/雜項收款已整併；2026-08 內控改版更名；2026-10-29 自園務行政移入財務）', async () => {

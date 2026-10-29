@@ -27,27 +27,47 @@ const router = createRouter({
       { path: 'year-end/cycles/:id', component: Stub, meta: { title: '結算工作區' } },
       { path: 'year-end/payout', component: Stub, meta: { title: '考核年終發放' } },
       { path: 'rules', component: Stub, meta: { title: '規則設定' } },
+      { path: 'rules/scoring', component: Stub, meta: { title: '考核計分規則' } },
+      { path: 'rules/bonus-rates', component: Stub, meta: { title: '年終獎金率' } },
+      { path: 'rules/year-end-rules', component: Stub, meta: { title: '年終規則' } },
+      { path: 'rules/festival-headcount', component: Stub, meta: { title: '節慶人數' } },
       { path: 'exceptions', component: Stub, meta: { title: '待補資料與例外' } },
     ],
   }],
 })
 
-describe('AppraisalYearEndLayout — 三段 + 齒輪（V2 IA）', () => {
+describe('AppraisalYearEndLayout — 待辦／待補資料兩段 + 齒輪（S1：考核／年終改由側欄切換）', () => {
   beforeEach(async () => {
     permState.read = true
     permState.settings = false
     permState.finalize = false
+    permState.yearEnd = true
     await router.push('/appraisal-year-end/appraisal/current')
     await router.isReady()
   })
 
-  it('只顯示三段：待辦／考核／年終，不再有「發放」「規則設定」「例外中心」段', () => {
+  it('只顯示兩段：待辦／待補資料；考核、年終不再是頂列段（側欄已分成兩個選單項）', () => {
     const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
     const options = w.findComponent({ name: 'ElSegmented' }).props('options') as Array<{ label: string; value: string }>
-    expect(options.map((o) => o.value)).toEqual(['todo', 'appraisal', 'year-end'])
-    expect(options.map((o) => o.label)).toEqual(['待辦', '考核', '年終'])
+    expect(options.map((o) => o.value)).toEqual(['todo', 'exceptions'])
+    expect(options.map((o) => o.label)).toEqual(['待辦', '待補資料'])
   })
-  it('頁內不再渲染麵包屑（層級由頂列麵包屑與 segmented 表達）', async () => {
+  it('待補資料需 APPRAISAL_READ 或 YEAR_END_READ（同 exceptions 路由規則）', () => {
+    permState.read = false
+    permState.yearEnd = false
+    permState.settings = true
+    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
+    const options = w.findComponent({ name: 'ElSegmented' }).props('options') as Array<{ value: string }>
+    // 只持 SETTINGS_READ：待辦可進（5 碼 OR），待補資料不可
+    expect(options.map((o) => o.value)).toEqual(['todo'])
+  })
+  it('點「待補資料」導向 /appraisal-year-end/exceptions', async () => {
+    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
+    w.findComponent({ name: 'ElSegmented' }).vm.$emit('change', 'exceptions')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/appraisal-year-end/exceptions')
+  })
+  it('頁內不再渲染麵包屑（層級由頂列麵包屑與側欄表達）', async () => {
     const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
     await flushPromises()
     expect(w.find('.aye-breadcrumb').exists()).toBe(false)
@@ -90,38 +110,57 @@ describe('AppraisalYearEndLayout — 齒輪（規則設定）入口', () => {
   })
 })
 
-describe('AppraisalYearEndLayout — activeKey 折算（payout/rules/exceptions 不獨立佔段）', () => {
-  beforeEach(() => { permState.read = true; permState.settings = false; permState.finalize = true })
+describe('AppraisalYearEndLayout — activeKey（只有待辦、待補資料會高亮）', () => {
+  beforeEach(() => { permState.read = true; permState.settings = false; permState.finalize = true; permState.yearEnd = true })
 
-  it('停在 payout 路由時 segmented 高亮「年終」（發放已併入年終網域）', async () => {
-    await router.push('/appraisal-year-end/year-end/payout')
+  it.each([
+    ['/appraisal-year-end/todo', 'todo'],
+    ['/appraisal-year-end/exceptions', 'exceptions'],
+    // 考核／年終／發放／規則頁都不佔段
+    ['/appraisal-year-end/appraisal/current', ''],
+    ['/appraisal-year-end/year-end', ''],
+    ['/appraisal-year-end/year-end/payout', ''],
+    ['/appraisal-year-end/year-end/cycles/7', ''],
+    ['/appraisal-year-end/rules', ''],
+  ])('停在 %s → segmented modelValue=%j', async (path, expected) => {
+    await router.push(path)
     await router.isReady()
     const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
     await flushPromises()
-    expect(w.findComponent({ name: 'ElSegmented' }).props('modelValue')).toBe('year-end')
+    expect(w.findComponent({ name: 'ElSegmented' }).props('modelValue')).toBe(expected)
+  })
+})
+
+describe('AppraisalYearEndLayout — 齒輪依所在邊帶到該邊第一個可見規則頁籤', () => {
+  beforeEach(() => { permState.read = true; permState.settings = true; permState.finalize = false; permState.yearEnd = true })
+
+  it('年終側（/year-end）→ 年終側第一個可見頁籤（bonus-rates）', async () => {
+    await router.push('/appraisal-year-end/year-end')
+    await router.isReady()
+    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
+    await w.find('.aye-gear').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/appraisal-year-end/rules/bonus-rates')
   })
 
-  it('年終週期工作區路由（/year-end/cycles/:id）activeKey 落在「年終」', async () => {
-    await router.push('/appraisal-year-end/year-end/cycles/7')
+  it('年終側規則頁籤上同樣帶回年終側（只持 SETTINGS_READ → year-end-rules）', async () => {
+    permState.read = false
+    await router.push('/appraisal-year-end/rules/year-end-rules')
     await router.isReady()
     const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
+    await w.find('.aye-gear').trigger('click')
     await flushPromises()
-    expect(w.findComponent({ name: 'ElSegmented' }).props('modelValue')).toBe('year-end')
+    expect(router.currentRoute.value.path).toBe('/appraisal-year-end/rules/year-end-rules')
   })
 
-  it('停在規則設定路由時 segmented 不高亮任何段', async () => {
-    await router.push('/appraisal-year-end/rules')
-    await router.isReady()
-    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElSegmented' }).props('modelValue')).toBe('')
-  })
-
-  it('停在例外中心路由時 segmented 不高亮任何段', async () => {
-    await router.push('/appraisal-year-end/exceptions')
-    await router.isReady()
-    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElSegmented' }).props('modelValue')).toBe('')
+  it('考核側與待辦 → /rules（由路由 redirect 依權限落點）', async () => {
+    for (const from of ['/appraisal-year-end/appraisal/current', '/appraisal-year-end/todo']) {
+      await router.push(from)
+      await router.isReady()
+      const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
+      await w.find('.aye-gear').trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.path).toBe('/appraisal-year-end/rules')
+    }
   })
 })

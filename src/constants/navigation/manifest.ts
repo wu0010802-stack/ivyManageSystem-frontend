@@ -141,6 +141,17 @@ export interface ManifestPage {
      * 最長前綴匹配高亮不到入口。只影響高亮與群組展開，不產生路由權限規則、不影響可見性。
      */
     activeAlso?: readonly string[]
+    /**
+     * 「只因這些碼而可見」的側欄可見碼：只進 sidebar 的 visibleCodes，**不衍生路由規則、不進 picker**。
+     * 給「一個選單項拆成兩個」之後仍要保留舊可見性的入口用——sharedViews 會衍生成「本頁 routePath × 該碼」
+     * 的規則而放寬路由，不能拿來借可見性。必須搭配 visibleAlsoEntry。
+     */
+    visibleAlso?: readonly PermissionName[]
+    /**
+     * 使用者不持有任何 views／sharedViews 碼、只靠 visibleAlso 可見時，點選單項改走這個入口
+     *（否則會被路由守衛擋在 routePath 外）。高亮也一併折算到這個入口。
+     */
+    visibleAlsoEntry?: string
   }
 }
 
@@ -234,48 +245,94 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('Money') },
         },
         {
-          key: 'appraisalYearEnd', title: '考核與年終', routePath: '/appraisal-year-end', routePrefix: true,
-          views: [
-            { code: 'APPRAISAL_READ', label: '考核檢視' },
-            { code: 'YEAR_END_READ', label: '年終檢視' },
-          ],
-          // 整合工作區頂層 prefix 承載 5 碼 OR（含 overview）；此 3 碼 owned 於他處
-          //（settingsGeneral / salary / 本頁 actions 的 APPRAISAL_FINALIZE）。
-          sharedViews: ['SETTINGS_READ', 'SALARY_READ', 'APPRAISAL_FINALIZE'],
+          // 2026-10-29 後台 IA 重整 批次 3（S1）：原單一選單項「考核與年終」拆成「考核」「年終」兩個，
+          // URL 全不變（仍是 /appraisal-year-end/* 巢狀工作區），只換選單入口與高亮。
+          // 待辦（/todo）與待補資料（/exceptions）兩邊共用，入口在工作區頂列（AppraisalYearEndLayout）。
+          //
+          // ⚠ 整個 /appraisal-year-end 頂層 prefix 仍承載原本的 5 碼 OR（待辦頁、舊 section query
+          // redirect 落點靠它），逐條抄在下方 extraRoutes；子路徑再各自「最長匹配」細分。
+          // 5 碼 OR 不再用 sharedViews 表達：sharedViews 會衍生成「本頁 routePath × 該碼」的規則，
+          // 拆成 /appraisal-year-end/appraisal 之後會把考核頁放寬給 SETTINGS_READ／SALARY_READ。
+          key: 'appraisal', title: '考核', routePath: '/appraisal-year-end/appraisal', routePrefix: true,
+          views: [{ code: 'APPRAISAL_READ', label: '考核檢視' }],
           actions: [
             { code: 'APPRAISAL_EVENT_WRITE', requiresView: 'APPRAISAL_READ' },
             { code: 'APPRAISAL_REVIEW', requiresView: 'APPRAISAL_READ' },
             { code: 'APPRAISAL_ACCOUNTING', requiresView: 'APPRAISAL_READ' },
             { code: 'APPRAISAL_FINALIZE', requiresView: 'APPRAISAL_READ' },
             { code: 'APPRAISAL_RULE_WRITE', requiresView: 'APPRAISAL_READ' },
-            { code: 'YEAR_END_WRITE', requiresView: 'YEAR_END_READ' },
-            { code: 'YEAR_END_REVIEW', requiresView: 'YEAR_END_READ' },
-            { code: 'YEAR_END_ACCOUNTING', requiresView: 'YEAR_END_READ' },
-            { code: 'YEAR_END_FINALIZE', requiresView: 'YEAR_END_READ' },
           ],
-          menu: { icon: icon('Trophy') },
+          menu: {
+            icon: icon('Checked'),
+            // 待辦、待補資料與考核側規則頁籤沒有 /appraisal-year-end/appraisal 的路徑前綴，靠別名高亮「考核」。
+            // 規則頁籤的歸邊見 views/appraisalYearEnd/ruleTabs.ts（appraisalYearEndSplit.test.ts 守同步）。
+            activeAlso: [
+              '/appraisal-year-end/todo',
+              '/appraisal-year-end/overview',
+              '/appraisal-year-end/exceptions',
+              '/appraisal-year-end/rules/scoring',
+              '/appraisal-year-end/rules/catalog',
+              '/appraisal-year-end/rules/enrollment-targets',
+            ],
+          },
           // 逐條對齊原 permissions.ts 手寫規則（SYNC-2 / 2026-07-10 巢狀路由「最長匹配」細分）。
           extraRoutes: [
             { path: '/appraisal', permission: 'SETTINGS_READ', prefix: true },
             { path: '/appraisal', permission: 'APPRAISAL_READ', prefix: true },
             { path: '/appraisal-management', permission: 'SETTINGS_READ' },
             { path: '/appraisal-management', permission: 'SALARY_READ' },
-            { path: '/year_end', permission: 'YEAR_END_READ', prefix: true },
-            { path: '/year-end/appraisal-payout', permission: 'APPRAISAL_FINALIZE' },
-            { path: '/appraisal-year-end/appraisal', permission: 'APPRAISAL_READ', prefix: true },
-            { path: '/appraisal-year-end/year-end', permission: 'YEAR_END_READ', prefix: true },
-            { path: '/appraisal-year-end/year-end/payout', permission: 'APPRAISAL_FINALIZE' },
+            // 工作區頂層 prefix：5 碼 OR（含待辦頁）。
+            { path: '/appraisal-year-end', permission: 'APPRAISAL_READ', prefix: true },
+            { path: '/appraisal-year-end', permission: 'YEAR_END_READ', prefix: true },
+            { path: '/appraisal-year-end', permission: 'SETTINGS_READ', prefix: true },
+            { path: '/appraisal-year-end', permission: 'SALARY_READ', prefix: true },
+            { path: '/appraisal-year-end', permission: 'APPRAISAL_FINALIZE', prefix: true },
             { path: '/appraisal-year-end/rules', permission: 'APPRAISAL_READ', prefix: true },
             { path: '/appraisal-year-end/rules', permission: 'SETTINGS_READ', prefix: true },
             { path: '/appraisal-year-end/rules/scoring', permission: 'APPRAISAL_READ' },
-            { path: '/appraisal-year-end/rules/bonus-rates', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/rules/catalog', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/rules/enrollment-targets', permission: 'APPRAISAL_READ' },
-            // 節慶人數（月度共用人數）沿用薪資權限；SALARY_READ 已在本群組 sharedViews 內。
-            { path: '/appraisal-year-end/rules/festival-headcount', permission: 'SALARY_READ' },
-            { path: '/appraisal-year-end/rules/year-end-rules', permission: 'SETTINGS_READ' },
             { path: '/appraisal-year-end/exceptions', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/exceptions', permission: 'YEAR_END_READ' },
+          ],
+        },
+        {
+          key: 'yearEnd', title: '年終', routePath: '/appraisal-year-end/year-end', routePrefix: true,
+          views: [{ code: 'YEAR_END_READ', label: '年終檢視' }],
+          actions: [
+            { code: 'YEAR_END_WRITE', requiresView: 'YEAR_END_READ' },
+            { code: 'YEAR_END_REVIEW', requiresView: 'YEAR_END_READ' },
+            { code: 'YEAR_END_ACCOUNTING', requiresView: 'YEAR_END_READ' },
+            { code: 'YEAR_END_FINALIZE', requiresView: 'YEAR_END_READ' },
+          ],
+          menu: {
+            icon: icon('Trophy'),
+            // 原單一入口「考核與年終」的 5 碼 OR 中，SETTINGS_READ（年終規則）／SALARY_READ（節慶人數）／
+            // APPRAISAL_FINALIZE（考核年終發放）三碼的頁面都屬年終側；沒有 YEAR_END_READ 的這些帳號
+            // 仍要看得到入口（sidebar 回歸測試曾因漏掉它們出過事），點下去落在兩邊共用的待辦頁。
+            visibleAlso: ['SETTINGS_READ', 'SALARY_READ', 'APPRAISAL_FINALIZE'],
+            visibleAlsoEntry: '/appraisal-year-end/todo',
+            // 年終側規則頁籤（年終獎金率、節慶人數、年終規則）的高亮別名；
+            // /year-end/payout、/year-end/cycles/:id 已在 routePath 前綴內。
+            // 待辦、待補資料兩邊共用，這裡與「考核」都掛別名：兩個選單項都有時先到先得（考核），
+            // 只看得到年終的帳號由側欄略過不可見的擁有者而落到這一項。
+            activeAlso: [
+              '/appraisal-year-end/todo',
+              '/appraisal-year-end/overview',
+              '/appraisal-year-end/exceptions',
+              '/appraisal-year-end/rules/bonus-rates',
+              '/appraisal-year-end/rules/festival-headcount',
+              '/appraisal-year-end/rules/year-end-rules',
+            ],
+          },
+          extraRoutes: [
+            { path: '/year_end', permission: 'YEAR_END_READ', prefix: true },
+            { path: '/year-end/appraisal-payout', permission: 'APPRAISAL_FINALIZE' },
+            { path: '/appraisal-year-end/year-end/payout', permission: 'APPRAISAL_FINALIZE' },
+            { path: '/appraisal-year-end/rules/bonus-rates', permission: 'APPRAISAL_READ' },
+            // 節慶人數（月度共用人數）沿用薪資權限（業主裁定 D4）；歸年終側的理由見 ruleTabs.ts。
+            { path: '/appraisal-year-end/rules/festival-headcount', permission: 'SALARY_READ' },
+            { path: '/appraisal-year-end/rules/year-end-rules', permission: 'SETTINGS_READ' },
           ],
         },
         {

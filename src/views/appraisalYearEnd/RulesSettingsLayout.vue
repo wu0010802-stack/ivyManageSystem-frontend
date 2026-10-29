@@ -1,69 +1,29 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { hasPermission } from '@/utils/auth'
 import { provideOpenCycleHint } from '@/views/appraisal/composables/useOpenCycleHint'
 import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
-import { PAGE_TERMS } from '@/constants/moduleTerms'
+import { RULE_TABS, ruleTabSide, visibleRuleTabs, type AyeSide } from './ruleTabs'
 
-// 子頁權限對齊實際呼叫的 API：前四頁走 appraisal API（APPRAISAL_READ）、年終規則走 SETTINGS_READ。
-// Task B7：另加 canWrite/permLabel——各 tab 實際「寫入」權限對齊各面板真實 gate（B4 已向後端核實），
-// 用於 tab 標題旁的唯讀徽章，與「能否看到分頁」的 can（讀權限）分開判定。
-// - scoring / catalog：面板編輯走 APPRAISAL_RULE_WRITE（ScoringRulesPanel canEditRules / PenaltyCatalogPanel canEdit）
-// - bonus-rates / enrollment-targets：面板寫入走 APPRAISAL_FINALIZE（BonusRatesPanel canWrite / YearlyEnrollmentTargetSection canEditTarget）
-// - year-end-rules：面板儲存走 SETTINGS_WRITE 且 ACTIVITY_PAYMENT_APPROVE 雙權限（YearEndRulesPanel canSaveRules）
-const TABS = [
-  {
-    name: 'scoring',
-    label: PAGE_TERMS.appraisalScoringRules,
-    can: () => hasPermission('APPRAISAL_READ'),
-    canWrite: () => hasPermission('APPRAISAL_RULE_WRITE'),
-    permLabel: '考核規則設定',
-  },
-  {
-    name: 'bonus-rates',
-    label: '年終獎金率',
-    can: () => hasPermission('APPRAISAL_READ'),
-    canWrite: () => hasPermission('APPRAISAL_FINALIZE'),
-    permLabel: '考核核定',
-  },
-  {
-    name: 'catalog',
-    label: PAGE_TERMS.appraisalCatalog,
-    can: () => hasPermission('APPRAISAL_READ'),
-    canWrite: () => hasPermission('APPRAISAL_RULE_WRITE'),
-    permLabel: '考核規則設定',
-  },
-  {
-    name: 'enrollment-targets',
-    label: '學年目標人數',
-    can: () => hasPermission('APPRAISAL_READ'),
-    canWrite: () => hasPermission('APPRAISAL_FINALIZE'),
-    permLabel: '考核核定',
-  },
-  {
-    // 節慶人數沿用薪資權限（業主裁定 D4）——只持 APPRAISAL_*/YEAR_END_* 者看不到本頁。
-    name: 'festival-headcount',
-    label: '節慶人數',
-    can: () => hasPermission('SALARY_READ'),
-    canWrite: () => hasPermission('SALARY_WRITE'),
-    permLabel: '薪資編輯',
-  },
-  {
-    name: 'year-end-rules',
-    label: '年終規則',
-    can: () => hasPermission('SETTINGS_READ'),
-    canWrite: () => hasPermission('SETTINGS_WRITE') && hasPermission('ACTIVITY_PAYMENT_APPROVE'),
-    permLabel: '年終規則設定',
-  },
-]
-
+// 頁籤定義（含各頁籤的讀／寫權限 gate 與所屬邊）集中在 ./ruleTabs.ts。
+// 2026-10-29 後台 IA 重整 批次 3（S1）：側欄「考核與年終」拆成「考核」「年終」兩個選單項後，
+// 本 layout 只列「目前所在那一邊」的規則頁籤——考核側 scoring／catalog／enrollment-targets，
+// 年終側 bonus-rates／festival-headcount／year-end-rules。路徑與各頁籤權限不變，
+// 要看另一邊的規則由側欄切換（頂列齒輪也依所在邊帶到該邊第一個可見頁籤）。
 const route = useRoute()
 const router = useRouter()
-const visibleTabs = computed(() => TABS.filter((t) => t.can()))
+const pathTab = computed(() => route.path.split('/')[3])
+// 目前所在邊：由路徑上的頁籤名決定；停在 bare /rules（尚未 redirect）時取使用者可見的第一個頁籤的邊，
+// 沒有任何可見頁籤時退回考核側（visibleTabs 為空，不渲染任何頁籤）。
+const currentSide = computed<AyeSide>(() => {
+  const fromPath = ruleTabSide(pathTab.value)
+  if (fromPath) return fromPath
+  return RULE_TABS.find((t) => t.can())?.side ?? 'appraisal'
+})
+const visibleTabs = computed(() => visibleRuleTabs(currentSide.value))
 // fallback 落在使用者實際看得到的第一個分頁，而非寫死 'scoring'（該頁需 APPRAISAL_READ）——
 // 否則只持 SETTINGS_READ 的使用者若因故落在此 fallback 分支，el-tabs 會指向他看不到的分頁。
-const activeTab = computed(() => route.path.split('/')[3] ?? visibleTabs.value[0]?.name ?? 'scoring')
+const activeTab = computed(() => pathTab.value ?? visibleTabs.value[0]?.name ?? 'scoring')
 const onTabChange = (name: string | number) => {
   if (String(name) !== activeTab.value) router.push(`/appraisal-year-end/rules/${name}`)
 }

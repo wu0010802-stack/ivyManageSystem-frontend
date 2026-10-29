@@ -74,7 +74,7 @@
             <el-icon><component :is="group.icon" /></el-icon>
             <span>{{ group.title }}</span>
           </template>
-          <el-menu-item v-for="item in group.items" :key="item.index" :index="item.index">
+          <el-menu-item v-for="item in group.items" :key="item.index" :index="entryIndex(item)">
             <el-icon><component :is="item.icon" /></el-icon>
             <template #title>
               {{ item.title }}
@@ -114,6 +114,7 @@ import { Expand, Fold, Close } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, hasPermission, isPlatformAdmin } from '@/utils/auth'
 import { PLATFORM_ONLY_CODES } from '@/constants/permissions'
 import { SIDEBAR_TREE, ACTIVE_MENU_ENTRIES } from '@/constants/navigation'
+import type { SidebarItem } from '@/constants/navigation'
 import { useTenantBranding } from '@/composables/useTenantBranding'
 
 const { branding } = useTenantBranding()
@@ -171,6 +172,15 @@ const platformView = computed(() => isPlatformAdmin())
 const isPlatformItem = (visibleCodes: readonly string[]): boolean =>
   visibleCodes.length > 0 && visibleCodes.every((code) => PLATFORM_ONLY_CODES.has(code))
 
+// 選單項的點擊入口：有 fallbackIndex（menu.visibleAlsoEntry）且使用者不持有任何 primaryCodes、
+// 只靠 visibleAlso 可見時改走 fallbackIndex，避免點進自己被路由守衛擋住的 routePath。
+const entryIndex = (item: SidebarItem): string => {
+  if (item.fallbackIndex && item.primaryCodes && !item.primaryCodes.some((code) => canView.value[code])) {
+    return item.fallbackIndex
+  }
+  return item.index
+}
+
 const itemAllowed = (item: { visibleCodes: readonly string[] }): boolean => {
   const platformItem = isPlatformItem(item.visibleCodes)
   // platform 頁：非總部身分一律不顯示；總部身分：只顯示 platform 頁（分校業務頁隱藏）。
@@ -198,20 +208,31 @@ const visibleGroups = computed(() =>
 )
 
 // ACTIVE_MENU_ENTRIES（全部選單頁 routePath＋menu.activeAlso 別名）最長前綴匹配：
-// /salary/settle → /salary、/appraisal-year-end/rules/* → /appraisal-year-end 自動涵蓋；
+// /salary/settle → /salary、/appraisal-year-end/appraisal/* → 「考核」自動涵蓋；
 // /students/admissions、/settings/accounts 等本身即選單頁者，比 /students、/settings 更長而勝出
 //（精確高亮）；別名命中時高亮其所屬選單項（如 /gov-reports → 政府申報）。
+// 擁有者選單項若對目前使用者不可見就跳過該筆：兩邊共用的頁（考核×年終的待辦、待補資料）同時掛在
+//「考核」「年終」兩個別名下，這樣只持其中一邊權限的人也會高亮到自己看得到的那一項。
+const itemByIndex = new Map<string, SidebarItem>(
+  [...SIDEBAR_TREE.topLevel, ...SIDEBAR_TREE.groups.flatMap((g) => g.items), ...SIDEBAR_TREE.bottomLevel].map(
+    (it) => [it.index, it],
+  ),
+)
 const activeMenu = computed(() => {
   const currentPath = route.path
   let bestLength = 0
   let bestIndex = ''
   for (const { path, index } of ACTIVE_MENU_ENTRIES) {
-    if ((currentPath === path || currentPath.startsWith(`${path}/`)) && path.length > bestLength) {
-      bestLength = path.length
-      bestIndex = index
-    }
+    if (!((currentPath === path || currentPath.startsWith(`${path}/`)) && path.length > bestLength)) continue
+    const owner = itemByIndex.get(index)
+    if (owner && !itemAllowed(owner)) continue
+    bestLength = path.length
+    bestIndex = index
   }
-  return bestIndex || currentPath
+  if (!bestIndex) return currentPath
+  // 高亮跟著點擊入口走：只靠 visibleAlso 可見的帳號，選單項的 index 是 fallbackIndex。
+  const owner = itemByIndex.get(bestIndex)
+  return owner ? entryIndex(owner) : bestIndex
 })
 
 // badgeKey → badge 數值。2026-08-20 高風險事件移出工作台後兩者分開計：相加會讓

@@ -45,39 +45,60 @@ const subs = (w: ReturnType<typeof mountWith>) =>
 describe('AdminSidebar 考核年終整併 + 群組可見性回歸', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('整合入口取代三個舊項目', () => {
+  it('「考核」「年終」兩個入口取代舊的整合入口與三個舊項目（2026-10-29 S1）', () => {
     const w = mountWith(['*'])
     const all = items(w)
-    expect(all).toContain('/appraisal-year-end')
+    expect(all).toContain('/appraisal-year-end/appraisal')
+    expect(all).toContain('/appraisal-year-end/year-end')
+    // 舊單一入口「考核與年終」已拆掉（網址仍可用，只是不再是選單項）
+    expect(all).not.toContain('/appraisal-year-end')
     expect(all).not.toContain('/year_end/cycles')
     expect(all).not.toContain('/year-end/appraisal-payout')
     expect(all).not.toContain('/appraisal-management')
   })
 
-  it('只有 SALARY_READ → 系統設定群組不顯示（修補回歸）', () => {
+  it('只有 SALARY_READ → 系統設定群組不顯示（修補回歸）；人事薪資仍有年終入口，點擊落在共用待辦頁', () => {
     const w = mountWith(['SALARY_READ'])
     expect(subs(w)).not.toContain('group-settings')
     expect(subs(w)).toContain('group-leave')
-    expect(items(w)).toContain('/appraisal-year-end')
+    expect(items(w)).toContain('/appraisal-year-end/todo')
+    // 沒有 YEAR_END_READ，點原 routePath 會被路由守衛擋住，所以入口換成待辦頁
+    expect(items(w)).not.toContain('/appraisal-year-end/year-end')
+    expect(items(w)).not.toContain('/appraisal-year-end/appraisal')
   })
 
-  it('只有 SETTINGS_READ → 人事薪資群組顯示且含整合入口（修補回歸）', () => {
+  it('只有 SETTINGS_READ → 人事薪資群組顯示且有年終入口（修補回歸）', () => {
     const w = mountWith(['SETTINGS_READ'])
     expect(subs(w)).toContain('group-leave')
-    expect(items(w)).toContain('/appraisal-year-end')
+    expect(items(w)).toContain('/appraisal-year-end/todo')
     expect(subs(w)).toContain('group-settings')
   })
 
-  it('只有 YEAR_END_READ → 入口可見', () => {
-    expect(items(mountWith(['YEAR_END_READ']))).toContain('/appraisal-year-end')
+  it('只有 YEAR_END_READ → 只看到「年終」，且入口就是年終清單（不落到待辦頁）', () => {
+    const all = items(mountWith(['YEAR_END_READ']))
+    expect(all).toContain('/appraisal-year-end/year-end')
+    expect(all).not.toContain('/appraisal-year-end/appraisal')
+    expect(all).not.toContain('/appraisal-year-end/todo')
   })
 
-  it('只有 APPRAISAL_FINALIZE → 入口可見', () => {
-    expect(items(mountWith(['APPRAISAL_FINALIZE']))).toContain('/appraisal-year-end')
+  it('只有 APPRAISAL_FINALIZE → 入口可見（走待辦頁，年終清單需 YEAR_END_READ）', () => {
+    const all = items(mountWith(['APPRAISAL_FINALIZE']))
+    expect(all).toContain('/appraisal-year-end/todo')
+    expect(all).not.toContain('/appraisal-year-end/year-end')
   })
 
-  it('只有 APPRAISAL_READ → 入口可見（2026-07-10 巢狀路由新增的頂層權限）', () => {
-    expect(items(mountWith(['APPRAISAL_READ']))).toContain('/appraisal-year-end')
+  it('只有 APPRAISAL_READ → 只看到「考核」（2026-07-10 巢狀路由新增的頂層權限）', () => {
+    const all = items(mountWith(['APPRAISAL_READ']))
+    expect(all).toContain('/appraisal-year-end/appraisal')
+    expect(all).not.toContain('/appraisal-year-end/year-end')
+    expect(all).not.toContain('/appraisal-year-end/todo')
+  })
+
+  it('APPRAISAL_READ＋YEAR_END_READ → 兩個入口都用各自的 routePath', () => {
+    const all = items(mountWith(['APPRAISAL_READ', 'YEAR_END_READ']))
+    expect(all).toContain('/appraisal-year-end/appraisal')
+    expect(all).toContain('/appraisal-year-end/year-end')
+    expect(all).not.toContain('/appraisal-year-end/todo')
   })
 
   it('報名時間設定 掛課後才藝群組，不在系統設定；修改紀錄已併入報名管理頁籤（2026-10-29 M4），不再有獨立側欄項', () => {
@@ -150,10 +171,53 @@ describe('AdminSidebar activeMenu 薪資子頁高亮', () => {
     expect(w.find('nav').attributes('data-active')).toBe('/employees')
   })
 
-  it('/appraisal-year-end/... 子頁（2026-07-10 巢狀路由）→ 高亮整合入口 (/appraisal-year-end)', () => {
-    routeState.path = '/appraisal-year-end/rules/scoring'
-    const w = mountWith(['*'])
-    expect(w.find('nav').attributes('data-active')).toBe('/appraisal-year-end')
+  it('/appraisal-year-end/appraisal/... 與考核側規則頁籤 → 高亮「考核」', () => {
+    for (const path of [
+      '/appraisal-year-end/appraisal',
+      '/appraisal-year-end/appraisal/calibration',
+      '/appraisal-year-end/rules/scoring',
+      '/appraisal-year-end/rules/catalog',
+      '/appraisal-year-end/rules/enrollment-targets',
+    ]) {
+      routeState.path = path
+      const w = mountWith(['*'])
+      expect(w.find('nav').attributes('data-active'), path).toBe('/appraisal-year-end/appraisal')
+    }
+  })
+
+  it('/appraisal-year-end/year-end/... 與年終側規則頁籤 → 高亮「年終」', () => {
+    for (const path of [
+      '/appraisal-year-end/year-end',
+      '/appraisal-year-end/year-end/payout',
+      '/appraisal-year-end/year-end/cycles/7',
+      '/appraisal-year-end/rules/bonus-rates',
+      '/appraisal-year-end/rules/festival-headcount',
+      '/appraisal-year-end/rules/year-end-rules',
+    ]) {
+      routeState.path = path
+      const w = mountWith(['*'])
+      expect(w.find('nav').attributes('data-active'), path).toBe('/appraisal-year-end/year-end')
+    }
+  })
+
+  it('兩邊共用的待辦、待補資料：兩邊都有 → 高亮「考核」；只看得到年終 → 高亮「年終」', () => {
+    for (const path of ['/appraisal-year-end/todo', '/appraisal-year-end/exceptions']) {
+      routeState.path = path
+      expect(mountWith(['*']).find('nav').attributes('data-active'), path).toBe('/appraisal-year-end/appraisal')
+      expect(mountWith(['APPRAISAL_READ']).find('nav').attributes('data-active'), path).toBe(
+        '/appraisal-year-end/appraisal',
+      )
+      expect(mountWith(['YEAR_END_READ']).find('nav').attributes('data-active'), path).toBe(
+        '/appraisal-year-end/year-end',
+      )
+    }
+  })
+
+  it('只靠 visibleAlso 可見的帳號（SETTINGS_READ）停在待辦頁 → 高亮他看得到的年終入口（待辦頁）', () => {
+    routeState.path = '/appraisal-year-end/todo'
+    const w = mountWith(['SETTINGS_READ'])
+    expect(w.find('nav').attributes('data-active')).toBe('/appraisal-year-end/todo')
+    expect(items(w)).toContain('/appraisal-year-end/todo')
   })
 
   // manifest 化後 activeMenu 改為 ACTIVE_MENU_ENTRIES 最長前綴匹配；

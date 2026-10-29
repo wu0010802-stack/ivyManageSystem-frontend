@@ -99,8 +99,14 @@ export interface SidebarItem {
   title: string
   icon: Component
   badgeKey?: 'workbench' | 'governance' | 'activityInquiries' | 'activityReview'
-  /** views ∪ sharedViews；可見性 = some(hasPermission)，由元件端 computed 過濾。 */
+  /** views ∪ sharedViews ∪ menu.visibleAlso；可見性 = some(hasPermission)，由元件端 computed 過濾。 */
   visibleCodes: readonly string[]
+  /**
+   * 僅 menu.visibleAlsoEntry 存在時帶出：views ∪ sharedViews（不含 visibleAlso）。
+   * 使用者不持有其中任何一碼、只靠 visibleAlso 可見時，元件端改用 fallbackIndex 當點擊入口。
+   */
+  primaryCodes?: readonly string[]
+  fallbackIndex?: string
 }
 
 export interface SidebarGroup {
@@ -117,9 +123,17 @@ function toSidebarItem(page: ManifestPage): SidebarItem | null {
     index: page.routePath,
     title: page.title,
     icon: page.menu.icon,
-    visibleCodes: [...page.views.map((v) => v.code), ...(page.sharedViews ?? [])],
+    visibleCodes: [
+      ...page.views.map((v) => v.code),
+      ...(page.sharedViews ?? []),
+      ...(page.menu.visibleAlso ?? []),
+    ],
   }
   if (page.menu.badgeKey) item.badgeKey = page.menu.badgeKey
+  if (page.menu.visibleAlsoEntry) {
+    item.primaryCodes = [...page.views.map((v) => v.code), ...(page.sharedViews ?? [])]
+    item.fallbackIndex = page.menu.visibleAlsoEntry
+  }
   return item
 }
 
