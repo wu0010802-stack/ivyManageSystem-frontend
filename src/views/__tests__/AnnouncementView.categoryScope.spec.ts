@@ -60,8 +60,15 @@ vi.mock('@/utils/auth', () => ({ hasPermission: (code: string) => hasPermissionM
 
 import AnnouncementView from '@/views/AnnouncementView.vue'
 
+// 表單已改用 FormDialog＋FormSection（shallowMount 預設連 slot 一起 stub 掉），這裡讓它們把 slot
+// 內容渲染出來，才能斷言對話框內 radio 實際 render 出的 disabled 屬性。
 const globalConfig = {
-  stubs: { teleport: true, 'el-table-column': { template: '<span />' } },
+  stubs: {
+    teleport: true,
+    'el-table-column': { template: '<span />' },
+    FormDialog: { template: '<div><slot /></div>' },
+    FormSection: { template: '<div><slot /></div>' },
+  },
 }
 
 type Vm = {
