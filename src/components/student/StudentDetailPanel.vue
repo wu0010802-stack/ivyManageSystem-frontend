@@ -14,16 +14,17 @@ import LifecycleTransitionDialog from './LifecycleTransitionDialog.vue'
 
 import OverviewTab from './tabs/OverviewTab.vue'
 import BasicInfoTab from './tabs/BasicInfoTab.vue'
-import AttendanceTab from './tabs/AttendanceTab.vue'
 import RecordsTab from './tabs/RecordsTab.vue'
 import FeesTab from './tabs/FeesTab.vue'
 import ActivityTab from './tabs/ActivityTab.vue'
-import HealthAndGrowthTab from './tabs/HealthAndGrowthTab.vue'
+import GrowthTab from './tabs/GrowthTab.vue'
+import HealthTab from '@/components/portfolio/HealthTab.vue'
 import CommunicationTab from './tabs/CommunicationTab.vue'
 import LifecycleTab from './tabs/LifecycleTab.vue'
 import JourneyTimeline from '@/components/recruitment/JourneyTimeline.vue'
 import StudentDisabilityDocsPanel from './StudentDisabilityDocsPanel.vue'
 import StudentEnrollmentCertButton from './StudentEnrollmentCertButton.vue'
+import { resolveStudentTab, sectionBelongsTo, type SectionRequest } from './studentProfileTabs'
 
 const props = withDefaults(defineProps<{
   studentId?: number | null
@@ -69,49 +70,32 @@ const canFeesRead = computed(() => hasPermission('FEES_READ'))
 const canSpecialNeedsRead = computed(() => hasPermission('STUDENTS_SPECIAL_NEEDS_READ'))
 
 const defaultTabFor = (ctx: string) => (ctx === 'classroom' ? 'overview' : 'basic')
-// 2026-09-09（需求 2）：原本各自獨立的 health_growth／growth_profile 一級
-// tab 合併成同一個 health_growth_profile 父 tab（內部用 HealthAndGrowthTab
-// 分「健康類／成長類」兩組）。舊書籤（含更早期 4 個原獨立 tab 整併進
-// growth_profile 時留下的名稱）一律導向合併後的父 tab 名稱。
-const LEGACY_TAB_MAP = {
-  guardians: 'basic',
-  health_growth: 'health_growth_profile',
-  growth_profile: 'health_growth_profile',
-  milestones: 'health_growth_profile',
-  timeline: 'health_growth_profile',
-  photo_gallery: 'health_growth_profile',
-  growth_report: 'health_growth_profile',
+
+// 一級頁籤的舊 key 對照集中在 studentProfileTabs.ts（2026-10-29 S6 整併：出席併入教務紀錄、
+// 健康／成長攤平成兩個一級頁籤、頁籤內不再巢狀）。這裡只負責「依權限挑第一個看得到的候選」。
+// ⚠ 只有 page＋syncUrl 才讀網址（router.currentRoute）：抽屜與內嵌情境由父層控制 router，
+//   且不少測試的 router mock 沒有 currentRoute。
+const first = (v: unknown): string => (Array.isArray(v) ? first(v[0]) : v == null ? '' : String(v))
+const urlQuery = () => (props.mode === 'page' && props.syncUrl ? router.currentRoute.value.query : {})
+const resolveRequested = (raw: string) => {
+  const q = urlQuery()
+  return resolveStudentTab(raw, { sub: first(q.sub), group: first(q.group) })
 }
-const mapLegacyTab = (name: string) => (LEGACY_TAB_MAP as Record<string, string>)[name] || name
-// 4 個原獨立 tab 整併成 growth_profile 的 sub-tab，書籤連結 ?tab=<舊名>
-// 需要同時帶 ?sub=<舊名> 進 GrowthProfileTab（讀 route.query.sub）；否則
-// 舊書籤 ?tab=timeline / photo_gallery / growth_report 全部落到預設的
-// milestones sub-tab。bug sweep round 4 (2026-05-14) F-FE-1。
-const GROWTH_SUB_FROM_LEGACY = new Set([
-  'milestones',
-  'timeline',
-  'photo_gallery',
-  'growth_report',
-])
-// 上述 6 個舊 tab 名稱合併後該落在 HealthAndGrowthTab 的哪個分組（需求 2）。
-const GROUP_FROM_LEGACY: Record<string, 'health' | 'growth'> = {
-  health_growth: 'health',
-  growth_profile: 'growth',
-  milestones: 'growth',
-  timeline: 'growth',
-  photo_gallery: 'growth',
-  growth_report: 'growth',
+
+// 頁籤內區塊請求（教務紀錄的出席／請假…、成長的七個區塊）：nonce 讓同一請求可重複觸發
+let sectionNonce = 0
+const recordsSection = ref<SectionRequest | null>(null)
+const growthSection = ref<SectionRequest | null>(null)
+function requestSection(tab: string, sub: string) {
+  if (!sectionBelongsTo(tab, sub)) return
+  const req: SectionRequest = { section: sub, nonce: ++sectionNonce }
+  if (tab === 'records') recordsSection.value = req
+  else if (tab === 'growth') growthSection.value = req
 }
-const initialActive = mapLegacyTab(
-  props.initialTab || props.defaultTab || defaultTabFor(props.context),
-)
-const initialGrowthSub = GROWTH_SUB_FROM_LEGACY.has(props.initialTab)
-  ? props.initialTab
-  : null
-const initialHealthGrowthGroup = ref<'health' | 'growth'>(
-  GROUP_FROM_LEGACY[props.initialTab] || 'health',
-)
-const activeTab = ref(initialActive)
+
+const requestedTab = props.initialTab || props.defaultTab || defaultTabFor(props.context)
+const initialResolved = resolveRequested(requestedTab)
+const activeTab = ref(initialResolved.candidates[0])
 
 const editDialogVisible = ref(false)
 const editInitial = ref<Record<string, unknown> | null>(null)
@@ -123,11 +107,11 @@ const showOpenFullPage = computed(() => props.mode === 'drawer' && props.context
 const TAB_DEFS = computed(() => [
   { name: 'overview', label: '總覽', show: true },
   { name: 'basic', label: '基本資料', show: true },
-  { name: 'attendance', label: '出席紀錄', show: true },
   { name: 'records', label: '教務紀錄', show: true },
   { name: 'fees', label: '學費', show: canFeesRead.value },
   { name: 'activity', label: '才藝報名', show: canActivityRead.value },
-  { name: 'health_growth_profile', label: '健康／成長檔案', show: canPortfolioRead.value || canHealthRead.value },
+  { name: 'health', label: '健康', show: canHealthRead.value },
+  { name: 'growth', label: '成長', show: canPortfolioRead.value },
   { name: 'disability_docs', label: '鑑定文件', show: canSpecialNeedsRead.value },
   { name: 'lifecycle', label: '在校歷程', show: true },
   { name: 'communication', label: '家長溝通', show: true },
@@ -135,10 +119,13 @@ const TAB_DEFS = computed(() => [
 
 const visibleTabs = computed(() => TAB_DEFS.value.filter((t) => t.show))
 
-// 深連結 ?tab= 指向被權限過濾掉的 tab（如無 FEES_READ 連到 fees）時，
+// 依權限挑第一個看得到的候選頁籤；全都看不到（如無 FEES_READ 連到 fees）時
 // activeTab 會指向不存在的 pane 而整個內容區空白——退回總覽
-if (!visibleTabs.value.some((t) => t.name === activeTab.value)) {
-  activeTab.value = 'overview'
+const pickVisibleTab = (candidates: string[]): string =>
+  candidates.find((name) => visibleTabs.value.some((t) => t.name === name)) ?? 'overview'
+activeTab.value = pickVisibleTab(initialResolved.candidates)
+if (initialResolved.sub && activeTab.value === initialResolved.candidates[0]) {
+  requestSection(activeTab.value, initialResolved.sub)
 }
 
 // 快速切換學生時，較舊學生的慢回應不得覆寫新學生的 profile（標頭/PII 競態）。
@@ -183,63 +170,35 @@ watch(
   { immediate: true },
 )
 
-// 同步 URL（page mode）
+// 舊書籤（?tab=attendance／health_growth_profile&group=growth&sub=…／timeline…）進來時，
+// 把網址改寫成現行 key（tab＋sub），免得網址與畫面不一致、之後換頁籤又殘留舊 group。
+// 只在 page mode + syncUrl 時推 URL；drawer／embedded mode 由父層控制 router。
+function canonicalizeUrl(resolved: ReturnType<typeof resolveStudentTab>) {
+  if (props.mode !== 'page' || !props.syncUrl || !resolved.legacy) return
+  const { group: _group, sub: _sub, ...rest } = router.currentRoute.value.query
+  const sub = activeTab.value === resolved.candidates[0] ? resolved.sub : ''
+  router.replace({ query: { ...rest, tab: activeTab.value, ...(sub ? { sub } : {}) } })
+}
+canonicalizeUrl(initialResolved)
+
+// 同步 URL（page mode）：使用者切頁籤時寫 ?tab=；殘留的 ?sub=／?group= 若不屬於新頁籤就拿掉
 watch(activeTab, (val) => {
   if (props.mode !== 'page' || !props.syncUrl) return
   const currentQuery = router.currentRoute.value.query
-  if (currentQuery.tab === val) return
-  router.replace({ query: { ...currentQuery, tab: val } })
+  const keepSub = sectionBelongsTo(val, first(currentQuery.sub))
+  if (currentQuery.tab === val && !currentQuery.group && (keepSub || !currentQuery.sub)) return
+  const { group: _group, sub: _sub, ...rest } = currentQuery
+  router.replace({ query: { ...rest, tab: val, ...(keepSub ? { sub: first(currentQuery.sub) } : {}) } })
 })
 
-// 舊書籤 ?tab=<growth_profile sub 名> → 進來時補 ?sub= 讓 GrowthProfileTab 跳對
-// 預期 sub，並同步 ?tab=growth_profile 讓 URL 與顯示一致（否則 activeTab
-// 是 growth_profile 但 URL 仍掛舊名）。只在 page mode + syncUrl 時推 URL；
-// drawer/embedded mode 由父層控制 router。bug sweep round 4 (2026-05-14) F-FE-1。
-if (props.mode === 'page' && props.syncUrl && (initialGrowthSub || GROUP_FROM_LEGACY[props.initialTab])) {
-  const q = router.currentRoute.value.query
-  const needsTab = q.tab !== initialActive
-  const needsSub = initialGrowthSub ? q.sub !== initialGrowthSub : false
-  const needsGroup = GROUP_FROM_LEGACY[props.initialTab]
-    ? q.group !== GROUP_FROM_LEGACY[props.initialTab]
-    : false
-  if (needsTab || needsSub || needsGroup) {
-    router.replace({
-      query: {
-        ...q,
-        tab: initialActive,
-        ...(initialGrowthSub ? { sub: initialGrowthSub } : {}),
-        ...(GROUP_FROM_LEGACY[props.initialTab] ? { group: GROUP_FROM_LEGACY[props.initialTab] } : {}),
-      },
-    })
-  }
-}
-
-// URL 帶舊 tab 名稱時即時轉換（書籤相容）
+// URL 帶舊 tab 名稱時即時轉換（書籤相容）；同一頁內再收到新的 ?tab=（如站內連結同頁導覽）也走這裡
 watch(() => props.initialTab, (val) => {
   if (!val) return
-  const mapped = mapLegacyTab(val)
-  if (mapped !== activeTab.value) activeTab.value = mapped
-  // 後續切換時若帶舊名，同樣補 ?sub= / ?group=
-  if (
-    props.mode === 'page' &&
-    props.syncUrl &&
-    GROWTH_SUB_FROM_LEGACY.has(val) &&
-    router.currentRoute.value.query.sub !== val
-  ) {
-    router.replace({
-      query: { ...router.currentRoute.value.query, sub: val },
-    })
-  }
-  if (
-    props.mode === 'page' &&
-    props.syncUrl &&
-    GROUP_FROM_LEGACY[val] &&
-    router.currentRoute.value.query.group !== GROUP_FROM_LEGACY[val]
-  ) {
-    router.replace({
-      query: { ...router.currentRoute.value.query, group: GROUP_FROM_LEGACY[val] },
-    })
-  }
+  const resolved = resolveRequested(val)
+  const target = pickVisibleTab(resolved.candidates)
+  if (target !== activeTab.value) activeTab.value = target
+  if (resolved.sub && target === resolved.candidates[0]) requestSection(target, resolved.sub)
+  canonicalizeUrl(resolved)
 })
 
 // 監聽 bus 重新載 profile（編輯後同步摘要）
@@ -254,15 +213,13 @@ const busEvents = [
 busEvents.forEach((e) => domainBus.on(e, onProfileMutate))
 onUnmounted(() => busEvents.forEach((e) => domainBus.off(e, onProfileMutate)))
 
-// 教務紀錄 → 出席跳轉：攜帶日期區間給 AttendanceTab 預填篩選
-const attendanceDateRange = ref<[string, string] | null>(null)
-function handleRecordsJumpTab(payload: string | { tab?: string; query?: { from?: string; to?: string } }) {
-  const target = typeof payload === 'string' ? payload : payload?.tab
-  if (!target) return
-  if (target === 'attendance' && typeof payload !== 'string' && payload?.query) {
-    attendanceDateRange.value = [payload.query.from || '', payload.query.to || '']
-  }
-  activeTab.value = mapLegacyTab(target)
+// 總覽卡片等處的 goto-tab：值可能是舊 key（attendance／guardians…），統一走對照表；
+// 帶區塊的（attendance → 教務紀錄 › 出席）同時請求頁籤內切到該區塊
+function gotoTab(name: string) {
+  const resolved = resolveStudentTab(name)
+  const target = pickVisibleTab(resolved.candidates)
+  activeTab.value = target
+  if (resolved.sub && target === resolved.candidates[0]) requestSection(target, resolved.sub)
 }
 
 // 摺要列：操作
@@ -371,25 +328,19 @@ const handleBackToClassroom = () => {
         <OverviewTab
           v-if="tab.name === 'overview'"
           :profile="profile"
-          @goto-tab="(t) => (activeTab = mapLegacyTab(t))"
+          @goto-tab="gotoTab"
         />
         <BasicInfoTab
           v-else-if="tab.name === 'basic'"
           :profile="profile"
           @guardians-changed="handleGuardiansChanged"
         />
-        <AttendanceTab
-          v-else-if="tab.name === 'attendance'"
-          :student-id="safeStudentId"
-          :active="activeTab === 'attendance'"
-          :external-date-range="attendanceDateRange"
-        />
         <RecordsTab
           v-else-if="tab.name === 'records'"
           :student-id="safeStudentId"
           :classroom-id="(profile.basic as Record<string, unknown>)?.classroom_id as number | undefined"
           :active="activeTab === 'records'"
-          @jump-tab="handleRecordsJumpTab"
+          :section-request="recordsSection"
         />
         <FeesTab
           v-else-if="tab.name === 'fees'"
@@ -402,11 +353,11 @@ const handleBackToClassroom = () => {
           :student-id="safeStudentId"
           :active="activeTab === 'activity'"
         />
-        <HealthAndGrowthTab
-          v-else-if="tab.name === 'health_growth_profile'"
+        <HealthTab v-else-if="tab.name === 'health'" :student-id="safeStudentId" />
+        <GrowthTab
+          v-else-if="tab.name === 'growth'"
           :student-id="safeStudentId"
-          :sync-url="syncUrl"
-          :initial-group="initialHealthGrowthGroup"
+          :section-request="growthSection"
         />
         <StudentDisabilityDocsPanel
           v-else-if="tab.name === 'disability_docs'"

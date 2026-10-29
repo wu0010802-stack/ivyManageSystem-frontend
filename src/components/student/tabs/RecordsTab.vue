@@ -18,19 +18,22 @@ import AssessmentEditorDialog from '@/components/student/AssessmentEditorDialog.
 import ChangeLogEditorDialog from '@/components/student/ChangeLogEditorDialog.vue'
 import SummaryCards from '@/components/student/tabs/academic/SummaryCards.vue'
 import LeaveSection from '@/components/student/tabs/academic/LeaveSection.vue'
+import AttendanceTab from '@/components/student/tabs/AttendanceTab.vue'
+import { sectionBelongsTo, type SectionRequest } from '@/components/student/studentProfileTabs'
 
+// 2026-10-29（後台 IA 重整 S6）：原獨立的「出席紀錄」一級頁籤併入本頁的分類表格，成為「出席」區塊
+// （教務紀錄＝出席、請假、評量、事件、異動）。原本靠 emit('jump-tab') 請父層切頁籤再帶日期區間，
+// 現在都在本元件內完成；父層只剩 sectionRequest（深連結 ?sub=、總覽卡片 goto-tab 'attendance'）。
 const props = withDefaults(defineProps<{
   studentId: number
   classroomId?: number | null
   active?: boolean
+  sectionRequest?: SectionRequest | null
 }>(), {
   classroomId: null,
   active: true,
+  sectionRequest: null,
 })
-
-const emit = defineEmits<{
-  'jump-tab': [payload: string | { tab: string; query?: Record<string, string> }]
-}>()
 
 const canWrite = computed(() => hasPermission('STUDENTS_WRITE'))
 
@@ -240,9 +243,26 @@ function handleJumpSection(section: string) {
   tableTab.value = section
 }
 
-function handleJumpAttendance(payload: Record<string, string>) {
-  emit('jump-tab', { tab: 'attendance', query: payload })
+// 請假列的「看當時出席」帶日期區間給出席區塊預填篩選
+const attendanceRange = ref<[string, string] | null>(null)
+function handleJumpAttendance(payload: { from?: string; to?: string }) {
+  attendanceRange.value = [payload.from || '', payload.to || '']
+  handleJumpSection('attendance')
 }
+
+// 摘要卡片的出席率卡片 → 出席區塊（SummaryCards 仍以 jump-tab 'attendance' 表達，元件契約不動）
+function handleSummaryJump(tab: string) {
+  if (tab === 'attendance') handleJumpSection('attendance')
+}
+
+// 父層請求：深連結 ?sub=<區塊>、總覽卡片 goto-tab 'attendance'。immediate：掛載當下就帶著請求（深連結進來）
+watch(
+  () => props.sectionRequest,
+  (req) => {
+    if (req && sectionBelongsTo('records', req.section)) handleJumpSection(req.section)
+  },
+  { immediate: true },
+)
 
 defineExpose({
   refresh: () => {
@@ -258,7 +278,7 @@ defineExpose({
       ref="summaryRef"
       :student-id="studentId"
       :active="active"
-      @jump-tab="(tab) => emit('jump-tab', { tab })"
+      @jump-tab="handleSummaryJump"
       @jump-section="handleJumpSection"
     />
     <div class="filter-bar">
@@ -473,6 +493,14 @@ defineExpose({
           :student-id="studentId"
           :active="active && tableTab === 'leave'"
           @jump-attendance="handleJumpAttendance"
+        />
+      </el-tab-pane>
+
+      <el-tab-pane label="出席" name="attendance">
+        <AttendanceTab
+          :student-id="studentId"
+          :active="active && viewMode === 'table' && tableTab === 'attendance'"
+          :external-date-range="attendanceRange"
         />
       </el-tab-pane>
 

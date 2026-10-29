@@ -636,8 +636,8 @@ onMounted(async () => {
               <el-table-column label="姓名" width="110">
                 <template #default="{ row }">
                   <router-link
-                    v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
-                    :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')!"
+                    v-if="buildStudentProfileLink(row.student_id ?? row.id, 'records', 'attendance')"
+                    :to="buildStudentProfileLink(row.student_id ?? row.id, 'records', 'attendance')!"
                     class="student-link"
                   >{{ row.name }}</router-link>
                   <span v-else>{{ row.name }}</span>
@@ -711,8 +711,8 @@ onMounted(async () => {
         <el-table-column label="姓名" width="110">
           <template #default="{ row }">
             <router-link
-              v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
-              :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')!"
+              v-if="buildStudentProfileLink(row.student_id ?? row.id, 'records', 'attendance')"
+              :to="buildStudentProfileLink(row.student_id ?? row.id, 'records', 'attendance')!"
               class="student-link"
             >{{ row.name }}</router-link>
             <span v-else>{{ row.name }}</span>

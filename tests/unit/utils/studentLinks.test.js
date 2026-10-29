@@ -10,6 +10,14 @@ describe('buildStudentProfileLink', () => {
     })
   })
 
+  it('帶 sub 時一併寫進 query（教務紀錄 › 出席＝tab records + sub attendance，S6）', () => {
+    expect(buildStudentProfileLink(42, 'records', 'attendance')).toEqual({
+      name: 'student-profile',
+      params: { id: 42 },
+      query: { tab: 'records', sub: 'attendance' },
+    })
+  })
+
   it('沒帶 tab 時 query 為空物件', () => {
     expect(buildStudentProfileLink(7)).toEqual({
       name: 'student-profile',
