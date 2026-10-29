@@ -6,6 +6,7 @@ import { captureException } from '@/utils/sentry'
 import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import { attendanceRouteProps, isValidDateQuery, legacySettingsShiftsRedirect } from './attendanceRouteProps'
+import { isBatchTab } from '../views/salary/batchTabs'
 
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
@@ -296,7 +297,21 @@ export const routes: RouteRecordRaw[] = [
             path: '/salary/settings',
             name: 'salary-settings',
             component: () => import('../views/salary/SalarySettingsView.vue'),
+            // 2026-10-29（後台 IA 重整 S2）：節慶發放／停課登記／下學期超額／才藝獎勵金四個頁籤
+            // 移到 /salary/batches。舊書籤 /salary/settings?tab=<這四個> 帶其餘 query 導到新頁同名頁籤。
+            // 其他 tab 值與無 tab 照常進薪資設定。
+            beforeEnter: (to) => (
+                isBatchTab(to.query.tab)
+                    ? { path: '/salary/batches', query: to.query, replace: true }
+                    : true
+            ),
             meta: { title: '薪資設定' }
+        },
+        {
+            path: '/salary/batches',
+            name: 'salary-batches',
+            component: () => import('../views/salary/SalaryBatchesView.vue'),
+            meta: { title: '獎金批次作業' }
         },
         {
             path: '/salary/recruitment-bonus',

@@ -76,6 +76,20 @@ describe('SalaryHubView', () => {
         expect(wrapper.text()).toContain('薪資總覽與歷史')
     })
 
+    it('入口卡含「獎金批次作業」→ /salary/batches；薪資設定卡說明不再提節慶', async () => {
+        getRecordsMock.mockResolvedValue({ data: [] })
+        const wrapper = mountHub()
+        await flushPromises()
+
+        const card = wrapper.findAll('.hub-link-card').find((c) => c.text().includes('獎金批次作業'))
+        expect(card).toBeTruthy()
+        await card!.trigger('click')
+        expect(pushMock).toHaveBeenCalledWith('/salary/batches')
+        // 非完整薪資角色同樣看得到（節慶兩個頁籤只需 SALARY_READ）
+        hasFullSalaryViewMock.mockReturnValue(false)
+        expect(mountHub().text()).toContain('獎金批次作業')
+    })
+
     it('覆核中狀態：顯示封存進度與需注意數，深連結到 review 步驟', async () => {
         // 本月 2 筆（1 封存 1 未封存 + 手動調整異常）；上月查詢回空
         getRecordsMock.mockImplementation((_y: number, m: number) => {

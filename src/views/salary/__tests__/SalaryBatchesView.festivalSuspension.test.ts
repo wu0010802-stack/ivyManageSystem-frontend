@@ -23,10 +23,10 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: replaceMock }),
 }))
 
-import SalarySettingsView from '../SalarySettingsView.vue'
+import SalaryBatchesView from '../SalaryBatchesView.vue'
 
 function mountView() {
-  return shallowMount(SalarySettingsView, {
+  return shallowMount(SalaryBatchesView, {
     global: {
       stubs: {
         'el-tabs': { template: '<div><slot /></div>' },
@@ -42,7 +42,7 @@ function mountView() {
 const paneNames = (wrapper: ReturnType<typeof mountView>) =>
   wrapper.findAll('.pane').map((p) => p.attributes('data-name'))
 
-describe('SalarySettingsView — 節慶停課登記頁籤', () => {
+describe('SalaryBatchesView — 節慶停課登記頁籤（2026-10-29 S2 自薪資設定搬出，gate 原樣）', () => {
   beforeEach(() => {
     permState.perms = new Set(['SALARY_READ'])
     permState.fullView = false
@@ -57,13 +57,15 @@ describe('SalarySettingsView — 節慶停課登記頁籤', () => {
     expect(names.indexOf('festival_suspension')).toBe(names.indexOf('festival_payout') + 1)
   })
 
-  it('沒有 SALARY_READ：頁籤不出現，網址指定也退回第一個可見頁籤', () => {
+  it('沒有 SALARY_READ：頁籤不出現，網址指定也不接受（沒有任何可見頁籤）', () => {
     permState.perms = new Set(['SETTINGS_READ'])
     routeState.query = { tab: 'festival_suspension' }
     const wrapper = mountView()
 
     expect(paneNames(wrapper)).not.toContain('festival_suspension')
-    expect((wrapper.vm as unknown as { tab: string }).tab).toBe('bonus')
+    expect(paneNames(wrapper)).toEqual([])
+    expect((wrapper.vm as unknown as { tab: string }).tab).toBe('')
+    expect(wrapper.findComponent({ name: 'FestivalSuspensionPanel' }).exists()).toBe(false)
   })
 
   it('網址 ?tab=festival_suspension 直接開到該頁籤，且只在該頁籤掛載面板', () => {
@@ -73,7 +75,7 @@ describe('SalarySettingsView — 節慶停課登記頁籤', () => {
     expect((wrapper.vm as unknown as { tab: string }).tab).toBe('festival_suspension')
     expect(wrapper.findComponent({ name: 'FestivalSuspensionPanel' }).exists()).toBe(true)
 
-    routeState.query = { tab: 'bonus' }
+    routeState.query = { tab: 'festival_payout' }
     expect(mountView().findComponent({ name: 'FestivalSuspensionPanel' }).exists()).toBe(false)
   })
 })

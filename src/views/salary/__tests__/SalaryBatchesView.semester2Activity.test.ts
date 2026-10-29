@@ -23,10 +23,10 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: replaceMock }),
 }))
 
-import SalarySettingsView from '../SalarySettingsView.vue'
+import SalaryBatchesView from '../SalaryBatchesView.vue'
 
 function mountView() {
-  return shallowMount(SalarySettingsView, {
+  return shallowMount(SalaryBatchesView, {
     global: {
       stubs: {
         'el-tabs': { template: '<div><slot /></div>' },
@@ -42,7 +42,7 @@ function mountView() {
 const paneNames = (wrapper: ReturnType<typeof mountView>) =>
   wrapper.findAll('.pane').map((p) => p.attributes('data-name'))
 
-describe('SalarySettingsView — 下學期才藝獎勵金頁籤', () => {
+describe('SalaryBatchesView — 下學期才藝獎勵金頁籤（2026-10-29 S2 自薪資設定搬出，gate 原樣）', () => {
   beforeEach(() => {
     permState.perms = new Set(['SALARY_READ', 'SALARY_WRITE', 'SETTINGS_READ'])
     permState.fullView = true
@@ -65,7 +65,8 @@ describe('SalarySettingsView — 下學期才藝獎勵金頁籤', () => {
     const wrapper = mountView()
 
     expect(paneNames(wrapper)).not.toContain('semester2_activity')
-    expect((wrapper.vm as unknown as { tab: string }).tab).toBe('bonus')
+    // 退回第一個可見頁籤（節慶發放與未扣餘額；SALARY_READ 即可看）
+    expect((wrapper.vm as unknown as { tab: string }).tab).toBe('festival_payout')
   })
 
   it('沒有 SALARY_READ：頁籤不出現', () => {
@@ -81,7 +82,7 @@ describe('SalarySettingsView — 下學期才藝獎勵金頁籤', () => {
     expect((wrapper.vm as unknown as { tab: string }).tab).toBe('semester2_activity')
     expect(wrapper.findComponent({ name: 'Semester2ActivityPanel' }).exists()).toBe(true)
 
-    routeState.query = { tab: 'bonus' }
+    routeState.query = { tab: 'festival_payout' }
     expect(mountView().findComponent({ name: 'Semester2ActivityPanel' }).exists()).toBe(false)
   })
 })
