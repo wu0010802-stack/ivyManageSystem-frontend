@@ -3,7 +3,7 @@
 import { NAVIGATION_MANIFEST } from './manifest'
 import {
   collectOwnedCodes,
-  deriveActiveMenuPaths,
+  deriveActiveMenuEntries,
   deriveBreadcrumbParents,
   derivePickerTree,
   deriveRoutePermissionRules,
@@ -16,8 +16,8 @@ export const ROUTE_PERMISSION_RULES = deriveRoutePermissionRules(NAVIGATION_MANI
 /** 側邊欄樹（未做權限過濾；AdminSidebar 以 visibleCodes × hasPermission 過濾）。 */
 export const SIDEBAR_TREE = deriveSidebarTree(NAVIGATION_MANIFEST)
 
-/** activeMenu 最長前綴匹配用的 menu 頁 routePath 全集。 */
-export const ACTIVE_MENU_PATHS = deriveActiveMenuPaths(NAVIGATION_MANIFEST)
+/** activeMenu 最長前綴匹配表：menu 頁 routePath（高亮自己）＋ menu.activeAlso 別名（高亮所屬選單項）。 */
+export const ACTIVE_MENU_ENTRIES = deriveActiveMenuEntries(NAVIGATION_MANIFEST)
 
 /** 麵包屑父層候選（已依 path 長度降冪，供最長前綴匹配）。 */
 export const BREADCRUMB_PARENTS = deriveBreadcrumbParents(NAVIGATION_MANIFEST)
@@ -33,6 +33,7 @@ export type {
   NavigationManifest,
 } from './manifest'
 export type {
+  ActiveMenuEntry,
   BreadcrumbParent,
   PickerDefinitionLike,
   PickerGroup,

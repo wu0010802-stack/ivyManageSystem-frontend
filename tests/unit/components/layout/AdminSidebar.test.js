@@ -122,10 +122,12 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(wrapper.find('[data-index="/activity/registrations"]').exists()).toBe(true)
   })
 
-  it('政府報表五頁不在側欄（2026-10-12 業主指示暫時下架，路由保留）', async () => {
+  it('政府申報在側欄只有一個入口（2026-10-29 批次 2，單一入口恢復 10-12 下架的五頁選單）', async () => {
     const wrapper = await mountSidebar()
+    const entry = wrapper.find('[data-index="/admin/gov-reports/monthly"]')
+    expect(entry.exists()).toBe(true)
+    expect(entry.text()).toContain('政府申報')
     for (const path of [
-      '/admin/gov-reports/monthly',
       '/admin/gov-reports/certificates',
       '/admin/gov-reports/subsidies',
       '/admin/gov-reports/iep',
@@ -133,6 +135,7 @@ describe('AdminSidebar 9-IA structure', () => {
     ]) {
       expect(wrapper.find(`[data-index="${path}"]`).exists()).toBe(false)
     }
+    // 頁面標題不當選單文字（選單只叫「政府申報」）
     expect(wrapper.text()).not.toContain('月度幼生在園統計')
     expect(wrapper.text()).not.toContain('勞健保與稅務申報')
   })

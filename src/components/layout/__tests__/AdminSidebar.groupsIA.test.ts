@@ -80,7 +80,12 @@ describe('側欄群組順序與歸屬（SIDEBAR_TREE 靜態）', () => {
     ])
     expect(itemsOf('group-recruitment')).toEqual(['/students/admissions'])
     expect(itemsOf('group-transport')).toEqual(['/dismissal-queue', '/pickup-authorizations', '/bus'])
-    expect(itemsOf('group-finance')).toEqual(['/fees', '/finance-signoffs', '/reports'])
+    expect(itemsOf('group-finance')).toEqual([
+      '/fees',
+      '/finance-signoffs',
+      '/reports',
+      '/admin/gov-reports/monthly',
+    ])
     expect(itemsOf('group-admin')).toEqual(['/announcements', '/calendar', '/surveys'])
   })
 
@@ -209,5 +214,45 @@ describe('側欄展開狀態不落地（舊 key 不得讓側欄壞掉）', () =>
     mount(AdminSidebar, { global: { stubs } })
     expect(localStorage.getItem).not.toHaveBeenCalled()
     expect(localStorage.setItem).not.toHaveBeenCalled()
+  })
+})
+
+describe('政府申報入口（財務群組）', () => {
+  beforeEach(() => {
+    setUserInfo(null)
+    routeState.path = '/'
+  })
+
+  it('只有 GOV_REPORTS_VIEW：看得到入口（財務群組）', () => {
+    const w = mountWith(['GOV_REPORTS_VIEW'])
+    expect(subs(w)).toEqual(['group-finance'])
+    expect(inGroup(w, 'group-finance')).toEqual(['/admin/gov-reports/monthly'])
+  })
+
+  it('只有 GOV_REPORTS_EXPORT：不借道放寬——沒有側欄入口，也進不了教育部頁', () => {
+    const w = mountWith(['GOV_REPORTS_EXPORT'])
+    expect(items(w)).not.toContain('/admin/gov-reports/monthly')
+    expect(subs(w)).not.toContain('group-finance')
+    expect(canAccessRoute('/admin/gov-reports/monthly')).toBe(false)
+    expect(canAccessRoute('/gov-reports')).toBe(true)
+  })
+
+  it.each([
+    '/admin/gov-reports/monthly',
+    '/admin/gov-reports/certificates',
+    '/admin/gov-reports/subsidies',
+    '/admin/gov-reports/iep',
+    '/gov-reports',
+  ])('在 %s 時側欄高亮「政府申報」入口', (path) => {
+    routeState.path = path
+    const w = mountWith(['*'])
+    expect(w.find('nav').attributes('data-active')).toBe('/admin/gov-reports/monthly')
+  })
+
+  it('別名不外溢：/reports 仍高亮經營報表，/fees 仍高亮學費管理', () => {
+    routeState.path = '/reports'
+    expect(mountWith(['*']).find('nav').attributes('data-active')).toBe('/reports')
+    routeState.path = '/fees'
+    expect(mountWith(['*']).find('nav').attributes('data-active')).toBe('/fees')
   })
 })

@@ -1,7 +1,7 @@
 <template>
   <div class="iep-view" v-loading="loading">
     <PageHeader
-      title="IEP 個別化教育計畫"
+      :title="PAGE_TERMS.govIep"
       subtitle="身障幼生每學期一份；核准後轉唯讀"
     />
 
@@ -159,6 +159,7 @@ import {
 } from '@/api/govMoe'
 import { getStudents } from '@/api/students'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import { useAllClassroomStore } from '@/stores/classroomAll'
 import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
@@ -501,7 +502,8 @@ onMounted(loadAll)
 
 <style scoped>
 .iep-view { padding: 16px; }
-.iep-page { display: flex; gap: 16px; height: calc(100vh - 200px); }
+/* 256px＝原 200px ＋ 政府申報頁籤列（GovReportsLayout）約 56px，避免多出外層捲軸 */
+.iep-page { display: flex; gap: 16px; height: calc(100vh - 256px); }
 .left-pane { width: 320px; border-right: 1px solid var(--el-border-color-lighter); padding: 12px; overflow-y: auto; }
 .right-pane { flex: 1; padding: 16px; overflow-y: auto; }
 .empty-state { display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); }

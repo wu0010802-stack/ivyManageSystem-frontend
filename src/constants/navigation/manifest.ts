@@ -133,6 +133,12 @@ export interface ManifestPage {
      * 稽核類頁面；省略 = 照既有行為渲染在群組之前。
      */
     placement?: 'bottom'
+    /**
+     * 其他路徑（prefix 語意：等於或以 `${path}/` 開頭）也高亮本選單項。給「一個選單項、頁籤式多路由」
+     * 的入口用——這些路由沒有共同的 routePath 前綴（如政府申報的 /admin/gov-reports/* 與 /gov-reports），
+     * 最長前綴匹配高亮不到入口。只影響高亮與群組展開，不產生路由權限規則、不影響可見性。
+     */
+    activeAlso?: readonly string[]
   }
 }
 
@@ -512,14 +518,21 @@ export const NAVIGATION_MANIFEST = {
           views: [{ code: 'REPORTS' }],
           menu: { icon: icon('PieChart') },
         },
-        // 政府報表五頁自「報表」群組移入本群組（業主指示，2026-08-01）；
-        // 權限碼主屬與路由不動，僅選單歸屬變更。
-        // 2026-10-12 業主指示暫時自側欄下架：五頁皆拿掉 menu，路由、權限規則、權限編輯器
-        // 節點與後端 API 全數保留（深連結仍受原權限碼守衛）。恢復時把 menu 加回即可，
-        // 原圖示依序為 Histogram／Document／Document／Document／Files（見 govReportsNav.test.ts）。
+        // 政府申報（2026-10-29 後台 IA 重整 批次 2）：財務群組只出一個選單項「政府申報」，
+        // 指到 /admin/gov-reports/monthly（教育部幼生通報月報）；頁內頁籤列由巢狀路由殼
+        // （views/admin/gov-reports/GovReportsLayout.vue）套在五頁外面，串起教育部四頁與
+        // /gov-reports（勞健保與稅務申報），各頁網址、元件與路由規則皆不動。
+        // 2026-10-12 業主指示曾暫時下架五頁選單；本次以單一入口恢復。
+        // 選單項可見性＝本頁 views（GOV_REPORTS_VIEW），與目標路由的 gate 一致。
+        // ⚠ 刻意不借道 GOV_REPORTS_EXPORT 做多碼可見：借道會讓 /admin/gov-reports/monthly 的路由規則
+        // 多出 EXPORT（permissionParity 守的不變式），等於放寬教育部頁的存取。只持 EXPORT 的自訂角色
+        // 沒有側欄入口（與 10-12 下架後現況相同；預設角色模板中持 EXPORT 者——admin／principal——
+        // 皆同時持 VIEW）。要涵蓋該情形得另開 hub 路由，見批次 2 回報。
+        // activeAlso：/gov-reports 與 monthly 無共同路徑前綴，靠別名讓側欄高亮「政府申報」。
         {
-          key: 'govMonthly', title: PAGE_TERMS.govMonthly, routePath: '/admin/gov-reports/monthly',
+          key: 'govMonthly', title: PAGE_TERMS.govHub, routePath: '/admin/gov-reports/monthly',
           views: [{ code: 'GOV_REPORTS_VIEW' }],
+          menu: { icon: icon('Histogram'), activeAlso: ['/admin/gov-reports', '/gov-reports'] },
           // /admin/gov-reports/{monthly,certificates,subsidies,iep} 由此 prefix 規則涵蓋。
           extraRoutes: [{ path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true }],
         },
@@ -532,7 +545,7 @@ export const NAVIGATION_MANIFEST = {
           views: [], sharedViews: ['GOV_REPORTS_VIEW'],
         },
         {
-          key: 'govIep', title: 'IEP 個別化教育計畫', routePath: '/admin/gov-reports/iep',
+          key: 'govIep', title: PAGE_TERMS.govIep, routePath: '/admin/gov-reports/iep',
           views: [], sharedViews: ['GOV_REPORTS_VIEW'],
         },
         {

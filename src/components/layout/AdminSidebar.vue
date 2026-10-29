@@ -113,7 +113,7 @@ import { useRoute } from 'vue-router'
 import { Expand, Fold, Close } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, hasPermission, isPlatformAdmin } from '@/utils/auth'
 import { PLATFORM_ONLY_CODES } from '@/constants/permissions'
-import { SIDEBAR_TREE, ACTIVE_MENU_PATHS } from '@/constants/navigation'
+import { SIDEBAR_TREE, ACTIVE_MENU_ENTRIES } from '@/constants/navigation'
 import { useTenantBranding } from '@/composables/useTenantBranding'
 
 const { branding } = useTenantBranding()
@@ -197,18 +197,21 @@ const visibleGroups = computed(() =>
     .filter((group) => group.items.length > 0)
 )
 
-// ACTIVE_MENU_PATHS（全部選單頁 routePath）最長前綴匹配：/salary/settle → /salary、
-// /appraisal-year-end/rules/* → /appraisal-year-end 自動涵蓋；/students/admissions、
-// /settings/accounts 等本身即選單頁者，比 /students、/settings 更長而勝出（精確高亮）。
+// ACTIVE_MENU_ENTRIES（全部選單頁 routePath＋menu.activeAlso 別名）最長前綴匹配：
+// /salary/settle → /salary、/appraisal-year-end/rules/* → /appraisal-year-end 自動涵蓋；
+// /students/admissions、/settings/accounts 等本身即選單頁者，比 /students、/settings 更長而勝出
+//（精確高亮）；別名命中時高亮其所屬選單項（如 /gov-reports → 政府申報）。
 const activeMenu = computed(() => {
   const currentPath = route.path
-  let best = ''
-  for (const path of ACTIVE_MENU_PATHS) {
-    if ((currentPath === path || currentPath.startsWith(`${path}/`)) && path.length > best.length) {
-      best = path
+  let bestLength = 0
+  let bestIndex = ''
+  for (const { path, index } of ACTIVE_MENU_ENTRIES) {
+    if ((currentPath === path || currentPath.startsWith(`${path}/`)) && path.length > bestLength) {
+      bestLength = path.length
+      bestIndex = index
     }
   }
-  return best || currentPath
+  return bestIndex || currentPath
 })
 
 // badgeKey → badge 數值。2026-08-20 高風險事件移出工作台後兩者分開計：相加會讓

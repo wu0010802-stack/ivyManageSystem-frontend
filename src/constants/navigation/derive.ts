@@ -151,11 +151,28 @@ export function deriveSidebarTree(m: NavigationManifest): {
   return { topLevel, bottomLevel, groups }
 }
 
-/** activeMenu 前綴表：全部 menu 頁的 routePath，供元件端最長前綴匹配高亮。 */
-export function deriveActiveMenuPaths(m: NavigationManifest): string[] {
-  return allPages(m)
-    .filter((p) => p.menu && p.routePath !== null)
-    .map((p) => p.routePath as string)
+export interface ActiveMenuEntry {
+  /** 前綴匹配用路徑（等於或以 `${path}/` 開頭即命中）。 */
+  path: string
+  /** 命中時要高亮的 el-menu-item index（＝選單項 routePath）。 */
+  index: string
+}
+
+/**
+ * activeMenu 前綴表：全部 menu 頁的 routePath（高亮自己），加上 menu.activeAlso 宣告的別名
+ *（高亮所屬選單項），供元件端最長前綴匹配。別名給「一個選單項、頁籤式多路由」的入口用，
+ * 例如政府申報的 /gov-reports 沒有與入口共同的路徑前綴。
+ */
+export function deriveActiveMenuEntries(m: NavigationManifest): ActiveMenuEntry[] {
+  const out: ActiveMenuEntry[] = []
+  for (const page of allPages(m)) {
+    if (!page.menu || page.routePath === null) continue
+    out.push({ path: page.routePath, index: page.routePath })
+    for (const alias of page.menu.activeAlso ?? []) {
+      out.push({ path: alias, index: page.routePath })
+    }
+  }
+  return out
 }
 
 export interface BreadcrumbParent {

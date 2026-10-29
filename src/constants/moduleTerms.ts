@@ -66,6 +66,13 @@ export const PAGE_TERMS = {
   govCertificates: '在學證明開立紀錄',
   /** /admin/gov-reports/subsidies。原「特教加給」漏掉頁面實際涵蓋的助理鐘點費。 */
   govSubsidies: '特教加給與鐘點費',
+  /** /admin/gov-reports/iep。 */
+  govIep: 'IEP 個別化教育計畫',
+  /**
+   * 側欄「政府申報」入口（財務群組，2026-10-29 後台 IA 重整 批次 2）：指到 /admin/gov-reports/monthly，
+   * 頁內頁籤列串起教育部四頁與 /gov-reports（勞健保與稅務申報）。也是這組頁的麵包屑父層文字。
+   */
+  govHub: '政府申報',
 
   // 課後才藝：側欄在「課後才藝」群組內用短名，meta 靠 parentTitle 帶出模組，兩者字面一致。
   /** /activity/dashboard */

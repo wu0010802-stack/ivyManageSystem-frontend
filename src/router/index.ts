@@ -457,34 +457,51 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '個人資料' }
         },
         {
-            path: '/gov-reports',
-            name: 'gov-reports',
-            component: () => import('../views/GovReportsView.vue'),
-            meta: { title: PAGE_TERMS.govExport }
-        },
-        {
-            path: '/admin/gov-reports/certificates',
-            name: 'AdminGovReportsCertificates',
-            component: () => import('../views/admin/gov-reports/CertificatesView.vue'),
-            meta: { title: PAGE_TERMS.govCertificates }
-        },
-        {
-            path: '/admin/gov-reports/subsidies',
-            name: 'AdminGovReportsSubsidies',
-            component: () => import('@/views/admin/gov-reports/SubsidiesView.vue'),
-            meta: { title: PAGE_TERMS.govSubsidies },
-        },
-        {
-            path: '/admin/gov-reports/iep',
-            name: 'AdminGovReportsIep',
-            component: () => import('@/views/admin/gov-reports/IepView.vue'),
-            meta: { title: 'IEP 個別化教育計畫' },
-        },
-        {
-            path: '/admin/gov-reports/monthly',
-            name: 'AdminGovReportsMonthly',
-            component: () => import('@/views/admin/gov-reports/MonthlyReportView.vue'),
-            meta: { title: PAGE_TERMS.govMonthly },
+            // 政府申報頁籤列（2026-10-29 後台 IA 重整 批次 2）：側欄「政府申報」單一入口。
+            // 巢狀路由只負責在五頁上方套頁籤列（GovReportsLayout），各頁網址、元件與權限規則皆不動：
+            // 教育部四頁走 manifest 的 /admin/gov-reports prefix 規則（GOV_REPORTS_VIEW），
+            // 勞健保與稅務申報 /gov-reports 仍是 GOV_REPORTS_EXPORT——它以絕對路徑掛在殼下，
+            // 網址維持 /gov-reports（書籤、SalaryHub 等舊連結不變）。
+            // /admin/gov-reports 本身只是容器，導到第一個頁籤。
+            path: '/admin/gov-reports',
+            component: () => import('../views/admin/gov-reports/GovReportsLayout.vue'),
+            redirect: '/admin/gov-reports/monthly',
+            meta: { title: PAGE_TERMS.govHub },
+            children: [
+                {
+                    path: 'certificates',
+                    name: 'AdminGovReportsCertificates',
+                    component: () => import('../views/admin/gov-reports/CertificatesView.vue'),
+                    // 麵包屑父層指向入口頁（monthly）。/gov-reports 刻意不掛 parent：它的 gate 是
+                    // GOV_REPORTS_EXPORT，與 monthly 的 GOV_REPORTS_VIEW 不同，掛了會讓只持 EXPORT 的人
+                    // 看到點不進去的父層連結。
+                    meta: { title: PAGE_TERMS.govCertificates, parent: '/admin/gov-reports/monthly' }
+                },
+                {
+                    path: 'subsidies',
+                    name: 'AdminGovReportsSubsidies',
+                    component: () => import('@/views/admin/gov-reports/SubsidiesView.vue'),
+                    meta: { title: PAGE_TERMS.govSubsidies, parent: '/admin/gov-reports/monthly' },
+                },
+                {
+                    path: 'iep',
+                    name: 'AdminGovReportsIep',
+                    component: () => import('@/views/admin/gov-reports/IepView.vue'),
+                    meta: { title: PAGE_TERMS.govIep, parent: '/admin/gov-reports/monthly' },
+                },
+                {
+                    path: 'monthly',
+                    name: 'AdminGovReportsMonthly',
+                    component: () => import('@/views/admin/gov-reports/MonthlyReportView.vue'),
+                    meta: { title: PAGE_TERMS.govMonthly },
+                },
+                {
+                    path: '/gov-reports',
+                    name: 'gov-reports',
+                    component: () => import('../views/GovReportsView.vue'),
+                    meta: { title: PAGE_TERMS.govExport }
+                },
+            ],
         },
         // ============ 考核 × 年終 整合工作區（巢狀 shell，2026-07-10 UX 改版）============
         {

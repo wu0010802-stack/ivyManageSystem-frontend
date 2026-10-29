@@ -1,8 +1,10 @@
 /**
- * 政府報表五頁（教育部四頁 + 勞健保與稅務申報）暫時自側邊欄下架（業主指示，2026-10-12）。
+ * 政府報表五頁（教育部四頁 + 勞健保與稅務申報）的側欄入口。
  *
- * 只拿掉選單入口：路由、權限規則、權限編輯器節點與後端 API 全部保留，
- * 深連結仍以原權限碼守衛——日後恢復只需把 manifest 的 menu 加回去。
+ * 2026-10-12 業主指示曾整組自側邊欄下架；2026-10-29 後台 IA 重整 批次 2 以「財務」群組下
+ * 單一選單項「政府申報」恢復（指到 /admin/gov-reports/monthly，頁內由頁籤列串起五頁）。
+ * 其餘四個路徑仍不是獨立側欄項目；路由、權限規則、權限編輯器節點與後端 API 皆不動，
+ * 深連結仍以原權限碼守衛。
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 
@@ -16,18 +18,33 @@ const GOV_VIEW_PATHS = [
   '/admin/gov-reports/iep',
 ] as const
 
+const GOV_ENTRY = '/admin/gov-reports/monthly'
+
 const allSidebarItemPaths = (): string[] => [
   ...SIDEBAR_TREE.topLevel.map((i) => i.index),
   ...SIDEBAR_TREE.bottomLevel.map((i) => i.index),
   ...SIDEBAR_TREE.groups.flatMap((g) => g.items.map((i) => i.index)),
 ]
 
-describe('政府報表五頁不出現在側邊欄', () => {
-  it('五個路徑都不是側邊欄項目', () => {
+describe('政府申報只有一個側欄入口（財務群組）', () => {
+  it('入口是 /admin/gov-reports/monthly，其餘四個路徑不是側邊欄項目', () => {
     const all = allSidebarItemPaths()
-    for (const path of [...GOV_VIEW_PATHS, '/gov-reports']) {
+    expect(all).toContain(GOV_ENTRY)
+    for (const path of [
+      '/admin/gov-reports/certificates',
+      '/admin/gov-reports/subsidies',
+      '/admin/gov-reports/iep',
+      '/gov-reports',
+    ]) {
       expect(all).not.toContain(path)
     }
+  })
+
+  it('入口在「財務」群組，標題「政府申報」，可見性碼只有 GOV_REPORTS_VIEW（與目標路由 gate 一致）', () => {
+    const finance = SIDEBAR_TREE.groups.find((g) => g.index === 'group-finance')
+    const entry = finance?.items.find((i) => i.index === GOV_ENTRY)
+    expect(entry?.title).toBe('政府申報')
+    expect(entry?.visibleCodes).toEqual(['GOV_REPORTS_VIEW'])
   })
 
   it('「園務行政」群組仍保留其餘項目（防整組被誤刪的假綠）', () => {
@@ -38,7 +55,7 @@ describe('政府報表五頁不出現在側邊欄', () => {
     // 收付款管理 2026-10-29（後台 IA 重整 批次 2）起移到「財務」群組
     const finance = SIDEBAR_TREE.groups.find((g) => g.index === 'group-finance')
     expect(finance?.items.map((i) => i.index)).toEqual(
-      expect.arrayContaining(['/fees', '/finance-signoffs', '/reports'])
+      expect.arrayContaining(['/fees', '/finance-signoffs', '/reports', GOV_ENTRY])
     )
   })
 })
