@@ -53,6 +53,15 @@ export function extractErrorCode(e: unknown): string | undefined {
 }
 
 /**
+ * 原樣取出後端 `detail`（字串、結構化物件或 422 陣列皆不轉換）。
+ * 只供呼叫端判斷錯誤分支（比對字樣、取結構化名單）；要顯示的文案仍走 apiError()。
+ */
+export function rawErrorDetail(e: unknown): unknown {
+    const err = e as { response?: { data?: { detail?: unknown } } } | null
+    return err?.response?.data?.detail
+}
+
+/**
  * 提取 `{error_code, detail}` 形狀的顯示文字；detail 為純字串時直接回傳。
  * apiError() 找的是 `{code, message}` 的 message，對此形狀會漏接，故另設此函式。
  */

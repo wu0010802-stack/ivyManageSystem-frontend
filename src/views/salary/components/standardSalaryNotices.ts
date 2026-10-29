@@ -5,6 +5,8 @@
 //   回傳 needs_confirmation，須逐筆明確確認才寫回主檔。
 // - #61 職位標準低於該年度基本工資 → PUT 回傳 below_minimum_wage（示警不擋儲存）。
 
+import { rawErrorDetail } from '@/utils/error'
+
 export interface BelowMinimumWageRow {
   key: string
   value: number
@@ -77,9 +79,8 @@ export interface SyncMinimumWageBlock {
 /** 從 axios error 取出「同步後低於基本工資」的結構化 422；其他錯誤回 null。 */
 export function pickSyncMinimumWageBlock(err: unknown): SyncMinimumWageBlock | null {
   if (!isRecord(err) || !isRecord(err.response)) return null
-  const { status, data } = err.response
-  if (status !== 422 || !isRecord(data) || !isRecord(data.detail)) return null
-  const detail = data.detail
+  const detail = rawErrorDetail(err)
+  if (err.response.status !== 422 || !isRecord(detail)) return null
   if (detail.code !== SYNC_BELOW_MINIMUM_WAGE || !Array.isArray(detail.employees)) return null
   const employees = detail.employees.filter(
     (r): r is SyncMinimumWageBlockedEmployee =>

@@ -1,4 +1,4 @@
-import { apiError } from '@/utils/error'
+import { apiError, rawErrorDetail } from '@/utils/error'
 
 /**
  * 後端對「同學年已有成長冊」回 409，detail 形如
@@ -12,9 +12,9 @@ export const EXISTING_BOOK_MESSAGE =
 
 /** 是否為「該生本學年已有成長冊」的衝突錯誤（409）。 */
 export function isExistingBookConflict(error: unknown): boolean {
-  const e = error as { response?: { status?: number; data?: { detail?: unknown } } } | null
+  const e = error as { response?: { status?: number } } | null
   if (e?.response?.status !== 409) return false
-  const detail = e.response?.data?.detail
+  const detail = rawErrorDetail(error)
   return typeof detail === 'string' && detail.includes(EXISTING_BOOK_PATTERN)
 }
 
