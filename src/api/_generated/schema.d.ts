@@ -5797,7 +5797,10 @@ export interface paths {
         get: operations["get_attendance_policy_api_config_attendance_policy_get"];
         /**
          * Update Attendance Policy
-         * @description 更新考勤政策設定（建立新版本，保留舊版歷程）
+         * @description 更新考勤政策設定（建立新版本，保留舊版歷程）。
+         *
+         *     上下班時間決定遲到／早退扣款、festival_bonus_months 決定節慶發放月，屬算錢基準
+         *     → 比照 PUT /config/bonus 要求金流簽核（資安稽核 2026-10-29 P3）。
          */
         put: operations["update_attendance_policy_api_config_attendance_policy_put"];
         post?: never;
@@ -5926,7 +5929,10 @@ export interface paths {
         get: operations["get_grade_targets_api_config_grade_targets_get"];
         /**
          * Update Grade Target
-         * @description 更新年級目標人數設定（直接更新屬於目前有效獎金設定版本的行）
+         * @description 更新年級目標人數設定（直接更新屬於目前有效獎金設定版本的行）。
+         *
+         *     目標人數即節慶／超額獎金門檻，與 PUT /config/bonus 同一份設定 → 同樣要求金流簽核
+         *     （資安稽核 2026-10-29 P3，原本只要 SETTINGS_WRITE 可繞過該端點的簽核）。
          */
         put: operations["update_grade_target_api_config_grade_targets_put"];
         post?: never;
@@ -6082,7 +6088,11 @@ export interface paths {
         get: operations["get_position_salary_api_config_position_salary_get"];
         /**
          * Update Position Salary
-         * @description 更新職位標準底薪設定（無資料則 insert，有則版本 +1）
+         * @description 更新職位標準底薪設定（無資料則 insert，有則版本 +1）。
+         *
+         *     引擎 _resolve_standard_base 對 bypass_standard_base=False 的員工直接取職位標準作底薪，
+         *     改標準＝改該職位全員底薪，不需經過 /position-salary/sync 的簽核 → 本端點同樣要求
+         *     金流簽核（資安稽核 2026-10-29 P3）。
          */
         put: operations["update_position_salary_api_config_position_salary_put"];
         post?: never;
@@ -11115,6 +11125,11 @@ export interface paths {
          *     certificate_pdf_path 現為 storage backend 的 key（module "portfolio"）：
          *     - 雲端後端（非 LocalStorage）→ 302 導向 signed URL（強制 attachment 下載）
          *     - local 後端 → 直接讀檔回傳 bytes
+         *
+         *     資安稽核 2026-10-29 P2：PDF 內含完整身分證字號（services/
+         *     employee_offboarding_certificate_pdf.py），下載權限須與員工 API 對 id_number
+         *     解遮罩同級（api/employees.py：SALARY_WRITE），並比照同檔其他端點要求全員薪資視野。
+         *     離職員工本人走 magic-link（/offboarding/download），不經此端點。
          */
         get: operations["get_certificate_pdf_api_offboarding__employee_id__certificate_pdf_get"];
         put?: never;
@@ -13655,6 +13670,10 @@ export interface paths {
         /**
          * Admin Confirm Visual Match
          * @description D10④：POS 佇列卡目視比對明碼後一鍵確認，不重新輸入 6 碼。
+         *
+         *     放學佇列（/dismissal-queue，頁面碼 DISMISSAL_CALLS_*）的 POS 卡片呼叫本端點；
+         *     只持放學碼的角色也要能確認交接，但須全園範圍（同放學佇列端點）。
+         *     GUARDIANS_WRITE 持有者行為不變。
          */
         post: operations["admin_confirm_visual_match_api_pickup_authorizations__auth_id__confirm_visual_match_post"];
         delete?: never;
