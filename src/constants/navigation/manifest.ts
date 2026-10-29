@@ -63,11 +63,13 @@ const SIDEBAR_ICONS = {
   List: safeIcon(() => ElementPlusIcons.List),
   Memo: safeIcon(() => ElementPlusIcons.Memo),
   Money: safeIcon(() => ElementPlusIcons.Money),
+  Notebook: safeIcon(() => ElementPlusIcons.Notebook),
   OfficeBuilding: safeIcon(() => ElementPlusIcons.OfficeBuilding),
   PieChart: safeIcon(() => ElementPlusIcons.PieChart),
   Promotion: safeIcon(() => ElementPlusIcons.Promotion),
   School: safeIcon(() => ElementPlusIcons.School),
   Setting: safeIcon(() => ElementPlusIcons.Setting),
+  Stamp: safeIcon(() => ElementPlusIcons.Stamp),
   Star: safeIcon(() => ElementPlusIcons.Star),
   Suitcase: safeIcon(() => ElementPlusIcons.Suitcase),
   Tickets: safeIcon(() => ElementPlusIcons.Tickets),
@@ -378,7 +380,8 @@ export const NAVIGATION_MANIFEST = {
           key: 'growthBooks', title: '成長冊工作台', routePath: '/growth-books',
           views: [{ code: 'PORTFOLIO_READ' }],
           actions: [{ code: 'PORTFOLIO_WRITE' }, { code: 'PORTFOLIO_PUBLISH' }],
-          menu: { icon: icon('Collection') },
+          // 圖示（2026-10-29 批次 2）：原與「才藝設定與品項」同為 Collection，改 Notebook。
+          menu: { icon: icon('Notebook') },
         },
         {
           // 在籍統計：現值統計與異動帳同一頁（2026-09-07 整合），資料同源於在籍統計 API，
@@ -413,7 +416,8 @@ export const NAVIGATION_MANIFEST = {
           key: 'dismissalQueue', title: PAGE_TERMS.dismissalQueue, routePath: '/dismissal-queue',
           views: [{ code: 'DISMISSAL_CALLS_READ' }],
           actions: [{ code: 'DISMISSAL_CALLS_WRITE' }],
-          menu: { icon: icon('Van') },
+          // 圖示（2026-10-29 批次 2）：Van 讓給新群組「接送交通」，佇列改 Clock。
+          menu: { icon: icon('Clock') },
         },
         {
           // 未新增 Permission enum 值，沿用既有 GUARDIANS_READ/WRITE（照預編班先例）。
@@ -423,7 +427,8 @@ export const NAVIGATION_MANIFEST = {
           key: 'pickupAuthorizations', title: PAGE_TERMS.pickupAuthorizations,
           routePath: '/pickup-authorizations',
           views: [], sharedViews: ['GUARDIANS_READ', 'GUARDIANS_WRITE'],
-          menu: { icon: icon('User') },
+          // 圖示（2026-10-29 批次 2）：原與「學生」同為 User，改 Stamp（授權核銷）。
+          menu: { icon: icon('Stamp') },
         },
         {
           // 娃娃車管理（2026-08-13 三頁整合單一入口＋頁內分頁，比照 workbench；
@@ -516,7 +521,8 @@ export const NAVIGATION_MANIFEST = {
         {
           key: 'reportsMain', title: PAGE_TERMS.reports, routePath: '/reports',
           views: [{ code: 'REPORTS' }],
-          menu: { icon: icon('PieChart') },
+          // 圖示（2026-10-29 批次 2）：原與「在籍統計」同為 PieChart；沿用已退役「報表」群組的 DataAnalysis。
+          menu: { icon: icon('DataAnalysis') },
         },
         // 政府申報（2026-10-29 後台 IA 重整 批次 2）：財務群組只出一個選單項「政府申報」，
         // 指到 /admin/gov-reports/monthly（教育部幼生通報月報）；頁內頁籤列由巢狀路由殼
