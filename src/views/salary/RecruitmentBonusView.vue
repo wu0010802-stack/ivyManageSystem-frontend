@@ -643,7 +643,8 @@ const openDetail = async (row: CampaignRow) => {
     extraBonusItems.value = []
     extraBonusError.value = false
     const ok = await fetchDetail(row.id)
-    if (ok && detail.value?.status === 'settled') {
+    // 上方 detail.value = null 會讓 TS 把 await 後的值收窄成 null，需重新標註
+    if (ok && (detail.value as CampaignDetail | null)?.status === 'settled') {
         await fetchSettledPayments()
     }
 }

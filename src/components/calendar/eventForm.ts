@@ -113,7 +113,8 @@ export function buildEventPayload(form: CalendarEventFormValues) {
     start_time: form.is_all_day ? null : (form.start_time || null),
     end_time: form.is_all_day ? null : (form.end_time || null),
     location: form.location || null,
-    recurrence_rule: form.recurrence_rule || null,
+    // 展開成匿名物件：interface 不具隱含 index signature，無法直接指派給 API 的 Record 型別
+    recurrence_rule: form.recurrence_rule ? { ...form.recurrence_rule } : null,
     visibility: form.visibility,
     category: form.category,
     academic_year: form.academic_year ?? null,
