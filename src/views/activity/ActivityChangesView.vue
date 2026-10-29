@@ -1,9 +1,12 @@
 <template>
-  <div class="activity-changes">
-    <PageHeader
-      :title="PAGE_TERMS.activityChanges"
-      subtitle="才藝報名的加退課、繳費狀態、候補轉正、刪除等異動，誰在什麼時候改的都查得到。點學生姓名可直接打開那筆報名。"
-    >
+  <div class="activity-changes" :class="{ 'activity-changes--embedded': embedded }">
+    <!-- embedded：由 ActivityRegistrationHubView 以「異動紀錄」頁籤嵌入，頁首標題由 hub 提供，
+         這裡只留說明文字＋重新整理（後台 IA 重整 M4）。獨立掛載（預設）行為不變。 -->
+    <div v-if="embedded" class="changes-embedded-bar">
+      <p class="changes-embedded-bar__hint">{{ SUBTITLE }}</p>
+      <el-button :loading="loading" @click="fetchList">重新整理</el-button>
+    </div>
+    <PageHeader v-else :title="PAGE_TERMS.activityChanges" :subtitle="SUBTITLE">
       <template #actions>
         <el-button :loading="loading" @click="fetchList">重新整理</el-button>
       </template>
@@ -128,6 +131,11 @@ import { PAGE_TERMS } from '@/constants/moduleTerms'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
+defineProps<{ embedded?: boolean }>()
+
+const SUBTITLE =
+  '才藝報名的加退課、繳費狀態、候補轉正、刪除等異動，誰在什麼時候改的都查得到。點學生姓名可直接打開那筆報名。'
+
 interface ChangeRow {
   id: number
   student_name: string
@@ -233,5 +241,18 @@ onMounted(() => {
 
 <style scoped>
 .activity-changes { padding: 16px; }
+.activity-changes--embedded { padding: 0; }
+.changes-embedded-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.changes-embedded-bar__hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
 .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 </style>

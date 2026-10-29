@@ -114,11 +114,10 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('稽核與資料品質')
   })
 
-  it('「報表」含修改紀錄 /activity/changes', async () => {
+  it('修改紀錄已併入報名管理的「異動紀錄」頁籤（2026-10-29 M4），側欄不再有 /activity/changes', async () => {
     const wrapper = await mountSidebar()
-    const changesItem = wrapper.find('[data-index="/activity/changes"]')
-    expect(changesItem.exists()).toBe(true)
-    expect(changesItem.text()).toContain('修改紀錄')
+    expect(wrapper.find('[data-index="/activity/changes"]').exists()).toBe(false)
+    expect(wrapper.find('[data-index="/activity/registrations"]').exists()).toBe(true)
   })
 
   it('政府報表五頁不在側欄（2026-10-12 業主指示暫時下架，路由保留）', async () => {

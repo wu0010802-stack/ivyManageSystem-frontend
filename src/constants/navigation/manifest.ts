@@ -581,7 +581,13 @@ export const NAVIGATION_MANIFEST = {
           views: [], sharedViews: ['ACTIVITY_READ'],
           menu: { icon: icon('Tickets'), badgeKey: 'activityReview' },
           // 業主裁決（2026-06-13）：pending 動作頁對齊後端動作端點的 ACTIVITY_WRITE。
-          extraRoutes: [{ path: '/activity/registrations/pending', permission: 'ACTIVITY_WRITE' }],
+          // /activity/changes：2026-10-29 後台 IA 重整 M4 起併入本頁的「異動紀錄」頁籤
+          //（原 activityChanges 節點與側欄「報名修改紀錄」移除），舊路徑改 redirect，
+          // 規則保留供 redirect 解析前不被彈走（ACTIVITY_READ，與併入前相同）。
+          extraRoutes: [
+            { path: '/activity/registrations/pending', permission: 'ACTIVITY_WRITE' },
+            { path: '/activity/changes', permission: 'ACTIVITY_READ' },
+          ],
         },
         {
           // 課程與用品已於 2026-07-31 併入本頁前兩個 tab，gate 放寬為 ACTIVITY_READ
@@ -622,11 +628,6 @@ export const NAVIGATION_MANIFEST = {
           key: 'activityAttendance', title: '點名管理', routePath: '/activity/attendance', routePrefix: true,
           views: [], sharedViews: ['ACTIVITY_READ'],
           menu: { icon: icon('Checked') },
-        },
-        {
-          key: 'activityChanges', title: PAGE_TERMS.activityChanges, routePath: '/activity/changes',
-          views: [], sharedViews: ['ACTIVITY_READ'],
-          menu: { icon: icon('List') },
         },
       ],
     },

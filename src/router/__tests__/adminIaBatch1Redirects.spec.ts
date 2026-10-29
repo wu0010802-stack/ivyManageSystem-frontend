@@ -96,3 +96,29 @@ describe('M2 固定支出登錄只留收付款管理', () => {
     expect(reportsGuard()(to({}))).toBe(true)
   })
 })
+
+describe('M4 才藝異動變成報名管理頁籤', () => {
+  it('/activity/changes 導到 /activity/registrations?tab=changes，query 一併帶過去', () => {
+    expect(follow('/activity/changes').path).toBe('/activity/registrations')
+    expect(follow('/activity/changes').query).toEqual({ tab: 'changes' })
+    expect(follow('/activity/changes?foo=1').query).toEqual({ foo: '1', tab: 'changes' })
+  })
+
+  it('舊路由不掛 meta.title；/activity/registrations 仍是報名管理', () => {
+    const old = router.getRoutes().find((r) => r.path === '/activity/changes')
+    expect(old?.meta?.title).toBeUndefined()
+    const hub = router.getRoutes().find((r) => r.path === '/activity/registrations')
+    expect(hub?.meta?.title).toBe('報名管理')
+  })
+
+  it('側欄不再有「報名修改紀錄」，報名管理仍在', () => {
+    const paths = SIDEBAR_TREE.groups.flatMap((g) => g.items.map((i) => i.index))
+    expect(paths).not.toContain('/activity/changes')
+    expect(paths).toContain('/activity/registrations')
+  })
+
+  it('舊路徑權限規則保留（仍為 ACTIVITY_READ）', () => {
+    const rules = ROUTE_PERMISSION_RULES.filter((r) => r.path === '/activity/changes')
+    expect(rules.map((r) => r.permission)).toEqual(['ACTIVITY_READ'])
+  })
+})

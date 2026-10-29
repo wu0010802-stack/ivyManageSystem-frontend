@@ -1,6 +1,7 @@
 <template>
   <div class="activity-registrations">
-    <PageHeader title="報名管理" />
+    <!-- embedded：由 ActivityRegistrationHubView 以「報名」頁籤嵌入時，頁首標題由 hub 提供 -->
+    <PageHeader v-if="!embedded" title="報名管理" />
 
     <div class="mode-list">
     <div class="toolbar">
@@ -699,6 +700,8 @@ function courseStatusLabel(status: string) {
 }
 const termStore = useAcademicTermStore()
 const route = useRoute()
+
+defineProps<{ embedded?: boolean }>()
 
 // 老師實際的分享動作是「複製連結貼到家長 LINE@」，所以這裡給的必須是對外的
 // public.html 網址，而不是 router.resolve('public-activity') 解出的 admin SPA

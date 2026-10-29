@@ -663,7 +663,7 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/activity/registrations',
             name: 'activity-registrations',
-            component: () => import('../views/activity/ActivityRegistrationView.vue'),
+            component: () => import('../views/activity/ActivityRegistrationHubView.vue'),
             meta: { title: '報名管理' }
         },
         {
@@ -709,11 +709,13 @@ export const routes: RouteRecordRaw[] = [
             component: () => import('../views/activity/ActivitySettingsView.vue'),
             meta: { title: PAGE_TERMS.activitySettings }
         },
+        // 2026-10-29 後台 IA 重整 M4：報名修改紀錄併入報名管理的「異動紀錄」頁籤，舊網址保留
+        // redirect（書籤／稽核連結）。⚠ 不掛 meta.title（避免全域搜尋出現同名兩筆）；權限規則
+        // 仍由 manifest activityRegistrations 頁的 extraRoutes 保留。
         {
             path: '/activity/changes',
             name: 'activity-changes',
-            component: () => import('../views/activity/ActivityChangesView.vue'),
-            meta: { title: PAGE_TERMS.activityChanges }
+            redirect: (to) => ({ path: '/activity/registrations', query: { ...to.query, tab: 'changes' } })
         },
         {
             path: '/activity/attendance',
