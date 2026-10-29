@@ -1,10 +1,19 @@
 <template>
   <div v-loading="loading">
+    <LoadErrorState
+      v-if="loadError"
+      compact
+      title="獎金條載入失敗"
+      description="載入成功前請勿視為尚無可發放獎金，請重新載入。"
+      :retrying="loading"
+      @retry="reload"
+    />
+    <template v-else>
     <div class="slips-toolbar no-print">
-      <el-button size="small" @click="printSlips">列印獎金條</el-button>
+      <el-button size="small" :disabled="payableBlocks.length === 0" @click="printSlips">列印獎金條</el-button>
     </div>
     <div v-for="block in payableBlocks" :key="block.employee_id ?? block.employee_name" class="slip">
-      <div class="slip__title">高雄市私立常春藤幼兒園──招生獎金條（{{ report?.campaign_name }}）</div>
+      <div class="slip__title">{{ institutionName }}──招生獎金條（{{ report?.campaign_name }}）</div>
       <div class="slip__name">{{ block.employee_name }}</div>
       <div class="slip__meta">確認 {{ block.counted_persons }} 人 × 單價 {{ formatCurrency(block.unit_price) }}</div>
       <div class="slip__students">{{ confirmedNames(block) }}</div>
@@ -16,6 +25,7 @@
       title="尚無可發放獎金"
       description="確認歸屬後這裡會產生每師一張獎金條"
     />
+    </template>
   </div>
 </template>
 
@@ -23,6 +33,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
+import LoadErrorState from '@/components/salary/LoadErrorState.vue'
+import { useTenantBranding } from '@/composables/useTenantBranding'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
 import { getCampaignReport } from '@/api/recruitmentBonus'
@@ -34,6 +46,11 @@ type ReportBlock = Schema<'RecruitmentBonusReportBlockOut'>
 const props = defineProps<{ campaignId: number }>()
 const report = ref<Report | null>(null)
 const loading = ref(false)
+const loadError = ref(false)
+
+// 獎金條抬頭走 per-tenant 品牌（不寫死義華）；預設租戶輸出仍是「高雄市私立常春藤幼兒園」。
+const { branding } = useTenantBranding()
+const institutionName = computed(() => `${branding.value.org_prefix}${branding.value.short_name}幼兒園`)
 
 const payableBlocks = computed(() => (report.value?.blocks || []).filter((b) => b.total_amount > 0))
 const confirmedNames = (block: ReportBlock) =>
@@ -45,9 +62,12 @@ const printSlips = () => window.print()
 
 const reload = async () => {
   loading.value = true
+  loadError.value = false
   try {
     report.value = (await getCampaignReport(props.campaignId)).data
   } catch (e) {
+    report.value = null
+    loadError.value = true
     ElMessage.error(friendlyError('載入獎金條失敗', e))
   } finally {
     loading.value = false

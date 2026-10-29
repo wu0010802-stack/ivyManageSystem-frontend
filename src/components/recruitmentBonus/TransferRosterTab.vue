@@ -1,5 +1,14 @@
 <template>
   <div v-loading="loading">
+    <LoadErrorState
+      v-if="loadError"
+      compact
+      title="轉帳名冊載入失敗"
+      description="載入成功前請勿視為沒有要轉帳的人（合計不是 0 元），請重新載入。"
+      :retrying="loading"
+      @retry="reload"
+    />
+    <template v-else>
     <p v-if="roster?.account_masked" class="mask-hint">
       帳號已遮罩（僅顯示尾四碼）：完整帳號需要完整薪資檢視權限。
     </p>
@@ -21,12 +30,14 @@
       </el-table-column>
     </el-table>
     <div class="roster-total">合計 <strong>{{ formatCurrency(roster?.total_amount || 0) }}</strong></div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import LoadErrorState from '@/components/salary/LoadErrorState.vue'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
 import { getTransferRoster } from '@/api/recruitmentBonus'
@@ -35,12 +46,16 @@ import type { Schema } from '@/api/_generated/typed'
 const props = defineProps<{ campaignId: number }>()
 const roster = ref<Schema<'RecruitmentBonusRosterOut'> | null>(null)
 const loading = ref(false)
+const loadError = ref(false)
 
 const reload = async () => {
   loading.value = true
+  loadError.value = false
   try {
     roster.value = (await getTransferRoster(props.campaignId)).data
   } catch (e) {
+    roster.value = null
+    loadError.value = true
     ElMessage.error(friendlyError('載入轉帳名冊失敗', e))
   } finally {
     loading.value = false
