@@ -21,6 +21,7 @@ import { MODULE_TERMS } from '@/constants/moduleTerms'
 import { getApprovalPolicies, type ApprovalPolicyRow } from '@/api/approvalSettings'
 import { isSuperAdmin } from '@/utils/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
+import OtherSignoffsStrip from './OtherSignoffsStrip.vue'
 
 const router = useRouter()
 
@@ -136,6 +137,13 @@ const fetchAll = async () => {
     loading.value = false
     isFirstLoad.value = false
   }
+}
+
+// 「其他待簽」區塊自己載入（掛載時一次）；頁首「重新整理」連它一起重抓
+const otherSignoffsRef = ref<InstanceType<typeof OtherSignoffsStrip> | null>(null)
+const refreshAll = () => {
+  void otherSignoffsRef.value?.reload()
+  return fetchAll()
 }
 
 type ApprovalFn = (id: unknown, payload: unknown) => Promise<unknown>
@@ -361,9 +369,11 @@ onMounted(() => {
         <el-tag v-else type="success" effect="dark" size="large">
           全部已處理
         </el-tag>
-        <el-button @click="fetchAll">重新整理</el-button>
+        <el-button @click="refreshAll">重新整理</el-button>
       </template>
     </PageHeader>
+
+    <OtherSignoffsStrip ref="otherSignoffsRef" />
 
     <div class="shortcut-grid">
       <el-card class="shortcut-card" shadow="hover">
