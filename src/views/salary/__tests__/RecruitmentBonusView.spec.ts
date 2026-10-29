@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import RecruitmentBonusView from '../RecruitmentBonusView.vue'
 import { formatCurrency } from '@/utils/currency'
 import type { Schema } from '@/api/_generated/typed'
@@ -70,9 +70,15 @@ vi.mock('element-plus', async (importOriginal) => {
     }
 })
 
+// FormDialog 內的 el-form 以 ref.validate() 擋必填；stub 依 formValid 決定結果。
+// ⚠ vitest 下真 ElForm.validate() 對任何輸入都回 true（async-validator 的 ESM/CJS interop 問題），
+// 靠真 el-form 驗證失敗的斷言會假綠；規則是否接上欄位另以 .is-required／rules 斷言（見下方 describe）。
+const formValid = { ok: true }
+const statementReloadMock = vi.fn(() => Promise.resolve())
+
 const STUBS = {
     // 三個 tab 元件行為由各自 spec 覆蓋（Task 9/10），這裡 stub 掉避免真 mount 打 API
-    ReportStatementTab: true,
+    ReportStatementTab: { template: '<div class="statement-stub" />', methods: { reload: () => statementReloadMock() } },
     BonusSlipsTab: true,
     TransferRosterTab: true,
     'el-tabs': { template: '<div class="tabs-stub"><slot /></div>' },
@@ -84,7 +90,7 @@ const STUBS = {
     'el-option': true,
     'el-input': true,
     'el-input-number': true,
-    'el-form': true,
+    'el-form': { template: '<form><slot /></form>', methods: { validate: () => Promise.resolve(formValid.ok) } },
     'el-form-item': true,
     'el-pagination': true,
     'el-tag': true,
@@ -98,8 +104,10 @@ const STUBS = {
         props: ['modelValue'],
         template: '<div v-if="modelValue" class="dialog-stub"><slot /><slot name="footer" /></div>',
     },
+    // emits 要明寫：否則父層的 @click 會同時當原生監聽器落在 <button> 上，點一次觸發兩次。
     'el-button': {
         props: ['disabled', 'loading'],
+        emits: ['click'],
         template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
     },
     'el-result': {
@@ -209,6 +217,19 @@ interface ViewVm {
     submitCreate: () => Promise<void>
     openCreateDialog: () => void
     createDialogVisible: boolean
+    creating: boolean
+    listError: boolean
+    detailError: boolean
+    extraBonusError: boolean
+    patchRow: (row: AttributionRow, patch: Record<string, unknown>) => Promise<void>
+    onNotesBlur: (row: AttributionRow) => void
+    openAddDialog: () => void
+    addDialogVisible: boolean
+    adding: boolean
+    addForm: Record<string, unknown>
+    submitAdd: () => Promise<void>
+    createRules: Record<string, Array<Record<string, unknown>>>
+    addRules: Record<string, Array<Record<string, unknown>>>
 }
 
 describe('RecruitmentBonusView', () => {
@@ -227,6 +248,8 @@ describe('RecruitmentBonusView', () => {
         vi.mocked(ElMessage.error).mockReset()
         vi.mocked(ElMessage.warning).mockReset()
         vi.mocked(ElMessageBox.confirm).mockReset()
+        formValid.ok = true
+        statementReloadMock.mockClear()
     })
 
     it('非完整薪資角色不載入 campaign 或員工獎金資料', async () => {
@@ -572,6 +595,7 @@ describe('RecruitmentBonusView', () => {
         const vm = wrapper.vm as unknown as ViewVm
 
         vm.openCreateDialog()
+        await flushPromises() // 等 FormDialog 內的 el-form ref 綁定
         vm.createForm.name = '115下招生獎勵'
         vm.createForm.start_date = '2026-09-16'
         vm.createForm.end_date = '2027-03-15'
@@ -695,5 +719,385 @@ describe('RecruitmentBonusView 幼生欄顯示', () => {
 
         expect(vm.splitIncompleteCount).toBe(2)
         expect(wrapper.text()).toContain('拆分')
+    })
+})
+
+// ============================================================================
+// 2026-10-29 UI/UX：載入失敗錯誤態、寫入失敗提示、FormDialog 化的新增期間／歸屬列
+// ============================================================================
+
+const apiError = (status = 500) => Object.assign(new Error('boom'), { response: { status, data: {} } })
+
+const openDetailFor = async (wrapper: ReturnType<typeof mountView>, row = campaignRow()) => {
+    const vm = wrapper.vm as unknown as ViewVm
+    await vm.openDetail(row)
+    await flushPromises()
+    return vm
+}
+
+describe('RecruitmentBonusView 載入失敗不可偽裝成空資料', () => {
+    beforeEach(() => {
+        hasPermissionMock.mockReset().mockReturnValue(true)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
+        listCampaignsMock.mockReset()
+        getCampaignMock.mockReset()
+        listExtraBonusesMock.mockReset().mockResolvedValue({ data: { items: [], total_amount: 0 } })
+        vi.mocked(ElMessage.error).mockReset()
+        formValid.ok = true
+    })
+
+    it('期別列表載入失敗：顯示錯誤態與重新載入，不顯示「尚無招生獎金期」；重試成功後恢復列表', async () => {
+        listCampaignsMock.mockRejectedValueOnce(apiError())
+        const wrapper = mountView()
+        await flushPromises()
+
+        expect(wrapper.find('[data-test="load-error-state"]').exists()).toBe(true)
+        expect(wrapper.text()).toContain('招生獎金期載入失敗')
+        expect(wrapper.text()).not.toContain('尚無招生獎金期')
+        expect(ElMessage.error).toHaveBeenCalledTimes(1)
+
+        listCampaignsMock.mockResolvedValueOnce({ data: { items: [campaignRow()] } })
+        await wrapper.find('[data-test="load-error-retry"]').trigger('click')
+        await flushPromises()
+
+        expect(listCampaignsMock).toHaveBeenCalledTimes(2)
+        expect(wrapper.find('[data-test="load-error-state"]').exists()).toBe(false)
+        expect(wrapper.text()).toContain('115上招生獎勵')
+    })
+
+    it('明細載入失敗：顯示錯誤態（不是空白頁），重試成功後才出現分頁與資料', async () => {
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock.mockRejectedValueOnce(apiError())
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper)
+
+        expect(vm.detailError).toBe(true)
+        expect(wrapper.text()).toContain('招生獎金期明細載入失敗')
+        expect(wrapper.findAll('.tab-pane-stub')).toHaveLength(0)
+
+        getCampaignMock.mockResolvedValueOnce({ data: detailFixture({ employee_summary: [summaryRow()] }) })
+        await wrapper.find('[data-test="load-error-retry"]').trigger('click')
+        await flushPromises()
+
+        expect(vm.detailError).toBe(false)
+        expect(wrapper.findAll('.tab-pane-stub')).toHaveLength(4)
+        expect(wrapper.text()).toContain('林慧慈')
+    })
+
+    it('已有明細時重抓失敗：保留畫面但顯示「資料可能過期」橫幅並擋下結算', async () => {
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock
+            .mockResolvedValueOnce({ data: detailFixture({ pending_count: 0, employee_summary: [summaryRow()] }) })
+            .mockRejectedValueOnce(apiError())
+        patchAttributionMock.mockResolvedValue({ data: attributionRow() })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper)
+        expect(vm.settleDisabled).toBe(false)
+
+        await vm.patchRow(attributionRow(), { points: 0.5 })
+        await flushPromises()
+
+        expect(vm.detailError).toBe(true)
+        expect(wrapper.find('[data-test="detail-stale-banner"]').exists()).toBe(true)
+        expect(vm.settleDisabled).toBe(true)
+        expect(vm.settleDisabledReason).toContain('重新載入')
+        const settleBtn = wrapper.findAll('button').find((b) => b.text().includes('結算'))
+        expect(settleBtn?.attributes('disabled')).toBeDefined()
+    })
+
+    it('已結算期的已發放明細載入失敗：顯示錯誤態，不說「查無已發放明細」', async () => {
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow({ status: 'settled' })] } })
+        getCampaignMock.mockResolvedValue({
+            data: detailFixture({ status: 'settled', settled_at: '2026-04-01T00:00:00', pending_count: 0 }),
+        })
+        listExtraBonusesMock.mockRejectedValueOnce(apiError())
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper, campaignRow({ status: 'settled' }))
+
+        expect(vm.extraBonusError).toBe(true)
+        expect(wrapper.text()).toContain('已發放明細載入失敗')
+        expect(wrapper.text()).not.toContain('查無已發放明細')
+
+        listExtraBonusesMock.mockResolvedValueOnce({ data: { items: [extraBonusRow()], total_amount: 600 } })
+        await wrapper.find('[data-test="load-error-retry"]').trigger('click')
+        await flushPromises()
+        expect(vm.extraBonusError).toBe(false)
+        expect(wrapper.text()).toContain('林慧慈')
+    })
+
+    it('快速返回列表：晚到的舊明細回應不會把畫面拉回明細', async () => {
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow()] } })
+        let resolveDetail: (v: unknown) => void = () => {}
+        getCampaignMock.mockImplementationOnce(() => new Promise((resolve) => { resolveDetail = resolve }))
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        const opening = vm.openDetail(campaignRow())
+        vm.backToList()
+        resolveDetail({ data: detailFixture() })
+        await opening
+        await flushPromises()
+
+        expect(vm.selectedCampaignId).toBeNull()
+        expect(vm.detail).toBeNull()
+    })
+})
+
+describe('RecruitmentBonusView 寫入失敗提示與確認', () => {
+    beforeEach(() => {
+        hasPermissionMock.mockReset().mockReturnValue(true)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
+        listCampaignsMock.mockReset().mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock.mockReset().mockResolvedValue({ data: detailFixture({ attributions: [attributionRow()] }) })
+        createCampaignMock.mockReset()
+        createAttributionMock.mockReset()
+        patchAttributionMock.mockReset()
+        syncCandidatesMock.mockReset()
+        listExtraBonusesMock.mockReset().mockResolvedValue({ data: { items: [], total_amount: 0 } })
+        vi.mocked(ElMessage.success).mockReset()
+        vi.mocked(ElMessage.error).mockReset()
+        vi.mocked(ElMessageBox.confirm).mockReset()
+        formValid.ok = true
+        statementReloadMock.mockClear()
+    })
+
+    it('歸屬列欄位更新失敗：跳出錯誤提示並重抓明細還原成伺服器值', async () => {
+        patchAttributionMock.mockRejectedValue(apiError(422))
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper)
+        getCampaignMock.mockClear()
+
+        await vm.patchRow(attributionRow(), { points: 9 })
+        await flushPromises()
+
+        expect(ElMessage.error).toHaveBeenCalledTimes(1)
+        expect(String(vi.mocked(ElMessage.error).mock.calls[0][0])).toContain('更新歸屬列失敗')
+        expect(getCampaignMock).toHaveBeenCalledTimes(1)
+        expect(statementReloadMock).not.toHaveBeenCalled()
+    })
+
+    it('歸屬列更新成功：重抓明細並重載統計表', async () => {
+        patchAttributionMock.mockResolvedValue({ data: attributionRow() })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper)
+
+        await vm.patchRow(attributionRow(), { points: 0.5 })
+        await flushPromises()
+
+        expect(patchAttributionMock).toHaveBeenCalledWith(1, 1, { points: 0.5 })
+        expect(statementReloadMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('備註失焦但內容沒變：不送 PATCH；內容改過才送', async () => {
+        patchAttributionMock.mockResolvedValue({ data: attributionRow() })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper)
+
+        vm.onNotesBlur(attributionRow({ notes: null }))
+        await flushPromises()
+        expect(patchAttributionMock).not.toHaveBeenCalled()
+
+        vm.onNotesBlur(attributionRow({ notes: '家長說明年再來' }))
+        await flushPromises()
+        expect(patchAttributionMock).toHaveBeenCalledWith(1, 1, { notes: '家長說明年再來' })
+    })
+
+    it('同步候選前先確認（會把已退預繳列改排除）：取消不呼叫 API，確認才同步', async () => {
+        syncCandidatesMock.mockResolvedValue({
+            data: { created: 1, excluded: 0, skipped_other_campaign: 0, carried_over: 0, note: '' },
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper)
+
+        vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+        await (vm as unknown as { doSync: () => Promise<void> }).doSync()
+        expect(syncCandidatesMock).not.toHaveBeenCalled()
+
+        vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as never)
+        await (vm as unknown as { doSync: () => Promise<void> }).doSync()
+        expect(syncCandidatesMock).toHaveBeenCalledWith(1)
+        const [message] = vi.mocked(ElMessageBox.confirm).mock.calls[0]
+        expect(String(message)).toContain('排除')
+        expect(String(message)).toContain('金額')
+    })
+
+    it('新增期間：表單驗證不過時不送出、也不關閉對話框', async () => {
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openCreateDialog()
+        await flushPromises()
+        formValid.ok = false
+
+        await vm.submitCreate()
+        await flushPromises()
+
+        expect(createCampaignMock).not.toHaveBeenCalled()
+        expect(vm.createDialogVisible).toBe(true)
+        expect(vm.creating).toBe(false)
+    })
+
+    it('新增期間：送出失敗顯示錯誤提示、對話框保留輸入、可再次送出', async () => {
+        createCampaignMock.mockRejectedValueOnce(apiError(409))
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openCreateDialog()
+        await flushPromises()
+        vm.createForm.name = '115下招生獎勵'
+        vm.createForm.start_date = '2026-09-16'
+        vm.createForm.end_date = '2027-03-15'
+
+        await vm.submitCreate()
+        await flushPromises()
+
+        expect(ElMessage.error).toHaveBeenCalledTimes(1)
+        expect(String(vi.mocked(ElMessage.error).mock.calls[0][0])).toContain('新增招生獎金期失敗')
+        expect(vm.createDialogVisible).toBe(true)
+        expect(vm.createForm.name).toBe('115下招生獎勵')
+        expect(vm.creating).toBe(false)
+
+        createCampaignMock.mockResolvedValueOnce({ data: campaignRow() })
+        await vm.submitCreate()
+        await flushPromises()
+        expect(vm.createDialogVisible).toBe(false)
+    })
+
+    it('新增期間：送出中連點只會建立一次（防重複建期）', async () => {
+        let resolveCreate: (v: unknown) => void = () => {}
+        createCampaignMock.mockImplementationOnce(() => new Promise((resolve) => { resolveCreate = resolve }))
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.openCreateDialog()
+        await flushPromises()
+        vm.createForm.name = '115下招生獎勵'
+        vm.createForm.start_date = '2026-09-16'
+        vm.createForm.end_date = '2027-03-15'
+
+        const first = vm.submitCreate()
+        const second = vm.submitCreate()
+        await flushPromises()
+        expect(vm.creating).toBe(true)
+        resolveCreate({ data: campaignRow() })
+        await Promise.all([first, second])
+        await flushPromises()
+
+        expect(createCampaignMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('新增歸屬列：送出成功關閉並重載；失敗顯示錯誤且保留對話框', async () => {
+        createAttributionMock.mockRejectedValueOnce(apiError(422))
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper)
+        vm.openAddDialog()
+        await flushPromises()
+        vm.addForm.employee_id = 2
+
+        await vm.submitAdd()
+        await flushPromises()
+        expect(ElMessage.error).toHaveBeenCalledTimes(1)
+        expect(String(vi.mocked(ElMessage.error).mock.calls[0][0])).toContain('新增歸屬列失敗')
+        expect(vm.addDialogVisible).toBe(true)
+        expect(vm.adding).toBe(false)
+
+        createAttributionMock.mockResolvedValueOnce({ data: attributionRow() })
+        await vm.submitAdd()
+        await flushPromises()
+        expect(createAttributionMock).toHaveBeenLastCalledWith(
+            1,
+            expect.objectContaining({ point_code: 'self_report', employee_id: 2, status: 'pending' }),
+        )
+        expect(vm.addDialogVisible).toBe(false)
+        expect(statementReloadMock).toHaveBeenCalled()
+    })
+
+    it('新增歸屬列：表單驗證不過時不送出', async () => {
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper)
+        vm.openAddDialog()
+        await flushPromises()
+        formValid.ok = false
+
+        await vm.submitAdd()
+        expect(createAttributionMock).not.toHaveBeenCalled()
+        expect(vm.addDialogVisible).toBe(true)
+    })
+
+    it('迄日早於起日：驗證規則回報錯誤；同日或之後通過', async () => {
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        vm.createForm.start_date = '2026-09-16'
+        const validator = vm.createRules.end_date.find((r) => typeof r.validator === 'function')!
+            .validator as (rule: unknown, value: string, cb: (e?: Error) => void) => void
+
+        const early = vi.fn()
+        validator({}, '2026-09-01', early)
+        expect(early.mock.calls[0][0]).toBeInstanceOf(Error)
+        expect(String(early.mock.calls[0][0])).toContain('不可早於起日')
+
+        const same = vi.fn()
+        validator({}, '2026-09-16', same)
+        expect(same).toHaveBeenCalledWith()
+    })
+})
+
+// vitest 下真 ElForm.validate() 恆回 true，所以「規則有接上欄位」改斷言 EP 由規則推導出的 .is-required。
+describe('RecruitmentBonusView 對話框必填欄位已接上規則（真 el-form）', () => {
+    const mountReal = () =>
+        mount(RecruitmentBonusView, {
+            global: {
+                plugins: [ElementPlus],
+                stubs: {
+                    ReportStatementTab: true,
+                    BonusSlipsTab: true,
+                    TransferRosterTab: true,
+                    'el-dialog': {
+                        props: ['modelValue'],
+                        template: '<div v-if="modelValue" class="dialog-stub"><slot /><slot name="footer" /></div>',
+                    },
+                    'el-table': { props: ['data'], template: '<div class="table-stub" />' },
+                },
+            },
+        })
+
+    beforeEach(() => {
+        hasPermissionMock.mockReset().mockReturnValue(true)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
+        listCampaignsMock.mockReset().mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock.mockReset().mockResolvedValue({ data: detailFixture() })
+    })
+
+    it('新增期間：名稱、起日、迄日都是必填（label 帶 *）', async () => {
+        const wrapper = mountReal()
+        await flushPromises()
+        ;(wrapper.vm as unknown as ViewVm).openCreateDialog()
+        await flushPromises()
+
+        const items = wrapper.findAllComponents({ name: 'ElFormItem' })
+        const required = items.filter((c) => c.classes().includes('is-required')).map((c) => c.props('prop'))
+        expect(required).toEqual(['name', 'start_date', 'end_date'])
+    })
+
+    it('新增歸屬列：來源類型、點數、班別倍數必填', async () => {
+        const wrapper = mountReal()
+        await flushPromises()
+        const vm = await openDetailFor(wrapper as unknown as ReturnType<typeof mountView>)
+        vm.openAddDialog()
+        await flushPromises()
+
+        const items = wrapper.findAllComponents({ name: 'ElFormItem' })
+        const required = items.filter((c) => c.classes().includes('is-required')).map((c) => c.props('prop'))
+        expect(required).toEqual(['point_code', 'points', 'grade_multiplier'])
     })
 })

@@ -1,7 +1,16 @@
 <template>
   <div v-loading="loading" class="report-statement">
+    <LoadErrorState
+      v-if="loadError"
+      compact
+      title="統計表載入失敗"
+      description="載入成功前請勿視為尚無歸屬資料，也不要以此作為發放依據，請重新載入。"
+      :retrying="loading"
+      @retry="reload"
+    />
+    <template v-else>
     <div v-if="report && report.settled_mismatches.length" class="mismatch-banner">
-      ⚠ 結算後歸屬資料與實際入帳不一致（{{ report.settled_mismatches.length }} 位員工），請勿以本表為發放依據，速查表外獎金明細。
+      ⚠ 結算後歸屬資料與實際入帳不一致（{{ report.settled_mismatches.length }} 位員工），請勿以本表為發放依據，改查「已發放明細」確認實際入帳。
     </div>
     <div v-if="report && report.unassigned_rows.length" class="unassigned-banner">
       {{ report.unassigned_rows.length }} 筆招生人待指定：{{ report.unassigned_rows.map((r) => r.child_name || `#${r.attribution_id}`).join('、') }}（請至「歸屬核對」處理）
@@ -57,7 +66,7 @@
       </div>
       <div class="teacher-block__total">
         <strong>{{ formatCurrency(block.total_amount) }}</strong>
-        <code class="formula">{{ block.formula_text }}</code>
+        <span class="formula-label">計算式</span><code class="formula">{{ block.formula_text }}</code>
       </div>
     </div>
 
@@ -67,6 +76,7 @@
       title="尚無歸屬資料"
       description="先於「歸屬核對」同步候選並確認歸屬"
     />
+    </template>
   </div>
 </template>
 
@@ -74,6 +84,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
+import LoadErrorState from '@/components/salary/LoadErrorState.vue'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
 import { getCampaignReport } from '@/api/recruitmentBonus'
@@ -90,6 +101,8 @@ const props = defineProps<{ campaignId: number }>()
 
 const report = ref<Report | null>(null)
 const loading = ref(false)
+// 失敗時清掉舊報表：統計表是發放依據，不能在重抓失敗後繼續顯示過期數字
+const loadError = ref(false)
 
 const rowClass = (row: ReportRow) => ({
   'cell-pending': row.status === 'pending',
@@ -98,10 +111,13 @@ const rowClass = (row: ReportRow) => ({
 
 const reload = async () => {
   loading.value = true
+  loadError.value = false
   try {
     const res = await getCampaignReport(props.campaignId)
     report.value = res.data
   } catch (e) {
+    report.value = null
+    loadError.value = true
     ElMessage.error(friendlyError('載入統計表失敗', e))
   } finally {
     loading.value = false
@@ -113,7 +129,7 @@ defineExpose({ reload })
 
 <style scoped>
 .teacher-block { border: 1px solid var(--el-border-color); border-radius: 6px; padding: var(--space-3); margin-bottom: var(--space-3); }
-.teacher-block__head { display: flex; justify-content: space-between; margin-bottom: var(--space-2); }
+.teacher-block__head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin-bottom: var(--space-2); }
 .teacher-name { font-weight: 700; display: flex; gap: var(--space-2); align-items: center; }
 .teacher-meta { color: var(--el-text-color-secondary); font-size: 13px; }
 .student-strip { overflow-x: auto; }
@@ -124,8 +140,9 @@ defineExpose({ reload })
 .deferred-cell { color: var(--el-text-color-secondary); background: var(--el-fill-color-lighter); }
 .cell-pending { background: var(--el-color-warning-light-9); }
 .cell-uncategorized { outline: 1px dashed var(--el-color-danger); outline-offset: -1px; }
-.teacher-block__total { margin-top: var(--space-2); display: flex; gap: var(--space-3); align-items: baseline; }
-.formula { color: var(--el-text-color-secondary); font-size: 12px; }
+.teacher-block__total { margin-top: var(--space-2); display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; }
+.formula { color: var(--el-text-color-secondary); font-size: 12px; word-break: break-all; }
+.formula-label { color: var(--el-text-color-secondary); font-size: 12px; }
 .grand-total { text-align: right; font-size: 15px; margin-top: var(--space-2); }
 .mismatch-banner { color: var(--el-color-danger); background: var(--el-color-danger-light-9); padding: var(--space-2) var(--space-3); border-radius: 4px; margin-bottom: var(--space-3); }
 .unassigned-banner { color: var(--el-color-warning); background: var(--el-color-warning-light-9); padding: var(--space-2) var(--space-3); border-radius: 4px; margin-bottom: var(--space-3); }

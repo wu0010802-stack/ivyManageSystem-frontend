@@ -20,14 +20,22 @@
             @click="openSegmentDialog"
           >新增覆寫區段</el-button>
         </div>
+        <LoadErrorState
+          v-if="segmentsError"
+          compact
+          title="月額覆寫載入失敗"
+          description="載入成功前請勿視為沒有設定過覆寫，請重新載入。"
+          :retrying="segmentsLoading"
+          @retry="fetchSegments"
+        />
         <EmptyState
-          v-if="!segmentsLoading && segments.length === 0"
+          v-else-if="!segmentsLoading && segments.length === 0"
           variant="inline"
           title="本學年無月額覆寫"
           description="沒有職務異動時不需設定"
         />
         <el-table v-else v-loading="segmentsLoading" :data="segments" stripe size="small" style="width: 100%">
-          <el-table-column prop="employee_name" label="員工" min-width="110" />
+          <el-table-column prop="employee_name" label="員工" min-width="110" fixed />
           <el-table-column label="期間" min-width="150">
             <template #default="{ row }">{{ segmentRangeLabel(row.start_month, row.end_month) }}</template>
           </el-table-column>
@@ -62,14 +70,22 @@
             @click="openDeductionDialog"
           >新增扣抵</el-button>
         </div>
+        <LoadErrorState
+          v-if="deductionsError"
+          compact
+          title="扣抵載入失敗"
+          description="載入成功前請勿視為沒有扣抵，請重新載入。"
+          :retrying="deductionsLoading"
+          @retry="fetchDeductions"
+        />
         <EmptyState
-          v-if="!deductionsLoading && deductions.length === 0"
+          v-else-if="!deductionsLoading && deductions.length === 0"
           variant="inline"
           title="本學年無扣抵"
           description="需要以本獎勵金扣抵時再新增"
         />
         <el-table v-else v-loading="deductionsLoading" :data="deductions" stripe size="small" style="width: 100%">
-          <el-table-column prop="employee_name" label="員工" min-width="110" />
+          <el-table-column prop="employee_name" label="員工" min-width="110" fixed />
           <el-table-column label="金額" width="110">
             <template #default="{ row }">{{ formatCurrency(row.amount) }}</template>
           </el-table-column>
@@ -131,6 +147,10 @@
               :label="`${growthPositionLabel(p.key)}（月額 ${formatCurrency(p.monthly_rate)}／每學期 ${p.required_hours_per_semester} 小時）`"
             />
           </el-select>
+          <div v-if="positionRatesError" class="hint hint--error" role="alert">
+            職務月額表載入失敗，無法選擇職務。
+            <el-button link type="primary" size="small" @click="fetchPositionRates">重新載入</el-button>
+          </div>
         </el-form-item>
         <el-form-item label="備註">
           <el-input v-model="segmentForm.note" type="textarea" :rows="2" maxlength="500" show-word-limit />
@@ -179,6 +199,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import FormDialog from '@/components/common/FormDialog.vue'
+import LoadErrorState from '@/components/salary/LoadErrorState.vue'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
 import {
@@ -213,24 +234,49 @@ interface EmployeeOption {
   name: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   schoolYear: number
   canWrite: boolean
   employeeOptions: EmployeeOption[]
-}>()
+  /** 本學年獎勵金已發放的員工 id；對他們的異動會多一道提醒（已發金額不會跟著變）。 */
+  paidEmployeeIds?: number[]
+}>(), {
+  paidEmployeeIds: () => [],
+})
 const emit = defineEmits<{ (e: 'changed'): void }>()
 
 const activeTab = ref<'segments' | 'deductions'>('segments')
 const saving = ref(false)
 const bounds = computed(() => schoolYearMonthBounds(props.schoolYear))
 
+// 結算是 per-employee 冪等：已發放的員工，覆寫／扣抵異動只會改預覽，不會更動已發金額，也不會自動追扣或補發。
+const PAID_NOTE = '此員工本學年的獎勵金已發放，異動不會更動已發放的金額，也不會自動追扣或補發；若需調整，請另行人工處理。'
+const isPaid = (employeeId: number | null | undefined): boolean =>
+  employeeId != null && props.paidEmployeeIds.includes(employeeId)
+const confirmIfPaid = async (employeeId: number | null | undefined, action: string): Promise<boolean> => {
+  if (!isPaid(employeeId)) return true
+  try {
+    await ElMessageBox.confirm(`${PAID_NOTE}確定${action}？`, '已發放員工的異動確認', {
+      confirmButtonText: '確定繼續',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 // ---- 職務月額表 ----
 const positionRates = ref<PositionRate[]>([])
+const positionRatesError = ref(false)
 const fetchPositionRates = async () => {
+  positionRatesError.value = false
   try {
     const res = await listGrowthPositionRates()
     positionRates.value = res.data
   } catch (e) {
+    positionRatesError.value = true
     ElMessage.error(friendlyError('載入職務月額表失敗', e))
   }
 }
@@ -238,16 +284,21 @@ const fetchPositionRates = async () => {
 // ---- 覆寫區段 ----
 const segments = ref<RateSegment[]>([])
 const segmentsLoading = ref(false)
+// 載入失敗不可退回「本學年無月額覆寫」：行政會以為沒設過而重複新增
+const segmentsError = ref(false)
 let segmentSeq = 0
 const fetchSegments = async () => {
   const seq = ++segmentSeq
   segmentsLoading.value = true
+  segmentsError.value = false
   try {
     const res = await listGrowthRateSegments({ school_year: props.schoolYear })
     if (seq !== segmentSeq) return
     segments.value = res.data.items
   } catch (e) {
     if (seq !== segmentSeq) return
+    segments.value = []
+    segmentsError.value = true
     ElMessage.error(friendlyError('載入月額覆寫失敗', e))
   } finally {
     if (seq === segmentSeq) segmentsLoading.value = false
@@ -282,11 +333,13 @@ const openSegmentDialog = () => {
 }
 
 const submitSegment = async () => {
+  if (saving.value) return
   const err = validateRateSegmentDraft(segmentForm)
   if (err) {
     ElMessage.warning(err)
     return
   }
+  if (!(await confirmIfPaid(segmentForm.employee_id, '新增月額覆寫'))) return
   saving.value = true
   try {
     const res = await createGrowthRateSegment({
@@ -311,7 +364,7 @@ const submitSegment = async () => {
 const confirmDeleteSegment = async (row: RateSegment) => {
   try {
     await ElMessageBox.confirm(
-      `確定刪除 ${row.employee_name ?? ''} ${segmentRangeLabel(row.start_month, row.end_month)} 的月額覆寫？刪除後該期間改回現職月額。`,
+      `確定刪除 ${row.employee_name ?? ''} ${segmentRangeLabel(row.start_month, row.end_month)} 的月額覆寫？刪除後該期間改回現職月額。${isPaid(row.employee_id) ? PAID_NOTE : ''}`,
       '確認刪除',
       { confirmButtonText: '確定刪除', cancelButtonText: '取消', type: 'warning' },
     )
@@ -331,16 +384,20 @@ const confirmDeleteSegment = async (row: RateSegment) => {
 // ---- 扣抵 ----
 const deductions = ref<Deduction[]>([])
 const deductionsLoading = ref(false)
+const deductionsError = ref(false)
 let deductionSeq = 0
 const fetchDeductions = async () => {
   const seq = ++deductionSeq
   deductionsLoading.value = true
+  deductionsError.value = false
   try {
     const res = await listGrowthDeductions({ school_year: props.schoolYear })
     if (seq !== deductionSeq) return
     deductions.value = res.data.items
   } catch (e) {
     if (seq !== deductionSeq) return
+    deductions.value = []
+    deductionsError.value = true
     ElMessage.error(friendlyError('載入扣抵失敗', e))
   } finally {
     if (seq === deductionSeq) deductionsLoading.value = false
@@ -364,11 +421,13 @@ const openDeductionDialog = () => {
 }
 
 const submitDeduction = async () => {
+  if (saving.value) return
   const err = validateDeductionDraft(deductionForm)
   if (err) {
     ElMessage.warning(err)
     return
   }
+  if (!(await confirmIfPaid(deductionForm.employee_id, '新增扣抵'))) return
   saving.value = true
   try {
     await createGrowthDeduction({
@@ -391,7 +450,7 @@ const submitDeduction = async () => {
 const confirmDeleteDeduction = async (row: Deduction) => {
   try {
     await ElMessageBox.confirm(
-      `確定刪除 ${row.employee_name ?? ''} 的扣抵 ${formatCurrency(row.amount)}（${row.reason}）？`,
+      `確定刪除 ${row.employee_name ?? ''} 的扣抵 ${formatCurrency(row.amount)}（${row.reason}）？${isPaid(row.employee_id) ? PAID_NOTE : ''}`,
       '確認刪除',
       { confirmButtonText: '確定刪除', cancelButtonText: '取消', type: 'warning' },
     )
@@ -431,6 +490,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
   margin: var(--space-4) 0 var(--space-2);
 }
 .section-header h3 {
@@ -445,5 +506,8 @@ onMounted(() => {
   color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.6;
+}
+.hint--error {
+  color: var(--el-color-danger);
 }
 </style>

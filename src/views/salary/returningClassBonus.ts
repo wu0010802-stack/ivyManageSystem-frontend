@@ -181,14 +181,14 @@ export interface SkipGroup {
 }
 
 const SKIP_GROUP_DEFS: Omit<SkipGroup, 'names'>[] = [
-    { key: 'skipped_already_paid', label: '已發放過', hint: '同類別同月已有表外獎金紀錄（含 HR 手動登錄），未重複發放' },
+    { key: 'skipped_already_paid', label: '已發放過', hint: '同類別同月已有獨立轉帳獎金紀錄（含 HR 手動登錄），未重複發放' },
     { key: 'skipped_self', label: '結算者本人', hint: '職權分離：請由其他有權限的人員再次結算即可補發' },
     { key: 'skipped_finalized', label: '薪資已封存', hint: '歸屬月至年底有已封存月份，未寫入；需先解除封存' },
     { key: 'skipped_unselected', label: '未勾選', hint: '本次未勾選，之後可再勾選結算' },
     {
         key: 'skipped_legacy_other',
         label: '同月已有「其他」手登',
-        hint: '同歸屬月已有「其他」類別表外獎金，可能是改版前手登的同一筆；確認不是後再勾選結算',
+        hint: '同歸屬月已有「其他」類別的獨立轉帳獎金，可能是改版前手登的同一筆；確認不是後再勾選結算',
     },
 ]
 
