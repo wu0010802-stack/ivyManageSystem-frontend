@@ -38676,6 +38676,15 @@ export interface components {
             registrations: components["schemas"]["MyRegistrationsOut"];
             upcoming_sessions: components["schemas"]["ParentUpcomingSessionsOut"];
         };
+        /** ParentAttendanceDayOut */
+        ParentAttendanceDayOut: {
+            /** Date */
+            date?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Status */
+            status?: string | null;
+        };
         /** ParentChildResponseOut */
         ParentChildResponseOut: {
             my_response?: components["schemas"]["ParentResponseOut"] | null;
@@ -38891,6 +38900,20 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * ParentDailyAttendanceOut
+         * @description 單日出席；當天沒有紀錄時 status／remark 皆為 null。
+         */
+        ParentDailyAttendanceOut: {
+            /** Date */
+            date: string;
+            /** Remark */
+            remark?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
         /** ParentDismissalCallListOut */
         ParentDismissalCallListOut: {
             /** Items */
@@ -38936,6 +38959,111 @@ export interface components {
             student_id: number;
             /** Student Name */
             student_name: string;
+        };
+        /** ParentFeePaymentOut */
+        ParentFeePaymentOut: {
+            /** Amount */
+            amount: number;
+            /** Payment Date */
+            payment_date?: string | null;
+            /** Payment Method */
+            payment_method?: string | null;
+            /** Receipt No */
+            receipt_no?: string | null;
+        };
+        /** ParentFeePaymentsOut */
+        ParentFeePaymentsOut: {
+            /** Fee Item Name */
+            fee_item_name: string;
+            /** Payments */
+            payments: components["schemas"]["ParentFeePaymentOut"][];
+            /** Period */
+            period?: string | null;
+            /** Refunds */
+            refunds: components["schemas"]["ParentFeeRefundOut"][];
+        };
+        /** ParentFeeRecordListOut */
+        ParentFeeRecordListOut: {
+            /** Items */
+            items: components["schemas"]["ParentFeeRecordOut"][];
+            /** Total */
+            total: number;
+        };
+        /** ParentFeeRecordOut */
+        ParentFeeRecordOut: {
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid: number;
+            /** Due Date */
+            due_date?: string | null;
+            /** Fee Item Name */
+            fee_item_name: string;
+            /** Id */
+            id: number;
+            /** Outstanding */
+            outstanding: number;
+            /** Payment Date */
+            payment_date?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Status */
+            status: string;
+        };
+        /** ParentFeeRefundOut */
+        ParentFeeRefundOut: {
+            /** Amount */
+            amount: number;
+            /** Reason */
+            reason: string;
+            /** Refunded At */
+            refunded_at?: string | null;
+        };
+        /**
+         * ParentFeesStudentSummaryOut
+         * @description by_student 單筆：該生跨學期加總（折抵已在各學期桶內套用）。
+         */
+        ParentFeesStudentSummaryOut: {
+            /** Adjustment */
+            adjustment: number;
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid: number;
+            /** Due Soon */
+            due_soon: number;
+            /** Outstanding */
+            outstanding: number;
+            /** Overdue */
+            overdue: number;
+            /** Student Id */
+            student_id: number;
+        };
+        /** ParentFeesSummaryOut */
+        ParentFeesSummaryOut: {
+            /** By Student */
+            by_student: components["schemas"]["ParentFeesStudentSummaryOut"][];
+            totals: components["schemas"]["ParentFeesTotalsOut"];
+        };
+        /**
+         * ParentFeesTotalsOut
+         * @description 跨子女 grand totals；outstanding_count 為仍有欠款的 (student, period) 桶數。
+         */
+        ParentFeesTotalsOut: {
+            /** Adjustment */
+            adjustment: number;
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid: number;
+            /** Due Soon */
+            due_soon: number;
+            /** Outstanding */
+            outstanding: number;
+            /** Outstanding Count */
+            outstanding_count: number;
+            /** Overdue */
+            overdue: number;
         };
         /**
          * ParentMedicationLogOut
@@ -39150,6 +39278,26 @@ export interface components {
             /** Series */
             series?: components["schemas"]["TrafficSeriesPointOut"][] | null;
             silence?: components["schemas"]["TrafficSilenceOut"] | null;
+        };
+        /**
+         * ParentMonthlyAttendanceOut
+         * @description 單月出席；counts 固定含「出席／缺席／病假／事假／遲到」五個 key（未出現為 0）。
+         */
+        ParentMonthlyAttendanceOut: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Items */
+            items: components["schemas"]["ParentAttendanceDayOut"][];
+            /** Month */
+            month: number;
+            /** Recorded Days */
+            recorded_days: number;
+            /** Student Id */
+            student_id: number;
+            /** Year */
+            year: number;
         };
         /**
          * ParentPortalMessageAttachmentOut
@@ -48421,6 +48569,11 @@ export interface components {
             attendance_deduction: number;
             /** Base Salary */
             base_salary: number;
+            /**
+             * Base Transfer Amount
+             * @default 0
+             */
+            base_transfer_amount: number;
             /** Birthday Bonus */
             birthday_bonus: number;
             /** Breakdown */
@@ -48742,6 +48895,11 @@ export interface components {
             attendance_policy_id?: number | null;
             /** Base Salary */
             base_salary?: number | null;
+            /**
+             * Base Transfer Amount
+             * @default 0
+             */
+            base_transfer_amount: number;
             /** Birthday Bonus */
             birthday_bonus?: number | null;
             /** Bonus Amount */
@@ -74037,7 +74195,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentDailyAttendanceOut"];
                 };
             };
             /** @description Validation Error */
@@ -74070,7 +74228,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentMonthlyAttendanceOut"];
                 };
             };
             /** @description Validation Error */
@@ -74929,7 +75087,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentFeeRecordListOut"];
                 };
             };
             /** @description Validation Error */
@@ -74960,7 +75118,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentFeePaymentsOut"];
                 };
             };
             /** @description Validation Error */
@@ -74989,7 +75147,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentFeesSummaryOut"];
                 };
             };
         };
