@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RadarChart } from '@/views/reports/chartSetup'
+import { RadarChart } from '@/composables/useChartJs'
 
 interface ScoreItem {
   display_order?: number

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { LineChart } from '@/views/reports/chartSetup'
+import { LineChart } from '@/composables/useChartJs'
 
 interface TrendPoint {
   label?: string

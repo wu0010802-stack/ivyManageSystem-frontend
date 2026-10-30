@@ -33,7 +33,7 @@ vi.mock('@/api/reports', () => ({
     return Promise.resolve({ data: { monthly_trend: year === 2026 ? state.trend : state.prevTrend } })
   }),
 }))
-vi.mock('@/views/reports/chartSetup', () => ({
+vi.mock('@/composables/useChartJs', () => ({
   BarChart: { name: 'BarChart', props: ['data', 'options', 'plugins'], template: '<div class="chart-stub" />' },
 }))
 vi.mock('@/api/vendorPayment', () => ({ getVendorPaymentSummary: vi.fn().mockResolvedValue({ data: { pending_count: 0, pending_amount: 0 } }) }))

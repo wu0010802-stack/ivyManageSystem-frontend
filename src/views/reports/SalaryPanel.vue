@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getDashboard, getFinanceSummary, getSalaryContributors } from '@/api/reports'
-import { BarChart, MONTH_LABELS } from './chartSetup'
+import { BarChart, MONTH_LABELS } from '@/composables/useChartJs'
 import { money } from '@/utils/format'
 import { apiError } from '@/utils/error'
 import { computeReportPeriod, monthState } from './useReportPeriod'

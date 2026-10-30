@@ -5,7 +5,7 @@ import ElementPlus from 'element-plus'
 import { invalidateCachedAsync } from '@/composables/useCachedAsync'
 import { resolveTrendPalette, withAlpha } from '../trendChart'
 
-// BarChart 是從 `./chartSetup`（.ts barrel）具名 import 的 defineAsyncComponent；
+// BarChart 是從 `@/composables/useChartJs` 具名 import 的 defineAsyncComponent；
 // <script setup> 編譯後這類純值 import 會直接綁在 module scope（不進 setupState/_ctx），
 // VTU 的 `global.stubs: { BarChart: true }` 名稱比對機制找不到它們。
 // 比照本檔兄弟測試 tests/unit/views/reports/AttendancePanel.spec.js 的作法，
