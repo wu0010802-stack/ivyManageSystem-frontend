@@ -172,6 +172,11 @@ jobs:
       - name: 錯誤處理棘輪（直讀 response.data.detail 只准降不准升）
         run: npm run check:error-detail
 
+      # api 層沒帶產生型別的呼叫（回傳 AxiosResponse<any>）只准降不准升；
+      # 後端補了 response_model 就該改用 AxiosResp<'/path', 'method'>。
+      - name: api 型別棘輪（沒有型別的 api 呼叫只准降不准升）
+        run: npm run check:untyped-api
+
       # 表單 dialog 棘輪：裸 el-dialog 表單／label-width／硬寫 px 寬度／新增鈕誤用 success 或「＋」
       # 只准降不准升；新表單一律 FormDialog（spec 2026-09-06-admin-form-dialog-defaults）。
       - name: 表單 dialog 棘輪（FormDialog 採用、label-width、px 寬度、按鈕誤用）
@@ -293,3 +298,4 @@ jobs:
       - name: Check cross-repo shared constants
         working-directory: ivy-frontend
         run: npm run check:shared-constants
+
