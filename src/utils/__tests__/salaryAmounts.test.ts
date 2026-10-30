@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   computeBaseTransferAmount,
@@ -74,4 +76,21 @@ describe('salaryAmounts', () => {
       }),
     ).toBe(35000)
   })
+
+  // 薪資列表（SalaryRecordItemOut）與快照明細（SalarySnapshotDetailOut）原本沒有這個欄位，
+  // 前端只能自己重算；後端補上後由產生型別釘住，欄位被拿掉時這裡先紅，
+  // 不會悄悄退回前端公式。
+  it.each(['SalaryRecordItemOut', 'SalarySnapshotDetailOut', 'SalarySnapshotSummaryOut'])(
+    'schema.d.ts 的 %s 宣告 base_transfer_amount',
+    (name) => {
+      const schema = readFileSync(
+        resolve(__dirname, '../../api/_generated/schema.d.ts'),
+        'utf-8',
+      )
+      const start = schema.indexOf(`        ${name}: {`)
+      expect(start, `${name} 不在 schema.d.ts`).toBeGreaterThan(-1)
+      const end = schema.indexOf('\n        };', start)
+      expect(schema.slice(start, end)).toMatch(/\bbase_transfer_amount\??: number;/)
+    },
+  )
 })
