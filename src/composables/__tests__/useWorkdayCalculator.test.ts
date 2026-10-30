@@ -183,3 +183,101 @@ describe('useWorkdayCalculator — 全天模式 API 失敗 fallback（F3）', ()
     expect(calc.calcHint.value).toContain('非工作日')
   })
 })
+
+/**
+ * 業主裁定 2026-10-30：請假時數由後端重算覆寫（送出時以伺服器時數寫入 leave_hours）。
+ * 前端只顯示 workday-hours 回傳的 leave_hours；部分時段把起訖時間帶給 API 算；
+ * 前端自行估算只在 API 失敗時當提示。
+ */
+describe('useWorkdayCalculator — 顯示後端 leave_hours（後端權威）', () => {
+  const settle = async () => {
+    await nextTick()
+    await new Promise((r) => setTimeout(r, 350)) // useDebounceFn 300ms
+    await flushPromises()
+  }
+
+  it('自訂時段：帶起訖時間呼叫 API，顯示回傳 leave_hours 而非前端自算', async () => {
+    const form = reactive<Record<string, unknown>>({ employee_id: 1, start_date: '', end_date: '', leave_hours: 8 })
+    const calls: unknown[][] = []
+    const fetchFn = (...args: unknown[]) => {
+      calls.push(args)
+      // 前端自算 09:00–12:00＝3h；後端（班別 break 上限）說 2.5h → 以後端為準
+      return Promise.resolve({
+        data: {
+          total_hours: 8,
+          leave_hours: 2.5,
+          breakdown: [{ date: '2026-10-07', type: 'workday', hours: 8, work_start: '08:00', work_end: '17:00' }],
+        },
+      })
+    }
+    const calc = useWorkdayCalculator({ form, fetchFn })
+    calc.leaveMode.value = 'custom'
+    await nextTick()
+    form.start_date = '2026-10-07 09:00:00'
+    form.end_date = '2026-10-07 12:00:00'
+    await settle()
+
+    expect(calls.at(-1)).toEqual(['2026-10-07', '2026-10-07', { start_time: '09:00', end_time: '12:00' }])
+    expect(form.leave_hours).toBe(2.5)
+    expect(calc.calcHint.value).toContain('2.5h')
+  })
+
+  it('全天：不帶時段，leave_hours＝後端回傳值（含 0，不抬成 0.5h）', async () => {
+    const form = reactive<Record<string, unknown>>({ employee_id: 1, start_date: '', end_date: '', leave_hours: 8 })
+    const calls: unknown[][] = []
+    const fetchFn = (...args: unknown[]) => {
+      calls.push(args)
+      return Promise.resolve({
+        data: { total_hours: 0, leave_hours: 0, breakdown: [{ date: '2026-10-10', type: 'weekend', hours: 0 }] },
+      })
+    }
+    useWorkdayCalculator({ form, fetchFn })
+    form.start_date = '2026-10-10'
+    form.end_date = '2026-10-10'
+    await settle()
+
+    expect(calls.at(-1)).toEqual(['2026-10-10', '2026-10-10', {}])
+    expect(form.leave_hours).toBe(0)
+  })
+
+  it('上午／下午：只帶 12:00 迄時／13:00 起時，顯示後端時數', async () => {
+    const form = reactive<Record<string, unknown>>({ employee_id: 1, start_date: '', end_date: '', leave_hours: 8 })
+    const calls: unknown[][] = []
+    const fetchFn = (...args: unknown[]) => {
+      calls.push(args)
+      return Promise.resolve({
+        data: {
+          total_hours: 8.5,
+          leave_hours: 5,
+          breakdown: [{ date: '2026-10-07', type: 'workday', hours: 8.5, work_start: '07:00', work_end: '16:30' }],
+        },
+      })
+    }
+    const calc = useWorkdayCalculator({ form, fetchFn })
+    calc.leaveMode.value = 'morning'
+    await nextTick()
+    calc.leaveSingleDate.value = '2026-10-07'
+    await flushPromises()
+
+    expect(calls.at(-1)).toEqual(['2026-10-07', '2026-10-07', { end_time: '12:00' }])
+    expect(form.start_date).toBe('2026-10-07 07:00:00')
+    expect(form.leave_hours).toBe(5)
+
+    calc.leaveMode.value = 'afternoon'
+    await nextTick()
+    calc.leaveSingleDate.value = '2026-10-08'
+    await flushPromises()
+    expect(calls.at(-1)).toEqual(['2026-10-08', '2026-10-08', { start_time: '13:00' }])
+  })
+
+  it('API 失敗時前端估算只當提示（hint 標明以系統排班為準）', async () => {
+    const form = reactive<Record<string, unknown>>({ employee_id: 1, start_date: '', end_date: '', leave_hours: 8 })
+    const calc = useWorkdayCalculator({ form, fetchFn: () => Promise.reject(new Error('network down')) })
+    form.start_date = '2026-10-07'
+    form.end_date = '2026-10-07'
+    await settle()
+
+    expect(form.leave_hours).toBe(8)
+    expect(calc.calcHint.value).toContain('送出時以系統排班重算')
+  })
+})
