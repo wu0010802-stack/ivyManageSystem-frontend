@@ -43,6 +43,135 @@ const SENTRY_UPLOAD_ENABLED =
     !!process.env.SENTRY_ORG &&
     !!process.env.SENTRY_PROJECT
 
+// shared-common 釘選清單（manualChunks 依 id.includes 比對；可放檔案或目錄前綴）。
+// 抽成具名 export 讓 tests/unit/build/parentSharedPins.test.ts 能驗證：家長端可達的
+// 共用模組都有明確指派、清單每條都指得到實檔、且被釘檔不靜態 import element-plus。
+// 新增三端共用的 EP-free 檔時，在這裡補一條（守衛測試會列出漏掉的檔）。
+//
+// 共用工具：admin & 家長兩端皆會引用、且不能依賴 element-plus / activity-admin。
+// 必須先於 activity-admin / parent-app 規則，避免被 rollup 自動合併進
+// activity-admin chunk（曾發生 parent.html 因 format.js 被合併而被迫載入
+// activity-admin 整包的回歸）。
+// ⚠ 只放 element-plus-free 的檔案；download.js / useConfirmDelete.js 等用 ElMessage
+// 的檔案不能放進來，否則家長 bundle 會被迫拉 element-plus chunk。
+export const SHARED_COMMON_PINS = [
+    '/src/utils/format.ts',
+    '/src/utils/apiDedupe.ts',
+    '/src/utils/offlineQueue.ts',
+    // academic：學年/民國年純函式 util（EP-free），admin（活動/考核）與家長端
+    // LeavesView 皆用。未顯式指派時 Rollup 把它複製進 admin-core + activity-admin
+    // 兩個 chunk，且家長端 import 它 → parent-app 靜態橋接 activity-admin（53KB gz
+    // admin 程式碼）。釘到 shared-common 同時 de-dup 並切斷 parent→activity-admin。
+    '/src/utils/academic.ts',
+    '/src/composables/useCachedAsync.ts',
+    '/src/components/common/MobileErrorRetry.vue',
+    // EmptyState：三端共用空狀態元件（inline SVG、EP-free，見該檔 docstring——
+    // 它就是為了斷開 EP 依賴才改 inline SVG 的）。2026-08-28 家長端聯絡簿改版把
+    // ContactBookView 升為 tab 根頁（連同新 AnnouncementsPanel eager 進 parent-app
+    // entry），EmptyState 被 Rollup 吸進 parent-app chunk → 20 個 admin/portal
+    // route chunk（SalaryHistory/Platform*/Calibration/PortalContactBook…）靜態
+    // 橋接 parent-app 整包，check-entry-chunks 紅、staging 連兩筆 build FAILED。
+    // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第六次同型回歸。
+    '/src/components/common/EmptyState.vue',
+    // 友善錯誤/連線狀態/捲動鎖/品牌裝飾元件：portal views 與家長端共用（皆 EP-free）。
+    // 未顯式指派時落 portal chunk → parent-app 靜態橋接整包 portal，連帶 cascade
+    // fullcalendar/chart-vendor/activity-admin/qrcode/markdown（~285KB gz）。
+    '/src/composables/useFriendlyError.ts',
+    '/src/utils/errorCodeRegistry.ts',
+    '/src/composables/useOnlineStatus.ts',
+    '/src/composables/useBodyLock.ts',
+    // useAccessibleDialog（public 對話框與家長端首屏 ConsentModal 共用）與
+    // calendarEventTypes（admin 行事曆與家長端簽收頁的類型中文對照）皆 EP-free。
+    // 2026-10 家長端 UI/UX 改版讓 ConsentModal 改用 useAccessibleDialog 後，未 pin 時
+    // Rollup 把它吸進 parent-app → index / public 靜態可達 parent-app（第七次同型回歸）。
+    '/src/composables/useAccessibleDialog.ts',
+    '/src/constants/calendarEventTypes.ts',
+    '/src/components/brand/',
+    // ErrorBoundary.vue（admin App.vue + parent App.vue 共用）與 chunkSelfHeal.ts
+    // （admin / public / parent 三端 main.ts 各呼叫一次）皆三端共用且皆 EP-free。
+    // 未顯式指派時 Rollup 把兩檔吸進 parent-app chunk → index / public entry 被迫
+    // 靜態 import parent-app 整包，連鎖 static-bridge 幾乎全部 chunk（家長 LIFF boot：
+    // 殭屍 mount、每次載頁必打 2 支 /api/parent 401、401 後 parent/api/index.ts 改寫
+    // location.hash='#/login' 摧毀 deep link → admin 深頁重整被彈首頁、報名連結 hash 被吃）。
+    // ⚠ 這是「三端共用的 EP-free 檔漏 pin → 被併進 parent-app」的第二次同型回歸
+    //（前次為 design-tokens.css，見下方全域樣式規則的註解）。釘到 shared-common
+    //（三端皆載、admin 本就載）即切斷 index/public → parent-app 的靜態橋接。
+    '/src/components/common/ErrorBoundary.vue',
+    '/src/utils/chunkSelfHeal.ts',
+    // sentry：三端 main.ts + ErrorBoundary + admin api/index.ts 皆 import。靜態
+    // import 全為 type-only（@sentry/vue 走 await import → sentry chunk 維持
+    // lazy），EP-free。未 pin 時被併進 admin-core → shared-common（ErrorBoundary
+    // 的 captureException）與 parent-app（parent main.ts 的 initSentry）雙雙
+    // 靜態橋接 admin-core。
+    '/src/utils/sentry.ts',
+    // errorHandler：純錯誤分類（零 import、EP-free），admin api/index.ts 與家長
+    // src/parent/api/index.ts 皆用。原列 admin-core，害 parent-app 靜態橋接
+    // admin-core（家長端被迫載整包 admin entry utilities）；移入 shared-common
+    // 切斷（admin-core 規則的清單已同步移除）。
+    '/src/utils/errorHandler.ts',
+    // lifecycle / taipeiTime / constants-activity：純常數/純函式（零 import、
+    // EP-free），admin/portal 與家長端 eager 元件（ChildrenStrip /
+    // useTodayTimeline / activityPayment）皆用。未 pin 時分別落 portal 與
+    // activity-admin chunk → parent-app 靜態橋接 portal / activity-admin，
+    // 再連鎖 admin-core + element-plus + fullcalendar 全塞進家長首屏。
+    // 釘到 shared-common 切斷整條 cascade。
+    '/src/constants/lifecycle.ts',
+    '/src/utils/taipeiTime.ts',
+    '/src/constants/activity.ts',
+    // ws / html：WebSocket 重連工具與 HTML escape（皆零 import、EP-free），
+    // admin（useInboxNotifications / useBusMonitor / DismissalQueueView）與家長端
+    // （useBusTracking / ParentOfflineIndicator）共用。未 pin 時 Rollup 把兩檔併進
+    // parent-app chunk → admin index 為了頂欄通知的 ws.ts 靜態橋接 parent-app 整包
+    // （首屏 332KB 爆 310KB 預算、check-entry-chunks 紅、staging 部署連續失敗）。
+    // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第三次同型回歸。
+    '/src/utils/ws.ts',
+    '/src/utils/html.ts',
+    // weekdaySchedule：上課星期複選的判定/格式化/衝堂純函式（零 import、EP-free），
+    // 公開報名頁 useCourseAdvisory 與家長端 parent/utils/activitySchedule 皆用。
+    // 未 pin 時被吸進 parent-app chunk → 公開頁的 ActivityPublicView（lazy route，
+    // 但 / redirect 到 /activity 故等同首屏）靜態 import parent-app 整包 →
+    // src/parent/main.ts 的 top-level 副作用執行：家長 App 也 mount('#app') 搶佔
+    // 畫面、guard 判未登入導向 /login → 公開報名網址開出家長端登入（LIFF）。
+    // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第四次同型回歸。
+    '/src/utils/weekdaySchedule.ts',
+    // publicCopy：公開頁行銷文案的粗體解析/一行一條轉換純函式（零 import、
+    // EP-free），公開頁 ActivityPublicView 與 admin ActivitySettingsView 共用。
+    // 與 weekdaySchedule 同型：跨端共用純函式檔必 pin，防被併進單端 chunk
+    // 造成另一端靜態橋接整包（2026-08-03 公開頁接管事故的教訓）。
+    '/src/utils/publicCopy.ts',
+    // 多租戶品牌（4d/fb）：tenantMeta.ts 是裸 fetch、零 axios 依賴，
+    // useTenantBranding.ts 只依賴 vue + tenantMeta。三個 entry 都要讀品牌字串，
+    // 家長端的 liff.ts 也 import tenantMeta 取 liff_id。
+    // ⛔ **不得改回 admin-core**：admin-core 被 check-entry-chunks.mjs 對 parent
+    //    entry 設為 forbidden（家長端不得靜態可達 admin-core），改回去會直接讓
+    //    `npm run build` exit 1、CI Build check 紅、出不了 image（CT-F-05 / GAP-01）。
+    '/src/api/tenantMeta.ts',
+    '/src/composables/useTenantBranding.ts',
+    // fc 的租戶解析／儲存隔離／boot 檢查／三態遮罩入口：同樣三端共用且 EP-free。
+    // ⚠ tenantBlocked.ts 漏 pin 曾讓 index.html 直接靜態可達 parent-app
+    //（「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」的第五次同型回歸），
+    // admin 首屏 gz 從 276KB 漂到 337KB 並觸發 check-entry-chunks 的 forbidden 邊。
+    '/src/utils/tenant.ts',
+    '/src/utils/tenantStorage.ts',
+    '/src/utils/tenantBlocked.ts',
+    '/src/utils/tenantBoot.ts',
+    // surveyQuestionTypes：活動參加調查題型列舉/共用驗證純函式（零 import、
+    // EP-free），管理端 surveyFormModel/SurveyDetailView、教師端
+    // PortalSurveyDetailView、家長端 SurveyFillSheet 三端皆 import 同一份
+    // （2026-08-10 whole-branch review Critical 修復：三端原本各自手抄字面值，
+    // 家長端曾誤植不存在的 'single'/'multi'）。與 weekdaySchedule/publicCopy
+    // 同型：跨端共用純函式檔未 pin 時會被吸進單端 chunk，讓另一端靜態橋接整包。
+    '/src/constants/surveyQuestionTypes.ts',
+    // reducedMotion：`prefers-reduced-motion` 偵測（零 import、EP-free），
+    // admin 的 DismissalPosCountdownBar（DismissalQueueView 靜態依賴鏈上）與
+    // 2026-09-16「家長端相簿回顧 UI」新增的 RecapViewer 兩端都用同一份。
+    // 未 pin 時被吸進 parent-app chunk → DismissalQueueView 靜態橋接
+    // parent-app 整包，check-entry-chunks 紅、staging 前端部署連兩筆失敗
+    // （2026-09-16 起）。「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」
+    // 第七次同型回歸。
+    '/src/utils/reducedMotion.ts',
+]
+
 function manualChunks(id) {
     // Vite SFC helper（plugin-vue:export-helper）固定到 vue-core。
     // 不鎖的話 Rollup 會把它推到第一個用 SFC 的 chunk（曾跑去 parent-app），
@@ -77,128 +206,9 @@ function manualChunks(id) {
     }
 
     // 共用工具：admin & 家長兩端皆會引用、且不能依賴 element-plus / activity-admin。
-    // 必須先於 activity-admin / parent-app 規則，避免被 rollup 自動合併進
-    // activity-admin chunk（曾發生 parent.html 因 format.js 被合併而被迫載入
-    // activity-admin 整包的回歸）。
-    // ⚠ 只放 element-plus-free 的檔案；download.js / useConfirmDelete.js 等用 ElMessage
-    // 的檔案不能放進來，否則家長 bundle 會被迫拉 element-plus chunk。
-    if (
-        id.includes('/src/utils/format.ts') ||
-        id.includes('/src/utils/apiDedupe.ts') ||
-        id.includes('/src/utils/offlineQueue.ts') ||
-        // academic：學年/民國年純函式 util（EP-free），admin（活動/考核）與家長端
-        // LeavesView 皆用。未顯式指派時 Rollup 把它複製進 admin-core + activity-admin
-        // 兩個 chunk，且家長端 import 它 → parent-app 靜態橋接 activity-admin（53KB gz
-        // admin 程式碼）。釘到 shared-common 同時 de-dup 並切斷 parent→activity-admin。
-        id.includes('/src/utils/academic.ts') ||
-        id.includes('/src/composables/useCachedAsync.ts') ||
-        id.includes('/src/components/common/MobileErrorRetry.vue') ||
-        // EmptyState：三端共用空狀態元件（inline SVG、EP-free，見該檔 docstring——
-        // 它就是為了斷開 EP 依賴才改 inline SVG 的）。2026-08-28 家長端聯絡簿改版把
-        // ContactBookView 升為 tab 根頁（連同新 AnnouncementsPanel eager 進 parent-app
-        // entry），EmptyState 被 Rollup 吸進 parent-app chunk → 20 個 admin/portal
-        // route chunk（SalaryHistory/Platform*/Calibration/PortalContactBook…）靜態
-        // 橋接 parent-app 整包，check-entry-chunks 紅、staging 連兩筆 build FAILED。
-        // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第六次同型回歸。
-        id.includes('/src/components/common/EmptyState.vue') ||
-        // 友善錯誤/連線狀態/捲動鎖/品牌裝飾元件：portal views 與家長端共用（皆 EP-free）。
-        // 未顯式指派時落 portal chunk → parent-app 靜態橋接整包 portal，連帶 cascade
-        // fullcalendar/chart-vendor/activity-admin/qrcode/markdown（~285KB gz）。
-        id.includes('/src/composables/useFriendlyError.ts') ||
-        id.includes('/src/utils/errorCodeRegistry.ts') ||
-        id.includes('/src/composables/useOnlineStatus.ts') ||
-        id.includes('/src/composables/useBodyLock.ts') ||
-        // useAccessibleDialog（public 對話框與家長端首屏 ConsentModal 共用）與
-        // calendarEventTypes（admin 行事曆與家長端簽收頁的類型中文對照）皆 EP-free。
-        // 2026-10 家長端 UI/UX 改版讓 ConsentModal 改用 useAccessibleDialog 後，未 pin 時
-        // Rollup 把它吸進 parent-app → index / public 靜態可達 parent-app（第七次同型回歸）。
-        id.includes('/src/composables/useAccessibleDialog.ts') ||
-        id.includes('/src/constants/calendarEventTypes.ts') ||
-        id.includes('/src/components/brand/') ||
-        // ErrorBoundary.vue（admin App.vue + parent App.vue 共用）與 chunkSelfHeal.ts
-        // （admin / public / parent 三端 main.ts 各呼叫一次）皆三端共用且皆 EP-free。
-        // 未顯式指派時 Rollup 把兩檔吸進 parent-app chunk → index / public entry 被迫
-        // 靜態 import parent-app 整包，連鎖 static-bridge 幾乎全部 chunk（家長 LIFF boot：
-        // 殭屍 mount、每次載頁必打 2 支 /api/parent 401、401 後 parent/api/index.ts 改寫
-        // location.hash='#/login' 摧毀 deep link → admin 深頁重整被彈首頁、報名連結 hash 被吃）。
-        // ⚠ 這是「三端共用的 EP-free 檔漏 pin → 被併進 parent-app」的第二次同型回歸
-        //（前次為 design-tokens.css，見下方全域樣式規則的註解）。釘到 shared-common
-        //（三端皆載、admin 本就載）即切斷 index/public → parent-app 的靜態橋接。
-        id.includes('/src/components/common/ErrorBoundary.vue') ||
-        id.includes('/src/utils/chunkSelfHeal.ts') ||
-        // sentry：三端 main.ts + ErrorBoundary + admin api/index.ts 皆 import。靜態
-        // import 全為 type-only（@sentry/vue 走 await import → sentry chunk 維持
-        // lazy），EP-free。未 pin 時被併進 admin-core → shared-common（ErrorBoundary
-        // 的 captureException）與 parent-app（parent main.ts 的 initSentry）雙雙
-        // 靜態橋接 admin-core。
-        id.includes('/src/utils/sentry.ts') ||
-        // errorHandler：純錯誤分類（零 import、EP-free），admin api/index.ts 與家長
-        // src/parent/api/index.ts 皆用。原列 admin-core，害 parent-app 靜態橋接
-        // admin-core（家長端被迫載整包 admin entry utilities）；移入 shared-common
-        // 切斷（admin-core 規則的清單已同步移除）。
-        id.includes('/src/utils/errorHandler.ts') ||
-        // lifecycle / taipeiTime / constants-activity：純常數/純函式（零 import、
-        // EP-free），admin/portal 與家長端 eager 元件（ChildrenStrip /
-        // useTodayTimeline / activityPayment）皆用。未 pin 時分別落 portal 與
-        // activity-admin chunk → parent-app 靜態橋接 portal / activity-admin，
-        // 再連鎖 admin-core + element-plus + fullcalendar 全塞進家長首屏。
-        // 釘到 shared-common 切斷整條 cascade。
-        id.includes('/src/constants/lifecycle.ts') ||
-        id.includes('/src/utils/taipeiTime.ts') ||
-        id.includes('/src/constants/activity.ts') ||
-        // ws / html：WebSocket 重連工具與 HTML escape（皆零 import、EP-free），
-        // admin（useInboxNotifications / useBusMonitor / DismissalQueueView）與家長端
-        // （useBusTracking / ParentOfflineIndicator）共用。未 pin 時 Rollup 把兩檔併進
-        // parent-app chunk → admin index 為了頂欄通知的 ws.ts 靜態橋接 parent-app 整包
-        // （首屏 332KB 爆 310KB 預算、check-entry-chunks 紅、staging 部署連續失敗）。
-        // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第三次同型回歸。
-        id.includes('/src/utils/ws.ts') ||
-        id.includes('/src/utils/html.ts') ||
-        // weekdaySchedule：上課星期複選的判定/格式化/衝堂純函式（零 import、EP-free），
-        // 公開報名頁 useCourseAdvisory 與家長端 parent/utils/activitySchedule 皆用。
-        // 未 pin 時被吸進 parent-app chunk → 公開頁的 ActivityPublicView（lazy route，
-        // 但 / redirect 到 /activity 故等同首屏）靜態 import parent-app 整包 →
-        // src/parent/main.ts 的 top-level 副作用執行：家長 App 也 mount('#app') 搶佔
-        // 畫面、guard 判未登入導向 /login → 公開報名網址開出家長端登入（LIFF）。
-        // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第四次同型回歸。
-        id.includes('/src/utils/weekdaySchedule.ts') ||
-        // publicCopy：公開頁行銷文案的粗體解析/一行一條轉換純函式（零 import、
-        // EP-free），公開頁 ActivityPublicView 與 admin ActivitySettingsView 共用。
-        // 與 weekdaySchedule 同型：跨端共用純函式檔必 pin，防被併進單端 chunk
-        // 造成另一端靜態橋接整包（2026-08-03 公開頁接管事故的教訓）。
-        id.includes('/src/utils/publicCopy.ts') ||
-        // 多租戶品牌（4d/fb）：tenantMeta.ts 是裸 fetch、零 axios 依賴，
-        // useTenantBranding.ts 只依賴 vue + tenantMeta。三個 entry 都要讀品牌字串，
-        // 家長端的 liff.ts 也 import tenantMeta 取 liff_id。
-        // ⛔ **不得改回 admin-core**：admin-core 被 check-entry-chunks.mjs 對 parent
-        //    entry 設為 forbidden（家長端不得靜態可達 admin-core），改回去會直接讓
-        //    `npm run build` exit 1、CI Build check 紅、出不了 image（CT-F-05 / GAP-01）。
-        id.includes('/src/api/tenantMeta.ts') ||
-        id.includes('/src/composables/useTenantBranding.ts') ||
-        // fc 的租戶解析／儲存隔離／boot 檢查／三態遮罩入口：同樣三端共用且 EP-free。
-        // ⚠ tenantBlocked.ts 漏 pin 曾讓 index.html 直接靜態可達 parent-app
-        //（「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」的第五次同型回歸），
-        // admin 首屏 gz 從 276KB 漂到 337KB 並觸發 check-entry-chunks 的 forbidden 邊。
-        id.includes('/src/utils/tenant.ts') ||
-        id.includes('/src/utils/tenantStorage.ts') ||
-        id.includes('/src/utils/tenantBlocked.ts') ||
-        id.includes('/src/utils/tenantBoot.ts') ||
-        // surveyQuestionTypes：活動參加調查題型列舉/共用驗證純函式（零 import、
-        // EP-free），管理端 surveyFormModel/SurveyDetailView、教師端
-        // PortalSurveyDetailView、家長端 SurveyFillSheet 三端皆 import 同一份
-        // （2026-08-10 whole-branch review Critical 修復：三端原本各自手抄字面值，
-        // 家長端曾誤植不存在的 'single'/'multi'）。與 weekdaySchedule/publicCopy
-        // 同型：跨端共用純函式檔未 pin 時會被吸進單端 chunk，讓另一端靜態橋接整包。
-        id.includes('/src/constants/surveyQuestionTypes.ts') ||
-        // reducedMotion：`prefers-reduced-motion` 偵測（零 import、EP-free），
-        // admin 的 DismissalPosCountdownBar（DismissalQueueView 靜態依賴鏈上）與
-        // 2026-09-16「家長端相簿回顧 UI」新增的 RecapViewer 兩端都用同一份。
-        // 未 pin 時被吸進 parent-app chunk → DismissalQueueView 靜態橋接
-        // parent-app 整包，check-entry-chunks 紅、staging 前端部署連兩筆失敗
-        // （2026-09-16 起）。「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」
-        // 第七次同型回歸。
-        id.includes('/src/utils/reducedMotion.ts')
-    ) {
+    // 必須先於 activity-admin / parent-app 規則，避免被 rollup 自動合併進單端 chunk。
+    // 清單與每條的來由見上方 SHARED_COMMON_PINS。
+    if (SHARED_COMMON_PINS.some((pin) => id.includes(pin))) {
         return 'shared-common'
     }
 
