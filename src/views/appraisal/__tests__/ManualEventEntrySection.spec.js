@@ -407,4 +407,27 @@ describe('ManualEventEntrySection', () => {
     expect(inp.attributes('data-grid-row')).toBe('0')
     expect(inp.attributes('data-grid-col')).toBe('10')
   })
+
+  it('傳入 deltaRanges（租戶規則）時，分值欄上下限以它為準', async () => {
+    const wrapper = mount(ManualEventEntrySection, mountOpts({
+      deltaRanges: { EXAM_RESULT: { min: -5, max: 15 } },
+    }))
+    await flushPromises()
+    const inp = wrapper
+      .findAllComponents({ name: 'ElInputNumberStub' })
+      .find((c) => c.attributes('data-test') === 'count-1-EXAM_RESULT')
+    expect(inp).toBeTruthy()
+    expect(inp.props('min')).toBe(-5)
+    expect(inp.vm.$attrs.max).toBe(15)
+  })
+
+  it('未傳 deltaRanges 時沿用 fallback 常數', async () => {
+    const wrapper = mount(ManualEventEntrySection, mountOpts())
+    await flushPromises()
+    const inp = wrapper
+      .findAllComponents({ name: 'ElInputNumberStub' })
+      .find((c) => c.attributes('data-test') === 'count-1-EXAM_RESULT')
+    expect(inp.props('min')).toBe(-10)
+    expect(inp.vm.$attrs.max).toBe(10)
+  })
 })
