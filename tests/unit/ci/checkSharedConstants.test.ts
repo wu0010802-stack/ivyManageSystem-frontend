@@ -24,6 +24,13 @@ const FE_FILES = {
   'src/constants/pos.ts': 'export const REFUND_APPROVAL_THRESHOLD = 1000\n',
   'src/constants/activity.ts':
     'export const GRADE_TARGET_BONUS = 1000\nexport const FIELD_RULES = { voidReasonMin: 5, refundReasonMin: 15, unlockReasonMin: 10 }\n',
+  'src/utils/leaves.ts':
+    "export const MATERNITY_FULL_PAY_SENIORITY_MONTHS = 6\nexport const LEAVE_TYPES = [\n  { value: 'personal', label: '事假' },\n  { value: 'maternity', label: '產假' },\n]\n",
+}
+
+const BE_LEAVE_FILES = {
+  'services/leave_quota_calc.py': 'MATERNITY_FULL_PAY_SENIORITY_MONTHS = 6\n',
+  'utils/constants.py': 'LEAVE_TYPE_LABELS: dict[str, str] = {\n    "personal": "事假",\n    "maternity": "產假",\n}\n',
 }
 
 // 後端 2026-10-22 起基本工資改年度表，常數取表尾一列（services/salary/minimum_wage.py）
@@ -36,8 +43,10 @@ MINIMUM_MONTHLY_WAGE = MINIMUM_WAGE_TABLE[-1][1]
 MINIMUM_HOURLY_WAGE = MINIMUM_WAGE_TABLE[-1][2]
 `
 
-function backend(minimumWageSource: string): string {
+function backend(minimumWageSource: string, extra: Record<string, string> = {}): string {
   return tree({
+    ...BE_LEAVE_FILES,
+    ...extra,
     'services/salary/minimum_wage.py': minimumWageSource,
     'utils/activity_constants.py':
       'REFUND_APPROVAL_THRESHOLD = 1000\nGRADE_TARGET_BONUS = 1000\nMIN_VOID_REASON_LENGTH = 5\nMIN_REFUND_REASON_LENGTH = 15\n',
@@ -77,5 +86,38 @@ describe('check-shared-constants 後端年度表引用', () => {
   it('直接寫數字的舊格式仍可解析', () => {
     const r = run(backend('MINIMUM_MONTHLY_WAGE = 29_500\nMINIMUM_HOURLY_WAGE = 196\n'))
     expect(r.status).toBe(0)
+  })
+})
+
+describe('check-shared-constants 假別代碼集合', () => {
+  const wage = 'MINIMUM_MONTHLY_WAGE = 29500\nMINIMUM_HOURLY_WAGE = 196\n'
+
+  it('前後端假別代碼相同時通過，並比對產假年資門檻', () => {
+    const r = run(backend(wage))
+    expect(r.stdout).toContain('[OK   ] 假別代碼: 2 個一致')
+    expect(r.stdout).toContain('BE MATERNITY_FULL_PAY_SENIORITY_MONTHS=6')
+    expect(r.status).toBe(0)
+  })
+
+  it('後端多一個假別時判漂移並列出差異', () => {
+    const r = run(backend(wage, {
+      'utils/constants.py':
+        'LEAVE_TYPE_LABELS: dict[str, str] = {\n    "personal": "事假",\n    "maternity": "產假",\n    "new_leave": "新假",\n}\n',
+    }))
+    expect(r.stdout).toContain('[DRIFT] 假別代碼')
+    expect(r.stdout).toContain('僅後端 [new_leave]')
+    expect(r.status).toBe(1)
+  })
+
+  it('後端找不到 LEAVE_TYPE_LABELS 時視為解析失敗（fail closed）', () => {
+    const r = run(backend(wage, { 'utils/constants.py': 'OTHER = {}\n' }))
+    expect(r.stdout).toContain('[DRIFT] 假別代碼')
+    expect(r.status).toBe(1)
+  })
+
+  it('產假年資門檻前後端不同時判漂移', () => {
+    const r = run(backend(wage, { 'services/leave_quota_calc.py': 'MATERNITY_FULL_PAY_SENIORITY_MONTHS = 12\n' }))
+    expect(r.stdout).toContain('[DRIFT] 產假全薪年資門檻（月）')
+    expect(r.status).toBe(1)
   })
 })

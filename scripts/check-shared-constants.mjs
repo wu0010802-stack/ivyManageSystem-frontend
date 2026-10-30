@@ -61,6 +61,22 @@ export const SHARED_CONSTANTS = [
     fe: { file: "src/constants/activity.ts", symbol: "unlockReasonMin" },
     be: { file: "schemas/activity_admin.py", symbol: "_UNLOCK_REASON_MIN_LENGTH" },
   },
+  // 2026-10-30：產假／流產假扣薪說明文字以此門檻組字（滿 N 個月不扣、未滿減半）。
+  {
+    label: "產假全薪年資門檻（月）",
+    fe: { file: "src/utils/leaves.ts", symbol: "MATERNITY_FULL_PAY_SENIORITY_MONTHS" },
+    be: { file: "services/leave_quota_calc.py", symbol: "MATERNITY_FULL_PAY_SENIORITY_MONTHS" },
+  },
+];
+
+// 假別代碼集合：前端 LEAVE_TYPES 的 value 必須與後端 LEAVE_TYPE_LABELS 的鍵完全相同，
+// 避免後端新增／改名假別後前端下拉選單與扣薪說明沒跟上。
+export const SHARED_KEY_SETS = [
+  {
+    label: "假別代碼",
+    fe: { file: "src/utils/leaves.ts", symbol: "LEAVE_TYPES" },
+    be: { file: "utils/constants.py", symbol: "LEAVE_TYPE_LABELS" },
+  },
 ];
 
 /**
@@ -128,6 +144,51 @@ export function parseTableLastRowRef(source, symbol) {
   return Number(cell.replace(/_/g, ""));
 }
 
+/** 取出 `NAME … = {` 或 `NAME … = [` 開頭、到配對收尾括號為止的區塊文字；找不到回 null。 */
+function sliceBlock(source, symbol) {
+  const start = source.match(new RegExp(`^(?:export\\s+const\\s+)?${symbol}\\b[^=\\n]*=\\s*([\\[{])`, "m"));
+  if (!start) return null;
+  const open = start[1];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  for (let i = start.index + start[0].length - 1; i < source.length; i++) {
+    if (source[i] === open) depth++;
+    else if (source[i] === close && --depth === 0) return source.slice(start.index, i + 1);
+  }
+  return null;
+}
+
+/** 解析 python dict `NAME: dict[str, str] = { "key": ... }` 的字串鍵；解析不到回 null。 */
+export function parseObjectKeys(source, symbol) {
+  const block = sliceBlock(source, symbol);
+  if (!block) return null;
+  const keys = [...block.matchAll(/^\s*["']([A-Za-z0-9_]+)["']\s*:/gm)].map((m) => m[1]);
+  return keys.length ? keys : null;
+}
+
+/** 解析 TS 陣列 `export const NAME = [ { value: 'key', ... }, ... ]` 的 value 欄；解析不到回 null。 */
+export function parseArrayValueKeys(source, symbol) {
+  const block = sliceBlock(source, symbol);
+  if (!block) return null;
+  const keys = [...block.matchAll(/\bvalue:\s*["']([A-Za-z0-9_]+)["']/g)].map((m) => m[1]);
+  return keys.length ? keys : null;
+}
+
+/** 兩邊鍵集合差異；任一側為 null 視為解析失敗。 */
+export function diffKeySet(feKeys, beKeys) {
+  if (!feKeys || !beKeys) return { ok: false, onlyFe: [], onlyBe: [] };
+  const fe = new Set(feKeys);
+  const be = new Set(beKeys);
+  const onlyFe = [...fe].filter((k) => !be.has(k));
+  const onlyBe = [...be].filter((k) => !fe.has(k));
+  return { ok: onlyFe.length === 0 && onlyBe.length === 0, onlyFe, onlyBe };
+}
+
+function readSource(rootDir, fileRel) {
+  const path = resolve(rootDir, fileRel);
+  return existsSync(path) ? readFileSync(path, "utf8") : null;
+}
+
 /** 純比對：回傳漂移的 rows（值不等、或任一側解析失敗）。 */
 export function diffConstants(rows) {
   return rows.filter(
@@ -171,10 +232,24 @@ export function main() {
     );
   }
 
+  let keySetBad = 0;
+  for (const k of SHARED_KEY_SETS) {
+    const feSrc = readSource(feRoot, k.fe.file);
+    const beSrc = readSource(beRoot, k.be.file);
+    const feKeys = feSrc === null ? null : parseArrayValueKeys(feSrc, k.fe.symbol);
+    const beKeys = beSrc === null ? null : parseObjectKeys(beSrc, k.be.symbol);
+    const d = diffKeySet(feKeys, beKeys);
+    if (!d.ok) keySetBad++;
+    const detail = !feKeys || !beKeys
+      ? `FE ${k.fe.symbol}=${feKeys ? feKeys.length : "null"} ↔ BE ${k.be.symbol}=${beKeys ? beKeys.length : "null"}`
+      : `僅前端 [${d.onlyFe.join(", ")}]；僅後端 [${d.onlyBe.join(", ")}]`;
+    console.log(`[${d.ok ? "OK   " : "DRIFT"}] ${k.label}: ${d.ok ? `${feKeys.length} 個一致` : detail}`);
+  }
+
   const bad = diffConstants(rows);
-  if (bad.length) {
+  if (bad.length || keySetBad) {
     console.error(
-      `\n[check-shared-constants] ${bad.length} 個共用常數前後端不一致或解析失敗——` +
+      `\n[check-shared-constants] ${bad.length + keySetBad} 個共用常數／代碼集合前後端不一致或解析失敗——` +
         `請修正其中一邊使其相符（兩邊都是 source of truth，值須相同）。`,
     );
     process.exit(1);
