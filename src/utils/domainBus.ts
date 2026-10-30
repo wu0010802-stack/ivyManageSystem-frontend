@@ -14,6 +14,7 @@ import mitt, { type Emitter } from 'mitt'
  *  - 'student-record:updated'   { kind, student_id, record_id, patch }
  *  - 'student-record:deleted'   { kind, student_id, record_id }
  *  - 'attendance:changed'       { date, classroom_id }
+ *  - 'employee:offboarded'      { id }
  *
  * kind ∈ 'incident' | 'assessment' | 'change_log'
  */
@@ -34,6 +35,10 @@ export const RECORD_EVENTS = Object.freeze({
 
 export const ATTENDANCE_EVENTS = Object.freeze({
   CHANGED: 'attendance:changed',
+} as const)
+
+export const EMPLOYEE_EVENTS = Object.freeze({
+  OFFBOARDED: 'employee:offboarded',
 } as const)
 
 export type DomainEventMap = {
@@ -62,6 +67,8 @@ export type DomainEventMap = {
   'student-record:deleted': { kind: string; student_id: number | undefined; record_id: number }
   /** 出勤異動（用於觸發 AttendanceSection 重新載入） */
   'attendance:changed': { date: unknown; classroom_id: unknown }
+  /** 員工完成離職流程（後端已設 is_active=false、resign_date），共用員工清單需失效 */
+  'employee:offboarded': { id: number }
 }
 
 export const domainBus: Emitter<DomainEventMap> = mitt<DomainEventMap>()

@@ -5,6 +5,7 @@ import { createStudent } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
 import { useQuickAddSubmit } from './useQuickAddSubmit'
 import { submitStudentCreateWithDuplicateConfirm } from '@/utils/studentDuplicateConflict'
+import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 
 type ClassroomOption = { id: number; name: string }
 
@@ -29,8 +30,8 @@ const rules: FormRules = {
 const classrooms = ref<ClassroomOption[]>([])
 const classroomsLoading = ref(false)
 
+// 每次開啟都重新載入：首頁不會重新掛載本元件，只載一次會讓之後新增的班級要整頁重整才選得到。
 const loadClassrooms = async () => {
-  if (classrooms.value.length > 0) return
   classroomsLoading.value = true
   try {
     const res = await getClassrooms({})
@@ -85,7 +86,15 @@ const handleSubmit = async () => {
     // run() 內部經 useErrorNotify 的 isSilentError 靜默處理（不顯示錯誤 toast）。
     submit: () => submitStudentCreateWithDuplicateConfirm(createStudent, payload),
   })
-  if (result) emit('update:visible', false)
+  if (result) {
+    // 比照 stores/student.ts createStudent：通知 syncBridge 讓學生清單與班級人數快取失效
+    const created = ((result as { data?: Record<string, unknown> })?.data ?? {}) as Record<string, unknown>
+    domainBus.emit(STUDENT_EVENTS.CREATED, {
+      id: created.id as number,
+      classroom_id: (created.classroom_id ?? payload.classroom_id ?? null) as number | null,
+    })
+    emit('update:visible', false)
+  }
 }
 </script>
 

@@ -1,7 +1,9 @@
-import { domainBus, STUDENT_EVENTS, RECORD_EVENTS } from '@/utils/domainBus'
+import { domainBus, STUDENT_EVENTS, RECORD_EVENTS, EMPLOYEE_EVENTS } from '@/utils/domainBus'
 import { useStudentStore } from './student'
 import { useStudentRecordsStore } from './studentRecords'
 import { useClassroomStore } from './classroom'
+import { useAllClassroomStore } from './classroomAll'
+import { useEmployeeStore } from './employee'
 
 let initialized = false
 const inFlight = new Set<string>()
@@ -17,6 +19,10 @@ export function initSyncBridge() {
   const studentStore = useStudentStore()
   const recordsStore = useStudentRecordsStore()
   const classroomStore = useClassroomStore()
+  // 跨學期班級清單與當期清單並存是刻意設計（見 classroomAll.ts）；這裡只補失效，
+  // 不主動重抓（沒有頁面在看時不必打 API，下次 fetchClassrooms() 會因 TTL 歸零重抓）。
+  const allClassroomStore = useAllClassroomStore()
+  const employeeStore = useEmployeeStore()
 
   function guard(eventKey: string, handler: () => void) {
     if (inFlight.has(eventKey)) return
@@ -44,6 +50,7 @@ export function initSyncBridge() {
     guard(STUDENT_EVENTS.CREATED, () => {
       studentStore.invalidateAll()
       classroomStore.fetchClassrooms(true)
+      allClassroomStore.invalidate()
     })
   })
 
@@ -55,6 +62,7 @@ export function initSyncBridge() {
       )
       recordsStore.invalidateAll()
       classroomStore.fetchClassrooms(true)
+      allClassroomStore.invalidate()
     })
   })
 
@@ -70,6 +78,7 @@ export function initSyncBridge() {
       studentStore.invalidateAll()
       recordsStore.invalidateAll()
       classroomStore.fetchClassrooms(true)
+      allClassroomStore.invalidate()
     })
   })
 
@@ -95,6 +104,12 @@ export function initSyncBridge() {
   domainBus.on(RECORD_EVENTS.CREATED, recordHandler)
   domainBus.on(RECORD_EVENTS.UPDATED, recordHandler)
   domainBus.on(RECORD_EVENTS.DELETED, recordHandler)
+
+  domainBus.on(EMPLOYEE_EVENTS.OFFBOARDED, ({ id }) => {
+    guard(`${EMPLOYEE_EVENTS.OFFBOARDED}:${id}`, () => {
+      employeeStore.invalidate()
+    })
+  })
 }
 
 export function _resetSyncBridgeForTests() {

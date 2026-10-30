@@ -21,6 +21,7 @@ import {
   processOffboarding,
 } from '@/api/offboarding'
 import type { ApiBody, ApiResponse } from '@/api/_generated/typed'
+import { domainBus, EMPLOYEE_EVENTS } from '@/utils/domainBus'
 
 export type OffboardingDetail = ApiResponse<'/offboarding/{employee_id}', 'get'>
 export type OffboardingPreviewPayload = ApiBody<'/offboarding/{employee_id}/preview', 'post'>
@@ -67,6 +68,8 @@ export const useOffboardingStore = defineStore('offboarding', () => {
   ): Promise<OffboardingProcessResult> {
     const res = await processOffboarding(id, payload)
     invalidate(id)
+    // 後端已把員工設為離職（is_active=false、resign_date），通知 syncBridge 讓共用員工清單失效
+    domainBus.emit(EMPLOYEE_EVENTS.OFFBOARDED, { id })
     return res.data
   }
 
