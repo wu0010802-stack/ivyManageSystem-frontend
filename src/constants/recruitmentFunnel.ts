@@ -5,7 +5,9 @@
  * 2026-07-30 起第四欄為真正的 withdrawn 退出狀態（退預繳／退註冊），
  * 舊 active（已開學）階段已自漏斗移除——開學屬學生 lifecycle 軸
  * （constants/lifecycle.ts），與本檔無關，勿混用。
- * 漂移由 __tests__/recruitmentFunnel.test.ts 鎖定。
+ * 跨 repo 漂移由後端 tests/test_lifecycle_funnel_parity.py 鎖定（regex 解析本檔
+ * FUNNEL_STAGES，在後端 CI cross-repo-parity job 跑）；__tests__/recruitmentFunnel.test.ts
+ * 只鎖前端自身的形狀。改 FUNNEL_STAGES 的寫法時要讓後端 parser 仍讀得懂。
  */
 
 export const FUNNEL_STAGES = ['visited', 'deposited', 'enrolled', 'withdrawn'] as const

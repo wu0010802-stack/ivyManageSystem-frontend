@@ -8,7 +8,11 @@
  *   - PARENT 家長端：transferred=已轉出 / withdrawn=已退學（enrolled 對家長亦顯示為在學）
  *
  * ALLOWED_TRANSITIONS 鏡像後端 services/student_lifecycle.py（後端為權威，
- * 此處供前端 UX gate）；漂移由 __tests__/lifecycle.test.ts 鎖定。
+ * 此處供前端 UX gate）。跨 repo 漂移由後端 tests/test_lifecycle_funnel_parity.py
+ * 鎖定（regex 解析本檔的 LIFECYCLE_STATUSES 順序與 ALLOWED_TRANSITIONS，在後端 CI
+ * cross-repo-parity job 帶 LIFECYCLE_PARITY_REQUIRE_FRONTEND=1 跑）；
+ * __tests__/lifecycle.test.ts 只鎖前端自身的形狀，擋不住與後端的漂移。
+ * 改這兩個常數的寫法時要讓後端 parser 仍讀得懂。
  *
  * 註：analytics 流失分析（ChurnPanel）只關注 active/on_leave 兩態且用語不同
  * （「休學中」），刻意不套用本檔。
