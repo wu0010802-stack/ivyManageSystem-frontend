@@ -299,3 +299,58 @@ jobs:
         working-directory: ivy-frontend
         run: npm run check:shared-constants
 
+      # FE/BE 雙寫清單的 parity 測試（測試本體在後端 repo）。原本只有後端 CI 的
+      # cross-repo-parity job 會跑，且拿的是前端同名分支／base／main——前端 PR 改了
+      # 權限、PII denylist、lifecycle 或招生漏斗常數，前端 CI 完全不會紅，
+      # 要等後端下一次 CI 才發現。這裡用剛 checkout 的「這次前端改動」對上後端
+      # companion ref 直接跑，sibling layout（../ivy-frontend）與後端 job 相同。
+      # 帶 *_REQUIRE_FRONTEND=1：缺 sibling 時 fail 而非 skip。後端 companion ref 若還沒有
+      # 該測試檔（例如 lifecycle parity 尚未併進後端 staging／main）則警告後略過，不誤紅。
+      # quick action module parity 暫不接：前端 QUICK_ACTION_CATALOG 已改成由
+      # QUICK_ACTION_KEYS 推導（Object.fromEntries），後端 test_quick_action_module_parity.py
+      # 的 regex 抽不到 key，接上會立刻紅；等後端 parser 跟上再補這一步。
+
+      - name: Run FE/BE PII denylist parity test
+        if: ${{ !cancelled() }}
+        working-directory: ivy-backend
+        env:
+          PII_PARITY_REQUIRE_FRONTEND: "1"
+          ENV: development
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+          JWT_SECRET_KEY: ci-test-secret-key-not-for-production
+        run: |
+          if [ ! -f tests/test_pii_denylist_parity.py ]; then
+            echo "::warning::後端 companion ref 沒有 tests/test_pii_denylist_parity.py（測試尚未併進該分支），略過"
+            exit 0
+          fi
+          python -m pytest tests/test_pii_denylist_parity.py -v -p no:cacheprovider
+
+      - name: Run FE/BE Permission parity test
+        if: ${{ !cancelled() }}
+        working-directory: ivy-backend
+        env:
+          PERMISSION_PARITY_REQUIRE_FRONTEND: "1"
+          ENV: development
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+          JWT_SECRET_KEY: ci-test-secret-key-not-for-production
+        run: |
+          if [ ! -f tests/test_permission_parity.py ]; then
+            echo "::warning::後端 companion ref 沒有 tests/test_permission_parity.py（測試尚未併進該分支），略過"
+            exit 0
+          fi
+          python -m pytest tests/test_permission_parity.py -v -p no:cacheprovider
+
+      - name: Run FE/BE lifecycle & recruitment funnel parity test
+        if: ${{ !cancelled() }}
+        working-directory: ivy-backend
+        env:
+          LIFECYCLE_PARITY_REQUIRE_FRONTEND: "1"
+          ENV: development
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+          JWT_SECRET_KEY: ci-test-secret-key-not-for-production
+        run: |
+          if [ ! -f tests/test_lifecycle_funnel_parity.py ]; then
+            echo "::warning::後端 companion ref 沒有 tests/test_lifecycle_funnel_parity.py（測試尚未併進該分支），略過"
+            exit 0
+          fi
+          python -m pytest tests/test_lifecycle_funnel_parity.py -v -p no:cacheprovider
