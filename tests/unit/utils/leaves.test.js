@@ -51,8 +51,9 @@ describe('LEAVE_TYPES', () => {
     expect(LEAVE_RULE_HINTS.time_swap).toContain('不扣薪')
   })
 
-  it('不扣薪假別正確標示（特休、產假、公假等）', () => {
-    const noDeductTypes = ['annual', 'maternity', 'paternity', 'official', 'marriage', 'bereavement', 'prenatal', 'compensatory', 'occupational_injury', 'time_swap']
+  // 產假／流產假依年資（滿 6 個月不扣、未滿減半），另見 src/utils/__tests__/leavesDeductionHint.test.ts
+  it('不扣薪假別正確標示（特休、公假等）', () => {
+    const noDeductTypes = ['annual', 'paternity', 'official', 'marriage', 'bereavement', 'prenatal', 'compensatory', 'occupational_injury', 'time_swap']
     for (const value of noDeductTypes) {
       const t = LEAVE_TYPES.find(t => t.value === value)
       expect(t.deduction).toBe('不扣')

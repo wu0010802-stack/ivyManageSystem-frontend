@@ -6,19 +6,28 @@
  *                   結構：{ personal: { label: '事假', type: 'warning' }, ... }
  */
 
+/**
+ * 產假／流產假全薪的年資門檻（月）。與後端 services/leave_quota_calc.py
+ * MATERNITY_FULL_PAY_SENIORITY_MONTHS 雙寫，由 scripts/check-shared-constants.mjs 比對。
+ * 到職滿此月數不扣薪，未滿減半發給（勞基法 §50 II）。
+ */
+export const MATERNITY_FULL_PAY_SENIORITY_MONTHS = 6
+const MATERNITY_DEDUCTION = `到職滿 ${MATERNITY_FULL_PAY_SENIORITY_MONTHS} 個月不扣，未滿減半`
+const MATERNITY_PAY_HINT = `到職滿 ${MATERNITY_FULL_PAY_SENIORITY_MONTHS} 個月薪資照給，未滿 ${MATERNITY_FULL_PAY_SENIORITY_MONTHS} 個月減半發給`
+
 export const LEAVE_TYPES = [
   { value: 'personal',       label: '事假',            color: 'warning', deduction: '全扣' },
   { value: 'sick',           label: '病假',            color: 'info',    deduction: '扣半薪' },
   { value: 'menstrual',      label: '生理假',          color: 'info',    deduction: '扣半薪' },
   { value: 'annual',         label: '特休',            color: 'success', deduction: '不扣' },
-  { value: 'maternity',      label: '產假',            color: 'success', deduction: '不扣' },
+  { value: 'maternity',      label: '產假',            color: 'success', deduction: MATERNITY_DEDUCTION },
   { value: 'paternity',      label: '陪產假',          color: 'success', deduction: '不扣' },
   { value: 'official',       label: '公假',            color: 'success', deduction: '不扣' },
   { value: 'marriage',       label: '婚假',            color: 'success', deduction: '不扣' },
   { value: 'bereavement',    label: '喪假',            color: 'success', deduction: '不扣' },
   { value: 'prenatal',       label: '產檢假',          color: 'success', deduction: '不扣' },
   { value: 'paternity_new',  label: '陪產檢及陪產假',  color: 'success', deduction: '不扣' },
-  { value: 'miscarriage',    label: '流產假',          color: 'success', deduction: '不扣' },
+  { value: 'miscarriage',    label: '流產假',          color: 'success', deduction: MATERNITY_DEDUCTION },
   { value: 'family_care',    label: '家庭照顧假',      color: 'warning', deduction: '全扣（併入事假）' },
   { value: 'parental_unpaid',label: '育嬰留職停薪',    color: 'info',    deduction: '留停無薪' },
   { value: 'compensatory',   label: '補休',            color: 'success', deduction: '不扣' },
@@ -38,14 +47,14 @@ export const LEAVE_RULE_HINTS = {
   sick: '每學年 30 日，薪資折半發給，且須以 4 小時為單位申請。',
   menstrual: '每月 1 日，併入病假計算，薪資依病假規定辦理。',
   annual: '依年資給假，仍須事先申請並經核准。',
-  maternity: '生育 8 週、流產依週數給假；需檢附醫生證明。',
+  maternity: `生育 8 週、流產依週數給假；需檢附醫生證明。${MATERNITY_PAY_HINT}。`,
   paternity: '配偶分娩前後 15 日內可請 5 日，薪資照給。',
   official: '代表園所參加校外活動得請公假，薪資照給。',
   marriage: '婚假 8 日，不含例假日，薪資照給。',
   bereavement: '喪假依親等給 3/6/8 日，需於事發日起 100 日內休畢。',
   prenatal: '產檢假 7 日，薪資照給。',
   paternity_new: '陪產檢及陪產假依園所規則辦理，薪資照給。',
-  miscarriage: '流產假依懷孕週數給假，需檢附醫療證明。',
+  miscarriage: `流產假依懷孕週數給假，需檢附醫療證明。${MATERNITY_PAY_HINT}。`,
   family_care: '全年 7 日，併入事假計算，薪資依事假規定辦理。',
   parental_unpaid: '任職滿 6 個月後可申請，子女滿 3 歲前最長 2 年。',
   compensatory: '補休不扣薪，依已核准補休配額使用。',
