@@ -170,6 +170,24 @@ export const SHARED_COMMON_PINS = [
     // （2026-09-16 起）。「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」
     // 第七次同型回歸。
     '/src/utils/reducedMotion.ts',
+    // 2026-10-30 tests/unit/build/parentSharedPins.test.ts 首次掃出的漏 pin（皆 EP-free、
+    // 依賴只有 vue 或已釘的 format／taipeiTime）：家長端與 admin／portal 共用，未 pin 時
+    // 由 Rollup 自行歸塊，隨時可能重演上面七次的 parent-app 橋接。
+    // currency：家長首屏 useParentTodos（eager）與 FeeHero 用；pos 被已釘的
+    // constants/activity 靜態 import、自身又 import currency，兩檔一起釘才不會讓
+    // shared-common 反向橋接別的 chunk。
+    '/src/utils/currency.ts',
+    '/src/constants/pos.ts',
+    // url（FaqAnswer）、publicLinks／useRegistrationWindow（家長才藝頁）、
+    // useDismissalUrgency（家長接送通知）：零或僅 vue／已釘檔依賴。
+    '/src/utils/url.ts',
+    '/src/utils/publicLinks.ts',
+    '/src/composables/useRegistrationWindow.ts',
+    '/src/composables/useDismissalUrgency.ts',
+    // useChartJs：家長生長曲線頁與 admin 報表共用；本身只 `import('chart.js')` 動態載入，
+    // 釘進 shared-common 只多一支極小的包裝檔，chart.js 仍留在 lazy 的 chart-vendor。
+    // ⚠ 不能改釘 chart-vendor：那會讓用到它的頁面靜態 import chart-vendor，抵銷 lazy。
+    '/src/composables/useChartJs.ts',
 ]
 
 function manualChunks(id) {
