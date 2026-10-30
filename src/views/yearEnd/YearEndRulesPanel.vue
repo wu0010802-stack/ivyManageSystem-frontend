@@ -7,8 +7,8 @@ import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { hasPermission } from '@/utils/auth'
 import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
-import { confirmWithReason } from '@/views/appraisal/confirmWithReason'
-import { injectOpenCycleHint } from '@/views/appraisal/composables/useOpenCycleHint'
+import { confirmWithReason } from '@/views/appraisalYearEnd/shared/confirmWithReason'
+import { injectOpenCycleHint } from '@/views/appraisalYearEnd/shared/useOpenCycleHint'
 import {
   DIVIDEND_ACTIVITY_GRADES,
   emptyGradeThresholdPercents,

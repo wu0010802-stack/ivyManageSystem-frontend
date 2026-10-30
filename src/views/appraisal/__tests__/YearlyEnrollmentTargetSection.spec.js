@@ -45,7 +45,7 @@ vi.mock('@/composables/useErrorNotify', () => ({
 
 // Task B5：mock useOpenCycleHint，允許測試驗證 notifyRuleChanged 被呼叫
 const mockNotifyRuleChanged = vi.fn()
-vi.mock('../composables/useOpenCycleHint', () => ({
+vi.mock('@/views/appraisalYearEnd/shared/useOpenCycleHint', () => ({
   injectOpenCycleHint: () => ({
     openCycle: { value: null },
     refresh: vi.fn(),
@@ -59,7 +59,7 @@ vi.mock('../composables/useOpenCycleHint', () => ({
 // Task B4：目標人數修改改走共用 confirmWithReason（確認＋原因）；mock 掉以獨立驗證
 // saveEdit() 有呼叫它、以及取消時（回傳 null）不送 PATCH。
 const confirmWithReasonMock = vi.fn()
-vi.mock('../confirmWithReason', () => ({
+vi.mock('@/views/appraisalYearEnd/shared/confirmWithReason', () => ({
   confirmWithReason: (...args) => confirmWithReasonMock(...args),
   RULE_CHANGE_REASON_TEMPLATES: ['年度政策調整', '主管裁示', '校正錯誤設定', '配合法規更新'],
 }))

@@ -14,7 +14,7 @@ import { listAppraisalCatalog, patchAppraisalCatalogItem } from '@/api/appraisal
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
-import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
+import { injectOpenCycleHint } from '@/views/appraisalYearEnd/shared/useOpenCycleHint'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 

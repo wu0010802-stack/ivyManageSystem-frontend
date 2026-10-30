@@ -4,7 +4,7 @@ import { defineComponent, h, inject, nextTick, provide } from 'vue'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import YearEndConfigView from '../YearEndConfigView.vue'
-import TargetCrossRef from '@/views/appraisal/components/TargetCrossRef.vue'
+import TargetCrossRef from '@/views/appraisalYearEnd/shared/TargetCrossRef.vue'
 
 // ---- Mock API modules ----
 vi.mock('@/api/yearEnd', async (importOriginal) => {

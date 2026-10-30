@@ -46,7 +46,7 @@ import ListView from './components/ListView.vue'
 import RejectDialog from './components/RejectDialog.vue'
 import CommentDialog from './components/CommentDialog.vue'
 import BatchSignButton from './components/BatchSignButton.vue'
-import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
+import SignProgressBar from '@/views/appraisalYearEnd/shared/SignProgressBar.vue'
 import EmployeeSummaryDrawer from './components/EmployeeSummaryDrawer.vue'
 
 interface Cycle {

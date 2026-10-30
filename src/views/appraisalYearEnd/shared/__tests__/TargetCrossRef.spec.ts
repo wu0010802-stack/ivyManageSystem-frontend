@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import TargetCrossRef from '../components/TargetCrossRef.vue'
+import TargetCrossRef from '../TargetCrossRef.vue'
 
 describe('TargetCrossRef', () => {
   it('三值不一致時顯示對照警示', () => {

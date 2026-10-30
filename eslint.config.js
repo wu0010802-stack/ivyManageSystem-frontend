@@ -128,6 +128,35 @@ export default tseslint.config(
     },
   },
 
+  // 分層守衛：考核（src/views/appraisal）與年終（src/views/yearEnd）不得互相 import。
+  // 兩者已整併在 /appraisal-year-end/* 底下，跨模組共用的元件／composable 一律放
+  // src/views/appraisalYearEnd/shared/（2026-10-30 搬入 useOpenCycleHint、confirmWithReason、
+  // TargetCrossRef、SignProgressBar 後上鎖）。只擋路徑形式的 import，@/api/yearEnd 等不受影響。
+  {
+    files: ['src/views/appraisal/**/*.{ts,vue}'],
+    ignores: ['**/__tests__/**', '**/*.test.ts', '**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['@/views/yearEnd', '@/views/yearEnd/**', '**/views/yearEnd/**', '../yearEnd/**', '../../yearEnd/**', '../../../yearEnd/**'],
+          message: 'src/views/appraisal 不得 import src/views/yearEnd；共用程式請移到 src/views/appraisalYearEnd/shared/。',
+        }],
+      }],
+    },
+  },
+  {
+    files: ['src/views/yearEnd/**/*.{ts,vue}'],
+    ignores: ['**/__tests__/**', '**/*.test.ts', '**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['@/views/appraisal', '@/views/appraisal/**', '**/views/appraisal/**', '../appraisal/**', '../../appraisal/**', '../../../appraisal/**'],
+          message: 'src/views/yearEnd 不得 import src/views/appraisal；共用程式請移到 src/views/appraisalYearEnd/shared/。',
+        }],
+      }],
+    },
+  },
+
   // 測試 / 設定 / 腳本：放寬 any 禁令（對齊 CLAUDE.md「測試可寬鬆、可 .js」精神）。
   {
     files: [

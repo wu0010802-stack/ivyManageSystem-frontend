@@ -19,8 +19,8 @@ import {
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
-import { confirmWithReason } from '../confirmWithReason'
-import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
+import { confirmWithReason } from '@/views/appraisalYearEnd/shared/confirmWithReason'
+import { injectOpenCycleHint } from '@/views/appraisalYearEnd/shared/useOpenCycleHint'
 
 // Task B5：規則變更影響提示——新增版本成功訊息改走 notifyRuleChanged，OPEN
 // 週期存在時提示「此變更於下次試算/重算生效」，取代原本固定的「已新增版本」。

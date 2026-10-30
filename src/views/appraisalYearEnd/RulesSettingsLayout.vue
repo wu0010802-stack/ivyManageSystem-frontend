@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { provideOpenCycleHint } from '@/views/appraisal/composables/useOpenCycleHint'
+import { provideOpenCycleHint } from '@/views/appraisalYearEnd/shared/useOpenCycleHint'
 import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { RULE_TABS, ruleTabSide, visibleRuleTabs, type AyeSide } from './ruleTabs'
 

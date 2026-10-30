@@ -20,7 +20,7 @@ vi.mock('element-plus', () => ({
 
 // Task B5：mock useOpenCycleHint，允許測試驗證 notifyRuleChanged 被呼叫
 const mockNotifyRuleChanged = vi.fn()
-vi.mock('../composables/useOpenCycleHint', () => ({
+vi.mock('@/views/appraisalYearEnd/shared/useOpenCycleHint', () => ({
   injectOpenCycleHint: () => ({
     openCycle: ref(null) as Ref<{ id: number; status?: string | null; [key: string]: unknown } | null>,
     refresh: vi.fn(),

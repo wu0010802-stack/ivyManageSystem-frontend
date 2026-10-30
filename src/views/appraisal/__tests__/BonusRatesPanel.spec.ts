@@ -14,7 +14,7 @@ vi.mock('@/utils/auth', () => ({
 }))
 
 const confirmWithReasonMock = vi.fn()
-vi.mock('../confirmWithReason', () => ({
+vi.mock('@/views/appraisalYearEnd/shared/confirmWithReason', () => ({
   confirmWithReason: (...args: unknown[]) => confirmWithReasonMock(...args),
   RULE_CHANGE_REASON_TEMPLATES: ['年度政策調整', '主管裁示', '校正錯誤設定', '配合法規更新'],
 }))

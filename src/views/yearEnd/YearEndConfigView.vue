@@ -16,7 +16,7 @@ import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { fmtPct } from '@/utils/format'
-import TargetCrossRef from '@/views/appraisal/components/TargetCrossRef.vue'
+import TargetCrossRef from '@/views/appraisalYearEnd/shared/TargetCrossRef.vue'
 import YearEndCycleRulesCard from './components/YearEndCycleRulesCard.vue'
 import type { CycleRulesState } from './yearEnd0315'
 

@@ -24,7 +24,7 @@ import { downloadFile } from '@/utils/download'
 import { hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
 import { SIGN_STATUS_TAG, SIGN_STATUS_ORDER, signStatusLabel } from '@/constants/appraisalYearEnd'
-import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
+import SignProgressBar from '@/views/appraisalYearEnd/shared/SignProgressBar.vue'
 import ProvenanceDrawer from './components/ProvenanceDrawer.vue'
 import type { ProvenanceKey } from './components/ProvenanceDrawer.vue'
 
@@ -135,7 +135,7 @@ watch(provenanceDrawerVisible, (visible) => {
 const statusLabel = signStatusLabel
 
 // Task 11②：頂部簽核進度列 counts —— 由已載入 settlements 的 status 本地聚合，
-// 不額外打 API（SignProgressBar 純顯示用元件，見 @/views/appraisalYearEnd/components/SignProgressBar.vue）
+// 不額外打 API（SignProgressBar 純顯示用元件，見 @/views/appraisalYearEnd/shared/SignProgressBar.vue）
 const settlementCounts = computed(() => {
   const counts: Record<string, number> = {}
   for (const s of settlements.value) {

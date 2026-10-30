@@ -20,11 +20,11 @@ import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { getCurrentAcademicTerm, buildSchoolYearOptions } from '@/utils/academic'
 import { autoEnrollmentCaption } from '@/utils/headcountLabels'
 import { formatTaipeiDateTimeMinute } from '@/utils/format'
-import { injectOpenCycleHint } from './composables/useOpenCycleHint'
+import { injectOpenCycleHint } from '@/views/appraisalYearEnd/shared/useOpenCycleHint'
 import CreateCycleDialog from './components/CreateCycleDialog.vue'
-import TargetCrossRef from './components/TargetCrossRef.vue'
+import TargetCrossRef from '@/views/appraisalYearEnd/shared/TargetCrossRef.vue'
 import type { CreatedCycle } from './composables/useCreateCycle'
-import { confirmWithReason } from './confirmWithReason'
+import { confirmWithReason } from '@/views/appraisalYearEnd/shared/confirmWithReason'
 
 interface CycleEntry {
   id: number

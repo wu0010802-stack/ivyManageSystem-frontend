@@ -3,7 +3,7 @@ const listMock = vi.fn()
 vi.mock('@/api/appraisal', () => ({ listAppraisalCycles: (...a: unknown[]) => listMock(...a) }))
 const msgSuccess = vi.fn()
 vi.mock('element-plus', () => ({ ElMessage: { success: (...a: unknown[]) => msgSuccess(...a), info: vi.fn() } }))
-import { useOpenCycleHint } from '../composables/useOpenCycleHint'
+import { useOpenCycleHint } from '../useOpenCycleHint'
 
 describe('useOpenCycleHint', () => {
   it('有 OPEN 週期時 refresh 設 openCycle', async () => {

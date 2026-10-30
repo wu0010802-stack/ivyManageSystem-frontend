@@ -18,7 +18,7 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 import { createScoringRule } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
-import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
+import { injectOpenCycleHint } from '@/views/appraisalYearEnd/shared/useOpenCycleHint'
 
 // Task B5：規則變更影響提示——建立成功訊息改走 notifyRuleChanged，OPEN 週期
 // 存在時提示「此變更於下次試算/重算生效」，取代原本固定的「已建立新版規則」。
