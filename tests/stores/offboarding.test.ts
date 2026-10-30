@@ -17,6 +17,7 @@ vi.mock('@/api/offboarding', () => ({
 }))
 
 import * as offboardingApi from '@/api/offboarding'
+import { domainBus, EMPLOYEE_EVENTS } from '@/utils/domainBus'
 import { useOffboardingStore } from '@/stores/offboarding'
 
 const mockDetail = { employee_id: 1, status: 'pending', last_working_date: '2026-06-30' }
@@ -115,5 +116,31 @@ describe('useOffboardingStore', () => {
 
     // cache 不應被寫入
     expect(store.getDetail(1)).toBeUndefined()
+  })
+
+  // 離職流程會把員工 is_active=false、寫 resign_date；共用員工清單（useEmployeeStore，
+  // 5 分鐘 TTL）需經 domainBus 通知失效，否則各頁在職下拉仍列出已離職者。
+  it('process 成功後 emit employee:offboarded', async () => {
+    ;(offboardingApi.processOffboarding as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockProcessResult })
+    const handler = vi.fn()
+    domainBus.on(EMPLOYEE_EVENTS.OFFBOARDED, handler)
+    try {
+      await useOffboardingStore().process(1, { resign_date: '2026-06-30' } as never)
+      expect(handler).toHaveBeenCalledWith({ id: 1 })
+    } finally {
+      domainBus.off(EMPLOYEE_EVENTS.OFFBOARDED, handler)
+    }
+  })
+
+  it('process 失敗時不 emit employee:offboarded', async () => {
+    ;(offboardingApi.processOffboarding as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'))
+    const handler = vi.fn()
+    domainBus.on(EMPLOYEE_EVENTS.OFFBOARDED, handler)
+    try {
+      await expect(useOffboardingStore().process(1, {} as never)).rejects.toThrow('boom')
+      expect(handler).not.toHaveBeenCalled()
+    } finally {
+      domainBus.off(EMPLOYEE_EVENTS.OFFBOARDED, handler)
+    }
   })
 })
