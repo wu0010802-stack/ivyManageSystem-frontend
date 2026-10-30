@@ -33,6 +33,7 @@ import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
 import ManualEventEntrySection from './components/ManualEventEntrySection.vue'
+import { resolveManualDeltaRanges } from './manualDeltaRanges'
 import ScorePreviewDialog from './components/ScorePreviewDialog.vue'
 import CreateCycleDialog from './components/CreateCycleDialog.vue'
 import AppraisalProcessGuide from './components/AppraisalProcessGuide.vue'
@@ -170,6 +171,9 @@ async function loadRules(
     rulesByCode.value = {}
   }
 }
+
+// 手填分值上下限跟隨同一份規則（後端以週期基準日規則驗證 422），規則未載入時退回預設常數
+const manualDeltaRanges = computed(() => resolveManualDeltaRanges(rulesByCode.value))
 
 // ── 簽核統計（給流程引導條 sync/recompute/sign 步驟判定用，Task A3）───
 const signSummary = ref<{ counts: Record<string, number> } | null>(null)
@@ -671,6 +675,7 @@ function onGuideNavigate(key: AppraisalStepKey) {
             :cycle-id="currentCycle.id"
             :participants="participants"
             :readonly="currentCycle.status !== 'OPEN'"
+            :delta-ranges="manualDeltaRanges"
           />
         </el-collapse-item>
       </el-collapse>

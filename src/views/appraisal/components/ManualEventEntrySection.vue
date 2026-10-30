@@ -7,6 +7,7 @@ import {
 } from '../composables/useManualEventEntry'
 import { MANUAL_COLUMN_GROUPS } from '../manualColumnGroups'
 import { MANUAL_DELTA_RANGES } from '@/constants/appraisal'
+import type { DeltaRange } from '../manualDeltaRanges'
 import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import { ElMessage } from 'element-plus'
@@ -16,6 +17,8 @@ const props = defineProps<{
   cycleId?: number | null
   participants?: Record<string, unknown>[]
   readonly?: boolean
+  /** 週期基準日有效的 MANUAL_DELTA 規則上下限（父層由 resolveManualDeltaRanges 算出）；未傳用預設常數 */
+  deltaRanges?: Record<string, DeltaRange> | null
 }>()
 
 const cycleIdRef = computed(() => props.cycleId ?? null)
@@ -32,8 +35,9 @@ const ITEM_CODES = MANUAL_ITEM_CODES
 const LABEL = MANUAL_LABEL
 
 // MANUAL_DELTA 類手填「分值」項（如幼兒意外 −10~0），其餘為次數/時數（min 0）
-const minFor = (code: string) => MANUAL_DELTA_RANGES[code]?.min ?? 0
-const maxFor = (code: string) => MANUAL_DELTA_RANGES[code]?.max ?? Infinity
+const rangeFor = (code: string) => (props.deltaRanges ?? MANUAL_DELTA_RANGES)[code]
+const minFor = (code: string) => rangeFor(code)?.min ?? 0
+const maxFor = (code: string) => rangeFor(code)?.max ?? Infinity
 
 // 分組表頭：巢狀 el-table-column 內仍需扁平欄位序（跨組連續）供鍵盤導航 data-grid-col 使用
 const colIndexOf = (code: string) => ITEM_CODES.indexOf(code)
