@@ -4,7 +4,7 @@ import ChildContextHeader from '../components/ChildContextHeader.vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import { useAbortableFetch } from '../composables/useAbortableFetch'
-import { getMonthlyAttendance } from '../api/attendance'
+import { getMonthlyAttendance, type ParentAttendanceDay } from '../api/attendance'
 import { localDateISO } from '../utils/date'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -43,10 +43,10 @@ const { data: attRes, error: attError, pending: loading, refresh: refreshAtt } =
   )
 const data = computed(() => attRes.value?.data || null)
 const dayMap = computed(() => {
-  const m = new Map<string, { status?: string; remark?: string }>()
-  for (const item of data.value?.items || []) {
-    const it = item as { date: string; status?: string; remark?: string }
-    m.set(it.date, it)
+  const m = new Map<string, DayInfo>()
+  for (const it of data.value?.items || []) {
+    // schema 宣告 date 可為 null（後端 r.date 為 NULL 時）；沿用原本照樣寫入 Map 的行為
+    m.set(it.date as string, it)
   }
   return m
 })
@@ -73,7 +73,7 @@ const calendarDays = computed(() => {
   return cells
 })
 
-type DayInfo = { status?: string; remark?: string }
+type DayInfo = Pick<ParentAttendanceDay, 'status' | 'remark'>
 type DayCell = { date: string; day: number; info: DayInfo | null } | null
 
 // 只記所選「日期」，狀態／備註一律由目前的 dayMap 推導：存 cell 快照會讓下拉重整
@@ -128,7 +128,7 @@ const STATUS_TONE: Record<string, { tone: string; label: string; mark: string }>
 const LEGEND = Object.values(STATUS_TONE)
 
 /** 格內記號：已知狀態用對照表，未知狀態退回狀態文字的第一個字（仍不只靠顏色） */
-function statusMark(status?: string): string {
+function statusMark(status?: string | null): string {
   if (!status) return ''
   return STATUS_TONE[status]?.mark ?? status.slice(0, 1)
 }

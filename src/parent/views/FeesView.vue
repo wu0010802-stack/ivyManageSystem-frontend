@@ -11,6 +11,11 @@ import {
   getFeesSummary,
   listFeeRecords,
   getFeePayments,
+  type ParentFeePayment,
+  type ParentFeeRecord,
+  type ParentFeeRefund,
+  type ParentFeesStudentSummary,
+  type ParentFeesSummary,
 } from '../api/fees'
 import { toast } from '../utils/toast'
 import { copyText as copyToClipboard } from '../utils/clipboard'
@@ -20,36 +25,21 @@ import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
-interface FeeRecord {
-  id: number
-  status: string
-  due_date?: string
-  fee_item_name: string
-  period?: string
-  student_name?: string
-  amount_due: number
-  amount_paid: number
-  outstanding: number
-  [key: string]: unknown
-}
-
-interface Payment {
-  payment_date?: string
-  payment_method?: string
-  amount?: number
-  receipt_no?: string
-}
+// 欄位型別取自後端 response_model（schema.d.ts），不再手寫一份會漂移的 interface。
+// student_name 不在後端回應內（buildReceiptText 一律退回「—」），保留宣告只為維持現況行為。
+type FeeRecord = ParentFeeRecord & { student_name?: string }
+type Payment = ParentFeePayment
 
 interface FeeDetail {
   record: FeeRecord
   payments: Payment[]
-  refunds: unknown[]
+  refunds: ParentFeeRefund[]
 }
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
 
-const summary = ref<Record<string, unknown> | null>(null)
+const summary = ref<ParentFeesSummary | null>(null)
 const records = ref<FeeRecord[]>([])
 const loading = ref(false)
 const loadError = ref(false)
@@ -85,12 +75,12 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const childTotals = computed(() => {
-  const map = new Map<number, unknown>()
-  for (const item of (summary.value?.by_student as { student_id: number }[]) || []) map.set(item.student_id, item)
+  const map = new Map<number, ParentFeesStudentSummary>()
+  for (const item of summary.value?.by_student || []) map.set(item.student_id, item)
   return map
 })
 
-const myTotals = computed(() => (childTotals.value.get(selectedId.value!) as Record<string, unknown> | undefined) || null)
+const myTotals = computed(() => childTotals.value.get(selectedId.value!) || null)
 
 /** 還沒繳清的狀態（overdue 若出現也算待繳，不能被分到「已結清」） */
 const PENDING_STATUSES = new Set(['unpaid', 'partial', 'overdue'])
@@ -103,8 +93,8 @@ function finiteOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-const familyOutstanding = computed(() => Number((summary.value?.totals as Record<string, unknown>)?.outstanding ?? 0))
-const familyOverdue = computed(() => Number((summary.value?.totals as Record<string, unknown>)?.overdue ?? 0))
+const familyOutstanding = computed(() => Number(summary.value?.totals?.outstanding ?? 0))
+const familyOverdue = computed(() => Number(summary.value?.totals?.overdue ?? 0))
 
 /**
  * 摘要口徑：頁面是「目前孩子」的帳單，hero 的金額／標題／狀態一律用同一位孩子的數字
@@ -143,7 +133,7 @@ const heroEyebrow = computed(() => {
 /** 多孩家庭且其他孩子也有欠款時，另外提一句全家合計，免得家長以為只剩這筆 */
 const familyNote = computed(() => {
   if (heroScope.value !== 'child') return ''
-  const children = (summary.value?.by_student as unknown[] | undefined)?.length ?? 0
+  const children = summary.value?.by_student?.length ?? 0
   if (children < 2 || familyOutstanding.value <= childOutstanding.value) return ''
   return `全家未繳合計 $${formatNum(familyOutstanding.value)}`
 })
@@ -185,7 +175,7 @@ const heroStatusLabel = computed(() => {
 async function fetchSummary() {
   try {
     const { data } = await getFeesSummary()
-    summary.value = data as Record<string, unknown>
+    summary.value = data
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
@@ -202,7 +192,7 @@ async function fetchRecords() {
   try {
     const { data } = await listFeeRecords(reqId)
     if (selectedId.value !== reqId) return
-    records.value = (data as { items?: FeeRecord[] })?.items || []
+    records.value = data?.items || []
   } catch (err) {
     if (selectedId.value !== reqId) return
     const e = err as Record<string, unknown>
@@ -231,15 +221,15 @@ async function retryLoad() {
 
 async function openDetail(record: FeeRecord) {
   const seq = ++detailSeq
-  const mine = { record, payments: [] as Payment[], refunds: [] as unknown[] }
+  const mine = { record, payments: [] as Payment[], refunds: [] as ParentFeeRefund[] }
   detail.value = mine
   detailError.value = false
   detailLoading.value = true
   try {
     const { data } = await getFeePayments(record.id)
     if (seq !== detailSeq) return
-    mine.payments = (data as { payments?: Payment[] })?.payments || []
-    mine.refunds = (data as { refunds?: unknown[] })?.refunds || []
+    mine.payments = data?.payments || []
+    mine.refunds = data?.refunds || []
     detail.value = { ...mine }
   } catch {
     // 失敗改在收據彈窗內顯示可重試的錯誤態，不再只跳 toast（避免顯示「無付款紀錄」的假空態）
@@ -326,7 +316,7 @@ async function pullRefresh() {
     <div v-if="myTotals" class="single-totals" data-testid="fees-single-totals">
       <span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
       <span class="totals-text">
-        {{ childName || '此學生' }}已繳 ${{ formatNum(myTotals.amount_paid as number) }}
+        {{ childName || '此學生' }}已繳 ${{ formatNum(myTotals.amount_paid) }}
         <template v-if="familyNote">・{{ familyNote }}</template>
       </span>
     </div>

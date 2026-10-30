@@ -23,8 +23,8 @@ interface FeeRecord {
   amount_due: number
   amount_paid: number
   outstanding: number
-  due_date?: string
-  period?: string
+  due_date?: string | null
+  period?: string | null
 }
 
 type ToneFn = (status: string) => 'ok' | 'warn' | 'danger' | 'neutral' | 'info'

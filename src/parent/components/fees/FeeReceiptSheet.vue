@@ -16,20 +16,20 @@ import ParentIcon from '@/parent/components/ParentIcon.vue'
 
 interface FeeRecord {
   fee_item_name: string
-  period?: string
+  period?: string | null
   [key: string]: unknown
 }
 
 interface Payment {
-  receipt_no?: string
-  payment_date?: string
-  payment_method?: string
+  receipt_no?: string | null
+  payment_date?: string | null
+  payment_method?: string | null
   amount?: number
   [key: string]: unknown
 }
 
 interface Refund {
-  refunded_at?: string
+  refunded_at?: string | null
   reason?: string
   amount?: number
   [key: string]: unknown
