@@ -27,6 +27,8 @@ export interface SettlementRecord {
     is_finalized: boolean
     breakdown_stale: boolean
     manual_overrides: string[]
+    /** 後端算好的主薪轉（SalaryRecordItemOut.base_transfer_amount）；畫面經 computeBaseTransferAmount 取用。 */
+    base_transfer_amount?: number
     [key: string]: unknown
 }
 
