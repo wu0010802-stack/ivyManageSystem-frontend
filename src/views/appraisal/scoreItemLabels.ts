@@ -53,13 +53,9 @@ export const AUTO_ITEM_CODES = new Set([
   'TRIAL_LEAVE',
 ])
 
-/** MANUAL_DELTA 類分值項的輸入範圍（與後端 aprreg01 規則 config 一致） */
-export const MANUAL_DELTA_RANGES: Record<string, { min: number; max: number }> = {
-  CHILD_ACCIDENT: { min: -10, max: 0 },
-  EXAM_RESULT: { min: -10, max: 10 },
-  RECRUIT_SCORE: { min: 0, max: 20 },
-  SUPERVISOR_SCORE: { min: 0, max: 10 },
-}
+// MANUAL_DELTA_RANGES 已搬到 @/constants/appraisal（components 也要用，不應反向依賴 views）；
+// 此處保留轉出別名，避免既有 importer 斷掉。
+export { MANUAL_DELTA_RANGES } from '@/constants/appraisal'
 
 /**
  * ITEM_DOMAIN_GROUPS — 24 碼依性質分五組（考勤/招生/才藝/懲處/加分），供規則設定頁

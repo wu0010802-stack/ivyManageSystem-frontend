@@ -6,7 +6,7 @@ import {
   MANUAL_LABEL,
 } from '../composables/useManualEventEntry'
 import { MANUAL_COLUMN_GROUPS } from '../manualColumnGroups'
-import { MANUAL_DELTA_RANGES } from '../scoreItemLabels'
+import { MANUAL_DELTA_RANGES } from '@/constants/appraisal'
 import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import { ElMessage } from 'element-plus'

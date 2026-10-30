@@ -109,7 +109,7 @@ import { getEmployees } from '@/api/employees'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { getUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
-import { MANUAL_DELTA_RANGES } from '@/views/appraisal/scoreItemLabels'
+import { MANUAL_DELTA_RANGES } from '@/constants/appraisal'
 import FormSection from '@/components/common/FormSection.vue'
 
 const props = withDefaults(defineProps<{
