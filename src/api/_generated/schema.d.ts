@@ -10507,6 +10507,9 @@ export interface paths {
          *     - 每週排班（ShiftAssignment）
          *     - 週末自動排除
          *     - 無排班資料時預設 8h/天
+         *
+         *     leave_hours＝送出假單時伺服器會寫入的時數（業主 2026-10-30：後端重算覆寫）；
+         *     部分時段帶 start_time（起日）／end_time（迄日），只帶一邊時另一邊取班別上下班時間。
          */
         get: operations["get_workday_hours_api_leaves_workday_hours_get"];
         put?: never;
@@ -16005,7 +16008,9 @@ export interface paths {
         };
         /**
          * Get My Workday Hours
-         * @description 計算本人在指定區間的每日工時明細（整合排班 + 國定假日）
+         * @description 計算本人在指定區間的每日工時明細（整合排班 + 國定假日）。
+         *
+         *     leave_hours＝送出假單時伺服器會寫入的時數（與管理端 /leaves/workday-hours 同口徑）。
          */
         get: operations["get_my_workday_hours_api_portal_my_workday_hours_get"];
         put?: never;
@@ -37956,6 +37961,8 @@ export interface components {
          *     為 0 (int)、workday branch 為 float — Pydantic float 自動 coerce。
          */
         MyWorkdayHoursBreakdownItem: {
+            /** Break Minutes */
+            break_minutes?: number | null;
             /** Date */
             date: string;
             /** Holiday Name */
@@ -37981,11 +37988,16 @@ export interface components {
         };
         /**
          * MyWorkdayHoursOut
-         * @description GET /portal/my-workday-hours 回傳 — total_hours + breakdown。
+         * @description GET /portal/my-workday-hours 回傳 — total_hours + breakdown + leave_hours。
+         *
+         *     leave_hours：送出假單時伺服器會寫入的時數（2026-10-30 業主裁定由後端重算覆寫）；
+         *     帶 start_time／end_time query 時是部分時段的時數，否則＝total_hours。前端只顯示此值。
          */
         MyWorkdayHoursOut: {
             /** Breakdown */
             breakdown: components["schemas"]["MyWorkdayHoursBreakdownItem"][];
+            /** Leave Hours */
+            leave_hours: number;
             /** Total Hours */
             total_hours: number;
         };
@@ -53575,6 +53587,19 @@ export interface components {
             message: string;
             /** Week Start */
             week_start: string;
+        };
+        /**
+         * WorkdayHoursOut
+         * @description GET /leaves/workday-hours 回傳：與教師端 /portal/my-workday-hours 同形
+         *     （total_hours＋breakdown＋伺服器會寫入的 leave_hours）。
+         */
+        WorkdayHoursOut: {
+            /** Breakdown */
+            breakdown: components["schemas"]["MyWorkdayHoursBreakdownItem"][];
+            /** Leave Hours */
+            leave_hours: number;
+            /** Total Hours */
+            total_hours: number;
         };
         /** WorkSampleCreate */
         WorkSampleCreate: {
@@ -71905,7 +71930,9 @@ export interface operations {
             query: {
                 employee_id: number;
                 end_date: string;
+                end_time?: string | null;
                 start_date: string;
+                start_time?: string | null;
             };
             header?: never;
             path?: never;
@@ -71919,7 +71946,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WorkdayHoursOut"];
                 };
             };
             /** @description Validation Error */
@@ -80787,7 +80814,9 @@ export interface operations {
         parameters: {
             query: {
                 end_date: string;
+                end_time?: string | null;
                 start_date: string;
+                start_time?: string | null;
             };
             header?: never;
             path?: never;

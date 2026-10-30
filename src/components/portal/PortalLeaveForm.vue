@@ -20,6 +20,7 @@ import {
 } from '@/utils/leaves'
 import { apiError } from '@/utils/error'
 import { useLeaveHoursCalculator } from '@/composables/useLeaveHoursCalculator'
+import type { WorkdayTimeQuery } from '@/composables/useWorkdayCalculator'
 import FormSection from '@/components/common/FormSection.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 
@@ -66,7 +67,7 @@ const {
   form,
   formRef,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fetchWorkdayHoursFn: ((start: string, end: string) => getMyWorkdayHours({ start_date: start, end_date: end })) as any,
+  fetchWorkdayHoursFn: ((start: string, end: string, times?: WorkdayTimeQuery) => getMyWorkdayHours({ start_date: start, end_date: end, ...times })) as any,
    
   fetchQuotaFn: (async (leaveType: string, year?: number) => {
     if (!leaveType || !_QUOTA_TYPES_LOCAL.has(leaveType)) return null

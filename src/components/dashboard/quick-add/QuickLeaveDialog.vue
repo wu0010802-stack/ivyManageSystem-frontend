@@ -6,6 +6,7 @@ import { createLeave } from '@/api/leaves'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES } from '@/utils/leaves'
 import { useQuickAddSubmit } from './useQuickAddSubmit'
+import { useWorkdayCalculator } from '@/composables/useWorkdayCalculator'
 
 type EmployeeOption = { id: number; name: string; job_title?: string }
 
@@ -27,6 +28,10 @@ const form = reactive({
   reason: '',
 })
 
+// 時數由後端依排班計算（GET /leaves/workday-hours 的 leave_hours；業主 2026-10-30 裁定
+// 送出時後端重算覆寫，HR 不能手動少報）。快速新增只有全天模式；API 失敗時前端估算只當提示。
+const { calcHint, calcLoading } = useWorkdayCalculator({ form: form as unknown as Record<string, unknown> })
+
 const dateOrderError = computed(() =>
   form.start_date && form.end_date && form.end_date < form.start_date
     ? '結束日期不可早於開始日期'
@@ -38,7 +43,13 @@ const rules: FormRules = {
   leave_type: [{ required: true, message: '請選擇假別', trigger: 'change' }],
   start_date: [{ required: true, message: '請選擇開始日期', trigger: 'change' }],
   end_date: [{ required: true, message: '請選擇結束日期', trigger: 'change' }],
-  leave_hours: [{ required: true, message: '請輸入請假時數', trigger: 'blur' }],
+  leave_hours: [
+    {
+      validator: (_rule, value, callback) =>
+        Number(value) >= 0.5 ? callback() : callback(new Error('所選區間沒有可請假的工作時數')),
+      trigger: 'change',
+    },
+  ],
 }
 
 const { submitting, run } = useQuickAddSubmit()
@@ -72,6 +83,7 @@ watch(
 )
 
 const handleSubmit = async () => {
+  if (calcLoading.value) return
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid || form.employee_id == null) return
   if (dateOrderError.value) return
@@ -141,8 +153,8 @@ const handleSubmit = async () => {
         />
       </el-form-item>
       <el-form-item label="時數" prop="leave_hours">
-        <el-input-number v-model="form.leave_hours" :min="0.5" :step="0.5" :precision="1" />
-        <span style="margin-left:8px;color:var(--el-text-color-secondary);font-size:12px">小時</span>
+        <span data-test="quick-leave-hours">{{ calcLoading ? '計算中…' : `${form.leave_hours} 小時` }}</span>
+        <span v-if="calcHint && !calcLoading" style="margin-left:8px;color:var(--el-text-color-secondary);font-size:12px">{{ calcHint }}</span>
       </el-form-item>
       <el-form-item label="原因">
         <el-input
@@ -157,7 +169,7 @@ const handleSubmit = async () => {
     </el-form>
     <template #footer>
       <el-button @click="emit('update:visible', false)">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="handleSubmit">送出</el-button>
+      <el-button type="primary" :loading="submitting" :disabled="calcLoading" @click="handleSubmit">送出</el-button>
     </template>
   </el-dialog>
 </template>

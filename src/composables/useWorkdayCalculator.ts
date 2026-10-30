@@ -3,10 +3,17 @@ import { useDebounceFn } from '@vueuse/core'
 import { getWorkdayHours } from '@/api/leaves'
 
 const DAILY_WORK_HOURS = 8
+// API 失敗時前端估算只當提示：送出時後端依排班重算並覆寫（業主 2026-10-30）
+const ESTIMATE_NOTE = '（預估，送出時以系統排班重算）'
+
+/** workday-hours 的部分時段 query：只帶有值的一邊（上午假只帶迄時、下午假只帶起時）。 */
+export type WorkdayTimeQuery = { start_time?: string; end_time?: string }
+
+type BreakdownDay = { type: string; date: string; hours?: number; work_start?: string; work_end?: string }
 
 export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<string, unknown>; fetchFn?: ((...args: unknown[]) => Promise<unknown>) | null }) {
   const calcHint = ref('')
-  const calcBreakdown = ref<{ type: string; date: string; hours?: number; work_start?: string; work_end?: string }[]>([])
+  const calcBreakdown = ref<BreakdownDay[]>([])
   const calcLoading = ref(false)
   const leaveMode = ref('full')
   const leaveSingleDate = ref('')
@@ -54,7 +61,7 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
       const hours = calcSameDayHours(s, e)
       form.leave_hours = Math.max(0.5, Math.round(hours * 2) / 2)
       const lunchNote = hours < (e.getTime() - s.getTime()) / 3600000 ? '（已扣除 1h 午休）' : ''
-      calcHint.value = `同日請假 ${form.leave_hours}h${lunchNote}（預設班制）`
+      calcHint.value = `同日請假 ${form.leave_hours}h${lunchNote}${ESTIMATE_NOTE}`
       return
     }
     const workdays = countWorkdays(sDay, eDay)
@@ -63,18 +70,23 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
     form.leave_hours = workdays === 0 ? 0 : Math.max(0.5, total)
     calcHint.value = workdays === 0
       ? '所選日期皆為非工作日（預設班制），請改選工作日'
-      : `${workdays} 個工作日 × ${DAILY_WORK_HOURS}h = ${total}h（預設班制，已排除週末）`
+      : `${workdays} 個工作日 × ${DAILY_WORK_HOURS}h = ${total}h（已排除週末）${ESTIMATE_NOTE}`
   }
 
-  const applyBreakdownResult = (start: string, end: string, total_hours: number, breakdown: { type: string; date: string; hours?: number; work_start?: string; work_end?: string }[]) => {
+  // serverHours：workday-hours 回傳的 leave_hours＝送出時後端會寫入的時數（業主 2026-10-30
+  // 裁定後端權威）。有值就直接顯示；沒有（舊版後端）才退回前端自算。
+  const applyBreakdownResult = (start: string, end: string, total_hours: number, breakdown: BreakdownDay[], serverHours?: number) => {
     calcBreakdown.value = breakdown
+    const hasServerHours = typeof serverHours === 'number'
     if (leaveMode.value === 'morning') {
       const sd = start.substring(0, 10)
       const dayData = breakdown.find(d => d.date === sd && d.type === 'workday')
       const workStart = dayData?.work_start || '08:00'
       form.start_date = `${sd} ${workStart}:00`
       form.end_date = `${sd} 12:00:00`
-      const hours = Math.max(0.5, Math.round((new Date(form.end_date as string).getTime() - new Date(form.start_date as string).getTime()) / 3600000 * 2) / 2)
+      const hours = hasServerHours
+        ? serverHours
+        : Math.max(0.5, Math.round((new Date(form.end_date as string).getTime() - new Date(form.start_date as string).getTime()) / 3600000 * 2) / 2)
       form.leave_hours = hours
       calcHint.value = `上午請假 ${hours}h（${workStart}–12:00）`
       return
@@ -85,18 +97,28 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
       const workEnd = dayData?.work_end || '17:00'
       form.start_date = `${sd} 13:00:00`
       form.end_date = `${sd} ${workEnd}:00`
-      const hours = Math.max(0.5, Math.round((new Date(form.end_date as string).getTime() - new Date(form.start_date as string).getTime()) / 3600000 * 2) / 2)
+      const hours = hasServerHours
+        ? serverHours
+        : Math.max(0.5, Math.round((new Date(form.end_date as string).getTime() - new Date(form.start_date as string).getTime()) / 3600000 * 2) / 2)
       form.leave_hours = hours
       calcHint.value = `下午請假 ${hours}h（13:00–${workEnd}）`
       return
     }
     if (leaveMode.value === 'full') {
-      form.leave_hours = Math.max(0.5, total_hours)
+      // 後端值為 0（區間全是週末／假日／排休）不抬成 0.5h，交由 ≥ 0.5h 表單驗證擋下
+      form.leave_hours = hasServerHours ? serverHours : Math.max(0.5, total_hours)
       const workdayCount = breakdown.filter(d => d.type === 'workday').length
       const holidayCount = breakdown.filter(d => d.type === 'holiday').length
       const parts = [`${workdayCount} 個工作日，合計 ${total_hours}h`]
       if (holidayCount > 0) parts.push(`${holidayCount} 天國定假日不計`)
       calcHint.value = parts.join('，')
+      return
+    }
+    if (hasServerHours) {
+      form.leave_hours = serverHours
+      const workdays = breakdown.filter(d => d.type === 'workday').length
+      const holidays = breakdown.filter(d => d.type === 'holiday').length
+      calcHint.value = `${workdays} 個工作日，合計 ${serverHours}h（依實際時段）${holidays > 0 ? `，${holidays} 天國定假日不計` : ''}`
       return
     }
     const startTime = start.substring(11, 16) || '09:00'
@@ -134,6 +156,20 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
   // stale 值一旦覆寫使用者無法修正。
   let fetchEpoch = 0
 
+  // 依模式決定帶給 workday-hours 的部分時段：全天不帶；上午只帶 12:00 迄時、下午只帶 13:00
+  // 起時（另一邊由後端取班別上下班時間，與送出時 start_time＝班別上班時間一致）；自訂帶起訖。
+  const timeQueryFor = (start: string, end: string): WorkdayTimeQuery => {
+    if (leaveMode.value === 'full') return {}
+    if (leaveMode.value === 'morning') return { end_time: '12:00' }
+    if (leaveMode.value === 'afternoon') return { start_time: '13:00' }
+    const q: WorkdayTimeQuery = {}
+    const st = start.substring(11, 16)
+    const et = end.substring(11, 16)
+    if (st) q.start_time = st
+    if (et) q.end_time = et
+    return q
+  }
+
   const fetchWorkdayHours = async (start: string, end: string) => {
     const my = ++fetchEpoch
     calcLoading.value = true
@@ -142,15 +178,16 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
     try {
       const sd = start.substring(0, 10)
       const ed = end.substring(0, 10)
+      const times = timeQueryFor(start, end)
       let res
       if (fetchFn) {
-        res = await fetchFn(sd, ed)
+        res = await fetchFn(sd, ed, times)
       } else {
-        res = await getWorkdayHours({ employee_id: form.employee_id, start_date: sd, end_date: ed })
+        res = await getWorkdayHours({ employee_id: form.employee_id, start_date: sd, end_date: ed, ...times })
       }
       if (my !== fetchEpoch) return
-      const { total_hours, breakdown } = (res as { data: { total_hours: number; breakdown: { type: string; date: string; hours?: number; work_start?: string; work_end?: string }[] } }).data
-      applyBreakdownResult(start, end, total_hours, breakdown)
+      const { total_hours, breakdown, leave_hours } = (res as { data: { total_hours: number; leave_hours?: number; breakdown: BreakdownDay[] } }).data
+      applyBreakdownResult(start, end, total_hours, breakdown, leave_hours)
     } catch {
       if (my !== fetchEpoch) return
       if (leaveMode.value === 'morning' || leaveMode.value === 'afternoon') {
@@ -158,7 +195,7 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
         // 不可走 fallbackCalc：呼叫端傳的是 date-only 字串，fallbackCalc 以同日 00:00–00:00
         // 建 Date → 誤算 0 分鐘 → 把 leave_hours 覆寫成 0.5h，與固定 4h 時段自相矛盾。
         form.leave_hours = 4
-        calcHint.value = `${leaveMode.value === 'morning' ? '上午' : '下午'} 4h（預設班制）`
+        calcHint.value = `${leaveMode.value === 'morning' ? '上午' : '下午'} 4h${ESTIMATE_NOTE}`
       } else {
         fallbackCalc(start, end)
       }
@@ -237,7 +274,7 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
     if (empId || fetchFn) {
       fetchWorkdayHours(singleDate, singleDate)
     } else {
-      calcHint.value = `${mode === 'morning' ? '上午' : '下午'} 4h（預設班制）`
+      calcHint.value = `${mode === 'morning' ? '上午' : '下午'} 4h${ESTIMATE_NOTE}`
     }
   })
 
