@@ -112,6 +112,22 @@ export default tseslint.config(
     rules: noUtcDateSliceRules,
   },
 
+  // 分層守衛：共用元件（src/components）不得反向 import 頁面（src/views）。
+  // 2026-10-30 清掉最後幾處（chartSetup 轉出、MANUAL_DELTA_RANGES、批次駁回對話框）後上鎖；
+  // 共用的東西請放 components／composables／constants／utils。
+  {
+    files: ['src/components/**/*.{ts,vue}'],
+    ignores: ['**/__tests__/**', '**/*.test.ts', '**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['@/views/*', '@/views/**', '**/views/*', '**/views/**'],
+          message: 'src/components 不得 import src/views；共用程式請移到 components／composables／constants／utils。',
+        }],
+      }],
+    },
+  },
+
   // 測試 / 設定 / 腳本：放寬 any 禁令（對齊 CLAUDE.md「測試可寬鬆、可 .js」精神）。
   {
     files: [
