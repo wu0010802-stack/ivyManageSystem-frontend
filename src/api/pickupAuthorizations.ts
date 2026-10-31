@@ -25,3 +25,9 @@ export const confirmVisualMatch = (
   authId: number,
 ): AxiosResp<'/pickup-authorizations/{auth_id}/confirm-visual-match', 'post'> =>
   api.post(`/pickup-authorizations/${authId}/confirm-visual-match`)
+
+// 園方作廢待交接的委託接送授權（監護權爭議、家長聯絡不上等）；非 active 回 409。
+export const cancelPickupAuthorization = (
+  authId: number,
+): AxiosResp<'/pickup-authorizations/{auth_id}/cancel', 'post'> =>
+  api.post(`/pickup-authorizations/${authId}/cancel`)
