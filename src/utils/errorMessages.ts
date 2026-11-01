@@ -98,6 +98,15 @@ export function errorDetailObject<T extends Record<string, unknown> = Record<str
 }
 
 /**
+ * 取後端字串 detail（HTTPException(detail="...")），非字串或空白回 null。
+ * 供元件依後端固定措辭分支（如 403 門檻辨識）；一般顯示訊息仍走 friendlyError。
+ */
+export function errorDetailString(err: unknown): string | null {
+  const d = (err as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail
+  return typeof d === 'string' && d.trim() ? d.trim() : null
+}
+
+/**
  * 產生「動作失敗：原因。下一步」格式的使用者友善訊息。
  *
  * @param action 完整動作片語（含「失敗」），如「載入請假清單失敗」「儲存加班單失敗」

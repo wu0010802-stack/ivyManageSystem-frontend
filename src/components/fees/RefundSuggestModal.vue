@@ -115,8 +115,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
-import { suggestRefund, refundFeeRecord } from '@/api/fees'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { suggestRefund, refundFeeRecord, createFeeRefundRequest } from '@/api/fees'
+import { friendlyError } from '@/utils/errorMessages'
+import { isRefundApprovalRequired, refundApprovalMessage } from './refundApproval'
 import { NON_REFUNDABLE_FEE_TYPES } from './feeTypes'
 import { dateToLocalISO } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
@@ -146,6 +148,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   refunded: []
+  requested: []
 }>()
 
 const FEE_TYPE_LABELS = {
@@ -280,21 +283,57 @@ function backToEdit() {
 async function onSubmit() {
   if (!canSubmit.value || !props.record || submitting.value) return
   submitting.value = true
+  const recordId = (props.record as FeeRecord).id
+  const payload = {
+    amount: form.amount,
+    reason: form.reason,
+    notes: form.notes,
+    calc_method: suggestion.value?.calc_method,
+    calc_payload: suggestion.value?.calc_payload,
+  }
+  let approvalError: unknown = null
   try {
-    await refundFeeRecord((props.record as FeeRecord).id, {
-      amount: form.amount,
-      reason: form.reason,
-      notes: form.notes,
-      idempotency_key: idempotencyKey.value,
-      calc_method: suggestion.value?.calc_method,
-      calc_payload: suggestion.value?.calc_payload,
-    })
+    await refundFeeRecord(recordId, { ...payload, idempotency_key: idempotencyKey.value })
     ElMessage.success('已建立退費')
     emit('refunded')
     emit('update:modelValue', false)
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err.response?.data?.detail || '退費失敗')
+    if (isRefundApprovalRequired(e)) {
+      approvalError = e
+    } else {
+      const err = e as { response?: { data?: { detail?: string } } }
+      ElMessage.error(err.response?.data?.detail || '退費失敗')
+    }
+  } finally {
+    submitting.value = false
+  }
+  if (approvalError) await offerRefundRequest(recordId, payload, approvalError)
+}
+
+// 累計達簽核門檻（FIN-F2）：不能由同一人直接退款，改送退費申請給另一位簽核者核准。
+// 申請不扣款，核准時才實際建立退費並扣已繳。
+async function offerRefundRequest(
+  recordId: number,
+  payload: Parameters<typeof createFeeRefundRequest>[1],
+  err: unknown,
+) {
+  try {
+    await ElMessageBox.confirm(
+      `${refundApprovalMessage(err)}。送出申請後不會立即扣款，待另一位具「金流簽核」權限者核准才會實際退費。`,
+      '需他人核准的退費',
+      { confirmButtonText: '送出退費申請', cancelButtonText: '返回', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  submitting.value = true
+  try {
+    await createFeeRefundRequest(recordId, payload)
+    ElMessage.success('已送出退費申請，待另一位簽核者核准後才會實際退費')
+    emit('requested')
+    emit('update:modelValue', false)
+  } catch (e: unknown) {
+    ElMessage.error(friendlyError('送出退費申請失敗', e))
   } finally {
     submitting.value = false
   }

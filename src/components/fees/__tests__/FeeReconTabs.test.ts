@@ -47,9 +47,13 @@ const apiMocks = vi.hoisted(() => ({
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
-const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
+const authMocks = vi.hoisted(() => ({
+  perms: new Set<string>(),
+  userInfo: null as Record<string, unknown> | null,
+}))
 vi.mock('@/utils/auth', () => ({
   hasPermission: (name: string) => authMocks.perms.has(name),
+  getUserInfo: () => authMocks.userInfo,
 }))
 
 const flushPromises = async () => {
@@ -105,6 +109,7 @@ const globalStubs = {
 beforeEach(() => {
   vi.clearAllMocks()
   authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE', 'FEE_CLOSE_APPROVE'])
+  authMocks.userInfo = null
 })
 
 describe('CashHandoverTab', () => {
@@ -159,6 +164,64 @@ describe('CashHandoverTab', () => {
     vm.confirmForm.actual = 100000
     await flushPromises()
     expect(vm.confirmVariance).toBe(0)
+  })
+
+  // FIN-F2：提交者不得自行簽收（後端 403），前端預先停用並說明；
+  // 若仍遇 403（例如資料過期）要顯示後端原因＋下一步，而非通用「請重試」
+  const SUBMITTED_BY_7 = {
+    id: 5, business_date: '2026-08-25', status: 'submitted',
+    cash_receipt_total: 100000, expected_cash_amount: 100000,
+    owner_actual_amount: null, variance: null, accountant_user_id: 7,
+  }
+
+  it('本人提交的交接批：老闆簽收按鈕停用', async () => {
+    authMocks.userInfo = { id: 7, username: 'acct' }
+    apiMocks.getCashHandovers.mockResolvedValueOnce({ total: 1, items: [SUBMITTED_BY_7] })
+    const wrapper = await mountTab()
+    await flushPromises()
+    const btn = wrapper.find('[data-test="confirm-handover"]')
+    expect(btn.exists()).toBe(true)
+    // 本檔未裝 ElementPlus：el-button 以原樣 custom element 渲染，disabled 落成字串屬性
+    expect(btn.attributes('disabled')).toBe('true')
+    const vm = wrapper.vm as unknown as { isOwnSubmission: (r: unknown) => boolean }
+    expect(vm.isOwnSubmission(SUBMITTED_BY_7)).toBe(true)
+  })
+
+  it('他人提交的交接批：老闆簽收按鈕可用', async () => {
+    authMocks.userInfo = { id: 8, username: 'owner' }
+    apiMocks.getCashHandovers.mockResolvedValueOnce({ total: 1, items: [SUBMITTED_BY_7] })
+    const wrapper = await mountTab()
+    await flushPromises()
+    const btn = wrapper.find('[data-test="confirm-handover"]')
+    expect(btn.attributes('disabled')).toBe('false')
+  })
+
+  it('簽收遇 403 → 顯示後端職責分離原因與下一步', async () => {
+    const { ElMessage } = await import('element-plus')
+    const errorSpy = vi.spyOn(ElMessage, 'error').mockImplementation(() => ({ close: () => {} }) as never)
+    authMocks.userInfo = { id: 8, username: 'owner' }
+    apiMocks.getCashHandovers.mockResolvedValue({ total: 1, items: [SUBMITTED_BY_7] })
+    apiMocks.confirmCashHandover.mockRejectedValueOnce({
+      response: {
+        status: 403,
+        data: { detail: '不可確認自己提交的現金交接（需由其他人點收，職責分離）' },
+      },
+    } as never)
+    const wrapper = await mountTab()
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      openConfirm: (r: unknown) => void
+      submitConfirm: () => Promise<void>
+      confirmForm: { actual?: number; reason: string }
+    }
+    vm.openConfirm(SUBMITTED_BY_7)
+    vm.confirmForm.actual = 100000
+    await vm.submitConfirm()
+    expect(errorSpy).toHaveBeenCalledWith(
+      '簽收失敗：不可確認自己提交的現金交接（需由其他人點收，職責分離）。請改由其他具簽收權限者點收。',
+    )
+    errorSpy.mockRestore()
+    apiMocks.getCashHandovers.mockImplementation(() => Promise.resolve({ total: 0, items: [] }))
   })
 
   it('無 FEE_CLOSE_APPROVE 者看不到老闆簽收按鈕（會計仍可提交）', async () => {

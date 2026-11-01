@@ -8664,15 +8664,33 @@ export interface paths {
         put?: never;
         /**
          * Refund Fee Record
-         * @description 建立退款紀錄並扣除已繳金額。
+         * @description 建立退款紀錄並扣除已繳金額（累計未達簽核門檻者）。
          *
-         *     - 退款金額必須 ≤ 當下已繳
-         *     - 一次退款一筆，需填退款原因（稽核要求）
-         *     - 鎖住該筆 fee record，避免與 pay_fee_record 併發衝突
-         *     - 若帶 idempotency_key，10 分鐘視窗內同 key 視為重試，回傳原退款結果
-         *       （避免網路重送造成重複扣款；DB UniqueConstraint 於並發時攔下第二筆）
+         *     累計退款達 FINANCE_APPROVAL_THRESHOLD：無簽核權者 403；有簽核權者亦回
+         *     409 REFUND_APPROVAL_REQUIRED，須改走 POST /records/{id}/refund-requests
+         *     由另一位簽核者核准（FIN-F2 職責分離）。
          */
         post: operations["refund_fee_record_api_fees_records__record_id__refund_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/records/{record_id}/refund-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Refund Request
+         * @description 送出學費退費申請（不扣款）；由另一位具金流簽核權者核准後才實際退款。
+         */
+        post: operations["create_refund_request_api_fees_records__record_id__refund_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8801,6 +8819,66 @@ export interface paths {
          *     與發單批次共用同生同月互擋：該生該月已有任一 monthly 單 → 409。
          */
         post: operations["create_manual_monthly_fee_record_api_fees_records_monthly_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/refund-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Refund Requests
+         * @description 退費申請佇列（全校）；僅不受班級限制的財務角色可列。
+         */
+        get: operations["list_refund_requests_api_fees_refund_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/refund-requests/{request_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Refund Request
+         * @description 核准退費申請並實際退款：核准者須具金流簽核權且不得為申請人。
+         */
+        post: operations["approve_refund_request_api_fees_refund_requests__request_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/refund-requests/{request_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Refund Request
+         * @description 駁回退費申請（不動任何金額）：同核准，需金流簽核權且不得為申請人。
+         */
+        post: operations["reject_refund_request_api_fees_refund_requests__request_id__reject_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12518,7 +12596,7 @@ export interface paths {
         };
         /**
          * List Payments
-         * @description 收據以 idempotency_key 分組（同一筆收據可能含多次付款）。
+         * @description 列出繳費與退款紀錄；對帳沖銷（內部更正）不列。
          *
          *     隱私：operator / refunded_by 等員工欄位不回傳；refund 只回金額與原因。
          */
@@ -33391,6 +33469,59 @@ export interface components {
             student_name?: string | null;
             /** Total Refunded */
             total_refunded: number;
+        };
+        /** FeeRefundRequestApproveOut */
+        FeeRefundRequestApproveOut: {
+            refund: components["schemas"]["FeeRefundCreateOut"];
+            request: components["schemas"]["FeeRefundRequestOut"];
+        };
+        /** FeeRefundRequestListOut */
+        FeeRefundRequestListOut: {
+            /** Items */
+            items: components["schemas"]["FeeRefundRequestOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * FeeRefundRequestOut
+         * @description 學費退費申請（FIN-F2 Maker–Checker）。
+         */
+        FeeRefundRequestOut: {
+            /** Amount */
+            amount: number;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /** Fee Item Name */
+            fee_item_name?: string | null;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Reason */
+            reason: string;
+            /** Record Id */
+            record_id: number;
+            /** Refund Id */
+            refund_id?: number | null;
+            /** Requested At */
+            requested_at?: string | null;
+            /** Requested By Name */
+            requested_by_name?: string | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id?: number | null;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /** FeeRefundRequestRejectIn */
+        FeeRefundRequestRejectIn: {
+            /** Reason */
+            reason: string;
         };
         /** FeeRefundSuggestOut */
         FeeRefundSuggestOut: {
@@ -68898,6 +69029,41 @@ export interface operations {
             };
         };
     };
+    create_refund_request_api_fees_records__record_id__refund_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeRefundRequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     suggest_refund_api_fees_records__record_id__refund_suggest_post: {
         parameters: {
             query?: never;
@@ -69048,6 +69214,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeeRecordOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_refund_requests_api_fees_refund_requests_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeRefundRequestListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_refund_request_api_fees_refund_requests__request_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeRefundRequestApproveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_refund_request_api_fees_refund_requests__request_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeRefundRequestRejectIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeRefundRequestOut"];
                 };
             };
             /** @description Validation Error */

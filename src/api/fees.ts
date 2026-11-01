@@ -35,6 +35,27 @@ export const refundFeeRecord = (
   payload: ApiBody<'/fees/records/{record_id}/refund', 'post'>,
 ): Promise<ApiResponse<'/fees/records/{record_id}/refund', 'post'>> =>
   api.post(`/fees/records/${id}/refund`, payload).then((res) => res.data)
+// ===== 學費退費申請（累計達簽核門檻：申請 → 另一位金流簽核者核准，FIN-F2）=====
+/** 送出退費申請（不扣款）；payload 與直接退費同形。 */
+export const createFeeRefundRequest = (
+  recordId: number,
+  payload: ApiBody<'/fees/records/{record_id}/refund-requests', 'post'>,
+): Promise<ApiResponse<'/fees/records/{record_id}/refund-requests', 'post'>> =>
+  api.post(`/fees/records/${recordId}/refund-requests`, payload).then((res) => res.data)
+export const getFeeRefundRequests = (
+  params?: ApiQuery<'/fees/refund-requests', 'get'>,
+): Promise<ApiResponse<'/fees/refund-requests', 'get'>> =>
+  api.get('/fees/refund-requests', { params }).then((res) => res.data)
+/** 核准並實際退款；需 ACTIVITY_PAYMENT_APPROVE 且不得為申請人本人（後端 403）。 */
+export const approveFeeRefundRequest = (
+  requestId: number,
+): Promise<ApiResponse<'/fees/refund-requests/{request_id}/approve', 'post'>> =>
+  api.post(`/fees/refund-requests/${requestId}/approve`).then((res) => res.data)
+export const rejectFeeRefundRequest = (
+  requestId: number,
+  payload: ApiBody<'/fees/refund-requests/{request_id}/reject', 'post'>,
+): Promise<ApiResponse<'/fees/refund-requests/{request_id}/reject', 'post'>> =>
+  api.post(`/fees/refund-requests/${requestId}/reject`, payload).then((res) => res.data)
 export const suggestRefund = (
   recordId: number,
   payload: ApiBody<'/fees/records/{record_id}/refund-suggest', 'post'>,
