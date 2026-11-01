@@ -1,4 +1,3 @@
-import { ElMessage } from 'element-plus'
 import api from './index'
 import type { ApiQuery, ApiBody, AxiosResp } from './_generated/typed'
 
@@ -30,6 +29,8 @@ export async function getAllEmployees(params?: EmployeeListParams): AxiosResp<'/
         rows.push(...next.data)
     }
     if (rows.length < total) {
+        // 動態載入：api 模組在首屏 entry 內，靜態 import element-plus 會把整包拖進首屏
+        const { ElMessage } = await import('element-plus')
         ElMessage.warning(`員工清單只載入 ${rows.length} / ${total} 筆，請以搜尋縮小範圍`)
     }
     return { ...first, data: rows }
