@@ -14,6 +14,7 @@ import FormSection from '@/components/common/FormSection.vue'
 import { sectionForStudentField } from '@/constants/studentFormSections'
 import { hasPermission } from '@/utils/auth'
 import { buildStudentMutationPayload } from './studentEditPayload'
+import { notifyTransferResult } from '@/utils/studentTransferNotice'
 
 const props = withDefaults(defineProps<{
   visible?: boolean
@@ -225,11 +226,12 @@ const submit = async () => {
       })
       if (payload.is_special_education == null) Reflect.deleteProperty(payload, 'is_special_education')
       if (isEdit.value) {
-        await studentStore.updateStudent(form.id as number, payload)
+        const result = await studentStore.updateStudent(form.id as number, payload)
+        notifyTransferResult('更新成功', (result as { warning?: string | null } | null)?.warning)
       } else {
         await studentStore.createStudent(payload)
+        ElMessage.success('新增成功')
       }
-      ElMessage.success(isEdit.value ? '更新成功' : '新增成功')
       snapshot()
       emit('saved', payload)
       close()
