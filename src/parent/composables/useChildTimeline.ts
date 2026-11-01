@@ -1,6 +1,15 @@
 import { ref, watch, type Ref } from 'vue'
 import { fetchChildTimeline } from '../api/childTimeline'
 
+// HEALTH-F13：親師溝通紀錄為園內紀錄，後端已不回傳；舊版後端仍可能回，前端再擋一層。
+const PARENT_HIDDEN_TYPES = new Set(['communication'])
+
+function visibleToParent(items: unknown[]): unknown[] {
+  return items.filter(
+    (it) => !PARENT_HIDDEN_TYPES.has(String((it as { type?: unknown } | null)?.type ?? '')),
+  )
+}
+
 export function useChildTimeline(studentIdRef: Ref<number | null | undefined>) {
   const items = ref<unknown[]>([])
   const loading = ref(false)
@@ -24,9 +33,9 @@ export function useChildTimeline(studentIdRef: Ref<number | null | undefined>) {
       const r = await fetchChildTimeline(sid, params)
       if (mySeq !== requestSeq || sid !== studentIdRef.value) return
       if (append) {
-        items.value = [...items.value, ...(r.data.items || [])]
+        items.value = [...items.value, ...visibleToParent(r.data.items || [])]
       } else {
-        items.value = r.data.items || []
+        items.value = visibleToParent(r.data.items || [])
       }
       nextCursor.value = r.data.next_cursor || null
     } catch (e) {

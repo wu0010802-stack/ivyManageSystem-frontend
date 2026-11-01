@@ -3,7 +3,7 @@ import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassIncidents, createPortalIncident } from '@/api/studentIncidents'
 import { getMyStudents } from '@/api/portal'
-import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as _TYPE_TAG, SEVERITY_TAG as _SEVERITY_TAG } from '@/constants/studentRecords'
+import { INCIDENT_PARENT_VISIBILITY_HINT, INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as _TYPE_TAG, SEVERITY_TAG as _SEVERITY_TAG } from '@/constants/studentRecords'
 import { useIsMobile } from '@/composables/useIsMobile'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
@@ -294,7 +294,15 @@ function resetFilters() {
     <!-- 新增 Dialog -->
     <el-dialog v-model="dialogVisible" title="新增事件紀錄" :width="isMobile ? '92%' : '500px'">
       <el-form label-width="90px" :label-position="isMobile ? 'top' : 'right'">
-        <el-form-item label="學生 *">
+        <el-alert
+          data-test="parent-visibility-hint"
+          type="info"
+          :closable="false"
+          show-icon
+          :title="INCIDENT_PARENT_VISIBILITY_HINT"
+          style="margin-bottom: 12px"
+        />
+<el-form-item label="學生 *">
           <el-select v-model="form.student_id" placeholder="選擇學生" style="width: 100%">
             <el-option v-for="s in currentStudents" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
