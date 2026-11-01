@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildStudentMutationPayload } from '../studentEditPayload'
+import { buildStudentMutationPayload, isEnrollmentDateClearable } from '../studentEditPayload'
 
 describe('buildStudentMutationPayload', () => {
   it('編輯資料來源未含政府欄位時，不送預設國籍與弱勢標記覆寫資料庫', () => {
@@ -149,5 +149,17 @@ describe('buildStudentMutationPayload', () => {
     )
 
     expect(payload).toEqual({ classroom_id: 20, source_classroom_id: 10 })
+  })
+})
+
+describe('isEnrollmentDateClearable（NEWSTU-F8）', () => {
+  it('編輯模式且已有入學日時不可清空（後端回 422；清空會讓歷史人數灌水）', () => {
+    expect(isEnrollmentDateClearable(true, { enrollment_date: '2026-10-20' })).toBe(false)
+  })
+
+  it('新增模式或原本沒有入學日時可清空', () => {
+    expect(isEnrollmentDateClearable(false, null)).toBe(true)
+    expect(isEnrollmentDateClearable(true, { enrollment_date: null })).toBe(true)
+    expect(isEnrollmentDateClearable(true, {})).toBe(true)
   })
 })
