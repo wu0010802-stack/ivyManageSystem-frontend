@@ -1,15 +1,11 @@
 import api from './index'
+import { fetchAllByTotalCount, EMPLOYEE_PAGE_LIMIT, EMPLOYEE_MAX_PAGES } from '@/utils/fetchAllByTotalCount'
 import type { ApiQuery, ApiBody, AxiosResp } from './_generated/typed'
 
 export const getEmployees = (params?: ApiQuery<'/employees', 'get'>): AxiosResp<'/employees', 'get'> =>
     api.get('/employees', { params })
 
-/** 後端 GET /employees 單頁 limit 上限（api/employees.py：Query(le=500)） */
-export const EMPLOYEE_PAGE_LIMIT = 500
-/** 翻頁安全上限：header 異常時不無限迴圈（500 × 40 = 2 萬筆） */
-const EMPLOYEE_MAX_PAGES = 40
-/** 後端以此 header 回報過濾後總筆數（body 維持陣列）；axios 會把 header 名轉小寫 */
-const TOTAL_COUNT_HEADER = 'x-total-count'
+export { EMPLOYEE_PAGE_LIMIT }
 
 type EmployeeListParams = Omit<NonNullable<ApiQuery<'/employees', 'get'>>, 'skip' | 'limit'>
 
@@ -18,23 +14,12 @@ type EmployeeListParams = Omit<NonNullable<ApiQuery<'/employees', 'get'>>, 'skip
  * 離職發起、員工搜尋）一律走這裡，依 `X-Total-Count` 逐頁取完並合併。
  * 舊後端沒有該 header 時退回單頁；翻頁上限仍取不完時提示使用者，不靜默少人。
  */
-export async function getAllEmployees(params?: EmployeeListParams): AxiosResp<'/employees', 'get'> {
-    const first = await getEmployees({ ...params, skip: 0, limit: EMPLOYEE_PAGE_LIMIT })
-    const total = Number(first.headers?.[TOTAL_COUNT_HEADER])
-    if (!Number.isFinite(total)) return first
-    const rows = [...(first.data ?? [])]
-    for (let page = 1; rows.length < total && page < EMPLOYEE_MAX_PAGES; page++) {
-        const next = await getEmployees({ ...params, skip: rows.length, limit: EMPLOYEE_PAGE_LIMIT })
-        if (!next.data?.length) break
-        rows.push(...next.data)
-    }
-    if (rows.length < total) {
-        // 動態載入：api 模組在首屏 entry 內，靜態 import element-plus 會把整包拖進首屏
-        const { ElMessage } = await import('element-plus')
-        ElMessage.warning(`員工清單只載入 ${rows.length} / ${total} 筆，請以搜尋縮小範圍`)
-    }
-    return { ...first, data: rows }
-}
+export const getAllEmployees = (params?: EmployeeListParams): AxiosResp<'/employees', 'get'> =>
+    fetchAllByTotalCount((skip, limit) => getEmployees({ ...params, skip, limit }), {
+        pageLimit: EMPLOYEE_PAGE_LIMIT,
+        maxPages: EMPLOYEE_MAX_PAGES,
+        label: '員工清單',
+    })
 
 export const getEmployee = (id: number): AxiosResp<'/employees/{employee_id}', 'get'> =>
     api.get(`/employees/${id}`)
