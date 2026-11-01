@@ -60,6 +60,28 @@ describe('fees api — non-template endpoints', () => {
     expect(mockPost).toHaveBeenCalledWith('/fees/records/42/refund', payload)
   })
 
+  // FIN-F2：累計達簽核門檻的學費退費改走申請 → 他人核准
+  it('createFeeRefundRequest POST /fees/records/:id/refund-requests with payload', async () => {
+    const payload = { amount: 1500, reason: '家長申請退費' }
+    await mod.createFeeRefundRequest(42, payload)
+    expect(mockPost).toHaveBeenCalledWith('/fees/records/42/refund-requests', payload)
+  })
+
+  it('getFeeRefundRequests GET /fees/refund-requests with params', async () => {
+    await mod.getFeeRefundRequests({ status: 'requested' })
+    expect(mockGet).toHaveBeenCalledWith('/fees/refund-requests', { params: { status: 'requested' } })
+  })
+
+  it('approveFeeRefundRequest POST /fees/refund-requests/:id/approve', async () => {
+    await mod.approveFeeRefundRequest(7)
+    expect(mockPost).toHaveBeenCalledWith('/fees/refund-requests/7/approve')
+  })
+
+  it('rejectFeeRefundRequest POST /fees/refund-requests/:id/reject with reason', async () => {
+    await mod.rejectFeeRefundRequest(7, { reason: '金額有誤請重送' })
+    expect(mockPost).toHaveBeenCalledWith('/fees/refund-requests/7/reject', { reason: '金額有誤請重送' })
+  })
+
   it('suggestRefund POST /fees/records/:id/refund-suggest with payload', async () => {
     const payload = { effective_date: '2026-05-01' }
     await mod.suggestRefund(42, payload)
