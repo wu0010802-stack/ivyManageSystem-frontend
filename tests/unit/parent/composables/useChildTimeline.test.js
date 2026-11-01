@@ -138,3 +138,23 @@ describe('useChildTimeline', () => {
     expect(items.value).toEqual([{ id: 99 }])
   })
 })
+
+describe('useChildTimeline — 內部溝通紀錄防線（HEALTH-F13）', () => {
+  it('即使後端回了 communication 項目也不顯示給家長', async () => {
+    fetchChildTimeline.mockResolvedValueOnce({
+      data: {
+        items: [
+          { id: 'milestone-1', type: 'milestone' },
+          { id: 'communication-2', type: 'communication', summary: '疑似轉園' },
+        ],
+        next_cursor: null,
+      },
+    })
+    const sid = ref(10)
+    const { items } = useChildTimeline(sid)
+    await nextTick()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(items.value).toEqual([{ id: 'milestone-1', type: 'milestone' }])
+  })
+})
