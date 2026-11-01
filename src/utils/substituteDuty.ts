@@ -32,3 +32,18 @@ export function takesDutyHandoverText(requesterName?: string | null): string {
   const name = requesterName && requesterName.length > 0 ? requesterName : '請假人'
   return `請你接手 ${name} 這幾天的職務班別；假單核准後，你的上下班時間會跟著調整`
 }
+
+/**
+ * 審核清單：申請人在假期內「正以代理人身分接手他人職務」的日期（後端 `covering_substitute_duty_dates`）。
+ * 非空代表核准後被代理者當天無人頂班；後端不會自動收回代理班，需行政人員另行安排。
+ */
+export function coveringSubstituteDutyDates(row: unknown): string[] {
+  const list = asRecord(row)?.covering_substitute_duty_dates
+  if (!Array.isArray(list)) return []
+  return list.filter((d): d is string => typeof d === 'string' && d.length > 0)
+}
+
+/** 審核清單／審核抽屜共用的代理職務衝突說明（文案不漂移）。 */
+export function coveringSubstituteDutyText(dates: string[]): string {
+  return `申請人在 ${dates.join('、')} 正代理他人職務並已接手班表，核准後被代理者當天無人頂班，請另行安排代理`
+}
