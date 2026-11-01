@@ -24,6 +24,7 @@ import AdminListToolbar, { type FilterGroup } from '@/components/common/AdminLis
 import { useIsMobile } from '@/composables/useIsMobile'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import {
+  cancelPickupAuthorization,
   listPickupAuthorizations,
   overridePickupAuthorization,
   verifyPickupAuthorization,
@@ -279,7 +280,8 @@ const todoCount = computed(() => statusCounts.value.active)
 
 function recordSummary(item: PickupAuth): string {
   if (item.status === 'cancelled') {
-    return item.cancelled_at ? `家長 ${formatDateTime(item.cancelled_at)} 取消` : '家長已取消'
+    // 家長端與園方都可能取消，回應不分來源，文案保持中性。
+    return item.cancelled_at ? `${formatDateTime(item.cancelled_at)} 取消` : '已取消'
   }
   if (item.status === 'completed') {
     const via = item.completed_via === 'code' ? '驗碼'
@@ -390,6 +392,40 @@ async function submitOverride() {
     ElMessage.error(extractErrorDetail(err))
   } finally {
     verifying.value = false
+  }
+}
+
+// ── 園方取消授權 ────────────────────────────────────────────────────────
+// 一次只送一筆：送出中所有取消鈕 disabled，避免連點或同時作廢多筆。
+const cancellingId = ref<number | null>(null)
+const HTTP_CONFLICT = 409
+
+async function cancelAuthorization(item: PickupAuth) {
+  if (cancellingId.value !== null) return
+  try {
+    await ElMessageBox.confirm(
+      `確定取消 ${item.student_name} ${formatPickupDate(item.pickup_date)}由 ${item.person_name}（${item.person_relation}）接送的授權？取消後此取件碼立即失效，且無法復原。`,
+      '取消接送授權',
+      { confirmButtonText: '取消授權', cancelButtonText: '返回', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  cancellingId.value = item.id
+  try {
+    await cancelPickupAuthorization(item.id)
+    ElMessage.success('已取消接送授權')
+    fetchData()
+  } catch (err) {
+    const status = (err as { response?: { status?: number } }).response?.status
+    if (status === HTTP_CONFLICT) {
+      ElMessage.warning('這筆授權已交接、已取消或已過期，無法再取消；已重新整理清單')
+      fetchData()
+    } else {
+      ElMessage.error(extractErrorDetail(err))
+    }
+  } finally {
+    cancellingId.value = null
   }
 }
 
@@ -506,6 +542,16 @@ onMounted(fetchData)
           :aria-label="`人工核對${item.student_name}的接送人證件`"
           @click="openVerify(item as unknown as PickupAuth)"
         >人工核對</el-button>
+        <el-button
+          v-if="canWrite && item.effective_status === 'active'"
+          data-test="pickup-cancel"
+          type="danger"
+          plain
+          :loading="cancellingId === item.id"
+          :disabled="cancellingId !== null && cancellingId !== item.id"
+          :aria-label="`取消${item.student_name}的接送授權`"
+          @click="cancelAuthorization(item as unknown as PickupAuth)"
+        >取消授權</el-button>
       </template>
     </AdminListCards>
 
@@ -557,7 +603,7 @@ onMounted(fetchData)
           </div>
         </template>
       </el-table-column>
-      <el-table-column v-if="canWrite" label="" width="130">
+      <el-table-column v-if="canWrite" label="" width="210">
         <template #default="{ row }">
           <el-button
             v-if="row.effective_status === 'active' && !row.code_locked"
@@ -573,6 +619,17 @@ onMounted(fetchData)
             :aria-label="`人工核對${row.student_name}的接送人證件`"
             @click="openVerify(row)"
           >人工核對</el-button>
+          <el-button
+            v-if="row.effective_status === 'active'"
+            data-test="pickup-cancel"
+            type="danger"
+            plain
+            size="small"
+            :loading="cancellingId === row.id"
+            :disabled="cancellingId !== null && cancellingId !== row.id"
+            :aria-label="`取消${row.student_name}的接送授權`"
+            @click="cancelAuthorization(row)"
+          >取消授權</el-button>
         </template>
       </el-table-column>
       <template #empty>

@@ -13661,6 +13661,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pickup-authorizations/{auth_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Cancel
+         * @description QA AUTHZ-F1：園方作廢委託接送授權（例如監護權爭議、家長聯絡不上）。
+         *
+         *     原本只有建立者本人能取消，被解除監護者預建的未來日授權沒有任何人能作廢。
+         *     語意同家長端取消：active → cancelled，連動中的 proxy 接送通知一併取消。
+         */
+        post: operations["admin_cancel_api_pickup_authorizations__auth_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pickup-authorizations/{auth_id}/confirm-visual-match": {
         parameters: {
             query?: never;
@@ -77079,6 +77102,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PortalPickupAuthListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_cancel_api_pickup_authorizations__auth_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
                 };
             };
             /** @description Validation Error */
