@@ -5,5 +5,168 @@
     "每筆都必須有 expires，過期會讓 gate 轉紅以強制重新檢討。",
     "當上游修好、漏洞消失後，script 會提示把對應項目刪掉。"
   ],
-  "allow": []
+  "allow": [
+    {
+      "package": "minimatch",
+      "severity": "moderate",
+      "reason": "GHSA-g3hv-75wg-m249（minimatch <11.0.1）只在 minimatch 11.x 修補（2026-10-27 才發佈的 major，無 10.x/9.x/5.x backport）；2026-10-31 查 registry，eslint 10.14.0／@eslint/config-array 0.23.5／typescript-estree 8.72.1／workbox-build 7.4.1／editorconfig 3.0.2／filelist 2.0.2／@redocly/openapi-core 1.34.22 最新版皆仍依賴 <11，上游未跟進；全為 devDependency（lint／build／codegen 工具），pattern 皆為 repo 內固定字串",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "glob",
+      "severity": "moderate",
+      "reason": "GHSA-3g3m-2fjr-6pw4（glob 9–14.0.1）只在 glob 14.0.2+ 修補（2026-10-27 發佈的 major）；workbox-build 7.4.1、@sentry/bundler-plugins 11.10.0、js-beautify 2.0.3 最新版仍依賴 glob ≤13；devDependency，不使用 AbortSignal 逾時",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@eslint/config-array",
+      "severity": "moderate",
+      "reason": "僅經由 minimatch 傳遞（最新 0.23.5 仍依賴 minimatch ^10.2.4）；devDependency，只在 lint 執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "eslint",
+      "severity": "moderate",
+      "reason": "僅經由 minimatch／@eslint/config-array 傳遞；已升到最新 10.14.0 仍依賴 minimatch ^10.2.6，無版本可升；只在 lint 執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@eslint-community/eslint-utils",
+      "severity": "moderate",
+      "reason": "僅經由 eslint 傳遞（peer）；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@typescript-eslint/typescript-estree",
+      "severity": "moderate",
+      "reason": "僅經由 minimatch 傳遞；已升到最新 8.72.1 仍依賴 minimatch ^10.2.2；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@typescript-eslint/utils",
+      "severity": "moderate",
+      "reason": "僅經由 typescript-estree／eslint 傳遞；已在最新 8.72.1；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@typescript-eslint/parser",
+      "severity": "moderate",
+      "reason": "僅經由 typescript-estree／eslint 傳遞；已在最新 8.72.1；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@typescript-eslint/type-utils",
+      "severity": "moderate",
+      "reason": "僅經由 typescript-estree／eslint 傳遞；已在最新 8.72.1；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@typescript-eslint/eslint-plugin",
+      "severity": "moderate",
+      "reason": "僅經由 typescript-estree／eslint 傳遞；已在最新 8.72.1；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "typescript-eslint",
+      "severity": "moderate",
+      "reason": "僅經由 @typescript-eslint/* 與 eslint 傳遞；已升到最新 8.72.1，無版本可升；只在 lint 執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "vue-eslint-parser",
+      "severity": "moderate",
+      "reason": "僅經由 eslint 傳遞；最新 10.4.1；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "eslint-plugin-vue",
+      "severity": "moderate",
+      "reason": "僅經由 eslint／vue-eslint-parser／@typescript-eslint/parser 傳遞；已升到最新 10.12.0；只在 lint 執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@vue/language-core",
+      "severity": "moderate",
+      "reason": "僅經由 minimatch 傳遞（2.2.12 依賴 minimatch ^9.0.3）；修正需 vue-tsc 3.x，但 vue-tsc 依 CLAUDE.md 釘在 2.2.12（v3 對 composable + template ref 有 noUnusedLocals 誤報，上游 issue #1168）；只在 typecheck 執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "vue-tsc",
+      "severity": "moderate",
+      "reason": "僅經由 @vue/language-core→minimatch 傳遞；修正版 3.x 違反 CLAUDE.md 釘版（停在 2.2.12，上游 issue #1168），待誤報修好或 minimatch backport 再處理；只在 typecheck 執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@redocly/openapi-core",
+      "severity": "moderate",
+      "reason": "僅經由 minimatch 5.1.9 傳遞；openapi-typescript 最新 7.13.0 仍依賴 ^1.34.6，而 1.x 最新 1.34.22 仍釘 minimatch 5.1.9；只在 gen:api 執行，輸入為後端產出的 openapi.json",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "openapi-typescript",
+      "severity": "moderate",
+      "reason": "僅經由 @redocly/openapi-core→minimatch 傳遞；已在最新 7.13.0，無版本可升；只在 gen:api 執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@sentry/bundler-plugins",
+      "severity": "moderate",
+      "reason": "僅經由 glob 13.0.6／minimatch 傳遞；最新 11.10.0 仍依賴 glob ^13.0.6；build-time 上傳 source map 用",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@sentry/vite-plugin",
+      "severity": "moderate",
+      "reason": "僅經由 @sentry/bundler-plugins→glob／minimatch 傳遞；已升到 5.4.1，升 major 至最新 11.10.0 仍依賴 glob ^13.0.6 解不掉；只在 build 執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "workbox-build",
+      "severity": "moderate",
+      "reason": "僅經由 glob 11／minimatch 傳遞；最新 7.4.1 仍依賴 glob ^11.0.1；build-time 產生 service worker",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "vite-plugin-pwa",
+      "severity": "moderate",
+      "reason": "僅經由 workbox-build→glob／minimatch 傳遞；升 major 2.0.0 仍用 workbox-build 7.4.1 解不掉（audit 建議的 1.1.0 是降版）；只在 build 執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "filelist",
+      "severity": "moderate",
+      "reason": "僅經由 minimatch 5.x 傳遞（workbox-build→ejs→jake 鏈）；最新 2.0.2 依賴 minimatch ^10.2.1 仍有漏洞；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "jake",
+      "severity": "moderate",
+      "reason": "僅經由 filelist→minimatch 傳遞（workbox-build→ejs 鏈）；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "ejs",
+      "severity": "moderate",
+      "reason": "僅經由 jake→filelist→minimatch 傳遞（workbox-build 鏈，build-time 模板固定）；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "@trickfilm400/rollup-plugin-off-main-thread",
+      "severity": "moderate",
+      "reason": "僅經由 ejs→jake→filelist→minimatch 傳遞（workbox-build 鏈）；devDependency",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "editorconfig",
+      "severity": "moderate",
+      "reason": "僅經由 minimatch 傳遞（@vue/test-utils→js-beautify 鏈）；最新 3.0.2 依賴 minimatch ~10.2.4 仍有漏洞；只在測試執行",
+      "expires": "2026-12-31"
+    },
+    {
+      "package": "js-beautify",
+      "severity": "moderate",
+      "reason": "僅經由 editorconfig／glob→minimatch 傳遞（@vue/test-utils 鏈）；最新 2.0.3 仍依賴 glob ^13、editorconfig ^3；只在測試執行",
+      "expires": "2026-12-31"
+    }
+  ]
 }
