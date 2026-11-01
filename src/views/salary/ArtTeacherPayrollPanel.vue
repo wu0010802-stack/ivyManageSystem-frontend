@@ -9,6 +9,7 @@ import {
   updateArtPayroll,
   deleteArtPayroll,
   batchImportArtPayroll,
+  artImportExistingCount,
 } from '@/api/artTeacherPayroll'
 import { useEmployeeStore } from '@/stores/employee'
 import AdminCreateButton from '@/components/common/AdminCreateButton.vue'
@@ -228,6 +229,38 @@ const handleFileChange = (file: { raw?: File }) => {
   if (file.raw) importFile.value = file.raw
 }
 
+type ArtImportMode = 'default' | 'replace' | 'append'
+
+// BONUS-F7：該月已有明細時由使用者選「覆寫整月」或「追加」。覆寫為 confirm（重傳同檔
+// 不加倍）、追加為 cancel；distinguishCancelAndClose 讓 Esc/X（close）視為放棄匯入。
+const askImportMode = (existingCount: number): Promise<ArtImportMode | null> =>
+  ElMessageBox.confirm(
+    `${query.year} 年 ${query.month} 月已有 ${existingCount} 筆才藝薪資明細。` +
+      '「覆寫整月」會先刪除該月全部明細再匯入；「追加」會保留既有明細，重複上傳同一檔將使金額加倍。',
+    '該月已有明細',
+    {
+      confirmButtonText: '覆寫整月',
+      cancelButtonText: '追加',
+      distinguishCancelAndClose: true,
+      type: 'warning',
+    },
+  )
+    .then((): ArtImportMode => 'replace')
+    .catch((action): ArtImportMode | null => (action === 'cancel' ? 'append' : null))
+
+const runImport = async (file: File, mode: ArtImportMode): Promise<void> => {
+  const replace = mode === 'replace' || (mode === 'default' && importReplaceExisting.value)
+  const res = await batchImportArtPayroll(query.year, query.month, file, replace, mode === 'append')
+  importResult.value = res.data
+  const { imported, skipped } = res.data
+  if (skipped > 0) {
+    ElMessage.warning(`已匯入 ${imported} 筆；${skipped} 筆失敗（見下方明細）`)
+  } else {
+    ElMessage.success(`已匯入 ${imported} 筆`)
+  }
+  fetchList()
+}
+
 const handleImport = async () => {
   if (!importFile.value) {
     ElMessage.warning('請選擇 Excel 檔案')
@@ -242,22 +275,21 @@ const handleImport = async () => {
     ).then(() => true, () => false)
     if (!ok) return
   }
+  const file = importFile.value
   importLoading.value = true
   try {
-    const res = await batchImportArtPayroll(
-      query.year,
-      query.month,
-      importFile.value,
-      importReplaceExisting.value,
-    )
-    importResult.value = res.data
-    const { imported, skipped } = res.data
-    if (skipped > 0) {
-      ElMessage.warning(`已匯入 ${imported} 筆；${skipped} 筆失敗（見下方明細）`)
-    } else {
-      ElMessage.success(`已匯入 ${imported} 筆`)
+    try {
+      await runImport(file, 'default')
+    } catch (e) {
+      const existingCount = artImportExistingCount(e)
+      if (existingCount === null) throw e
+      const mode = await askImportMode(existingCount)
+      if (mode === null) {
+        ElMessage.info('已取消匯入')
+        return
+      }
+      await runImport(file, mode)
     }
-    fetchList()
   } catch (e) {
     ElMessage.error(friendlyError('匯入才藝老師薪資失敗', e))
   } finally {
@@ -464,7 +496,7 @@ onMounted(() => {
         <el-form-item label="覆寫模式">
           <el-switch v-model="importReplaceExisting" />
           <span class="hint" style="margin-left: 12px;">
-            打開後：匯入前先刪除這個月所有已登記的明細，再以檔案內容為準（送出前會再確認）
+            打開後：匯入前先刪除這個月所有已登記的明細，再以檔案內容為準（送出前會再確認）；未打開且該月已有明細時，會請你選擇覆寫或追加
           </span>
         </el-form-item>
       </el-form>

@@ -3622,6 +3622,10 @@ export interface paths {
          *     Excel 欄位：員工姓名 / 工號(選填) / 科目 / 班級備註 / 時數 / 鐘點費 / 超額 / 加給活動 / 備註
          *
          *     回傳：{total, imported, skipped, errors:[{row, message}]}
+         *
+         *     BONUS-F7：同師同月同科同班可有多筆合法分項，無法以欄位鍵判重；為避免重傳
+         *     同一檔讓金額加倍，該月已有明細且未指定 replace_existing / append 時回 409
+         *     （detail.code=ART_IMPORT_MONTH_HAS_ENTRIES、existing_count），由使用者選擇。
          */
         post: operations["batch_import_api_art_teacher_payroll_batch_import_post"];
         delete?: never;
@@ -59920,6 +59924,8 @@ export interface operations {
     batch_import_api_art_teacher_payroll_batch_import_post: {
         parameters: {
             query: {
+                /** @description True=保留該月既有 entries、追加本檔明細。該月已有明細時須明確指定 replace_existing 或 append 其一，否則回 409（BONUS-F7） */
+                append?: boolean;
                 month: number;
                 /** @description True=匯入前先刪除該月所有 entries（整月覆寫，避免重複） */
                 replace_existing?: boolean;
