@@ -1,8 +1,25 @@
 import api from './index'
+import { fetchAllByTotalCount, EMPLOYEE_PAGE_LIMIT, EMPLOYEE_MAX_PAGES } from '@/utils/fetchAllByTotalCount'
 import type { ApiQuery, ApiBody, AxiosResp } from './_generated/typed'
 
 export const getEmployees = (params?: ApiQuery<'/employees', 'get'>): AxiosResp<'/employees', 'get'> =>
     api.get('/employees', { params })
+
+export { EMPLOYEE_PAGE_LIMIT }
+
+type EmployeeListParams = Omit<NonNullable<ApiQuery<'/employees', 'get'>>, 'skip' | 'limit'>
+
+/**
+ * 取完整員工清單（FE-F4）：後端預設只回 100 筆，需要完整名冊的地方（員工 store、
+ * 離職發起、員工搜尋）一律走這裡，依 `X-Total-Count` 逐頁取完並合併。
+ * 舊後端沒有該 header 時退回單頁；翻頁上限仍取不完時提示使用者，不靜默少人。
+ */
+export const getAllEmployees = (params?: EmployeeListParams): AxiosResp<'/employees', 'get'> =>
+    fetchAllByTotalCount((skip, limit) => getEmployees({ ...params, skip, limit }), {
+        pageLimit: EMPLOYEE_PAGE_LIMIT,
+        maxPages: EMPLOYEE_MAX_PAGES,
+        label: '員工清單',
+    })
 
 export const getEmployee = (id: number): AxiosResp<'/employees/{employee_id}', 'get'> =>
     api.get(`/employees/${id}`)

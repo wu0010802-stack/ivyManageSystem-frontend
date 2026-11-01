@@ -24,6 +24,7 @@ import BonusImpactPreview from '@/components/students/BonusImpactPreview.vue'
 import StudentEditDialog from '@/components/student/StudentEditDialog.vue'
 import { useStudentStore } from '@/stores/student'
 import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
+import { notifyTransferResult } from '@/utils/studentTransferNotice'
 
 const route = useRoute()
 const router = useRouter()
@@ -376,12 +377,12 @@ const submitTransfer = async () => {
   transferSubmitting.value = true
   try {
     const studentStore = useStudentStore()
-    await studentStore.bulkTransfer({
+    const result = await studentStore.bulkTransfer({
       student_ids: selectedStudents.value.map((student) => student.id),
       target_classroom_id: transferTargetClassroomId.value,
       source_classroom_id: transferSourceClassroomId.value,
     })
-    ElMessage.success('學生轉班成功')
+    notifyTransferResult('學生轉班成功', (result as { warning?: string | null } | null)?.warning)
     transferDialogVisible.value = false
     selectedStudents.value = []
     fetchStudents()
