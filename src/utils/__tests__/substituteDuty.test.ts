@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { extractSubstituteDutyWarnings, formatSubstituteDutyWarning, takesDutyHandoverText } from '@/utils/substituteDuty'
+import {
+  coveringSubstituteDutyDates,
+  coveringSubstituteDutyText,
+  extractSubstituteDutyWarnings,
+  formatSubstituteDutyWarning,
+  takesDutyHandoverText,
+} from '@/utils/substituteDuty'
 
 describe('formatSubstituteDutyWarning', () => {
   it('帶假單編號與日期', () => {
@@ -60,5 +66,21 @@ describe('takesDutyHandoverText', () => {
     expect(takesDutyHandoverText(undefined)).toContain('請你接手 請假人 ')
     expect(takesDutyHandoverText('')).toContain('請假人')
     expect(takesDutyHandoverText(null)).not.toContain('null')
+  })
+})
+
+describe('coveringSubstituteDutyDates', () => {
+  it('取出後端 covering_substitute_duty_dates 的日期字串', () => {
+    expect(coveringSubstituteDutyDates({ covering_substitute_duty_dates: ['2026-09-15', '', 3] })).toEqual(['2026-09-15'])
+  })
+
+  it('欄位缺漏或格式不對回空陣列（舊後端相容）', () => {
+    expect(coveringSubstituteDutyDates({})).toEqual([])
+    expect(coveringSubstituteDutyDates(null)).toEqual([])
+    expect(coveringSubstituteDutyDates({ covering_substitute_duty_dates: 'x' })).toEqual([])
+  })
+
+  it('說明文字列出所有日期', () => {
+    expect(coveringSubstituteDutyText(['2026-09-15', '2026-09-16'])).toContain('2026-09-15、2026-09-16')
   })
 })
