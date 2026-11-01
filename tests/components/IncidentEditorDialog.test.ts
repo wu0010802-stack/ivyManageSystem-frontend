@@ -47,3 +47,14 @@ describe('IncidentEditorDialog — A+C', () => {
     expect(isBodyHidden(wrapper, 'section-extra')).toBe(true)
   })
 })
+
+describe('IncidentEditorDialog — 家長可見性提示（HEALTH-F13）', () => {
+  it('提示家長端只看到類型／嚴重程度／發生時間，描述與處置不外露', async () => {
+    const { INCIDENT_PARENT_VISIBILITY_HINT } = await import('@/constants/studentRecords')
+    const wrapper = mountDialog()
+    const hint = wrapper.find('[data-test="parent-visibility-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain(INCIDENT_PARENT_VISIBILITY_HINT)
+    expect(INCIDENT_PARENT_VISIBILITY_HINT).toContain('家長看不到')
+  })
+})

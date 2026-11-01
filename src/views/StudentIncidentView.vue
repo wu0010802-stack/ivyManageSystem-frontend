@@ -6,7 +6,7 @@ import { getIncidents, createIncident, updateIncident, deleteIncident } from '@/
 import { useAllClassroomStore } from '@/stores/classroomAll'
 import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
 import { getStudents } from '@/api/students'
-import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG } from '@/constants/studentRecords'
+import { INCIDENT_PARENT_VISIBILITY_HINT, INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG } from '@/constants/studentRecords'
 import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 import { hasPermission } from '@/utils/auth'
@@ -391,7 +391,15 @@ onMounted(() => {
       width="560px"
     >
       <el-form label-width="90px">
-        <el-form-item label="班級">
+        <el-alert
+          data-test="parent-visibility-hint"
+          type="info"
+          :closable="false"
+          show-icon
+          :title="INCIDENT_PARENT_VISIBILITY_HINT"
+          style="margin-bottom: 12px"
+        />
+<el-form-item label="班級">
           <el-select
             v-model="dialogClassroom"
             placeholder="選擇班級"
