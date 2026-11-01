@@ -32,6 +32,9 @@
       <el-button type="primary" @click="openNewRefundDialog">新增退費</el-button>
     </div>
 
+    <!-- 待核准退費申請（累計達簽核門檻，FIN-F2）；無待審或無權列出時不顯示 -->
+    <FeeRefundRequestsPanel ref="requestsPanelRef" @decided="loadRefundedRecords" />
+
     <!-- ================================================================
          退費歷史表（GET /fees/refunds 伺服器分頁，Phase 2 起為完整退費歷史）
     ================================================================ -->
@@ -197,6 +200,7 @@
       v-model="refundModalVisible"
       :record="refundTarget"
       @refunded="onRefunded"
+      @requested="onRefundRequested"
     />
   </div>
 </template>
@@ -209,6 +213,7 @@ import type { ApiQuery } from '@/api/_generated/typed'
 import { formatCurrency } from '@/utils/currency'
 import EmptyState from '@/components/common/EmptyState.vue'
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
+import FeeRefundRequestsPanel from '@/components/fees/FeeRefundRequestsPanel.vue'
 
 const props = withDefaults(defineProps<{
   periodOptions?: string[]
@@ -416,6 +421,12 @@ function openRefundForRow(row: FeeRecord) {
 function onRefunded() {
   ElMessage.success('退費完成')
   loadRefundedRecords()
+}
+
+// 送出退費申請（尚未扣款）→ 只需刷新待審清單，退費歷史不變
+const requestsPanelRef = ref<{ load: () => Promise<void> } | null>(null)
+function onRefundRequested() {
+  void requestsPanelRef.value?.load()
 }
 
 // ─── 工具 ─────────────────────────────────────────────────────────────────
