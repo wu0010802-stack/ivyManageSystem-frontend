@@ -18,12 +18,34 @@ export const deleteArtPayroll = (id: number) =>
   api.delete(`/art-teacher-payroll/${id}`)
 
 // 批次匯入：上傳 .xlsx，回傳 {total, imported, skipped, errors}
-export const batchImportArtPayroll = (year: number, month: number, file: File, replaceExisting = false) => {
+// 該月已有明細時須明確選擇 replaceExisting（覆寫整月）或 append（追加），
+// 否則後端回 409 detail.code=ART_IMPORT_MONTH_HAS_ENTRIES（BONUS-F7，防重傳加倍）。
+export const ART_IMPORT_MONTH_HAS_ENTRIES = 'ART_IMPORT_MONTH_HAS_ENTRIES'
+
+export const batchImportArtPayroll = (
+  year: number,
+  month: number,
+  file: File,
+  replaceExisting = false,
+  append = false,
+) => {
   const formData = new FormData()
   formData.append('file', file)
+  const appendQuery = append ? '&append=true' : ''
   return api.post(
-    `/art-teacher-payroll/batch-import?year=${year}&month=${month}&replace_existing=${replaceExisting}`,
+    `/art-teacher-payroll/batch-import?year=${year}&month=${month}&replace_existing=${replaceExisting}${appendQuery}`,
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } },
   )
+}
+
+/** 若錯誤為「該月已有明細需選擇覆寫或追加」的 409，回傳既有筆數；否則 null。 */
+export const artImportExistingCount = (err: unknown): number | null => {
+  const res = (err as { response?: { status?: number; data?: { detail?: unknown } } } | null)?.response
+  if (res?.status !== 409) return null
+  const detail = res.data?.detail
+  if (!detail || typeof detail !== 'object') return null
+  const { code, existing_count: count } = detail as { code?: unknown; existing_count?: unknown }
+  if (code !== ART_IMPORT_MONTH_HAS_ENTRIES) return null
+  return typeof count === 'number' ? count : 0
 }
