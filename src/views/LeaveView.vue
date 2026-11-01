@@ -7,6 +7,7 @@ import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { notifySubstituteDutyWarnings } from '@/composables/substituteDutyNotice'
+import { coveringSubstituteDutyDates, coveringSubstituteDutyText } from '@/utils/substituteDuty'
 import { List, Plus, Paperclip, InfoFilled, Calendar, Loading, ArrowLeft, ArrowRight, Wallet } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
@@ -811,6 +812,13 @@ onMounted(() => {
                     :content="`換班申請 #${scope.row.related_swap.id}（${scope.row.related_swap.swap_date}，狀態：${scope.row.related_swap.status}）`"
                   >
                     <el-tag type="warning" size="small" effect="plain" class="leave-swap-tag">換班中</el-tag>
+                  </el-tooltip>
+                  <el-tooltip
+                    v-if="coveringSubstituteDutyDates(scope.row).length"
+                    placement="top"
+                    :content="coveringSubstituteDutyText(coveringSubstituteDutyDates(scope.row))"
+                  >
+                    <el-tag type="danger" size="small" effect="plain" class="leave-swap-tag" data-test="leave-covering-duty-tag">代理職務衝突</el-tag>
                   </el-tooltip>
                 </div>
               </template>

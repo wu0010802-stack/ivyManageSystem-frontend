@@ -197,4 +197,20 @@ describe('LeaveReviewDrawer', () => {
       expect(getLeaveQuotas).not.toHaveBeenCalled()
     })
   })
+
+  describe('代理職務衝突（STAFFIMPORT-F6）', () => {
+    it('申請人正代理他人職務 → 顯示警示項', async () => {
+      const w = mountDrawer({ ...baseRow, covering_substitute_duty_dates: ['2026-09-22'] })
+      await flushPromises()
+      const item = w.find('[data-test="lrd-check-covering-duty"]')
+      expect(item.exists()).toBe(true)
+      expect(item.text()).toContain('2026-09-22')
+    })
+
+    it('無代理職務 → 不顯示', async () => {
+      const w = mountDrawer({ ...baseRow, covering_substitute_duty_dates: [] })
+      await flushPromises()
+      expect(w.find('[data-test="lrd-check-covering-duty"]').exists()).toBe(false)
+    })
+  })
 })

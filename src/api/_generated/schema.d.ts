@@ -36366,6 +36366,11 @@ export interface components {
              * @default []
              */
             attachment_paths: string[];
+            /**
+             * Covering Substitute Duty Dates
+             * @default []
+             */
+            covering_substitute_duty_dates: string[];
             /** Created At */
             created_at?: string | null;
             /** Deduction Ratio */
@@ -38456,6 +38461,8 @@ export interface components {
         OvertimeApproveResultOut: {
             /** Chain Length */
             chain_length?: number | null;
+            /** Comp Leave Converted To Pay */
+            comp_leave_converted_to_pay?: number | null;
             /** Comp Leave Hours Granted */
             comp_leave_hours_granted?: number | null;
             /** Id */

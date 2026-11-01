@@ -10,6 +10,7 @@
 import { computed, ref, watch } from 'vue'
 import { getLeaveQuotas } from '@/api/leaves'
 import { leaveRequiresAttachment } from '@/utils/leaves'
+import { coveringSubstituteDutyDates, coveringSubstituteDutyText } from '@/utils/substituteDuty'
 
 interface QuotaRow {
   remaining_hours: number
@@ -163,6 +164,8 @@ const sameDayClass = computed<'warn' | 'info'>(() => (props.sameDayCount >= 3 ? 
 
 // 模板內插值不支援 TS `as` 轉型，型別窄化改在這裡做
 const relatedSwap = computed(() => props.row?.related_swap as { id: number; swap_date: string } | null | undefined)
+// STAFFIMPORT-F6：申請人正代理他人職務的日期（後端不自動收回代理班）
+const coveringDutyDates = computed(() => coveringSubstituteDutyDates(props.row))
 </script>
 
 <template>
@@ -217,6 +220,13 @@ const relatedSwap = computed(() => props.row?.related_swap as { id: number; swap
           <span class="lrd-check-icon">{{ sameDayCount >= 3 ? '!' : 'i' }}</span>
           <div class="lrd-check-body">
             <div>{{ sameDayCount > 0 ? `同期間還有 ${sameDayCount} 人請假` : '同期間無其他人請假' }}</div>
+          </div>
+        </div>
+
+        <div v-if="coveringDutyDates.length" class="lrd-check-item warn" data-test="lrd-check-covering-duty">
+          <span class="lrd-check-icon">!</span>
+          <div class="lrd-check-body">
+            <div>{{ coveringSubstituteDutyText(coveringDutyDates) }}</div>
           </div>
         </div>
 
