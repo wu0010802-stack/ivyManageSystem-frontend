@@ -14,6 +14,7 @@ vi.mock('@/api/classrooms', () => ({
 }))
 vi.mock('@/api/employees', () => ({
   getEmployees: vi.fn().mockResolvedValue({ data: [{ id: 1, name: '甲' }] }),
+  getAllEmployees: vi.fn().mockResolvedValue({ data: [{ id: 1, name: '甲' }] }),
 }))
 vi.mock('@/api/studentRecords', () => ({
   getStudentRecordsTimeline: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
