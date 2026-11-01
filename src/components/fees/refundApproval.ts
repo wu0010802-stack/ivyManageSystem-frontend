@@ -6,20 +6,16 @@
  * - 無金流簽核權者：403（require_finance_approve 的字串 detail，含「審批閾值」）
  * 兩者都應改走「送出退費申請 → 另一位簽核者核准」。
  */
-import { errorDetailObject } from '@/utils/errorMessages'
+import { errorDetailObject, errorDetailString } from '@/utils/errorMessages'
 
 export const REFUND_APPROVAL_REQUIRED = 'REFUND_APPROVAL_REQUIRED'
 // 後端 require_finance_approve 的固定措辭；403 無結構化 code 時以此辨識門檻擋下
 const THRESHOLD_403_MARKER = '審批閾值'
 
 export function isRefundApprovalRequired(err: unknown): boolean {
-  const res = (err as { response?: { status?: number; data?: { detail?: unknown } } } | null)?.response
-  if (!res) return false
-  if (res.status === 409) return errorDetailObject(err)?.code === REFUND_APPROVAL_REQUIRED
-  if (res.status === 403) {
-    const d = res.data?.detail
-    return typeof d === 'string' && d.includes(THRESHOLD_403_MARKER)
-  }
+  const status = (err as { response?: { status?: number } } | null)?.response?.status
+  if (status === 409) return errorDetailObject(err)?.code === REFUND_APPROVAL_REQUIRED
+  if (status === 403) return errorDetailString(err)?.includes(THRESHOLD_403_MARKER) ?? false
   return false
 }
 
@@ -27,8 +23,7 @@ export function isRefundApprovalRequired(err: unknown): boolean {
 export function refundApprovalMessage(err: unknown): string {
   const obj = errorDetailObject<{ message?: unknown }>(err)
   if (obj && typeof obj.message === 'string') return obj.message
-  const d = (err as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail
-  return typeof d === 'string' ? d : '本次退費累計已達簽核門檻'
+  return errorDetailString(err) ?? '本次退費累計已達簽核門檻'
 }
 
 /**

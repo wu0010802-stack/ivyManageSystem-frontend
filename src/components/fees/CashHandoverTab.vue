@@ -211,7 +211,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { friendlyError } from '@/utils/errorMessages'
+import { errorDetailString, friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
 import { hasPermission, getUserInfo } from '@/utils/auth'
@@ -442,8 +442,7 @@ async function submitConfirm() {
 
 // 403 多為職責分離（本人提交本人簽收）或權限不足；給可讀原因與下一步，不顯示通用「請重試」
 function forbiddenDetail(e: unknown): string {
-  const d = (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
-  const reason = typeof d === 'string' && d.trim() ? d.trim() : '您沒有簽收此交接的權限'
+  const reason = errorDetailString(e) ?? '您沒有簽收此交接的權限'
   return `${reason}。請改由其他具簽收權限者點收。`
 }
 
