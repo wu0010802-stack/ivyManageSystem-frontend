@@ -44,6 +44,7 @@
           type="date"
           value-format="YYYY-MM-DD"
           placeholder="留空為今日"
+          :disabled-date="disabledEffectiveDate"
           style="width: 100%"
         />
       </el-form-item>
@@ -112,6 +113,7 @@ import { ElMessage } from 'element-plus'
 import { transitionStudentLifecycle } from '@/api/students'
 import { LIFECYCLE_LABELS_ADMIN as STATUS_LABELS, ALLOWED_TRANSITIONS } from '@/constants/lifecycle'
 import { apiError } from '@/utils/error'
+import { dateToLocalISO, todayISO } from '@/utils/format'
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -171,6 +173,13 @@ const terminalWarning = computed(() => {
   }
   return map[form.to_status] || ''
 })
+
+// 後端轉移會立即改在籍狀態，沒有「到生效日才生效」的排程；未來日後端回 422。
+// 預定的異動請於生效當日再執行。
+function disabledEffectiveDate(d: Date): boolean {
+  return dateToLocalISO(d) > todayISO()
+}
+defineExpose({ disabledEffectiveDate })
 
 const reasonOptions = computed(() => REASON_BY_TARGET[form.to_status] || [])
 

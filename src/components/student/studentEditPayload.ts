@@ -62,3 +62,15 @@ export function buildStudentMutationPayload(
   }
   return payload
 }
+
+/**
+ * 入學日是否允許清空（NEWSTU-F8）：編輯既有入學日的學生時不可清空——在籍判定把
+ * NULL 視為早已入學，清空會讓歷史每一天都計入人數（後端回 422）。
+ */
+export function isEnrollmentDateClearable(
+  isEdit: boolean,
+  initial: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!isEdit) return true
+  return !initial?.enrollment_date
+}
