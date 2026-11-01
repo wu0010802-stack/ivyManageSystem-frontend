@@ -94,3 +94,26 @@ describe('artTeacherPayroll api', () => {
     )
   })
 })
+
+describe('artTeacherPayroll batch import 重複防護（BONUS-F7）', () => {
+  beforeEach(() => {
+    mockPost.mockReset()
+    mockPost.mockResolvedValue({ data: {} })
+  })
+
+  it('batchImportArtPayroll append=true 帶 &append=true', async () => {
+    const file = new File(['dummy'], 'payroll.xlsx')
+    await mod.batchImportArtPayroll(2026, 5, file, false, true)
+    expect(mockPost.mock.calls[0][0]).toBe(
+      '/art-teacher-payroll/batch-import?year=2026&month=5&replace_existing=false&append=true',
+    )
+  })
+
+  it('artImportExistingCount 只認 409 + ART_IMPORT_MONTH_HAS_ENTRIES', () => {
+    const hit = { response: { status: 409, data: { detail: { code: 'ART_IMPORT_MONTH_HAS_ENTRIES', existing_count: 3 } } } }
+    expect(mod.artImportExistingCount(hit)).toBe(3)
+    expect(mod.artImportExistingCount({ response: { status: 409, data: { detail: '已封存' } } })).toBeNull()
+    expect(mod.artImportExistingCount({ response: { status: 400, data: { detail: { code: 'ART_IMPORT_MONTH_HAS_ENTRIES' } } } })).toBeNull()
+    expect(mod.artImportExistingCount(null)).toBeNull()
+  })
+})
