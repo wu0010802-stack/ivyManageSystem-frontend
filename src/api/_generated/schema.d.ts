@@ -6930,6 +6930,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Options
+         * @description 請假／加班／會議／行事曆／公告頁的員工下拉專用輕量端點（2026-10-31 SUP-01）。
+         *
+         *     主任等角色不需（也不該）為了選人而取得 EMPLOYEES_READ——後者會連帶開放全員電話、
+         *     地址、生日、緊急聯絡人、名冊匯出與合約文件。本端點只回 id／員工編號／姓名／在職。
+         */
+        get: operations["get_employee_options_api_employees_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees/probation-alerts": {
         parameters: {
             query?: never;
@@ -31735,6 +31758,20 @@ export interface components {
             id: number;
             /** Message */
             message: string;
+        };
+        /**
+         * EmployeeOptionOut
+         * @description 員工下拉選項：僅識別欄位，不含任何個資／薪資。
+         */
+        EmployeeOptionOut: {
+            /** Employee Id */
+            employee_id: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
         };
         /**
          * EmployeeOut
@@ -65801,6 +65838,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_options_api_employees_options_get: {
+        parameters: {
+            query?: {
+                /** @description 在職狀態過濾；不帶＝全部 */
+                is_active?: boolean | null;
+                limit?: number;
+                search?: string | null;
+                skip?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeOptionOut"][];
                 };
             };
             /** @description Validation Error */

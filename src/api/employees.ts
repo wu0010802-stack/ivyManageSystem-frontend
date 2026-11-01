@@ -5,6 +5,13 @@ import type { ApiQuery, ApiBody, AxiosResp } from './_generated/typed'
 export const getEmployees = (params?: ApiQuery<'/employees', 'get'>): AxiosResp<'/employees', 'get'> =>
     api.get('/employees', { params })
 
+/**
+ * 員工下拉選項（id／員編／姓名／在職，無個資薪資）：主任等沒有 EMPLOYEES_READ 的角色
+ * 選人時使用。後端不翻頁（上限 1000），取不到 X-Total-Count 也無妨。
+ */
+export const getEmployeeOptions = (params?: ApiQuery<'/employees/options', 'get'>): AxiosResp<'/employees/options', 'get'> =>
+    api.get('/employees/options', { params })
+
 export { EMPLOYEE_PAGE_LIMIT }
 
 type EmployeeListParams = Omit<NonNullable<ApiQuery<'/employees', 'get'>>, 'skip' | 'limit'>
