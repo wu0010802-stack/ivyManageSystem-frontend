@@ -35,6 +35,7 @@ vi.mock('element-plus', () => ({
 }))
 
 import { ElMessage } from 'element-plus'
+import { todayTaipeiISO } from '@/utils/format'
 import GovReportsView from '@/views/GovReportsView.vue'
 
 const STORAGE_KEY = 'gov-reports.employer'
@@ -71,12 +72,19 @@ const mountOptions = {
   },
 }
 
-function lastMonthPeriod() {
-  const d = new Date()
-  d.setDate(1)
-  d.setMonth(d.getMonth() - 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+// 期待值須與元件同口徑（台北日期）；用主機時區 new Date() 在台北已跨月、
+// UTC 未跨月的時段（月底 16:00 UTC 後）會差一個月
+function lastMonth() {
+  const [year, month] = todayTaipeiISO().split('-').map(Number)
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
 }
+
+function lastMonthPeriod() {
+  const { year, month } = lastMonth()
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+const lastTaipeiYear = () => Number(todayTaipeiISO().slice(0, 4)) - 1
 
 const downloadButtons = (wrapper) =>
   wrapper.findAll('button').filter((b) => b.text().includes('下載申報表'))
@@ -104,7 +112,7 @@ describe('GovReportsView — 期間預設值', () => {
     expect(pickers).toHaveLength(4)
     expect(pickers[0].element.value).toBe(lastMonthPeriod())
     expect(pickers[1].element.value).toBe(lastMonthPeriod())
-    expect(pickers[2].element.value).toBe(String(new Date().getFullYear() - 1))
+    expect(pickers[2].element.value).toBe(String(lastTaipeiYear()))
     expect(pickers[3].element.value).toBe(lastMonthPeriod())
   })
 
@@ -170,12 +178,10 @@ describe('GovReportsView — 下載流程', () => {
     const wrapper = mount(GovReportsView, mountOptions)
     await downloadButtons(wrapper)[0].trigger('click')
     await flushPromises()
-    const d = new Date()
-    d.setDate(1)
-    d.setMonth(d.getMonth() - 1)
+    const { year, month } = lastMonth()
     expect(mockLabor).toHaveBeenCalledWith({
-      year: d.getFullYear(),
-      month: d.getMonth() + 1,
+      year,
+      month,
       fmt: 'xlsx',
       employer_name: '常春藤',
       employer_code: '12345678',
@@ -191,7 +197,7 @@ describe('GovReportsView — 下載流程', () => {
     await downloadButtons(wrapper)[2].trigger('click')
     await flushPromises()
     expect(mockWithholding).toHaveBeenCalledWith({
-      year: new Date().getFullYear() - 1,
+      year: lastTaipeiYear(),
       employer_name: undefined,
       employer_id: '87654321',
     })

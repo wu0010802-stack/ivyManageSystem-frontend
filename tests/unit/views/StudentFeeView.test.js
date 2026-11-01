@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { todayTaipeiISO } from '@/utils/format'
 
 // ── vue-router mock：replace/push 會實際改 route.query（模擬導航循環）──────
 const routerMocks = vi.hoisted(() => ({ route: null, router: null }))
@@ -104,14 +105,15 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
       partial_count: 0,
       total_unpaid: 0,
     })
-    // 上個月已關帳＝關帳列不是待辦；本檔測的是導航殼層，徽章不該干擾斷言
-    const now = new Date()
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    // 上個月已關帳＝關帳列不是待辦；本檔測的是導航殼層，徽章不該干擾斷言。
+    // 「上個月」須與 useFeeOverview 同口徑（台北日期）；用主機時區 new Date()
+    // 在台北已跨月、UTC 未跨月的時段（月底 16:00 UTC 後）會差一個月而多出待辦徽章
+    const [ty, tm] = todayTaipeiISO().split('-').map(Number)
     apiMocks.getClosePeriods.mockResolvedValue({
       items: [
         {
-          close_year: prev.getFullYear(),
-          close_month: prev.getMonth() + 1,
+          close_year: tm === 1 ? ty - 1 : ty,
+          close_month: tm === 1 ? 12 : tm - 1,
           status: 'closed',
         },
       ],
