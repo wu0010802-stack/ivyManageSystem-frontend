@@ -77,16 +77,26 @@
           >
             提交交接
           </el-button>
-          <el-button
+          <el-tooltip
             v-if="canApprove && row.status === 'submitted'"
-            size="small"
-            type="success"
-            text
-            data-test="confirm-handover"
-            @click="openConfirm(row)"
+            :disabled="!isOwnSubmission(row)"
+            :content="OWN_SUBMISSION_HINT"
+            placement="top"
           >
-            老闆簽收
-          </el-button>
+            <!-- span 包住 disabled 按鈕，tooltip 才收得到 hover -->
+            <span class="handover-confirm-wrap">
+              <el-button
+                size="small"
+                type="success"
+                text
+                :disabled="isOwnSubmission(row)"
+                data-test="confirm-handover"
+                @click="openConfirm(row)"
+              >
+                老闆簽收
+              </el-button>
+            </span>
+          </el-tooltip>
           <el-button
             v-if="canApprove && ['submitted', 'confirmed'].includes(row.status)"
             size="small"
@@ -204,7 +214,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
-import { hasPermission } from '@/utils/auth'
+import { hasPermission, getUserInfo } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import type { ApiBody } from '@/api/_generated/typed'
 import {
@@ -224,6 +234,7 @@ interface BatchRow {
   expected_cash_amount: number | null
   owner_actual_amount: number | null
   variance: number | null
+  accountant_user_id?: number | null
 }
 interface FeeRecordRow {
   id: number
@@ -245,6 +256,13 @@ const STATUS_LABELS: Record<string, string> = {
 
 const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 const canApprove = computed(() => hasPermission(PERMISSION_NAMES.FEE_CLOSE_APPROVE))
+
+// FIN-F2 職責分離：提交交接的人不得自己簽收（後端 403）；前端預先停用並說明
+const OWN_SUBMISSION_HINT = '不可簽收自己提交的現金交接，需由其他具簽收權限者點收（職責分離）'
+const currentUserId = computed(() => (getUserInfo() as { id?: unknown } | null)?.id)
+function isOwnSubmission(row: BatchRow): boolean {
+  return row.accountant_user_id != null && row.accountant_user_id === currentUserId.value
+}
 
 const batches = ref<BatchRow[]>([])
 const loading = ref(false)
@@ -414,8 +432,19 @@ async function submitConfirm() {
     confirmVisible.value = false
     fetchBatches()
   } catch (e) {
+    if ((e as { response?: { status?: number } }).response?.status === 403) {
+      ElMessage.error(`簽收失敗：${forbiddenDetail(e)}`)
+      return
+    }
     ElMessage.error(friendlyError('簽收失敗', e))
   }
+}
+
+// 403 多為職責分離（本人提交本人簽收）或權限不足；給可讀原因與下一步，不顯示通用「請重試」
+function forbiddenDetail(e: unknown): string {
+  const d = (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+  const reason = typeof d === 'string' && d.trim() ? d.trim() : '您沒有簽收此交接的權限'
+  return `${reason}。請改由其他具簽收權限者點收。`
 }
 
 async function doReopen(row: BatchRow) {
@@ -438,10 +467,17 @@ async function doReopen(row: BatchRow) {
 }
 
 onMounted(fetchBatches)
-defineExpose({ fetchBatches, openCashDialog, canWrite })
+defineExpose({ fetchBatches, openCashDialog, canWrite, isOwnSubmission, submitConfirm, openConfirm })
 </script>
 
 <style scoped>
+.handover-confirm-wrap {
+  display: inline-flex;
+}
+/* span 包裝打斷 el-button + el-button 的預設間距，補回 */
+.handover-confirm-wrap + .el-button {
+  margin-left: 12px;
+}
 .today-banner {
   display: flex;
   align-items: center;
