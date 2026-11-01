@@ -6,6 +6,7 @@ import { batchSaveAttendance, getDailyAttendance } from '@/api/studentAttendance
 import type { Schema } from '@/api/_generated/typed'
 import { domainBus, ATTENDANCE_EVENTS } from '@/utils/domainBus'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
+import { showAbsenceWarnings } from '@/utils/attendanceWarnings'
 
 const STATUS_OPTIONS = ['出席', '缺席', '病假', '事假', '遲到']
 
@@ -96,7 +97,7 @@ const saveDaily = async () => {
   const payloadContext = { date: localDate.value, classroom_id: localClassroomId.value }
   saving.value = true
   try {
-    await batchSaveAttendance({
+    const resp = await batchSaveAttendance({
       date: payloadContext.date,
       entries: dailyRecords.value.map((record) => ({
         student_id: record.student_id,
@@ -107,6 +108,7 @@ const saveDaily = async () => {
     domainBus.emit(ATTENDANCE_EVENTS.CHANGED, payloadContext)
     if (epoch !== fetchEpoch || savedContext !== contextKey.value) return
     ElMessage.success('點名編修儲存成功')
+    showAbsenceWarnings(resp?.data?.warnings)
     emit('saved', payloadContext)
     await fetchDaily()
   } catch (error) {

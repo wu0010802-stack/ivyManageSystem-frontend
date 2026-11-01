@@ -36,6 +36,7 @@ import {
   OP_STATUS,
 } from '@/utils/offlineQueue'
 import { flushClassAttendanceQueue } from '@/utils/attendanceSync'
+import { showAbsenceWarnings } from '@/utils/attendanceWarnings'
 import { useOnlineStatus, isNetworkError } from '@/composables/useOnlineStatus'
 import { todayISO, thisMonthISO } from '@/utils/format'
 import { getUserInfo } from '@/utils/auth'
@@ -346,13 +347,14 @@ const saveDailyAttendance = async () => {
       return
     }
     // entries 來自伺服器點名清單，student_id/status 必有值；依後端契約送出。
-    await batchSaveClassAttendance(payload as ApiBody<'/portal/class-attendance/batch', 'post'>)
+    const resp = await batchSaveClassAttendance(payload as ApiBody<'/portal/class-attendance/batch', 'post'>)
     acceptSnapshot()
     ElMessage.success(
       unmarkedCount.value > 0
         ? `已儲存 ${entries.length} 筆，還有 ${unmarkedCount.value} 位未點名`
         : '點名儲存成功',
     )
+    showAbsenceWarnings(resp?.data?.warnings)
     if (pendingCount.value > 0) syncQueue({ silent: true })
   } catch (error) {
     // navigator.onLine 可能說謊：實際網路失敗也要 fallback 到佇列
