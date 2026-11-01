@@ -7,6 +7,14 @@
     @closed="onClosed"
   >
     <el-form label-position="top">
+      <el-alert
+        data-test="parent-visibility-hint"
+        type="info"
+        :closable="false"
+        show-icon
+        :title="INCIDENT_PARENT_VISIBILITY_HINT"
+        style="margin-bottom: 12px"
+      />
       <el-form-item v-if="!lockStudent" label="班級">
         <el-select
           v-model="pickedClassroomId"
@@ -103,7 +111,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { INCIDENT_TYPES, SEVERITIES } from '@/constants/studentRecords'
+import { INCIDENT_PARENT_VISIBILITY_HINT, INCIDENT_TYPES, SEVERITIES } from '@/constants/studentRecords'
 import { getStudents } from '@/api/students'
 import { getEmployees } from '@/api/employees'
 import { useStudentRecordsStore } from '@/stores/studentRecords'

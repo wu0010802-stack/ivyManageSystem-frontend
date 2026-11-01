@@ -36,6 +36,7 @@ vi.mock('@/constants/studentRecords', () => ({
   SEVERITIES: ['輕微', '中度', '嚴重'],
   INCIDENT_TYPE_TAG: {},
   SEVERITY_TAG: {},
+  INCIDENT_PARENT_VISIBILITY_HINT: '',
 }))
 
 vi.mock('element-plus', () => ({

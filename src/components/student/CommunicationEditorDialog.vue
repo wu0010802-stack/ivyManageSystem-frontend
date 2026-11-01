@@ -7,6 +7,14 @@
     @closed="onClosed"
   >
     <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
+      <el-alert
+        data-test="parent-visibility-hint"
+        type="info"
+        :closable="false"
+        show-icon
+        :title="COMMUNICATION_PARENT_VISIBILITY_HINT"
+        style="margin-bottom: 12px"
+      />
       <el-form-item label="溝通日期" prop="communication_date">
         <el-date-picker
           v-model="form.communication_date"
@@ -55,6 +63,7 @@ import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createCommunication, updateCommunication } from '@/api/studentCommunications'
 import { apiError } from '@/utils/error'
+import { COMMUNICATION_PARENT_VISIBILITY_HINT } from '@/constants/studentRecords'
 
 const COMMUNICATION_TYPES = ['電話', 'LINE', '面談', 'Email', '家聯簿', '簡訊', '其他']
 
