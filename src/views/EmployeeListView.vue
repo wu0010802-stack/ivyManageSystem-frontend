@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDebounceFn } from '@vueuse/core'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
-import { getEmployees, deleteEmployee } from '@/api/employees'
+import { getAllEmployees, deleteEmployee } from '@/api/employees'
 import { getProbationAlerts } from '@/api/home'
 import { statusKeyOf, getEmployeeStatus, isMissingSalary, tenureLabel, type EmployeeStatusKey } from '@/utils/employeeDisplay'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
@@ -94,7 +94,7 @@ const {
   search: runEmployeeSearch,
   reset: resetEmployeeSearch,
 } = useLatestSearch<Record<string, unknown>[]>(
-  async (val) => (await getEmployees({ search: val })).data as Record<string, unknown>[],
+  async (val) => (await getAllEmployees({ search: val })).data as Record<string, unknown>[],
 )
 
 const filteredEmployees = computed(() =>

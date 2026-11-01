@@ -4,7 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { Search } from '@element-plus/icons-vue'
-import { getEmployees } from '@/api/employees'
+import { getAllEmployees } from '@/api/employees'
 import { getOffboardingCertificate, getOffboardingList, patchNhiUnenroll } from '@/api/offboarding'
 import { useOffboardingStore } from '@/stores/offboarding'
 import type { OffboardingDetail } from '@/stores/offboarding'
@@ -292,7 +292,7 @@ async function openInitiate(): Promise<void> {
     initiateVisible.value = true
     initiateLoading.value = true
     try {
-        const res = await getEmployees()
+        const res = await getAllEmployees({ is_active: true })
         const all = (res.data ?? []) as ActiveEmployee[]
         activeEmployees.value = all.filter((e) => !!e.is_active && !e.resign_date)
     } catch (e) {

@@ -38,6 +38,7 @@ const MagicLinkPanelStub = {
 
 vi.mock('@/api/employees', () => ({
     getEmployees: vi.fn(),
+    getAllEmployees: vi.fn(),
 }))
 
 vi.mock('@/api/offboarding', () => ({
@@ -123,6 +124,7 @@ describe('OffboardingView', () => {
 
         expect(offboardingApi.getOffboardingList).toHaveBeenCalledTimes(1)
         expect(employeesApi.getEmployees).not.toHaveBeenCalled()
+        expect(employeesApi.getAllEmployees).not.toHaveBeenCalled()
         expect(offboardingApi.getOffboardingDetail).not.toHaveBeenCalled()
     })
 })

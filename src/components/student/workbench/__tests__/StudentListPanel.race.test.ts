@@ -41,6 +41,7 @@ vi.mock('@/stores/student', () => ({
   }),
 }))
 
+import { ElMessage } from 'element-plus'
 import { getStudent, getStudents } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
 import { createDismissalCall, getDismissalCalls } from '@/api/dismissalCalls'
@@ -256,5 +257,47 @@ describe('StudentListPanel 異動防重送', () => {
     expect(bulkTransferMock).toHaveBeenCalledTimes(1)
     pending.resolve({ data: {} })
     await first
+  })
+})
+
+describe('StudentListPanel 轉班後的編班計畫警示（TERM-F9）', () => {
+  it('後端回 warning 時改以需手動關閉的警示呈現，不只顯示成功', async () => {
+    const wrapper = await mountPanel()
+    const vm = wrapper.vm as unknown as {
+      selectedStudents: Array<{ id: number; classroom_id: number }>
+      transferTargetClassroomId: number | null
+      submitTransfer: () => Promise<void>
+    }
+    const warning = '注意：中班生甲 在已發布的 115 學年編班計畫中，轉班後新學年自動套用會整份失敗'
+    bulkTransferMock.mockResolvedValueOnce({
+      message: '學生轉班成功', moved_count: 1, target_classroom_id: 20, warning,
+    })
+    vm.selectedStudents = [{ id: 1, classroom_id: 10 }]
+    vm.transferTargetClassroomId = 20
+
+    await vm.submitTransfer()
+
+    expect(vi.mocked(ElMessage.warning)).toHaveBeenCalledWith(
+      expect.objectContaining({ message: warning, duration: 0, showClose: true }),
+    )
+  })
+
+  it('沒有 warning 時維持原本的成功訊息', async () => {
+    const wrapper = await mountPanel()
+    const vm = wrapper.vm as unknown as {
+      selectedStudents: Array<{ id: number; classroom_id: number }>
+      transferTargetClassroomId: number | null
+      submitTransfer: () => Promise<void>
+    }
+    bulkTransferMock.mockResolvedValueOnce({
+      message: '學生轉班成功', moved_count: 1, target_classroom_id: 20, warning: null,
+    })
+    vm.selectedStudents = [{ id: 1, classroom_id: 10 }]
+    vm.transferTargetClassroomId = 20
+
+    await vm.submitTransfer()
+
+    expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('學生轉班成功')
+    expect(vi.mocked(ElMessage.warning)).not.toHaveBeenCalled()
   })
 })

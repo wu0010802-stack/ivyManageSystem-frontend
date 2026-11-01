@@ -21,6 +21,7 @@ vi.mock('@/api/home', () => ({
 
 vi.mock('@/api/employees', () => ({
   getEmployees: vi.fn(() => Promise.resolve({ data: [] })),
+  getAllEmployees: vi.fn(() => Promise.resolve({ data: [] })),
   getEmployee: vi.fn(),
   createEmployee: vi.fn(),
   updateEmployeeBasic: vi.fn(() => Promise.resolve({ data: {} })),

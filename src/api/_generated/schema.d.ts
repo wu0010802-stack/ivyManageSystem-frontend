@@ -26349,6 +26349,8 @@ export interface components {
          * BulkTransferResultOut
          * @description POST /students/bulk-transfer 回傳；shape 與 MutationResultOut 不同
          *     （沒 `id`，多了 `moved_count` + `target_classroom_id`）。
+         *
+         *     `warning`：被轉班學生在已發布編班計畫內時的提醒（TERM-F9），否則為 null。
          */
         BulkTransferResultOut: {
             /** Message */
@@ -26357,6 +26359,8 @@ export interface components {
             moved_count: number;
             /** Target Classroom Id */
             target_classroom_id: number;
+            /** Warning */
+            warning?: string | null;
         };
         /**
          * BusActiveTripOut
@@ -52238,6 +52242,21 @@ export interface components {
             status_tag?: string | null;
             /** Student Id */
             student_id?: string | null;
+        };
+        /**
+         * StudentUpdateResultOut
+         * @description PUT /students/{id} 回傳：MutationResultOut 加選填 `warning`。
+         *
+         *     `warning`：改班後學生成為已發布編班計畫的來源班漂移生時的提醒（TERM-F9），
+         *     新學年自動套用會因此整份失敗；否則為 null。
+         */
+        StudentUpdateResultOut: {
+            /** Id */
+            id: number;
+            /** Message */
+            message: string;
+            /** Warning */
+            warning?: string | null;
         };
         /** SubsidyCreate */
         SubsidyCreate: {
@@ -87975,7 +87994,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MutationResultOut"];
+                    "application/json": components["schemas"]["StudentUpdateResultOut"];
                 };
             };
             /** @description Validation Error */

@@ -6,7 +6,7 @@ import ElementPlus from 'element-plus'
 // api wrapper mock 形狀照真實後端契約（OffboardingListResponse / OffboardingDetailResponse 節錄）；
 // 全部具名匯出都要提供 vi.fn() stub，避免 MagicLinkPanel / OffboardingModal 內部 import 到 undefined。
 vi.mock('@/api/employees', () => ({
-    getEmployees: vi.fn(),
+    getAllEmployees: vi.fn(),
 }))
 vi.mock('@/api/offboarding', () => ({
     previewOffboarding: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock('@/utils/auth', async (importOriginal) => {
     }
 })
 
-import { getEmployees } from '@/api/employees'
+import { getAllEmployees } from '@/api/employees'
 import {
     getOffboardingCertificate,
     getOffboardingDetail,
@@ -43,7 +43,7 @@ import {
 import OffboardingView from '../OffboardingView.vue'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 
-const mockGetEmployees = getEmployees as unknown as ReturnType<typeof vi.fn>
+const mockGetEmployees = getAllEmployees as unknown as ReturnType<typeof vi.fn>
 const mockGetDetail = getOffboardingDetail as unknown as ReturnType<typeof vi.fn>
 const mockGetList = getOffboardingList as unknown as ReturnType<typeof vi.fn>
 const mockPatchNhi = patchNhiUnenroll as unknown as ReturnType<typeof vi.fn>
