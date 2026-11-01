@@ -36,6 +36,7 @@ import {
   OP_STATUS,
 } from '@/utils/offlineQueue'
 import { flushClassAttendanceQueue, discardSupersededClassAttendanceOps } from '@/utils/attendanceSync'
+import { showAbsenceWarnings } from '@/utils/attendanceWarnings'
 import { useOnlineStatus, isNetworkError } from '@/composables/useOnlineStatus'
 import { todayISO, thisMonthISO } from '@/utils/format'
 import { getUserInfo } from '@/utils/auth'
@@ -355,13 +356,14 @@ const saveDailyAttendance = async () => {
       return
     }
     // entries 來自伺服器點名清單，student_id/status 必有值；依後端契約送出。
-    await batchSaveClassAttendance(payload as ApiBody<'/portal/class-attendance/batch', 'post'>)
+    const resp = await batchSaveClassAttendance(payload as ApiBody<'/portal/class-attendance/batch', 'post'>)
     acceptSnapshot()
     ElMessage.success(
       unmarkedCount.value > 0
         ? `已儲存 ${entries.length} 筆，還有 ${unmarkedCount.value} 位未點名`
         : '點名儲存成功',
     )
+    showAbsenceWarnings(resp?.data?.warnings)
     // 先剔除佇列中已被這次儲存覆蓋的舊狀態，否則補送會把新點名蓋回並誤發缺席推播；
     // 剔除失敗就不補送（寧可留在佇列，也不拿舊資料覆寫）。pendingCount 只計 pending，
     // needs_review 的舊 op 也要剔除（老師手動重試會蓋回），故不以 pendingCount 為前提。

@@ -13,7 +13,7 @@ import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import FormSection from '@/components/common/FormSection.vue'
 import { sectionForStudentField } from '@/constants/studentFormSections'
 import { hasPermission } from '@/utils/auth'
-import { buildStudentMutationPayload } from './studentEditPayload'
+import { buildStudentMutationPayload, isEnrollmentDateClearable } from './studentEditPayload'
 
 const props = withDefaults(defineProps<{
   visible?: boolean
@@ -36,6 +36,7 @@ const emit = defineEmits<{
 }>()
 
 const isEdit = computed(() => props.mode === 'edit')
+const enrollmentDateClearable = computed(() => isEnrollmentDateClearable(isEdit.value, props.initial))
 const canHealthWrite = computed(() => (
   hasPermission('STUDENTS_HEALTH_WRITE')
   && (!isEdit.value || hasPermission('STUDENTS_HEALTH_READ'))
@@ -294,7 +295,10 @@ const submit = async () => {
         </el-select>
       </el-form-item>
       <el-form-item class="fg-6" label="入學日">
-        <el-date-picker v-model="form.enrollment_date" type="date" placeholder="選擇日期" value-format="YYYY-MM-DD" style="width: 100%" />
+        <el-date-picker
+          v-model="form.enrollment_date" type="date" placeholder="選擇日期" value-format="YYYY-MM-DD"
+          :clearable="enrollmentDateClearable" style="width: 100%"
+        />
       </el-form-item>
       <!-- 只在編輯模式顯示：後端 StudentCreate 沒有這個欄位，新增時填了會被
            Pydantic 靜默丟棄，畫面卻照樣跳「新增成功」。碼在第一次發單前由產

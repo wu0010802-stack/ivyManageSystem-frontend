@@ -51098,13 +51098,18 @@ export interface components {
         };
         /**
          * StudentAttendanceBatchSaveResultOut
-         * @description POST /student-attendance/batch — 批次 upsert 結果 ({message, saved})。
+         * @description POST /student-attendance/batch — 批次 upsert 結果 ({message, saved, warnings})。
          */
         StudentAttendanceBatchSaveResultOut: {
             /** Message */
             message: string;
             /** Saved */
             saved: number;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /**
          * StudentAttendanceByStudentItemOut
