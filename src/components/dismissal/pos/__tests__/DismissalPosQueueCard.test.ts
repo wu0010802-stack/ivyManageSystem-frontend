@@ -396,4 +396,31 @@ describe('DismissalPosQueueCard', () => {
     expect(w.find('.pos-queue-card__name').text()).toBe('未知學生')
     expect(w.find('.pos-queue-card__room').text()).toBe('未分班')
   })
+
+  describe('2026-11-02 滑鼠／鍵盤可達：不必左滑也能復原或取消', () => {
+    it('倒數中卡面常駐「復原」鈕，點一下就 emit cancel（尚未送出通知，不需二次確認）', async () => {
+      const item = stagingItem()
+      const w = mount(DismissalPosQueueCard, { props: { item } })
+      const undo = w.get('[data-testid="pos-queue-card-undo"]')
+      expect(undo.attributes('tabindex')).toBeUndefined()
+      expect(undo.attributes('aria-label')).toBe('復原，不通知 王小明')
+      await undo.trigger('click')
+      expect(w.emitted('cancel')).toEqual([[item]])
+    })
+
+    it('已送出的卡片有可用鍵盤聚焦的「取消通知」鈕（滑鼠裝置顯示，走 popconfirm 二次確認）', () => {
+      const w = mount(DismissalPosQueueCard, { props: { item: activeItem() } })
+      const btn = w.get('[data-testid="pos-queue-card-cancel-inline"]')
+      expect(btn.attributes('tabindex')).toBeUndefined()
+      expect(btn.attributes('disabled')).toBeUndefined()
+      // 只點 reference 不會直接取消，要在 popconfirm 確認
+      expect(w.emitted('cancel')).toBeUndefined()
+    })
+
+    it('已放學卡片沒有復原或取消鈕', () => {
+      const w = mount(DismissalPosQueueCard, { props: { item: doneItem() } })
+      expect(w.find('[data-testid="pos-queue-card-undo"]').exists()).toBe(false)
+      expect(w.find('[data-testid="pos-queue-card-cancel-inline"]').exists()).toBe(false)
+    })
+  })
 })

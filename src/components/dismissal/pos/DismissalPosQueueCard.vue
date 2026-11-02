@@ -34,8 +34,16 @@
  * 發出第二次請求（打破『呼叫端點恰一次』acceptance criteria）。點擊後刻意不主動
  * close()（不同於取消鈕）：失敗時（如已被搶先核銷）卡片留在滑開狀態，讓使用者能
  * 直接再點一次重試，不必重新滑開。
+ *
+ * 2026-11-02 滑鼠／鍵盤可達性：辦公室多半用桌機滑鼠操作，左滑手勢既看不出來、鍵盤也到不了
+ * （reveal 區按鈕 tabindex=-1，要先拖曳才會打開）。
+ * - 倒數中（staging）卡面常駐「復原」鈕，所有裝置都一鍵撤回，5 秒內不用找手勢。
+ * - 已送出（active）卡在可 hover 的精確指標裝置（滑鼠）另顯示「取消通知」「確認交接」，
+ *   走 el-popconfirm 二次確認（等同滑開再點的兩步）；觸控裝置維持原本左滑。
+ *   這排按鈕停止 pointerdown 冒泡，避免點按鈕時被當成開始拖曳。
  */
 import { computed } from 'vue'
+import { ElPopconfirm } from 'element-plus'
 import {
   formatExpectedArrival,
   etaRelativeText,
@@ -174,6 +182,19 @@ function handleCancelClick() {
   close()
 }
 
+/** 倒數中撤回：尚未送出任何通知，不需要二次確認。 */
+function handleUndoClick() {
+  emit('cancel', props.item)
+}
+
+const cancelConfirmTitle = computed(() => `取消 ${props.item.studentName || '這位學生'} 的接送通知？老師端會同步撤下。`)
+const pickupConfirmTitle = computed(() => {
+  const who = proxyPersonLabel.value || '代理人'
+  return proxyPickupCode.value
+    ? `確認 ${who} 出示的取件碼是 ${proxyPickupCode.value}？`
+    : `確認已把孩子交給 ${who}？`
+})
+
 const bodyStyle = computed(() => ({
   transform: `translateX(${dragX.value}px)`,
 }))
@@ -231,11 +252,25 @@ const bodyStyle = computed(() => ({
         <span v-if="proxyPickupCode" class="pos-queue-card__proxy-code">取件碼 {{ proxyPickupCode }}</span>
       </div>
 
-      <DismissalPosCountdownBar
-        v-if="item.phase === 'staging' && item.countdown"
-        :started-at="item.countdown.startedAt"
-        :duration-ms="item.countdown.durationMs"
-      />
+      <div v-if="item.phase === 'staging' && item.countdown" class="pos-queue-card__staging">
+        <div class="pos-queue-card__staging-row">
+          <span class="pos-queue-card__staging-text">{{ item.submitting ? '通知送出中…' : '即將通知老師' }}</span>
+          <button
+            type="button"
+            class="pos-queue-card__undo"
+            data-testid="pos-queue-card-undo"
+            :aria-label="`復原，不通知 ${item.studentName || '這位學生'}`"
+            @pointerdown.stop
+            @click="handleUndoClick"
+          >
+            復原
+          </button>
+        </div>
+        <DismissalPosCountdownBar
+          :started-at="item.countdown.startedAt"
+          :duration-ms="item.countdown.durationMs"
+        />
+      </div>
       <div v-else-if="isDone" class="pos-queue-card__done-flag">✅ {{ doneText }}</div>
       <div v-else-if="etaText" class="pos-queue-card__eta-flag">{{ etaText }}</div>
       <div v-else-if="showProxyStatus" class="pos-queue-card__waiting-flag">
@@ -251,6 +286,50 @@ const bodyStyle = computed(() => ({
 
       <div v-if="showConfirmButton" class="pos-queue-card__swipe-hint">
         <span aria-hidden="true">←</span> 左滑確認
+      </div>
+
+      <div
+        v-if="item.phase === 'active'"
+        class="pos-queue-card__pointer-actions"
+        @pointerdown.stop
+      >
+        <ElPopconfirm
+          v-if="showConfirmButton"
+          :title="pickupConfirmTitle"
+          confirm-button-text="確認交接"
+          cancel-button-text="返回"
+          :width="240"
+          @confirm="handleConfirmClick"
+        >
+          <template #reference>
+            <button
+              type="button"
+              class="pos-queue-card__action pos-queue-card__action--primary"
+              data-testid="pos-queue-card-confirm-inline"
+              :disabled="confirming"
+            >
+              {{ confirming ? '確認中…' : '確認交接' }}
+            </button>
+          </template>
+        </ElPopconfirm>
+        <ElPopconfirm
+          :title="cancelConfirmTitle"
+          confirm-button-text="取消通知"
+          confirm-button-type="danger"
+          cancel-button-text="返回"
+          :width="240"
+          @confirm="emit('cancel', item)"
+        >
+          <template #reference>
+            <button
+              type="button"
+              class="pos-queue-card__action"
+              data-testid="pos-queue-card-cancel-inline"
+            >
+              取消通知
+            </button>
+          </template>
+        </ElPopconfirm>
       </div>
     </div>
   </div>
@@ -398,6 +477,107 @@ const bodyStyle = computed(() => ({
   gap: 3px;
   font-size: 11px;
   color: var(--text-tertiary);
+}
+
+.pos-queue-card__staging {
+  margin-top: var(--space-2, 8px);
+}
+
+.pos-queue-card__staging-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+  margin-bottom: var(--space-1, 4px);
+}
+
+.pos-queue-card__staging-text {
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pos-queue-card__undo {
+  min-height: 32px;
+  padding: 0 var(--space-4, 16px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-color);
+  color: var(--text-primary);
+  font-size: var(--text-sm, 13px);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pos-queue-card__undo:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger-darker);
+}
+
+.pos-queue-card__undo:focus-visible,
+.pos-queue-card__action:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 滑鼠操作的動作列：觸控裝置隱藏（維持左滑），可 hover 的精確指標才顯示 */
+.pos-queue-card__pointer-actions {
+  display: none;
+  margin-top: var(--space-3, 12px);
+  gap: var(--space-2, 8px);
+  justify-content: flex-end;
+}
+
+.pos-queue-card__action {
+  min-height: 28px;
+  padding: 0 var(--space-3, 12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface-color);
+  color: var(--text-secondary);
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pos-queue-card__action:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger-darker);
+}
+
+/* 實心主色鈕用深一階主色（白字約 5.9:1；--color-primary 白字只有 4.1:1 不過 AA） */
+.pos-queue-card__action--primary {
+  border-color: var(--el-color-primary-dark-2);
+  background: var(--el-color-primary-dark-2);
+  color: var(--el-color-white);
+}
+
+.pos-queue-card__action--primary:hover {
+  border-color: var(--el-color-primary-dark-2);
+  color: var(--el-color-white);
+  opacity: 0.9;
+}
+
+.pos-queue-card__action:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pos-queue-card__pointer-actions {
+    display: flex;
+  }
+
+  /* 滑鼠已有看得到的按鈕，不再提示左滑 */
+  .pos-queue-card__swipe-hint {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .pos-queue-card__undo {
+    min-height: var(--touch-target-min);
+  }
 }
 
 .pos-queue-card__eta-flag {

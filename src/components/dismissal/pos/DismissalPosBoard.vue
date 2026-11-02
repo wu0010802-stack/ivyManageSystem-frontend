@@ -14,18 +14,22 @@
  * 卡片 ⋮ 選單的補登／撤銷在這裡打 API，完成後 refresh 名單並 emit refresh-calls
  * 讓父層重抓接送通知（娃娃車補登是一筆 request_source=bus 的 completed call）。
  *
- * 範圍決策：左欄 count 徽章（T-005 選配欄位）本輪未串接——要正確算出「每班
- * unpicked 人數」需要對所有班級（非僅選中班級）各自跑一次 buildRoster +
- * useStudentPosStatus，屬於額外範圍，acceptance_criteria 未要求，先不做，
- * 如需要可另拆 task。
+ * 2026-11-02：
+ * - 左欄 count 徽章接上：每班「還在園內等接送」（useStudentPosStatus＝unpicked）人數，
+ *   櫃台一眼看出哪幾班還有孩子沒走。
+ * - 中欄上方加跨班姓名搜尋；搜尋結果可能不在選中班級，所以 quick-dispatch 改用學生自己
+ *   的 classroom_id 建立通知（不再假設＝選中班級）。
+ * - notifyingIds（右欄倒數中＋已送出）傳給中欄卡片顯示「通知中」。
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 import DismissalPosClassroomRail from './DismissalPosClassroomRail.vue'
 import DismissalPosStudentGrid from './DismissalPosStudentGrid.vue'
 import DismissalPosQueuePanel from './DismissalPosQueuePanel.vue'
 import type { DismissalPosStudentCardStudent, PosLeaveType } from './DismissalPosStudentCard.vue'
-import type { RosterStudentInput, ClassroomInput } from '@/composables/useDismissalRoster'
+import { buildRoster, type RosterStudentInput, type ClassroomInput } from '@/composables/useDismissalRoster'
+import { useStudentPosStatus, type PosStudentCallInput } from '@/composables/useStudentPosStatus'
 import type { DismissalCallView } from '@/composables/useDismissalUrgency'
 import { useDismissalPosQueue } from '@/composables/useDismissalPosQueue'
 import { useDismissalReservationChime } from '@/composables/useDismissalReservationChime'
@@ -61,9 +65,7 @@ watch(
   { immediate: true },
 )
 
-const classroomRailItems = computed(() =>
-  props.classrooms.map(c => ({ id: c.id, name: c.name })),
-)
+const searchQuery = ref('')
 
 const activeCalls = computed(() => props.calls)
 const { queue, addToQueue, cancel, confirmProxyPickup, confirmingIds } =
@@ -72,6 +74,39 @@ const { queue, addToQueue, cancel, confirmProxyPickup, confirmingIds } =
 useDismissalReservationChime(activeCalls)
 
 const { dayStatus, refresh: refreshDayStatus } = useDismissalPosDayStatus()
+
+/** 右欄還沒結束的學生（倒數中＋已送出未放學）：中欄卡片顯示「通知中」並停用再點。 */
+const notifyingIds = computed(
+  () => new Set(queue.value.filter(item => item.phase !== 'done').map(item => item.studentId)),
+)
+
+/** 每班還在園內等接送的人數（請假、娃娃車、已被接走都不算）。 */
+const waitingCountByClassroom = computed(() => {
+  const counts = new Map<number, number>()
+  for (const group of buildRoster(props.students, props.classrooms, props.calls)) {
+    if (group.kind !== 'classroom' || group.classroomId == null) continue
+    let n = 0
+    for (const s of group.students) {
+      const { status } = useStudentPosStatus(
+        { id: s.id },
+        props.calls as PosStudentCallInput[],
+        dayStatus.value,
+      )
+      if (status === 'unpicked') n += 1
+    }
+    counts.set(group.classroomId, n)
+  }
+  return counts
+})
+
+const classroomRailItems = computed(() =>
+  props.classrooms.map(c => ({ id: c.id, name: c.name, count: waitingCountByClassroom.value.get(c.id) ?? 0 })),
+)
+
+function selectClassroom(id: number) {
+  selectedClassroomId.value = id
+  searchQuery.value = ''
+}
 const busyIds = ref<Set<number>>(new Set())
 
 /** 同一學生同時只允許一個補登／撤銷請求；完成後重抓名單與（視需要）接送通知。 */
@@ -129,12 +164,14 @@ function handleUnmarkLeave(student: DismissalPosStudentCardStudent) {
 }
 
 function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
-  if (selectedClassroomId.value == null) return
-  const classroom = props.classrooms.find(c => c.id === selectedClassroomId.value)
+  // 搜尋結果可能不在選中班級：一律用學生自己的班級建立通知。
+  const classroomId = props.students.find(s => s.id === student.id)?.classroom_id ?? selectedClassroomId.value
+  if (classroomId == null) return
+  const classroom = props.classrooms.find(c => c.id === classroomId)
   addToQueue({
     id: student.id,
     name: student.name,
-    classroomId: selectedClassroomId.value,
+    classroomId,
     classroomName: classroom?.name ?? '',
   })
 }
@@ -145,23 +182,34 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
     <DismissalPosClassroomRail
       class="pos-board__rail"
       :classrooms="classroomRailItems"
-      :selected-id="selectedClassroomId"
-      @update:selected-id="selectedClassroomId = $event"
+      :selected-id="searchQuery.trim() ? null : selectedClassroomId"
+      @update:selected-id="selectClassroom"
     />
-    <DismissalPosStudentGrid
-      class="pos-board__grid"
-      :selected-classroom-id="selectedClassroomId"
-      :students="students"
-      :classrooms="classrooms"
-      :calls="calls"
-      :day-status="dayStatus"
-      :busy-ids="busyIds"
-      @quick-dispatch="handleQuickDispatch"
-      @mark-bus="handleMarkBus"
-      @mark-leave="handleMarkLeave"
-      @unmark-bus="handleUnmarkBus"
-      @unmark-leave="handleUnmarkLeave"
-    />
+    <section class="pos-board__grid" aria-label="學生">
+      <el-input
+        v-model="searchQuery"
+        class="pos-board__search"
+        placeholder="搜尋學生姓名（全園）"
+        aria-label="搜尋學生姓名"
+        :prefix-icon="Search"
+        clearable
+      />
+      <DismissalPosStudentGrid
+        :selected-classroom-id="selectedClassroomId"
+        :students="students"
+        :classrooms="classrooms"
+        :calls="calls"
+        :day-status="dayStatus"
+        :busy-ids="busyIds"
+        :notifying-ids="notifyingIds"
+        :search-query="searchQuery"
+        @quick-dispatch="handleQuickDispatch"
+        @mark-bus="handleMarkBus"
+        @mark-leave="handleMarkLeave"
+        @unmark-bus="handleUnmarkBus"
+        @unmark-leave="handleUnmarkLeave"
+      />
+    </section>
     <DismissalPosQueuePanel
       class="pos-board__queue"
       :items="queue"
@@ -192,6 +240,11 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
   padding: var(--space-5, 20px);
 }
 
+.pos-board__search {
+  max-width: 22rem;
+  margin-bottom: var(--space-4);
+}
+
 .pos-board__queue {
   border-left: 1px solid var(--border-color);
   background: var(--surface-color);
@@ -200,17 +253,21 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
   min-height: 0;
 }
 
-@media (max-width: 1023.98px) {
+/* 版面依「看板實際可用寬度」切換，不看視窗寬（2026-11-02）：810 平板直式＋展開的
+   後台側欄只剩約 550px，舊的視窗斷點仍給三欄，中欄被擠到 45px、班名直排。
+   容器由 DismissalQueueView 的 .pos-board-host 提供（container-type 只掛在那層，
+   掛在整頁會把頁內未 teleport 的對話框困住，同 main.css 容器卡註解的道理）。 */
+@container dismissal-board (max-width: 1000px) {
   .pos-board {
-    grid-template-columns: 160px 1fr 240px;
+    grid-template-columns: 150px 1fr 230px;
   }
 }
 
-/* 手機：三欄（160＋1fr＋240）塞不進 375px，右側被裁、整頁可橫捲。改單欄堆疊：
-   班級列變橫向捲動的 chip 列；接送佇列提到學生卡片之上——點學生後有 5 秒撤銷
-   倒數，佇列若排在一長串學生卡片後面就看不到也來不及按。 */
-@media (--to-sm) {
+/* 窄：三欄塞不下，改單欄堆疊：班級列變橫向捲動的 chip 列；接送佇列提到學生卡片之上——
+   點學生後有 5 秒撤銷倒數，佇列若排在一長串學生卡片後面就看不到也來不及按。 */
+@container dismissal-board (max-width: 700px) {
   .pos-board {
+    flex: none;
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
@@ -247,6 +304,10 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
     order: 2;
     overflow: visible;
     padding: 0;
+  }
+
+  .pos-board__search {
+    max-width: none;
   }
 }
 </style>

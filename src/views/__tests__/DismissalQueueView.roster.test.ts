@@ -110,6 +110,7 @@ import DismissalQueueView from '@/views/DismissalQueueView.vue'
 import DismissalPosBoard from '@/components/dismissal/pos/DismissalPosBoard.vue'
 import { getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
+import { getDismissalCalls } from '@/api/dismissalCalls'
 
 const globalConfig = {
   stubs: { teleport: true, 'el-table-column': { template: '<span />' } },
@@ -152,6 +153,9 @@ describe('DismissalQueueView 點名單班級歸屬', () => {
 
   it('班級篩選只列出有在籍學生的班級，跨學年同名班帶學期標籤', async () => {
     const wrapper = await mountView()
+    // 2026-11-02 起班級篩選只在歷史紀錄檢視出現（看板由左欄切班）
+    ;(wrapper.vm as unknown as { filterStatus: string }).filterStatus = 'completed'
+    await flushPromises()
     const labels = wrapper
       .findAll('[data-testid="dismissal-classroom-option"]')
       .map(o => o.attributes('label'))
@@ -160,5 +164,18 @@ describe('DismissalQueueView 點名單班級歸屬', () => {
       '天堂鳥',
       '向日葵（115學年度上學期）',
     ])
+  })
+
+  it('看板不顯示班級篩選；從歷史帶著班級切回看板時，查詢不帶 classroom_id（右欄要看全園）', async () => {
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-testid="dismissal-classroom-option"]').exists()).toBe(false)
+    const vm = wrapper.vm as unknown as { filterStatus: string; filterClassroomId: number | null; fetchCalls: () => Promise<void> }
+    vm.filterStatus = 'completed'
+    vm.filterClassroomId = 13
+    await vm.fetchCalls()
+    expect(vi.mocked(getDismissalCalls).mock.lastCall?.[0]).toMatchObject({ classroom_id: 13, status: 'completed' })
+    vm.filterStatus = 'active'
+    await vm.fetchCalls()
+    expect(vi.mocked(getDismissalCalls).mock.lastCall?.[0]).not.toHaveProperty('classroom_id')
   })
 })

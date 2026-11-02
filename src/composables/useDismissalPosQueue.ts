@@ -54,6 +54,10 @@ interface StagingEntry {
   student: PosDispatchStudent
   startedAt: number
   timer: ReturnType<typeof setTimeout>
+  /** 倒數已結束、createDismissalCall 在途（2026-11-02 審查 F7） */
+  submitting: boolean
+  /** 在途時被按了復原：送出成功後要自動撤回 */
+  cancelRequested: boolean
 }
 
 function stagingItemId(studentId: number): string {
@@ -113,6 +117,7 @@ function toStagingItem(studentId: number, entry: StagingEntry): PosQueueItem {
     source: entry.student.source ?? 'onsite',
     countdown: { startedAt: entry.startedAt, durationMs: STAGING_DURATION_MS },
     call: null,
+    submitting: entry.submitting,
   }
 }
 
@@ -234,6 +239,7 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
   async function submit(studentId: number) {
     const entry = staging.get(studentId)
     if (!entry) return
+    entry.submitting = true
     try {
       const res = await createDismissalCall({
         student_id: studentId,
@@ -245,6 +251,11 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
       // 靜默交回 WS/輪詢」，不會把畸形資料塞進佇列或用 NaN 呼叫後續的 cancel）。
       const created = res.data as Schema<'DismissalCallOut'>
       if (typeof created?.id !== 'number') return
+      if (entry.cancelRequested) {
+        // 在途時按了復原：照使用者意思撤回剛送出的通知（老師端可能已短暫看到，會一併撤下）
+        await retractJustCreated(created.id, entry.student.name, created)
+        return
+      }
       localActiveCalls.set(created.id, {
         id: created.id,
         student_id: created.student_id,
@@ -276,6 +287,31 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
    * 的 activeCallStudentIds（與既有點名單 chip.is-notifying 同一份判斷邏輯），
    * 不另外定義一套「進行中」規則。
    */
+  async function retractJustCreated(
+    callId: number,
+    studentName: string,
+    created: Schema<'DismissalCallOut'>,
+  ) {
+    try {
+      await cancelDismissalCall(callId)
+      ElMessage.info(`已撤回 ${studentName} 的接送通知`)
+    } catch {
+      // 撤不回：把它放回右欄讓櫃台看得到、能再取消一次
+      localActiveCalls.set(callId, {
+        id: callId,
+        student_id: created.student_id,
+        student_name: created.student_name,
+        classroom_name: created.classroom_name,
+        status: created.status,
+        requested_at: created.requested_at,
+        request_source: created.request_source,
+        expected_arrival_at: created.expected_arrival_at,
+        arrived_at: created.arrived_at,
+      })
+      ElMessage.error(`${studentName} 的通知已送出、撤回失敗，請在右欄再取消一次`)
+    }
+  }
+
   function addToQueue(student: PosDispatchStudent) {
     if (staging.has(student.id)) return
     if (activeCallStudentIds(activeCalls.value).has(student.id)) return
@@ -283,7 +319,7 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     const timer = setTimeout(() => {
       void submit(student.id)
     }, STAGING_DURATION_MS)
-    staging.set(student.id, { student, startedAt, timer })
+    staging.set(student.id, { student, startedAt, timer, submitting: false, cancelRequested: false })
   }
 
   /**
@@ -300,6 +336,8 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
       const entry = staging.get(item.studentId)
       if (entry) {
         clearTimeout(entry.timer)
+        // 倒數已結束、請求在途：記下撤回意圖，送出成功後由 submit 自動撤回
+        if (entry.submitting) entry.cancelRequested = true
         staging.delete(item.studentId)
       }
       return

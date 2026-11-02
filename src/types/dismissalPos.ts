@@ -78,4 +78,6 @@ export interface PosQueueItem {
   source: PosQueueSource
   countdown: PosQueueCountdown | null
   call: DismissalCallView | null
+  /** staging 專用：倒數已結束、通知送出中（此時按復原會在送出後自動撤回） */
+  submitting?: boolean
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import ElementPlus from 'element-plus'
 
 const api = vi.hoisted(() => ({
   getDismissalPosStatus: vi.fn(),
@@ -217,6 +218,50 @@ describe('DismissalPosBoard', () => {
       const w = mountBoard()
       await flushPromises()
       expect(w.findAll('.pos-student-card__status')).toHaveLength(0)
+    })
+  })
+
+  describe('2026-11-02 櫃台效率：班級待接送數、通知中、跨班搜尋', () => {
+    beforeEach(() => {
+      api.getDismissalPosStatus.mockResolvedValue({ data: { leaves: [], bus_departed: [] } })
+    })
+
+    it('左欄每班顯示還在園內等接送的人數；已被家長接走的不算', async () => {
+      const calls = [
+        { id: 9, student_id: 102, student_name: '陳小華', classroom_name: '陽光班', status: 'completed', completed_at: '2026-11-02T16:10:00' },
+      ] as DismissalCallView[]
+      const w = mountBoard(calls)
+      await flushPromises()
+      const badges = w.findAll('.pos-classroom-rail__badge').map(b => b.text())
+      expect(badges).toEqual(['1', '1'])
+      expect(w.findAll('.pos-classroom-rail__item')[0].attributes('aria-label')).toBe('陽光班，待接送 1 位')
+    })
+
+    it('點過的學生卡片立刻顯示「通知中」且再點不會重複入列（原本看起來沒反應）', async () => {
+      const w = mountBoard()
+      await flushPromises()
+      const card = w.find('.pos-student-card')
+      await card.trigger('click')
+      expect(card.classes()).toContain('is-notifying')
+      expect(card.text()).toContain('通知中')
+      expect(card.attributes('aria-disabled')).toBe('true')
+      await card.trigger('click')
+      expect(w.findAll('.pos-queue-card')).toHaveLength(1)
+    })
+
+    it('跨班搜尋：輸入姓名列出別班學生（帶班級名），點了用學生自己的班級建立通知', async () => {
+      const w = mount(DismissalPosBoard, {
+        props: { classrooms: CLASSROOMS, students: STUDENTS, calls: [] },
+        global: { plugins: [ElementPlus] },
+      })
+      await flushPromises()
+      await w.find('input[aria-label="搜尋學生姓名"]').setValue('林')
+      const cards = w.findAll('.pos-student-card')
+      expect(cards).toHaveLength(1)
+      expect(cards[0].find('.pos-student-card__name').text()).toBe('林小美')
+      expect(cards[0].find('.pos-student-card__room').text()).toBe('星星班')
+      await cards[0].trigger('click')
+      expect(w.find('.pos-queue-card__room').text()).toBe('星星班')
     })
   })
 })
