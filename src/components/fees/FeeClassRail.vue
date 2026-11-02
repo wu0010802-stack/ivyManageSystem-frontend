@@ -10,8 +10,8 @@
     <button
       type="button"
       class="rail-all"
-      :class="{ 'rail-all--on': !selectedClass && !selectedGrade }"
-      :aria-pressed="!selectedClass && !selectedGrade"
+      :class="{ 'rail-all--on': isAllOn }"
+      :aria-pressed="isAllOn"
       :title="showCounts ? `全部班級　共 ${total} 人・${totalUnpaid ? `${totalUnpaid} 人未收齊` : '已收齊'}` : '全部班級'"
       data-test="stmt-class-rail-all"
       @click="emit('select', { cls: null, grade: null })"
@@ -85,6 +85,7 @@
  * 受控元件：選取狀態（班／年段）由父層持有，本元件只 emit。分組資料一律由父層
  * 以 `buildClassGroups` 產出並與表格分組共用，避免兩處算出不同的班級集合。
  */
+import { computed } from 'vue'
 import { Check } from '@element-plus/icons-vue'
 import type { ClassGroup, GradeGroup } from '@/components/fees/feeClassGrouping'
 
@@ -95,7 +96,10 @@ const props = withDefaults(
     total?: number
     /** 範圍內未收齊人數（「全部」的計數） */
     totalUnpaid?: number
-    /** 選中的班名（月表的 classroom_name），null＝未指定 */
+    /**
+     * 選中的班名（月表的 classroom_name），null＝未指定（全部）。
+     * ⚠ ''＝「未分班」，是合法的選取值——判斷一律 `=== null`，不可用 truthy。
+     */
     selectedClass?: string | null
     /** 選中的年段 key，null＝未指定 */
     selectedGrade?: string | null
@@ -125,9 +129,12 @@ const emit = defineEmits<{
   select: [payload: { cls: string | null; grade: string | null }]
 }>()
 
+/** 「全部」＝班與年段都未指定（未分班的 '' 是有選，不算全部） */
+const isAllOn = computed(() => props.selectedClass === null && props.selectedGrade === null)
+
 /** 年段標籤只在「選了整個年段」時作用；選了其中一班時作用態在班 chip 上 */
 function isGradeOn(key: string): boolean {
-  return !props.selectedClass && props.selectedGrade === key
+  return props.selectedClass === null && props.selectedGrade === key
 }
 
 function onGrade(key: string) {

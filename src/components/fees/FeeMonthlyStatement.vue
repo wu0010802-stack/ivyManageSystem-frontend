@@ -212,7 +212,7 @@
           <!-- 跨班一列都沒通過篩選時：分組表頭的統計講的是收款狀況，與「逾期」等
                篩選無關，整排留著只是噪音——改成一句說明為什麼是空的。
                明確選定某一班時例外：那條表頭正是該班的脈絡，保留它與組內空狀態。 -->
-          <tr v-if="visibleStudents.length === 0 && !selectedClassroom">
+          <tr v-if="visibleStudents.length === 0 && selectedClassroom === null">
             <td :colspan="totalColumns" class="stmt-state" data-test="stmt-no-match">
               {{ emptyRowsHint }}
             </td>
@@ -601,7 +601,7 @@ import BatchPayDialog from '@/components/fees/BatchPayDialog.vue'
 import ManualMonthlyRecordDialog from '@/components/fees/ManualMonthlyRecordDialog.vue'
 import BillingCodeCell from '@/components/fees/BillingCodeCell.vue'
 import FeeClassRail from '@/components/fees/FeeClassRail.vue'
-import { buildClassGroups } from '@/components/fees/feeClassGrouping'
+import { UNASSIGNED_CLASS_LABEL, buildClassGroups } from '@/components/fees/feeClassGrouping'
 import {
   activeSettlementTags,
   sumSettlements,
@@ -780,6 +780,11 @@ function onPrepayMutated() {
 
 // ─── 前端快篩狀態 ──────────────────────────────────────────────────────────
 const searchName = ref('')
+/**
+ * null＝全部（未指定）；''＝「未分班」（月表 classroom_name 為空的學生）。
+ * ⚠ 判斷有沒有選班一律 `=== null`／`!== null`：用 truthy 會把未分班當成沒選，
+ * 畫面顯示全校、全選勾到全校（2026-11-02 bug hunt）。
+ */
 const selectedClassroom = ref<string | null>(null)
 const selectedGrade = ref<string | null>(null)
 // 預設「該繳的人」：未繳＋部分繳費開、已繳清關
@@ -803,7 +808,7 @@ function onRailSelect(payload: { cls: string | null; grade: string | null }) {
   selectedGrade.value = payload.grade
   checkedIds.value = new Set()
   // 明確點進某一班時展開它，否則自動收合會讓人以為班是空的
-  if (payload.cls) {
+  if (payload.cls !== null) {
     const next = new Set(collapsedClasses.value)
     next.delete(payload.cls)
     collapsedClasses.value = next
@@ -865,9 +870,9 @@ const scopeStudents = computed(() => {
   const kw = searchName.value.trim()
   return students.value.filter((s) => {
     const cls = s.classroom_name ?? ''
-    if (selectedClassroom.value) {
+    if (selectedClassroom.value !== null) {
       if (cls !== selectedClassroom.value) return false
-    } else if (selectedGrade.value && gradeOfClass.value.get(cls) !== selectedGrade.value) {
+    } else if (selectedGrade.value !== null && gradeOfClass.value.get(cls) !== selectedGrade.value) {
       return false
     }
     return !kw || [s.student_name, s.billing_code_suffix, s.full_collection_number].some(value => (value ?? '').includes(kw))
@@ -928,7 +933,10 @@ function jumpToWorkspace(target: { ws: FeeWorkspaceKey; view: string }) {
 
 /** 摘要列標題隨範圍走：選了班或年段就說出是哪一個，避免看錯成全園數字 */
 const scopeLabel = computed(() => {
-  const scope = selectedClassroom.value || selectedGrade.value || ''
+  const scope =
+    selectedClassroom.value !== null
+      ? selectedClassroom.value || UNASSIGNED_CLASS_LABEL
+      : (selectedGrade.value ?? '')
   return scope ? `${monthLabel.value}・${scope}` : monthLabel.value
 })
 

@@ -470,6 +470,67 @@ describe('表格依班級分組', () => {
   })
 })
 
+// 2026-11-02 bug hunt F9：未分班的班名是 ''，月表原本用 truthy 判斷「有沒有選班」
+// → 點「未分班」等於沒選：顯示全校、全選會勾全校、摘要標題寫成全園。
+describe('班級篩選：未分班', () => {
+  const UNASSIGNED = {
+    student_id: 4,
+    student_name: '吳未分班',
+    classroom_name: null,
+    status: 'unpaid',
+    total_due: 9500,
+    total_paid: 0,
+    outstanding: 9500,
+    items: [item({ id: 41 })],
+  }
+  const withUnassigned = () => ({
+    ...STATEMENT,
+    students: [...STATEMENT.students, UNASSIGNED],
+  })
+  const unassignedChip = (w: ReturnType<typeof mountStatement>) =>
+    w.find('[data-test="stmt-class-rail-class"][data-classroom=""]')
+
+  it('點「未分班」只列未分班學生，「全部」不亮', async () => {
+    getFeeMonthlyStatement.mockResolvedValue(withUnassigned())
+    const w = mountStatement()
+    await flushPromises()
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分', '吳未分班'])
+    await unassignedChip(w).trigger('click')
+    expect(rowNames(w)).toEqual(['吳未分班'])
+    expect(unassignedChip(w).attributes('aria-pressed')).toBe('true')
+    expect(w.find('[data-test="stmt-class-rail-all"]').attributes('aria-pressed')).toBe('false')
+  })
+
+  it('選未分班時全選只勾未分班學生，不會勾到全校', async () => {
+    getFeeMonthlyStatement.mockResolvedValue(withUnassigned())
+    const w = mountStatement()
+    await flushPromises()
+    await unassignedChip(w).trigger('click')
+    await w.find('input[aria-label="全選本頁可收款學生"]').setValue(true)
+    expect(w.find('[data-test="stmt-batch-pay"]').text()).toContain('1 人')
+    await w.find('[data-test="stmt-batch-pay"]').trigger('click')
+    expect(w.find('[data-testid="batch-pay-dialog"]').attributes('data-ids')).toBe('41')
+  })
+
+  it('摘要標題標明是未分班，不讀成全園數字', async () => {
+    getFeeMonthlyStatement.mockResolvedValue(withUnassigned())
+    const w = mountStatement()
+    await flushPromises()
+    await unassignedChip(w).trigger('click')
+    expect(w.find('[data-test="stmt-summary"]').text()).toContain('未分班')
+  })
+
+  it('再點一次未分班回到全部', async () => {
+    getFeeMonthlyStatement.mockResolvedValue(withUnassigned())
+    const w = mountStatement()
+    await flushPromises()
+    await unassignedChip(w).trigger('click')
+    await unassignedChip(w).trigger('click')
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分', '吳未分班'])
+    expect(w.find('[data-test="stmt-class-rail-all"]').attributes('aria-pressed')).toBe('true')
+  })
+})
+
 describe('收款與批次收款', () => {
   it('列上「收現金」開啟 StudentCashReceiptDialog 並帶學生與月份', async () => {
     const w = mountStatement()
