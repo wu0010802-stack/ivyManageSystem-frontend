@@ -115,9 +115,23 @@ const mockExport = exportClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockRegenerate = regenerateClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockTeacherOptions = getTeacherOptions as ReturnType<typeof vi.fn>
 
+// StatusOut 必填欄位的預設值對齊 staging／prod 實況：排程與自動畢業都未啟用。
+// 需要「啟用」的測試請顯式覆寫；「欄位缺省（舊後端）保守視為啟用」另有專門測試。
+const STATUS_REQUIRED_DEFAULTS = {
+  apply_date: '2026-08-01',
+  applies_immediately: false,
+  scheduler_enabled: false,
+  auto_graduation_enabled: false,
+  graduation_date: '2026-07-31',
+  retain_pending_count: 0,
+  pending_new_student_count: 0,
+  apply_failure: null,
+}
+
 function statusNone() {
   return {
     data: {
+      ...STATUS_REQUIRED_DEFAULTS,
       state: 'none' as const,
       target_school_year: 115,
       source_school_year: 114,
@@ -136,6 +150,7 @@ function statusNone() {
 function statusDraft() {
   return {
     data: {
+      ...STATUS_REQUIRED_DEFAULTS,
       state: 'draft' as const,
       target_school_year: 115,
       source_school_year: 114,
@@ -162,6 +177,7 @@ function detailDraft() {
       generated_at: '2026-06-01T00:00:00',
       published_at: null,
       applied_at: null,
+      carry_over_available: 0,
       classes: [],
       students: [],
       issues: {
@@ -175,6 +191,7 @@ function detailDraft() {
 function detailDraftWithClasses(overrides: Record<string, unknown> = {}) {
   return {
     data: {
+      carry_over_available: 0,
       id: 5,
       target_school_year: 115,
       source_school_year: 114,
@@ -312,7 +329,7 @@ describe('YearPlanWorkspaceView', () => {
 
   it('補救模式（applies_immediately）：常駐警示條並把套用資訊傳給發布對話框', async () => {
     const remedial = statusDraft()
-    Object.assign(remedial.data, { applies_immediately: true, apply_date: '2026-08-01' })
+    Object.assign(remedial.data, { applies_immediately: true, apply_date: '2026-08-01', scheduler_enabled: true })
     mockStatus.mockResolvedValue(remedial)
     mockDetail.mockResolvedValue(detailDraftWithClasses())
     const w = mountView()
@@ -329,7 +346,7 @@ describe('YearPlanWorkspaceView', () => {
 
   it('補救模式但還沒有草稿：警示條不說「這份計畫」', async () => {
     const none = statusNone()
-    Object.assign(none.data, { applies_immediately: true, apply_date: '2026-08-01' })
+    Object.assign(none.data, { applies_immediately: true, apply_date: '2026-08-01', scheduler_enabled: true })
     mockStatus.mockResolvedValue(none)
     const w = mountView()
     await flushPromises()
@@ -450,7 +467,7 @@ describe('YearPlanWorkspaceView', () => {
 
   it('尚無草稿：說明系統會在準備期自動產生，並寫出日期', async () => {
     const none = statusNone()
-    Object.assign(none.data, { prep_start_date: '2027-06-01', apply_date: '2027-08-01', applies_immediately: false })
+    Object.assign(none.data, { prep_start_date: '2027-06-01', apply_date: '2027-08-01', applies_immediately: false, scheduler_enabled: true })
     mockStatus.mockResolvedValue(none)
     const w = mountView()
     await flushPromises()
@@ -889,6 +906,9 @@ describe('YearPlanWorkspaceView', () => {
         published_at: '2027-06-20T00:00:00',
         apply_date: '2027-08-01',
         applies_immediately: false,
+        // FE-A 這組測的是排程與自動畢業都啟用時的說法
+        scheduler_enabled: true,
+        auto_graduation_enabled: true,
         ...extra,
       },
     }
@@ -1478,12 +1498,14 @@ describe('YearPlanWorkspaceView', () => {
       })
       mockUnpublish.mockResolvedValue({ data: { status: 'draft', version: 2 } })
       const w = await mountWith(fecStatus('published', { blocking_count: 1 }), detail)
-      const alert = w.find('.published-blocking-alert')
-      expect(alert.text()).toContain('已發布的計畫有 1 項阻擋，套用會失敗')
+      // 單一紅框：狀態列講「套用會失敗」並帶處理按鈕（不再另疊一個 alert）
+      expect(w.find('.published-blocking-alert').exists()).toBe(false)
+      const bar = w.find('.plan-published-bar')
+      expect(bar.find('.bar-headline').text()).toBe('已發布的計畫有 1 項阻擋，套用會失敗')
 
       mockStatus.mockResolvedValue(fecStatus('draft', { blocking_count: 1, version: 2 }))
       mockDetail.mockResolvedValue(detailWithGraduatingRetain({ version: 2 }))
-      await alert.find('.btn-unpublish-regenerate').trigger('click')
+      await bar.find('.btn-unpublish-regenerate').trigger('click')
       await flushPromises()
       expect(mockUnpublish).toHaveBeenCalledWith(5, { base_version: 1 })
       expect(w.find('.regenerate-overwrite').exists()).toBe(true)
@@ -1658,7 +1680,166 @@ describe('YearPlanWorkspaceView', () => {
       const w = await mountWith(fecStatus('draft', { applies_immediately: true }), detailDraftWithClasses())
       w.findComponent({ name: 'PlanPublishDialog' }).vm.$emit('confirm')
       await flushPromises()
-      expect(mockPublish).toHaveBeenCalledWith(5, { base_version: 1, confirm_target_school_year: 116 })
+      // 送計畫本身的目標學年（detail 115），不是 status 的（116）
+      expect(mockPublish).toHaveBeenCalledWith(5, { base_version: 1, confirm_target_school_year: 115 })
+      expect(w.findComponent({ name: 'PlanPublishDialog' }).props('targetSchoolYear')).toBe(115)
+    })
+
+    // ── 前端審查 F1–F10 ──
+
+    it('F1 補救模式已發布但有阻擋：不顯示「約一小時內套用」橫幅，狀態列講套用會失敗', async () => {
+      setToday('2027-08-03')
+      const detail = detailWithGraduatingRetain({
+        status: 'published',
+        issues: { blocking: [{ code: 'teacher_invalid', message: 'x', plan_class_id: 10, student_id: null }], warnings: [] },
+      })
+      const w = await mountWith(fecStatus('published', { applies_immediately: true, blocking_count: 1 }), detail)
+      expect(w.find('.remedial-banner').exists()).toBe(false)
+      expect(w.find('.plan-published-bar .bar-headline').text()).toBe('已發布的計畫有 1 項阻擋，套用會失敗')
+      expect(w.text()).not.toContain('約一小時內套用')
+    })
+
+    it('F2 today 在每次重新載入時重算（頁面開著跨日，倒數不會停在前一天）', async () => {
+      setToday('2027-07-31')
+      const w = await mountWith(fecStatus('draft'))
+      expect(w.findComponent({ name: 'PlanNextSteps' }).props('today')).toBe('2027-07-31')
+      setToday('2027-08-01')
+      mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+      w.findComponent(PlanRosterTable).vm.$emit('student-move', { studentIds: [1], op: 'assign', planClassId: 10 })
+      await flushPromises()
+      expect(w.findComponent({ name: 'PlanNextSteps' }).props('today')).toBe('2027-08-01')
+    })
+
+    it('F2 發布時後端回 422 remedial_confirm_required：重新載入後發布 dialog 出現學年確認', async () => {
+      setToday('2027-08-01')
+      mockPreview.mockResolvedValue({
+        data: {
+          classes: [], graduating: [], excluded: [],
+          issues: { blocking: [], warnings: [] },
+          totals: { assigned_count: 0, class_count: 0, excluded_count: 0, graduating_count: 0 },
+        },
+      })
+      const w = await mountWith(fecStatus('draft'), detailDraftWithClasses())
+      mockPublish.mockRejectedValueOnce({
+        response: { status: 422 },
+        errorDetail: { code: 'remedial_confirm_required', message: '請輸入學年 115 確認後再發布' },
+        displayMessage: '請輸入學年 115 確認後再發布',
+      })
+      mockStatus.mockResolvedValue(fecStatus('draft', { applies_immediately: true }))
+      w.findComponent({ name: 'PlanPublishDialog' }).vm.$emit('confirm')
+      await flushPromises()
+      expect(w.findComponent({ name: 'PlanPublishDialog' }).props('appliesImmediately')).toBe(true)
+    })
+
+    it('F3 搬班後又有其他修改：按復原不送出，提示之後又有修改', async () => {
+      setToday('2027-07-20')
+      const warnSpy = vi.spyOn(ElMessage, 'warning')
+      const w = await mountWith(fecStatus('draft'), detailDraftWithClasses())
+      mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+      mockDetail.mockResolvedValue(detailDraftWithClasses({ version: 2 }))
+      w.findComponent(PlanRosterTable).vm.$emit('student-move', { studentIds: [1], op: 'assign', planClassId: 10 })
+      await flushPromises()
+      const notice = (mockShowMoveNotice.mock.calls.at(-1) as unknown[])[0] as { onUndo?: () => void }
+
+      mockUpdateClass.mockResolvedValue({ data: { id: 10, version: 3 } })
+      mockDetail.mockResolvedValue(detailDraftWithClasses({ version: 3 }))
+      w.findComponent(PlanRosterTable).vm.$emit('teacher-change', 10, 'head_teacher_id', 100)
+      await flushPromises()
+
+      const bulkCalls = mockBulkStudents.mock.calls.length
+      notice.onUndo!()
+      await flushPromises()
+      expect(mockBulkStudents.mock.calls.length).toBe(bulkCalls)
+      expect(String(warnSpy.mock.calls.at(-1)![0])).toContain('之後又有修改，無法復原')
+      warnSpy.mockRestore()
+    })
+
+    it('F4 離開頁面時關閉搬班通知', async () => {
+      setToday('2027-07-20')
+      const close = vi.fn()
+      mockShowMoveNotice.mockReturnValueOnce({ close })
+      const w = await mountWith(fecStatus('draft'), detailDraftWithClasses())
+      mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+      w.findComponent(PlanRosterTable).vm.$emit('student-move', { studentIds: [1], op: 'assign', planClassId: 10 })
+      await flushPromises()
+      w.unmount()
+      expect(close).toHaveBeenCalled()
+    })
+
+    it('F5 搜尋框 Enter 在注音選字中（isComposing／keyCode 229）不跳下一位', async () => {
+      setToday('2027-07-20')
+      const w = await mountWith(fecStatus('draft'), detailForEfficiency())
+      const input = w.find('.roster-search input')
+      await input.setValue('張宸瑋')
+      await flushPromises()
+      await input.trigger('keydown', { key: 'Enter', isComposing: true })
+      expect(w.find('.search-count').text()).toBe('1/2')
+      await input.trigger('keydown', { key: 'Enter', keyCode: 229 })
+      expect(w.find('.search-count').text()).toBe('1/2')
+      await input.trigger('keydown', { key: 'Enter' })
+      expect(w.find('.search-count').text()).toBe('2/2')
+    })
+
+    it('F8 已儲存但畫面沒更新：寫入入口都停用；撤回並重新產生不會開重新產生 dialog', async () => {
+      setToday('2027-07-20')
+      vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+      const detail = detailWithGraduatingRetain({
+        status: 'published',
+        issues: { blocking: [{ code: 'teacher_invalid', message: 'x', plan_class_id: 10, student_id: null }], warnings: [] },
+      })
+      const w = await mountWith(fecStatus('published', { blocking_count: 1 }), detail)
+      mockUnpublish.mockResolvedValue({ data: { status: 'draft', version: 2 } })
+      mockStatus.mockRejectedValueOnce({ response: { status: 503 }, displayMessage: '服務暫停' })
+      await w.find('.btn-unpublish-regenerate').trigger('click')
+      await flushPromises()
+      expect(w.find('.stale-banner').exists()).toBe(true)
+      expect(w.find('.regenerate-overwrite').exists()).toBe(false)
+      expect((w.find('.btn-unpublish').element as HTMLButtonElement).disabled).toBe(true)
+      expect(w.findComponent(PlanRosterTable).props('busy')).toBe(true)
+    })
+
+    it('F9 上一個動作還在處理時拖曳放下：提示稍後再試，不靜默吞掉', async () => {
+      setToday('2027-07-20')
+      const infoSpy = vi.spyOn(ElMessage, 'info')
+      const w = await mountWith(fecStatus('draft'), detailDraftWithClasses())
+      mockBulkStudents.mockReturnValue(new Promise(() => {}))
+      w.findComponent(PlanRosterTable).vm.$emit('student-move', { studentIds: [1], op: 'assign', planClassId: 10 })
+      await flushPromises()
+      w.findComponent(PlanRosterTable).vm.$emit('student-move', { studentIds: [1], op: 'assign', planClassId: 11 })
+      await flushPromises()
+      expect(mockBulkStudents).toHaveBeenCalledTimes(1)
+      expect(String(infoSpy.mock.calls.at(-1)![0])).toContain('上一個動作還在處理')
+      infoSpy.mockRestore()
+    })
+
+    it('F10 老師名單載入失敗：提示，點老師格時重試', async () => {
+      setToday('2027-07-20')
+      const warnSpy = vi.spyOn(ElMessage, 'warning')
+      mockTeacherOptions.mockRejectedValueOnce(new Error('network'))
+      const w = await mountWith(fecStatus('draft'), detailDraftWithClasses())
+      expect(String(warnSpy.mock.calls.at(-1)![0])).toContain('老師名單載入失敗')
+      const callsBefore = mockTeacherOptions.mock.calls.length
+      mockTeacherOptions.mockResolvedValueOnce({ data: [{ id: 100, name: '林佳蓉' }] })
+      w.findComponent(PlanRosterTable).vm.$emit('teacher-cell-open')
+      await flushPromises()
+      expect(mockTeacherOptions.mock.calls.length).toBe(callsBefore + 1)
+      expect(w.findComponent(PlanRosterTable).props('teacherOptions')).toEqual([{ id: 100, name: '林佳蓉' }])
+      warnSpy.mockRestore()
+    })
+
+    it('開新增／編輯班級 dialog 時清掉上一次的欄位錯誤', async () => {
+      setToday('2027-07-20')
+      const w = await mountWith(fecStatus('draft'), detailDraftWithClasses())
+      mockUpdateClass.mockRejectedValueOnce({
+        response: { status: 422 },
+        errorDetail: { code: 'VALIDATION_ERROR', message: 'x', errors: [{ loc: ['body', 'capacity'], msg: 'x' }] },
+        displayMessage: 'x',
+      })
+      w.findComponent({ name: 'PlanClassEditDialog' }).vm.$emit('update', 10, { capacity: 0 })
+      await flushPromises()
+      expect(w.findComponent({ name: 'PlanClassEditDialog' }).props('fieldErrors')).not.toEqual({})
+      await w.find('.btn-add-class').trigger('click')
+      expect(w.findComponent({ name: 'PlanClassEditDialog' }).props('fieldErrors')).toEqual({})
     })
 
     it('發布 dialog 拿到排程狀態與畢業日', async () => {
@@ -1767,7 +1948,8 @@ describe('YearPlanWorkspaceView', () => {
       await flushPromises()
       const toolbar = w.findComponent(PlanBatchToolbar)
       expect(toolbar.props('graduationGradeName')).toBe('大班')
-      expect(toolbar.props('autoGraduationEnabled')).toBe(true)
+      // 基礎 mock 對齊 staging：自動畢業未啟用
+      expect(toolbar.props('autoGraduationEnabled')).toBe(false)
     })
 
     it('定位「非畢業年級被標畢業」（只有 student_id）→ 展開畢業名單定位', async () => {
@@ -1787,5 +1969,16 @@ describe('YearPlanWorkspaceView', () => {
       await flushPromises()
       expect(w.find('.graduate-bucket .bucket-row[data-student-id="9"]').classes()).toContain('flash-highlight')
     })
+  })
+  it('status 缺新欄位（舊後端）時保守視為排程與自動畢業都啟用', async () => {
+    const legacy = statusNone()
+    const data = legacy.data as Record<string, unknown>
+    delete data.scheduler_enabled
+    delete data.auto_graduation_enabled
+    Object.assign(data, { prep_start_date: '2027-06-01', apply_date: '2027-08-01' })
+    mockStatus.mockResolvedValue(legacy)
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.empty-desc').text()).toContain('自動產生')
   })
 })

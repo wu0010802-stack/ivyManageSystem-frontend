@@ -20,15 +20,15 @@
         </el-badge>
         <template v-if="canWrite && state === 'draft'">
           <template v-if="!isNarrow">
-            <el-button class="btn-regenerate" :disabled="loading" @click="onRegenerateClick">重新產生建議</el-button>
-            <el-button class="btn-add-class" :disabled="loading" @click="onAddClassClick">新增班級</el-button>
+            <el-button class="btn-regenerate" :disabled="writeLocked" @click="onRegenerateClick">重新產生建議</el-button>
+            <el-button class="btn-add-class" :disabled="writeLocked" @click="onAddClassClick">新增班級</el-button>
           </template>
-          <el-button type="primary" class="btn-publish" :disabled="!canPublish || loading" @click="onPublishClick">發布</el-button>
+          <el-button type="primary" class="btn-publish" :disabled="!canPublish || writeLocked" @click="onPublishClick">發布</el-button>
         </template>
         <el-button
           v-if="canWrite && state === 'published'"
           class="btn-unpublish"
-          :disabled="loading"
+          :disabled="writeLocked"
           @click="onUnpublishClick"
         >撤回發布</el-button>
         <!-- 「更多」：有計畫就有（匯出只要讀取權限）；寫入相關項目另依權限與狀態 -->
@@ -39,14 +39,15 @@
           <template #dropdown>
             <el-dropdown-menu>
               <template v-if="canWrite && isNarrow && state === 'draft'">
-                <el-dropdown-item command="add-class">新增班級</el-dropdown-item>
-                <el-dropdown-item command="regenerate">重新產生建議</el-dropdown-item>
+                <el-dropdown-item command="add-class" :disabled="writeLocked">新增班級</el-dropdown-item>
+                <el-dropdown-item command="regenerate" :disabled="writeLocked">重新產生建議</el-dropdown-item>
               </template>
               <el-dropdown-item command="export" :divided="canWrite && isNarrow && state === 'draft'">匯出 Excel</el-dropdown-item>
               <el-dropdown-item
                 v-if="canWrite && canCancelPlan"
                 command="cancel-plan"
                 class="dropdown-item-danger"
+                :disabled="writeLocked"
                 divided
               >{{ state === 'published' ? '作廢計畫' : '作廢草稿' }}</el-dropdown-item>
             </el-dropdown-menu>
@@ -100,27 +101,6 @@
     </div>
 
     <template v-else-if="plan">
-    <!-- 已發布卻有阻擋：套用一定失敗，直接給出路（撤回後重新產生） -->
-    <el-alert
-      v-if="state === 'published' && plan.issues.blocking.length > 0"
-      class="published-blocking-alert"
-      type="error"
-      show-icon
-      :closable="false"
-      :title="`已發布的計畫有 ${plan.issues.blocking.length} 項阻擋，套用會失敗`"
-    >
-      <div class="stale-body">
-        <span>處理方式寫在右側「阻擋套用」各項裡；多數要先撤回發布、重新產生建議再發布。</span>
-        <el-button
-          v-if="canWrite"
-          size="small"
-          type="danger"
-          class="btn-unpublish-regenerate"
-          :disabled="loading"
-          @click="onUnpublishAndRegenerate"
-        >撤回並重新產生</el-button>
-      </div>
-    </el-alert>
     <PlanPublishedBar
       v-if="state === 'published' && status"
       :published-at="status.published_at ?? plan.published_at ?? null"
@@ -130,7 +110,20 @@
       :apply-failure="status.apply_failure ?? null"
       :apply-overdue="status.apply_overdue"
       :today="today"
-    />
+      :blocking-count="plan.issues.blocking.length"
+    >
+      <!-- 已發布卻有阻擋：套用一定失敗，直接給出路（撤回後重新產生）。狀態列本身就講
+           「套用會失敗」，不再另外疊一個紅色 alert -->
+      <template v-if="canWrite && plan.issues.blocking.length > 0" #actions>
+        <el-button
+          size="small"
+          type="danger"
+          class="btn-unpublish-regenerate"
+          :disabled="writeLocked"
+          @click="onUnpublishAndRegenerate"
+        >撤回並重新產生</el-button>
+      </template>
+    </PlanPublishedBar>
     <PlanNextSteps
       v-if="state === 'draft'"
       :unassigned-count="unassignedCount"
@@ -142,7 +135,7 @@
       :can-edit="editable && canWrite"
       :apply-date="status?.apply_date ?? null"
       :applies-immediately="appliesImmediately"
-      :busy="loading"
+      :busy="writeLocked"
       :show-teacher-link="viewMode !== 'teachers'"
       :scheduler-enabled="schedulerEnabled"
       :today="today"
@@ -170,7 +163,7 @@
             :selected-students="selectedStudents"
             :graduation-grade-name="graduationGrade"
             :auto-graduation-enabled="autoGraduationEnabled"
-            :disabled="loading"
+            :disabled="writeLocked"
             @bulk-op="onBulkOp"
             @clear-selection="clearSelection"
           />
@@ -240,7 +233,7 @@
           :editable="editable && canWrite"
           :selected-ids="selectedSet"
           :teacher-options="teacherOptions"
-          :busy="loading"
+          :busy="writeLocked"
           :view-mode="viewMode"
           :match-ids="matchIdSet"
           :current-match-id="currentMatchId"
@@ -249,6 +242,7 @@
           @class-edit="onClassEdit"
           @student-move="onStudentMove"
           @teacher-change="onTeacherChange"
+          @teacher-cell-open="onTeacherCellOpen"
         />
       </div>
       <!-- 寬幕側欄可收合成窄 rail（只顯示阻擋數）讓表格變寬；用 v-show 保留側欄狀態
@@ -283,7 +277,7 @@
             :plan="plan"
             :editable="editable && canWrite"
             :selected-ids="selectedSet"
-            :busy="loading"
+            :busy="writeLocked"
             @set-selected="onSetSelected"
             @locate-issue="onLocateIssue"
             @assign-student="onAssignStudent"
@@ -309,7 +303,7 @@
         :plan="plan"
         :editable="editable && canWrite"
         :selected-ids="selectedSet"
-        :busy="loading"
+        :busy="writeLocked"
         @set-selected="onSetSelected"
         @locate-issue="onLocateIssue"
         @assign-student="onAssignStudent"
@@ -350,7 +344,7 @@
       :submitting="loading"
       :apply-date="status?.apply_date ?? null"
       :applies-immediately="appliesImmediately"
-      :target-school-year="status?.target_school_year ?? null"
+      :target-school-year="plan?.target_school_year ?? status?.target_school_year ?? null"
       :moved-count="planMoves.moved"
       :retain-count="planMoves.retained"
       :scheduler-enabled="schedulerEnabled"
@@ -467,14 +461,21 @@ const STATE_LABELS: Record<PlanState, string> = {
 }
 const stateLabel = computed(() => STATE_LABELS[state.value])
 
-// 台北今天：發布截止、畢業日風險、是否在準備期都以此判斷（頁面停留跨日不重算，重新整理即更新）
-const today = todayTaipeiISO()
+// 台北今天：發布截止、畢業日風險、是否在準備期都以此判斷。每次載入／寫入結束時重算，
+// 頁面開著跨日（例如發布截止前後）倒數與留級警告才不會停在前一天
+const today = ref(todayTaipeiISO())
+watch(loading, (busy) => {
+  if (!busy) today.value = todayTaipeiISO()
+})
+// 寫入入口一律鎖住的狀態：寫入進行中，或寫入成功但畫面沒更新（版本落後，任何寫入必撞
+// 版本衝突，會被誤讀成「有別人在改」）
+const writeLocked = computed(() => loading.value || staleAfterWrite.value)
 // 排程（自動產生草稿／自動套用）是否啟用；staging／prod 目前未啟用，所有「系統會自動…」
 // 的說法都要看這個。欄位缺省（舊後端）視為啟用。
 const schedulerEnabled = computed(() => status.value?.scheduler_enabled !== false)
 const inPrepPeriod = computed(() => {
   const st = status.value
-  return !!st && isWithinPrepPeriod(today, st.prep_start_date, st.apply_date)
+  return !!st && isWithinPrepPeriod(today.value, st.prep_start_date, st.apply_date)
 })
 const graduationGrade = computed(() => (plan.value ? graduationGradeName(plan.value.students) : null))
 // 自動畢業是否開啟（status.auto_graduation_enabled）：關閉時所有「會被自動畢業」的警告改說
@@ -491,7 +492,7 @@ const noneDescription = computed(() => {
       ? `現在已是 ${st.target_school_year} 學年上學期：現在產生的草稿一經發布，約一小時內就會套用到現行班級。`
       : `現在已是 ${st.target_school_year} 學年上學期，但自動套用未啟用：草稿發布後不會套用，需請系統管理員開啟。`
   }
-  if (today < st.prep_start_date) {
+  if (today.value < st.prep_start_date) {
     const prep = formatPlanDate(st.prep_start_date)
     const auto = schedulerEnabled.value ? '，系統會在當天自動產生草稿' : ''
     return `${prep} 起進入新學年準備期${auto}；也可以現在先產生，${basis}。`
@@ -508,7 +509,12 @@ const appliesImmediately = computed(() => status.value?.applies_immediately === 
 const showRemedialBanner = computed(() =>
   appliesImmediately.value
   && state.value !== 'applied'
-  && !(state.value === 'published' && (!schedulerEnabled.value || !!status.value?.apply_failure)),
+  && !(state.value === 'published' && (
+    !schedulerEnabled.value
+    || !!status.value?.apply_failure
+    // 有阻擋＝套用一定失敗，「約一小時內套用、無法復原」不成立（狀態列會講）
+    || (plan.value?.issues.blocking.length ?? 0) > 0
+  )),
 )
 const remedialTitle = computed(() => {
   const year = status.value?.target_school_year
@@ -600,7 +606,8 @@ function onPublishClick(): void {
 
 async function onPublishConfirm(): Promise<void> {
   // 補救模式後端要求帶目標學年確認（dialog 已讓使用者輸入過學年）
-  const result = await publish(appliesImmediately.value ? status.value?.target_school_year : undefined)
+  // 學年確認送計畫本身的目標學年（後端比對的是 plan.target_school_year）
+  const result = await publish(appliesImmediately.value ? plan.value?.target_school_year : undefined)
   if (result.ok) {
     notifySaved('已發布')
     publishDialogVisible.value = false
@@ -626,7 +633,7 @@ function retainUnpublishWarning(): string {
     return `目前有 ${who}：留級要在套用前重新發布才會生效。`
   }
   const graduation = st.graduation_date
-  const phase = retainRiskPhase(today, graduation)
+  const phase = retainRiskPhase(today.value, graduation)
   if (phase === 'before' && graduation) {
     return `目前有 ${who}：撤回後如果沒在畢業日 ${formatPlanDate(graduation)} 前重新發布，他們會被系統自動畢業。`
   }
@@ -675,7 +682,9 @@ async function onUnpublishClick(): Promise<boolean> {
 
 // 已發布但有阻擋：撤回（同一個確認框，留級生警告照樣出現）→ 打開重新產生建議
 async function onUnpublishAndRegenerate(): Promise<void> {
-  if (await onUnpublishClick()) onRegenerateClick()
+  const ok = await onUnpublishClick()
+  // 撤回成功但畫面沒更新（版本落後）：開了重新產生也一定撞版本衝突，先讓使用者重新載入
+  if (ok && !staleAfterWrite.value) onRegenerateClick()
 }
 
 // 有已報到、尚未開學的新生：他們不在草稿（草稿只收在籍生），開學後要另外分班
@@ -755,12 +764,14 @@ const classEditMode = ref<'create' | 'edit'>('create')
 const classEditTarget = ref<PlanClassOut | null>(null)
 
 function onAddClassClick(): void {
+  fieldErrors.value = {} // 不顯示上一次失敗留下的欄位錯誤
   classEditMode.value = 'create'
   classEditTarget.value = null
   classEditDialogVisible.value = true
 }
 
 function onClassEdit(planClassId: number): void {
+  fieldErrors.value = {}
   classEditMode.value = 'edit'
   classEditTarget.value = plan.value?.classes.find(c => c.id === planClassId) ?? null
   classEditDialogVisible.value = true
@@ -801,7 +812,8 @@ async function loadTeacherOptions(): Promise<void> {
     const res = await getTeacherOptions()
     teacherOptions.value = (res.data ?? []) as TeacherOptionLike[]
   } catch {
-    teacherOptionsRequested = false // 下次進入可編輯狀態再試；格子仍可顯示現值
+    teacherOptionsRequested = false // 下次點老師格時再試；格子仍以姓名顯示現值
+    ElMessage.warning('老師名單載入失敗，點老師格時會再試一次')
   }
 }
 
@@ -821,6 +833,11 @@ const ROLE_BY_FIELD: Record<TeacherField, TeacherRole> = {
   art_teacher_id: 'art',
 }
 const teacherCellErrors = ref<Record<string, string>>({})
+
+// 老師格展開：名單沒載到（先前失敗）就重試
+function onTeacherCellOpen(): void {
+  if (!teacherOptions.value.length && !teacherOptionsRequested) void loadTeacherOptions()
+}
 
 async function onTeacherChange(planClassId: number, field: TeacherField, teacherId: number | null): Promise<void> {
   const key = `${planClassId}:${ROLE_BY_FIELD[field]}`
@@ -980,6 +997,8 @@ async function moveWithUndo(op: 'assign' | 'retain', studentIds: number[], planC
   if (!ok) return false
   // 寫入成功但畫面沒更新：composable 已提醒重新載入，這時版本落後，復原必撞版本衝突
   if (staleAfterWrite.value) return true
+  // 復原只對「搬完之後沒再改過」的計畫有效：記下此刻版本，按復原時比對
+  const versionAfterMove = plan.value?.version ?? null
   await nextTick()
   rosterRef.value?.flashStudents(studentIds)
 
@@ -993,7 +1012,7 @@ async function moveWithUndo(op: 'assign' | 'retain', studentIds: number[], planC
   moveNotice?.close()
   moveNotice = showMoveNotice({
     message,
-    onUndo: groups.length ? () => { void undoMove(groups, restorableIds) } : undefined,
+    onUndo: groups.length ? () => { void undoMove(groups, restorableIds, versionAfterMove) } : undefined,
   })
   return true
 }
@@ -1009,11 +1028,16 @@ function waitUntilIdle(): Promise<void> {
   })
 }
 
-async function undoMove(groups: UndoGroup[], studentIds: number[]): Promise<void> {
+async function undoMove(groups: UndoGroup[], studentIds: number[], versionAfterMove: number | null): Promise<void> {
   // 另一個動作還在送：等它結束再復原（直接送會被 in-flight 防護擋掉）
   await waitUntilIdle()
   if (!editable.value) {
     ElMessage.info('這份計畫已不是草稿，無法復原')
+    return
+  }
+  // 搬完之後又有其他寫入（排除、改老師、重新產生…）：用搬動前快照送回會蓋掉那些修改
+  if (plan.value?.version !== versionAfterMove) {
+    ElMessage.warning('之後又有修改，無法復原；請直接在表格調整')
     return
   }
   let done = 0
@@ -1106,6 +1130,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   narrowMq?.removeEventListener('change', onNarrowChange)
+  // 離開頁面就收掉搬班通知：否則在別頁按「復原」會用這頁的狀態送出寫入
+  moveNotice?.close()
 })
 
 const totalIssueCount = computed(
@@ -1121,6 +1147,15 @@ async function onStudentMove(payload: {
   excludeReason?: string | null
 }): Promise<void> {
   if (!payload.studentIds.length) return
+  // 上一筆還在送（或畫面待重新載入）時放下：in-flight 防護會把這次吞掉，先講清楚
+  if (staleAfterWrite.value) {
+    ElMessage.info('畫面還沒更新，請先按「重新載入」再調整')
+    return
+  }
+  if (loading.value) {
+    ElMessage.info('上一個動作還在處理，請稍後再拖')
+    return
+  }
   if (payload.op === 'assign' || payload.op === 'retain') {
     await moveWithUndo(payload.op, payload.studentIds, payload.planClassId ?? null)
     return
@@ -1188,6 +1223,8 @@ watch(
 
 function onSearchKeydown(event: Event | KeyboardEvent): void {
   if (!('key' in event) || event.key !== 'Enter') return
+  // 注音／IME 選字的 Enter 不是「下一位」（Safari 在 compositionend 後才送，keyCode=229）
+  if (event.isComposing || event.keyCode === 229) return
   event.preventDefault()
   const total = matchList.value?.length ?? 0
   if (total === 0) return
@@ -1283,8 +1320,7 @@ watch(
 }
 
 .remedial-banner,
-.stale-banner,
-.published-blocking-alert {
+.stale-banner {
   margin-bottom: var(--space-4);
 }
 
