@@ -42,7 +42,7 @@
           :key="s.id"
           class="unassigned-row"
           :data-student-id="s.id"
-          :draggable="editable"
+          :draggable="editable && !busy"
           @dragstart="onDragStart(s, $event)"
         >
           <el-checkbox
@@ -225,7 +225,7 @@ function onSelectAllVisible(checked: boolean): void {
 // ── 拖曳來源：dataTransfer 攜帶 student.id，表格 onDrop 的外部 fallback 讀取。
 // 側欄自身不是拖放目標（維持 drag-move spec 決策 2）。
 function onDragStart(student: PlanStudent, event: DragEvent): void {
-  if (!props.editable) return
+  if (!props.editable || props.busy) return
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', String(student.id))

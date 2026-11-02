@@ -453,4 +453,25 @@ describe('PlanRosterTable', () => {
     expect(cell('中班A', 'assistant').props('error')).toBe('副班導「陳老師」已停用')
     expect(cell('中班A', 'head').props('error')).toBeNull()
   })
+  // ── 審查 F9／F10 ──
+
+  it('寫入進行中（busy）不能開始拖曳（避免第二次放下被靜默吞掉）', () => {
+    const w = mountTable({}, true, new Set<number>(), { busy: true })
+    expect(w.find('.student-entry[data-student-id="1"]').attributes('draggable')).toBe('false')
+  })
+
+  it('老師名單沒載到（空）時：格子仍有「目前指派」選項（顯示姓名，不會顯示原始 id）', () => {
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers', teacherOptions: [] })
+    const cell = w.findAllComponents(PlanTeacherCell)
+      .find(c => c.props('className') === '小班A' && c.props('role') === 'head')!
+    expect(cell.props('optionGroups')).toEqual([
+      { label: '目前指派', options: [{ id: 100, label: '王老師', disabled: false, note: '' }] },
+    ])
+  })
+
+  it('老師格展開時往上 emit teacher-cell-open', () => {
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers' })
+    w.findAllComponents(PlanTeacherCell)[0].vm.$emit('open')
+    expect(w.emitted('teacher-cell-open')).toBeTruthy()
+  })
 })

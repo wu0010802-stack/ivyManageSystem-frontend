@@ -227,4 +227,11 @@ describe('PlanSidePanel', () => {
     expect(w.find('.plan-issues-summary').exists()).toBe(false)
     expect(w.text()).toContain('仍在去年班 1 位')
   })
+  it('寫入進行中（busy）待分班列不能開始拖曳', () => {
+    const w = mount(PlanSidePanel, {
+      global: { plugins: [ElementPlus] },
+      props: { plan: buildPlan(), editable: true, selectedIds: new Set<number>(), busy: true },
+    })
+    expect(w.findAll('.unassigned-row')[0].attributes('draggable')).toBe('false')
+  })
 })

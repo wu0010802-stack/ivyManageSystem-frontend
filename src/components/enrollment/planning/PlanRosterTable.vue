@@ -86,6 +86,7 @@
                 :option-groups="teacherOptionsByCell.get(`${cls.id}:${role}`) ?? []"
                 :error="cellErrors[`${cls.id}:${role}`] ?? null"
                 @change="(id: number | null) => emit('teacher-change', cls.id, TEACHER_FIELD_BY_ROLE[role], id)"
+                @open="emit('teacher-cell-open')"
               />
             </td>
           </tr>
@@ -109,7 +110,7 @@
                 <div
                   class="student-entry"
                   :data-student-id="student.id"
-                  :draggable="editable"
+                  :draggable="editable && !busy"
                   :title="studentTitle(student)"
                   :class="{
                     dragging: draggingStudent?.id === student.id,
@@ -191,6 +192,7 @@ import {
   TEACHER_ROLES,
   TEACHER_ROLE_LABELS,
   buildTeacherOptionGroups,
+  currentTeacherOnlyGroups,
   groupClassesByGrade,
   isMovedIn,
   orderedRosterEntries,
@@ -238,6 +240,8 @@ const emit = defineEmits<{
   // 尚未接線（brief 明示 checkbox 批次優先，拖曳延後），單人移動＝ids 長度 1。
   'student-move': [payload: { studentIds: number[]; op: BulkOp; planClassId?: number | null; excludeReason?: string | null }]
   'teacher-change': [planClassId: number, field: TeacherField, teacherId: number | null]
+  /** 老師格展開（父層在老師名單沒載到時重試） */
+  'teacher-cell-open': []
 }>()
 
 // ── 年級分組（依 target_grade_id 首次出現順序分組，容忍後端非嚴格連續排序）──
@@ -266,13 +270,17 @@ function teacherNameOf(cls: PlanClass, role: TeacherRole): string | null {
   return cls.art_teacher_name ?? null
 }
 
-// 每格下拉選項（分組＋「已是某班班導」停用註記）；只在可編輯時計算
+// 每格下拉選項（分組＋「已是某班班導」停用註記）；只在可編輯時計算。老師名單沒載到
+// （載入失敗）時只放目前指派的老師，下拉才不會把現值顯示成原始 id
 const teacherOptionsByCell = computed(() => {
   const map = new Map<string, TeacherOptionGroup[]>()
-  if (!props.editable || props.teacherOptions.length === 0) return map
+  if (!props.editable) return map
+  const loaded = props.teacherOptions.length > 0
   for (const cls of props.plan.classes) {
     for (const role of TEACHER_ROLES) {
-      map.set(`${cls.id}:${role}`, buildTeacherOptionGroups(props.teacherOptions, props.plan.classes, cls.id, role))
+      map.set(`${cls.id}:${role}`, loaded
+        ? buildTeacherOptionGroups(props.teacherOptions, props.plan.classes, cls.id, role)
+        : currentTeacherOnlyGroups(props.plan.classes, cls.id, role))
     }
   }
   return map
@@ -369,7 +377,7 @@ const draggingStudent = ref<{ id: number; planClassId: number | null } | null>(n
 const dragOverClassId = ref<number | null>(null)
 
 function onDragStart(student: PlanStudent, event: DragEvent): void {
-  if (!props.editable) return
+  if (!props.editable || props.busy) return
   draggingStudent.value = { id: student.id, planClassId: student.plan_class_id ?? null }
   // jsdom 程式化 dispatch 無 dataTransfer；設值僅為真實瀏覽器的游標/拖曳影像。
   if (event.dataTransfer) {
