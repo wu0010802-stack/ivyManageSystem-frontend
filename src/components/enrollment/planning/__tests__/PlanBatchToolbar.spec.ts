@@ -16,7 +16,13 @@ interface ToolbarVm {
 
 interface SelectedStudent { id: number; disposition: string; current_grade_name: string | null }
 
-function mountToolbar(props: Partial<{ selectedCount: number; disabled: boolean; selectedStudents: SelectedStudent[] }> = {}) {
+function mountToolbar(props: Partial<{
+  selectedCount: number
+  disabled: boolean
+  selectedStudents: SelectedStudent[]
+  graduationGradeName: string | null
+  autoGraduationEnabled: boolean
+}> = {}) {
   return mount(PlanBatchToolbar, {
     attachTo: document.body,
     global: { plugins: [ElementPlus] },
@@ -178,6 +184,43 @@ describe('PlanBatchToolbar', () => {
     const w = mountToolbar()
     await vmOf(w).applyExclude()
     expect(String(promptSpy.mock.calls[0][0])).toContain('不會辦理離園')
+  })
+
+  it('排除選到畢業年級學生：提示仍會在畢業日自動畢業、要續讀請標記留級', async () => {
+    const promptSpy = vi.spyOn(ElMessageBox, 'prompt').mockRejectedValue('cancel')
+    const w = mountToolbar({
+      graduationGradeName: '大班',
+      selectedStudents: [
+        { id: 1, disposition: 'graduate', current_grade_name: '大班' },
+        { id: 2, disposition: 'promote', current_grade_name: '中班' },
+      ],
+    })
+    await vmOf(w).applyExclude()
+    const message = String(promptSpy.mock.calls[0][0])
+    expect(message).toContain('大班生排除仍會在畢業日自動畢業；要續讀請標記留級')
+  })
+
+  it('自動畢業未開啟時：不提自動畢業，改說留級要在套用前發布才會生效', async () => {
+    const promptSpy = vi.spyOn(ElMessageBox, 'prompt').mockRejectedValue('cancel')
+    const w = mountToolbar({
+      graduationGradeName: '大班',
+      autoGraduationEnabled: false,
+      selectedStudents: [{ id: 1, disposition: 'graduate', current_grade_name: '大班' }],
+    })
+    await vmOf(w).applyExclude()
+    const message = String(promptSpy.mock.calls[0][0])
+    expect(message).not.toContain('自動畢業')
+    expect(message).toContain('留級要在套用前發布才會生效')
+  })
+
+  it('沒選到畢業年級學生：維持一般排除說明', async () => {
+    const promptSpy = vi.spyOn(ElMessageBox, 'prompt').mockRejectedValue('cancel')
+    const w = mountToolbar({
+      graduationGradeName: '大班',
+      selectedStudents: [{ id: 2, disposition: 'promote', current_grade_name: '中班' }],
+    })
+    await vmOf(w).applyExclude()
+    expect(String(promptSpy.mock.calls[0][0])).not.toContain('畢業')
   })
 
   it('點「清除選取」emit clear-selection', async () => {
