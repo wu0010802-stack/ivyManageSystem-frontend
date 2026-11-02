@@ -53,6 +53,7 @@ const {
   showApprovals,
   showCalendar,
   showStudents,
+  showEmployees,
   stats,
   studentCount,
   currentTermLabel,
@@ -529,7 +530,7 @@ const anomalyOverflow = computed(
             </div>
             <div class="overview-row">
               <span class="overview-row__label">教師人數</span>
-              <span class="overview-row__value">{{ statDisplay(stats.teachers, criticalErrors.employees) }}</span>
+              <span class="overview-row__value">{{ statDisplay(stats.teachers, criticalErrors.employees || !showEmployees) }}</span>
             </div>
             <div class="overview-row">
               <span class="overview-row__label">
