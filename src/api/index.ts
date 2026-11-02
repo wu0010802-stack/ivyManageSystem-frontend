@@ -18,6 +18,7 @@ import {
     tenantHeaders,
 } from '@/utils/tenant'
 import { showTenantBlocked } from '@/utils/tenantBlocked'
+import { shareStaffRefresh } from './refreshCoordinator'
 
 // Lazy router import：直接 top-level import 會把 createRouter side effect 拉進
 // 所有 import @/api 的測試（不少測試只 partial-mock vue-router 而沒 export
@@ -102,16 +103,25 @@ onAdminSessionReset(() => {
     clearDedupe(api)
 })
 
+/**
+ * 收到 409（另一分頁的 refresh 勝出、rotation 進行中）後，重打原請求前的等待。
+ * 勝出那支的 Set-Cookie 還沒回來就重打，會帶舊 access cookie 再 401 而被踢回登入頁
+ * （day-qa F3 實測：409 比勝出方的 200 早 3 秒回來）。同分頁的併發已由
+ * refreshCoordinator 合流，這裡只剩跨分頁情境。
+ */
+export const REFRESH_CONFLICT_SETTLE_MS = 1500
+
 function _doRefresh(): Promise<boolean> {
     const generation = getAdminSessionGeneration()
     // Cookie 會自動帶出，不需手動設定 header
     // 裸 axios（不經上面的 request interceptor），tenant header 必須自己帶。
-    return axios.post(buildRefreshUrl(), null, {
+    // 與 router guard／idle timer 的 refreshSession() 共用同一個 in-flight（day-qa F3）。
+    return shareStaffRefresh(() => axios.post(buildRefreshUrl(), null, {
         withCredentials: true,
         timeout: 30000,
         signal: getAdminSessionSignal(),
         headers: tenantHeaders(),
-    }).then(res => {
+    })).then(res => {
         if (!isAdminSessionCurrent(generation)) {
             throw new axios.CanceledError('Admin session changed during refresh')
         }
@@ -126,8 +136,11 @@ function _doRefresh(): Promise<boolean> {
         // router guard / useIdleTimeout / axios 攔截器三條路會同時發 refresh，因此這個
         // 409 在正常使用下就會出現；當成失敗會把使用中的老師踢回登入頁。
         // 對齊 src/router/index.ts 與 src/parent/api/index.ts 對同一情境的既有處理。
+        // 但必須先等勝出方的 Set-Cookie 落地，否則重打會帶舊 cookie 再 401（day-qa F3）。
         if ((err as { response?: { status?: number } })?.response?.status === 409) {
-            return true
+            return new Promise<boolean>((resolve) => {
+                setTimeout(() => resolve(true), REFRESH_CONFLICT_SETTLE_MS)
+            })
         }
         throw err
     })

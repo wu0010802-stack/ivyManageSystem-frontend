@@ -1,7 +1,8 @@
 import type { AxiosResponse } from 'axios'
 import api from './index'
 import { waitForAdminSessionCleanup, waitForPendingLogout } from '@/utils/auth'
-import { advanceAdminSession, onAdminSessionReset } from '@/utils/adminSession'
+import { advanceAdminSession } from '@/utils/adminSession'
+import { shareStaffRefresh } from './refreshCoordinator'
 
 async function requestSessionChange<T>(request: () => Promise<T>): Promise<T> {
   await waitForPendingLogout()
@@ -13,26 +14,13 @@ async function requestSessionChange<T>(request: () => Promise<T>): Promise<T> {
 export const login = (username: string, password: string) => requestSessionChange(() =>
   api.post('/auth/login', { username, password }))
 
-// Why: 切頁與 401 retry 可能同時觸發 refresh；router/axios interceptor 各自有獨立 inflight，
-// 但跨路徑（navigation 與 401 retry 並發）不會合流。這裡讓 navigation 路徑自身先 dedupe，
-// 避免快速連點切頁在 session 過期那一刻同時打多支 /auth/refresh。
-let _inflightRefresh: Promise<AxiosResponse<{ user: unknown }>> | null = null
-
-onAdminSessionReset(() => {
-  _inflightRefresh = null
-})
-
-export const refreshSession = () => {
-  if (_inflightRefresh) return _inflightRefresh
-  // 用 .finally 鏈接著儲存，避免有獨立未被 await 的 promise 鏈造成 unhandled rejection。
-  const refresh = api.post<{ user: unknown }>('/auth/refresh')
-  const tracked = refresh.finally(() => {
-    // session 切換後可能已有新 refresh；舊 promise 完成時不可清掉新的。
-    if (_inflightRefresh === tracked) _inflightRefresh = null
-  })
-  _inflightRefresh = tracked
-  return tracked
-}
+// Why: 切頁、idle timer 與 401 retry 可能同時觸發 refresh。router guard／useIdleTimeout 與
+// axios 401 攔截器共用 refreshCoordinator 的同一個 in-flight——原本兩邊各自 dedupe、跨路徑
+// 不合流，同一分頁仍會打兩支 /auth/refresh，後到的拿 409 而把老師踢回登入頁（day-qa F3）。
+export const refreshSession = () =>
+  shareStaffRefresh(() => api.post<{ user: unknown }>('/auth/refresh')) as Promise<
+    AxiosResponse<{ user: unknown }>
+  >
 
 export const changePassword = (data: unknown) =>
   api.post('/auth/change-password', data)
