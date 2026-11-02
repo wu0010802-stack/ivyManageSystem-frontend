@@ -28,6 +28,8 @@ const SOURCE_LABEL: Record<string, string> = {
 /** 名單上說明「為什麼是這個時數」：依排班來源與下班時間。 */
 export function describeShiftHours(item: Pick<MeetingShiftHoursItem, 'source' | 'shift_end'>): string {
   if (item.source === 'daily_off') return '當天排休'
+  // 國定假日、週末未排當日班、時薪制未排當日班（後端 expected_attendance 為 False）→ 整場
+  if (item.source === 'non_workday') return '當天非上班日'
   if (item.source === 'default') return `未排班（${item.shift_end} 下班）`
   return `${SOURCE_LABEL[item.source] ?? '排班'} ${item.shift_end} 下班`
 }
