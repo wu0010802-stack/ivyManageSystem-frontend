@@ -64,6 +64,37 @@ function preview(overrides: Record<string, unknown> = {}) {
   }
 }
 
+/**
+ * 依 payload 的金額算出缺金額年段——比照後端 slip_template_service：payload
+ * 沒帶金額的年段 amount=null、列入 missing_amounts 且 blocked。
+ *
+ * ⚠ 舊 mock 不看 payload、永遠回 `missing_amounts: []`，與後端不符，把
+ * 「開窗帶入記憶金額後沒重算」的 bug 蓋成假綠。
+ */
+function previewFor(
+  payload: { amounts?: Record<string, number> } | undefined,
+  overrides: Record<string, unknown> = {},
+) {
+  const amount = payload?.amounts?.['大班'] ?? null
+  const missing = amount == null ? ['大班'] : []
+  return preview({
+    by_grade: [
+      {
+        grade_name: '大班',
+        student_count: 2,
+        billable_count: 2,
+        amount,
+        subtotal: amount == null ? 0 : amount * 2,
+      },
+    ],
+    missing_amounts: missing,
+    blocked: missing.length > 0,
+    rows_total: amount == null ? 0 : 2,
+    total_amount: amount == null ? 0 : amount * 2,
+    ...overrides,
+  })
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((done) => {
@@ -145,7 +176,7 @@ async function settle(wrapper: ReturnType<typeof mountDialog>) {
 describe('FeeSlipTemplateDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    apiMocks.previewSlipTemplate.mockResolvedValue(preview())
+    apiMocks.previewSlipTemplate.mockImplementation(async (payload) => previewFor(payload))
     apiMocks.exportSlipTemplate.mockResolvedValue({ data: new Blob(), headers: {} })
   })
 
@@ -248,8 +279,10 @@ describe('FeeSlipTemplateDialog', () => {
   it('最新 preview 失敗後仍維持 fail-closed，不得用舊成功資料解鎖操作', async () => {
     vi.useFakeTimers()
     try {
+      // 開窗：第一次試算＋帶入記憶金額後的重算都成功，之後改帳期的那次失敗
       apiMocks.previewSlipTemplate
-        .mockResolvedValueOnce(preview())
+        .mockImplementationOnce(async (payload) => previewFor(payload))
+        .mockImplementationOnce(async (payload) => previewFor(payload))
         .mockRejectedValueOnce(new Error('preview failed'))
       const wrapper = await settle(mountDialog())
       expect((wrapper.vm as unknown as { canAdvance: boolean }).canAdvance).toBe(true)
@@ -263,6 +296,30 @@ describe('FeeSlipTemplateDialog', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('開窗帶入記憶金額後立即重算，小計不再待填、可按下一步', async () => {
+    const wrapper = await settle(mountDialog())
+    await settle(wrapper)
+    // 記憶金額帶進輸入框後，最後一次試算的 payload 必須含該金額
+    const lastPreview = apiMocks.previewSlipTemplate.mock.calls.at(-1)?.[0]
+    expect(lastPreview.amounts).toEqual({ 大班: 10800 })
+    expect(wrapper.text()).not.toContain('待填')
+    expect(wrapper.find('[data-test="slip-missing-amounts"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="slip-next"]').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('沒有記憶金額時只試算一次，不會無限重算', async () => {
+    apiMocks.previewSlipTemplate.mockImplementation(async (payload) =>
+      previewFor(payload, { amount_defaults: {} }),
+    )
+    const wrapper = await settle(mountDialog())
+    await settle(wrapper)
+    expect(apiMocks.previewSlipTemplate).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-test="slip-missing-amounts"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="slip-next"]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
   })
 
   it('顯示各年段人數與金額', async () => {
@@ -400,28 +457,29 @@ describe('FeeSlipTemplateDialog', () => {
     // 發出，才驗得到指派有帶進去。
     vi.useFakeTimers()
     try {
+      const missingSuffix = {
+        missing_suffix: [
+          {
+            student_id: 7,
+            student_name: '沒碼',
+            classroom_name: '牡丹班',
+            suggested_suffix: '4115',
+          },
+        ],
+        blocked: true,
+      }
+      // 開窗的第一次試算與帶入記憶金額後的重算都還缺碼，指派後才補齊
       apiMocks.previewSlipTemplate
-        .mockResolvedValueOnce(
-          preview({
-            missing_suffix: [
-              {
-                student_id: 7,
-                student_name: '沒碼',
-                classroom_name: '牡丹班',
-                suggested_suffix: '4115',
-              },
-            ],
-            blocked: true,
-          }),
-        )
-        .mockResolvedValue(preview())
+        .mockImplementationOnce(async (payload) => previewFor(payload, missingSuffix))
+        .mockImplementationOnce(async (payload) => previewFor(payload, missingSuffix))
       const wrapper = await settle(mountDialog())
       await wrapper.find('[data-test="slip-next"]').trigger('click')
       await settle(wrapper)
+      const callsBeforeAssign = apiMocks.previewSlipTemplate.mock.calls.length
       await wrapper.find('[data-test="slip-apply-suggested"]').trigger('click')
       await vi.advanceTimersByTimeAsync(300)
       await settle(wrapper)
-      expect(apiMocks.previewSlipTemplate).toHaveBeenCalledTimes(2)
+      expect(apiMocks.previewSlipTemplate).toHaveBeenCalledTimes(callsBeforeAssign + 1)
       const lastPreview = apiMocks.previewSlipTemplate.mock.calls.at(-1)?.[0]
       expect(lastPreview.suffix_assignments).toEqual({ '7': '4115' })
       wrapper.unmount()
