@@ -213,6 +213,7 @@ import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
 import { allocateCollectionPayment, getCollectionCandidates } from '@/api/fees'
+import type { ApiBody } from '@/api/_generated/typed'
 import type { CollectionPaymentRow } from './collectionTypes'
 import CollectionAllocConfirmCard from './CollectionAllocConfirmCard.vue'
 
@@ -421,31 +422,59 @@ watch(
   { immediate: true },
 )
 
+type AllocatePart = ApiBody<'/fees/collection-payments/{payment_id}/allocate', 'post'>['parts'][number]
+
+/** 單筆轉成 API 欄位；缺必填欄位時回傳具體問題（只送該類型對應的欄位） */
+function toAllocatePart(p: EditablePart): AllocatePart | string {
+  if (p.part_type === 'fee_record') {
+    if (!p.fee_record_id) return '請選擇費用單'
+    return { part_type: p.part_type, amount: p.amount, fee_record_id: p.fee_record_id }
+  }
+  if (p.part_type === 'prepayment') {
+    if (!p.student_id || !p.target_school_year || !p.target_semester) {
+      return '請填寫預繳學生與目標學期'
+    }
+    return {
+      part_type: p.part_type,
+      amount: p.amount,
+      student_id: p.student_id,
+      target_school_year: p.target_school_year,
+      target_semester: p.target_semester,
+    }
+  }
+  if (!p.reason?.trim()) return '請填寫非學費原因'
+  return { part_type: p.part_type, amount: p.amount, reason: p.reason }
+}
+
+/**
+ * 送出前先驗欄位，回傳第一個問題（多筆時標明第幾筆）或可送出的 parts。
+ *
+ * ⚠ 不可在組 payload 時 throw new Error 再交給 friendlyError：沒有 response 的
+ * 錯誤會被 errorHandler 判成 NETWORK_ERROR，使用者只看到「網路連線異常」。
+ */
+function buildAllocateParts(): { parts: AllocatePart[] } | { problem: string } {
+  const built: AllocatePart[] = []
+  for (const [index, p] of parts.value.entries()) {
+    const result = toAllocatePart(p)
+    if (typeof result === 'string') {
+      return { problem: parts.value.length > 1 ? `第 ${index + 1} 筆：${result}` : result }
+    }
+    built.push(result)
+  }
+  return { parts: built }
+}
+
 async function submit() {
   if (!props.payment) return
+  const built = buildAllocateParts()
+  if ('problem' in built) {
+    ElMessage.warning(built.problem)
+    return
+  }
   submitting.value = true
   try {
     await allocateCollectionPayment(props.payment.id, {
-      parts: parts.value.map((p) => {
-        if (p.part_type === 'fee_record') {
-          if (!p.fee_record_id) throw new Error('請選擇費用單')
-          return { part_type: p.part_type, amount: p.amount, fee_record_id: p.fee_record_id }
-        }
-        if (p.part_type === 'prepayment') {
-          if (!p.student_id || !p.target_school_year || !p.target_semester) {
-            throw new Error('請填寫預繳學生與目標學期')
-          }
-          return {
-            part_type: p.part_type,
-            amount: p.amount,
-            student_id: p.student_id,
-            target_school_year: p.target_school_year,
-            target_semester: p.target_semester,
-          }
-        }
-        if (!p.reason?.trim()) throw new Error('請填寫非學費原因')
-        return { part_type: p.part_type, amount: p.amount, reason: p.reason }
-      }),
+      parts: built.parts,
       allow_partial: partsTotal.value < props.payment.unallocated,
     })
     ElMessage.success('已完成分配')

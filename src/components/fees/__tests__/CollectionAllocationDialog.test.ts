@@ -349,3 +349,57 @@ describe('代收分配契約與候選競態', () => {
     expect(wrapper.get('[data-test="alloc-confirm"]').attributes('disabled')).toBeDefined()
   })
 })
+
+// 2026-11-02 bug hunt F7：手動分配的欄位檢查原本在組 payload 時 throw
+// new Error(...)，被 catch 交給 friendlyError；errorHandler 對沒有 response 的
+// 錯誤一律判成 NETWORK_ERROR → 使用者看到「網路連線異常」。改成送出前先驗，
+// 用 ElMessage.warning 講具體問題、不打 API；API 錯誤仍走 friendlyError。
+describe('手動分配送出前的欄位檢查', () => {
+  it.each([
+    [{ part_type: 'fee_record', amount: 100 }, '請選擇費用單'],
+    [{ part_type: 'prepayment', amount: 100, student_id: 5 }, '請填寫預繳學生與目標學期'],
+    [{ part_type: 'non_tuition', amount: 100, reason: '   ' }, '請填寫非學費原因'],
+  ])('%o → 警告「%s」、不打 API、不報網路錯誤', async (part, message) => {
+    const { ElMessage } = await import('element-plus')
+    const wrapper = await mountDialog()
+    const vm = wrapper.vm as unknown as { parts: unknown[] }
+    vm.parts = [part]
+    await nextTick()
+    await wrapper.get('[data-test="alloc-confirm"]').trigger('click')
+    await nextTick()
+    expect(apiMocks.allocateCollectionPayment).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining(message))
+    expect(ElMessage.error).not.toHaveBeenCalled()
+  })
+
+  it('多筆都有問題時提示第一筆，並標明是第幾筆', async () => {
+    const { ElMessage } = await import('element-plus')
+    const wrapper = await mountDialog()
+    const vm = wrapper.vm as unknown as { parts: unknown[] }
+    vm.parts = [
+      { part_type: 'fee_record', amount: 100, fee_record_id: 77 },
+      { part_type: 'non_tuition', amount: 100, reason: '' },
+      { part_type: 'fee_record', amount: 100 },
+    ]
+    await nextTick()
+    await wrapper.get('[data-test="alloc-confirm"]').trigger('click')
+    await nextTick()
+    expect(apiMocks.allocateCollectionPayment).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledTimes(1)
+    expect(ElMessage.warning).toHaveBeenCalledWith('第 2 筆：請填寫非學費原因')
+  })
+
+  it('API 失敗仍走 friendlyError 報錯（不受欄位檢查改動影響）', async () => {
+    const { ElMessage } = await import('element-plus')
+    apiMocks.allocateCollectionPayment.mockRejectedValueOnce(
+      Object.assign(new Error('bad'), { response: { status: 400, data: { detail: '金額超過未分配' } } }),
+    )
+    const wrapper = await mountDialog()
+    await wrapper.get('[data-test="alloc-confirm"]').trigger('click')
+    await nextTick()
+    await nextTick()
+    expect(apiMocks.allocateCollectionPayment).toHaveBeenCalledTimes(1)
+    expect(ElMessage.error).toHaveBeenCalledTimes(1)
+    expect(ElMessage.warning).not.toHaveBeenCalled()
+  })
+})
