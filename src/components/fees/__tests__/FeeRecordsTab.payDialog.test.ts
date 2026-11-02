@@ -65,6 +65,28 @@ const mountTab = () =>
     },
   })
 
+/**
+ * 送出鈕在 el-dialog 的 #footer：未註冊的 el-dialog 只會畫預設 slot，要驗
+ * 送出鈕狀態得換成會畫 footer 的 stub（只畫開著的 dialog，其他 modal 不受影響），
+ * el-button 也換成原生 button，disabled 才是真的 DOM 屬性。
+ */
+const mountTabWithFooter = () =>
+  shallowMount(FeeRecordsTab, {
+    props: { classrooms: [], periodOptions: [] },
+    global: {
+      stubs: {
+        teleport: true,
+        'el-table-column': { template: '<span />' },
+        'el-form': ElFormStub,
+        'el-dialog': {
+          props: ['modelValue', 'title'],
+          template: '<div v-if="modelValue" :title="title"><slot /><slot name="footer" /></div>',
+        },
+        'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
+      },
+    },
+  })
+
 const vmOf = (w: ReturnType<typeof mountTab>) => w.vm as unknown as TabVm
 
 beforeEach(() => {
@@ -125,19 +147,55 @@ describe('付款 dialog 累計語意與差額', () => {
     expect(text).toContain('200') // 更新後尚欠
   })
 
-  it('更新後累計低於目前累計 → 顯示更正 warning，但不擋送出', async () => {
-    const w = mountTab()
+  // 2026-11-02 bug hunt F6：後端 _pay_core 對 amount_paid < 已登記金額一律
+  // 400「請改用退款流程」——舊 UI 卻說送出後會「更正」原紀錄且不擋送出，
+  // 使用者照做只會撞 400。下修累計不是收款能做的事，要走退款或沖銷。
+  it('更新後累計低於目前已繳 → 顯示錯誤提示（改走退款／沖銷）、停用送出且不打 API', async () => {
+    const w = mountTabWithFooter()
     const vm = vmOf(w)
     vm.openPayDialog(PARTIAL_ROW)
     await nextTick()
 
     vm.payForm.amount_paid = 300
     await nextTick()
-    expect(w.find('[data-test="pay-correction-warning"]').exists()).toBe(true)
+    expect(w.find('[data-test="pay-correction-warning"]').exists()).toBe(false)
+    const error = w.find('[data-test="pay-below-paid-error"]')
+    expect(error.exists()).toBe(true)
+    expect(error.attributes('type')).toBe('error')
+    const message = `${error.attributes('title') ?? ''}${error.attributes('description') ?? ''}`
+    expect(message).toContain('不能低於目前已繳 NT$500')
+    expect(message).toContain('退款')
+    expect(message).toContain('沖銷')
+    expect(message).not.toContain('更正')
+    expect(w.find('[data-test="pay-submit"]').attributes('disabled')).toBeDefined()
 
     await vm.submitPay()
     await flushPromises()
-    expect(payFeeRecord).toHaveBeenCalledTimes(1)
+    expect(payFeeRecord).not.toHaveBeenCalled()
+  })
+
+  it('累計輸入下限＝目前已繳（部分繳費）；未繳時下限 1', async () => {
+    const w = mountTab()
+    const vm = vmOf(w)
+    vm.openPayDialog(PARTIAL_ROW)
+    await nextTick()
+    const input = () => w.find('[aria-label="入帳後累計已繳"]')
+    expect(input().attributes('min')).toBe('500')
+
+    vm.openPayDialog(UNPAID_ROW)
+    await nextTick()
+    expect(input().attributes('min')).toBe('1')
+  })
+
+  it('累計等於或高於目前已繳 → 不顯示錯誤、可送出', async () => {
+    const w = mountTabWithFooter()
+    const vm = vmOf(w)
+    vm.openPayDialog(PARTIAL_ROW)
+    await nextTick()
+    vm.payForm.amount_paid = 700
+    await nextTick()
+    expect(w.find('[data-test="pay-below-paid-error"]').exists()).toBe(false)
+    expect(w.find('[data-test="pay-submit"]').attributes('disabled')).toBeUndefined()
   })
 
   it('送出的 payload 仍是累計 amount_paid（原 API 契約不變）', async () => {
