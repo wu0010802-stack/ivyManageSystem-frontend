@@ -121,6 +121,13 @@ describe('ContactBookEntryDrawer', () => {
     expect(saveBtn.attributes('disabled') !== undefined).toBe(true)
   })
 
+  it('新條目（尚未存成草稿）時發布鈕停用並說明要先儲存草稿（day-qa F15）', () => {
+    const w = mountIt({ ...ENTRY_DRAFT, id: undefined, version: 0 })
+    const publishBtn = w.findAll('button').find((b) => b.text().includes('發布給家長'))
+    expect(publishBtn.attributes('disabled')).toBeDefined()
+    expect(w.text()).toContain('先按「儲存草稿」才能發布給家長')
+  })
+
   it('publish button label changes for published entry', () => {
     const w = mountIt(ENTRY_PUBLISHED)
     expect(w.text()).toContain('再次發布')

@@ -395,7 +395,8 @@ defineExpose({ requestLeave })
            改兩層：狀態一列；按鈕分左右兩組、可換行。主按鈕給逐位填寫的主流程「儲存並填下一位」，
            單筆發布降為次級（建議流程是最後在列表批次發布）。 -->
       <div class="drawer-footer">
-        <span role="status" class="drawer-footer__status">{{ busy ? '儲存處理中…' : isDirty ? '有未儲存的變更' : '尚無未儲存的變更' }}</span>
+        <!-- 新條目沒有 id 時「發布給家長」是停用的：說清楚要先存草稿（day-qa F15） -->
+        <span role="status" class="drawer-footer__status">{{ busy ? '儲存處理中…' : !entry?.id ? '新的一筆：先按「儲存草稿」才能發布給家長' : isDirty ? '有未儲存的變更' : '尚無未儲存的變更' }}</span>
         <div class="drawer-footer__actions">
           <div class="drawer-footer__group">
             <el-button :disabled="busy" @click="handleClose">關閉</el-button>
