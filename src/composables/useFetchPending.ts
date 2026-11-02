@@ -28,9 +28,11 @@ export function useFetchPending<T>(
       total.value = Number(res?.total ?? items.value.length)
       hasMore.value = Boolean(res?.hasMore)
       error.value = false
-    } catch {
-      // 背景靜默刷新，不干擾使用者；改由 error 讓畫面顯示「載入失敗」
-      error.value = true
+    } catch (e) {
+      // 背景靜默刷新，不干擾使用者；改由 error 讓畫面顯示「載入失敗」。
+      // 403＝沒有這份清單的讀取權（例如有 APPROVALS 但缺 LEAVES_READ）：重新整理也不會好，
+      // 不算載入失敗，維持空清單（day-qa 審查 P3）。
+      error.value = (e as { response?: { status?: number } } | null)?.response?.status !== 403
     } finally {
       isLoading.value = false
     }

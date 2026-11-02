@@ -91,4 +91,14 @@ describe('審核工作台載入失敗（day-qa F6）', () => {
     expect(wrapper.findAll('.tag').map((t) => t.text())).toContain('1 筆待審')
     wrapper.unmount()
   })
+
+  it('沒有某份清單的讀取權（403）不算載入失敗，不顯示錯誤提示', async () => {
+    vi.mocked(leavesApi.getLeaves).mockRejectedValue({ response: { status: 403, data: { detail: '權限不足' } } })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('有待審清單沒有載入成功')
+    expect(wrapper.text()).not.toContain('部分清單載入失敗')
+    wrapper.unmount()
+  })
 })
+
