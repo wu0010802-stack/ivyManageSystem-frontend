@@ -11,10 +11,14 @@ import { useRouter } from 'vue-router'
 import { ArrowRight, Calendar } from '@element-plus/icons-vue'
 import { getClassroomYearPlanStatus } from '@/api/classroomYearPlan'
 import { hasPermission } from '@/utils/auth'
-import { formatDateTimeTW } from '@/utils/format'
+import { formatDateTimeTW, todayTaipeiISO } from '@/utils/format'
 import { apiError } from '@/utils/error'
 import type { Schema } from '@/api/_generated/typed'
-import { formatPlanDate } from '@/components/enrollment/planning/planHelpers'
+import {
+  daysBetweenISO,
+  formatPlanDate,
+  retainRiskPhase,
+} from '@/components/enrollment/planning/planHelpers'
 
 type StatusOut = Schema<'StatusOut'>
 
@@ -24,6 +28,8 @@ const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
 const loading = ref(true)
 const loadError = ref('')
 const status = ref<StatusOut | null>(null)
+// 台北今天：算發布截止、畢業日倒數、是否已進入準備期
+const today = todayTaipeiISO()
 
 const state = computed(() => status.value?.state ?? 'none')
 const applyOverdue = computed(() => status.value?.apply_overdue ?? false)
@@ -31,14 +37,51 @@ const blockingCount = computed(() => status.value?.blocking_count ?? 0)
 const warningCount = computed(() => status.value?.warning_count ?? 0)
 // 補救模式：目前已是目標學年上學期，發布後排程下一輪（約一小時內）就套用
 const appliesImmediately = computed(() => status.value?.applies_immediately === true)
+// 排程（自動產生／套用）未啟用時不能寫「自動套用」；欄位缺省（舊後端）視為啟用
+const schedulerEnabled = computed(() => status.value?.scheduler_enabled !== false)
+const applyFailure = computed(() => status.value?.apply_failure ?? null)
+const beforePrep = computed(() => {
+  const prep = status.value?.prep_start_date
+  return state.value === 'none' && !appliesImmediately.value && !!prep && today < prep
+})
 
-// 樣式：讀取失敗用 error；排程套用逾期用 warning 蓋過其他狀態；applied 用 success；
-// draft 有待處理問題時用 warning；其餘（none / 無問題的 draft）用 info。
+// 已發布卻不會（順利）套用的三種情況：一律 error，這是使用者最容易誤以為沒事的狀態
+const publishedProblem = computed<string | null>(() => {
+  if (state.value !== 'published') return null
+  if (!schedulerEnabled.value) return '已發布，但自動套用未啟用：請聯絡系統管理員開啟，否則不會套用'
+  if (applyFailure.value) return `已發布，但套用失敗：${applyFailure.value}`
+  if (blockingCount.value > 0) return `已發布但有 ${blockingCount.value} 項阻擋，套用會失敗`
+  return null
+})
+
+// 草稿的畢業年級留級生：畢業日前 14 天內（含補跑期）提醒要先發布
+const RETAIN_WARN_DAYS = 14
+const retainNote = computed<{ text: string; urgent: boolean } | null>(() => {
+  const st = status.value
+  if (!st || state.value !== 'draft' || (st.retain_pending_count ?? 0) <= 0) return null
+  const phase = retainRiskPhase(today, st.graduation_date)
+  if (phase === 'before' && st.graduation_date) {
+    return {
+      text: `有 ${st.retain_pending_count} 位畢業年級留級生須在 ${formatPlanDate(st.graduation_date)} 前發布`,
+      urgent: daysBetweenISO(today, st.graduation_date) <= RETAIN_WARN_DAYS,
+    }
+  }
+  if (phase === 'catchup') {
+    return { text: `已過畢業日，${st.retain_pending_count} 位留級生仍可能被自動畢業，請盡快發布`, urgent: true }
+  }
+  return null
+})
+
+// 樣式：讀取失敗與「已發布卻不會套用」用 error；逾期 warning；applied success；
+// draft 有阻擋、補救模式或留級生快到畢業日用 warning；其餘 info。
 const alertType = computed<'info' | 'warning' | 'success' | 'error'>(() => {
   if (loadError.value) return 'error'
+  if (publishedProblem.value) return 'error'
   if (applyOverdue.value) return 'warning'
   if (state.value === 'applied') return 'success'
-  if (state.value === 'draft' && (blockingCount.value > 0 || appliesImmediately.value)) return 'warning'
+  if (state.value === 'draft' && (blockingCount.value > 0 || appliesImmediately.value || retainNote.value?.urgent)) {
+    return 'warning'
+  }
   return 'info'
 })
 
@@ -48,37 +91,51 @@ const bannerTitle = computed(() => {
   return year ? `新學年預編班（${year} 學年）` : '新學年預編班'
 })
 
+function draftMessage(): string {
+  let base = '草稿編輯中'
+  if (blockingCount.value > 0) {
+    base = `草稿編輯中，有 ${blockingCount.value} 項阻擋`
+    if (warningCount.value > 0) base += `（另 ${warningCount.value} 項提醒）`
+  } else if (warningCount.value > 0) {
+    base = `草稿編輯中，有 ${warningCount.value} 項提醒`
+  }
+  if (retainNote.value) return `${base}；${retainNote.value.text}`
+  if (!schedulerEnabled.value) return `${base}；自動套用未啟用`
+  if (appliesImmediately.value) return `${base}；已開學，發布後約一小時內套用`
+  const apply = formatPlanDate(status.value?.apply_date)
+  return apply ? `${base}；請在 ${apply} 前發布` : base
+}
+
 const displayMessage = computed(() => {
   if (loadError.value) return loadError.value
-  if (applyOverdue.value) return '計畫尚未套用，排程器重試中'
+  if (publishedProblem.value) return publishedProblem.value
+  if (applyOverdue.value) return '已發布但尚未套用，排程器重試中'
   switch (state.value) {
-    case 'draft': {
-      let base = '草稿編輯中'
-      if (blockingCount.value > 0) {
-        base = `草稿編輯中，尚有 ${blockingCount.value} 項問題`
-        if (warningCount.value > 0) base += `（另 ${warningCount.value} 項提醒）`
-      } else if (warningCount.value > 0) {
-        base = `草稿編輯中，有 ${warningCount.value} 項提醒`
-      }
-      return appliesImmediately.value ? `${base}；已開學，發布後約一小時內套用` : base
-    }
+    case 'draft':
+      return draftMessage()
     case 'published': {
+      if (appliesImmediately.value) return '已發布，約一小時內套用'
       const date = formatPlanDate(status.value?.apply_date)
-      return date ? `已確認，將於 ${date} 自動套用` : '已確認，等待學年切換後自動套用'
+      return date ? `已發布，將於 ${date} 自動套用` : '已發布，等待學年切換後自動套用'
     }
     case 'applied':
       return `已於 ${formatDateTimeTW(status.value?.applied_at)} 套用`
     case 'none':
     default:
+      if (beforePrep.value) {
+        return `尚未產生新學年草稿，${formatPlanDate(status.value?.prep_start_date)} 起進入準備期`
+      }
       return '尚未產生新學年草稿'
   }
 })
 
-// none 態且有寫入權限時，連結文案改為更直接的行動呼籲；其餘情況（含唯讀使用者）
-// 一律顯示通用導頁文案——同一個連結、同一個目的地，只是文案依情境調整。
-const linkLabel = computed(() => (
-  state.value === 'none' && canWrite.value ? '前往建立' : '前往預編班'
-))
+// 已發布但有阻擋或套用失敗：連結改「前往處理」；none 態且已進入準備期、有寫入權限：「前往建立」；
+// 其餘（含唯讀、準備期前）一律通用文案——同一個連結、同一個目的地。
+const linkLabel = computed(() => {
+  if (state.value === 'published' && (blockingCount.value > 0 || applyFailure.value)) return '前往處理'
+  if (state.value === 'none' && canWrite.value && !beforePrep.value) return '前往建立'
+  return '前往預編班'
+})
 
 const goWorkspace = () => {
   router.push('/students/year-plan')
