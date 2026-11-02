@@ -109,14 +109,17 @@
                   @dragstart="onDragStart(student, $event)"
                   @dragend="onDragEnd"
                 >
-                  <label class="student-line">
+                  <!-- 姓名放進 el-checkbox 自己的 label（點姓名也能勾），外層不再包 <label>：
+                       巢狀 label 會讓點擊與讀屏行為不確定 -->
+                  <div class="student-line">
                     <el-checkbox
                       v-if="editable"
                       class="student-checkbox"
+                      :aria-label="student.name"
                       :model-value="props.selectedIds.has(student.id)"
                       @change="(val: string | number | boolean) => emit('set-selected', [student.id], Boolean(val))"
-                    />
-                    <span class="student-name">{{ student.name }}</span>
+                    >{{ student.name }}</el-checkbox>
+                    <span v-else class="student-name">{{ student.name }}</span>
                     <span
                       v-if="dispositionTag(student)"
                       class="disposition-tag"
@@ -129,9 +132,9 @@
                       title="手動調整過"
                       aria-label="手動調整過"
                     />
-                  </label>
-                  <!-- 同班升上來的不重複寫原班；只標出從別班搬進來的 -->
-                  <div v-if="isMovedIn(student, cls)" class="student-moved">← {{ student.source_classroom_name }}</div>
+                  </div>
+                  <!-- 同班升上來的不重複寫原班；只標出從別班搬進來的（「原」＝原班，箭頭會被讀成要搬去哪） -->
+                  <div v-if="isMovedIn(student, cls)" class="student-moved">原 {{ student.source_classroom_name }}</div>
                 </div>
               </template>
             </td>
@@ -171,6 +174,7 @@ import {
   TEACHER_ROLES,
   TEACHER_ROLE_LABELS,
   buildTeacherOptions,
+  isMovedIn,
   sourceTeacherName,
   type TeacherCellOption,
   type TeacherField,
@@ -291,10 +295,6 @@ function classAllSelected(classId: number): boolean {
 
 function classSomeSelected(classId: number): boolean {
   return classStudents(classId).some(st => props.selectedIds.has(st.id))
-}
-
-function isMovedIn(student: PlanStudent, cls: PlanClass): boolean {
-  return !!student.source_classroom_name && student.source_classroom_name !== cls.source_name
 }
 
 const unassignedCount = computed(() =>
@@ -423,7 +423,7 @@ defineExpose({ locateStudent, locateClass })
 .plan-roster-wrapper {
   --yp-h-grade: 34px;
   --yp-h-name: 50px;
-  font-size: 14px;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
@@ -559,7 +559,7 @@ defineExpose({ locateStudent, locateClass })
   z-index: 2;
   background: var(--color-neutral-100);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   border-right: 2px solid var(--neutral-600) !important;
 }
 
@@ -591,8 +591,13 @@ defineExpose({ locateStudent, locateClass })
 .student-line {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  cursor: default;
+  gap: var(--space-1);
+}
+
+/* 姓名是 el-checkbox 的 label：縮小預設 8px 間距、沿用表格字級 */
+.student-checkbox :deep(.el-checkbox__label) {
+  padding-left: var(--space-1);
+  font-size: inherit;
 }
 
 .student-moved {
@@ -612,6 +617,15 @@ defineExpose({ locateStudent, locateClass })
   height: auto;
 }
 
+/* 觸控（平板）：整班勾選與班級編輯鈕的點擊區至少 32px */
+@media (pointer: coarse) {
+  .class-select-all,
+  .class-edit-btn {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
 .class-code {
   font-size: var(--text-xs);
   font-weight: var(--font-weight-regular);
@@ -624,7 +638,7 @@ defineExpose({ locateStudent, locateClass })
 }
 
 .disposition-tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   border-radius: var(--radius-sm);
   padding: 0 4px;
 }
@@ -655,7 +669,7 @@ tfoot tr:first-child td {
 .plan-roster-table .grade-total-cell {
   background: var(--color-neutral-100);
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .grand-total-row td {

@@ -150,8 +150,21 @@ describe('PlanRosterTable', () => {
     const entry = (id: number) => w.find(`.student-entry[data-student-id="${id}"]`)
     // 小班A 的來源班是 幼幼A：同班升上來的不重複顯示原班
     expect(entry(1).find('.student-moved').exists()).toBe(false)
-    // 小華來自 幼幼B → 標出來源
-    expect(entry(2).find('.student-moved').text()).toContain('幼幼B')
+    // 小華來自 幼幼B → 標出來源，寫「原 幼幼B」（箭頭會被讀成「要搬去」）
+    expect(entry(2).find('.student-moved').text()).toBe('原 幼幼B')
+  })
+
+  it('學生勾選框：不包在 <label> 裡（無巢狀 label），且有可讀名稱', () => {
+    const w = mountTable()
+    const entry = w.find('.student-entry[data-student-id="1"]')
+    expect(entry.find('label .el-checkbox').exists()).toBe(false)
+    expect(entry.find('label.student-line').exists()).toBe(false)
+    // EP 把 aria-label 放在 checkbox 自己的 <label> 根元素；input 在其內，名稱即學生姓名
+    const box = entry.find('.student-checkbox')
+    expect(box.element.tagName).toBe('LABEL')
+    expect(box.attributes('aria-label')).toBe('小明')
+    expect(box.find('input[type="checkbox"]').exists()).toBe(true)
+    expect(box.text()).toContain('小明')
   })
 
   it('手動調整過的學生有標記（重新產生時會被保留的就是這些）', () => {
