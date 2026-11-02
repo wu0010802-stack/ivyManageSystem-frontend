@@ -64,7 +64,12 @@
 
     <KeepAlive>
       <CashHandoverTab v-if="view === 'handover'" ref="handoverRef" embedded />
-      <CloseTab v-else ref="closeRef" @navigate="(target) => emit('navigate', target)" />
+      <CloseTab
+        v-else
+        ref="closeRef"
+        :requested-month="month"
+        @navigate="(target) => emit('navigate', target)"
+      />
     </KeepAlive>
   </section>
 </template>
@@ -82,10 +87,19 @@ import CloseTab from '@/components/fees/CloseTab.vue'
 import FeeWorkspaceToolbar from './FeeWorkspaceToolbar.vue'
 import { FEE_WORKSPACE_VIEWS, type FeeNavTarget } from './feesNavigation'
 
-const props = withDefaults(defineProps<{ view?: string }>(), { view: 'handover' })
+const props = withDefaults(
+  defineProps<{
+    view?: string
+    /** 月結月份（route ?month=，YYYY-MM）；未帶＝月結預設本月 */
+    month?: string
+  }>(),
+  { view: 'handover', month: undefined },
+)
 
 const emit = defineEmits<{
   'change-view': [view: string]
+  /** 工具列換月結月份：交殼層寫回網址 */
+  'change-month': [month: string]
   navigate: [target: FeeNavTarget]
 }>()
 
@@ -114,11 +128,12 @@ const closeRef = ref<{
   setMonth?: (next: string) => void
 } | null>(null)
 
-// 月結的月份選擇上移到工具列；本地 ref 只作為 picker 的顯示值
+// 月結的月份選擇上移到工具列；本地 ref 只作為 picker 的顯示值。
+// 網址帶的月份由 CloseTab（requested-month）自己套用，這裡等它套完再回讀。
 const closeMonth = ref('')
 watch(
-  () => props.view,
-  async (v) => {
+  () => [props.view, props.month] as const,
+  async ([v]) => {
     if (v !== 'close') return
     await nextTick()
     closeMonth.value = closeRef.value?.month ?? ''
@@ -136,5 +151,6 @@ function onCloseMonthChange(value: unknown) {
   if (!next) return
   closeMonth.value = next
   closeRef.value?.setMonth?.(next)
+  emit('change-month', next)
 }
 </script>

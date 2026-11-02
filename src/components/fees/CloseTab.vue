@@ -241,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { computed, onActivated, onMounted, ref, watch } from 'vue'
 import { CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -249,7 +249,7 @@ import { formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
-import type { FeeNavTarget } from './workspace/feesNavigation'
+import { isMonthLabel, type FeeNavTarget } from './workspace/feesNavigation'
 import {
   closePeriod,
   getClosePeriods,
@@ -323,13 +323,22 @@ const CHECKLIST_FIX_TARGETS: Record<string, FeeNavTarget> = {
   equation_balanced: { ws: 'billing', view: 'matching' },
 }
 
+const props = defineProps<{
+  /**
+   * 外部指定的月份（YYYY-MM，來自 route ?month=）。工作台「尚未關帳 → 去月結」
+   * 帶最早未關帳的那個月；沒帶時預設本月。
+   */
+  requestedMonth?: string
+}>()
+
 const emit = defineEmits<{
   navigate: [target: FeeNavTarget]
 }>()
 
 const canApprove = computed(() => hasPermission(PERMISSION_NAMES.FEE_CLOSE_APPROVE))
 
-const month = ref(todayISO().slice(0, 7))
+// 首次掛載就用外部指定的月份，避免先查本月再切過去（多打一輪且畫面閃本月）
+const month = ref(isMonthLabel(props.requestedMonth) ? props.requestedMonth : todayISO().slice(0, 7))
 const summary = ref<CloseSummary | null>(null)
 const closes = ref<CloseRow[]>([])
 const exceptionNote = ref('')
@@ -515,6 +524,14 @@ function setMonth(next: string) {
   month.value = next
   fetchSummary()
 }
+
+// 已快取的月結頁再被帶月份進來（工作台另一則待辦、上一頁）：切到該月
+watch(
+  () => props.requestedMonth,
+  (next) => {
+    if (isMonthLabel(next)) setMonth(next)
+  },
+)
 
 defineExpose({ fetchSummary, fetchCloses, month, setMonth })
 </script>
