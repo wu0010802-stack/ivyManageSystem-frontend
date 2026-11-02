@@ -24,6 +24,7 @@ import {
 } from '@/api/portal'
 import type { ApiBody } from '@/api/_generated/typed'
 import { downloadFile } from '@/utils/download'
+import { compareStudentNo } from '@/utils/studentNo'
 import { apiError } from '@/utils/error'
 import { pickClassroomIdFromQuery } from '@/utils/portalQuery'
 import {
@@ -68,6 +69,7 @@ const activeTab = ref('daily')
 const classroomId = ref<number | null>(null)
 const dailyDate = ref(todayISO())
 const dailyRecords = ref<AttendanceRecord[]>([])
+const byStudentNo = (a: AttendanceRecord, b: AttendanceRecord): number => compareStudentNo(a.student_no, b.student_no)
 const dailyLoading = ref(false)
 // 三段讀取各自的失敗旗標：失敗時顯示錯誤＋重試，不落到「尚無學生」「尚未載入月度資料」
 const classroomsError = ref(false)
@@ -284,11 +286,12 @@ const fetchDailyAttendance = async () => {
       last_recorded_by?: string | null
     }
     // status 原樣保留：null／空字串＝未點名，畫面直接照著畫。
+    // 學號依自然順序排（115-大-8 在 115-大-15 之前）：後端以字串排序，位數不一時會跳號（day-qa F17）
     dailyRecords.value = (body.records ?? []).map((record) => ({
       ...record,
       status: record.status ?? null,
       remark: record.remark ?? '',
-    }))
+    })).sort(byStudentNo)
     lastRecordedAt.value = body.last_recorded_at ?? null
     lastRecordedBy.value = body.last_recorded_by ?? null
     acceptSnapshot()
@@ -641,6 +644,9 @@ onMounted(async () => {
   .save-row {
     /* 與 PortalLayout 的底部導覽列高度對齊，避免遮住儲存動作。 */
     bottom: calc(60px + env(safe-area-inset-bottom) + var(--space-2));
+    /* 捲到底時，sticky 會把儲存卡往上推到上面那個高度，蓋住最後一位學生的狀態鈕
+       （day-qa F8：elementFromPoint 命中儲存卡）。卡片後面留同高的空間，最後一列才捲得出來。 */
+    margin-bottom: calc(60px + env(safe-area-inset-bottom) + var(--space-2));
   }
 }
 </style>
