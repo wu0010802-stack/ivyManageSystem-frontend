@@ -1,16 +1,23 @@
 import { describe, it, expect } from 'vitest'
 import {
+  addDaysISO,
+  appliedResultLists,
   buildAssignGroups,
   buildTeacherOptions,
   buildUndoGroups,
   countCarryOverSlots,
   countPlanMoves,
   countRetainAtGraduationRisk,
+  daysBetweenISO,
   filterRosterMatches,
+  formatMonthDay,
   formatPlanDate,
+  graduationGradeName,
   groupClassesByGrade,
   isMovedIn,
+  isWithinPrepPeriod,
   orderedRosterEntries,
+  retainRiskPhase,
   TEACHER_FIELD_BY_ROLE,
 } from '../planHelpers'
 import type { Schema } from '@/api/_generated/typed'
@@ -252,5 +259,75 @@ describe('buildUndoGroups', () => {
     ])
     expect(result.restorableIds).toEqual([1, 2, 3, 4, 5, 6])
     expect(result.unassignedCount).toBe(1)
+  })
+})
+
+describe('日期工具', () => {
+  it('addDaysISO／daysBetweenISO 以日曆日計算（跨月、不受時區影響）', () => {
+    expect(addDaysISO('2027-07-31', 7)).toBe('2027-08-07')
+    expect(addDaysISO('2027-03-01', -1)).toBe('2027-02-28')
+    expect(daysBetweenISO('2027-07-17', '2027-07-31')).toBe(14)
+    expect(daysBetweenISO('2027-08-02', '2027-07-31')).toBe(-2)
+  })
+
+  it('formatMonthDay：日期時間取 MM/DD；空值回空字串', () => {
+    expect(formatMonthDay('2027-06-20T09:30:00')).toBe('06/20')
+    expect(formatMonthDay(null)).toBe('')
+  })
+})
+
+describe('retainRiskPhase（對齊後端自動畢業：畢業日起補跑 7 天）', () => {
+  it('畢業日前 before；畢業日到第 7 天 catchup；之後 after；沒有畢業日回 null', () => {
+    expect(retainRiskPhase('2027-07-30', '2027-07-31')).toBe('before')
+    expect(retainRiskPhase('2027-07-31', '2027-07-31')).toBe('catchup')
+    expect(retainRiskPhase('2027-08-07', '2027-07-31')).toBe('catchup')
+    expect(retainRiskPhase('2027-08-08', '2027-07-31')).toBe('after')
+    expect(retainRiskPhase('2027-07-30', null)).toBeNull()
+  })
+})
+
+describe('isWithinPrepPeriod', () => {
+  it('準備期＝準備起始日（含）到套用日（不含）', () => {
+    expect(isWithinPrepPeriod('2027-05-31', '2027-06-01', '2027-08-01')).toBe(false)
+    expect(isWithinPrepPeriod('2027-06-01', '2027-06-01', '2027-08-01')).toBe(true)
+    expect(isWithinPrepPeriod('2027-07-31', '2027-06-01', '2027-08-01')).toBe(true)
+    expect(isWithinPrepPeriod('2027-08-01', '2027-06-01', '2027-08-01')).toBe(false)
+  })
+})
+
+describe('graduationGradeName', () => {
+  it('取標為畢業學生的現況年級（最多人那個）；判斷不出來回 null', () => {
+    expect(graduationGradeName([
+      stu({ id: 1, disposition: 'graduate', current_grade_name: '大班' }),
+      stu({ id: 2, disposition: 'graduate', current_grade_name: '大班' }),
+      stu({ id: 3, disposition: 'graduate', current_grade_name: '中班' }),
+      stu({ id: 4, disposition: 'promote', current_grade_name: '小班' }),
+    ])).toBe('大班')
+    expect(graduationGradeName([stu({ disposition: 'promote' })])).toBeNull()
+  })
+})
+
+describe('appliedResultLists', () => {
+  it('仍在去年班的名單扣掉「排除」的人（同一人只出現一次、兩份名單不相加）', () => {
+    const result = appliedResultLists({
+      created_classrooms: 2, reused_classrooms: 6, moved_students: 120, graduated: 36, excluded_still_active: 1,
+      left_behind: [
+        { id: 1, name: '甲', classroom_name: '向日葵' },
+        { id: 2, name: '乙', classroom_name: '牡丹' },
+      ],
+      excluded_still_active_students: [{ id: 2, name: '乙', classroom_name: '牡丹' }],
+      skipped_inactive: [{ id: 3, name: '丙', classroom_name: null }],
+      capacity_overflow: [],
+    })
+    expect(result.leftBehind.map(s => s.id)).toEqual([1])
+    expect(result.excluded.map(s => s.id)).toEqual([2])
+    expect(result.skippedInactive.map(s => s.id)).toEqual([3])
+  })
+
+  it('名單欄位缺省時回空陣列', () => {
+    const result = appliedResultLists({
+      created_classrooms: 0, reused_classrooms: 0, moved_students: 0, graduated: 0, excluded_still_active: 0,
+    })
+    expect(result).toEqual({ leftBehind: [], excluded: [], skippedInactive: [], capacityOverflow: [] })
   })
 })

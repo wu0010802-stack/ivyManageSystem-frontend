@@ -322,3 +322,97 @@ export function buildUndoGroups(before: PlanStudent[]): {
 
 /** 編班表檢視：學生名單（班名、人數＋學生列）／老師指派（班名、人數＋三列老師）。 */
 export type RosterViewMode = 'students' | 'teachers'
+
+// ── 狀態感知（FE-C）：日期、畢業日風險、準備期、套用結果 ──
+
+function isoToUtc(date: string): number {
+  return Date.parse(`${date.slice(0, 10)}T00:00:00Z`)
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** 'YYYY-MM-DD' 加減天數（純日曆日運算：以 UTC 午夜為錨，不受瀏覽器時區影響）。 */
+export function addDaysISO(date: string, days: number): string {
+  const d = new Date(isoToUtc(date) + days * DAY_MS)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+}
+
+/** to − from 的天數（'YYYY-MM-DD'）；to 在 from 之前為負數。 */
+export function daysBetweenISO(from: string, to: string): number {
+  return Math.round((isoToUtc(to) - isoToUtc(from)) / DAY_MS)
+}
+
+/** 日期時間字串 → 'MM/DD'（「已於 06/20 發布」用）；空值回空字串。 */
+export function formatMonthDay(value: string | null | undefined): string {
+  if (!value) return ''
+  const match = /^\d{4}-(\d{2})-(\d{2})/.exec(value)
+  return match ? `${match[1]}/${match[2]}` : value
+}
+
+/**
+ * 自動畢業從畢業日當天起、往後補跑幾天（對齊後端
+ * `services/graduation_scheduler.CATCHUP_GRACE_DAYS`）：這段期間排程每一輪都可能
+ * 把「沒有被已發布計畫豁免」的畢業年級在籍生畢業。
+ */
+export const GRADUATION_CATCHUP_DAYS = 7
+
+export type RetainRiskPhase = 'before' | 'catchup' | 'after'
+
+/**
+ * 畢業年級留級生的風險階段：before＝畢業日前（撤回／沒發布，畢業日一到就會被畢業）；
+ * catchup＝畢業日到補跑最後一天（隨時可能被畢業）；after＝補跑期已過（不會再自動畢業）。
+ * 沒有畢業日回 null。
+ */
+export function retainRiskPhase(today: string, graduationDate: string | null | undefined): RetainRiskPhase | null {
+  if (!graduationDate) return null
+  if (today < graduationDate) return 'before'
+  if (today <= addDaysISO(graduationDate, GRADUATION_CATCHUP_DAYS)) return 'catchup'
+  return 'after'
+}
+
+/** 準備期＝準備起始日（含）到套用日（不含）；排程只在這段期間自動產生草稿。 */
+export function isWithinPrepPeriod(today: string, prepStartDate: string, applyDate: string): boolean {
+  return prepStartDate <= today && today < applyDate
+}
+
+/** 畢業年級名稱：取標為畢業的學生現況年級（最多人的那個）；判斷不出來回 null。 */
+export function graduationGradeName(students: PlanStudent[]): string | null {
+  const counts = new Map<string, number>()
+  for (const s of students) {
+    if (s.disposition !== 'graduate' || !s.current_grade_name) continue
+    counts.set(s.current_grade_name, (counts.get(s.current_grade_name) ?? 0) + 1)
+  }
+  let best: string | null = null
+  let bestCount = 0
+  for (const [name, count] of counts) {
+    if (count > bestCount) {
+      best = name
+      bestCount = count
+    }
+  }
+  return best
+}
+
+type AppliedSummary = Schema<'PlanAppliedSummaryOut'>
+type AppliedStudent = Schema<'PlanAppliedStudentOut'>
+
+/**
+ * 套用結果的名單：「仍在去年班」扣掉「排除」的人（排除的學生本來就會留在原班，
+ * 後端兩份名單會重疊）。兩份分開列、不可相加。
+ */
+export function appliedResultLists(summary: AppliedSummary): {
+  leftBehind: AppliedStudent[]
+  excluded: AppliedStudent[]
+  skippedInactive: AppliedStudent[]
+  capacityOverflow: Schema<'PlanAppliedOverflowClassOut'>[]
+} {
+  const excluded = summary.excluded_still_active_students ?? []
+  const excludedIds = new Set(excluded.map(s => s.id))
+  return {
+    leftBehind: (summary.left_behind ?? []).filter(s => !excludedIds.has(s.id)),
+    excluded,
+    skippedInactive: summary.skipped_inactive ?? [],
+    capacityOverflow: summary.capacity_overflow ?? [],
+  }
+}
