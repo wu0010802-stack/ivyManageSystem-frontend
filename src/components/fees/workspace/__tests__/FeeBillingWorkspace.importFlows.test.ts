@@ -2,6 +2,7 @@
  * 收款工作區工具列「匯入 ▾」與發單抽屜的跨元件流程（2026-11-02 bug hunt）。
  *
  * F5：「匯入 ▾ › 代收／存摺 CSV」要切到入帳媒合對應來源並展開匯入面板。
+ * F8：發單抽屜匯入／刪除批次後要刷新待辦總覽。
  *     view／source 是 route query 受控 prop，本元件只 emit，寫回要等殼層完成
  *     一次 router 導覽（遠超兩個 microtask）。舊版 await 兩次 nextTick 就呼叫
  *     matchingRef.openImport，此時面板根本還沒掛載 → staging 實測面板不展開。
@@ -125,7 +126,7 @@ const settle = async (ms = ROUTER_DELAY_MS * 4) => {
 }
 
 import FeeBillingWorkspace from '../FeeBillingWorkspace.vue'
-import { __resetFeeOverview } from '../useFeeOverview'
+import { __resetFeeOverview, useFeeOverview } from '../useFeeOverview'
 
 /** 扮演殼層：change-view／change-source 延遲一個 router 往返才寫回 prop */
 function mountBilling(props: Record<string, unknown> = {}) {
@@ -212,6 +213,36 @@ describe('F5「匯入 ▾ › 代收／存摺 CSV」：等媒合面板真的掛�
     await wrapper.setProps({ view: 'matching', source: 'passbook' })
     await settle()
     expect(matchingMocks.openImport).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+})
+
+// F8：發單抽屜匯入／刪除批次後要刷新待辦總覽（應收帳款頂端「待產單」提示條、
+// 次層頁籤徽章）。舊版只有 generated 事件才 refreshOverview。
+describe('F8 發單抽屜批次異動 → 刷新待辦總覽', () => {
+  it('抽屜 emit batches-changed → 重抓待辦總覽（含發單批次）', async () => {
+    const wrapper = mountBilling()
+    await settle()
+    const before = apiMocks.getBillSlipBatches.mock.calls.length
+    wrapper.findComponent({ name: 'FeeBillSlipDrawer' }).vm.$emit('batches-changed')
+    await settle()
+    expect(apiMocks.getBillSlipBatches).toHaveBeenCalledTimes(before + 1)
+    wrapper.unmount()
+  })
+
+  it('刪掉最後一個待產單批次 → 提示條消失', async () => {
+    apiMocks.getBillSlipBatches.mockResolvedValue([
+      { net_total: 10800, records_generated_count: 0, unresolved_count: 0, unresolved_amount: 0 },
+    ])
+    // 殼層（StudentFeeView）onMounted 會 ensureLoaded；單獨掛工作區時自己載
+    await useFeeOverview().ensureLoaded()
+    const wrapper = mountBilling()
+    await settle()
+    expect(wrapper.find('[data-test="billslip-notice"]').exists()).toBe(true)
+    apiMocks.getBillSlipBatches.mockResolvedValue([])
+    wrapper.findComponent({ name: 'FeeBillSlipDrawer' }).vm.$emit('batches-changed')
+    await settle()
+    expect(wrapper.find('[data-test="billslip-notice"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })

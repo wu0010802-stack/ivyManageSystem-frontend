@@ -769,3 +769,65 @@ describe('BillSlipTab 批次類型（SPEC-019 §6.1）', () => {
 
   })
 })
+
+
+// 2026-11-02 bug hunt F8：匯入／刪除批次後只重載抽屜內清單，收款工作區的待辦
+// 總覽（應收帳款頂端「待產單」提示條、徽章）沒刷新——刪掉待產單批次後提示條
+// 仍在、匯入新批次後徽章不出現。批次清單有變就 emit batches-changed 往上冒。
+describe('BillSlipTab 批次異動通知（batches-changed）', () => {
+  it('匯入成功 → emit batches-changed', async () => {
+    apiMocks.importBillSlipBatch.mockResolvedValue({ ...BATCH, created: true })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      form: { title: string; batch_kind: string }
+      runPreview: () => Promise<void>
+      runImport: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'Check.xls')
+    vm.form.title = '月費'
+    vm.form.batch_kind = 'monthly'
+    apiMocks.previewBillSlipBatch.mockResolvedValue({ ...PREVIEW })
+    await vm.runPreview()
+    await vm.runImport()
+    expect(wrapper.emitted('batches-changed')).toHaveLength(1)
+  })
+
+  it('匯入失敗 → 不 emit', async () => {
+    apiMocks.importBillSlipBatch.mockRejectedValue({ response: { status: 409, data: { detail: '重疊' } } })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      form: { title: string; batch_kind: string }
+      runPreview: () => Promise<void>
+      runImport: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'Check.xls')
+    vm.form.title = '月費'
+    vm.form.batch_kind = 'monthly'
+    apiMocks.previewBillSlipBatch.mockResolvedValue({ ...PREVIEW })
+    await vm.runPreview()
+    await vm.runImport()
+    expect(wrapper.emitted('batches-changed')).toBeUndefined()
+  })
+
+  it('刪除成功 → emit batches-changed；取消確認不 emit', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as { removeBatch: (row: unknown) => Promise<void> }
+    mbMocks.confirm.mockRejectedValueOnce('cancel')
+    await vm.removeBatch(BATCH)
+    expect(wrapper.emitted('batches-changed')).toBeUndefined()
+    mbMocks.confirm.mockResolvedValueOnce('confirm')
+    await vm.removeBatch(BATCH)
+    expect(wrapper.emitted('batches-changed')).toHaveLength(1)
+  })
+
+  it('刪除失敗 → 不 emit', async () => {
+    mbMocks.confirm.mockResolvedValue('confirm')
+    apiMocks.deleteBillSlipBatch.mockRejectedValueOnce(new Error('boom'))
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as { removeBatch: (row: unknown) => Promise<void> }
+    await vm.removeBatch(BATCH)
+    expect(wrapper.emitted('batches-changed')).toBeUndefined()
+  })
+})

@@ -225,6 +225,7 @@
       :model-value="importsOpen"
       @update:model-value="(v: boolean) => emit('update:imports-open', v)"
       @generated="onGenerated"
+      @batches-changed="refreshOverview"
     />
     <FeeSlipTemplateDialog
       v-model="slipTemplateOpen"
