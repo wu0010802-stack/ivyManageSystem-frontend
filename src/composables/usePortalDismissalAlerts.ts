@@ -39,6 +39,18 @@ type DismissalCall = DismissalCallView
 const activeCalls = ref<DismissalCall[]>([])
 const loading = ref(false)
 const liveAnnounce = ref('')
+/**
+ * 每則接送提醒一個事件（帶序號）：文字相同的連續事件 watch liveAnnounce 抓不到，
+ * 殼層的可見提醒（PortalDismissalBanner）改看這個（day-qa 審查 P2）。
+ * kind：pre＝家長預告尚未抵達；waiting＝家長已到門口／行政建單，需要老師處理。
+ */
+export interface DismissalAnnouncement { seq: number; callId: number; kind: 'pre' | 'waiting'; text: string }
+const lastAnnouncement = ref<DismissalAnnouncement | null>(null)
+let announceSeq = 0
+function announce(callId: number, kind: DismissalAnnouncement['kind'], text: string): void {
+  liveAnnounce.value = text
+  lastAnnouncement.value = { seq: ++announceSeq, callId, kind, text }
+}
 const wsConnected = ref(false)
 const wsReconnectCount = ref(0)
 const wsExhausted = ref(false)
@@ -400,11 +412,11 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
       }, SPEECH_LEAD_MS)
       speechTimers.add(speechTimer)
       notifyBrowser(payload, announceText)
-      liveAnnounce.value = `預告接送：${announceText}`
+      announce(payload.id, 'pre', `預告接送：${announceText}`)
     } else {
       notifyBrowser(payload)
       playAlert(payload)
-      liveAnnounce.value = `新接送通知：${payload.student_name || '學生'}${payload.classroom_name ? `（${payload.classroom_name}）` : ''} 等待接送`
+      announce(payload.id, 'waiting', `新接送通知：${payload.student_name || '學生'}${payload.classroom_name ? `（${payload.classroom_name}）` : ''} 等待接送`)
     }
   } else if (type === 'dismissal_call_arrived') {
     // 家長/辦公室標記「已到門口」：此刻才觸發較強的音效、震動與語音。
@@ -416,7 +428,7 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
       // 重複 arrived 事件不重播（idempotent）
       notifyBrowser(payload, `${payload.student_name || '學生'}家長已到門口，請準備放學`)
       playAlert(payload, '家長已到門口，請準備放學')
-      liveAnnounce.value = `${payload.student_name || '學生'}家長已到門口，請準備放學`
+      announce(payload.id, 'waiting', `${payload.student_name || '學生'}家長已到門口，請準備放學`)
     }
     // 教師已按過「我收到了」（acknowledged）且家長此刻才抵達：自動完成放學。
     if (payload.status === 'acknowledged') {
@@ -489,6 +501,7 @@ export function teardownPortalDismissalAlerts(): void {
   // muted 偏好持久化於 localStorage；重讀當前值（與 toggleMute 寫入保持同步，正常情況為 no-op）
   muted.value = tenantGetItem(SOUND_PREF_KEY) === '1'
   liveAnnounce.value = ''
+  lastAnnouncement.value = null
   loading.value = false
   initialized = false
 }
@@ -516,7 +529,7 @@ onAdminSessionReset((context) => {
 
 export function usePortalDismissalAlerts() {
   return {
-    activeCalls, sortedCalls, pendingCount, loading, liveAnnounce,
+    activeCalls, sortedCalls, pendingCount, loading, liveAnnounce, lastAnnouncement,
     wsConnected, connectionState, lastWsClose, connectionMessage,
     muted, audioUnlocked, notificationSupported,
     toggleMute, unlockAudio, unlockSpeech, playBeep, speakAnnouncement, playAlert, cancelPendingSpeech, triggerHaptic, fetchCalls,
