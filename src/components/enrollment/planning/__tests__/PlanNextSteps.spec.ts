@@ -136,4 +136,19 @@ describe('PlanNextSteps', () => {
     const after = mountSteps({ today: '2027-08-09', retainPendingCount: 2, graduationDate: '2027-07-31' })
     expect(after.find('.retain-deadline').exists()).toBe(false)
   })
+  it('沿用原班老師：可沿用 0 但原班有老師（都停用、預定離職或在他班帶班）→ 停用並說明；都沒有就不顯示', () => {
+    const blocked = mountSteps({ carryOverSlots: 0, carryOverCandidates: 5 })
+    const btn = blocked.find('.btn-carry-over')
+    expect(btn.exists()).toBe(true)
+    expect((btn.element as HTMLButtonElement).disabled).toBe(true)
+    expect(btn.text()).toContain('沿用原班老師（0）')
+    expect(blocked.find('.carry-over-note').text()).toBe('原班老師已停用、預定離職或在其他班帶班，沒有可沿用的')
+
+    const none = mountSteps({ carryOverSlots: 0, carryOverCandidates: 0 })
+    expect(none.find('.btn-carry-over').exists()).toBe(false)
+
+    const ok = mountSteps({ carryOverSlots: 3, carryOverCandidates: 5 })
+    expect((ok.find('.btn-carry-over').element as HTMLButtonElement).disabled).toBe(false)
+    expect(ok.find('.carry-over-note').exists()).toBe(false)
+  })
 })

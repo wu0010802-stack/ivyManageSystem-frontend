@@ -28,6 +28,7 @@
         <span class="step-title">指派老師</span>
         <span class="step-status">{{ teacherStatus }}</span>
         <span v-if="teacherSub" class="step-sub">{{ teacherSub }}</span>
+        <span v-if="carryOverBlocked" class="step-sub carry-over-note">原班老師已停用、預定離職或在其他班帶班，沒有可沿用的</span>
       </div>
       <div class="step-actions">
         <el-button
@@ -38,10 +39,10 @@
           @click="emit('show-teachers')"
         >去指派</el-button>
         <el-button
-          v-if="canEdit && carryOverSlots > 0"
+          v-if="canEdit && (carryOverSlots > 0 || carryOverBlocked)"
           size="small"
           class="btn-carry-over"
-          :disabled="busy"
+          :disabled="busy || carryOverSlots === 0"
           @click="emit('carry-over')"
         >沿用原班老師（{{ carryOverSlots }}）</el-button>
       </div>
@@ -84,8 +85,10 @@ const props = withDefaults(defineProps<{
   /** 草稿班級數；0 班時老師步驟是「還沒有班級」而非空集合的「都已指派」 */
   classCount: number
   emptyTeacherSlots: { head: number; assistant: number; art: number }
-  /** 原班有老師、目前空著的格子數（可一鍵沿用） */
+  /** 按下「沿用原班老師」實際會填入的格數（後端 carry_over_available） */
   carryOverSlots: number
+  /** 空著且原班有老師的格數（含停用、預定離職、他班已占用而無法沿用的） */
+  carryOverCandidates?: number
   blockingCount: number
   canEdit: boolean
   applyDate?: string | null
@@ -112,6 +115,7 @@ const props = withDefaults(defineProps<{
   retainPendingCount: 0,
   graduationDate: null,
   graduationGradeName: null,
+  carryOverCandidates: 0,
 })
 
 const emit = defineEmits<{
@@ -124,6 +128,9 @@ const assignStep = computed<StepState>(() => (props.unassignedCount > 0 ? 'block
 const assignStatus = computed(() =>
   props.unassignedCount > 0 ? `還有 ${props.unassignedCount} 位待分班` : '全部學生都已分班',
 )
+
+// 原班有老師但一個都沒辦法沿用：按鈕留著但停用，並講原因（不然使用者以為功能壞了）
+const carryOverBlocked = computed(() => props.carryOverSlots === 0 && props.carryOverCandidates > 0)
 
 const teacherStep = computed<StepState>(() => {
   const { head, assistant, art } = props.emptyTeacherSlots
