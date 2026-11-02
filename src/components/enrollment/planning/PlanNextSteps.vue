@@ -29,13 +29,22 @@
         <span class="step-status">{{ teacherStatus }}</span>
         <span v-if="teacherSub" class="step-sub">{{ teacherSub }}</span>
       </div>
-      <el-button
-        v-if="canEdit && carryOverSlots > 0"
-        size="small"
-        class="btn-carry-over"
-        :disabled="busy"
-        @click="emit('carry-over')"
-      >沿用原班老師（{{ carryOverSlots }}）</el-button>
+      <div class="step-actions">
+        <el-button
+          v-if="showTeacherLink && classCount > 0"
+          link
+          type="primary"
+          class="btn-show-teachers"
+          @click="emit('show-teachers')"
+        >去指派</el-button>
+        <el-button
+          v-if="canEdit && carryOverSlots > 0"
+          size="small"
+          class="btn-carry-over"
+          :disabled="busy"
+          @click="emit('carry-over')"
+        >沿用原班老師（{{ carryOverSlots }}）</el-button>
+      </div>
     </li>
 
     <li class="next-step" :class="stepClass(publishStep)">
@@ -71,15 +80,19 @@ const props = withDefaults(defineProps<{
   applyDate?: string | null
   appliesImmediately?: boolean
   busy?: boolean
+  /** 編班表不在「老師指派」檢視時顯示「去指派」 */
+  showTeacherLink?: boolean
 }>(), {
   applyDate: null,
   appliesImmediately: false,
   busy: false,
+  showTeacherLink: false,
 })
 
 const emit = defineEmits<{
   'show-unassigned': []
   'carry-over': []
+  'show-teachers': []
 }>()
 
 const assignStep = computed<StepState>(() => (props.unassignedCount > 0 ? 'blocking' : 'done'))
@@ -206,9 +219,22 @@ function stepClass(state: StepState): Record<string, boolean> {
   color: var(--text-secondary);
 }
 
+.step-actions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.step-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
 /* 觸控（平板）：「查看」「沿用原班老師」點擊區至少 32px */
 @media (pointer: coarse) {
   .btn-show-unassigned,
+  .btn-show-teachers,
   .btn-carry-over {
     min-height: 32px;
   }

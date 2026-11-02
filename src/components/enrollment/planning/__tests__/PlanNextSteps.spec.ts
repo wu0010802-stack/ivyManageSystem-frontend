@@ -83,4 +83,15 @@ describe('PlanNextSteps', () => {
     const w = mountSteps({ appliesImmediately: true, blockingCount: 0 })
     expect(w.findAll('.next-step')[2].text()).toContain('約一小時內')
   })
+  it('老師步驟有「去指派」：切到老師指派檢視；已在老師指派或沒有班級時不顯示', async () => {
+    const w = mountSteps({ showTeacherLink: true })
+    const btn = w.find('.btn-show-teachers')
+    expect(btn.exists()).toBe(true)
+    expect(btn.text()).toBe('去指派')
+    await btn.trigger('click')
+    expect(w.emitted('show-teachers')).toBeTruthy()
+
+    expect(mountSteps({ showTeacherLink: false }).find('.btn-show-teachers').exists()).toBe(false)
+    expect(mountSteps({ showTeacherLink: true, classCount: 0 }).find('.btn-show-teachers').exists()).toBe(false)
+  })
 })
