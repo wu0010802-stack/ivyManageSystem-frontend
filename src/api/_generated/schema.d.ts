@@ -51337,6 +51337,11 @@ export interface components {
             apply_failure?: string | null;
             /** Apply Overdue */
             apply_overdue: boolean;
+            /**
+             * Auto Graduation Enabled
+             * @default false
+             */
+            auto_graduation_enabled: boolean;
             /** Blocking Count */
             blocking_count: number;
             /** Graduation Date */
