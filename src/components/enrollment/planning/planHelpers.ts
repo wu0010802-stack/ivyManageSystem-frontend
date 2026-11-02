@@ -134,23 +134,6 @@ export function countPlanMoves(
   return { moved, retained }
 }
 
-/**
- * 留在畢業年級的留級生人數：這些人只有在計畫「已發布」時才會被畢業排程豁免，
- * 撤回發布後若沒在畢業日前重新發布，會被自動畢業。畢業年級以「有學生標為畢業」
- * 的現況年級判斷（前端沒有年級的畢業屬性）；判斷不出來時回 0。
- */
-export function countRetainAtGraduationRisk(students: PlanStudent[]): number {
-  const graduationGrades = new Set(
-    students
-      .filter(s => s.disposition === 'graduate' && s.current_grade_name)
-      .map(s => s.current_grade_name as string),
-  )
-  if (graduationGrades.size === 0) return 0
-  return students.filter(
-    s => s.disposition === 'retain' && !!s.current_grade_name && graduationGrades.has(s.current_grade_name),
-  ).length
-}
-
 export interface AssignGroup {
   gradeName: string
   options: Array<{ id: number; label: string }>

@@ -7,7 +7,6 @@ import {
   buildUndoGroups,
   countCarryOverSlots,
   countPlanMoves,
-  countRetainAtGraduationRisk,
   daysBetweenISO,
   filterRosterMatches,
   formatMonthDay,
@@ -129,22 +128,6 @@ describe('countPlanMoves', () => {
       stu({ id: 6, source_classroom_name: '天堂鳥', disposition: 'exclude' }),
     ]
     expect(countPlanMoves(students, classes)).toEqual({ moved: 1, retained: 1 })
-  })
-})
-
-describe('countRetainAtGraduationRisk', () => {
-  it('只算留在畢業年級（有學生要畢業的年級）的留級生', () => {
-    const students = [
-      stu({ id: 1, disposition: 'graduate', current_grade_name: '大班' }),
-      stu({ id: 2, disposition: 'retain', current_grade_name: '大班' }),
-      stu({ id: 3, disposition: 'retain', current_grade_name: '中班' }),
-      stu({ id: 4, disposition: 'promote', current_grade_name: '大班' }),
-    ]
-    expect(countRetainAtGraduationRisk(students)).toBe(1)
-  })
-
-  it('沒有任何畢業生可判斷畢業年級時回 0', () => {
-    expect(countRetainAtGraduationRisk([stu({ disposition: 'retain', current_grade_name: '大班' })])).toBe(0)
   })
 })
 

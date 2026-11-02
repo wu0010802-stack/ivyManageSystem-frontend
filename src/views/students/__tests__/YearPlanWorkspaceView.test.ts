@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import type { Mock } from 'vitest'
@@ -60,7 +60,9 @@ vi.mock('@/api/classroomYearPlan', () => ({
   unpublishClassroomYearPlan: vi.fn(),
   cancelClassroomYearPlan: vi.fn(),
   carryOverClassroomYearPlanTeachers: vi.fn(),
+  exportClassroomYearPlan: vi.fn(),
 }))
+vi.mock('@/utils/download', () => ({ saveBlobResponse: vi.fn() }))
 vi.mock('@/api/classrooms', () => ({
   getGrades: vi.fn().mockResolvedValue({ data: [] }),
   getTeacherOptions: vi.fn().mockResolvedValue({ data: [] }),
@@ -84,7 +86,10 @@ import {
   unpublishClassroomYearPlan,
   updateClassroomYearPlanClass,
   carryOverClassroomYearPlanTeachers,
+  exportClassroomYearPlan,
+  regenerateClassroomYearPlan,
 } from '@/api/classroomYearPlan'
+import { saveBlobResponse } from '@/utils/download'
 import { getTeacherOptions } from '@/api/classrooms'
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 import YearPlanWorkspaceView from '../YearPlanWorkspaceView.vue'
@@ -106,6 +111,8 @@ const mockCancel = cancelClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockUnpublish = unpublishClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockUpdateClass = updateClassroomYearPlanClass as ReturnType<typeof vi.fn>
 const mockCarryOver = carryOverClassroomYearPlanTeachers as ReturnType<typeof vi.fn>
+const mockExport = exportClassroomYearPlan as ReturnType<typeof vi.fn>
+const mockRegenerate = regenerateClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockTeacherOptions = getTeacherOptions as ReturnType<typeof vi.fn>
 
 function statusNone() {
@@ -563,7 +570,8 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.find('.btn-regenerate').exists()).toBe(false)
     expect(w.find('.btn-publish').exists()).toBe(false)
     expect(w.find('.btn-unpublish').exists()).toBe(false)
-    expect(w.find('.btn-more').exists()).toBe(false)
+    // 「更多」仍在，但只剩讀取權限可用的「匯出 Excel」（FE-C）
+    expect(w.find('.btn-more').exists()).toBe(true)
     // canWrite=false → PlanRosterTable editable prop 為 false，勾選 checkbox 不出現
     expect(w.findComponent({ name: 'ElCheckbox' }).exists()).toBe(false)
   })
@@ -974,8 +982,10 @@ describe('YearPlanWorkspaceView', () => {
   })
 
   it('撤回發布：寫明要在套用日前重新發布；有大班留級生時警告畢業日前沒發布會被自動畢業', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2027-07-20T04:00:00Z'))
     const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
-    mockStatus.mockResolvedValue(publishedStatus())
+    mockStatus.mockResolvedValue(publishedStatus({ retain_pending_count: 1, graduation_date: '2027-07-31' }))
     mockDetail.mockResolvedValue(detailWithGraduatingRetain({ status: 'published' }))
     const w = mountView()
     await flushPromises()
@@ -989,6 +999,7 @@ describe('YearPlanWorkspaceView', () => {
     expect(message).toContain('1 位大班留級生')
     expect(message).toContain('自動畢業')
     expect(mockUnpublish).not.toHaveBeenCalled()
+    vi.useRealTimers()
   })
 
   it('撤回發布：沒有大班留級生時不出現自動畢業警告', async () => {
@@ -1361,5 +1372,297 @@ describe('YearPlanWorkspaceView', () => {
     await flushPromises()
     expect(roster(w).props('viewMode')).toBe('students')
     expect(w.find('.student-entry[data-student-id="3"]').classes()).toContain('flash-highlight')
+  })
+  // ── 2026-11-02 第二輪 FE-C：狀態感知畫面 ─────────────────────────────
+
+  describe('FE-C 狀態感知', () => {
+    const statusBase = {
+      target_school_year: 116,
+      source_school_year: 115,
+      blocking_count: 0,
+      warning_count: 0,
+      published_at: null,
+      applied_at: null,
+      prep_start_date: '2027-06-01',
+      apply_date: '2027-08-01',
+      applies_immediately: false,
+      apply_overdue: false,
+      scheduler_enabled: true,
+      graduation_date: '2027-07-31',
+      retain_pending_count: 0,
+      pending_new_student_count: 0,
+      apply_failure: null,
+    }
+
+    function fecStatus(state: 'none' | 'draft' | 'published' | 'applied', extra: Record<string, unknown> = {}) {
+      return {
+        data: {
+          ...statusBase,
+          state,
+          plan_id: state === 'none' ? null : 5,
+          version: state === 'none' ? null : 1,
+          ...(state === 'published' ? { published_at: '2027-06-20T09:00:00' } : {}),
+          ...extra,
+        },
+      }
+    }
+
+    function setToday(iso: string) {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date(`${iso}T04:00:00Z`))
+    }
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    async function mountWith(statusRes: unknown, detailRes: unknown = detailWithGraduatingRetain()) {
+      mockStatus.mockResolvedValue(statusRes)
+      if (detailRes) mockDetail.mockResolvedValue(detailRes)
+      const w = mount(YearPlanWorkspaceView, {
+        global: { plugins: [ElementPlus], stubs: { RouterLink: RouterLinkStub } },
+      })
+      await flushPromises()
+      return w
+    }
+
+    it('沒有草稿、準備期前：寫出準備期起日；排程啟用才說會自動產生', async () => {
+      setToday('2027-03-01')
+      const on = await mountWith(fecStatus('none'), null)
+      expect(on.find('.empty-desc').text()).toContain('2027/06/01 起進入新學年準備期，系統會在當天自動產生草稿')
+
+      const off = await mountWith(fecStatus('none', { scheduler_enabled: false }), null)
+      expect(off.find('.empty-desc').text()).toContain('2027/06/01 起進入新學年準備期')
+      expect(off.find('.empty-desc').text()).not.toContain('自動產生')
+    })
+
+    it('沒有草稿、已在準備期、排程關閉：不說系統會自動產生', async () => {
+      setToday('2027-06-10')
+      const w = await mountWith(fecStatus('none', { scheduler_enabled: false }), null)
+      expect(w.find('.empty-desc').text()).toContain('已進入準備期')
+      expect(w.find('.empty-desc').text()).not.toContain('自動產生')
+    })
+
+    it('草稿：進度列拿到排程、今天、畢業年級留級生人數、畢業日與年級名', async () => {
+      setToday('2027-07-20')
+      const w = await mountWith(fecStatus('draft', { scheduler_enabled: false, retain_pending_count: 2 }))
+      const steps = w.findComponent({ name: 'PlanNextSteps' })
+      expect(steps.props()).toMatchObject({
+        schedulerEnabled: false,
+        today: '2027-07-20',
+        retainPendingCount: 2,
+        graduationDate: '2027-07-31',
+        graduationGradeName: '大班',
+      })
+      expect(w.findComponent({ name: 'PlanPublishedBar' }).exists()).toBe(false)
+    })
+
+    it('已發布：進度列換成狀態列；排程關閉時 error 明講不會套用', async () => {
+      setToday('2027-07-20')
+      const w = await mountWith(
+        fecStatus('published', { scheduler_enabled: false }),
+        detailWithGraduatingRetain({ status: 'published' }),
+      )
+      expect(w.findComponent({ name: 'PlanNextSteps' }).exists()).toBe(false)
+      const bar = w.find('.plan-published-bar')
+      expect(bar.classes()).toContain('is-error')
+      expect(bar.text()).toContain('自動套用未啟用，請聯絡系統管理員開啟，否則不會套用')
+    })
+
+    it('已發布但有阻擋：error 提示套用會失敗，「撤回並重新產生」撤回後打開重新產生', async () => {
+      setToday('2027-07-20')
+      vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+      const detail = detailWithGraduatingRetain({
+        status: 'published',
+        issues: { blocking: [{ code: 'student_source_classroom_changed', message: 'x', plan_class_id: null, student_id: 1 }], warnings: [] },
+      })
+      mockUnpublish.mockResolvedValue({ data: { status: 'draft', version: 2 } })
+      const w = await mountWith(fecStatus('published', { blocking_count: 1 }), detail)
+      const alert = w.find('.published-blocking-alert')
+      expect(alert.text()).toContain('已發布的計畫有 1 項阻擋，套用會失敗')
+
+      mockStatus.mockResolvedValue(fecStatus('draft', { blocking_count: 1, version: 2 }))
+      mockDetail.mockResolvedValue(detailWithGraduatingRetain({ version: 2 }))
+      await alert.find('.btn-unpublish-regenerate').trigger('click')
+      await flushPromises()
+      expect(mockUnpublish).toHaveBeenCalledWith(5, { base_version: 1 })
+      expect(w.find('.regenerate-overwrite').exists()).toBe(true)
+    })
+
+    it('補救模式：已發布且排程關閉時不顯示「約一小時內套用」的警示條；草稿時改說自動套用未啟用', async () => {
+      setToday('2027-08-10')
+      const published = await mountWith(
+        fecStatus('published', { applies_immediately: true, scheduler_enabled: false }),
+        detailWithGraduatingRetain({ status: 'published' }),
+      )
+      expect(published.find('.remedial-banner').exists()).toBe(false)
+
+      const draft = await mountWith(fecStatus('draft', { applies_immediately: true, scheduler_enabled: false }))
+      const banner = draft.find('.remedial-banner')
+      expect(banner.text()).toContain('自動套用未啟用')
+      expect(banner.text()).not.toContain('約一小時內')
+    })
+
+    it('補救模式已發布但上次套用失敗：不再顯示「約一小時內套用」的警示條（由狀態列講失敗原因）', async () => {
+      setToday('2027-08-03')
+      const w = await mountWith(
+        fecStatus('published', { applies_immediately: true, apply_overdue: true, apply_failure: '有 1 項阻擋：A' }),
+        detailWithGraduatingRetain({ status: 'published' }),
+      )
+      expect(w.find('.remedial-banner').exists()).toBe(false)
+      expect(w.find('.plan-published-bar').text()).toContain('套用失敗：有 1 項阻擋：A')
+    })
+
+    it('有已報到但不在計畫的新生：一行說明開學後到班級管理分班', async () => {
+      setToday('2027-07-20')
+      const w = await mountWith(fecStatus('draft', { pending_new_student_count: 4 }))
+      expect(w.find('.pending-new-note').text()).toBe('另有 4 位已報到的新生不在本計畫，開學後請到班級管理分班')
+    })
+
+    it('撤回發布：畢業日後的補跑期間警告仍可能被畢業；補跑期過後改說不會再被自動畢業', async () => {
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+      setToday('2027-08-03')
+      const catchup = await mountWith(
+        fecStatus('published', { retain_pending_count: 2 }),
+        detailWithGraduatingRetain({ status: 'published' }),
+      )
+      await catchup.find('.btn-unpublish').trigger('click')
+      await flushPromises()
+      const catchupMsg = String(confirmSpy.mock.calls.at(-1)![0])
+      expect(catchupMsg).toContain('2 位大班留級生')
+      expect(catchupMsg).toContain('2027/08/07')
+      expect(catchupMsg).toContain('可能被畢業')
+
+      setToday('2027-08-10')
+      const after = await mountWith(
+        fecStatus('published', { retain_pending_count: 2 }),
+        detailWithGraduatingRetain({ status: 'published' }),
+      )
+      await after.find('.btn-unpublish').trigger('click')
+      await flushPromises()
+      const afterMsg = String(confirmSpy.mock.calls.at(-1)![0])
+      expect(afterMsg).toContain('不會再被自動畢業')
+      expect(afterMsg).toContain('套用前重新發布')
+    })
+
+    it('撤回發布＋排程關閉：不說「否則不會自動套用」，改說自動套用未啟用', async () => {
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+      setToday('2027-07-20')
+      const w = await mountWith(
+        fecStatus('published', { scheduler_enabled: false }),
+        detailWithGraduatingRetain({ status: 'published' }),
+      )
+      await w.find('.btn-unpublish').trigger('click')
+      await flushPromises()
+      const msg = String(confirmSpy.mock.calls.at(-1)![0])
+      expect(msg).toContain('自動套用未啟用')
+      expect(msg).not.toContain('否則新學年不會自動套用')
+    })
+
+    it('作廢：只有排程啟用且在準備期內才說系統約一小時內會重建草稿', async () => {
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+      setToday('2027-06-10')
+      const on = await mountWith(fecStatus('draft'))
+      on.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'cancel-plan')
+      await flushPromises()
+      expect(String(confirmSpy.mock.calls.at(-1)![0])).toContain('約一小時內會自動重新產生')
+
+      const off = await mountWith(fecStatus('draft', { scheduler_enabled: false }))
+      off.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'cancel-plan')
+      await flushPromises()
+      expect(String(confirmSpy.mock.calls.at(-1)![0])).not.toContain('自動重新產生')
+
+      setToday('2027-03-01')
+      const beforePrep = await mountWith(fecStatus('draft'))
+      beforePrep.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'cancel-plan')
+      await flushPromises()
+      expect(String(confirmSpy.mock.calls.at(-1)![0])).not.toContain('自動重新產生')
+    })
+
+    it('重新產生建議：說明照後端語意；同名沒重建的班在結果訊息列出', async () => {
+      setToday('2027-07-20')
+      const warnSpy = vi.spyOn(ElMessage, 'warning')
+      const w = await mountWith(fecStatus('draft'))
+      await w.find('.btn-regenerate').trigger('click')
+      await flushPromises()
+      const body = w.find('.regenerate-body').text()
+      expect(body).toContain('已離園的學生一律移除')
+      expect(body).toContain('原班會更新成他現在的班')
+      expect(body).toContain('同名')
+      expect(body).not.toContain('班級與老師指派不受影響')
+
+      mockRegenerate.mockResolvedValue({ data: { added: 1, removed: 2, updated: 3, preserved_manual: 4, skipped_class_names: ['香蕉', '蘋果'], version: 2 } })
+      mockDetail.mockResolvedValue(detailWithGraduatingRetain({ version: 2 }))
+      await w.find('.btn-regenerate-confirm').trigger('click')
+      await flushPromises()
+      expect(warnSpy).toHaveBeenCalled()
+      const message = String((warnSpy.mock.calls.at(-1)![0] as { message?: string }).message ?? warnSpy.mock.calls.at(-1)![0])
+      expect(message).toContain('香蕉、蘋果')
+      warnSpy.mockRestore()
+    })
+
+    it('「更多」→ 匯出 Excel：呼叫匯出端點並下載', async () => {
+      setToday('2027-07-20')
+      mockExport.mockResolvedValue({ data: new Blob(['x']), headers: {} })
+      const w = await mountWith(fecStatus('draft'))
+      w.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'export')
+      await flushPromises()
+      expect(mockExport).toHaveBeenCalledWith(5)
+      expect(saveBlobResponse).toHaveBeenCalledWith(expect.anything(), '115學年預編班.xlsx')
+    })
+
+    it('唯讀使用者也有「更多」，裡面只有匯出', async () => {
+      setToday('2027-07-20')
+      hasPermissionReturn = false
+      const w = await mountWith(fecStatus('published'), detailWithGraduatingRetain({ status: 'published' }))
+      expect(w.find('.btn-more').exists()).toBe(true)
+      await w.find('.btn-more').trigger('click')
+      await flushPromises()
+      const items = w.findAllComponents({ name: 'ElDropdownItem' }).map(i => i.text())
+      expect(items).toEqual(['匯出 Excel'])
+    })
+
+    it('補救模式發布：帶目標學年確認給後端', async () => {
+      setToday('2027-08-10')
+      mockPreview.mockResolvedValue({
+        data: {
+          classes: [], graduating: [], excluded: [],
+          issues: { blocking: [], warnings: [] },
+          totals: { assigned_count: 0, class_count: 0, excluded_count: 0, graduating_count: 0 },
+        },
+      })
+      mockPublish.mockResolvedValue({ data: { status: 'published', version: 2 } })
+      const w = await mountWith(fecStatus('draft', { applies_immediately: true }), detailDraftWithClasses())
+      w.findComponent({ name: 'PlanPublishDialog' }).vm.$emit('confirm')
+      await flushPromises()
+      expect(mockPublish).toHaveBeenCalledWith(5, { base_version: 1, confirm_target_school_year: 116 })
+    })
+
+    it('發布 dialog 拿到排程狀態與畢業日', async () => {
+      setToday('2027-07-20')
+      const w = await mountWith(fecStatus('draft', { scheduler_enabled: false }))
+      const dialog = w.findComponent({ name: 'PlanPublishDialog' })
+      expect(dialog.props('schedulerEnabled')).toBe(false)
+      expect(dialog.props('graduationDate')).toBe('2027-07-31')
+    })
+
+    it('已套用：側欄顯示套用結果，沒有進度列或發布狀態列', async () => {
+      setToday('2027-08-10')
+      const w = await mountWith(
+        fecStatus('applied', { applied_at: '2027-08-01T01:00:00' }),
+        detailWithGraduatingRetain({
+          status: 'applied',
+          applied_at: '2027-08-01T01:00:00',
+          applied_summary: {
+            created_classrooms: 0, reused_classrooms: 1, moved_students: 2, graduated: 1, excluded_still_active: 0,
+            left_behind: [{ id: 30, name: '插班生', classroom_name: '向日葵' }],
+          },
+        }),
+      )
+      expect(w.find('.plan-applied-result').exists()).toBe(true)
+      expect(w.text()).toContain('仍在去年班 1 位')
+      expect(w.findComponent({ name: 'PlanNextSteps' }).exists()).toBe(false)
+      expect(w.findComponent({ name: 'PlanPublishedBar' }).exists()).toBe(false)
+    })
   })
 })

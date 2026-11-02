@@ -31,20 +31,23 @@
           :disabled="loading"
           @click="onUnpublishClick"
         >撤回發布</el-button>
-        <el-dropdown v-if="canWrite && canCancelPlan" trigger="click" @command="onMoreCommand">
+        <!-- 「更多」：有計畫就有（匯出只要讀取權限）；寫入相關項目另依權限與狀態 -->
+        <el-dropdown v-if="plan" trigger="click" @command="onMoreCommand">
           <el-button class="btn-more" :disabled="loading">
             更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <template v-if="isNarrow && state === 'draft'">
+              <template v-if="canWrite && isNarrow && state === 'draft'">
                 <el-dropdown-item command="add-class">新增班級</el-dropdown-item>
                 <el-dropdown-item command="regenerate">重新產生建議</el-dropdown-item>
               </template>
+              <el-dropdown-item command="export" :divided="canWrite && isNarrow && state === 'draft'">匯出 Excel</el-dropdown-item>
               <el-dropdown-item
+                v-if="canWrite && canCancelPlan"
                 command="cancel-plan"
                 class="dropdown-item-danger"
-                :divided="isNarrow && state === 'draft'"
+                divided
               >{{ state === 'published' ? '作廢計畫' : '作廢草稿' }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -97,6 +100,37 @@
     </div>
 
     <template v-else-if="plan">
+    <!-- 已發布卻有阻擋：套用一定失敗，直接給出路（撤回後重新產生） -->
+    <el-alert
+      v-if="state === 'published' && plan.issues.blocking.length > 0"
+      class="published-blocking-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      :title="`已發布的計畫有 ${plan.issues.blocking.length} 項阻擋，套用會失敗`"
+    >
+      <div class="stale-body">
+        <span>處理方式寫在右側「阻擋套用」各項裡；多數要先撤回發布、重新產生建議再發布。</span>
+        <el-button
+          v-if="canWrite"
+          size="small"
+          type="danger"
+          class="btn-unpublish-regenerate"
+          :disabled="loading"
+          @click="onUnpublishAndRegenerate"
+        >撤回並重新產生</el-button>
+      </div>
+    </el-alert>
+    <PlanPublishedBar
+      v-if="state === 'published' && status"
+      :published-at="status.published_at ?? plan.published_at ?? null"
+      :apply-date="status.apply_date"
+      :applies-immediately="appliesImmediately"
+      :scheduler-enabled="schedulerEnabled"
+      :apply-failure="status.apply_failure ?? null"
+      :apply-overdue="status.apply_overdue"
+      :today="today"
+    />
     <PlanNextSteps
       v-if="state === 'draft'"
       :unassigned-count="unassignedCount"
@@ -109,10 +143,18 @@
       :applies-immediately="appliesImmediately"
       :busy="loading"
       :show-teacher-link="viewMode !== 'teachers'"
+      :scheduler-enabled="schedulerEnabled"
+      :today="today"
+      :retain-pending-count="status?.retain_pending_count ?? 0"
+      :graduation-date="status?.graduation_date ?? null"
+      :graduation-grade-name="graduationGrade"
       @show-unassigned="onShowUnassigned"
       @carry-over="onCarryOverClick"
       @show-teachers="viewMode = 'teachers'"
     />
+    <p v-if="showPendingNewNote" class="pending-new-note">
+      另有 {{ status?.pending_new_student_count }} 位已報到的新生不在本計畫，開學後請到班級管理分班
+    </p>
     <div class="workspace-body" :class="{ 'is-side-collapsed': !isNarrow && sideCollapsed }">
       <div class="main-column">
         <!-- 固定高度的批次列位置（不多佔一列）：未勾選時是檢視切換＋搜尋／篩選（學生名單）或
@@ -271,10 +313,18 @@
 
     <el-dialog v-model="regenerateDialogVisible" title="重新產生建議" :width="FORM_DIALOG_WIDTH.compact">
       <div class="regenerate-body">
-        <p>依最新的在籍資料重算分班建議：新入園的學生會加入、已離園的會移除、換過班的會更新。班級與老師指派不受影響。</p>
+        <p>依最新的在籍資料重算分班建議：</p>
+        <!-- 語意照後端 regenerate（fe-contract）：離園一律移除、手動保留但原班更新、
+             刪掉的系統班有條件重建、同名略過 -->
+        <ul class="regenerate-rules">
+          <li>新入園的學生會加入；已離園的學生一律移除（手動調整過的也是）。</li>
+          <li>手動調整過的學生保留你的安排，但原班會更新成他現在的班。</li>
+          <li>你刪掉的系統班，只有原班還有照系統規則分派的學生（例如新入園）時才會重建；跟現有班級同名的不會重建，完成後會列出來。</li>
+          <li>已指派的老師不受影響。</li>
+        </ul>
         <p>目前有 {{ manualAdjustedCount }} 位學生手動調整過（表格中姓名旁有圓點），預設會保留。</p>
         <el-checkbox v-model="overwriteManual" class="regenerate-overwrite">
-          連手動調整也放棄，全部依系統規則重新分派
+          連手動調整也放棄，全部依系統規則重新分派（刪掉的系統班也會重建）
         </el-checkbox>
       </div>
       <template #footer>
@@ -298,6 +348,8 @@
       :target-school-year="status?.target_school_year ?? null"
       :moved-count="planMoves.moved"
       :retain-count="planMoves.retained"
+      :scheduler-enabled="schedulerEnabled"
+      :graduation-date="status?.graduation_date ?? null"
       @confirm="onPublishConfirm"
     />
 
@@ -326,14 +378,22 @@ import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.
 import PlanClassEditDialog from '@/components/enrollment/planning/PlanClassEditDialog.vue'
 import PlanPublishDialog from '@/components/enrollment/planning/PlanPublishDialog.vue'
 import PlanNextSteps from '@/components/enrollment/planning/PlanNextSteps.vue'
+import PlanPublishedBar from '@/components/enrollment/planning/PlanPublishedBar.vue'
+import { exportClassroomYearPlan } from '@/api/classroomYearPlan'
+import { saveBlobResponse } from '@/utils/download'
+import { todayTaipeiISO } from '@/utils/format'
 import { showMoveNotice, type MoveNoticeHandle } from '@/components/enrollment/planning/planMoveNotice'
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 import {
   TEACHER_FIELD_BY_ROLE,
   countCarryOverSlots,
   countPlanMoves,
-  countRetainAtGraduationRisk,
+  GRADUATION_CATCHUP_DAYS,
+  addDaysISO,
   buildUndoGroups,
+  graduationGradeName,
+  isWithinPrepPeriod,
+  retainRiskPhase,
   filterRosterMatches,
   orderedRosterEntries,
   type RosterChip,
@@ -398,22 +458,51 @@ const STATE_LABELS: Record<PlanState, string> = {
 }
 const stateLabel = computed(() => STATE_LABELS[state.value])
 
-// 尚無草稿：講清楚系統何時會自動產生、現在產生會依據什麼
+// 台北今天：發布截止、畢業日風險、是否在準備期都以此判斷（頁面停留跨日不重算，重新整理即更新）
+const today = todayTaipeiISO()
+// 排程（自動產生草稿／自動套用）是否啟用；staging／prod 目前未啟用，所有「系統會自動…」
+// 的說法都要看這個。欄位缺省（舊後端）視為啟用。
+const schedulerEnabled = computed(() => status.value?.scheduler_enabled !== false)
+const inPrepPeriod = computed(() => {
+  const st = status.value
+  return !!st && isWithinPrepPeriod(today, st.prep_start_date, st.apply_date)
+})
+const graduationGrade = computed(() => (plan.value ? graduationGradeName(plan.value.students) : null))
+
+// 尚無草稿：講清楚何時進入準備期、系統會不會自動產生、現在產生會依據什麼
 const noneDescription = computed(() => {
   const st = status.value
   if (!st) return ''
+  const basis = `依 ${st.source_school_year} 學年下學期的班級與在籍學生建立分班建議`
   if (appliesImmediately.value) {
-    return `現在已是 ${st.target_school_year} 學年上學期：現在產生的草稿一經發布，約一小時內就會套用到現行班級。`
+    return schedulerEnabled.value
+      ? `現在已是 ${st.target_school_year} 學年上學期：現在產生的草稿一經發布，約一小時內就會套用到現行班級。`
+      : `現在已是 ${st.target_school_year} 學年上學期，但自動套用未啟用：草稿發布後不會套用，需請系統管理員開啟。`
   }
-  const prep = formatPlanDate(st.prep_start_date)
-  return `系統會在 ${prep} 自動產生草稿；也可以現在先產生，依 ${st.source_school_year} 學年下學期的班級與在籍學生建立分班建議。`
+  if (today < st.prep_start_date) {
+    const prep = formatPlanDate(st.prep_start_date)
+    const auto = schedulerEnabled.value ? '，系統會在當天自動產生草稿' : ''
+    return `${prep} 起進入新學年準備期${auto}；也可以現在先產生，${basis}。`
+  }
+  return schedulerEnabled.value
+    ? `已進入準備期，系統會自動產生草稿；也可以現在先產生，${basis}。`
+    : `已進入準備期，可以產生草稿，${basis}。`
 })
 
-// ── 補救模式（status.applies_immediately）：上學期才產生／發布的計畫，排程下一輪就套用
+// ── 補救模式（status.applies_immediately）：上學期才產生／發布的計畫，排程下一輪就套用。
+// 已發布但排程未啟用或上次套用失敗時，「約一小時內套用」不成立：改由 PlanPublishedBar
+// 用 error 樣式講原因，這裡不再顯示。
 const appliesImmediately = computed(() => status.value?.applies_immediately === true)
-const showRemedialBanner = computed(() => appliesImmediately.value && state.value !== 'applied')
+const showRemedialBanner = computed(() =>
+  appliesImmediately.value
+  && state.value !== 'applied'
+  && !(state.value === 'published' && (!schedulerEnabled.value || !!status.value?.apply_failure)),
+)
 const remedialTitle = computed(() => {
   const year = status.value?.target_school_year
+  if (!schedulerEnabled.value) {
+    return `現在已是 ${year} 學年上學期，但自動套用未啟用：發布後不會套用到現行班級，需請系統管理員開啟`
+  }
   if (state.value === 'published') return `已發布，${year} 學年上學期已開始：排程會在約一小時內套用到現行班級`
   if (state.value === 'none') return `現在已是 ${year} 學年上學期：草稿產生並發布後，約一小時內就會套用到現行班級`
   return `現在已是 ${year} 學年上學期：這份計畫發布後約一小時內就會套用到現行班級`
@@ -473,9 +562,18 @@ function onRegenerateClick(): void {
 async function onRegenerateConfirm(): Promise<void> {
   const result = await regenerate(overwriteManual.value)
   if (result) {
-    notifySaved(
-      `已重新產生：新增 ${result.added}、移除 ${result.removed}、更新 ${result.updated}，保留手動調整 ${result.preserved_manual} 筆`,
-    )
+    const summary = `已重新產生：新增 ${result.added}、移除 ${result.removed}、更新 ${result.updated}，保留手動調整 ${result.preserved_manual} 筆`
+    const skipped = result.skipped_class_names ?? []
+    if (skipped.length && !staleAfterWrite.value) {
+      // 刪掉的系統班要重建時撞到現有同名班：後端略過不建，要讓使用者知道是哪幾班
+      ElMessage.warning({
+        message: `${summary}。下列班級跟現有班級同名，沒有重建：${skipped.join('、')}`,
+        duration: 8000,
+        showClose: true,
+      })
+    } else {
+      notifySaved(summary)
+    }
     regenerateDialogVisible.value = false
   }
 }
@@ -489,7 +587,8 @@ function onPublishClick(): void {
 }
 
 async function onPublishConfirm(): Promise<void> {
-  const result = await publish()
+  // 補救模式後端要求帶目標學年確認（dialog 已讓使用者輸入過學年）
+  const result = await publish(appliesImmediately.value ? status.value?.target_school_year : undefined)
   if (result.ok) {
     notifySaved('已發布')
     publishDialogVisible.value = false
@@ -500,18 +599,38 @@ async function onPublishConfirm(): Promise<void> {
 }
 
 // 撤回發布的後果要講清楚：沒在套用日前重新發布就不會套用；留在畢業年級的留級生只有
-// 「已發布」時才會被畢業排程豁免，撤回後拖過畢業日會被自動畢業（P1-2）。
-// 畢業日要等後端 StatusOut 補欄位（FE-C），這裡先用套用日與「畢業日前」的說法。
+// 「已發布」時才會被畢業排程豁免（P1-2）。人數用後端 retain_pending_count（published 也有值），
+// 依今天與畢業日的距離分三段：畢業日前／畢業日起 7 天補跑期間（隨時可能被畢業）／補跑期過後。
 const planMoves = computed(() =>
   plan.value ? countPlanMoves(plan.value.students, plan.value.classes) : { moved: 0, retained: 0 },
 )
-const retainAtGraduationRisk = computed(() =>
-  plan.value ? countRetainAtGraduationRisk(plan.value.students) : 0,
-)
+
+function retainUnpublishWarning(): string {
+  const st = status.value
+  const count = st?.retain_pending_count ?? 0
+  if (!st || count <= 0) return ''
+  const who = `${count} 位${graduationGrade.value ?? '畢業年級'}留級生`
+  const graduation = st.graduation_date
+  const phase = retainRiskPhase(today, graduation)
+  if (phase === 'before' && graduation) {
+    return `目前有 ${who}：撤回後如果沒在畢業日 ${formatPlanDate(graduation)} 前重新發布，他們會被系統自動畢業。`
+  }
+  if (phase === 'catchup' && graduation) {
+    const until = formatPlanDate(addDaysISO(graduation, GRADUATION_CATCHUP_DAYS))
+    return `目前有 ${who}：已過畢業日，但系統到 ${until} 前仍會補跑自動畢業，撤回期間他們可能被畢業，請改完立刻重新發布。`
+  }
+  if (phase === 'after') {
+    return `目前有 ${who}：已過畢業日的補跑期間，撤回後他們不會再被自動畢業，但要在套用前重新發布，留級才會生效。`
+  }
+  // 沒有畢業日（理論上不會）：保守提醒
+  return `目前有 ${who}：撤回期間他們可能被系統自動畢業，請改完立刻重新發布。`
+}
 
 function unpublishMessage(): string {
   const parts = ['撤回後草稿恢復為可編輯。']
-  if (appliesImmediately.value) {
+  if (!schedulerEnabled.value) {
+    parts.push('自動套用未啟用：改完重新發布後，仍要請系統管理員開啟才會套用。')
+  } else if (appliesImmediately.value) {
     parts.push('改完要重新發布，才會套用到現行班級。')
   } else {
     const date = formatPlanDate(status.value?.apply_date)
@@ -519,13 +638,12 @@ function unpublishMessage(): string {
       ? `請在 ${date} 前重新發布，否則新學年不會自動套用。`
       : '請在新學年開學前重新發布，否則不會自動套用。')
   }
-  if (retainAtGraduationRisk.value > 0) {
-    parts.push(`目前有 ${retainAtGraduationRisk.value} 位大班留級生：畢業日前沒有重新發布，他們會被自動畢業。`)
-  }
+  const retain = retainUnpublishWarning()
+  if (retain) parts.push(retain)
   return parts.join('')
 }
 
-async function onUnpublishClick(): Promise<void> {
+async function onUnpublishClick(): Promise<boolean> {
   try {
     await ElMessageBox.confirm(
       unpublishMessage(),
@@ -533,10 +651,34 @@ async function onUnpublishClick(): Promise<void> {
       { type: 'warning', confirmButtonText: '確定撤回', cancelButtonText: '取消' },
     )
   } catch {
-    return // 使用者取消
+    return false // 使用者取消
   }
   const ok = await unpublish()
   if (ok) notifySaved('已撤回發布')
+  return ok
+}
+
+// 已發布但有阻擋：撤回（同一個確認框，留級生警告照樣出現）→ 打開重新產生建議
+async function onUnpublishAndRegenerate(): Promise<void> {
+  if (await onUnpublishClick()) onRegenerateClick()
+}
+
+// 有已報到、尚未開學的新生：他們不在草稿（草稿只收在籍生），開學後要另外分班
+const showPendingNewNote = computed(() =>
+  (state.value === 'draft' || state.value === 'published') && (status.value?.pending_new_student_count ?? 0) > 0,
+)
+
+// ── 匯出 Excel（讀取權限即可、任何狀態）：檔名由後端 Content-Disposition 給 ──
+async function onExportClick(): Promise<void> {
+  const planId = plan.value?.id
+  if (planId == null) return
+  try {
+    const res = await exportClassroomYearPlan(planId)
+    saveBlobResponse(res, `${plan.value?.target_school_year ?? ''}學年預編班.xlsx`)
+  } catch (e) {
+    const err = e as { displayMessage?: string | null }
+    ElMessage.error(err?.displayMessage || '匯出失敗，請稍後再試')
+  }
 }
 
 // ── 作廢：確認鈕一律 danger。已發布的計畫作廢＝同時取消發布、無法復原，多一道
@@ -546,10 +688,14 @@ const CANCEL_CONFIRM_WORD = '作廢'
 
 async function onCancelPlanClick(): Promise<void> {
   const lost = '所有手動調整（搬班、留級、排除）與老師指派都會一起消失'
+  // 準備期內排程會補產生草稿（約每小時檢查一次）；排程未啟用或還沒到準備期就不會
+  const regen = schedulerEnabled.value && inPrepPeriod.value
+    ? '目前在準備期內，作廢後系統約一小時內會自動重新產生一份新草稿。'
+    : ''
   try {
     if (state.value === 'published') {
       await ElMessageBox.prompt(
-        `此計畫已發布，作廢會同時取消發布。這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。此操作無法復原，請輸入「${CANCEL_CONFIRM_WORD}」確認。`,
+        `此計畫已發布，作廢會同時取消發布。這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。${regen}此操作無法復原，請輸入「${CANCEL_CONFIRM_WORD}」確認。`,
         '作廢已發布的計畫',
         {
           type: 'warning',
@@ -563,7 +709,7 @@ async function onCancelPlanClick(): Promise<void> {
       )
     } else {
       await ElMessageBox.confirm(
-        `作廢後這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。確定要作廢嗎？`,
+        `作廢後這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。${regen}確定要作廢嗎？`,
         '作廢草稿',
         {
           type: 'warning',
@@ -580,9 +726,10 @@ async function onCancelPlanClick(): Promise<void> {
   if (ok) notifySaved('已作廢，草稿已移除')
 }
 
-// 「更多」：作廢；窄幕時另收「新增班級」「重新產生建議」。
+// 「更多」：匯出、作廢；窄幕時另收「新增班級」「重新產生建議」。
 function onMoreCommand(command: string): void {
-  if (command === 'cancel-plan') void onCancelPlanClick()
+  if (command === 'export') void onExportClick()
+  else if (command === 'cancel-plan') void onCancelPlanClick()
   else if (command === 'add-class') onAddClassClick()
   else if (command === 'regenerate') onRegenerateClick()
 }
@@ -1096,8 +1243,15 @@ watch(
 }
 
 .remedial-banner,
-.stale-banner {
+.stale-banner,
+.published-blocking-alert {
   margin-bottom: var(--space-4);
+}
+
+.pending-new-note {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .stale-body {
@@ -1389,5 +1543,10 @@ watch(
 
 .regenerate-body p {
   margin: 0;
+}
+
+.regenerate-rules {
+  margin: 0;
+  padding-left: var(--space-5);
 }
 </style>
