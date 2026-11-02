@@ -102,3 +102,84 @@ export function countCarryOverSlots(classes: PlanClass[]): number {
 export function sourceTeacherName(cls: PlanClass, role: TeacherRole): string | null {
   return cls[SOURCE_NAME_BY_ROLE[role]] ?? null
 }
+
+// ── 學生分派 ──
+
+type PlanStudent = Schema<'PlanStudentOut'>
+
+/** 學生是從別班換進這個草稿班（原班 ≠ 草稿班的原班）；手動新增的班沒有原班，一律算。 */
+export function isMovedIn(student: PlanStudent, cls: PlanClass): boolean {
+  return !!student.source_classroom_name && student.source_classroom_name !== cls.source_name
+}
+
+/**
+ * 已分班學生中「換到別班」與「留級」的人數（發布摘要用）。留級生一定落在別的班，
+ * 另計不重複算進換班；未分班、畢業、排除都不算。
+ */
+export function countPlanMoves(
+  students: PlanStudent[],
+  classes: PlanClass[],
+): { moved: number; retained: number } {
+  const classById = new Map(classes.map(c => [c.id, c]))
+  let moved = 0
+  let retained = 0
+  for (const s of students) {
+    if (s.plan_class_id == null) continue
+    const cls = classById.get(s.plan_class_id)
+    if (!cls) continue
+    if (s.disposition === 'retain') retained += 1
+    else if (s.disposition === 'promote' && isMovedIn(s, cls)) moved += 1
+  }
+  return { moved, retained }
+}
+
+/**
+ * 留在畢業年級的留級生人數：這些人只有在計畫「已發布」時才會被畢業排程豁免，
+ * 撤回發布後若沒在畢業日前重新發布，會被自動畢業。畢業年級以「有學生標為畢業」
+ * 的現況年級判斷（前端沒有年級的畢業屬性）；判斷不出來時回 0。
+ */
+export function countRetainAtGraduationRisk(students: PlanStudent[]): number {
+  const graduationGrades = new Set(
+    students
+      .filter(s => s.disposition === 'graduate' && s.current_grade_name)
+      .map(s => s.current_grade_name as string),
+  )
+  if (graduationGrades.size === 0) return 0
+  return students.filter(
+    s => s.disposition === 'retain' && !!s.current_grade_name && graduationGrades.has(s.current_grade_name),
+  ).length
+}
+
+export interface AssignGroup {
+  gradeName: string
+  options: Array<{ id: number; label: string }>
+}
+
+/**
+ * 待分班學生「分到…」下拉的選項：依年級分組。
+ * - 留級生只能分到現在年級的班（後端 retain 年級不符回 422）。
+ * - 一般升班：原班升上去的年級（草稿班原班＝學生原班）排第一，其餘照草稿班順序。
+ */
+export function buildAssignGroups(student: PlanStudent, classes: PlanClass[]): AssignGroup[] {
+  const candidates = student.disposition === 'retain'
+    ? classes.filter(c => !!student.current_grade_name && c.grade_name === student.current_grade_name)
+    : classes
+  const groups: AssignGroup[] = []
+  for (const c of candidates) {
+    const gradeName = c.grade_name || '未分年級'
+    let group = groups.find(g => g.gradeName === gradeName)
+    if (!group) {
+      group = { gradeName, options: [] }
+      groups.push(group)
+    }
+    group.options.push({ id: c.id, label: c.target_name })
+  }
+  const expected = classes.find(
+    c => !!student.source_classroom_name && c.source_name === student.source_classroom_name,
+  )?.grade_name
+  if (expected) {
+    const idx = groups.findIndex(g => g.gradeName === expected)
+    if (idx > 0) groups.unshift(...groups.splice(idx, 1))
+  }
+  return groups
+}
