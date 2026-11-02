@@ -1,9 +1,35 @@
 <template>
   <div class="plan-teacher-cell">
-    <!-- 點格子才展開下拉：常駐 24 個下拉框太吵，平常只看姓名 -->
+    <!-- 點格子才展開下拉：常駐 24 個下拉框太吵，平常只看姓名。
+         展開時原本的按鈕留在原位（隱藏、不可聚焦）撐住欄寬，下拉疊在上面：
+         下拉本身不參與欄寬計算，老師指派檢視 8 班照樣放得下 -->
+    <button
+      v-if="editable"
+      type="button"
+      class="teacher-trigger"
+      :class="{
+        'is-empty': !teacherName,
+        'is-blocking': !teacherName && role === 'head',
+        'has-error': !!error,
+        'is-hidden': editing,
+      }"
+      :disabled="disabled"
+      :tabindex="editing ? -1 : undefined"
+      :aria-hidden="editing ? 'true' : undefined"
+      :aria-invalid="error ? 'true' : undefined"
+      :aria-label="`${className} ${roleLabel}：${teacherName ?? '未指派'}，點擊選擇老師`"
+      @click="startEdit"
+    >
+      <span class="teacher-name" :title="teacherName ?? undefined">{{ teacherName ?? '未指派' }}</span>
+      <span v-if="!teacherName && sourceTeacherName" class="teacher-source">原班：{{ sourceTeacherName }}</span>
+    </button>
+    <template v-else>
+      <span class="teacher-name" :class="{ 'is-empty': !teacherName, 'is-blocking': !teacherName && role === 'head' }">{{ teacherName ?? '未指派' }}</span>
+      <span v-if="!teacherName && sourceTeacherName" class="teacher-source">原班：{{ sourceTeacherName }}</span>
+    </template>
     <!-- 選項分組：原班老師（標「原班」）／帶班老師／其他職務；現值已停用時另有「目前指派」 -->
     <el-select
-      v-if="editing"
+      v-if="editable && editing"
       ref="selectRef"
       :model-value="teacherId ?? undefined"
       class="teacher-select"
@@ -29,23 +55,6 @@
         </el-option>
       </el-option-group>
     </el-select>
-    <button
-      v-else-if="editable"
-      type="button"
-      class="teacher-trigger"
-      :class="{ 'is-empty': !teacherName, 'is-blocking': !teacherName && role === 'head', 'has-error': !!error }"
-      :disabled="disabled"
-      :aria-invalid="error ? 'true' : undefined"
-      :aria-label="`${className} ${roleLabel}：${teacherName ?? '未指派'}，點擊選擇老師`"
-      @click="startEdit"
-    >
-      <span class="teacher-name" :title="teacherName ?? undefined">{{ teacherName ?? '未指派' }}</span>
-      <span v-if="!teacherName && sourceTeacherName" class="teacher-source">原班：{{ sourceTeacherName }}</span>
-    </button>
-    <template v-else>
-      <span class="teacher-name" :class="{ 'is-empty': !teacherName, 'is-blocking': !teacherName && role === 'head' }">{{ teacherName ?? '未指派' }}</span>
-      <span v-if="!teacherName && sourceTeacherName" class="teacher-source">原班：{{ sourceTeacherName }}</span>
-    </template>
     <!-- 這一格存檔失敗（例：選到已停用的老師）：錯誤留在格子上，不只是一閃而過的 toast -->
     <span v-if="error && !editing" class="teacher-error" role="alert">{{ error }}</span>
   </div>
@@ -112,14 +121,14 @@ function onBlur(): void {
 
 <style scoped>
 .plan-teacher-cell {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  /* 固定格寬：展開下拉或長姓名都不撐開整欄 */
-  width: 6.5rem;
-  max-width: 6.5rem;
-  margin: 0 auto;
+  /* 欄寬由內容與每班的 min-width 決定；展開的下拉疊在上面不撐寬（見 .teacher-select） */
+  width: 100%;
+  min-width: 0;
 }
 
 .teacher-name {
@@ -186,7 +195,16 @@ function onBlur(): void {
 }
 
 .teacher-select {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
   width: 100%;
+}
+
+/* 展開下拉時保留原按鈕的版面（撐住欄寬與列高），但不顯示、不可聚焦 */
+.teacher-trigger.is-hidden {
+  visibility: hidden;
 }
 
 .opt-note {

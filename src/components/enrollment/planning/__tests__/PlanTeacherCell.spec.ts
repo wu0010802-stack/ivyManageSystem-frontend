@@ -121,4 +121,16 @@ describe('PlanTeacherCell', () => {
     expect(w.find('.teacher-trigger').attributes('aria-invalid')).toBe('true')
     expect(w.find('.teacher-trigger').classes()).toContain('has-error')
   })
+  it('展開下拉時原本的格子內容留在原位（隱藏、不可聚焦）撐住欄寬，下拉疊在上面，不撐寬整欄', async () => {
+    const w = mountCell()
+    await w.find('.teacher-trigger').trigger('click')
+    const trigger = w.find('.teacher-trigger')
+    expect(trigger.exists()).toBe(true)
+    expect(trigger.classes()).toContain('is-hidden')
+    expect(trigger.attributes('aria-hidden')).toBe('true')
+    expect(trigger.attributes('tabindex')).toBe('-1')
+    expect(w.find('.teacher-select').exists()).toBe(true)
+    // 不再用固定 rem 寬（會讓老師指派檢視 8 班放不下）
+    expect((w.find('.plan-teacher-cell').element as HTMLElement).style.width).toBe('')
+  })
 })
