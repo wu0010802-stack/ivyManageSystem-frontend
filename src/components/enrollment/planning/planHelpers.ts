@@ -88,6 +88,76 @@ export function buildTeacherOptions(
   })
 }
 
+// ── 老師下拉分組 ──
+
+/**
+ * 判斷「帶班老師」的職稱關鍵字（員工職稱是自由文字，例：班導、副班導、美語教師、
+ * 幼兒園教師、教保員、藝術）。其餘（主任、組長、行政、司機、廚房、護理…）歸「其他職務」。
+ * 新增帶班職稱時改這裡。
+ */
+export const CLASS_TEACHER_POSITION_KEYWORDS = ['班導', '導師', '教師', '老師', '教保員', '美語', '藝術'] as const
+
+export function isClassTeacherPosition(position: string | null | undefined): boolean {
+  if (!position) return false
+  return CLASS_TEACHER_POSITION_KEYWORDS.some(keyword => position.includes(keyword))
+}
+
+export interface TeacherOptionGroup {
+  label: string
+  options: TeacherCellOption[]
+}
+
+const CURRENT_NAME_BY_ROLE = {
+  head: 'head_teacher_name',
+  assistant: 'assistant_teacher_name',
+  art: 'art_teacher_name',
+} as const
+
+/**
+ * 老師格下拉的分組：
+ * 1. 「目前指派」：現值老師已停用（不在可選名單）時補一個 disabled「○○（已停用）」，
+ *    否則下拉會把現值顯示成原始 id；
+ * 2. 「原班老師」：與原班同職務的老師（依姓名比對），標「原班」放最前；
+ * 3. 「帶班老師」／「其他職務」：依職稱關鍵字（CLASS_TEACHER_POSITION_KEYWORDS）。
+ * 停用與占用註記沿用 buildTeacherOptions；空組不出現。
+ */
+export function buildTeacherOptionGroups(
+  teachers: TeacherOptionLike[],
+  classes: PlanClass[],
+  classId: number,
+  role: TeacherRole,
+): TeacherOptionGroup[] {
+  const cls = classes.find(c => c.id === classId)
+  const options = buildTeacherOptions(teachers, classes, classId, role)
+  const sourceName = cls ? sourceTeacherName(cls, role) : null
+  const positionById = new Map(teachers.map(t => [t.id, t.position ?? null]))
+  const nameById = new Map(teachers.map(t => [t.id, t.name]))
+
+  const groups: TeacherOptionGroup[] = []
+  const currentId = cls ? cls[TEACHER_FIELD_BY_ROLE[role]] ?? null : null
+  if (currentId != null && !nameById.has(currentId)) {
+    const currentName = cls?.[CURRENT_NAME_BY_ROLE[role]] ?? `#${currentId}`
+    groups.push({ label: '目前指派', options: [{ id: currentId, label: `${currentName}（已停用）`, disabled: true, note: '' }] })
+  }
+
+  const source: TeacherCellOption[] = []
+  const teaching: TeacherCellOption[] = []
+  const others: TeacherCellOption[] = []
+  for (const opt of options) {
+    if (sourceName && nameById.get(opt.id) === sourceName) {
+      source.push({ ...opt, note: ['原班', opt.note].filter(Boolean).join('・') })
+    } else if (isClassTeacherPosition(positionById.get(opt.id))) {
+      teaching.push(opt)
+    } else {
+      others.push(opt)
+    }
+  }
+  if (source.length) groups.push({ label: '原班老師', options: source })
+  if (teaching.length) groups.push({ label: '帶班老師', options: teaching })
+  if (others.length) groups.push({ label: '其他職務', options: others })
+  return groups
+}
+
 /** 原班老師可沿用的空格數（實際能填多少以後端回傳為準：停用或衝突的會被略過）。 */
 export function countCarryOverSlots(classes: PlanClass[]): number {
   let count = 0

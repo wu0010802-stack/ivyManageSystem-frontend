@@ -3,6 +3,7 @@ import {
   addDaysISO,
   appliedResultLists,
   buildAssignGroups,
+  buildTeacherOptionGroups,
   buildTeacherOptions,
   buildUndoGroups,
   countCarryOverSlots,
@@ -13,6 +14,7 @@ import {
   formatPlanDate,
   graduationGradeName,
   groupClassesByGrade,
+  isClassTeacherPosition,
   isMovedIn,
   isWithinPrepPeriod,
   orderedRosterEntries,
@@ -312,5 +314,55 @@ describe('appliedResultLists', () => {
       created_classrooms: 0, reused_classrooms: 0, moved_students: 0, graduated: 0, excluded_still_active: 0,
     })
     expect(result).toEqual({ leftBehind: [], excluded: [], skippedInactive: [], capacityOverflow: [] })
+  })
+})
+
+describe('isClassTeacherPosition（老師下拉分組用）', () => {
+  it('班導、副班導、教師、教保員、美語、藝術類職稱算帶班老師；其他職務與空值不算', () => {
+    for (const p of ['班導', '副班導', '美語教師', '幼兒園教師', '教保員', '助理教保員', '藝術', '美語老師']) {
+      expect(isClassTeacherPosition(p)).toBe(true)
+    }
+    for (const p of ['主任', '組長', '司機', '行政', '廚房', '護理人員', '美編', '', null, undefined]) {
+      expect(isClassTeacherPosition(p)).toBe(false)
+    }
+  })
+})
+
+describe('buildTeacherOptionGroups', () => {
+  const people = [
+    { id: 100, name: '林佳蓉', position: '班導' },
+    { id: 101, name: '陳怡君', position: '副班導' },
+    { id: 102, name: '黃雅婷', position: '美語教師' },
+    { id: 103, name: '王主任', position: '主任' },
+    { id: 104, name: '張司機', position: null },
+  ]
+
+  it('原班老師獨立一組放最前並標「原班」；其餘分帶班老師／其他職務', () => {
+    const classes = [cls({ id: 1, target_name: '玫瑰', source_head_teacher_name: '陳怡君' })]
+    const groups = buildTeacherOptionGroups(people, classes, 1, 'head')
+    expect(groups.map(g => g.label)).toEqual(['原班老師', '帶班老師', '其他職務'])
+    expect(groups[0].options.map(o => [o.id, o.note])).toEqual([[101, '原班']])
+    expect(groups[1].options.map(o => o.id)).toEqual([100, 102])
+    expect(groups[2].options.map(o => o.id)).toEqual([103, 104])
+  })
+
+  it('原班老師同時在他班帶班：仍標原班，並保留占用註記與停用狀態', () => {
+    const classes = [
+      cls({ id: 1, target_name: '玫瑰', source_head_teacher_name: '林佳蓉' }),
+      cls({ id: 2, target_name: '百合', head_teacher_id: 100 }),
+    ]
+    const groups = buildTeacherOptionGroups(people, classes, 1, 'head')
+    expect(groups[0].options[0]).toMatchObject({ id: 100, note: '原班・百合班導', disabled: true })
+  })
+
+  it('沒有原班老師（手動新增的班）就沒有原班組；空組不出現', () => {
+    const groups = buildTeacherOptionGroups(people.slice(0, 2), [cls({ id: 1 })], 1, 'head')
+    expect(groups.map(g => g.label)).toEqual(['帶班老師'])
+  })
+
+  it('目前指派的老師已停用（不在可選名單）：補一個 disabled「○○（已停用）」放最前，下拉不會顯示原始 id', () => {
+    const classes = [cls({ id: 1, head_teacher_id: 57, head_teacher_name: '吳老師' })]
+    const groups = buildTeacherOptionGroups(people, classes, 1, 'head')
+    expect(groups[0]).toEqual({ label: '目前指派', options: [{ id: 57, label: '吳老師（已停用）', disabled: true, note: '' }] })
   })
 })
