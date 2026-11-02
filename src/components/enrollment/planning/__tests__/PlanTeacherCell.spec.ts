@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ElementPlus from 'element-plus'
 import PlanTeacherCell from '../PlanTeacherCell.vue'
+import cellSource from '../PlanTeacherCell.vue?raw'
 
 const optionGroups = [
   { label: '原班老師', options: [{ id: 100, label: '林佳蓉', disabled: false, note: '原班' }] },
@@ -130,7 +131,51 @@ describe('PlanTeacherCell', () => {
     expect(trigger.attributes('aria-hidden')).toBe('true')
     expect(trigger.attributes('tabindex')).toBe('-1')
     expect(w.find('.teacher-select').exists()).toBe(true)
-    // 不再用固定 rem 寬（會讓老師指派檢視 8 班放不下）
-    expect((w.find('.plan-teacher-cell').element as HTMLElement).style.width).toBe('')
+  })
+
+  it('樣式守衛：格子不寫死寬度，下拉絕對定位疊在格子上（固定寬會讓老師指派檢視 8 班放不下）', () => {
+    // scoped CSS 不會出現在 inline style，直接檢查元件原始碼的規則
+    const block = (selector: string) => {
+      const start = cellSource.indexOf(`${selector} {`)
+      expect(start).toBeGreaterThan(-1)
+      return cellSource.slice(start, cellSource.indexOf('}', start))
+    }
+    const cell = block('.plan-teacher-cell')
+    expect(cell).not.toMatch(/(?:^|\s)(?:max-)?width:\s*[\d.]+(?:rem|px|em)/m)
+    const select = block('.teacher-select')
+    expect(select).toMatch(/position:\s*absolute/)
+    expect(select).toMatch(/width:\s*100%/)
+  })
+
+  it('鍵盤選定或按 Esc 收回後，焦點回到這一格的按鈕；Tab／點別處離開不搶焦點', async () => {
+    const w = mountCell()
+    const trigger = () => w.find('.teacher-trigger').element as HTMLElement
+    await w.find('.teacher-trigger').trigger('click')
+    w.findComponent({ name: 'ElSelect' }).vm.$emit('change', 100)
+    await nextTick()
+    await nextTick()
+    expect(document.activeElement).toBe(trigger())
+
+    await w.find('.teacher-trigger').trigger('click')
+    w.findComponent({ name: 'ElSelect' }).vm.$emit('visible-change', false)
+    await nextTick()
+    await nextTick()
+    expect(document.activeElement).toBe(trigger())
+
+    trigger().blur()
+    await w.find('.teacher-trigger').trigger('click')
+    const select = w.findComponent({ name: 'ElSelect' })
+    select.vm.$emit('blur', new FocusEvent('blur'))
+    select.vm.$emit('visible-change', false)
+    await nextTick()
+    await nextTick()
+    expect(document.activeElement).not.toBe(trigger())
+    w.unmount()
+  })
+
+  it('展開時 emit open（父層可在老師名單沒載到時重試）', async () => {
+    const w = mountCell()
+    await w.find('.teacher-trigger').trigger('click')
+    expect(w.emitted('open')).toBeTruthy()
   })
 })

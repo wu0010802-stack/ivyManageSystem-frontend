@@ -5,6 +5,7 @@
          下拉本身不參與欄寬計算，老師指派檢視 8 班照樣放得下 -->
     <button
       v-if="editable"
+      ref="triggerRef"
       type="button"
       class="teacher-trigger"
       :class="{
@@ -87,33 +88,47 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   change: [teacherId: number | null]
+  /** 展開下拉（父層可在老師名單沒載到時重試） */
+  open: []
 }>()
 
 const roleLabel = computed(() => TEACHER_ROLE_LABELS[props.role])
 
 const editing = ref(false)
 const selectRef = ref<{ focus: () => void } | null>(null)
+const triggerRef = ref<HTMLButtonElement | null>(null)
 
 async function startEdit(): Promise<void> {
   if (props.disabled) return
   editing.value = true
+  emit('open')
   await nextTick()
   selectRef.value?.focus()
+}
+
+// 鍵盤選定或 Esc 收回：下拉被移除，焦點不能掉回 body（老師指派有 3×N 格，只用鍵盤時
+// 每次都要從頁首 Tab 回來）→ 還給這一格的按鈕
+async function closeAndRefocus(): Promise<void> {
+  editing.value = false
+  await nextTick()
+  triggerRef.value?.focus()
 }
 
 function onChange(value: unknown): void {
   // clearable 的 × 會給 undefined；JSON 序列化會整欄丟掉 → 後端視為未變更，必須正規化成 null
   const next = typeof value === 'number' ? value : null
-  editing.value = false
+  void closeAndRefocus()
   if (next === props.teacherId) return
   emit('change', next)
 }
 
 function onVisibleChange(visible: boolean): void {
-  if (!visible) editing.value = false
+  // 已因 blur 收回（Tab／點別處）時不搶回焦點；仍在編輯＝Esc 或選完關閉
+  if (!visible && editing.value) void closeAndRefocus()
 }
 
-// Tab 或點別處離開：沒選就收回顯示態（只靠 visible-change 時，Tab 離開會卡在下拉框）
+// Tab 或點別處離開：沒選就收回顯示態（只靠 visible-change 時，Tab 離開會卡在下拉框）；
+// 焦點交給使用者要去的地方，不拉回
 function onBlur(): void {
   editing.value = false
 }
