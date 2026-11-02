@@ -485,7 +485,7 @@ interface FieldBreakdown {
 const showFieldBreakdownDialog = ref(false)
 const fieldBreakdownLoading = ref(false)
 const fieldBreakdown = ref<FieldBreakdown | null>(null)
-const MONEY_KEYS = new Set(['bonusBase', 'result', 'perPerson', 'pay', 'deduction', 'dailySalary', 'ruleAmount', 'penalty'])
+const MONEY_KEYS = new Set(['bonusBase', 'result', 'perPerson', 'pay', 'deduction', 'dailySalary', 'ruleAmount', 'penalty', 'accrual'])
 
 const openFieldBreakdown = async (row: SettlementRecord, field: string) => {
     if (!row.id) {
