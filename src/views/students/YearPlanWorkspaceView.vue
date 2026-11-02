@@ -52,6 +52,21 @@
       :description="remedialDescription"
     />
 
+    <!-- 寫入成功但重新載入失敗：畫面停在儲存前，繼續操作會撞版本衝突，先請使用者重新載入 -->
+    <el-alert
+      v-if="staleAfterWrite && plan"
+      class="stale-banner"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="已儲存，但畫面沒有更新"
+    >
+      <div class="stale-body">
+        <span>畫面上還是儲存前的資料，請重新載入後再繼續調整。</span>
+        <el-button size="small" class="btn-stale-reload" :loading="loading" @click="load()">重新載入</el-button>
+      </div>
+    </el-alert>
+
     <div v-if="loading && !plan" class="loading-skeleton">
       <div class="skeleton-row" v-for="i in 4" :key="i"></div>
     </div>
@@ -60,7 +75,7 @@
          toast，工作台必須留著讓使用者修正後重試 -->
     <div v-else-if="error && !plan" class="workspace-error">
       <p>{{ error }}</p>
-      <el-button class="btn-reload" @click="load">重新載入</el-button>
+      <el-button class="btn-reload" @click="load()">重新載入</el-button>
     </div>
 
     <div v-else-if="state === 'none'" class="empty-state">
@@ -231,6 +246,7 @@ const {
   loading,
   error,
   versionConflict,
+  staleAfterWrite,
   state,
   load,
   generate,
@@ -245,7 +261,16 @@ const {
   cancelPlan,
 } = useYearPlanWorkspace()
 
-onMounted(load)
+onMounted(() => {
+  void load()
+})
+
+// 寫入成功但畫面沒更新時，composable 已提醒一次「已儲存，但畫面沒有更新」；
+// 不再疊一則成功 toast（P3-1：不要同時跳兩種結果）
+function notifySaved(message: string): void {
+  if (staleAfterWrite.value) return
+  ElMessage.success(message)
+}
 
 const STATE_LABELS: Record<PlanState, string> = {
   none: '無草稿',
@@ -330,7 +355,7 @@ function onRegenerateClick(): void {
 async function onRegenerateConfirm(): Promise<void> {
   const result = await regenerate(overwriteManual.value)
   if (result) {
-    ElMessage.success(
+    notifySaved(
       `已重新產生：新增 ${result.added}、移除 ${result.removed}、更新 ${result.updated}，保留手動調整 ${result.preserved_manual} 筆`,
     )
     regenerateDialogVisible.value = false
@@ -348,7 +373,7 @@ function onPublishClick(): void {
 async function onPublishConfirm(): Promise<void> {
   const result = await publish()
   if (result.ok) {
-    ElMessage.success('已發布')
+    notifySaved('已發布')
     publishDialogVisible.value = false
   } else if (result.blockingIssues) {
     ElMessage.warning('尚有阻擋問題，無法發布，已重新整理清單')
@@ -367,7 +392,7 @@ async function onUnpublishClick(): Promise<void> {
     return // 使用者取消
   }
   const ok = await unpublish()
-  if (ok) ElMessage.success('已撤回發布')
+  if (ok) notifySaved('已撤回發布')
 }
 
 // ── 作廢草稿：published 狀態語氣加重（等同取消已發布的確認），draft 則單純告知
@@ -388,7 +413,7 @@ async function onCancelPlanClick(): Promise<void> {
     return // 使用者取消
   }
   const ok = await cancelPlan()
-  if (ok) ElMessage.success('已作廢，草稿已移除')
+  if (ok) notifySaved('已作廢，草稿已移除')
 }
 
 // 「更多」下拉目前僅一個作廢項目，command 用字串比對保留未來擴充空間。
@@ -416,7 +441,7 @@ function onClassEdit(planClassId: number): void {
 async function onClassCreate(payload: ClassCreatePayload): Promise<void> {
   const ok = await createClass(payload)
   if (ok) {
-    ElMessage.success('已新增班級')
+    notifySaved('已新增班級')
     classEditDialogVisible.value = false
   }
 }
@@ -424,7 +449,7 @@ async function onClassCreate(payload: ClassCreatePayload): Promise<void> {
 async function onClassUpdate(classId: number, payload: ClassUpdatePayload): Promise<void> {
   const ok = await updateClass(classId, payload)
   if (ok) {
-    ElMessage.success('已更新班級')
+    notifySaved('已更新班級')
     classEditDialogVisible.value = false
   }
 }
@@ -432,7 +457,7 @@ async function onClassUpdate(classId: number, payload: ClassUpdatePayload): Prom
 async function onClassDelete(classId: number): Promise<void> {
   const ok = await deleteClass(classId)
   if (ok) {
-    ElMessage.success('已刪除班級')
+    notifySaved('已刪除班級')
     classEditDialogVisible.value = false
   }
 }
@@ -462,7 +487,7 @@ watch(
 
 async function onTeacherChange(planClassId: number, field: TeacherField, teacherId: number | null): Promise<void> {
   const ok = await updateClass(planClassId, { [field]: teacherId } as ClassUpdatePayload)
-  if (ok) ElMessage.success(teacherId == null ? '已清除老師' : '已更新老師')
+  if (ok) notifySaved(teacherId == null ? '已清除老師' : '已更新老師')
 }
 
 const carryOverSlots = computed(() => (plan.value ? countCarryOverSlots(plan.value.classes) : 0))
@@ -488,7 +513,7 @@ async function onCarryOverClick(): Promise<void> {
     return // 使用者取消
   }
   const result = await carryOverTeachers()
-  if (!result) return
+  if (!result || staleAfterWrite.value) return
   const skipped: string[] = []
   if (result.skipped_inactive) skipped.push(`${result.skipped_inactive} 位已停用`)
   if (result.skipped_conflict) skipped.push(`${result.skipped_conflict} 位已在其他班帶班`)
@@ -569,7 +594,7 @@ async function onBulkOp(payload: {
     payload.excludeReason ?? null,
   )
   if (ok) {
-    ElMessage.success('已更新學生分派')
+    notifySaved('已更新學生分派')
     clearSelection()
   }
 }
@@ -632,7 +657,7 @@ async function onStudentMove(payload: {
     payload.planClassId ?? null,
     payload.excludeReason ?? null,
   )
-  if (ok) ElMessage.success('已更新學生分派')
+  if (ok) notifySaved('已更新學生分派')
 }
 </script>
 
@@ -677,8 +702,16 @@ async function onStudentMove(payload: {
   color: var(--color-danger);
 }
 
-.remedial-banner {
+.remedial-banner,
+.stale-banner {
   margin-bottom: var(--space-4);
+}
+
+.stale-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .loading-skeleton {

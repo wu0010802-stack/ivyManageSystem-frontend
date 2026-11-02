@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import ElementPlus, { ElMessageBox } from 'element-plus'
+import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn()
@@ -828,5 +828,34 @@ describe('YearPlanWorkspaceView', () => {
     await flushPromises()
 
     expect(w.find('.class-name-cell[data-plan-class-id="10"]').classes()).toContain('flash-highlight')
+  })
+
+  // ── 2026-11-02 第二輪：寫入成功但重新載入失敗（P3-1）──
+
+  it('寫入成功但重新載入失敗：不跳成功 toast，顯示「已儲存但畫面沒有更新」橫幅與重新載入鈕', async () => {
+    const successSpy = vi.spyOn(ElMessage, 'success')
+    mockStatus.mockResolvedValueOnce(statusDraft())
+    mockDetail.mockResolvedValueOnce(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+    mockStatus.mockRejectedValueOnce({ response: { status: 503 }, displayMessage: '服務暫停' })
+    w.findComponent(PlanRosterTable).vm.$emit('student-move', { studentIds: [1], op: 'assign', planClassId: 11 })
+    await flushPromises()
+
+    expect(successSpy).not.toHaveBeenCalled()
+    const banner = w.find('.stale-banner')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('畫面沒有更新')
+    // 表格仍在（不是整頁錯誤畫面）
+    expect(w.find('.plan-roster-table').exists()).toBe(true)
+
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses({ version: 2 }))
+    await banner.find('.btn-stale-reload').trigger('click')
+    await flushPromises()
+    expect(w.find('.stale-banner').exists()).toBe(false)
+    successSpy.mockRestore()
   })
 })

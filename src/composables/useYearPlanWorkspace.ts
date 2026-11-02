@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   getClassroomYearPlanStatus,
   getClassroomYearPlanDetail,
@@ -25,6 +26,13 @@ import { useErrorNotify } from '@/composables/useErrorNotify'
  * 全部共用 `_runMutation`（loading/error/versionConflict 重置 + 成功後 reload() 取回最新
  * version，讓 UI 的 selected 勾選重置、editable 唯讀鎖等都能單純依賴 plan.version/status
  * 的變化，不需要各呼叫端各自維護）。
+ *
+ * 2026-11-02 第二輪：
+ * - loading 改計數型（P3-15）：load() 與 mutation 各自進出計數，load 的 finally 不會在
+ *   mutation 還沒回來時就把按鈕解鎖；load() 本身以序號取最後一次的結果。
+ * - 寫入成功但 reload 失敗（P3-1）：不再「成功＋失敗」兩則 toast，改一則提醒並標記
+ *   `staleAfterWrite`，呼叫端據此略過成功 toast、顯示重新載入入口。
+ * - 409 invalid_state（P3-11）：計畫狀態被別人改掉（發布／撤回／作廢），自動重新載入。
  */
 
 type StatusOut = Schema<'StatusOut'>
@@ -41,11 +49,15 @@ interface AxiosLikeError {
   displayMessage?: string | null
 }
 
-function _isVersionConflict(e: unknown): e is AxiosLikeError {
+function _is409WithCode(e: unknown, code: string): e is AxiosLikeError {
   if (!e || typeof e !== 'object') return false
   const err = e as AxiosLikeError
-  return err.response?.status === 409 && err.errorDetail?.code === 'version_conflict'
+  return err.response?.status === 409 && err.errorDetail?.code === code
 }
+
+const STALE_AFTER_WRITE_MESSAGE = '已儲存，但畫面沒有更新，請按重新載入'
+// 後端 invalid_state 訊息帶 draft/published 等內部狀態字，不直接給使用者看
+const INVALID_STATE_MESSAGE = '這份計畫的狀態剛被變更（可能已發布、撤回或作廢），已重新載入最新畫面'
 
 /**
  * publish 的 409 blocking_issues 特例：後端 detail `{code, issues}` 沒有 `message` 欄位，
@@ -69,8 +81,13 @@ export function useYearPlanWorkspace() {
 
   const status = ref<StatusOut | null>(null)
   const plan = ref<PlanDetailOut | null>(null)
-  const loading = ref(false)
+  // 計數型 loading：任何 load/mutation 進行中即為 true，最後一個結束才解鎖
+  const pendingCount = ref(0)
+  const loading = computed(() => pendingCount.value > 0)
   const error = ref<string | null>(null)
+  // 寫入成功但隨後 reload 失敗：畫面停在寫入前（version 落後），需使用者手動重新載入
+  const staleAfterWrite = ref(false)
+  let loadSeq = 0
   // 409 version_conflict 專用旗標：與一般 error 分開，讓 UI 可以顯示「請重新載入」
   // 而非一般錯誤 toast（此草稿已被其他操作異動，樂觀鎖版本不符）。
   const versionConflict = ref(false)
@@ -81,42 +98,78 @@ export function useYearPlanWorkspace() {
   const version = computed(() => plan.value?.version ?? status.value?.version ?? null)
   const state = computed(() => status.value?.state ?? 'none')
 
-  function _handleError(e: unknown, context: string, fallback: string): void {
-    if (_isVersionConflict(e)) {
+  function _begin(): void {
+    pendingCount.value += 1
+  }
+
+  function _end(): void {
+    pendingCount.value = Math.max(0, pendingCount.value - 1)
+  }
+
+  /** 統一錯誤處理；回傳 true 表示呼叫端應重新載入（invalid_state：狀態已被別人改掉）。 */
+  function _handleError(e: unknown, context: string, fallback: string): boolean {
+    if (_is409WithCode(e, 'version_conflict')) {
       versionConflict.value = true
       error.value = '此草稿已被其他操作異動，請重新載入後再試'
-      return
+      return false
+    }
+    if (_is409WithCode(e, 'invalid_state')) {
+      error.value = INVALID_STATE_MESSAGE
+      ElMessage.warning(INVALID_STATE_MESSAGE)
+      return true
     }
     const err = e as { displayMessage?: string | null }
     error.value = (err && typeof err === 'object' && err.displayMessage) || fallback
     notify(e, context, fallback)
+    return false
   }
 
-  /** 讀 status；有 plan_id 才串接讀 detail（none 狀態沒有草稿可讀）。 */
-  async function load(): Promise<void> {
-    loading.value = true
+  /**
+   * 讀 status；有 plan_id 才串接讀 detail（none 狀態沒有草稿可讀）。回傳是否成功。
+   * 重疊呼叫時以最後一次為準（序號比對），先發後到的舊回應直接丟棄。
+   * `silent`：寫入後的 reload 用，失敗不跳錯誤 toast（由呼叫端改顯示 stale 提醒）。
+   */
+  async function load(options: { silent?: boolean } = {}): Promise<boolean> {
+    const seq = ++loadSeq
+    _begin()
     error.value = null
     versionConflict.value = false
     try {
       const statusRes = await getClassroomYearPlanStatus()
-      status.value = statusRes.data
+      if (seq !== loadSeq) return true
       const planId = statusRes.data.plan_id
+      let nextPlan: PlanDetailOut | null = null
       if (planId != null) {
         const detailRes = await getClassroomYearPlanDetail(planId)
-        plan.value = detailRes.data
-      } else {
-        plan.value = null
+        if (seq !== loadSeq) return true
+        nextPlan = detailRes.data
       }
+      status.value = statusRes.data
+      plan.value = nextPlan
+      staleAfterWrite.value = false
+      return true
     } catch (e) {
-      _handleError(e, 'useYearPlanWorkspace.load', '載入編班工作台失敗')
+      if (seq !== loadSeq) return false
+      if (!options.silent) _handleError(e, 'useYearPlanWorkspace.load', '載入編班工作台失敗')
+      return false
     } finally {
-      loading.value = false
+      _end()
+    }
+  }
+
+  /** 寫入成功後重新載入；失敗時只提醒一次並標記 stale（不與呼叫端的成功 toast 疊加錯誤）。 */
+  async function _reloadAfterWrite(): Promise<void> {
+    const ok = await load({ silent: true })
+    if (!ok) {
+      staleAfterWrite.value = true
+      ElMessage.warning(STALE_AFTER_WRITE_MESSAGE)
     }
   }
 
   /** 冪等產生草稿；成功後重新 load() 取得完整 status + detail。 */
   async function generate(targetSchoolYear?: number): Promise<void> {
-    loading.value = true
+    if (loading.value) return
+    _begin()
     error.value = null
     versionConflict.value = false
     try {
@@ -125,16 +178,17 @@ export function useYearPlanWorkspace() {
       await generateClassroomYearPlan(payload)
       await load()
     } catch (e) {
-      _handleError(e, 'useYearPlanWorkspace.generate', '產生草稿失敗')
+      if (_handleError(e, 'useYearPlanWorkspace.generate', '產生草稿失敗')) await load()
     } finally {
-      loading.value = false
+      _end()
     }
   }
 
   /**
-   * 共用互動編輯 mutation 骨架：重置 loading/error/versionConflict → 執行 action →
+   * 共用互動編輯 mutation 骨架：重置 error/versionConflict → 執行 action →
    * 成功後 reload() 取回最新 plan（version 會遞增，UI 依此重置勾選/更新唯讀鎖）→
-   * 失敗走 `_handleError`（409 version_conflict 特判）。
+   * 失敗走 `_handleError`（409 version_conflict 特判、invalid_state 自動重新載入）。
+   * reload 失敗不影響回傳值：寫入已成功，呼叫端照樣關 dialog，只是改看 staleAfterWrite。
    */
   async function _runMutation<T>(
     action: () => Promise<T>,
@@ -144,18 +198,21 @@ export function useYearPlanWorkspace() {
     // in-flight 再入短路：UI disabled 綁 loading 之外的第二道防線（同 tick 雙擊、
     // DOM 尚未重繪套用 disabled 時）——否則第二發帶同一 base_version 撞 409 偽版本衝突。
     if (loading.value) return null
-    loading.value = true
+    _begin()
     error.value = null
     versionConflict.value = false
     try {
-      const result = await action()
-      await load()
+      let result: T
+      try {
+        result = await action()
+      } catch (e) {
+        if (_handleError(e, context, fallback)) await load()
+        return null
+      }
+      await _reloadAfterWrite()
       return result
-    } catch (e) {
-      _handleError(e, context, fallback)
-      return null
     } finally {
-      loading.value = false
+      _end()
     }
   }
 
@@ -284,23 +341,25 @@ export function useYearPlanWorkspace() {
     if (loading.value) return { ok: false }
     const planId = plan.value.id
     const baseVersion = plan.value.version
-    loading.value = true
+    _begin()
     error.value = null
     versionConflict.value = false
     try {
-      await publishClassroomYearPlan(planId, { base_version: baseVersion })
-      await load()
-      return { ok: true }
-    } catch (e) {
-      const blockingIssues = _extractBlockingIssues(e)
-      if (blockingIssues) {
-        error.value = '尚有阻擋問題，無法發布'
-        return { ok: false, blockingIssues }
+      try {
+        await publishClassroomYearPlan(planId, { base_version: baseVersion })
+      } catch (e) {
+        const blockingIssues = _extractBlockingIssues(e)
+        if (blockingIssues) {
+          error.value = '尚有阻擋問題，無法發布'
+          return { ok: false, blockingIssues }
+        }
+        if (_handleError(e, 'useYearPlanWorkspace.publish', '發布失敗')) await load()
+        return { ok: false }
       }
-      _handleError(e, 'useYearPlanWorkspace.publish', '發布失敗')
-      return { ok: false }
+      await _reloadAfterWrite()
+      return { ok: true }
     } finally {
-      loading.value = false
+      _end()
     }
   }
 
@@ -340,6 +399,7 @@ export function useYearPlanWorkspace() {
     loading,
     error,
     versionConflict,
+    staleAfterWrite,
     version,
     state,
     load,

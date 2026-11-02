@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ElMessage } from 'element-plus'
+
+const { mockNotify } = vi.hoisted(() => ({ mockNotify: vi.fn() }))
 
 vi.mock('@/api/classroomYearPlan', () => ({
   getClassroomYearPlanStatus: vi.fn(),
@@ -15,7 +18,7 @@ vi.mock('@/api/classroomYearPlan', () => ({
   cancelClassroomYearPlan: vi.fn(),
   carryOverClassroomYearPlanTeachers: vi.fn(),
 }))
-vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: vi.fn() }) }))
+vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: mockNotify }) }))
 
 import {
   getClassroomYearPlanStatus,
@@ -403,5 +406,120 @@ describe('useYearPlanWorkspace', () => {
     expect(await ws.cancelPlan()).toBe(false)
     expect(mockCancel).not.toHaveBeenCalled()
     void first // 首發刻意不 resolve；測試結束由 vitest 回收
+  })
+
+  // ── 2026-11-02 第二輪：P3-1 / P3-11 / P3-15 ─────────────────────────
+
+  it('load() 回傳是否成功（成功 true、失敗 false）', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraft())
+    const ws = useYearPlanWorkspace()
+    expect(await ws.load()).toBe(true)
+
+    mockStatus.mockRejectedValueOnce({ response: { status: 500 }, displayMessage: '伺服器錯誤' })
+    expect(await ws.load()).toBe(false)
+  })
+
+  it('寫入成功但重新載入失敗：不跳錯誤 toast，改一則「已儲存但畫面沒有更新」提醒，並標記 staleAfterWrite', async () => {
+    const warnSpy = vi.spyOn(ElMessage, 'warning')
+    const ws = await loadedWorkspace()
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+    mockStatus.mockRejectedValueOnce({ response: { status: 503 }, displayMessage: '服務暫停' })
+
+    const ok = await ws.bulkUpdateStudents('reset', [1])
+
+    // 寫入確實成功：呼叫端照樣當成功處理（關閉 dialog 等），不要以為失敗而重送
+    expect(ok).toBe(true)
+    expect(ws.staleAfterWrite.value).toBe(true)
+    expect(mockNotify).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(String(warnSpy.mock.calls[0][0])).toContain('已儲存，但畫面沒有更新，請按重新載入')
+    expect(ws.loading.value).toBe(false)
+
+    // 之後重新載入成功 → 解除 stale 旗標
+    mockStatus.mockResolvedValue(statusDraft(5, 2))
+    mockDetail.mockResolvedValue(detailDraft(5, 2))
+    await ws.load()
+    expect(ws.staleAfterWrite.value).toBe(false)
+    warnSpy.mockRestore()
+  })
+
+  it('發布成功但重新載入失敗：仍回 {ok:true}，標記 staleAfterWrite，不跳錯誤 toast', async () => {
+    const warnSpy = vi.spyOn(ElMessage, 'warning')
+    const ws = await loadedWorkspace()
+    mockPublish.mockResolvedValue({ data: { status: 'published', version: 2 } })
+    mockStatus.mockRejectedValueOnce({ response: { status: 503 }, displayMessage: '服務暫停' })
+
+    const result = await ws.publish()
+
+    expect(result).toEqual({ ok: true })
+    expect(ws.staleAfterWrite.value).toBe(true)
+    expect(mockNotify).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    warnSpy.mockRestore()
+  })
+
+  it('409 invalid_state（計畫狀態已被別人改掉）：自動重新載入最新狀態，不當版本衝突', async () => {
+    const warnSpy = vi.spyOn(ElMessage, 'warning')
+    const ws = await loadedWorkspace()
+    const statusCallsBefore = mockStatus.mock.calls.length
+    mockBulkStudents.mockRejectedValueOnce({
+      response: { status: 409 },
+      errorDetail: { code: 'invalid_state', message: '僅 draft 狀態的草稿可執行此操作（目前狀態：published）' },
+      displayMessage: '僅 draft 狀態的草稿可執行此操作（目前狀態：published）',
+    })
+    mockStatus.mockResolvedValue({ data: { ...statusDraft(5, 2).data, state: 'published' as const } })
+    mockDetail.mockResolvedValue({ data: { ...detailDraft(5, 2).data, status: 'published' } })
+
+    const ok = await ws.bulkUpdateStudents('reset', [1])
+
+    expect(ok).toBe(false)
+    expect(ws.versionConflict.value).toBe(false)
+    expect(mockStatus.mock.calls.length).toBe(statusCallsBefore + 1)
+    expect(ws.plan.value?.status).toBe('published')
+    // 不把後端的技術訊息（draft／published）直接丟給使用者
+    expect(mockNotify).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(String(warnSpy.mock.calls[0][0])).not.toContain('draft')
+    expect(String(warnSpy.mock.calls[0][0])).toContain('已重新載入')
+    warnSpy.mockRestore()
+  })
+
+  it('mutation in-flight 時另一個 load() 結束不會提前解鎖 loading（計數型 loading）', async () => {
+    const ws = await loadedWorkspace()
+    let resolveWrite: (v: unknown) => void = () => {}
+    mockBulkStudents.mockReturnValue(new Promise(r => { resolveWrite = r }))
+
+    const pending = ws.bulkUpdateStudents('reset', [1])
+    expect(ws.loading.value).toBe(true)
+
+    // 例如版本衝突對話框的「重新載入」：在 mutation 還沒回來時跑完一次 load
+    await ws.load()
+    expect(ws.loading.value).toBe(true)
+
+    mockStatus.mockResolvedValue(statusDraft(5, 2))
+    mockDetail.mockResolvedValue(detailDraft(5, 2))
+    resolveWrite({ data: { updated_count: 1, version: 2 } })
+    expect(await pending).toBe(true)
+    expect(ws.loading.value).toBe(false)
+  })
+
+  it('兩次 load() 重疊時以最後一次為準（先發後到的舊回應不覆蓋新資料）', async () => {
+    const ws = useYearPlanWorkspace()
+    let resolveFirst: (v: unknown) => void = () => {}
+    mockStatus.mockReturnValueOnce(new Promise(r => { resolveFirst = r }))
+    mockStatus.mockResolvedValueOnce(statusDraft(5, 3))
+    mockDetail.mockResolvedValue(detailDraft(5, 3))
+
+    const first = ws.load()
+    const second = ws.load()
+    await second
+    expect(ws.plan.value?.version).toBe(3)
+
+    mockDetail.mockResolvedValue(detailDraft(5, 1))
+    resolveFirst(statusDraft(5, 1))
+    await first
+    expect(ws.plan.value?.version).toBe(3)
+    expect(ws.loading.value).toBe(false)
   })
 })
