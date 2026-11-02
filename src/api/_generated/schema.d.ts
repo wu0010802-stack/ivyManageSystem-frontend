@@ -48197,6 +48197,8 @@ export interface components {
          * @description GET /salaries/employee-salary-debug：單一員工當月薪資逐項試算。
          *
          *     非發放月時 `festival_period_rows` 為 null；沒有帶班班級時 `classroom_context` 為 null。
+         *     `festival_month_accrual` 僅非發放月有值（本月節慶累積額與併入的發放薪資月），
+         *     發放月或計算失敗時為 null。
          */
         SalaryDebugSnapshotOut: {
             /** Attendance Summary */
@@ -48219,6 +48221,10 @@ export interface components {
             festival_bonus_detail: {
                 [key: string]: unknown;
             };
+            /** Festival Month Accrual */
+            festival_month_accrual?: {
+                [key: string]: unknown;
+            } | null;
             /** Festival Period Rows */
             festival_period_rows: {
                 [key: string]: unknown;
