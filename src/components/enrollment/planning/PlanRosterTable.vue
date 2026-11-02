@@ -26,7 +26,7 @@
             >
               <div class="class-name-line">
                 <el-checkbox
-                  v-if="editable && classStudents(cls.id).length"
+                  v-if="editable && viewMode === 'students' && classStudents(cls.id).length"
                   class="class-select-all"
                   :aria-label="`勾選${cls.target_name}全班`"
                   :model-value="classAllSelected(cls.id)"
@@ -61,6 +61,8 @@
               <span class="capacity-badge" :class="{ 'over-capacity': isOverCapacity(cls) }">
                 {{ cls.assigned_count }}/{{ cls.capacity ?? '—' }}
               </span>
+              <!-- 男女比：性別未知與已離園不計；整班都不知道就不顯示 -->
+              <span v-if="genderSplit(cls.id)" class="gender-split">{{ genderSplit(cls.id) }}</span>
             </td>
           </tr>
           <!-- 三師：只在「老師指派」檢視出現。格內直接選老師（取代逐班開對話框）；
@@ -81,7 +83,8 @@
                 :source-teacher-name="sourceTeacherName(cls, role)"
                 :editable="editable"
                 :disabled="busy"
-                :options="teacherOptionsByCell.get(`${cls.id}:${role}`) ?? []"
+                :option-groups="teacherOptionsByCell.get(`${cls.id}:${role}`) ?? []"
+                :error="cellErrors[`${cls.id}:${role}`] ?? null"
                 @change="(id: number | null) => emit('teacher-change', cls.id, TEACHER_FIELD_BY_ROLE[role], id)"
               />
             </td>
@@ -110,6 +113,7 @@
                   :title="studentTitle(student)"
                   :class="{
                     dragging: draggingStudent?.id === student.id,
+                    'is-left': student.is_active_now === false,
                     'is-match': matchIds?.has(student.id) ?? false,
                     'is-current-match': currentMatchId === student.id,
                     'is-dimmed': matchIds != null && !matchIds.has(student.id),
@@ -128,6 +132,11 @@
                       @change="(val: string | number | boolean) => emit('set-selected', [student.id], Boolean(val))"
                     >{{ student.name }}</el-checkbox>
                     <span v-else class="student-name">{{ student.name }}</span>
+                    <span
+                      v-if="student.is_active_now === false"
+                      class="disposition-tag disposition-tag-left"
+                      title="已離園，不計入人數，重新產生建議時會移除"
+                    >離</span>
                     <span
                       v-if="dispositionTag(student)"
                       class="disposition-tag"
@@ -181,14 +190,14 @@ import {
   TEACHER_FIELD_BY_ROLE,
   TEACHER_ROLES,
   TEACHER_ROLE_LABELS,
-  buildTeacherOptions,
+  buildTeacherOptionGroups,
   groupClassesByGrade,
   isMovedIn,
   orderedRosterEntries,
   sourceTeacherName,
   type GradeGroup,
   type RosterViewMode,
-  type TeacherCellOption,
+  type TeacherOptionGroup,
   type TeacherField,
   type TeacherRole,
 } from './planHelpers'
@@ -211,12 +220,15 @@ const props = withDefaults(defineProps<{
   matchIds?: ReadonlySet<number> | null
   /** 搜尋目前停在哪一位（Enter 換下一位） */
   currentMatchId?: number | null
+  /** 老師格存檔失敗的原因，key＝`班級id:職務`（後端 detail.field 對到格子） */
+  cellErrors?: Record<string, string>
 }>(), {
   teacherOptions: () => [],
   busy: false,
   viewMode: 'students',
   matchIds: null,
   currentMatchId: null,
+  cellErrors: () => ({}),
 })
 
 const emit = defineEmits<{
@@ -254,13 +266,13 @@ function teacherNameOf(cls: PlanClass, role: TeacherRole): string | null {
   return cls.art_teacher_name ?? null
 }
 
-// 每格下拉選項（含「已是某班班導」停用註記）；只在可編輯時計算
+// 每格下拉選項（分組＋「已是某班班導」停用註記）；只在可編輯時計算
 const teacherOptionsByCell = computed(() => {
-  const map = new Map<string, TeacherCellOption[]>()
+  const map = new Map<string, TeacherOptionGroup[]>()
   if (!props.editable || props.teacherOptions.length === 0) return map
   for (const cls of props.plan.classes) {
     for (const role of TEACHER_ROLES) {
-      map.set(`${cls.id}:${role}`, buildTeacherOptions(props.teacherOptions, props.plan.classes, cls.id, role))
+      map.set(`${cls.id}:${role}`, buildTeacherOptionGroups(props.teacherOptions, props.plan.classes, cls.id, role))
     }
   }
   return map
@@ -288,6 +300,18 @@ const studentsByClass = computed(() => {
 
 function classStudents(classId: number): PlanStudent[] {
   return studentsByClass.value.get(classId) ?? []
+}
+
+/** 「男 x・女 y」：只算在籍且性別已知的學生；都不知道回 null（不顯示）。 */
+function genderSplit(classId: number): string | null {
+  let male = 0
+  let female = 0
+  for (const st of classStudents(classId)) {
+    if (st.is_active_now === false) continue
+    if (st.gender === '男') male += 1
+    else if (st.gender === '女') female += 1
+  }
+  return male + female > 0 ? `男 ${male}・女 ${female}` : null
 }
 
 function classAllSelected(classId: number): boolean {
@@ -752,6 +776,23 @@ defineExpose({ locateStudent, locateClass, flashStudents, scrollToStudent, remea
 .disposition-tag-graduate {
   color: var(--color-info-hover);
   background: var(--color-info-soft);
+}
+
+.disposition-tag-left {
+  color: var(--text-secondary);
+  background: var(--color-neutral-200);
+}
+
+.student-entry.is-left {
+  opacity: 0.55;
+}
+
+.gender-split {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-secondary);
 }
 
 .disposition-tag-exclude {

@@ -145,9 +145,16 @@ describe('PlanRosterTable', () => {
     })
     const cell = w.findAllComponents(PlanTeacherCell)
       .find(c => c.props('className') === '小班A' && c.props('role') === 'head')!
-    expect(cell.props('options')).toEqual([
-      { id: 200, label: '李老師', disabled: true, note: '中班A班導' },
-      { id: 300, label: '新老師', disabled: false, note: '' },
+    // 現值王老師(100)不在可選名單（已停用）→ 補「目前指派」；李老師、新老師沒職稱 → 其他職務
+    expect(cell.props('optionGroups')).toEqual([
+      { label: '目前指派', options: [{ id: 100, label: '王老師（已停用）', disabled: true, note: '' }] },
+      {
+        label: '其他職務',
+        options: [
+          { id: 200, label: '李老師', disabled: true, note: '中班A班導' },
+          { id: 300, label: '新老師', disabled: false, note: '' },
+        ],
+      },
     ])
   })
 
@@ -405,5 +412,45 @@ describe('PlanRosterTable', () => {
       Element.prototype.getBoundingClientRect = original
       Object.defineProperty(window, 'innerHeight', { configurable: true, value: innerHeight })
     }
+  })
+  // ── FE-D：男女數、離園、老師指派檢視、格子錯誤 ──
+
+  it('人數下顯示「男 x・女 y」：性別未知不計、離園不計；全部未知就不顯示', () => {
+    const plan = buildPlan()
+    plan.students[0].gender = '男'
+    plan.students[1].gender = '女'
+    plan.students[2].gender = '男'
+    const w = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    expect(w.find('.capacity-cell .gender-split').text()).toBe('男 2・女 1')
+    expect(w.findAll('.gender-split').length).toBe(1)
+
+    plan.students[2].is_active_now = false
+    const w2 = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    expect(w2.find('.gender-split').text()).toBe('男 1・女 1')
+  })
+
+  it('已離園的學生標「離」並淡化，說明不計入人數、重新產生時會移除', () => {
+    const plan = buildPlan()
+    plan.students[0].is_active_now = false
+    const w = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    const entry = w.find('.student-entry[data-student-id="1"]')
+    expect(entry.classes()).toContain('is-left')
+    const tag = entry.find('.disposition-tag-left')
+    expect(tag.text()).toBe('離')
+    expect(tag.attributes('title')).toBe('已離園，不計入人數，重新產生建議時會移除')
+    expect(w.find('.student-entry[data-student-id="2"] .disposition-tag-left').exists()).toBe(false)
+  })
+
+  it('老師指派檢視不顯示整班勾選（沒有學生列可選）', () => {
+    expect(mountTable().findAll('.class-select-all').length).toBe(1)
+    expect(mountTable({}, true, new Set<number>(), { viewMode: 'teachers' }).findAll('.class-select-all').length).toBe(0)
+  })
+
+  it('老師格錯誤依 班級:職務 對到格子', () => {
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers', cellErrors: { '11:assistant': '副班導「陳老師」已停用' } })
+    const cell = (cls: string, role: string) => w.findAllComponents(PlanTeacherCell)
+      .find(c => c.props('className') === cls && c.props('role') === role)!
+    expect(cell('中班A', 'assistant').props('error')).toBe('副班導「陳老師」已停用')
+    expect(cell('中班A', 'head').props('error')).toBeNull()
   })
 })
