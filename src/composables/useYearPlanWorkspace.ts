@@ -331,11 +331,13 @@ export function useYearPlanWorkspace() {
   }
 
   /**
-   * 發布草稿。特判 409 blocking_issues（後端在發布當下重新檢查 blocking issue，可能與
+   * 發布草稿（補救模式由呼叫端帶 `confirmTargetSchoolYear`）。特判 409 blocking_issues（後端在發布當下重新檢查 blocking issue，可能與
    * dialog 開啟當下的 preview 快照不同步——例如發布前有另一個操作異動了草稿）：回傳
    * `blockingIssues` 讓呼叫端可以重新整理 preview 展示最新清單，而非落入一般錯誤 toast。
    */
-  async function publish(): Promise<{ ok: boolean; blockingIssues?: IssueOut[] }> {
+  async function publish(
+    confirmTargetSchoolYear?: number,
+  ): Promise<{ ok: boolean; blockingIssues?: IssueOut[] }> {
     if (!plan.value) return { ok: false }
     // in-flight 再入短路（同 _runMutation）：防雙擊以同一 base_version 送第二發。
     if (loading.value) return { ok: false }
@@ -346,7 +348,13 @@ export function useYearPlanWorkspace() {
     versionConflict.value = false
     try {
       try {
-        await publishClassroomYearPlan(planId, { base_version: baseVersion })
+        // 補救模式（已開學、發布即套用）後端要求帶目標學年確認，否則 422 remedial_confirm_required
+        await publishClassroomYearPlan(
+          planId,
+          confirmTargetSchoolYear != null
+            ? { base_version: baseVersion, confirm_target_school_year: confirmTargetSchoolYear }
+            : { base_version: baseVersion },
+        )
       } catch (e) {
         const blockingIssues = _extractBlockingIssues(e)
         if (blockingIssues) {

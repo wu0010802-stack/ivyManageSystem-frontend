@@ -1,4 +1,5 @@
 import api from './index'
+import type { AxiosResponse } from 'axios'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 // 新學年預編班（草稿隔離：generate/regenerate/classes/students/preview/publish
@@ -98,3 +99,10 @@ export const carryOverClassroomYearPlanTeachers = (
     payload: ApiBody<'/classroom-year-plans/{plan_id}/carry-over-teachers', 'post'>,
 ): AxiosResp<'/classroom-year-plans/{plan_id}/carry-over-teachers', 'post'> =>
     api.post(`/classroom-year-plans/${planId}/carry-over-teachers`, payload)
+
+/**
+ * GET /classroom-year-plans/{plan_id}/export — 編班表＋名單 xlsx（CLASSROOMS_READ，任何狀態皆可）。
+ * 檔名在 Content-Disposition 的 RFC 5987 `filename*`，由 `saveBlobResponse` 解析。
+ */
+export const exportClassroomYearPlan = (planId: number): Promise<AxiosResponse<Blob>> =>
+    api.get(`/classroom-year-plans/${planId}/export`, { responseType: 'blob', timeout: 30000 })

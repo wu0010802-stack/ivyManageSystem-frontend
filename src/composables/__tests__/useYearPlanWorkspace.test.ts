@@ -294,6 +294,19 @@ describe('useYearPlanWorkspace', () => {
     expect(ws.plan.value?.status).toBe('published')
   })
 
+  it('publish(confirmYear)：補救模式帶 confirm_target_school_year；不帶時只送 base_version', async () => {
+    const ws = await loadedWorkspace()
+    mockPublish.mockResolvedValue({ data: { status: 'published', version: 2 } })
+    mockStatus.mockResolvedValue(statusDraft(5, 2))
+    mockDetail.mockResolvedValue(detailDraft(5, 2))
+
+    await ws.publish(115)
+    expect(mockPublish).toHaveBeenLastCalledWith(5, { base_version: 1, confirm_target_school_year: 115 })
+
+    await ws.publish()
+    expect(mockPublish).toHaveBeenLastCalledWith(5, { base_version: 2 })
+  })
+
   it('publish(): 409 blocking_issues 時回傳 blockingIssues 清單，不當一般錯誤處理', async () => {
     const ws = await loadedWorkspace()
     mockPublish.mockRejectedValue({
