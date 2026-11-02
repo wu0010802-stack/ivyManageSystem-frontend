@@ -99,10 +99,23 @@ const GROUP_TITLES: Record<string, string> = {
   art_teacher_missing: '班級尚未指派美語老師',
 }
 
+// 已發布時同一個 code 的意思不同（後端 published 訊息也不同）：換班要先撤回才能重新
+// 產生；發布後才入園、超過容量改成提醒「套用時／後」會怎樣
+const PUBLISHED_GROUP_TITLES: Record<string, string> = {
+  student_source_classroom_changed: '學生已換班，需先撤回發布再重新產生建議',
+  student_missing_from_plan: '發布後才入園的學生，套用時會留在原班',
+  capacity_exceeded: '套用後班級人數會超過容量',
+}
+
 interface IssueGroup {
   key: string
   title: string
   items: IssueOut[]
+}
+
+function titleFor(code: string): string | undefined {
+  if (props.context === 'published' && PUBLISHED_GROUP_TITLES[code]) return PUBLISHED_GROUP_TITLES[code]
+  return GROUP_TITLES[code]
 }
 
 function groupByCode(items: IssueOut[], severity: string): IssueGroup[] {
@@ -117,7 +130,7 @@ function groupByCode(items: IssueOut[], severity: string): IssueGroup[] {
   }
   return order.map(code => ({
     key: `${severity}:${code}`,
-    title: GROUP_TITLES[code] ?? map.get(code)![0].message,
+    title: titleFor(code) ?? map.get(code)![0].message,
     items: map.get(code)!,
   }))
 }

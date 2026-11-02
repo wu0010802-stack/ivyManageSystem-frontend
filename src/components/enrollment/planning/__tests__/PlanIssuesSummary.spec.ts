@@ -138,6 +138,28 @@ describe('PlanIssuesSummary', () => {
     expect(w.find('.severity-blocking .severity-title').text()).toBe('阻擋套用')
   })
 
+  it('已發布語境的群組標題：換班要先撤回、發布後才入園的人會留在原班、超額是套用後', () => {
+    const w = mount(PlanIssuesSummary, {
+      global: { plugins: [ElementPlus] },
+      props: {
+        context: 'published',
+        issues: {
+          blocking: [{ code: 'student_source_classroom_changed', message: 'x', plan_class_id: null, student_id: 1 }],
+          warnings: [
+            { code: 'student_missing_from_plan', message: 'y', plan_class_id: null, student_id: 2 },
+            { code: 'capacity_exceeded', message: 'z', plan_class_id: 3, student_id: null },
+          ],
+        },
+      },
+    })
+    const titles = w.findAll('.group-title').map(t => t.text())
+    expect(titles).toEqual([
+      '學生已換班，需先撤回發布再重新產生建議',
+      '發布後才入園的學生，套用時會留在原班',
+      '套用後班級人數會超過容量',
+    ])
+  })
+
   it('僅 warnings 時不渲染 blocking 區塊', () => {
     const w = mountSummary(buildIssues({ blocking: [] }))
     expect(w.find('.severity-blocking').exists()).toBe(false)
