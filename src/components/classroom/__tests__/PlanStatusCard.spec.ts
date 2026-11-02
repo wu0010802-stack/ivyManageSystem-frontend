@@ -338,7 +338,7 @@ describe('PlanStatusCard', () => {
     it('已發布但有阻擋：error「套用會失敗」＋前往處理', async () => {
       const w = await cardWith({ state: 'published', blocking_count: 2 })
       expect(w.find('.plan-banner').classes()).toContain('plan-banner--error')
-      expect(w.text()).toContain('已發布但有 2 項阻擋，套用會失敗')
+      expect(w.text()).toContain('已發布的計畫有 2 項阻擋，套用會失敗')
       expect(w.find('.plan-banner__link').text()).toContain('前往處理')
     })
 

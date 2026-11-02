@@ -50,7 +50,7 @@ const publishedProblem = computed<string | null>(() => {
   if (state.value !== 'published') return null
   if (!schedulerEnabled.value) return '已發布，但自動套用未啟用：請聯絡系統管理員開啟，否則不會套用'
   if (applyFailure.value) return `已發布，但套用失敗：${applyFailure.value}`
-  if (blockingCount.value > 0) return `已發布但有 ${blockingCount.value} 項阻擋，套用會失敗`
+  if (blockingCount.value > 0) return `已發布的計畫有 ${blockingCount.value} 項阻擋，套用會失敗`
   return null
 })
 
