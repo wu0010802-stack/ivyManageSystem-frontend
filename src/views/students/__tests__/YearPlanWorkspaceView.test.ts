@@ -411,7 +411,7 @@ describe('YearPlanWorkspaceView', () => {
 
   it('沿用原班老師：有可沿用的空格才顯示；確認後呼叫 API 並提示結果', async () => {
     const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
-    const detail = detailDraftWithClasses()
+    const detail = detailDraftWithClasses({ carry_over_available: 2 })
     Object.assign(detail.data.classes[0], { source_head_teacher_name: '林佳蓉', source_art_teacher_name: '黃雅婷' })
     mockStatus.mockResolvedValue(statusDraft())
     mockDetail.mockResolvedValue(detail)
@@ -1663,6 +1663,106 @@ describe('YearPlanWorkspaceView', () => {
       expect(w.text()).toContain('仍在去年班 1 位')
       expect(w.findComponent({ name: 'PlanNextSteps' }).exists()).toBe(false)
       expect(w.findComponent({ name: 'PlanPublishedBar' }).exists()).toBe(false)
+    })
+  })
+  // ── 2026-11-02 第二輪 FE-D：老師指派與班級編輯 ──────────────────────────
+
+  describe('FE-D 老師指派與班級編輯', () => {
+    it('改老師成功不跳成功 toast；失敗時錯誤依 detail.field 放到那一格', async () => {
+      const successSpy = vi.spyOn(ElMessage, 'success')
+      mockStatus.mockResolvedValue(statusDraft())
+      mockDetail.mockResolvedValue(detailDraftWithClasses())
+      const w = mountView()
+      await flushPromises()
+
+      mockUpdateClass.mockResolvedValueOnce({ data: { id: 10, version: 2 } })
+      w.findComponent(PlanRosterTable).vm.$emit('teacher-change', 10, 'assistant_teacher_id', 101)
+      await flushPromises()
+      expect(successSpy).not.toHaveBeenCalled()
+
+      mockUpdateClass.mockRejectedValueOnce({
+        response: { status: 400 },
+        errorDetail: { code: 'teacher_not_found', message: '班導「吳老師」已停用，請改選其他老師', field: 'head_teacher_id' },
+        displayMessage: '班導「吳老師」已停用，請改選其他老師',
+      })
+      w.findComponent(PlanRosterTable).vm.$emit('teacher-change', 10, 'head_teacher_id', 57)
+      await flushPromises()
+      expect(w.findComponent(PlanRosterTable).props('cellErrors')).toEqual({ '10:head': '班導「吳老師」已停用，請改選其他老師' })
+      successSpy.mockRestore()
+    })
+
+    it('沿用原班老師：數字用後端 carry_over_available，結果訊息含預定離職略過數', async () => {
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+      const infoSpy = vi.spyOn(ElMessage, 'success')
+      const detail = detailDraftWithClasses({ carry_over_available: 1 })
+      Object.assign(detail.data.classes[0], { source_head_teacher_name: '林佳蓉', source_art_teacher_name: '黃雅婷' })
+      mockStatus.mockResolvedValue(statusDraft())
+      mockDetail.mockResolvedValue(detail)
+      mockCarryOver.mockResolvedValue({ data: { filled: 1, skipped_inactive: 0, skipped_conflict: 0, skipped_resigning: 1, version: 2 } })
+      const w = mountView()
+      await flushPromises()
+
+      const steps = w.findComponent({ name: 'PlanNextSteps' })
+      expect(steps.props('carryOverSlots')).toBe(1)
+      expect(steps.props('carryOverCandidates')).toBe(2)
+
+      await w.find('.btn-carry-over').trigger('click')
+      await flushPromises()
+      expect(String(confirmSpy.mock.calls.at(-1)![0])).toContain('1 個')
+      expect(String(confirmSpy.mock.calls.at(-1)![0])).toContain('預定離職')
+      expect(String(infoSpy.mock.calls.at(-1)![0])).toContain('1 位預定離職')
+      infoSpy.mockRestore()
+    })
+
+    it('班級編輯 dialog 拿到後端欄位錯誤', async () => {
+      mockStatus.mockResolvedValue(statusDraft())
+      mockDetail.mockResolvedValue(detailDraftWithClasses())
+      const w = mountView()
+      await flushPromises()
+      mockUpdateClass.mockRejectedValueOnce({
+        response: { status: 422 },
+        errorDetail: { code: 'VALIDATION_ERROR', message: '輸入資料格式有誤', errors: [{ loc: ['body', 'capacity'], msg: 'x' }] },
+        displayMessage: '輸入資料格式有誤',
+      })
+      w.findComponent({ name: 'PlanClassEditDialog' }).vm.$emit('update', 10, { capacity: 0 })
+      await flushPromises()
+      expect(w.findComponent({ name: 'PlanClassEditDialog' }).props('fieldErrors')).toEqual({ capacity: '容量要在 1 到 200 之間' })
+    })
+
+    it('批次列拿到畢業年級名稱（排除畢業年級學生時換提示）', async () => {
+      const detail = detailDraftWithClasses({
+        students: [
+          { id: 1, student_id: 'S001', name: '小明', source_classroom_name: '幼幼A', plan_class_id: 10, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
+          { id: 8, student_id: 'S008', name: '大美', source_classroom_name: '天堂鳥', plan_class_id: null, disposition: 'graduate', exclude_reason: null, manually_adjusted: false, current_grade_name: '大班' },
+        ],
+      })
+      mockStatus.mockResolvedValue(statusDraft())
+      mockDetail.mockResolvedValue(detail)
+      const w = mountView()
+      await flushPromises()
+      w.findComponent(PlanSidePanel).vm.$emit('set-selected', [8], true)
+      await flushPromises()
+      const toolbar = w.findComponent(PlanBatchToolbar)
+      expect(toolbar.props('graduationGradeName')).toBe('大班')
+      expect(toolbar.props('autoGraduationEnabled')).toBe(true)
+    })
+
+    it('定位「非畢業年級被標畢業」（只有 student_id）→ 展開畢業名單定位', async () => {
+      const detail = detailDraftWithClasses({
+        students: [
+          { id: 1, student_id: 'S001', name: '小明', source_classroom_name: '幼幼A', plan_class_id: 10, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
+          { id: 9, student_id: 'S009', name: '中中', source_classroom_name: '中班舊', plan_class_id: null, disposition: 'graduate', exclude_reason: null, manually_adjusted: true, current_grade_name: '中班' },
+        ],
+      })
+      mockStatus.mockResolvedValue(statusDraft())
+      mockDetail.mockResolvedValue(detail)
+      const w = mountView()
+      await flushPromises()
+      w.findComponent(PlanSidePanel).vm.$emit('locate-issue', {
+        code: 'graduate_not_graduation_grade', message: 'x', plan_class_id: null, student_id: 9,
+      })
+      await flushPromises()
+      expect(w.find('.graduate-bucket .bucket-row[data-student-id="9"]').classes()).toContain('flash-highlight')
     })
   })
 })

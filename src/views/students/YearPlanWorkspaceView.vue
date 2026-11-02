@@ -137,6 +137,7 @@
       :class-count="plan.classes.length"
       :empty-teacher-slots="emptyTeacherSlots"
       :carry-over-slots="carryOverSlots"
+      :carry-over-candidates="carryOverCandidates"
       :blocking-count="plan.issues.blocking.length"
       :can-edit="editable && canWrite"
       :apply-date="status?.apply_date ?? null"
@@ -166,6 +167,8 @@
             :selected-count="selectedStudentIds.length"
             :plan-classes="planClassOptions"
             :selected-students="selectedStudents"
+            :graduation-grade-name="graduationGrade"
+            :auto-graduation-enabled="autoGraduationEnabled"
             :disabled="loading"
             @bulk-op="onBulkOp"
             @clear-selection="clearSelection"
@@ -240,6 +243,7 @@
           :view-mode="viewMode"
           :match-ids="matchIdSet"
           :current-match-id="currentMatchId"
+          :cell-errors="teacherCellErrors"
           @set-selected="onSetSelected"
           @class-edit="onClassEdit"
           @student-move="onStudentMove"
@@ -355,6 +359,7 @@
 
     <PlanClassEditDialog
       v-model="classEditDialogVisible"
+      :field-errors="fieldErrors"
       :mode="classEditMode"
       :plan-class="classEditTarget"
       :submitting="loading"
@@ -399,6 +404,7 @@ import {
   type RosterChip,
   type RosterViewMode,
   type TeacherField,
+  type TeacherRole,
   type UndoGroup,
 } from '@/components/enrollment/planning/planHelpers'
 import { getTeacherOptions } from '@/api/classrooms'
@@ -425,6 +431,7 @@ const {
   error,
   versionConflict,
   staleAfterWrite,
+  fieldErrors,
   state,
   load,
   generate,
@@ -468,6 +475,9 @@ const inPrepPeriod = computed(() => {
   return !!st && isWithinPrepPeriod(today, st.prep_start_date, st.apply_date)
 })
 const graduationGrade = computed(() => (plan.value ? graduationGradeName(plan.value.students) : null))
+// 自動畢業是否開啟：後端 StatusOut 加 auto_graduation_enabled 後改讀它（目前一律視為開啟，
+// 也就是保守地提醒「會被自動畢業」）
+const autoGraduationEnabled = computed(() => true)
 
 // 尚無草稿：講清楚何時進入準備期、系統會不會自動產生、現在產生會依據什麼
 const noneDescription = computed(() => {
@@ -798,12 +808,36 @@ watch(
   { immediate: true },
 )
 
+// 老師格直接改：成功不跳 toast（格子本身就顯示新老師）；失敗時 composable 會提示，
+// 並依後端 detail.field 把原因留在那一格上，直到下一次成功寫入。
+const ROLE_BY_FIELD: Record<TeacherField, TeacherRole> = {
+  head_teacher_id: 'head',
+  assistant_teacher_id: 'assistant',
+  art_teacher_id: 'art',
+}
+const teacherCellErrors = ref<Record<string, string>>({})
+
 async function onTeacherChange(planClassId: number, field: TeacherField, teacherId: number | null): Promise<void> {
+  const key = `${planClassId}:${ROLE_BY_FIELD[field]}`
   const ok = await updateClass(planClassId, { [field]: teacherId } as ClassUpdatePayload)
-  if (ok) notifySaved(teacherId == null ? '已清除老師' : '已更新老師')
+  if (ok) {
+    const { [key]: _cleared, ...rest } = teacherCellErrors.value
+    teacherCellErrors.value = rest
+    return
+  }
+  const message = fieldErrors.value[field]
+  if (message) teacherCellErrors.value = { ...teacherCellErrors.value, [key]: message }
 }
 
-const carryOverSlots = computed(() => (plan.value ? countCarryOverSlots(plan.value.classes) : 0))
+// 計畫換了版本（任何寫入成功、重新載入）就不再沿用舊的格子錯誤
+watch(() => plan.value?.version, () => {
+  teacherCellErrors.value = {}
+})
+
+// 「沿用原班老師（N）」：N 用後端 carry_over_available（＝按下去實際會填的格數，已排除
+// 停用、預定離職、他班已占用）；候選數＝空著且原班有老師的格數，用來判斷要不要說明為何是 0
+const carryOverSlots = computed(() => plan.value?.carry_over_available ?? 0)
+const carryOverCandidates = computed(() => (plan.value ? countCarryOverSlots(plan.value.classes) : 0))
 
 const emptyTeacherSlots = computed(() => {
   const classes = plan.value?.classes ?? []
@@ -818,7 +852,7 @@ const emptyTeacherSlots = computed(() => {
 async function onCarryOverClick(): Promise<void> {
   try {
     await ElMessageBox.confirm(
-      `將依原班老師帶入 ${carryOverSlots.value} 個空著的老師欄位（班導、副班導、美語老師）。已指派的不會被覆蓋；已停用、或已在其他班擔任班導／副班導的老師會略過。`,
+      `將依原班老師帶入 ${carryOverSlots.value} 個空著的老師欄位（班導、副班導、美語老師）。已指派的不會被覆蓋；已停用、預定離職、或已在其他班擔任班導／副班導的老師會略過。`,
       '沿用原班老師',
       { type: 'info', confirmButtonText: '帶入', cancelButtonText: '取消' },
     )
@@ -830,6 +864,7 @@ async function onCarryOverClick(): Promise<void> {
   const skipped: string[] = []
   if (result.skipped_inactive) skipped.push(`${result.skipped_inactive} 位已停用`)
   if (result.skipped_conflict) skipped.push(`${result.skipped_conflict} 位已在其他班帶班`)
+  if (result.skipped_resigning) skipped.push(`${result.skipped_resigning} 位預定離職`)
   const skippedText = skipped.length ? `；略過 ${skipped.join('、')}` : ''
   if (result.filled > 0) ElMessage.success(`已帶入 ${result.filled} 位老師${skippedText}`)
   else ElMessage.info(`沒有可帶入的老師${skippedText}`)
