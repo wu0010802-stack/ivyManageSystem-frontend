@@ -1082,7 +1082,8 @@ html.dark .portal-layout {
   box-shadow: var(--pt-elev-2) !important;
 }
 
-:deep(.el-card[shadow="never"]),
+/* shadow 是 prop、DOM 上是 class is-never-shadow（[shadow="never"] 屬性選擇器從未生效） */
+:deep(.el-card.is-never-shadow),
 :deep(.el-card.no-hover) {
   box-shadow: var(--pt-elev-1) !important;
 }

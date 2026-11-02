@@ -275,8 +275,11 @@ body {
   }
 }
 
-/* Cards used as containers (tables, forms) should not hover-float */
-.el-card[shadow="never"]:hover,
+/* Cards used as containers (tables, forms) should not hover-float.
+ * shadow 是元件 prop、不會渲染成 DOM 屬性，Element Plus 實際輸出 class is-never-shadow
+ * （舊寫法 [shadow="never"] 從未生效）。抬升的 transform 也會把卡內 position:fixed 的
+ * 抽屜／對話框困在卡片框裡，所以容器卡一定要退出。守衛：containerCardNoHoverLift.spec.ts */
+.el-card.is-never-shadow:hover,
 .el-card.no-hover:hover {
   transform: none;
   box-shadow: var(--shadow-sm) !important;
