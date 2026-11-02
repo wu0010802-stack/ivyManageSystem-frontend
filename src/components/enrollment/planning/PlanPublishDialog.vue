@@ -14,10 +14,13 @@
         <section class="apply-notice" :class="{ 'apply-notice--immediate': appliesImmediately }">
           <p class="apply-when">{{ applyWhenText }}</p>
           <ul class="consequence-list">
-            <li>{{ preview.totals.assigned_count }} 位學生搬到新班級</li>
+            <li>{{ assignedText }}</li>
             <li v-if="preview.totals.graduating_count">{{ preview.totals.graduating_count }} 位大班生轉為畢業</li>
             <li v-if="preview.totals.excluded_count">{{ preview.totals.excluded_count }} 位排除的學生不會被搬動，仍留在原班</li>
-            <li>各班老師的帶班資料同步更新，相關薪資需重新計算</li>
+            <li>各班老師的帶班資料同步更新</li>
+            <!-- 依 apply.py：帶班異動老師的未封存薪資＋（有學生搬動時）全園之後節慶發放月的
+                 未封存薪資會標 needs_recalc；系統不會自動重算 -->
+            <li>帶班有異動的老師，以及全園之後節慶獎金發放月的未封存薪資，會標成「待重算」；要由負責薪資的同仁到薪資頁重新計算，已封存的月份不受影響</li>
           </ul>
           <p class="apply-undo">{{ undoText }}</p>
           <!-- 補救模式：發布＝一小時內不可逆套用到現行班級，要求輸入學年確認意圖 -->
@@ -46,7 +49,8 @@
           <div class="total-chip"><span class="total-label">排除</span><span class="total-value">{{ preview.totals.excluded_count }}</span></div>
         </div>
 
-        <PlanIssuesSummary :issues="preview.issues" class="publish-issues" />
+        <!-- dialog 內沒有表格可定位：提醒事項只列文字，不給可點的外觀 -->
+        <PlanIssuesSummary :issues="preview.issues" :interactive="false" class="publish-issues" />
 
         <div class="section">
           <h4>逐班分派</h4>
@@ -71,22 +75,21 @@
           </table>
         </div>
 
-        <div class="section-row">
-          <div class="section">
-            <h4>畢業名單（{{ preview.graduating.length }}）</h4>
-            <ul class="summary-list">
-              <li v-for="s in preview.graduating" :key="s.id">{{ s.name }}<span class="source">{{ s.source_classroom_name ?? '' }}</span></li>
-            </ul>
-          </div>
-          <div class="section">
-            <h4>排除名單（{{ preview.excluded.length }}）</h4>
-            <ul class="summary-list">
-              <li v-for="s in preview.excluded" :key="s.id">
-                {{ s.name }}<span class="source">{{ s.source_classroom_name ?? '' }}</span>
-                <span v-if="s.exclude_reason" class="reason">（{{ s.exclude_reason }}）</span>
-              </li>
-            </ul>
-          </div>
+        <!-- 畢業名單常有三、四十人：多欄排列，不再一人一行把 dialog 拉成長條 -->
+        <div class="section">
+          <h4>畢業名單（{{ preview.graduating.length }}）</h4>
+          <ul class="summary-list summary-list--grid graduating-list">
+            <li v-for="s in preview.graduating" :key="s.id">{{ s.name }}<span class="source">{{ s.source_classroom_name ?? '' }}</span></li>
+          </ul>
+        </div>
+        <div class="section">
+          <h4>排除名單（{{ preview.excluded.length }}）</h4>
+          <ul class="summary-list summary-list--grid excluded-list">
+            <li v-for="s in preview.excluded" :key="s.id">
+              {{ s.name }}<span class="source">{{ s.source_classroom_name ?? '' }}</span>
+              <span v-if="s.exclude_reason" class="reason">（{{ s.exclude_reason }}）</span>
+            </li>
+          </ul>
         </div>
 
       </template>
@@ -136,11 +139,17 @@ const props = withDefaults(defineProps<{
   /** 補救模式：目前已是目標學年上學期，發布後排程下一輪（約一小時內）就套用。 */
   appliesImmediately?: boolean
   targetSchoolYear?: number | null
+  /** 已分班的一般升班生中，換到別班的人數（父層由草稿計算；預覽 API 沒有逐生資料） */
+  movedCount?: number
+  /** 已分班的留級生人數 */
+  retainCount?: number
 }>(), {
   submitting: false,
   applyDate: null,
   appliesImmediately: false,
   targetSchoolYear: null,
+  movedCount: 0,
+  retainCount: 0,
 })
 
 const emit = defineEmits<{
@@ -182,6 +191,15 @@ const applyWhenText = computed(() => {
   return date
     ? `發布後，系統會在 ${date}（${year} 學年上學期開始）自動套用到正式班級。`
     : '發布後，系統會在新學年上學期開始時自動套用到正式班級。'
+})
+const assignedText = computed(() => {
+  const total = preview.value?.totals.assigned_count ?? 0
+  const year = props.targetSchoolYear
+  const base = `${total} 位學生升到 ${year != null ? `${year} 學年` : '新學年'}班級`
+  const parts: string[] = []
+  if (props.movedCount > 0) parts.push(`${props.movedCount} 位換班`)
+  if (props.retainCount > 0) parts.push(`${props.retainCount} 位留級`)
+  return parts.length ? `${base}（其中 ${parts.join('、')}）` : base
 })
 const undoText = computed(() =>
   props.appliesImmediately
@@ -292,13 +310,13 @@ defineExpose({ reload, preview, blockingCount, canPublish })
 }
 
 .total-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .total-value {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
 }
 
 .publish-issues {
@@ -307,23 +325,17 @@ defineExpose({ reload, preview, blockingCount, canPublish })
 
 .section {
   margin-bottom: var(--space-4);
-  flex: 1;
 }
 
 .section h4 {
   margin: 0 0 var(--space-2);
-  font-size: 13px;
-}
-
-.section-row {
-  display: flex;
-  gap: var(--space-5);
+  font-size: var(--text-sm);
 }
 
 .classes-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .classes-table th,
@@ -342,20 +354,26 @@ defineExpose({ reload, preview, blockingCount, canPublish })
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
+}
+
+.summary-list--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  column-gap: var(--space-4);
 }
 
 .source {
   color: var(--text-secondary);
-  font-size: 12px;
-  margin-left: 6px;
+  font-size: var(--text-xs);
+  margin-left: var(--space-1);
 }
 
 .reason {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 </style>

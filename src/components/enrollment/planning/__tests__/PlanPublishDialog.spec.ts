@@ -112,7 +112,7 @@ describe('PlanPublishDialog', () => {
     const text = w.text()
     expect(text).toContain('2027/08/01')
     expect(text).toContain('自動套用')
-    expect(text).toContain('3 位學生搬到新班級')
+    expect(text).toContain('3 位學生升到 116 學年班級')
     expect(text).toContain('1 位大班生轉為畢業')
     expect(text).toContain('1 位排除的學生不會被搬動')
     expect(text).toContain('撤回發布')
@@ -157,6 +157,50 @@ describe('PlanPublishDialog', () => {
     await input.setValue('１１５')
     expect(confirmBtn()?.props('disabled')).toBe(false)
     expect(w.find('.confirm-year-error').exists()).toBe(false)
+  })
+
+  it('升班人數附上換班與留級的拆分（為 0 的不寫）', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2027-08-01', targetSchoolYear: 116, movedCount: 2, retainCount: 1 })
+    await flushPromises()
+    expect(w.text()).toContain('3 位學生升到 116 學年班級（其中 2 位換班、1 位留級）')
+
+    await w.setProps({ movedCount: 0, retainCount: 1 })
+    expect(w.text()).toContain('（其中 1 位留級）')
+    await w.setProps({ movedCount: 0, retainCount: 0 })
+    expect(w.text()).not.toContain('其中')
+  })
+
+  it('薪資後果講清楚：誰的薪資會標成待重算、由誰去算', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2027-08-01', targetSchoolYear: 116 })
+    await flushPromises()
+    const text = w.find('.consequence-list').text()
+    expect(text).not.toContain('相關薪資需重新計算')
+    expect(text).toContain('待重算')
+    expect(text).toContain('負責薪資的同仁')
+    expect(text).toContain('已封存')
+  })
+
+  it('提醒事項在 dialog 內是純文字，不可點（沒有表格可定位）', async () => {
+    mockGetPreview.mockResolvedValue({
+      data: previewFixture({
+        issues: { blocking: [], warnings: [{ code: 'assistant_teacher_missing', message: '班級「小班A」尚未指派副班導', plan_class_id: 10, student_id: null }] },
+      }),
+    })
+    const w = mountDialog()
+    await flushPromises()
+    await w.find('.group-toggle').trigger('click')
+    const item = w.find('.issue-item')
+    expect(item.exists()).toBe(true)
+    expect(item.attributes('role')).toBeUndefined()
+  })
+
+  it('畢業名單用多欄排列（長名單不再一人一行）', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.find('.graduating-list').classes()).toContain('summary-list--grid')
   })
 
   it('預覽載入失敗：顯示錯誤訊息，不顯示「尚無預覽資料」', async () => {
