@@ -55,7 +55,12 @@
       <div class="step-body">
         <span class="step-title">發布</span>
         <span class="step-status">{{ publishStatus }}</span>
-        <span class="step-sub">{{ applyText }}</span>
+        <span class="step-sub" :class="{ 'is-danger': !schedulerEnabled }">{{ applyText }}</span>
+        <span
+          v-if="retainDeadline"
+          class="step-sub retain-deadline"
+          :class="`is-${retainDeadline.tone}`"
+        >{{ retainDeadline.text }}</span>
       </div>
     </li>
   </ol>
@@ -64,7 +69,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Check } from '@element-plus/icons-vue'
-import { formatPlanDate } from './planHelpers'
+import {
+  GRADUATION_CATCHUP_DAYS,
+  addDaysISO,
+  daysBetweenISO,
+  formatPlanDate,
+  retainRiskPhase,
+} from './planHelpers'
 
 type StepState = 'done' | 'blocking' | 'pending'
 
@@ -82,11 +93,25 @@ const props = withDefaults(defineProps<{
   busy?: boolean
   /** 編班表不在「老師指派」檢視時顯示「去指派」 */
   showTeacherLink?: boolean
+  /** 排程（自動產生／套用）是否啟用；關閉時不寫「自動套用」 */
+  schedulerEnabled?: boolean
+  /** 今天（'YYYY-MM-DD'，台北）；空字串＝不算剩幾天 */
+  today?: string
+  /** 畢業年級留級生人數（後端 status.retain_pending_count）：草稿沒發布，畢業日一到會被畢業 */
+  retainPendingCount?: number
+  graduationDate?: string | null
+  /** 畢業年級名稱（例如「大班」）；判斷不出來時寫「畢業年級」 */
+  graduationGradeName?: string | null
 }>(), {
   applyDate: null,
   appliesImmediately: false,
   busy: false,
   showTeacherLink: false,
+  schedulerEnabled: true,
+  today: '',
+  retainPendingCount: 0,
+  graduationDate: null,
+  graduationGradeName: null,
 })
 
 const emit = defineEmits<{
@@ -129,9 +154,38 @@ const publishStatus = computed(() =>
   props.blockingCount > 0 ? `還有 ${props.blockingCount} 項阻擋，處理完才能發布` : '可以發布',
 )
 const applyText = computed(() => {
+  if (!props.schedulerEnabled) return '自動套用未啟用：發布後不會自動套用，請聯絡系統管理員開啟'
   if (props.appliesImmediately) return '發布後約一小時內套用到現行班級'
   const date = formatPlanDate(props.applyDate)
-  return date ? `發布後 ${date} 自動套用` : '發布後於新學年開學時自動套用'
+  if (!date) return '發布後於新學年開學時自動套用'
+  if (!props.today || !props.applyDate) return `發布後 ${date} 自動套用`
+  return `請在 ${date} 前發布（還有 ${Math.max(0, daysBetweenISO(props.today, props.applyDate))} 天），當天自動套用`
+})
+
+// 留在畢業年級的留級生：草稿不受豁免，畢業日一到（含之後 7 天補跑）就會被自動畢業。
+// 只算還沒過補跑期的；14 天內轉警示色。
+const RETAIN_WARN_DAYS = 14
+const retainDeadline = computed<{ text: string; tone: 'normal' | 'warning' | 'danger' } | null>(() => {
+  const count = props.retainPendingCount
+  const graduation = props.graduationDate
+  if (count <= 0 || !graduation || !props.today) return null
+  const who = `${count} 位${props.graduationGradeName ?? '畢業年級'}留級生`
+  const phase = retainRiskPhase(props.today, graduation)
+  if (phase === 'before') {
+    const days = daysBetweenISO(props.today, graduation)
+    return {
+      text: `有 ${who}，須在畢業日 ${formatPlanDate(graduation)} 前發布（還有 ${days} 天）`,
+      tone: days <= RETAIN_WARN_DAYS ? 'warning' : 'normal',
+    }
+  }
+  if (phase === 'catchup') {
+    const until = formatPlanDate(addDaysISO(graduation, GRADUATION_CATCHUP_DAYS))
+    return {
+      text: `有 ${who}：已過畢業日，系統到 ${until} 前仍可能把他們畢業，請盡快發布`,
+      tone: 'danger',
+    }
+  }
+  return null
 })
 
 function stepClass(state: StepState): Record<string, boolean> {
@@ -217,6 +271,16 @@ function stepClass(state: StepState): Record<string, boolean> {
 .step-sub {
   font-size: var(--text-xs);
   color: var(--text-secondary);
+}
+
+.step-sub.is-warning {
+  color: var(--color-warning-darker);
+  font-weight: var(--font-weight-semibold);
+}
+
+.step-sub.is-danger {
+  color: var(--color-danger-darker);
+  font-weight: var(--font-weight-semibold);
 }
 
 .step-actions {

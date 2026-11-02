@@ -94,4 +94,46 @@ describe('PlanNextSteps', () => {
     expect(mountSteps({ showTeacherLink: false }).find('.btn-show-teachers').exists()).toBe(false)
     expect(mountSteps({ showTeacherLink: true, classCount: 0 }).find('.btn-show-teachers').exists()).toBe(false)
   })
+  // ── FE-C：發布截止、自動套用未啟用、留級生倒數 ──
+
+  it('發布步驟寫出截止日與剩幾天', () => {
+    const w = mountSteps({ today: '2027-07-10', schedulerEnabled: true })
+    expect(w.findAll('.next-step')[2].text()).toContain('請在 2027/08/01 前發布（還有 22 天），當天自動套用')
+  })
+
+  it('自動套用未啟用：不寫「自動套用」，改警告發布後不會套用', () => {
+    const w = mountSteps({ today: '2027-07-10', schedulerEnabled: false })
+    const step = w.findAll('.next-step')[2]
+    expect(step.text()).toContain('自動套用未啟用：發布後不會自動套用，請聯絡系統管理員開啟')
+    expect(step.text()).not.toContain('當天自動套用')
+    expect(step.find('.step-sub.is-danger').exists()).toBe(true)
+  })
+
+  it('有畢業年級留級生：寫出須在畢業日前發布；14 天內轉警示色，年級名用實際名稱', () => {
+    const far = mountSteps({
+      today: '2027-06-01', retainPendingCount: 3, graduationDate: '2027-07-31', graduationGradeName: '大班',
+    })
+    const farLine = far.find('.retain-deadline')
+    expect(farLine.text()).toBe('有 3 位大班留級生，須在畢業日 2027/07/31 前發布（還有 60 天）')
+    expect(farLine.classes()).not.toContain('is-warning')
+
+    const near = mountSteps({
+      today: '2027-07-20', retainPendingCount: 3, graduationDate: '2027-07-31', graduationGradeName: '大大班',
+    })
+    expect(near.find('.retain-deadline').text()).toContain('3 位大大班留級生')
+    expect(near.find('.retain-deadline').classes()).toContain('is-warning')
+  })
+
+  it('畢業日後的補跑期間：警告隨時可能被畢業；補跑期過後不再顯示', () => {
+    const catchup = mountSteps({
+      today: '2027-08-02', retainPendingCount: 2, graduationDate: '2027-07-31', graduationGradeName: null,
+    })
+    const line = catchup.find('.retain-deadline')
+    expect(line.text()).toContain('2 位畢業年級留級生')
+    expect(line.text()).toContain('2027/08/07')
+    expect(line.classes()).toContain('is-danger')
+
+    const after = mountSteps({ today: '2027-08-09', retainPendingCount: 2, graduationDate: '2027-07-31' })
+    expect(after.find('.retain-deadline').exists()).toBe(false)
+  })
 })
