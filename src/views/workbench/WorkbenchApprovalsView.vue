@@ -33,9 +33,11 @@ const loading = ref(false)
 // 給模板區別「畫骨架」與「靜默重整」（重整時保持原有資料 + 表格，避免閃爍）。
 const isFirstLoad = ref(true)
 
-const { items: pendingLeaves,          fetch: fetchPendingLeaves    } = useFetchPending(getLeaves)
-const { items: pendingOvertimes,       fetch: fetchPendingOvertimes } = useFetchPending(getOvertimes)
-const { items: pendingPunchCorrections, fetch: fetchPendingCorrections } = useFetchPending(getCorrections)
+const { items: pendingLeaves,          fetch: fetchPendingLeaves,    error: leavesLoadError      } = useFetchPending(getLeaves)
+const { items: pendingOvertimes,       fetch: fetchPendingOvertimes, error: overtimesLoadError   } = useFetchPending(getOvertimes)
+const { items: pendingPunchCorrections, fetch: fetchPendingCorrections, error: correctionsLoadError } = useFetchPending(getCorrections)
+// 任一佇列沒載到：不得顯示成「0 筆待審／全部已處理」（day-qa F6）
+const anyLoadError = computed(() => leavesLoadError.value || overtimesLoadError.value || correctionsLoadError.value)
 
 // 跨佇列關鍵字搜尋：三佇列各自客端過濾（比對員工姓名），共用同一個輸入框
 // 與搜尋字串（approvalSearch），寫入時同步灌到三個 composable 的 searchQuery
@@ -363,7 +365,10 @@ onMounted(() => {
   <div class="approval-page">
     <PageHeader title="審核工作台" subtitle="集中查看待審請假、加班與補打卡，並可直接跳到對應管理頁處理。">
       <template #actions>
-        <el-tag v-if="totalPending > 0" type="danger" effect="dark" size="large">
+        <el-tag v-if="anyLoadError" type="danger" effect="dark" size="large">
+          部分清單載入失敗
+        </el-tag>
+        <el-tag v-else-if="totalPending > 0" type="danger" effect="dark" size="large">
           {{ totalPending }} 項待審核
         </el-tag>
         <el-tag v-else type="success" effect="dark" size="large">
@@ -373,13 +378,24 @@ onMounted(() => {
       </template>
     </PageHeader>
 
+    <el-alert
+      v-if="anyLoadError"
+      class="load-error-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      title="有待審清單沒有載入成功，下方數字可能不完整"
+      description="請按右上角「重新整理」再試一次；若持續失敗，請改到各管理頁查看。"
+    />
+
     <OtherSignoffsStrip ref="otherSignoffsRef" />
 
     <div class="shortcut-grid">
       <el-card class="shortcut-card" shadow="hover">
         <div class="shortcut-card__meta">
           <span class="shortcut-card__title">請假管理</span>
-          <el-tag :type="pendingLeaves.length > 0 ? 'warning' : 'success'" effect="plain">
+          <el-tag v-if="leavesLoadError" type="danger" effect="plain">載入失敗</el-tag>
+          <el-tag v-else :type="pendingLeaves.length > 0 ? 'warning' : 'success'" effect="plain">
             {{ pendingLeaves.length }} 筆待審
           </el-tag>
         </div>
@@ -393,7 +409,8 @@ onMounted(() => {
       <el-card class="shortcut-card" shadow="hover">
         <div class="shortcut-card__meta">
           <span class="shortcut-card__title">加班管理</span>
-          <el-tag :type="pendingOvertimes.length > 0 ? 'warning' : 'success'" effect="plain">
+          <el-tag v-if="overtimesLoadError" type="danger" effect="plain">載入失敗</el-tag>
+          <el-tag v-else :type="pendingOvertimes.length > 0 ? 'warning' : 'success'" effect="plain">
             {{ pendingOvertimes.length }} 筆待審
           </el-tag>
         </div>
@@ -407,7 +424,8 @@ onMounted(() => {
       <el-card class="shortcut-card" shadow="hover">
         <div class="shortcut-card__meta">
           <span class="shortcut-card__title">{{ MODULE_TERMS.attendance }}</span>
-          <el-tag :type="pendingPunchCorrections.length > 0 ? 'warning' : 'success'" effect="plain">
+          <el-tag v-if="correctionsLoadError" type="danger" effect="plain">載入失敗</el-tag>
+          <el-tag v-else :type="pendingPunchCorrections.length > 0 ? 'warning' : 'success'" effect="plain">
             {{ pendingPunchCorrections.length }} 筆待審
           </el-tag>
         </div>
@@ -870,6 +888,10 @@ onMounted(() => {
 <style scoped>
 .approval-page {
   padding: 0;
+}
+
+.load-error-alert {
+  margin-bottom: 16px;
 }
 
 .shortcut-grid {
