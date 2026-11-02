@@ -19,6 +19,7 @@ import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useConfirmDelete } from '@/composables'
 import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
+import { isAfterTaipeiToday } from '@/utils/format'
 import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
 import BonusImpactPreview from '@/components/students/BonusImpactPreview.vue'
 import StudentEditDialog from '@/components/student/StudentEditDialog.vue'
@@ -75,6 +76,8 @@ const graduateDialogVisible = ref(false)
 const graduateSubmitting = ref(false)
 const graduateTarget = ref<StudentRow | null>(null)
 const graduateBatchMode = ref(false)
+// 後端離園日不可晚於今日（台北）；預定的畢業/轉出請於當日再執行。單筆與批次共用。
+const disabledGraduationDate = (d: Date) => isAfterTaipeiToday(d)
 const graduateFormRef = ref<{ validate: (cb: (valid: boolean) => void) => void } | null>(null)
 const graduateForm = reactive({ graduation_date: '', status: '已畢業', reason: '', notes: '' })
 const graduateRules = {
@@ -838,6 +841,7 @@ onMounted(async () => {
             type="date"
             placeholder="選擇日期"
             value-format="YYYY-MM-DD"
+            :disabled-date="disabledGraduationDate"
             style="width: 100%"
           />
         </el-form-item>

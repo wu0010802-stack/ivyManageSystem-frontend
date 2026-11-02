@@ -183,6 +183,13 @@ export const todayTaipeiISO = (now: Date = new Date()) => {
   return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`
 }
 
+// 日期選擇器 :disabled-date 用：選擇器日期是瀏覽器本地午夜，後端判「今日」用 Asia/Taipei，
+// 故以本地日曆日（dateToLocalISO）對台北今日比較，晚於台北今日者禁選。
+export const isAfterTaipeiToday = (d: unknown) => {
+  const iso = dateToLocalISO(d)
+  return iso !== '' && iso > todayTaipeiISO()
+}
+
 // 後端 naive DateTime 欄位（utils/taipei_time.now_taipei_naive()）的同格式字串：
 // `YYYY-MM-DDTHH:mm:ss`，無 Z、無 offset，語意為 Asia/Taipei 牆鐘。
 // 用於樂觀更新時自行補上後端 response 沒帶回來的 naive 時間欄位——用

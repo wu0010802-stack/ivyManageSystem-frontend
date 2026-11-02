@@ -301,3 +301,20 @@ describe('StudentListPanel 轉班後的編班計畫警示（TERM-F9）', () => {
     expect(vi.mocked(ElMessage.warning)).not.toHaveBeenCalled()
   })
 })
+
+describe('StudentListPanel 離園日期不可選未來日（UAT S-14）', () => {
+  it('disabledGraduationDate：台北今日可選、明日起禁選（單筆與批次共用同一個選擇器）', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-02T10:00:00Z'))
+    try {
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as { disabledGraduationDate: (d: Date) => boolean }
+      expect(vm.disabledGraduationDate(new Date(2026, 10, 2))).toBe(false)
+      expect(vm.disabledGraduationDate(new Date(2026, 10, 3))).toBe(true)
+      expect(vm.disabledGraduationDate(new Date(2027, 11, 31))).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+

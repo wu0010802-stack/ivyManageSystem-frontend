@@ -61,6 +61,9 @@ interface StudentItem {
 // ─── 狀態 ───────────────────────────────────────────────
 const calls = ref<DismissalCall[]>([])
 const loading = ref(false)
+// 載入失敗的持久錯誤態（S-13）：toast 會消失，失敗不可落入「沒有在籍學生」等空狀態。
+const callsLoadFailed = ref(false)
+const rosterLoadFailed = ref(false)
 // 班級清單刻意不走全域 classroomStore：那支 store 由 8 個頁面共用、且 _createFetchStore
 // 呼叫 apiFn() 不帶參數，只拿得到「當期學期」的班級。接送通知的名單是「今天在籍的孩子」
 // 不跟學期，暑假期間學生已編入下學年班級，用當期清單會全部對不上班級（2026-07-30 根因）。
@@ -192,6 +195,7 @@ const loadCalls = async (force: boolean) => {
     const res = await (force ? getDismissalCallsFresh(params) : getDismissalCalls(params))
     if (mySeq !== fetchDispatchSeq) return
     calls.value = (res.data || []) as DismissalCall[]
+    callsLoadFailed.value = false
   } catch (e) {
     if (isAuthFailureStatus((e as { response?: { status?: number } })?.response?.status)) {
       authFailed = true
@@ -199,7 +203,10 @@ const loadCalls = async (force: boolean) => {
       return
     }
     // 過時快照不再彈錯（前一輪請求已被新一輪取代）
-    if (mySeq === fetchDispatchSeq) ElMessage.error(friendlyError('載入接送通知失敗', e))
+    if (mySeq === fetchDispatchSeq) {
+      callsLoadFailed.value = true
+      ElMessage.error(friendlyError('載入接送通知失敗', e))
+    }
   } finally {
     if (mySeq === fetchDispatchSeq) loading.value = false
   }
@@ -232,9 +239,24 @@ const loadRoster = async () => {
     const res = await getDismissalRoster()
     students.value = res.data.students as StudentItem[]
     classrooms.value = res.data.classrooms as ClassroomInput[]
+    rosterLoadFailed.value = false
   } catch (e) {
+    rosterLoadFailed.value = true
     ElMessage.error(friendlyError('載入點名單失敗', e))
   }
+}
+
+// 擋住內容區的載入失敗：點名單失敗只影響 POS 看板（active 視圖）；通知列表失敗且
+// 手上沒有任何舊資料時才擋（有舊資料的輪詢失敗仍顯示舊資料＋toast）。
+const loadBlocked = computed(() =>
+  (isActiveView.value && rosterLoadFailed.value) ||
+  (callsLoadFailed.value && calls.value.length === 0),
+)
+const retryLoad = async () => {
+  const tasks: Promise<unknown>[] = []
+  if (callsLoadFailed.value) tasks.push(fetchCalls())
+  if (rosterLoadFailed.value) tasks.push(loadRoster())
+  await Promise.all(tasks)
 }
 
 // ─── 建立通知（備註路徑，少見情境走 Dialog）──────────────
@@ -573,7 +595,19 @@ onUnmounted(() => {
     <!-- active 視圖：三欄 POS 佈局（左＝班級列表／中＝該班學生 card／右＝接送排序佇列），
          取代原本的搜尋框＋待接送看板＋點名單三段（D7）。DismissalPosBoard 內部自行組裝
          T-005/T-007/T-010，並用 useDismissalPosQueue 管理右欄 5 秒倒數＋合併排序。 -->
-    <template v-if="isActiveView">
+    <el-alert
+      v-if="loadBlocked"
+      data-testid="dismissal-load-error"
+      type="error"
+      show-icon
+      :closable="false"
+      title="放學佇列資料載入失敗"
+    >
+      <p>目前無法確認在籍學生與接送通知，請重試；在載入成功前請勿視為沒有學生或沒有通知。</p>
+      <el-button data-testid="dismissal-load-retry" type="primary" @click="retryLoad">重試</el-button>
+    </el-alert>
+
+    <template v-else-if="isActiveView">
       <DismissalPosBoard
         :classrooms="classrooms"
         :students="students"

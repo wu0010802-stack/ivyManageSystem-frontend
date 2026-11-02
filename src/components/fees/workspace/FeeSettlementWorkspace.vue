@@ -64,7 +64,12 @@
 
     <KeepAlive>
       <CashHandoverTab v-if="view === 'handover'" ref="handoverRef" embedded />
-      <CloseTab v-else ref="closeRef" @navigate="(target) => emit('navigate', target)" />
+      <CloseTab
+        v-else
+        ref="closeRef"
+        :requested-month="month"
+        @navigate="(target) => emit('navigate', target)"
+      />
     </KeepAlive>
   </section>
 </template>
@@ -74,7 +79,7 @@
  * 結算工作區：每日交接（現金交接批）＋月結（當期關帳）。
  * 月結 checklist 的「前往修正」透過 navigate 事件冒泡給 StudentFeeView 導頁。
  */
-import { computed, nextTick, onActivated, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import CashHandoverTab from '@/components/fees/CashHandoverTab.vue'
@@ -82,10 +87,19 @@ import CloseTab from '@/components/fees/CloseTab.vue'
 import FeeWorkspaceToolbar from './FeeWorkspaceToolbar.vue'
 import { FEE_WORKSPACE_VIEWS, type FeeNavTarget } from './feesNavigation'
 
-const props = withDefaults(defineProps<{ view?: string }>(), { view: 'handover' })
+const props = withDefaults(
+  defineProps<{
+    view?: string
+    /** 月結月份（route ?month=，YYYY-MM）；未帶＝月結預設本月 */
+    month?: string
+  }>(),
+  { view: 'handover', month: undefined },
+)
 
 const emit = defineEmits<{
   'change-view': [view: string]
+  /** 工具列換月結月份：交殼層寫回網址 */
+  'change-month': [month: string]
   navigate: [target: FeeNavTarget]
 }>()
 
@@ -95,9 +109,11 @@ function onViewChange(next: string) {
   if (next !== props.view) emit('change-view', next)
 }
 
-// 切回結算工作區時刷新（KeepAlive activate）：交接批與關帳摘要會被別處的
-// 操作改動——帳單頁與對帳工作區收的現金都會落進當日交接批，切回來若還是
-// 舊快照，會計會對著過期的期望金額交錢。
+// 切回結算工作區時要刷新：交接批與關帳摘要會被別處的操作改動——帳單頁與
+// 對帳工作區收的現金都會落進當日交接批，切回來若還是舊快照，會計會對著過期
+// 的期望金額交錢。刷新由 CashHandoverTab／CloseTab 各自的 onActivated 負責
+// （同工作區內切子頁也要刷，且祖先 KeepAlive 啟用時同樣會觸發），本元件
+// 不可再重打一次，否則切回時同一支 API 打兩次。
 const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 
 const handoverRef = ref<{
@@ -112,11 +128,12 @@ const closeRef = ref<{
   setMonth?: (next: string) => void
 } | null>(null)
 
-// 月結的月份選擇上移到工具列；本地 ref 只作為 picker 的顯示值
+// 月結的月份選擇上移到工具列；本地 ref 只作為 picker 的顯示值。
+// 網址帶的月份由 CloseTab（requested-month）自己套用，這裡等它套完再回讀。
 const closeMonth = ref('')
 watch(
-  () => props.view,
-  async (v) => {
+  () => [props.view, props.month] as const,
+  async ([v]) => {
     if (v !== 'close') return
     await nextTick()
     closeMonth.value = closeRef.value?.month ?? ''
@@ -134,17 +151,6 @@ function onCloseMonthChange(value: unknown) {
   if (!next) return
   closeMonth.value = next
   closeRef.value?.setMonth?.(next)
+  emit('change-month', next)
 }
-
-// 首次 activate 與 mount 同一輪、子元件自己會載，故跳過第一次（用旗標而非
-// onMounted 時序，避免依賴 hook 執行順序）
-let activatedOnce = false
-onActivated(() => {
-  if (activatedOnce) {
-    handoverRef.value?.fetchBatches?.()
-    closeRef.value?.fetchSummary?.()
-    closeRef.value?.fetchCloses?.()
-  }
-  activatedOnce = true
-})
 </script>

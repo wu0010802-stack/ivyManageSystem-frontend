@@ -250,3 +250,34 @@ describe('feesNavigation：ws/view 解析', () => {
     })
   })
 })
+
+describe('feesNavigation：月結月份（?month=，工作台「去月結」帶最早未關帳月份）', () => {
+  it('月結檢視帶合法 month 直接採用且不需正規化', () => {
+    const loc = resolveFeesLocation({ ws: 'settlement', view: 'close', month: '2026-09' })
+    expect(loc.month).toBe('2026-09')
+    expect(loc.needsNormalize).toBe(false)
+    expect(loc.normalizedQuery.month).toBe('2026-09')
+  })
+
+  it('非月結檢視上的 month 會被清掉', () => {
+    const loc = resolveFeesLocation({ ws: 'settlement', view: 'handover', month: '2026-09' })
+    expect(loc.month).toBeNull()
+    expect(loc.needsNormalize).toBe(true)
+    expect(loc.normalizedQuery.month).toBeUndefined()
+  })
+
+  it('非法 month 會被清掉（月結預設本月）', () => {
+    for (const month of ['2026-13', '2026-9', 'bogus', '2026-00']) {
+      const loc = resolveFeesLocation({ ws: 'settlement', view: 'close', month })
+      expect(loc.month).toBeNull()
+      expect(loc.needsNormalize).toBe(true)
+      expect(loc.normalizedQuery.month).toBeUndefined()
+    }
+  })
+
+  it('沒帶 month 時為 null 且不需正規化', () => {
+    const loc = resolveFeesLocation({ ws: 'settlement', view: 'close' })
+    expect(loc.month).toBeNull()
+    expect(loc.needsNormalize).toBe(false)
+  })
+})

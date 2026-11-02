@@ -241,7 +241,10 @@ describe('收款工作區切回時刷新', () => {
     expect(statementMocks.refresh).not.toHaveBeenCalled()
     wrapper.unmount()
   })
-  it('停在入帳媒合時切回，刷新的是媒合面板', async () => {
+  it('停在入帳媒合時切回，外層不重打媒合清單（由代收／存摺子頁 onActivated 自行重載）', async () => {
+    // 子頁的 onActivated 在祖先 KeepAlive 啟用時也會觸發；外層若再呼叫
+    // matchingRef.refresh()，切回時同一支清單 API 會打兩次。
+    // 真子元件「切回只多打一次」見 FeeSubtabActivation.test.ts。
     const wrapper = mount(keepAliveHost(FeeBillingWorkspace, { view: 'matching' }), {
       global: { stubs: GLOBAL_STUBS },
     })
@@ -252,13 +255,17 @@ describe('收款工作區切回時刷新', () => {
     await wrapper.setProps({ show: true })
     await flushAll()
 
-    expect(matchingMocks.refresh).toHaveBeenCalledTimes(1)
+    expect(matchingMocks.refresh).not.toHaveBeenCalled()
     expect(statementMocks.refresh).not.toHaveBeenCalled()
+    expect(recordsMocks.fetchRecords).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })
 
 describe('結算工作區切回時刷新', () => {
+  // 交接／月結子頁各自 onActivated 重新載入（同工作區切子頁也要刷），且祖先
+  // KeepAlive 啟用時同樣觸發；外層工作區不得再呼叫子頁的刷新，否則切回時同
+  // 一支 API 打兩次。真子元件「切回只多打一次」見 FeeSubtabActivation.test.ts。
   it('首次掛載不額外呼叫刷新', async () => {
     const wrapper = mount(keepAliveHost(FeeSettlementWorkspace), {
       global: { stubs: GLOBAL_STUBS },
@@ -268,7 +275,7 @@ describe('結算工作區切回時刷新', () => {
     wrapper.unmount()
   })
 
-  it('切走再切回後刷新當日交接批（帳單頁收的現金會進當日批）', async () => {
+  it('切走再切回時外層不重複呼叫交接批刷新（交由子頁 onActivated）', async () => {
     const wrapper = mount(keepAliveHost(FeeSettlementWorkspace), {
       global: { stubs: GLOBAL_STUBS },
     })
@@ -279,11 +286,11 @@ describe('結算工作區切回時刷新', () => {
     await wrapper.setProps({ show: true })
     await flushAll()
 
-    expect(handoverMocks.fetchBatches).toHaveBeenCalledTimes(1)
+    expect(handoverMocks.fetchBatches).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
-  it('停在月結時切回，重新取關帳摘要與關帳列表', async () => {
+  it('停在月結時切回，外層不重複呼叫關帳摘要／列表刷新（交由子頁 onActivated）', async () => {
     const wrapper = mount(
       keepAliveHost(FeeSettlementWorkspace, { view: 'close' }),
       { global: { stubs: GLOBAL_STUBS } },
@@ -295,8 +302,8 @@ describe('結算工作區切回時刷新', () => {
     await wrapper.setProps({ show: true })
     await flushAll()
 
-    expect(closeMocks.fetchSummary).toHaveBeenCalledTimes(1)
-    expect(closeMocks.fetchCloses).toHaveBeenCalledTimes(1)
+    expect(closeMocks.fetchSummary).not.toHaveBeenCalled()
+    expect(closeMocks.fetchCloses).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })

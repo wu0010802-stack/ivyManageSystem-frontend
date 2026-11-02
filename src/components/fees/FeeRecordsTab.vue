@@ -254,7 +254,7 @@
           <el-form-item label="入帳後累計已繳" prop="amount_paid">
             <el-input-number
               v-model="payForm.amount_paid"
-              :min="1"
+              :min="payMinAmount"
               :max="Math.min(payingRecord?.amount_due || 999999, 999999)"
               :step="1"
               :precision="0"
@@ -276,15 +276,17 @@
             </p>
           </div>
 
+          <!-- 後端對累計低於已登記金額一律 400（請改用退款流程）：收款不能下修，
+               多收或登錯要走退款或沖銷，這裡直接擋下並指路，不讓使用者撞 400 -->
           <el-alert
-            v-if="payDelta < 0"
-            data-test="pay-correction-warning"
-            type="warning"
+            v-if="payBelowPaid"
+            data-test="pay-below-paid-error"
+            type="error"
             :closable="false"
             show-icon
             class="pay-correction-alert"
-            title="更新後累計低於目前已繳"
-            description="送出後將以此金額「更正」原繳費紀錄，請確認是要修正先前登記的金額。"
+            :title="`累計已繳不能低於目前已繳 ${formatCurrency(payCurrentPaid)}`"
+            description="多收或登錯請改用「退款」，或在收款明細「沖銷」該筆收款。"
           />
 
           <!-- 帳單頁限現金（業主裁定 2026-09-01）：轉帳一律走入帳媒合
@@ -311,7 +313,13 @@
       </div>
       <template #footer>
         <el-button @click="attemptClosePayDialog">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitPay">{{ payDialogTitle }}</el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          :disabled="payBelowPaid"
+          data-test="pay-submit"
+          @click="submitPay"
+        >{{ payDialogTitle }}</el-button>
       </template>
     </el-dialog>
 
@@ -626,6 +634,9 @@ const payDialogTitle = computed(() =>
 const payCurrentPaid = computed(() => payingRecord.value?.amount_paid || 0)
 // 差額／尚欠僅為呈現用試算；amount_paid payload 仍是「入帳後累計」，計算規則不變
 const payDelta = computed(() => (payForm.value.amount_paid || 0) - payCurrentPaid.value)
+/** 累計不得低於目前已繳（後端 400）；未繳時至少 1 */
+const payMinAmount = computed(() => Math.max(payCurrentPaid.value, 1))
+const payBelowPaid = computed(() => payDelta.value < 0)
 const payRemaining = computed(() =>
   Math.max((payingRecord.value?.amount_due || 0) - (payForm.value.amount_paid || 0), 0),
 )
@@ -661,6 +672,7 @@ async function onPayDialogBeforeClose(done: () => void) {
 }
 
 async function submitPay() {
+  if (payBelowPaid.value) return
   const valid = await payFormRef.value?.validate().catch(() => false)
   if (!valid) return
   saving.value = true

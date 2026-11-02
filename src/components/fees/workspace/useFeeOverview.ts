@@ -17,6 +17,7 @@
  * - 現金交接看的是「所有未結批次」而非只有今天那一筆。
  * - 預繳退款導向現金項目（PrepaymentRefundsDialog 的所在），不是費用單退費頁。
  * - 關帳改盯「上個月」：本月還沒結束就催關帳，而關帳會 409 鎖死當月後續入帳。
+ *   （2026-11-02 起擴為「本學期起始月到上個月」最早的未關帳月份，並帶月份導航）
  * - 快取有 TTL 且隨身分切換清空（原本離開 /fees 再回來永遠是舊數字）。
  * - 載入失敗的項目另立分組並辨識 403，不再混進「沒有待辦」。
  */
@@ -121,7 +122,8 @@ const state = reactive({
   feeSummary: null as FeeSummaryLite | null,
   feeSummaryLoaded: false,
   monthClosed: null as boolean | null,
-  prevMonthClosed: null as boolean | null,
+  /** 本學期起始月到上個月之間未關帳的月份（YYYY-MM 升冪）；載入失敗為 null */
+  overdueCloseMonths: null as string[] | null,
   billSlips: null as {
     total: number
     pending: number
@@ -206,24 +208,68 @@ async function loadFeeSummary() {
   }
 }
 
+/** 'YYYY-MM' 位移 delta 個月 */
+function shiftMonth(label: string, delta: number): string {
+  const [y, m] = label.split('-').map(Number)
+  const index = y * 12 + (m - 1) + delta
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`
+}
+
+/**
+ * 該月所屬學期的起始月（YYYY-MM）。學期規則同後端 utils/academic：
+ * 上學期 8/1–隔年 1/31、下學期 2/1–7/31（1 月屬前一年的上學期）。
+ *
+ * ⚠ 刻意不 import `@/utils/academic` 的 academicTermForMonth：多支工作區測試
+ * 以只含 getCurrentAcademicTerm 的 factory mock 整個模組，引用其他 export 會讓
+ * 這些測試在模組載入時就炸掉。
+ */
+export function semesterStartMonth(label: string): string {
+  const [y, m] = label.split('-').map(Number)
+  if (m >= 8) return `${y}-08`
+  if (m >= 2) return `${y}-02`
+  return `${y - 1}-08`
+}
+
+/**
+ * 該催關帳的月份（YYYY-MM 升冪）：本學期起始月到上個月之間未關帳者。
+ *
+ * 只看上個月會漏掉更早的未關帳月份（staging 實測 2026-11：9 月、10 月都沒關，
+ * 工作台只提 10 月）。本月是學期第一個月（8 月、2 月）時區間只剩上個月——
+ * 上個月屬上一學期，但月份已結束仍要催，維持舊行為。本月不催（見 closeItem）。
+ */
+export function overdueCloseMonths(
+  currentMonth: string,
+  isClosed: (label: string) => boolean,
+): string[] {
+  const prev = shiftMonth(currentMonth, -1)
+  const semesterStart = semesterStartMonth(currentMonth)
+  // 字典序即時間序（YYYY-MM 固定寬度）
+  let cursor = semesterStart < prev ? semesterStart : prev
+  const months: string[] = []
+  while (cursor <= prev) {
+    if (!isClosed(cursor)) months.push(cursor)
+    cursor = shiftMonth(cursor, 1)
+  }
+  return months
+}
+
 async function loadMonthClosed() {
-  const [y, m] = monthLabel.value.split('-').map(Number)
-  const prevY = m === 1 ? y - 1 : y
-  const prevM = m === 1 ? 12 : m - 1
   try {
     const data = await getClosePeriods()
     const items = (data.items ?? []) as ClosePeriodLite[]
-    const closed = (yy: number, mm: number) =>
-      items.some(
-        (row) =>
-          row.close_year === yy && row.close_month === mm && row.status === 'closed',
-      )
-    state.monthClosed = closed(y, m)
-    state.prevMonthClosed = closed(prevY, prevM)
+    const closedLabels = new Set(
+      items
+        .filter((row) => row.status === 'closed')
+        .map((row) => `${row.close_year}-${String(row.close_month).padStart(2, '0')}`),
+    )
+    state.monthClosed = closedLabels.has(monthLabel.value)
+    state.overdueCloseMonths = overdueCloseMonths(monthLabel.value, (label) =>
+      closedLabels.has(label),
+    )
   } catch (err) {
     noteFailure(err)
     state.monthClosed = null
-    state.prevMonthClosed = null
+    state.overdueCloseMonths = null
   }
 }
 
@@ -350,7 +396,7 @@ export function __resetFeeOverview() {
   state.feeSummary = null
   state.feeSummaryLoaded = false
   state.monthClosed = null
-  state.prevMonthClosed = null
+  state.overdueCloseMonths = null
   state.billSlips = null
   state.collectionPending = null
   state.passbookPending = null
@@ -596,10 +642,17 @@ function refundItem(): FeeQueueItem {
   }
 }
 
-/** 上一個月的 YYYY-MM（關帳的實際對象） */
+/** 上一個月的 YYYY-MM */
 function prevMonthLabel(): string {
-  const [y, m] = monthLabel.value.split('-').map(Number)
-  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
+  return shiftMonth(monthLabel.value, -1)
+}
+
+/** 未關帳月份的待辦標題：只有上個月時維持舊文案，否則指名最早那個月 */
+function overdueCloseTitle(months: string[]): string {
+  const earliest = months[0]
+  if (months.length > 1) return `${earliest} 起 ${months.length} 個月尚未關帳`
+  if (earliest === prevMonthLabel()) return `上個月（${earliest}）尚未關帳`
+  return `${earliest} 尚未關帳`
 }
 
 /**
@@ -610,6 +663,9 @@ function prevMonthLabel(): string {
  * 才能繼續。舊版在 checklist 全過時把「本月可以關帳」標成待處理，等於從
  * 每月 1 號就把一個會癱瘓當月收款的動作置頂催促（結算頁籤的紅徽章也因此
  * 整個月不可能歸零）。本月只呈現進度，不催。
+ *
+ * 催的範圍是本學期起始月到上個月（見 overdueCloseMonths），target 帶最早未關帳
+ * 的月份——不帶的話月結頁預設本月，點「去月結」看到的根本不是待辦講的那個月。
  */
 function closeItem(): FeeQueueItem {
   const base = {
@@ -622,12 +678,17 @@ function closeItem(): FeeQueueItem {
   if (state.monthClosed === null) {
     return { ...base, state: 'unknown', detail: '無法載入關帳紀錄，點入月結查看' }
   }
-  if (state.prevMonthClosed === false) {
+  const overdue = state.overdueCloseMonths ?? []
+  if (overdue.length > 0) {
     return {
       ...base,
+      target: { ...base.target, month: overdue[0] },
       state: 'action',
-      title: `上個月（${prevMonthLabel()}）尚未關帳`,
-      detail: '月份已結束，關帳後快照凍結',
+      title: overdueCloseTitle(overdue),
+      detail:
+        overdue.length > 1
+          ? `未關帳：${overdue.join('、')}；月份已結束，關帳後快照凍結`
+          : '月份已結束，關帳後快照凍結',
       actionLabel: canApproveClose() ? '去月結' : '查看',
     }
   }

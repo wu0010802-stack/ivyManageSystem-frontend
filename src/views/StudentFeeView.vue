@@ -57,7 +57,9 @@
         <FeeSettlementWorkspace
           v-else
           :view="activeView ?? undefined"
+          :month="activeMonth ?? undefined"
           @change-view="onViewChange"
+          @change-month="onCloseMonthChange"
           @navigate="navigateTo"
         />
       </KeepAlive>
@@ -69,7 +71,7 @@
 /**
  * 學費管理（任務導向 IA）。
  *
- * 本檔只做資訊架構殼層：PageHeader、主導航、query（?ws=&view=&src=&imports=）
+ * 本檔只做資訊架構殼層：PageHeader、主導航、query（?ws=&view=&src=&imports=&month=）
  * 同步與工作區掛載；業務內容全部在 components/fees/ 與 workspace/ 子元件。
  *
  * 2026-09-02 簡化改版：
@@ -116,6 +118,8 @@ const activeWs = computed(() => resolved.value.ws)
 const activeView = computed(() => resolved.value.view)
 const activeSrc = computed(() => resolved.value.src)
 const activeMode = computed(() => resolved.value.mode)
+/** 月結月份（?month=）；工作台「尚未關帳 → 去月結」帶最早未關帳的那個月 */
+const activeMonth = computed(() => resolved.value.month)
 // 僅此頁生命週期內記憶；離開頁面、登出或租戶重掛時隨實例清除。
 const lastRecordsMode = ref('statement')
 watch(resolved, (loc) => {
@@ -156,6 +160,7 @@ function queryFor(target: FeeNavTarget): LocationQueryRaw {
   delete query.src
   delete query.imports
   delete query.mode
+  delete query.month
 
   const views = FEE_WORKSPACE_VIEWS[target.ws]
   let view: string | undefined
@@ -171,6 +176,9 @@ function queryFor(target: FeeNavTarget): LocationQueryRaw {
   const recordsMode = target.mode ?? lastRecordsMode.value
   if (target.ws === 'billing' && view === 'receivable' && recordsMode !== 'statement') {
     query.mode = recordsMode
+  }
+  if (target.month && target.ws === 'settlement' && view === 'close') {
+    query.month = target.month
   }
 
   // ?search= 是全域搜尋帶進來的一次性上下文（GlobalSearch 帶學生姓名直達
@@ -215,6 +223,12 @@ function onImportsToggle(open: boolean) {
   })
   if (open) router.push({ query })
   else router.replace({ query })
+}
+
+/** 月結工具列換月份：寫回網址，重新整理／上一頁才還原得了 */
+function onCloseMonthChange(month: string) {
+  if (month === activeMonth.value) return
+  router.push({ query: queryFor({ ws: 'settlement', view: 'close', month }) })
 }
 
 function onModeChange(mode: string) {

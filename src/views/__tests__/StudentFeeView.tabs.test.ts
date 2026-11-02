@@ -60,8 +60,8 @@ vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
   __esModule: true,
   default: {
     name: 'FeeSettlementWorkspace',
-    props: ['view'],
-    template: '<div data-test="ws-settlement" :data-view="view" />',
+    props: ['view', 'month'],
+    template: '<div data-test="ws-settlement" :data-view="view" :data-month="month" />',
   },
 }))
 import StudentFeeView from '../StudentFeeView.vue'
@@ -180,6 +180,41 @@ describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => 
       expect(Object.keys(q).sort()).toEqual(['mode', 'search', 'view', 'ws'])
       expect(q.search).toBe('王小美')
     }
+  })
+
+  it('工作台「去月結」帶月份 → 網址寫入 month，月結工作區收到該月（不再落在本月）', async () => {
+    const w = mountView()
+    await flushAll()
+    w.findComponent({ name: 'FeeWorkbench' }).vm.$emit('navigate', {
+      ws: 'settlement',
+      view: 'close',
+      month: '2026-09',
+    })
+    await flushAll()
+    expect(routerMocks.route!.query).toMatchObject({
+      ws: 'settlement',
+      view: 'close',
+      month: '2026-09',
+    })
+    expect(w.find('[data-test="ws-settlement"]').attributes('data-month')).toBe('2026-09')
+  })
+
+  it('月結工具列換月份 → 同步寫回網址（重新整理／上一頁可還原）', async () => {
+    const w = mountView({ ws: 'settlement', view: 'close', month: '2026-09' })
+    await flushAll()
+    w.findComponent({ name: 'FeeSettlementWorkspace' }).vm.$emit('change-month', '2026-10')
+    await flushAll()
+    expect(routerMocks.route!.query.month).toBe('2026-10')
+    expect(w.find('[data-test="ws-settlement"]').attributes('data-month')).toBe('2026-10')
+  })
+
+  it('從月結切到每日交接 → month 從網址移除', async () => {
+    const w = mountView({ ws: 'settlement', view: 'close', month: '2026-09' })
+    await flushAll()
+    w.findComponent({ name: 'FeeSettlementWorkspace' }).vm.$emit('change-view', 'handover')
+    await flushAll()
+    expect(routerMocks.route!.query.view).toBe('handover')
+    expect(routerMocks.route!.query).not.toHaveProperty('month')
   })
 
   it('頁首保留學費管理標題，不宣稱所有工作區都限本學期', async () => {

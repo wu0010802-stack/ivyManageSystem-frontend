@@ -183,3 +183,47 @@ describe('emit select', () => {
     expect(w.emitted('select')).toEqual([[{ cls: null, grade: null }]])
   })
 })
+
+// 2026-11-02 bug hunt F9：「未分班」的班名是 ''，原本到處用 truthy 判斷
+// 「有沒有選班」——選了未分班等於沒選：「全部」與「未分班」同時亮、月表顯示
+// 全校。約定：null＝全部（未指定），''＝未分班，判斷一律 === null。
+describe('未分班（班名為空字串）', () => {
+  const WITH_UNASSIGNED = [...STUDENTS, { classroom_name: null, status: 'unpaid' }]
+  const groupsWithUnassigned = buildClassGroups(WITH_UNASSIGNED, CLASSROOMS)
+  const mountWithUnassigned = (props: Record<string, unknown> = {}) =>
+    mountRail({ groups: groupsWithUnassigned, ...props })
+
+  it('有未分班學生時出現「未分班」chip', () => {
+    const w = mountWithUnassigned()
+    const chip = classChips(w).find((c) => c.attributes('data-classroom') === '')
+    expect(chip).toBeDefined()
+    expect(chip!.text()).toContain('未分班')
+  })
+
+  it('選了未分班：只有未分班 chip 為作用態，「全部」不亮', () => {
+    const w = mountWithUnassigned({ selectedClass: '', selectedGrade: null })
+    expect(chipOf(w, '').attributes('aria-pressed')).toBe('true')
+    expect(w.find('[data-test="stmt-class-rail-all"]').attributes('aria-pressed')).toBe('false')
+    const others = classChips(w).filter((c) => c.attributes('data-classroom') !== '')
+    expect(others.every((c) => c.attributes('aria-pressed') === 'false')).toBe(true)
+  })
+
+  it('點未分班帶出 cls=""（不是 null）；再點一次回全部', async () => {
+    const w = mountWithUnassigned()
+    await chipOf(w, '').trigger('click')
+    expect(w.emitted('select')?.at(-1)).toEqual([{ cls: '', grade: null }])
+
+    const selected = mountWithUnassigned({ selectedClass: '', selectedGrade: null })
+    await chipOf(selected, '').trigger('click')
+    expect(selected.emitted('select')?.at(-1)).toEqual([{ cls: null, grade: null }])
+  })
+
+  it('選了未分班時，未分年段的年段標籤不亮（作用態在班 chip 上）', () => {
+    const w = mountWithUnassigned({ selectedClass: '', selectedGrade: '未分年段' })
+    const ungraded = w
+      .findAll('[data-test="stmt-class-rail-grade"]')
+      .find((g) => g.attributes('data-grade') === '未分年段')
+    expect(ungraded).toBeDefined()
+    expect(ungraded!.attributes('aria-pressed')).toBe('false')
+  })
+})

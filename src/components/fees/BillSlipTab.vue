@@ -495,7 +495,14 @@ import type {
 const { embedded } = defineProps<{ embedded?: boolean }>()
 
 /** 產出費用單後通知父層刷新應收帳款與待辦數 */
-const emit = defineEmits<{ generated: [] }>()
+const emit = defineEmits<{
+  generated: []
+  /**
+   * 批次清單有異動（匯入、刪除、指定學生改變未解析數）。收款工作區的待辦總覽
+   * （「待產單」提示條、徽章）讀的是同一份批次清單，要跟著刷新。
+   */
+  'batches-changed': []
+}>()
 
 const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 
@@ -582,6 +589,7 @@ async function runImport() {
       form.batch_no = ''
       form.batch_kind = ''
     }
+    emit('batches-changed')
     await fetchBatches()
     await selectBatch(result)
   } catch (e) {
@@ -732,6 +740,7 @@ async function onAssignPick(student: { id: number; name: string }) {
       student_id: student.id,
     })
     ElMessage.success(`已指定 ${student.name}`)
+    emit('batches-changed')
     await fetchBatches()
     await fetchReport()
     genPlan.value = (await generateBillSlipRecords(genBatch.value.id, {
@@ -785,6 +794,7 @@ async function removeBatch(row: BillSlipBatchRow) {
   try {
     await deleteBillSlipBatch(row.id)
     ElMessage.success('已刪除發單快照')
+    emit('batches-changed')
     if (selectedBatchId.value === row.id) {
       selectedBatchId.value = null
       report.value = null

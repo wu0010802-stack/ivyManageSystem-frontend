@@ -13,7 +13,7 @@
  * 原 recon/billslips（發單快照）不再是次層檢視，改為「匯入紀錄」抽屜
  * （query flag `imports=1`），並在有批次未產單時於應收帳款頂端顯示提示條。
  *
- * 所有狀態仍以 route query 保存（?ws=&view=&src=&imports=），重新整理與
+ * 所有狀態仍以 route query 保存（?ws=&view=&src=&imports=&month=），重新整理與
  * 上一頁／下一頁可還原。舊網址（2026-08-25 IA 的 ?ws=recon 系列、更早的
  * ?tab= 系列）全數在此做相容映射，由 StudentFeeView 以 router.replace 正規化。
  */
@@ -68,6 +68,11 @@ export interface FeeNavTarget {
   imports?: boolean
   /** 應收帳款檢視模式：statement（月表，預設）｜ list（逐筆，依學期） */
   mode?: string
+  /**
+   * 月結月份（YYYY-MM），只在結算／月結有意義；未帶＝月結預設本月。
+   * 工作台「尚未關帳 → 去月結」必須帶，否則點進去落在本月而不是待辦指的那個月。
+   */
+  month?: string
 }
 
 /** 舊版 ?tab= 值 → 新工作區/檢視 的相容映射（8 個舊 tab 全數涵蓋） */
@@ -128,6 +133,13 @@ const RECORDS_MODE_KEYS = new Set<string>(FEE_RECORDS_MODES.map((m) => m.key))
 
 const MATCHING_SOURCE_KEYS = new Set<string>(FEE_MATCHING_SOURCES.map((s) => s.key))
 
+/** 月結月份 YYYY-MM（月份 01–12）；網址是使用者可控輸入，非法值一律清掉 */
+const MONTH_LABEL_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+
+export function isMonthLabel(value: unknown): value is string {
+  return typeof value === 'string' && MONTH_LABEL_RE.test(value)
+}
+
 function firstString(raw: LocationQuery[string]): string | null {
   const value = Array.isArray(raw) ? raw[0] : raw
   return typeof value === 'string' && value ? value : null
@@ -141,6 +153,8 @@ export interface ResolvedFeesLocation {
   src: string | null
   /** 應收帳款檢視模式；非該檢視時為 null */
   mode: string | null
+  /** 月結月份（YYYY-MM）；非月結檢視或未帶／非法時為 null */
+  month: string | null
   /** 匯入紀錄抽屜是否開啟（只在收款工作區有意義） */
   imports: boolean
   /** query 是否需要 router.replace 正規化（含舊網址映射、非法值修正） */
@@ -169,6 +183,7 @@ export function resolveFeesLocation(query: LocationQuery): ResolvedFeesLocation 
   const rawImports = firstString(query.imports)
   const rawSearch = firstString(query.search)
   const rawMode = firstString(query.mode)
+  const rawMonth = firstString(query.month)
 
   let ws: FeeWorkspaceKey
   let requestedView: string | null = rawView
@@ -224,10 +239,14 @@ export function resolveFeesLocation(query: LocationQuery): ResolvedFeesLocation 
       : DEFAULT_RECORDS_MODE
     : null
 
+  // 月份只在結算／月結有意義；未帶時不寫進網址（月結預設本月）
+  const isClose = ws === 'settlement' && view === 'close'
+  const month = isClose && isMonthLabel(rawMonth) ? rawMonth : null
+
   const normalizedQuery: LocationQueryRaw = {}
   for (const [key, value] of Object.entries(query)) {
     if (key === 'tab' || key === 'ws' || key === 'view') continue
-    if (key === 'src' || key === 'imports' || key === 'mode') continue
+    if (key === 'src' || key === 'imports' || key === 'mode' || key === 'month') continue
     normalizedQuery[key] = value
   }
   normalizedQuery.ws = ws
@@ -235,6 +254,7 @@ export function resolveFeesLocation(query: LocationQuery): ResolvedFeesLocation 
   if (src && src !== DEFAULT_MATCHING_SOURCE) normalizedQuery.src = src
   if (imports) normalizedQuery.imports = '1'
   if (mode && mode !== DEFAULT_RECORDS_MODE) normalizedQuery.mode = mode
+  if (month) normalizedQuery.month = month
 
   const expectedSrc = src && src !== DEFAULT_MATCHING_SOURCE ? src : null
   const expectedMode = mode && mode !== DEFAULT_RECORDS_MODE ? mode : null
@@ -246,9 +266,10 @@ export function resolveFeesLocation(query: LocationQuery): ResolvedFeesLocation 
     (rawView ?? null) !== view ||
     (rawSrc ?? null) !== expectedSrc ||
     (rawImports ?? null) !== (imports ? '1' : null) ||
-    (rawMode ?? null) !== expectedMode
+    (rawMode ?? null) !== expectedMode ||
+    (rawMonth ?? null) !== month
 
-  return { ws, view, src, mode, imports, needsNormalize, normalizedQuery }
+  return { ws, view, src, mode, month, imports, needsNormalize, normalizedQuery }
 }
 
 /**

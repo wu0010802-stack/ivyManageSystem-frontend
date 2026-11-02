@@ -30,6 +30,8 @@ const yearOptions = computed(() => [baseYear - 1, baseYear, baseYear + 1])
 
 const preview = ref<PreviewOut | null>(null)
 const loading = ref(false)
+// 預覽載入失敗的持久錯誤態（B15-08）：toast 會消失，失敗不可顯示成「查無資料」。
+const loadFailed = ref(false)
 const applying = ref(false)
 const applyResult = ref<ApplyOut | null>(null)
 
@@ -45,6 +47,7 @@ const fetchPreview = async () => {
   if (!canView.value) return
   const mine = ++seq
   loading.value = true
+  loadFailed.value = false
   try {
     const res = await previewSemester2Activity({ academic_year: academicYear.value })
     if (mine !== seq) return
@@ -52,6 +55,7 @@ const fetchPreview = async () => {
   } catch (e) {
     if (mine !== seq) return
     preview.value = null
+    loadFailed.value = true
     ElMessage.error(friendlyError('載入下學期才藝獎勵金預覽失敗', e))
   } finally {
     if (mine === seq) loading.value = false
@@ -100,7 +104,7 @@ watch(academicYear, () => {
 })
 onMounted(fetchPreview)
 
-defineExpose({ preview, applyResult, payableCount, coexistRows, tableRows, doApply, fetchPreview, academicYear })
+defineExpose({ loadFailed, preview, applyResult, payableCount, coexistRows, tableRows, doApply, fetchPreview, academicYear })
 </script>
 
 <template>
@@ -170,12 +174,25 @@ defineExpose({ preview, applyResult, payableCount, coexistRows, tableRows, doApp
         data-test="apply-result"
       />
 
+      <el-alert
+        v-if="loadFailed"
+        type="error"
+        :closable="false"
+        show-icon
+        class="mb-2"
+        title="下學期才藝獎勵金預覽載入失敗"
+        data-test="load-error"
+      >
+        <p>目前無法確認該學年的才藝獎勵金資料，請重試；在載入成功前請勿視為沒有資料。</p>
+        <el-button type="primary" size="small" data-test="load-retry" @click="fetchPreview">重試</el-button>
+      </el-alert>
+
       <p v-if="preview" class="summary" data-test="summary">
         歸屬 {{ preview.period_year }}/{{ preview.period_month }}；預計寫入 {{ payableCount }} 筆，合計
         <strong>{{ formatCurrency(preview.total_amount) }}</strong>
       </p>
 
-      <el-table v-loading="loading" :data="tableRows" stripe style="width: 100%" empty-text="該學年下學期查無才藝獎勵金資料">
+      <el-table v-if="!loadFailed" v-loading="loading" :data="tableRows" stripe style="width: 100%" empty-text="該學年下學期查無才藝獎勵金資料">
         <el-table-column prop="employee_name" label="員工" min-width="110" />
         <el-table-column prop="category_label" label="類別" width="140" />
         <el-table-column label="金額" width="110" align="right">

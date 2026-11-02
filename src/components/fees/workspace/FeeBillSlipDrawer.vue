@@ -18,7 +18,12 @@
       </div>
     </template>
 
-    <BillSlipTab ref="tabRef" embedded @generated="emit('generated')" />
+    <BillSlipTab
+      ref="tabRef"
+      embedded
+      @generated="emit('generated')"
+      @batches-changed="emit('batches-changed')"
+    />
   </el-drawer>
 </template>
 
@@ -43,6 +48,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   /** 產生費用單後冒泡，讓收款工作區刷新應收帳款與待辦數 */
   generated: []
+  /** 匯入／刪除批次等清單異動：收款工作區刷新待辦數（「待產單」提示條、徽章） */
+  'batches-changed': []
 }>()
 
 const tabRef = ref<{ fetchBatches?: () => void } | null>(null)

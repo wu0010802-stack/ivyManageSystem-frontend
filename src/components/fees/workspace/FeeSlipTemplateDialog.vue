@@ -326,6 +326,20 @@ function payload(): PreviewPayload {
   }
 }
 
+/** 把後端記住的金額填進還沒填的年段；有任何一個被帶入就回 true */
+function applyRememberedAmounts(result: PreviewData): boolean {
+  let applied = false
+  for (const row of result.by_grade) {
+    if (amounts.value[row.grade_name] != null) continue
+    const remembered = result.amount_defaults?.[row.grade_name]
+    if (typeof remembered === 'number') {
+      amounts.value[row.grade_name] = remembered
+      applied = true
+    }
+  }
+  return applied
+}
+
 async function fetchPreview() {
   const seq = ++previewRequestSeq
   const requestPayload = payload()
@@ -335,14 +349,15 @@ async function fetchPreview() {
     const result = await previewSlipTemplate(requestPayload)
     if (seq !== previewRequestSeq) return
     data.value = result
-    previewReady.value = true
     // 第一次載入：把上次用過的金額帶進來，使用者只需確認
-    for (const row of result.by_grade) {
-      if (amounts.value[row.grade_name] == null) {
-        const remembered = result.amount_defaults?.[row.grade_name]
-        if (typeof remembered === 'number') amounts.value[row.grade_name] = remembered
-      }
+    if (applyRememberedAmounts(result)) {
+      // 這次試算的 payload 沒帶這些金額，後端回的小計／missing_amounts／blocked
+      // 全是「待填」狀態——不立刻重算，畫面會顯示有金額卻擋住下一步。
+      // 重算的 payload 已含帶入金額，該年段不會再被帶入，不會無限循環。
+      void fetchPreview()
+      return
     }
+    previewReady.value = true
   } catch (e) {
     if (seq === previewRequestSeq) ElMessage.error(friendlyError('試算範本失敗', e))
   } finally {

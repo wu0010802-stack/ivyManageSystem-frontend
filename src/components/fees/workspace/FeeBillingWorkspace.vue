@@ -225,6 +225,7 @@
       :model-value="importsOpen"
       @update:model-value="(v: boolean) => emit('update:imports-open', v)"
       @generated="onGenerated"
+      @batches-changed="refreshOverview"
     />
     <FeeSlipTemplateDialog
       v-model="slipTemplateOpen"
@@ -478,19 +479,49 @@ function onSlipTemplateCommand(command: string) {
   slipTemplateOpen.value = true
 }
 
+/**
+ * 「匯入 ▾ › 代收／存摺 CSV」的待開意圖（一次性）。
+ *
+ * view／source 是 route query 受控 prop：本元件只 emit，寫回要等殼層完成
+ * router 導覽（跨導覽守衛與 history API，遠超幾個 microtask）。舊版固定 await
+ * 兩次 nextTick 就呼叫 openImport，此時媒合面板根本還沒掛載，匯入面板不展開
+ * （staging 實測；同類問題見上方 waitForListMode）。改成記下意圖，等面板真的
+ * 掛上且來源對上時才消費。fromView 用來偵測「導覽途中被帶去別的檢視」而作廢，
+ * 免得之後手動進媒合時匯入面板突然自己打開。
+ */
+const pendingImport = ref<{ src: 'collection' | 'passbook'; fromView: string } | null>(null)
+
+function consumePendingImport() {
+  const pending = pendingImport.value
+  if (!pending) return
+  if (props.view !== 'matching') {
+    if (props.view !== pending.fromView) pendingImport.value = null
+    return
+  }
+  if (props.source !== pending.src) return
+  const openImport = matchingRef.value?.openImport
+  if (!openImport) return
+  pendingImport.value = null
+  openImport()
+}
+
+watch(
+  [pendingImport, () => props.view, () => props.source, matchingRef],
+  consumePendingImport,
+  { flush: 'post' },
+)
+onDeactivated(() => { pendingImport.value = null })
+
 /** 匯入下拉：前兩項切到入帳媒合對應來源並展開匯入面板，第三項開發單批次抽屜 */
-async function onImportCommand(command: string) {
+function onImportCommand(command: string) {
   if (command === 'billslip') {
     emit('update:imports-open', true)
     return
   }
   const src = command === 'passbook' ? 'passbook' : 'collection'
+  pendingImport.value = { src, fromView: props.view }
   if (props.view !== 'matching') emit('change-view', 'matching')
   if (props.source !== src) emit('change-source', src)
-  // 等父層 query 變更回灌 props、對應子元件掛好再展開匯入面板
-  await nextTick()
-  await nextTick()
-  matchingRef.value?.openImport?.()
 }
 
 // 刷新目前作用中的帳款檢視（月表或逐筆明細）
@@ -530,13 +561,14 @@ async function onOpenList(studentName: string) {
 // 切回收款工作區時刷新（KeepAlive activate）：在結算頁簽收、或別的 session
 // 銷帳後回到這裡，舊實例會停在變更前的快照。首次 activate 與 mount 同一輪、
 // 子元件自己會載，故跳過第一次——用旗標而非 onMounted 時序，避免依賴 hook 順序。
+// 入帳媒合的代收／存摺子頁自帶 onActivated（祖先 KeepAlive 啟用時也會觸發），
+// 這裡不可再 matchingRef.refresh()，否則切回時同一支清單 API 打兩次。
 let activatedOnce = false
 onActivated(() => {
   workspaceActive = true
   if (activatedOnce) {
-    if (props.view === 'matching') matchingRef.value?.refresh?.()
-    else if (props.view === 'cashItems') cashItemsRef.value?.refresh?.()
-    else refreshActiveRecordsView()
+    if (props.view === 'cashItems') cashItemsRef.value?.refresh?.()
+    else if (props.view !== 'matching') refreshActiveRecordsView()
     refreshOverview()
   }
   activatedOnce = true

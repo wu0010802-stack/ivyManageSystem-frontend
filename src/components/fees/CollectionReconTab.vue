@@ -172,8 +172,15 @@
         maxlength="4"
         style="width: 110px"
         clearable
-        @change="refetch"
+        :aria-invalid="suffixInvalid"
+        @change="onSuffixChange"
       />
+      <span
+        v-if="suffixInvalid"
+        class="suffix-hint"
+        role="status"
+        data-test="collection-suffix-hint"
+      >{{ SUFFIX_FILTER_HINT }}</span>
       <el-date-picker
         v-model="filters.date_from"
         type="date"
@@ -317,7 +324,20 @@
         </template>
       </el-table-column>
       <template #empty>
-        <EmptyState v-if="!loading" :title="emptyTitle" :description="emptyDescription">
+        <!-- 載入失敗不可畫成「沒有待媒合」：會讓會計以為錢都媒合完了 -->
+        <EmptyState
+          v-if="!loading && loadError"
+          variant="error"
+          title="載入失敗"
+          description="代收繳費清單沒有載入成功，請重試；看不到資料不代表已全數媒合。"
+        >
+          <template #action>
+            <el-button size="small" data-test="collection-load-retry" @click="fetchPayments">
+              重試
+            </el-button>
+          </template>
+        </EmptyState>
+        <EmptyState v-else-if="!loading" :title="emptyTitle" :description="emptyDescription">
           <template #action>
             <el-button
               v-if="filters.status"
@@ -406,7 +426,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onActivated, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import type { ApiQuery } from '@/api/_generated/typed'
@@ -425,6 +445,7 @@ import {
 import CollectionAllocationDialog from './CollectionAllocationDialog.vue'
 import CollectionBatchDrawer from './CollectionBatchDrawer.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { SUFFIX_FILTER_HINT, isSuffixFilterReady, suffixFilterParam } from './suffixFilter'
 import {
   COLLECTION_PENDING_STATUSES,
   COLLECTION_SCOPES,
@@ -536,6 +557,10 @@ const filters = reactive<{
 })
 const payments = ref<CollectionPaymentRow[]>([])
 const loading = ref(false)
+/** 最近一次清單載入失敗（空狀態改顯示「載入失敗」＋重試） */
+const loadError = ref(false)
+/** 末四碼打到一半：不送查詢（後端 suffix 須剛好 4 碼，否則 422） */
+const suffixInvalid = computed(() => !isSuffixFilterReady(filters.suffix))
 const page = ref(1)
 const pageSize = 50
 const total = ref(0)
@@ -641,6 +666,7 @@ async function fetchPayments() {
   payments.value = []
   total.value = 0
   loading.value = true
+  loadError.value = false
   try {
     const params: ApiQuery<'/fees/collection-payments', 'get'> = {
       page: page.value,
@@ -648,7 +674,8 @@ async function fetchPayments() {
       include_match_details: true,
     }
     if (filters.status) params.status = filters.status
-    if (filters.suffix) params.suffix = filters.suffix
+    const suffix = suffixFilterParam(filters.suffix)
+    if (suffix) params.suffix = suffix
     if (filters.date_from) params.date_from = filters.date_from
     if (filters.date_to) params.date_to = filters.date_to
     if (filters.posting_state) params.posting_state = filters.posting_state
@@ -660,7 +687,10 @@ async function fetchPayments() {
     payments.value = data.items ?? []
     total.value = data.total ?? 0
   } catch (e) {
-    if (sequence === querySequence) ElMessage.error(friendlyError('載入代收繳費失敗', e))
+    if (sequence === querySequence) {
+      loadError.value = true
+      ElMessage.error(friendlyError('載入代收繳費失敗', e))
+    }
   } finally {
     if (sequence === querySequence) loading.value = false
   }
@@ -669,6 +699,12 @@ async function fetchPayments() {
 function refetch() {
   page.value = 1
   fetchPayments()
+}
+
+/** 末四碼送出（Enter／失焦／清除）：不足 4 碼只顯示行內提示，不打 API */
+function onSuffixChange() {
+  if (suffixInvalid.value) return
+  refetch()
 }
 
 function setScope(value: string) {
@@ -733,6 +769,14 @@ async function runCoverage(dryRun: boolean) {
 }
 
 onMounted(fetchPayments)
+// 外層工作區的內層 KeepAlive 會保留本頁實例：同工作區切子頁、或整個工作區
+// 被切回（祖先 KeepAlive 啟用也會觸發本 hook）都要重新載入，否則沿用舊快照。
+// 首次 activate 與 mount 同一輪、onMounted 已載，故跳過第一次。
+let activatedOnce = false
+onActivated(() => {
+  if (activatedOnce) fetchPayments()
+  activatedOnce = true
+})
 defineExpose({ fetchPayments, openCoverage, openImport, openBatch, setScope, filters })
 </script>
 
@@ -778,6 +822,11 @@ defineExpose({ fetchPayments, openCoverage, openImport, openBatch, setScope, fil
 .hint {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+.suffix-hint {
+  align-self: center;
+  color: var(--el-color-danger);
+  font-size: 12px;
 }
 .preview-box {
   margin-top: 10px;
