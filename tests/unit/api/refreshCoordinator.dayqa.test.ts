@@ -71,4 +71,17 @@ describe('staff refresh 單一 in-flight（day-qa F3）', () => {
     expect(REFRESH_CONFLICT_SETTLE_MS).toBeGreaterThanOrEqual(800)
     expect(retriedAt - started).toBeGreaterThanOrEqual(REFRESH_CONFLICT_SETTLE_MS)
   })
+
+  it('409 收場後重打仍 401（勝出方 cookie 更晚才落地）時再等一輪重打，不直接登出', async () => {
+    mockGlobal.onPost(buildRefreshUrl()).replyOnce(409, { detail: 'rotation in progress' })
+    mockApi.onGet('/portal/dismissal-calls').replyOnce(401) // 原請求
+    mockApi.onGet('/portal/dismissal-calls').replyOnce(401) // 等一輪後重打：cookie 仍是舊的
+    mockApi.onGet('/portal/dismissal-calls').replyOnce(200, { items: [1] }) // 再等一輪：勝出方已落地
+
+    const resp = await api.get('/portal/dismissal-calls')
+
+    expect(resp.data).toEqual({ items: [1] })
+    expect(mockGlobal.history.post.filter((r) => r.url?.includes('/auth/refresh'))).toHaveLength(1)
+  }, 15000)
 })
+

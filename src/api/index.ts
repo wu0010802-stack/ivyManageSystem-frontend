@@ -47,6 +47,10 @@ declare module 'axios' {
         _retried?: boolean
         _adminSessionGeneration?: number
         _tenantBusyRetries?: number
+        /** 本請求的 refresh 以 409（他分頁勝出）收場 */
+        _refreshConflict?: boolean
+        /** 409 收場後重打仍 401，已再等過一輪 */
+        _conflictRetried?: boolean
     }
 }
 
@@ -96,7 +100,8 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 })
 
 // ---------- Token refresh logic ----------
-let _refreshing: Promise<boolean> | null = null // 單一 refresh promise，避免併發多次刷新
+type RefreshOutcome = 'ok' | 'conflict'
+let _refreshing: Promise<RefreshOutcome> | null = null // 單一 refresh promise，避免併發多次刷新
 
 onAdminSessionReset(() => {
     _refreshing = null
@@ -111,7 +116,7 @@ onAdminSessionReset(() => {
  */
 export const REFRESH_CONFLICT_SETTLE_MS = 1500
 
-function _doRefresh(): Promise<boolean> {
+function _doRefresh(): Promise<RefreshOutcome> {
     const generation = getAdminSessionGeneration()
     // Cookie 會自動帶出，不需手動設定 header
     // 裸 axios（不經上面的 request interceptor），tenant header 必須自己帶。
@@ -128,8 +133,8 @@ function _doRefresh(): Promise<boolean> {
         // 後端已透過 Set-Cookie 更新 access_token，前端只需更新 userInfo
         const { user } = res.data
         if (user) setUserInfo(user)
-        return true
-    }).catch((err) => {
+        return 'ok' as const
+    }).catch((err): Promise<RefreshOutcome> => {
         // 409：staff refresh token rotation 的併發保護。後端 services/staff_refresh.py
         // 在 5 秒 race 視窗內對同一 token 的第二次請求回 409「rotation in progress」，
         // 意思是「另一條路徑已經刷新成功、session 仍有效，請重打原請求」——不是登入失效。
@@ -138,8 +143,8 @@ function _doRefresh(): Promise<boolean> {
         // 對齊 src/router/index.ts 與 src/parent/api/index.ts 對同一情境的既有處理。
         // 但必須先等勝出方的 Set-Cookie 落地，否則重打會帶舊 cookie 再 401（day-qa F3）。
         if ((err as { response?: { status?: number } })?.response?.status === 409) {
-            return new Promise<boolean>((resolve) => {
-                setTimeout(() => resolve(true), REFRESH_CONFLICT_SETTLE_MS)
+            return new Promise<RefreshOutcome>((resolve) => {
+                setTimeout(() => resolve('conflict'), REFRESH_CONFLICT_SETTLE_MS)
             })
         }
         throw err
@@ -210,7 +215,8 @@ api.interceptors.response.use(
                     })
                     _refreshing = tracked
                 }
-                await _refreshing
+                const outcome = await _refreshing
+                if (outcome === 'conflict' && originalRequest) originalRequest._refreshConflict = true
 
                 if (!isAdminSessionCurrent(originalRequest?._adminSessionGeneration)) {
                     throw new axios.CanceledError('Admin session changed before request retry')
@@ -230,6 +236,17 @@ api.interceptors.response.use(
 
         // 非 401 或已重試過仍失敗
         if (error.response?.status === 401 && !isAuthEndpoint) {
+            // refresh 以 409 收場（他分頁勝出）後重打仍 401：勝出方的 Set-Cookie 可能還沒落地
+            // （實測可晚 3 秒以上），再等一輪重打一次，才判定登入失效（day-qa 審查 P3）。
+            if (originalRequest?._refreshConflict && !originalRequest._conflictRetried) {
+                originalRequest._conflictRetried = true
+                const generation = originalRequest._adminSessionGeneration
+                await new Promise((resolve) => setTimeout(resolve, REFRESH_CONFLICT_SETTLE_MS))
+                if (!isAdminSessionCurrent(generation)) {
+                    return Promise.reject(new axios.CanceledError('Admin session changed before conflict retry'))
+                }
+                return api(originalRequest)
+            }
             _redirectToLogin()
         }
 
