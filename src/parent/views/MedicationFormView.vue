@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, useId } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import {
@@ -48,8 +48,14 @@ const form = ref<{
 })
 
 const INITIAL_ORDER_DATE = form.value.order_date
-// 今天已經過去的時段：不擋送出，只提醒（day-qa F12）
-const pastSlots = computed(() => pastSlotsForToday(form.value.order_date, form.value.time_slots, todayISO()))
+// 今天已經過去的時段：不擋送出，只提醒（day-qa F12）。表單開著放過某個時段時也要自己出現，
+// 所以每分鐘更新一次「現在」（審查 P3）。
+const nowTick = ref(Date.now())
+const nowTimer = setInterval(() => { nowTick.value = Date.now() }, 60_000)
+onBeforeUnmount(() => clearInterval(nowTimer))
+const pastSlots = computed(() =>
+  pastSlotsForToday(form.value.order_date, form.value.time_slots, todayISO(), new Date(nowTick.value)),
+)
 const INITIAL_SLOTS = form.value.time_slots.join(',')
 
 /** 還沒送出、且家長已經填了東西：離開前要確認 */
