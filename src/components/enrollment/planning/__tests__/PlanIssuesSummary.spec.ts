@@ -160,6 +160,28 @@ describe('PlanIssuesSummary', () => {
     ])
   })
 
+  it('第二輪新增的 issue code 都有固定標題（不退回逐筆訊息）', () => {
+    const w = mount(PlanIssuesSummary, {
+      global: { plugins: [ElementPlus] },
+      props: {
+        issues: {
+          blocking: [{ code: 'graduate_not_graduation_grade', message: '原始-1', plan_class_id: null, student_id: 9 }],
+          warnings: [
+            { code: 'exclude_will_graduate', message: '原始-2', plan_class_id: null, student_id: 6 },
+            { code: 'teacher_resigning', message: '原始-3', plan_class_id: 10, student_id: null },
+            { code: 'retain_already_graduated', message: '原始-4', plan_class_id: null, student_id: 7 },
+          ],
+        },
+      },
+    })
+    expect(w.findAll('.group-title').map(t => t.text())).toEqual([
+      '非畢業年級的學生被標記畢業',
+      '排除的畢業年級學生仍會自動畢業',
+      '老師預定離職，新學年無法帶班',
+      '留級生已被系統畢業，留級不會生效',
+    ])
+  })
+
   it('僅 warnings 時不渲染 blocking 區塊', () => {
     const w = mountSummary(buildIssues({ blocking: [] }))
     expect(w.find('.severity-blocking').exists()).toBe(false)
