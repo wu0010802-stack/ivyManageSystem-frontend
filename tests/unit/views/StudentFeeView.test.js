@@ -105,18 +105,21 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
       partial_count: 0,
       total_unpaid: 0,
     })
-    // 上個月已關帳＝關帳列不是待辦；本檔測的是導航殼層，徽章不該干擾斷言。
-    // 「上個月」須與 useFeeOverview 同口徑（台北日期）；用主機時區 new Date()
+    // 過去月份皆已關帳＝關帳列不是待辦；本檔測的是導航殼層，徽章不該干擾斷言。
+    // 2026-11-02 起關帳待辦涵蓋「本學期起始月→上個月」（useFeeOverview
+    // overdueCloseMonths），只關上個月會讓學期內更早的月份冒出徽章，故關過去 12 個月。
+    // 月份須與 useFeeOverview 同口徑（台北日期）；用主機時區 new Date()
     // 在台北已跨月、UTC 未跨月的時段（月底 16:00 UTC 後）會差一個月而多出待辦徽章
     const [ty, tm] = todayTaipeiISO().split('-').map(Number)
     apiMocks.getClosePeriods.mockResolvedValue({
-      items: [
-        {
-          close_year: tm === 1 ? ty - 1 : ty,
-          close_month: tm === 1 ? 12 : tm - 1,
+      items: Array.from({ length: 12 }, (_, i) => {
+        const idx = ty * 12 + (tm - 1) - (i + 1)
+        return {
+          close_year: Math.floor(idx / 12),
+          close_month: (idx % 12) + 1,
           status: 'closed',
-        },
-      ],
+        }
+      }),
     })
     apiMocks.getBillSlipBatches.mockResolvedValue([])
     apiMocks.getCollectionPayments.mockResolvedValue({ total: 0 })
