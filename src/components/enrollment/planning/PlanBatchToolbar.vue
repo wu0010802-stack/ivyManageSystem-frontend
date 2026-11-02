@@ -165,7 +165,12 @@ async function applyReset(): Promise<void> {
     await ElMessageBox.confirm(
       '此操作將丟棄所選學生的手動調整，還原為系統建議，確定要繼續嗎？',
       '還原建議',
-      { type: 'warning', confirmButtonText: '確定還原', cancelButtonText: '取消' },
+      {
+        type: 'warning',
+        confirmButtonText: '確定還原',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      },
     )
   } catch {
     return // 使用者取消，不派發

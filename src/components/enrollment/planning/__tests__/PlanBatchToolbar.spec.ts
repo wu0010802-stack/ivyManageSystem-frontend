@@ -78,6 +78,9 @@ describe('PlanBatchToolbar', () => {
     const w = mountToolbar()
     await vmOf(w).applyReset()
     expect(confirmSpy).toHaveBeenCalled()
+    // 會丟掉手動調整的破壞性動作：確認鈕用 danger，不是主色
+    const options = confirmSpy.mock.calls[0][2] as { confirmButtonClass?: string }
+    expect(options.confirmButtonClass).toContain('el-button--danger')
     const events = w.emitted('bulk-op')
     expect(events![0][0]).toEqual({ op: 'reset' })
   })
