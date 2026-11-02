@@ -99,6 +99,45 @@ describe('PlanIssuesSummary', () => {
     expect(w.find('.severity-section').exists()).toBe(false)
   })
 
+  it('class_name_duplicate 有固定標題', () => {
+    const w = mountSummary(buildIssues({
+      blocking: [{ code: 'class_name_duplicate', message: '原始訊息', plan_class_id: 10, student_id: null }],
+      warnings: [],
+    }))
+    expect(w.find('.severity-blocking .group-title').text()).toBe('班級名稱重複')
+  })
+
+  it('組標題鈕帶 aria-expanded，展開／收合時切換', async () => {
+    const w = mountSummary()
+    const toggle = w.findAll('.group-toggle')[0]
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    await toggle.trigger('click')
+    expect(w.findAll('.group-toggle')[0].attributes('aria-expanded')).toBe('true')
+  })
+
+  it('interactive=false（發布 dialog 內）：逐筆列是純文字，沒有按鈕語意、點了也不 emit', async () => {
+    const w = mount(PlanIssuesSummary, {
+      global: { plugins: [ElementPlus] },
+      props: { issues: buildIssues(), interactive: false },
+    })
+    await w.findAll('.group-toggle')[0].trigger('click')
+    const item = w.find('.issue-item')
+    expect(item.attributes('role')).toBeUndefined()
+    expect(item.attributes('tabindex')).toBeUndefined()
+    expect(item.classes()).toContain('issue-item--static')
+    await item.trigger('click')
+    expect(w.emitted('locate-issue')).toBeFalsy()
+  })
+
+  it('context：草稿寫「阻擋發布」，已發布寫「阻擋套用」', () => {
+    expect(mountSummary().find('.severity-blocking .severity-title').text()).toBe('阻擋發布')
+    const w = mount(PlanIssuesSummary, {
+      global: { plugins: [ElementPlus] },
+      props: { issues: buildIssues(), context: 'published' },
+    })
+    expect(w.find('.severity-blocking .severity-title').text()).toBe('阻擋套用')
+  })
+
   it('僅 warnings 時不渲染 blocking 區塊', () => {
     const w = mountSummary(buildIssues({ blocking: [] }))
     expect(w.find('.severity-blocking').exists()).toBe(false)

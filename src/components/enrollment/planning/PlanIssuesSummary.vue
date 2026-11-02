@@ -16,14 +16,19 @@
         <span class="severity-count">{{ severity.total }}</span>
       </div>
       <div v-for="group in severity.groups" :key="group.key" class="issue-group">
-        <button type="button" class="group-toggle" @click="toggleGroup(group.key)">
+        <button
+          type="button"
+          class="group-toggle"
+          :aria-expanded="expandedGroups.has(group.key) ? 'true' : 'false'"
+          @click="toggleGroup(group.key)"
+        >
           <el-icon class="group-arrow" :class="{ expanded: expandedGroups.has(group.key) }">
             <ArrowRight />
           </el-icon>
           <span class="group-title">{{ group.title }}</span>
           <span class="group-count">{{ group.items.length }}</span>
         </button>
-        <ul v-if="expandedGroups.has(group.key)" class="group-items">
+        <ul v-if="expandedGroups.has(group.key) && interactive" class="group-items">
           <li
             v-for="(issue, idx) in group.items"
             :key="idx"
@@ -32,6 +37,14 @@
             tabindex="0"
             @click="emit('locate-issue', issue)"
             @keydown.enter.space.prevent="emit('locate-issue', issue)"
+          >{{ issue.message }}</li>
+        </ul>
+        <!-- 發布 dialog 內沒有表格可定位：純文字清單，不給可點的外觀 -->
+        <ul v-else-if="expandedGroups.has(group.key)" class="group-items">
+          <li
+            v-for="(issue, idx) in group.items"
+            :key="idx"
+            class="issue-item issue-item--static"
           >{{ issue.message }}</li>
         </ul>
       </div>
@@ -51,7 +64,16 @@ import type { Schema } from '@/api/_generated/typed'
 type IssuesOut = Schema<'IssuesOut'>
 type IssueOut = Schema<'IssueOut'>
 
-const props = defineProps<{ issues: IssuesOut }>()
+const props = withDefaults(defineProps<{
+  issues: IssuesOut
+  /** false＝純文字清單（發布 dialog 內沒有可定位的表格），逐筆不可點 */
+  interactive?: boolean
+  /** published：計畫已發布，阻擋的是「套用」而不是「發布」 */
+  context?: 'draft' | 'published'
+}>(), {
+  interactive: true,
+  context: 'draft',
+})
 const emit = defineEmits<{ 'locate-issue': [issue: IssueOut] }>()
 
 // 與後端 services/classroom_year_plan/issues.py 的 code 對齊；未知 code fallback
@@ -66,6 +88,7 @@ const GROUP_TITLES: Record<string, string> = {
   teacher_duplicate: '老師重複指派多班',
   teacher_invalid: '老師已停用或不屬於本園',
   class_code_duplicate: '班級代號重複',
+  class_name_duplicate: '班級名稱重複',
   target_grade_invalid: '班級年級已停用',
   student_source_classroom_changed: '學生已換班，需重新產生建議',
   student_missing_from_plan: '在籍生不在草稿中，需重新產生建議',
@@ -103,7 +126,7 @@ const visibleSeverities = computed(() =>
   [
     {
       key: 'blocking',
-      label: '阻擋發布',
+      label: props.context === 'published' ? '阻擋套用' : '阻擋發布',
       total: props.issues.blocking.length,
       groups: groupByCode(props.issues.blocking, 'blocking'),
     },
@@ -259,5 +282,13 @@ function toggleGroup(key: string): void {
 
 .issue-item:hover {
   filter: brightness(0.95);
+}
+
+.issue-item--static {
+  cursor: default;
+}
+
+.issue-item--static:hover {
+  filter: none;
 }
 </style>
