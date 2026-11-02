@@ -39949,6 +39949,8 @@ export interface components {
             cycle_id: number;
             /** Employee Id */
             employee_id: number;
+            /** Employee Name */
+            employee_name?: string | null;
             /** Exclude Reason */
             exclude_reason: string | null;
             /** Hire Months In Cycle */
@@ -52577,6 +52579,8 @@ export interface components {
             bonus_amount: string;
             /** Cycle Id */
             cycle_id: number;
+            /** Employee Name */
+            employee_name?: string | null;
             /** Event Score Sum */
             event_score_sum: string;
             grade: components["schemas"]["Grade"];
