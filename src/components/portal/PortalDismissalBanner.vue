@@ -12,6 +12,9 @@
 import { onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElNotification } from 'element-plus'
+// ElNotification 是程式化呼叫的 API，按需樣式不會自動帶入（main.ts 只手動載了 message／message-box）；
+// 沒有這行它會以無樣式的 static 區塊掉到頁面最底，看起來就像沒跳提醒。
+import 'element-plus/theme-chalk/el-notification.css'
 import { usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
 
 const DISMISSAL_PATH = '/portal/dismissal-calls'

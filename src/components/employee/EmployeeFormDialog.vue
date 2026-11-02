@@ -4,6 +4,8 @@ import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import type { ApiBody } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
+// 程式化的 ElNotification 不吃按需樣式：沒載 CSS 時「新增成功」會無樣式地掉到頁面最底（day-qa 發現）
+import 'element-plus/theme-chalk/el-notification.css'
 import { useRouter } from 'vue-router'
 import { createEmployee, updateEmployeeBasic, updateEmployeeSalary } from '@/api/employees'
 import { getPositionSalary } from '@/api/config'
