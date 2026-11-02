@@ -98,8 +98,15 @@
         maxlength="4"
         style="width: 110px"
         clearable
-        @change="refetch"
+        :aria-invalid="suffixInvalid"
+        @change="onSuffixChange"
       />
+      <span
+        v-if="suffixInvalid"
+        class="suffix-hint"
+        role="status"
+        data-test="recon-suffix-hint"
+      >{{ SUFFIX_FILTER_HINT }}</span>
       <el-date-picker
         v-model="filters.date_from"
         type="date"
@@ -185,8 +192,21 @@
         </template>
       </el-table-column>
       <template #empty>
+        <!-- 載入失敗不可畫成「沒有待媒合」：會讓會計以為交易都處理完了 -->
         <EmptyState
-          v-if="!loading"
+          v-if="!loading && loadError"
+          variant="error"
+          title="載入失敗"
+          description="存摺交易清單沒有載入成功，請重試；看不到資料不代表已全數處理。"
+        >
+          <template #action>
+            <el-button size="small" data-test="recon-load-retry" @click="fetchTxns">
+              重試
+            </el-button>
+          </template>
+        </EmptyState>
+        <EmptyState
+          v-else-if="!loading"
           :title="emptyTitle"
           :description="emptyDescription"
         >
@@ -236,6 +256,7 @@ import {
 } from '@/api/fees'
 import AllocationDialog from './AllocationDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { SUFFIX_FILTER_HINT, isSuffixFilterReady, suffixFilterParam } from './suffixFilter'
 
 interface TxnRow {
   id: number
@@ -426,16 +447,22 @@ async function runImport() {
   }
 }
 
+/** 最近一次清單載入失敗（空狀態改顯示「載入失敗」＋重試） */
+const loadError = ref(false)
+/** 末四碼打到一半：不送查詢（後端 suffix 須剛好 4 碼，否則 422） */
+const suffixInvalid = computed(() => !isSuffixFilterReady(filters.suffix))
+
 let querySequence = 0
 async function fetchTxns() {
   const sequence = ++querySequence
   txns.value = []
   total.value = 0
   loading.value = true
+  loadError.value = false
   try {
     const data = await getBankTransactions({
       status: filters.status || undefined,
-      suffix: filters.suffix || undefined,
+      suffix: suffixFilterParam(filters.suffix),
       date_from: filters.date_from || undefined,
       date_to: filters.date_to || undefined,
       page: page.value,
@@ -445,7 +472,10 @@ async function fetchTxns() {
     txns.value = data.items as TxnRow[]
     total.value = data.total
   } catch (e) {
-    if (sequence === querySequence) ElMessage.error(friendlyError('載入交易失敗', e))
+    if (sequence === querySequence) {
+      loadError.value = true
+      ElMessage.error(friendlyError('載入交易失敗', e))
+    }
   } finally {
     if (sequence === querySequence) loading.value = false
   }
@@ -454,6 +484,12 @@ async function fetchTxns() {
 function refetch() {
   page.value = 1
   fetchTxns()
+}
+
+/** 末四碼送出（Enter／失焦／清除）：不足 4 碼只顯示行內提示，不打 API */
+function onSuffixChange() {
+  if (suffixInvalid.value) return
+  refetch()
 }
 
 function setScope(status: string) {
@@ -629,6 +665,11 @@ defineExpose({ fetchTxns, openImport, setScope, filters })
 
 .hint {
   color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.suffix-hint {
+  align-self: center;
+  color: var(--el-color-danger);
   font-size: 12px;
 }
 
