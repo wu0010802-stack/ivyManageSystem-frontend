@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import ElementPlus from 'element-plus'
 import PlanSidePanel from '../PlanSidePanel.vue'
@@ -205,5 +205,26 @@ describe('PlanSidePanel', () => {
       dataTransfer: { setData, effectAllowed: '' },
     })
     expect(setData).toHaveBeenCalledWith('text/plain', '1')
+  })
+  it('已套用：問題摘要換成套用結果卡', () => {
+    const w = mount(PlanSidePanel, {
+      global: { plugins: [ElementPlus], stubs: { RouterLink: RouterLinkStub } },
+      props: {
+        plan: buildPlan({
+          status: 'applied',
+          applied_at: '2027-08-01T01:00:00',
+          issues: { blocking: [], warnings: [] },
+          applied_summary: {
+            created_classrooms: 0, reused_classrooms: 8, moved_students: 120, graduated: 36, excluded_still_active: 0,
+            left_behind: [{ id: 11, name: '王小明', classroom_name: '向日葵' }],
+          },
+        }),
+        editable: false,
+        selectedIds: new Set<number>(),
+      },
+    })
+    expect(w.find('.plan-applied-result').exists()).toBe(true)
+    expect(w.find('.plan-issues-summary').exists()).toBe(false)
+    expect(w.text()).toContain('仍在去年班 1 位')
   })
 })

@@ -1,7 +1,14 @@
 <template>
   <aside ref="rootEl" class="plan-side-panel">
     <section class="panel-section">
+      <!-- 已套用：沒有問題要處理了，改看套用結果（沒照計畫走的人） -->
+      <PlanAppliedResult
+        v-if="plan.status === 'applied' && plan.applied_summary"
+        :summary="plan.applied_summary"
+        :applied-at="plan.applied_at ?? null"
+      />
       <PlanIssuesSummary
+        v-else
         :issues="plan.issues"
         :context="plan.status === 'published' ? 'published' : 'draft'"
         @locate-issue="issue => emit('locate-issue', issue)"
@@ -118,6 +125,7 @@ import { computed, nextTick, ref } from 'vue'
 import type { Schema } from '@/api/_generated/typed'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
 import PlanIssuesSummary from './PlanIssuesSummary.vue'
+import PlanAppliedResult from './PlanAppliedResult.vue'
 import { buildAssignGroups } from './planHelpers'
 
 // 工作台右側欄：問題聚合摘要 + 待分班操作區 + 畢業/排除唯讀名單。
