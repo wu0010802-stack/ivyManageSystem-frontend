@@ -8,6 +8,7 @@ import { fetchTenantMetaForLine, shouldUseLegacyLineEnvFallback } from '@/api/te
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { safeExternalUrl, LINE_FRIEND_URL_HOSTS } from '@/utils/url'
+import { apiError, validationFieldMessage } from '@/utils/error'
 import { WarningFilled } from '@element-plus/icons-vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
@@ -229,8 +230,9 @@ async function savePunchPin() {
     profile.value.has_punch_pin = true
     pinForm.new_pin = ''
     pinForm.confirm_pin = ''
-  } catch {
-    ElMessage.error('設定失敗，請重試')
+  } catch (error) {
+    // 弱碼被後端擋下（422）時顯示具體原因；其餘錯誤才是「請重試」（day-qa F11）
+    ElMessage.error(validationFieldMessage(error, 'pin') ?? apiError(error, '設定失敗，請重試'))
   } finally {
     savingPin.value = false
   }
@@ -409,12 +411,16 @@ onMounted(() => {
       </template>
       <el-form label-width="100px">
         <el-form-item label="新 PIN">
-          <el-input v-model="pinForm.new_pin" type="password" maxlength="6"
-                    placeholder="4-6 位數字" show-password />
+          <el-input v-model="pinForm.new_pin" type="password" maxlength="6" inputmode="numeric"
+                    autocomplete="new-password" placeholder="4-6 位數字" show-password />
         </el-form-item>
         <el-form-item label="確認 PIN">
-          <el-input v-model="pinForm.confirm_pin" type="password" maxlength="6" show-password />
+          <el-input v-model="pinForm.confirm_pin" type="password" maxlength="6" inputmode="numeric"
+                    autocomplete="new-password" show-password />
         </el-form-item>
+        <p class="pin-rule-hint">
+          4–6 位數字；不能全部相同或重複（如 0000、1212）、不能連號（如 1234、4321），也不能用常見組合（如 2580、1122）。
+        </p>
         <el-form-item>
           <el-button type="primary" :loading="savingPin" @click="savePunchPin">儲存</el-button>
         </el-form-item>
@@ -432,6 +438,13 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.pin-rule-hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
 }
 
 .pin-status-tag {

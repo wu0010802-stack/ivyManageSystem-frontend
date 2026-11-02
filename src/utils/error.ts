@@ -110,3 +110,24 @@ export function mapEmployeeError(error: unknown) {
     }
     return { type: 'error', message: apiError(error, e?.message || '操作失敗') }
 }
+
+/**
+ * 取 FastAPI 422 中「指定欄位」的驗證訊息（後端刻意寫成給使用者看的中文，例如打卡 PIN 弱碼）。
+ *
+ * Why（day-qa F11）：axios 攔截器對 422 陣列一律退成通用文案（避免把欄位路徑、輸入值等技術
+ * 細節丟給使用者），結果 PIN 被以「常見弱碼」擋下時畫面只剩「設定失敗，請重試」，重試永遠失敗。
+ * 只在呼叫端明確指定、且訊息由後端 validator 撰寫的欄位使用；pydantic 的「Value error, 」前綴會去掉。
+ */
+export function validationFieldMessage(error: unknown, field: string): string | null {
+    const detail = (error as { response?: { status?: number; data?: { detail?: unknown } } } | null)
+        ?.response?.data?.detail
+    if (!Array.isArray(detail)) return null
+    for (const item of detail) {
+        const loc = (item as { loc?: unknown })?.loc
+        const msg = (item as { msg?: unknown })?.msg
+        if (Array.isArray(loc) && loc[loc.length - 1] === field && typeof msg === 'string' && msg.trim()) {
+            return msg.replace(/^Value error,\s*/, '').trim()
+        }
+    }
+    return null
+}
