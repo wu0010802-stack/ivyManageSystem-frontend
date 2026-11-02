@@ -13,6 +13,7 @@ import OfflineIndicator from '@/components/OfflineIndicator.vue'
 import { apiError } from '@/utils/error'
 import A11yMenu from '@/components/common/A11yMenu.vue'
 import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
+import PortalDismissalBanner from '@/components/portal/PortalDismissalBanner.vue'
 import ApplySheet from '@/components/portal/ApplySheet.vue'
 import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -274,7 +275,10 @@ onMounted(() => {
   // 每次導覽結構改變都要進版，沿用舊號碼的老師讀不到新說明。
   const PORTAL_LAYOUT_VERSION = '4'
   const stored = tenantGetItem('portal_layout_v')
-  if (stored !== PORTAL_LAYOUT_VERSION) {
+  if (stored === null) {
+    // 這台裝置第一次進教師端：沒有舊導覽可比，「介面已更新」只會讓新老師困惑（day-qa F16）
+    tenantSetItem('portal_layout_v', PORTAL_LAYOUT_VERSION)
+  } else if (stored !== PORTAL_LAYOUT_VERSION) {
     setTimeout(() => {
       ElMessageBox({
         title: '導航更新',
@@ -587,6 +591,8 @@ const submitPassword = async () => {
 
     <el-container>
       <OfflineIndicator />
+      <!-- 不在接送頁時，接送預告／家長已到門口的可見提醒（day-qa F7） -->
+      <PortalDismissalBanner />
 
       <!-- 冒充模式常駐橫幅：readonly（預覽）或 write（代操作）-->
       <el-alert
