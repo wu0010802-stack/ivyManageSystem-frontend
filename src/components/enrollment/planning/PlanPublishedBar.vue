@@ -10,6 +10,9 @@
       <p class="bar-headline">{{ headline }}</p>
       <p class="bar-details">{{ details.join('・') }}</p>
     </div>
+    <div v-if="$slots.actions" class="bar-actions">
+      <slot name="actions" />
+    </div>
   </div>
 </template>
 
@@ -27,16 +30,20 @@ const props = withDefaults(defineProps<{
   applyOverdue?: boolean
   /** 今天（'YYYY-MM-DD'，台北）；由父層傳入，測試可固定 */
   today: string
+  /** 已發布計畫的阻擋數（published 時只含會讓套用失敗的問題） */
+  blockingCount?: number
 }>(), {
   publishedAt: null,
   applyDate: null,
   appliesImmediately: false,
   applyFailure: null,
   applyOverdue: false,
+  blockingCount: 0,
 })
 
+// 優先序與 PlanStatusCard 一致：排程未啟用 → 套用失敗 → 阻擋 → 逾期
 const tone = computed<'info' | 'warning' | 'error'>(() => {
-  if (!props.schedulerEnabled || props.applyFailure) return 'error'
+  if (!props.schedulerEnabled || props.applyFailure || props.blockingCount > 0) return 'error'
   if (props.applyOverdue) return 'warning'
   return 'info'
 })
@@ -50,6 +57,7 @@ const applyCountdown = computed(() => {
 const headline = computed(() => {
   if (!props.schedulerEnabled) return '自動套用未啟用，請聯絡系統管理員開啟，否則不會套用'
   if (props.applyFailure) return `套用失敗：${props.applyFailure}`
+  if (props.blockingCount > 0) return `已發布的計畫有 ${props.blockingCount} 項阻擋，套用會失敗`
   if (props.applyOverdue) return '已超過預期時間仍未套用，排程器重試中'
   if (props.appliesImmediately) return '已發布，約一小時內套用到現行班級'
   if (!props.applyDate) return '已發布，將於新學年開學時自動套用'
@@ -61,8 +69,14 @@ const details = computed(() => {
   const published = formatMonthDay(props.publishedAt)
   if (published) parts.push(`已於 ${published} 發布`)
   if (!props.schedulerEnabled && props.applyFailure) parts.push(`上次套用失敗：${props.applyFailure}`)
-  if (props.schedulerEnabled && props.applyFailure) parts.push('處理好之後系統會自動重試')
-  parts.push('要修改請先撤回發布')
+  // 阻擋不是 headline 時（排程未啟用／已有失敗原因）列在說明裡，不被蓋掉
+  const blockingIsHeadline = props.schedulerEnabled && !props.applyFailure && props.blockingCount > 0
+  if (props.blockingCount > 0 && !blockingIsHeadline) parts.push(`另有 ${props.blockingCount} 項阻擋，處理前不會套用`)
+  if (blockingIsHeadline) parts.push('處理方式寫在右側「阻擋套用」各項裡；多數要先撤回發布、重新產生建議再發布')
+  else {
+    if (props.schedulerEnabled && props.applyFailure) parts.push('處理好之後系統會自動重試')
+    parts.push('要修改請先撤回發布')
+  }
   return parts
 })
 </script>
@@ -86,7 +100,13 @@ const details = computed(() => {
 }
 
 .bar-body {
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.bar-actions {
+  flex: none;
+  align-self: center;
 }
 
 .bar-headline {

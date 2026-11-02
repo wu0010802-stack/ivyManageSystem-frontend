@@ -59,4 +59,31 @@ describe('PlanPublishedBar', () => {
   it('套用日就是今天：寫「今天」而不是「還有 0 天」', () => {
     expect(mountBar({ today: '2027-08-01' }).text()).toContain('（今天）')
   })
+  it('有阻擋（排程啟用、尚未失敗）：error「套用會失敗」，不再說何時自動套用；補救模式也一樣', () => {
+    const w = mountBar({ blockingCount: 2 })
+    expect(w.classes()).toContain('is-error')
+    expect(w.find('.bar-headline').text()).toBe('已發布的計畫有 2 項阻擋，套用會失敗')
+    expect(w.text()).not.toContain('自動套用')
+    expect(w.text()).toContain('已於 06/20 發布')
+    const remedial = mountBar({ blockingCount: 1, appliesImmediately: true })
+    expect(remedial.find('.bar-headline').text()).toBe('已發布的計畫有 1 項阻擋，套用會失敗')
+    expect(remedial.text()).not.toContain('約一小時內')
+  })
+
+  it('優先序：排程未啟用、套用失敗排在阻擋前面，阻擋改列在說明裡', () => {
+    const off = mountBar({ schedulerEnabled: false, blockingCount: 2 })
+    expect(off.find('.bar-headline').text()).toContain('自動套用未啟用')
+    expect(off.find('.bar-details').text()).toContain('另有 2 項阻擋，處理前不會套用')
+    const failed = mountBar({ applyFailure: 'X', blockingCount: 1 })
+    expect(failed.find('.bar-headline').text()).toBe('套用失敗：X')
+  })
+
+  it('actions slot：放處理按鈕（例如撤回並重新產生）', () => {
+    const w = mount(PlanPublishedBar, {
+      global: { plugins: [ElementPlus] },
+      props: { applyDate: '2027-08-01', schedulerEnabled: true, today: '2027-07-22', blockingCount: 1 },
+      slots: { actions: '<button class="slot-btn">撤回並重新產生</button>' },
+    })
+    expect(w.find('.bar-actions .slot-btn').exists()).toBe(true)
+  })
 })
