@@ -2,6 +2,7 @@
 import type { Schema } from '@/api/_generated/typed'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
 import { formatTeacherOptionLabel, type TeacherOptionLike } from '@/utils/teacherOption'
+import { pad2 } from '@/utils/format'
 
 type PlanClass = Schema<'PlanClassOut'>
 
@@ -404,8 +405,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 /** 'YYYY-MM-DD' 加減天數（純日曆日運算：以 UTC 午夜為錨，不受瀏覽器時區影響）。 */
 export function addDaysISO(date: string, days: number): string {
   const d = new Date(isoToUtc(date) + days * DAY_MS)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`
 }
 
 /** to − from 的天數（'YYYY-MM-DD'）；to 在 from 之前為負數。 */
