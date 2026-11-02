@@ -1556,8 +1556,9 @@ describe('YearPlanWorkspaceView', () => {
       await flushPromises()
       const msg = String(confirmSpy.mock.calls.at(-1)![0])
       expect(msg).toContain('2 位大班留級生')
-      expect(msg).toContain('留級要在套用前發布才會生效')
+      expect(msg).toContain('留級要在套用前重新發布才會生效')
       expect(msg).not.toContain('自動畢業')
+      expect(msg).not.toContain('畢業日')
 
       const draft = await mountWith(fecStatus('draft', { retain_pending_count: 2, auto_graduation_enabled: false }))
       expect(draft.findComponent({ name: 'PlanNextSteps' }).props('autoGraduationEnabled')).toBe(false)

@@ -623,7 +623,7 @@ function retainUnpublishWarning(): string {
   if (!st || count <= 0) return ''
   const who = `${count} 位${graduationGrade.value ?? '畢業年級'}留級生`
   if (!autoGraduationEnabled.value) {
-    return `目前有 ${who}：留級要在套用前發布才會生效，改完記得重新發布。`
+    return `目前有 ${who}：留級要在套用前重新發布才會生效。`
   }
   const graduation = st.graduation_date
   const phase = retainRiskPhase(today, graduation)

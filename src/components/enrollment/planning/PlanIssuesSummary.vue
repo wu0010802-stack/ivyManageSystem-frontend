@@ -101,7 +101,8 @@ const GROUP_TITLES: Record<string, string> = {
   graduate_not_graduation_grade: '非畢業年級的學生被標記畢業',
   exclude_will_graduate: '排除的畢業年級學生仍會自動畢業',
   teacher_resigning: '老師預定離職，新學年無法帶班',
-  retain_already_graduated: '留級生已被系統畢業，留級不會生效',
+  // 可能是系統自動畢業，也可能是手動辦畢業：標題中性
+  retain_already_graduated: '留級生已畢業，留級不會生效',
 }
 
 // 已發布時同一個 code 的意思不同（後端 published 訊息也不同）：換班要先撤回才能重新
