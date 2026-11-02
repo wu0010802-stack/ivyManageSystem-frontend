@@ -8,7 +8,7 @@ import {
 } from '../api/medications'
 import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
-import { MEDICATION_PHOTO_MAX, MEDICATION_PHOTO_MAX_BYTES, nextMedicationSlot } from '../utils/medicationForm'
+import { MEDICATION_PHOTO_MAX, MEDICATION_PHOTO_MAX_BYTES, nextMedicationSlot, pastSlotsForToday } from '../utils/medicationForm'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -48,6 +48,8 @@ const form = ref<{
 })
 
 const INITIAL_ORDER_DATE = form.value.order_date
+// 今天已經過去的時段：不擋送出，只提醒（day-qa F12）
+const pastSlots = computed(() => pastSlotsForToday(form.value.order_date, form.value.time_slots, todayISO()))
 const INITIAL_SLOTS = form.value.time_slots.join(',')
 
 /** 還沒送出、且家長已經填了東西：離開前要確認 */
@@ -248,6 +250,9 @@ function cancelAllergy() {
               <ParentIcon name="close" size="sm" />
             </button>
           </div>
+          <p v-if="pastSlots.length" class="slot-past-hint" role="status">
+            {{ pastSlots.join('、') }} 已經過了。老師收到後會盡快處理；如果在家已經吃過，請刪掉這個時段。
+          </p>
           <button
             type="button"
             class="add-slot"
@@ -415,6 +420,12 @@ function cancelAllergy() {
   cursor: not-allowed;
 }
 
+.slot-past-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-warning-strong);
+}
 .add-slot {
   display: inline-flex;
   align-items: center;

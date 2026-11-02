@@ -44,3 +44,23 @@ export function nextMedicationSlot(slots: readonly string[]): string {
   while (taken.has(next) && next < LAST_MINUTE_OF_DAY) next = Math.min(next + 30, LAST_MINUTE_OF_DAY)
   return toHHMM(next)
 }
+
+/**
+ * 用藥日期是今天時，已經過去的時段（day-qa F12）。
+ *
+ * 實測：家長 14:35 送出今天的用藥單，預設時段 08:00 原封不動送出，老師端立刻多一筆「逾時未餵」。
+ * 不擋送出（家長可能就是要請老師補餵），只在表單上提示，讓家長確認或刪掉在家已吃過的時段。
+ */
+export function pastSlotsForToday(
+  orderDate: string,
+  slots: readonly string[],
+  todayIso: string,
+  now: Date = new Date(),
+): string[] {
+  if (orderDate !== todayIso) return []
+  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+  return slots.filter((s) => {
+    const m = toMinutes(s)
+    return m !== null && m < nowMinutes
+  })
+}
