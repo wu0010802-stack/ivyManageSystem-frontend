@@ -92,6 +92,8 @@ function _is409WithCode(e: unknown, code: string): e is AxiosLikeError {
 const STALE_AFTER_WRITE_MESSAGE = '已儲存，但畫面沒有更新，請按重新載入'
 // 後端 invalid_state 訊息帶 draft/published 等內部狀態字，不直接給使用者看
 const INVALID_STATE_MESSAGE = '這份計畫的狀態剛被變更（可能已發布、撤回或作廢），已重新載入最新畫面'
+// 頁面開著時跨進目標學年上學期：前端還以為是一般模式，發布沒帶學年確認
+const REMEDIAL_CONFIRM_MESSAGE = '學期已切換，請重新確認發布：已重新載入，發布時要輸入學年確認'
 
 /**
  * publish 的 409 blocking_issues 特例：後端 detail `{code, issues}` 沒有 `message` 欄位，
@@ -152,6 +154,14 @@ export function useYearPlanWorkspace() {
     if (_is409WithCode(e, 'invalid_state')) {
       error.value = INVALID_STATE_MESSAGE
       ElMessage.warning(INVALID_STATE_MESSAGE)
+      return true
+    }
+    // 422 remedial_confirm_required：重新載入拿到 applies_immediately=true，發布 dialog
+    // 就會出現學年輸入欄（否則使用者只能自己整頁重新整理）
+    if ((e as AxiosLikeError)?.response?.status === 422
+      && (e as AxiosLikeError).errorDetail?.code === 'remedial_confirm_required') {
+      error.value = REMEDIAL_CONFIRM_MESSAGE
+      ElMessage.warning(REMEDIAL_CONFIRM_MESSAGE)
       return true
     }
     const err = e as { displayMessage?: string | null }
@@ -234,11 +244,12 @@ export function useYearPlanWorkspace() {
   ): Promise<T | null> {
     // in-flight 再入短路：UI disabled 綁 loading 之外的第二道防線（同 tick 雙擊、
     // DOM 尚未重繪套用 disabled 時）——否則第二發帶同一 base_version 撞 409 偽版本衝突。
+    // 先清欄位錯誤再判斷短路：被短路的呼叫端（例如老師格）不能讀到上一筆留下的錯誤
+    fieldErrors.value = {}
     if (loading.value) return null
     _begin()
     error.value = null
     versionConflict.value = false
-    fieldErrors.value = {}
     try {
       let result: T
       try {

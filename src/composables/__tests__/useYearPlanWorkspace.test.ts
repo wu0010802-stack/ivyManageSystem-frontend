@@ -566,4 +566,41 @@ describe('useYearPlanWorkspace', () => {
     await ws.updateClass(10, { head_teacher_id: 57 })
     expect(ws.fieldErrors.value).toEqual({ head_teacher_id: '班導「吳老師」已停用，請改選其他老師' })
   })
+  it('發布遇到 422 remedial_confirm_required（頁面開著時跨進新學期）：重新載入並提示重新確認，不當一般錯誤', async () => {
+    const warnSpy = vi.spyOn(ElMessage, 'warning')
+    const ws = await loadedWorkspace()
+    const statusCallsBefore = mockStatus.mock.calls.length
+    mockPublish.mockRejectedValueOnce({
+      response: { status: 422 },
+      errorDetail: { code: 'remedial_confirm_required', message: '目前已是 115 學年上學期…請輸入學年 115 確認後再發布' },
+      displayMessage: '目前已是 115 學年上學期…請輸入學年 115 確認後再發布',
+    })
+    mockStatus.mockResolvedValue({ data: { ...statusDraft(5, 1).data, applies_immediately: true } })
+
+    const result = await ws.publish()
+
+    expect(result.ok).toBe(false)
+    expect(mockStatus.mock.calls.length).toBe(statusCallsBefore + 1)
+    expect(ws.status.value?.applies_immediately).toBe(true)
+    expect(mockNotify).not.toHaveBeenCalled()
+    expect(String(warnSpy.mock.calls.at(-1)![0])).toContain('學期已切換，請重新確認發布')
+    warnSpy.mockRestore()
+  })
+
+  it('in-flight 短路時也清掉上一筆的欄位錯誤（呼叫端不會讀到舊錯誤掛到別格）', async () => {
+    const ws = await loadedWorkspace()
+    mockUpdateClass.mockRejectedValueOnce({
+      response: { status: 400 },
+      errorDetail: { code: 'teacher_not_found', message: '舊錯誤', field: 'head_teacher_id' },
+      displayMessage: '舊錯誤',
+    })
+    await ws.updateClass(10, { head_teacher_id: 57 })
+    expect(ws.fieldErrors.value).toEqual({ head_teacher_id: '舊錯誤' })
+
+    // 重新載入進行中（例如版本衝突後按了重新載入）時另一格送出 → 被 in-flight 短路
+    mockStatus.mockReturnValue(new Promise(() => {}))
+    void ws.load()
+    expect(await ws.updateClass(10, { head_teacher_id: 58 })).toBe(false)
+    expect(ws.fieldErrors.value).toEqual({})
+  })
 })
