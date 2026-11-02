@@ -7,6 +7,7 @@ import { friendlyError } from '@/utils/errorMessages'
 import { hasPermission } from '@/utils/auth'
 import { useFormDirty } from '@/composables/useFormDirty'
 import { useSettingsDirty } from './settingsDirty'
+import { validateMeetingWindow } from '@/utils/meetingWindow'
 import OvertimeBonusTab from './components/OvertimeBonusTab.vue'
 import FestivalBonusTab from './components/FestivalBonusTab.vue'
 import StandardSalaryTab from './components/StandardSalaryTab.vue'
@@ -57,6 +58,9 @@ const bonusConfig = reactive({
   // 階段 2-B：園規常數從 hardcode 搬到 BonusConfig
   meeting_default_hours: 2,
   meeting_absence_penalty: 100,
+  // mtgshift01：園務會議時段 HH:MM；兩欄都設才依當天排班算每人時數（null＝停用）
+  meeting_start_time: null as string | null,
+  meeting_end_time: null as string | null,
   art_teacher_festival: 2000,
   // 義華 Q13：懲處預設扣節慶獎金（個案未填金額時套用）。初值 null＝GET 未帶回時
   // 原樣送 null（後端不改值），避免前端預設值悄悄覆寫租戶設定。
@@ -68,6 +72,8 @@ const bonusConfig = reactive({
 })
 // 上次載入的開關值：儲存前比對「新開啟」哪些規則，提示會影響未封存月份重算。
 const loadedFestivalToggles = ref<FestivalRuleToggleValues>(emptyFestivalRuleToggles())
+// 後端 GET 有回傳會議時段欄位才顯示與送出（PUT 為 extra=forbid，後端未升版時送了會 422）
+const meetingWindowSupported = ref(false)
 
 const bonusReady = ref(false)
 const gradesReady = ref(false)
@@ -94,6 +100,7 @@ const fetchBonusConfig = async () => {
     const response = await getBonusConfig()
     const data = response.data as Record<string, unknown>
     Object.assign(bonusConfig, data)
+    meetingWindowSupported.value = 'meeting_start_time' in data
     loadedFestivalToggles.value = pickFestivalRuleToggles(data)
     snapshotBonus()
     bonusReady.value = true
@@ -132,6 +139,13 @@ const fetchGradeTargets = async () => {
 const saveBonusConfig = async (): Promise<boolean> => {
   // bug sweep 2026-05-16 P1-5：BonusConfig 變更影響全員獎金基數，
   // 後端對齊 PUT /insurance/brackets 要求 reason ≥10 字 + ACTIVITY_PAYMENT_APPROVE。
+  const windowError = meetingWindowSupported.value
+    ? validateMeetingWindow(bonusConfig.meeting_start_time, bonusConfig.meeting_end_time)
+    : null
+  if (windowError) {
+    ElMessage.warning(`園務會議時段：${windowError}`)
+    return false
+  }
   const enabled = newlyEnabledFestivalRules(loadedFestivalToggles.value, bonusConfig)
   if (enabled.length > 0) {
     try {
@@ -195,6 +209,13 @@ const saveBonusConfig = async (): Promise<boolean> => {
     enrollment_count_mode: bonusConfig.enrollment_count_mode,
     meeting_default_hours: bonusConfig.meeting_default_hours,
     meeting_absence_penalty: bonusConfig.meeting_absence_penalty,
+    // 空字串＝清除（停用）；null 在後端代表「本次不改」，所以清空要轉成空字串
+    ...(meetingWindowSupported.value
+      ? {
+          meeting_start_time: bonusConfig.meeting_start_time || '',
+          meeting_end_time: bonusConfig.meeting_end_time || '',
+        }
+      : {}),
     art_teacher_festival: bonusConfig.art_teacher_festival,
     warning_deduction: bonusConfig.warning_deduction,
     minor_offense_deduction: bonusConfig.minor_offense_deduction,
@@ -307,7 +328,11 @@ onMounted(() => {
 
       <!-- 節慶獎金（合併：教師基數 + 主管獎金 + 目標人數） -->
       <el-tab-pane label="節慶獎金" name="festival">
-        <FestivalBonusTab :bonus-config="bonusConfig" :grade-targets="gradeTargets" />
+        <FestivalBonusTab
+          :bonus-config="bonusConfig"
+          :grade-targets="gradeTargets"
+          :meeting-window-supported="meetingWindowSupported"
+        />
       </el-tab-pane>
 
       <!-- 職位標準底薪 -->

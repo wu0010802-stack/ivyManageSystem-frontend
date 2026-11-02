@@ -29,3 +29,47 @@ describe('buildMeetingBatchPayload（義華比對 #22：批次會議時數＋逐
     expect(payload.hours_overrides).toBeUndefined()
   })
 })
+
+describe('buildMeetingBatchPayload 會議時段模式（mtgshift01：依排班算每人時數）', () => {
+  const window = { start: '17:30', end: '18:30' }
+
+  it('送會議時段、不送整場時數；未改的人交給後端依排班算', () => {
+    const payload = buildMeetingBatchPayload(
+      base,
+      1.5,
+      [
+        { id: 1, attended: true, hours: null, suggested: 0.5 },
+        { id: 2, attended: true, hours: null, suggested: 1 },
+      ],
+      window,
+    )
+    expect(payload.meeting_start_time).toBe('17:30')
+    expect(payload.meeting_end_time).toBe('18:30')
+    expect(payload.meeting_hours).toBeUndefined()
+    expect(payload.hours_overrides).toBeUndefined()
+  })
+
+  it('手動改過且不同於排班建議 → 送逐人覆寫；改回建議值不送', () => {
+    const payload = buildMeetingBatchPayload(
+      base,
+      null,
+      [
+        { id: 1, attended: true, hours: 0.25, suggested: 0.5 },
+        { id: 2, attended: true, hours: 1, suggested: 1 },
+        { id: 3, attended: false, hours: 1, suggested: 1 },
+      ],
+      window,
+    )
+    expect(payload.hours_overrides).toEqual({ 1: 0.25 })
+  })
+
+  it('手動改成 0 也要送（18:00 下班者被要求留下但不計）', () => {
+    const payload = buildMeetingBatchPayload(
+      base,
+      null,
+      [{ id: 1, attended: true, hours: 0, suggested: 0.5 }],
+      window,
+    )
+    expect(payload.hours_overrides).toEqual({ 1: 0 })
+  })
+})

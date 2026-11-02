@@ -28,6 +28,9 @@ interface FestivalBonusConfig {
   admin_festival: number
   meeting_default_hours: number
   meeting_absence_penalty: number
+  // mtgshift01：園務會議時段 HH:MM（null＝未設，會議整場套 meeting_default_hours）
+  meeting_start_time?: string | null
+  meeting_end_time?: string | null
   art_teacher_festival: number
   // 義華 Q13：懲處預設扣節慶獎金（元）；null＝後端未回傳（沿用後端預設）
   warning_deduction: number | null
@@ -51,10 +54,12 @@ const OFFENSE_DEDUCTION_FIELDS = [
   { key: 'major_offense_deduction', label: '大過 預設扣節慶獎金' },
 ] as const
 
-defineProps<{
+withDefaults(defineProps<{
   bonusConfig: FestivalBonusConfig
   gradeTargets: Record<string, unknown>[]
-}>()
+  // 後端 GET 有回傳會議時段欄位才顯示（後端未升版時隱藏）
+  meetingWindowSupported?: boolean
+}>(), { meetingWindowSupported: false })
 </script>
 
 <template>
@@ -200,7 +205,7 @@ defineProps<{
       <el-col :span="8">
         <el-form-item>
           <template #label>
-            <el-tooltip content="每場園務會議計幾小時加班費（業主實務 2 小時）" placement="top">
+            <el-tooltip content="每場園務會議計幾小時加班費（業主實務 2 小時）；下方設了會議時段時改依排班計算" placement="top">
               <span>園務會議時數</span>
             </el-tooltip>
           </template>
@@ -238,6 +243,33 @@ defineProps<{
             controls-position="right" style="width: 100%"
           />
         </el-form-item>
+      </el-col>
+    </el-row>
+    <!-- mtgshift01（義華 2026-11-02）：會議時段；兩欄都設才依當天排班算每人時數 -->
+    <el-row v-if="meetingWindowSupported" :gutter="20" data-testid="meeting-window">
+      <el-col :span="16">
+        <el-form-item label="園務會議時段">
+          <div class="meeting-window">
+            <el-time-select
+              v-model="bonusConfig.meeting_start_time"
+              start="07:00" step="00:15" end="21:00"
+              placeholder="開始" clearable
+              aria-label="園務會議開始時間"
+            />
+            <span class="meeting-window__sep">至</span>
+            <el-time-select
+              v-model="bonusConfig.meeting_end_time"
+              start="07:00" step="00:15" end="21:00"
+              placeholder="結束" clearable
+              aria-label="園務會議結束時間"
+            />
+          </div>
+        </el-form-item>
+        <p class="desc-text">
+          設了會議時段，登錄園務會議時會依每人當天排班自動算時數：只有排班下班之後的時段算加班
+          （例：會議 17:30–18:30，17:30 下班算 1 小時、18:00 下班算 0.5 小時、當天排休算整場）。
+          兩欄都清空＝不依排班，每場套用上方「園務會議時數」。
+        </p>
       </el-col>
     </el-row>
   </el-card>
@@ -317,6 +349,21 @@ defineProps<{
   color: var(--text-tertiary);
   line-height: 1.6;
   margin-bottom: 15px;
+}
+
+.meeting-window {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.meeting-window :deep(.el-select) {
+  width: 120px;
+}
+
+.meeting-window__sep {
+  color: var(--text-tertiary);
 }
 .mt-4 { margin-top: var(--space-4); }
 .rule-toggle-row {

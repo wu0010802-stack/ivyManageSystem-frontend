@@ -243,6 +243,52 @@ describe('BonusConfigPanel — saveAllBonusSettings 儲存閘門', () => {
     expect(payload.minor_offense_deduction).toBe(3000)
     expect(payload.major_offense_deduction).toBeNull()
   })
+
+  describe('園務會議時段（mtgshift01）', () => {
+    const save = async (data: Record<string, unknown>, edit?: (c: Record<string, unknown>) => void) => {
+      getBonusConfig.mockResolvedValue({ data: { config_year: 2026, ...data } })
+      ;(ElMessageBox.prompt as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+        value: '義華園務會議固定時段依排班算加班',
+      })
+      const wrapper = mountPanel()
+      await flushPromises()
+      const state = wrapper.vm.$.setupState as unknown as SetupState & { bonusConfig: Record<string, unknown> }
+      edit?.(state.bonusConfig)
+      await state.saveAllBonusSettings()
+      await flushPromises()
+      return updateBonusConfig.mock.calls[0]?.[0] as Record<string, unknown> | undefined
+    }
+
+    it('GET 帶回的時段原樣送回', async () => {
+      const payload = await save({ meeting_start_time: '17:30', meeting_end_time: '18:30' })
+      expect(payload?.meeting_start_time).toBe('17:30')
+      expect(payload?.meeting_end_time).toBe('18:30')
+    })
+
+    it('清空時段 → 送空字串（後端清除＝停用）', async () => {
+      const payload = await save({ meeting_start_time: '17:30', meeting_end_time: '18:30' }, (c) => {
+        c.meeting_start_time = null
+        c.meeting_end_time = null
+      })
+      expect(payload?.meeting_start_time).toBe('')
+      expect(payload?.meeting_end_time).toBe('')
+    })
+
+    it('後端未回傳時段欄位（尚未支援）→ 不送，避免嚴格 PUT 契約 422', async () => {
+      const payload = await save({})
+      expect(payload).toBeDefined()
+      expect(payload).not.toHaveProperty('meeting_start_time')
+      expect(payload).not.toHaveProperty('meeting_end_time')
+    })
+
+    it('只填一邊 → 擋下不送並提示', async () => {
+      const payload = await save({ meeting_start_time: null, meeting_end_time: null }, (c) => {
+        c.meeting_start_time = '17:30'
+      })
+      expect(payload).toBeUndefined()
+      expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('同時'))
+    })
+  })
 })
 
 // 薪資模組稽核 P2：saveAllBonusSettings 最終送到 PUT /config/bonus，後端除

@@ -3,9 +3,11 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { getMeetings, getMeetingSummary, createBatch, updateMeeting, deleteMeeting } from '@/api/meetings'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { money } from '@/utils/format'
+import { money, todayISO } from '@/utils/format'
 import { useEmployeeStore } from '@/stores/employee'
 import { buildMeetingBatchPayload, type MeetingBatchAttendance } from '@/utils/meetingBatch'
+import { useMeetingShiftPreview } from '@/composables/useMeetingShiftPreview'
+import { describeShiftHours, formatMeetingHours, validateMeetingWindow } from '@/utils/meetingWindow'
 
 withDefaults(defineProps<{
   embedded?: boolean
@@ -37,6 +39,14 @@ const batchForm = reactive({
 // 本場會議實際時數；null＝沿用系統預設（獎金設定的會議預設時數）
 const batchMeetingHours = ref<number | null>(null)
 const employeeAttendance = ref<(MeetingBatchAttendance & { name: string })[]>([])
+// mtgshift01：獎金設定有會議時段 → 依每人當天排班預填時數（時段模式）
+const shiftPreview = useMeetingShiftPreview(employeeAttendance)
+const { windowMode: meetingWindowMode, start: meetingStart, end: meetingEnd } = shiftPreview
+const refreshShiftPreview = () => shiftPreview.refresh(batchForm.meeting_date)
+const shiftHint = (employeeId: number): string => {
+  const item = shiftPreview.itemFor(employeeId)
+  return item ? `${describeShiftHours(item)} · ${formatMeetingHours(item.hours)} 小時` : ''
+}
 
 const editDialogVisible = ref<boolean>(false)
 const editForm = reactive<{
@@ -109,6 +119,8 @@ const handleBatchCreate = () => {
     hours: null,
   }))
   batchDialogVisible.value = true
+  // 未選日期前先以今天探測租戶是否設了會議時段；探測期間就選了日期的話，回來後依該日重算
+  void shiftPreview.init(todayISO()).then(refreshShiftPreview)
 }
 
 const toggleSelectAll = (value: string | number | boolean) => {
@@ -134,7 +146,27 @@ const submitBatch = async () => {
     return
   }
 
-  const payload = buildMeetingBatchPayload(batchForm, batchMeetingHours.value, employeeAttendance.value)
+  let meetingWindow: { start: string; end: string } | null = null
+  if (meetingWindowMode.value) {
+    const start = meetingStart.value
+    const end = meetingEnd.value
+    if (!start || !end) {
+      ElMessage.warning('請填寫會議時段')
+      return
+    }
+    const windowError = validateMeetingWindow(start, end)
+    if (windowError) {
+      ElMessage.warning(windowError)
+      return
+    }
+    meetingWindow = { start, end }
+  }
+  const payload = buildMeetingBatchPayload(
+    batchForm,
+    batchMeetingHours.value,
+    employeeAttendance.value,
+    meetingWindow,
+  )
 
   if (payload.attendees.length === 0 && (payload.absentees?.length ?? 0) === 0) {
     ElMessage.warning('請至少選擇一位員工')
@@ -317,9 +349,37 @@ onMounted(() => {
     <el-dialog v-model="batchDialogVisible" title="新增園務會議紀錄" width="700px" top="5vh">
       <el-form label-width="100px">
         <el-form-item label="會議日期">
-          <el-date-picker v-model="batchForm.meeting_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" />
+          <el-date-picker
+            v-model="batchForm.meeting_date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            style="width: 100%;"
+            @change="refreshShiftPreview"
+          />
         </el-form-item>
-        <el-form-item label="會議時數">
+        <el-form-item v-if="meetingWindowMode" label="會議時段">
+          <div class="meeting-window">
+            <el-time-select
+              v-model="meetingStart"
+              start="07:00" step="00:15" end="21:00"
+              :clearable="false"
+              aria-label="會議開始時間"
+              @change="refreshShiftPreview"
+            />
+            <span class="text-muted">至</span>
+            <el-time-select
+              v-model="meetingEnd"
+              start="07:00" step="00:15" end="21:00"
+              :clearable="false"
+              aria-label="會議結束時間"
+              @change="refreshShiftPreview"
+            />
+          </div>
+          <span class="dialog-hint">
+            依每人當天排班自動計算：只有排班下班之後的時段算加班（當天排休算整場）；遲到／早退者可在下方逐人改
+          </span>
+        </el-form-item>
+        <el-form-item v-else label="會議時數">
           <el-input-number
             v-model="batchMeetingHours"
             :min="0.5"
@@ -344,17 +404,27 @@ onMounted(() => {
         </div>
         <div class="employee-list">
           <div v-for="employee in employeeAttendance" :key="employee.id" class="employee-item">
-            <span>{{ employee.name }}</span>
+            <div class="employee-item-name">
+              <span>{{ employee.name }}</span>
+              <span
+                v-if="meetingWindowMode && employee.attended && shiftHint(employee.id)"
+                class="employee-shift-hint"
+              >{{ shiftHint(employee.id) }}</span>
+            </div>
             <div class="employee-item-controls">
               <el-input-number
                 v-if="employee.attended"
                 v-model="employee.hours"
-                :min="0.5"
+                :min="meetingWindowMode ? 0 : 0.5"
                 :max="12"
                 :step="0.5"
-                :precision="1"
+                :precision="meetingWindowMode ? 2 : 1"
                 size="small"
-                placeholder="同場次"
+                :placeholder="
+                  meetingWindowMode && employee.suggested != null
+                    ? formatMeetingHours(employee.suggested)
+                    : '同場次'
+                "
                 controls-position="right"
                 :aria-label="`${employee.name} 實際會議時數`"
                 class="employee-hours-input"
@@ -474,8 +544,30 @@ onMounted(() => {
   gap: 8px;
 }
 
+.employee-item-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.employee-shift-hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.meeting-window {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.meeting-window :deep(.el-select) {
+  width: 120px;
+}
+
 .employee-hours-input {
-  width: 96px;
+  width: 104px;
 }
 
 .summary-attended {

@@ -246,3 +246,36 @@ describe('FestivalBonusTab 節慶／超額計算規則開關', () => {
     expect(activeIndex(wrapper, 'excess_exclude_long_leave')).toBe(1)
   })
 })
+
+// mtgshift01（義華 2026-11-02）：園規常數卡加「園務會議時段」，設了才依當天排班算每人時數
+describe('FestivalBonusTab 園務會議時段', () => {
+  const TimeSelectStub = {
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template:
+      '<input class="time" :value="modelValue ?? \'\'" @input="$emit(\'update:modelValue\', $event.target.value || null)" />',
+  }
+  const mountWithTime = (bonusConfig: Record<string, unknown>, meetingWindowSupported: boolean) =>
+    mount(FestivalBonusTab, {
+      props: { bonusConfig: bonusConfig as ReturnType<typeof makeConfig>, gradeTargets: [], meetingWindowSupported },
+      global: { stubs: { ...STUBS, 'el-time-select': TimeSelectStub } },
+    })
+
+  it('後端支援時顯示開始／結束兩欄並綁定設定值', async () => {
+    const bonusConfig = reactive({ ...makeConfig(), meeting_start_time: '17:30', meeting_end_time: '18:30' })
+    const wrapper = mountWithTime(bonusConfig, true)
+    const field = wrapper.find('[data-testid="meeting-window"]')
+    expect(field.exists()).toBe(true)
+    expect(field.text()).toContain('排班下班之後')
+    const inputs = field.findAll('input.time')
+    expect(inputs.map((i) => (i.element as HTMLInputElement).value)).toEqual(['17:30', '18:30'])
+
+    await inputs[1].setValue('19:00')
+    expect(bonusConfig.meeting_end_time).toBe('19:00')
+  })
+
+  it('後端尚未支援時不顯示', () => {
+    const wrapper = mountWithTime(makeConfig(), false)
+    expect(wrapper.find('[data-testid="meeting-window"]').exists()).toBe(false)
+  })
+})

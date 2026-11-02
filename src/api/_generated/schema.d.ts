@@ -10781,6 +10781,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/meetings/shift-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Meeting Shift Hours
+         * @description 預覽每位在職員工當天依排班的會議時數（批次登錄視窗預填用，不寫入）。
+         *
+         *     未帶時段 → 用租戶設定的會議時段；租戶也沒設 → 回空（前端改用整場時數）。
+         */
+        get: operations["preview_meeting_shift_hours_api_meetings_shift_hours_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/meetings/summary": {
         parameters: {
             query?: never;
@@ -26024,6 +26046,16 @@ export interface components {
             /** Meeting Default Hours */
             meeting_default_hours?: number | null;
             /**
+             * Meeting End Time
+             * @description 園務會議結束時間 HH:MM（空字串＝清除）
+             */
+            meeting_end_time?: string | null;
+            /**
+             * Meeting Start Time
+             * @description 園務會議開始時間 HH:MM（空字串＝清除；設了才依排班算每人時數）
+             */
+            meeting_start_time?: string | null;
+            /**
              * Minor Offense Deduction
              * @description 小過一支預設扣節慶獎金（元）
              */
@@ -37244,8 +37276,12 @@ export interface components {
             };
             /** Meeting Date */
             meeting_date: string;
+            /** Meeting End Time */
+            meeting_end_time?: string | null;
             /** Meeting Hours */
             meeting_hours?: number | null;
+            /** Meeting Start Time */
+            meeting_start_time?: string | null;
             /**
              * Meeting Type
              * @default staff_meeting
@@ -37293,6 +37329,35 @@ export interface components {
             overtime_hours?: number | null;
             /** Remark */
             remark?: string | null;
+        };
+        /**
+         * MeetingShiftHoursItem
+         * @description 單一員工依當天排班的會議時數。
+         */
+        MeetingShiftHoursItem: {
+            /** Employee Id */
+            employee_id: number;
+            /** Hours */
+            hours: number;
+            /** Shift End */
+            shift_end?: string | null;
+            /** Source */
+            source: string;
+        };
+        /**
+         * MeetingShiftHoursOut
+         * @description GET /meetings/shift-hours — 會議時段與每人預設時數；未設時段時兩欄 None、items 空。
+         */
+        MeetingShiftHoursOut: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["MeetingShiftHoursItem"][];
+            /** Meeting End Time */
+            meeting_end_time?: string | null;
+            /** Meeting Start Time */
+            meeting_start_time?: string | null;
         };
         /**
          * MessageRecallOut
@@ -72643,6 +72708,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeetingBatchCreateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_meeting_shift_hours_api_meetings_shift_hours_get: {
+        parameters: {
+            query: {
+                /** @description 會議日期 YYYY-MM-DD */
+                meeting_date: string;
+                /** @description 會議結束 HH:MM；省略＝租戶設定 */
+                meeting_end_time?: string | null;
+                /** @description 會議開始 HH:MM；省略＝租戶設定 */
+                meeting_start_time?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingShiftHoursOut"];
                 };
             };
             /** @description Validation Error */
