@@ -158,6 +158,22 @@ export function buildTeacherOptionGroups(
   return groups
 }
 
+/**
+ * 老師名單載入失敗時的退路：只放目前指派的老師（用班級上的姓名），下拉輸入框才不會把
+ * 現值顯示成原始 id。不標「已停用」（名單沒載到，不代表他停用了）。
+ */
+export function currentTeacherOnlyGroups(
+  classes: PlanClass[],
+  classId: number,
+  role: TeacherRole,
+): TeacherOptionGroup[] {
+  const cls = classes.find(c => c.id === classId)
+  const currentId = cls ? cls[TEACHER_FIELD_BY_ROLE[role]] ?? null : null
+  if (cls == null || currentId == null) return []
+  const name = cls[CURRENT_NAME_BY_ROLE[role]] ?? '目前指派的老師'
+  return [{ label: '目前指派', options: [{ id: currentId, label: name, disabled: false, note: '' }] }]
+}
+
 /** 原班老師可沿用的空格數（實際能填多少以後端回傳為準：停用或衝突的會被略過）。 */
 export function countCarryOverSlots(classes: PlanClass[]): number {
   let count = 0
@@ -195,7 +211,8 @@ export function countPlanMoves(
   let moved = 0
   let retained = 0
   for (const s of students) {
-    if (s.plan_class_id == null) continue
+    // 已離園：後端 assigned_count 不算、套用時也會略過，拆分數字要跟總數同口徑
+    if (s.plan_class_id == null || s.is_active_now === false) continue
     const cls = classById.get(s.plan_class_id)
     if (!cls) continue
     if (s.disposition === 'retain') retained += 1

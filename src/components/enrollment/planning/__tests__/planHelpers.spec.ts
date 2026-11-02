@@ -8,6 +8,7 @@ import {
   buildUndoGroups,
   countCarryOverSlots,
   countPlanMoves,
+  currentTeacherOnlyGroups,
   daysBetweenISO,
   filterRosterMatches,
   formatMonthDay,
@@ -364,5 +365,27 @@ describe('buildTeacherOptionGroups', () => {
     const classes = [cls({ id: 1, head_teacher_id: 57, head_teacher_name: '吳老師' })]
     const groups = buildTeacherOptionGroups(people, classes, 1, 'head')
     expect(groups[0]).toEqual({ label: '目前指派', options: [{ id: 57, label: '吳老師（已停用）', disabled: true, note: '' }] })
+  })
+})
+
+describe('countPlanMoves 不算已離園學生（後端 assigned_count 只算在籍）', () => {
+  it('已離園的換班生與留級生都不算', () => {
+    const rose = cls({ id: 1, source_name: '向日葵' })
+    const students = [
+      stu({ id: 9, plan_class_id: 1, source_classroom_name: '玫瑰', is_active_now: false }),
+      stu({ id: 10, plan_class_id: 1, disposition: 'retain', is_active_now: false }),
+      stu({ id: 11, plan_class_id: 1, source_classroom_name: '玫瑰' }),
+    ]
+    expect(countPlanMoves(students, [rose])).toEqual({ moved: 1, retained: 0 })
+  })
+})
+
+describe('currentTeacherOnlyGroups（老師名單載入失敗時）', () => {
+  it('只放目前指派的老師（用姓名，不顯示原始 id、不標已停用）；沒指派回空陣列', () => {
+    const classes = [cls({ id: 1, head_teacher_id: 57, head_teacher_name: '吳老師' })]
+    expect(currentTeacherOnlyGroups(classes, 1, 'head')).toEqual([
+      { label: '目前指派', options: [{ id: 57, label: '吳老師', disabled: false, note: '' }] },
+    ])
+    expect(currentTeacherOnlyGroups(classes, 1, 'assistant')).toEqual([])
   })
 })
