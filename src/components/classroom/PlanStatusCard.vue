@@ -59,6 +59,10 @@ const RETAIN_WARN_DAYS = 14
 const retainNote = computed<{ text: string; urgent: boolean } | null>(() => {
   const st = status.value
   if (!st || state.value !== 'draft' || (st.retain_pending_count ?? 0) <= 0) return null
+  // 自動畢業沒開：沒有畢業日風險，只提醒要在套用前發布
+  if (st.auto_graduation_enabled === false) {
+    return { text: `有 ${st.retain_pending_count} 位畢業年級留級生，留級要在套用前發布才會生效`, urgent: false }
+  }
   const phase = retainRiskPhase(today, st.graduation_date)
   if (phase === 'before' && st.graduation_date) {
     return {

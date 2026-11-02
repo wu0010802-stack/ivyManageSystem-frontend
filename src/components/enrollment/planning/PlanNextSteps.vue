@@ -105,6 +105,8 @@ const props = withDefaults(defineProps<{
   graduationDate?: string | null
   /** 畢業年級名稱（例如「大班」）；判斷不出來時寫「畢業年級」 */
   graduationGradeName?: string | null
+  /** 自動畢業是否開啟（status.auto_graduation_enabled）；關閉時留級生沒有畢業日風險 */
+  autoGraduationEnabled?: boolean
 }>(), {
   applyDate: null,
   appliesImmediately: false,
@@ -116,6 +118,7 @@ const props = withDefaults(defineProps<{
   graduationDate: null,
   graduationGradeName: null,
   carryOverCandidates: 0,
+  autoGraduationEnabled: true,
 })
 
 const emit = defineEmits<{
@@ -175,8 +178,11 @@ const RETAIN_WARN_DAYS = 14
 const retainDeadline = computed<{ text: string; tone: 'normal' | 'warning' | 'danger' } | null>(() => {
   const count = props.retainPendingCount
   const graduation = props.graduationDate
-  if (count <= 0 || !graduation || !props.today) return null
+  if (count <= 0) return null
   const who = `${count} 位${props.graduationGradeName ?? '畢業年級'}留級生`
+  // 自動畢業沒開：不會有人被畢業，留級只要在套用前發布就生效
+  if (!props.autoGraduationEnabled) return { text: `有 ${who}：留級要在套用前發布才會生效`, tone: 'normal' }
+  if (!graduation || !props.today) return null
   const phase = retainRiskPhase(props.today, graduation)
   if (phase === 'before') {
     const days = daysBetweenISO(props.today, graduation)

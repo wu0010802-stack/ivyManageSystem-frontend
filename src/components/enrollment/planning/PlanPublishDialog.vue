@@ -149,6 +149,8 @@ const props = withDefaults(defineProps<{
   schedulerEnabled?: boolean
   /** 畢業日（'YYYY-MM-DD'）：排除的畢業年級學生仍會在這天被畢業 */
   graduationDate?: string | null
+  /** 自動畢業是否開啟；關閉時排除的學生不會被畢業，不標畢業日 */
+  autoGraduationEnabled?: boolean
 }>(), {
   submitting: false,
   applyDate: null,
@@ -158,6 +160,7 @@ const props = withDefaults(defineProps<{
   retainCount: 0,
   schedulerEnabled: true,
   graduationDate: null,
+  autoGraduationEnabled: true,
 })
 
 const emit = defineEmits<{
@@ -214,7 +217,7 @@ const assignedText = computed(() => {
 })
 // 被排除但仍會在畢業日被自動畢業的學生（後端 exclude_will_graduate 提醒帶 student_id）
 const willGraduateIds = computed(() => new Set(
-  (preview.value?.issues.warnings ?? [])
+  (props.autoGraduationEnabled ? preview.value?.issues.warnings ?? [] : [])
     .filter(issue => issue.code === 'exclude_will_graduate' && issue.student_id != null)
     .map(issue => issue.student_id as number),
 ))

@@ -123,7 +123,11 @@ const retainDisabled = computed(() => isDisabled.value || retainOptions.value.le
 const hint = computed(() => {
   if (props.selectedCount === 0) return ''
   const hints: string[] = []
-  if (hasGraduate.value) hints.push('所選含畢業生：要續讀請用「標記留級」，否則仍會被自動畢業')
+  if (hasGraduate.value) {
+    hints.push(props.autoGraduationEnabled
+      ? '所選含畢業生：要續讀請用「標記留級」，否則仍會被自動畢業'
+      : '所選含畢業生：要續讀請用「標記留級」')
+  }
   if (hasRetain.value) hints.push('所選含留級生：要換班請用「標記留級」選同年級的班')
   if (mixedGrades.value) hints.push('所選學生年級不同，請分年級標記留級')
   else if (props.selectedStudents.length > 0 && retainOptions.value.length === 0) {
@@ -153,10 +157,10 @@ const excludePromptText = computed(() => {
   const base = '排除的學生不參與本次編班：套用時不會被搬動、仍留在原班'
   if (selectsGraduationGrade.value) {
     const grade = props.graduationGradeName
-    const warning = props.autoGraduationEnabled
-      ? `${grade}生排除仍會在畢業日自動畢業；要續讀請標記留級。`
-      : `${grade}生要續讀請標記留級，留級要在套用前發布才會生效。`
-    return `${warning}${base}。可填寫原因（選填）：`
+    if (!props.autoGraduationEnabled) {
+      return `排除的學生套用時維持現在的班；要讓${grade}生續讀請標記留級，留級要在套用前發布才會生效。可填寫原因（選填）：`
+    }
+    return `${grade}生排除仍會在畢業日自動畢業；要續讀請標記留級。${base}。可填寫原因（選填）：`
   }
   return `${base}，也不會辦理離園（轉學、休學請到學生資料辦理）。可填寫原因（選填）：`
 })

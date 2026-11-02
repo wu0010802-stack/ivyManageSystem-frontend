@@ -1545,6 +1545,28 @@ describe('YearPlanWorkspaceView', () => {
       expect(afterMsg).toContain('套用前重新發布')
     })
 
+    it('自動畢業未開啟：撤回確認不提自動畢業；進度列、批次列、發布 dialog 都拿到關閉狀態', async () => {
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+      setToday('2027-07-20')
+      const published = await mountWith(
+        fecStatus('published', { retain_pending_count: 2, auto_graduation_enabled: false }),
+        detailWithGraduatingRetain({ status: 'published' }),
+      )
+      await published.find('.btn-unpublish').trigger('click')
+      await flushPromises()
+      const msg = String(confirmSpy.mock.calls.at(-1)![0])
+      expect(msg).toContain('2 位大班留級生')
+      expect(msg).toContain('留級要在套用前發布才會生效')
+      expect(msg).not.toContain('自動畢業')
+
+      const draft = await mountWith(fecStatus('draft', { retain_pending_count: 2, auto_graduation_enabled: false }))
+      expect(draft.findComponent({ name: 'PlanNextSteps' }).props('autoGraduationEnabled')).toBe(false)
+      expect(draft.findComponent({ name: 'PlanPublishDialog' }).props('autoGraduationEnabled')).toBe(false)
+      draft.findComponent(PlanSidePanel).vm.$emit('set-selected', [8], true)
+      await flushPromises()
+      expect(draft.findComponent(PlanBatchToolbar).props('autoGraduationEnabled')).toBe(false)
+    })
+
     it('撤回發布＋排程關閉：不說「否則不會自動套用」，改說自動套用未啟用', async () => {
       const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
       setToday('2027-07-20')

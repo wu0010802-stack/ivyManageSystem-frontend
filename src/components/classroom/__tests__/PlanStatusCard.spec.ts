@@ -353,6 +353,14 @@ describe('PlanStatusCard', () => {
       expect(w.text()).toContain('有 3 位畢業年級留級生須在 2027/07/31 前發布')
     })
 
+    it('自動畢業未開啟：留級生不提畢業日，改說要在套用前發布、不升 warning', async () => {
+      const w = await cardWith({ state: 'draft', retain_pending_count: 3, auto_graduation_enabled: false })
+      expect(w.text()).toContain('有 3 位畢業年級留級生，留級要在套用前發布才會生效')
+      expect(w.text()).not.toContain('自動畢業')
+      expect(w.text()).not.toContain('2027/07/31')
+      expect(w.find('.plan-banner').classes()).toContain('plan-banner--info')
+    })
+
     it('草稿但自動套用未啟用：不寫「請在套用日前發布」，改提醒未啟用', async () => {
       const w = await cardWith({ state: 'draft', scheduler_enabled: false })
       expect(w.text()).toContain('草稿編輯中；自動套用未啟用')

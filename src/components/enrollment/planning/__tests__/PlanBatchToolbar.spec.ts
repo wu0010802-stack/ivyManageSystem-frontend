@@ -210,7 +210,17 @@ describe('PlanBatchToolbar', () => {
     await vmOf(w).applyExclude()
     const message = String(promptSpy.mock.calls[0][0])
     expect(message).not.toContain('自動畢業')
+    expect(message).toContain('排除的學生套用時維持現在的班；要讓大班生續讀請標記留級')
     expect(message).toContain('留級要在套用前發布才會生效')
+  })
+
+  it('自動畢業未開啟：所選含畢業生的提示不說「否則仍會被自動畢業」', () => {
+    const w = mountToolbar({
+      autoGraduationEnabled: false,
+      selectedStudents: [{ id: 1, disposition: 'graduate', current_grade_name: '大班' }],
+    })
+    expect(w.find('.toolbar-hint').text()).toContain('所選含畢業生：要續讀請用「標記留級」')
+    expect(w.find('.toolbar-hint').text()).not.toContain('自動畢業')
   })
 
   it('沒選到畢業年級學生：維持一般排除說明', async () => {

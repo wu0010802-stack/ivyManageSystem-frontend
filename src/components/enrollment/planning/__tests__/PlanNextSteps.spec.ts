@@ -151,4 +151,14 @@ describe('PlanNextSteps', () => {
     expect((ok.find('.btn-carry-over').element as HTMLButtonElement).disabled).toBe(false)
     expect(ok.find('.carry-over-note').exists()).toBe(false)
   })
+  it('自動畢業未開啟：留級生不提畢業日與自動畢業，改說留級要在套用前發布才會生效（不轉警示色）', () => {
+    const w = mountSteps({
+      today: '2027-07-25', retainPendingCount: 3, graduationDate: '2027-07-31', graduationGradeName: '大班',
+      autoGraduationEnabled: false,
+    })
+    const line = w.find('.retain-deadline')
+    expect(line.text()).toBe('有 3 位大班留級生：留級要在套用前發布才會生效')
+    expect(line.classes()).not.toContain('is-warning')
+    expect(line.classes()).not.toContain('is-danger')
+  })
 })

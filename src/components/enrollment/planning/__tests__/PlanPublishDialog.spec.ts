@@ -236,6 +236,20 @@ describe('PlanPublishDialog', () => {
     expect(rows[1].find('.will-graduate').text()).toBe('將於 2027/07/31 畢業')
   })
 
+  it('自動畢業未開啟：排除名單不標畢業日，後果清單不說會畢業', async () => {
+    mockGetPreview.mockResolvedValue({
+      data: previewFixture({
+        excluded: [{ id: 6, name: '大寶', source_classroom_name: '天堂鳥', exclude_reason: null }],
+        totals: { assigned_count: 3, class_count: 1, excluded_count: 1, graduating_count: 1 },
+        issues: { blocking: [], warnings: [{ code: 'exclude_will_graduate', message: 'x', plan_class_id: null, student_id: 6 }] },
+      }),
+    })
+    const w = mountDialog(5, { graduationDate: '2027-07-31', autoGraduationEnabled: false })
+    await flushPromises()
+    expect(w.find('.will-graduate').exists()).toBe(false)
+    expect(w.find('.consequence-list').text()).toContain('1 位排除的學生不會被搬動，仍留在原班')
+  })
+
   it('預覽載入失敗：顯示錯誤訊息，不顯示「尚無預覽資料」', async () => {
     mockGetPreview.mockRejectedValue({ displayMessage: '伺服器忙碌，請稍後再試' })
     const w = mountDialog()

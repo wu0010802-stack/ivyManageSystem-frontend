@@ -149,6 +149,7 @@
       :retain-pending-count="status?.retain_pending_count ?? 0"
       :graduation-date="status?.graduation_date ?? null"
       :graduation-grade-name="graduationGrade"
+      :auto-graduation-enabled="autoGraduationEnabled"
       @show-unassigned="onShowUnassigned"
       @carry-over="onCarryOverClick"
       @show-teachers="viewMode = 'teachers'"
@@ -354,6 +355,7 @@
       :retain-count="planMoves.retained"
       :scheduler-enabled="schedulerEnabled"
       :graduation-date="status?.graduation_date ?? null"
+      :auto-graduation-enabled="autoGraduationEnabled"
       @confirm="onPublishConfirm"
     />
 
@@ -475,9 +477,9 @@ const inPrepPeriod = computed(() => {
   return !!st && isWithinPrepPeriod(today, st.prep_start_date, st.apply_date)
 })
 const graduationGrade = computed(() => (plan.value ? graduationGradeName(plan.value.students) : null))
-// 自動畢業是否開啟：後端 StatusOut 加 auto_graduation_enabled 後改讀它（目前一律視為開啟，
-// 也就是保守地提醒「會被自動畢業」）
-const autoGraduationEnabled = computed(() => true)
+// 自動畢業是否開啟（status.auto_graduation_enabled）：關閉時所有「會被自動畢業」的警告改說
+// 「留級要在套用前發布才會生效」。欄位缺省（舊後端）保守視為開啟。
+const autoGraduationEnabled = computed(() => status.value?.auto_graduation_enabled !== false)
 
 // 尚無草稿：講清楚何時進入準備期、系統會不會自動產生、現在產生會依據什麼
 const noneDescription = computed(() => {
@@ -620,6 +622,9 @@ function retainUnpublishWarning(): string {
   const count = st?.retain_pending_count ?? 0
   if (!st || count <= 0) return ''
   const who = `${count} 位${graduationGrade.value ?? '畢業年級'}留級生`
+  if (!autoGraduationEnabled.value) {
+    return `目前有 ${who}：留級要在套用前發布才會生效，改完記得重新發布。`
+  }
   const graduation = st.graduation_date
   const phase = retainRiskPhase(today, graduation)
   if (phase === 'before' && graduation) {
