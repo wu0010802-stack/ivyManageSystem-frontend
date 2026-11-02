@@ -32,6 +32,20 @@ beforeAll(() => {
   })
 })
 
+const { mockShowMoveNotice, storage } = vi.hoisted(() => ({
+  mockShowMoveNotice: vi.fn(() => ({ close: vi.fn() })),
+  storage: new Map<string, string>(),
+}))
+vi.mock('@/components/enrollment/planning/planMoveNotice', () => ({ showMoveNotice: mockShowMoveNotice }))
+vi.mock('@/utils/tenantStorage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/tenantStorage')>()
+  return {
+    ...actual,
+    tenantGetItem: vi.fn((key: string) => storage.get(key) ?? null),
+    tenantSetItem: vi.fn((key: string, value: string) => { storage.set(key, value) }),
+  }
+})
+
 vi.mock('@/api/classroomYearPlan', () => ({
   getClassroomYearPlanStatus: vi.fn(),
   getClassroomYearPlanDetail: vi.fn(),
@@ -72,6 +86,7 @@ import {
   carryOverClassroomYearPlanTeachers,
 } from '@/api/classroomYearPlan'
 import { getTeacherOptions } from '@/api/classrooms'
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 import YearPlanWorkspaceView from '../YearPlanWorkspaceView.vue'
 import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.vue'
 import PlanRosterTable from '@/components/enrollment/planning/PlanRosterTable.vue'
@@ -182,6 +197,7 @@ describe('YearPlanWorkspaceView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     hasPermissionReturn = true
+    storage.clear()
   })
 
   afterEach(() => {
@@ -727,8 +743,11 @@ describe('YearPlanWorkspaceView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.findComponent(PlanBatchToolbar).exists()).toBe(false)
-    // 未勾選時同一位置顯示操作提示（含可拖曳），勾選後換成批次列，表格不會被推動
-    expect(w.find('.batch-hint').text()).toContain('拖')
+    // 未勾選時同一位置是檢視切換＋搜尋＋篩選，操作提示（含可拖曳）收在說明圖示；
+    // 勾選後換成批次列，表格不會被推動
+    expect(w.find('.roster-search').exists()).toBe(true)
+    const tooltips = w.findAllComponents({ name: 'ElTooltip' }).map(t => String(t.props('content') ?? ''))
+    expect(tooltips.some(text => text.includes('拖'))).toBe(true)
 
     const checkbox = w.findComponent({ name: 'ElCheckbox' })
     await checkbox.find('input[type="checkbox"]').setValue(true)
@@ -1074,16 +1093,16 @@ describe('YearPlanWorkspaceView', () => {
     expect(mockBulkStudents).toHaveBeenLastCalledWith(5, expect.objectContaining({ op: 'retain', student_ids: [3] }))
   })
 
-  it('未勾選時批次列位置顯示圖例（手動調整、原班、留級）', async () => {
+  it('未勾選時批次列位置的篩選 chip 兼圖例（標記樣子與表格相同：原、留、圓點）', async () => {
     mockStatus.mockResolvedValue(statusDraft())
     mockDetail.mockResolvedValue(detailDraftWithClasses())
     const w = mountView()
     await flushPromises()
-    const legend = w.find('.roster-legend')
-    expect(legend.exists()).toBe(true)
-    expect(legend.text()).toContain('手動調整過')
-    expect(legend.text()).toContain('原＝原班')
-    expect(legend.text()).toContain('留＝留級')
+    const chips = w.findAll('.filter-chip')
+    expect(chips.map(c => c.text())).toEqual(['原 換班', '留 留級', '手動調整'])
+    expect(chips[0].attributes('title')).toContain('原班')
+    expect(chips[1].attributes('title')).toContain('留級')
+    expect(chips[2].find('.legend-dot').exists()).toBe(true)
   })
 
   it('發布 dialog 拿到換班與留級人數', async () => {
@@ -1095,5 +1114,252 @@ describe('YearPlanWorkspaceView', () => {
     // 小明 中班舊→玫瑰（玫瑰的來源班就是中班舊）不算換班；大寶是留級
     expect(dialog.props('movedCount')).toBe(0)
     expect(dialog.props('retainCount')).toBe(1)
+  })
+  // ── 2026-11-02 第二輪 FE-B ─────────────────────────────────────────
+
+  // 三班：小班A(10)／中班A(11)／中班B(12)；兩位同名「張宸瑋」、一位留級、一位待分班
+  function detailForEfficiency(overrides: Record<string, unknown> = {}) {
+    const base = (id: number, name: string, extra: Record<string, unknown> = {}) => ({
+      id: id, source_name: null, target_name: name, target_grade_id: 1, grade_name: '小班',
+      capacity: 30, class_code: null, head_teacher_id: null, head_teacher_name: null,
+      assistant_teacher_id: null, assistant_teacher_name: null, art_teacher_id: null, art_teacher_name: null,
+      assigned_count: 0, ...extra,
+    })
+    return detailDraftWithClasses({
+      classes: [
+        base(10, '小班A', { source_name: '幼幼A' }),
+        base(11, '中班A', { target_grade_id: 2, grade_name: '中班', source_name: '小班舊' }),
+        base(12, '中班B', { target_grade_id: 2, grade_name: '中班', source_name: '小班舊2' }),
+      ],
+      students: [
+        { id: 1, student_id: 'S001', name: '張宸瑋', source_classroom_name: '幼幼A', plan_class_id: 10, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
+        { id: 2, student_id: 'S002', name: '李子晴', source_classroom_name: '幼幼A', plan_class_id: 10, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
+        { id: 3, student_id: 'S003', name: '張宸瑋', source_classroom_name: '小班舊', plan_class_id: 11, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '小班' },
+        { id: 4, student_id: 'S004', name: '王可昕', source_classroom_name: '中班舊', plan_class_id: 11, disposition: 'retain', exclude_reason: null, manually_adjusted: true, current_grade_name: '中班' },
+        { id: 5, student_id: 'S005', name: '林品妍', source_classroom_name: '小班舊', plan_class_id: null, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '小班' },
+      ],
+      ...overrides,
+    })
+  }
+
+  async function mountEfficiency() {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailForEfficiency())
+    const w = mountView()
+    await flushPromises()
+    return w
+  }
+
+  const roster = (w: ReturnType<typeof mountView>) => w.findComponent(PlanRosterTable)
+  // v-show 只寫 inline style；happy-dom 對未掛進 document 的元素算不出 computed style，
+  // 直接看 inline display
+  const shown = (el: { element: Element }) => (el.element as HTMLElement).style.display !== 'none'
+
+  it('檢視切換：預設學生名單；切到老師指派後表格換檢視、批次列位置改成老師相關提示', async () => {
+    const w = await mountEfficiency()
+    expect(roster(w).props('viewMode')).toBe('students')
+    const seg = w.findComponent({ name: 'ElSegmented' })
+    expect(seg.exists()).toBe(true)
+
+    seg.vm.$emit('update:modelValue', 'teachers')
+    await flushPromises()
+    expect(roster(w).props('viewMode')).toBe('teachers')
+    expect(w.find('.roster-search').exists()).toBe(false)
+    expect(w.find('.teacher-hint').text()).toContain('點格子選老師')
+  })
+
+  it('進度列「去指派」切到老師指派；切過去後就不再顯示', async () => {
+    const w = await mountEfficiency()
+    const steps = w.findComponent({ name: 'PlanNextSteps' })
+    expect(steps.props('showTeacherLink')).toBe(true)
+    steps.vm.$emit('show-teachers')
+    await flushPromises()
+    expect(roster(w).props('viewMode')).toBe('teachers')
+    expect(steps.props('showTeacherLink')).toBe(false)
+  })
+
+  it('搜尋姓名：同名學生都高亮，n/m 正確；Enter 跳下一位、到底回第一位', async () => {
+    const w = await mountEfficiency()
+    const input = w.find('.roster-search input')
+    await input.setValue('張宸瑋')
+    await flushPromises()
+    expect([...(roster(w).props('matchIds') as Set<number>)]).toEqual([1, 3])
+    expect(roster(w).props('currentMatchId')).toBe(1)
+    expect(w.find('.search-count').text()).toBe('1/2')
+
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(roster(w).props('currentMatchId')).toBe(3)
+    expect(w.find('.search-count').text()).toBe('2/2')
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(w.find('.search-count').text()).toBe('1/2')
+    await input.trigger('keydown', { key: 'Enter', shiftKey: true })
+    expect(w.find('.search-count').text()).toBe('2/2')
+  })
+
+  it('搜尋學號；查無時顯示 0/0；清空後不高亮也不淡化', async () => {
+    const w = await mountEfficiency()
+    const input = w.find('.roster-search input')
+    await input.setValue('s004')
+    await flushPromises()
+    expect([...(roster(w).props('matchIds') as Set<number>)]).toEqual([4])
+    await input.setValue('查無此人')
+    await flushPromises()
+    expect(w.find('.search-count').text()).toBe('0/0')
+    await input.setValue('')
+    await flushPromises()
+    expect(roster(w).props('matchIds')).toBeNull()
+    expect(w.find('.search-count').exists()).toBe(false)
+  })
+
+  it('篩選 chip：按「留級」只標出留級生，再按一次取消', async () => {
+    const w = await mountEfficiency()
+    const chip = w.findAll('.filter-chip')[1]
+    expect(chip.attributes('aria-pressed')).toBe('false')
+    await chip.trigger('click')
+    expect(chip.attributes('aria-pressed')).toBe('true')
+    expect([...(roster(w).props('matchIds') as Set<number>)]).toEqual([4])
+    await chip.trigger('click')
+    expect(roster(w).props('matchIds')).toBeNull()
+  })
+
+  it('批次移至班級：成功後跳可復原通知；按復原把學生放回原班，且不再跳第二則可復原通知', async () => {
+    const successSpy = vi.spyOn(ElMessage, 'success')
+    const w = await mountEfficiency()
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+    mockDetail.mockResolvedValue(detailForEfficiency({ version: 2 }))
+
+    w.findComponent(PlanSidePanel).vm.$emit('set-selected', [1], true)
+    await flushPromises()
+    const toolbar = w.findComponent(PlanBatchToolbar).vm as unknown as { assignTargetId: number | null; applyAssign: () => void }
+    toolbar.assignTargetId = 11
+    toolbar.applyAssign()
+    await flushPromises()
+
+    expect(mockShowMoveNotice).toHaveBeenCalledOnce()
+    const notice = (mockShowMoveNotice.mock.calls[0] as unknown[])[0] as { message: string; onUndo?: () => void }
+    expect(notice.message).toBe('已將 1 位學生移到 中班A（中班）')
+    expect(typeof notice.onUndo).toBe('function')
+
+    mockDetail.mockResolvedValue(detailForEfficiency({ version: 3 }))
+    notice.onUndo!()
+    await flushPromises()
+    expect(mockBulkStudents).toHaveBeenLastCalledWith(5, {
+      base_version: 2, op: 'assign', student_ids: [1], plan_class_id: 10, exclude_reason: null,
+    })
+    expect(mockShowMoveNotice).toHaveBeenCalledOnce()
+    expect(successSpy).toHaveBeenCalledWith('已復原')
+    successSpy.mockRestore()
+  })
+
+  it('原本在待分班的學生被拖進班：通知說明不提供復原（沒有復原鈕）', async () => {
+    const w = await mountEfficiency()
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+    roster(w).vm.$emit('student-move', { studentIds: [5], op: 'assign', planClassId: 11 })
+    await flushPromises()
+    const notice = (mockShowMoveNotice.mock.calls[0] as unknown[])[0] as { message: string; onUndo?: () => void }
+    expect(notice.message).toContain('待分班')
+    expect(notice.onUndo).toBeUndefined()
+  })
+
+  it('留級：通知寫「標記留級」；復原時原本畢業的學生送回畢業', async () => {
+    const detail = detailForEfficiency()
+    detail.data.classes.push({
+      id: 20, source_name: '中班舊', target_name: '玫瑰', target_grade_id: 3, grade_name: '大班',
+      capacity: 30, class_code: null, head_teacher_id: null, head_teacher_name: null,
+      assistant_teacher_id: null, assistant_teacher_name: null, art_teacher_id: null, art_teacher_name: null,
+      assigned_count: 0,
+    })
+    detail.data.students.push({ id: 9, student_id: 'S009', name: '大寶', source_classroom_name: '天堂鳥', plan_class_id: null, disposition: 'graduate', exclude_reason: null, manually_adjusted: false, current_grade_name: '大班' })
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detail)
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+    const w = mountView()
+    await flushPromises()
+
+    w.findComponent(PlanSidePanel).vm.$emit('set-selected', [9], true)
+    await flushPromises()
+    const toolbar = w.findComponent(PlanBatchToolbar).vm as unknown as { retainTargetId: number | null; applyRetain: () => void }
+    toolbar.retainTargetId = 20
+    toolbar.applyRetain()
+    await flushPromises()
+
+    const notice = (mockShowMoveNotice.mock.calls[0] as unknown[])[0] as { message: string; onUndo?: () => void }
+    expect(notice.message).toBe('已將 1 位學生標記留級，放進 玫瑰（大班）')
+    notice.onUndo!()
+    await flushPromises()
+    expect(mockBulkStudents).toHaveBeenLastCalledWith(5, expect.objectContaining({ op: 'graduate', student_ids: [9], plan_class_id: null }))
+  })
+
+  it('搬班成功重新載入後，被搬的學生閃一下', async () => {
+    const w = await mountEfficiency()
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+    const moved = detailForEfficiency({ version: 2 })
+    moved.data.students[0].plan_class_id = 11
+    mockDetail.mockResolvedValue(moved)
+    roster(w).vm.$emit('student-move', { studentIds: [1], op: 'assign', planClassId: 11 })
+    await flushPromises()
+    expect(w.find('.student-entry[data-student-id="1"]').classes()).toContain('flash-highlight')
+  })
+
+  it('側欄可收合成窄 rail（只顯示阻擋數），偏好記在 tenantStorage，重新進來維持收合', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailForEfficiency({
+      issues: { blocking: [{ code: 'student_unassigned', message: 'x', plan_class_id: null, student_id: 5 }], warnings: [] },
+    }))
+    const w = mountView()
+    await flushPromises()
+    expect(shown(w.find('.side-rail'))).toBe(false)
+
+    await w.find('.btn-side-collapse').trigger('click')
+    expect(shown(w.find('.side-rail'))).toBe(true)
+    expect(w.find('.side-rail').text()).toContain('1')
+    expect(w.find('.side-rail').attributes('aria-expanded')).toBe('false')
+    expect(shown(w.find('.side-expanded'))).toBe(false)
+    expect(tenantSetItem).toHaveBeenLastCalledWith('yearPlan.sidePanelCollapsed', '1')
+
+    const again = mountView()
+    await flushPromises()
+    expect(shown(again.find('.side-rail'))).toBe(true)
+
+    await again.find('.side-rail').trigger('click')
+    expect(shown(again.find('.side-expanded'))).toBe(true)
+    expect(tenantSetItem).toHaveBeenLastCalledWith('yearPlan.sidePanelCollapsed', '0')
+  })
+
+  it('收合時按進度列「查看」待分班：先展開側欄再定位', async () => {
+    storage.set('yearPlan.sidePanelCollapsed', '1')
+    const w = await mountEfficiency()
+    expect(shown(w.find('.side-rail'))).toBe(true)
+    await w.find('.btn-show-unassigned').trigger('click')
+    await flushPromises()
+    expect(shown(w.find('.side-expanded'))).toBe(true)
+    expect(w.find('.unassigned-row[data-student-id="5"]').classes()).toContain('flash-highlight')
+  })
+
+  it('偏好讀取失敗（例如無痕或封鎖儲存）照樣正常顯示、側欄展開', async () => {
+    ;(tenantGetItem as Mock).mockImplementationOnce(() => { throw new Error('blocked') })
+    const w = await mountEfficiency()
+    expect(w.find('.plan-roster-table').exists()).toBe(true)
+    expect(shown(w.find('.side-expanded'))).toBe(true)
+  })
+
+  it('窄幕（抽屜模式）沒有 rail', async () => {
+    useNarrowViewport()
+    const w = await mountEfficiency()
+    expect(w.find('.side-rail').exists()).toBe(false)
+    expect(w.find('.btn-side-collapse').exists()).toBe(false)
+  })
+
+  it('定位老師類問題時切到老師指派；定位表格裡的學生時切回學生名單', async () => {
+    const w = await mountEfficiency()
+    const panel = w.findComponent(PlanSidePanel)
+    panel.vm.$emit('locate-issue', { code: 'head_teacher_missing', message: 'x', plan_class_id: 11, student_id: null })
+    await flushPromises()
+    expect(roster(w).props('viewMode')).toBe('teachers')
+
+    panel.vm.$emit('locate-issue', { code: 'cross_grade_assignment', message: 'x', plan_class_id: null, student_id: 3 })
+    await flushPromises()
+    expect(roster(w).props('viewMode')).toBe('students')
+    expect(w.find('.student-entry[data-student-id="3"]').classes()).toContain('flash-highlight')
   })
 })

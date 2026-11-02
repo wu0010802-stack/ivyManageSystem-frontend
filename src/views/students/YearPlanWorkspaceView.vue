@@ -108,13 +108,15 @@
       :apply-date="status?.apply_date ?? null"
       :applies-immediately="appliesImmediately"
       :busy="loading"
+      :show-teacher-link="viewMode !== 'teachers'"
       @show-unassigned="onShowUnassigned"
       @carry-over="onCarryOverClick"
+      @show-teachers="viewMode = 'teachers'"
     />
-    <div class="workspace-body">
+    <div class="workspace-body" :class="{ 'is-side-collapsed': !isNarrow && sideCollapsed }">
       <div class="main-column">
-        <!-- 固定高度的批次列位置：未勾選時是圖例（＋可編輯時的操作提示），勾選後換成批次列，
-             表格不會被往下推 -->
+        <!-- 固定高度的批次列位置（不多佔一列）：未勾選時是檢視切換＋搜尋／篩選（學生名單）或
+             老師指派提示；勾選後換成批次列，表格不會被往下推 -->
         <div v-if="plan.classes.length" class="batch-slot">
           <PlanBatchToolbar
             v-if="editable && canWrite && selectedStudentIds.length > 0"
@@ -127,13 +129,54 @@
             @clear-selection="clearSelection"
           />
           <div v-else class="batch-idle">
-            <ul class="roster-legend" aria-label="圖例">
-              <li class="legend-item"><span class="legend-dot" aria-hidden="true"></span>手動調整過</li>
-              <li class="legend-item"><span class="legend-moved">原</span>＝原班</li>
-              <li class="legend-item"><span class="legend-retain">留</span>＝留級</li>
-            </ul>
-            <p v-if="editable && canWrite" class="batch-hint">
-              勾選學生（或班名旁的方框選整班）可批次調整，也能直接拖到其他班
+            <el-segmented
+              v-model="viewMode"
+              class="view-switch"
+              :options="VIEW_OPTIONS"
+              aria-label="編班表檢視"
+            />
+            <template v-if="viewMode === 'students'">
+              <div class="roster-search">
+                <el-input
+                  v-model="searchQuery"
+                  class="roster-search-input"
+                  :prefix-icon="Search"
+                  placeholder="搜尋姓名或學號"
+                  aria-label="搜尋學生姓名或學號，Enter 跳下一位"
+                  clearable
+                  @keydown="onSearchKeydown"
+                />
+                <span v-if="matchList" class="search-count" aria-live="polite">{{ searchCountText }}</span>
+              </div>
+              <!-- 篩選 chip 兼圖例：標記長得跟表格裡一樣 -->
+              <div class="roster-chips" role="group" aria-label="篩選學生">
+                <button
+                  v-for="chip in ROSTER_CHIPS"
+                  :key="chip.key"
+                  type="button"
+                  class="filter-chip"
+                  :class="{ 'is-active': activeChips.has(chip.key) }"
+                  :aria-pressed="activeChips.has(chip.key) ? 'true' : 'false'"
+                  :title="chip.title"
+                  @click="toggleChip(chip.key)"
+                >
+                  <span v-if="chip.key === 'manual'" class="legend-dot" aria-hidden="true"></span>
+                  <span v-else :class="chip.markClass" aria-hidden="true">{{ chip.mark }}</span>
+                  {{ chip.label }}
+                </button>
+              </div>
+              <el-tooltip
+                v-if="editable && canWrite"
+                content="勾選學生（或班名旁的方框選整班）可批次調整，也能直接拖到其他班"
+                placement="bottom"
+              >
+                <el-icon class="batch-help" tabindex="0" role="img" aria-label="操作說明：勾選學生可批次調整，也能直接拖到其他班">
+                  <QuestionFilled />
+                </el-icon>
+              </el-tooltip>
+            </template>
+            <p v-else class="batch-hint teacher-hint">
+              {{ editable && canWrite ? '點格子選老師；原班老師可用進度列的「沿用原班老師」一鍵帶入' : '各班的班導、副班導與美語老師' }}
             </p>
           </div>
         </div>
@@ -152,24 +195,54 @@
           :selected-ids="selectedSet"
           :teacher-options="teacherOptions"
           :busy="loading"
+          :view-mode="viewMode"
+          :match-ids="matchIdSet"
+          :current-match-id="currentMatchId"
           @set-selected="onSetSelected"
           @class-edit="onClassEdit"
           @student-move="onStudentMove"
           @teacher-change="onTeacherChange"
         />
       </div>
-      <PlanSidePanel
-        v-if="!isNarrow"
-        :ref="setSidePanelRef"
-        class="side-panel"
-        :plan="plan"
-        :editable="editable && canWrite"
-        :selected-ids="selectedSet"
-        :busy="loading"
-        @set-selected="onSetSelected"
-        @locate-issue="onLocateIssue"
-        @assign-student="onAssignStudent"
-      />
+      <!-- 寬幕側欄可收合成窄 rail（只顯示阻擋數）讓表格變寬；用 v-show 保留側欄狀態
+           （展開的名單、搜尋字），定位時才能直接用 -->
+      <div v-if="!isNarrow" class="side-column" :class="{ 'is-collapsed': sideCollapsed }">
+        <button
+          v-show="sideCollapsed"
+          type="button"
+          class="side-rail"
+          aria-expanded="false"
+          :aria-label="`展開問題與名單（阻擋 ${plan.issues.blocking.length} 項）`"
+          @click="setSideCollapsed(false)"
+        >
+          <el-icon aria-hidden="true"><DArrowLeft /></el-icon>
+          <span class="rail-count" :class="{ 'is-zero': plan.issues.blocking.length === 0 }">
+            {{ plan.issues.blocking.length }}
+          </span>
+          <span class="rail-label" aria-hidden="true">阻擋</span>
+        </button>
+        <div v-show="!sideCollapsed" class="side-expanded">
+          <div class="side-toolbar">
+            <button
+              type="button"
+              class="btn-side-collapse"
+              aria-expanded="true"
+              aria-label="收合問題與名單，讓編班表變寬"
+              @click="setSideCollapsed(true)"
+            >收合<el-icon aria-hidden="true"><DArrowRight /></el-icon></button>
+          </div>
+          <PlanSidePanel
+            :ref="setSidePanelRef"
+            :plan="plan"
+            :editable="editable && canWrite"
+            :selected-ids="selectedSet"
+            :busy="loading"
+            @set-selected="onSetSelected"
+            @locate-issue="onLocateIssue"
+            @assign-student="onAssignStudent"
+          />
+        </div>
+      </div>
     </div>
     </template>
 
@@ -243,7 +316,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, DArrowLeft, DArrowRight, QuestionFilled, Search } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import { useYearPlanWorkspace } from '@/composables/useYearPlanWorkspace'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
@@ -253,12 +326,20 @@ import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.
 import PlanClassEditDialog from '@/components/enrollment/planning/PlanClassEditDialog.vue'
 import PlanPublishDialog from '@/components/enrollment/planning/PlanPublishDialog.vue'
 import PlanNextSteps from '@/components/enrollment/planning/PlanNextSteps.vue'
+import { showMoveNotice, type MoveNoticeHandle } from '@/components/enrollment/planning/planMoveNotice'
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 import {
   TEACHER_FIELD_BY_ROLE,
   countCarryOverSlots,
   countPlanMoves,
   countRetainAtGraduationRisk,
+  buildUndoGroups,
+  filterRosterMatches,
+  orderedRosterEntries,
+  type RosterChip,
+  type RosterViewMode,
   type TeacherField,
+  type UndoGroup,
 } from '@/components/enrollment/planning/planHelpers'
 import { getTeacherOptions } from '@/api/classrooms'
 import { FORM_DIALOG_WIDTH } from '@/constants/formDialog'
@@ -618,11 +699,21 @@ const unassignedCount = computed(() => unassignedStudents.value.length)
 async function onShowUnassigned(): Promise<void> {
   const first = unassignedStudents.value[0]
   if (!first) return
+  await revealSidePanel()
+  await sidePanelRef.value?.locateStudent(first.id)
+}
+
+/** 要在側欄定位前：窄幕打開抽屜、寬幕把收合的 rail 展開。 */
+async function revealSidePanel(): Promise<void> {
   if (isNarrow.value) {
-    drawerVisible.value = true
+    if (!drawerVisible.value) {
+      drawerVisible.value = true
+      await nextTick()
+    }
+  } else if (sideCollapsed.value) {
+    setSideCollapsed(false)
     await nextTick()
   }
-  await sidePanelRef.value?.locateStudent(first.id)
 }
 
 // ── 學生批次操作：selection 單一事實來源（表格 + 側欄待分班共用；批次工具列據此
@@ -672,6 +763,10 @@ async function onBulkOp(payload: {
   excludeReason?: string | null
 }): Promise<void> {
   if (!selectedStudentIds.value.length) return
+  if (payload.op === 'assign' || payload.op === 'retain') {
+    if (await moveWithUndo(payload.op, selectedStudentIds.value, payload.planClassId ?? null)) clearSelection()
+    return
+  }
   const ok = await bulkUpdateStudents(
     payload.op,
     selectedStudentIds.value,
@@ -684,19 +779,104 @@ async function onBulkOp(payload: {
   }
 }
 
+// ── 搬班回饋與復原（P2-7）：批次移至班級／標記留級／拖曳成功後，被搬的學生閃一下，
+// 並跳附「復原」鈕的通知。復原＝依搬動前快照逐批送回原處（另一次 mutation），成功
+// 只跳一般訊息，不再產生可復原通知（避免無限鏈）。原本待分班的人後端沒有「放回待
+// 分班」的操作，不提供復原並在通知說明。──
+let moveNotice: MoveNoticeHandle | null = null
+
+async function moveWithUndo(op: 'assign' | 'retain', studentIds: number[], planClassId: number | null): Promise<boolean> {
+  const idSet = new Set(studentIds)
+  const before = (plan.value?.students ?? []).filter(s => idSet.has(s.id)).map(s => ({ ...s }))
+  const target = plan.value?.classes.find(c => c.id === planClassId)
+  const ok = await bulkUpdateStudents(op, studentIds, planClassId, null)
+  if (!ok) return false
+  // 寫入成功但畫面沒更新：composable 已提醒重新載入，這時版本落後，復原必撞版本衝突
+  if (staleAfterWrite.value) return true
+  await nextTick()
+  rosterRef.value?.flashStudents(studentIds)
+
+  const { groups, restorableIds, unassignedCount: wasUnassigned } = buildUndoGroups(before)
+  const where = target ? `${target.target_name}（${target.grade_name ?? '未分年級'}）` : '新的班級'
+  let message = op === 'retain'
+    ? `已將 ${studentIds.length} 位學生標記留級，放進 ${where}`
+    : `已將 ${studentIds.length} 位學生移到 ${where}`
+  if (groups.length === 0) message += '。他們原本在待分班，這次不提供復原'
+  else if (wasUnassigned > 0) message += `。其中 ${wasUnassigned} 位原本在待分班，復原時不會放回待分班`
+  moveNotice?.close()
+  moveNotice = showMoveNotice({
+    message,
+    onUndo: groups.length ? () => { void undoMove(groups, restorableIds) } : undefined,
+  })
+  return true
+}
+
+function waitUntilIdle(): Promise<void> {
+  if (!loading.value) return Promise.resolve()
+  return new Promise((resolve) => {
+    const stop = watch(loading, (busy) => {
+      if (busy) return
+      stop()
+      resolve()
+    })
+  })
+}
+
+async function undoMove(groups: UndoGroup[], studentIds: number[]): Promise<void> {
+  // 另一個動作還在送：等它結束再復原（直接送會被 in-flight 防護擋掉）
+  await waitUntilIdle()
+  if (!editable.value) {
+    ElMessage.info('這份計畫已不是草稿，無法復原')
+    return
+  }
+  let done = 0
+  for (const group of groups) {
+    const ok = await bulkUpdateStudents(group.op, group.studentIds, group.planClassId, group.excludeReason)
+    if (!ok) break
+    done += 1
+  }
+  if (done === groups.length) {
+    notifySaved('已復原')
+    await nextTick()
+    rosterRef.value?.flashStudents(studentIds)
+  } else if (done > 0) {
+    ElMessage.warning('只復原了一部分，請看一下表格再手動調整')
+  }
+}
+
 // 側欄待分班列就地「分到…」（一般生 assign、留級生 retain，由側欄依 disposition 決定）
 async function onAssignStudent(payload: { studentId: number; op: BulkOp; planClassId: number }): Promise<void> {
   const ok = await bulkUpdateStudents(payload.op, [payload.studentId], payload.planClassId)
   if (!ok) return
   const target = plan.value?.classes.find(c => c.id === payload.planClassId)
   notifySaved(target ? `已分到 ${target.target_name}` : '已更新學生分派')
+  if (viewMode.value === 'students') {
+    await nextTick()
+    rosterRef.value?.flashStudents([payload.studentId])
+  }
 }
+
+// 老師相關問題在「老師指派」檢視才看得到老師格
+const TEACHER_ISSUE_CODES = new Set([
+  'head_teacher_missing',
+  'assistant_teacher_missing',
+  'art_teacher_missing',
+  'teacher_duplicate',
+  'teacher_invalid',
+  'teacher_resigning',
+])
 
 async function onLocateIssue(issue: Schema<'IssueOut'>): Promise<void> {
   if (issue.student_id != null) {
-    // 已分班 → 表格定位；否則 fallback 側欄待分班清單。窄幕抽屜模式下表格在抽屜
-    // 後方，命中 roster 分支才需先關抽屜露出表格；sidePanel 分支目標就在抽屜內，
-    // 不關。
+    // 已分班 → 表格定位（老師指派檢視沒有學生列，先切回學生名單）；否則 fallback
+    // 側欄待分班清單。窄幕抽屜模式下表格在抽屜後方，命中 roster 分支才需先關抽屜
+    // 露出表格；sidePanel 分支目標就在抽屜內，不關。
+    const studentId = issue.student_id
+    const inTable = rosterEntries.value.some(entry => entry.student.id === studentId)
+    if (inTable && viewMode.value !== 'students') {
+      viewMode.value = 'students'
+      await nextTick()
+    }
     if (rosterRef.value?.locateStudent(issue.student_id)) {
       if (isNarrow.value) drawerVisible.value = false
       return
@@ -713,6 +893,10 @@ async function onLocateIssue(issue: Schema<'IssueOut'>): Promise<void> {
   if (issue.plan_class_id != null) {
     // 班級一律是表格目標，窄幕同理先關抽屜
     if (isNarrow.value) drawerVisible.value = false
+    if (TEACHER_ISSUE_CODES.has(issue.code) && viewMode.value !== 'teachers') {
+      viewMode.value = 'teachers'
+      await nextTick()
+    }
     rosterRef.value?.locateClass(issue.plan_class_id)
   }
 }
@@ -750,6 +934,10 @@ async function onStudentMove(payload: {
   excludeReason?: string | null
 }): Promise<void> {
   if (!payload.studentIds.length) return
+  if (payload.op === 'assign' || payload.op === 'retain') {
+    await moveWithUndo(payload.op, payload.studentIds, payload.planClassId ?? null)
+    return
+  }
   const ok = await bulkUpdateStudents(
     payload.op,
     payload.studentIds,
@@ -758,6 +946,110 @@ async function onStudentMove(payload: {
   )
   if (ok) notifySaved('已更新學生分派')
 }
+
+// ── 編班表檢視（P2-10）：學生名單／老師指派。切換時清掉勾選（另一個檢視看不到學生列）──
+const VIEW_OPTIONS: Array<{ label: string; value: RosterViewMode }> = [
+  { label: '學生名單', value: 'students' },
+  { label: '老師指派', value: 'teachers' },
+]
+const viewMode = ref<RosterViewMode>('students')
+watch(viewMode, clearSelection)
+
+// ── 搜尋與篩選（P2-11）：只標示、不改資料。符合者依表格欄序排，Enter 下一位、
+// Shift+Enter 上一位，到底繞回。──
+const ROSTER_CHIPS: Array<{ key: RosterChip; label: string; mark: string; markClass: string; title: string }> = [
+  { key: 'moved', label: '換班', mark: '原', markClass: 'legend-moved', title: '從別班換進來的學生（表格中「原」＝原班）' },
+  { key: 'retain', label: '留級', mark: '留', markClass: 'legend-retain', title: '留級生（表格中標「留」）' },
+  { key: 'manual', label: '手動調整', mark: '', markClass: '', title: '手動調整過的學生（表格中姓名旁的圓點），重新產生建議時會保留' },
+]
+const searchQuery = ref('')
+const activeChips = ref<Set<RosterChip>>(new Set())
+const currentMatchIndex = ref(0)
+
+const rosterEntries = computed(() =>
+  plan.value ? orderedRosterEntries(plan.value.students, plan.value.classes) : [],
+)
+const matchList = computed(() => filterRosterMatches(rosterEntries.value, searchQuery.value, activeChips.value))
+const matchIdSet = computed(() => (matchList.value ? new Set(matchList.value) : null))
+const currentMatchId = computed(() => {
+  const list = matchList.value
+  if (!list || list.length === 0) return null
+  return list[Math.min(currentMatchIndex.value, list.length - 1)]
+})
+const searchCountText = computed(() => {
+  const list = matchList.value ?? []
+  if (list.length === 0) return '0/0'
+  return `${Math.min(currentMatchIndex.value, list.length - 1) + 1}/${list.length}`
+})
+
+function toggleChip(chip: RosterChip): void {
+  if (activeChips.value.has(chip)) activeChips.value.delete(chip)
+  else activeChips.value.add(chip)
+}
+
+// 條件變了 → 回到第一位並捲過去（reload 造成的名單變動不捲，避免畫面亂跳）
+watch(
+  () => [searchQuery.value, [...activeChips.value].join(',')],
+  async () => {
+    currentMatchIndex.value = 0
+    const first = currentMatchId.value
+    if (first == null) return
+    await nextTick()
+    rosterRef.value?.scrollToStudent(first)
+  },
+)
+
+function onSearchKeydown(event: Event | KeyboardEvent): void {
+  if (!('key' in event) || event.key !== 'Enter') return
+  event.preventDefault()
+  const total = matchList.value?.length ?? 0
+  if (total === 0) return
+  const step = event.shiftKey ? -1 : 1
+  currentMatchIndex.value = (Math.min(currentMatchIndex.value, total - 1) + step + total) % total
+  const id = currentMatchId.value
+  if (id != null) rosterRef.value?.scrollToStudent(id)
+}
+
+// ── 側欄收合 rail：每位使用者自己的版面偏好，存 tenantStorage；讀寫失敗（無痕、
+// 封鎖儲存）一律當成展開，不影響操作 ──
+const SIDE_COLLAPSED_KEY = 'yearPlan.sidePanelCollapsed'
+
+function readSideCollapsed(): boolean {
+  try {
+    return tenantGetItem(SIDE_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const sideCollapsed = ref(readSideCollapsed())
+
+function setSideCollapsed(collapsed: boolean): void {
+  sideCollapsed.value = collapsed
+  try {
+    tenantSetItem(SIDE_COLLAPSED_KEY, collapsed ? '1' : '0')
+  } catch {
+    /* 偏好寫不進去不影響操作 */
+  }
+}
+
+// ── 表格上方的東西（橫幅、批次列、進度列、側欄寬度）變了，表格頂端就會移動：
+// 請編班表重算捲動區高度（它自己只管掛載、視窗縮放與檢視切換）──
+watch(
+  () => [
+    staleAfterWrite.value,
+    showRemedialBanner.value,
+    state.value,
+    plan.value?.version,
+    selectedStudentIds.value.length > 0,
+    isNarrow.value,
+    sideCollapsed.value,
+  ],
+  async () => {
+    await nextTick()
+    rosterRef.value?.remeasure()
+  },
+)
 </script>
 
 <style scoped>
@@ -874,11 +1166,82 @@ async function onStudentMove(payload: {
   gap: var(--space-3);
 }
 
-.side-panel {
+.workspace-body.is-side-collapsed {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.side-column {
   position: sticky;
   top: var(--space-3);
   max-height: calc(100vh - 140px);
   overflow-y: auto;
+}
+
+.side-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-1);
+}
+
+.btn-side-collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.btn-side-collapse:hover {
+  background: var(--color-neutral-100);
+  color: var(--text-primary);
+}
+
+/* 收合後的窄 rail：只剩阻擋數，點了展開 */
+.side-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 2.75rem;
+  padding: var(--space-3) 0;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  background: var(--surface-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.side-rail:hover {
+  border-color: var(--color-neutral-300);
+  color: var(--text-primary);
+}
+
+.rail-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-danger-hover);
+  background: var(--color-danger-soft);
+}
+
+.rail-count.is-zero {
+  color: var(--color-success-darker);
+  background: var(--color-success-soft);
+}
+
+.rail-label {
+  writing-mode: vertical-rl;
+  font-size: var(--text-xs);
 }
 
 .batch-slot {
@@ -901,26 +1264,60 @@ async function onStudentMove(payload: {
 
 .batch-idle {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-5);
+  gap: var(--space-2) var(--space-3);
 }
 
-.roster-legend {
-  display: flex;
+.roster-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.roster-search-input {
+  width: 11rem;
+}
+
+.search-count {
+  min-width: 2.5rem;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.roster-chips {
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--text-sm);
-  color: var(--text-primary);
+  gap: var(--space-2);
 }
 
-.legend-item {
+.filter-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-full);
+  background: var(--surface-color);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.filter-chip:hover {
+  border-color: var(--color-neutral-300);
+}
+
+.filter-chip.is-active {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.batch-help {
+  color: var(--text-secondary);
+  cursor: help;
 }
 
 /* 與 PlanRosterTable 的 .manual-mark／.student-moved／.disposition-tag-retain 同樣子 */
@@ -943,6 +1340,13 @@ async function onStudentMove(payload: {
   font-size: var(--text-xs);
   color: var(--color-warning-hover);
   background: var(--color-warning-soft);
+}
+
+@media (pointer: coarse) {
+  .filter-chip,
+  .btn-side-collapse {
+    min-height: 32px;
+  }
 }
 
 .batch-hint {
