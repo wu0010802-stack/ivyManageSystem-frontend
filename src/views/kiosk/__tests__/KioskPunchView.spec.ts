@@ -43,6 +43,25 @@ describe('KioskPunchView', () => {
     expect(wrapper.text()).toContain('請先到教師入口設定打卡 PIN')
   })
 
+  it('未設 PIN 的員工卡片直接標示「未設 PIN」，不用點下去才知道（day-qa F14）', async () => {
+    const { getKioskRoster } = await import('@/api/kiosk')
+    ;(getKioskRoster as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: [
+        { employee_id: 2, name: '無PIN', has_pin: false, today_state: 'none' },
+        { employee_id: 3, name: '有PIN', has_pin: true, today_state: 'none' },
+      ],
+    })
+    const wrapper = mount(KioskPunchView, { global: { stubs: { NumPad: true } } })
+    await flushPromises()
+    const cards = wrapper.findAll('.roster-item')
+    expect(cards.find((c) => c.text().includes('無PIN'))!.text()).toContain('未設 PIN')
+    expect(cards.find((c) => c.text().includes('有PIN'))!.text()).not.toContain('未設 PIN')
+    // 提示列固定佔位：點之前就存在（不推擠名單），點之後才有內容並點名是誰
+    expect(wrapper.find('.nopin-warning').exists()).toBe(true)
+    await cards.find((c) => c.text().includes('無PIN'))!.trigger('click')
+    expect(wrapper.find('.nopin-warning').text()).toContain('無PIN')
+  })
+
   it('完整流程：選員工 → PIN → confirm → confirmPunch → success', async () => {
     const wrapper = mount(KioskPunchView, {
       global: { stubs: { NumPad: true, ElButton } },

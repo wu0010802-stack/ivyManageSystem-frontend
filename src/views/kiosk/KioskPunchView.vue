@@ -28,6 +28,8 @@ const preview = ref<Preview | null>(null)
 const successText = ref('')
 const loading = ref(false)
 const noPinWarning = ref(false)
+// 點到未設 PIN 的人時，提示要點名是誰（多人排隊時才知道是哪位要先去設定）
+const noPinName = ref('')
 
 /**
  * 共用平板：PIN／確認頁閒置過久要自動回名單並清掉 PIN，否則下一位可以替前一位按確認（QA #24）。
@@ -84,7 +86,8 @@ onMounted(loadRoster)
 function pickEmployee(e: RosterEntry) {
   if (!e.has_pin) {
     noPinWarning.value = true
-    ElMessage.warning('請先到教師入口設定打卡 PIN')
+    noPinName.value = e.name
+    ElMessage.warning(`${e.name} 還不能打卡：請先到教師入口設定打卡 PIN`)
     return
   }
   noPinWarning.value = false
@@ -186,7 +189,10 @@ function reset() {
   <div class="kiosk">
     <h1 class="kiosk-title">電子打卡</h1>
 
-    <p v-if="noPinWarning" class="nopin-warning">請先到教師入口設定打卡 PIN</p>
+    <!-- 固定佔位：提示出現時不推擠名單（day-qa F14） -->
+    <p class="nopin-warning" :class="{ 'is-visible': noPinWarning }" role="status" aria-live="polite">
+      {{ noPinWarning ? `${noPinName} 還不能打卡：請先到教師入口設定打卡 PIN` : '' }}
+    </p>
 
     <div v-if="stage === 'roster'" class="roster">
       <div
@@ -200,7 +206,8 @@ function reset() {
         @keydown.enter.space.prevent="pickEmployee(e)"
       >
         <span class="roster-name">{{ e.name }}</span>
-        <span v-if="e.today_state === 'in_only'" class="roster-tag">已上班</span>
+        <span v-if="!e.has_pin" class="roster-tag roster-tag--nopin">未設 PIN</span>
+        <span v-else-if="e.today_state === 'in_only'" class="roster-tag">已上班</span>
         <span v-else-if="e.today_state === 'done'" class="roster-tag">已完成</span>
       </div>
     </div>
@@ -239,7 +246,9 @@ function reset() {
   padding: 24px 12px; border: 1px solid var(--el-border-color, #dcdfe6);
   border-radius: 12px; cursor: pointer; font-size: 20px;
 }
-.roster-item.no-pin { opacity: 0.5; }
+/* 未設 PIN：以虛線框＋文字標示，不再只靠半透明（整片淡灰時分不出誰能打卡，day-qa F14） */
+.roster-item.no-pin { border-style: dashed; color: var(--el-text-color-secondary, #909399); background: var(--el-fill-color-light, #f5f7fa); }
+.roster-tag--nopin { color: var(--el-color-warning-dark-2, #b88230); }
 .roster-tag { display: block; font-size: 13px; color: var(--el-color-success, #67c23a); }
 .pin-dots { font-size: 32px; letter-spacing: 8px; min-height: 40px; }
 .pin-stage, .confirm-stage, .success-stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -247,5 +256,6 @@ function reset() {
 .confirm-overwrite { color: var(--el-color-warning, #e6a23c); }
 .success-check { font-size: 32px; color: var(--el-color-success, #67c23a); }
 .success-text { font-size: 24px; }
-.nopin-warning { color: var(--el-color-warning, #e6a23c); font-size: 16px; margin-bottom: 8px; }
+.nopin-warning { color: var(--el-color-warning-dark-2, #b88230); font-size: 16px; margin: 0 0 8px; min-height: 1.5em; visibility: hidden; }
+.nopin-warning.is-visible { visibility: visible; }
 </style>
