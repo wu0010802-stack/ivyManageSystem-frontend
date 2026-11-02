@@ -30,7 +30,7 @@ import { join } from 'node:path'
  * 補好型別之後**必須**同步調降這個數字，否則棘輪會鬆掉。
  * 與 check-error-detail-ratchet.mjs 同一套作法：把成果鎖進版控。
  */
-const BASELINE = 454
+const BASELINE = 453
 
 const ROOTS = ['src/api', 'src/parent/api']
 

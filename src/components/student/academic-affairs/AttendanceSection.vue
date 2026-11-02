@@ -1,189 +1,211 @@
 <script setup lang="ts">
+/**
+ * 學生儀表板「每日點名」：上方是全園各班點名進度（點班級即切換），下方直接是可編修的
+ * 點名表（AttendanceBatchPanel）。
+ *
+ * 2026-11-02 改版：原本是唯讀表格＋「批次點名」抽屜，改一位學生要開抽屜、而且抽屜會被
+ * 卡片的 hover 位移困在卡片框裡（見 main.css 容器卡註解）。改成就地編修後，抽屜與本元件
+ * 自己那份 GET 一起拿掉，資料只由 AttendanceBatchPanel 載一次。
+ *
+ * 各班進度走 GET /student-attendance/overview（需全園 STUDENTS_READ）；只看得到自己班的
+ * 帳號會 403，此時整條進度列不顯示，不影響下方點名表。
+ */
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
-import { apiError } from '@/utils/error'
-import { getDailyAttendance } from '@/api/studentAttendance'
-import type { Schema } from '@/api/_generated/typed'
+import { getAttendanceOverview, type AttendanceOverviewClassroom } from '@/api/studentAttendance'
+import { useAcademicTermStore } from '@/stores/academicTerm'
+import { normalizeSchoolYear } from '@/utils/academic'
 import { ACADEMIC_AFFAIRS_FILTERS_KEY } from '@/composables/useAcademicAffairsFilters'
 import { ATTENDANCE_EVENTS, domainBus } from '@/utils/domainBus'
 import AttendanceBatchPanel from './AttendanceBatchPanel.vue'
 import SectionCard from './SectionCard.vue'
 
 const props = defineProps<{ attendanceDate?: string | null }>()
+const emit = defineEmits<{ 'update:attendanceDate': [v: string] }>()
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('AttendanceSection 須在 TodayTasksPanel 內使用')
 
-type AttendanceRow = Schema<'StudentAttendanceDailyRecordOut'>
-const records = ref<AttendanceRow[]>([])
-const loading = ref(false)
-const errorMessage = ref('')
-const batchDrawerOpen = ref(false)
+const termStore = useAcademicTermStore()
 
 const refDate = computed(() => props.attendanceDate === undefined ? ctx.endDate.value : props.attendanceDate)
+const classroomId = computed(() => ctx.filters.classroomId as number | null)
+const studentId = computed(() => (ctx.filters.studentId as number | null) ?? null)
 
-const filteredRows = computed(() => {
-  const sid = ctx.filters.studentId
-  if (!sid) return records.value
-  return records.value.filter((r) => r.student_id === sid)
-})
+const overview = ref<AttendanceOverviewClassroom[]>([])
+let overviewSeq = 0
 
-const summary = computed(() => {
-  const s = { total: filteredRows.value.length, present: 0, absent: 0, leave: 0, unmarked: 0, late: 0 }
-  for (const r of filteredRows.value) {
-    if (!r.status) { s.unmarked += 1; continue }
-    if (r.status === '出席') s.present += 1
-    else if (r.status === '遲到') s.late += 1
-    else if (r.status === '缺席') s.absent += 1
-    else if (r.status === '病假' || r.status === '事假') s.leave += 1
-  }
-  return s
-})
-
-const statusType = (status: string | null | undefined) => {
-  if (status === '出席') return 'success'
-  if (status === '遲到') return 'warning'
-  if (status === '缺席') return 'danger'
-  if (status === '病假' || status === '事假') return 'info'
-  return undefined
-}
-
-let requestSequence = 0
-const fetchDaily = async () => {
-  const sequence = ++requestSequence
-  const classroomId = ctx.filters.classroomId as number | null
+const fetchOverview = async () => {
+  const seq = ++overviewSeq
   const date = refDate.value
-  if (!classroomId || !date) {
-    records.value = []
-    errorMessage.value = ''
-    loading.value = false
+  if (!date) {
+    overview.value = []
     return
   }
-  loading.value = true
-  records.value = []
-  errorMessage.value = ''
   try {
-    const res = await getDailyAttendance({
+    const res = await getAttendanceOverview({
       date,
-      classroom_id: classroomId,
+      school_year: normalizeSchoolYear(termStore.school_year),
+      semester: termStore.semester,
     })
-    if (sequence !== requestSequence) return
-    records.value = res.data.records ?? []
-  } catch (error) {
-    if (sequence !== requestSequence) return
-    errorMessage.value = apiError(error, '載入出席資料失敗')
-    records.value = []
-  } finally {
-    if (sequence === requestSequence) loading.value = false
+    if (seq !== overviewSeq) return
+    overview.value = res.data.classrooms ?? []
+  } catch {
+    // 進度列是輔助資訊：403（只能看自己班）或暫時失敗都只是不顯示，不擋下方點名表。
+    if (seq === overviewSeq) overview.value = []
   }
 }
 
-const onAttendanceChanged = (payload: Record<string, unknown>) => {
-  if (payload?.classroom_id === ctx.filters.classroomId && payload?.date === refDate.value) {
-    fetchDaily()
-  }
+const showProgress = computed(() => overview.value.length > 1)
+const completeCount = computed(() => overview.value.filter(c => c.rollcall_status === 'complete').length)
+
+const chipState = (c: AttendanceOverviewClassroom) => {
+  if (c.rollcall_status === 'complete') return '完成'
+  if (c.rollcall_status === 'unstarted') return '未點名'
+  return `差 ${c.unmarked_count}`
 }
 
-watch(
-  () => [ctx.filters.classroomId, refDate.value],
-  () => {
-    batchDrawerOpen.value = false
-    fetchDaily()
-  },
-  { immediate: true },
-)
+const onAttendanceChanged = (payload: { date: unknown; classroom_id: unknown }) => {
+  if (payload?.date === refDate.value) void fetchOverview()
+}
+
+/** 點名表「返回儲存」把班級切回原班：直接寫回班級，不走 setClassroom（它會順手清掉學生篩選）。 */
+const onPanelClassroomUpdate = (id: number | string | null) => {
+  ctx.filters.classroomId = id == null ? null : Number(id)
+}
+
+const onPanelDateUpdate = (date: string) => {
+  emit('update:attendanceDate', date)
+}
+
+watch(refDate, () => { void fetchOverview() })
 
 onMounted(() => {
   domainBus.on(ATTENDANCE_EVENTS.CHANGED, onAttendanceChanged)
+  void fetchOverview()
 })
 
 onUnmounted(() => {
-  requestSequence += 1
+  overviewSeq += 1
   domainBus.off(ATTENDANCE_EVENTS.CHANGED, onAttendanceChanged)
 })
-
-defineExpose({ fetchDaily })
 </script>
 
 <template>
-  <SectionCard
-    title="每日點名"
-    :count="summary.total"
-    count-type="info"
-    :loading="loading"
-    :error-message="errorMessage"
-    :empty-description="ctx.filters.classroomId ? '當日尚未點名，點右上「批次點名」開始' : '請先選擇班級'"
-    :show-empty="filteredRows.length === 0"
-    @retry="fetchDaily"
-  >
+  <SectionCard title="每日點名">
     <template #titleExtra v-if="refDate && !$slots['date-control']">{{ refDate }}</template>
     <template #actions>
       <slot name="date-control" />
-      <el-button
-        size="small"
-        type="primary"
-        :disabled="!ctx.filters.classroomId || !refDate || loading"
-        @click="batchDrawerOpen = true"
-      >
-        批次點名
-      </el-button>
     </template>
     <template #summary>
-      <p v-if="!loading && !errorMessage && summary.total" class="attendance-progress" role="status">
-        {{ summary.unmarked ? `尚有 ${summary.unmarked} 位未完成點名` : ctx.filters.studentId ? '此學生已完成點名' : '全班已完成點名' }}
-      </p>
-      <div class="summary-tags">
-        <el-tag type="success" size="small">出席 {{ summary.present }}</el-tag>
-        <el-tag type="warning" size="small">遲到 {{ summary.late }}</el-tag>
-        <el-tag type="danger" size="small">缺席 {{ summary.absent }}</el-tag>
-        <el-tag type="info" size="small">請假 {{ summary.leave }}</el-tag>
-        <el-tag size="small">未點名 {{ summary.unmarked }}</el-tag>
+      <div v-if="showProgress" class="class-progress" role="group" aria-label="各班點名進度">
+        <span class="class-progress__label">
+          各班進度 <strong>{{ completeCount }}／{{ overview.length }}</strong> 班完成
+        </span>
+        <div class="class-progress__chips">
+          <button
+            v-for="c in overview"
+            :key="c.classroom_id"
+            type="button"
+            class="class-chip"
+            :class="[`is-${c.rollcall_status}`, { 'is-current': c.classroom_id === classroomId }]"
+            :aria-pressed="c.classroom_id === classroomId"
+            :aria-label="`${c.classroom_name}：${chipState(c)}`"
+            @click="ctx.setClassroom(c.classroom_id)"
+          >
+            <span class="class-chip__name">{{ c.classroom_name }}</span>
+            <span class="class-chip__state">{{ chipState(c) }}</span>
+          </button>
+        </div>
       </div>
     </template>
 
-    <el-table
-      v-if="filteredRows.length"
-      :data="filteredRows"
-      stripe
-      size="small"
-      class="attendance-table"
-      max-height="320"
-    >
-      <el-table-column prop="student_no" label="學號" width="100" />
-      <el-table-column prop="name" label="姓名" width="100" />
-      <el-table-column label="狀態" width="90" align="center">
-        <template #default="{ row }">
-          <el-tag size="small" :type="statusType(row.status)">{{ row.status || '未點名' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="remark" label="備註" show-overflow-tooltip />
-    </el-table>
-
-    <el-drawer
-      v-model="batchDrawerOpen"
-      :title="`批次點名 - ${refDate}`"
-      size="60%"
-      destroy-on-close
-    >
-      <AttendanceBatchPanel
-        v-if="refDate"
-        :classroom-id="(ctx.filters.classroomId as number | null)"
-        :date="refDate"
-        hide-classroom-select
-        hide-date-picker
-        hint="儲存後本頁出席區塊會自動更新；舊出席頁如同時開啟也會同步刷新。"
-      />
-    </el-drawer>
+    <AttendanceBatchPanel
+      v-if="refDate"
+      :classroom-id="classroomId"
+      :date="refDate"
+      :student-id="studentId"
+      hide-classroom-select
+      hide-date-picker
+      @update:classroom-id="onPanelClassroomUpdate"
+      @update:date="onPanelDateUpdate"
+    />
+    <p v-else class="attendance-no-date">請先選擇點名日期</p>
   </SectionCard>
 </template>
 
 <style scoped>
-.summary-tags {
+.class-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.class-progress__label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.class-progress__label strong {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.class-progress__chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
-.attendance-progress { margin: 0 0 var(--space-3); font-weight: var(--font-weight-semibold); }
-.attendance-table { width: 100%; margin-top: var(--space-3); }
+
+.class-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-color);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.class-chip:hover {
+  border-color: var(--color-primary);
+}
+
+.class-chip:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.class-chip__state {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.class-chip.is-complete .class-chip__state { color: var(--color-success-darker); }
+.class-chip.is-partial .class-chip__state { color: var(--color-warning-darker); }
+.class-chip.is-unstarted .class-chip__state { color: var(--text-secondary); }
+
+.class-chip.is-current {
+  border-color: var(--color-primary);
+  background: var(--color-primary-lighter);
+  font-weight: var(--font-weight-semibold);
+}
+
+.attendance-no-date {
+  margin: 0;
+  padding: var(--space-6) 0;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
 .section-card :deep(.section-head),
 .section-card :deep(.section-actions) {
   flex-wrap: wrap;
@@ -193,15 +215,16 @@ defineExpose({ fetchDaily })
   row-gap: var(--space-2);
 }
 
+@media (pointer: coarse) {
+  .class-chip {
+    min-height: var(--touch-target-min);
+  }
+}
+
 @media (--to-sm) {
   .section-card :deep(.section-actions) {
     width: 100%;
     justify-content: flex-start;
-  }
-
-  .section-card :deep(.section-actions > .el-button) {
-    width: 100%;
-    min-height: var(--touch-target-min);
   }
 }
 </style>

@@ -1,7 +1,11 @@
 import api from './index'
-import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
+import type { ApiBody, ApiQuery, AxiosResp, Schema } from './_generated/typed'
 
-export const getAttendanceOverview = (params: unknown) =>
+export type AttendanceOverviewClassroom = Schema<'StudentAttendanceOverviewClassroomOut'>
+
+export const getAttendanceOverview = (
+  params: ApiQuery<'/student-attendance/overview', 'get'>,
+): AxiosResp<'/student-attendance/overview', 'get'> =>
   api.get('/student-attendance/overview', { params })
 
 export const getDailyAttendance = (

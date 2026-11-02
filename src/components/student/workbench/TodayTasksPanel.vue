@@ -173,7 +173,7 @@ onMounted(async () => {
 
     <div class="workbench-layout">
       <div class="attendance-workspace">
-        <AttendanceSection :attendance-date="attendanceDate">
+        <AttendanceSection v-model:attendance-date="attendanceDate">
           <template #date-control>
             <label class="attendance-date-control">
               <span class="header-control-label">點名日期</span>
