@@ -530,13 +530,14 @@ async function onOpenList(studentName: string) {
 // 切回收款工作區時刷新（KeepAlive activate）：在結算頁簽收、或別的 session
 // 銷帳後回到這裡，舊實例會停在變更前的快照。首次 activate 與 mount 同一輪、
 // 子元件自己會載，故跳過第一次——用旗標而非 onMounted 時序，避免依賴 hook 順序。
+// 入帳媒合的代收／存摺子頁自帶 onActivated（祖先 KeepAlive 啟用時也會觸發），
+// 這裡不可再 matchingRef.refresh()，否則切回時同一支清單 API 打兩次。
 let activatedOnce = false
 onActivated(() => {
   workspaceActive = true
   if (activatedOnce) {
-    if (props.view === 'matching') matchingRef.value?.refresh?.()
-    else if (props.view === 'cashItems') cashItemsRef.value?.refresh?.()
-    else refreshActiveRecordsView()
+    if (props.view === 'cashItems') cashItemsRef.value?.refresh?.()
+    else if (props.view !== 'matching') refreshActiveRecordsView()
     refreshOverview()
   }
   activatedOnce = true

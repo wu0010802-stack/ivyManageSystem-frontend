@@ -209,7 +209,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onActivated, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { errorDetailString, friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
@@ -466,6 +466,14 @@ async function doReopen(row: BatchRow) {
 }
 
 onMounted(fetchBatches)
+// 外層工作區的內層 KeepAlive 會保留本頁實例：同工作區切子頁、或整個工作區
+// 被切回（祖先 KeepAlive 啟用也會觸發本 hook）都要重新載入，否則沿用舊快照。
+// 首次 activate 與 mount 同一輪、onMounted 已載，故跳過第一次。
+let activatedOnce = false
+onActivated(() => {
+  if (activatedOnce) fetchBatches()
+  activatedOnce = true
+})
 defineExpose({ fetchBatches, openCashDialog, canWrite, isOwnSubmission, submitConfirm, openConfirm })
 </script>
 

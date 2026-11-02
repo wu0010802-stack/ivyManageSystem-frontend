@@ -241,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onActivated, onMounted, ref } from 'vue'
 import { CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -493,6 +493,18 @@ async function doReopen(row: CloseRow) {
 onMounted(() => {
   fetchSummary()
   fetchCloses()
+})
+// 外層結算工作區的內層 KeepAlive 會保留本頁實例：從交接切回、或整個工作區
+// 被切回（祖先 KeepAlive 啟用也會觸發本 hook）都要重新檢查，否則簽收後回來
+// 仍是紅燈。month 留在快取實例裡，重取的就是使用者目前選的月份。
+// 首次 activate 與 mount 同一輪、onMounted 已載，故跳過第一次。
+let activatedOnce = false
+onActivated(() => {
+  if (activatedOnce) {
+    fetchSummary()
+    fetchCloses()
+  }
+  activatedOnce = true
 })
 /**
  * 月份選擇與「重新檢查」上移到結算工作區的共用工具列，故對外開放讀寫。
