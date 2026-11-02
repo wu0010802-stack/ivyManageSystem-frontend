@@ -23,6 +23,7 @@ import { useDashboardSections } from '@/composables'
 import DisabilityExpirySection from '@/components/dashboard/DisabilityExpirySection.vue'
 import IntegrationsHealthCard from '@/components/dashboard/IntegrationsHealthCard.vue'
 import { hasPermission } from '@/utils/auth'
+import { todayTaipeiISO } from '@/utils/format'
 import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
 import QuickAddMenu, { type QuickAddDialogType } from '@/components/dashboard/QuickAddMenu.vue'
 import QuickOvertimeDialog from '@/components/dashboard/quick-add/QuickOvertimeDialog.vue'
@@ -81,6 +82,8 @@ const showIntegrationsHealth = hasPermission('AUDIT_LOGS')
 // 今日待辦：把分散在右欄/出勤摘要的「需要處理」數字升為頁面前段第一視覺
 // Why: 既有 dashboard 全是統計數字（系統有什麼），把待審/異常/未點名前置成
 //      「今天需要處理什麼」，讓使用者一眼知道下一步要點哪裡。
+// day-qa F9：出勤核對頁沒帶日期會跳「最早未交薪資月」；處理「今日」異常要直接落在今天那週
+const todayAttendancePath = (): string => `/attendance?date=${todayTaipeiISO()}`
 const todoTiles = computed(() => {
   const tiles = []
 
@@ -102,7 +105,7 @@ const todoTiles = computed(() => {
   if (showAttendance && attendanceAnomalies.value) {
     const count = (attendanceAnomalies.value as { anomalies?: unknown[] }).anomalies?.length ?? 0
     if (count > 0) {
-      tiles.push({ key: 'anomalies', label: '今日打卡異常', count, tone: 'danger', path: '/attendance' })
+      tiles.push({ key: 'anomalies', label: '今日打卡異常', count, tone: 'danger', path: todayAttendancePath() })
     }
   }
 
@@ -149,7 +152,7 @@ const statDisplay = (value: number | null | undefined, failed: boolean): string 
   failed || value == null ? '—' : value
 
 // Type helpers for composable data with loose types
-interface TodayStats { total_employees: number; present_count: number; late_count: number; missing_count: number }
+interface TodayStats { total_employees: number; present_count: number; late_count: number; missing_count: number; absent_count?: number; expected_count?: number; on_leave_count?: number }
 interface StudentAttendanceSummaryData { total_students: number; recorded_count: number; on_campus_count: number; unmarked_count: number; present_count: number; late_count: number; absent_count: number; leave_count: number; record_completion_rate: number }
 interface AttendanceAnomaliesData { anomalies: { employee_id: unknown; anomaly_type: unknown; employee_name: unknown; late_minutes: unknown }[] }
 interface EventTagTypeMap { [key: string]: 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
@@ -263,7 +266,7 @@ const anomalyOverflow = computed(
       </el-row>
       <el-row v-else-if="typedTodayStats" :gutter="20" class="stats-row">
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="今日應出勤" :value="typedTodayStats.total_employees" :icon="Calendar" color="primary" />
+          <StatCard label="今日應出勤" :value="typedTodayStats.expected_count ?? typedTodayStats.total_employees" :icon="Calendar" color="primary" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
           <StatCard label="已出勤" :value="typedTodayStats.present_count" :icon="Select" color="success" />
@@ -272,7 +275,8 @@ const anomalyOverflow = computed(
           <StatCard label="遲到" :value="typedTodayStats.late_count" :icon="AlarmClock" color="warning" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="未打卡" :value="typedTodayStats.missing_count" :icon="Warning" color="danger" />
+          <!-- day-qa F4：「未打卡」＝今天應上班卻沒有任何打卡（absent_count）；缺上/下班卡（missing_count）另見打卡異常 -->
+          <StatCard label="未打卡" :value="typedTodayStats.absent_count ?? typedTodayStats.missing_count" :icon="Warning" color="danger" />
         </el-col>
       </el-row>
       <!-- 已載入但無資料：不能留孤兒標題（週末/失敗都要說清楚） -->
@@ -381,7 +385,7 @@ const anomalyOverflow = computed(
             </div>
           </div>
           <div class="anomaly-hint text-secondary">
-            <el-button link size="small" @click="navigateTo('/attendance')">
+            <el-button link size="small" @click="navigateTo(todayAttendancePath())">
               {{ anomalyOverflow > 0 ? `還有 ${anomalyOverflow} 筆，查看全部 →` : '查看出勤記錄 →' }}
             </el-button>
           </div>

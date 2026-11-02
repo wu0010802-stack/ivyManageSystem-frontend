@@ -4358,11 +4358,9 @@ export interface paths {
          * Get Today Attendance Summary
          * @description 取得今日出勤即時狀態。
          *
-         *     P1-3（2026-08-17）absent 語意修正——不再用「active employees − present」粗算：
-         *     - **到離職有效期**：hire_date > 今天（未到職）或 resign_date < 今天（已離職、
-         *       is_active 可能尚未更新）者不列入今日母體
-         *     - **核准請假**涵蓋今天者不算 absent（另回傳 on_leave_count）
-         *     - **週末/假日（非補班日）**：僅「當日有 DailyShift 排班」者期望出勤
+         *     P1-3（2026-08-17）absent 語意修正——不再用「active employees − present」粗算；
+         *     day-qa F10（2026-11-02）起「應上班」改走全系統共用的 `is_expected_attendance_day`，
+         *     並回傳 `expected_count`（今日應出勤人數）。規則見 `_today_expectation`。
          */
         get: operations["get_today_attendance_summary_api_attendance_today_get"];
         put?: never;
@@ -4382,7 +4380,11 @@ export interface paths {
         };
         /**
          * Get Today Anomalies
-         * @description 今日打卡異常員工清單
+         * @description 今日打卡異常員工清單。
+         *
+         *     「整日未打卡」只列**今天應上班**、沒有真實打卡、也沒有核准請假的人（與 `/today`
+         *     的 absent 同一判定，day-qa F10）——週末、國定假日、排休、時薪制沒排班、請假者
+         *     不再被列為異常。遲到／缺卡旗標沿用寫入時已依應上班判定算好的值。
          */
         get: operations["get_today_anomalies_api_attendance_today_anomalies_get"];
         put?: never;
@@ -53330,6 +53332,11 @@ export interface components {
             absent_count: number;
             /** Date */
             date: string;
+            /**
+             * Expected Count
+             * @default 0
+             */
+            expected_count: number;
             /** Late Count */
             late_count: number;
             /** Missing Count */
