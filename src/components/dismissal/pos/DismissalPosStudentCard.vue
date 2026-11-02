@@ -16,6 +16,10 @@
  *
  * 卡片本體用 div[role=button]（非 <button>）：more-icon 是巢狀真按鈕，
  * <button> 不能包 <button>（比照既有 mockup 的既有理由）。
+ *
+ * 通知中（notifying，2026-11-02）：倒數中或已送出、老師還沒放學的學生顯示「通知中」並停用
+ * 點擊。原本這種卡片看起來與待接送一模一樣，再點一次會被 addToQueue 靜默忽略，櫃台會以為
+ * 沒點到而連點。classroomLabel 只在跨班搜尋結果裡帶，讓同名學生分得出班級。
  */
 import { computed } from 'vue'
 import { ElDropdown, ElDropdownMenu, ElDropdownItem } from 'element-plus'
@@ -35,8 +39,12 @@ const props = withDefaults(
     detail?: PosStudentStatusDetail
     /** 補登／撤銷請求進行中：停用選單避免重複送出 */
     busy?: boolean
+    /** 已在右欄佇列（倒數中或已通知、尚未放學） */
+    notifying?: boolean
+    /** 跨班搜尋時顯示的班級名稱 */
+    classroomLabel?: string
   }>(),
-  { detail: () => ({}), busy: false },
+  { detail: () => ({}), busy: false, notifying: false, classroomLabel: '' },
 )
 
 const emit = defineEmits<{
@@ -50,7 +58,7 @@ const emit = defineEmits<{
 interface StatusMeta {
   label: string
   icon: string
-  tone: 'leave' | 'bus' | 'picked' | 'proxy'
+  tone: 'leave' | 'bus' | 'picked' | 'proxy' | 'notify'
 }
 
 /**
@@ -66,7 +74,9 @@ const STATUS_META: Record<Exclude<PosStudentStatus, 'unpicked'>, StatusMeta> = {
 }
 
 const isUnpicked = computed(() => props.status === 'unpicked')
+const NOTIFYING_META: StatusMeta = { label: '通知中', icon: '📣', tone: 'notify' }
 const statusMeta = computed<StatusMeta | null>(() => {
+  if (props.notifying) return NOTIFYING_META
   if (isUnpicked.value) return null
   const meta = STATUS_META[props.status as Exclude<PosStudentStatus, 'unpicked'>]
   if (props.status === 'on_leave' && props.detail.leaveType) {
@@ -133,14 +143,15 @@ function handleCommand(command: string) {
  * 家長臨時改來接時，辦公室先撤銷補登再點卡片。
  */
 const canDispatch = computed(
-  () => props.status === 'unpicked' || props.status === 'guardian_picked',
+  () => !props.notifying && (props.status === 'unpicked' || props.status === 'guardian_picked'),
 )
 
 /** 姓名 + 狀態，讓報讀器一次唸完整句（比照 DismissalCallCard 既有 aria-label 慣例）。 */
 const ariaLabel = computed(() => {
   const statusText = statusMeta.value ? statusMeta.value.label : '待接送'
-  const redispatchHint = props.status === 'guardian_picked' ? '，點擊可再次通知' : ''
-  return `${props.student.name}，${statusText}${redispatchHint}`
+  const redispatchHint = props.status === 'guardian_picked' && canDispatch.value ? '，點擊可再次通知' : ''
+  const room = props.classroomLabel ? `（${props.classroomLabel}）` : ''
+  return `${props.student.name}${room}，${statusText}${redispatchHint}`
 })
 
 function handleDispatch() {
@@ -152,10 +163,15 @@ function handleDispatch() {
 <template>
   <div
     class="pos-student-card"
-    :class="{ 'is-resolved': !isUnpicked, 'is-redispatchable': canDispatch && !isUnpicked }"
+    :class="{
+      'is-resolved': !isUnpicked && !notifying,
+      'is-redispatchable': canDispatch && !isUnpicked,
+      'is-notifying': notifying,
+    }"
     role="button"
     tabindex="0"
     :aria-label="ariaLabel"
+    :aria-disabled="!canDispatch"
     @click="handleDispatch"
     @keydown.enter.prevent="handleDispatch"
     @keydown.space.prevent="handleDispatch"
@@ -191,6 +207,7 @@ function handleDispatch() {
     </el-dropdown>
 
     <div class="pos-student-card__name">{{ student.name }}</div>
+    <div v-if="classroomLabel" class="pos-student-card__room">{{ classroomLabel }}</div>
 
     <span
       v-if="statusMeta"
@@ -302,6 +319,32 @@ function handleDispatch() {
 .pos-student-card__status--picked {
   background: var(--color-success-soft);
   color: var(--color-success-darker);
+}
+
+/* 通知中：主色淡底＋深一階主色字（admin 深一階主色在淡底上約 5.1:1） */
+.pos-student-card__status--notify {
+  background: var(--color-primary-lighter);
+  color: var(--el-color-primary-dark-2);
+}
+
+.pos-student-card__room {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* 通知中：仍在園內（不降成淡灰），但不可再點；外框改主色提示它已在右欄佇列裡 */
+.pos-student-card.is-notifying {
+  cursor: default;
+  border-color: var(--color-primary);
+}
+
+.pos-student-card.is-notifying:hover {
+  box-shadow: none;
+}
+
+.pos-student-card.is-notifying:active {
+  transform: none;
 }
 
 /* proxy_picked（T-023 review 修復，2026-08-23）：原用 --color-danger-soft，但這是正常完成的

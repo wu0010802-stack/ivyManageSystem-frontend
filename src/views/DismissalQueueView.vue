@@ -22,6 +22,7 @@ import {
 } from '@/utils/ws'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 import PageHeader from '@/components/common/PageHeader.vue'
+import FormDialog from '@/components/common/FormDialog.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
@@ -182,7 +183,9 @@ const loadCalls = async (force: boolean) => {
   loading.value = true
   try {
     const params: Record<string, unknown> = {}
-    if (filterClassroomId.value) params.classroom_id = filterClassroomId.value
+    // 看板（active）以左欄班級切換、右欄佇列看全園，班級篩選只用在歷史紀錄；
+    // 從歷史切回看板時若還帶著班級參數，右欄會少掉別班的通知。
+    if (filterClassroomId.value && !isActiveView.value) params.classroom_id = filterClassroomId.value
     // active 篩選不帶 status 參數：D5 定案「家長已接送」＝今日 completed 的既有
     // 資料，POS 中欄徽章需要吃得到這筆，而 GET /api/dismissal-calls 不帶 status
     // 篩選即回今日全部狀態（含 completed）。右欄佇列只顯示 pending/acknowledged
@@ -489,6 +492,14 @@ const STATUS_TYPE_MAP: Record<string, ElTagType> = {
 }
 const statusType = (status: string): ElTagType => STATUS_TYPE_MAP[status]
 
+/** 檢視切換（取代原本藏在下拉選單裡的模式切換：看板與歷史表格是兩種完全不同的畫面）。 */
+const VIEW_OPTIONS = [
+  { value: 'active', label: '今日看板' },
+  { value: 'completed', label: '已放學' },
+  { value: 'cancelled', label: '已取消' },
+  { value: 'all', label: '全部紀錄' },
+] as const
+
 // 後端時間是台北 naive 字串，統一走 formatTaipeiClock 顯式錨定 +08:00 並以
 // Asia/Taipei 格式化，任何裝置時區都顯示正確台北時刻（修原 new Date 在非台灣
 // 裝置會差 8 小時的顯示 bug；與 portal / 家長時間軸同源）。
@@ -532,7 +543,7 @@ onUnmounted(() => {
         >
           {{ wsConnected ? '即時同步中' : '連線不穩' }}
         </el-tag>
-        <el-button type="primary" :icon="Plus" @click="openCreateDialog">建立通知</el-button>
+        <el-button :icon="Plus" @click="openCreateDialog">建立通知（含備註）</el-button>
       </template>
     </PageHeader>
 
@@ -566,18 +577,28 @@ onUnmounted(() => {
       >立即重連</el-button>
     </div>
 
-    <!-- 篩選 -->
-    <el-row :gutter="12" class="filter-bar">
-      <el-col :xs="24" :sm="8">
-        <el-select v-model="filterStatus" placeholder="狀態" clearable @change="fetchCalls" style="width:100%">
-          <el-option label="待處理（待確認 + 已收到）" value="active" />
-          <el-option label="已放學" value="completed" />
-          <el-option label="已取消" value="cancelled" />
-          <el-option label="全部" value="all" />
-        </el-select>
-      </el-col>
-      <el-col :xs="24" :sm="8">
-        <el-select v-model="filterClassroomId" placeholder="全部班級" clearable @change="fetchCalls" style="width:100%">
+    <!-- 檢視切換＋（僅歷史紀錄）班級篩選與重新整理；看板由左欄切班、即時同步不需手動重整 -->
+    <div class="filter-bar">
+      <el-radio-group
+        v-model="filterStatus"
+        class="filter-bar__view"
+        aria-label="檢視"
+        data-testid="dismissal-view-switch"
+        @change="fetchCalls"
+      >
+        <el-radio-button v-for="opt in VIEW_OPTIONS" :key="opt.value" :value="opt.value">
+          {{ opt.label }}
+        </el-radio-button>
+      </el-radio-group>
+      <template v-if="!isActiveView">
+        <el-select
+          v-model="filterClassroomId"
+          placeholder="全部班級"
+          aria-label="班級"
+          clearable
+          class="filter-bar__classroom"
+          @change="fetchCalls"
+        >
           <el-option
             v-for="c in classroomOptions"
             :key="c.id"
@@ -586,11 +607,9 @@ onUnmounted(() => {
             data-testid="dismissal-classroom-option"
           />
         </el-select>
-      </el-col>
-      <el-col :xs="24" :sm="4">
-        <el-button @click="fetchCalls" :loading="loading">重新整理</el-button>
-      </el-col>
-    </el-row>
+        <el-button :icon="Refresh" :loading="loading" @click="fetchCalls">重新整理</el-button>
+      </template>
+    </div>
 
     <!-- active 視圖：三欄 POS 佈局（左＝班級列表／中＝該班學生 card／右＝接送排序佇列），
          取代原本的搜尋框＋待接送看板＋點名單三段（D7）。DismissalPosBoard 內部自行組裝
@@ -607,14 +626,14 @@ onUnmounted(() => {
       <el-button data-testid="dismissal-load-retry" type="primary" @click="retryLoad">重試</el-button>
     </el-alert>
 
-    <template v-else-if="isActiveView">
+    <div v-else-if="isActiveView" class="pos-board-host">
       <DismissalPosBoard
         :classrooms="classrooms"
         :students="students"
         :calls="posBoardCalls"
         @refresh-calls="refetchCallsAfterWrite"
       />
-    </template>
+    </div>
 
     <!-- 歷史紀錄：已放學 / 已取消 / 全部，走密集表格 -->
     <!-- 手機歷史視圖：10 欄約 1000px 的表格要橫捲才按得到「取消通知」，改任務卡片 -->
@@ -683,15 +702,23 @@ onUnmounted(() => {
       </template>
     </el-table>
 
-    <!-- 建立通知 Dialog -->
-    <el-dialog v-model="createDialogVisible" title="建立接送通知" width="420px">
-      <el-form label-width="80px">
-        <el-form-item label="班級篩選">
+    <!-- 建立通知（含備註的少見路徑；一般直接點看板上的學生卡） -->
+    <FormDialog
+      v-model="createDialogVisible"
+      title="建立接送通知"
+      size="compact"
+      submit-text="建立通知"
+      :loading="createLoading"
+      :dirty="() => !!createForm.student_id || !!createForm.note"
+      @submit="submitCreate"
+    >
+      <el-form label-position="top">
+        <el-form-item label="班級（縮小學生清單用）">
           <el-select
             v-model="createFilterClassroomId"
             placeholder="全部班級"
             clearable
-            style="width:100%"
+            class="full-width"
           >
             <el-option v-for="c in classroomOptions" :key="c.id" :label="c.label" :value="c.id" />
           </el-select>
@@ -699,9 +726,9 @@ onUnmounted(() => {
         <el-form-item label="學生" required>
           <el-select
             v-model="createForm.student_id"
-            placeholder="選擇學生"
+            placeholder="輸入姓名搜尋"
             filterable
-            style="width:100%"
+            class="full-width"
             @change="onStudentSelect"
           >
             <el-option
@@ -713,14 +740,10 @@ onUnmounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item label="備註">
-          <el-input v-model="createForm.note" placeholder="選填" />
+          <el-input v-model="createForm.note" placeholder="選填，老師端會看到" />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="createLoading" @click="submitCreate">建立</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </div>
 </template>
 
@@ -804,7 +827,32 @@ onUnmounted(() => {
 }
 
 .filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
   margin-bottom: var(--space-4);
+}
+
+.filter-bar__classroom {
+  width: 14rem;
+}
+
+.full-width {
+  width: 100%;
+}
+
+/* 看板的尺寸容器：DismissalPosBoard 依這層的實際寬度切三欄／堆疊（container query）。
+   container-type 只掛在這層、不掛整頁：它會讓內含 position:fixed 的元素以這層為
+   containing block，頁內的「建立接送通知」對話框若在範圍內會被困住。三欄時看板剛好
+   填滿、各欄自己捲動；窄寬堆疊時看板比這層高，由這層捲動。 */
+.pos-board-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  container: dismissal-board / inline-size;
 }
 
 .calls-table {
@@ -839,6 +887,23 @@ onUnmounted(() => {
   /* 篩選列的「重新整理」是預設尺寸 el-button（32px），手機補足觸控下限 */
   .filter-bar :deep(.el-button) {
     min-height: var(--touch-target-min);
+    width: 100%;
+  }
+  .filter-bar__view {
+    width: 100%;
+    display: flex;
+  }
+  .filter-bar__view :deep(.el-radio-button) {
+    flex: 1;
+  }
+  .filter-bar__view :deep(.el-radio-button__inner) {
+    width: 100%;
+    min-height: var(--touch-target-min);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .filter-bar__classroom {
     width: 100%;
   }
 }

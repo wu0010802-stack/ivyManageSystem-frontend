@@ -8,7 +8,7 @@
 export interface DismissalPosClassroomRailItem {
   id: number
   name: string
-  /** 待接送人數徽章；未提供則不顯示徽章（由父層決定要不要算/顯示）。 */
+  /** 待接送（還在園內）人數徽章；未提供則不顯示徽章（DismissalPosBoard 2026-11-02 起會帶）。 */
   count?: number
 }
 
@@ -35,6 +35,7 @@ function selectClassroom(id: number) {
       class="pos-classroom-rail__item"
       :class="{ 'is-active': c.id === props.selectedId }"
       :aria-pressed="c.id === props.selectedId"
+      :aria-label="c.count !== undefined ? `${c.name}，待接送 ${c.count} 位` : undefined"
       @click="selectClassroom(c.id)"
     >
       <span class="pos-classroom-rail__name">{{ c.name }}</span>

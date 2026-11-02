@@ -5498,9 +5498,9 @@ export interface paths {
          * Post Carry Over Teachers
          * @description 沿用原班老師：草稿班空著的班導／副班導／美語老師，依來源班現任老師帶入。
          *
-         *     只填空格、不覆蓋已指派；來源老師已停用者略過；班導／副班導已在其他草稿班
-         *     擔任班導或副班導者略過（避免一鍵帶出 teacher_duplicate）。美語老師可跨班。
-         *     沒有任何可填的空格時不遞增 version。
+         *     填格規則見 `services.classroom_year_plan.carry_over`（只填空格；停用、開學前離職、
+         *     班導／副班導跨班衝突皆略過；美語老師可跨班）。與 detail 的 carry_over_available
+         *     共用同一份計畫。沒有任何可填的空格時不遞增 version。
          */
         post: operations["post_carry_over_teachers_api_classroom_year_plans__plan_id__carry_over_teachers_post"];
         delete?: never;
@@ -5542,6 +5542,28 @@ export interface paths {
         head?: never;
         /** Patch Class */
         patch: operations["patch_class_api_classroom_year_plans__plan_id__classes__class_id__patch"];
+        trace?: never;
+    };
+    "/classroom-year-plans/{plan_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Plan
+         * @description 匯出預編班 Excel（工作表「編班表」與「名單」）；任何狀態皆可匯出。
+         *
+         *     內容含學生姓名，比照 api/exports.py 以 write_explicit_audit 留 EXPORT 稽核。
+         */
+        get: operations["export_plan_api_classroom_year_plans__plan_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/classroom-year-plans/{plan_id}/preview": {
@@ -5644,6 +5666,9 @@ export interface paths {
         /**
          * Post Generate
          * @description 冪等：目標學年已有非 cancelled 草稿時直接回傳既有草稿（created=False）。
+         *
+         *     目標學年只能是預設值（下學期編下一學年、上學期補救編當學年）；其他學年 422，
+         *     避免直打 API 產出排程永遠不會套用、/status 也看不到的計畫。
          */
         post: operations["post_generate_api_classroom_year_plans_generate_post"];
         delete?: never;
@@ -5662,6 +5687,9 @@ export interface paths {
         /**
          * Get Status
          * @description 無 plan 也要能答（state="none"）。target 學年由 resolve_default_target_year 推。
+         *
+         *     狀態衍生欄位（畢業日、留級待發布、套用失敗原因、逾期判定）的語意見
+         *     `services/classroom_year_plan/status.py`。
          */
         get: operations["get_status_api_classroom_year_plans_status_get"];
         put?: never;
@@ -28215,8 +28243,8 @@ export interface components {
         };
         /**
          * ClassUpdateRequest
-         * @description 部分更新：「有給才改」語意（router 端以 `exclude_unset` 判斷）。教師三欄位
-         *     允許顯式傳 `null` 清空（`exclude_unset` 保留但值為 None 時仍套用）。
+         * @description 部分更新：「有給才改」語意（router 端以 `exclude_unset` 判斷）。教師三欄位、
+         *     代號與容量允許顯式傳 `null` 清空（`exclude_unset` 保留但值為 None 時仍套用）。
          */
         ClassUpdateRequest: {
             /** Art Teacher Id */
@@ -40943,10 +40971,91 @@ export interface components {
             /** Lng */
             lng: number;
         };
-        /** PlanActionRequest */
+        /**
+         * PlanActionRequest
+         * @description publish／unpublish／cancel 共用。
+         *
+         *     `confirm_target_school_year`：只有 publish 在補救模式（目前學期已是目標學年上學期，
+         *     發布後約一小時內就套用）時檢查，必須等於計畫目標學年，否則 422
+         *     `remedial_confirm_required`。其他情況忽略。
+         */
         PlanActionRequest: {
             /** Base Version */
             base_version: number;
+            /** Confirm Target School Year */
+            confirm_target_school_year?: number | null;
+        };
+        /**
+         * PlanAppliedOverflowClassOut
+         * @description 套用後超過容量的草稿班；current_count＝目標班現在的在籍人數（即時查）。
+         */
+        PlanAppliedOverflowClassOut: {
+            /** Capacity */
+            capacity?: number | null;
+            /**
+             * Current Count
+             * @default 0
+             */
+            current_count: number;
+            /** Id */
+            id: number;
+            /** Target Name */
+            target_name: string;
+        };
+        /**
+         * PlanAppliedStudentOut
+         * @description 套用結果名單單筆：學生名與目前班名即時查；查無（已刪或他園）name 為 `#id`。
+         */
+        PlanAppliedStudentOut: {
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PlanAppliedSummaryOut
+         * @description 套用結果（`services.classroom_year_plan.status.describe_applied_summary`）。
+         *
+         *     計數照套用當下寫入的 summary。⚠ `excluded_still_active`（計數）與 `left_behind`
+         *     可能是同一位學生，**不可相加**；要合併名單請把 `left_behind` 與
+         *     `excluded_still_active_students`（現況即時查）依 id 去重。
+         */
+        PlanAppliedSummaryOut: {
+            /** Capacity Overflow */
+            capacity_overflow?: components["schemas"]["PlanAppliedOverflowClassOut"][];
+            /**
+             * Created Classrooms
+             * @default 0
+             */
+            created_classrooms: number;
+            /**
+             * Excluded Still Active
+             * @default 0
+             */
+            excluded_still_active: number;
+            /** Excluded Still Active Students */
+            excluded_still_active_students?: components["schemas"]["PlanAppliedStudentOut"][];
+            /**
+             * Graduated
+             * @default 0
+             */
+            graduated: number;
+            /** Left Behind */
+            left_behind?: components["schemas"]["PlanAppliedStudentOut"][];
+            /**
+             * Moved Students
+             * @default 0
+             */
+            moved_students: number;
+            /**
+             * Reused Classrooms
+             * @default 0
+             */
+            reused_classrooms: number;
+            /** Skipped Inactive */
+            skipped_inactive?: components["schemas"]["PlanAppliedStudentOut"][];
         };
         /** PlanCarryOverTeachersRequest */
         PlanCarryOverTeachersRequest: {
@@ -40956,7 +41065,8 @@ export interface components {
         /**
          * PlanCarryOverTeachersResultOut
          * @description 沿用原班老師結果：filled＝實際填入的空格數；skipped_inactive＝來源老師已停用；
-         *     skipped_conflict＝來源班導／副班導已在其他草稿班擔任班導／副班導。
+         *     skipped_conflict＝來源班導／副班導已在其他草稿班擔任班導／副班導；
+         *     skipped_resigning＝來源老師在職但新學年開學日前就離職（resign_date < apply_date）。
          */
         PlanCarryOverTeachersResultOut: {
             /** Filled */
@@ -40965,6 +41075,11 @@ export interface components {
             skipped_conflict: number;
             /** Skipped Inactive */
             skipped_inactive: number;
+            /**
+             * Skipped Resigning
+             * @default 0
+             */
+            skipped_resigning: number;
             /** Version */
             version: number;
         };
@@ -41018,6 +41133,12 @@ export interface components {
         PlanDetailOut: {
             /** Applied At */
             applied_at?: string | null;
+            applied_summary?: components["schemas"]["PlanAppliedSummaryOut"] | null;
+            /**
+             * Carry Over Available
+             * @default 0
+             */
+            carry_over_available: number;
             /** Classes */
             classes: components["schemas"]["PlanClassOut"][];
             /** Generated At */
@@ -41090,8 +41211,15 @@ export interface components {
             disposition: string;
             /** Exclude Reason */
             exclude_reason?: string | null;
+            /** Gender */
+            gender?: string | null;
             /** Id */
             id: number;
+            /**
+             * Is Active Now
+             * @default false
+             */
+            is_active_now: boolean;
             /** Manually Adjusted */
             manually_adjusted: boolean;
             /** Name */
@@ -46081,7 +46209,14 @@ export interface components {
              */
             overwrite_manual: boolean;
         };
-        /** RegenerateResultOut */
+        /**
+         * RegenerateResultOut
+         * @description 重新產生建議結果（語意見 `services.classroom_year_plan.generator.regenerate_plan`）。
+         *
+         *     removed 含已不在籍學生的手動列；preserved_manual 只算在籍的手動列。
+         *     skipped_class_names：要補建的系統班與草稿內既有班同名（大小寫不分）而略過，
+         *     該班學生變待分班。
+         */
         RegenerateResultOut: {
             /** Added */
             added: number;
@@ -46089,6 +46224,8 @@ export interface components {
             preserved_manual: number;
             /** Removed */
             removed: number;
+            /** Skipped Class Names */
+            skipped_class_names?: string[];
             /** Updated */
             updated: number;
             /** Version */
@@ -51200,10 +51337,24 @@ export interface components {
              * Format: date
              */
             apply_date: string;
+            /** Apply Failure */
+            apply_failure?: string | null;
             /** Apply Overdue */
             apply_overdue: boolean;
+            /**
+             * Auto Graduation Enabled
+             * @default false
+             */
+            auto_graduation_enabled: boolean;
             /** Blocking Count */
             blocking_count: number;
+            /** Graduation Date */
+            graduation_date?: string | null;
+            /**
+             * Pending New Student Count
+             * @default 0
+             */
+            pending_new_student_count: number;
             /** Plan Id */
             plan_id?: number | null;
             /**
@@ -51213,6 +51364,16 @@ export interface components {
             prep_start_date: string;
             /** Published At */
             published_at?: string | null;
+            /**
+             * Retain Pending Count
+             * @default 0
+             */
+            retain_pending_count: number;
+            /**
+             * Scheduler Enabled
+             * @default false
+             */
+            scheduler_enabled: boolean;
             /** Source School Year */
             source_school_year: number;
             /**
@@ -63155,6 +63316,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassMutationResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_plan_api_classroom_year_plans__plan_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Excel 檔案下載 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */

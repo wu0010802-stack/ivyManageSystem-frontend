@@ -65,9 +65,15 @@ const props = withDefaults(defineProps<{
   planClasses: PlanClassOption[]
   selectedStudents?: SelectedPlanStudent[]
   disabled?: boolean
+  /** 畢業年級名稱（例「大班」）：排除時判斷是否選到畢業年級學生 */
+  graduationGradeName?: string | null
+  /** 自動畢業是否開啟；關閉時排除的提示不提自動畢業（後端 status.auto_graduation_enabled） */
+  autoGraduationEnabled?: boolean
 }>(), {
   selectedStudents: () => [],
   disabled: false,
+  graduationGradeName: null,
+  autoGraduationEnabled: true,
 })
 
 const emit = defineEmits<{
@@ -117,7 +123,11 @@ const retainDisabled = computed(() => isDisabled.value || retainOptions.value.le
 const hint = computed(() => {
   if (props.selectedCount === 0) return ''
   const hints: string[] = []
-  if (hasGraduate.value) hints.push('所選含畢業生：要續讀請用「標記留級」，否則仍會被自動畢業')
+  if (hasGraduate.value) {
+    hints.push(props.autoGraduationEnabled
+      ? '所選含畢業生：要續讀請用「標記留級」，否則仍會被自動畢業'
+      : '所選含畢業生：要續讀請用「標記留級」')
+  }
   if (hasRetain.value) hints.push('所選含留級生：要換班請用「標記留級」選同年級的班')
   if (mixedGrades.value) hints.push('所選學生年級不同，請分年級標記留級')
   else if (props.selectedStudents.length > 0 && retainOptions.value.length === 0) {
@@ -138,12 +148,29 @@ function applyRetain(): void {
   retainTargetId.value = null
 }
 
+// 排除只是不參與編班；畢業年級的學生畢業日照樣會被自動畢業（P2-5），要續讀得標記留級
+const selectsGraduationGrade = computed(() =>
+  !!props.graduationGradeName
+  && props.selectedStudents.some(s => s.current_grade_name === props.graduationGradeName),
+)
+const excludePromptText = computed(() => {
+  const base = '排除的學生不參與本次編班：套用時不會被搬動、仍留在原班'
+  if (selectsGraduationGrade.value) {
+    const grade = props.graduationGradeName
+    if (!props.autoGraduationEnabled) {
+      return `排除的學生套用時維持現在的班；要讓${grade}生續讀請標記留級，留級要在套用前發布才會生效。可填寫原因（選填）：`
+    }
+    return `${grade}生排除仍會在畢業日自動畢業；要續讀請標記留級。${base}。可填寫原因（選填）：`
+  }
+  return `${base}，也不會辦理離園（轉學、休學請到學生資料辦理）。可填寫原因（選填）：`
+})
+
 async function applyExclude(): Promise<void> {
   try {
     // ElMessageBox.prompt 型別為 MessageBoxInputData | Action（三種 box 共用型別，
     // TS 不會依呼叫的是 prompt narrowing），實際上 prompt 恆回傳含 value 的物件。
     const result = await ElMessageBox.prompt(
-      '排除的學生不參與本次編班：套用時不會被搬動、仍留在原班，也不會辦理離園（轉學、休學請到學生資料辦理）。可填寫原因（選填）：',
+      excludePromptText.value,
       '排除學生',
       {
         confirmButtonText: '排除',
@@ -165,7 +192,12 @@ async function applyReset(): Promise<void> {
     await ElMessageBox.confirm(
       '此操作將丟棄所選學生的手動調整，還原為系統建議，確定要繼續嗎？',
       '還原建議',
-      { type: 'warning', confirmButtonText: '確定還原', cancelButtonText: '取消' },
+      {
+        type: 'warning',
+        confirmButtonText: '確定還原',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      },
     )
   } catch {
     return // 使用者取消，不派發

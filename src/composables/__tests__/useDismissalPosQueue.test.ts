@@ -170,6 +170,29 @@ describe('useDismissalPosQueue', () => {
     stop()
   })
 
+  it('倒數剛結束、通知送出中按復原：送出成功後自動撤回，右欄不留已送出的卡（2026-11-02 審查 F7）', async () => {
+    let resolveCreate!: (v: unknown) => void
+    vi.mocked(createDismissalCall).mockReturnValueOnce(new Promise(r => { resolveCreate = r }) as never)
+    const activeCalls = ref<DismissalCallView[]>([])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    api.addToQueue(student)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(createDismissalCall).toHaveBeenCalledTimes(1)
+    const staging = api.queue.value[0]
+    expect(staging.phase).toBe('staging')
+    expect(staging.submitting).toBe(true)
+
+    void api.cancel(staging)
+    expect(api.queue.value).toHaveLength(0)
+
+    resolveCreate({ data: { id: 301, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'pending' } })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(cancelDismissalCall).toHaveBeenCalledWith(301)
+    expect(api.queue.value.filter(i => i.id === 301)).toHaveLength(0)
+    stop()
+  })
+
   it('倒數中 cancel 後就算等滿 5000ms 也不會再呼叫 createDismissalCall（timer 已清除）', async () => {
     const activeCalls = ref<DismissalCallView[]>([])
     const { api, stop } = run(() => useDismissalPosQueue(activeCalls))

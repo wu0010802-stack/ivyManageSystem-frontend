@@ -66,6 +66,22 @@ withDefaults(defineProps<{
   color: var(--text-tertiary);
 }
 
+/* 平板（768–1023px）：.page-header 是 nowrap，動作鈕一多就把左側標題擠到只剩一兩個字寬、
+   逐字直排（2026-11-02 新學年預編班 810 寬實測）。這裡只「允許」動作區換到下一列並給標題
+   區最小寬度：放得下時版面與桌機相同，放不下才換列。手機另有下方 --to-sm 的整寬排法。 */
+@media (--to-md) {
+  .page-header {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+  .page-header__left {
+    min-width: min(100%, 12rem);
+  }
+  .header-actions {
+    flex-wrap: wrap;
+  }
+}
+
 /* F-4：.page-header 的 flex nowrap 來自全站 src/assets/main.css（非 scoped）；
    窄螢幕下右側 .header-actions（下拉/按鈕組）不收縮，把左側標題擠到只剩幾 px
    寬，逐字直排、副標破版。scoped 選擇器（.page-header[data-v-xxx]）specificity

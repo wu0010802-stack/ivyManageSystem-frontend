@@ -19,9 +19,6 @@ interface DialogVm {
     target_grade_id: number | null
     capacity: number | null
     class_code: string | null
-    head_teacher_id: number | null
-    assistant_teacher_id: number | null
-    art_teacher_id: number | null
   }
   onSubmit: () => void
   onDelete: () => Promise<void>
@@ -97,55 +94,61 @@ describe('PlanClassEditDialog', () => {
     expect(w.emitted('create')).toBeFalsy()
   })
 
-  it('edit 模式：開啟時表單帶入既有班級資料（含三教師）', async () => {
+  it('edit 模式：開啟時表單帶入既有班級資料，沒有老師欄位（老師在編班表格子裡指派）', async () => {
     const w = mountDialog({ mode: 'edit', planClass })
     await flushPromises()
     const vm = vmOf(w)
     expect(vm.form.target_name).toBe('小班A')
     expect(vm.form.target_grade_id).toBe(1)
     expect(vm.form.capacity).toBe(20)
-    expect(vm.form.head_teacher_id).toBe(100)
-    expect(vm.form.assistant_teacher_id).toBe(101)
-    expect(vm.form.art_teacher_id).toBe(102)
+    expect(vm.form).not.toHaveProperty('head_teacher_id')
+    expect(document.body.querySelector('.plan-class-dialog-teacher-hint')?.textContent).toContain('老師指派')
+    w.unmount()
   })
 
-  it('edit 模式：修改後 onSubmit emit update(classId, payload)', async () => {
+  it('edit 模式：只送有變動的欄位（停用老師不會再讓改名或改容量失敗）', async () => {
     const w = mountDialog({ mode: 'edit', planClass })
     await flushPromises()
     const vm = vmOf(w)
     vm.form.target_name = '小班A改名'
-    vm.form.head_teacher_id = null
     await w.vm.$nextTick()
     vm.onSubmit()
     const events = w.emitted('update')
     expect(events).toBeTruthy()
     expect(events![0][0]).toBe(10)
-    expect(events![0][1]).toEqual({
-      target_name: '小班A改名',
-      target_grade_id: 1,
-      capacity: 20,
-      class_code: 'K1A',
-      head_teacher_id: null,
-      assistant_teacher_id: 101,
-      art_teacher_id: 102,
-    })
+    expect(events![0][1]).toEqual({ target_name: '小班A改名' })
   })
 
-  it('edit 模式：el-select clear 造成 undefined 時仍送顯式 null（清空教師不可被 JSON 序列化吞掉）', async () => {
+  it('edit 模式：清空容量送顯式 null；沒有任何變動時不能儲存', async () => {
     const w = mountDialog({ mode: 'edit', planClass })
     await flushPromises()
     const vm = vmOf(w)
-    // el-select clearable 的 × 會把 model 設成 undefined（繞過 number|null 型別）；
-    // 若 payload 原樣帶 undefined，JSON.stringify 會整欄丟棄 → 後端 exclude_unset 視為未變更
-    vm.form.head_teacher_id = undefined as unknown as null
-    await w.vm.$nextTick()
+    expect(vm.canSubmit).toBe(false)
     vm.onSubmit()
-    const events = w.emitted('update')
-    expect(events).toBeTruthy()
-    const payload = events![0][1] as Record<string, unknown>
-    expect('head_teacher_id' in payload).toBe(true)
-    expect(payload.head_teacher_id).toBeNull()
-    expect(JSON.parse(JSON.stringify(payload))).toHaveProperty('head_teacher_id', null)
+    expect(w.emitted('update')).toBeFalsy()
+
+    vm.form.capacity = undefined as unknown as null
+    await w.vm.$nextTick()
+    expect(vm.canSubmit).toBe(true)
+    vm.onSubmit()
+    const payload = w.emitted('update')![0][1] as Record<string, unknown>
+    expect(payload).toEqual({ capacity: null })
+    expect(JSON.parse(JSON.stringify(payload))).toHaveProperty('capacity', null)
+  })
+
+  it('容量輸入限 1–200', async () => {
+    const w = mountDialog({ mode: 'edit', planClass })
+    await flushPromises()
+    const input = w.findComponent({ name: 'ElInputNumber' })
+    expect(input.props('min')).toBe(1)
+    expect(input.props('max')).toBe(200)
+  })
+
+  it('後端欄位錯誤顯示在對應欄位下', async () => {
+    const w = mountDialog({ mode: 'edit', planClass, fieldErrors: { capacity: '容量要在 1 到 200 之間' } })
+    await flushPromises()
+    const item = w.findAllComponents({ name: 'ElFormItem' }).find(i => i.props('label') === '容量')!
+    expect(item.props('error')).toBe('容量要在 1 到 200 之間')
   })
 
   it('edit 模式：確認刪除後 emit delete(classId)', async () => {
@@ -175,13 +178,13 @@ describe('PlanClassEditDialog', () => {
     expect(w.emitted('delete')).toBeFalsy()
   })
 
-  it('使用 FormDialog 標準殼層；新增用 compact、編輯用 standardNarrow', async () => {
+  it('使用 FormDialog 標準殼層；新增與編輯都用 compact（沒有老師欄位了）', async () => {
     const wCreate = mountDialog({ mode: 'create' })
     await flushPromises()
     expect(wCreate.findComponent({ name: 'FormDialog' }).props('size')).toBe('compact')
     const wEdit = mountDialog({ mode: 'edit', planClass })
     await flushPromises()
-    expect(wEdit.findComponent({ name: 'FormDialog' }).props('size')).toBe('standardNarrow')
+    expect(wEdit.findComponent({ name: 'FormDialog' }).props('size')).toBe('compact')
   })
 
   it('班級代號欄位可編輯並帶入 payload；清空送 null', async () => {
@@ -191,19 +194,17 @@ describe('PlanClassEditDialog', () => {
     expect((input.element as HTMLInputElement).value).toBe('K1A')
     await input.setValue(' 大2 ')
     vmOf(w).onSubmit()
-    expect((w.emitted('update')![0][1] as Record<string, unknown>).class_code).toBe('大2')
+    expect(w.emitted('update')![0][1]).toEqual({ class_code: '大2' })
 
     await input.setValue('  ')
     vmOf(w).onSubmit()
-    expect((w.emitted('update')![1][1] as Record<string, unknown>).class_code).toBeNull()
+    expect(w.emitted('update')![1][1]).toEqual({ class_code: null })
   })
 
-  it('用詞統一為「班導」，不出現「班導師」', async () => {
+  it('用詞不出現「班導師」', async () => {
     const w = mountDialog({ mode: 'edit', planClass })
     await flushPromises()
-    const text = document.body.textContent ?? ''
-    expect(text).toContain('班導')
-    expect(text).not.toContain('班導師')
+    expect(document.body.textContent ?? '').not.toContain('班導師')
     w.unmount()
   })
 
@@ -216,11 +217,11 @@ describe('PlanClassEditDialog', () => {
     expect(dirty()).toBe(true)
   })
 
-  it('開啟時載入年級與教師選項', async () => {
+  it('開啟時只載入年級（不再載入老師選項）', async () => {
     const w = mountDialog({ mode: 'edit', planClass })
     await flushPromises()
     expect(mockGetGrades).toHaveBeenCalled()
-    expect(mockGetTeacherOptions).toHaveBeenCalled()
+    expect(mockGetTeacherOptions).not.toHaveBeenCalled()
     expect(w).toBeTruthy()
   })
 
@@ -228,6 +229,8 @@ describe('PlanClassEditDialog', () => {
     const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
     const w = mountDialog({ mode: 'edit', planClass, submitting: true })
     await flushPromises()
+    vmOf(w).form.target_name = '改名'
+    await w.vm.$nextTick()
 
     const buttons = w.findAllComponents({ name: 'ElButton' })
     const saveBtn = buttons.find(b => b.text().includes('儲存'))

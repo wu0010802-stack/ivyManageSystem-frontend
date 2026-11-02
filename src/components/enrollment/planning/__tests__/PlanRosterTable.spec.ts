@@ -70,10 +70,15 @@ function buildPlan(overrides: Partial<PlanDetail> = {}): PlanDetail {
   }
 }
 
-function mountTable(overrides: Partial<PlanDetail> = {}, editable = true, selectedIds = new Set<number>()) {
+function mountTable(
+  overrides: Partial<PlanDetail> = {},
+  editable = true,
+  selectedIds = new Set<number>(),
+  extraProps: Record<string, unknown> = {},
+) {
   return mount(PlanRosterTable, {
     global: { plugins: [ElementPlus] },
-    props: { plan: buildPlan(overrides), editable, selectedIds },
+    props: { plan: buildPlan(overrides), editable, selectedIds, ...extraProps },
   })
 }
 
@@ -107,7 +112,7 @@ describe('PlanRosterTable', () => {
   })
 
   it('三師格改用 PlanTeacherCell：未指派顯示「未指派」與原班老師（不再藏在 hover）', () => {
-    const w = mountTable()
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers' })
     const cells = w.findAllComponents(PlanTeacherCell)
     expect(cells.length).toBe(6) // 2 班 × 3 職務
     const smallA = cells.filter(c => c.props('className') === '小班A')
@@ -120,7 +125,7 @@ describe('PlanRosterTable', () => {
   })
 
   it('老師格 change → emit teacher-change(班 id, 欄位, 老師 id)', () => {
-    const w = mountTable()
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers' })
     const cell = w.findAllComponents(PlanTeacherCell)
       .find(c => c.props('className') === '中班A' && c.props('role') === 'assistant')!
     cell.vm.$emit('change', null)
@@ -135,13 +140,21 @@ describe('PlanRosterTable', () => {
         editable: true,
         selectedIds: new Set<number>(),
         teacherOptions: [{ id: 200, name: '李老師' }, { id: 300, name: '新老師' }],
+        viewMode: 'teachers',
       },
     })
     const cell = w.findAllComponents(PlanTeacherCell)
       .find(c => c.props('className') === '小班A' && c.props('role') === 'head')!
-    expect(cell.props('options')).toEqual([
-      { id: 200, label: '李老師', disabled: true, note: '中班A班導' },
-      { id: 300, label: '新老師', disabled: false, note: '' },
+    // 現值王老師(100)不在可選名單（已停用）→ 補「目前指派」；李老師、新老師沒職稱 → 其他職務
+    expect(cell.props('optionGroups')).toEqual([
+      { label: '目前指派', options: [{ id: 100, label: '王老師（已停用）', disabled: true, note: '' }] },
+      {
+        label: '其他職務',
+        options: [
+          { id: 200, label: '李老師', disabled: true, note: '中班A班導' },
+          { id: 300, label: '新老師', disabled: false, note: '' },
+        ],
+      },
     ])
   })
 
@@ -150,8 +163,21 @@ describe('PlanRosterTable', () => {
     const entry = (id: number) => w.find(`.student-entry[data-student-id="${id}"]`)
     // 小班A 的來源班是 幼幼A：同班升上來的不重複顯示原班
     expect(entry(1).find('.student-moved').exists()).toBe(false)
-    // 小華來自 幼幼B → 標出來源
-    expect(entry(2).find('.student-moved').text()).toContain('幼幼B')
+    // 小華來自 幼幼B → 標出來源，寫「原 幼幼B」（箭頭會被讀成「要搬去」）
+    expect(entry(2).find('.student-moved').text()).toBe('原 幼幼B')
+  })
+
+  it('學生勾選框：不包在 <label> 裡（無巢狀 label），且有可讀名稱', () => {
+    const w = mountTable()
+    const entry = w.find('.student-entry[data-student-id="1"]')
+    expect(entry.find('label .el-checkbox').exists()).toBe(false)
+    expect(entry.find('label.student-line').exists()).toBe(false)
+    // EP 把 aria-label 放在 checkbox 自己的 <label> 根元素；input 在其內，名稱即學生姓名
+    const box = entry.find('.student-checkbox')
+    expect(box.element.tagName).toBe('LABEL')
+    expect(box.attributes('aria-label')).toBe('小明')
+    expect(box.find('input[type="checkbox"]').exists()).toBe(true)
+    expect(box.text()).toContain('小明')
   })
 
   it('手動調整過的學生有標記（重新產生時會被保留的就是這些）', () => {
@@ -315,5 +341,137 @@ describe('PlanRosterTable', () => {
     expect(vm.locateClass(10)).toBe(true)
     expect(w.find('.class-name-cell[data-plan-class-id="10"]').classes()).toContain('flash-highlight')
     expect(vm.locateClass(999)).toBe(false)
+  })
+  // ── FE-B：檢視切換、搜尋高亮、批次閃爍、max-height ──
+
+  it('預設「學生名單」：只有班名、人數與學生列，不顯示三列老師', () => {
+    const w = mountTable()
+    expect(w.findAllComponents(PlanTeacherCell).length).toBe(0)
+    expect(w.findAll('.teacher-label').length).toBe(0)
+    expect(w.findAll('.student-entry').length).toBe(3)
+    expect(w.findAll('.capacity-badge').length).toBe(2)
+  })
+
+  it('「老師指派」：只有班名、人數與三列老師，不顯示學生列', () => {
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers' })
+    expect(w.findAllComponents(PlanTeacherCell).length).toBe(6)
+    expect(w.findAll('.student-entry').length).toBe(0)
+    expect(w.findAll('.capacity-badge').length).toBe(2)
+  })
+
+  it('學生 title 顯示學號與原班', () => {
+    const w = mountTable()
+    expect(w.find('.student-entry[data-student-id="1"]').attributes('title')).toBe('S001・原 幼幼A')
+  })
+
+  it('matchIds：符合者高亮、其餘淡化，目前這位另外標示；null 時都不標', async () => {
+    const w = mountTable({}, true, new Set<number>(), { matchIds: new Set([1, 3]), currentMatchId: 3 })
+    const entry = (id: number) => w.find(`.student-entry[data-student-id="${id}"]`)
+    expect(entry(1).classes()).toContain('is-match')
+    expect(entry(3).classes()).toContain('is-current-match')
+    expect(entry(2).classes()).toContain('is-dimmed')
+    expect(entry(1).classes()).not.toContain('is-dimmed')
+
+    await w.setProps({ matchIds: null, currentMatchId: null })
+    expect(w.findAll('.student-entry.is-match, .student-entry.is-dimmed, .student-entry.is-current-match').length).toBe(0)
+  })
+
+  it('flashStudents：被搬的學生都閃一下，並捲到第一位', () => {
+    const w = mountTable()
+    const scrollSpy = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>
+    scrollSpy.mockClear()
+    const vm = w.vm as unknown as { flashStudents: (ids: number[]) => boolean }
+    expect(vm.flashStudents([3, 1])).toBe(true)
+    expect(w.find('.student-entry[data-student-id="1"]').classes()).toContain('flash-highlight')
+    expect(w.find('.student-entry[data-student-id="3"]').classes()).toContain('flash-highlight')
+    // 依表格順序的第一位（小明 id=1）
+    expect(scrollSpy.mock.contexts[0]).toBe(w.find('.student-entry[data-student-id="1"]').element)
+    expect(vm.flashStudents([999])).toBe(false)
+  })
+
+  it('max-height 依表格實際位置算到視窗底（不再用寫死的留白）', async () => {
+    const original = Element.prototype.getBoundingClientRect
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.classList?.contains('plan-roster-scroll')) return { top: 300, bottom: 900, left: 0, right: 0, width: 0, height: 600, x: 0, y: 300, toJSON: () => ({}) } as DOMRect
+      return original.call(this)
+    }
+    const innerHeight = window.innerHeight
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+    try {
+      const w = mount(PlanRosterTable, {
+        attachTo: document.body,
+        global: { plugins: [ElementPlus] },
+        props: { plan: buildPlan(), editable: true, selectedIds: new Set<number>() },
+      })
+      await w.vm.$nextTick()
+      const el = w.find('.plan-roster-scroll').element as HTMLElement
+      const gap = parseFloat(getComputedStyle(el).getPropertyValue('--yp-bottom-gap')) || 0
+      expect(el.style.maxHeight).toBe(`${900 - 300 - gap}px`)
+      w.unmount()
+    } finally {
+      Element.prototype.getBoundingClientRect = original
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: innerHeight })
+    }
+  })
+  // ── FE-D：男女數、離園、老師指派檢視、格子錯誤 ──
+
+  it('人數下顯示「男 x・女 y」：性別未知不計、離園不計；全部未知就不顯示', () => {
+    const plan = buildPlan()
+    plan.students[0].gender = '男'
+    plan.students[1].gender = '女'
+    plan.students[2].gender = '男'
+    const w = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    expect(w.find('.capacity-cell .gender-split').text()).toBe('男 2・女 1')
+    expect(w.findAll('.gender-split').length).toBe(1)
+
+    plan.students[2].is_active_now = false
+    const w2 = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    expect(w2.find('.gender-split').text()).toBe('男 1・女 1')
+  })
+
+  it('已離園的學生標「離」並淡化，說明不計入人數、重新產生時會移除', () => {
+    const plan = buildPlan()
+    plan.students[0].is_active_now = false
+    const w = mount(PlanRosterTable, { global: { plugins: [ElementPlus] }, props: { plan, editable: true, selectedIds: new Set<number>() } })
+    const entry = w.find('.student-entry[data-student-id="1"]')
+    expect(entry.classes()).toContain('is-left')
+    const tag = entry.find('.disposition-tag-left')
+    expect(tag.text()).toBe('離')
+    expect(tag.attributes('title')).toBe('已離園，不計入人數，重新產生建議時會移除')
+    expect(w.find('.student-entry[data-student-id="2"] .disposition-tag-left').exists()).toBe(false)
+  })
+
+  it('老師指派檢視不顯示整班勾選（沒有學生列可選）', () => {
+    expect(mountTable().findAll('.class-select-all').length).toBe(1)
+    expect(mountTable({}, true, new Set<number>(), { viewMode: 'teachers' }).findAll('.class-select-all').length).toBe(0)
+  })
+
+  it('老師格錯誤依 班級:職務 對到格子', () => {
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers', cellErrors: { '11:assistant': '副班導「陳老師」已停用' } })
+    const cell = (cls: string, role: string) => w.findAllComponents(PlanTeacherCell)
+      .find(c => c.props('className') === cls && c.props('role') === role)!
+    expect(cell('中班A', 'assistant').props('error')).toBe('副班導「陳老師」已停用')
+    expect(cell('中班A', 'head').props('error')).toBeNull()
+  })
+  // ── 審查 F9／F10 ──
+
+  it('寫入進行中（busy）不能開始拖曳（避免第二次放下被靜默吞掉）', () => {
+    const w = mountTable({}, true, new Set<number>(), { busy: true })
+    expect(w.find('.student-entry[data-student-id="1"]').attributes('draggable')).toBe('false')
+  })
+
+  it('老師名單沒載到（空）時：格子仍有「目前指派」選項（顯示姓名，不會顯示原始 id）', () => {
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers', teacherOptions: [] })
+    const cell = w.findAllComponents(PlanTeacherCell)
+      .find(c => c.props('className') === '小班A' && c.props('role') === 'head')!
+    expect(cell.props('optionGroups')).toEqual([
+      { label: '目前指派', options: [{ id: 100, label: '王老師', disabled: false, note: '' }] },
+    ])
+  })
+
+  it('老師格展開時往上 emit teacher-cell-open', () => {
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers' })
+    w.findAllComponents(PlanTeacherCell)[0].vm.$emit('open')
+    expect(w.emitted('teacher-cell-open')).toBeTruthy()
   })
 })

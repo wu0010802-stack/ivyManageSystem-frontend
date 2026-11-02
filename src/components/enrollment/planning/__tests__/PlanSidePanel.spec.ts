@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import ElementPlus from 'element-plus'
 import PlanSidePanel from '../PlanSidePanel.vue'
@@ -21,7 +21,10 @@ function buildPlan(overrides: Partial<PlanDetail> = {}): PlanDetail {
     generated_at: '2026-06-01T00:00:00',
     published_at: null,
     applied_at: null,
-    classes: [],
+    classes: [
+      { id: 10, source_name: '幼幼A', target_name: '小班A', target_grade_id: 1, grade_name: '小班', capacity: 20, class_code: null, head_teacher_id: null, head_teacher_name: null, assistant_teacher_id: null, assistant_teacher_name: null, art_teacher_id: null, art_teacher_name: null, assigned_count: 1 },
+      { id: 11, source_name: '小班舊', target_name: '中班A', target_grade_id: 2, grade_name: '中班', capacity: 20, class_code: null, head_teacher_id: null, head_teacher_name: null, assistant_teacher_id: null, assistant_teacher_name: null, art_teacher_id: null, art_teacher_name: null, assigned_count: 0 },
+    ],
     students: [
       { id: 1, student_id: 'S001', name: '王小明', source_classroom_name: '幼幼A', plan_class_id: null, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
       { id: 2, student_id: 'S002', name: '李小華', source_classroom_name: '幼幼B', plan_class_id: null, disposition: 'retain', exclude_reason: null, manually_adjusted: false, current_grade_name: '小班' },
@@ -108,10 +111,67 @@ describe('PlanSidePanel', () => {
     expect(w.emitted('set-selected')!.at(-1)).toEqual([[4], true])
   })
 
-  it('畢業／排除段落各自全選，只作用於該段', async () => {
+  it('畢業／排除段落各自全選，只作用於該段（展開後才提供）', async () => {
     const w = mountPanel()
+    await w.find('.graduate-bucket .el-collapse-item__header').trigger('click')
     await w.find('.graduate-bucket .bucket-select-all input[type="checkbox"]').setValue(true)
     expect(w.emitted('set-selected')!.at(-1)).toEqual([[3], true])
+  })
+
+  it('收合中的名單標頭不提供全選（避免一次勾滿看不到的人）', () => {
+    const w = mountPanel()
+    expect(w.find('.graduate-bucket .bucket-select-all').exists()).toBe(false)
+    expect(w.find('.exclude-bucket .bucket-select-all').exists()).toBe(false)
+  })
+
+  it('來源班寫「原 X」，不會被讀成建議班級', () => {
+    const w = mountPanel()
+    expect(w.find('.unassigned-row[data-student-id="1"] .student-source').text()).toBe('原 幼幼A')
+    expect(w.find('.bucket-row[data-student-id="3"] .student-source').text()).toBe('原 大班A')
+  })
+
+  it('locateStudent：畢業／排除名單的學生 → 先展開該名單再定位', async () => {
+    const w = mountPanel()
+    const vm = w.vm as unknown as { locateStudent: (id: number) => Promise<boolean> }
+    expect(await vm.locateStudent(4)).toBe(true)
+    expect(w.find('.exclude-bucket .el-collapse-item__header').classes()).toContain('is-active')
+    expect(w.find('.bucket-row[data-student-id="4"]').classes()).toContain('flash-highlight')
+  })
+
+  it('locateStudent：不在草稿的學生回 false', async () => {
+    const w = mountPanel()
+    const vm = w.vm as unknown as { locateStudent: (id: number) => Promise<boolean> }
+    expect(await vm.locateStudent(999)).toBe(false)
+  })
+
+  it('待分班列「分到…」：一般生 emit assign、留級生 emit retain（不用回表格批次列）', async () => {
+    const w = mountPanel()
+    const select = (id: number) => w.find(`.unassigned-row[data-student-id="${id}"]`).findComponent({ name: 'ElSelect' })
+    expect(select(1).exists()).toBe(true)
+    select(1).vm.$emit('change', 10)
+    expect(w.emitted('assign-student')!.at(-1)).toEqual([{ studentId: 1, op: 'assign', planClassId: 10 }])
+    select(2).vm.$emit('change', 10)
+    expect(w.emitted('assign-student')!.at(-1)).toEqual([{ studentId: 2, op: 'retain', planClassId: 10 }])
+  })
+
+  it('「分到…」依年級分組：原班升上去的年級排前；留級生只列同年級的班', () => {
+    const w = mountPanel()
+    const groups = (id: number) => w.find(`.unassigned-row[data-student-id="${id}"]`)
+      .findComponent({ name: 'ElSelect' })
+      .findAllComponents({ name: 'ElOptionGroup' }).map(g => g.props('label'))
+    // 王小明原班 幼幼A → 小班A（小班）排第一
+    expect(groups(1)).toEqual(['小班', '中班'])
+    // 李小華留級、現況小班 → 只有小班
+    expect(groups(2)).toEqual(['小班'])
+  })
+
+  it('「分到…」：editable=false 不出現；busy 時停用', () => {
+    expect(mountPanel({}, false).find('.unassigned-row .row-assign').exists()).toBe(false)
+    const w = mount(PlanSidePanel, {
+      global: { plugins: [ElementPlus] },
+      props: { plan: buildPlan(), editable: true, selectedIds: new Set<number>(), busy: true },
+    })
+    expect(w.find('.unassigned-row').findComponent({ name: 'ElSelect' }).props('disabled')).toBe(true)
   })
 
   it('editable=false：畢業／排除名單不出現勾選', () => {
@@ -145,5 +205,33 @@ describe('PlanSidePanel', () => {
       dataTransfer: { setData, effectAllowed: '' },
     })
     expect(setData).toHaveBeenCalledWith('text/plain', '1')
+  })
+  it('已套用：問題摘要換成套用結果卡', () => {
+    const w = mount(PlanSidePanel, {
+      global: { plugins: [ElementPlus], stubs: { RouterLink: RouterLinkStub } },
+      props: {
+        plan: buildPlan({
+          status: 'applied',
+          applied_at: '2027-08-01T01:00:00',
+          issues: { blocking: [], warnings: [] },
+          applied_summary: {
+            created_classrooms: 0, reused_classrooms: 8, moved_students: 120, graduated: 36, excluded_still_active: 0,
+            left_behind: [{ id: 11, name: '王小明', classroom_name: '向日葵' }],
+          },
+        }),
+        editable: false,
+        selectedIds: new Set<number>(),
+      },
+    })
+    expect(w.find('.plan-applied-result').exists()).toBe(true)
+    expect(w.find('.plan-issues-summary').exists()).toBe(false)
+    expect(w.text()).toContain('仍在去年班 1 位')
+  })
+  it('寫入進行中（busy）待分班列不能開始拖曳', () => {
+    const w = mount(PlanSidePanel, {
+      global: { plugins: [ElementPlus] },
+      props: { plan: buildPlan(), editable: true, selectedIds: new Set<number>(), busy: true },
+    })
+    expect(w.findAll('.unassigned-row')[0].attributes('draggable')).toBe('false')
   })
 })

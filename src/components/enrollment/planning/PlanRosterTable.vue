@@ -1,6 +1,7 @@
 <template>
   <div ref="rootEl" class="plan-roster-wrapper">
-    <div class="plan-roster-scroll">
+    <!-- max-height 由 remeasure() 依表格實際位置算到視窗底（不再用寫死的留白） -->
+    <div ref="scrollEl" class="plan-roster-scroll" :style="scrollMaxHeight ? { maxHeight: scrollMaxHeight } : undefined">
       <table class="plan-roster-table">
         <thead>
           <!-- 年級跨欄 -->
@@ -25,7 +26,7 @@
             >
               <div class="class-name-line">
                 <el-checkbox
-                  v-if="editable && classStudents(cls.id).length"
+                  v-if="editable && viewMode === 'students' && classStudents(cls.id).length"
                   class="class-select-all"
                   :aria-label="`勾選${cls.target_name}全班`"
                   :model-value="classAllSelected(cls.id)"
@@ -60,10 +61,13 @@
               <span class="capacity-badge" :class="{ 'over-capacity': isOverCapacity(cls) }">
                 {{ cls.assigned_count }}/{{ cls.capacity ?? '—' }}
               </span>
+              <!-- 男女比：性別未知與已離園不計；整班都不知道就不顯示 -->
+              <span v-if="genderSplit(cls.id)" class="gender-split">{{ genderSplit(cls.id) }}</span>
             </td>
           </tr>
-          <!-- 三師：格內直接選老師（取代逐班開對話框）；未指派時直接顯示原班老師 -->
-          <tr v-for="role in TEACHER_ROLES" :key="role">
+          <!-- 三師：只在「老師指派」檢視出現。格內直接選老師（取代逐班開對話框）；
+               未指派時直接顯示原班老師 -->
+          <tr v-for="role in visibleTeacherRoles" :key="role">
             <td class="row-label teacher-label">{{ TEACHER_ROLE_LABELS[role] }}</td>
             <td
               v-for="cls in flatClasses"
@@ -79,14 +83,16 @@
                 :source-teacher-name="sourceTeacherName(cls, role)"
                 :editable="editable"
                 :disabled="busy"
-                :options="teacherOptionsByCell.get(`${cls.id}:${role}`) ?? []"
+                :option-groups="teacherOptionsByCell.get(`${cls.id}:${role}`) ?? []"
+                :error="cellErrors[`${cls.id}:${role}`] ?? null"
                 @change="(id: number | null) => emit('teacher-change', cls.id, TEACHER_FIELD_BY_ROLE[role], id)"
+                @open="emit('teacher-cell-open')"
               />
             </td>
           </tr>
         </thead>
 
-        <tbody>
+        <tbody v-if="viewMode === 'students'">
           <tr v-for="rowIdx in maxRowCount" :key="rowIdx">
             <td class="seq-cell">{{ rowIdx }}</td>
             <td
@@ -104,19 +110,34 @@
                 <div
                   class="student-entry"
                   :data-student-id="student.id"
-                  :draggable="editable"
-                  :class="{ dragging: draggingStudent?.id === student.id }"
+                  :draggable="editable && !busy"
+                  :title="studentTitle(student)"
+                  :class="{
+                    dragging: draggingStudent?.id === student.id,
+                    'is-left': student.is_active_now === false,
+                    'is-match': matchIds?.has(student.id) ?? false,
+                    'is-current-match': currentMatchId === student.id,
+                    'is-dimmed': matchIds != null && !matchIds.has(student.id),
+                  }"
                   @dragstart="onDragStart(student, $event)"
                   @dragend="onDragEnd"
                 >
-                  <label class="student-line">
+                  <!-- 姓名放進 el-checkbox 自己的 label（點姓名也能勾），外層不再包 <label>：
+                       巢狀 label 會讓點擊與讀屏行為不確定 -->
+                  <div class="student-line">
                     <el-checkbox
                       v-if="editable"
                       class="student-checkbox"
+                      :aria-label="student.name"
                       :model-value="props.selectedIds.has(student.id)"
                       @change="(val: string | number | boolean) => emit('set-selected', [student.id], Boolean(val))"
-                    />
-                    <span class="student-name">{{ student.name }}</span>
+                    >{{ student.name }}</el-checkbox>
+                    <span v-else class="student-name">{{ student.name }}</span>
+                    <span
+                      v-if="student.is_active_now === false"
+                      class="disposition-tag disposition-tag-left"
+                      title="已離園，不計入人數，重新產生建議時會移除"
+                    >離</span>
                     <span
                       v-if="dispositionTag(student)"
                       class="disposition-tag"
@@ -129,9 +150,9 @@
                       title="手動調整過"
                       aria-label="手動調整過"
                     />
-                  </label>
-                  <!-- 同班升上來的不重複寫原班；只標出從別班搬進來的 -->
-                  <div v-if="isMovedIn(student, cls)" class="student-moved">← {{ student.source_classroom_name }}</div>
+                  </div>
+                  <!-- 同班升上來的不重複寫原班；只標出從別班搬進來的（「原」＝原班，箭頭會被讀成要搬去哪） -->
+                  <div v-if="isMovedIn(student, cls)" class="student-moved">原 {{ student.source_classroom_name }}</div>
                 </div>
               </template>
             </td>
@@ -160,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { Edit } from '@element-plus/icons-vue'
 import type { Schema } from '@/api/_generated/typed'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
@@ -170,9 +191,15 @@ import {
   TEACHER_FIELD_BY_ROLE,
   TEACHER_ROLES,
   TEACHER_ROLE_LABELS,
-  buildTeacherOptions,
+  buildTeacherOptionGroups,
+  currentTeacherOnlyGroups,
+  groupClassesByGrade,
+  isMovedIn,
+  orderedRosterEntries,
   sourceTeacherName,
-  type TeacherCellOption,
+  type GradeGroup,
+  type RosterViewMode,
+  type TeacherOptionGroup,
   type TeacherField,
   type TeacherRole,
 } from './planHelpers'
@@ -189,9 +216,21 @@ const props = withDefaults(defineProps<{
   teacherOptions?: TeacherOptionLike[]
   /** 父層 mutation in-flight：鎖住老師格觸發點 */
   busy?: boolean
+  /** 學生名單（班名、人數＋學生列）／老師指派（班名、人數＋三列老師） */
+  viewMode?: RosterViewMode
+  /** 搜尋／篩選符合的學生：符合者高亮、其餘淡化；null＝沒有在搜尋 */
+  matchIds?: ReadonlySet<number> | null
+  /** 搜尋目前停在哪一位（Enter 換下一位） */
+  currentMatchId?: number | null
+  /** 老師格存檔失敗的原因，key＝`班級id:職務`（後端 detail.field 對到格子） */
+  cellErrors?: Record<string, string>
 }>(), {
   teacherOptions: () => [],
   busy: false,
+  viewMode: 'students',
+  matchIds: null,
+  currentMatchId: null,
+  cellErrors: () => ({}),
 })
 
 const emit = defineEmits<{
@@ -201,31 +240,14 @@ const emit = defineEmits<{
   // 尚未接線（brief 明示 checkbox 批次優先，拖曳延後），單人移動＝ids 長度 1。
   'student-move': [payload: { studentIds: number[]; op: BulkOp; planClassId?: number | null; excludeReason?: string | null }]
   'teacher-change': [planClassId: number, field: TeacherField, teacherId: number | null]
+  /** 老師格展開（父層在老師名單沒載到時重試） */
+  'teacher-cell-open': []
 }>()
 
 // ── 年級分組（依 target_grade_id 首次出現順序分組，容忍後端非嚴格連續排序）──
-interface GradeGroup {
-  gradeId: number
-  gradeName: string
-  classes: PlanClass[]
-}
+const gradeGroups = computed<GradeGroup[]>(() => groupClassesByGrade(props.plan.classes))
 
-const gradeGroups = computed<GradeGroup[]>(() => {
-  const order: number[] = []
-  const map = new Map<number, PlanClass[]>()
-  for (const cls of props.plan.classes) {
-    if (!map.has(cls.target_grade_id)) {
-      map.set(cls.target_grade_id, [])
-      order.push(cls.target_grade_id)
-    }
-    map.get(cls.target_grade_id)!.push(cls)
-  }
-  return order.map(gid => ({
-    gradeId: gid,
-    gradeName: map.get(gid)![0].grade_name ?? '未分年級',
-    classes: map.get(gid)!,
-  }))
-})
+const visibleTeacherRoles = computed(() => (props.viewMode === 'teachers' ? TEACHER_ROLES : []))
 
 const flatClasses = computed<PlanClass[]>(() => gradeGroups.value.flatMap(g => g.classes))
 
@@ -248,13 +270,17 @@ function teacherNameOf(cls: PlanClass, role: TeacherRole): string | null {
   return cls.art_teacher_name ?? null
 }
 
-// 每格下拉選項（含「已是某班班導」停用註記）；只在可編輯時計算
+// 每格下拉選項（分組＋「已是某班班導」停用註記）；只在可編輯時計算。老師名單沒載到
+// （載入失敗）時只放目前指派的老師，下拉才不會把現值顯示成原始 id
 const teacherOptionsByCell = computed(() => {
-  const map = new Map<string, TeacherCellOption[]>()
-  if (!props.editable || props.teacherOptions.length === 0) return map
+  const map = new Map<string, TeacherOptionGroup[]>()
+  if (!props.editable) return map
+  const loaded = props.teacherOptions.length > 0
   for (const cls of props.plan.classes) {
     for (const role of TEACHER_ROLES) {
-      map.set(`${cls.id}:${role}`, buildTeacherOptions(props.teacherOptions, props.plan.classes, cls.id, role))
+      map.set(`${cls.id}:${role}`, loaded
+        ? buildTeacherOptionGroups(props.teacherOptions, props.plan.classes, cls.id, role)
+        : currentTeacherOnlyGroups(props.plan.classes, cls.id, role))
     }
   }
   return map
@@ -284,6 +310,18 @@ function classStudents(classId: number): PlanStudent[] {
   return studentsByClass.value.get(classId) ?? []
 }
 
+/** 「男 x・女 y」：只算在籍且性別已知的學生；都不知道回 null（不顯示）。 */
+function genderSplit(classId: number): string | null {
+  let male = 0
+  let female = 0
+  for (const st of classStudents(classId)) {
+    if (st.is_active_now === false) continue
+    if (st.gender === '男') male += 1
+    else if (st.gender === '女') female += 1
+  }
+  return male + female > 0 ? `男 ${male}・女 ${female}` : null
+}
+
 function classAllSelected(classId: number): boolean {
   const list = classStudents(classId)
   return list.length > 0 && list.every(st => props.selectedIds.has(st.id))
@@ -291,10 +329,6 @@ function classAllSelected(classId: number): boolean {
 
 function classSomeSelected(classId: number): boolean {
   return classStudents(classId).some(st => props.selectedIds.has(st.id))
-}
-
-function isMovedIn(student: PlanStudent, cls: PlanClass): boolean {
-  return !!student.source_classroom_name && student.source_classroom_name !== cls.source_name
 }
 
 const unassignedCount = computed(() =>
@@ -319,6 +353,14 @@ function cellStudents(classId: number, rowIdx: number): PlanStudent[] {
   return student ? [student] : []
 }
 
+/** hover 提示：學號＋原班（同名學生靠這個分辨） */
+function studentTitle(student: PlanStudent): string {
+  const parts: string[] = []
+  if (student.student_id) parts.push(student.student_id)
+  if (student.source_classroom_name) parts.push(`原 ${student.source_classroom_name}`)
+  return parts.join('・')
+}
+
 function dispositionTag(student: PlanStudent): string | null {
   switch (student.disposition) {
     case 'retain': return '留'
@@ -335,7 +377,7 @@ const draggingStudent = ref<{ id: number; planClassId: number | null } | null>(n
 const dragOverClassId = ref<number | null>(null)
 
 function onDragStart(student: PlanStudent, event: DragEvent): void {
-  if (!props.editable) return
+  if (!props.editable || props.busy) return
   draggingStudent.value = { id: student.id, planClassId: student.plan_class_id ?? null }
   // jsdom 程式化 dispatch 無 dataTransfer；設值僅為真實瀏覽器的游標/拖曳影像。
   if (event.dataTransfer) {
@@ -408,6 +450,34 @@ function locateStudent(studentId: number): boolean {
   return true
 }
 
+/** 只捲動不閃爍（搜尋「下一位」用；目前這位的樣式由 currentMatchId 負責）。 */
+function scrollToStudent(studentId: number): boolean {
+  const el = rootEl.value?.querySelector(`.student-entry[data-student-id="${studentId}"]`)
+  if (!el) return false
+  el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
+  return true
+}
+
+/**
+ * 搬班／復原成功後：被動到的學生都閃一下，並捲到表格順序（欄序）的第一位。
+ * DOM 是逐列排的，不能直接取 querySelectorAll 的第一個。
+ */
+function flashStudents(studentIds: number[]): boolean {
+  const wanted = new Set(studentIds)
+  const els = new Map<number, Element>()
+  for (const el of rootEl.value?.querySelectorAll('.student-entry') ?? []) {
+    const id = Number((el as HTMLElement).dataset.studentId)
+    if (wanted.has(id)) els.set(id, el)
+  }
+  if (els.size === 0) return false
+  const first = orderedRosterEntries(props.plan.students, props.plan.classes)
+    .map(entry => els.get(entry.student.id))
+    .find((el): el is Element => el != null)
+  first?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
+  for (const el of els.values()) _flash(el)
+  return true
+}
+
 function locateClass(planClassId: number): boolean {
   const el = rootEl.value?.querySelector(`.class-name-cell[data-plan-class-id="${planClassId}"]`)
   if (!el) return false
@@ -416,23 +486,70 @@ function locateClass(planClassId: number): boolean {
   return true
 }
 
-defineExpose({ locateStudent, locateClass })
+// ── 捲動區高度：表格頂端到捲動容器（後台為 el-main）底部，扣掉 --yp-bottom-gap
+// （＝內容區底部留白 token）。表格上方的進度列、橫幅、批次列高度會變，父層在
+// 這些變動後呼叫 remeasure()；本元件自己處理掛載、視窗縮放與檢視切換。
+const scrollEl = ref<HTMLElement | null>(null)
+const scrollMaxHeight = ref<string | null>(null)
+// 視窗很矮時至少保留幾列可捲，不讓表格被壓扁
+const MIN_SCROLL_HEIGHT_PX = 320
+
+function findScrollParent(el: HTMLElement): HTMLElement | null {
+  let node = el.parentElement
+  while (node && node !== document.body && node !== document.documentElement) {
+    const { overflowY } = getComputedStyle(node)
+    if (overflowY === 'auto' || overflowY === 'scroll') return node
+    node = node.parentElement
+  }
+  return null
+}
+
+function remeasure(): void {
+  const el = scrollEl.value
+  if (!el) return
+  const parent = findScrollParent(el)
+  // 換算成「頁面捲到最上面時」的位置，頁面已往下捲也算得對
+  const staticTop = el.getBoundingClientRect().top + (parent ? parent.scrollTop : window.scrollY)
+  const bottom = parent ? parent.getBoundingClientRect().bottom : window.innerHeight
+  const gap = parseFloat(getComputedStyle(el).getPropertyValue('--yp-bottom-gap')) || 0
+  scrollMaxHeight.value = `${Math.max(MIN_SCROLL_HEIGHT_PX, Math.round(bottom - staticTop - gap))}px`
+}
+
+function onWindowResize(): void {
+  remeasure()
+}
+
+onMounted(() => {
+  remeasure()
+  window.addEventListener('resize', onWindowResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onWindowResize)
+})
+
+watch(() => props.viewMode, () => {
+  void nextTick(remeasure)
+})
+
+defineExpose({ locateStudent, locateClass, flashStudents, scrollToStudent, remeasure })
 </script>
 
 <style scoped>
 .plan-roster-wrapper {
   --yp-h-grade: 34px;
   --yp-h-name: 50px;
-  font-size: 14px;
+  /* 表格底到視窗底的留白＝後台內容區底部 padding（.content-container 用 --space-8） */
+  --yp-bottom-gap: var(--space-8);
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
 .plan-roster-scroll {
   overflow: auto;
   /* 垂直捲動收在表格容器內，sticky 表頭對此容器生效（el-main 為外層捲動根，
-     對 window/el-main sticky 需算 header 高度，內部容器最穩） */
-  /* 上方還有頁首、進度列與批次列；扣掉它們讓頁面本身不再出現第二條捲軸 */
-  max-height: max(320px, calc(100vh - 330px));
+     對 window/el-main sticky 需算 header 高度，內部容器最穩）。max-height 由
+     remeasure() 寫在 inline style；--yp-bottom-gap 由外層繼承 */
 }
 
 .plan-roster-table {
@@ -559,7 +676,7 @@ defineExpose({ locateStudent, locateClass })
   z-index: 2;
   background: var(--color-neutral-100);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   border-right: 2px solid var(--neutral-600) !important;
 }
 
@@ -581,6 +698,22 @@ defineExpose({ locateStudent, locateClass })
   opacity: 0.4;
 }
 
+/* 搜尋／篩選：符合者底色標出、目前這位加外框；不符合的淡化但仍可操作 */
+.student-entry.is-match {
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-soft);
+}
+
+.student-entry.is-current-match {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--color-warning);
+  outline-offset: -1px;
+}
+
+.student-entry.is-dimmed {
+  opacity: 0.4;
+}
+
 .student-cell.drop-target-active,
 .class-name-cell.drop-target-active {
   background: var(--color-primary-soft);
@@ -591,8 +724,13 @@ defineExpose({ locateStudent, locateClass })
 .student-line {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  cursor: default;
+  gap: var(--space-1);
+}
+
+/* 姓名是 el-checkbox 的 label：縮小預設 8px 間距、沿用表格字級 */
+.student-checkbox :deep(.el-checkbox__label) {
+  padding-left: var(--space-1);
+  font-size: inherit;
 }
 
 .student-moved {
@@ -612,6 +750,15 @@ defineExpose({ locateStudent, locateClass })
   height: auto;
 }
 
+/* 觸控（平板）：整班勾選與班級編輯鈕的點擊區至少 32px */
+@media (pointer: coarse) {
+  .class-select-all,
+  .class-edit-btn {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
 .class-code {
   font-size: var(--text-xs);
   font-weight: var(--font-weight-regular);
@@ -624,7 +771,7 @@ defineExpose({ locateStudent, locateClass })
 }
 
 .disposition-tag {
-  font-size: 11px;
+  font-size: var(--text-xs);
   border-radius: var(--radius-sm);
   padding: 0 4px;
 }
@@ -637,6 +784,23 @@ defineExpose({ locateStudent, locateClass })
 .disposition-tag-graduate {
   color: var(--color-info-hover);
   background: var(--color-info-soft);
+}
+
+.disposition-tag-left {
+  color: var(--text-secondary);
+  background: var(--color-neutral-200);
+}
+
+.student-entry.is-left {
+  opacity: 0.55;
+}
+
+.gender-split {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-secondary);
 }
 
 .disposition-tag-exclude {
@@ -655,7 +819,7 @@ tfoot tr:first-child td {
 .plan-roster-table .grade-total-cell {
   background: var(--color-neutral-100);
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .grand-total-row td {

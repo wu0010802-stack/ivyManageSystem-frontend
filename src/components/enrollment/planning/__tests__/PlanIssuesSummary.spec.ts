@@ -99,6 +99,90 @@ describe('PlanIssuesSummary', () => {
     expect(w.find('.severity-section').exists()).toBe(false)
   })
 
+  it('class_name_duplicate 有固定標題', () => {
+    const w = mountSummary(buildIssues({
+      blocking: [{ code: 'class_name_duplicate', message: '原始訊息', plan_class_id: 10, student_id: null }],
+      warnings: [],
+    }))
+    expect(w.find('.severity-blocking .group-title').text()).toBe('班級名稱重複')
+  })
+
+  it('組標題鈕帶 aria-expanded，展開／收合時切換', async () => {
+    const w = mountSummary()
+    const toggle = w.findAll('.group-toggle')[0]
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    await toggle.trigger('click')
+    expect(w.findAll('.group-toggle')[0].attributes('aria-expanded')).toBe('true')
+  })
+
+  it('interactive=false（發布 dialog 內）：逐筆列是純文字，沒有按鈕語意、點了也不 emit', async () => {
+    const w = mount(PlanIssuesSummary, {
+      global: { plugins: [ElementPlus] },
+      props: { issues: buildIssues(), interactive: false },
+    })
+    await w.findAll('.group-toggle')[0].trigger('click')
+    const item = w.find('.issue-item')
+    expect(item.attributes('role')).toBeUndefined()
+    expect(item.attributes('tabindex')).toBeUndefined()
+    expect(item.classes()).toContain('issue-item--static')
+    await item.trigger('click')
+    expect(w.emitted('locate-issue')).toBeFalsy()
+  })
+
+  it('context：草稿寫「阻擋發布」，已發布寫「阻擋套用」', () => {
+    expect(mountSummary().find('.severity-blocking .severity-title').text()).toBe('阻擋發布')
+    const w = mount(PlanIssuesSummary, {
+      global: { plugins: [ElementPlus] },
+      props: { issues: buildIssues(), context: 'published' },
+    })
+    expect(w.find('.severity-blocking .severity-title').text()).toBe('阻擋套用')
+  })
+
+  it('已發布語境的群組標題：換班要先撤回、發布後才入園的人會留在原班、超額是套用後', () => {
+    const w = mount(PlanIssuesSummary, {
+      global: { plugins: [ElementPlus] },
+      props: {
+        context: 'published',
+        issues: {
+          blocking: [{ code: 'student_source_classroom_changed', message: 'x', plan_class_id: null, student_id: 1 }],
+          warnings: [
+            { code: 'student_missing_from_plan', message: 'y', plan_class_id: null, student_id: 2 },
+            { code: 'capacity_exceeded', message: 'z', plan_class_id: 3, student_id: null },
+          ],
+        },
+      },
+    })
+    const titles = w.findAll('.group-title').map(t => t.text())
+    expect(titles).toEqual([
+      '學生已換班，需先撤回發布再重新產生建議',
+      '發布後才入園的學生，套用時會留在原班',
+      '套用後班級人數會超過容量',
+    ])
+  })
+
+  it('第二輪新增的 issue code 都有固定標題（不退回逐筆訊息）', () => {
+    const w = mount(PlanIssuesSummary, {
+      global: { plugins: [ElementPlus] },
+      props: {
+        issues: {
+          blocking: [{ code: 'graduate_not_graduation_grade', message: '原始-1', plan_class_id: null, student_id: 9 }],
+          warnings: [
+            { code: 'exclude_will_graduate', message: '原始-2', plan_class_id: null, student_id: 6 },
+            { code: 'teacher_resigning', message: '原始-3', plan_class_id: 10, student_id: null },
+            { code: 'retain_already_graduated', message: '原始-4', plan_class_id: null, student_id: 7 },
+          ],
+        },
+      },
+    })
+    expect(w.findAll('.group-title').map(t => t.text())).toEqual([
+      '非畢業年級的學生被標記畢業',
+      '排除的畢業年級學生仍會自動畢業',
+      '老師預定離職，新學年無法帶班',
+      // 不一定是系統自動畢業（也可能是手動辦畢業），標題中性
+      '留級生已畢業，留級不會生效',
+    ])
+  })
+
   it('僅 warnings 時不渲染 blocking 區塊', () => {
     const w = mountSummary(buildIssues({ blocking: [] }))
     expect(w.find('.severity-blocking').exists()).toBe(false)

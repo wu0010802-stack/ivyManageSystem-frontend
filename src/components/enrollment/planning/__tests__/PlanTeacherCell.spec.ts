@@ -3,10 +3,12 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ElementPlus from 'element-plus'
 import PlanTeacherCell from '../PlanTeacherCell.vue'
+import cellSource from '../PlanTeacherCell.vue?raw'
 
-const options = [
-  { id: 100, label: '林佳蓉', disabled: false, note: '' },
-  { id: 101, label: '陳怡君', disabled: true, note: '玫瑰班導' },
+const optionGroups = [
+  { label: '原班老師', options: [{ id: 100, label: '林佳蓉', disabled: false, note: '原班' }] },
+  { label: '帶班老師', options: [{ id: 101, label: '陳怡君', disabled: true, note: '玫瑰班導' }] },
+  { label: '其他職務', options: [{ id: 103, label: '王主任', disabled: false, note: '' }] },
 ]
 
 function mountCell(props: Record<string, unknown> = {}) {
@@ -21,7 +23,7 @@ function mountCell(props: Record<string, unknown> = {}) {
       sourceTeacherName: '林佳蓉',
       editable: true,
       disabled: false,
-      options,
+      optionGroups,
       ...props,
     },
   })
@@ -87,5 +89,93 @@ describe('PlanTeacherCell', () => {
   it('按鈕有可讀的 aria-label（班名＋職務＋現值）', () => {
     const w = mountCell()
     expect(w.find('.teacher-trigger').attributes('aria-label')).toBe('百合 班導：未指派，點擊選擇老師')
+  })
+  it('下拉依組別呈現（原班老師／帶班老師／其他職務）', async () => {
+    const w = mountCell()
+    await w.find('.teacher-trigger').trigger('click')
+    const groups = w.findComponent({ name: 'ElSelect' }).findAllComponents({ name: 'ElOptionGroup' })
+    expect(groups.map(g => g.props('label'))).toEqual(['原班老師', '帶班老師', '其他職務'])
+  })
+
+  it('下拉 placeholder 顯示原班老師；沒有原班老師時寫「選擇老師」', async () => {
+    const w = mountCell()
+    await w.find('.teacher-trigger').trigger('click')
+    expect(w.findComponent({ name: 'ElSelect' }).props('placeholder')).toBe('原班：林佳蓉')
+    const plain = mountCell({ sourceTeacherName: null })
+    await plain.find('.teacher-trigger').trigger('click')
+    expect(plain.findComponent({ name: 'ElSelect' }).props('placeholder')).toBe('選擇老師')
+  })
+
+  it('沒選就離開（blur／Tab）：收回成顯示態，不 emit', async () => {
+    const w = mountCell()
+    await w.find('.teacher-trigger').trigger('click')
+    w.findComponent({ name: 'ElSelect' }).vm.$emit('blur', new FocusEvent('blur'))
+    await nextTick()
+    expect(w.findComponent({ name: 'ElSelect' }).exists()).toBe(false)
+    expect(w.find('.teacher-trigger').exists()).toBe(true)
+    expect(w.emitted('change')).toBeFalsy()
+  })
+
+  it('這一格存檔失敗：顯示錯誤訊息並標成 aria-invalid', () => {
+    const w = mountCell({ error: '班導「吳老師」已停用，請改選其他老師' })
+    expect(w.find('.teacher-error').text()).toBe('班導「吳老師」已停用，請改選其他老師')
+    expect(w.find('.teacher-trigger').attributes('aria-invalid')).toBe('true')
+    expect(w.find('.teacher-trigger').classes()).toContain('has-error')
+  })
+  it('展開下拉時原本的格子內容留在原位（隱藏、不可聚焦）撐住欄寬，下拉疊在上面，不撐寬整欄', async () => {
+    const w = mountCell()
+    await w.find('.teacher-trigger').trigger('click')
+    const trigger = w.find('.teacher-trigger')
+    expect(trigger.exists()).toBe(true)
+    expect(trigger.classes()).toContain('is-hidden')
+    expect(trigger.attributes('aria-hidden')).toBe('true')
+    expect(trigger.attributes('tabindex')).toBe('-1')
+    expect(w.find('.teacher-select').exists()).toBe(true)
+  })
+
+  it('樣式守衛：格子不寫死寬度，下拉絕對定位疊在格子上（固定寬會讓老師指派檢視 8 班放不下）', () => {
+    // scoped CSS 不會出現在 inline style，直接檢查元件原始碼的規則
+    const block = (selector: string) => {
+      const start = cellSource.indexOf(`${selector} {`)
+      expect(start).toBeGreaterThan(-1)
+      return cellSource.slice(start, cellSource.indexOf('}', start))
+    }
+    const cell = block('.plan-teacher-cell')
+    expect(cell).not.toMatch(/(?:^|\s)(?:max-)?width:\s*[\d.]+(?:rem|px|em)/m)
+    const select = block('.teacher-select')
+    expect(select).toMatch(/position:\s*absolute/)
+    expect(select).toMatch(/width:\s*100%/)
+  })
+
+  it('鍵盤選定或按 Esc 收回後，焦點回到這一格的按鈕；Tab／點別處離開不搶焦點', async () => {
+    const w = mountCell()
+    const trigger = () => w.find('.teacher-trigger').element as HTMLElement
+    await w.find('.teacher-trigger').trigger('click')
+    w.findComponent({ name: 'ElSelect' }).vm.$emit('change', 100)
+    await nextTick()
+    await nextTick()
+    expect(document.activeElement).toBe(trigger())
+
+    await w.find('.teacher-trigger').trigger('click')
+    w.findComponent({ name: 'ElSelect' }).vm.$emit('visible-change', false)
+    await nextTick()
+    await nextTick()
+    expect(document.activeElement).toBe(trigger())
+
+    trigger().blur()
+    await w.find('.teacher-trigger').trigger('click')
+    const select = w.findComponent({ name: 'ElSelect' })
+    select.vm.$emit('blur', new FocusEvent('blur'))
+    select.vm.$emit('visible-change', false)
+    await nextTick()
+    await nextTick()
+    expect(document.activeElement).not.toBe(trigger())
+    w.unmount()
+  })
+
+  it('展開時 emit open（父層可在老師名單沒載到時重試）', async () => {
+    const w = mountCell()
+    await w.find('.teacher-trigger').trigger('click')
+    expect(w.emitted('open')).toBeTruthy()
   })
 })

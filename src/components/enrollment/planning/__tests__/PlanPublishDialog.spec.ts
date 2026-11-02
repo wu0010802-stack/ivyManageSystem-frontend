@@ -112,7 +112,7 @@ describe('PlanPublishDialog', () => {
     const text = w.text()
     expect(text).toContain('2027/08/01')
     expect(text).toContain('自動套用')
-    expect(text).toContain('3 位學生搬到新班級')
+    expect(text).toContain('3 位學生升到 116 學年班級')
     expect(text).toContain('1 位大班生轉為畢業')
     expect(text).toContain('1 位排除的學生不會被搬動')
     expect(text).toContain('撤回發布')
@@ -157,6 +157,97 @@ describe('PlanPublishDialog', () => {
     await input.setValue('１１５')
     expect(confirmBtn()?.props('disabled')).toBe(false)
     expect(w.find('.confirm-year-error').exists()).toBe(false)
+  })
+
+  it('升班人數附上換班與留級的拆分（為 0 的不寫）', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2027-08-01', targetSchoolYear: 116, movedCount: 2, retainCount: 1 })
+    await flushPromises()
+    expect(w.text()).toContain('3 位學生升到 116 學年班級（其中 2 位換班、1 位留級）')
+
+    await w.setProps({ movedCount: 0, retainCount: 1 })
+    expect(w.text()).toContain('（其中 1 位留級）')
+    await w.setProps({ movedCount: 0, retainCount: 0 })
+    expect(w.text()).not.toContain('其中')
+  })
+
+  it('薪資後果講清楚：誰的薪資會標成待重算、由誰去算', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2027-08-01', targetSchoolYear: 116 })
+    await flushPromises()
+    const text = w.find('.consequence-list').text()
+    expect(text).not.toContain('相關薪資需重新計算')
+    expect(text).toContain('待重算')
+    expect(text).toContain('負責薪資的同仁')
+    expect(text).toContain('已封存')
+  })
+
+  it('提醒事項在 dialog 內是純文字，不可點（沒有表格可定位）', async () => {
+    mockGetPreview.mockResolvedValue({
+      data: previewFixture({
+        issues: { blocking: [], warnings: [{ code: 'assistant_teacher_missing', message: '班級「小班A」尚未指派副班導', plan_class_id: 10, student_id: null }] },
+      }),
+    })
+    const w = mountDialog()
+    await flushPromises()
+    await w.find('.group-toggle').trigger('click')
+    const item = w.find('.issue-item')
+    expect(item.exists()).toBe(true)
+    expect(item.attributes('role')).toBeUndefined()
+  })
+
+  it('畢業名單用多欄排列（長名單不再一人一行）', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.find('.graduating-list').classes()).toContain('summary-list--grid')
+  })
+
+  it('自動套用未啟用：說明區改 error 樣式，明講發布後不會套用，不寫「系統會自動套用」', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2027-08-01', targetSchoolYear: 116, schedulerEnabled: false })
+    await flushPromises()
+    const notice = w.find('.apply-notice')
+    expect(notice.classes()).toContain('apply-notice--danger')
+    expect(notice.find('.apply-when').text()).toContain('自動套用未啟用')
+    expect(notice.find('.apply-when').text()).toContain('不會自動套用')
+    expect(w.text()).not.toContain('系統會在 2027/08/01')
+  })
+
+  it('排除的大班生仍會畢業：後果清單與排除名單都寫出畢業日，不再說「仍留在原班」了事', async () => {
+    mockGetPreview.mockResolvedValue({
+      data: previewFixture({
+        excluded: [
+          { id: 5, name: '小英', source_classroom_name: '中班B', exclude_reason: '轉學' },
+          { id: 6, name: '大寶', source_classroom_name: '天堂鳥', exclude_reason: '待家長確認' },
+        ],
+        totals: { assigned_count: 3, class_count: 1, excluded_count: 2, graduating_count: 1 },
+        issues: {
+          blocking: [],
+          warnings: [{ code: 'exclude_will_graduate', message: '學生「大寶」被排除，但仍會在 2027/07/31 自動畢業', plan_class_id: null, student_id: 6 }],
+        },
+      }),
+    })
+    const w = mountDialog(5, { applyDate: '2027-08-01', targetSchoolYear: 116, graduationDate: '2027-07-31' })
+    await flushPromises()
+    expect(w.find('.consequence-list').text()).toContain('2 位排除的學生不會被搬動；其中 1 位畢業年級的學生仍會在 2027/07/31 畢業')
+    const rows = w.findAll('.excluded-list li')
+    expect(rows[0].find('.will-graduate').exists()).toBe(false)
+    expect(rows[1].find('.will-graduate').text()).toBe('將於 2027/07/31 畢業')
+  })
+
+  it('自動畢業未開啟：排除名單不標畢業日，後果清單不說會畢業', async () => {
+    mockGetPreview.mockResolvedValue({
+      data: previewFixture({
+        excluded: [{ id: 6, name: '大寶', source_classroom_name: '天堂鳥', exclude_reason: null }],
+        totals: { assigned_count: 3, class_count: 1, excluded_count: 1, graduating_count: 1 },
+        issues: { blocking: [], warnings: [{ code: 'exclude_will_graduate', message: 'x', plan_class_id: null, student_id: 6 }] },
+      }),
+    })
+    const w = mountDialog(5, { graduationDate: '2027-07-31', autoGraduationEnabled: false })
+    await flushPromises()
+    expect(w.find('.will-graduate').exists()).toBe(false)
+    expect(w.find('.consequence-list').text()).toContain('1 位排除的學生不會被搬動，仍留在原班')
   })
 
   it('預覽載入失敗：顯示錯誤訊息，不顯示「尚無預覽資料」', async () => {

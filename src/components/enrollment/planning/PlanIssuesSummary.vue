@@ -16,14 +16,19 @@
         <span class="severity-count">{{ severity.total }}</span>
       </div>
       <div v-for="group in severity.groups" :key="group.key" class="issue-group">
-        <button type="button" class="group-toggle" @click="toggleGroup(group.key)">
+        <button
+          type="button"
+          class="group-toggle"
+          :aria-expanded="expandedGroups.has(group.key) ? 'true' : 'false'"
+          @click="toggleGroup(group.key)"
+        >
           <el-icon class="group-arrow" :class="{ expanded: expandedGroups.has(group.key) }">
             <ArrowRight />
           </el-icon>
           <span class="group-title">{{ group.title }}</span>
           <span class="group-count">{{ group.items.length }}</span>
         </button>
-        <ul v-if="expandedGroups.has(group.key)" class="group-items">
+        <ul v-if="expandedGroups.has(group.key) && interactive" class="group-items">
           <li
             v-for="(issue, idx) in group.items"
             :key="idx"
@@ -32,6 +37,14 @@
             tabindex="0"
             @click="emit('locate-issue', issue)"
             @keydown.enter.space.prevent="emit('locate-issue', issue)"
+          >{{ issue.message }}</li>
+        </ul>
+        <!-- 發布 dialog 內沒有表格可定位：純文字清單，不給可點的外觀 -->
+        <ul v-else-if="expandedGroups.has(group.key)" class="group-items">
+          <li
+            v-for="(issue, idx) in group.items"
+            :key="idx"
+            class="issue-item issue-item--static"
           >{{ issue.message }}</li>
         </ul>
       </div>
@@ -51,7 +64,16 @@ import type { Schema } from '@/api/_generated/typed'
 type IssuesOut = Schema<'IssuesOut'>
 type IssueOut = Schema<'IssueOut'>
 
-const props = defineProps<{ issues: IssuesOut }>()
+const props = withDefaults(defineProps<{
+  issues: IssuesOut
+  /** false＝純文字清單（發布 dialog 內沒有可定位的表格），逐筆不可點 */
+  interactive?: boolean
+  /** published：計畫已發布，阻擋的是「套用」而不是「發布」 */
+  context?: 'draft' | 'published'
+}>(), {
+  interactive: true,
+  context: 'draft',
+})
 const emit = defineEmits<{ 'locate-issue': [issue: IssueOut] }>()
 
 // 與後端 services/classroom_year_plan/issues.py 的 code 對齊；未知 code fallback
@@ -66,6 +88,7 @@ const GROUP_TITLES: Record<string, string> = {
   teacher_duplicate: '老師重複指派多班',
   teacher_invalid: '老師已停用或不屬於本園',
   class_code_duplicate: '班級代號重複',
+  class_name_duplicate: '班級名稱重複',
   target_grade_invalid: '班級年級已停用',
   student_source_classroom_changed: '學生已換班，需重新產生建議',
   student_missing_from_plan: '在籍生不在草稿中，需重新產生建議',
@@ -74,12 +97,31 @@ const GROUP_TITLES: Record<string, string> = {
   graduate_grade_unresolved: '年級設定無法判斷升級',
   assistant_teacher_missing: '班級尚未指派副班導',
   art_teacher_missing: '班級尚未指派美語老師',
+  // 2026-11 第二輪新增
+  graduate_not_graduation_grade: '非畢業年級的學生被標記畢業',
+  exclude_will_graduate: '排除的畢業年級學生仍會自動畢業',
+  teacher_resigning: '老師預定離職，新學年無法帶班',
+  // 可能是系統自動畢業，也可能是手動辦畢業：標題中性
+  retain_already_graduated: '留級生已畢業，留級不會生效',
+}
+
+// 已發布時同一個 code 的意思不同（後端 published 訊息也不同）：換班要先撤回才能重新
+// 產生；發布後才入園、超過容量改成提醒「套用時／後」會怎樣
+const PUBLISHED_GROUP_TITLES: Record<string, string> = {
+  student_source_classroom_changed: '學生已換班，需先撤回發布再重新產生建議',
+  student_missing_from_plan: '發布後才入園的學生，套用時會留在原班',
+  capacity_exceeded: '套用後班級人數會超過容量',
 }
 
 interface IssueGroup {
   key: string
   title: string
   items: IssueOut[]
+}
+
+function titleFor(code: string): string | undefined {
+  if (props.context === 'published' && PUBLISHED_GROUP_TITLES[code]) return PUBLISHED_GROUP_TITLES[code]
+  return GROUP_TITLES[code]
 }
 
 function groupByCode(items: IssueOut[], severity: string): IssueGroup[] {
@@ -94,7 +136,7 @@ function groupByCode(items: IssueOut[], severity: string): IssueGroup[] {
   }
   return order.map(code => ({
     key: `${severity}:${code}`,
-    title: GROUP_TITLES[code] ?? map.get(code)![0].message,
+    title: titleFor(code) ?? map.get(code)![0].message,
     items: map.get(code)!,
   }))
 }
@@ -103,7 +145,7 @@ const visibleSeverities = computed(() =>
   [
     {
       key: 'blocking',
-      label: '阻擋發布',
+      label: props.context === 'published' ? '阻擋套用' : '阻擋發布',
       total: props.issues.blocking.length,
       groups: groupByCode(props.issues.blocking, 'blocking'),
     },
@@ -259,5 +301,13 @@ function toggleGroup(key: string): void {
 
 .issue-item:hover {
   filter: brightness(0.95);
+}
+
+.issue-item--static {
+  cursor: default;
+}
+
+.issue-item--static:hover {
+  filter: none;
 }
 </style>
