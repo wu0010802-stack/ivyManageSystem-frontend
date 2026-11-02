@@ -121,8 +121,15 @@ export function mapEmployeeError(error: unknown) {
 export function validationFieldMessage(error: unknown, field: string): string | null {
     const detail = (error as { response?: { status?: number; data?: { detail?: unknown } } } | null)
         ?.response?.data?.detail
-    if (!Array.isArray(detail)) return null
-    for (const item of detail) {
+    // 後端 utils/exception_handlers 把 422 包成 { detail: { errors: [...], code: 'VALIDATION_ERROR', message } }；
+    // 裸 FastAPI（未註冊 handler）才是 { detail: [...] }。兩種都認。
+    const items = Array.isArray(detail)
+        ? detail
+        : (detail && typeof detail === 'object' && Array.isArray((detail as { errors?: unknown }).errors))
+            ? (detail as { errors: unknown[] }).errors
+            : null
+    if (!items) return null
+    for (const item of items) {
         const loc = (item as { loc?: unknown })?.loc
         const msg = (item as { msg?: unknown })?.msg
         if (Array.isArray(loc) && loc[loc.length - 1] === field && typeof msg === 'string' && msg.trim()) {
