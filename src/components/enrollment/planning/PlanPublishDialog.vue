@@ -11,12 +11,12 @@
       />
       <template v-else-if="preview">
         <!-- 發布最大的焦慮是「之後會發生什麼」：先講何時套用、會改到什麼、能不能反悔 -->
-        <section class="apply-notice" :class="{ 'apply-notice--immediate': appliesImmediately }">
+        <section class="apply-notice" :class="{ 'apply-notice--danger': appliesImmediately || !schedulerEnabled }">
           <p class="apply-when">{{ applyWhenText }}</p>
           <ul class="consequence-list">
             <li>{{ assignedText }}</li>
             <li v-if="preview.totals.graduating_count">{{ preview.totals.graduating_count }} 位大班生轉為畢業</li>
-            <li v-if="preview.totals.excluded_count">{{ preview.totals.excluded_count }} 位排除的學生不會被搬動，仍留在原班</li>
+            <li v-if="preview.totals.excluded_count">{{ excludedText }}</li>
             <li>各班老師的帶班資料同步更新</li>
             <!-- 依 apply.py：帶班異動老師的未封存薪資＋（有學生搬動時）全園之後節慶發放月的
                  未封存薪資會標 needs_recalc；系統不會自動重算 -->
@@ -88,6 +88,8 @@
             <li v-for="s in preview.excluded" :key="s.id">
               {{ s.name }}<span class="source">{{ s.source_classroom_name ?? '' }}</span>
               <span v-if="s.exclude_reason" class="reason">（{{ s.exclude_reason }}）</span>
+              <!-- 排除只是不搬班：畢業年級的學生畢業日照樣會被自動畢業 -->
+              <span v-if="willGraduateIds.has(s.id)" class="will-graduate">將於 {{ graduationText }} 畢業</span>
             </li>
           </ul>
         </div>
@@ -143,6 +145,10 @@ const props = withDefaults(defineProps<{
   movedCount?: number
   /** 已分班的留級生人數 */
   retainCount?: number
+  /** 排程是否啟用；關閉時發布後不會自動套用 */
+  schedulerEnabled?: boolean
+  /** 畢業日（'YYYY-MM-DD'）：排除的畢業年級學生仍會在這天被畢業 */
+  graduationDate?: string | null
 }>(), {
   submitting: false,
   applyDate: null,
@@ -150,6 +156,8 @@ const props = withDefaults(defineProps<{
   targetSchoolYear: null,
   movedCount: 0,
   retainCount: 0,
+  schedulerEnabled: true,
+  graduationDate: null,
 })
 
 const emit = defineEmits<{
@@ -183,6 +191,9 @@ const canPublish = computed(
 )
 
 const applyWhenText = computed(() => {
+  if (!props.schedulerEnabled) {
+    return '自動套用未啟用：發布後不會自動套用到正式班級，請聯絡系統管理員開啟。'
+  }
   const year = props.targetSchoolYear
   if (props.appliesImmediately) {
     return `現在已是 ${year} 學年上學期，發布後約一小時內就會套用到現行班級。`
@@ -201,6 +212,20 @@ const assignedText = computed(() => {
   if (props.retainCount > 0) parts.push(`${props.retainCount} 位留級`)
   return parts.length ? `${base}（其中 ${parts.join('、')}）` : base
 })
+// 被排除但仍會在畢業日被自動畢業的學生（後端 exclude_will_graduate 提醒帶 student_id）
+const willGraduateIds = computed(() => new Set(
+  (preview.value?.issues.warnings ?? [])
+    .filter(issue => issue.code === 'exclude_will_graduate' && issue.student_id != null)
+    .map(issue => issue.student_id as number),
+))
+const graduationText = computed(() => formatPlanDate(props.graduationDate) || '畢業日')
+const excludedText = computed(() => {
+  const total = preview.value?.totals.excluded_count ?? 0
+  const graduating = (preview.value?.excluded ?? []).filter(s => willGraduateIds.value.has(s.id)).length
+  if (graduating === 0) return `${total} 位排除的學生不會被搬動，仍留在原班`
+  return `${total} 位排除的學生不會被搬動；其中 ${graduating} 位畢業年級的學生仍會在 ${graduationText.value} 畢業`
+})
+
 const undoText = computed(() =>
   props.appliesImmediately
     ? '套用後無法復原；還沒準備好就先不要發布。'
@@ -254,7 +279,7 @@ defineExpose({ reload, preview, blockingCount, canPublish })
   font-size: var(--text-sm);
 }
 
-.apply-notice--immediate {
+.apply-notice--danger {
   border-color: var(--color-danger);
   background: var(--color-danger-soft);
 }
@@ -375,5 +400,14 @@ defineExpose({ reload, preview, blockingCount, canPublish })
 .reason {
   color: var(--text-secondary);
   font-size: var(--text-xs);
+}
+
+.will-graduate {
+  margin-left: var(--space-1);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-warning-darker);
+  background: var(--color-warning-soft);
 }
 </style>

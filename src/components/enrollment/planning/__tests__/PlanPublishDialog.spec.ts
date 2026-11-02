@@ -203,6 +203,39 @@ describe('PlanPublishDialog', () => {
     expect(w.find('.graduating-list').classes()).toContain('summary-list--grid')
   })
 
+  it('自動套用未啟用：說明區改 error 樣式，明講發布後不會套用，不寫「系統會自動套用」', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { applyDate: '2027-08-01', targetSchoolYear: 116, schedulerEnabled: false })
+    await flushPromises()
+    const notice = w.find('.apply-notice')
+    expect(notice.classes()).toContain('apply-notice--danger')
+    expect(notice.find('.apply-when').text()).toContain('自動套用未啟用')
+    expect(notice.find('.apply-when').text()).toContain('不會自動套用')
+    expect(w.text()).not.toContain('系統會在 2027/08/01')
+  })
+
+  it('排除的大班生仍會畢業：後果清單與排除名單都寫出畢業日，不再說「仍留在原班」了事', async () => {
+    mockGetPreview.mockResolvedValue({
+      data: previewFixture({
+        excluded: [
+          { id: 5, name: '小英', source_classroom_name: '中班B', exclude_reason: '轉學' },
+          { id: 6, name: '大寶', source_classroom_name: '天堂鳥', exclude_reason: '待家長確認' },
+        ],
+        totals: { assigned_count: 3, class_count: 1, excluded_count: 2, graduating_count: 1 },
+        issues: {
+          blocking: [],
+          warnings: [{ code: 'exclude_will_graduate', message: '學生「大寶」被排除，但仍會在 2027/07/31 自動畢業', plan_class_id: null, student_id: 6 }],
+        },
+      }),
+    })
+    const w = mountDialog(5, { applyDate: '2027-08-01', targetSchoolYear: 116, graduationDate: '2027-07-31' })
+    await flushPromises()
+    expect(w.find('.consequence-list').text()).toContain('2 位排除的學生不會被搬動；其中 1 位畢業年級的學生仍會在 2027/07/31 畢業')
+    const rows = w.findAll('.excluded-list li')
+    expect(rows[0].find('.will-graduate').exists()).toBe(false)
+    expect(rows[1].find('.will-graduate').text()).toBe('將於 2027/07/31 畢業')
+  })
+
   it('預覽載入失敗：顯示錯誤訊息，不顯示「尚無預覽資料」', async () => {
     mockGetPreview.mockRejectedValue({ displayMessage: '伺服器忙碌，請稍後再試' })
     const w = mountDialog()
