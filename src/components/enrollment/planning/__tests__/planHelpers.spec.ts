@@ -2,11 +2,15 @@ import { describe, it, expect } from 'vitest'
 import {
   buildAssignGroups,
   buildTeacherOptions,
+  buildUndoGroups,
   countCarryOverSlots,
   countPlanMoves,
   countRetainAtGraduationRisk,
+  filterRosterMatches,
   formatPlanDate,
+  groupClassesByGrade,
   isMovedIn,
+  orderedRosterEntries,
   TEACHER_FIELD_BY_ROLE,
 } from '../planHelpers'
 import type { Schema } from '@/api/_generated/typed'
@@ -158,5 +162,95 @@ describe('buildAssignGroups', () => {
   it('留級生只能分到現在年級的班', () => {
     const groups = buildAssignGroups(stu({ disposition: 'retain', current_grade_name: '中班' }), classes)
     expect(groups).toEqual([{ gradeName: '中班', options: [{ id: 2, label: '百合' }, { id: 3, label: '櫻花' }] }])
+  })
+})
+
+describe('groupClassesByGrade', () => {
+  it('依年級首次出現順序分組（容忍後端非連續排序）', () => {
+    const groups = groupClassesByGrade([
+      cls({ id: 1, target_grade_id: 3, grade_name: '大班' }),
+      cls({ id: 2, target_grade_id: 2, grade_name: '中班' }),
+      cls({ id: 3, target_grade_id: 3, grade_name: '大班' }),
+      cls({ id: 4, target_grade_id: 9, grade_name: null }),
+    ])
+    expect(groups.map(g => [g.gradeName, g.classes.map(c => c.id)])).toEqual([
+      ['大班', [1, 3]], ['中班', [2]], ['未分年級', [4]],
+    ])
+  })
+})
+
+describe('orderedRosterEntries', () => {
+  it('只取表格裡的學生（已分班的升班／留級），依表格欄序再依名單順序', () => {
+    const classes = [
+      cls({ id: 1, target_grade_id: 3, grade_name: '大班' }),
+      cls({ id: 2, target_grade_id: 2, grade_name: '中班' }),
+      cls({ id: 3, target_grade_id: 3, grade_name: '大班' }),
+    ]
+    const students = [
+      stu({ id: 10, plan_class_id: 2 }),
+      stu({ id: 11, plan_class_id: 3 }),
+      stu({ id: 12, plan_class_id: 1, disposition: 'retain' }),
+      stu({ id: 13, plan_class_id: null }),
+      stu({ id: 14, disposition: 'graduate' }),
+      stu({ id: 15, plan_class_id: 1 }),
+    ]
+    expect(orderedRosterEntries(students, classes).map(e => e.student.id)).toEqual([12, 15, 11, 10])
+    expect(orderedRosterEntries(students, classes)[0].cls.id).toBe(1)
+  })
+})
+
+describe('filterRosterMatches', () => {
+  const rose = cls({ id: 1, source_name: '向日葵' })
+  const entries = [
+    { student: stu({ id: 1, name: '張宸瑋', student_id: 'S101', source_classroom_name: '向日葵' }), cls: rose },
+    { student: stu({ id: 2, name: '張宸瑋', student_id: 'S102', source_classroom_name: '牡丹', manually_adjusted: true }), cls: rose },
+    { student: stu({ id: 3, name: '李子晴', student_id: 'S103', source_classroom_name: '向日葵', disposition: 'retain' }), cls: rose },
+    { student: stu({ id: 4, name: '王可昕', student_id: null, source_classroom_name: '向日葵' }), cls: rose },
+  ]
+
+  it('沒有搜尋也沒有篩選時回 null（不高亮、不淡化）', () => {
+    expect(filterRosterMatches(entries, '  ', new Set())).toBeNull()
+  })
+
+  it('姓名部分比對：同名學生都算', () => {
+    expect(filterRosterMatches(entries, '宸瑋', new Set())).toEqual([1, 2])
+  })
+
+  it('學號比對不分大小寫', () => {
+    expect(filterRosterMatches(entries, 's103', new Set())).toEqual([3])
+  })
+
+  it('篩選 chip：換班只算一般升班從別班換來的；多個 chip 取聯集', () => {
+    expect(filterRosterMatches(entries, '', new Set(['moved']))).toEqual([2])
+    expect(filterRosterMatches(entries, '', new Set(['retain']))).toEqual([3])
+    expect(filterRosterMatches(entries, '', new Set(['manual']))).toEqual([2])
+    expect(filterRosterMatches(entries, '', new Set(['retain', 'manual']))).toEqual([2, 3])
+  })
+
+  it('搜尋與篩選同時有：兩者都要符合', () => {
+    expect(filterRosterMatches(entries, '張', new Set(['manual']))).toEqual([2])
+  })
+})
+
+describe('buildUndoGroups', () => {
+  it('原本有班的依原班與留級與否分組；畢業、排除還原原處置；原本待分班不提供復原', () => {
+    const result = buildUndoGroups([
+      stu({ id: 1, plan_class_id: 10 }),
+      stu({ id: 2, plan_class_id: 10 }),
+      stu({ id: 3, plan_class_id: 10, disposition: 'retain' }),
+      stu({ id: 4, plan_class_id: 11 }),
+      stu({ id: 5, disposition: 'graduate' }),
+      stu({ id: 6, disposition: 'exclude', exclude_reason: '轉學' }),
+      stu({ id: 7, plan_class_id: null }),
+    ])
+    expect(result.groups).toEqual([
+      { op: 'assign', planClassId: 10, studentIds: [1, 2], excludeReason: null },
+      { op: 'retain', planClassId: 10, studentIds: [3], excludeReason: null },
+      { op: 'assign', planClassId: 11, studentIds: [4], excludeReason: null },
+      { op: 'graduate', planClassId: null, studentIds: [5], excludeReason: null },
+      { op: 'exclude', planClassId: null, studentIds: [6], excludeReason: '轉學' },
+    ])
+    expect(result.restorableIds).toEqual([1, 2, 3, 4, 5, 6])
+    expect(result.unassignedCount).toBe(1)
   })
 })

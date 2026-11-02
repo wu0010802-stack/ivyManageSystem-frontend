@@ -1,5 +1,6 @@
 // 新學年預編班工作台共用的純函式（無狀態、可單元測試）。
 import type { Schema } from '@/api/_generated/typed'
+import type { BulkOp } from '@/composables/useYearPlanWorkspace'
 import { formatTeacherOptionLabel, type TeacherOptionLike } from '@/utils/teacherOption'
 
 type PlanClass = Schema<'PlanClassOut'>
@@ -183,3 +184,141 @@ export function buildAssignGroups(student: PlanStudent, classes: PlanClass[]): A
   }
   return groups
 }
+
+// ── 編班表顯示順序、搜尋與篩選 ──
+
+export interface GradeGroup {
+  gradeId: number
+  gradeName: string
+  classes: PlanClass[]
+}
+
+/** 依 target_grade_id 首次出現順序分組（容忍後端非嚴格連續排序）；表格欄序以此為準。 */
+export function groupClassesByGrade(classes: PlanClass[]): GradeGroup[] {
+  const order: number[] = []
+  const map = new Map<number, PlanClass[]>()
+  for (const c of classes) {
+    if (!map.has(c.target_grade_id)) {
+      map.set(c.target_grade_id, [])
+      order.push(c.target_grade_id)
+    }
+    map.get(c.target_grade_id)!.push(c)
+  }
+  return order.map(gid => ({
+    gradeId: gid,
+    gradeName: map.get(gid)![0].grade_name ?? '未分年級',
+    classes: map.get(gid)!,
+  }))
+}
+
+export interface RosterEntry {
+  student: PlanStudent
+  cls: PlanClass
+}
+
+/** 編班表裡的學生（已分班的升班／留級），依表格欄序、同班依名單順序。搜尋的「下一位」照這個順序走。 */
+export function orderedRosterEntries(students: PlanStudent[], classes: PlanClass[]): RosterEntry[] {
+  const byClass = new Map<number, PlanStudent[]>()
+  for (const s of students) {
+    if ((s.disposition !== 'promote' && s.disposition !== 'retain') || s.plan_class_id == null) continue
+    if (!byClass.has(s.plan_class_id)) byClass.set(s.plan_class_id, [])
+    byClass.get(s.plan_class_id)!.push(s)
+  }
+  const entries: RosterEntry[] = []
+  for (const group of groupClassesByGrade(classes)) {
+    for (const cls of group.classes) {
+      for (const student of byClass.get(cls.id) ?? []) entries.push({ student, cls })
+    }
+  }
+  return entries
+}
+
+/** 編班表篩選 chip：換班（一般升班從別班換來）／留級／手動調整過。 */
+export type RosterChip = 'moved' | 'retain' | 'manual'
+
+function matchesChip(entry: RosterEntry, chip: RosterChip): boolean {
+  const { student, cls } = entry
+  if (chip === 'retain') return student.disposition === 'retain'
+  if (chip === 'manual') return student.manually_adjusted
+  return student.disposition === 'promote' && isMovedIn(student, cls)
+}
+
+/**
+ * 搜尋（姓名部分比對、學號不分大小寫）＋篩選 chip（聯集），兩者同時有時都要符合。
+ * 回傳符合者的 id（依表格順序）；沒有任何條件時回 null＝不高亮也不淡化。
+ */
+export function filterRosterMatches(
+  entries: RosterEntry[],
+  query: string,
+  chips: ReadonlySet<RosterChip>,
+): number[] | null {
+  const q = query.trim().toLowerCase()
+  if (!q && chips.size === 0) return null
+  return entries
+    .filter((entry) => {
+      const { student } = entry
+      if (q) {
+        const hit = student.name.toLowerCase().includes(q)
+          || (student.student_id ?? '').toLowerCase().includes(q)
+        if (!hit) return false
+      }
+      if (chips.size > 0 && ![...chips].some(chip => matchesChip(entry, chip))) return false
+      return true
+    })
+    .map(entry => entry.student.id)
+}
+
+// ── 搬班復原 ──
+
+export interface UndoGroup {
+  op: BulkOp
+  planClassId: number | null
+  studentIds: number[]
+  excludeReason: string | null
+}
+
+/**
+ * 依搬動前的學生快照，組出把他們放回原處的批次操作：
+ * - 原本在某班：依原班＋是否留級分組，送 assign／retain 回原班；
+ * - 原本畢業／排除：送 graduate／exclude（排除依原因分組）；
+ * - 原本待分班：後端沒有「放回待分班」的操作，不提供復原，只計數讓文案說明。
+ * 復原後這些學生會被標為手動調整過（後端行為）。
+ */
+export function buildUndoGroups(before: PlanStudent[]): {
+  groups: UndoGroup[]
+  restorableIds: number[]
+  unassignedCount: number
+} {
+  const groups: UndoGroup[] = []
+  const byKey = new Map<string, UndoGroup>()
+  const restorableIds: number[] = []
+  let unassignedCount = 0
+  const push = (key: string, make: () => UndoGroup, studentId: number): void => {
+    let group = byKey.get(key)
+    if (!group) {
+      group = make()
+      byKey.set(key, group)
+      groups.push(group)
+    }
+    group.studentIds.push(studentId)
+    restorableIds.push(studentId)
+  }
+  for (const s of before) {
+    if (s.disposition === 'graduate') {
+      push('graduate', () => ({ op: 'graduate', planClassId: null, studentIds: [], excludeReason: null }), s.id)
+    } else if (s.disposition === 'exclude') {
+      const reason = s.exclude_reason ?? null
+      push(`exclude:${reason ?? ''}`, () => ({ op: 'exclude', planClassId: null, studentIds: [], excludeReason: reason }), s.id)
+    } else if (s.plan_class_id != null) {
+      const op: BulkOp = s.disposition === 'retain' ? 'retain' : 'assign'
+      const classId = s.plan_class_id
+      push(`${op}:${classId}`, () => ({ op, planClassId: classId, studentIds: [], excludeReason: null }), s.id)
+    } else {
+      unassignedCount += 1
+    }
+  }
+  return { groups, restorableIds, unassignedCount }
+}
+
+/** 編班表檢視：學生名單（班名、人數＋學生列）／老師指派（班名、人數＋三列老師）。 */
+export type RosterViewMode = 'students' | 'teachers'
