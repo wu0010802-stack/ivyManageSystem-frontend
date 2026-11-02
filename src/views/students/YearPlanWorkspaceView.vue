@@ -12,13 +12,17 @@
       <!-- mutation in-flight（loading=true）期間鎖住所有互動觸發點：雙擊會以同一
            base_version 送第二發、撞 409 誤導使用者「有別人在動草稿」 -->
       <template #actions>
+      <!-- 窄幕（含平板）只留「問題與名單」「發布」「更多」：五顆鈕不換行會把標題擠成逐字直排。
+           寬幕「重新產生建議」放最左，不緊貼「發布」（一個會重算全園分班，一個是主要動作） -->
       <div v-if="status" class="actions">
         <el-badge v-if="isNarrow && plan" :value="totalIssueCount" :hidden="totalIssueCount === 0" class="drawer-badge">
           <el-button class="btn-side-drawer" @click="drawerVisible = true">問題與名單</el-button>
         </el-badge>
         <template v-if="canWrite && state === 'draft'">
-          <el-button class="btn-add-class" :disabled="loading" @click="onAddClassClick">新增班級</el-button>
-          <el-button class="btn-regenerate" :disabled="loading" @click="onRegenerateClick">重新產生建議</el-button>
+          <template v-if="!isNarrow">
+            <el-button class="btn-regenerate" :disabled="loading" @click="onRegenerateClick">重新產生建議</el-button>
+            <el-button class="btn-add-class" :disabled="loading" @click="onAddClassClick">新增班級</el-button>
+          </template>
           <el-button type="primary" class="btn-publish" :disabled="!canPublish || loading" @click="onPublishClick">發布</el-button>
         </template>
         <el-button
@@ -33,7 +37,15 @@
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="cancel-plan" class="dropdown-item-danger">作廢草稿</el-dropdown-item>
+              <template v-if="isNarrow && state === 'draft'">
+                <el-dropdown-item command="add-class">新增班級</el-dropdown-item>
+                <el-dropdown-item command="regenerate">重新產生建議</el-dropdown-item>
+              </template>
+              <el-dropdown-item
+                command="cancel-plan"
+                class="dropdown-item-danger"
+                :divided="isNarrow && state === 'draft'"
+              >{{ state === 'published' ? '作廢計畫' : '作廢草稿' }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -101,10 +113,11 @@
     />
     <div class="workspace-body">
       <div class="main-column">
-        <!-- 固定高度的批次列位置：未勾選時是操作提示，勾選後換成批次列，表格不會被往下推 -->
-        <div v-if="editable && canWrite && plan.classes.length" class="batch-slot">
+        <!-- 固定高度的批次列位置：未勾選時是圖例（＋可編輯時的操作提示），勾選後換成批次列，
+             表格不會被往下推 -->
+        <div v-if="plan.classes.length" class="batch-slot">
           <PlanBatchToolbar
-            v-if="selectedStudentIds.length > 0"
+            v-if="editable && canWrite && selectedStudentIds.length > 0"
             class="batch-toolbar"
             :selected-count="selectedStudentIds.length"
             :plan-classes="planClassOptions"
@@ -113,9 +126,16 @@
             @bulk-op="onBulkOp"
             @clear-selection="clearSelection"
           />
-          <p v-else class="batch-hint">
-            勾選學生（或勾班名旁的方框選整班）後，可以批次移班、標記留級或排除；也可以直接把學生拖到其他班。
-          </p>
+          <div v-else class="batch-idle">
+            <ul class="roster-legend" aria-label="圖例">
+              <li class="legend-item"><span class="legend-dot" aria-hidden="true"></span>手動調整過</li>
+              <li class="legend-item"><span class="legend-moved">原</span>＝原班</li>
+              <li class="legend-item"><span class="legend-retain">留</span>＝留級</li>
+            </ul>
+            <p v-if="editable && canWrite" class="batch-hint">
+              勾選學生（或班名旁的方框選整班）可批次調整，也能直接拖到其他班
+            </p>
+          </div>
         </div>
         <div v-if="!plan.classes.length" class="zero-class-state">
           <p class="empty-title">草稿裡還沒有任何班級</p>
@@ -145,21 +165,34 @@
         :plan="plan"
         :editable="editable && canWrite"
         :selected-ids="selectedSet"
+        :busy="loading"
         @set-selected="onSetSelected"
         @locate-issue="onLocateIssue"
+        @assign-student="onAssignStudent"
       />
     </div>
     </template>
 
-    <el-drawer v-model="drawerVisible" size="360px" :with-header="false">
+    <!-- 不加遮罩且可穿透：在抽屜勾選畢業／排除名單後，左側表格上方的批次列仍可直接操作 -->
+    <el-drawer
+      v-model="drawerVisible"
+      class="side-drawer"
+      title="問題與名單"
+      size="360px"
+      :modal="false"
+      modal-penetrable
+      :lock-scroll="false"
+    >
       <PlanSidePanel
         v-if="isNarrow && plan"
         :ref="setSidePanelRef"
         :plan="plan"
         :editable="editable && canWrite"
         :selected-ids="selectedSet"
+        :busy="loading"
         @set-selected="onSetSelected"
         @locate-issue="onLocateIssue"
+        @assign-student="onAssignStudent"
       />
     </el-drawer>
 
@@ -190,6 +223,8 @@
       :apply-date="status?.apply_date ?? null"
       :applies-immediately="appliesImmediately"
       :target-school-year="status?.target_school_year ?? null"
+      :moved-count="planMoves.moved"
+      :retain-count="planMoves.retained"
       @confirm="onPublishConfirm"
     />
 
@@ -221,6 +256,8 @@ import PlanNextSteps from '@/components/enrollment/planning/PlanNextSteps.vue'
 import {
   TEACHER_FIELD_BY_ROLE,
   countCarryOverSlots,
+  countPlanMoves,
+  countRetainAtGraduationRisk,
   type TeacherField,
 } from '@/components/enrollment/planning/planHelpers'
 import { getTeacherOptions } from '@/api/classrooms'
@@ -381,10 +418,36 @@ async function onPublishConfirm(): Promise<void> {
   }
 }
 
+// 撤回發布的後果要講清楚：沒在套用日前重新發布就不會套用；留在畢業年級的留級生只有
+// 「已發布」時才會被畢業排程豁免，撤回後拖過畢業日會被自動畢業（P1-2）。
+// 畢業日要等後端 StatusOut 補欄位（FE-C），這裡先用套用日與「畢業日前」的說法。
+const planMoves = computed(() =>
+  plan.value ? countPlanMoves(plan.value.students, plan.value.classes) : { moved: 0, retained: 0 },
+)
+const retainAtGraduationRisk = computed(() =>
+  plan.value ? countRetainAtGraduationRisk(plan.value.students) : 0,
+)
+
+function unpublishMessage(): string {
+  const parts = ['撤回後草稿恢復為可編輯。']
+  if (appliesImmediately.value) {
+    parts.push('改完要重新發布，才會套用到現行班級。')
+  } else {
+    const date = formatPlanDate(status.value?.apply_date)
+    parts.push(date
+      ? `請在 ${date} 前重新發布，否則新學年不會自動套用。`
+      : '請在新學年開學前重新發布，否則不會自動套用。')
+  }
+  if (retainAtGraduationRisk.value > 0) {
+    parts.push(`目前有 ${retainAtGraduationRisk.value} 位大班留級生：畢業日前沒有重新發布，他們會被自動畢業。`)
+  }
+  return parts.join('')
+}
+
 async function onUnpublishClick(): Promise<void> {
   try {
     await ElMessageBox.confirm(
-      '確定要撤回發布嗎？撤回後草稿將恢復為可編輯狀態。',
+      unpublishMessage(),
       '撤回發布',
       { type: 'warning', confirmButtonText: '確定撤回', cancelButtonText: '取消' },
     )
@@ -395,20 +458,40 @@ async function onUnpublishClick(): Promise<void> {
   if (ok) notifySaved('已撤回發布')
 }
 
-// ── 作廢草稿：published 狀態語氣加重（等同取消已發布的確認），draft 則單純告知
-// 草稿將移除、可重新產生。作廢後 plan 從系統消失，cancelPlan() 內建 reload() 會讓
-// state 回到 none，本層不需要額外處理空狀態渲染。
+// ── 作廢：確認鈕一律 danger。已發布的計畫作廢＝同時取消發布、無法復原，多一道
+// 「輸入作廢」確認；草稿則單純告知草稿將移除、可重新產生。作廢後 plan 從系統消失，
+// cancelPlan() 內建 reload() 會讓 state 回到 none，本層不需要額外處理空狀態渲染。
+const CANCEL_CONFIRM_WORD = '作廢'
+
 async function onCancelPlanClick(): Promise<void> {
   const lost = '所有手動調整（搬班、留級、排除）與老師指派都會一起消失'
-  const message = state.value === 'published'
-    ? `此計畫已發布，作廢會同時取消發布。這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。此操作無法復原，確定要作廢嗎？`
-    : `作廢後這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。確定要作廢嗎？`
   try {
-    await ElMessageBox.confirm(message, '作廢草稿', {
-      type: 'warning',
-      confirmButtonText: '確定作廢',
-      cancelButtonText: '取消',
-    })
+    if (state.value === 'published') {
+      await ElMessageBox.prompt(
+        `此計畫已發布，作廢會同時取消發布。這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。此操作無法復原，請輸入「${CANCEL_CONFIRM_WORD}」確認。`,
+        '作廢已發布的計畫',
+        {
+          type: 'warning',
+          confirmButtonText: '確定作廢',
+          cancelButtonText: '取消',
+          confirmButtonClass: 'el-button--danger',
+          inputPlaceholder: '請輸入確認文字',
+          inputValidator: (value: string) =>
+            (value || '').trim() === CANCEL_CONFIRM_WORD || `請輸入「${CANCEL_CONFIRM_WORD}」`,
+        },
+      )
+    } else {
+      await ElMessageBox.confirm(
+        `作廢後這份新學年草稿會被移除，${lost}；之後可重新產生，但要從頭調整。確定要作廢嗎？`,
+        '作廢草稿',
+        {
+          type: 'warning',
+          confirmButtonText: '確定作廢',
+          cancelButtonText: '取消',
+          confirmButtonClass: 'el-button--danger',
+        },
+      )
+    }
   } catch {
     return // 使用者取消
   }
@@ -416,9 +499,11 @@ async function onCancelPlanClick(): Promise<void> {
   if (ok) notifySaved('已作廢，草稿已移除')
 }
 
-// 「更多」下拉目前僅一個作廢項目，command 用字串比對保留未來擴充空間。
+// 「更多」：作廢；窄幕時另收「新增班級」「重新產生建議」。
 function onMoreCommand(command: string): void {
   if (command === 'cancel-plan') void onCancelPlanClick()
+  else if (command === 'add-class') onAddClassClick()
+  else if (command === 'regenerate') onRegenerateClick()
 }
 
 // ── 班級編輯（新增／編輯／刪除）──
@@ -599,6 +684,14 @@ async function onBulkOp(payload: {
   }
 }
 
+// 側欄待分班列就地「分到…」（一般生 assign、留級生 retain，由側欄依 disposition 決定）
+async function onAssignStudent(payload: { studentId: number; op: BulkOp; planClassId: number }): Promise<void> {
+  const ok = await bulkUpdateStudents(payload.op, [payload.studentId], payload.planClassId)
+  if (!ok) return
+  const target = plan.value?.classes.find(c => c.id === payload.planClassId)
+  notifySaved(target ? `已分到 ${target.target_name}` : '已更新學生分派')
+}
+
 async function onLocateIssue(issue: Schema<'IssueOut'>): Promise<void> {
   if (issue.student_id != null) {
     // 已分班 → 表格定位；否則 fallback 側欄待分班清單。窄幕抽屜模式下表格在抽屜
@@ -608,7 +701,13 @@ async function onLocateIssue(issue: Schema<'IssueOut'>): Promise<void> {
       if (isNarrow.value) drawerVisible.value = false
       return
     }
-    await sidePanelRef.value?.locateStudent(issue.student_id)
+    // 待分班、畢業／排除名單（側欄會先展開名單）；都不在＝學生不在草稿裡
+    const found = await sidePanelRef.value?.locateStudent(issue.student_id)
+    if (!found) {
+      ElMessage.info(editable.value
+        ? '這位學生不在草稿裡：按「重新產生建議」才會加進草稿'
+        : '這位學生不在這份計畫裡')
+    }
     return
   }
   if (issue.plan_class_id != null) {
@@ -678,23 +777,25 @@ async function onStudentMove(payload: {
   color: var(--neutral-700);
 }
 
+/* 草稿是正常工作狀態，不用警示色（還差什麼交給進度列）；文字取深一階確保 AA 對比 */
 .status-badge.status-draft {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-hover);
+  background: var(--color-info-soft);
+  color: var(--color-info-darker);
 }
 
 .status-badge.status-published {
-  background: var(--color-info-soft);
-  color: var(--color-info-hover);
+  background: var(--color-primary-lighter);
+  color: var(--el-color-primary-dark-2);
 }
 
 .status-badge.status-applied {
   background: var(--color-success-soft);
-  color: var(--color-success-hover);
+  color: var(--color-success-darker);
 }
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
@@ -796,6 +897,52 @@ async function onStudentMove(payload: {
 .batch-toolbar {
   flex: 1 1 auto;
   padding: 0;
+}
+
+.batch-idle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-5);
+}
+
+.roster-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* 與 PlanRosterTable 的 .manual-mark／.student-moved／.disposition-tag-retain 同樣子 */
+.legend-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-info);
+}
+
+.legend-moved {
+  font-size: var(--text-xs);
+  color: var(--color-info-hover);
+}
+
+.legend-retain {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-warning-hover);
+  background: var(--color-warning-soft);
 }
 
 .batch-hint {

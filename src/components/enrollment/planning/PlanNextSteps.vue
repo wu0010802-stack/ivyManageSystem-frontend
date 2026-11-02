@@ -206,6 +206,14 @@ function stepClass(state: StepState): Record<string, boolean> {
   color: var(--text-secondary);
 }
 
+/* 觸控（平板）：「查看」「沿用原班老師」點擊區至少 32px */
+@media (pointer: coarse) {
+  .btn-show-unassigned,
+  .btn-carry-over {
+    min-height: 32px;
+  }
+}
+
 @media (--to-md) {
   .plan-next-steps {
     flex-direction: column;
