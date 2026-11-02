@@ -29,6 +29,8 @@ describe('describeShiftHours（批次登錄名單上的排班原因）', () => {
     [{ source: 'daily_off', shift_end: null }, '當天排休'],
     [{ source: 'employee', shift_end: '17:30' }, '員工工時 17:30 下班'],
     [{ source: 'default', shift_end: '17:00' }, '未排班（17:00 下班）'],
+    // 後端 non_workday：國定假日、週末未排當日班、時薪制未排當日班 → 整場（2026-11-02 審查 P1）
+    [{ source: 'non_workday', shift_end: null }, '當天非上班日'],
   ])('%o → %s', (item, expected) => {
     expect(describeShiftHours(item)).toBe(expected)
   })
