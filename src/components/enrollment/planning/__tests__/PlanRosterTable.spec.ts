@@ -70,10 +70,15 @@ function buildPlan(overrides: Partial<PlanDetail> = {}): PlanDetail {
   }
 }
 
-function mountTable(overrides: Partial<PlanDetail> = {}, editable = true, selectedIds = new Set<number>()) {
+function mountTable(
+  overrides: Partial<PlanDetail> = {},
+  editable = true,
+  selectedIds = new Set<number>(),
+  extraProps: Record<string, unknown> = {},
+) {
   return mount(PlanRosterTable, {
     global: { plugins: [ElementPlus] },
-    props: { plan: buildPlan(overrides), editable, selectedIds },
+    props: { plan: buildPlan(overrides), editable, selectedIds, ...extraProps },
   })
 }
 
@@ -107,7 +112,7 @@ describe('PlanRosterTable', () => {
   })
 
   it('三師格改用 PlanTeacherCell：未指派顯示「未指派」與原班老師（不再藏在 hover）', () => {
-    const w = mountTable()
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers' })
     const cells = w.findAllComponents(PlanTeacherCell)
     expect(cells.length).toBe(6) // 2 班 × 3 職務
     const smallA = cells.filter(c => c.props('className') === '小班A')
@@ -120,7 +125,7 @@ describe('PlanRosterTable', () => {
   })
 
   it('老師格 change → emit teacher-change(班 id, 欄位, 老師 id)', () => {
-    const w = mountTable()
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers' })
     const cell = w.findAllComponents(PlanTeacherCell)
       .find(c => c.props('className') === '中班A' && c.props('role') === 'assistant')!
     cell.vm.$emit('change', null)
@@ -135,6 +140,7 @@ describe('PlanRosterTable', () => {
         editable: true,
         selectedIds: new Set<number>(),
         teacherOptions: [{ id: 200, name: '李老師' }, { id: 300, name: '新老師' }],
+        viewMode: 'teachers',
       },
     })
     const cell = w.findAllComponents(PlanTeacherCell)
@@ -328,5 +334,76 @@ describe('PlanRosterTable', () => {
     expect(vm.locateClass(10)).toBe(true)
     expect(w.find('.class-name-cell[data-plan-class-id="10"]').classes()).toContain('flash-highlight')
     expect(vm.locateClass(999)).toBe(false)
+  })
+  // ── FE-B：檢視切換、搜尋高亮、批次閃爍、max-height ──
+
+  it('預設「學生名單」：只有班名、人數與學生列，不顯示三列老師', () => {
+    const w = mountTable()
+    expect(w.findAllComponents(PlanTeacherCell).length).toBe(0)
+    expect(w.findAll('.teacher-label').length).toBe(0)
+    expect(w.findAll('.student-entry').length).toBe(3)
+    expect(w.findAll('.capacity-badge').length).toBe(2)
+  })
+
+  it('「老師指派」：只有班名、人數與三列老師，不顯示學生列', () => {
+    const w = mountTable({}, true, new Set<number>(), { viewMode: 'teachers' })
+    expect(w.findAllComponents(PlanTeacherCell).length).toBe(6)
+    expect(w.findAll('.student-entry').length).toBe(0)
+    expect(w.findAll('.capacity-badge').length).toBe(2)
+  })
+
+  it('學生 title 顯示學號與原班', () => {
+    const w = mountTable()
+    expect(w.find('.student-entry[data-student-id="1"]').attributes('title')).toBe('S001・原 幼幼A')
+  })
+
+  it('matchIds：符合者高亮、其餘淡化，目前這位另外標示；null 時都不標', async () => {
+    const w = mountTable({}, true, new Set<number>(), { matchIds: new Set([1, 3]), currentMatchId: 3 })
+    const entry = (id: number) => w.find(`.student-entry[data-student-id="${id}"]`)
+    expect(entry(1).classes()).toContain('is-match')
+    expect(entry(3).classes()).toContain('is-current-match')
+    expect(entry(2).classes()).toContain('is-dimmed')
+    expect(entry(1).classes()).not.toContain('is-dimmed')
+
+    await w.setProps({ matchIds: null, currentMatchId: null })
+    expect(w.findAll('.student-entry.is-match, .student-entry.is-dimmed, .student-entry.is-current-match').length).toBe(0)
+  })
+
+  it('flashStudents：被搬的學生都閃一下，並捲到第一位', () => {
+    const w = mountTable()
+    const scrollSpy = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>
+    scrollSpy.mockClear()
+    const vm = w.vm as unknown as { flashStudents: (ids: number[]) => boolean }
+    expect(vm.flashStudents([3, 1])).toBe(true)
+    expect(w.find('.student-entry[data-student-id="1"]').classes()).toContain('flash-highlight')
+    expect(w.find('.student-entry[data-student-id="3"]').classes()).toContain('flash-highlight')
+    // 依表格順序的第一位（小明 id=1）
+    expect(scrollSpy.mock.contexts[0]).toBe(w.find('.student-entry[data-student-id="1"]').element)
+    expect(vm.flashStudents([999])).toBe(false)
+  })
+
+  it('max-height 依表格實際位置算到視窗底（不再用寫死的留白）', async () => {
+    const original = Element.prototype.getBoundingClientRect
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.classList?.contains('plan-roster-scroll')) return { top: 300, bottom: 900, left: 0, right: 0, width: 0, height: 600, x: 0, y: 300, toJSON: () => ({}) } as DOMRect
+      return original.call(this)
+    }
+    const innerHeight = window.innerHeight
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+    try {
+      const w = mount(PlanRosterTable, {
+        attachTo: document.body,
+        global: { plugins: [ElementPlus] },
+        props: { plan: buildPlan(), editable: true, selectedIds: new Set<number>() },
+      })
+      await w.vm.$nextTick()
+      const el = w.find('.plan-roster-scroll').element as HTMLElement
+      const gap = parseFloat(getComputedStyle(el).getPropertyValue('--yp-bottom-gap')) || 0
+      expect(el.style.maxHeight).toBe(`${900 - 300 - gap}px`)
+      w.unmount()
+    } finally {
+      Element.prototype.getBoundingClientRect = original
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: innerHeight })
+    }
   })
 })

@@ -1,6 +1,7 @@
 <template>
   <div ref="rootEl" class="plan-roster-wrapper">
-    <div class="plan-roster-scroll">
+    <!-- max-height 由 remeasure() 依表格實際位置算到視窗底（不再用寫死的留白） -->
+    <div ref="scrollEl" class="plan-roster-scroll" :style="scrollMaxHeight ? { maxHeight: scrollMaxHeight } : undefined">
       <table class="plan-roster-table">
         <thead>
           <!-- 年級跨欄 -->
@@ -62,8 +63,9 @@
               </span>
             </td>
           </tr>
-          <!-- 三師：格內直接選老師（取代逐班開對話框）；未指派時直接顯示原班老師 -->
-          <tr v-for="role in TEACHER_ROLES" :key="role">
+          <!-- 三師：只在「老師指派」檢視出現。格內直接選老師（取代逐班開對話框）；
+               未指派時直接顯示原班老師 -->
+          <tr v-for="role in visibleTeacherRoles" :key="role">
             <td class="row-label teacher-label">{{ TEACHER_ROLE_LABELS[role] }}</td>
             <td
               v-for="cls in flatClasses"
@@ -86,7 +88,7 @@
           </tr>
         </thead>
 
-        <tbody>
+        <tbody v-if="viewMode === 'students'">
           <tr v-for="rowIdx in maxRowCount" :key="rowIdx">
             <td class="seq-cell">{{ rowIdx }}</td>
             <td
@@ -105,7 +107,13 @@
                   class="student-entry"
                   :data-student-id="student.id"
                   :draggable="editable"
-                  :class="{ dragging: draggingStudent?.id === student.id }"
+                  :title="studentTitle(student)"
+                  :class="{
+                    dragging: draggingStudent?.id === student.id,
+                    'is-match': matchIds?.has(student.id) ?? false,
+                    'is-current-match': currentMatchId === student.id,
+                    'is-dimmed': matchIds != null && !matchIds.has(student.id),
+                  }"
                   @dragstart="onDragStart(student, $event)"
                   @dragend="onDragEnd"
                 >
@@ -163,7 +171,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { Edit } from '@element-plus/icons-vue'
 import type { Schema } from '@/api/_generated/typed'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
@@ -174,8 +182,12 @@ import {
   TEACHER_ROLES,
   TEACHER_ROLE_LABELS,
   buildTeacherOptions,
+  groupClassesByGrade,
   isMovedIn,
+  orderedRosterEntries,
   sourceTeacherName,
+  type GradeGroup,
+  type RosterViewMode,
   type TeacherCellOption,
   type TeacherField,
   type TeacherRole,
@@ -193,9 +205,18 @@ const props = withDefaults(defineProps<{
   teacherOptions?: TeacherOptionLike[]
   /** 父層 mutation in-flight：鎖住老師格觸發點 */
   busy?: boolean
+  /** 學生名單（班名、人數＋學生列）／老師指派（班名、人數＋三列老師） */
+  viewMode?: RosterViewMode
+  /** 搜尋／篩選符合的學生：符合者高亮、其餘淡化；null＝沒有在搜尋 */
+  matchIds?: ReadonlySet<number> | null
+  /** 搜尋目前停在哪一位（Enter 換下一位） */
+  currentMatchId?: number | null
 }>(), {
   teacherOptions: () => [],
   busy: false,
+  viewMode: 'students',
+  matchIds: null,
+  currentMatchId: null,
 })
 
 const emit = defineEmits<{
@@ -208,28 +229,9 @@ const emit = defineEmits<{
 }>()
 
 // ── 年級分組（依 target_grade_id 首次出現順序分組，容忍後端非嚴格連續排序）──
-interface GradeGroup {
-  gradeId: number
-  gradeName: string
-  classes: PlanClass[]
-}
+const gradeGroups = computed<GradeGroup[]>(() => groupClassesByGrade(props.plan.classes))
 
-const gradeGroups = computed<GradeGroup[]>(() => {
-  const order: number[] = []
-  const map = new Map<number, PlanClass[]>()
-  for (const cls of props.plan.classes) {
-    if (!map.has(cls.target_grade_id)) {
-      map.set(cls.target_grade_id, [])
-      order.push(cls.target_grade_id)
-    }
-    map.get(cls.target_grade_id)!.push(cls)
-  }
-  return order.map(gid => ({
-    gradeId: gid,
-    gradeName: map.get(gid)![0].grade_name ?? '未分年級',
-    classes: map.get(gid)!,
-  }))
-})
+const visibleTeacherRoles = computed(() => (props.viewMode === 'teachers' ? TEACHER_ROLES : []))
 
 const flatClasses = computed<PlanClass[]>(() => gradeGroups.value.flatMap(g => g.classes))
 
@@ -317,6 +319,14 @@ const maxRowCount = computed(() => {
 function cellStudents(classId: number, rowIdx: number): PlanStudent[] {
   const student = studentsByClass.value.get(classId)?.[rowIdx - 1]
   return student ? [student] : []
+}
+
+/** hover 提示：學號＋原班（同名學生靠這個分辨） */
+function studentTitle(student: PlanStudent): string {
+  const parts: string[] = []
+  if (student.student_id) parts.push(student.student_id)
+  if (student.source_classroom_name) parts.push(`原 ${student.source_classroom_name}`)
+  return parts.join('・')
 }
 
 function dispositionTag(student: PlanStudent): string | null {
@@ -408,6 +418,34 @@ function locateStudent(studentId: number): boolean {
   return true
 }
 
+/** 只捲動不閃爍（搜尋「下一位」用；目前這位的樣式由 currentMatchId 負責）。 */
+function scrollToStudent(studentId: number): boolean {
+  const el = rootEl.value?.querySelector(`.student-entry[data-student-id="${studentId}"]`)
+  if (!el) return false
+  el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
+  return true
+}
+
+/**
+ * 搬班／復原成功後：被動到的學生都閃一下，並捲到表格順序（欄序）的第一位。
+ * DOM 是逐列排的，不能直接取 querySelectorAll 的第一個。
+ */
+function flashStudents(studentIds: number[]): boolean {
+  const wanted = new Set(studentIds)
+  const els = new Map<number, Element>()
+  for (const el of rootEl.value?.querySelectorAll('.student-entry') ?? []) {
+    const id = Number((el as HTMLElement).dataset.studentId)
+    if (wanted.has(id)) els.set(id, el)
+  }
+  if (els.size === 0) return false
+  const first = orderedRosterEntries(props.plan.students, props.plan.classes)
+    .map(entry => els.get(entry.student.id))
+    .find((el): el is Element => el != null)
+  first?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
+  for (const el of els.values()) _flash(el)
+  return true
+}
+
 function locateClass(planClassId: number): boolean {
   const el = rootEl.value?.querySelector(`.class-name-cell[data-plan-class-id="${planClassId}"]`)
   if (!el) return false
@@ -416,13 +454,61 @@ function locateClass(planClassId: number): boolean {
   return true
 }
 
-defineExpose({ locateStudent, locateClass })
+// ── 捲動區高度：表格頂端到捲動容器（後台為 el-main）底部，扣掉 --yp-bottom-gap
+// （＝內容區底部留白 token）。表格上方的進度列、橫幅、批次列高度會變，父層在
+// 這些變動後呼叫 remeasure()；本元件自己處理掛載、視窗縮放與檢視切換。
+const scrollEl = ref<HTMLElement | null>(null)
+const scrollMaxHeight = ref<string | null>(null)
+// 視窗很矮時至少保留幾列可捲，不讓表格被壓扁
+const MIN_SCROLL_HEIGHT_PX = 320
+
+function findScrollParent(el: HTMLElement): HTMLElement | null {
+  let node = el.parentElement
+  while (node && node !== document.body && node !== document.documentElement) {
+    const { overflowY } = getComputedStyle(node)
+    if (overflowY === 'auto' || overflowY === 'scroll') return node
+    node = node.parentElement
+  }
+  return null
+}
+
+function remeasure(): void {
+  const el = scrollEl.value
+  if (!el) return
+  const parent = findScrollParent(el)
+  // 換算成「頁面捲到最上面時」的位置，頁面已往下捲也算得對
+  const staticTop = el.getBoundingClientRect().top + (parent ? parent.scrollTop : window.scrollY)
+  const bottom = parent ? parent.getBoundingClientRect().bottom : window.innerHeight
+  const gap = parseFloat(getComputedStyle(el).getPropertyValue('--yp-bottom-gap')) || 0
+  scrollMaxHeight.value = `${Math.max(MIN_SCROLL_HEIGHT_PX, Math.round(bottom - staticTop - gap))}px`
+}
+
+function onWindowResize(): void {
+  remeasure()
+}
+
+onMounted(() => {
+  remeasure()
+  window.addEventListener('resize', onWindowResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onWindowResize)
+})
+
+watch(() => props.viewMode, () => {
+  void nextTick(remeasure)
+})
+
+defineExpose({ locateStudent, locateClass, flashStudents, scrollToStudent, remeasure })
 </script>
 
 <style scoped>
 .plan-roster-wrapper {
   --yp-h-grade: 34px;
   --yp-h-name: 50px;
+  /* 表格底到視窗底的留白＝後台內容區底部 padding（.content-container 用 --space-8） */
+  --yp-bottom-gap: var(--space-8);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
@@ -430,9 +516,8 @@ defineExpose({ locateStudent, locateClass })
 .plan-roster-scroll {
   overflow: auto;
   /* 垂直捲動收在表格容器內，sticky 表頭對此容器生效（el-main 為外層捲動根，
-     對 window/el-main sticky 需算 header 高度，內部容器最穩） */
-  /* 上方還有頁首、進度列與批次列；扣掉它們讓頁面本身不再出現第二條捲軸 */
-  max-height: max(320px, calc(100vh - 330px));
+     對 window/el-main sticky 需算 header 高度，內部容器最穩）。max-height 由
+     remeasure() 寫在 inline style；--yp-bottom-gap 由外層繼承 */
 }
 
 .plan-roster-table {
@@ -578,6 +663,22 @@ defineExpose({ locateStudent, locateClass })
 }
 
 .student-entry.dragging {
+  opacity: 0.4;
+}
+
+/* 搜尋／篩選：符合者底色標出、目前這位加外框；不符合的淡化但仍可操作 */
+.student-entry.is-match {
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-soft);
+}
+
+.student-entry.is-current-match {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--color-warning);
+  outline-offset: -1px;
+}
+
+.student-entry.is-dimmed {
   opacity: 0.4;
 }
 
