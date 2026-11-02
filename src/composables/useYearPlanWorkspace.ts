@@ -45,8 +45,42 @@ export type BulkOp = 'assign' | 'retain' | 'graduate' | 'exclude' | 'reset'
 
 interface AxiosLikeError {
   response?: { status?: number; data?: { detail?: unknown } }
-  errorDetail?: { code?: string; current_version?: number } | null
+  errorDetail?: {
+    code?: string
+    current_version?: number
+    message?: string
+    /** teacher_not_found 等單欄錯誤：哪個欄位 */
+    field?: string
+    /** 422 envelope：Pydantic errors（loc＝['body', 欄位]） */
+    errors?: Array<{ loc?: unknown[]; msg?: string }>
+  } | null
   displayMessage?: string | null
+}
+
+// 422 驗證錯誤的欄位說法（後端 Pydantic msg 是英文）；沒列到的退回後端 msg
+const FIELD_VALIDATION_MESSAGES: Record<string, string> = {
+  capacity: '容量要在 1 到 200 之間',
+  target_name: '班名不可空白',
+}
+
+/**
+ * 從後端錯誤取出欄位錯誤（key＝欄位名）：422 envelope 的 errors[].loc、或單欄錯誤
+ * 的 detail.field（例 teacher_not_found）。沒有欄位資訊回空物件。
+ */
+export function extractFieldErrors(e: unknown): Record<string, string> {
+  if (!e || typeof e !== 'object') return {}
+  const detail = (e as AxiosLikeError).errorDetail
+  if (!detail) return {}
+  const out: Record<string, string> = {}
+  if (typeof detail.field === 'string' && detail.field) {
+    out[detail.field] = detail.message || '這個欄位有誤'
+  }
+  for (const item of detail.errors ?? []) {
+    const loc = item.loc ?? []
+    const field = loc[0] === 'body' && typeof loc[1] === 'string' ? loc[1] : null
+    if (field && !out[field]) out[field] = FIELD_VALIDATION_MESSAGES[field] ?? item.msg ?? '這個欄位有誤'
+  }
+  return out
 }
 
 function _is409WithCode(e: unknown, code: string): e is AxiosLikeError {
@@ -87,6 +121,8 @@ export function useYearPlanWorkspace() {
   const error = ref<string | null>(null)
   // 寫入成功但隨後 reload 失敗：畫面停在寫入前（version 落後），需使用者手動重新載入
   const staleAfterWrite = ref(false)
+  // 上一次寫入的欄位錯誤（班級編輯 dialog、老師格據此把錯誤放在欄位上）；每次寫入前清空
+  const fieldErrors = ref<Record<string, string>>({})
   let loadSeq = 0
   // 409 version_conflict 專用旗標：與一般 error 分開，讓 UI 可以顯示「請重新載入」
   // 而非一般錯誤 toast（此草稿已被其他操作異動，樂觀鎖版本不符）。
@@ -120,6 +156,7 @@ export function useYearPlanWorkspace() {
     }
     const err = e as { displayMessage?: string | null }
     error.value = (err && typeof err === 'object' && err.displayMessage) || fallback
+    fieldErrors.value = extractFieldErrors(e)
     notify(e, context, fallback)
     return false
   }
@@ -201,6 +238,7 @@ export function useYearPlanWorkspace() {
     _begin()
     error.value = null
     versionConflict.value = false
+    fieldErrors.value = {}
     try {
       let result: T
       try {
@@ -408,6 +446,7 @@ export function useYearPlanWorkspace() {
     error,
     versionConflict,
     staleAfterWrite,
+    fieldErrors,
     version,
     state,
     load,

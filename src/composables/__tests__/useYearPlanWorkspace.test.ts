@@ -535,4 +535,35 @@ describe('useYearPlanWorkspace', () => {
     expect(ws.plan.value?.version).toBe(3)
     expect(ws.loading.value).toBe(false)
   })
+  it('欄位錯誤：422 驗證錯誤依 loc 對到欄位（容量給好懂的說法），下一次寫入前清掉', async () => {
+    const ws = await loadedWorkspace()
+    mockUpdateClass.mockRejectedValueOnce({
+      response: { status: 422 },
+      errorDetail: {
+        code: 'VALIDATION_ERROR',
+        message: '輸入資料格式有誤',
+        errors: [{ loc: ['body', 'capacity'], msg: 'Input should be greater than or equal to 1', type: 'greater_than_equal' }],
+      },
+      displayMessage: '輸入資料格式有誤',
+    })
+    expect(await ws.updateClass(10, { capacity: 0 })).toBe(false)
+    expect(ws.fieldErrors.value).toEqual({ capacity: '容量要在 1 到 200 之間' })
+
+    mockUpdateClass.mockResolvedValueOnce({ data: { id: 10, version: 2 } })
+    mockStatus.mockResolvedValue(statusDraft(5, 2))
+    mockDetail.mockResolvedValue(detailDraft(5, 2))
+    await ws.updateClass(10, { capacity: 20 })
+    expect(ws.fieldErrors.value).toEqual({})
+  })
+
+  it('欄位錯誤：teacher_not_found 依 detail.field 對到老師欄位，訊息用後端的（帶姓名）', async () => {
+    const ws = await loadedWorkspace()
+    mockUpdateClass.mockRejectedValueOnce({
+      response: { status: 400 },
+      errorDetail: { code: 'teacher_not_found', message: '班導「吳老師」已停用，請改選其他老師', field: 'head_teacher_id' },
+      displayMessage: '班導「吳老師」已停用，請改選其他老師',
+    })
+    await ws.updateClass(10, { head_teacher_id: 57 })
+    expect(ws.fieldErrors.value).toEqual({ head_teacher_id: '班導「吳老師」已停用，請改選其他老師' })
+  })
 })
