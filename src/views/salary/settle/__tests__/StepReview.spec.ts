@@ -37,23 +37,24 @@ const rec = (over: Partial<SettlementRecord> = {}): SettlementRecord => ({
     employee_id: 'E1',
     employee_name: '測試',
     version: 3,
+    base_salary: 36000,
     gross_salary: 40000,
     net_salary: 36000,
     is_finalized: false,
     breakdown_stale: false,
     manual_overrides: [],
+    employee_is_active: true,
+    employee_resign_date: null,
     ...over,
 })
 
-const makeSettlement = (records: SettlementRecord[], prev: SettlementRecord[] = []) => {
+const makeSettlement = (records: SettlementRecord[]) => {
     const recordsRef = ref(records)
-    const prevRef = ref(prev)
     const thresholds = ref({ ...DEFAULT_THRESHOLDS })
-    const anomalies = computed(() => detectAnomalies(recordsRef.value, prevRef.value, thresholds.value))
+    const anomalies = computed(() => detectAnomalies(recordsRef.value, thresholds.value, { year: 2026, month: 5 }))
     return {
         records: recordsRef,
-        prevRecords: prevRef,
-        prevLoadFailed: ref(false),
+        currentLoadFailed: ref(false),
         loading: ref(false),
         anomalies,
         sortedRecords: computed(() => sortByAttention(recordsRef.value, anomalies.value)),
@@ -65,7 +66,8 @@ const makeSettlement = (records: SettlementRecord[], prev: SettlementRecord[] = 
 const STUBS = {
     'el-card': { template: '<div><slot /></div>' },
     'el-table': true,
-    'el-switch': true,
+    'el-table-column': true,
+    'router-link': { template: '<a><slot /></a>' },
     'el-popover': true,
     'el-form': true,
     'el-form-item': true,
@@ -81,38 +83,114 @@ const STUBS = {
 
 interface ReviewVm {
     visibleRecords: SettlementRecord[]
-    onlyAttention: boolean
+    activeFilter: string
+    chips: { key: string; label: string; count: number }[]
 }
 
-describe('StepReview', () => {
-    it('異常列排前；「只看需注意」過濾正確', async () => {
-        const prev = [
-            rec({ employee_id: 'A', net_salary: 30000 }),
-            rec({ employee_id: 'B', net_salary: 30000 }),
-        ]
-        const cur = [
-            rec({ employee_id: 'A', net_salary: 30000 }), // 正常
-            rec({ employee_id: 'B', net_salary: 40000 }), // 差 33% → 異常
-        ]
-        const settlement = makeSettlement(cur, prev)
-        const wrapper = mount(StepReview, {
-            global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
-        })
-        const vm = wrapper.vm as unknown as ReviewVm
-        expect(vm.visibleRecords.map((r) => r.employee_id)).toEqual(['B', 'A'])
-
-        vm.onlyAttention = true
-        await flushPromises()
-        expect(vm.visibleRecords.map((r) => r.employee_id)).toEqual(['B'])
+const mountReview = (settlement: ReturnType<typeof makeSettlement>, extraStubs = {}) =>
+    mount(StepReview, {
+        global: {
+            stubs: { ...STUBS, ...extraStubs },
+            provide: { settlement, settleQuery: { year: 2026, month: 5 } },
+        },
     })
 
-    it('需注意筆數摘要正確顯示', () => {
-        const settlement = makeSettlement([rec({ manual_overrides: ['net_salary'] })])
-        const wrapper = mount(StepReview, {
-            global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
-        })
-        expect(wrapper.text()).toContain('需注意')
-        expect(wrapper.text()).toContain('共 1 人')
+const headBreakdown = (total: number, target: number | null) => ({
+    enrollment: {
+        snapshot_date: '2026-05-31',
+        total,
+        classroom_id: 1,
+        classroom_name: '蒲公英',
+        grade_name: '大班',
+        multi_head: false,
+        target,
+        overtime_target: 33,
+    },
+    assistant: null,
+})
+
+describe('StepReview', () => {
+    it('需注意列依嚴重度排前；chip 篩選正確', async () => {
+        const settlement = makeSettlement([
+            rec({ employee_id: 'A' }), // 正常
+            rec({ employee_id: 'M', manual_overrides: ['festival_bonus'] }), // 手動調整
+            rec({ employee_id: 'I', employee_is_active: false }), // 停用仍在名冊
+        ])
+        const vm = mountReview(settlement).vm as unknown as ReviewVm
+        expect(vm.visibleRecords.map((r) => r.employee_id)).toEqual(['I', 'M', 'A'])
+
+        vm.activeFilter = 'attention'
+        await flushPromises()
+        expect(vm.visibleRecords.map((r) => r.employee_id)).toEqual(['I', 'M'])
+
+        vm.activeFilter = 'inactive'
+        await flushPromises()
+        expect(vm.visibleRecords.map((r) => r.employee_id)).toEqual(['I'])
+    })
+
+    it('chip 只列有人的需注意類型，計數正確', () => {
+        const settlement = makeSettlement([
+            rec({ employee_id: 'A', net_salary: 0, base_transfer_amount: 0 }),
+            rec({ employee_id: 'B', absence_deduction: 16102 }),
+            rec({ employee_id: 'C' }),
+        ])
+        const vm = mountReview(settlement).vm as unknown as ReviewVm
+        expect(vm.chips.map((c) => [c.key, c.count])).toEqual([
+            ['all', 3],
+            ['attention', 2],
+            ['zero', 1],
+            ['heavy', 1],
+        ])
+    })
+
+    it('班級未達目標人數 chip：在籍 < 目標才算，目標未設定不算', async () => {
+        const settlement = makeSettlement([
+            rec({ employee_id: 'A', breakdown: headBreakdown(28, 30) }),
+            rec({ employee_id: 'B', breakdown: headBreakdown(31, 30) }),
+            rec({ employee_id: 'C', breakdown: headBreakdown(20, null) }),
+            rec({ employee_id: 'D' }),
+        ])
+        const vm = mountReview(settlement).vm as unknown as ReviewVm
+        expect(vm.chips.find((c) => c.key === 'below')?.count).toBe(1)
+        vm.activeFilter = 'below'
+        await flushPromises()
+        expect(vm.visibleRecords.map((r) => r.employee_id)).toEqual(['A'])
+    })
+
+    it('底部操作列：需注意摘要點出停用與實領 0', () => {
+        const settlement = makeSettlement([
+            rec({ employee_id: 'I', employee_is_active: false }),
+            rec({ employee_id: 'Z', net_salary: 0, base_transfer_amount: 0 }),
+        ])
+        const text = mountReview(settlement).text()
+        expect(text).toContain('需注意 2 位')
+        expect(text).toContain('1 位已停用仍在名冊')
+        expect(text).toContain('1 位實領 ≤ 0')
+        expect(text).toContain('確認無誤，進入定案')
+    })
+
+    it('沒有需注意 → 操作列顯示「沒有需注意的人」', () => {
+        const text = mountReview(makeSettlement([rec()])).text()
+        expect(text).toContain('沒有需注意的人')
+    })
+
+    it('不再顯示任何與上月比較的文字', () => {
+        const text = mountReview(makeSettlement([rec()])).text()
+        expect(text).not.toContain('上月')
+    })
+
+    it('當月載入失敗 → 顯示載入失敗，不誤導成「尚未計算」', () => {
+        const settlement = makeSettlement([])
+        settlement.currentLoadFailed.value = true
+        const text = mountReview(settlement, { EmptyState: { props: ['title'], template: '<div>{{ title }}<slot /></div>' } }).text()
+        expect(text).toContain('本月薪資載入失敗')
+        expect(text).not.toContain('本月尚未計算薪資')
+    })
+
+    it('本月全為 0 的欄收合提示列出欄名', () => {
+        const text = mountReview(makeSettlement([rec()])).text()
+        expect(text).toContain('本月全為 0、已收合')
+        expect(text).toContain('節慶獎金')
     })
 
     it('點欄位明細：有 record id 開 dialog、無 id 警告（取代舊 SalaryView 測試）', async () => {
@@ -270,26 +348,6 @@ describe('StepReview 姓名搜尋', () => {
     })
 })
 
-describe('StepReview 上月比較 banner', () => {
-    it('prevLoadFailed=true → 顯示載入失敗警示而非「上月無紀錄」', () => {
-        const settlement = makeSettlement([rec()])
-        settlement.prevLoadFailed.value = true
-        const wrapper = mount(StepReview, {
-            global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
-        })
-        expect(wrapper.text()).toContain('上月資料載入失敗')
-        expect(wrapper.text()).not.toContain('上月無紀錄')
-    })
-
-    it('上月真無資料（未失敗）→ 顯示「上月無紀錄」', () => {
-        const settlement = makeSettlement([rec()])
-        const wrapper = mount(StepReview, {
-            global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
-        })
-        expect(wrapper.text()).toContain('上月無紀錄')
-    })
-})
-
 describe('StepReview 批次調整', () => {
   beforeEach(() => { vi.mocked(manualAdjustSalary).mockReset() })
 
@@ -331,5 +389,26 @@ describe('StepReview 批次調整', () => {
     const { ElMessage } = await import('element-plus')
     expect(vi.mocked(ElMessage.warning)).toHaveBeenCalled()
     expect(settlement.refresh).toHaveBeenCalled()
+  })
+})
+
+describe('StepReview 批次調整防連點', () => {
+  it('送出中再次觸發 → 第二次直接略過（不重送）', async () => {
+    let release: (v: unknown) => void = () => {}
+    vi.mocked(manualAdjustSalary).mockReset()
+    vi.mocked(manualAdjustSalary).mockImplementation(
+      () => new Promise((resolve) => { release = resolve }) as never,
+    )
+    const settlement = makeSettlement([rec({ id: 1 })])
+    const vm = mountReview(settlement, { BatchAdjustDialog: true }).vm as unknown as {
+      selectedAdjustRows: SettlementRecord[]
+      applyBatchAdjust: (p: { field: string; value: number; reason: string }) => Promise<void>
+    }
+    vm.selectedAdjustRows = [rec({ id: 1, employee_name: '甲', version: 3 })]
+    const first = vm.applyBatchAdjust({ field: 'overtime_pay', value: 300, reason: '值週津貼補發' })
+    await vm.applyBatchAdjust({ field: 'overtime_pay', value: 300, reason: '值週津貼補發' })
+    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledTimes(1)
+    release({ data: { record: {} } })
+    await first
   })
 })

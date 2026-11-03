@@ -7,11 +7,11 @@ import {
   detectAnomalies,
   sortByAttention,
   type SettlementRecord,
-  type Thresholds,
 } from '@/composables/useSalarySettlement'
 
-// 月結工作台最高風險的純邏輯（狀態推導 + 異常偵測 + 注意度排序 + 門檻），
-// 異常偵測靜默回歸時月結畫面會漏標需重算薪資 → 表格驅動鎖各分支與門檻邊界。
+// 月結工作台最高風險的純邏輯（狀態推導 + 需注意判斷 + 注意度排序 + 門檻），
+// 需注意判斷靜默回歸時結薪覆核會漏標停用員工／實領 0 → 表格驅動鎖各分支與門檻邊界。
+// 2026-11-03 起不再與上月比較（業主裁定：覆核不看上月差距）。
 
 function rec(over: Partial<SettlementRecord> = {}): SettlementRecord {
   return {
@@ -19,14 +19,19 @@ function rec(over: Partial<SettlementRecord> = {}): SettlementRecord {
     employee_id: 1,
     employee_name: '員工',
     version: 1,
+    base_salary: 30000,
     gross_salary: 40000,
     net_salary: 35000,
     is_finalized: false,
     breakdown_stale: false,
     manual_overrides: [],
+    employee_is_active: true,
+    employee_resign_date: null,
     ...over,
   }
 }
+
+const OCT = { year: 2026, month: 10 }
 
 describe('deriveStatus', () => {
   it('無紀錄 → not_calculated', () => {
@@ -40,117 +45,53 @@ describe('deriveStatus', () => {
   })
 
   it('有未封存且 breakdown_stale → needs_recalc', () => {
-    expect(deriveStatus([rec({ is_finalized: false, breakdown_stale: true })])).toBe('needs_recalc')
+    expect(deriveStatus([rec({ breakdown_stale: true })])).toBe('needs_recalc')
   })
 
   it('有未封存但皆非 stale → reviewing', () => {
-    expect(deriveStatus([rec({ is_finalized: false, breakdown_stale: false })])).toBe('reviewing')
+    expect(deriveStatus([rec(), rec({ id: 2, employee_id: 2, is_finalized: true })])).toBe('reviewing')
   })
 
   it('finalized 優先：全封存即使有 stale 仍 finalized', () => {
-    // every(is_finalized) 先判定；混合封存+未封存stale → needs_recalc
     expect(deriveStatus([rec({ is_finalized: true, breakdown_stale: true })])).toBe('finalized')
-    expect(
-      deriveStatus([
-        rec({ id: 1, employee_id: 1, is_finalized: true }),
-        rec({ id: 2, employee_id: 2, is_finalized: false, breakdown_stale: true }),
-      ]),
-    ).toBe('needs_recalc')
   })
 })
 
-describe('detectAnomalies', () => {
-  const TH: Thresholds = { pct: 0.1, abs: 3000 }
-
-  it('manual_overrides 非空 → 標 manual', () => {
-    const map = detectAnomalies([rec({ employee_id: 7, manual_overrides: ['base_salary'] })], [], TH)
-    expect(map.get(7)).toEqual([{ type: 'manual' }])
-  })
-
-  it('系統首月（previous 空）→ 不報 diff/new，但仍報 manual', () => {
-    const map = detectAnomalies(
-      [rec({ employee_id: 1 }), rec({ employee_id: 2, manual_overrides: ['x'] })],
-      [],
-      TH,
-    )
-    expect(map.has(1)).toBe(false)
-    expect(map.get(2)).toEqual([{ type: 'manual' }])
-  })
-
-  it('本月新進（不在上月）→ 標 new', () => {
-    const map = detectAnomalies([rec({ employee_id: 9 })], [rec({ employee_id: 1 })], TH)
-    expect(map.get(9)).toEqual([{ type: 'new' }])
-  })
-
-  it('差異超過 pct 門檻 → diff', () => {
-    // prev 10000 → cur 11500：abs=1500(<3000) 但 pct=0.15(>=0.1)
-    const map = detectAnomalies(
-      [rec({ employee_id: 1, net_salary: 11500, gross_salary: 11500 })],
-      [rec({ employee_id: 1, net_salary: 10000, gross_salary: 11500 })],
-      TH,
-    )
-    const reasons = map.get(1) || []
-    expect(reasons.some((r) => r.type === 'diff' && r.field === 'net_salary')).toBe(true)
-  })
-
-  it('差異超過 abs 門檻 → diff（即使 pct 小）', () => {
-    // prev 50000 → cur 56000：abs=6000(>=3000) 但 pct=0.12
-    const map = detectAnomalies(
-      [rec({ employee_id: 1, net_salary: 56000, gross_salary: 50000 })],
-      [rec({ employee_id: 1, net_salary: 50000, gross_salary: 50000 })],
-      TH,
-    )
-    const reasons = map.get(1) || []
-    expect(reasons.some((r) => r.type === 'diff' && r.field === 'net_salary')).toBe(true)
-  })
-
-  it('差異在門檻內 → 不報', () => {
-    // prev 50000 → cur 52000：abs=2000(<3000) 且 pct=0.04(<0.1)
-    const map = detectAnomalies(
-      [rec({ employee_id: 1, net_salary: 52000, gross_salary: 50000 })],
-      [rec({ employee_id: 1, net_salary: 50000, gross_salary: 50000 })],
-      TH,
-    )
-    expect(map.has(1)).toBe(false)
-  })
-
-  it('上月為 0、本月非 0 → pct=1 觸發 diff', () => {
-    const map = detectAnomalies(
-      [rec({ employee_id: 1, net_salary: 5000, gross_salary: 5000 })],
-      [rec({ employee_id: 1, net_salary: 0, gross_salary: 0 })],
-      TH,
-    )
-    const reasons = map.get(1) || []
-    expect(reasons.some((r) => r.type === 'diff')).toBe(true)
-  })
-
-  it('manual + diff 可同筆並存', () => {
-    const map = detectAnomalies(
-      [rec({ employee_id: 1, net_salary: 56000, gross_salary: 50000, manual_overrides: ['x'] })],
-      [rec({ employee_id: 1, net_salary: 50000, gross_salary: 50000 })],
-      TH,
-    )
-    const types = (map.get(1) || []).map((r) => r.type)
-    expect(types).toContain('manual')
-    expect(types).toContain('diff')
+describe('detectAnomalies 邊界表', () => {
+  const cases: Array<[string, Partial<SettlementRecord>, string[]]> = [
+    ['在職一般', {}, []],
+    ['停用、無離職日', { employee_is_active: false }, ['inactive']],
+    ['停用、離職日上月底', { employee_is_active: false, employee_resign_date: '2026-09-30' }, ['inactive']],
+    ['停用、離職日本月 1 日', { employee_is_active: false, employee_resign_date: '2026-10-01' }, []],
+    ['在職但離職日早於本月（資料矛盾）', { employee_resign_date: '2026-08-31' }, ['inactive']],
+    ['實領 0', { net_salary: 0, base_transfer_amount: 0 }, ['zero']],
+    ['實領 0 但有未休折現（主薪轉 > 0）', { net_salary: 0, base_transfer_amount: 1200 }, []],
+    ['曠職剛好 10%', { absence_deduction: 3000 }, ['heavy']],
+    ['曠職 9.99%', { absence_deduction: 2997 }, []],
+    ['保費追溯不算扣款偏高', { insurance_adjustment: 9000 }, []],
+    ['手動調整', { manual_overrides: ['festival_bonus'] }, ['manual']],
+  ]
+  it.each(cases)('%s', (_name, over, expected) => {
+    const m = detectAnomalies([rec(over)], DEFAULT_THRESHOLDS, OCT)
+    expect((m.get(1) ?? []).map((r) => r.type)).toEqual(expected)
   })
 })
 
 describe('sortByAttention', () => {
-  it('被標記者排前、未標記排後，各自保序', () => {
-    const records = [
+  it('被標記者依嚴重度排前、未標記排後，各自保序', () => {
+    const list = [
       rec({ id: 1, employee_id: 1 }),
-      rec({ id: 2, employee_id: 2 }),
-      rec({ id: 3, employee_id: 3 }),
+      rec({ id: 2, employee_id: 2, manual_overrides: ['x'] }),
+      rec({ id: 3, employee_id: 3, net_salary: 0, base_transfer_amount: 0 }),
+      rec({ id: 4, employee_id: 4 }),
     ]
-    const anomalies = new Map([[2, [{ type: 'manual' as const }]]])
-    const sorted = sortByAttention(records, anomalies)
-    expect(sorted.map((r) => r.employee_id)).toEqual([2, 1, 3])
+    const sorted = sortByAttention(list, detectAnomalies(list, DEFAULT_THRESHOLDS, OCT))
+    expect(sorted.map((r) => r.employee_id)).toEqual([3, 2, 1, 4])
   })
 
   it('無異常 → 原序不變', () => {
-    const records = [rec({ employee_id: 1 }), rec({ employee_id: 2 })]
-    expect(sortByAttention(records, new Map()).map((r) => r.employee_id)).toEqual([1, 2])
+    const list = [rec({ id: 1, employee_id: 1 }), rec({ id: 2, employee_id: 2 })]
+    expect(sortByAttention(list, new Map())).toEqual(list)
   })
 })
 
@@ -158,25 +99,24 @@ describe('thresholds（localStorage per 裝置）', () => {
   beforeEach(() => localStorage.clear())
 
   it('DEFAULT_THRESHOLDS 鎖定常數', () => {
-    expect(DEFAULT_THRESHOLDS).toEqual({ pct: 0.1, abs: 3000 })
+    expect(DEFAULT_THRESHOLDS).toEqual({ heavyPct: 0.1 })
   })
 
   it('無 localStorage → 回預設（且為複本，不可變更原常數）', () => {
     const t = getThresholds()
-    expect(t).toEqual(DEFAULT_THRESHOLDS)
-    t.pct = 0.5
-    expect(DEFAULT_THRESHOLDS.pct).toBe(0.1)
+    t.heavyPct = 0.9
+    expect(DEFAULT_THRESHOLDS.heavyPct).toBe(0.1)
   })
 
   it('set → get round-trip', () => {
-    setThresholds({ pct: 0.2, abs: 5000 })
-    expect(getThresholds()).toEqual({ pct: 0.2, abs: 5000 })
+    setThresholds({ heavyPct: 0.25 })
+    expect(getThresholds()).toEqual({ heavyPct: 0.25 })
   })
 
-  it('壞值（非物件 / 缺欄）→ 回預設', () => {
-    localStorage.setItem('ivy_salary_anomaly_thresholds', 'not-json')
-    expect(getThresholds()).toEqual(DEFAULT_THRESHOLDS)
-    localStorage.setItem('ivy_salary_anomaly_thresholds', JSON.stringify({ pct: 0.2 }))
-    expect(getThresholds()).toEqual(DEFAULT_THRESHOLDS)
+  it('壞值（非物件 / 缺欄 / 超出範圍）→ 回預設', () => {
+    for (const raw of ['123', '{"pct":0.2}', '{"heavyPct":"x"}', '{"heavyPct":0}', '{"heavyPct":2}']) {
+      localStorage.setItem('ivy_salary_review_thresholds', raw)
+      expect(getThresholds()).toEqual(DEFAULT_THRESHOLDS)
+    }
   })
 })

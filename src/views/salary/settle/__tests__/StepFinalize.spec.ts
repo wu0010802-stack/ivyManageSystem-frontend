@@ -53,10 +53,9 @@ const makeSettlement = (records: SettlementRecord[]) => {
     const recordsRef = ref(records)
     return {
         records: recordsRef,
-        prevRecords: ref([] as SettlementRecord[]),
         loading: ref(false),
         status: computed(() => deriveStatus(recordsRef.value)),
-        anomalies: computed(() => detectAnomalies(recordsRef.value, [], DEFAULT_THRESHOLDS)),
+        anomalies: computed(() => detectAnomalies(recordsRef.value, DEFAULT_THRESHOLDS, { year: 2026, month: 5 })),
         finalizedCount: computed(() => recordsRef.value.filter((r) => r.is_finalized).length),
         refresh: vi.fn().mockResolvedValue(undefined),
     }

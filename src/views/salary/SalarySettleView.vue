@@ -13,6 +13,7 @@
         v-for="(s, i) in STEPS"
         :key="s.key"
         :title="s.title"
+        :description="stepDescription(s.key)"
         class="settle-step"
         :class="{ 'settle-step--disabled': calculating }"
         @click="goManual(i)"
@@ -23,6 +24,7 @@
       :is="STEPS[stepIndex].comp"
       :key="`${STEPS[stepIndex].key}:${query.year}-${query.month}`"
       @next="go(stepIndex + 1)"
+      @prev="go(stepIndex - 1)"
     />
   </div>
 </template>
@@ -38,6 +40,7 @@ import StepReview from './settle/StepReview.vue'
 import StepFinalize from './settle/StepFinalize.vue'
 import StepExport from './settle/StepExport.vue'
 import { useSalarySettlement, type SettlementStatus } from '@/composables/useSalarySettlement'
+import { formatTaipeiDateTimeMinute } from '@/utils/format'
 
 interface StepDef { key: string; title: string; comp: Component }
 const STEPS: StepDef[] = [
@@ -102,7 +105,29 @@ const STATUS_LABEL: Record<SettlementStatus, string> = {
     reviewing: '覆核中',
     finalized: '已定案',
 }
-const statusLabel = computed(() => `狀態：${STATUS_LABEL[settlement.status.value]}`)
+// 最後計算時間：records 的 calculated_at 取最新一筆（後端已轉 ISO 字串）
+const lastCalculatedAt = computed(() => {
+    let latest = ''
+    for (const r of settlement.records.value) {
+        const at = typeof r.calculated_at === 'string' ? r.calculated_at : ''
+        if (at > latest) latest = at
+    }
+    return latest ? formatTaipeiDateTimeMinute(latest) : ''
+})
+const statusLabel = computed(() => {
+    const base = `狀態：${STATUS_LABEL[settlement.status.value]}`
+    return lastCalculatedAt.value ? `${base}　·　最後計算 ${lastCalculatedAt.value}` : base
+})
+// 步驟列副標：只放確定的事實（計算時間、需注意人數），不推測前一步是否「通過」
+const stepDescription = (key: string): string => {
+    const count = settlement.records.value.length
+    if (key === 'calculate' && count > 0) return `${count} 人`
+    if (key === 'review' && count > 0) {
+        const n = settlement.anomalies.value.size
+        return n > 0 ? `${n} 位需注意` : '沒有需注意'
+    }
+    return ''
+}
 </script>
 
 <style scoped>

@@ -7,13 +7,30 @@
           {{ enrollment.classroom_name }}</a><span v-if="enrollment.grade_name">（{{ enrollment.grade_name }}）</span>
         · 共 {{ enrollment.total }} 人
       </p>
+      <dl v-if="headHeadcount && headHeadcount.target" class="bd-figures">
+        <div><dt>班級目標人數</dt><dd>{{ headHeadcount.target }}（{{ gapLong(headHeadcount) }}）</dd></div>
+        <div><dt>達成率</dt><dd>{{ ratioText(headHeadcount) }}</dd></div>
+        <div><dt>超額門檻（年終統計）</dt><dd>{{ headHeadcount.overtimeTarget || '—' }}（{{ overtimeText(headHeadcount) }}）</dd></div>
+      </dl>
+      <p v-if="headHeadcount && headHeadcount.multiHead" class="bd-meta">同時是多個班的班導，這裡只顯示第一個班；請到班級管理確認。</p>
       <p class="bd-meta">資料時間：{{ formattedSnapshot }} 月底快照</p>
     </section>
 
     <section v-if="assistantNames.length" class="bd-section">
       <h4>兼任班級</h4>
       <p>{{ assistantNames.join('、') }}</p>
+      <ul v-if="otherHeadcounts.length" class="bd-classes">
+        <li v-for="h in otherHeadcounts" :key="h.classroomName">
+          {{ h.classroomName }}<span v-if="h.gradeName">（{{ h.gradeName }}）</span>
+          · {{ ROLE_LABEL[h.role] }}<span v-if="h.isShared && h.role === 'assistant_teacher'">（共用）</span>
+          · 在籍 {{ h.enrollment }}<template v-if="h.target"> ／ 目標 {{ h.target }}（{{ gapLong(h) }}）</template>
+        </li>
+      </ul>
     </section>
+
+    <p v-if="enrollment || otherHeadcounts.length" class="bd-meta">
+      以上是班級的人數與目標。個人節慶獎金依職務可能不同（主管看全園人數、共用副班導與美師用共用目標、發放月按期間逐月累計、新班有保障比例），金額以「節慶獎金」明細為準。
+    </p>
 
     <section v-if="enrollment" class="bd-section">
       <h4>行內試算</h4>
@@ -53,6 +70,14 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { simulateSalary } from '@/api/salary'
 import { money } from '@/utils/format'
+import {
+  headcountsOf,
+  headcountGap,
+  ratioText,
+  overtimeText,
+  ROLE_LABEL,
+  type ClassHeadcount,
+} from './settle/reviewHeadcount'
 
 const props = defineProps<{
   row: Record<string, unknown>
@@ -67,6 +92,16 @@ const enrollment = computed(() => (props.row?.breakdown as Record<string, unknow
 const assistantNames = computed(
   () => ((props.row?.breakdown as Record<string, unknown>)?.assistant as Record<string, string[]>)?.by_classroom ?? []
 )
+
+const headcounts = computed(() => headcountsOf(props.row ?? {}))
+const headHeadcount = computed(() => headcounts.value.find((h) => h.role === 'head_teacher') ?? null)
+const otherHeadcounts = computed(() => headcounts.value.filter((h) => h.role !== 'head_teacher'))
+const gapLong = (h: ClassHeadcount): string => {
+  const gap = headcountGap(h)
+  if (gap === null) return '目標未設定'
+  if (gap === 0) return '剛好達標'
+  return gap < 0 ? `還差 ${-gap} 人` : `多 ${gap} 人`
+}
 
 const overrideCount = ref<number>(enrollment.value?.total ?? 0)
 const preview = ref<PreviewResult | null>(null)
@@ -128,6 +163,11 @@ const resetPreview = () => {
 .bd-section h4 { margin: 0 0 6px; font-size: 14px; color: var(--el-text-color-primary); }
 .bd-section p { margin: 2px 0; }
 .bd-meta { color: var(--el-text-color-secondary); font-size: 12px; }
+.bd-figures { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5); margin: var(--space-2) 0; }
+.bd-figures div { display: flex; gap: var(--space-2); }
+.bd-figures dt { color: var(--el-text-color-secondary); }
+.bd-figures dd { margin: 0; font-variant-numeric: tabular-nums; }
+.bd-classes { margin: var(--space-1) 0 0; padding-left: var(--space-5); }
 .bd-controls { display: flex; gap: 8px; align-items: center; }
 .bd-preview {
   margin-top: 8px;

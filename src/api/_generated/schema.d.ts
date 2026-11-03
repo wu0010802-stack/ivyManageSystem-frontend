@@ -49020,8 +49020,15 @@ export interface components {
             employee_code: string;
             /** Employee Id */
             employee_id: number;
+            /**
+             * Employee Is Active
+             * @default true
+             */
+            employee_is_active: boolean;
             /** Employee Name */
             employee_name: string;
+            /** Employee Resign Date */
+            employee_resign_date?: string | null;
             /** Extra Allowance */
             extra_allowance: number;
             /** Extra Allowance Label */
@@ -49036,6 +49043,11 @@ export interface components {
             gross_salary: number;
             /** Health Insurance */
             health_insurance: number;
+            /**
+             * Hourly Total
+             * @default 0
+             */
+            hourly_total: number;
             /** Id */
             id: number;
             /**

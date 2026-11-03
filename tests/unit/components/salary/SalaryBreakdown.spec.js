@@ -76,6 +76,34 @@ describe('SalaryBreakdown', () => {
     expect(text).toContain('2026/05/31')
   })
 
+  it('有目標人數時顯示目標、差距、達成率與超額門檻（2026-11-03 班級人數差距）', () => {
+    const row = teacherRow()
+    row.breakdown.enrollment.target = 25
+    row.breakdown.enrollment.overtime_target = 28
+    const text = mountWithEP({ row, year: 2026, month: 5 }).text()
+    expect(text).toContain('班級目標人數')
+    expect(text).toContain('還差 2 人')
+    expect(text).toContain('92%')
+    expect(text).toContain('未超額，還差 5 人')
+  })
+
+  it('舊後端沒帶 target → 不顯示目標區塊', () => {
+    expect(mountWithEP({ row: teacherRow(), year: 2026, month: 5 }).text()).not.toContain('班級目標人數')
+  })
+
+  it('兼任班級帶人數與共用標示', () => {
+    const row = teacherRow()
+    row.breakdown.enrollment = null
+    row.breakdown.assistant = {
+      by_classroom: ['中班 B'],
+      classes: [{ classroom_id: 7, classroom_name: '中班 B', grade_name: '中班', role: 'assistant_teacher', total: 20, target: 24, overtime_target: 27, is_shared_assistant: true }],
+    }
+    const text = mountWithEP({ row, year: 2026, month: 5 }).text()
+    expect(text).toContain('副班導（共用）')
+    expect(text).toContain('在籍 20')
+    expect(text).toContain('目標 24（還差 4 人）')
+  })
+
   it('renders grade_name alongside classroom_name', () => {
     const wrapper = mountWithEP({ row: teacherRow(), year: 2026, month: 5 })
     expect(wrapper.text()).toContain('大班 A')
