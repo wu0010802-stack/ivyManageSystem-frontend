@@ -1,12 +1,13 @@
 <template>
   <div class="salary-breakdown">
     <section v-if="schoolHeadcount" class="bd-section">
-      <h4>全園人數（{{ SCHOOL_BASIS_LABEL[schoolHeadcount.schoolBasis!] }}）</h4>
+      <h4>全園人數（{{ schoolHeadcount.schoolBasis ? SCHOOL_BASIS_LABEL[schoolHeadcount.schoolBasis] : '參考' }}）</h4>
       <p>
         全園在籍 {{ schoolHeadcount.enrollment }} 人 ／ 全園目標 {{ schoolHeadcount.target || '—' }}
         （{{ gapLong(schoolHeadcount) }}，達成 {{ ratioText(schoolHeadcount) }}）
       </p>
-      <p class="bd-meta">節慶獎金依全園比例計算，不看下面的班級人數。資料時間：{{ formatSnapshotDate(schoolHeadcount.snapshotDate) }} 月底快照</p>
+      <p v-if="schoolHeadcount.schoolBasis" class="bd-meta">節慶獎金依全園比例計算，不看下面的班級人數。資料時間：{{ formatSnapshotDate(schoolHeadcount.snapshotDate) }} 月底快照</p>
+      <p v-else class="bd-meta">此員工不帶班，節慶獎金也不依全園比例；全園人數僅供參考。資料時間：{{ formatSnapshotDate(schoolHeadcount.snapshotDate) }} 月底快照</p>
     </section>
 
     <section v-if="enrollment" class="bd-section">
@@ -37,7 +38,7 @@
       </ul>
     </section>
 
-    <p v-if="enrollment || otherHeadcounts.length || schoolHeadcount" class="bd-meta">
+    <p v-if="enrollment || otherHeadcounts.length || schoolHeadcount?.schoolBasis" class="bd-meta">
       以上是班級的人數與目標。個人節慶獎金依職務可能不同（主管看全園人數、共用副班導與美師用共用目標、發放月按期間逐月累計、新班有保障比例），金額以「節慶獎金」明細為準。
     </p>
 

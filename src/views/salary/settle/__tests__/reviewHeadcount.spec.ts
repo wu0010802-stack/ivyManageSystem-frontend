@@ -6,6 +6,7 @@ import {
     gapText,
     ratioText,
     overtimeText,
+    isSchoolReference,
 } from '../reviewHeadcount'
 
 const head = {
@@ -83,6 +84,39 @@ describe('全園人數（主管／辦公室）', () => {
         expect(p.schoolBasis).toBe('supervisor')
         expect(headcountGap(p)).toBe(-8)
         expect(p.overtimeTarget).toBeNull()
+    })
+})
+
+describe('全園人數（不帶班參考）', () => {
+    it('basis=null：不帶班的人也帶全園在籍／目標，標為參考', () => {
+        const row = {
+            breakdown: {
+                enrollment: null,
+                assistant: null,
+                school: { basis: null, total: 152, target: 160, snapshot_date: '2026-10-31' },
+                festival_basis: null,
+            },
+        }
+        const p = primaryHeadcount(row)!
+        expect(p.scope).toBe('school')
+        expect(p.classroomName).toBe('全園')
+        expect(p.schoolBasis).toBeNull()
+        expect(isSchoolReference(p)).toBe(true)
+        expect(p.enrollment).toBe(152)
+        expect(headcountGap(p)).toBe(-8)
+    })
+
+    it('節慶看全園的人（主管等）不是參考；班級列也不是', () => {
+        const sup = primaryHeadcount({
+            breakdown: { school: { basis: 'supervisor', total: 152, target: 160, snapshot_date: '2026-10-31' } },
+        })
+        expect(isSchoolReference(sup)).toBe(false)
+        expect(isSchoolReference(primaryHeadcount({ breakdown: { enrollment: head } }))).toBe(false)
+        expect(isSchoolReference(null)).toBe(false)
+    })
+
+    it('不認得的 basis 字串不採用（防舊／壞資料）', () => {
+        expect(headcountsOf({ breakdown: { school: { basis: 'weird', total: 1, target: 2 } } })).toEqual([])
     })
 })
 

@@ -109,6 +109,19 @@ describe('SalaryBreakdown', () => {
     expect(text).not.toContain('此員工無班級資料')
   })
 
+  it('不帶班（basis=null）：全園人數標參考，不說節慶依全園比例', () => {
+    const row = teacherRow()
+    row.breakdown = { enrollment: null, assistant: null, festival_basis: null, school: { basis: null, total: 152, target: 160, snapshot_date: '2026-10-31' } }
+    const text = mountWithEP({ row, year: 2026, month: 5 }).text()
+    expect(text).toContain('全園人數（參考）')
+    expect(text).toContain('全園在籍 152 人 ／ 全園目標 160')
+    expect(text).toContain('僅供參考')
+    expect(text).not.toContain('節慶獎金依全園比例計算')
+    expect(text).not.toContain('以上是班級的人數與目標')
+    expect(text).not.toContain('undefined')
+    expect(text).not.toContain('此員工無班級資料')
+  })
+
   it('兼任班級帶人數與共用標示', () => {
     const row = teacherRow()
     row.breakdown.enrollment = null

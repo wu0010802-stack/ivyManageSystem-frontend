@@ -325,6 +325,7 @@ import {
     headcountsOf,
     primaryHeadcount,
     headcountGap,
+    isSchoolReference,
     gapText,
     ROLE_LABEL,
     SCHOOL_BASIS_LABEL,
@@ -417,7 +418,9 @@ const typeCount = (t: AnomalyType): number => {
     return n
 }
 const isBelowTarget = (row: SettlementRecord): boolean => {
-    const gap = headcountGap(primaryHeadcount(row))
+    const h = primaryHeadcount(row)
+    if (isSchoolReference(h)) return false // 不帶班者的全園人數只是參考，不影響本人薪資
+    const gap = headcountGap(h)
     return gap !== null && gap < 0
 }
 const chips = computed(() => {
@@ -476,14 +479,17 @@ const classSubLabel = (row: SettlementRecord): string => {
     const list = headcountsOf(row)
     const first = list[0]
     if (!first) return ''
-    if (first.scope === 'school' && first.schoolBasis) return `${SCHOOL_BASIS_LABEL[first.schoolBasis]} · 全園比例`
+    if (first.scope === 'school') {
+        return first.schoolBasis ? `${SCHOOL_BASIS_LABEL[first.schoolBasis]} · 全園比例` : '不帶班 · 參考'
+    }
     const parts = [first.gradeName, first.role === 'head_teacher' ? '' : ROLE_LABEL[first.role]].filter(Boolean)
     const label = parts.join(' · ')
     return list.length > 1 ? `${label} +${list.length - 1} 班` : label
 }
 const gapClass = (row: SettlementRecord): string => {
-    const gap = headcountGap(primaryHeadcount(row))
-    if (gap === null) return 'is-muted'
+    const h = primaryHeadcount(row)
+    const gap = headcountGap(h)
+    if (gap === null || isSchoolReference(h)) return 'is-muted'
     if (gap < 0) return 'gap-below'
     if (gap > 0) return 'gap-above'
     return ''

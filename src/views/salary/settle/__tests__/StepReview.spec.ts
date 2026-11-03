@@ -88,6 +88,8 @@ interface ReviewVm {
     visibleRecords: SettlementRecord[]
     activeFilter: string
     chips: { key: string; label: string; count: number }[]
+    classSubLabel: (row: SettlementRecord) => string
+    gapClass: (row: SettlementRecord) => string
 }
 
 const mountReview = (settlement: ReturnType<typeof makeSettlement>, extraStubs = {}) =>
@@ -158,6 +160,28 @@ describe('StepReview', () => {
         vm.activeFilter = 'below'
         await flushPromises()
         expect(vm.visibleRecords.map((r) => r.employee_id)).toEqual(['A'])
+    })
+
+    it('不帶班的人顯示全園在籍／目標（參考），不算進「人數未達目標」', async () => {
+        const schoolRef = { enrollment: null, assistant: null, festival_basis: null,
+            school: { basis: null, total: 152, target: 160, snapshot_date: '2026-05-31' } }
+        const schoolSup = { enrollment: null, assistant: null, festival_basis: 'supervisor',
+            school: { basis: 'supervisor', total: 152, target: 160, snapshot_date: '2026-05-31' } }
+        const settlement = makeSettlement([
+            rec({ employee_id: 'K', breakdown: schoolRef }),
+            rec({ employee_id: 'S', breakdown: schoolSup }),
+        ])
+        const vm = mountReview(settlement).vm as unknown as ReviewVm
+        const [k, s] = settlement.records.value
+        expect(vm.classSubLabel(k)).toBe('不帶班 · 參考')
+        expect(vm.classSubLabel(s)).toBe('主管 · 全園比例')
+        // 參考列的差距照顯示但不上色（不影響本人薪資）；主管列照常標未達
+        expect(vm.gapClass(k)).toBe('is-muted')
+        expect(vm.gapClass(s)).toBe('gap-below')
+        expect(vm.chips.find((c) => c.key === 'below')?.count).toBe(1)
+        vm.activeFilter = 'below'
+        await flushPromises()
+        expect(vm.visibleRecords.map((r) => r.employee_id)).toEqual(['S'])
     })
 
     it('底部操作列：需注意摘要點出停用與實領 0', () => {
