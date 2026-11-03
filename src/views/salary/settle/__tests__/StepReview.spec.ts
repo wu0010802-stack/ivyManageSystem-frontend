@@ -31,6 +31,7 @@ vi.mock('element-plus', async (importOriginal) => {
 })
 
 import { manualAdjustSalary } from '@/api/salary'
+import { ElMessage } from 'element-plus'
 
 const rec = (over: Partial<SettlementRecord> = {}): SettlementRecord => ({
     id: 1,
@@ -411,4 +412,39 @@ describe('StepReview 批次調整防連點', () => {
     release({ data: { record: {} } })
     await first
   })
+})
+
+
+describe('StepReview 需注意門檻輸入防呆', () => {
+    interface ThresholdVm {
+        heavyPctInput: number | null | undefined
+        applyThresholds: () => void
+    }
+    beforeEach(() => {
+        localStorage.clear()
+        vi.mocked(ElMessage.warning).mockClear()
+        vi.mocked(ElMessage.success).mockClear()
+    })
+
+    it.each([[null], [undefined], [Number.NaN], [0], [-5]])('輸入 %s 按套用：不存、不改門檻、提示', async (bad) => {
+        const settlement = makeSettlement([rec()])
+        const vm = mountReview(settlement).vm as unknown as ThresholdVm
+        const before = settlement.thresholds.value.heavyPct
+        vm.heavyPctInput = bad as number
+        vm.applyThresholds()
+        await flushPromises()
+        expect(settlement.thresholds.value.heavyPct).toBe(before)
+        expect(ElMessage.warning).toHaveBeenCalled()
+        expect(ElMessage.success).not.toHaveBeenCalled()
+        expect(JSON.stringify(Object.entries(localStorage))).not.toContain('"heavyPct":0')
+    })
+
+    it('合法值 20 → 套用為 0.2', async () => {
+        const settlement = makeSettlement([rec()])
+        const vm = mountReview(settlement).vm as unknown as ThresholdVm
+        vm.heavyPctInput = 20
+        vm.applyThresholds()
+        expect(settlement.thresholds.value.heavyPct).toBe(0.2)
+        expect(ElMessage.success).toHaveBeenCalled()
+    })
 })

@@ -520,7 +520,13 @@ const tableMaxHeight = computed(() => Math.max(360, windowHeight.value - 340))
 // ---- 需注意門檻（per 裝置，localStorage） ----
 const heavyPctInput = ref(Math.round(getThresholds().heavyPct * 100))
 const applyThresholds = () => {
-    const t = { heavyPct: heavyPctInput.value / 100 }
+    // 清空 / NaN / <=0 一律擋下：否則會存成 0%，所有扣款被標「偏高」
+    const pct = Number(heavyPctInput.value)
+    if (heavyPctInput.value == null || !Number.isFinite(pct) || pct <= 0) {
+        ElMessage.warning('請輸入大於 0 的百分比')
+        return
+    }
+    const t = { heavyPct: pct / 100 }
     setThresholds(t)
     settlement.thresholds.value = t
     ElMessage.success('需注意門檻已更新（只在這台電腦生效）')
