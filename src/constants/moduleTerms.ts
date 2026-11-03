@@ -39,6 +39,11 @@ export const PAGE_TERMS = {
    * 與 classrooms 的語意重疊已由上方 classrooms 改名為「班級管理」解除。
    */
   students: '學生',
+  /**
+   * /students/rollcall。2026-11-03 自學生儀表板（/students?tab=tasks）抽成側欄獨立頁。
+   * 與 /student-attendance「學生出席紀錄」分工：本頁是當日點名作業，那頁是總覽與月分析。
+   */
+  studentRollcall: '每日點名',
   /** /dismissal-queue。原「接送通知」與 Portal /portal/dismissal-calls 完全同名；admin 側管的是佇列。 */
   dismissalQueue: '接送管理',
   /** /pickup-authorizations。與 dismissalQueue（櫃台放學呼叫）不同語意——本頁管的是

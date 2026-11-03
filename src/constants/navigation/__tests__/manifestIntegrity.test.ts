@@ -287,6 +287,9 @@ const INTENTIONAL_DIVERGENCE = {
     // 2026-09-08 公告分類管理新頁（anncat01）：沿用 ANNOUNCEMENTS_READ 借道
     // sharedViews，不新增權限碼（fixture 凍結於 2026-07-31，此頁更晚才有）。
     '/announcement-categories × ANNOUNCEMENTS_READ',
+    // 2026-11-03 每日點名自學生儀表板抽成側欄獨立頁：沿用 STUDENTS_READ 借道 sharedViews，
+    // 不新增權限碼（fixture 凍結於 2026-07-31，此頁更晚才有）。
+    '/students/rollcall × STUDENTS_READ',
   ],
 }
 

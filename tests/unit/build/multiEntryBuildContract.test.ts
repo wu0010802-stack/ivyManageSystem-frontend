@@ -54,7 +54,7 @@ describe('multi-entry build contract', () => {
     expect(readProjectFile('src/views/EmployeeDetailView.vue')).toContain(
       "import AttendanceSection from '@/components/employee/detail/AttendanceSection.vue'",
     )
-    expect(readProjectFile('src/components/student/workbench/TodayTasksPanel.vue')).toContain(
+    expect(readProjectFile('src/views/StudentRollcallView.vue')).toContain(
       "import AttendanceSection from '@/components/student/academic-affairs/AttendanceSection.vue'",
     )
     expect(readProjectFile('src/components/student/workbench/TodayTasksPanel.vue')).toContain(

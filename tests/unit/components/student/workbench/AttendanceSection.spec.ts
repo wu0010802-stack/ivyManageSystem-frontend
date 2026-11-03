@@ -1,5 +1,5 @@
 /**
- * 學生儀表板「每日點名」區塊（2026-11-02 改為就地編修）：點名表本身與回應競態由
+ * 「每日點名」區塊（2026-11-02 改為就地編修；2026-11-03 起由側欄獨立頁 StudentRollcallView 承載）：點名表本身與回應競態由
  * AttendanceBatchPanel 負責（見 tests/unit/components/AttendanceBatchPanel.context.test.ts），
  * 這裡只驗區塊層的接線：點名日期與班級／學生篩選怎麼傳給點名表、各班進度列、回寫。
  */
@@ -83,5 +83,21 @@ describe('每日點名區塊', () => {
     expect(ctx.filters.classroomId).toBe(5)
     expect(ctx.filters.studentId).toBe(7)
     expect(wrapper.emitted('update:attendanceDate')).toEqual([['2026-09-05']])
+  })
+
+  it('hide-header 傳給卡片：頁面自己有標題時不重複顯示「每日點名」卡片標頭', async () => {
+    vi.mocked(getAttendanceOverview).mockResolvedValue({ data: { classrooms: [] } } as never)
+    const ctx = useAcademicAffairsFilters({ classroomId: 1 })
+    const SectionCardStub = {
+      name: 'SectionCard',
+      props: { title: String, hideHeader: Boolean },
+      template: '<div class="card-stub" :data-hide-header="String(hideHeader)"><slot /></div>',
+    }
+    const mountWith = (props: Record<string, unknown>) => shallowMount(AttendanceSection, {
+      props: { attendanceDate: '2026-09-06', ...props },
+      global: { provide: { [ACADEMIC_AFFAIRS_FILTERS_KEY as symbol]: ctx }, stubs: { SectionCard: SectionCardStub } },
+    })
+    expect(mountWith({ hideHeader: true }).find('.card-stub').attributes('data-hide-header')).toBe('true')
+    expect(mountWith({}).find('.card-stub').attributes('data-hide-header')).toBe('false')
   })
 })

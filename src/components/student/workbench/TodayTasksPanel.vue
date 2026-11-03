@@ -6,13 +6,11 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import { getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
 import { normalizeSchoolYear } from '@/utils/academic'
-import { todayISO } from '@/utils/format'
 import { todayRange, thisWeekRange, thisMonthRange, lastNDaysRange } from '@/utils/dateRange'
 import {
   useAcademicAffairsFilters,
   ACADEMIC_AFFAIRS_FILTERS_KEY,
 } from '@/composables/useAcademicAffairsFilters'
-import AttendanceSection from '@/components/student/academic-affairs/AttendanceSection.vue'
 import LeaveSection from '@/components/student/academic-affairs/LeaveSection.vue'
 import AssessmentSection from '@/components/student/academic-affairs/AssessmentSection.vue'
 import IncidentSection from '@/components/student/academic-affairs/IncidentSection.vue'
@@ -36,7 +34,6 @@ const { filters, setClassroom, setDateRange, setStudent } = filtersCtx
 
 provide(ACADEMIC_AFFAIRS_FILTERS_KEY, filtersCtx)
 
-const attendanceDate = ref(todayISO())
 const classrooms = ref<ClassroomItem[]>([])
 const classroomsLoading = ref(false)
 const students = ref<StudentItem[]>([])
@@ -125,7 +122,8 @@ onMounted(async () => {
 <template>
   <div class="today-tasks-panel">
     <p class="panel-subtitle">
-      班級與學生篩選會同時套用到點名、請假與教務紀錄；日期則在各工作區分開設定。
+      篩選會套用到下方請假與教務紀錄。每日點名已移到側欄「學生與班級」：
+      <router-link to="/students/rollcall" class="rollcall-link">前往每日點名</router-link>
     </p>
 
     <el-card shadow="never" class="filter-card">
@@ -168,57 +166,35 @@ onMounted(async () => {
             />
           </el-select>
         </div>
+        <label class="filter-item">
+          <span class="filter-label">紀錄查詢區間</span>
+          <el-date-picker
+            :model-value="selectedDateRange"
+            type="daterange"
+            aria-label="紀錄查詢區間"
+            start-label="紀錄起始日"
+            end-label="紀錄結束日"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="起始日"
+            end-placeholder="結束日"
+            :shortcuts="dateRangeShortcuts"
+            @update:model-value="setDateRange"
+          />
+        </label>
       </div>
     </el-card>
 
-    <div class="workbench-layout">
-      <div class="attendance-workspace">
-        <AttendanceSection v-model:attendance-date="attendanceDate">
-          <template #date-control>
-            <label class="attendance-date-control">
-              <span class="header-control-label">點名日期</span>
-              <el-date-picker
-                v-model="attendanceDate"
-                type="date"
-                aria-label="點名日期"
-                value-format="YYYY-MM-DD"
-                :clearable="false"
-              />
-            </label>
-          </template>
-        </AttendanceSection>
+    <div class="records-workspace">
+      <LeaveSection />
+
+      <div class="secondary-records">
+        <span class="secondary-records-label">其他教務紀錄</span>
+        <div class="secondary-records-entries">
+          <AssessmentSection :classrooms="classrooms" />
+          <IncidentSection :classrooms="classrooms" />
+        </div>
       </div>
-      <aside class="records-workspace" aria-label="紀錄查詢">
-        <div class="records-filter">
-          <label class="records-filter-control">
-            <span class="filter-label">紀錄查詢區間</span>
-            <el-date-picker
-              :model-value="selectedDateRange"
-              type="daterange"
-              aria-label="紀錄查詢區間"
-              start-label="紀錄起始日"
-              end-label="紀錄結束日"
-              value-format="YYYY-MM-DD"
-              range-separator="至"
-              start-placeholder="起始日"
-              end-placeholder="結束日"
-              :shortcuts="dateRangeShortcuts"
-              @update:model-value="setDateRange"
-            />
-          </label>
-          <p class="records-filter-hint">此區間套用到下方請假、評量與事件紀錄。</p>
-        </div>
-
-        <LeaveSection />
-
-        <div class="secondary-records">
-          <span class="secondary-records-label">其他教務紀錄</span>
-          <div class="secondary-records-entries">
-            <AssessmentSection :classrooms="classrooms" />
-            <IncidentSection :classrooms="classrooms" />
-          </div>
-        </div>
-      </aside>
     </div>
   </div>
 </template>
@@ -233,6 +209,22 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
+.rollcall-link {
+  color: var(--el-color-primary);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rollcall-link:hover {
+  text-decoration: underline;
+}
+
+.rollcall-link:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
 .filter-card {
   margin-top: var(--space-4);
   border-radius: var(--radius-lg);
@@ -241,10 +233,10 @@ onMounted(async () => {
 
 .filter-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr);
   align-items: center;
   gap: var(--space-4);
-  max-width: 44rem;
+  max-width: 64rem;
 }
 
 .filter-item {
@@ -253,7 +245,6 @@ onMounted(async () => {
   align-items: stretch;
   gap: var(--space-2);
   min-width: 0;
-  flex: 1 1 12rem;
 }
 
 .filter-label {
@@ -262,55 +253,17 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.workbench-layout {
-  margin-top: var(--space-4);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-4);
-}
-
-.attendance-workspace {
-  flex: 1.7 1 0;
-  min-width: min(100%, 32rem);
+/* el-select／el-date-picker 根節點不帶本元件的 scoped 屬性，需 :deep */
+.filter-item :deep(.el-select),
+.filter-item :deep(.el-date-editor) {
+  width: 100%;
+  min-width: 0;
 }
 
 .records-workspace {
   display: grid;
-  flex: 1 1 0;
-  min-width: min(100%, 40rem);
+  margin-top: var(--space-4);
   gap: var(--space-4);
-}
-
-.records-filter {
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background: var(--bg-color);
-}
-
-.records-filter-control,
-.attendance-date-control {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.records-filter-control {
-  align-items: stretch;
-  flex-direction: column;
-}
-
-.header-control-label {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-}
-
-.records-filter-hint {
-  margin: var(--space-2) 0 0;
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
 }
 
 .secondary-records {
@@ -328,42 +281,6 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
-}
-
-@media (--to-sm) {
-  .secondary-records-entries {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  /* 篩選列：標籤在上、控制項滿寬。原本標籤與寫死 200–280px 的控制項並排，
-     375px 下日期區間超出卡片右緣被裁掉。 */
-  .filter-row {
-    gap: var(--space-3);
-  }
-
-  .filter-item {
-    flex: 1 1 100%;
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-1);
-    min-width: 0;
-  }
-
-  /* el-date-picker 根節點不帶本元件的 scoped 屬性，需 :deep */
-  .filter-item :deep(.el-select),
-  .filter-item :deep(.el-date-editor) {
-    width: 100% !important;
-  }
-}
-
-.filter-item :deep(.el-select),
-.records-filter :deep(.el-date-editor) {
-  width: 100%;
-  min-width: 0;
-}
-
-.attendance-date-control :deep(.el-date-editor) {
-  width: 10rem;
 }
 
 /* 觸發鈕由子元件 (AssessmentSection / IncidentSection) 渲染，故用 :deep 穿透 */
@@ -409,29 +326,35 @@ onMounted(async () => {
   line-height: 1;
 }
 
-.section-placeholder {
-  border-radius: var(--radius-lg);
-  min-height: 320px;
+/* 平板：日期區間在三欄裡太擠，改兩欄、區間獨佔一列。 */
+@media (--to-md) {
+  .filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-row > .filter-item:last-child {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (--to-sm) {
+  /* 篩選列：標籤在上、控制項滿寬（375px 下日期區間原本會超出卡片右緣）。 */
   .filter-row {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
   }
 
-  .attendance-date-control {
-    width: 100%;
+  .filter-item {
+    gap: var(--space-1);
   }
 
-  .attendance-date-control :deep(.el-date-editor) {
-    flex: 1;
-    width: auto;
+  .filter-item :deep(.el-input__wrapper),
+  .filter-item :deep(.el-select__wrapper) {
     min-height: var(--touch-target-min);
   }
 
-  .attendance-date-control :deep(.el-input__wrapper),
-  .records-filter :deep(.el-input__wrapper) {
-    min-height: var(--touch-target-min);
+  .secondary-records-entries {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

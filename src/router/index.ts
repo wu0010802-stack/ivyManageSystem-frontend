@@ -147,6 +147,13 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: PAGE_TERMS.students }
         },
         {
+            // 每日點名（2026-11-03 自學生儀表板抽成側欄獨立頁）。側欄一級項目，不設 meta.parent。
+            path: '/students/rollcall',
+            name: 'student-rollcall',
+            component: () => import('../views/StudentRollcallView.vue'),
+            meta: { title: PAGE_TERMS.studentRollcall }
+        },
+        {
             path: '/students/profile/:id',
             name: 'student-profile',
             component: () => import('../views/StudentProfileView.vue'),

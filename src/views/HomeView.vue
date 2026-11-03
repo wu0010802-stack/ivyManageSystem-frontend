@@ -112,7 +112,7 @@ const todoTiles = computed(() => {
   if (showStudents && studentAttendanceSummary.value) {
     const unmarked = (studentAttendanceSummary.value as { unmarked_count?: number }).unmarked_count ?? 0
     if (unmarked > 0) {
-      tiles.push({ key: 'unmarked', label: '學生未點名', count: unmarked, tone: 'danger', path: '/student-attendance' })
+      tiles.push({ key: 'unmarked', label: '學生未點名', count: unmarked, tone: 'danger', path: '/students/rollcall' })
     }
   }
 

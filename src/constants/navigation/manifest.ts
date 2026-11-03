@@ -405,6 +405,15 @@ export const NAVIGATION_MANIFEST = {
           ],
         },
         {
+          // 每日點名（2026-11-03）：原為學生儀表板（/students?tab=tasks）左欄的區塊，抽成側欄獨立項目。
+          // 不新增 Permission：STUDENTS_READ 已由 studentsMain 主屬，本頁走 sharedViews 借道
+          // （同 signDocuments 模式）。存檔授權由後端點名端點守衛；own_class 帳號只看得到自己班，
+          // 各班進度列（/student-attendance/overview 403）自動隱藏。
+          key: 'studentRollcall', title: PAGE_TERMS.studentRollcall, routePath: '/students/rollcall',
+          views: [], sharedViews: ['STUDENTS_READ'],
+          menu: { icon: icon('Checked') },
+        },
+        {
           // 入學文件電子簽署（esign01，2026-08-11）：範本管理 + 發送追蹤，
           // 沿用既有 STUDENTS_READ/WRITE，不新增 Permission（spec D9）。
           // STUDENTS_READ 已由 studentsMain 主屬（views），本頁改用 sharedViews 借道

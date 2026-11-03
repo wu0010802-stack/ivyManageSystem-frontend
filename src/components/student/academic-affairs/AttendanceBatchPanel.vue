@@ -2,7 +2,7 @@
 /**
  * 管理端點名編修：單班單日的學生點名表，直接在列上改狀態、只送出有改動的學生。
  *
- * 用在兩處：學生儀表板「每日點名」（AttendanceSection，班級／日期由外層控制）與
+ * 用在兩處：側欄「每日點名」頁（AttendanceSection，班級／日期由外層控制）與
  * 學生出席紀錄頁「點名編修」分頁（自帶班級、日期選擇）。
  *
  * 2026-11-02 改版（純邏輯見 utils/rollcallEditor.ts）：
@@ -53,7 +53,7 @@ const props = withDefaults(defineProps<{
   hideClassroomSelect?: boolean
   hideDatePicker?: boolean
   hint?: string
-  /** 只顯示這位學生（學生儀表板的「學生（選填）」篩選）；批次動作仍以全班為範圍，故此時隱藏。 */
+  /** 只顯示這位學生（外層帶學生篩選時）；批次動作仍以全班為範圍，故此時隱藏。 */
   studentId?: number | null
 }>(), {
   classroomId: null,

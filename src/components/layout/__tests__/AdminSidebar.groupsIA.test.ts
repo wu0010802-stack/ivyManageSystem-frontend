@@ -73,6 +73,7 @@ describe('側欄群組順序與歸屬（SIDEBAR_TREE 靜態）', () => {
     expect(itemsOf('group-students')).toEqual([
       '/classrooms',
       '/students',
+      '/students/rollcall',
       '/students/sign-documents',
       '/portfolio/medication-today',
       '/growth-books',

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 /**
- * 學生儀表板「每日點名」：上方是全園各班點名進度（點班級即切換），下方直接是可編修的
+ * 「每日點名」主體：上方是全園各班點名進度（點班級即切換），下方直接是可編修的
  * 點名表（AttendanceBatchPanel）。
+ *
+ * 2026-11-03 起由側欄獨立頁 StudentRollcallView（/students/rollcall）承載，不再放在學生儀表板；
+ * 班級篩選經 ACADEMIC_AFFAIRS_FILTERS_KEY 由頁面 provide。頁面自己有標題時傳 hide-header。
  *
  * 2026-11-02 改版：原本是唯讀表格＋「批次點名」抽屜，改一位學生要開抽屜、而且抽屜會被
  * 卡片的 hover 位移困在卡片框裡（見 main.css 容器卡註解）。改成就地編修後，抽屜與本元件
@@ -19,11 +22,11 @@ import { ATTENDANCE_EVENTS, domainBus } from '@/utils/domainBus'
 import AttendanceBatchPanel from './AttendanceBatchPanel.vue'
 import SectionCard from './SectionCard.vue'
 
-const props = defineProps<{ attendanceDate?: string | null }>()
+const props = defineProps<{ attendanceDate?: string | null; hideHeader?: boolean }>()
 const emit = defineEmits<{ 'update:attendanceDate': [v: string] }>()
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
-if (!ctx) throw new Error('AttendanceSection 須在 TodayTasksPanel 內使用')
+if (!ctx) throw new Error('AttendanceSection 須在 provide ACADEMIC_AFFAIRS_FILTERS_KEY 的頁面內使用（StudentRollcallView）')
 
 const termStore = useAcademicTermStore()
 
@@ -91,7 +94,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <SectionCard title="每日點名">
+  <SectionCard title="每日點名" :hide-header="props.hideHeader">
     <template #titleExtra v-if="refDate && !$slots['date-control']">{{ refDate }}</template>
     <template #actions>
       <slot name="date-control" />
