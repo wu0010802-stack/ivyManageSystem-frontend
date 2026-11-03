@@ -14,6 +14,7 @@ vi.mock('@/parent/composables/useParentLogout', () => ({
 import api, {
   buildParentRefreshUrl,
   PARENT_API_BASE,
+  REFRESH_CONFLICT_SETTLE_MS,
   resetParentApiSessionState,
 } from '@/parent/api/index'
 
@@ -60,6 +61,21 @@ describe('parent api refresh interceptor', () => {
     const resp = await api.get('/some-endpoint')
     expect(resp.data).toEqual({ ok: true })
   })
+
+  it('409 時等勝出方 Set-Cookie 落地（settle）後才重打原請求（對齊管理端 F3）', async () => {
+    mockApi.onGet('/some-endpoint').replyOnce(401)
+    mockGlobal.onPost('/api/parent/auth/refresh').replyOnce(409, { detail: 'rotation in progress' })
+    let retriedAt = 0
+    mockApi.onGet('/some-endpoint').replyOnce(() => {
+      retriedAt = Date.now()
+      return [200, { ok: true }]
+    })
+    const started = Date.now()
+    const resp = await api.get('/some-endpoint')
+    expect(resp.data).toEqual({ ok: true })
+    expect(REFRESH_CONFLICT_SETTLE_MS).toBeGreaterThanOrEqual(800)
+    expect(retriedAt - started).toBeGreaterThanOrEqual(REFRESH_CONFLICT_SETTLE_MS - 50)
+  }, 10000)
 
   it('does not loop refresh when /parent/auth/refresh itself returns 401', async () => {
     // refresh 屬於 isAuthEndpoint 白名單；自己 401 應直接 reject、不再 refresh

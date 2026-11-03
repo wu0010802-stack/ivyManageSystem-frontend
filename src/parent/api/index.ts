@@ -204,6 +204,13 @@ function _recordTiming(method: string, url: string, status: number, durationMs: 
   }
 }
 
+/**
+ * 收到 409（另一分頁的 refresh 勝出、rotation 進行中）後，重打原請求前的等待。
+ * 勝出方的 Set-Cookie 還沒落地就重打會帶舊 cookie 再 401 而誤登出
+ * （對齊管理端 src/api/index.ts 的 day-qa F3）。
+ */
+export const REFRESH_CONFLICT_SETTLE_MS = 1500
+
 function _doRefresh(): Promise<boolean> {
   // 回傳 boolean (true=成功)；rotation 5s race 視窗內同 family 第二次 refresh 會回 409，
   // 等同「已被同 family 完成 rotation」→ 仍視為成功（後續重打原請求會帶到新 cookie）。
@@ -225,7 +232,11 @@ function _doRefresh(): Promise<boolean> {
       return true
     })
     .catch((err) => {
-      if (err?.response?.status === 409) return true
+      if (err?.response?.status === 409) {
+        return new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(true), REFRESH_CONFLICT_SETTLE_MS)
+        })
+      }
       throw err
     })
     .finally(() => {
