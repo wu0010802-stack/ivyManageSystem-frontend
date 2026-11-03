@@ -48,7 +48,7 @@
           <el-button
             v-if="canWriteSalary"
             :disabled="selectedAdjustRows.length === 0"
-            @click="batchAdjustVisible = true"
+            @click="openBatchAdjust"
           >批次調整（{{ selectedAdjustRows.length }}）</el-button>
         </div>
       </div>
@@ -132,8 +132,8 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="班級人數" align="center">
-          <el-table-column label="班級" width="128">
+        <el-table-column label="人數差距" align="center">
+          <el-table-column label="班級／全園" width="132">
             <template #default="scope">
               <div v-if="primaryHeadcount(scope.row)" class="class-cell">
                 <span>{{ primaryHeadcount(scope.row)!.classroomName }}</span>
@@ -264,43 +264,21 @@
     <!-- 批次調整 dialog -->
     <BatchAdjustDialog
       v-model="batchAdjustVisible"
-      :count="selectedAdjustRows.length"
+      :rows="batchRows"
+      :failures="batchFailures"
       :loading="batchApplying"
       @confirm="applyBatchAdjust"
     />
 
-    <!-- 欄位明細 dialog（自原 SalaryView 搬移） -->
-    <el-dialog v-model="showFieldBreakdownDialog" :title="fieldBreakdownTitle" width="960px">
-      <div v-loading="fieldBreakdownLoading">
-        <template v-if="fieldBreakdown">
-          <el-descriptions :column="2" border class="breakdown-meta">
-            <el-descriptions-item label="姓名">{{ fieldBreakdown.employee?.employee_name }}</el-descriptions-item>
-            <el-descriptions-item label="員工編號">{{ fieldBreakdown.employee?.employee_code }}</el-descriptions-item>
-            <el-descriptions-item label="職稱">{{ fieldBreakdown.employee?.job_title || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="月份">{{ fieldBreakdown.employee?.year }} 年 {{ fieldBreakdown.employee?.month }} 月</el-descriptions-item>
-          </el-descriptions>
-          <el-table :data="fieldBreakdown.rows" border max-height="480" stripe class="field-breakdown-table">
-            <el-table-column
-              v-for="column in fieldBreakdown.columns"
-              :key="column.key"
-              :prop="column.key"
-              :label="column.label"
-              min-width="120"
-            >
-              <template #default="scope">
-                {{ renderFieldBreakdownValue(scope.row, column) }}
-              </template>
-            </el-table-column>
-          </el-table>
-          <el-alert v-if="fieldBreakdown.note" :title="fieldBreakdown.note" type="info" :closable="false" class="breakdown-alert" />
-        </template>
-      </div>
-      <template #footer>
-        <div class="breakdown-footer" v-if="fieldBreakdown">
-          明細合計：<strong>{{ money(fieldBreakdown.summary?.amount || 0) }}</strong>
-        </div>
-      </template>
-    </el-dialog>
+    <!-- 欄位明細：右側抽屜（不遮名冊，可切項目與上一位／下一位） -->
+    <FieldBreakdownDrawer
+      v-model="showFieldBreakdown"
+      v-model:row="breakdownRow"
+      v-model:field="breakdownField"
+      :nav-rows="visibleRecords"
+      :year="q.year"
+      :month="q.month"
+    />
   </div>
 </template>
 
@@ -309,10 +287,12 @@ import { ref, computed, inject, h, defineComponent, type PropType } from 'vue'
 import { ElMessage, ElTooltip, ElIcon } from 'element-plus'
 import { InfoFilled, Edit, Search } from '@element-plus/icons-vue'
 import { useWindowSize } from '@vueuse/core'
-import { getSalaryFieldBreakdown, manualAdjustSalary } from '@/api/salary'
+import { manualAdjustSalary } from '@/api/salary'
 import SalaryBreakdown from '../SalaryBreakdown.vue'
 import AdjustDrawer from './AdjustDrawer.vue'
 import BatchAdjustDialog from './BatchAdjustDialog.vue'
+import type { BatchItem, BatchFailure } from './batchAdjust'
+import FieldBreakdownDrawer from './FieldBreakdownDrawer.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { hasPermission } from '@/utils/auth'
 import { money, pad2 } from '@/utils/format'
@@ -322,7 +302,6 @@ import {
     computeTotalTakeHomeAmount,
 } from '@/utils/salaryAmounts'
 import { downloadFile } from '@/utils/download'
-import { useErrorNotify } from '@/composables/useErrorNotify'
 import { useClientTableFilter } from '@/composables/useClientTableFilter'
 import {
     getThresholds,
@@ -348,6 +327,7 @@ import {
     headcountGap,
     gapText,
     ROLE_LABEL,
+    SCHOOL_BASIS_LABEL,
 } from './reviewHeadcount'
 
 defineEmits<{ (e: 'next'): void; (e: 'prev'): void }>()
@@ -357,7 +337,6 @@ const q = inject<{ year: number; month: number }>('settleQuery', {
     year: new Date().getFullYear(),
     month: new Date().getMonth() + 1,
 })
-const { notify } = useErrorNotify()
 const canWriteSalary = computed(() => hasPermission('SALARY_WRITE'))
 
 // ---- 人工調整標記（共用小元件） ----
@@ -403,7 +382,7 @@ const causeShort = (r: AnomalyReason): string => {
         case 'zero':
             return `本月實領 ${formatAmount(r.amount)} 元`
         case 'heavy':
-            return `${r.label} ${formatAmount(r.amount)}（本月底薪 ${pctText(r.pct)}）`
+            return `${r.label} ${formatAmount(r.amount)}（月薪 ${pctText(r.pct)}）`
         case 'manual':
             return fieldsText(r.fields)
     }
@@ -417,7 +396,7 @@ const causeLong = (r: AnomalyReason): string => {
         case 'zero':
             return `本月實領 ${money(r.amount)}。常見原因：整月留停、沒有出勤紀錄、底薪或時薪設定錯誤，或保費追溯補收大於應發。請確認後再定案。`
         case 'heavy':
-            return `${r.label} ${money(r.amount)}，占本月底薪 ${pctText(r.pct)}。如果是漏打卡或假單還沒核准，先到出勤核對處理，再回來重算。`
+            return `${r.label} ${money(r.amount)}，占月薪 ${pctText(r.pct)}。如果是漏打卡或假單還沒核准，先到出勤核對處理，再回來重算。`
         case 'manual':
             return `已手動調整：${fieldsText(r.fields)}。重算時會保留這些值。`
     }
@@ -451,7 +430,7 @@ const chips = computed(() => {
         if (count > 0) list.push({ key: t, label: REASON_META[t].label, count, tone: REASON_META[t].tone })
     }
     const below = settlement.records.value.filter(isBelowTarget).length
-    if (below > 0) list.push({ key: 'below', label: '所帶班級未達目標', count: below, tone: 'neutral' })
+    if (below > 0) list.push({ key: 'below', label: '人數未達目標', count: below, tone: 'neutral' })
     return list
 })
 
@@ -497,6 +476,7 @@ const classSubLabel = (row: SettlementRecord): string => {
     const list = headcountsOf(row)
     const first = list[0]
     if (!first) return ''
+    if (first.scope === 'school' && first.schoolBasis) return `${SCHOOL_BASIS_LABEL[first.schoolBasis]} · 全園比例`
     const parts = [first.gradeName, first.role === 'head_teacher' ? '' : ROLE_LABEL[first.role]].filter(Boolean)
     const label = parts.join(' · ')
     return list.length > 1 ? `${label} +${list.length - 1} 班` : label
@@ -541,40 +521,73 @@ const openAdjust = (row: SettlementRecord) => {
 }
 
 // ---- 批次調整 ----
+// 對話框拿「最新」資料：以 id 從 settlement.records 取，失敗重試前 refresh 後版本與現值自動更新
+const BATCH_CONCURRENCY = 5
 const batchAdjustVisible = ref(false)
 const batchApplying = ref(false)
+const batchRowIds = ref<number[]>([])
+const batchFailures = ref<BatchFailure[]>([])
+const batchRows = computed(() => {
+    const byId = new Map(settlement.records.value.map((r) => [r.id, r]))
+    return batchRowIds.value.map((id) => byId.get(id)).filter((r): r is SettlementRecord => !!r && !r.is_finalized)
+})
 const selectedAdjustRows = ref<SettlementRecord[]>([])
 const isRowSelectable = (row: SettlementRecord) => !row.is_finalized
 const onSelectionChange = (rows: SettlementRecord[]) => {
     selectedAdjustRows.value = rows
 }
-const applyBatchAdjust = async ({ field, value, reason }: { field: string; value: number; reason: string }) => {
-    const rows = selectedAdjustRows.value
-    if (rows.length === 0 || batchApplying.value) return
+const openBatchAdjust = () => {
+    batchRowIds.value = selectedAdjustRows.value.map((r) => r.id)
+    batchFailures.value = []
+    batchAdjustVisible.value = true
+}
+const applyBatchAdjust = async ({ field, reason, items }: { field: string; reason: string; items: BatchItem[] }) => {
+    if (items.length === 0 || batchApplying.value) return
     batchApplying.value = true
     try {
-        const payload = { [field]: value, adjustment_reason: reason } as Parameters<typeof manualAdjustSalary>[1]
-        const results = await Promise.allSettled(
-            rows.map((r) => manualAdjustSalary(r.id, payload, r.version ?? undefined)),
-        )
-        const failed = results
-            .map((res, i) => ({ res, row: rows[i] }))
-            .filter((x) => x.res.status === 'rejected')
-            .map((x) => {
-                const e = (x.res as PromiseRejectedResult).reason as { response?: { data?: { detail?: string } } }
-                return { name: x.row.employee_name, reason: e?.response?.data?.detail || '失敗' }
-            })
-        const succeeded = rows.length - failed.length
-        if (failed.length === 0) {
-            ElMessage.success(`已套用 ${succeeded} 筆`)
-        } else {
-            ElMessage.warning(
-                `完成：成功 ${succeeded} 筆，失敗 ${failed.length} 筆（${failed.map((f) => `${f.name}: ${f.reason}`).join('；')}）`,
+        // 分批送（每批 BATCH_CONCURRENCY 筆）：每筆後端都要取鎖重算，選全員時不一次打上百個請求
+        const results: PromiseSettledResult<unknown>[] = []
+        for (let i = 0; i < items.length; i += BATCH_CONCURRENCY) {
+            const chunk = items.slice(i, i + BATCH_CONCURRENCY)
+            results.push(
+                ...(await Promise.allSettled(
+                    chunk.map((it) =>
+                        manualAdjustSalary(
+                            it.id,
+                            { [field]: it.value, adjustment_reason: reason } as Parameters<typeof manualAdjustSalary>[1],
+                            it.version,
+                        ),
+                    ),
+                )),
             )
         }
-        batchAdjustVisible.value = false
-        selectedAdjustRows.value = []
-        settlement.refresh()
+        const nameOf = new Map(batchRows.value.map((r) => [r.id, r.employee_name]))
+        const failed: BatchFailure[] = []
+        results.forEach((res, i) => {
+            if (res.status !== 'rejected') return
+            const e = res.reason as { response?: { data?: { detail?: string }; status?: number } }
+            const detail = e?.response?.data?.detail
+            const reasonText =
+                e?.response?.status === 409
+                    ? '這筆剛被其他人改過'
+                    : typeof detail === 'string' && detail
+                      ? detail
+                      : '套用失敗'
+            failed.push({ id: items[i].id, name: nameOf.get(items[i].id) ?? String(items[i].id), reason: reasonText })
+        })
+        const succeeded = items.length - failed.length
+        await settlement.refresh()
+        if (failed.length === 0) {
+            ElMessage.success(`已套用 ${succeeded} 人`)
+            batchAdjustVisible.value = false
+            batchFailures.value = []
+            selectedAdjustRows.value = []
+        } else {
+            // 失敗的人留在對話框：資料已重新載入，使用者看過預覽可再套用一次
+            if (succeeded > 0) ElMessage.success(`已套用 ${succeeded} 人`)
+            batchFailures.value = failed
+            batchRowIds.value = failed.map((f) => f.id)
+        }
     } finally {
         batchApplying.value = false
     }
@@ -589,52 +602,18 @@ const exportPdf = (row: SettlementRecord) => {
     downloadFile(`/salaries/${row.id}/export?format=pdf`, `薪資單_${row.employee_name}.pdf`)
 }
 
-// ---- 欄位明細 dialog（自原 SalaryView 搬移） ----
-interface FieldBreakdown {
-    employee?: { employee_name?: string; employee_code?: string; job_title?: string; year?: number; month?: number }
-    title?: string
-    rows?: Record<string, unknown>[]
-    columns?: { key: string; label?: string; [key: string]: unknown }[]
-    note?: string
-    summary?: Record<string, unknown>
-}
-const showFieldBreakdownDialog = ref(false)
-const fieldBreakdownLoading = ref(false)
-const fieldBreakdown = ref<FieldBreakdown | null>(null)
-const MONEY_KEYS = new Set(['bonusBase', 'result', 'perPerson', 'pay', 'deduction', 'dailySalary', 'ruleAmount', 'penalty', 'accrual'])
-
-// 請求序號守衛：舊回應不得蓋新回應，loading 只在最新請求結束時關閉
-let fieldBreakdownSeq = 0
-const openFieldBreakdown = async (row: SettlementRecord, field: string) => {
+// ---- 欄位明細抽屜 ----
+const showFieldBreakdown = ref(false)
+const breakdownRow = ref<SettlementRecord | null>(null)
+const breakdownField = ref('')
+const openFieldBreakdown = (row: SettlementRecord, field: string) => {
     if (!row.id) {
         ElMessage.warning('請先計算薪資後再查看明細')
         return
     }
-    const seq = ++fieldBreakdownSeq
-    fieldBreakdownLoading.value = true
-    try {
-        const response = await getSalaryFieldBreakdown(row.id, field)
-        if (seq !== fieldBreakdownSeq) return
-        fieldBreakdown.value = response.data as FieldBreakdown
-        showFieldBreakdownDialog.value = true
-    } catch (error) {
-        if (seq !== fieldBreakdownSeq) return
-        notify(error, 'StepReview.fieldBreakdown', null, { prefix: '載入欄位明細失敗' })
-    } finally {
-        if (seq === fieldBreakdownSeq) fieldBreakdownLoading.value = false
-    }
-}
-const fieldBreakdownTitle = computed(() => {
-    const employee = fieldBreakdown.value?.employee
-    if (!employee || !fieldBreakdown.value?.title) return '薪資明細'
-    return `${fieldBreakdown.value.title}｜${employee.employee_name}｜${employee.year} 年 ${employee.month} 月`
-})
-const renderFieldBreakdownValue = (row: Record<string, unknown>, column: { key: string }) => {
-    const value = row?.[column.key]
-    if (value === null || value === undefined || value === '') return '-'
-    if (MONEY_KEYS.has(column.key)) return money(value)
-    if (column.key === 'value' && typeof value === 'number') return money(value)
-    return value
+    breakdownRow.value = row
+    breakdownField.value = field
+    showFieldBreakdown.value = true
 }
 </script>
 
@@ -922,17 +901,6 @@ const renderFieldBreakdownValue = (row: Record<string, unknown>, column: { key: 
 .review-actionbar__buttons {
   display: flex;
   gap: var(--space-2);
-}
-
-.breakdown-meta,
-.breakdown-alert,
-.field-breakdown-table {
-  margin-bottom: var(--space-4);
-}
-
-.breakdown-footer {
-  font-size: var(--text-lg);
-  text-align: right;
 }
 
 :deep(.manual-override-icon) {

@@ -64,6 +64,28 @@ describe('headcountsOf', () => {
     })
 })
 
+describe('全園人數（主管／辦公室）', () => {
+    it('breakdown.school 排在最前，作為本人的人數依據', () => {
+        const row = {
+            breakdown: {
+                enrollment: head,
+                assistant: null,
+                school: { basis: 'supervisor', total: 152, target: 160, snapshot_date: '2026-10-31' },
+                festival_basis: 'supervisor',
+            },
+        }
+        const list = headcountsOf(row)
+        expect(list.map((h) => [h.scope, h.classroomName])).toEqual([
+            ['school', '全園'],
+            ['class', '蒲公英'],
+        ])
+        const p = primaryHeadcount(row)!
+        expect(p.schoolBasis).toBe('supervisor')
+        expect(headcountGap(p)).toBe(-8)
+        expect(p.overtimeTarget).toBeNull()
+    })
+})
+
 describe('差距與文字', () => {
     const base = headcountsOf({ breakdown: { enrollment: head } })[0]
 

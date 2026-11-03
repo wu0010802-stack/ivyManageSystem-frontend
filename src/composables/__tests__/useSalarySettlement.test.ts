@@ -91,6 +91,20 @@ describe('detectAnomalies（不比上月：停用仍在名冊／實領 0／扣�
         expect(m.get('E1')).toEqual([{ type: 'zero', amount: -500 }])
     })
 
+    it('分母用契約月薪：月中到職者本月底薪很小也不誤報（業主 2026-11-03 裁定）', () => {
+        const m = detectAnomalies(
+            [rec({ base_salary: 3000, contract_base_salary: 30000, leave_deduction: 1000 })],
+            DEFAULT_THRESHOLDS,
+            PERIOD,
+        )
+        expect(m.size).toBe(0)
+    })
+
+    it('舊後端沒帶 contract_base_salary → 退回本月底薪', () => {
+        const m = detectAnomalies([rec({ base_salary: 3000, leave_deduction: 1000 })], DEFAULT_THRESHOLDS, PERIOD)
+        expect(m.get('E1')?.[0]?.type).toBe('heavy')
+    })
+
     it('單項扣款 ≥ 底薪 10%（邊界含）→ heavy，取金額最大的一項', () => {
         const m = detectAnomalies(
             [rec({ base_salary: 30000, absence_deduction: 3000, late_deduction: 3500 })],

@@ -30,7 +30,7 @@ vi.mock('element-plus', async (importOriginal) => {
     }
 })
 
-import { manualAdjustSalary, getSalaryFieldBreakdown } from '@/api/salary'
+import { manualAdjustSalary } from '@/api/salary'
 import { ElMessage } from 'element-plus'
 
 const rec = (over: Partial<SettlementRecord> = {}): SettlementRecord => ({
@@ -69,6 +69,8 @@ const STUBS = {
     'el-table': true,
     'el-table-column': true,
     'router-link': { template: '<a><slot /></a>' },
+    BatchAdjustDialog: true,
+    FieldBreakdownDrawer: true,
     'el-popover': true,
     'el-form': true,
     'el-form-item': true,
@@ -194,23 +196,24 @@ describe('StepReview', () => {
         expect(text).toContain('節慶獎金')
     })
 
-    it('點欄位明細：有 record id 開 dialog、無 id 警告（取代舊 SalaryView 測試）', async () => {
-        const { getSalaryFieldBreakdown } = await import('@/api/salary')
-        vi.mocked(getSalaryFieldBreakdown).mockResolvedValue({
-            data: { title: '底薪明細', employee: { employee_name: '測試' }, rows: [], columns: [] },
-        } as never)
+    it('點欄位明細：有 record id 開右側抽屜帶入人與欄位；無 id 警告', async () => {
         const settlement = makeSettlement([rec({ id: 12 })])
-        const wrapper = mount(StepReview, {
-            global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
-        })
-        const vm = wrapper.vm as unknown as {
-            openFieldBreakdown: (row: SettlementRecord, field: string) => Promise<void>
-            showFieldBreakdownDialog: boolean
+        const vm = mountReview(settlement).vm as unknown as {
+            openFieldBreakdown: (row: SettlementRecord, field: string) => void
+            showFieldBreakdown: boolean
+            breakdownField: string
+            breakdownRow: SettlementRecord | null
         }
-        await vm.openFieldBreakdown(settlement.records.value[0], 'base_salary')
-        await flushPromises()
-        expect(getSalaryFieldBreakdown).toHaveBeenCalledWith(12, 'base_salary')
-        expect(vm.showFieldBreakdownDialog).toBe(true)
+        vm.openFieldBreakdown(settlement.records.value[0], 'base_salary')
+        expect(vm.showFieldBreakdown).toBe(true)
+        expect(vm.breakdownField).toBe('base_salary')
+        expect(vm.breakdownRow?.id).toBe(12)
+
+        const { ElMessage } = await import('element-plus')
+        vm.showFieldBreakdown = false
+        vm.openFieldBreakdown(rec({ id: 0 }), 'base_salary')
+        expect(vm.showFieldBreakdown).toBe(false)
+        expect(vi.mocked(ElMessage.warning)).toHaveBeenCalled()
     })
 })
 
@@ -349,47 +352,73 @@ describe('StepReview 姓名搜尋', () => {
     })
 })
 
+type BatchVm = {
+  selectedAdjustRows: SettlementRecord[]
+  batchFailures: { id: number; name: string; reason: string }[]
+  batchAdjustVisible: boolean
+  openBatchAdjust: () => void
+  applyBatchAdjust: (p: { field: string; reason: string; items: { id: number; version: number | undefined; value: number }[] }) => Promise<void>
+}
+
 describe('StepReview 批次調整', () => {
   beforeEach(() => { vi.mocked(manualAdjustSalary).mockReset() })
 
-  it('applyBatchAdjust 對每筆選取送單欄 partial payload 並 refresh', async () => {
+  it('每人送自己的絕對值與版本，全部成功 → 關閉、清選取、refresh', async () => {
     vi.mocked(manualAdjustSalary).mockResolvedValue({ data: { record: {} } } as never)
-    const settlement = makeSettlement([rec({ id: 1 })])
-    const wrapper = mount(StepReview, {
-      global: { stubs: { ...STUBS, BatchAdjustDialog: true }, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
+    const settlement = makeSettlement([rec({ id: 1, employee_name: '甲' }), rec({ id: 2, employee_name: '乙', employee_id: 'E2' })])
+    const vm = mountReview(settlement).vm as unknown as BatchVm
+    vm.selectedAdjustRows = settlement.records.value
+    vm.openBatchAdjust()
+    expect(vm.batchAdjustVisible).toBe(true)
+    await vm.applyBatchAdjust({
+      field: 'meeting_overtime_pay',
+      reason: '10/30 臨時會議補發',
+      items: [{ id: 1, version: 3, value: 916 }, { id: 2, version: 5, value: 500 }],
     })
-    const vm = wrapper.vm as unknown as {
-      selectedAdjustRows: SettlementRecord[]
-      applyBatchAdjust: (p: { field: string; value: number; reason: string }) => Promise<void>
-    }
-    vm.selectedAdjustRows = [
-      rec({ id: 1, employee_name: '甲', version: 3 }),
-      rec({ id: 2, employee_name: '乙', version: 5 }),
-    ]
-    await vm.applyBatchAdjust({ field: 'festival_bonus', value: 500, reason: '活動加班補發' })
-    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledWith(1, { festival_bonus: 500, adjustment_reason: '活動加班補發' }, 3)
-    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledWith(2, { festival_bonus: 500, adjustment_reason: '活動加班補發' }, 5)
+    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledWith(1, { meeting_overtime_pay: 916, adjustment_reason: '10/30 臨時會議補發' }, 3)
+    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledWith(2, { meeting_overtime_pay: 500, adjustment_reason: '10/30 臨時會議補發' }, 5)
     expect(settlement.refresh).toHaveBeenCalled()
+    expect(vm.batchAdjustVisible).toBe(false)
+    expect(vm.selectedAdjustRows).toEqual([])
   })
 
-  it('部分失敗時其餘成功並 warning', async () => {
+  it('部分失敗 → 對話框留著、只剩失敗者並列出原因（409 用白話）', async () => {
     vi.mocked(manualAdjustSalary)
-      .mockRejectedValueOnce({ response: { data: { detail: '已封存' } } })
+      .mockRejectedValueOnce({ response: { status: 409, data: { detail: 'version conflict' } } })
       .mockResolvedValue({ data: { record: {} } } as never)
-    const settlement = makeSettlement([rec({ id: 1 })])
-    const wrapper = mount(StepReview, {
-      global: { stubs: { ...STUBS, BatchAdjustDialog: true }, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
+    const settlement = makeSettlement([rec({ id: 1, employee_name: '甲' }), rec({ id: 2, employee_name: '乙', employee_id: 'E2' })])
+    const vm = mountReview(settlement).vm as unknown as BatchVm
+    vm.selectedAdjustRows = settlement.records.value
+    vm.openBatchAdjust()
+    await vm.applyBatchAdjust({
+      field: 'overtime_pay',
+      reason: '值週津貼補發',
+      items: [{ id: 1, version: 3, value: 300 }, { id: 2, version: 3, value: 300 }],
     })
-    const vm = wrapper.vm as unknown as {
-      selectedAdjustRows: SettlementRecord[]
-      applyBatchAdjust: (p: { field: string; value: number; reason: string }) => Promise<void>
-    }
-    vm.selectedAdjustRows = [rec({ id: 1, employee_name: '甲', version: 3 }), rec({ id: 2, employee_name: '乙', version: 5 })]
-    await vm.applyBatchAdjust({ field: 'overtime_pay', value: 300, reason: '值週津貼補發' })
-    const { ElMessage } = await import('element-plus')
-    expect(vi.mocked(ElMessage.warning)).toHaveBeenCalled()
     expect(settlement.refresh).toHaveBeenCalled()
+    expect(vm.batchAdjustVisible).toBe(true)
+    expect(vm.batchFailures).toEqual([{ id: 1, name: '甲', reason: '這筆剛被其他人改過' }])
+  })
+})
+
+describe('StepReview 批次調整分批', () => {
+  it('12 人分 3 批送，每批最多 5 筆同時進行', async () => {
+    vi.mocked(manualAdjustSalary).mockReset()
+    let inFlight = 0
+    let peak = 0
+    vi.mocked(manualAdjustSalary).mockImplementation(async () => {
+      inFlight++
+      peak = Math.max(peak, inFlight)
+      await new Promise((r) => setTimeout(r, 0))
+      inFlight--
+      return { data: { record: {} } } as never
+    })
+    const settlement = makeSettlement([rec({ id: 1 })])
+    const vm = mountReview(settlement).vm as unknown as BatchVm
+    const items = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, version: 1, value: 100 }))
+    await vm.applyBatchAdjust({ field: 'overtime_pay', reason: '值週津貼補發', items })
+    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledTimes(12)
+    expect(peak).toBeLessThanOrEqual(5)
   })
 })
 
@@ -401,13 +430,10 @@ describe('StepReview 批次調整防連點', () => {
       () => new Promise((resolve) => { release = resolve }) as never,
     )
     const settlement = makeSettlement([rec({ id: 1 })])
-    const vm = mountReview(settlement, { BatchAdjustDialog: true }).vm as unknown as {
-      selectedAdjustRows: SettlementRecord[]
-      applyBatchAdjust: (p: { field: string; value: number; reason: string }) => Promise<void>
-    }
-    vm.selectedAdjustRows = [rec({ id: 1, employee_name: '甲', version: 3 })]
-    const first = vm.applyBatchAdjust({ field: 'overtime_pay', value: 300, reason: '值週津貼補發' })
-    await vm.applyBatchAdjust({ field: 'overtime_pay', value: 300, reason: '值週津貼補發' })
+    const vm = mountReview(settlement).vm as unknown as BatchVm
+    const payload = { field: 'overtime_pay', reason: '值週津貼補發', items: [{ id: 1, version: 3, value: 300 }] }
+    const first = vm.applyBatchAdjust(payload)
+    await vm.applyBatchAdjust(payload)
     expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledTimes(1)
     release({ data: { record: {} } })
     await first
@@ -446,59 +472,5 @@ describe('StepReview 需注意門檻輸入防呆', () => {
         vm.applyThresholds()
         expect(settlement.thresholds.value.heavyPct).toBe(0.2)
         expect(ElMessage.success).toHaveBeenCalled()
-    })
-})
-
-describe('StepReview 欄位明細 dialog 請求序號守衛', () => {
-    interface BreakdownVm {
-        openFieldBreakdown: (row: SettlementRecord, field: string) => Promise<void>
-        fieldBreakdown: { title?: string } | null
-        fieldBreakdownLoading: boolean
-    }
-    const deferred = () => {
-        let resolve!: (v: unknown) => void
-        const promise = new Promise((r) => { resolve = r })
-        return { promise, resolve }
-    }
-
-    it('舊請求晚到不得蓋掉新請求，loading 只在最新請求結束時關閉', async () => {
-        const first = deferred()
-        const second = deferred()
-        vi.mocked(getSalaryFieldBreakdown)
-            .mockReturnValueOnce(first.promise as never)
-            .mockReturnValueOnce(second.promise as never)
-        const vm = mountReview(makeSettlement([rec()])).vm as unknown as BreakdownVm
-
-        const p1 = vm.openFieldBreakdown(rec({ id: 1 }), 'a')
-        const p2 = vm.openFieldBreakdown(rec({ id: 2 }), 'b')
-        second.resolve({ data: { title: '新' } })
-        await p2
-        expect(vm.fieldBreakdown?.title).toBe('新')
-        expect(vm.fieldBreakdownLoading).toBe(false)
-
-        first.resolve({ data: { title: '舊' } })
-        await p1
-        expect(vm.fieldBreakdown?.title).toBe('新')
-        expect(vm.fieldBreakdownLoading).toBe(false)
-    })
-
-    it('舊請求先回、新請求仍在飛時 loading 維持 true', async () => {
-        const first = deferred()
-        const second = deferred()
-        vi.mocked(getSalaryFieldBreakdown)
-            .mockReturnValueOnce(first.promise as never)
-            .mockReturnValueOnce(second.promise as never)
-        const vm = mountReview(makeSettlement([rec()])).vm as unknown as BreakdownVm
-
-        const p1 = vm.openFieldBreakdown(rec({ id: 1 }), 'a')
-        const p2 = vm.openFieldBreakdown(rec({ id: 2 }), 'b')
-        first.resolve({ data: { title: '舊' } })
-        await p1
-        expect(vm.fieldBreakdownLoading).toBe(true)
-        expect(vm.fieldBreakdown?.title).toBeUndefined()
-        second.resolve({ data: { title: '新' } })
-        await p2
-        expect(vm.fieldBreakdown?.title).toBe('新')
-        expect(vm.fieldBreakdownLoading).toBe(false)
     })
 })

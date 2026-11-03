@@ -49014,6 +49014,11 @@ export interface components {
             breakdown_stale: boolean;
             /** Calculated At */
             calculated_at?: string | null;
+            /**
+             * Contract Base Salary
+             * @default 0
+             */
+            contract_base_salary: number;
             /** Early Leave Deduction */
             early_leave_deduction: number;
             /** Employee Code */

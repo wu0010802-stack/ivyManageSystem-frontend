@@ -6,7 +6,9 @@
  * - 需注意判斷（detectAnomalies，2026-11-03 起不再與上月比較——業主裁定覆核不看上月差距）：
  *   ① 已停用／已離職仍在名冊（停用且離職日空白，或離職日早於本月）
  *   ② 實領 ≤ 0（主薪轉 base_transfer_amount ≤ 0；保費追溯補收可能使其為負）
- *   ③ 扣款偏高：單項出勤類扣款 ≥ 本月底薪（已按到離職折算）× heavyPct（預設 10%）
+ *   ③ 扣款偏高：單項出勤類扣款 ≥ 契約月薪 × heavyPct（預設 10%，約 3 天日薪）。
+ *      分母用契約月薪（records 的 contract_base_salary，業主 2026-11-03 裁定）而非折算後的
+ *      本月底薪，避免月中到離職者請一天假就被標；舊後端沒帶時退回本月底薪。
  *   ④ 手動調整過
  * - 門檻 per 裝置存 localStorage（業主未要求全園共用，維持後端零修改）；
  *   各園薪資規模不同，門檻本就該 per-tenant，故走 tenantStorage（CT-F-07，
@@ -120,7 +122,8 @@ function inactiveReason(r: SettlementRecord, period: SettlementPeriod): AnomalyR
 }
 
 function heavyReason(r: SettlementRecord, thresholds: Thresholds): AnomalyReason | null {
-    const base = num(r.base_salary)
+    const contract = num(r.contract_base_salary)
+    const base = contract > 0 ? contract : num(r.base_salary)
     if (base <= 0) return null // 時薪／無底薪不判（無比例基準）
     let worst: { key: string; label: string; amount: number } | null = null
     for (const f of HEAVY_DEDUCTION_FIELDS) {

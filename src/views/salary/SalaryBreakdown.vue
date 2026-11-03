@@ -1,5 +1,14 @@
 <template>
   <div class="salary-breakdown">
+    <section v-if="schoolHeadcount" class="bd-section">
+      <h4>全園人數（{{ SCHOOL_BASIS_LABEL[schoolHeadcount.schoolBasis!] }}）</h4>
+      <p>
+        全園在籍 {{ schoolHeadcount.enrollment }} 人 ／ 全園目標 {{ schoolHeadcount.target || '—' }}
+        （{{ gapLong(schoolHeadcount) }}，達成 {{ ratioText(schoolHeadcount) }}）
+      </p>
+      <p class="bd-meta">節慶獎金依全園比例計算，不看下面的班級人數。資料時間：{{ formatSnapshotDate(schoolHeadcount.snapshotDate) }} 月底快照</p>
+    </section>
+
     <section v-if="enrollment" class="bd-section">
       <h4>人數來源</h4>
       <p>
@@ -28,7 +37,7 @@
       </ul>
     </section>
 
-    <p v-if="enrollment || otherHeadcounts.length" class="bd-meta">
+    <p v-if="enrollment || otherHeadcounts.length || schoolHeadcount" class="bd-meta">
       以上是班級的人數與目標。個人節慶獎金依職務可能不同（主管看全園人數、共用副班導與美師用共用目標、發放月按期間逐月累計、新班有保障比例），金額以「節慶獎金」明細為準。
     </p>
 
@@ -58,7 +67,7 @@
       </el-button>
     </section>
 
-    <p v-if="!enrollment && !assistantNames.length" class="bd-muted">
+    <p v-if="!enrollment && !assistantNames.length && !schoolHeadcount" class="bd-muted">
       此員工無班級資料
     </p>
   </div>
@@ -76,6 +85,7 @@ import {
   ratioText,
   overtimeText,
   ROLE_LABEL,
+  SCHOOL_BASIS_LABEL,
   type ClassHeadcount,
 } from './settle/reviewHeadcount'
 
@@ -94,8 +104,14 @@ const assistantNames = computed(
 )
 
 const headcounts = computed(() => headcountsOf(props.row ?? {}))
-const headHeadcount = computed(() => headcounts.value.find((h) => h.role === 'head_teacher') ?? null)
-const otherHeadcounts = computed(() => headcounts.value.filter((h) => h.role !== 'head_teacher'))
+const schoolHeadcount = computed(() => headcounts.value.find((h) => h.scope === 'school') ?? null)
+const headHeadcount = computed(
+  () => headcounts.value.find((h) => h.scope === 'class' && h.role === 'head_teacher') ?? null,
+)
+const otherHeadcounts = computed(
+  () => headcounts.value.filter((h) => h.scope === 'class' && h.role !== 'head_teacher'),
+)
+const formatSnapshotDate = (iso: string | null) => (iso ? iso.replace(/-/g, '/') : '')
 const gapLong = (h: ClassHeadcount): string => {
   const gap = headcountGap(h)
   if (gap === null) return '目標未設定'

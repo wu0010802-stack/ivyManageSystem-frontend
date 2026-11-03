@@ -91,6 +91,24 @@ describe('SalaryBreakdown', () => {
     expect(mountWithEP({ row: teacherRow(), year: 2026, month: 5 }).text()).not.toContain('班級目標人數')
   })
 
+  it('主管／辦公室：顯示全園人數與目標，並說明不看班級人數', () => {
+    const row = teacherRow()
+    row.breakdown.school = { basis: 'supervisor', total: 152, target: 160, snapshot_date: '2026-10-31' }
+    const text = mountWithEP({ row, year: 2026, month: 5 }).text()
+    expect(text).toContain('全園人數（主管）')
+    expect(text).toContain('全園在籍 152 人 ／ 全園目標 160')
+    expect(text).toContain('還差 8 人')
+    expect(text).toContain('節慶獎金依全園比例計算')
+  })
+
+  it('只有全園資訊（無班級）也不顯示「此員工無班級資料」', () => {
+    const row = teacherRow()
+    row.breakdown = { enrollment: null, assistant: null, school: { basis: 'office', total: 152, target: 160, snapshot_date: '2026-10-31' } }
+    const text = mountWithEP({ row, year: 2026, month: 5 }).text()
+    expect(text).toContain('全園人數（辦公室）')
+    expect(text).not.toContain('此員工無班級資料')
+  })
+
   it('兼任班級帶人數與共用標示', () => {
     const row = teacherRow()
     row.breakdown.enrollment = null

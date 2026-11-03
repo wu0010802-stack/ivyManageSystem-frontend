@@ -6,14 +6,21 @@
  * - `breakdown.enrollment`：本人當班導的班（target／overtime_target 為該班節慶目標人數與超額門檻）
  * - `breakdown.assistant.classes`：副班導／美師所帶各班（共用副班導已改用 shared_assistant 目標）
  *
- * ⚠ 這是「班級」的人數差距：目標一律是該班依有無副班導查的班級目標（同班的人看到同一組數字），
+ * - `breakdown.school`：節慶獎金看全園比例的人（主管／辦公室／未帶班教保，後端
+ *   services/salary/festival_basis.py 依引擎分支判定）→ 全園在籍 vs 全園目標，排在最前
+ *
+ * ⚠ 班級列是「班級」的人數差距：目標一律是該班依有無副班導查的班級目標（同班的人看到同一組數字），
  * 不是個人節慶獎金的計算基準——引擎對共用副班導與美師改用共用目標、主管看全園人數、
  * 發放月按期間逐月累計、新班有保障比例。個人金額以「節慶獎金」欄位明細為準。
  */
 
 export type HeadcountRole = 'head_teacher' | 'assistant_teacher' | 'art_teacher'
+export type SchoolBasis = 'supervisor' | 'office' | 'unassigned'
 
 export interface ClassHeadcount {
+    /** class＝班級人數；school＝全園人數（主管／辦公室／未帶班教保的節慶依據） */
+    scope: 'class' | 'school'
+    schoolBasis: SchoolBasis | null
     classroomName: string
     gradeName: string | null
     role: HeadcountRole
@@ -34,14 +41,33 @@ const optInt = (v: unknown): number | null => {
 }
 
 const ROLES: readonly HeadcountRole[] = ['head_teacher', 'assistant_teacher', 'art_teacher']
+const SCHOOL_BASES: readonly SchoolBasis[] = ['supervisor', 'office', 'unassigned']
 
 export function headcountsOf(row: Record<string, unknown>): ClassHeadcount[] {
     const bd = row.breakdown
     if (!isObj(bd)) return []
     const out: ClassHeadcount[] = []
+    const school = bd.school
+    if (isObj(school) && SCHOOL_BASES.includes(school.basis as SchoolBasis)) {
+        out.push({
+            scope: 'school',
+            schoolBasis: school.basis as SchoolBasis,
+            classroomName: '全園',
+            gradeName: null,
+            role: 'head_teacher',
+            enrollment: optInt(school.total) ?? 0,
+            target: optInt(school.target),
+            overtimeTarget: null,
+            isShared: false,
+            multiHead: false,
+            snapshotDate: typeof school.snapshot_date === 'string' ? school.snapshot_date : null,
+        })
+    }
     const enr = bd.enrollment
     if (isObj(enr) && typeof enr.classroom_name === 'string') {
         out.push({
+            scope: 'class',
+            schoolBasis: null,
             classroomName: enr.classroom_name,
             gradeName: typeof enr.grade_name === 'string' ? enr.grade_name : null,
             role: 'head_teacher',
@@ -59,6 +85,8 @@ export function headcountsOf(row: Record<string, unknown>): ClassHeadcount[] {
         if (!isObj(c) || typeof c.classroom_name !== 'string') continue
         const role = ROLES.includes(c.role as HeadcountRole) ? (c.role as HeadcountRole) : 'assistant_teacher'
         out.push({
+            scope: 'class',
+            schoolBasis: null,
             classroomName: c.classroom_name,
             gradeName: typeof c.grade_name === 'string' ? c.grade_name : null,
             role,
@@ -100,6 +128,12 @@ export function overtimeText(h: ClassHeadcount | null): string {
     if (over > 0) return `超額 ${over} 人`
     if (over === 0) return '剛好到門檻，未超額'
     return `未超額，還差 ${-over} 人`
+}
+
+export const SCHOOL_BASIS_LABEL: Record<SchoolBasis, string> = {
+    supervisor: '主管',
+    office: '辦公室',
+    unassigned: '未帶班教保',
 }
 
 export const ROLE_LABEL: Record<HeadcountRole, string> = {
