@@ -5,7 +5,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { getAllEmployees, deleteEmployee } from '@/api/employees'
 import { getProbationAlerts } from '@/api/home'
-import { statusKeyOf, getEmployeeStatus, isMissingSalary, tenureLabel, type EmployeeStatusKey } from '@/utils/employeeDisplay'
+import { statusKeyOf, getEmployeeStatus, isMissingSalary, tenureLabel, canOffboard, type EmployeeStatusKey } from '@/utils/employeeDisplay'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -486,7 +486,7 @@ onMounted(async () => {
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item v-if="scope.row.is_active && canManageOffboarding" command="offboard">辦理離職</el-dropdown-item>
+                  <el-dropdown-item v-if="canOffboard(scope.row) && canManageOffboarding" command="offboard">辦理離職</el-dropdown-item>
                   <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
                   <el-dropdown-item v-if="scope.row.is_active" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
                 </el-dropdown-menu>
@@ -534,7 +534,7 @@ onMounted(async () => {
           <el-button link type="primary" size="small">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item v-if="item.is_active && canManageOffboarding" command="offboard">辦理離職</el-dropdown-item>
+              <el-dropdown-item v-if="canOffboard(item) && canManageOffboarding" command="offboard">辦理離職</el-dropdown-item>
               <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
               <el-dropdown-item v-if="item.is_active" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
             </el-dropdown-menu>

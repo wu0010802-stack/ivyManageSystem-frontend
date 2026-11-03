@@ -22,6 +22,14 @@ export const getEmployeeStatus = (emp: Record<string, unknown>): { label: string
 }
 
 /**
+ * 「辦理離職」入口判定單一來源（2026-11-03）：在職中，或已停用但尚未登錄離職日。
+ * 停用但沒有離職日的員工任職期間不明，後端一律不計薪、不列申報（services/employment_scope）；
+ * 這是畫面上唯一能補填離職日的入口（編輯表單無離職日欄位，後端 offboard 不擋已停用者）。
+ */
+export const canOffboard = (emp: Record<string, unknown>): boolean =>
+  Boolean(emp.is_active) || !emp.resign_date
+
+/**
  * 「待補薪資」判定單一來源：在職 + 正職 + 底薪未設定（=0）。
  * 名冊列 tag 與 HR 待辦 chip 計數/篩選皆呼叫此函式，避免兩處口徑漂移。
  */

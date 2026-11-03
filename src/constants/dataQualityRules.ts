@@ -55,6 +55,15 @@ export const DATA_QUALITY_RULES: Record<string, DataQualityRuleMeta> = {
       '點擊右側員工編號前往員工管理頁，確認離職日正確後，將「在職中」取消勾選並儲存。',
     selfServiceable: true,
   },
+  employee_inactive_without_resign_date: {
+    label: '員工已停用但沒有離職日',
+    what: '這位員工已被停用（名冊顯示為已離職），但沒有填寫離職日期，系統無法判斷他實際任職到哪一天。',
+    impact:
+      '這類員工不會列入任何月份的薪資計算、勞健保申報與投保人數。若他其實仍在職，或某些月份還有上班，那幾個月的薪資會漏算。',
+    howToFix:
+      '點擊右側員工編號前往員工頁，按「辦理離職」補填實際離職日；補上後，系統會依離職日把他納入任職期間內的月份。若他其實仍在職，請聯繫工程人員恢復在職狀態。',
+    selfServiceable: true,
+  },
   student_active_but_lifecycle_terminal: {
     label: '學生已離校但仍為在學',
     what: '這位學生的就學狀態已是畢業／轉學／退學，但「在學中」沒有關掉。',

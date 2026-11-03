@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { User } from '@element-plus/icons-vue'
 import { useEmployeeDetail } from '@/composables/useEmployeeDetail'
-import { getEmployeeStatus, standardSalaryFor, isMissingSalary } from '@/utils/employeeDisplay'
+import { getEmployeeStatus, standardSalaryFor, isMissingSalary, canOffboard } from '@/utils/employeeDisplay'
 import { expiryStatus } from '@/utils/expiry'
 import { getPositionSalary } from '@/api/config'
 import { hasPermission } from '@/utils/auth'
@@ -178,7 +178,7 @@ const onSaved = async () => {
         </div>
         <div v-if="canWriteEmployees" class="aside-actions">
           <el-button type="primary" plain size="small" @click="openEdit">編輯</el-button>
-          <el-button v-if="employee.is_active" type="warning" plain size="small" @click="offboardVisible = true">辦理離職</el-button>
+          <el-button v-if="canOffboard(employee)" type="warning" plain size="small" @click="offboardVisible = true">辦理離職</el-button>
         </div>
         <nav class="anchor-nav" aria-label="區塊導覽">
           <a
