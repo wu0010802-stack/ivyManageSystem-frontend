@@ -30,7 +30,7 @@ vi.mock('element-plus', async (importOriginal) => {
     }
 })
 
-import { manualAdjustSalary } from '@/api/salary'
+import { manualAdjustSalary, getSalaryFieldBreakdown } from '@/api/salary'
 import { ElMessage } from 'element-plus'
 
 const rec = (over: Partial<SettlementRecord> = {}): SettlementRecord => ({
@@ -446,5 +446,59 @@ describe('StepReview 需注意門檻輸入防呆', () => {
         vm.applyThresholds()
         expect(settlement.thresholds.value.heavyPct).toBe(0.2)
         expect(ElMessage.success).toHaveBeenCalled()
+    })
+})
+
+describe('StepReview 欄位明細 dialog 請求序號守衛', () => {
+    interface BreakdownVm {
+        openFieldBreakdown: (row: SettlementRecord, field: string) => Promise<void>
+        fieldBreakdown: { title?: string } | null
+        fieldBreakdownLoading: boolean
+    }
+    const deferred = () => {
+        let resolve!: (v: unknown) => void
+        const promise = new Promise((r) => { resolve = r })
+        return { promise, resolve }
+    }
+
+    it('舊請求晚到不得蓋掉新請求，loading 只在最新請求結束時關閉', async () => {
+        const first = deferred()
+        const second = deferred()
+        vi.mocked(getSalaryFieldBreakdown)
+            .mockReturnValueOnce(first.promise as never)
+            .mockReturnValueOnce(second.promise as never)
+        const vm = mountReview(makeSettlement([rec()])).vm as unknown as BreakdownVm
+
+        const p1 = vm.openFieldBreakdown(rec({ id: 1 }), 'a')
+        const p2 = vm.openFieldBreakdown(rec({ id: 2 }), 'b')
+        second.resolve({ data: { title: '新' } })
+        await p2
+        expect(vm.fieldBreakdown?.title).toBe('新')
+        expect(vm.fieldBreakdownLoading).toBe(false)
+
+        first.resolve({ data: { title: '舊' } })
+        await p1
+        expect(vm.fieldBreakdown?.title).toBe('新')
+        expect(vm.fieldBreakdownLoading).toBe(false)
+    })
+
+    it('舊請求先回、新請求仍在飛時 loading 維持 true', async () => {
+        const first = deferred()
+        const second = deferred()
+        vi.mocked(getSalaryFieldBreakdown)
+            .mockReturnValueOnce(first.promise as never)
+            .mockReturnValueOnce(second.promise as never)
+        const vm = mountReview(makeSettlement([rec()])).vm as unknown as BreakdownVm
+
+        const p1 = vm.openFieldBreakdown(rec({ id: 1 }), 'a')
+        const p2 = vm.openFieldBreakdown(rec({ id: 2 }), 'b')
+        first.resolve({ data: { title: '舊' } })
+        await p1
+        expect(vm.fieldBreakdownLoading).toBe(true)
+        expect(vm.fieldBreakdown?.title).toBeUndefined()
+        second.resolve({ data: { title: '新' } })
+        await p2
+        expect(vm.fieldBreakdown?.title).toBe('新')
+        expect(vm.fieldBreakdownLoading).toBe(false)
     })
 })

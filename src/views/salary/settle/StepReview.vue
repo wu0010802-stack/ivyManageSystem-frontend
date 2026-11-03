@@ -603,20 +603,25 @@ const fieldBreakdownLoading = ref(false)
 const fieldBreakdown = ref<FieldBreakdown | null>(null)
 const MONEY_KEYS = new Set(['bonusBase', 'result', 'perPerson', 'pay', 'deduction', 'dailySalary', 'ruleAmount', 'penalty', 'accrual'])
 
+// 請求序號守衛：舊回應不得蓋新回應，loading 只在最新請求結束時關閉
+let fieldBreakdownSeq = 0
 const openFieldBreakdown = async (row: SettlementRecord, field: string) => {
     if (!row.id) {
         ElMessage.warning('請先計算薪資後再查看明細')
         return
     }
+    const seq = ++fieldBreakdownSeq
     fieldBreakdownLoading.value = true
     try {
         const response = await getSalaryFieldBreakdown(row.id, field)
+        if (seq !== fieldBreakdownSeq) return
         fieldBreakdown.value = response.data as FieldBreakdown
         showFieldBreakdownDialog.value = true
     } catch (error) {
+        if (seq !== fieldBreakdownSeq) return
         notify(error, 'StepReview.fieldBreakdown', null, { prefix: '載入欄位明細失敗' })
     } finally {
-        fieldBreakdownLoading.value = false
+        if (seq === fieldBreakdownSeq) fieldBreakdownLoading.value = false
     }
 }
 const fieldBreakdownTitle = computed(() => {
