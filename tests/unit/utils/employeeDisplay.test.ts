@@ -2,8 +2,23 @@ import { describe, it, expect } from 'vitest'
 import {
   statusKeyOf, getEmployeeStatus, maskedMoney, insuranceLevelDisplay,
   pensionSelfRatePct, bankInfoDisplay, detectRole, standardSalaryFor,
-  isMissingSalary, tenureLabel,
+  isMissingSalary, tenureLabel, canOffboard,
 } from '@/utils/employeeDisplay'
+
+describe('canOffboard（辦理離職入口；2026-11-03）', () => {
+  it('在職、待離職 → 可辦理', () => {
+    expect(canOffboard({ is_active: true })).toBe(true)
+    expect(canOffboard({ is_active: true, resign_date: '2999-12-31' })).toBe(true)
+  })
+  it('已停用但沒有離職日 → 可補辦（否則畫面上無從補填離職日）', () => {
+    expect(canOffboard({ is_active: false })).toBe(true)
+    expect(canOffboard({ is_active: false, resign_date: null })).toBe(true)
+    expect(canOffboard({ is_active: false, resign_date: '' })).toBe(true)
+  })
+  it('已停用且已有離職日 → 不可重辦', () => {
+    expect(canOffboard({ is_active: false, resign_date: '2026-08-31' })).toBe(false)
+  })
+})
 
 describe('statusKeyOf / getEmployeeStatus', () => {
   it('is_active=false → resigned', () => {

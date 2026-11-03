@@ -18,6 +18,14 @@ describe('dataQualityRules', () => {
       expect(meta.howToFix).not.toBe('')
     })
 
+    it('停用但沒有離職日：說明漏算後果並導向辦理離職（2026-11-03）', () => {
+      const meta = getRuleMeta('employee_inactive_without_resign_date')
+      expect(meta.label).toBe('員工已停用但沒有離職日')
+      expect(meta.selfServiceable).toBe(true)
+      expect(meta.impact).toContain('薪資')
+      expect(meta.howToFix).toContain('辦理離職')
+    })
+
     it('未知 rule_code 降級為 fallback 而不拋錯', () => {
       // 後端新增規則但前端還沒同步時的情境——本頁不可以壞掉
       const meta = getRuleMeta('some_future_rule_not_yet_known')
