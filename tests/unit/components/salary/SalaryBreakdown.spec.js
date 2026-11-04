@@ -122,6 +122,41 @@ describe('SalaryBreakdown', () => {
     expect(text).not.toContain('此員工無班級資料')
   })
 
+  it('較上月：班導班、全園、兼任班級都顯示上月人數與增減（2026-11-04）', () => {
+    const row = teacherRow()
+    row.breakdown.enrollment.prev_total = 21
+    row.breakdown.school = { basis: 'supervisor', total: 152, target: 160, snapshot_date: '2026-10-31', prev_total: 155 }
+    row.breakdown.assistant = {
+      by_classroom: ['中班 B'],
+      classes: [{ classroom_id: 7, classroom_name: '中班 B', grade_name: '中班', role: 'assistant_teacher', total: 20, target: 24, overtime_target: 27, is_shared_assistant: false, prev_total: 20 }],
+    }
+    row.breakdown.prev_month = { year: 2026, month: 4, comparable: true, reason: null }
+    const text = mountWithEP({ row, year: 2026, month: 5 }).text()
+    expect(text).toContain('較上月 +2（4 月 21 人）')
+    expect(text).toContain('較上月 −3（4 月 155 人）')
+    expect(text).toContain('較上月 持平（4 月 20 人）')
+  })
+
+  it('上月還沒有這個班 → 說明新班', () => {
+    const row = teacherRow()
+    row.breakdown.enrollment.prev_total = null
+    row.breakdown.prev_month = { year: 2026, month: 4, comparable: true, reason: null }
+    expect(mountWithEP({ row, year: 2026, month: 5 }).text()).toContain('上月（4 月）還沒有這個班')
+  })
+
+  it('學年第一個月（8 月）→ 說明不跨學年比較', () => {
+    const row = teacherRow()
+    row.breakdown.enrollment.prev_total = null
+    row.breakdown.prev_month = { year: 2026, month: 7, comparable: false, reason: 'cross_school_year' }
+    const text = mountWithEP({ row, year: 2026, month: 8 }).text()
+    expect(text).toContain('本月是新學年第一個月，不與上一學年（7 月）比較')
+    expect(text).not.toContain('較上月')
+  })
+
+  it('舊後端沒帶 prev_month → 不顯示較上月', () => {
+    expect(mountWithEP({ row: teacherRow(), year: 2026, month: 5 }).text()).not.toContain('較上月')
+  })
+
   it('兼任班級帶人數與共用標示', () => {
     const row = teacherRow()
     row.breakdown.enrollment = null

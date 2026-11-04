@@ -89,7 +89,10 @@ interface ReviewVm {
     activeFilter: string
     chips: { key: string; label: string; count: number }[]
     classSubLabel: (row: SettlementRecord) => string
-    gapClass: (row: SettlementRecord) => string
+    deltaClass: (row: SettlementRecord) => string
+    deltaLabel: (row: SettlementRecord) => string
+    deltaTip: (row: SettlementRecord) => string
+    prevHeaderText: string
 }
 
 const mountReview = (settlement: ReturnType<typeof makeSettlement>, extraStubs = {}) =>
@@ -168,16 +171,17 @@ describe('StepReview', () => {
         const schoolSup = { enrollment: null, assistant: null, festival_basis: 'supervisor',
             school: { basis: 'supervisor', total: 152, target: 160, snapshot_date: '2026-05-31' } }
         const settlement = makeSettlement([
-            rec({ employee_id: 'K', breakdown: schoolRef }),
-            rec({ employee_id: 'S', breakdown: schoolSup }),
+            rec({ employee_id: 'K', breakdown: { ...schoolRef, school: { ...schoolRef.school, prev_total: 155 } } }),
+            rec({ employee_id: 'S', breakdown: { ...schoolSup, school: { ...schoolSup.school, prev_total: 155 } } }),
         ])
         const vm = mountReview(settlement).vm as unknown as ReviewVm
         const [k, s] = settlement.records.value
         expect(vm.classSubLabel(k)).toBe('不帶班 · 參考')
         expect(vm.classSubLabel(s)).toBe('主管 · 全園比例')
-        // 參考列的差距照顯示但不上色（不影響本人薪資）；主管列照常標未達
-        expect(vm.gapClass(k)).toBe('is-muted')
-        expect(vm.gapClass(s)).toBe('gap-below')
+        // 全園較上月：參考列照顯示但不上色（不影響本人薪資）；主管列照常上色
+        expect(vm.deltaLabel(k)).toBe('−3')
+        expect(vm.deltaClass(k)).toBe('is-muted')
+        expect(vm.deltaClass(s)).toBe('gap-below')
         expect(vm.chips.find((c) => c.key === 'below')?.count).toBe(1)
         vm.activeFilter = 'below'
         await flushPromises()
@@ -201,9 +205,47 @@ describe('StepReview', () => {
         expect(text).toContain('沒有需注意的人')
     })
 
-    it('不再顯示任何與上月比較的文字', () => {
+    it('不顯示薪資金額與上月的比較（人數較上月除外）', () => {
         const text = mountReview(makeSettlement([rec()])).text()
-        expect(text).not.toContain('上月')
+        expect(text).not.toContain('上月實領')
+        expect(text).not.toContain('與上月差')
+    })
+
+    it('人數差距＝較上月：本月 − 上月同一班，增加／減少分別上色', () => {
+        const prevOk = { year: 2026, month: 4, comparable: true, reason: null }
+        const withPrev = (total: number, prev: number | null) => ({
+            ...headBreakdown(total, 30),
+            enrollment: { ...headBreakdown(total, 30).enrollment, prev_total: prev },
+            prev_month: prevOk,
+        })
+        const settlement = makeSettlement([
+            rec({ employee_id: 'U', breakdown: withPrev(29, 27) }),
+            rec({ employee_id: 'D', breakdown: withPrev(26, 28) }),
+            rec({ employee_id: 'F', breakdown: withPrev(28, 28) }),
+            rec({ employee_id: 'N', breakdown: withPrev(12, null) }),
+            rec({ employee_id: 'X' }),
+        ])
+        const vm = mountReview(settlement).vm as unknown as ReviewVm
+        const [u, d, f, n, x] = settlement.records.value
+        expect([u, d, f, n, x].map(vm.deltaLabel)).toEqual(['+2', '−2', '持平', '—', '—'])
+        expect(vm.deltaClass(u)).toBe('gap-above')
+        expect(vm.deltaClass(d)).toBe('gap-below')
+        expect(vm.deltaClass(f)).toBe('')
+        expect(vm.deltaClass(n)).toBe('is-muted')
+        expect(vm.deltaTip(u)).toBe('4 月 27 人 → 本月 29 人')
+        expect(vm.deltaTip(n)).toBe('上月（4 月）還沒有這個班')
+        expect(vm.prevHeaderText).toBe('本月在籍 − 上月（4 月）同一班在籍；不帶班者比全園人數。不跨學年比較。')
+    })
+
+    it('學年第一個月（8 月）不跨學年比較：全部 —，表頭說明新學年', () => {
+        const cross = { year: 2026, month: 7, comparable: false, reason: 'cross_school_year' }
+        const bd = { ...headBreakdown(28, 30), enrollment: { ...headBreakdown(28, 30).enrollment, prev_total: null }, prev_month: cross }
+        const settlement = makeSettlement([rec({ employee_id: 'A', breakdown: bd })])
+        const vm = mountReview(settlement).vm as unknown as ReviewVm
+        const [a] = settlement.records.value
+        expect(vm.deltaLabel(a)).toBe('—')
+        expect(vm.deltaClass(a)).toBe('is-muted')
+        expect(vm.prevHeaderText).toBe('本月是新學年第一個月，不與上一學年（7 月）比較。')
     })
 
     it('當月載入失敗 → 顯示載入失敗，不誤導成「尚未計算」', () => {

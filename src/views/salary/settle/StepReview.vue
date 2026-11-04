@@ -150,9 +150,14 @@
               <span v-else class="is-muted">—</span>
             </template>
           </el-table-column>
-          <el-table-column label="差距" width="72" align="right" class-name="num-cell">
+          <el-table-column label="較上月" width="84" align="right" class-name="num-cell">
+            <template #header>
+              <el-tooltip :content="prevHeaderText" placement="top">
+                <span>較上月 <el-icon :size="12"><InfoFilled /></el-icon></span>
+              </el-tooltip>
+            </template>
             <template #default="scope">
-              <span :class="gapClass(scope.row)">{{ gapText(headcountGap(primaryHeadcount(scope.row))) }}</span>
+              <span :class="deltaClass(scope.row)" :title="deltaTip(scope.row)">{{ deltaLabel(scope.row) }}</span>
             </template>
           </el-table-column>
         </el-table-column>
@@ -325,8 +330,12 @@ import {
     headcountsOf,
     primaryHeadcount,
     headcountGap,
+    headcountDelta,
+    deltaText,
+    deltaTitle,
+    prevMonthOf,
+    prevHeaderTip,
     isSchoolReference,
-    gapText,
     ROLE_LABEL,
     SCHOOL_BASIS_LABEL,
 } from './reviewHeadcount'
@@ -486,12 +495,24 @@ const classSubLabel = (row: SettlementRecord): string => {
     const label = parts.join(' · ')
     return list.length > 1 ? `${label} +${list.length - 1} 班` : label
 }
-const gapClass = (row: SettlementRecord): string => {
+// ---- 較上月（人數差距，不跨學年）----
+// 上月是哪個月、能不能比：整份名冊同一個值，取第一筆有帶的
+const prevInfo = computed(() => {
+    for (const r of settlement.records.value) {
+        const p = prevMonthOf(r)
+        if (p) return p
+    }
+    return null
+})
+const prevHeaderText = computed(() => prevHeaderTip(prevInfo.value))
+const deltaLabel = (row: SettlementRecord): string => deltaText(headcountDelta(primaryHeadcount(row)))
+const deltaTip = (row: SettlementRecord): string => deltaTitle(primaryHeadcount(row), prevMonthOf(row))
+const deltaClass = (row: SettlementRecord): string => {
     const h = primaryHeadcount(row)
-    const gap = headcountGap(h)
-    if (gap === null || isSchoolReference(h)) return 'is-muted'
-    if (gap < 0) return 'gap-below'
-    if (gap > 0) return 'gap-above'
+    const delta = headcountDelta(h)
+    if (delta === null || isSchoolReference(h)) return 'is-muted'
+    if (delta < 0) return 'gap-below'
+    if (delta > 0) return 'gap-above'
     return ''
 }
 

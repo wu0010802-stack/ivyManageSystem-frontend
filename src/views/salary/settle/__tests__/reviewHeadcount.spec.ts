@@ -3,7 +3,11 @@ import {
     headcountsOf,
     primaryHeadcount,
     headcountGap,
-    gapText,
+    headcountDelta,
+    deltaText,
+    deltaTitle,
+    prevMonthOf,
+    prevHeaderTip,
     ratioText,
     overtimeText,
     isSchoolReference,
@@ -123,12 +127,8 @@ describe('全園人數（不帶班參考）', () => {
 describe('差距與文字', () => {
     const base = headcountsOf({ breakdown: { enrollment: head } })[0]
 
-    it('在籍 − 目標', () => {
+    it('在籍 − 目標（展開列與「人數未達目標」用）', () => {
         expect(headcountGap(base)).toBe(-2)
-        expect(gapText(-2)).toBe('−2')
-        expect(gapText(1)).toBe('+1')
-        expect(gapText(0)).toBe('達標')
-        expect(gapText(null)).toBe('—')
     })
 
     it('目標未設定（0 或 null）→ 差距 null', () => {
@@ -146,5 +146,85 @@ describe('差距與文字', () => {
         expect(overtimeText({ ...base, enrollment: 35 })).toBe('超額 2 人')
         expect(overtimeText({ ...base, enrollment: 33 })).toBe('剛好到門檻，未超額')
         expect(overtimeText({ ...base, overtimeTarget: null })).toBe('—')
+    })
+})
+
+describe('較上月（2026-11-04：人數差距改與上月比較，不跨學年）', () => {
+    const prevOk = { year: 2026, month: 9, comparable: true, reason: null }
+
+    it('班導班、副班導班、全園都帶上月人數（prev_total）', () => {
+        const row = {
+            breakdown: {
+                enrollment: { ...head, prev_total: 27 },
+                assistant: {
+                    by_classroom: ['海豚'],
+                    classes: [
+                        { classroom_id: 2, classroom_name: '海豚', grade_name: '大班', role: 'assistant_teacher',
+                          total: 31, target: 30, overtime_target: 33, is_shared_assistant: false, prev_total: 33 },
+                    ],
+                },
+                school: { basis: 'supervisor', total: 205, target: 160, snapshot_date: '2026-10-31', prev_total: 198 },
+                prev_month: prevOk,
+            },
+        }
+        expect(headcountsOf(row).map((h) => [h.classroomName, h.prevEnrollment])).toEqual([
+            ['全園', 198],
+            ['蒲公英', 27],
+            ['海豚', 33],
+        ])
+    })
+
+    it('舊後端沒有 prev_total／上月沒有這班（null）→ prevEnrollment null、較上月 null', () => {
+        const [legacy] = headcountsOf({ breakdown: { enrollment: head } })
+        expect(legacy.prevEnrollment).toBeNull()
+        expect(headcountDelta(legacy)).toBeNull()
+        const [fresh] = headcountsOf({ breakdown: { enrollment: { ...head, prev_total: null } } })
+        expect(fresh.prevEnrollment).toBeNull()
+        expect(headcountDelta(null)).toBeNull()
+    })
+
+    it('較上月＝本月在籍 − 上月在籍；上月 0 人照算', () => {
+        const [h] = headcountsOf({ breakdown: { enrollment: { ...head, prev_total: 27 } } })
+        expect(headcountDelta(h)).toBe(1)
+        expect(headcountDelta({ ...h, prevEnrollment: 30 })).toBe(-2)
+        expect(headcountDelta({ ...h, prevEnrollment: 28 })).toBe(0)
+        expect(headcountDelta({ ...h, prevEnrollment: 0 })).toBe(28)
+    })
+
+    it('較上月文字', () => {
+        expect(deltaText(1)).toBe('+1')
+        expect(deltaText(-2)).toBe('−2')
+        expect(deltaText(0)).toBe('持平')
+        expect(deltaText(null)).toBe('—')
+    })
+
+    it('prevMonthOf 解析 breakdown.prev_month；缺或壞資料 → null', () => {
+        expect(prevMonthOf({ breakdown: { prev_month: prevOk } })).toEqual(prevOk)
+        expect(prevMonthOf({ breakdown: { prev_month: { year: 2026, month: 7, comparable: false, reason: 'cross_school_year' } } }))
+            .toEqual({ year: 2026, month: 7, comparable: false, reason: 'cross_school_year' })
+        expect(prevMonthOf({ breakdown: { enrollment: head } })).toBeNull()
+        expect(prevMonthOf({})).toBeNull()
+        expect(prevMonthOf({ breakdown: { prev_month: { year: 'x', month: 9 } } })).toBeNull()
+    })
+
+    it('儲存格說明：上月→本月人數；新班；跨學年；取不到', () => {
+        const [h] = headcountsOf({ breakdown: { enrollment: { ...head, prev_total: 27 } } })
+        expect(deltaTitle(h, prevOk)).toBe('9 月 27 人 → 本月 28 人')
+        expect(deltaTitle({ ...h, prevEnrollment: null }, prevOk)).toBe('上月（9 月）還沒有這個班')
+        expect(deltaTitle({ ...h, prevEnrollment: null }, { year: 2026, month: 7, comparable: false, reason: 'cross_school_year' }))
+            .toBe('本月是新學年第一個月，不與上一學年（7 月）比較')
+        expect(deltaTitle({ ...h, prevEnrollment: null }, { year: 2026, month: 9, comparable: false, reason: 'unavailable' }))
+            .toBe('上月人數取不到，暫時無法比較')
+        expect(deltaTitle(h, null)).toBe('')
+        expect(deltaTitle(null, prevOk)).toBe('')
+    })
+
+    it('表頭說明依上月狀態', () => {
+        expect(prevHeaderTip(prevOk)).toBe('本月在籍 − 上月（9 月）同一班在籍；不帶班者比全園人數。不跨學年比較。')
+        expect(prevHeaderTip({ year: 2026, month: 7, comparable: false, reason: 'cross_school_year' }))
+            .toBe('本月是新學年第一個月，不與上一學年（7 月）比較。')
+        expect(prevHeaderTip({ year: 2026, month: 9, comparable: false, reason: 'unavailable' }))
+            .toBe('上月人數取不到，暫時無法比較。')
+        expect(prevHeaderTip(null)).toBe('本月在籍 − 上月同一班在籍；不跨學年比較。')
     })
 })

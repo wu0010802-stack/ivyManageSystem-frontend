@@ -6,6 +6,7 @@
         全園在籍 {{ schoolHeadcount.enrollment }} 人 ／ 全園目標 {{ schoolHeadcount.target || '—' }}
         （{{ gapLong(schoolHeadcount) }}，達成 {{ ratioText(schoolHeadcount) }}）
       </p>
+      <p v-if="deltaLong(schoolHeadcount)">{{ deltaLong(schoolHeadcount) }}</p>
       <p v-if="schoolHeadcount.schoolBasis" class="bd-meta">節慶獎金依全園比例計算，不看下面的班級人數。資料時間：{{ formatSnapshotDate(schoolHeadcount.snapshotDate) }} 月底快照</p>
       <p v-else class="bd-meta">此員工不帶班，節慶獎金也不依全園比例；全園人數僅供參考。資料時間：{{ formatSnapshotDate(schoolHeadcount.snapshotDate) }} 月底快照</p>
     </section>
@@ -17,6 +18,7 @@
           {{ enrollment.classroom_name }}</a><span v-if="enrollment.grade_name">（{{ enrollment.grade_name }}）</span>
         · 共 {{ enrollment.total }} 人
       </p>
+      <p v-if="headHeadcount && deltaLong(headHeadcount)">{{ deltaLong(headHeadcount) }}</p>
       <dl v-if="headHeadcount && headHeadcount.target" class="bd-figures">
         <div><dt>班級目標人數</dt><dd>{{ headHeadcount.target }}（{{ gapLong(headHeadcount) }}）</dd></div>
         <div><dt>達成率</dt><dd>{{ ratioText(headHeadcount) }}</dd></div>
@@ -34,6 +36,7 @@
           {{ h.classroomName }}<span v-if="h.gradeName">（{{ h.gradeName }}）</span>
           · {{ ROLE_LABEL[h.role] }}<span v-if="h.isShared && h.role === 'assistant_teacher'">（共用）</span>
           · 在籍 {{ h.enrollment }}<template v-if="h.target"> ／ 目標 {{ h.target }}（{{ gapLong(h) }}）</template>
+          <template v-if="deltaLong(h)"> · {{ deltaLong(h) }}</template>
         </li>
       </ul>
     </section>
@@ -83,6 +86,10 @@ import { money } from '@/utils/format'
 import {
   headcountsOf,
   headcountGap,
+  headcountDelta,
+  deltaText,
+  deltaTitle,
+  prevMonthOf,
   ratioText,
   overtimeText,
   ROLE_LABEL,
@@ -118,6 +125,16 @@ const gapLong = (h: ClassHeadcount): string => {
   if (gap === null) return '目標未設定'
   if (gap === 0) return '剛好達標'
   return gap < 0 ? `還差 ${-gap} 人` : `多 ${gap} 人`
+}
+
+// 較上月（2026-11-04）：舊後端沒帶 prev_month 就不顯示
+const prevMonth = computed(() => prevMonthOf(props.row ?? {}))
+const deltaLong = (h: ClassHeadcount): string => {
+  const p = prevMonth.value
+  if (!p) return ''
+  const d = headcountDelta(h)
+  if (d === null) return deltaTitle(h, p)
+  return `較上月 ${deltaText(d)}（${p.month} 月 ${h.prevEnrollment} 人）`
 }
 
 const overrideCount = ref<number>(enrollment.value?.total ?? 0)

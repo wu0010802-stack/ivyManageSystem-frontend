@@ -1,5 +1,12 @@
 /**
- * 結薪覆核：班級人數差距（在籍 vs 節慶目標人數）的純函式。
+ * 結薪覆核：班級人數（在籍、節慶目標、較上月）的純函式。
+ *
+ * 「人數差距」欄＝較上月（2026-11-04 起）：本月在籍 − 上月同一班在籍（不帶班者比全園）。
+ * 後端（breakdown_enrollment._resolve_prev_month）給各班／全園 `prev_total` 與
+ * `breakdown.prev_month`；上月與本月同源（resolve_bonus_counts，即上月節慶獎金的人數）。
+ * 不跨學年：本月是學年第一個月（8 月）時 prev_month.reason='cross_school_year'、不比較。
+ * 下學期另建同名班級列時，後端以同學年同班名對回上學期那一列。
+ * 在籍 − 目標（headcountGap）仍用於展開列與「人數未達目標」chip。
  *
  * 資料來源是 GET /salaries/records 每筆的 `breakdown`（後端
  * services/salary/breakdown_enrollment.py）：
@@ -33,6 +40,18 @@ export interface ClassHeadcount {
     isShared: boolean
     multiHead: boolean
     snapshotDate: string | null
+    /** 上月同一班（全園列＝上月全園）的在籍；舊後端／新班／不比較時 null */
+    prevEnrollment: number | null
+}
+
+export type PrevMonthReason = 'cross_school_year' | 'unavailable'
+
+/** breakdown.prev_month：上月是哪個月、能不能比 */
+export interface PrevMonthInfo {
+    year: number
+    month: number
+    comparable: boolean
+    reason: PrevMonthReason | null
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
@@ -64,6 +83,7 @@ export function headcountsOf(row: Record<string, unknown>): ClassHeadcount[] {
             isShared: false,
             multiHead: false,
             snapshotDate: typeof school.snapshot_date === 'string' ? school.snapshot_date : null,
+            prevEnrollment: optInt(school.prev_total),
         })
     }
     const enr = bd.enrollment
@@ -80,6 +100,7 @@ export function headcountsOf(row: Record<string, unknown>): ClassHeadcount[] {
             isShared: false,
             multiHead: enr.multi_head === true,
             snapshotDate: typeof enr.snapshot_date === 'string' ? enr.snapshot_date : null,
+            prevEnrollment: optInt(enr.prev_total),
         })
     }
     const asst = bd.assistant
@@ -99,6 +120,7 @@ export function headcountsOf(row: Record<string, unknown>): ClassHeadcount[] {
             isShared: c.is_shared_assistant === true,
             multiHead: false,
             snapshotDate: isObj(enr) && typeof enr.snapshot_date === 'string' ? enr.snapshot_date : null,
+            prevEnrollment: optInt(c.prev_total),
         })
     }
     return out
@@ -119,10 +141,48 @@ export function headcountGap(h: ClassHeadcount | null): number | null {
     return h.enrollment - h.target
 }
 
-export function gapText(gap: number | null): string {
-    if (gap === null) return '—'
-    if (gap === 0) return '達標'
-    return gap > 0 ? `+${gap}` : `−${Math.abs(gap)}`
+const PREV_REASONS: readonly PrevMonthReason[] = ['cross_school_year', 'unavailable']
+
+export function prevMonthOf(row: Record<string, unknown>): PrevMonthInfo | null {
+    const bd = row.breakdown
+    if (!isObj(bd) || !isObj(bd.prev_month)) return null
+    const p = bd.prev_month
+    if (typeof p.year !== 'number' || typeof p.month !== 'number') return null
+    return {
+        year: p.year,
+        month: p.month,
+        comparable: p.comparable === true,
+        reason: PREV_REASONS.includes(p.reason as PrevMonthReason) ? (p.reason as PrevMonthReason) : null,
+    }
+}
+
+/** 本月在籍 − 上月在籍；上月不明（舊後端、新班、不跨學年、取不到）回 null。 */
+export function headcountDelta(h: ClassHeadcount | null): number | null {
+    if (!h || h.prevEnrollment === null) return null
+    return h.enrollment - h.prevEnrollment
+}
+
+export function deltaText(delta: number | null): string {
+    if (delta === null) return '—'
+    if (delta === 0) return '持平'
+    return delta > 0 ? `+${delta}` : `−${Math.abs(delta)}`
+}
+
+/** 「較上月」儲存格的滑過說明。 */
+export function deltaTitle(h: ClassHeadcount | null, prev: PrevMonthInfo | null): string {
+    if (!h || !prev) return ''
+    if (prev.reason === 'cross_school_year') return `本月是新學年第一個月，不與上一學年（${prev.month} 月）比較`
+    if (!prev.comparable) return '上月人數取不到，暫時無法比較'
+    if (h.prevEnrollment === null) return `上月（${prev.month} 月）還沒有這個班`
+    return `${prev.month} 月 ${h.prevEnrollment} 人 → 本月 ${h.enrollment} 人`
+}
+
+/** 「較上月」欄表頭說明。 */
+export function prevHeaderTip(prev: PrevMonthInfo | null): string {
+    if (!prev) return '本月在籍 − 上月同一班在籍；不跨學年比較。'
+    if (prev.reason === 'cross_school_year') return `本月是新學年第一個月，不與上一學年（${prev.month} 月）比較。`
+    if (!prev.comparable) return '上月人數取不到，暫時無法比較。'
+    return `本月在籍 − 上月（${prev.month} 月）同一班在籍；不帶班者比全園人數。不跨學年比較。`
 }
 
 export function ratioText(h: ClassHeadcount | null): string {
