@@ -100,10 +100,6 @@ const classroomLabel = computed(() => {
   return String(props.form.classroom_id)
 })
 
-// 主管職／獎金等級覆蓋兩個 clearable el-select 必須 :value-on-clear="null"：EP 預設清除值是
-// undefined，JSON 序列化會丟掉 key，後端收不到「清空」卻回 200（QA P2 #72）；
-// 與 EmployeeFormSalary 的下拉一致。EmployeeFormDialog.dirtyToPayload 另有安全網。
-
 // 可收合區段 refs
 type CollapsibleSection = 'jobDetail' | 'personal' | 'worktime' | 'gov'
 
@@ -213,6 +209,9 @@ defineExpose({ applyValidationErrors })
         <el-option v-for="p in POSITION_OPTIONS" :key="p" :label="p" :value="p" />
       </el-select>
     </el-form-item>
+    <!-- 主管職／獎金等級覆蓋兩個 clearable el-select 必須 :value-on-clear="null"：Element Plus 預設清除值是
+         undefined，JSON 序列化會丟掉 key，後端收不到「清空」卻回 200（QA P2 #72）；
+         與 EmployeeFormSalary 的下拉一致。EmployeeFormDialog.dirtyToPayload 另有安全網。 -->
     <el-form-item label="主管職" prop="supervisor_role">
       <template v-if="isLocked('supervisor_role')">
         <span class="readonly-text">{{ fmt(form.supervisor_role) }} <el-icon><Lock /></el-icon></span>
@@ -221,6 +220,7 @@ defineExpose({ applyValidationErrors })
         <el-option v-for="item in SUPERVISOR_ROLE_OPTIONS" :key="item" :label="item" :value="item" />
       </el-select>
     </el-form-item>
+    <!-- 同上：清除值必須是 null（:value-on-clear="null"），否則清除不會送到後端 -->
     <el-form-item label="獎金等級覆蓋" prop="bonus_grade">
       <template v-if="isLocked('bonus_grade')">
         <span class="readonly-text">{{ fmt(form.bonus_grade) }} <el-icon><Lock /></el-icon></span>

@@ -205,10 +205,13 @@ describe('EmployeeFormDialog 清除主管職／獎金等級覆蓋（QA P2 #72）
     expect(s.form.salary_inputs_effective_from).toBe(EFF)
   })
 
-  // 範圍紀律：後端對 staff_role_category／teacher_cert_type 的 None 目前一律靜默略過（不在顯式清空白名單），
+  // 【範圍柵欄：後端支援清空後需同步翻轉】
+  // 後端對 staff_role_category／teacher_cert_type 的 None 目前一律靜默略過（不在顯式清空白名單），
   // 且自改守衛會把 staff_role_category 的 key 列為敏感欄；在後端確認前不把這些欄位的 undefined 改成 null。
   // 此案例鎖「正規化只對已確認欄位生效」，避免有人改成全欄位盲目轉 null。
-  it('未確認後端支援清空的欄位（staff_role_category）不被正規化，維持原行為', async () => {
+  // ⚠ 注意：payload 仍是 undefined（清除會假成功）是已知缺口、不是期望行為；
+  //   待後端對這些欄位支援 None 清空後，須把欄位加進 NULL_ON_CLEAR_FIELDS 並翻轉本案斷言為 null。
+  it('【範圍柵欄：後端支援清空後需同步翻轉】未確認後端支援清空的欄位（staff_role_category）不被正規化，維持原行為（已知缺口）', async () => {
     const s = await openEdited({ ...ROW, staff_role_category: 'office' })
     s.form.staff_role_category = undefined
     await flushPromises()
