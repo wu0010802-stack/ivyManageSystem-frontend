@@ -236,8 +236,18 @@ const FIELD_LABELS = {
   id_number: '身分證字號',
 }
 
+// 清除下拉時 Element Plus 預設把值寫成 undefined，JSON.stringify 會把該 key 整個丟掉：
+// 後端收到 {} 回 200，畫面卻顯示「已更新」（QA P2 #72）。根因在 EmployeeFormBasic 的
+// :value-on-clear="null"；這裡是安全網——只對「後端 EmployeeUpdate 確認會把 null 當成清空」
+// 的欄位把 undefined 正規化成 null（api/employees.py update_employee 的 None 白名單：
+// supervisor_role／gender 現況即支援，bonus_grade 由後端 U5 補上）。
+// 刻意不做全欄位盲轉：staff_role_category／teacher_cert_type／上下班時間等後端目前對 None
+// 一律靜默略過（且自改守衛會把有 key 的敏感欄位擋 403），後端未確認前維持原行為。
+const NULL_ON_CLEAR_FIELDS: ReadonlySet<string> = new Set(['supervisor_role', 'bonus_grade', 'gender'])
 const dirtyToPayload = (diff: Record<string, { after: unknown }>) =>
-  Object.fromEntries(Object.entries(diff).map(([k, v]) => [k, v.after]))
+  Object.fromEntries(
+    Object.entries(diff).map(([k, v]) => [k, v.after === undefined && NULL_ON_CLEAR_FIELDS.has(k) ? null : v.after]),
+  )
 
 const showError = (err: unknown) => {
   const m = mapEmployeeError(err)

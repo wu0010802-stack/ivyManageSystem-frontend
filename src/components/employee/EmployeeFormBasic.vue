@@ -100,6 +100,10 @@ const classroomLabel = computed(() => {
   return String(props.form.classroom_id)
 })
 
+// 主管職／獎金等級覆蓋兩個 clearable el-select 必須 :value-on-clear="null"：EP 預設清除值是
+// undefined，JSON 序列化會丟掉 key，後端收不到「清空」卻回 200（QA P2 #72）；
+// 與 EmployeeFormSalary 的下拉一致。EmployeeFormDialog.dirtyToPayload 另有安全網。
+
 // 可收合區段 refs
 type CollapsibleSection = 'jobDetail' | 'personal' | 'worktime' | 'gov'
 
@@ -213,7 +217,7 @@ defineExpose({ applyValidationErrors })
       <template v-if="isLocked('supervisor_role')">
         <span class="readonly-text">{{ fmt(form.supervisor_role) }} <el-icon><Lock /></el-icon></span>
       </template>
-      <el-select v-else v-model="form.supervisor_role" clearable placeholder="無主管職" style="width:100%">
+      <el-select v-else v-model="form.supervisor_role" clearable :value-on-clear="null" placeholder="無主管職" style="width:100%">
         <el-option v-for="item in SUPERVISOR_ROLE_OPTIONS" :key="item" :label="item" :value="item" />
       </el-select>
     </el-form-item>
@@ -222,7 +226,7 @@ defineExpose({ applyValidationErrors })
         <span class="readonly-text">{{ fmt(form.bonus_grade) }} <el-icon><Lock /></el-icon></span>
       </template>
       <template v-else>
-        <el-select v-model="form.bonus_grade" clearable filterable allow-create placeholder="自動（依教育局職稱）" style="width:100%">
+        <el-select v-model="form.bonus_grade" clearable :value-on-clear="null" filterable allow-create placeholder="自動（依教育局職稱）" style="width:100%">
           <el-option label="A 級（有教師證）" value="A" />
           <el-option label="B 級（教保員／助理教保員）" value="B" />
           <el-option label="C 級（非教保員）" value="C" />
