@@ -301,15 +301,19 @@ const approveOvertime = async (row: Record<string, unknown>, approved: boolean) 
 }
 
 
+// 合計只計已核准：待審核／已駁回不會發錢（後端建單即寫入 overtime_pay、駁回不清零），
+// 混入合計會誤導；與員工詳情頁 OvertimeSection 的 approvedSummary 同口徑
 const overtimeSummary = computed(() =>
-  overtimeRecords.value.reduce(
-    (acc: { totalHours: number; totalPay: number }, r) => {
-      acc.totalHours += Number(r.hours) || 0
-      acc.totalPay += Number(r.overtime_pay) || 0
-      return acc
-    },
-    { totalHours: 0, totalPay: 0 },
-  ),
+  overtimeRecords.value
+    .filter((r) => r.status === 'approved')
+    .reduce(
+      (acc: { totalHours: number; totalPay: number }, r) => {
+        acc.totalHours += Number(r.hours) || 0
+        acc.totalPay += Number(r.overtime_pay) || 0
+        return acc
+      },
+      { totalHours: 0, totalPay: 0 },
+    ),
 )
 
 const {
@@ -651,6 +655,7 @@ watch(activeSection, async (value) => {
           <div class="summary">
             <span>本月加班合計: <strong>{{ overtimeSummary.totalHours }} 小時</strong></span>
             <span>加班費合計: <strong>{{ money(overtimeSummary.totalPay) }}</strong></span>
+            <span class="muted-hint">僅計已核准（待審核、已駁回不計入）</span>
           </div>
         </el-card>
       </el-tab-pane>
