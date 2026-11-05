@@ -261,6 +261,44 @@ describe('StepFinalize 名冊載入中（切月後不得操作舊月名冊）', 
         expect(vm.disabledReason).toBe('')
     })
 
+    // 切月後的真實狀態是 loading=true 且 records=[]（watcher 先清空再重抓）。載入守衛必須排在
+    // 「records 為空」「已全數封存」之前，否則提示會變成「本月尚未計算薪資」／舊月的「已全數封存」，
+    // 按鈕雖仍 disabled，但操作者讀到的是錯誤的月狀態。
+    it('loading 中且 records 為空（切月後真實狀態）→ 提示載入中，而非「本月尚未計算薪資」', async () => {
+        const settlement = makeSettlement([])
+        settlement.loading.value = true
+        const wrapper = mountStep(settlement)
+        const vm = wrapper.vm as unknown as { disabledReason: string }
+
+        expect(vm.disabledReason).toContain('載入')
+        expect(vm.disabledReason).not.toContain('尚未計算')
+        // tooltip 的 content 綁定也要是載入提示（stub 未宣告 props，content 會落在根節點屬性上）
+        expect(wrapper.find('[content]').attributes('content')).toContain('載入')
+        expect(findFinalizeBtn(wrapper).attributes('disabled')).toBeDefined()
+
+        // 載入完成後回到真實原因：新月確實尚未計算
+        settlement.loading.value = false
+        await nextTick()
+        expect(vm.disabledReason).toContain('尚未計算')
+        expect(wrapper.find('[content]').attributes('content')).toContain('尚未計算')
+    })
+
+    it('loading 中且名冊顯示全數封存 → 提示載入中，不顯示「本月已全數封存」', async () => {
+        const settlement = makeSettlement([rec({ is_finalized: true })])
+        settlement.loading.value = true
+        const wrapper = mountStep(settlement)
+        const vm = wrapper.vm as unknown as { disabledReason: string }
+
+        expect(vm.disabledReason).toContain('載入')
+        expect(vm.disabledReason).not.toContain('已全數封存')
+        expect(findFinalizeBtn(wrapper).attributes('disabled')).toBeDefined()
+
+        // 載入完成 → 才換成真實原因
+        settlement.loading.value = false
+        await nextTick()
+        expect(vm.disabledReason).toContain('已全數封存')
+    })
+
     it('整合：切月後新月名冊回來前，人數歸零、定案鈕不可按；回來後以新月名冊恢復', async () => {
         getRecordsMock.mockResolvedValueOnce({
             data: [rec({ employee_name: 'MAY-1' }), rec({ id: 2, employee_id: 'E2', employee_name: 'MAY-2' })],

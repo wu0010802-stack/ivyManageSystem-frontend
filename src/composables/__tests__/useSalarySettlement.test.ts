@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { ref, nextTick } from 'vue'
+import { mount, flushPromises } from '@vue/test-utils'
+import { ref, nextTick, reactive, toRef, defineComponent, h, inject, provide, onMounted } from 'vue'
 import {
     deriveStatus,
     detectAnomalies,
@@ -8,6 +9,7 @@ import {
     setThresholds,
     useSalarySettlement,
     DEFAULT_THRESHOLDS,
+    type SalarySettlement,
     type SettlementRecord,
 } from '@/composables/useSalarySettlement'
 import { getRecords } from '@/api/salary'
@@ -404,6 +406,71 @@ describe('useSalarySettlement 切換年月（舊月名冊不得殘留到新月�
         expect(s.records.value).toEqual([])
         expect(s.currentLoadFailed.value).toBe(true)
         expect(s.loading.value).toBe(false)
+    })
+})
+
+// SalarySettleView 以 `:key="步驟:年-月"` 在切月時重掛步驟元件，而 useSalarySettlement 的 watch 與該 view
+// 同屬一個元件實例。watch 必須維持預設的 pre-flush：先清空名冊、重抓（loading=true），父層才 render
+// 並 setup 新步驟，新步驟因此一開始就看到「空名冊 + 載入中」。若改成 flush: 'post'，新步驟會先以舊月名冊
+// 首次渲染（定案／計算鈕在那一幀還可按），之後才被清空。這裡用「真 composable + 帶 :key 的重掛元件」鎖住時序。
+describe('useSalarySettlement 與 :key 重掛步驟的時序（watch 須為 pre-flush）', () => {
+    beforeEach(() => {
+        vi.mocked(getRecords).mockReset()
+    })
+
+    interface Seen { month: number; count: number; loading: boolean; failed: boolean }
+
+    it('切月重掛的新步驟在 setup 當下就看到空名冊與載入中（不得先以舊月名冊渲染一幀）', async () => {
+        const seen: Seen[] = []
+        const query = reactive({ year: 2026, month: 5 })
+        let settlement!: SalarySettlement
+
+        const Probe = defineComponent({
+            props: { month: { type: Number, required: true } },
+            setup(props) {
+                const s = inject<SalarySettlement>('settlement')!
+                seen.push({
+                    month: props.month,
+                    count: s.records.value.length,
+                    loading: s.loading.value,
+                    failed: s.currentLoadFailed.value,
+                })
+                return () => h('div', { class: 'probe' }, String(props.month))
+            },
+        })
+        const Host = defineComponent({
+            setup() {
+                settlement = useSalarySettlement(toRef(query, 'year'), toRef(query, 'month'))
+                provide('settlement', settlement)
+                onMounted(settlement.refresh)
+                return () => h(Probe, { key: `${query.year}-${query.month}`, month: query.month })
+            },
+        })
+
+        vi.mocked(getRecords).mockResolvedValueOnce({
+            data: [rec({ employee_name: 'MAY-1' }), rec({ id: 2, employee_id: 'E2', employee_name: 'MAY-2' })],
+        } as Awaited<ReturnType<typeof getRecords>>)
+        const wrapper = mount(Host)
+        await flushPromises()
+        expect(settlement.records.value).toHaveLength(2)
+        expect(seen).toEqual([{ month: 5, count: 0, loading: false, failed: false }]) // 首次掛載時尚未載入
+
+        // 4 月請求 pending：切月瞬間 Probe 以 :key 重掛
+        let resolveApril!: (v: Awaited<ReturnType<typeof getRecords>>) => void
+        vi.mocked(getRecords).mockReturnValueOnce(
+            new Promise((resolve) => { resolveApril = resolve }) as ReturnType<typeof getRecords>,
+        )
+        query.month = 4
+        await nextTick()
+
+        expect(seen).toHaveLength(2)
+        expect(seen[1]).toEqual({ month: 4, count: 0, loading: true, failed: false })
+        expect(wrapper.find('.probe').text()).toBe('4')
+
+        resolveApril({ data: [rec({ employee_name: 'APR-1' })] } as Awaited<ReturnType<typeof getRecords>>)
+        await flushPromises()
+        expect(settlement.records.value.map((r) => r.employee_name)).toEqual(['APR-1'])
+        expect(settlement.loading.value).toBe(false)
     })
 })
 

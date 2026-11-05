@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, reactive, toRef } from 'vue'
 import StepCalculate from '../StepCalculate.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useSalarySettlement, type SettlementRecord } from '@/composables/useSalarySettlement'
 
 const calculateMock = vi.fn()
 const calculateAsyncMock = vi.fn()
 const getSalaryCalcJobMock = vi.fn()
 const getSnapshotMock = vi.fn()
+const getRecordsMock = vi.fn()
 vi.mock('@/api/salary', () => ({
+    getRecords: (...a: unknown[]) => getRecordsMock(...a),
     calculate: (...a: unknown[]) => calculateMock(...a),
     calculateAsync: (...a: unknown[]) => calculateAsyncMock(...a),
     getSalaryCalcJob: (...a: unknown[]) => getSalaryCalcJobMock(...a),
@@ -310,6 +313,103 @@ describe('StepCalculate', () => {
             expect(wrapper.emitted('next')).toBeFalsy()
             expect(ElMessage.success).not.toHaveBeenCalled()
         })
+    })
+})
+
+// 整合案：用真 useSalarySettlement（而非手捏的 mock settlement）驗證「切月 → 清空 → 重抓」整條時序，
+// 比照 StepFinalize.spec 的整合案。
+describe('StepCalculate 整合：真 useSalarySettlement 切月', () => {
+    beforeEach(() => {
+        calculateAsyncMock.mockReset()
+        getSalaryCalcJobMock.mockReset()
+        getSnapshotMock.mockReset()
+        getSnapshotMock.mockResolvedValue({ data: { covered_months: [], rows: [] } })
+        getRecordsMock.mockReset()
+        hasPermissionMock.mockReturnValue(true)
+        vi.mocked(ElMessageBox.confirm).mockReset()
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+    })
+
+    const rec = (over: Partial<SettlementRecord> = {}): SettlementRecord => ({
+        id: 1,
+        employee_id: 'E1',
+        employee_name: '測試',
+        version: 1,
+        gross_salary: 40000,
+        net_salary: 36000,
+        is_finalized: false,
+        breakdown_stale: false,
+        manual_overrides: [],
+        ...over,
+    })
+
+    function deferred<T>() {
+        let resolve!: (value: T) => void
+        const promise = new Promise<T>((done) => { resolve = done })
+        return { promise, resolve }
+    }
+
+    /** 以真 composable 載入 5 月名冊後掛載 StepCalculate。 */
+    const mountWithRealSettlement = async (mayRecords: SettlementRecord[]) => {
+        getRecordsMock.mockResolvedValueOnce({ data: mayRecords })
+        const query = reactive({ year: 2026, month: 5 })
+        const settlement = useSalarySettlement(toRef(query, 'year'), toRef(query, 'month'))
+        await settlement.refresh()
+        const wrapper = mount(StepCalculate, {
+            global: { stubs: STUBS, provide: { settlement, settleQuery: query } },
+        })
+        await flushPromises()
+        const findBtn = () => wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))!
+        const vm = wrapper.vm as unknown as { disabledReason: string }
+        return { query, settlement, wrapper, findBtn, vm }
+    }
+
+    it('舊月已定案，切月後新月名冊回來前：不沿用「已定案」、計算鈕不可按；回來後以新月狀態為準', async () => {
+        const { query, wrapper, findBtn, vm } = await mountWithRealSettlement([
+            rec({ employee_name: 'MAY', is_finalized: true }),
+        ])
+        expect(vm.disabledReason).toContain('已定案')
+        expect(findBtn().attributes('disabled')).toBeDefined()
+
+        // 4 月請求 pending：新月名冊還沒回來
+        const april = deferred<{ data: SettlementRecord[] }>()
+        getRecordsMock.mockReturnValueOnce(april.promise)
+        query.month = 4
+        await nextTick()
+        await nextTick()
+
+        expect(vm.disabledReason).toContain('載入')
+        expect(vm.disabledReason).not.toContain('已定案')
+        expect(findBtn().attributes('disabled')).toBeDefined()
+        await findBtn().trigger('click')
+        await flushPromises()
+        expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+        expect(calculateAsyncMock).not.toHaveBeenCalled()
+
+        // 新月（4 月）尚未封存 → 回來後可計算
+        april.resolve({ data: [rec({ employee_name: 'APR', is_finalized: false })] })
+        await flushPromises()
+        expect(vm.disabledReason).toBe('')
+        expect(findBtn().attributes('disabled')).toBeUndefined()
+    })
+
+    it('舊月有過期明細（需重算橫幅），切月後新月名冊回來前橫幅不得殘留', async () => {
+        const { query, wrapper } = await mountWithRealSettlement([
+            rec({ employee_name: 'MAY', breakdown_stale: true }),
+        ])
+        expect(wrapper.text()).toContain('建議重新計算')
+
+        const april = deferred<{ data: SettlementRecord[] }>()
+        getRecordsMock.mockReturnValueOnce(april.promise)
+        query.month = 4
+        await nextTick()
+        await nextTick()
+
+        expect(wrapper.text()).not.toContain('建議重新計算')
+
+        april.resolve({ data: [rec({ employee_name: 'APR' })] })
+        await flushPromises()
+        expect(wrapper.text()).not.toContain('建議重新計算')
     })
 })
 
