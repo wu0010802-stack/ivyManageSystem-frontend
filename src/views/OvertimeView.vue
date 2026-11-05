@@ -303,8 +303,9 @@ const approveOvertime = async (row: Record<string, unknown>, approved: boolean) 
 
 // 合計只計已核准：待審核／已駁回不會發錢（後端建單即寫入 overtime_pay、駁回不清零），
 // 混入合計會誤導；與員工詳情頁 OvertimeSection 的 approvedSummary 同口徑
-const overtimeSummary = computed(() =>
-  overtimeRecords.value
+// （時數累加後取兩位小數，避免 0.1 + 0.2 顯示 0.30000000000000004；加班費不取整，同詳情頁）
+const overtimeSummary = computed(() => {
+  const totals = overtimeRecords.value
     .filter((r) => r.status === 'approved')
     .reduce(
       (acc: { totalHours: number; totalPay: number }, r) => {
@@ -313,8 +314,9 @@ const overtimeSummary = computed(() =>
         return acc
       },
       { totalHours: 0, totalPay: 0 },
-    ),
-)
+    )
+  return { totalHours: Math.round(totals.totalHours * 100) / 100, totalPay: totals.totalPay }
+})
 
 const {
   selectedItems: selectedOvertimes,

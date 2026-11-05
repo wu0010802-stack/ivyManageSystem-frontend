@@ -389,6 +389,67 @@ describe('OvertimeView', () => {
       expect(summary.text()).not.toContain('$1000')
       expect(summary.text()).not.toContain('4 小時')
     })
+
+    // 與詳情頁 OvertimeSection.approvedSummary 同口徑：時數累加後 Math.round(x * 100) / 100，
+    // 避免小數時數的浮點誤差（0.1 + 0.2 → 0.30000000000000004）直接顯示在畫面上
+    it('小數時數：1.5 + 2.5 = 4（不可逐筆取整後再加總）', async () => {
+      getOvertimes.mockResolvedValue(paged([
+          { id: 1, hours: 1.5, overtime_pay: 300, status: 'approved' },
+          { id: 2, hours: 2.5, overtime_pay: 500, status: 'approved' },
+        ]))
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalHours).toBe(4)
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalPay).toBe(800)
+    })
+
+    it('小數時數浮點誤差：0.1 + 0.2 四捨五入到兩位小數為 0.3', async () => {
+      getOvertimes.mockResolvedValue(paged([
+          { id: 1, hours: 0.1, overtime_pay: 20, status: 'approved' },
+          { id: 2, hours: 0.2, overtime_pay: 40, status: 'approved' },
+        ]))
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalHours).toBe(0.3)
+      const summary = wrapper.find('.summary-card .summary')
+      expect(summary.text()).toContain('0.3 小時')
+      expect(summary.text()).not.toContain('0.30000000000000004')
+    })
+
+    it('已核准為 0 但列表非空：合計卡仍顯示 0 小時、$0 與整句「僅計已核准」提示', async () => {
+      getOvertimes.mockResolvedValue(paged([
+          { id: 1, hours: 2, overtime_pay: 500, status: 'pending' },
+          { id: 2, hours: 3, overtime_pay: 800, status: 'rejected' },
+        ]))
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      const summary = wrapper.find('.summary-card .summary')
+      expect(summary.exists()).toBe(true)
+      expect(summary.text()).toContain('本月加班合計: 0 小時')
+      expect(summary.text()).toContain('加班費合計: $0')
+      expect(summary.text()).toContain('僅計已核准（待審核、已駁回不計入）')
+      expect(summary.text()).not.toContain('$500')
+      expect(summary.text()).not.toContain('$800')
+    })
+
+    it('status 缺漏、null 或 cancelled（非 approved 的未知值）不計入合計', async () => {
+      getOvertimes.mockResolvedValue(paged([
+          { id: 1, hours: 2, overtime_pay: 500, status: 'approved' },
+          { id: 2, hours: 1, overtime_pay: 300 },
+          { id: 3, hours: 1, overtime_pay: 200, status: null },
+          { id: 4, hours: 4, overtime_pay: 900, status: 'cancelled' },
+        ]))
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalHours).toBe(2)
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalPay).toBe(500)
+    })
   })
 
   // ── canApprove 邏輯 ───────────────────────────────────────────────────────
