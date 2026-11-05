@@ -73,8 +73,10 @@ vi.mock('@/composables/useFormDraft', async () => {
 
 import LeaveView from '@/views/LeaveView.vue'
 
-// el-form 用會暴露 validate() 的 stub（恆通過），讓 saveLeave 能走到「確認已核准假單」那一段；
-// 表單驗證規則本身不是這組測試要驗的東西（vitest 下真 ElForm.validate 也恆回 true）。
+// el-form 用會暴露 validate() 的 stub，讓 saveLeave 能走到「確認已核准假單」那一段；
+// 表單驗證規則本身不是這組測試要驗的東西（vitest 下真 ElForm.validate 恆回 true，所以驗證失敗的情境
+// 只能靠 stub 製造）。預設通過，確認順序的案例會把 formState.valid 設成 false 模擬驗證失敗。
+const formState = vi.hoisted(() => ({ valid: true }))
 const stubs = {
   'el-tabs': { template: '<div><slot /></div>' },
   'el-tab-pane': { template: '<div><slot /></div>' },
@@ -85,7 +87,7 @@ const stubs = {
   'el-dialog': { name: 'ElDialog', props: ['modelValue', 'title'], template: '<section v-if="modelValue" :data-title="title"><slot /><slot name="footer" /></section>' },
   'el-form': {
     template: '<form><slot /></form>',
-    methods: { validate: () => Promise.resolve(true), clearValidate: () => {} },
+    methods: { validate: () => Promise.resolve(formState.valid), clearValidate: () => {} },
   },
   'el-form-item': { template: '<div><slot /></div>' },
 }
@@ -128,6 +130,7 @@ const confirmCalls = () => ui.confirm.mock.calls.map((c) => ({ message: String(c
 
 beforeEach(() => {
   vi.clearAllMocks()
+  formState.valid = true
   route.query = {}
   api.getLeaves.mockResolvedValue(paged([]))
   api.updateLeave.mockResolvedValue({ data: { message: '請假記錄已更新', reset_to_pending: false } })
@@ -180,6 +183,23 @@ describe('LeaveView 編輯已核准假單：退回待審核的確認', () => {
     await second.vm.openEditWithDraft(makeLeave({ status: 'approved' }))
     await second.vm.saveLeave()
     await flushPromises()
+    expect(ui.success).toHaveBeenCalledTimes(1)
+    expect(ui.success).toHaveBeenCalledWith('請假記錄已更新')
+  })
+
+  // schema 的 LeaveUpdateResultOut.reset_to_pending 是 boolean | null 且可省略：只有明確的 true 才算退審，
+  // null／未帶不能被當成退審（否則會對沒被退審的單誤報「已退回待審核」）。
+  it.each([
+    ['null', { message: 'x', reset_to_pending: null }],
+    ['未帶欄位（undefined）', { message: 'x' }],
+  ])('後端回 reset_to_pending 為 %s → 成功提示維持「請假記錄已更新」，不誤報退審', async (_label, data) => {
+    api.updateLeave.mockResolvedValue({ data })
+    const { vm } = await mountView()
+    await vm.openEditWithDraft(makeLeave({ status: 'approved' }))
+    await vm.saveLeave()
+    await flushPromises()
+
+    expect(api.updateLeave).toHaveBeenCalledTimes(1)
     expect(ui.success).toHaveBeenCalledTimes(1)
     expect(ui.success).toHaveBeenCalledWith('請假記錄已更新')
   })
@@ -237,5 +257,50 @@ describe('LeaveView 編輯已核准假單：退回待審核的確認', () => {
     expect(api.createLeave).toHaveBeenCalledTimes(1)
     expect(api.updateLeave).not.toHaveBeenCalled()
     expect(ui.success).toHaveBeenCalledWith('請假記錄已新增')
+  })
+})
+
+// 「退回待審核」確認必須排在表單驗證與其他確認「之後」、真正送出「之前」：
+// 驗證沒過或使用者在先前的確認取消時，不該再被問一次會退審的問題。
+describe('LeaveView 編輯已核准假單：確認的先後順序', () => {
+  const titles = () => confirmCalls().map((c) => c.title)
+  // 病假 3 小時違反「須以 4 小時為單位」→ 會先跳「違反請假規則」確認（其他確認條件皆不成立）
+  const violatingSick = () => makeLeave({ status: 'approved', leave_type: 'sick', leave_hours: 3 })
+
+  it('表單驗證失敗：不跳「退回待審核」確認，也不送出', async () => {
+    formState.valid = false
+    const { vm } = await mountView()
+    await vm.openEditWithDraft(makeLeave({ status: 'approved' }))
+    await vm.saveLeave()
+    await flushPromises()
+
+    expect(ui.confirm).not.toHaveBeenCalled()
+    expect(api.updateLeave).not.toHaveBeenCalled()
+    expect(ui.success).not.toHaveBeenCalled()
+  })
+
+  it('規則違反確認被取消：不再跳「退回待審核」確認，也不送出', async () => {
+    ui.confirm.mockImplementation((_msg: unknown, title: unknown) =>
+      title === '違反請假規則' ? Promise.reject('cancel') : Promise.resolve('confirm'),
+    )
+    const { vm } = await mountView()
+    await vm.openEditWithDraft(violatingSick())
+    await vm.saveLeave()
+    await flushPromises()
+
+    expect(titles()).toEqual(['違反請假規則'])
+    expect(api.updateLeave).not.toHaveBeenCalled()
+    expect(ui.success).not.toHaveBeenCalled()
+  })
+
+  it('規則違反確認通過：兩個確認依序出現（先規則、後退審），之後才送出一次', async () => {
+    const { vm } = await mountView()
+    await vm.openEditWithDraft(violatingSick())
+    await vm.saveLeave()
+    await flushPromises()
+
+    expect(titles()).toEqual(['違反請假規則', '編輯已核准假單'])
+    expect(api.updateLeave).toHaveBeenCalledTimes(1)
+    expect(api.updateLeave.mock.calls[0][0]).toBe(77)
   })
 })
