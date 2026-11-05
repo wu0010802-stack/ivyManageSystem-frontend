@@ -73,6 +73,33 @@ describe('useEmployeeFormDirty', () => {
     expect(basicDirty.value).toEqual({ phone: { before: '0922', after: '0933' } })
   })
 
+  it('reset(form, fields) 只重設指定欄位，另一 tab 的待存異動維持 dirty（QA F1）', async () => {
+    const form = reactive({ name: '甲', phone: '0911', base_salary: 30000, pension_self_rate: 0 })
+    const { reset, basicDirty, salaryDirty } = useEmployeeFormDirty(form, basicFields, salaryFields)
+    reset(form)
+    form.phone = '0922'
+    form.base_salary = 38000
+    await nextTick()
+    reset(form, basicFields) // 只存了基本資料 tab
+    await nextTick()
+    expect(basicDirty.value).toEqual({})
+    expect(salaryDirty.value).toEqual({ base_salary: { before: 30000, after: 38000 } })
+    // 之後基本資料 tab 再改，基準是剛才儲存的值
+    form.phone = '0933'
+    await nextTick()
+    expect(basicDirty.value).toEqual({ phone: { before: '0922', after: '0933' } })
+  })
+
+  it('reset(form, fields) 在尚無基準快照時退回整份重設', async () => {
+    const form = reactive({ name: '甲', phone: '0911', base_salary: 30000, pension_self_rate: 0 })
+    const { reset, basicDirty, salaryDirty } = useEmployeeFormDirty(form, basicFields, salaryFields)
+    form.base_salary = 38000
+    reset(form, basicFields)
+    await nextTick()
+    expect(basicDirty.value).toEqual({})
+    expect(salaryDirty.value).toEqual({})
+  })
+
   it('originalForm 為 null（新增模式）→ dirty 永遠是空', async () => {
     const form = reactive({ name: '甲', phone: '0911', base_salary: 30000, pension_self_rate: 0 })
     const { basicDirty } = useEmployeeFormDirty(form, basicFields, salaryFields)

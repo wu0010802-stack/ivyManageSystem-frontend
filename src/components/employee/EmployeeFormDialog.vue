@@ -18,6 +18,7 @@ import { useFormDraft } from '@/composables/useFormDraft'
 import { useCrudDialog } from '@/composables/useCrudDialog'
 import { BASIC_TAB_FIELDS, SALARY_TAB_FIELDS } from '@/constants/employeeFields'
 import { OFFICIAL_JOB_TITLE_NAMES } from '@/constants/employee'
+import { touchesSalaryInputHistory } from '@/constants/salaryInputHistory'
 // 職稱→職等 / 職稱→薪資 key 改讀 per-tenant 端點（CT-FIX-09）。composable 在
 // setup 期觸發載入；兩支 getter 在載入完成前/失敗時退回 constants/employee.ts 的
 // 常數，因此下方的同步邏輯與改造前逐字相同（單租戶下兩者等價）。
@@ -513,28 +514,41 @@ const saveCreate = async () => {
   })
 }
 
-// #41：有「薪資輸入歷史欄」異動時才帶生效日（單填日期不算變更；後端對非歷史欄忽略）
-const SALARY_HISTORY_FIELDS_IN_BASIC_TAB = ['dependents']
-const withEffectiveFrom = (payload: Record<string, unknown>, historyKeys: readonly string[] | null) => {
+// #41／QA F1：payload 含任一「薪資輸入歷史欄」（清單與後端同源，見 constants/salaryInputHistory.ts）
+// 才帶異動生效日（單填日期不算變更；沒帶歷史欄的送出不帶，避免無謂的日期校驗與誤用掉）。
+// 生效日輸入框只在薪資 tab，兩個 tab 共用 form.salary_inputs_effective_from。
+const withEffectiveFrom = (payload: Record<string, unknown>) => {
   const eff = form.salary_inputs_effective_from
   if (!eff) return payload
-  if (historyKeys && !historyKeys.some((k) => k in payload)) return payload
+  if (!touchesSalaryInputHistory(Object.keys(payload))) return payload
   return { ...payload, salary_inputs_effective_from: eff }
+}
+
+// 生效日「用掉才清」：只有這次 payload 實際帶出（且已儲存成功）才清空；
+// 另一個 tab 還有待儲存的歷史欄異動時也先保留，讓它用同一個生效日（先存哪個 tab 都不會遺失）。
+const settleEffectiveFrom = (
+  sentPayload: Record<string, unknown>,
+  otherTabDiff: Record<string, unknown>,
+) => {
+  if (!('salary_inputs_effective_from' in sentPayload)) return
+  if (touchesSalaryInputHistory(Object.keys(otherTabDiff))) return
+  form.salary_inputs_effective_from = ''
 }
 
 // ── 基本資料更新（只送 dirty fields）────────────────
 const saveBasic = async () => {
-  const payload = withEffectiveFrom(dirtyToPayload(basicDirty.value), SALARY_HISTORY_FIELDS_IN_BASIC_TAB)
+  const payload = withEffectiveFrom(dirtyToPayload(basicDirty.value))
   if (Object.keys(payload).length === 0) {
     ElMessage.info('無變動')
     return
   }
   try {
     await updateEmployeeBasic(form.id!, payload)
-    form.salary_inputs_effective_from = ''
+    // 只標記基本資料 tab 已儲存；薪資 tab 尚未儲存的異動維持 dirty
+    resetDirty(form, BASIC_TAB_FIELDS)
+    settleEffectiveFrom(payload, salaryDirty.value)
     ElMessage.success(`基本資料已更新（${Object.keys(payload).length} 個欄位）`)
     emit('saved')
-    resetDirty(form)
     employeeDraft.clear()
   } catch (err) {
     showError(err)
@@ -548,14 +562,15 @@ const submitSalary = async (adjustmentReason: string | null = null) => {
     ElMessage.info('無變動')
     return
   }
-  const payload = withEffectiveFrom(dirtyPayload, null)
+  const payload = withEffectiveFrom(dirtyPayload)
   if (adjustmentReason) payload.adjustment_reason = adjustmentReason
   try {
     await updateEmployeeSalary(form.id!, payload)
-    form.salary_inputs_effective_from = ''
+    // 只標記薪資 tab 已儲存；基本資料 tab 尚未儲存的異動維持 dirty
+    resetDirty(form, SALARY_TAB_FIELDS)
+    settleEffectiveFrom(payload, basicDirty.value)
     ElMessage.success(`薪資資料已更新（${Object.keys(payload).length} 個欄位）`)
     emit('saved')
-    resetDirty(form)
   } catch (err) {
     showError(err)
   }

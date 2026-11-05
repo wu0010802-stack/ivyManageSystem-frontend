@@ -36,6 +36,7 @@ type Setup = {
   submitSalary: (reason?: string | null) => Promise<void>
   saveBasic: () => Promise<void>
   salaryDirty: Record<string, unknown>
+  basicDirty: Record<string, unknown>
 }
 
 const ROW = {
@@ -99,5 +100,149 @@ describe('EmployeeFormDialog 健保本人自付比例與異動生效日', () => 
     await flushPromises()
     await s.saveBasic()
     expect(updateEmployeeBasic).toHaveBeenCalledWith(1, { name: '吳亞娗２' })
+  })
+})
+
+// QA F1（2026-11-05）：基本資料 tab 的歷史欄不只 dependents，後端 SALARY_INPUT_HISTORY_FIELDS
+// 另含 job_title_id／position／supervisor_role／bonus_grade；漏帶生效日會被後端當「今天」寫歷史列，
+// 補算過去月份讀不到新值。生效日輸入框只在薪資 tab，兩個 tab 共用 form.salary_inputs_effective_from，
+// 因此「用掉才清、沒用到不清、另一 tab 還有待存歷史欄時不清」。
+describe('EmployeeFormDialog 基本資料 tab 全部歷史欄都帶生效日（QA F1）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const EFF = '2026-10-01'
+
+  it.each<[string, unknown]>([
+    ['bonus_grade', 'A'],
+    ['supervisor_role', 'principal'],
+    ['position', '班導師'],
+    ['job_title_id', 5],
+    ['dependents', 2],
+  ])('改 %s 並設生效日 → saveBasic payload 帶 salary_inputs_effective_from', async (field, value) => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form[field] = value
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+    await s.saveBasic()
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
+      [field]: value,
+      salary_inputs_effective_from: EFF,
+    })
+    // 實際帶出且儲存成功 → 生效日用掉、清空
+    expect(s.form.salary_inputs_effective_from).toBe('')
+  })
+
+  it('只改電話（非歷史欄）→ 不帶生效日，且生效日不被吃掉', async () => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.phone = '0912-345-678'
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+    await s.saveBasic()
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, { phone: '0912-345-678' })
+    expect(s.form.salary_inputs_effective_from).toBe(EFF)
+  })
+
+  it('薪資 tab 只改銀行帳號（非歷史欄）→ 不帶生效日，且生效日不被吃掉', async () => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.bank_account = '1234567890'
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+    await s.submitSalary(null)
+    expect(updateEmployeeSalary).toHaveBeenCalledWith(1, { bank_account: '1234567890' })
+    expect(s.form.salary_inputs_effective_from).toBe(EFF)
+  })
+
+  it('兩 tab 都有歷史欄待存：先存薪資 → 生效日保留給基本資料 tab', async () => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.health_self_pay_ratio = 0.5 // 薪資 tab 歷史欄
+    s.form.bonus_grade = 'A' // 基本 tab 歷史欄
+    s.form.dependents = 1 // 基本 tab 歷史欄
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+
+    await s.submitSalary(null)
+    expect(updateEmployeeSalary).toHaveBeenCalledWith(1, {
+      health_self_pay_ratio: 0.5,
+      salary_inputs_effective_from: EFF,
+    })
+    // 存薪資不可把基本資料 tab 尚未儲存的異動標成「已儲存」
+    expect(Object.keys(s.basicDirty).sort()).toEqual(['bonus_grade', 'dependents'])
+    // 基本資料 tab 還要用同一個生效日 → 不清
+    expect(s.form.salary_inputs_effective_from).toBe(EFF)
+
+    await s.saveBasic()
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
+      bonus_grade: 'A',
+      dependents: 1,
+      salary_inputs_effective_from: EFF,
+    })
+    // 兩邊都用掉了 → 清空
+    expect(s.form.salary_inputs_effective_from).toBe('')
+  })
+
+  it('兩 tab 都有歷史欄待存：先存基本資料 → 生效日保留給薪資 tab', async () => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.health_self_pay_ratio = 0.5
+    s.form.supervisor_role = 'principal'
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+
+    await s.saveBasic()
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
+      supervisor_role: 'principal',
+      salary_inputs_effective_from: EFF,
+    })
+    expect(Object.keys(s.salaryDirty)).toEqual(['health_self_pay_ratio'])
+    expect(s.form.salary_inputs_effective_from).toBe(EFF)
+
+    await s.submitSalary(null)
+    expect(updateEmployeeSalary).toHaveBeenCalledWith(1, {
+      health_self_pay_ratio: 0.5,
+      salary_inputs_effective_from: EFF,
+    })
+    expect(s.form.salary_inputs_effective_from).toBe('')
+  })
+
+  it('另一 tab 只剩非歷史欄待存 → 用掉的生效日照樣清空', async () => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.bonus_grade = 'B'
+    s.form.phone = '0912-345-678' // 基本 tab 的非歷史欄，不需要生效日
+    s.form.bank_account = '1234567890' // 薪資 tab 的非歷史欄
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+    await s.saveBasic()
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
+      bonus_grade: 'B',
+      phone: '0912-345-678',
+      salary_inputs_effective_from: EFF,
+    })
+    // 薪資 tab 剩下的 bank_account 不是歷史欄 → 不需要生效日
+    expect(s.form.salary_inputs_effective_from).toBe('')
+    expect(Object.keys(s.salaryDirty)).toEqual(['bank_account'])
+  })
+
+  it('儲存失敗 → 生效日與 dirty 都保留（可重試）', async () => {
+    vi.mocked(updateEmployeeBasic).mockRejectedValueOnce(new Error('boom'))
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.bonus_grade = 'A'
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+    await s.saveBasic()
+    expect(s.form.salary_inputs_effective_from).toBe(EFF)
+    expect(Object.keys(s.basicDirty)).toEqual(['bonus_grade'])
   })
 })
