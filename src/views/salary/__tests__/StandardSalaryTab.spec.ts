@@ -327,3 +327,130 @@ describe('StandardSalaryTab — 職位標準底薪改需金流簽核（資安稽
     expect(updatePositionSalary).toHaveBeenCalled()
   })
 })
+
+// QA #66：GET 載入失敗時畫面上是元件寫死的預設數字（39240／37160…），若仍可儲存，
+// PUT 會把這些預設值整包寫回租戶並讓未封存薪資標記需重算。載入未成功／進行中一律不可儲存。
+describe('StandardSalaryTab — 載入失敗或載入中不可儲存（QA #66）', () => {
+  type SaveVm = { savePositionSalary: () => Promise<void> }
+  const saveButtonOf = (wrapper: Awaited<ReturnType<typeof mountTab>>) =>
+    wrapper.findAll('button').find((b) => b.text() === '儲存職位底薪設定')!
+  const retryButtonOf = (wrapper: Awaited<ReturnType<typeof mountTab>>) =>
+    wrapper.findAll('button').find((b) => b.text() === '重試職位底薪設定')
+  const callSave = (wrapper: Awaited<ReturnType<typeof mountTab>>) =>
+    (wrapper.vm as unknown as SaveVm).savePositionSalary()
+
+  it('載入失敗：儲存鈕停用、出現 role=alert 錯誤條，程式化呼叫儲存也不送 API', async () => {
+    getPositionSalary.mockRejectedValue(new Error('boom'))
+    const wrapper = await mountTab()
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('載入失敗')
+    expect(retryButtonOf(wrapper)).toBeDefined()
+
+    await callSave(wrapper)
+    await flush()
+    expect(updatePositionSalary).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('尚未成功載入'))
+  })
+
+  it('載入失敗：點停用的儲存鈕同樣不送 API', async () => {
+    getPositionSalary.mockRejectedValue(new Error('boom'))
+    const wrapper = await mountTab()
+    await saveButtonOf(wrapper).trigger('click')
+    await flush()
+    expect(updatePositionSalary).not.toHaveBeenCalled()
+  })
+
+  it('點重試會再呼叫載入；仍失敗則維持停用與錯誤條', async () => {
+    getPositionSalary.mockRejectedValue(new Error('boom'))
+    const wrapper = await mountTab()
+    expect(getPositionSalary).toHaveBeenCalledTimes(1)
+
+    await retryButtonOf(wrapper)!.trigger('click')
+    await flush()
+    await wrapper.vm.$nextTick()
+    expect(getPositionSalary).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
+    await callSave(wrapper)
+    expect(updatePositionSalary).not.toHaveBeenCalled()
+  })
+
+  it('重試成功後錯誤條消失、可儲存，且送出的是載入的資料而非寫死預設值', async () => {
+    getPositionSalary.mockRejectedValueOnce(new Error('boom'))
+    const wrapper = await mountTab()
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
+
+    getPositionSalary.mockResolvedValueOnce({ data: { head_teacher_a: 41000, nurse: 31000 } })
+    await retryButtonOf(wrapper)!.trigger('click')
+    await flush()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(retryButtonOf(wrapper)).toBeUndefined()
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeUndefined()
+
+    await saveButtonOf(wrapper).trigger('click')
+    await flush()
+    expect(updatePositionSalary).toHaveBeenCalledTimes(1)
+    const sent = updatePositionSalary.mock.calls[0][0] as Record<string, unknown>
+    expect(sent.head_teacher_a).toBe(41000)
+    expect(sent.nurse).toBe(31000)
+  })
+
+  it('先載入成功、再次載入失敗：不沿用前一次的已載入狀態，同樣停用且不送 API', async () => {
+    const wrapper = await mountTab()
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeUndefined()
+
+    getPositionSalary.mockRejectedValueOnce(new Error('boom'))
+    await (wrapper.vm as unknown as { fetchPositionSalary: () => Promise<void> }).fetchPositionSalary()
+    await flush()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
+    await callSave(wrapper)
+    expect(updatePositionSalary).not.toHaveBeenCalled()
+  })
+
+  it('初次載入中：儲存鈕停用、不顯示錯誤條，程式化呼叫儲存不送 API', async () => {
+    getPositionSalary.mockReturnValue(new Promise(() => {}))
+    const wrapper = await mountTab()
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+
+    await callSave(wrapper)
+    await flush()
+    expect(updatePositionSalary).not.toHaveBeenCalled()
+  })
+
+  it('儲存進行中：儲存鈕停用，完成後恢復', async () => {
+    let finishSave: (v: unknown) => void = () => {}
+    updatePositionSalary.mockReturnValue(new Promise((resolve) => { finishSave = resolve }))
+    const wrapper = await mountTab()
+    const save = saveButtonOf(wrapper)
+    expect(save.attributes('disabled')).toBeUndefined()
+
+    await save.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
+
+    finishSave({ data: { below_minimum_wage: [] } })
+    await flush()
+    await wrapper.vm.$nextTick()
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeUndefined()
+  })
+
+  it('一般成功載入：無錯誤條、可儲存，且送出載入後的資料', async () => {
+    getPositionSalary.mockResolvedValue({ data: { head_teacher_b: 38000 } })
+    const wrapper = await mountTab()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(saveButtonOf(wrapper).attributes('disabled')).toBeUndefined()
+
+    await saveButtonOf(wrapper).trigger('click')
+    await flush()
+    expect(updatePositionSalary).toHaveBeenCalledTimes(1)
+    const sent = updatePositionSalary.mock.calls[0][0] as Record<string, unknown>
+    expect(sent.head_teacher_b).toBe(38000)
+    expect(ElMessage.success).toHaveBeenCalled()
+  })
+})

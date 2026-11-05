@@ -45,7 +45,10 @@ const loadingPositionSalary = ref(false)
 const canSavePositionSalary = computed(
   () => hasPermission('SETTINGS_WRITE') && hasPermission('ACTIVITY_PAYMENT_APPROVE'),
 )
+// 載入成功才為 true；上方 positionSalary 是寫死的預設數字，GET 失敗時畫面看起來像有資料，
+// 但並非租戶目前的設定——未載入成功不可儲存，否則 PUT 會把預設值整包寫回租戶（QA #66）。
 const positionSalaryLoaded = ref(false)
+const positionSalaryLoadError = ref(false)
 const { isDirty: positionDirty, snapshot: snapshotPosition } = useFormDirty(positionSalary)
 useSettingsDirty('職位標準底薪', () => positionSalaryLoaded.value && positionDirty.value)
 const compareRows = ref<Record<string, unknown>[]>([])
@@ -67,6 +70,9 @@ const STANDARD_KEY_LABEL: Record<string, string> = {
 }
 
 const fetchPositionSalary = async () => {
+  // 重新載入期間視為未載入，「已載入 ⇔ 最近一次載入成功」，失敗後不會沿用前一次的 true
+  positionSalaryLoaded.value = false
+  positionSalaryLoadError.value = false
   loadingPositionSalary.value = true
   try {
     const response = await getPositionSalary()
@@ -74,6 +80,7 @@ const fetchPositionSalary = async () => {
     snapshotPosition()
     positionSalaryLoaded.value = true
   } catch (error) {
+    positionSalaryLoadError.value = true
     ElMessage.error(friendlyError('職位底薪設定載入失敗', error))
   } finally {
     loadingPositionSalary.value = false
@@ -84,6 +91,11 @@ const savePositionSalary = async () => {
   // 防禦：按鈕已 disabled，但函式仍可能被程式化觸發，與 UI gate 同一道防線
   if (!canSavePositionSalary.value) {
     ElMessage.warning('您沒有權限儲存職位標準底薪（需要「系統設定寫入」與「金流簽核」權限）')
+    return
+  }
+  // 載入未成功時畫面上是寫死的預設值，不可當成租戶設定送出（同 BonusConfigPanel 的 bonusReady 守衛）
+  if (!positionSalaryLoaded.value) {
+    ElMessage.warning('職位底薪設定尚未成功載入，請先重試載入')
     return
   }
   loadingPositionSalary.value = true
@@ -212,6 +224,12 @@ onMounted(() => {
     <div class="section-title">職位標準底薪設定</div>
     <p class="desc-text">設定各職位的標準底薪，供新增員工時自動建議。特例可在員工編輯頁手動調整。</p>
 
+    <!-- 載入失敗：下方數字是寫死的預設值而非租戶目前設定，須重試成功才能儲存（QA #66） -->
+    <div v-if="positionSalaryLoadError" class="load-error-row" role="alert" data-test="position-salary-load-error">
+      職位底薪設定載入失敗，下方顯示的是預設數字而非目前設定，請重試載入後再儲存。
+      <el-button size="small" @click="fetchPositionSalary">重試職位底薪設定</el-button>
+    </div>
+
     <!-- 教師職位（分 A/B/C 級） -->
     <el-row :gutter="20" class="mb-4">
       <el-col :span="12">
@@ -315,7 +333,11 @@ onMounted(() => {
       <span v-if="!canSavePositionSalary" class="unsaved-hint" role="note">
         職位標準底薪會改變該職位全員底薪，需「系統設定寫入」與「金流簽核」權限才能儲存
       </span>
-      <el-button type="primary" :disabled="!canSavePositionSalary" @click="savePositionSalary">儲存職位底薪設定</el-button>
+      <el-button
+        type="primary"
+        :disabled="!canSavePositionSalary || !positionSalaryLoaded || loadingPositionSalary"
+        @click="savePositionSalary"
+      >儲存職位底薪設定</el-button>
     </div>
 
     <!-- 員工底薪比對 -->
@@ -468,6 +490,16 @@ onMounted(() => {
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
+}
+.load-error-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  color: var(--el-color-danger);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 .unsaved-hint {
   color: var(--color-warning-darker);
