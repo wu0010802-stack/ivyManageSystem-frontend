@@ -262,6 +262,66 @@ describe('SalaryHistoryPanel 載入失敗狀態（不殘留前一位員工資料
     expect(tableRows(wrapper)).toBe(1)
   })
 
+  // 重試「進行中」的畫面：舊錯誤要在送出重試的當下就清掉（loadError 重置在 fetchHistory 開頭），
+  // 否則 HR 會一邊看著上次的錯誤、一邊等重試；同時空狀態「無歷史薪資記錄」也不可在 loading 時閃現。
+  it('重試進行中（請求 pending）：錯誤 alert 已消失、不閃現「無歷史薪資記錄」；完成後顯示資料', async () => {
+    getHistoryMock.mockRejectedValueOnce(new Error('boom'))
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+    vm.selectedEmployeeId = 1
+    await flushPromises()
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(true)
+
+    const retry = createDeferred<{ data: HistoryRow[] }>()
+    getHistoryMock.mockImplementationOnce(() => retry.promise)
+    await wrapper.find('[data-testid="history-retry"]').trigger('click')
+    await flushPromises()
+
+    // 重試尚未回來
+    expect(getHistoryMock).toHaveBeenCalledTimes(2)
+    expect(vm.historyLoading).toBe(true)
+    expect(vm.loadError).toBeNull()
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="history-retry"]').exists()).toBe(false)
+    expect(wrapper.find('.empty-stub').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('無歷史薪資記錄')
+
+    retry.resolve({ data: [row(2222)] })
+    await flushPromises()
+    expect(vm.historyLoading).toBe(false)
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(false)
+    expect(vm.historyData.map((r) => r.net_salary)).toEqual([2222])
+    expect(tableRows(wrapper)).toBe(1)
+  })
+
+  // 區間（6／12／24 個月）切換與員工切換共用 fetchHistory：切區間要以新區間重打，
+  // 失敗時一樣要清空舊區間的資料並顯示可重試錯誤（不能殘留 12 個月的表格）。
+  it('已載入成功後把區間從 12 改成 6 個月並失敗：以新區間重打、清空舊資料、顯示可重試錯誤', async () => {
+    getHistoryMock
+      .mockResolvedValueOnce({ data: [row(1111)] }) // 員工 A、12 個月成功
+      .mockRejectedValueOnce(new Error('boom')) // 改 6 個月失敗
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+    vm.selectedEmployeeId = 1
+    await flushPromises()
+    expect(getHistoryMock).toHaveBeenLastCalledWith({ employee_id: 1, months: 12 })
+    expect(tableRows(wrapper)).toBe(1)
+
+    vm.historyMonths = 6
+    await flushPromises()
+
+    expect(getHistoryMock).toHaveBeenCalledTimes(2)
+    expect(getHistoryMock).toHaveBeenLastCalledWith({ employee_id: 1, months: 6 })
+    expect(vm.historyData).toEqual([])
+    expect(wrapper.find('.table-stub').exists()).toBe(false)
+    const alert = wrapper.find('[data-testid="history-error"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('載入薪資歷史失敗')
+    expect(wrapper.find('[data-testid="history-retry"]').exists()).toBe(true)
+    expect(wrapper.find('.empty-stub').exists()).toBe(false)
+    expect(ElMessage.error).toHaveBeenCalledTimes(1)
+  })
+
   it('失敗後重試成功但該員工確實無資料：顯示「無歷史薪資記錄」，不殘留舊錯誤', async () => {
     getHistoryMock.mockRejectedValueOnce(new Error('boom'))
     const wrapper = mountPanel()
