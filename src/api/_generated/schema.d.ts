@@ -16424,7 +16424,12 @@ export interface paths {
         get: operations["get_profile_api_portal_profile_get"];
         /**
          * Update Profile
-         * @description 更新個人資料（僅限允許欄位）
+         * @description 更新個人資料（僅限允許欄位）。
+         *
+         *     薪轉三欄位（bank_code／bank_account／bank_account_name）有實際異動時自審一筆
+         *     UPDATE 稽核：下一次薪轉名冊直接採用這組帳戶，管理端 PUT /employees 改同欄位本就
+         *     有 diff 稽核，自助路徑不能零軌跡。此路徑不在 ENTITY_PATTERNS，AuditMiddleware
+         *     不會重複記。
          */
         put: operations["update_profile_api_portal_profile_put"];
         post?: never;
