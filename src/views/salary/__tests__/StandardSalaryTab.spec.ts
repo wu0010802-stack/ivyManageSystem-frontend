@@ -332,6 +332,8 @@ describe('StandardSalaryTab — 職位標準底薪改需金流簽核（資安稽
 // PUT 會把這些預設值整包寫回租戶並讓未封存薪資標記需重算。載入未成功／進行中一律不可儲存。
 describe('StandardSalaryTab — 載入失敗或載入中不可儲存（QA #66）', () => {
   type SaveVm = { savePositionSalary: () => Promise<void> }
+  // 錯誤條用元件自己的 data-test 選取，不用通用的 [role="alert"]（日後同元件若新增其他 role=alert 會誤判）
+  const LOAD_ERROR_BAR = '[data-test="position-salary-load-error"]'
   const saveButtonOf = (wrapper: Awaited<ReturnType<typeof mountTab>>) =>
     wrapper.findAll('button').find((b) => b.text() === '儲存職位底薪設定')!
   const retryButtonOf = (wrapper: Awaited<ReturnType<typeof mountTab>>) =>
@@ -339,12 +341,13 @@ describe('StandardSalaryTab — 載入失敗或載入中不可儲存（QA #66）
   const callSave = (wrapper: Awaited<ReturnType<typeof mountTab>>) =>
     (wrapper.vm as unknown as SaveVm).savePositionSalary()
 
-  it('載入失敗：儲存鈕停用、出現 role=alert 錯誤條，程式化呼叫儲存也不送 API', async () => {
+  it('載入失敗：儲存鈕停用、出現載入失敗錯誤條（role=alert），程式化呼叫儲存也不送 API', async () => {
     getPositionSalary.mockRejectedValue(new Error('boom'))
     const wrapper = await mountTab()
     expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
-    const alert = wrapper.find('[role="alert"]')
+    const alert = wrapper.find(LOAD_ERROR_BAR)
     expect(alert.exists()).toBe(true)
+    expect(alert.attributes('role')).toBe('alert') // 螢幕閱讀器要能即時唸出
     expect(alert.text()).toContain('載入失敗')
     expect(retryButtonOf(wrapper)).toBeDefined()
 
@@ -352,6 +355,26 @@ describe('StandardSalaryTab — 載入失敗或載入中不可儲存（QA #66）
     await flush()
     expect(updatePositionSalary).not.toHaveBeenCalled()
     expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('尚未成功載入'))
+  })
+
+  // 兩道守衛都不通過時（無權限 + 未載入成功），目前行為是先講權限不足：沒有權限的人被告知
+  // 「請先重試載入」沒有意義（重試也存不了）。兩種順序都不送 API，差別只在提示文字，這裡鎖住現況。
+  it.each([
+    ['載入失敗', () => getPositionSalary.mockRejectedValue(new Error('boom'))],
+    ['初次載入中', () => getPositionSalary.mockReturnValue(new Promise(() => {}))],
+  ])('無金流簽核權限且%s：程式化儲存提示的是權限不足，而非尚未載入（權限守衛先於載入守衛）', async (_label, arrange) => {
+    arrange()
+    granted.delete('ACTIVITY_PAYMENT_APPROVE')
+    const wrapper = await mountTab()
+    vi.mocked(ElMessage.warning).mockClear()
+
+    await callSave(wrapper)
+    await flush()
+
+    expect(ElMessage.warning).toHaveBeenCalledTimes(1)
+    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('沒有權限'))
+    expect(ElMessage.warning).not.toHaveBeenCalledWith(expect.stringContaining('尚未成功載入'))
+    expect(updatePositionSalary).not.toHaveBeenCalled()
   })
 
   it('載入失敗：點停用的儲存鈕同樣不送 API', async () => {
@@ -371,7 +394,7 @@ describe('StandardSalaryTab — 載入失敗或載入中不可儲存（QA #66）
     await flush()
     await wrapper.vm.$nextTick()
     expect(getPositionSalary).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find(LOAD_ERROR_BAR).exists()).toBe(true)
     expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
     await callSave(wrapper)
     expect(updatePositionSalary).not.toHaveBeenCalled()
@@ -386,7 +409,7 @@ describe('StandardSalaryTab — 載入失敗或載入中不可儲存（QA #66）
     await retryButtonOf(wrapper)!.trigger('click')
     await flush()
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.find(LOAD_ERROR_BAR).exists()).toBe(false)
     expect(retryButtonOf(wrapper)).toBeUndefined()
     expect(saveButtonOf(wrapper).attributes('disabled')).toBeUndefined()
 
@@ -406,7 +429,7 @@ describe('StandardSalaryTab — 載入失敗或載入中不可儲存（QA #66）
     await (wrapper.vm as unknown as { fetchPositionSalary: () => Promise<void> }).fetchPositionSalary()
     await flush()
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find(LOAD_ERROR_BAR).exists()).toBe(true)
     expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
     await callSave(wrapper)
     expect(updatePositionSalary).not.toHaveBeenCalled()
@@ -416,7 +439,7 @@ describe('StandardSalaryTab — 載入失敗或載入中不可儲存（QA #66）
     getPositionSalary.mockReturnValue(new Promise(() => {}))
     const wrapper = await mountTab()
     expect(saveButtonOf(wrapper).attributes('disabled')).toBeDefined()
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.find(LOAD_ERROR_BAR).exists()).toBe(false)
 
     await callSave(wrapper)
     await flush()
@@ -443,7 +466,7 @@ describe('StandardSalaryTab — 載入失敗或載入中不可儲存（QA #66）
   it('一般成功載入：無錯誤條、可儲存，且送出載入後的資料', async () => {
     getPositionSalary.mockResolvedValue({ data: { head_teacher_b: 38000 } })
     const wrapper = await mountTab()
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.find(LOAD_ERROR_BAR).exists()).toBe(false)
     expect(saveButtonOf(wrapper).attributes('disabled')).toBeUndefined()
 
     await saveButtonOf(wrapper).trigger('click')
