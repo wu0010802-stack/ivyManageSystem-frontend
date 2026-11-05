@@ -245,4 +245,85 @@ describe('EmployeeFormDialog 基本資料 tab 全部歷史欄都帶生效日（Q
     expect(s.form.salary_inputs_effective_from).toBe(EFF)
     expect(Object.keys(s.basicDirty)).toEqual(['bonus_grade'])
   })
+
+  // 對稱於上一案例：薪資 tab 儲存失敗也不可提前用掉生效日、也不可提前把薪資 tab 標成已儲存
+  it('薪資 tab 儲存失敗 → 生效日與 salaryDirty 都保留（可重試）', async () => {
+    vi.mocked(updateEmployeeSalary).mockRejectedValueOnce(new Error('boom'))
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.health_self_pay_ratio = 0.5
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+    await s.submitSalary(null)
+    expect(updateEmployeeSalary).toHaveBeenCalledTimes(1)
+    expect(s.form.salary_inputs_effective_from).toBe(EFF)
+    expect(Object.keys(s.salaryDirty)).toEqual(['health_self_pay_ratio'])
+  })
+
+  // withEffectiveFrom 的 `if (!eff) return payload` 守衛：後端 salary_inputs_effective_from 是
+  // Optional[date]，空字串會被 pydantic 擋（date_from_datetime_parsing），所以沒填日期時 key 必須不存在
+  // （不是空字串）。基本資料 tab 會走到這個守衛的歷史欄從 1 個（dependents）擴到 5 個，風險升高。
+  it('改歷史欄 bonus_grade 但沒填生效日 → saveBasic payload 不帶 salary_inputs_effective_from', async () => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.bonus_grade = 'A'
+    await flushPromises()
+    expect(s.form.salary_inputs_effective_from).toBe('')
+    await s.saveBasic()
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, { bonus_grade: 'A' })
+    const sent = vi.mocked(updateEmployeeBasic).mock.calls[0][1] as Record<string, unknown>
+    expect('salary_inputs_effective_from' in sent).toBe(false)
+  })
+
+  it('薪資 tab 改歷史欄 health_self_pay_ratio 但沒填生效日 → submitSalary payload 不帶 salary_inputs_effective_from', async () => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.health_self_pay_ratio = 0.5
+    await flushPromises()
+    expect(s.form.salary_inputs_effective_from).toBe('')
+    await s.submitSalary(null)
+    expect(updateEmployeeSalary).toHaveBeenCalledWith(1, { health_self_pay_ratio: 0.5 })
+    const sent = vi.mocked(updateEmployeeSalary).mock.calls[0][1] as Record<string, unknown>
+    expect('salary_inputs_effective_from' in sent).toBe(false)
+  })
+
+  // 設計取捨（刻意，非缺陷）：生效日「用掉才清」。先存薪資 tab 時基本資料 tab 還有待存歷史欄 →
+  // 生效日保留；之後使用者把那個待存異動改回原值（basicDirty 變空），生效日仍殘留在表單
+  // （薪資 tab 的日期欄看得到），之後在基本資料 tab 改別的歷史欄儲存，就會套用這個殘留日期，
+  // 用掉才清空。不為此另設「diff 變空就清」的監聽：日期欄可見、populateForm／resetForm 重開視窗會清空，
+  // 且清掉會讓「先填日期、再改欄位」的操作順序失效。若日後要改這個行為，請連同本案例一起改。
+  it('另一 tab 的待存歷史欄被改回原值（diff 變空）→ 生效日殘留，下一次儲存會用到（刻意取捨）', async () => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    const originalBonusGrade = s.form.bonus_grade
+    s.form.health_self_pay_ratio = 0.5 // 薪資 tab 歷史欄
+    s.form.bonus_grade = 'A' // 基本 tab 歷史欄
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+
+    await s.submitSalary(null)
+    // 基本資料 tab 仍有待存歷史欄 → 生效日保留
+    expect(s.form.salary_inputs_effective_from).toBe(EFF)
+
+    // 使用者放棄基本資料 tab 的異動（改回原值）：兩個 tab 都乾淨了，但生效日還在
+    s.form.bonus_grade = originalBonusGrade
+    await flushPromises()
+    expect(Object.keys(s.basicDirty)).toEqual([])
+    expect(Object.keys(s.salaryDirty)).toEqual([])
+    expect(s.form.salary_inputs_effective_from).toBe(EFF)
+
+    // 之後在基本資料 tab 改別的歷史欄並儲存 → 殘留的生效日被帶出並用掉
+    s.form.dependents = 3
+    await flushPromises()
+    await s.saveBasic()
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
+      dependents: 3,
+      salary_inputs_effective_from: EFF,
+    })
+    expect(s.form.salary_inputs_effective_from).toBe('')
+  })
 })

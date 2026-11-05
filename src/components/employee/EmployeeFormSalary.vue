@@ -193,7 +193,8 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
         data-test="salary-inputs-effective-from"
       />
       <div class="hint" style="text-align:left">
-        投保級距、眷屬人數、健保身分等若從過去某月就該生效（例：眷屬 115.07 起），填該日；
+        投保級距、眷屬人數、健保身分，以及基本資料 tab 的職稱、園內職務、主管職、獎金等級，
+        若從過去某月就該生效（例：眷屬 115.07 起），填該日（兩個 tab 儲存時共用此日期）；
         重算未封存的過去月份會依此套用，已封存月份請用薪資「保費追溯調整」補收／退回。
       </div>
     </el-form-item>
