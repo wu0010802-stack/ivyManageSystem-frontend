@@ -73,6 +73,29 @@ export function festivalBatchForSalaryMonth(
   return null
 }
 
+/**
+ * 某月算出的節慶累積會併入哪個薪資月發放（依租戶口徑）。
+ * 對齊後端 FestivalPayoutPolicy.payout_month_for_event：
+ * 先以 next_distribution_month 找所屬批次（12→次年 2、1→2、2–5→6、6–8→9、9–11→12），
+ * 批次前移時改隨期間最後一個月的薪資發放。7/31 離職合併（Q12）屬個人例外，不在此處理。
+ */
+export function festivalPayoutMonthForEvent(
+  year: number,
+  month: number,
+  earlyPayoutFromYm: string | null | undefined,
+): YearMonth | null {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null
+  const batch: YearMonth =
+    month === 12 ? [year + 1, 2]
+      : month === 1 ? [year, 2]
+        : month <= 5 ? [year, 6]
+          : month <= 8 ? [year, 9]
+            : [year, 12]
+  return batchIsEarly(batch[0], batch[1], parseYearMonth(earlyPayoutFromYm))
+    ? prevMonth(batch[0], batch[1])
+    : batch
+}
+
 /** 該薪資月是否為節慶發放月（依租戶口徑）。 */
 export function isFestivalPayoutMonth(
   year: number,

@@ -7,6 +7,7 @@ import {
   festivalCoverageLabelForSalaryMonth,
   festivalPayoutMonthsInYear,
   festivalPayoutMonthsText,
+  festivalPayoutMonthForEvent,
 } from '../festivalCoverage'
 
 describe('festivalCoverageLabel — 節慶獎金發放月涵蓋的累積月份', () => {
@@ -97,5 +98,33 @@ describe('festivalCoverageLabelForSalaryMonth / festivalPayoutMonthsText', () =>
   it('標準口徑文字', () => {
     expect(festivalPayoutMonthsText(2026, null)).toBe('2／6／9／12 月')
     expect(festivalPayoutMonthsText(2027, '2026-01')).toBe('1／5／8／11 月')
+  })
+})
+
+describe('festivalPayoutMonthForEvent — 對齊後端 FestivalPayoutPolicy.payout_month_for_event', () => {
+  // 某月算出的節慶累積，會併入哪個薪資月發放（next_distribution_month → payout_month_for_batch）
+  it('標準口徑：9–11 月→12 月、12 月→次年 2 月、1 月→2 月、2–5 月→6 月、6–8 月→9 月', () => {
+    expect(festivalPayoutMonthForEvent(2026, 10, null)).toEqual([2026, 12])
+    expect(festivalPayoutMonthForEvent(2026, 12, null)).toEqual([2027, 2])
+    expect(festivalPayoutMonthForEvent(2026, 1, null)).toEqual([2026, 2])
+    expect(festivalPayoutMonthForEvent(2026, 2, null)).toEqual([2026, 6])
+    expect(festivalPayoutMonthForEvent(2026, 6, null)).toEqual([2026, 9])
+  })
+
+  it('前移口徑：批次改隨期間最後一個月的薪資發放（發放月本身的累積當月就發）', () => {
+    expect(festivalPayoutMonthForEvent(2026, 10, '2026-08')).toEqual([2026, 11])
+    expect(festivalPayoutMonthForEvent(2026, 11, '2026-08')).toEqual([2026, 11])
+    expect(festivalPayoutMonthForEvent(2026, 12, '2026-08')).toEqual([2027, 1])
+  })
+
+  it('切換點之前的批次仍走標準口徑（E=2026-11：9 月批止於 8 月 → 9 月發）', () => {
+    expect(festivalPayoutMonthForEvent(2026, 7, '2026-11')).toEqual([2026, 9])
+    expect(festivalPayoutMonthForEvent(2026, 10, '2026-11')).toEqual([2026, 11])
+  })
+
+  it('非法月份回 null', () => {
+    expect(festivalPayoutMonthForEvent(2026, 0, null)).toBeNull()
+    expect(festivalPayoutMonthForEvent(2026, 13, null)).toBeNull()
+    expect(festivalPayoutMonthForEvent(2026, NaN, null)).toBeNull()
   })
 })

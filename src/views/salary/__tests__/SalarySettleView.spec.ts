@@ -12,6 +12,11 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api/salary', () => ({
     getRecords: vi.fn().mockResolvedValue({ data: [] }),
+    // StepReview 掛載時載入「本月節慶（應計）」
+    getFestivalBonusPreview: vi.fn().mockResolvedValue({ data: [] }),
+}))
+vi.mock('@/api/festivalCarry', () => ({
+    getFestivalPayoutSettings: vi.fn().mockResolvedValue({ data: { early_payout_from_ym: null } }),
 }))
 
 const MonthScopedFinalizeStub = defineComponent({

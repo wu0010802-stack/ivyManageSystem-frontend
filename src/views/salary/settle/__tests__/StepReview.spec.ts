@@ -14,6 +14,10 @@ import {
 vi.mock('@/api/salary', () => ({
     getSalaryFieldBreakdown: vi.fn(),
     manualAdjustSalary: vi.fn(),
+    getFestivalBonusPreview: vi.fn().mockResolvedValue({ data: [] }),
+}))
+vi.mock('@/api/festivalCarry', () => ({
+    getFestivalPayoutSettings: vi.fn().mockResolvedValue({ data: { early_payout_from_ym: null } }),
 }))
 vi.mock('@/api/yearEnd', () => ({ listAppraisalPayouts: vi.fn() }))
 vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn().mockReturnValue(true) }))
@@ -30,7 +34,7 @@ vi.mock('element-plus', async (importOriginal) => {
     }
 })
 
-import { manualAdjustSalary } from '@/api/salary'
+import { manualAdjustSalary, getFestivalBonusPreview } from '@/api/salary'
 import { ElMessage } from 'element-plus'
 
 const rec = (over: Partial<SettlementRecord> = {}): SettlementRecord => ({
@@ -538,5 +542,70 @@ describe('StepReview 需注意門檻輸入防呆', () => {
         vm.applyThresholds()
         expect(settlement.thresholds.value.heavyPct).toBe(0.2)
         expect(ElMessage.success).toHaveBeenCalled()
+    })
+})
+
+describe('StepReview 本月節慶（應計）', () => {
+    interface FestivalVm {
+        activeGroups: string[]
+        accrualLabel: (row: SettlementRecord) => string
+        accrualTitle: (row: SettlementRecord) => string
+        accrualHeaderSub: string
+        canOpenAccrualDetail: boolean
+        openAccrualDetail: (row: SettlementRecord) => void
+        showFieldBreakdown: boolean
+        breakdownField: string
+    }
+    const previewRow = {
+        employeeId: 7,
+        category: '帶班老師',
+        bonusBase: 4000,
+        targetEnrollment: 27,
+        currentEnrollment: 25,
+        ratio: 0.926,
+        festivalBonus: 3704,
+        remark: '',
+    }
+    const mountMonth = async (month: number, records: SettlementRecord[]) => {
+        const wrapper = mount(StepReview, {
+            global: { stubs: STUBS, provide: { settlement: makeSettlement(records), settleQuery: { year: 2026, month } } },
+        })
+        await flushPromises()
+        return wrapper.vm as unknown as FestivalVm
+    }
+
+    it('非發放月：另計區出現應計欄（就算另計欄本月全 0），依員工顯示金額與併入月份', async () => {
+        vi.mocked(getFestivalBonusPreview).mockResolvedValueOnce({ data: [previewRow] } as never)
+        const vm = await mountMonth(10, [rec({ employee_id: 7 }), rec({ id: 2, employee_id: 8 })])
+
+        expect(getFestivalBonusPreview).toHaveBeenCalledWith({ year: 2026, month: 10 })
+        expect(vm.activeGroups).toContain('separate')
+        expect(vm.accrualHeaderSub).toBe('應計 · 12 月發')
+        expect(vm.accrualLabel(rec({ employee_id: 7 }))).toBe('3,704')
+        expect(vm.accrualTitle(rec({ employee_id: 7 }))).toContain('本月不發，預定併入 12 月薪資發放')
+        expect(vm.accrualLabel(rec({ employee_id: 8 }))).toBe('—')
+    })
+
+    it('載入失敗：表頭標示失敗、儲存格「—」，不影響名冊', async () => {
+        vi.mocked(getFestivalBonusPreview).mockRejectedValueOnce(new Error('500'))
+        const vm = await mountMonth(10, [rec({ employee_id: 7 })])
+        expect(vm.accrualHeaderSub).toBe('載入失敗')
+        expect(vm.accrualLabel(rec({ employee_id: 7 }))).toBe('—')
+    })
+
+    it('非發放月點應計金額 → 開「節慶獎金」明細抽屜（後端明細列本月累積）', async () => {
+        vi.mocked(getFestivalBonusPreview).mockResolvedValueOnce({ data: [previewRow] } as never)
+        const vm = await mountMonth(10, [rec({ employee_id: 7 })])
+        expect(vm.canOpenAccrualDetail).toBe(true)
+        vm.openAccrualDetail(rec({ employee_id: 7 }))
+        expect(vm.showFieldBreakdown).toBe(true)
+        expect(vm.breakdownField).toBe('festival_bonus')
+    })
+
+    it('標準口徑發放月（12 月）：本月應計照顯示（次年 2 月發），但明細是前期實發 → 不開抽屜', async () => {
+        vi.mocked(getFestivalBonusPreview).mockResolvedValueOnce({ data: [previewRow] } as never)
+        const vm = await mountMonth(12, [rec({ employee_id: 7 })])
+        expect(vm.accrualHeaderSub).toBe('應計 · 2027 年 2 月發')
+        expect(vm.canOpenAccrualDetail).toBe(false)
     })
 })

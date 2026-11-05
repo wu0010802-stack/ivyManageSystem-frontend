@@ -133,6 +133,16 @@ export const unfinalizeSalary = (recordId: number, reason: string): AxiosResp<'/
     return api.delete(`/salaries/${recordId}/finalize`, { data: payload })
 }
 
+/**
+ * 當月各員工節慶獎金試算（GET /salaries/festival-bonus；SALARY_READ 且限全員視野，
+ * 僅可看本人者 403）。不論是否發放月都照單月計算；非發放月即「本月應計、不入帳」。
+ * 後端無 response_model（data 為 unknown），解析見 views/salary/settle/reviewFestival.ts。
+ */
+export const getFestivalBonusPreview = (
+    params: ApiQuery<'/salaries/festival-bonus', 'get'>,
+): AxiosResp<'/salaries/festival-bonus', 'get'> =>
+    api.get('/salaries/festival-bonus', { params })
+
 // ── 節慶停課月登記（義華 2026-10-27，第七篇第七條 3／4）──────────────────────
 // 規則開啟時（BonusConfig.festival_suspension_rule），整班／全園當月停課 ≥10 日或繳費率 <60%
 // 即停發節慶獎金。讀 SALARY_READ、寫 SALARY_WRITE；寫入遇薪資批次計算中／已封存／年終已定案回 409。

@@ -196,6 +196,36 @@
               <ManualOverrideIcon :row="scope.row" :field="col.key" />
             </template>
           </el-table-column>
+          <!-- 本月算出、本月不發的節慶獎金（應計）：只供覆核，不進應發／實領 -->
+          <el-table-column
+            v-if="g === 'separate' && festivalAccrual.visible.value"
+            key="__festival_accrual"
+            width="156"
+            align="right"
+            class-name="num-cell is-accrual"
+            sortable
+            :sort-method="compareAccrual"
+          >
+            <template #header>
+              <el-tooltip :content="accrualHeaderTip" placement="top">
+                <span class="accrual-head">
+                  <span>本月節慶 <el-icon :size="12"><InfoFilled /></el-icon></span>
+                  <span class="accrual-head__sub" :class="{ 'is-danger': festivalAccrual.failed.value }">{{ accrualHeaderSub }}</span>
+                </span>
+              </el-tooltip>
+            </template>
+            <template #default="scope">
+              <button
+                v-if="canOpenAccrualDetail && scope.row.id && festivalAccrual.of(scope.row.employee_id)"
+                type="button"
+                class="amount-link accrual-amount"
+                :title="accrualTitle(scope.row)"
+                :aria-label="`${scope.row.employee_name}的本月節慶應計：${accrualLabel(scope.row)}，本月不發`"
+                @click="openAccrualDetail(scope.row)"
+              >{{ accrualLabel(scope.row) }}</button>
+              <span v-else class="accrual-amount" :title="accrualTitle(scope.row)">{{ accrualLabel(scope.row) }}</span>
+            </template>
+          </el-table-column>
         </el-table-column>
 
         <el-table-column label="實領" width="104" align="right" class-name="num-cell is-net" fixed="right">
@@ -288,7 +318,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, h, defineComponent, type PropType } from 'vue'
+import { ref, computed, inject, h, defineComponent, onMounted, watch, type PropType } from 'vue'
 import { ElMessage, ElTooltip, ElIcon } from 'element-plus'
 import { InfoFilled, Edit, Search } from '@element-plus/icons-vue'
 import { useWindowSize } from '@vueuse/core'
@@ -339,6 +369,8 @@ import {
     ROLE_LABEL,
     SCHOOL_BASIS_LABEL,
 } from './reviewHeadcount'
+import { accrualText, accrualTip, payoutText } from './reviewFestival'
+import { useFestivalMonthAccrual } from '@/composables/useFestivalMonthAccrual'
 
 defineEmits<{ (e: 'next'): void; (e: 'prev'): void }>()
 
@@ -479,9 +511,43 @@ const columnSplit = computed(() => splitColumns(settlement.records.value, showAl
 const zeroColumns = computed(() => splitColumns(settlement.records.value, false).hidden)
 const zeroColumnLabels = computed(() => zeroColumns.value.map((c) => c.label).join('、'))
 const activeGroups = computed(() =>
-    (['add', 'ded', 'separate'] as ColGroup[]).filter((g) => columnSplit.value.visible[g].length > 0),
+    (['add', 'ded', 'separate'] as ColGroup[]).filter(
+        (g) => columnSplit.value.visible[g].length > 0 || (g === 'separate' && festivalAccrual.visible.value),
+    ),
 )
 const showTotalTakeHome = computed(() => hasSeparateBonus(settlement.records.value))
+
+// ---- 本月節慶（應計）：本月算出、本月不發（併入發放月），只供覆核 ----
+const festivalAccrual = useFestivalMonthAccrual(() => ({ year: q.year, month: q.month }))
+onMounted(() => {
+    void festivalAccrual.load()
+})
+watch(() => [q.year, q.month], () => {
+    void festivalAccrual.load()
+})
+const accrualWhen = computed(() => payoutText(festivalAccrual.payout.value, q.year))
+const accrualHeaderSub = computed(() =>
+    festivalAccrual.failed.value ? '載入失敗' : `應計 · ${accrualWhen.value}發`,
+)
+const accrualHeaderTip = computed(() => {
+    if (festivalAccrual.failed.value) return '本月節慶應計載入失敗，請重新整理；不影響薪資名冊。'
+    const paidNote = festivalAccrual.paidThisMonth.value ? '左邊「節慶獎金」是本月實發（前幾個月的累積）。' : ''
+    return `本月算出的節慶獎金，本月薪資不發、不計入應發與實領；預定併入 ${accrualWhen.value}薪資發放。`
+        + `會議缺席扣減於發放月一併計算。${paidNote}`
+})
+const accrualLabel = (row: SettlementRecord): string =>
+    festivalAccrual.loading.value ? '…' : accrualText(festivalAccrual.of(row.employee_id))
+const accrualTitle = (row: SettlementRecord): string => {
+    if (festivalAccrual.loading.value) return '載入中'
+    if (festivalAccrual.failed.value) return '本月節慶應計載入失敗，請重新整理'
+    const f = festivalAccrual.of(row.employee_id)
+    return f ? accrualTip(f, festivalAccrual.payout.value, q.year) : '本月沒有此人的節慶試算資料'
+}
+const compareAccrual = (a: SettlementRecord, b: SettlementRecord): number =>
+    (festivalAccrual.of(a.employee_id)?.amount ?? -1) - (festivalAccrual.of(b.employee_id)?.amount ?? -1)
+// 發放月的「節慶獎金」明細是前期實發，對不上本月應計 → 只有非發放月才開明細抽屜
+const canOpenAccrualDetail = computed(() => !festivalAccrual.paidThisMonth.value)
+const openAccrualDetail = (row: SettlementRecord) => openFieldBreakdown(row, 'festival_bonus')
 
 // ---- 班級人數 ----
 const classSubLabel = (row: SettlementRecord): string => {
@@ -836,6 +902,28 @@ const openFieldBreakdown = (row: SettlementRecord, field: string) => {
 
 :deep(.el-table__body .cell) {
   white-space: nowrap;
+}
+
+/* 本月節慶（應計）：本月不發 → 淡底＋次要字色，和實發金額分開 */
+:deep(.el-table td.is-accrual) {
+  background-color: var(--el-fill-color-lighter);
+}
+
+.accrual-amount {
+  color: var(--el-text-color-secondary);
+}
+
+.accrual-head {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+
+.accrual-head__sub {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--el-text-color-secondary);
 }
 
 :deep(.el-table td.is-total),
