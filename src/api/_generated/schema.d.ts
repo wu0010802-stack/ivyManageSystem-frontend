@@ -6146,6 +6146,12 @@ export interface paths {
         /**
          * Compare Position Salary
          * @description 比對所有在職員工的底薪與職位標準，回傳有差異（或無法對應）的員工清單。
+         *
+         *     適用職位標準（有對應 key 且標準值非留空）而 bypass_standard_base=True（個人合約
+         *     底薪特例）的員工不可被同步：不進 ``employees``（不標待同步、不計入 ``out_of_sync``
+         *     與 ``sync_blocked_count``），改列於 ``bypass_employees``（依姓名排序）供前端呈現
+         *     「特例底薪」。無對應 key（時薪制、無對應職位）或標準留空者本來就不比對，也不列入
+         *     ``bypass_employees``。
          */
         get: operations["compare_position_salary_api_config_position_salary_compare_get"];
         put?: never;
@@ -6172,6 +6178,11 @@ export interface paths {
          *     P1 Security：權限改用 SALARY_WRITE（移除 SETTINGS_WRITE 旁路）；
          *     員工不得同步自己的薪資；任一員工 |delta| > FINANCE_APPROVAL_THRESHOLD
          *     需 ACTIVITY_PAYMENT_APPROVE；逐員工 audit_changes 寫入 request.state。
+         *
+         *     適用職位標準（有對應 key 且標準值非留空）而 bypass_standard_base=True（個人合約
+         *     底薪特例）的員工一律略過、不改寫底薪，姓名同時列入 ``skipped`` 與
+         *     ``skipped_bypass``。無對應 key（時薪制、無對應職位）或標準留空者本來就只進
+         *     ``skipped``，不進 ``skipped_bypass``。
          */
         post: operations["sync_position_salary_api_config_position_salary_sync_post"];
         delete?: never;
@@ -43528,6 +43539,8 @@ export interface components {
             needs_confirmation: components["schemas"]["PositionSalarySyncNeedsConfirmationItem"][];
             /** Skipped */
             skipped: string[];
+            /** Skipped Bypass */
+            skipped_bypass?: string[];
             /** Total Updated */
             total_updated: number;
             /** Updated */
