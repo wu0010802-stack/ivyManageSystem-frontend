@@ -198,7 +198,12 @@ const disabledEndDate = (time: Date) => {
   return time.getTime() < s.getTime()
 }
 
+// 開啟編輯時那張假單的狀態。後端對「已核准」假單的任何修改都會自動退回待審核
+// （api/leaves.py _apply_leave_update_and_revoke），儲存前要讓使用者明確知道；新增／重設時清空。
+const editingStatus = ref('')
+
 const resetForm = () => {
+  editingStatus.value = ''
   form.id = null
   form.employee_id = null
   form.leave_type = 'personal'
@@ -212,7 +217,10 @@ const resetForm = () => {
 
 const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDialog({
   resetForm,
-  populateForm: populateFormFromRecord,
+  populateForm: (row) => {
+    editingStatus.value = String(row.status ?? '')
+    populateFormFromRecord(row)
+  },
 })
 
 // 表單草稿暫存：排除醫療旗標；保留 reason（核心欄位）
@@ -549,6 +557,18 @@ const saveLeave = async () => {
     if (!confirmed) return
   }
 
+  // 編輯「已核准」假單：後端會自動退回待審核（需重新核准），儲存前明確告知，取消則不送出。
+  // 新增、或編輯待審核／已駁回假單不受影響。
+  if (isEdit.value && editingStatus.value === 'approved') {
+    const confirmed = await ElMessageBox.confirm(
+      '此假單目前為「已核准」。儲存後會退回「待審核」，已同步的考勤與代理班（若有）會一併收回，需重新核准；'
+        + '重新核准前，這段時間不會被視為已核准的假。確定要儲存？',
+      '編輯已核准假單',
+      { type: 'warning', confirmButtonText: '儲存並退回待審', cancelButtonText: '取消' },
+    ).catch(() => false)
+    if (!confirmed) return
+  }
+
   saveLoading.value = true
   try {
     const sd = form.start_date ? form.start_date.substring(0, 10) : ''
@@ -571,7 +591,12 @@ const saveLeave = async () => {
         reason: form.reason,
         is_hospitalized: isSick ? form.is_hospitalized : false,
       })
-      ElMessage.success('請假記錄已更新')
+      // 以回應的 reset_to_pending 為準（開啟後狀態可能被別人改過，不能只看開啟時的 editingStatus）
+      ElMessage.success(
+        updated?.data?.reset_to_pending === true
+          ? '請假記錄已更新並退回待審核，請重新核准'
+          : '請假記錄已更新',
+      )
       // SPEC-026：改日期／時段後，後端會把要求接手職務的代理人退回「待回應」（substitute_reconfirm），
       // 已核准假單被改時也可能附帶代理班回收的警示；與核准流程共用同一套 toast
       notifySubstituteDutyWarnings(updated)
