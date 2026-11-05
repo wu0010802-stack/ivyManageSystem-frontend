@@ -419,6 +419,73 @@ describe('OvertimeView', () => {
       expect(summary.text()).not.toContain('0.30000000000000004')
     })
 
+    // 0.1 + 0.2 只覆蓋「浮點往上偏」；Math.floor／Math.trunc 在往下偏的案例會露餡：
+    // 0.2 + 0.7 = 0.8999999999999999，×100 = 89.99999999999999，floor 得 0.89、round 得 0.9
+    it('小數時數浮點誤差往下偏：0.2 + 0.7 四捨五入為 0.9（不可無條件捨去成 0.89）', async () => {
+      getOvertimes.mockResolvedValue(paged([
+          { id: 1, hours: 0.2, overtime_pay: 40, status: 'approved' },
+          { id: 2, hours: 0.7, overtime_pay: 140, status: 'approved' },
+        ]))
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalHours).toBe(0.9)
+      const summary = wrapper.find('.summary-card .summary')
+      expect(summary.text()).toContain('0.9 小時')
+      expect(summary.text()).not.toContain('0.89')
+      expect(summary.text()).not.toContain('0.8999999999999999')
+    })
+
+    // 精度鎖在兩位小數：一位小數版本會把 0.25 + 0.5 = 0.75 變 0.8，把 1.234 變 1.2；
+    // 取整到三位以上或不取整則 1.234 不會變成 1.23
+    it('時數精度為兩位小數：0.25 + 0.5 = 0.75（不可只留一位小數成 0.8）', async () => {
+      getOvertimes.mockResolvedValue(paged([
+          { id: 1, hours: 0.25, overtime_pay: 50, status: 'approved' },
+          { id: 2, hours: 0.5, overtime_pay: 100, status: 'approved' },
+        ]))
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalHours).toBe(0.75)
+      const summary = wrapper.find('.summary-card .summary')
+      expect(summary.text()).toContain('0.75 小時')
+      expect(summary.text()).not.toContain('0.8 小時')
+    })
+
+    it('時數精度為兩位小數：單筆 1.234 取到 1.23（超過兩位的尾數捨入）', async () => {
+      getOvertimes.mockResolvedValue(paged([
+          { id: 1, hours: 1.234, overtime_pay: 250, status: 'approved' },
+        ]))
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalHours).toBe(1.23)
+      const summary = wrapper.find('.summary-card .summary')
+      expect(summary.text()).toContain('1.23 小時')
+      expect(summary.text()).not.toContain('1.234')
+      expect(summary.text()).not.toContain('1.2 小時')
+    })
+
+    // 加班費不取整（與詳情頁 OvertimeSection.approvedSummary 同口徑）：
+    // 只有時數會取兩位小數，金額照原始加總顯示，不可被一併 Math.round 成 101
+    it('加班費不取整：100.5 + 0.25 = 100.75 原樣加總與顯示', async () => {
+      getOvertimes.mockResolvedValue(paged([
+          { id: 1, hours: 1, overtime_pay: 100.5, status: 'approved' },
+          { id: 2, hours: 1, overtime_pay: 0.25, status: 'approved' },
+        ]))
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalPay).toBe(100.75)
+      const summary = wrapper.find('.summary-card .summary')
+      expect(summary.text()).toContain('加班費合計: $100.75')
+      expect(summary.text()).not.toContain('$101')
+    })
+
     it('已核准為 0 但列表非空：合計卡仍顯示 0 小時、$0 與整句「僅計已核准」提示', async () => {
       getOvertimes.mockResolvedValue(paged([
           { id: 1, hours: 2, overtime_pay: 500, status: 'pending' },
