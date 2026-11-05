@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import StepCalculate from '../StepCalculate.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -32,6 +32,7 @@ vi.mock('element-plus', async (importOriginal) => {
 
 const makeSettlement = (status: string, records: unknown[] = []) => ({
     records: ref(records),
+    loading: ref(false),
     status: computed(() => status),
     refresh: vi.fn().mockResolvedValue(undefined),
 })
@@ -95,6 +96,42 @@ describe('StepCalculate', () => {
     it('needs_recalc → 顯示重算建議橫幅', () => {
         const wrapper = mountStep(makeSettlement('needs_recalc'))
         expect(wrapper.text()).toContain('建議重新計算')
+    })
+
+    // 切月後新月名冊尚未回來：此時 status 不可信（舊月名冊或清空後的 not_calculated），
+    // 不能讓使用者按下計算，也不能把舊月的「已定案」當成新月狀態顯示。
+    it('名冊載入中 → 計算按鈕 disabled、提示載入中，且優先於舊月殘留的「已定案」', async () => {
+        const settlement = makeSettlement('finalized')
+        settlement.loading.value = true
+        const wrapper = mountStep(settlement)
+        const vm = wrapper.vm as unknown as { disabledReason: string }
+        const findBtn = () => wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))!
+
+        expect(findBtn().attributes('disabled')).toBeDefined()
+        expect(vm.disabledReason).toContain('載入')
+        expect(vm.disabledReason).not.toContain('已定案')
+
+        // 載入完成 → 回到真實狀態（此例新月已定案，仍 disabled，但理由改為已定案）
+        settlement.loading.value = false
+        await nextTick()
+        expect(vm.disabledReason).toContain('已定案')
+    })
+
+    it('名冊載入中（清空後 status 暫為 not_calculated）→ 計算鈕不可按，載入完成後恢復', async () => {
+        const settlement = makeSettlement('not_calculated')
+        settlement.loading.value = true
+        const wrapper = mountStep(settlement)
+        const findBtn = () => wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))!
+
+        expect(findBtn().attributes('disabled')).toBeDefined()
+        await findBtn().trigger('click')
+        await flushPromises()
+        expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+        expect(calculateAsyncMock).not.toHaveBeenCalled()
+
+        settlement.loading.value = false
+        await nextTick()
+        expect(findBtn().attributes('disabled')).toBeUndefined()
     })
 
     it('說明應符合後端整月拒絕語意，不宣稱會跳過已封存紀錄', () => {

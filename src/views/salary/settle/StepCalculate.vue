@@ -146,6 +146,8 @@ watch(isFestivalMonth, (now) => {
 })
 
 const disabledReason = computed(() => {
+    // 名冊載入中（切月後新月名冊未回來）：status 不可信，不可計算，也不顯示舊月的「已定案」
+    if (settlement.loading.value) return '資料載入中，請稍候'
     if (!hasPermission('SALARY_WRITE')) return '需要薪資寫入權限（目前為唯讀模式）'
     if (settlement.status.value === 'finalized') return '本月已定案，需先於「定案」步驟退回才能重算'
     if (isFestivalMonth.value && snapshotPending.value.length > 0) {

@@ -1,20 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, toRef, nextTick } from 'vue'
 import StepFinalize from '../StepFinalize.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     deriveStatus,
     detectAnomalies,
+    useSalarySettlement,
     DEFAULT_THRESHOLDS,
     type SettlementRecord,
 } from '@/composables/useSalarySettlement'
 
 const finalizeMonthMock = vi.fn()
 const unfinalizeSalaryMock = vi.fn()
+const getRecordsMock = vi.fn()
 vi.mock('@/api/salary', () => ({
     finalizeMonth: (...a: unknown[]) => finalizeMonthMock(...a),
     unfinalizeSalary: (...a: unknown[]) => unfinalizeSalaryMock(...a),
+    getRecords: (...a: unknown[]) => getRecordsMock(...a),
 }))
 
 const hasPermissionMock = vi.fn()
@@ -222,6 +225,74 @@ describe('StepFinalize', () => {
         )
         const vm = wrapper.vm as unknown as { totalNet: number }
         expect(vm.totalNet).toBe(41000)
+    })
+})
+
+describe('StepFinalize 名冊載入中（切月後不得操作舊月名冊）', () => {
+    beforeEach(() => {
+        finalizeMonthMock.mockReset()
+        getRecordsMock.mockReset()
+        hasPermissionMock.mockReturnValue(true)
+        getUserInfoMock.mockReturnValue({ role: 'hr' })
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+    })
+
+    const findFinalizeBtn = (wrapper: ReturnType<typeof mountStep>) =>
+        wrapper.findAll('button').find((b) => b.text().includes('整月定案'))!
+
+    it('loading 中即使 records 非空 → 定案鈕 disabled、提示載入中、點擊不開確認窗', async () => {
+        const settlement = makeSettlement([rec()])
+        settlement.loading.value = true
+        const wrapper = mountStep(settlement)
+
+        expect(findFinalizeBtn(wrapper).attributes('disabled')).toBeDefined()
+        const vm = wrapper.vm as unknown as { disabledReason: string }
+        expect(vm.disabledReason).toContain('載入')
+
+        await findFinalizeBtn(wrapper).trigger('click')
+        await flushPromises()
+        expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+        expect(finalizeMonthMock).not.toHaveBeenCalled()
+
+        // 載入完成 → 恢復可按
+        settlement.loading.value = false
+        await nextTick()
+        expect(findFinalizeBtn(wrapper).attributes('disabled')).toBeUndefined()
+        expect(vm.disabledReason).toBe('')
+    })
+
+    it('整合：切月後新月名冊回來前，人數歸零、定案鈕不可按；回來後以新月名冊恢復', async () => {
+        getRecordsMock.mockResolvedValueOnce({
+            data: [rec({ employee_name: 'MAY-1' }), rec({ id: 2, employee_id: 'E2', employee_name: 'MAY-2' })],
+        })
+        const query = reactive({ year: 2026, month: 5 })
+        const settlement = useSalarySettlement(toRef(query, 'year'), toRef(query, 'month'))
+        await settlement.refresh()
+        const wrapper = mount(StepFinalize, {
+            global: { stubs: STUBS, provide: { settlement, settleQuery: query } },
+        })
+        expect(wrapper.text()).toContain('2 人')
+        expect(findFinalizeBtn(wrapper).attributes('disabled')).toBeUndefined()
+
+        // 4 月請求 pending：模擬新月名冊還沒回來
+        const april = deferred<{ data: SettlementRecord[] }>()
+        getRecordsMock.mockReturnValueOnce(april.promise)
+        query.month = 4
+        await nextTick()
+        await nextTick()
+
+        expect(wrapper.text()).not.toContain('2 人')
+        expect(wrapper.text()).toContain('0 人')
+        expect(findFinalizeBtn(wrapper).attributes('disabled')).toBeDefined()
+        await findFinalizeBtn(wrapper).trigger('click')
+        await flushPromises()
+        expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+        expect(finalizeMonthMock).not.toHaveBeenCalled()
+
+        april.resolve({ data: [rec({ employee_name: 'APR-1' })] })
+        await flushPromises()
+        expect(wrapper.text()).toContain('1 人')
+        expect(findFinalizeBtn(wrapper).attributes('disabled')).toBeUndefined()
     })
 })
 

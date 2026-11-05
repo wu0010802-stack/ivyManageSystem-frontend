@@ -202,7 +202,14 @@ export function useSalarySettlement(year: Ref<number>, month: Ref<number>) {
             if (epoch === refreshEpoch) loading.value = false
         }
     }
-    watch([year, month], refresh)
+    // 年月改變：先清掉舊月名冊與失敗旗標再重抓。步驟元件（StepFinalize／StepCalculate 等）切月就立即
+    // 重掛，若不清空，新月名冊回來前畫面會是「新月標題 + 舊月名冊」，定案／計算鈕還可按。
+    // 只有年月改變才清空；一般 refresh（例如定案後重抓）維持不清，避免畫面閃空。
+    watch([year, month], () => {
+        records.value = []
+        currentLoadFailed.value = false
+        void refresh()
+    })
 
     const status = computed(() => deriveStatus(records.value))
     const anomalies = computed(() =>

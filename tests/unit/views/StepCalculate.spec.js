@@ -33,6 +33,7 @@ function makeSettlement(status = 'draft') {
   return {
     status: { value: status },
     records: { value: [] },
+    loading: { value: false },
     refresh: vi.fn().mockResolvedValue(undefined),
   }
 }

@@ -140,6 +140,8 @@ const totalNet = computed(() =>
 const finalizedRecords = computed(() => settlement.records.value.filter((r) => r.is_finalized))
 
 const disabledReason = computed(() => {
+    // 名冊載入中（切月後新月名冊未回來）：records 不可信，不可定案
+    if (settlement.loading.value) return '資料載入中，請稍候'
     if (!canWriteSalary.value) return '需要薪資寫入權限（目前為唯讀模式）'
     if (settlement.records.value.length === 0) return '本月尚未計算薪資'
     if (settlement.status.value === 'finalized') return '本月已全數封存'

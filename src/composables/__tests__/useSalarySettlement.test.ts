@@ -234,6 +234,179 @@ describe('useSalarySettlement refresh（async race）', () => {
     })
 })
 
+describe('useSalarySettlement 切換年月（舊月名冊不得殘留到新月載入完成前）', () => {
+    interface PendingCall {
+        year: number
+        month: number
+        resolve: (v: { data: unknown[] }) => void
+        reject: (e: unknown) => void
+    }
+
+    const flush = () => new Promise((r) => setTimeout(r))
+
+    /** 之後的 getRecords 一律回 pending promise，由測試手動 resolve／reject。 */
+    const mockPending = (): PendingCall[] => {
+        const calls: PendingCall[] = []
+        vi.mocked(getRecords).mockImplementation(
+            (year: number, month: number) =>
+                new Promise((resolve, reject) => {
+                    calls.push({ year, month, resolve, reject })
+                }) as ReturnType<typeof getRecords>,
+        )
+        return calls
+    }
+
+    /** 建立 composable 並先載入一個月（5 月）的名冊。 */
+    const loadedMay = async (mayRecords: SettlementRecord[]) => {
+        vi.mocked(getRecords).mockImplementation(
+            () => Promise.resolve({ data: mayRecords }) as ReturnType<typeof getRecords>,
+        )
+        const year = ref(2026)
+        const month = ref(5)
+        const s = useSalarySettlement(year, month)
+        await s.refresh()
+        return { year, month, s }
+    }
+
+    it('切月後 records 立即清空；新月載入完成前 status 不沿用舊月（loading 中）', async () => {
+        const { month, s } = await loadedMay([
+            rec({ employee_name: 'MAY', is_finalized: true, manual_overrides: ['x'] }),
+        ])
+        expect(s.status.value).toBe('finalized')
+        expect(s.finalizedCount.value).toBe(1)
+        expect(s.anomalies.value.size).toBe(1)
+
+        const calls = mockPending()
+        month.value = 4
+        await nextTick()
+
+        expect(calls.map((c) => [c.year, c.month])).toEqual([[2026, 4]])
+        expect(s.records.value).toEqual([])
+        expect(s.loading.value).toBe(true)
+        expect(s.status.value).toBe('not_calculated')
+        expect(s.finalizedCount.value).toBe(0)
+        expect(s.anomalies.value.size).toBe(0)
+
+        calls[0].resolve({ data: [rec({ employee_name: 'APR' })] })
+        await flush()
+        expect(s.records.value.map((r) => r.employee_name)).toEqual(['APR'])
+        expect(s.loading.value).toBe(false)
+    })
+
+    it('切年（跨年）同樣清空舊名冊', async () => {
+        const { year, s } = await loadedMay([rec({ employee_name: 'MAY' })])
+        const calls = mockPending()
+        year.value = 2025
+        await nextTick()
+
+        expect(calls.map((c) => [c.year, c.month])).toEqual([[2025, 5]])
+        expect(s.records.value).toEqual([])
+        expect(s.loading.value).toBe(true)
+    })
+
+    it('前一月載入失敗，切月後 currentLoadFailed 立即復位（不沿用上月失敗旗標）', async () => {
+        vi.mocked(getRecords).mockImplementation(
+            () => Promise.reject(new Error('500')) as ReturnType<typeof getRecords>,
+        )
+        const year = ref(2026)
+        const month = ref(5)
+        const s = useSalarySettlement(year, month)
+        await s.refresh()
+        expect(s.currentLoadFailed.value).toBe(true)
+
+        const calls = mockPending()
+        month.value = 4
+        await nextTick()
+
+        expect(s.currentLoadFailed.value).toBe(false)
+        expect(s.loading.value).toBe(true)
+        expect(calls).toHaveLength(1)
+    })
+
+    it('切月後新月載入失敗 → records 為空、currentLoadFailed 為 true、loading 結束', async () => {
+        const { month, s } = await loadedMay([rec({ employee_name: 'MAY' })])
+        const calls = mockPending()
+        month.value = 4
+        await nextTick()
+
+        calls[0].reject(new Error('500'))
+        await flush()
+
+        expect(s.records.value).toEqual([])
+        expect(s.currentLoadFailed.value).toBe(true)
+        expect(s.loading.value).toBe(false)
+    })
+
+    it('快速連續切月 5→4→3：4 月回應在 3 月仍 pending 時到達，不得顯示 4 月名冊', async () => {
+        const { month, s } = await loadedMay([rec({ employee_name: 'MAY' })])
+        const calls = mockPending()
+        month.value = 4
+        await nextTick()
+        month.value = 3
+        await nextTick()
+        expect(calls.map((c) => [c.year, c.month])).toEqual([
+            [2026, 4],
+            [2026, 3],
+        ])
+
+        calls[0].resolve({ data: [rec({ employee_name: 'APR' })] })
+        await flush()
+        expect(s.records.value).toEqual([]) // 4 月是晚到的舊請求：丟棄，不是新月名冊
+        expect(s.loading.value).toBe(true) // 3 月仍在載入
+
+        calls[1].resolve({ data: [rec({ employee_name: 'MAR' })] })
+        await flush()
+        expect(s.records.value.map((r) => r.employee_name)).toEqual(['MAR'])
+        expect(s.loading.value).toBe(false)
+    })
+
+    it('快速連續切月 5→4→3：4 月的晚到失敗不得清掉 3 月已載入的名冊或設失敗旗標', async () => {
+        const { month, s } = await loadedMay([rec({ employee_name: 'MAY' })])
+        const calls = mockPending()
+        month.value = 4
+        await nextTick()
+        month.value = 3
+        await nextTick()
+
+        calls[1].resolve({ data: [rec({ employee_name: 'MAR' })] })
+        await flush()
+        calls[0].reject(new Error('500'))
+        await flush()
+
+        expect(s.records.value.map((r) => r.employee_name)).toEqual(['MAR'])
+        expect(s.currentLoadFailed.value).toBe(false)
+        expect(s.loading.value).toBe(false)
+    })
+
+    it('一般 refresh（例如定案後重抓）不清空畫面：載入中仍保留現有名冊，回應後才換新', async () => {
+        const { s } = await loadedMay([rec({ employee_name: 'MAY' })])
+        const calls = mockPending()
+
+        const pending = s.refresh()
+        await nextTick()
+        expect(s.loading.value).toBe(true)
+        expect(s.records.value.map((r) => r.employee_name)).toEqual(['MAY']) // 不閃空
+
+        calls[0].resolve({ data: [rec({ employee_name: 'MAY', is_finalized: true })] })
+        await pending
+        expect(s.records.value[0]?.is_finalized).toBe(true)
+        expect(s.loading.value).toBe(false)
+    })
+
+    it('一般 refresh 失敗仍沿用既有行為：清空並標記載入失敗', async () => {
+        const { s } = await loadedMay([rec({ employee_name: 'MAY' })])
+        const calls = mockPending()
+
+        const pending = s.refresh()
+        calls[0].reject(new Error('500'))
+        await pending
+
+        expect(s.records.value).toEqual([])
+        expect(s.currentLoadFailed.value).toBe(true)
+        expect(s.loading.value).toBe(false)
+    })
+})
+
 describe('useSalarySettlement currentLoadFailed（當月載入失敗清空殘留）', () => {
     it('當月請求失敗 → 清空 records 並設 currentLoadFailed，避免殘留上一個月名冊', async () => {
         vi.mocked(getRecords).mockImplementation(
