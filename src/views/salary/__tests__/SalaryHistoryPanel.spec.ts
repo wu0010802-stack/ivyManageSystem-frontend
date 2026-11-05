@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { ElMessage } from 'element-plus'
 import SalaryHistoryPanel from '../SalaryHistoryPanel.vue'
 
 vi.mock('element-plus', async (importOriginal) => {
@@ -34,9 +35,13 @@ const STUBS = {
   'el-select': true,
   'el-option': true,
   'el-card': { template: '<div><slot /></div>' },
-  'el-table': true,
+  // 以 data-rows 暴露實際渲染的列數，供斷言「表格是否還在畫某位員工的資料」
+  'el-table': { props: ['data'], template: '<div class="table-stub" :data-rows="data.length" />' },
   'el-table-column': true,
-  'el-empty': true,
+  'el-alert': { props: ['title', 'type'], template: '<div class="alert-stub" :data-type="type">{{ title }}<slot /></div>' },
+  'el-empty': { props: ['description'], template: '<div class="empty-stub">{{ description }}</div>' },
+  // 宣告 emits，避免 onClick 同時以原生 listener fallthrough 與 $emit 各觸發一次（重試被打兩次）
+  'el-button': { emits: ['click'], template: '<button @click="$emit(\'click\')"><slot /></button>' },
 }
 
 type HistoryRow = {
@@ -78,10 +83,12 @@ const row = (netSalary: number, unusedLeavePayout = 0): HistoryRow => ({
 // 手動可控 resolve 時機的 deferred promise，用來模擬「先發後至」的 race。
 function createDeferred<T>() {
   let resolve!: (v: T) => void
-  const promise = new Promise<T>((res) => {
+  let reject!: (e: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
     resolve = res
+    reject = rej
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 type VmShape = {
@@ -89,6 +96,7 @@ type VmShape = {
   historyMonths: number
   historyData: HistoryRow[]
   historyLoading: boolean
+  loadError: string | null
   chartData: { datasets: Array<{ data: number[] }> } | null
 }
 
@@ -178,5 +186,180 @@ describe('SalaryHistoryPanel fetchHistory race guard', () => {
     await flushPromises()
     expect(vm.historyLoading).toBe(false)
     expect(vm.historyData.map((r) => r.net_salary)).toEqual([3333])
+  })
+})
+
+// P2 #70：載入失敗時不得殘留上一位員工的薪資表（HR 會把 A 的薪資誤讀成 B），
+// 首次載入就失敗也不得偽裝成「無歷史薪資記錄」。比照 SalaryMonthlyOverviewPanel：
+// 失敗 → 清空資料＋可重試 alert。
+describe('SalaryHistoryPanel 載入失敗狀態（不殘留前一位員工資料）', () => {
+  beforeEach(() => {
+    getHistoryMock.mockReset()
+    vi.mocked(ElMessage.error).mockClear()
+  })
+
+  const tableRows = (wrapper: ReturnType<typeof mountPanel>) =>
+    wrapper.find('.table-stub').exists() ? Number(wrapper.find('.table-stub').attributes('data-rows')) : 0
+
+  it('員工 A 載入成功後切到 B 且 B 失敗：清空表格、不再渲染 A 的資料，顯示可重試錯誤', async () => {
+    getHistoryMock
+      .mockResolvedValueOnce({ data: [row(1111)] }) // 員工 A 成功
+      .mockRejectedValueOnce(new Error('boom')) // 員工 B 失敗
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+
+    vm.selectedEmployeeId = 1
+    await flushPromises()
+    expect(vm.historyData.map((r) => r.net_salary)).toEqual([1111])
+    expect(tableRows(wrapper)).toBe(1)
+
+    vm.selectedEmployeeId = 2
+    await flushPromises()
+
+    expect(vm.historyData).toEqual([])
+    expect(vm.chartData).toBeNull()
+    expect(wrapper.find('.table-stub').exists()).toBe(false)
+    const alert = wrapper.find('[data-testid="history-error"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('載入薪資歷史失敗')
+    expect(wrapper.find('[data-testid="history-retry"]').exists()).toBe(true)
+    // 失敗不是「沒有資料」
+    expect(wrapper.find('.empty-stub').exists()).toBe(false)
+    expect(ElMessage.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('首次載入就失敗：顯示錯誤而不是「無歷史薪資記錄」', async () => {
+    getHistoryMock.mockRejectedValueOnce(new Error('boom'))
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+
+    vm.selectedEmployeeId = 1
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="history-retry"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('無歷史薪資記錄')
+    expect(wrapper.find('.empty-stub').exists()).toBe(false)
+  })
+
+  it('重試成功後錯誤區消失並顯示資料（以同一員工、同一區間重打）', async () => {
+    getHistoryMock.mockRejectedValueOnce(new Error('boom'))
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+    vm.selectedEmployeeId = 2
+    await flushPromises()
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(true)
+
+    getHistoryMock.mockResolvedValueOnce({ data: [row(2222)] })
+    await wrapper.find('[data-testid="history-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(getHistoryMock).toHaveBeenCalledTimes(2)
+    expect(getHistoryMock).toHaveBeenLastCalledWith({ employee_id: 2, months: 12 })
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(false)
+    expect(vm.loadError).toBeNull()
+    expect(vm.historyData.map((r) => r.net_salary)).toEqual([2222])
+    expect(tableRows(wrapper)).toBe(1)
+  })
+
+  it('失敗後重試成功但該員工確實無資料：顯示「無歷史薪資記錄」，不殘留舊錯誤', async () => {
+    getHistoryMock.mockRejectedValueOnce(new Error('boom'))
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+    vm.selectedEmployeeId = 1
+    await flushPromises()
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(true)
+
+    getHistoryMock.mockResolvedValueOnce({ data: [] })
+    await wrapper.find('[data-testid="history-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(false)
+    expect(wrapper.find('.empty-stub').text()).toContain('無歷史薪資記錄')
+  })
+
+  it('切到另一位員工並成功：先前員工的失敗訊息被清掉', async () => {
+    getHistoryMock
+      .mockRejectedValueOnce(new Error('boom')) // 員工 A 失敗
+      .mockResolvedValueOnce({ data: [row(2222)] }) // 員工 B 成功
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+    vm.selectedEmployeeId = 1
+    await flushPromises()
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(true)
+
+    vm.selectedEmployeeId = 2
+    await flushPromises()
+
+    expect(vm.loadError).toBeNull()
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(false)
+    expect(vm.historyData.map((r) => r.net_salary)).toEqual([2222])
+  })
+
+  it('成功但該員工無資料：維持「無歷史薪資記錄」空狀態（不是錯誤）', async () => {
+    getHistoryMock.mockResolvedValueOnce({ data: [] })
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+    vm.selectedEmployeeId = 1
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(false)
+    expect(wrapper.find('.empty-stub').text()).toContain('無歷史薪資記錄')
+  })
+
+  // epoch 守衛：舊請求（A）晚到的失敗，不得清掉已成功的 B，也不得蓋上錯誤。
+  it('舊請求 A 晚到的失敗不影響已成功的 B（資料保留、無錯誤、無 toast）', async () => {
+    const deferredA = createDeferred<{ data: HistoryRow[] }>()
+    const deferredB = createDeferred<{ data: HistoryRow[] }>()
+    getHistoryMock
+      .mockImplementationOnce(() => deferredA.promise)
+      .mockImplementationOnce(() => deferredB.promise)
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+
+    vm.selectedEmployeeId = 1 // A 發出（慢）
+    await flushPromises()
+    vm.selectedEmployeeId = 2 // B 發出（快）
+    await flushPromises()
+
+    deferredB.resolve({ data: [row(2222)] })
+    await flushPromises()
+    expect(vm.historyData.map((r) => r.net_salary)).toEqual([2222])
+
+    deferredA.reject(new Error('boom')) // A 晚到失敗
+    await flushPromises()
+
+    expect(vm.historyData.map((r) => r.net_salary)).toEqual([2222])
+    expect(vm.loadError).toBeNull()
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(false)
+    expect(tableRows(wrapper)).toBe(1)
+    expect(ElMessage.error).not.toHaveBeenCalled()
+  })
+
+  it('舊請求 A 的失敗先到、B 仍在進行：不顯示 A 的錯誤；B 成功後正常顯示 B', async () => {
+    const deferredA = createDeferred<{ data: HistoryRow[] }>()
+    const deferredB = createDeferred<{ data: HistoryRow[] }>()
+    getHistoryMock
+      .mockImplementationOnce(() => deferredA.promise)
+      .mockImplementationOnce(() => deferredB.promise)
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+
+    vm.selectedEmployeeId = 1
+    await flushPromises()
+    vm.selectedEmployeeId = 2
+    await flushPromises()
+
+    deferredA.reject(new Error('boom')) // A 在 B 完成前失敗
+    await flushPromises()
+    expect(vm.loadError).toBeNull()
+    expect(vm.historyLoading).toBe(true) // B 仍在進行
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(false)
+    expect(ElMessage.error).not.toHaveBeenCalled()
+
+    deferredB.resolve({ data: [row(2222)] })
+    await flushPromises()
+    expect(vm.historyData.map((r) => r.net_salary)).toEqual([2222])
+    expect(wrapper.find('[data-testid="history-error"]').exists()).toBe(false)
   })
 })

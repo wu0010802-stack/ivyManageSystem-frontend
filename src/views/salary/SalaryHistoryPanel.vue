@@ -18,6 +18,8 @@ const historyLoading = ref(false)
 const selectedEmployeeId = ref<number | null>(null)
 const historyMonths = ref(12)
 const historyData = ref<HistoryRow[]>([])
+// 載入失敗訊息；非 null 時顯示可重試 alert（不可殘留前一位員工的資料，也不可偽裝成空資料）
+const loadError = ref<string | null>(null)
 
 // 防切員工/切區間 race：晚到的舊請求不得蓋掉新選取的資料（epoch 比對，
 // 比照 useSalarySettlement.refresh 的 refreshEpoch 寫法）
@@ -27,13 +29,19 @@ const fetchHistory = async () => {
   if (!selectedEmployeeId.value) return
   const epoch = ++fetchEpoch
   historyLoading.value = true
+  loadError.value = null
   try {
     const response = await getHistory({ employee_id: selectedEmployeeId.value, months: historyMonths.value })
     if (epoch !== fetchEpoch) return // 已被更新的請求取代，捨棄結果
     historyData.value = response.data.slice().reverse()
   } catch (e) {
-    if (epoch !== fetchEpoch) return
-    ElMessage.error(friendlyError('載入薪資歷史失敗', e))
+    if (epoch !== fetchEpoch) return // 舊請求晚到的失敗不得清掉新請求的結果
+    // 失敗必須清空舊資料並顯示可重試錯誤：否則表格仍是上一位員工的薪資，
+    // 或首次失敗時被當成「無歷史薪資記錄」（比照 SalaryMonthlyOverviewPanel）
+    historyData.value = []
+    const message = friendlyError('載入薪資歷史失敗', e)
+    loadError.value = message
+    ElMessage.error(message)
   } finally {
     if (epoch === fetchEpoch) historyLoading.value = false
   }
@@ -171,6 +179,17 @@ onMounted(() => {
         </el-table-column>
       </el-table>
     </div>
+
+    <!-- 失敗：可重試 alert（不可偽裝成「無歷史薪資記錄」） -->
+    <el-alert
+      v-else-if="loadError"
+      type="error"
+      :closable="false"
+      :title="loadError"
+      data-testid="history-error"
+    >
+      <el-button size="small" data-testid="history-retry" @click="fetchHistory">重試</el-button>
+    </el-alert>
 
     <el-empty v-else-if="selectedEmployeeId && !historyLoading" description="無歷史薪資記錄" />
     <el-empty v-else-if="!selectedEmployeeId" description="請選擇員工查看薪資歷史" />
