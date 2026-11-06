@@ -1,7 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, ref } from 'vue'
+import { h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import EmployeeListView from '@/views/EmployeeListView.vue'
+
+// 權限開關：預設全空 = 與未登入時真實 hasPermission 相同（既有測試行為不變）；
+// F78 的測試用 grantOffboarding / grantPerms 開出需要的權限。
+const authMock = vi.hoisted(() => ({ perms: new Set(), fullSalaryView: false }))
+vi.mock('@/utils/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  hasPermission: (name) => authMock.perms.has(name),
+  hasFullSalaryView: () => authMock.fullSalaryView,
+}))
+
+// 手機卡片視圖開關（預設桌機）；需回傳真 ref，template 才會解包
+const viewportMock = vi.hoisted(() => ({ mobile: false }))
+vi.mock('@/composables/useIsMobile', async () => {
+  const { ref: vueRef } = await import('vue')
+  return { useIsMobile: () => ({ isMobile: vueRef(viewportMock.mobile), cleanup: () => {} }) }
+})
 
 const employeeStore = {
   employees: [],
@@ -105,9 +121,19 @@ const mountView = () =>
     global: { directives: { loading: () => {} }, stubs },
   })
 
+// 完整離職權限 = EMPLOYEES_WRITE + SALARY_WRITE + 全員薪資視野（canManageOffboarding）
+const grantOffboarding = () => {
+  authMock.perms = new Set(['EMPLOYEES_WRITE', 'SALARY_WRITE'])
+  authMock.fullSalaryView = true
+}
+
 describe('EmployeeListView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    authMock.perms = new Set()
+    authMock.fullSalaryView = false
+    viewportMock.mobile = false
+    mockDeleteEmployee.mockImplementation(() => Promise.resolve({ data: {} }))
     employeeStore.employees = []
     employeeStore.error = null
     employeeStore.fetchEmployees.mockImplementation(() => Promise.resolve())
@@ -381,6 +407,7 @@ describe('EmployeeListView', () => {
   })
 
   it('quick-resign 指令觸發確認框，確認後呼叫 deleteEmployee(id) 並重載', async () => {
+    grantOffboarding() // F78：quick-resign 與辦理離職同一組權限
     employeeStore.employees = [{ id: 7, name: '王小明', is_active: true, resign_date: null }]
     const wrapper = mountView()
     await flushPromises()
@@ -404,6 +431,7 @@ describe('EmployeeListView', () => {
   })
 
   it('quick-resign 取消確認框 → 不呼叫 deleteEmployee', async () => {
+    grantOffboarding()
     employeeStore.employees = [{ id: 7, name: '王小明', is_active: true, resign_date: null }]
     const wrapper = mountView()
     await flushPromises()
@@ -455,6 +483,186 @@ describe('EmployeeListView', () => {
     expect(link.exists()).toBe(true)
     expect(link.attributes('to')).toBe('/employees/7')
     expect(link.text()).toBe('王小明')
+  })
+
+  // ── F78：「僅停用帳號」(quick-resign) 與「辦理離職」同一組權限 ──────────────
+  // 後端 DELETE /employees/{id} 會設離職日、撤帳號、標薪資 stale，卻不做假額折現與離職快照；
+  // 完整離職入口由 canManageOffboarding（EMPLOYEES_WRITE + SALARY_WRITE + 全員薪資視野）把關，
+  // quick-resign 原本只看 is_active，只有 EMPLOYEES_WRITE 的帳號也能終結員工。
+  describe('quick-resign 權限（F78）', () => {
+    const activeRow = { id: 7, employee_id: 'E7', name: '王小明', is_active: true, resign_date: null }
+    const resignedRow = { id: 8, employee_id: 'E8', name: '已離職員工', is_active: false, resign_date: '2020-01-01' }
+
+    // el-table-column / AdminListCards 預設 stub 不渲染 slot；這裡讓「操作」欄與卡片 actions slot 真的渲染，
+    // 才能斷言「更多」下拉實際包含哪些指令（el-dropdown-item stub 會把 command 屬性落在根節點）。
+    const opsColumnStub = (rows) => ({
+      props: ['label'],
+      render() {
+        if (this.label === '操作' && this.$slots.default) {
+          return h('div', { class: 'ops-cell' }, rows.map((row) => this.$slots.default({ row })))
+        }
+        return null
+      },
+    })
+    const cardActionsStub = (rows) => ({
+      props: ['items'],
+      render() {
+        return h('div', { class: 'cards' }, rows.map((item) => this.$slots.actions?.({ item })))
+      },
+    })
+    const moreDropdownStub = { template: '<div class="more-dropdown"><slot /><slot name="dropdown" /></div>' }
+
+    const mountWithRows = async (rows) => {
+      employeeStore.employees = rows
+      const wrapper = mount(EmployeeListView, {
+        global: {
+          directives: { loading: () => {} },
+          stubs: {
+            ...stubs,
+            'el-dropdown': moreDropdownStub,
+            'el-table-column': opsColumnStub(rows),
+            AdminListCards: cardActionsStub(rows),
+          },
+        },
+      })
+      await flushPromises()
+      await nextTick()
+      return wrapper
+    }
+    const commandsOf = (wrapper) =>
+      wrapper.findAll('[command]').map((n) => n.attributes('command'))
+
+    // 以下情境刻意再給 ATTENDANCE_WRITE：讓「更多」下拉因重置 PIN 而照常渲染，
+    // 才是在驗證 quick-resign 項目本身的權限判斷，而不是被「整個下拉不渲染」順便遮住。
+    it('只有 EMPLOYEES_WRITE（無 SALARY_WRITE）→ 在職列「更多」只剩重置 PIN，不含 quick-resign／offboard', async () => {
+      authMock.perms = new Set(['EMPLOYEES_WRITE', 'ATTENDANCE_WRITE'])
+      authMock.fullSalaryView = true
+      const wrapper = await mountWithRows([activeRow])
+
+      expect(wrapper.find('.more-dropdown').exists()).toBe(true)
+      expect(commandsOf(wrapper)).toEqual(['reset-punch-pin'])
+    })
+
+    it('有 SALARY_WRITE 但無全員薪資視野 → 不含 quick-resign（與辦理離職同口徑）', async () => {
+      authMock.perms = new Set(['EMPLOYEES_WRITE', 'SALARY_WRITE', 'ATTENDANCE_WRITE'])
+      authMock.fullSalaryView = false
+      const wrapper = await mountWithRows([activeRow])
+
+      expect(wrapper.find('.more-dropdown').exists()).toBe(true)
+      expect(commandsOf(wrapper)).toEqual(['reset-punch-pin'])
+    })
+
+    it('有 SALARY_WRITE 但無 EMPLOYEES_WRITE → 整個「更多」下拉不渲染', async () => {
+      authMock.perms = new Set(['SALARY_WRITE'])
+      authMock.fullSalaryView = true
+      const wrapper = await mountWithRows([activeRow])
+
+      expect(wrapper.find('.more-dropdown').exists()).toBe(false)
+      expect(commandsOf(wrapper)).not.toContain('quick-resign')
+    })
+
+    it('具完整離職權限者：在職列仍有 offboard 與 quick-resign，已離職列沒有 quick-resign', async () => {
+      grantOffboarding()
+      const wrapper = await mountWithRows([activeRow])
+      expect(commandsOf(wrapper)).toEqual(expect.arrayContaining(['offboard', 'quick-resign']))
+
+      const resignedOnly = await mountWithRows([resignedRow])
+      expect(commandsOf(resignedOnly)).not.toContain('quick-resign')
+    })
+
+    it('手機卡片視圖：無 SALARY_WRITE 不含 quick-resign；具完整離職權限者仍有', async () => {
+      viewportMock.mobile = true
+      authMock.perms = new Set(['EMPLOYEES_WRITE', 'ATTENDANCE_WRITE'])
+      authMock.fullSalaryView = true
+      const noSalary = await mountWithRows([activeRow])
+      expect(noSalary.find('.cards').exists()).toBe(true) // 確認真的走到手機卡片分支
+      expect(noSalary.find('.ops-cell').exists()).toBe(false)
+      expect(commandsOf(noSalary)).toEqual(['reset-punch-pin'])
+
+      // 連重置 PIN 都沒有 → 手機卡片也不渲染空的「更多」
+      authMock.perms = new Set(['EMPLOYEES_WRITE'])
+      const nothing = await mountWithRows([activeRow])
+      expect(nothing.find('.more-dropdown').exists()).toBe(false)
+
+      grantOffboarding()
+      const full = await mountWithRows([activeRow])
+      expect(commandsOf(full)).toContain('quick-resign')
+    })
+
+    it('僅 EMPLOYEES_WRITE 且無其他可用指令 → 不渲染空的「更多」下拉；有 ATTENDANCE_WRITE 時只剩重置 PIN', async () => {
+      authMock.perms = new Set(['EMPLOYEES_WRITE'])
+      authMock.fullSalaryView = true
+      const empty = await mountWithRows([activeRow])
+      expect(empty.find('.more-dropdown').exists()).toBe(false)
+
+      authMock.perms = new Set(['EMPLOYEES_WRITE', 'ATTENDANCE_WRITE'])
+      const pinOnly = await mountWithRows([activeRow])
+      expect(pinOnly.find('.more-dropdown').exists()).toBe(true)
+      expect(commandsOf(pinOnly)).toEqual(['reset-punch-pin'])
+    })
+
+    it('無權限者即使直接送 quick-resign 指令也不跳確認框、不呼叫 deleteEmployee', async () => {
+      authMock.perms = new Set(['EMPLOYEES_WRITE'])
+      authMock.fullSalaryView = true
+      const wrapper = await mountWithRows([activeRow])
+
+      wrapper.vm.handleRowCommand('quick-resign', activeRow)
+      await flushPromises()
+      await flushPromises()
+
+      expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+      expect(mockDeleteEmployee).not.toHaveBeenCalled()
+    })
+
+    describe('失敗時顯示後端訊息', () => {
+      const BACKEND_409 = '此員工尚有補休或特休餘額，請改走完整離職流程'
+      const apiFailure = (status, detail) =>
+        Object.assign(new Error(`Request failed with status code ${status}`), {
+          response: { status, data: { detail } },
+          displayMessage: detail, // 與 api/index.ts interceptor 對字串 detail 的正規化一致
+          errorDetail: null,
+        })
+      const runQuickResignFailing = async (error) => {
+        grantOffboarding()
+        const wrapper = await mountWithRows([activeRow])
+        ElMessageBox.confirm.mockResolvedValueOnce(undefined)
+        mockDeleteEmployee.mockRejectedValueOnce(error)
+        employeeStore.fetchEmployees.mockClear()
+
+        wrapper.vm.handleRowCommand('quick-resign', activeRow)
+        await flushPromises()
+        await flushPromises()
+        await flushPromises()
+        return wrapper
+      }
+
+      it('409（有補休／特休餘額）→ 顯示後端訊息，不是通用「操作失敗」，且不重載、不報成功', async () => {
+        await runQuickResignFailing(apiFailure(409, BACKEND_409))
+
+        expect(mockDeleteEmployee).toHaveBeenCalledWith(7)
+        expect(ElMessage.warning).toHaveBeenCalledTimes(1)
+        expect(ElMessage.warning).toHaveBeenCalledWith(BACKEND_409)
+        expect(ElMessage.error).not.toHaveBeenCalled()
+        expect(ElMessage.success).not.toHaveBeenCalled()
+        expect(employeeStore.fetchEmployees).not.toHaveBeenCalled()
+      })
+
+      it('409 但後端訊息沒提到完整離職流程 → 補上「改走辦理離職」指引，後端原文保留', async () => {
+        await runQuickResignFailing(apiFailure(409, '員工仍有補休餘額'))
+
+        const [message] = ElMessage.warning.mock.calls[0]
+        expect(message).toContain('員工仍有補休餘額')
+        expect(message).toContain('辦理離職')
+      })
+
+      it('403（權限不足，例如權限剛被收回）→ 顯示後端訊息為錯誤', async () => {
+        await runQuickResignFailing(apiFailure(403, '需要薪資編輯權限才能辦理離職'))
+
+        expect(ElMessage.error).toHaveBeenCalledWith('需要薪資編輯權限才能辦理離職')
+        expect(ElMessage.warning).not.toHaveBeenCalled()
+        expect(employeeStore.fetchEmployees).not.toHaveBeenCalled()
+      })
+    })
   })
 
   // ── Task 7：HR 待辦 chips（待補薪資／試用期將到期）───────────────

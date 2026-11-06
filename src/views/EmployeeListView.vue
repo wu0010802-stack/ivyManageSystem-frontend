@@ -53,6 +53,15 @@ const canManageOffboarding = computed(
   () => canWriteEmployees.value && hasPermission('SALARY_WRITE') && hasFullSalaryView(),
 )
 
+// 「僅停用帳號」(quick-resign) 與「辦理離職」同一組權限（F78）：後端 DELETE /employees/{id} 會設離職日、
+// 撤帳號、標薪資 stale，卻不做假額折現與離職快照，不能只靠 EMPLOYEES_WRITE。前端判斷僅為 UI 便利，
+// 真正的守衛在後端（SALARY_WRITE + 全員薪資視野；有補休／特休餘額者回 409）。
+const canQuickResign = (row: Record<string, unknown>) =>
+  Boolean(row.is_active) && canManageOffboarding.value
+// 「更多」下拉至少有一個可用指令才渲染，避免只有 EMPLOYEES_WRITE 的帳號看到空選單
+const hasMoreActions = (row: Record<string, unknown>) =>
+  (canOffboard(row) && canManageOffboarding.value) || canResetPunchPin.value || canQuickResign(row)
+
 const { resetEmployeePin } = useResetPunchPin()
 
 const showError = (err: unknown) => {
@@ -279,7 +288,10 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 }
 
 // ── 快速標記離職（軟刪，取代舊「刪除」）────────────────
+const QUICK_RESIGN_CONFLICT_HINT = '請改走「辦理離職」完整流程'
+
 const quickResign = (row: Record<string, unknown>) => {
+  if (!canManageOffboarding.value) return
   ElMessageBox.confirm(
     h('div', null, [
       h('p', null, `確定僅停用「${row.name}」的帳號（不跑離職流程）？此操作會：`),
@@ -298,6 +310,12 @@ const quickResign = (row: Record<string, unknown>) => {
       ElMessage.success('已停用帳號並標記離職')
       fetchEmployees()
     } catch (err) {
+      // 409：有補休／特休餘額，停用帳號會略過折現與結算。顯示後端訊息，並確保使用者知道要改走完整流程
+      if ((err as { response?: { status?: number } } | null)?.response?.status === 409) {
+        const message = mapEmployeeError(err).message || '操作失敗'
+        ElMessage.warning(message.includes('離職流程') ? message : `${message}，${QUICK_RESIGN_CONFLICT_HINT}`)
+        return
+      }
       showError(err)
     }
   }).catch(() => {})
@@ -477,7 +495,7 @@ onMounted(async () => {
             </el-tooltip>
             <el-button v-else link type="primary" size="small" @click="openEdit(scope.row)">編輯</el-button>
             <el-dropdown
-              v-if="canWriteEmployees"
+              v-if="canWriteEmployees && hasMoreActions(scope.row)"
               trigger="click"
               @command="(cmd) => handleRowCommand(cmd, scope.row)"
             >
@@ -488,7 +506,7 @@ onMounted(async () => {
                 <el-dropdown-menu>
                   <el-dropdown-item v-if="canOffboard(scope.row) && canManageOffboarding" command="offboard">辦理離職</el-dropdown-item>
                   <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
-                  <el-dropdown-item v-if="scope.row.is_active" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
+                  <el-dropdown-item v-if="canQuickResign(scope.row)" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -527,7 +545,7 @@ onMounted(async () => {
       <template #actions="{ item }">
         <el-button v-if="canWriteEmployees" link type="primary" size="small" @click="openEdit(item)">編輯</el-button>
         <el-dropdown
-          v-if="canWriteEmployees"
+          v-if="canWriteEmployees && hasMoreActions(item)"
           trigger="click"
           @command="(cmd) => handleRowCommand(cmd, item)"
         >
@@ -536,7 +554,7 @@ onMounted(async () => {
             <el-dropdown-menu>
               <el-dropdown-item v-if="canOffboard(item) && canManageOffboarding" command="offboard">辦理離職</el-dropdown-item>
               <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
-              <el-dropdown-item v-if="item.is_active" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
+              <el-dropdown-item v-if="canQuickResign(item)" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
