@@ -10607,8 +10607,9 @@ export interface paths {
          * Update Leave Quota
          * @description 手動調整配額（例如主管核准額外特休）。
          *
-         *     須附 reason（5～500 字）；前後時數與原因寫入稽核；特休調高 ≥ 8 小時需金流簽核權限
-         *     （QA payroll 2026-11-05 B90）。
+         *     須附 reason（5～500 字）；前後時數與原因寫入稽核；特休調高後比「調整前與法定應得中較低者」高出
+         *     ≥ 8 小時需金流簽核權限（QA payroll 2026-11-05 B90；以法定應得為累計基準，擋拆單）；
+         *     時數須為有限數且介於 0 ~ 2400（擋 Infinity／NaN）。
          */
         put: operations["update_leave_quota_api_leaves_quotas__quota_id__put"];
         post?: never;
