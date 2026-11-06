@@ -1,5 +1,5 @@
 import api from './index'
-import type { Schema } from './_generated/typed'
+import type { ApiBody, Schema } from './_generated/typed'
 import { fetchPagedList, type PagedResult } from './_pagination'
 
 export type LeaveListItem = Schema<'LeaveListItemOut'>
@@ -35,7 +35,10 @@ export const getLeaveAttachment = (leaveId: number, filename: string) =>
 
 export const getLeaveQuotas = (params: unknown) => api.get('/leaves/quotas', { params })
 
-export const updateLeaveQuota = (id: number, data: unknown) => api.put(`/leaves/quotas/${id}`, data)
+// body: { total_hours, reason（必填，去頭尾空白後 5～500 字）, note? }（QA payroll 2026-11-05 B90）。
+// 特休調高 >= 8 小時另需金流簽核權限（缺權限 403）；前後時數與原因寫進稽核。
+export const updateLeaveQuota = (id: number, data: ApiBody<'/leaves/quotas/{quota_id}', 'put'>) =>
+  api.put(`/leaves/quotas/${id}`, data)
 
 // null body，透過 query params 送出
 export const initLeaveQuotas = (params: unknown) =>

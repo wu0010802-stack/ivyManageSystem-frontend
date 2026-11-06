@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { getLeaveQuotas, initLeaveQuotas, updateLeaveQuota } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
+import FormDialog from '@/components/common/FormDialog.vue'
 import { friendlyError } from '@/utils/errorMessages'
 import { Warning, QuestionFilled } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
@@ -21,6 +22,10 @@ interface QuotaRow {
   _newTotal: number
 }
 
+// 後端 QuotaUpdate.reason（api/leaves_quota.py）：去頭尾空白後 5～500 字，超出一律 400。
+const QUOTA_REASON_MIN_LENGTH = 5
+const QUOTA_REASON_MAX_LENGTH = 500
+
 const employeeStore = useEmployeeStore()
 const currentYear: number = new Date().getFullYear()
 
@@ -30,6 +35,17 @@ const quotaRows = ref<QuotaRow[]>([])
 const quotaMgrLoading = ref(false)
 const quotaSaving = ref(false)
 const earliestExpiringGrant = ref<EarliestExpiringGrant | null>(null)
+
+// 儲存配額必填「調整原因」（QA payroll 2026-11-05 F90）：點儲存先開對話框，確認後才送出。
+// 開啟當下就擷取前後時數，對話框顯示與送出都用這份快照。
+const reasonVisible = ref(false)
+const reason = ref('')
+const pendingChange = ref<{ row: QuotaRow; before: number; after: number } | null>(null)
+// 以字元計（對齊後端 Python len，emoji 不會被算成兩字）
+const reasonLength = computed(() => Array.from(reason.value.trim()).length)
+const reasonValid = computed(
+  () => reasonLength.value >= QUOTA_REASON_MIN_LENGTH && reasonLength.value <= QUOTA_REASON_MAX_LENGTH,
+)
 
 const loadQuotaMgr = async () => {
   if (!quotaMgrEmpId.value) return
@@ -70,17 +86,37 @@ const leaveTagType = (leaveType: string): ElTagType => {
   return (found?.color as ElTagType | undefined) ?? 'info'
 }
 
-const saveQuotaRow = async (row: QuotaRow) => {
+const requestQuotaSave = (row: QuotaRow) => {
+  pendingChange.value = { row, before: row.total_hours, after: row._newTotal }
+  reason.value = ''
+  reasonVisible.value = true
+}
+
+// 失敗（含特休調高被 403 要求金流簽核、原因過長 400）時對話框與原因保留，訊息沿用後端文字。
+const confirmQuotaSave = async () => {
+  const change = pendingChange.value
+  if (!change || !reasonValid.value || quotaSaving.value) return
   quotaSaving.value = true
   try {
-    const res = await updateLeaveQuota(row.id, { total_hours: row._newTotal, note: row.note })
-    Object.assign(row, (res as { data: QuotaRow }).data, { _editing: false, _newTotal: (res as { data: QuotaRow }).data.total_hours })
+    const res = await updateLeaveQuota(change.row.id, {
+      total_hours: change.after,
+      note: change.row.note,
+      reason: reason.value.trim(),
+    })
+    const saved = (res as { data: QuotaRow }).data
+    Object.assign(change.row, saved, { _editing: false, _newTotal: saved.total_hours })
+    reasonVisible.value = false
     ElMessage.success('已儲存')
   } catch (err) {
     ElMessage.error(friendlyError('儲存配額失敗', err))
   } finally {
     quotaSaving.value = false
   }
+}
+
+const onReasonDialogClosed = () => {
+  pendingChange.value = null
+  reason.value = ''
 }
 
 // 供父層（配額總覽表的「調整」連結）呼叫：選定員工並立即查詢，
@@ -181,13 +217,50 @@ defineExpose({
       <el-table-column label="操作" width="120" align="center">
         <template #default="{ row }">
           <template v-if="row._editing">
-            <el-button size="small" type="primary" link :loading="quotaSaving" @click="saveQuotaRow(row)">儲存</el-button>
+            <el-button size="small" type="primary" link :loading="quotaSaving" @click="requestQuotaSave(row)">儲存</el-button>
             <el-button size="small" link @click="row._editing = false; row._newTotal = row.total_hours">取消</el-button>
           </template>
           <el-button v-else size="small" link @click="row._editing = true">調整</el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <FormDialog
+      v-model="reasonVisible"
+      title="確認調整配額"
+      size="compact"
+      submit-text="確認儲存"
+      :loading="quotaSaving"
+      :disabled="!reasonValid"
+      @submit="confirmQuotaSave"
+      @closed="onReasonDialogClosed"
+    >
+      <p v-if="pendingChange" class="quota-change" data-test="quota-change">
+        {{ pendingChange.row.leave_type_label }}：{{ pendingChange.before }}h → {{ pendingChange.after }}h
+      </p>
+      <p
+        v-if="pendingChange?.row.leave_type === 'annual'"
+        class="quota-hint"
+        data-test="quota-annual-hint"
+      >
+        特休配額會折現進離職結算與年度結算；調高 8 小時以上需由具備金流簽核權限者處理。
+      </p>
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item label="調整原因" required>
+          <el-input
+            v-model="reason"
+            type="textarea"
+            :rows="3"
+            :maxlength="QUOTA_REASON_MAX_LENGTH"
+            show-word-limit
+            placeholder="說明為何調整配額，例如：主管核准補發額外特休、到職日更正後重算"
+          />
+          <div class="quota-reason-hint" :class="{ 'is-short': !!reason.trim() && !reasonValid }">
+            至少 {{ QUOTA_REASON_MIN_LENGTH }} 字（目前 {{ reasonLength }} 字），會寫入稽核紀錄供事後查核
+          </div>
+        </el-form-item>
+      </el-form>
+    </FormDialog>
   </div>
 </template>
 
@@ -202,5 +275,24 @@ defineExpose({
   gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
+}
+.quota-change {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.quota-hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--el-text-color-regular);
+  line-height: 1.6;
+}
+.quota-reason-hint {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+}
+.quota-reason-hint.is-short {
+  color: var(--el-color-warning);
 }
 </style>

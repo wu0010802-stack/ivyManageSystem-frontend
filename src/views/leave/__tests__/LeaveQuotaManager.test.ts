@@ -22,9 +22,13 @@ const flushPromises = async () => {
 }
 
 // el-table 未安裝 Element Plus 時不提供 scoped slot context，需 stub 成會 render slot 的殼
+// FormDialog：儲存配額的「調整原因」確認框（F90）。本檔只驗內嵌版面，不驗該對話框，
+// 以 stub 擋掉它內部的 el-dialog，否則「無 el-dialog 包裹」的斷言會抓到確認框自己。
+// 原因對話框的行為見 LeaveQuotaManager.reason.test.ts。
 const STUBS = {
   'el-table': { template: '<div><slot /></div>' },
   'el-table-column': { template: '<div></div>', props: ['label'] },
+  FormDialog: true,
 }
 
 function mountManager() {

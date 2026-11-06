@@ -84,7 +84,7 @@ describe('leaves api', () => {
   })
 
   it('updateLeaveQuota PUT /leaves/quotas/:id', async () => {
-    const payload = { days: 14 }
+    const payload = { total_hours: 112, reason: '主管核准補發額外特休' }
     await mod.updateLeaveQuota(7, payload)
     expect(mockPut).toHaveBeenCalledWith('/leaves/quotas/7', payload)
   })
