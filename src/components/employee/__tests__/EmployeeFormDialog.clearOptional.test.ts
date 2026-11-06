@@ -7,6 +7,10 @@
 //
 // 本檔鎖 dialog 層：form 值為 undefined（EP 預設清除值）或 null 時，payload 都必須是 null，
 // 且薪資輸入歷史欄（supervisor_role／bonus_grade）清除時照常帶異動生效日。
+//
+// FBG（第三波）：bonus_grade 的任何變動（含清除）後端要求 adjustment_reason，saveBasic 會先開
+// 「調整原因」確認框，確認後才走 submitBasic(reason)。涉及 bonus_grade 的案例因此改呼叫
+// submitBasic(REASON)，期望 payload 多一個 adjustment_reason；詳見 EmployeeFormDialog.bonusGradeReason.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount, flushPromises } from '@vue/test-utils'
 import EmployeeFormDialog from '../EmployeeFormDialog.vue'
@@ -39,8 +43,11 @@ type Setup = {
   openEdit: (row: Record<string, unknown>) => Promise<void>
   form: Record<string, unknown>
   saveBasic: () => Promise<void>
+  submitBasic: (reason?: string | null) => Promise<void>
   basicDirty: Record<string, unknown>
 }
+
+const REASON = '年度職等調整，園長核可'
 
 // 虛構員工；已設主管職與獎金等級覆蓋，供「清除」情境使用
 const ROW = {
@@ -72,13 +79,17 @@ describe('EmployeeFormDialog 清除主管職／獎金等級覆蓋（QA P2 #72）
     s.form.supervisor_role = undefined
     s.form.bonus_grade = undefined
     await flushPromises()
-    await s.saveBasic()
+    await s.submitBasic(REASON)
     expect(updateEmployeeBasic).toHaveBeenCalledTimes(1)
     const payload = vi.mocked(updateEmployeeBasic).mock.calls[0][1] as Record<string, unknown>
     // 必須是「key 存在且值為 null」：undefined 會在 JSON.stringify 時整個 key 被丟掉
     expect(payload).toHaveProperty('supervisor_role', null)
     expect(payload).toHaveProperty('bonus_grade', null)
-    expect(JSON.parse(JSON.stringify(payload))).toEqual({ supervisor_role: null, bonus_grade: null })
+    expect(JSON.parse(JSON.stringify(payload))).toEqual({
+      supervisor_role: null,
+      bonus_grade: null,
+      adjustment_reason: REASON,
+    })
   })
 
   it('清除值為 null（value-on-clear="null"）→ payload 帶 null', async () => {
@@ -86,8 +97,12 @@ describe('EmployeeFormDialog 清除主管職／獎金等級覆蓋（QA P2 #72）
     s.form.supervisor_role = null
     s.form.bonus_grade = null
     await flushPromises()
-    await s.saveBasic()
-    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, { supervisor_role: null, bonus_grade: null })
+    await s.submitBasic(REASON)
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
+      supervisor_role: null,
+      bonus_grade: null,
+      adjustment_reason: REASON,
+    })
   })
 
   it('只清除主管職：payload 只有 supervisor_role: null，且序列化後 key 仍在', async () => {
@@ -104,10 +119,11 @@ describe('EmployeeFormDialog 清除主管職／獎金等級覆蓋（QA P2 #72）
     s.form.bonus_grade = undefined
     s.form.salary_inputs_effective_from = EFF
     await flushPromises()
-    await s.saveBasic()
+    await s.submitBasic(REASON)
     expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
       bonus_grade: null,
       salary_inputs_effective_from: EFF,
+      adjustment_reason: REASON,
     })
     expect(s.form.salary_inputs_effective_from).toBe('')
   })
@@ -142,7 +158,8 @@ describe('EmployeeFormDialog 清除主管職／獎金等級覆蓋（QA P2 #72）
     const s = await openEdited()
     s.form.bonus_grade = undefined
     await flushPromises()
-    await s.saveBasic()
+    await s.submitBasic(REASON)
+    expect(updateEmployeeBasic).toHaveBeenCalledTimes(1)
     expect(Object.keys(s.basicDirty)).toEqual(['bonus_grade'])
   })
 

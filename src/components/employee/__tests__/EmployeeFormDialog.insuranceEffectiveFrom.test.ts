@@ -35,9 +35,14 @@ type Setup = {
   form: Record<string, unknown>
   submitSalary: (reason?: string | null) => Promise<void>
   saveBasic: () => Promise<void>
+  // FBG：bonus_grade 有變動時 saveBasic 會先開「調整原因」確認框，確認後才走 submitBasic(reason)。
+  // 本檔關心的是 payload 與生效日行為，涉及 bonus_grade 的案例直接呼叫 submitBasic 帶原因。
+  submitBasic: (reason?: string | null) => Promise<void>
   salaryDirty: Record<string, unknown>
   basicDirty: Record<string, unknown>
 }
+
+const REASON = '年度職等調整，園長核可'
 
 const ROW = {
   id: 1, employee_id: 'EMP001', name: '吳亞娗', employee_type: 'regular',
@@ -113,7 +118,6 @@ describe('EmployeeFormDialog 基本資料 tab 全部歷史欄都帶生效日（Q
   const EFF = '2026-10-01'
 
   it.each<[string, unknown]>([
-    ['bonus_grade', 'A'],
     ['supervisor_role', 'principal'],
     ['position', '班導師'],
     ['job_title_id', 5],
@@ -131,6 +135,23 @@ describe('EmployeeFormDialog 基本資料 tab 全部歷史欄都帶生效日（Q
       salary_inputs_effective_from: EFF,
     })
     // 實際帶出且儲存成功 → 生效日用掉、清空
+    expect(s.form.salary_inputs_effective_from).toBe('')
+  })
+
+  // bonus_grade 同為歷史欄，但變動需調整原因（FBG）：確認原因後的送出同樣帶生效日
+  it('改 bonus_grade 並設生效日 → 確認原因後 payload 帶 salary_inputs_effective_from 與 adjustment_reason', async () => {
+    const { s } = mountDialog()
+    await s.openEdit({ ...ROW })
+    await flushPromises()
+    s.form.bonus_grade = 'A'
+    s.form.salary_inputs_effective_from = EFF
+    await flushPromises()
+    await s.submitBasic(REASON)
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
+      bonus_grade: 'A',
+      salary_inputs_effective_from: EFF,
+      adjustment_reason: REASON,
+    })
     expect(s.form.salary_inputs_effective_from).toBe('')
   })
 
@@ -178,11 +199,12 @@ describe('EmployeeFormDialog 基本資料 tab 全部歷史欄都帶生效日（Q
     // 基本資料 tab 還要用同一個生效日 → 不清
     expect(s.form.salary_inputs_effective_from).toBe(EFF)
 
-    await s.saveBasic()
+    await s.submitBasic(REASON)
     expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
       bonus_grade: 'A',
       dependents: 1,
       salary_inputs_effective_from: EFF,
+      adjustment_reason: REASON,
     })
     // 兩邊都用掉了 → 清空
     expect(s.form.salary_inputs_effective_from).toBe('')
@@ -222,11 +244,12 @@ describe('EmployeeFormDialog 基本資料 tab 全部歷史欄都帶生效日（Q
     s.form.bank_account = '1234567890' // 薪資 tab 的非歷史欄
     s.form.salary_inputs_effective_from = EFF
     await flushPromises()
-    await s.saveBasic()
+    await s.submitBasic(REASON)
     expect(updateEmployeeBasic).toHaveBeenCalledWith(1, {
       bonus_grade: 'B',
       phone: '0912-345-678',
       salary_inputs_effective_from: EFF,
+      adjustment_reason: REASON,
     })
     // 薪資 tab 剩下的 bank_account 不是歷史欄 → 不需要生效日
     expect(s.form.salary_inputs_effective_from).toBe('')
@@ -241,7 +264,8 @@ describe('EmployeeFormDialog 基本資料 tab 全部歷史欄都帶生效日（Q
     s.form.bonus_grade = 'A'
     s.form.salary_inputs_effective_from = EFF
     await flushPromises()
-    await s.saveBasic()
+    await s.submitBasic(REASON)
+    expect(updateEmployeeBasic).toHaveBeenCalledTimes(1)
     expect(s.form.salary_inputs_effective_from).toBe(EFF)
     expect(Object.keys(s.basicDirty)).toEqual(['bonus_grade'])
   })
@@ -271,8 +295,8 @@ describe('EmployeeFormDialog 基本資料 tab 全部歷史欄都帶生效日（Q
     s.form.bonus_grade = 'A'
     await flushPromises()
     expect(s.form.salary_inputs_effective_from).toBe('')
-    await s.saveBasic()
-    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, { bonus_grade: 'A' })
+    await s.submitBasic(REASON)
+    expect(updateEmployeeBasic).toHaveBeenCalledWith(1, { bonus_grade: 'A', adjustment_reason: REASON })
     const sent = vi.mocked(updateEmployeeBasic).mock.calls[0][1] as Record<string, unknown>
     expect('salary_inputs_effective_from' in sent).toBe(false)
   })

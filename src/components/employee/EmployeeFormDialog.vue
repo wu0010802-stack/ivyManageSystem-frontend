@@ -190,8 +190,13 @@ const { reset: resetDirty, basicDirty, salaryDirty } = useEmployeeFormDirty(form
 
 // ── 薪資變更預覽對話框 ────────────────────────────────
 // 後端 finance_guards：底薪 / 時薪 / 投保級距變動需 adjustment_reason；
-// 大額（合計 > 1000）還需 ACTIVITY_PAYMENT_APPROVE 權限。
-const SALARY_AMOUNT_FIELDS = ['base_salary', 'hourly_rate', 'insurance_salary_level']
+// 大額（合計 > 1000）還需 ACTIVITY_PAYMENT_APPROVE 權限（缺權限時後端回 403，訊息由 showError 顯示）。
+// bonus_grade（獎金等級覆蓋）會間接決定帶班人員的標準底薪與投保薪資，後端同列入此金額守衛：
+// 任何變動（含清除成空白）都需 adjustment_reason（至少 5 字）。它在基本資料 tab，
+// 由 saveBasic 以同一個確認框收原因；其餘三欄在薪資 tab，由 saveSalary 收。
+const SALARY_AMOUNT_FIELDS = ['base_salary', 'hourly_rate', 'insurance_salary_level', 'bonus_grade']
+const needsAdjustmentReason = (diff: Record<string, unknown>) =>
+  SALARY_AMOUNT_FIELDS.some((f) => f in diff)
 interface ChangeEntry { before?: unknown; after?: unknown }
 const previewDialog = reactive({
   visible: false, title: '', changes: {} as Record<string, ChangeEntry>, requireConfirm: false,
@@ -547,23 +552,56 @@ const settleEffectiveFrom = (
 }
 
 // ── 基本資料更新（只送 dirty fields）────────────────
-const saveBasic = async () => {
-  const payload = withEffectiveFrom(dirtyToPayload(basicDirty.value))
-  if (Object.keys(payload).length === 0) {
+const submitBasic = async (adjustmentReason: string | null = null) => {
+  const diff = basicDirty.value
+  const dirtyPayload = dirtyToPayload(diff)
+  if (Object.keys(dirtyPayload).length === 0) {
     ElMessage.info('無變動')
     return
   }
+  // 金額守衛欄位（bonus_grade）有變動時必須帶原因；缺原因不送出（後端也會擋，這裡先提示）
+  const reasonRequired = needsAdjustmentReason(diff)
+  const reason = adjustmentReason?.trim() ?? ''
+  if (reasonRequired && !reason) {
+    ElMessage.warning('變動獎金等級需填寫調整原因')
+    return
+  }
+  const payload = withEffectiveFrom(dirtyPayload)
+  const changedFieldCount = Object.keys(payload).length
+  if (reasonRequired) payload.adjustment_reason = reason
   try {
     await updateEmployeeBasic(form.id!, payload)
     // 只標記基本資料 tab 已儲存；薪資 tab 尚未儲存的異動維持 dirty
     resetDirty(form, BASIC_TAB_FIELDS)
     settleEffectiveFrom(payload, salaryDirty.value)
-    ElMessage.success(`基本資料已更新（${Object.keys(payload).length} 個欄位）`)
+    ElMessage.success(`基本資料已更新（${changedFieldCount} 個欄位）`)
     emit('saved')
     employeeDraft.clear()
   } catch (err) {
     showError(err)
   }
+}
+
+// 儲存基本資料：變動 bonus_grade 時先開「調整原因」確認框（與薪資 tab 同一個元件），
+// 確認後才由 submitBasic 送出；其餘欄位照舊直接送。
+const saveBasic = async () => {
+  const diff = basicDirty.value
+  if (Object.keys(diff).length === 0) {
+    ElMessage.info('無變動')
+    return
+  }
+  if (needsAdjustmentReason(diff)) {
+    Object.assign(previewDialog, {
+      visible: true,
+      title: '基本資料變更確認',
+      changes: diff,
+      requireConfirm: true,
+      requireReason: true,
+      onConfirm: submitBasic,
+    })
+    return
+  }
+  await submitBasic()
 }
 
 // ── 薪資更新（強制預覽確認 modal）────────────────────
@@ -598,8 +636,8 @@ const saveSalary = () => {
     ElMessage.error(salarySubmitError.value)
     return
   }
-  // 任一直接金額欄位（底薪/時薪/投保級距）有變動 → 後端會要求 adjustment_reason
-  const needsReason = SALARY_AMOUNT_FIELDS.some((f) => f in diff)
+  // 任一金額守衛欄位（底薪/時薪/投保級距）有變動 → 後端會要求 adjustment_reason
+  const needsReason = needsAdjustmentReason(diff)
   Object.assign(previewDialog, {
     visible: true,
     title: '薪資變更確認',
@@ -617,6 +655,9 @@ const showBasicPreview = () => {
     title: '基本資料變更預覽',
     changes: basicDirty.value,
     requireConfirm: false,
+    // 與上一次開啟（薪資確認／bonus_grade 原因框）共用同一個 previewDialog，須明確關掉，
+    // 否則唯讀預覽會殘留一個填了也送不出去的「調整原因」輸入框
+    requireReason: false,
     onConfirm: null,
   })
 }
