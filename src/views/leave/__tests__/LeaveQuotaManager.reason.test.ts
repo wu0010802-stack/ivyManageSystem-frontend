@@ -278,6 +278,44 @@ describe('LeaveQuotaManager 儲存配額必填調整原因', () => {
     expect(sick.find('[data-test="quota-annual-hint"]').exists()).toBe(false)
   })
 
+  it('配額時數欄被清空（el-input-number 會 emit null）：不開原因對話框，提示輸入時數', async () => {
+    const warn = vi.spyOn(ElMessage, 'warning').mockImplementation((() => ({ close: () => {} })) as never)
+    const w = mountManager()
+    await loadAndEdit(w, 88)
+    stateOf(w).quotaRows[0]._newTotal = null as unknown as number
+    await flushPromises()
+
+    await buttonByText(w, '儲存')!.trigger('click')
+    await flushPromises()
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(w.find('.stub-body').exists()).toBe(false)
+    expect(updateLeaveQuota).not.toHaveBeenCalled()
+    // 列仍在編輯狀態，使用者補上時數後可以正常儲存
+    expect(stateOf(w).quotaRows[0]._editing).toBe(true)
+    stateOf(w).quotaRows[0]._newTotal = 88
+    await flushPromises()
+    await buttonByText(w, '儲存')!.trigger('click')
+    await flushPromises()
+    expect(w.find('.stub-body textarea').exists()).toBe(true)
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('原因字數以字元計（對齊後端 Python len）：3 個 emoji 只算 3 字不可送出，5 個才可', async () => {
+    const w = mountManager()
+    await loadAndEdit(w, 88)
+    await buttonByText(w, '儲存')!.trigger('click')
+    await flushPromises()
+
+    await typeReason(w, '😀😀😀')
+    expect(isSubmitDisabled(w)).toBe(true)
+    expect(w.find('.quota-reason-hint').text()).toContain('目前 3 字')
+
+    await typeReason(w, '😀😀😀😀😀')
+    expect(isSubmitDisabled(w)).toBe(false)
+    expect(w.find('.quota-reason-hint').text()).toContain('目前 5 字')
+  })
+
   it('原因輸入框限制 500 字（對齊後端上限）', async () => {
     const w = mountManager()
     await loadAndEdit(w, 88)

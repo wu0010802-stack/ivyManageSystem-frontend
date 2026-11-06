@@ -87,6 +87,11 @@ const leaveTagType = (leaveType: string): ElTagType => {
 }
 
 const requestQuotaSave = (row: QuotaRow) => {
+  // el-input-number 清空欄位會 emit null：先擋下，免得對話框顯示「80h → h」、使用者填完原因才被後端 422
+  if (typeof row._newTotal !== 'number' || !Number.isFinite(row._newTotal)) {
+    ElMessage.warning('請先輸入配額時數')
+    return
+  }
   pendingChange.value = { row, before: row.total_hours, after: row._newTotal }
   reason.value = ''
   reasonVisible.value = true
