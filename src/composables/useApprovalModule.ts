@@ -4,6 +4,7 @@ import { friendlyError } from '@/utils/errorMessages'
 import { getApprovalLogs } from '@/api/approvalSettings'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { getUserInfo } from '@/utils/auth'
+import { friendlyForceOverlapText } from '@/utils/leaveOverlap'
 import { notifySubstituteDutyWarnings } from './substituteDutyNotice'
 
 /**
@@ -50,7 +51,8 @@ export function useApprovalModule({ docType, batchApproveFn, fetchFn, recordLabe
         ElMessage.success(`已成功核准 ${succeeded.length} 筆`)
       } else {
         ElMessage.warning(
-          `核准完成：成功 ${succeeded.length} 筆，失敗 ${failed.length} 筆（${failed.map((f: { id: unknown; reason: string }) => `#${f.id}: ${f.reason}`).join('；')}）`
+          // 批次遇到與已核准假單重疊時，後端原因結尾帶 API 參數名；改成白話（強制核准只能單筆處理）
+          `核准完成：成功 ${succeeded.length} 筆，失敗 ${failed.length} 筆（${failed.map((f: { id: unknown; reason: string }) => `#${f.id}: ${friendlyForceOverlapText(f.reason)}`).join('；')}）`
         )
       }
       // 批次核准回傳的代理接手職務警示（只含成功核准的假單）

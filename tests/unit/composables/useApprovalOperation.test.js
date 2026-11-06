@@ -152,3 +152,72 @@ describe('useApprovalOperation', () => {
     })
   })
 })
+
+describe('useApprovalOperation — execute 回傳值與 interceptError（F74）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('成功回 true、失敗回 false', async () => {
+    const ok = useApprovalOperation({ apiFn: vi.fn().mockResolvedValue({}), onSuccess: vi.fn() })
+    expect(await ok.execute(1, { approved: true }, '已核准')).toBe(true)
+
+    const bad = useApprovalOperation({ apiFn: vi.fn().mockRejectedValue(new Error('x')), onSuccess: vi.fn() })
+    expect(await bad.execute(1, { approved: true }, '已核准')).toBe(false)
+  })
+
+  it('沒提供 interceptError：行為與原本相同（顯示錯誤 toast）', async () => {
+    const { execute } = useApprovalOperation({ apiFn: vi.fn().mockRejectedValue(new Error('x')), onSuccess: vi.fn() })
+    await execute(1, { approved: true }, '已核准')
+    expect(ElMessage.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('interceptError 回 true：不顯示錯誤 toast、不呼叫 onSuccess，且收到 id／payload／原錯誤', async () => {
+    const err = new Error('overlap')
+    const onSuccess = vi.fn()
+    const interceptError = vi.fn().mockReturnValue(true)
+    const { execute } = useApprovalOperation({ apiFn: vi.fn().mockRejectedValue(err), onSuccess, interceptError })
+
+    const ok = await execute(9, { approved: true }, '已核准')
+
+    expect(ok).toBe(false)
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    expect(onSuccess).not.toHaveBeenCalled()
+    expect(interceptError).toHaveBeenCalledWith(
+      err,
+      expect.objectContaining({ id: 9, payload: { approved: true }, successMsg: '已核准' }),
+    )
+  })
+
+  it('interceptError 回 false：照常顯示錯誤 toast', async () => {
+    const { execute } = useApprovalOperation({
+      apiFn: vi.fn().mockRejectedValue(new Error('x')),
+      onSuccess: vi.fn(),
+      interceptError: vi.fn().mockReturnValue(false),
+    })
+    await execute(1, { approved: true }, '已核准')
+    expect(ElMessage.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('request.retry 以新 payload 重送同一筆：成功訊息、onSuccess 沿用，回傳 true', async () => {
+    const apiFn = vi.fn().mockRejectedValueOnce(new Error('overlap')).mockResolvedValueOnce({})
+    const onSuccess = vi.fn()
+    let captured
+    const { execute } = useApprovalOperation({
+      apiFn,
+      onSuccess,
+      interceptError: (_e, request) => {
+        captured = request
+        return true
+      },
+    })
+
+    await execute(9, { approved: true }, '已核准')
+    const retried = await captured.retry({ approved: true, force_overlap: true, force_overlap_reason: '一二三四五六七八九十' })
+
+    expect(retried).toBe(true)
+    expect(apiFn).toHaveBeenNthCalledWith(2, 9, { approved: true, force_overlap: true, force_overlap_reason: '一二三四五六七八九十' })
+    expect(ElMessage.success).toHaveBeenCalledWith('已核准')
+    expect(onSuccess).toHaveBeenCalledTimes(1)
+  })
+})

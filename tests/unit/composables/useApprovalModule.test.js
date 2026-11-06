@@ -88,3 +88,43 @@ describe('useApprovalModule.showBatchApproveConfirm — 代理接手職務警示
     expect(ElMessage.warning).not.toHaveBeenCalled()
   })
 })
+
+describe('useApprovalModule.showBatchApproveConfirm — 重疊失敗原因不暴露 API 參數名（F74）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('批次遇到與已核准假單重疊：失敗原因改成白話，仍保留假單編號與衝突區間', async () => {
+    ElMessageBox.confirm.mockResolvedValue('confirm')
+    const { mod, batchApproveFn } = setup()
+    batchApproveFn.mockResolvedValue({
+      data: {
+        succeeded: [],
+        failed: [
+          {
+            id: 7,
+            reason: '與已核准假單 #12（2026-11-03~2026-11-03）重疊；批次核准不支援強制過，請改用單筆核准並帶 force_overlap',
+          },
+        ],
+      },
+    })
+
+    await mod.showBatchApproveConfirm()
+
+    const shown = ElMessage.warning.mock.calls[0][0]
+    expect(shown).not.toContain('force_overlap')
+    expect(shown).toContain('#7')
+    expect(shown).toContain('#12')
+    expect(shown).toContain('請改用單筆核准並確認強制核准')
+  })
+
+  it('不含參數名的失敗原因原樣顯示', async () => {
+    ElMessageBox.confirm.mockResolvedValue('confirm')
+    const { mod, batchApproveFn } = setup()
+    batchApproveFn.mockResolvedValue({
+      data: { succeeded: [], failed: [{ id: 3, reason: '本月薪資已封存，無法核准' }] },
+    })
+
+    await mod.showBatchApproveConfirm()
+
+    expect(ElMessage.warning.mock.calls[0][0]).toContain('#3: 本月薪資已封存，無法核准')
+  })
+})

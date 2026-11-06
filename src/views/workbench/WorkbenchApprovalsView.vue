@@ -16,6 +16,7 @@ import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import LeaveBatchRejectDialog from '@/components/leave/LeaveBatchRejectDialog.vue'
+import LeaveOverlapOverrideDialog from '@/components/leave/LeaveOverlapOverrideDialog.vue'
 import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS_MAP } from '@/constants/approvalEnums'
 import { MODULE_TERMS } from '@/constants/moduleTerms'
 import { getApprovalPolicies, type ApprovalPolicyRow } from '@/api/approvalSettings'
@@ -149,7 +150,13 @@ const refreshAll = () => {
 }
 
 type ApprovalFn = (id: unknown, payload: unknown) => Promise<unknown>
-const { execute: executeLeaveApproval }      = useApprovalOperation({ apiFn: approveLeaveApi as ApprovalFn,      onSuccess: fetchPendingLeaves })
+// 請假核准（含「核准整張」）遇到「與已核准假單重疊」(409)：由強制核准確認對話框接手，加班／補打卡不受影響
+const overlapRef = ref<InstanceType<typeof LeaveOverlapOverrideDialog> | null>(null)
+const { execute: executeLeaveApproval }      = useApprovalOperation({
+  apiFn: approveLeaveApi as ApprovalFn,
+  onSuccess: fetchPendingLeaves,
+  interceptError: (error, request) => overlapRef.value?.handle(error, request) ?? false,
+})
 const { execute: executeOvertimeApproval }   = useApprovalOperation({ apiFn: approveOvertimeApi as ApprovalFn,   onSuccess: fetchPendingOvertimes })
 const { execute: executeCorrectionApproval } = useApprovalOperation({ apiFn: approveCorrectionApi as ApprovalFn, onSuccess: fetchPendingCorrections })
 
@@ -846,6 +853,7 @@ onMounted(() => {
     <LeaveBatchRejectDialog v-model:visible="batchRejectVisibleL" v-model:reason="batchRejectReasonL" :loading="batchLoadingL" @confirm="confirmBatchRejectL" />
     <LeaveBatchRejectDialog v-model:visible="batchRejectVisibleO" v-model:reason="batchRejectReasonO" :loading="batchLoadingO" @confirm="confirmBatchRejectO" />
     <LeaveBatchRejectDialog v-model:visible="batchRejectVisibleC" v-model:reason="batchRejectReasonC" :loading="batchLoadingC" @confirm="confirmBatchRejectC" />
+    <LeaveOverlapOverrideDialog ref="overlapRef" />
 
     <el-dialog
       v-model="attachDialogVisible"

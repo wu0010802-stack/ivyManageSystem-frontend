@@ -26,6 +26,7 @@ import LeaveQuotaManager from './leave/LeaveQuotaManager.vue'
 import LeaveQuotaOverviewTable from './leave/LeaveQuotaOverviewTable.vue'
 import LeaveReviewDrawer from './leave/LeaveReviewDrawer.vue'
 import LeaveRejectDialog from './leave/LeaveRejectDialog.vue'
+import LeaveOverlapOverrideDialog from '@/components/leave/LeaveOverlapOverrideDialog.vue'
 import LeaveCalendar from './leave/LeaveCalendar.vue'
 import LeaveQuotaExpiryTab from '@/components/leave/LeaveQuotaExpiryTab.vue'
 import { hasPermission, getUserInfo } from '@/utils/auth'
@@ -630,9 +631,14 @@ const { confirmDelete: deleteLeave } = useConfirmDelete({
   successMsg: '已刪除',
 })
 
+// 核准遇到「與已核准假單重疊」(409)：由強制核准確認對話框接手（原因 ≥10 字＋金流簽核權限），
+// 確認後以同一個 payload 加 force_overlap 重送；LeaveReviewDrawer 的核准也走 approveLeave，一併涵蓋
+const overlapRef = ref<InstanceType<typeof LeaveOverlapOverrideDialog> | null>(null)
+
 const { execute: executeApproval } = useApprovalOperation({
   apiFn: approveLeaveApi as (id: unknown, payload: unknown) => Promise<unknown>,
   onSuccess: fetchLeaves,
+  interceptError: (error, request) => overlapRef.value?.handle(error, request) ?? false,
 })
 
 const approveLeave = async (row: Record<string, unknown>) => {
@@ -1038,6 +1044,7 @@ onMounted(() => {
     <!-- 子元件 -->
     <LeaveRejectDialog ref="rejectRef" @rejected="fetchLeaves()" />
     <LeaveAttachmentDialog ref="attachRef" />
+    <LeaveOverlapOverrideDialog ref="overlapRef" />
 
     <!-- 審核抽屜（畫面 B）：核准/駁回/編輯/審核紀錄/查看附件皆委派回既有流程，本身只做訊號彙整 -->
     <LeaveReviewDrawer
