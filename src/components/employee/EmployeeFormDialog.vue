@@ -197,6 +197,14 @@ const { reset: resetDirty, basicDirty, salaryDirty } = useEmployeeFormDirty(form
 const SALARY_AMOUNT_FIELDS = ['base_salary', 'hourly_rate', 'insurance_salary_level', 'bonus_grade']
 const needsAdjustmentReason = (diff: Record<string, unknown>) =>
   SALARY_AMOUNT_FIELDS.some((f) => f in diff)
+// 新增員工（POST /employees，QA F64／後端 B64）：請求帶 base_salary>0 或 hourly_rate>0 時，
+// 後端要求 adjustment_reason（去頭尾空白後至少 5 字，否則 400）；沒設薪資（兩段式建檔）不要求。
+// 底薪高出職位標準達金流簽核門檻時另需 ACTIVITY_PAYMENT_APPROVE（缺權限回 403，訊息由 showError 顯示）。
+const MIN_SALARY_REASON_LENGTH = 5
+const CREATE_REASON_LABEL = '薪資設定原因'
+const CREATE_REASON_PLACEHOLDER = '例：依職位標準敘薪、依聘任條件核定、園長核可'
+// 確認框列出的主要金額欄位（讓填原因的人看得到這次要設定什麼）
+const CREATE_SALARY_PREVIEW_FIELDS = ['base_salary', 'hourly_rate', 'insurance_salary_level'] as const
 interface ChangeEntry { before?: unknown; after?: unknown }
 const previewDialog = reactive({
   visible: false, title: '', changes: {} as Record<string, ChangeEntry>, requireConfirm: false,
@@ -476,6 +484,76 @@ async function showCreateGuidance(newEmployeeId: number | null) {
 
 // ── 新增流程（CREATE）────────────────────────────────
 const saving = ref(false)
+
+// 與後端 B64 同一條件：底薪或時薪 > 0 才算「帶了薪資」（只填投保級距／銀行不算）。
+const createNeedsSalaryReason = () => (form.base_salary ?? 0) > 0 || (form.hourly_rate ?? 0) > 0
+
+const buildCreateSalaryChanges = () => {
+  const changes: Record<string, ChangeEntry> = {}
+  for (const f of CREATE_SALARY_PREVIEW_FIELDS) {
+    const v = form[f]
+    if (v != null && v > 0) changes[f] = { before: null, after: v }
+  }
+  return changes
+}
+
+// 實際送出建立請求；saving 由呼叫端管理。成功後關窗、emit saved、引導下一步。
+const sendCreate = async (adjustmentReason: string | null) => {
+  // 建立新員工的薪資欄一律有值（初始 0；無薪資權限者也停在 0，不會是遮罩 null，
+  // 遮罩 null 只發生在編輯既有遮罩列）。此處 ?? 0 僅為滿足 API 型別的邊界收斂。
+  const { salary_inputs_effective_from: _ignoredEffectiveFrom, ...createForm } = form
+  const res = await createEmployee({
+    ...createForm,
+    health_self_pay_ratio: form.health_self_pay_ratio ?? 1,
+    base_salary: form.base_salary ?? 0,
+    hourly_rate: form.hourly_rate ?? 0,
+    insurance_salary_level: form.insurance_salary_level ?? 0,
+    // 沒設薪資時不帶這個 key（兩段式建檔，後端不要求也不記稽核）
+    ...(adjustmentReason ? { adjustment_reason: adjustmentReason } : {}),
+  })
+  // 持久成功回饋（reviewer 裁定）：MessageBox 可被 Esc/點遮罩快速關閉，
+  // toast 與引導框並存，確保成功訊息不因引導框被關而消失。
+  ElMessage.success('員工已新增')
+  employeeDraft.clear()
+  closeDialog()
+  emit('saved')
+  // 引導對話框需等使用者互動，不 await——避免拖住 finally 的 saving 重置
+  // （送出按鈕所屬 dialog 已 closeDialog，不會有殘留 loading 觀感問題）
+  const newEmployeeId = typeof res.data.id === 'number' ? res.data.id : null
+  void showCreateGuidance(newEmployeeId)
+}
+
+// 有設定薪資 → 開「薪資設定原因」確認框（與編輯模式同一個元件），確認後由 submitCreate 送出
+const openCreateReasonDialog = () => {
+  Object.assign(previewDialog, {
+    visible: true,
+    title: '新增員工薪資設定確認',
+    changes: buildCreateSalaryChanges(),
+    requireConfirm: true,
+    requireReason: true,
+    onConfirm: submitCreate,
+  })
+}
+
+// 確認框確認後的送出：原因不足 5 字不送（後端也會 400，這裡先提示）；送出中防重送
+const submitCreate = async (adjustmentReason: string | null = null) => {
+  if (saving.value) return
+  const reasonRequired = createNeedsSalaryReason()
+  const reason = adjustmentReason?.trim() ?? ''
+  if (reasonRequired && reason.length < MIN_SALARY_REASON_LENGTH) {
+    ElMessage.warning(`設定薪資需填寫${CREATE_REASON_LABEL}（至少 ${MIN_SALARY_REASON_LENGTH} 字）`)
+    return
+  }
+  saving.value = true
+  try {
+    await sendCreate(reasonRequired ? reason : null)
+  } catch (err) {
+    showError(err)
+  } finally {
+    saving.value = false
+  }
+}
+
 const saveCreate = async () => {
   if (saving.value) return  // 送出中防序列/併發重送（name 非 unique，序列雙擊會真的建出重複員工）
   const formEl = formRef.value
@@ -502,26 +580,12 @@ const saveCreate = async () => {
         if (props[0]) formEl.scrollToField(props[0])
         return
       }
-      // 建立新員工的薪資欄一律有值（初始 0；無薪資權限者也停在 0，不會是遮罩 null，
-      // 遮罩 null 只發生在編輯既有遮罩列）。此處 ?? 0 僅為滿足 API 型別的邊界收斂。
-      const { salary_inputs_effective_from: _ignoredEffectiveFrom, ...createForm } = form
-      const res = await createEmployee({
-        ...createForm,
-        health_self_pay_ratio: form.health_self_pay_ratio ?? 1,
-        base_salary: form.base_salary ?? 0,
-        hourly_rate: form.hourly_rate ?? 0,
-        insurance_salary_level: form.insurance_salary_level ?? 0,
-      })
-      // 持久成功回饋（reviewer 裁定）：MessageBox 可被 Esc/點遮罩快速關閉，
-      // toast 與引導框並存，確保成功訊息不因引導框被關而消失。
-      ElMessage.success('員工已新增')
-      employeeDraft.clear()
-      closeDialog()
-      emit('saved')
-      // 引導對話框需等使用者互動，不 await——避免拖住 finally 的 saving 重置
-      // （送出按鈕所屬 dialog 已 closeDialog，不會有殘留 loading 觀感問題）
-      const newEmployeeId = typeof res.data.id === 'number' ? res.data.id : null
-      void showCreateGuidance(newEmployeeId)
+      // 有設定薪資：先收「薪資設定原因」，確認後才由 submitCreate 送出（此處不送、saving 隨 finally 釋放）
+      if (createNeedsSalaryReason()) {
+        openCreateReasonDialog()
+        return
+      }
+      await sendCreate(null)
     } catch (err) {
       showError(err)
     } finally {
@@ -770,6 +834,9 @@ onMounted(async () => {
     :changes="previewDialog.changes"
     :require-confirm="previewDialog.requireConfirm"
     :require-reason="previewDialog.requireReason"
+    :reason-label="isEdit ? undefined : CREATE_REASON_LABEL"
+    :reason-placeholder="isEdit ? undefined : CREATE_REASON_PLACEHOLDER"
+    :reason-min-length="MIN_SALARY_REASON_LENGTH"
     :field-labels="FIELD_LABELS"
     @confirm="previewDialog.onConfirm && previewDialog.onConfirm($event)"
   />

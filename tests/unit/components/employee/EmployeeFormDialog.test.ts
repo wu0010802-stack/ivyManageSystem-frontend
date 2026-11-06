@@ -44,6 +44,7 @@ vi.mock('@/utils/auth', async (importOriginal) => ({
 }))
 
 import EmployeeFormDialog from '@/components/employee/EmployeeFormDialog.vue'
+import EmployeeChangesPreviewDialog from '@/components/employee/EmployeeChangesPreviewDialog.vue'
 
 // el-dialog 會 teleport 到 body；stub 成原地渲染方便查詢（比照 StudentEditDialog.test.ts 慣例）
 const ElDialogStub = {
@@ -93,15 +94,25 @@ describe('EmployeeFormDialog', () => {
     expect(w.text()).toContain('薪資 / 投保 / 銀行')
   })
 
-  it('新增：具 SALARY_WRITE 者填的薪資欄位隨整包 form 送出（不再是 0）', async () => {
+  it('新增：具 SALARY_WRITE 者填的薪資欄位隨整包 form 送出（不再是 0）；有薪資需先經確認框填薪資設定原因（F64）', async () => {
     const w = mountDialog()
     const vm = w.vm as unknown as DialogVm
     await vm.openCreate()
     vm.form.name = '測試員工'
     vm.form.base_salary = 32000
     await vm.saveCreate()
+    // 有設定薪資 → 先開「薪資設定原因」確認框，尚未送出
     await vi.waitFor(() => {
-      expect(mockCreateEmployee).toHaveBeenCalledWith(expect.objectContaining({ name: '測試員工', base_salary: 32000 }))
+      expect(vm.previewDialog.visible).toBe(true)
+    })
+    expect(mockCreateEmployee).not.toHaveBeenCalled()
+    w.findComponent(EmployeeChangesPreviewDialog).vm.$emit('confirm', '依職位標準敘薪，園長核可')
+    await vi.waitFor(() => {
+      expect(mockCreateEmployee).toHaveBeenCalledWith(expect.objectContaining({
+        name: '測試員工',
+        base_salary: 32000,
+        adjustment_reason: '依職位標準敘薪，園長核可',
+      }))
     })
   })
 

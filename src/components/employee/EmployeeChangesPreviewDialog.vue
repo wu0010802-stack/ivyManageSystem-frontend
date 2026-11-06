@@ -14,12 +14,17 @@ const props = withDefaults(defineProps<{
   fieldLabels?: Record<string, string>
   requireReason?: boolean
   reasonMinLength?: number
+  // 原因欄文案：預設為編輯模式的「調整原因」；新增員工設定薪資時改為「薪資設定原因」
+  reasonLabel?: string
+  reasonPlaceholder?: string
 }>(), {
   title: '即將儲存的變更',
   requireConfirm: false,
   fieldLabels: () => ({}),
   requireReason: false,
   reasonMinLength: 5,
+  reasonLabel: '調整原因',
+  reasonPlaceholder: '例：年度調薪 2026、誤算修正補差、主管核可一次性獎勵',
 })
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -74,12 +79,12 @@ const onConfirm = () => {
             <el-table-column prop="after" label="新值" />
         </el-table>
         <div v-if="requireReason" class="reason-block">
-            <label class="reason-label">調整原因（必填，至少 {{ reasonMinLength }} 字）</label>
+            <label class="reason-label">{{ reasonLabel }}（必填，至少 {{ reasonMinLength }} 字）</label>
             <el-input
                 v-model="reason"
                 type="textarea"
                 :rows="2"
-                placeholder="例：年度調薪 2026、誤算修正補差、主管核可一次性獎勵"
+                :placeholder="reasonPlaceholder"
                 maxlength="200"
                 show-word-limit
             />

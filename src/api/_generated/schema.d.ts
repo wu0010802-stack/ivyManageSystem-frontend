@@ -31688,6 +31688,8 @@ export interface components {
         EmployeeCreate: {
             /** Address */
             address?: string | null;
+            /** Adjustment Reason */
+            adjustment_reason?: string | null;
             /** Bank Account */
             bank_account?: string | null;
             /** Bank Account Name */
